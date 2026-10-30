@@ -14,7 +14,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
@@ -74,7 +74,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   private static final String T2 = "t2";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -83,21 +83,61 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   /**
-   * Two tenants launch import jobs concurrently; both must succeed and must not see each other's
+   * 两个租户并发发起导入作业；两边都必须成功，且不得读取对方的
    * job instances, tasks, or outbox events.
    */
   @Test
   @DisplayName("并发导入隔离验收: 两租户同时触发并等待终态, 实例与任务互不可见, 事件不挂到对方租户, 错误明细无跨租户污染, 配额峰值各自独立")
   void shouldKeepTenantsIsolated_whenConcurrentImportJobsBothSucceed() throws Exception {
+    final String selectCountSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+    final String selectCountSql2 = """
+            select count(*) from batch.job_task t
+            join batch.job_instance ji on ji.id = t.job_instance_id
+            where ji.tenant_id = ? and ji.dedup_key = ?
+            """;
+    final String selectIdSql = """
+        select id from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+    final String selectCountSql3 = """
+            select count(*)
+            from batch.outbox_event oe
+            join batch.job_task t on t.id = oe.aggregate_id
+            where oe.aggregate_type = 'JOB_TASK'
+              and oe.tenant_id = ?
+              and t.job_instance_id = ?
+            """;
+    final String selectCountSql4 = """
+            select count(*) from batch.file_error_record fer
+            where fer.tenant_id = ? and fer.file_id in (
+                select fr.id from batch.file_record fr
+                join batch.job_task t on t.job_instance_id = ?
+                where fr.tenant_id = ?
+            )
+            """;
+    final String selectCountSql5 = """
+            select count(*) from batch.file_error_record fer
+            where fer.tenant_id = ? and fer.file_id in (
+                select fr.id from batch.file_record fr where fr.tenant_id = ?
+            )
+            """;
+    final String selectCountSql6 = """
+        select count(*) from batch.quota_runtime_state where tenant_id = ?
+    """;
+    final String selectPeakBorrowedCountSql = """
+        select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?
+    """;
+
     awaitWorkerOnline(T1, "e2e-import-1", "IMPORT");
     seedTenantTemplates(T2);
     seedWorkerRegistry(T2, "e2e-import-1", "import");
 
-    // Prepare seeds for both tenants before launching (avoids DB contention in the fixture)
+    // 发起前先为两个租户准备种子数据，避免 fixture 中出现数据库争用。
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
 
-    // t2 uses a different dedup_key namespace because seeds are per-tenant
+    // 种子数据按租户隔离，因此 t2 使用独立的 dedup_key 命名空间。
     LaunchSeed t2Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T2, "IMPORT", "import", TriggerType.API);
 
@@ -129,7 +169,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                 """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T1,
-            t1Seed.jobCode(),
+            t1Seed.workflowDefinitionId(),
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             t1Seed.requestId(),
@@ -161,7 +201,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
                 """.stripTrailing());
         launchService.launch(new LaunchRequest(
             T2,
-            t2Seed.jobCode(),
+            t2Seed.workflowDefinitionId(),
             LocalDate.of(2026, 1, 15),
             TriggerType.API,
             t2Seed.requestId(),
@@ -176,11 +216,11 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
       executor.shutdownNow();
     }
 
-    // Publish outbox for both tenants sequentially (the forwarder is disabled in e2e profile)
+    // 由于 E2E profile 禁用了转发器，两个租户的 Outbox 事件需依次发布。
     e2eOutboxPublishSupport.publishAllPending(T1);
     e2eOutboxPublishSupport.publishAllPending(T2);
 
-    // ── Wait for both tasks to complete ────────────────────────────────────
+    // ── 等待两个任务均完成 ────────────────────────────────────
 
     await()
         .atMost(Duration.ofSeconds(120))
@@ -198,122 +238,76 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // ── Isolation assertion 1: job_instance ────────────────────────────────
 
-    // t1's dedup_key must not be visible under t2
-    Long t2CanSeeT1Instance = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T2,
-        t1Seed.dedupKey());
+    // t2 不得读取 t1 的 dedup_key。
+    Long t2CanSeeT1Instance =
+        jdbcTemplate.queryForObject(selectCountSql, Long.class, T2, t1Seed.dedupKey());
     assertThat(t2CanSeeT1Instance).isZero();
 
-    // t2's dedup_key must not be visible under t1
-    Long t1CanSeeT2Instance = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T1,
-        t2Seed.dedupKey());
+    // t1 不得读取 t2 的 dedup_key。
+    Long t1CanSeeT2Instance =
+        jdbcTemplate.queryForObject(selectCountSql, Long.class, T1, t2Seed.dedupKey());
     assertThat(t1CanSeeT2Instance).isZero();
 
     // ── Isolation assertion 2: job_task ────────────────────────────────────
 
-    Long t1TaskCount = jdbcTemplate.queryForObject("""
-            select count(*) from batch.job_task t
-            join batch.job_instance ji on ji.id = t.job_instance_id
-            where ji.tenant_id = ? and ji.dedup_key = ?
-            """, Long.class, T1, t1Seed.dedupKey());
-    Long t2TaskCount = jdbcTemplate.queryForObject("""
-            select count(*) from batch.job_task t
-            join batch.job_instance ji on ji.id = t.job_instance_id
-            where ji.tenant_id = ? and ji.dedup_key = ?
-            """, Long.class, T2, t2Seed.dedupKey());
+    Long t1TaskCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Long.class, T1, t1Seed.dedupKey());
+    Long t2TaskCount =
+        jdbcTemplate.queryForObject(selectCountSql2, Long.class, T2, t2Seed.dedupKey());
     assertThat(t1TaskCount).isGreaterThanOrEqualTo(1L);
     assertThat(t2TaskCount).isGreaterThanOrEqualTo(1L);
 
     // ── Isolation assertion 3: outbox_event ────────────────────────────────
 
-    // Count outbox events linked to each job instance via job_task.aggregate_id — they must stay
+    // 通过 job_task.aggregate_id 统计各作业实例关联的 Outbox 事件；结果必须归属于
     // under the
-    // correct tenant. aggregate_id stores job_task.id, not job_instance.id.
-    Long t1JobInstanceId = jdbcTemplate.queryForObject(
-        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T1,
-        t1Seed.dedupKey());
-    Long t2JobInstanceId = jdbcTemplate.queryForObject(
-        "select id from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T2,
-        t2Seed.dedupKey());
+    // 正确的租户。aggregate_id 存储的是 job_task.id，而非 job_instance.id。
+    Long t1JobInstanceId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, T1, t1Seed.dedupKey());
+    Long t2JobInstanceId =
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, T2, t2Seed.dedupKey());
 
     assertThat(t1JobInstanceId).isNotNull();
     assertThat(t2JobInstanceId).isNotNull();
 
-    // No outbox event linked to t1's tasks should carry t2's tenant_id, and vice versa.
-    Long t1OutboxUnderT2 = jdbcTemplate.queryForObject("""
-            select count(*)
-            from batch.outbox_event oe
-            join batch.job_task t on t.id = oe.aggregate_id
-            where oe.aggregate_type = 'JOB_TASK'
-              and oe.tenant_id = ?
-              and t.job_instance_id = ?
-            """, Long.class, T2, t1JobInstanceId);
-    Long t2OutboxUnderT1 = jdbcTemplate.queryForObject("""
-            select count(*)
-            from batch.outbox_event oe
-            join batch.job_task t on t.id = oe.aggregate_id
-            where oe.aggregate_type = 'JOB_TASK'
-              and oe.tenant_id = ?
-              and t.job_instance_id = ?
-            """, Long.class, T1, t2JobInstanceId);
+    // 关联 t1 任务的 Outbox 事件不得携带 t2 的 tenant_id，反向也同样成立。
+    Long t1OutboxUnderT2 =
+        jdbcTemplate.queryForObject(selectCountSql3, Long.class, T2, t1JobInstanceId);
+    Long t2OutboxUnderT1 =
+        jdbcTemplate.queryForObject(selectCountSql3, Long.class, T1, t2JobInstanceId);
     assertThat(t1OutboxUnderT2).isZero();
     assertThat(t2OutboxUnderT1).isZero();
 
-    // ── Isolation assertion 4: file_error_record (if any) ──────────────────
+    // ── 隔离断言 4：file_error_record（如有）──────────────────
 
-    // Since both jobs succeeded, no error records should exist for either tenant under the other
-    Long t1ErrorUnderT2 = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr
-                join batch.job_task t on t.job_instance_id = ?
-                where fr.tenant_id = ?
-            )
-            """, Long.class, T2, t1JobInstanceId, T1);
+    // 两个作业均已成功，因此任一租户下都不应出现属于另一租户的错误记录。
+    Long t1ErrorUnderT2 =
+        jdbcTemplate.queryForObject(selectCountSql4, Long.class, T2, t1JobInstanceId, T1);
     assertThat(t1ErrorUnderT2).isZero();
 
-    Long t2ErrorsOnT1Files = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr where fr.tenant_id = ?
-            )
-            """, Long.class, T2, T1);
+    Long t2ErrorsOnT1Files = jdbcTemplate.queryForObject(selectCountSql5, Long.class, T2, T1);
     assertThat(t2ErrorsOnT1Files).isZero();
 
-    Long t1ErrorsOnT2Files = jdbcTemplate.queryForObject("""
-            select count(*) from batch.file_error_record fer
-            where fer.tenant_id = ? and fer.file_id in (
-                select fr.id from batch.file_record fr where fr.tenant_id = ?
-            )
-            """, Long.class, T1, T2);
+    Long t1ErrorsOnT2Files = jdbcTemplate.queryForObject(selectCountSql5, Long.class, T1, T2);
     assertThat(t1ErrorsOnT2Files).isZero();
 
     // ── Quota isolation assertion (best-effort) ─────────────────────────────
 
-    // quota_runtime_state rows are written on demand; verify that if they exist, they are
+    // quota_runtime_state 按需写入；若记录存在，应校验其
     // per-tenant
-    Long t1QuotaCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.quota_runtime_state where tenant_id = ?", Long.class, T1);
-    Long t2QuotaCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.quota_runtime_state where tenant_id = ?", Long.class, T2);
+    Long t1QuotaCount = jdbcTemplate.queryForObject(selectCountSql6, Long.class, T1);
+    Long t2QuotaCount = jdbcTemplate.queryForObject(selectCountSql6, Long.class, T2);
 
-    // If quota rows exist for both tenants, their peak_borrowed_count must be independent
-    if (t1QuotaCount != null && t1QuotaCount > 0 && t2QuotaCount != null && t2QuotaCount > 0) {
-      List<Map<String, Object>> t1Quotas = jdbcTemplate.queryForList(
-          "select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?", T1);
-      List<Map<String, Object>> t2Quotas = jdbcTemplate.queryForList(
-          "select peak_borrowed_count from batch.quota_runtime_state where tenant_id = ?", T2);
+    // 若两个租户均有配额记录，其 peak_borrowed_count 必须相互独立。
+    boolean bothTenantsHaveQuotaState =
+        t1QuotaCount != null && t1QuotaCount > 0 && t2QuotaCount != null && t2QuotaCount > 0;
+    if (bothTenantsHaveQuotaState) {
+      List<Map<String, Object>> t1Quotas =
+          jdbcTemplate.queryForList(selectPeakBorrowedCountSql, T1);
+      List<Map<String, Object>> t2Quotas =
+          jdbcTemplate.queryForList(selectPeakBorrowedCountSql, T2);
 
-      // Each tenant's quota rows must reference only their own tenant
+      // 每个租户的配额记录只能引用自身租户。
       List<Object> t1Peaks = new ArrayList<>();
       for (Map<String, Object> row : t1Quotas) {
         t1Peaks.add(row.get("peak_borrowed_count"));
@@ -322,20 +316,24 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
       for (Map<String, Object> row : t2Quotas) {
         t2Peaks.add(row.get("peak_borrowed_count"));
       }
-      // Both lists should be non-empty if quota rows were written
+      // 若已写入配额记录，则两个租户对应的列表都必须非空。
       assertThat(t1Peaks).isNotEmpty();
       assertThat(t2Peaks).isNotEmpty();
     }
   }
 
   /**
-   * Data isolation test without running full pipeline: two tenants' job_instances created by
-   * separate launches are not cross-visible. Complements the concurrent scenario with a
+   * 不运行完整流程的数据隔离测试：两个租户分别发起作业并创建 job_instances，
+   * 各自创建的实例不得跨租户可见。本测试与并发场景互为补充，
    * deterministic, non-concurrent check.
    */
   @Test
   @DisplayName("非并发实例隔离验收: 两租户分别触发后各自实例计数为一, 按对方去重键查询均为零")
   void shouldIsolateJobInstances_whenTwoTenantsLaunchSeparately() {
+    final String selectCountSql = """
+        select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?
+    """;
+
     seedTenantTemplates(T2);
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
@@ -344,7 +342,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         T1,
-        t1Seed.jobCode(),
+        t1Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t1Seed.requestId(),
@@ -353,78 +351,65 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         T2,
-        t2Seed.jobCode(),
+        t2Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t2Seed.requestId(),
         "e2e-tr-mt-iso-t2",
         Map.of()));
 
-    // t1 can see its own instance
-    Long t1Own = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T1,
-        t1Seed.dedupKey());
+    // t1 可以查询自己的实例。
+    Long t1Own = jdbcTemplate.queryForObject(selectCountSql, Long.class, T1, t1Seed.dedupKey());
     assertThat(t1Own).isEqualTo(1L);
 
-    // t2 cannot see t1's instance by t1's dedup_key
-    Long t2SeesT1 = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T2,
-        t1Seed.dedupKey());
+    // t2 无法通过 t1 的 dedup_key 查询 t1 的实例。
+    Long t2SeesT1 = jdbcTemplate.queryForObject(selectCountSql, Long.class, T2, t1Seed.dedupKey());
     assertThat(t2SeesT1).isZero();
 
-    // t2 can see its own instance
-    Long t2Own = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T2,
-        t2Seed.dedupKey());
+    // t2 可以查询自己的实例。
+    Long t2Own = jdbcTemplate.queryForObject(selectCountSql, Long.class, T2, t2Seed.dedupKey());
     assertThat(t2Own).isEqualTo(1L);
 
-    // t1 cannot see t2's instance by t2's dedup_key
-    Long t1SeesT2 = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_instance where tenant_id = ? and dedup_key = ?",
-        Long.class,
-        T1,
-        t2Seed.dedupKey());
+    // t1 无法通过 t2 的 dedup_key 查询 t2 的实例。
+    Long t1SeesT2 = jdbcTemplate.queryForObject(selectCountSql, Long.class, T1, t2Seed.dedupKey());
     assertThat(t1SeesT2).isZero();
   }
 
-  /** Outbox isolation: outbox_events created for t1 are not visible under t2. */
+  /** Outbox 隔离：t1 创建的 outbox_events 对 t2 不可见。 */
   @Test
   @DisplayName("事件隔离验收: 单租户触发后本租户事件计数至少为一, 另一租户无导入类型事件")
   void shouldIsolateOutboxEvents_whenSingleTenantLaunches() {
+    final String selectCountSql = """
+        select count(*) from batch.outbox_event where tenant_id = ?
+    """;
+    final String selectCountSql2 = """
+        select count(*) from batch.outbox_event where tenant_id = ? and event_type = 'IMPORT'
+    """;
+
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
 
     launchService.launch(new LaunchRequest(
         T1,
-        t1Seed.jobCode(),
+        t1Seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         t1Seed.requestId(),
         "e2e-tr-mt-outbox",
         Map.of()));
 
-    Long t1OutboxCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.outbox_event where tenant_id = ?", Long.class, T1);
-    Long t2OutboxCount = jdbcTemplate.queryForObject(
-        "select count(*) from batch.outbox_event where tenant_id = ? and event_type = 'IMPORT'",
-        Long.class,
-        T2);
+    Long t1OutboxCount = jdbcTemplate.queryForObject(selectCountSql, Long.class, T1);
+    Long t2OutboxCount = jdbcTemplate.queryForObject(selectCountSql2, Long.class, T2);
 
     assertThat(t1OutboxCount).isGreaterThanOrEqualTo(1L);
-    // t2 should have no IMPORT outbox events created by t1's launch
+    // t2 下不得出现由 t1 发起作业所创建的 IMPORT Outbox 事件。
     assertThat(t2OutboxCount).isZero();
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void seedTenantTemplates(String tenantId) {
-    jdbcTemplate.update("""
+    final String insertFileTemplateConfigSql = """
         insert into batch.file_template_config (
             tenant_id, template_code, template_name, template_type, biz_type,
             file_format_type, charset, target_charset, with_bom,
@@ -452,21 +437,25 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         where tenant_id = ?
           and template_code = 'IMP-CUSTOMER-JSON-ARRAY'
         on conflict do nothing
-        """, tenantId, T1);
+        """;
+
+    jdbcTemplate.update(insertFileTemplateConfigSql, tenantId, T1);
   }
 
   private void seedWorkerRegistry(String tenantId, String workerCode, String workerGroup) {
-    jdbcTemplate.update(
-        "delete from batch.worker_registry where tenant_id = ? and worker_code = ?",
-        tenantId,
-        workerCode);
-    jdbcTemplate.update(
-        """
+    final String deleteWorkerRegistrySql = """
+        delete from batch.worker_registry where tenant_id = ? and worker_code = ?
+    """;
+    final String insertWorkerRegistrySql = """
         insert into batch.worker_registry (
             tenant_id, worker_code, worker_group, capability_tags, resource_tag,
             status, heartbeat_at, current_load, drain_started_at, drain_deadline_at
         ) values (?, ?, ?, '[]'::jsonb, null, 'ONLINE', ?, 0, null, null)
-        """,
+        """;
+
+    jdbcTemplate.update(deleteWorkerRegistrySql, tenantId, workerCode);
+    jdbcTemplate.update(
+        insertWorkerRegistrySql,
         tenantId,
         workerCode,
         CodeNormalizer.toUpperOrNull(workerGroup),
@@ -474,30 +463,38 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
   }
 
   private void awaitWorkerOnline(String tenantId, String workerCode, String workerGroup) {
-    await()
-        .atMost(Duration.ofSeconds(30))
-        .pollInterval(Duration.ofMillis(200))
-        .untilAsserted(() -> {
-          Integer count = jdbcTemplate.queryForObject(
-              """
+    final String selectCountSql = """
                       select count(1)::int
                       from batch.worker_registry
                       where tenant_id = ?
                         and worker_code = ?
                         and worker_group = ?
                         and status = 'ONLINE'
-                      """, Integer.class, tenantId, workerCode, CodeNormalizer.toUpperOrNull(workerGroup));
+                      """;
+
+    await()
+        .atMost(Duration.ofSeconds(30))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          Integer count = jdbcTemplate.queryForObject(
+              selectCountSql,
+              Integer.class,
+              tenantId,
+              workerCode,
+              CodeNormalizer.toUpperOrNull(workerGroup));
           assertThat(count).isEqualTo(1);
         });
   }
 
   private String taskStatus(String tenantId, String dedupKey) {
-    try {
-      return jdbcTemplate.queryForObject("""
+    final String selectTaskStatusSql = """
           select t.task_status from batch.job_task t
           join batch.job_instance ji on ji.id = t.job_instance_id
           where ji.tenant_id = ? and ji.dedup_key = ?
-          """, String.class, tenantId, dedupKey);
+          """;
+
+    try {
+      return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, tenantId, dedupKey);
     } catch (EmptyResultDataAccessException ex) {
       return null;
     } catch (DataAccessException ex) {

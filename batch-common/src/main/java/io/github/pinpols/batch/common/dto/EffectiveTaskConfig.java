@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.common.dto;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Instant;
+import java.util.List;
+import lombok.Builder;
 
 /**
  * Worker CLAIM 任务时由 orchestrator 返回的"生效配置快照"。
@@ -24,6 +27,7 @@ import java.time.Instant;
  * <p>兼容性:Stage 1(本 PR)仅新增,worker 优先读本对象,缺字段时 fallback 到 {@code TaskDispatchMessage}; Stage 2 按
  * schemaVersion v1→v2 瘦身 message 只留 task key。
  */
+@Builder
 public record EffectiveTaskConfig(
     String tenantId,
     Long taskId,
@@ -93,13 +97,23 @@ public record EffectiveTaskConfig(
      * ADR-014: 本轮分区认领 invocation id（读 {@code job_partition.current_invocation_id}）。worker
      * renew/report 可选带上做幂等与过期 worker 隔离。
      */
-    String partitionInvocationId) {
+    String partitionInvocationId,
+    /** 门禁观察到的依赖结果标识；消费者必须验证或固定该标识后，才能确认实际使用的结果。 */
+    List<DependencyResultReference> dependencyResultSnapshot,
+    /** 整 Workflow Replay 在审批快照中固定的操作与能力合同；普通任务为 null。 */
+    ReplayExecutionGuard replayExecutionGuard) {
+
+  public EffectiveTaskConfig {
+    dependencyResultSnapshot = EmptyChecks.isNull(dependencyResultSnapshot)
+        ? List.of()
+        : List.copyOf(dependencyResultSnapshot);
+  }
 
   /** 旧 orchestrator 领取成功但未返回实时配置时使用的兼容占位。 */
   public static EffectiveTaskConfig empty() {
     return new EffectiveTaskConfig(
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
         null, null, null, null, null, null, null, null, null, null, null, null, null, null, null,
-        null, null);
+        null, null, List.of(), null);
   }
 }

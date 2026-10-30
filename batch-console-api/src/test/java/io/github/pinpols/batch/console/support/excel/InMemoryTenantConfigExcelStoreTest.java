@@ -10,6 +10,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,7 @@ class InMemoryTenantConfigExcelStoreTest {
     CountDownLatch start = new CountDownLatch(1);
 
     try (ExecutorService executor = Executors.newFixedThreadPool(contenderCount)) {
-      List<Future<Boolean>> claims = java.util.stream.IntStream.range(0, contenderCount)
+      List<Future<Boolean>> claims = IntStream.range(0, contenderCount)
           .mapToObj(ignored -> executor.submit(() -> {
             ready.countDown();
             start.await();

@@ -1,22 +1,18 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.CURRENT_STAGE;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.FILE_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.PIPELINE_DEFINITION_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.PIPELINE_INSTANCE_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.TENANT_ID;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.params;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toJson;
-import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.toLong;
 import static io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues.truncate;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -38,89 +34,60 @@ public class PlatformPipelineRunRepository {
   private final PlatformFileRuntimeMapper mapper;
 
   public Long createPipelineInstance(CreatePipelineInstanceParam param) {
-    if (!Texts.hasText(param.tenantId()) || param.pipelineDefinitionId() == null) {
+    if (!Texts.hasText(param.tenantId()) || !Texts.hasText(param.systemPipelineCode())) {
       return null;
     }
-    Map<String, Object> values = params(
-        TENANT_ID,
-        param.tenantId(),
-        PIPELINE_DEFINITION_ID,
-        param.pipelineDefinitionId(),
-        "jobCode",
-        param.jobCode(),
-        "pipelineType",
-        param.pipelineType(),
-        FILE_ID,
-        param.fileId(),
-        "relatedJobInstanceId",
-        param.relatedJobInstanceId(),
-        CURRENT_STAGE,
-        param.currentStage(),
-        "traceId",
-        param.traceId(),
-        "runStatus",
-        PipelineRunStatus.RUNNING.name());
+    PlatformPipelineInsertParam values = PlatformPipelineInsertParam.builder()
+        .tenantId(param.tenantId())
+        .systemPipelineCode(param.systemPipelineCode())
+        .systemPipelineVersion(param.systemPipelineVersion())
+        .jobCode(param.jobCode())
+        .pipelineType(param.pipelineType())
+        .fileId(param.fileId())
+        .relatedJobInstanceId(param.relatedJobInstanceId())
+        .currentStage(param.currentStage())
+        .traceId(param.traceId())
+        .runStatus(PipelineRunStatus.RUNNING.name())
+        .build();
     mapper.insertPipelineInstance(values);
-    return toLong(values.get(ID));
+    return values.getId();
   }
 
-  public void bindFileToPipelineInstance(Long pipelineInstanceId, Long fileId) {
-    if (pipelineInstanceId != null && fileId != null) {
-      mapper.bindFileToPipelineInstance(
-          params(PIPELINE_INSTANCE_ID, pipelineInstanceId, FILE_ID, fileId));
+  public void bindFileToPipelineInstance(String tenantId, Long pipelineInstanceId, Long fileId) {
+    boolean pipelineFileAssociationIsComplete = EmptyChecks.isNotNull(tenantId)
+        && EmptyChecks.isNotNull(pipelineInstanceId)
+        && EmptyChecks.isNotNull(fileId);
+    if (pipelineFileAssociationIsComplete) {
+      mapper.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
     }
   }
 
   public void updatePipelineStage(
       Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
-      mapper.updatePipelineStage(params(
-          PIPELINE_INSTANCE_ID,
-          pipelineInstanceId,
-          CURRENT_STAGE,
-          currentStage,
-          "lastSuccessStage",
-          lastSuccessStage));
+      mapper.updatePipelineStage(pipelineInstanceId, currentStage, lastSuccessStage);
     }
   }
 
   public void markPipelineSuccess(
       Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
-      mapper.markPipelineSuccess(params(
-          PIPELINE_INSTANCE_ID,
-          pipelineInstanceId,
-          CURRENT_STAGE,
-          currentStage,
-          "lastSuccessStage",
-          lastSuccessStage,
-          "runStatus",
-          PipelineRunStatus.SUCCESS.name()));
+      mapper.markPipelineSuccess(
+          pipelineInstanceId, currentStage, lastSuccessStage, PipelineRunStatus.SUCCESS.name());
     }
   }
 
   public void markPipelineCompensating(Long pipelineInstanceId) {
     if (pipelineInstanceId != null) {
-      mapper.markPipelineCompensating(params(
-          PIPELINE_INSTANCE_ID,
-          pipelineInstanceId,
-          "runStatus",
-          PipelineRunStatus.COMPENSATING.name()));
+      mapper.markPipelineCompensating(pipelineInstanceId, PipelineRunStatus.COMPENSATING.name());
     }
   }
 
   public void markPipelineFailed(
       Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
     if (pipelineInstanceId != null) {
-      mapper.markPipelineFailed(params(
-          PIPELINE_INSTANCE_ID,
-          pipelineInstanceId,
-          CURRENT_STAGE,
-          currentStage,
-          "lastSuccessStage",
-          lastSuccessStage,
-          "runStatus",
-          PipelineRunStatus.FAILED.name()));
+      mapper.markPipelineFailed(
+          pipelineInstanceId, currentStage, lastSuccessStage, PipelineRunStatus.FAILED.name());
     }
   }
 
@@ -128,8 +95,7 @@ public class PlatformPipelineRunRepository {
     if (pipelineInstanceId == null) {
       return Set.of();
     }
-    List<String> stepCodes =
-        mapper.selectSucceededStepCodes(params(PIPELINE_INSTANCE_ID, pipelineInstanceId));
+    List<String> stepCodes = mapper.selectSucceededStepCodes(pipelineInstanceId);
     return stepCodes == null || stepCodes.isEmpty() ? Set.of() : new HashSet<>(stepCodes);
   }
 
@@ -138,8 +104,7 @@ public class PlatformPipelineRunRepository {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode)) {
       return Map.of();
     }
-    String json = mapper.selectLatestSucceededStepOutputSummary(
-        params(PIPELINE_INSTANCE_ID, pipelineInstanceId, "stepCode", stepCode));
+    String json = mapper.selectLatestSucceededStepOutputSummary(pipelineInstanceId, stepCode);
     if (!Texts.hasText(json)) {
       return Map.of();
     }
@@ -164,21 +129,18 @@ public class PlatformPipelineRunRepository {
     if (pipelineInstanceId == null || !Texts.hasText(stepCode) || !Texts.hasText(stageCode)) {
       return null;
     }
-    Map<String, Object> values = params(
-        PIPELINE_INSTANCE_ID,
-        pipelineInstanceId,
-        "stepCode",
-        stepCode,
-        "stageCode",
-        stageCode,
-        "stepStatus",
-        PipelineRunStatus.RUNNING.name(),
-        "inputSummaryJson",
-        toJson(inputSummary));
-    mapper.lockStepRunSequence(values);
-    values.put("runSeq", mapper.selectNextStepRunSeq(values));
+    PlatformStepRunInsertParam values = PlatformStepRunInsertParam.builder()
+        .pipelineInstanceId(pipelineInstanceId)
+        .stepCode(stepCode)
+        .stageCode(stageCode)
+        .stepStatus(PipelineRunStatus.RUNNING.name())
+        .inputSummaryJson(toJson(inputSummary))
+        .build();
+    mapper.lockStepRunSequence(pipelineInstanceId, stepCode);
+    Integer runSeq = mapper.selectNextStepRunSeq(pipelineInstanceId, stepCode);
+    values.setRunSeq(runSeq);
     mapper.insertStepRun(values);
-    return toLong(values.get(ID));
+    return values.getId();
   }
 
   public void finishStepRunSuccess(Long stepRunId, Object outputSummary) {
@@ -225,14 +187,18 @@ public class PlatformPipelineRunRepository {
     if (param.stepRunId() == null) {
       return;
     }
-    mapper.finishStepRun(params(
-        "stepRunId", param.stepRunId(),
-        "status", param.status(),
-        "outputSummaryJson", toJson(param.outputSummary()),
-        "errorCode", param.errorCode(),
-        "errorMessage", truncate(param.errorMessage(), 1024),
-        "errorKey", param.errorKey(),
-        "errorArgs", param.errorArgs()));
+    String outputSummaryJson = toJson(param.outputSummary());
+    String boundedErrorMessage = truncate(param.errorMessage(), 1024);
+    PlatformStepRunFinishParam statementParams = PlatformStepRunFinishParam.builder()
+        .stepRunId(param.stepRunId())
+        .status(param.status())
+        .outputSummaryJson(outputSummaryJson)
+        .errorCode(param.errorCode())
+        .errorMessage(boundedErrorMessage)
+        .errorKey(param.errorKey())
+        .errorArgs(param.errorArgs())
+        .build();
+    mapper.finishStepRun(statementParams);
   }
 
   @Builder

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：tenant-config-runtime-edit.sh:运行中更新作业配置的实例边界 SIM。
+# 用法：在仓库根目录执行 bash scripts/sim/30-tenant-config-runtime-edit.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 30-tenant-config-runtime-edit.sh:运行中更新作业配置的实例边界 SIM
 #
@@ -21,12 +23,14 @@ import http.cookiejar
 import json
 import os
 import signal
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import subprocess
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from datetime import date, timedelta
 
 TENANT = os.environ.get("SIM_ATOMIC_TENANT_ID", "default-tenant")
 JOB_CODE = os.environ.get("SIM_ATOMIC_JOB_CODE", "atomic_shell_demo")
@@ -120,16 +124,16 @@ def update_definition(job_id, default_params, retry_policy, retry_max_count, tim
         raise RuntimeError(f"job definition update failed HTTP={status}: {body[:500]}")
 
 
-def launch(label):
+def launch(label, biz_date):
     request_id = f"sim-tenant-runtime-edit-{label}-{int(time.time() * 1000)}"
     status, body = request(
         "POST",
         f"{TRIGGER}/api/triggers/launch",
         {
             "tenantId": TENANT,
-            "jobCode": JOB_CODE,
+            "workflowDefinitionId": workflow_id_for_fixture(TENANT, JOB_CODE),
             "triggerType": "API",
-            "bizDate": BIZ_DATE,
+            "bizDate": biz_date,
             "requestId": request_id,
             "params": {},
         },
@@ -222,7 +226,7 @@ edited_params = {"taskType": "shell", "command": "/bin/echo", "args": ["updated-
 old_instance_request = None
 try:
     update_definition(job_id, sleep_params, "EXPONENTIAL", 1, 300)
-    old_instance_request = launch("in-flight")
+    old_instance_request = launch("in-flight", BIZ_DATE)
     instance_id, task_id = wait_for_task(old_instance_request, "RUNNING")
     print(f"  [running] instance={instance_id} task={task_id}", flush=True)
 
@@ -234,7 +238,10 @@ try:
     )
     print("  ✓ running instance retains its creation-time execution and retry snapshot", flush=True)
 
-    new_instance_request = launch("after-edit")
+    new_instance_biz_date = (
+        date.fromisoformat(BIZ_DATE) + timedelta(days=1)
+    ).isoformat()
+    new_instance_request = launch("after-edit", new_instance_biz_date)
     new_snapshot = wait_for_observation(new_instance_request)
     assert new_snapshot[2:7] == ["/bin/echo", "updated-config", "NONE", "0", "60"], (
         f"new instance did not use the updated definition: observation={new_snapshot}"

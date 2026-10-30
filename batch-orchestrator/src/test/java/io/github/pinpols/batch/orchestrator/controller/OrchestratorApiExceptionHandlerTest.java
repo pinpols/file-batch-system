@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -36,6 +37,7 @@ class OrchestratorApiExceptionHandlerTest {
 
     assertThat(response.getStatusCode().value()).isEqualTo(400);
     assertThat(response.getBody().code()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+    assertThat(response.getBody().message()).isEqualTo(ResultCode.INVALID_ARGUMENT.label());
   }
 
   @Test
@@ -64,6 +66,23 @@ class OrchestratorApiExceptionHandlerTest {
         handler.handleResponseStatus(new ResponseStatusException(HttpStatus.CONFLICT, "clash"));
     assertThat(conflict.getStatusCode().value()).isEqualTo(409);
     assertThat(conflict.getBody().code()).isEqualTo(ResultCode.CONFLICT);
+  }
+
+  @Test
+  @DisplayName("迟到的 Worker claim 保持 404 响应并按预期拒绝记录 INFO")
+  void shouldClassifyUnavailableTaskClaimAsExpectedInfo() {
+    BizException unavailableClaim =
+        BizException.of(ResultCode.NOT_FOUND, "error.task.claim_not_available", "42");
+    BizException unrelatedNotFound =
+        BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+
+    ResponseEntity<CommonResponse<Void>> response = handler.handleBizException(unavailableClaim);
+
+    assertThat(response.getStatusCode().value()).isEqualTo(404);
+    assertThat(response.getBody()).isNotNull();
+    assertThat(response.getBody().code()).isEqualTo(ResultCode.NOT_FOUND);
+    assertThat(handler.logBizExceptionAtInfo(unavailableClaim)).isTrue();
+    assertThat(handler.logBizExceptionAtInfo(unrelatedNotFound)).isFalse();
   }
 
   @Test

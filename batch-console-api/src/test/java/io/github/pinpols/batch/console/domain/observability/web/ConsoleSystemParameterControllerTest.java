@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -23,17 +22,23 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("系统参数接口:参数查询、写入与删除")
+@ExtendWith(MockitoExtension.class)
 class ConsoleSystemParameterControllerTest {
 
-  private final ConsoleSystemParameterService parameterService =
-      mock(ConsoleSystemParameterService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleSystemParameterService parameterService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -44,9 +49,6 @@ class ConsoleSystemParameterControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -94,6 +96,9 @@ class ConsoleSystemParameterControllerTest {
   @Test
   @DisplayName("系统参数写入:按当前操作人提交键值、值与描述")
   void shouldUpsertParameter() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     mockMvc
         .perform(put("/api/console/system-parameters")
             .param("tenantId", "t1")

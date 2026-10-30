@@ -45,17 +45,15 @@
 
 ## 3. 推荐架构
 
-```text
-前端 route telemetry ───────────────┐
-                                    │
-后端 operation_audit / 业务结果 ────┼─> Usage metric normalizer
-                                    │       │
-                                    │       ├─> bounded batch buffer
-                                    │       └─> PostgreSQL daily upsert
-                                    │
-                                    └─> usage-summary query API
-                                             │
-                                      Console usage view / Grafana
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  F[前端 route telemetry] --> N[Usage metric normalizer]
+  B[后端审计 / 业务结果] --> N
+  N --> Q[有界批量缓冲]
+  Q --> D[PostgreSQL：daily upsert]
+  D --> A[usage-summary 查询 API]
+  A --> V[Console 用量视图 / Grafana]
 ```
 
 ### 3.1 数据来源优先级

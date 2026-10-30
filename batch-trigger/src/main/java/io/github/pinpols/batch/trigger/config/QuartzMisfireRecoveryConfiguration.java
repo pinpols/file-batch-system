@@ -1,6 +1,10 @@
 package io.github.pinpols.batch.trigger.config;
 
+import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzMisfireRecoveryListener;
+import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
+import org.quartz.Scheduler;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.quartz.autoconfigure.SchedulerFactoryBeanCustomizer;
@@ -13,10 +17,29 @@ import org.springframework.scheduling.TaskScheduler;
 public class QuartzMisfireRecoveryConfiguration {
 
   @Bean
+  QuartzMisfireRecoveryListener quartzMisfireRecoveryListener(
+      ObjectProvider<Scheduler> schedulerProvider,
+      @Qualifier("taskScheduler") TaskScheduler taskScheduler,
+      ScheduledOccurrenceRecorder occurrenceRecorder,
+      TriggerRuntimeProperties triggerRuntimeProperties) {
+    return new QuartzMisfireRecoveryListener(
+        schedulerProvider::getObject, taskScheduler, occurrenceRecorder, triggerRuntimeProperties);
+  }
+
+  @Bean
   SchedulerFactoryBeanCustomizer quartzMisfireRecoveryCustomizer(
-      ObjectProvider<org.quartz.Scheduler> schedulerProvider,
-      @Qualifier("taskScheduler") TaskScheduler taskScheduler) {
-    return factory -> factory.setGlobalTriggerListeners(
-        new QuartzMisfireRecoveryListener(schedulerProvider::getObject, taskScheduler));
+      QuartzMisfireRecoveryListener misfireRecoveryListener,
+      KafkaNamespaceProperties deploymentNamespace) {
+    return factory -> {
+      factory.setGlobalTriggerListeners(misfireRecoveryListener);
+      factory.setSchedulerName(schedulerName(deploymentNamespace.getNamespace()));
+    };
+  }
+
+  static String schedulerName(String deploymentNamespace) {
+    if (EmptyChecks.isNull(deploymentNamespace) || EmptyChecks.isBlank(deploymentNamespace)) {
+      return "BatchTriggerScheduler";
+    }
+    return "BatchTriggerScheduler-" + deploymentNamespace.trim();
   }
 }

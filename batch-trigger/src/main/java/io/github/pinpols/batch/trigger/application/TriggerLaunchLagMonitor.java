@@ -56,11 +56,15 @@ public class TriggerLaunchLagMonitor {
 
   @EventListener(ApplicationReadyEvent.class)
   public void start() {
-    if (!properties.isAdaptiveReleaseEnabled() || !started.compareAndSet(false, true)) {
+    if (!properties.isAdaptiveReleaseEnabled()) {
       return;
     }
-    scheduledTask.set(scheduler.scheduleWithFixedDelay(
-        this::sampleSafely, Duration.ofMillis(properties.getLagSampleIntervalMillis())));
+    boolean firstStart = started.compareAndSet(false, true);
+    if (!firstStart) {
+      return;
+    }
+    Duration samplingInterval = Duration.ofMillis(properties.getLagSampleIntervalMillis());
+    scheduledTask.set(scheduler.scheduleWithFixedDelay(this::sampleSafely, samplingInterval));
   }
 
   @EventListener(ContextClosedEvent.class)
@@ -81,7 +85,8 @@ public class TriggerLaunchLagMonitor {
       return;
     }
     try {
-      publishSnapshot(queryLag());
+      long sampledLag = queryLag();
+      publishSnapshot(sampledLag);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
       if (!stopping.get()) {
@@ -101,7 +106,9 @@ public class TriggerLaunchLagMonitor {
   }
 
   private void publishSnapshot(long lag) {
-    snapshot.set(new LagSnapshot(lag, sequence.incrementAndGet()));
+    long snapshotSequence = sequence.incrementAndGet();
+    LagSnapshot nextSnapshot = new LagSnapshot(lag, snapshotSequence);
+    snapshot.set(nextSnapshot);
   }
 
   record LagSnapshot(long lag, long sequence) {}

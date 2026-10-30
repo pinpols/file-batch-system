@@ -6,13 +6,15 @@ import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventOutboxRetryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
-import io.github.pinpols.batch.orchestrator.mapper.EventOutboxRetryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.Counter;
@@ -72,7 +74,7 @@ import org.springframework.stereotype.Service;
 public class DefaultScheduleForwarder implements ScheduleForwarder {
 
   private final OutboxEventMapper outboxEventMapper;
-  private final EventOutboxRetryMapper eventOutboxRetryMapper;
+  private final OutboxChildRecordService outboxChildRecordService;
   private final OutboxPublisher outboxPublisher;
   private final BatchOrchestratorGovernanceProperties governance;
   private final MeterRegistry meterRegistry;
@@ -185,7 +187,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         .build();
     long pollStartNanos = System.nanoTime();
     List<OutboxEventEntity> pendingEvents = outboxEventMapper.selectPending(pendingQuery);
-    pollTimer.record(Duration.ofNanos(System.nanoTime() - pollStartNanos));
+    long pollElapsedNanos = System.nanoTime() - pollStartNanos;
+    Duration pollDuration = Duration.ofNanos(pollElapsedNanos);
+    pollTimer.record(pollDuration);
     return pendingEvents;
   }
 
@@ -205,12 +209,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     }
     Set<Long> wonIds = new HashSet<>();
     for (Map.Entry<String, List<Long>> entry : pendingIdsByTenant.entrySet()) {
-      wonIds.addAll(outboxEventMapper.markPublishingBatch(
-          entry.getKey(),
-          entry.getValue(),
-          OutboxPublishStatus.PUBLISHING.code(),
-          OutboxPublishStatus.NEW.code(),
-          OutboxPublishStatus.FAILED.code()));
+      OutboxEventMarkPublishingBatchParam outboxEventMarkPublishingBatchParam =
+          OutboxEventMarkPublishingBatchParam.builder()
+              .tenantId(entry.getKey())
+              .ids(entry.getValue())
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .pendingStatus1(OutboxPublishStatus.NEW.code())
+              .pendingStatus2(OutboxPublishStatus.FAILED.code())
+              .build();
+      wonIds.addAll(outboxEventMapper.markPublishingBatch(outboxEventMarkPublishingBatchParam));
     }
     List<InFlight> inFlight = new ArrayList<>(pendingEvents.size());
     for (OutboxEventEntity event : pendingEvents) {
@@ -221,9 +228,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         } catch (RuntimeException exception) {
           future = CompletableFuture.completedFuture(false);
         }
-        inFlight.add(new InFlight(
-            event,
-            EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false)));
+        CompletableFuture<Boolean> publishFuture =
+            EmptyChecks.isNotNull(future) ? future : CompletableFuture.completedFuture(false);
+        inFlight.add(new InFlight(event, publishFuture));
       }
     }
     return inFlight;
@@ -239,8 +246,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    */
   private void awaitAcknowledgements(List<InFlight> inFlight) {
     if (EmptyChecks.isNotEmpty(inFlight)) {
-      CompletableFuture.allOf(
-              inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new))
+      CompletableFuture<?>[] acknowledgementFutures =
+          inFlight.stream().map(InFlight::future).toArray(CompletableFuture[]::new);
+      CompletableFuture.allOf(acknowledgementFutures)
           .orTimeout(governance.outbox().getPublishingTimeoutSeconds(), TimeUnit.SECONDS)
           .exceptionally(ex -> null)
           .join();
@@ -326,12 +334,15 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     for (Map.Entry<FailedGroupKey, List<Long>> entry : groups.failedByGroup().entrySet()) {
       Instant nextRetryAt = computeNextRetryAt(entry.getKey().attemptNo(), governance.outbox());
       nextRetryAtByGroup.put(entry.getKey(), nextRetryAt);
-      int updated = outboxEventMapper.markFailedBatch(
-          entry.getKey().tenantId(),
-          entry.getValue(),
-          OutboxPublishStatus.FAILED.code(),
-          nextRetryAt,
-          OutboxPublishStatus.PUBLISHING.code());
+      OutboxEventMarkFailedBatchParam outboxEventMarkFailedBatchParam =
+          OutboxEventMarkFailedBatchParam.builder()
+              .tenantId(entry.getKey().tenantId())
+              .ids(entry.getValue())
+              .status(OutboxPublishStatus.FAILED.code())
+              .nextPublishAt(nextRetryAt)
+              .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+              .build();
+      int updated = outboxEventMapper.markFailedBatch(outboxEventMarkFailedBatchParam);
       warnOnPartialUpdate(
           "markFailed", entry.getKey().tenantId(), entry.getValue().size(), updated);
     }
@@ -349,8 +360,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
         if (retry.attemptNo() >= governance.outbox().getMaxRetryAttempts()) {
           recordRetry(event, retry.attemptNo(), null, "retry attempts exhausted");
         } else {
-          Instant groupNextRetryAt =
-              nextRetryAtByGroup.get(new FailedGroupKey(event.getTenantId(), retry.attemptNo()));
+          FailedGroupKey groupKey = new FailedGroupKey(event.getTenantId(), retry.attemptNo());
+          Instant groupNextRetryAt = nextRetryAtByGroup.get(groupKey);
           recordRetry(event, retry.attemptNo(), groupNextRetryAt, "publish failed");
         }
       } finally {
@@ -368,7 +379,9 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
    * 把异常态归为「未发布」(交阶段三按 FAILED 回写),只对正常完成的才取值。
    */
   private static boolean isPublishedNow(CompletableFuture<Boolean> future) {
-    if (!future.isDone() || future.isCancelled() || future.isCompletedExceptionally()) {
+    boolean completedNormally =
+        future.isDone() && !future.isCancelled() && !future.isCompletedExceptionally();
+    if (!completedNormally) {
       return false;
     }
     return Boolean.TRUE.equals(future.getNow(false));
@@ -404,8 +417,11 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     int normalizedAttempt = Math.max(attemptNo, 1);
     // attempt^(N-1) 用 double 防溢出,clamp 到 [base, max]
     double raw = base * Math.pow(multiplier, normalizedAttempt - 1.0);
-    long bounded = Math.min(Math.max((long) raw, base), max);
-    double jitterRatio = Math.max(0.0, Math.min(outbox.getRetryJitterRatio(), 1.0));
+    long atLeastBaseDelay = Math.max((long) raw, base);
+    long bounded = Math.min(atLeastBaseDelay, max);
+    double configuredJitterRatio = outbox.getRetryJitterRatio();
+    double jitterRatioAtMostOne = Math.min(configuredJitterRatio, 1.0);
+    double jitterRatio = Math.max(0.0, jitterRatioAtMostOne);
     long jittered;
     if (jitterRatio == 0.0) {
       jittered = bounded;
@@ -414,7 +430,8 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
           1.0 + (ThreadLocalRandom.current().nextDouble() * 2.0 - 1.0) * jitterRatio;
       jittered = Math.max((long) (bounded * jitterFactor), 1L);
     }
-    return BatchDateTimeSupport.utcNow().plusSeconds(jittered);
+    Instant retryBaseTime = BatchDateTimeSupport.utcNow();
+    return retryBaseTime.plusSeconds(jittered);
   }
 
   /** 单独持久化 Outbox 发布重试记录，与业务重试计数器分开管理。 */
@@ -423,15 +440,17 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
     EventOutboxRetryEntity retry = new EventOutboxRetryEntity();
     retry.setTenantId(event.getTenantId());
     retry.setOutboxEventId(event.getId());
+    retry.setOutboxEventCreatedAt(event.getCreatedAt());
     retry.setEventKey(event.getEventKey());
     retry.setPublishAttempt(publishAttemptNo);
+    boolean retryIsExhausted = EmptyChecks.isNull(nextRetryAt);
     retry.setRetryStatus(
-        EmptyChecks.isNull(nextRetryAt)
+        retryIsExhausted
             ? RetryScheduleStatus.EXHAUSTED.code()
             : RetryScheduleStatus.FAILED.code());
     retry.setRetryReason(reason);
     retry.setNextRetryAt(nextRetryAt);
     retry.setTraceId(event.getTraceId());
-    eventOutboxRetryMapper.insert(retry);
+    outboxChildRecordService.recordRetry(retry);
   }
 }

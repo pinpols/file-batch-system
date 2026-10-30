@@ -2,13 +2,22 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Map;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
@@ -18,7 +27,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("作业监控策略 mapper 的真实 PostgreSQL 更新语义")
@@ -37,9 +48,39 @@ class JobMonitoringPolicyMapperIntegrationTest {
     dataSource.setUser(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
     jdbcTemplate = new JdbcTemplate(dataSource);
-    jdbcTemplate.execute("create schema batch");
-    jdbcTemplate.execute("create table batch.job_definition (id bigint primary key)");
-    jdbcTemplate.execute("""
+    String createBatchSchemaSql = """
+        create schema batch
+    """;
+    jdbcTemplate.execute(createBatchSchemaSql);
+    String createJobDefinitionTableSql = """
+        create table batch.job_definition (id bigint primary key)
+    """;
+    jdbcTemplate.execute(createJobDefinitionTableSql);
+    String extendJobDefinitionTableSql = """
+        alter table batch.job_definition
+          add column tenant_id varchar(64), add column job_code varchar(128),
+          add column job_name varchar(256), add column depends_on_job_code varchar(128),
+          add column trigger_mode varchar(32), add column queue_code varchar(128),
+          add column worker_group varchar(128), add column schedule_type varchar(32), add column schedule_expr varchar(256),
+          add column calendar_code varchar(128), add column window_code varchar(128),
+          add column retry_policy varchar(256), add column retry_max_count integer,
+          add column timeout_seconds integer, add column shard_strategy varchar(64),
+          add column execution_mode varchar(32), add column watermark_field varchar(128),
+          add column execution_handler varchar(256), add column param_schema text,
+          add column priority integer, add column enabled boolean, add column description text,
+          add column version integer not null default 1, add column updated_by varchar(64),
+          add column updated_at timestamptz not null default current_timestamp
+        """;
+    jdbcTemplate.execute(extendJobDefinitionTableSql);
+    String createLookupTablesSql = """
+        CREATE TABLE batch.workflow_definition (
+          id BIGINT PRIMARY KEY, tenant_id VARCHAR(64), single_job_definition_id BIGINT);
+        CREATE TABLE batch.job_dependency (
+          tenant_id VARCHAR(64), downstream_job_code VARCHAR(128), upstream_job_code VARCHAR(128),
+          dependency_order INTEGER, biz_date_alignment VARCHAR(32))
+        """;
+    jdbcTemplate.execute(createLookupTablesSql);
+    String createMonitoringPolicyTableSql = """
         create table batch.job_monitoring_policy (
           tenant_id varchar(64) not null,
           job_definition_id bigint not null references batch.job_definition(id) on delete cascade,
@@ -58,12 +99,18 @@ class JobMonitoringPolicyMapperIntegrationTest {
           completion_deadline_updated_at timestamptz not null default current_timestamp,
           unique (tenant_id, job_definition_id)
         )
-        """);
-    jdbcTemplate.update("insert into batch.job_definition(id) values (1)");
+        """;
+    jdbcTemplate.execute(createMonitoringPolicyTableSql);
+    ClassPathResource migration =
+        new ClassPathResource("db/migration/V355__job_monitoring_rule_effective_times.sql");
+    new ResourceDatabasePopulator(migration).execute(dataSource);
+    String insertJobDefinitionSql = """
+        insert into batch.job_definition(id) values (1)
+    """;
+    jdbcTemplate.update(insertJobDefinitionSql);
 
-    org.apache.ibatis.session.Configuration configuration =
-        new org.apache.ibatis.session.Configuration(
-            new Environment("job-monitoring-policy-it", new JdbcTransactionFactory(), dataSource));
+    Configuration configuration = new Configuration(
+        new Environment("job-monitoring-policy-it", new JdbcTransactionFactory(), dataSource));
     parseMapper(configuration, "mapper/CommonFragments.xml");
     parseMapper(configuration, "mapper/JobDefinitionMapper.xml");
     sqlSessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -72,6 +119,123 @@ class JobMonitoringPolicyMapperIntegrationTest {
   @AfterAll
   static void stopPostgres() {
     POSTGRES.stop();
+  }
+
+  @Test
+  @DisplayName("运行与启动规则独立生效，严重级别编辑不重置任一规则时钟")
+  void shouldKeepRuntimeAndStartActivationTimesIndependent() {
+    String insertDefinitionSql = """
+        INSERT INTO batch.job_definition(id) VALUES (3)
+        """;
+    jdbcTemplate.update(insertDefinitionSql);
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      JobDefinitionMapper mapper = session.getMapper(JobDefinitionMapper.class);
+      mapper.upsertJobMonitoringPolicy(clockPolicy(30, 60, "WARN"));
+      String backdateSql = """
+          UPDATE batch.job_monitoring_policy
+          SET soft_runtime_updated_at = CURRENT_TIMESTAMP - INTERVAL '1 hour',
+              start_grace_updated_at = CURRENT_TIMESTAMP - INTERVAL '1 hour',
+              completion_deadline_updated_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+          WHERE tenant_id = 'tenant-clock' AND job_definition_id = 3
+          """;
+      jdbcTemplate.update(backdateSql);
+      RuleTimes original = readRuleTimes();
+      mapper.upsertJobMonitoringPolicy(clockPolicy(30, 60, "ERROR"));
+      RuleTimes severityOnly = readRuleTimes();
+      assertThat(severityOnly).isEqualTo(original);
+      mapper.upsertJobMonitoringPolicy(clockPolicy(31, 60, "ERROR"));
+      RuleTimes runtimeChanged = readRuleTimes();
+      assertThat(runtimeChanged.runtime()).isAfter(original.runtime());
+      assertThat(runtimeChanged.start()).isEqualTo(original.start());
+      assertThat(runtimeChanged.completion()).isEqualTo(original.completion());
+      mapper.upsertJobMonitoringPolicy(clockPolicy(31, 61, "ERROR"));
+      RuleTimes startChanged = readRuleTimes();
+      assertThat(startChanged.runtime()).isEqualTo(runtimeChanged.runtime());
+      assertThat(startChanged.start()).isAfter(original.start());
+      assertThat(startChanged.completion()).isEqualTo(original.completion());
+    }
+  }
+
+  private JobMonitoringPolicyUpsertParam clockPolicy(int runtime, int start, String severity) {
+    return JobMonitoringPolicyUpsertParam.builder()
+        .tenantId("tenant-clock")
+        .jobDefinitionId(3L)
+        .softRuntimeSeconds(runtime)
+        .softRuntimeSeverity(severity)
+        .startGraceSeconds(start)
+        .startGraceSeverity(severity)
+        .completionDeadlineLocalTime(null)
+        .completionDeadlineDayOffset(0)
+        .dependencyCompletionWindowSeconds(0)
+        .completionDeadlineSeverity("WARN")
+        .updatedBy("operator")
+        .build();
+  }
+
+  private RuleTimes readRuleTimes() {
+    String selectSql = """
+        SELECT soft_runtime_updated_at, start_grace_updated_at, completion_deadline_updated_at
+        FROM batch.job_monitoring_policy WHERE tenant_id = 'tenant-clock' AND job_definition_id = 3
+        """;
+    return jdbcTemplate.queryForObject(
+        selectSql,
+        (result, row) -> new RuleTimes(
+            result.getObject("soft_runtime_updated_at", OffsetDateTime.class),
+            result.getObject("start_grace_updated_at", OffsetDateTime.class),
+            result.getObject("completion_deadline_updated_at", OffsetDateTime.class)));
+  }
+
+  private record RuleTimes(
+      OffsetDateTime runtime, OffsetDateTime start, OffsetDateTime completion) {}
+
+  @Test
+  @DisplayName("MANUAL 的就绪规则配置在列表和计数中分类一致，完成启用标记不依赖旧定时类型")
+  void shouldListConfiguredWorkflowPoliciesAsEligibilityDriven() {
+    String insertDefinitionsSql = """
+        INSERT INTO batch.job_definition(id, tenant_id, job_code, schedule_type)
+        VALUES (10, 'tenant-category', 'CONFIGURED', 'MANUAL'), (11, 'tenant-category', 'RUNTIME_ONLY', 'MANUAL')
+        """;
+    jdbcTemplate.update(insertDefinitionsSql);
+    JobMonitoringPolicyUpsertParam policy = JobMonitoringPolicyUpsertParam.builder()
+        .tenantId("tenant-category")
+        .jobDefinitionId(10L)
+        .softRuntimeSeconds(0)
+        .softRuntimeSeverity("WARN")
+        .startGraceSeconds(60)
+        .startGraceSeverity("WARN")
+        .completionDeadlineDayOffset(0)
+        .dependencyCompletionWindowSeconds(120)
+        .completionDeadlineSeverity("WARN")
+        .updatedBy("operator")
+        .build();
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      JobDefinitionMapper mapper = session.getMapper(JobDefinitionMapper.class);
+      mapper.upsertJobMonitoringPolicy(policy);
+      PageRequest page = new PageRequest(1, 20);
+      JobDefinitionQuery eligibility = JobDefinitionQuery.builder()
+          .tenantId("tenant-category")
+          .monitoringCategory("DEPENDENCY")
+          .pageRequest(page)
+          .build();
+      JobDefinitionQuery runtimeOnly = JobDefinitionQuery.builder()
+          .tenantId("tenant-category")
+          .monitoringCategory("RUNTIME_ONLY")
+          .pageRequest(page)
+          .build();
+      long eligibilityCount = mapper.countByQuery(eligibility);
+      List<JobDefinitionEntity> configured = mapper.selectByQuery(eligibility);
+      long runtimeCount = mapper.countByQuery(runtimeOnly);
+      List<JobDefinitionEntity> runtime = mapper.selectByQuery(runtimeOnly);
+      assertThat(eligibilityCount).isOne();
+      assertThat(configured)
+          .extracting(JobDefinitionEntity::getJobCode)
+          .containsExactly("CONFIGURED");
+      assertThat(configured.getFirst().getCompletionDeadlineEnabled()).isTrue();
+      assertThat(runtimeCount).isOne();
+      assertThat(runtime)
+          .extracting(JobDefinitionEntity::getJobCode)
+          .containsExactly("RUNTIME_ONLY");
+    }
   }
 
   @DisplayName("普通作业编辑不重置完成期限基线,修改期限才更新")
@@ -92,8 +256,12 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .completionDeadlineSeverity("WARN")
           .updatedBy("operator")
           .build());
-      jdbcTemplate.update(
-          "update batch.job_monitoring_policy set completion_deadline_updated_at = current_timestamp - interval '1 hour'");
+      String backdateCompletionDeadlineSql = """
+          update batch.job_monitoring_policy
+             set completion_deadline_updated_at = current_timestamp - interval '1 hour'
+          where tenant_id = 'tenant-a' and job_definition_id = 1
+          """;
+      jdbcTemplate.update(backdateCompletionDeadlineSql);
       OffsetDateTime originalBaseline = readCompletionBaseline();
 
       mapper.upsertJobMonitoringPolicy(JobMonitoringPolicyUpsertParam.builder()
@@ -141,21 +309,62 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .updatedBy("operator")
           .build());
       assertThat(readCompletionBaseline()).isAfter(clockBaseline);
-      assertThat(jdbcTemplate.queryForObject(
-              "select dependency_completion_window_seconds from batch.job_monitoring_policy",
-              Integer.class))
-          .isEqualTo(1200);
+      String selectDependencyCompletionWindowSql = """
+          select dependency_completion_window_seconds from batch.job_monitoring_policy
+          where tenant_id = 'tenant-a' and job_definition_id = 1
+      """;
+      Integer selectedDependencyCompletionWindowSeconds =
+          jdbcTemplate.queryForObject(selectDependencyCompletionWindowSql, Integer.class);
+      assertThat(selectedDependencyCompletionWindowSeconds).isEqualTo(1200);
     }
   }
 
-  private static OffsetDateTime readCompletionBaseline() {
-    return jdbcTemplate.queryForObject(
-        "select completion_deadline_updated_at from batch.job_monitoring_policy",
-        OffsetDateTime.class);
+  @DisplayName("作业维护更新 SQL 持久化执行处理器、参数 schema 与优先级")
+  @Test
+  void shouldPersistEditableExecutionFields() {
+    String insertEditableJobDefinitionSql = """
+        insert into batch.job_definition (
+          id, tenant_id, job_code, execution_handler, param_schema, priority
+        ) values (2, 'tenant-a', 'JOB_EDIT', 'old-handler', '{"type":"string"}', 3)
+        """;
+    jdbcTemplate.update(insertEditableJobDefinitionSql);
+    JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
+    param.setTenantId("tenant-a");
+    param.setJobCode("JOB_EDIT");
+    param.setJobName("job edit");
+    param.setTriggerMode("MANUAL");
+    param.setExecutionHandler("new-handler");
+    param.setParamSchema("{\"type\":\"object\"}");
+    param.setPriority(7);
+    param.setEnabled(true);
+    param.setUpdatedBy("tester");
+
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      JobDefinitionMapper mapper = session.getMapper(JobDefinitionMapper.class);
+      assertThat(mapper.updateJobDefinitionMaintenance(param)).isEqualTo(1);
+    }
+
+    String selectEditableJobDefinitionSql = """
+        select execution_handler, param_schema, priority from batch.job_definition where id = 2
+    """;
+    Map<String, Object> persisted = jdbcTemplate.queryForMap(selectEditableJobDefinitionSql);
+    assertThat(persisted)
+        .containsEntry("execution_handler", "new-handler")
+        .containsEntry("priority", 7);
+    Map<String, Object> schema = JsonUtils.fromJson(
+        persisted.get("param_schema").toString(), new TypeReference<Map<String, Object>>() {});
+    assertThat(schema).isEqualTo(Map.of("type", "object"));
   }
 
-  private static void parseMapper(
-      org.apache.ibatis.session.Configuration configuration, String resource) throws Exception {
+  private static OffsetDateTime readCompletionBaseline() {
+    String selectCompletionDeadlineBaselineSql = """
+        select completion_deadline_updated_at from batch.job_monitoring_policy
+        where tenant_id = 'tenant-a' and job_definition_id = 1
+    """;
+    return jdbcTemplate.queryForObject(selectCompletionDeadlineBaselineSql, OffsetDateTime.class);
+  }
+
+  private static void parseMapper(Configuration configuration, String resource) throws Exception {
     try (var input = Resources.getResourceAsStream(resource)) {
       new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
     }

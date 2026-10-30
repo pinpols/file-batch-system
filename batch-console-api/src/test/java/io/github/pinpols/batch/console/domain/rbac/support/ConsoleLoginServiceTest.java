@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.Set;
@@ -37,8 +38,7 @@ class ConsoleLoginServiceTest {
   private LoginProtectionService loginProtectionService;
 
   @Mock
-  private io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver
-      requestMetadataResolver;
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @InjectMocks
   private ConsoleLoginService loginService;

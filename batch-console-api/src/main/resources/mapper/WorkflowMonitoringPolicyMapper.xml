@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowMonitoringPolicyMapper">
+    <resultMap id="workflowMonitoringPolicyResultMap"
+               type="io.github.pinpols.batch.common.persistence.entity.WorkflowMonitoringPolicyEntity">
+        <id column="tenant_id" property="tenantId"/>
+        <id column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="soft_runtime_seconds" property="softRuntimeSeconds"/>
+        <result column="soft_runtime_severity" property="softRuntimeSeverity"/>
+        <result column="start_grace_seconds" property="startGraceSeconds"/>
+        <result column="start_grace_severity" property="startGraceSeverity"/>
+        <result column="completion_deadline_local_time" property="completionDeadlineLocalTime"/>
+        <result column="completion_deadline_day_offset" property="completionDeadlineDayOffset"/>
+        <result column="completion_deadline_severity" property="completionDeadlineSeverity"/>
+        <result column="policy_effective_at" property="policyEffectiveAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectByDefinition" resultMap="workflowMonitoringPolicyResultMap">
+        SELECT * FROM batch.workflow_monitoring_policy
+        WHERE tenant_id = #{tenantId} AND workflow_definition_id = #{workflowDefinitionId}
+    </select>
+
+    <select id="selectByTenant" resultMap="workflowMonitoringPolicyResultMap">
+        SELECT * FROM batch.workflow_monitoring_policy
+        WHERE tenant_id = #{tenantId}
+        ORDER BY workflow_definition_id
+    </select>
+
+    <insert id="upsert">
+        INSERT INTO batch.workflow_monitoring_policy (
+            tenant_id, workflow_definition_id, soft_runtime_seconds, soft_runtime_severity,
+            start_grace_seconds, start_grace_severity, completion_deadline_local_time,
+            completion_deadline_day_offset, completion_deadline_severity
+        ) VALUES (
+            #{tenantId}, #{workflowDefinitionId}, #{softRuntimeSeconds}, #{softRuntimeSeverity},
+            #{startGraceSeconds}, #{startGraceSeverity}, #{completionDeadlineLocalTime},
+            #{completionDeadlineDayOffset}, #{completionDeadlineSeverity}
+        )
+        ON CONFLICT (tenant_id, workflow_definition_id) DO UPDATE SET
+            soft_runtime_seconds = excluded.soft_runtime_seconds,
+            soft_runtime_severity = excluded.soft_runtime_severity,
+            start_grace_seconds = excluded.start_grace_seconds,
+            start_grace_severity = excluded.start_grace_severity,
+            completion_deadline_local_time = excluded.completion_deadline_local_time,
+            completion_deadline_day_offset = excluded.completion_deadline_day_offset,
+            completion_deadline_severity = excluded.completion_deadline_severity,
+            policy_effective_at = CASE WHEN
+                (batch.workflow_monitoring_policy.soft_runtime_seconds,
+                 batch.workflow_monitoring_policy.start_grace_seconds,
+                 batch.workflow_monitoring_policy.completion_deadline_local_time,
+                 batch.workflow_monitoring_policy.completion_deadline_day_offset)
+                IS DISTINCT FROM
+                (excluded.soft_runtime_seconds, excluded.start_grace_seconds,
+                 excluded.completion_deadline_local_time, excluded.completion_deadline_day_offset)
+                THEN CURRENT_TIMESTAMP ELSE batch.workflow_monitoring_policy.policy_effective_at END,
+            updated_at = CURRENT_TIMESTAMP
+    </insert>
+</mapper>

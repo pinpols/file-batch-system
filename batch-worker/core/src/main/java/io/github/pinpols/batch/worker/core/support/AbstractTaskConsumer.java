@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
@@ -31,7 +32,7 @@ import org.springframework.kafka.support.Acknowledgment;
 /**
  * Kafka 消费骨架（所有 worker 通用）。
  *
- * <p>设计目标：把“通用的消费/路由/幂等/日志字段注入”集中在一处，避免 import/export/dispatch 三条链路各自演化出不一致实现。
+ * <p>设计目标：把“通用的消费/路由/幂等/日志字段注入”集中在一处，避免 IMPORT、EXPORT、PROCESS、DISPATCH、ATOMIC 五类 Worker 各自演化出不一致实现。
  *
  * <p>子类只需要：
  *
@@ -139,6 +140,8 @@ public abstract class AbstractTaskConsumer
   // 注入不到时 topicPattern() 走默认 PATTERN 行为。
   private WorkerKafkaSubscribeProperties subscribeProperties;
 
+  private BatchKafkaTopicNamespace topicNamespace = new BatchKafkaTopicNamespace("");
+
   protected AbstractTaskConsumer(
       KafkaListenerEndpointRegistry kafkaListenerEndpointRegistry,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
@@ -159,6 +162,9 @@ public abstract class AbstractTaskConsumer
   public void setApplicationContext(ApplicationContext applicationContext) throws BeansException {
     this.subscribeProperties =
         applicationContext.getBeanProvider(WorkerKafkaSubscribeProperties.class).getIfAvailable();
+    this.topicNamespace = applicationContext
+        .getBeanProvider(BatchKafkaTopicNamespace.class)
+        .getIfAvailable(() -> new BatchKafkaTopicNamespace(""));
   }
 
   /** P1: 构造完成 + Spring 依赖装配后立即建立 semaphore,确保 doConsume 触发前 permits 已就绪。 */
@@ -214,7 +220,9 @@ public abstract class AbstractTaskConsumer
         final WorkerRegistration finalRegistration = registration;
         String tenantId = finalMessage.tenantId();
         WorkerExecutionResult result;
-        if (tenantId != null && !tenantId.isBlank() && !"unknown".equals(tenantId)) {
+        boolean hasKnownTenantIdentity =
+            EmptyChecks.isNotBlank(tenantId) && !"unknown".equals(tenantId);
+        if (hasKnownTenantIdentity) {
           result = RlsTenantContextHolder.runWithTenant(
               tenantId,
               () -> taskDispatchExecutor().execute(finalMessage, finalRegistration.getWorkerId()));
@@ -233,7 +241,7 @@ public abstract class AbstractTaskConsumer
             workerConfiguration().workerType(),
             result.taskId(),
             result.success(),
-            result.message());
+            SwallowedExceptionLogger.safeMessage(result.message()));
         return true;
       } catch (Exception ex) {
         // R1-P2-7 / S1-7：区分 orchestrator 5xx（transient，不该进 DLQ）vs 业务 4xx/不可恢复（DLQ）。
@@ -253,8 +261,7 @@ public abstract class AbstractTaskConsumer
             "{} task execution failed — publishing to DLQ: taskId={}, error={}",
             workerConfiguration().workerType(),
             message.taskId(),
-            SwallowedExceptionLogger.summary(ex),
-            ex);
+            SwallowedExceptionLogger.summary(ex));
         // #4-3: 先确认 DLQ 写入成功再提交偏移量，避免消息双重丢失
         if (!publishToDlqSafely(payload, ex.getMessage())) {
           // DLQ 写入失败：不提交偏移量，Kafka 将重新投递该消息
@@ -272,8 +279,7 @@ public abstract class AbstractTaskConsumer
       log.error(
           "{} pre-dispatch failed — publishing to DLQ: error={}",
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(parseOrStartupEx),
-          parseOrStartupEx);
+          SwallowedExceptionLogger.summary(parseOrStartupEx));
       return publishToDlqSafely(payload, parseOrStartupEx.getMessage());
     } finally {
       // 无论处理成功/失败/抛异常，都必须释放 permit；
@@ -321,9 +327,8 @@ public abstract class AbstractTaskConsumer
       backpressure.pause(batchListenerId());
       return false;
     }
-    BatchMdc.put(
-        StructuredLogField.TOPIC,
-        TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration()));
+    String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
+    BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
     try {
       WorkerRegistration registration = workerLoop().ensureStarted();
       return batchExecution.process(payloads, registration);
@@ -342,8 +347,7 @@ public abstract class AbstractTaskConsumer
           "{} batch execution failed — publishing {} payloads to DLQ: error={}",
           workerConfiguration().workerType(),
           n,
-          SwallowedExceptionLogger.summary(ex),
-          ex);
+          SwallowedExceptionLogger.summary(ex));
       boolean allDlq = true;
       for (String payload : payloads) {
         if (!publishToDlqSafely(payload, ex.getMessage())) {
@@ -395,14 +399,16 @@ public abstract class AbstractTaskConsumer
     }
     try {
       dlq.publish(
-          payload, workerConfiguration().topic(), workerConfiguration().workerType(), errorMessage);
+          payload,
+          workerConfiguration().topic(),
+          workerConfiguration().workerType(),
+          SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
       return true;
     } catch (Exception dlqEx) {
       log.error(
           "{} failed to publish to the DLQ: dlqError={}",
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.summary(dlqEx),
-          dlqEx);
+          SwallowedExceptionLogger.summary(dlqEx));
       return false;
     }
   }
@@ -410,39 +416,36 @@ public abstract class AbstractTaskConsumer
   private void injectMdc(TaskDispatchMessage message, WorkerRegistration registration) {
     BatchMdc.put(StructuredLogField.TENANT_ID, message.tenantId());
     BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
-    BatchMdc.put(
-        StructuredLogField.TASK_ID,
-        EmptyChecks.isNull(message.taskId()) ? null : String.valueOf(message.taskId()));
-    BatchMdc.put(
-        StructuredLogField.JOB_INSTANCE_ID,
-        EmptyChecks.isNull(message.jobInstanceId())
-            ? null
-            : String.valueOf(message.jobInstanceId()));
-    BatchMdc.put(
-        StructuredLogField.PARTITION_ID,
-        EmptyChecks.isNull(message.jobPartitionId())
-            ? null
-            : String.valueOf(message.jobPartitionId()));
+    Object rawTaskId = message.taskId();
+    String mdcTaskId = EmptyChecks.isNull(rawTaskId) ? null : String.valueOf(message.taskId());
+    BatchMdc.put(StructuredLogField.TASK_ID, mdcTaskId);
+    Object rawJobInstanceId = message.jobInstanceId();
+    String mdcJobInstanceId =
+        EmptyChecks.isNull(rawJobInstanceId) ? null : String.valueOf(message.jobInstanceId());
+    BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, mdcJobInstanceId);
+    Object rawPartitionId = message.jobPartitionId();
+    String mdcPartitionId =
+        EmptyChecks.isNull(rawPartitionId) ? null : String.valueOf(message.jobPartitionId());
+    BatchMdc.put(StructuredLogField.PARTITION_ID, mdcPartitionId);
     if (EmptyChecks.isNotNull(message.schedulingContext())) {
-      BatchMdc.put(
-          StructuredLogField.WORKFLOW_RUN_ID,
-          EmptyChecks.isNull(message.schedulingContext().workflowRunId())
-              ? null
-              : String.valueOf(message.schedulingContext().workflowRunId()));
-      BatchMdc.put(
-          StructuredLogField.BATCH_DAY,
-          EmptyChecks.isNull(message.schedulingContext().bizDate())
-              ? null
-              : message.schedulingContext().bizDate().toString());
-      BatchMdc.put(
-          StructuredLogField.ATTEMPT,
-          EmptyChecks.isNull(message.schedulingContext().attemptNo())
-              ? null
-              : String.valueOf(message.schedulingContext().attemptNo()));
+      Object rawWorkflowRunId = message.schedulingContext().workflowRunId();
+      String mdcWorkflowRunId = EmptyChecks.isNull(rawWorkflowRunId)
+          ? null
+          : String.valueOf(message.schedulingContext().workflowRunId());
+      BatchMdc.put(StructuredLogField.WORKFLOW_RUN_ID, mdcWorkflowRunId);
+      Object rawBizDate = message.schedulingContext().bizDate();
+      String mdcBizDate = EmptyChecks.isNull(rawBizDate)
+          ? null
+          : message.schedulingContext().bizDate().toString();
+      BatchMdc.put(StructuredLogField.BATCH_DAY, mdcBizDate);
+      Object rawAttempt = message.schedulingContext().attemptNo();
+      String mdcAttempt = EmptyChecks.isNull(rawAttempt)
+          ? null
+          : String.valueOf(message.schedulingContext().attemptNo());
+      BatchMdc.put(StructuredLogField.ATTEMPT, mdcAttempt);
     }
-    BatchMdc.put(
-        StructuredLogField.TOPIC,
-        TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration()));
+    String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
+    BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
     BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());
     BatchMdc.put(
         StructuredLogField.WORKER_ID,
@@ -460,7 +463,7 @@ public abstract class AbstractTaskConsumer
    * SINGLE 模式下能匹配 producer 端实际写出的 topic。
    */
   public String[] topics() {
-    return TaskConsumerRoutingPolicy.topics(workerConfiguration());
+    return TaskConsumerRoutingPolicy.topics(workerConfiguration(), topicNamespace);
   }
 
   /**
@@ -482,7 +485,8 @@ public abstract class AbstractTaskConsumer
    * @return Kafka topic 正则 pattern（已转义 base 中的点；调用方直接传给 {@code @KafkaListener.topicPattern}）
    */
   public String topicPattern() {
-    return TaskConsumerRoutingPolicy.topicPattern(workerConfiguration(), subscribeProperties);
+    return TaskConsumerRoutingPolicy.topicPattern(
+        workerConfiguration(), subscribeProperties, topicNamespace);
   }
 
   /**
@@ -490,7 +494,8 @@ public abstract class AbstractTaskConsumer
    * #{__listener.consumerGroupId()}} 引用。
    */
   public String consumerGroupId() {
-    return workerConfiguration().consumerGroupId();
+    String configuredConsumerGroupId = workerConfiguration().consumerGroupId();
+    return topicNamespace.consumerGroup(configuredConsumerGroupId);
   }
 
   private boolean accepts(TaskDispatchMessage message, WorkerRegistration registration) {
@@ -518,10 +523,11 @@ public abstract class AbstractTaskConsumer
   protected boolean acceptsConfiguredTenantScope(
       WorkerConfiguration cfg, TaskDispatchMessage message) {
     String configuredTenant = cfg.tenantId();
-    if (configuredTenant != null
+    boolean configuredTenantConflictsWithMessage = EmptyChecks.isNotNull(configuredTenant)
         && !configuredTenant.isBlank()
         && !SHARED_TENANT_WILDCARD.equalsIgnoreCase(configuredTenant)
-        && !configuredTenant.equalsIgnoreCase(message.tenantId())) {
+        && !configuredTenant.equalsIgnoreCase(message.tenantId());
+    if (configuredTenantConflictsWithMessage) {
       log.debug(
           "worker rejecting cross-tenant task: configuredTenant={}, messageTenant={}, taskId={}",
           configuredTenant,

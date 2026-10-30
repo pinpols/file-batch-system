@@ -361,19 +361,12 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 
 ### 6.5 一图:模式空间 / 我们走哪、不走哪
 
-```
-                  数据在平台  ←─────────────────→  数据在租户
-                  ┌─────────────────────────────────────┐
-   平台 worker    │ A 共享 schema (默认)│ 混合(否决 6.2) │
-                  ├─────────────────────────────────────┤
-   租户 worker    │ (不存在,谁连?)    │ B SDK 自托管    │
-                  └─────────────────────────────────────┘
-                  
-                  极端选项:
-                  - B' = SDK + 平台发布 worker 镜像(混合需求的合理替代)
-                  - C  = per-tenant schema(否决 6.1)
-                  - D  = per-tenant cluster(否决 6.3,留 enterprise 合同例外)
-```
+| Worker 部署位置 | 数据在平台 | 数据在租户 |
+|---|---|---|
+| 平台 Worker | A：共享 schema，默认方案 | 混合：本文 §6.2 否决 |
+| 租户 Worker | 本文未采纳的组合 | B：SDK 自托管 |
+
+其他选项保持原规划决策：B′ 为 SDK 加平台发布的 Worker 镜像；C（per-tenant schema）按 §6.1 否决；D（per-tenant cluster）按 §6.3 否决，仅保留 enterprise 合同例外。
 
 **最终我们只支持 A 和 B(及 B' 变种),其它一律拒绝**。
 
@@ -423,7 +416,7 @@ CREATE POLICY tenant_isolation ON biz.customer_account
 - ADR-029 dedicated SPI worker(本 plan 不变其定位)
 - ADR-034 CAP 定位(本 plan 三件套不影响 CAP,主链不变)
 - docs/agent-baseline.md §架构硬约束(本 plan 全部 phase 都保留「orchestrator 唯一状态主机」「worker 必须 CLAIM」)
-- `docs/architecture/scalability-assessment.md`(扩容能 / 不能解决的边界)
+- `docs/runbook/production-capacity-governance.md`(扩容能 / 不能解决的边界)
 - `BizTableSchemaRegistrar.java` javadoc(已留 Phase C 扩展点注释)
 
 ## 11. 检查点

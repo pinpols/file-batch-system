@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpdateRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.NotificationChannelUpsertRequest;
@@ -20,27 +21,82 @@ import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscri
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationChannelInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationChannelUpdateParam;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.SubscriptionRuleUpdateParam;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationMessage;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationSender;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationSenderRegistry;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDeliveryResult;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookDispatcher;
 import io.github.pinpols.batch.console.domain.notification.service.WebhookEventPayload;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow;
+import io.github.pinpols.batch.console.domain.notification.view.SubscriptionRuleRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.CallbackUrlValidator;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 @DisplayName("通知渠道与订阅规则服务: 参数校验, 持久化字段组装与测试发送链路")
 class DefaultConsoleNotificationApplicationServiceTest {
+
+  @DisplayName("创建通知规则前拒绝仅用于告警的事件类型")
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "JOB_SLA_BREACH",
+        " job_sla_violation ",
+        "JOB_SLA_VIOLATION_ESCALATED",
+        "ＪＯＢ＿ＳＬＡ＿ＢＲＥＡＣＨ",
+        "JOB_SLA_\001BREACH"
+      })
+  void shouldRejectAlertOnlyTypesBeforeCreatingRule(String eventType) {
+    when(channelMapper.selectByCode("tenant-a", "email-1"))
+        .thenReturn(channelRow("email-1", "EMAIL", null));
+    assertThatThrownBy(() -> service.createRule(
+            "tenant-a", ruleUpsert("sla", "email-1", "JOB_FAILED," + eventType, null, null, true)))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
+    verify(ruleMapper, never()).insert(any());
+  }
+
+  @DisplayName("更新通知规则前拒绝仅用于告警的事件类型")
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "JOB_SLA_BREACH",
+        " job_sla_violation ",
+        "JOB_SLA_VIOLATION_ESCALATED",
+        "ＪＯＢ＿ＳＬＡ＿ＢＲＥＡＣＨ",
+        "JOB_SLA_\001BREACH"
+      })
+  void shouldRejectAlertOnlyTypesBeforeUpdatingRule(String eventType) {
+    when(ruleMapper.selectById("tenant-a", 7L))
+        .thenReturn(new SubscriptionRuleRow(
+            7L, "tenant-a", null, null, null, null, null, true, null, null, null, null));
+    when(channelMapper.selectByCode("tenant-a", "email-1"))
+        .thenReturn(channelRow("email-1", "EMAIL", null));
+    assertThatThrownBy(() -> service.updateRule(
+            "tenant-a", 7L, ruleUpsert("sla", "email-1", eventType, null, null, true)))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.notification.sla_alert_channel"));
+    verify(ruleMapper, never()).update(any());
+  }
 
   private ConsoleTenantGuard tenantGuard;
   private ConsoleRequestMetadataResolver metadataResolver;
@@ -85,7 +141,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("按租户列出通知渠道并转换为对外响应对象")
   void shouldListChannels() {
     when(channelMapper.selectByTenant("tenant-a"))
-        .thenReturn(List.of(Map.of("channel_code", "email-1")));
+        .thenReturn(List.of(channelRow("email-1", "EMAIL", null)));
 
     List<ConsoleNotificationChannelResponse> result = service.listChannels("tenant-a");
 
@@ -97,7 +153,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("按渠道编码查询单个通知渠道的详情")
   void shouldGetChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channel_code", "email-1"));
+        .thenReturn(channelRow("email-1", "EMAIL", null));
 
     ConsoleNotificationChannelResponse result = service.getChannel("tenant-a", "email-1");
 
@@ -116,7 +172,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
@@ -127,6 +183,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   @DisplayName("创建渠道时写入租户, 渠道字段与创建人更新人")
   void shouldCreateChannel() {
+    when(channelMapper.insert(any())).thenReturn(1);
     when(channelMapper.selectByCode("tenant-a", "email-1")).thenReturn(null);
 
     service.createChannel(
@@ -134,17 +191,16 @@ class DefaultConsoleNotificationApplicationServiceTest {
         channelUpsert(
             "email-1", "Email One", "EMAIL", "{\"url\":\"https://example.com/hook\"}", true));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationChannelInsertParam> captor = ArgumentCaptor.captor();
     verify(channelMapper).insert(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("tenantId", "tenant-a")
-        .containsEntry("channelCode", "email-1")
-        .containsEntry("channelName", "Email One")
-        .containsEntry("channelType", "EMAIL")
-        .containsEntry("configJson", "{\"url\":\"https://example.com/hook\"}")
-        .containsEntry("enabled", true)
-        .containsEntry("createdBy", "operator-1")
-        .containsEntry("updatedBy", "operator-1");
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+    assertThat(captor.getValue().channelCode()).isEqualTo("email-1");
+    assertThat(captor.getValue().channelName()).isEqualTo("Email One");
+    assertThat(captor.getValue().channelType()).isEqualTo("EMAIL");
+    assertThat(captor.getValue().configJson()).isEqualTo("{\"url\":\"https://example.com/hook\"}");
+    assertThat(captor.getValue().enabled()).isEqualTo(true);
+    assertThat(captor.getValue().createdBy()).isEqualTo("operator-1");
+    assertThat(captor.getValue().updatedBy()).isEqualTo("operator-1");
   }
 
   @Test
@@ -153,9 +209,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
     // Critical 回归堵口:WEBHOOK 渠道 url 存前经 CallbackUrlValidator fail-closed,拦字面量内网/元数据 IP,
     // 不让它入库(OkHttp Dns pin 对字面量 IP 短路不生效,此处是主修)。
     when(channelMapper.selectByCode("tenant-a", "hook-1")).thenReturn(null);
-    doThrow(io.github.pinpols.batch.common.exception.BizException.of(
-            io.github.pinpols.batch.common.enums.ResultCode.INVALID_ARGUMENT,
-            "error.callback.restricted_address"))
+    doThrow(BizException.of(ResultCode.INVALID_ARGUMENT, "error.callback.restricted_address"))
         .when(callbackUrlValidator)
         .validate("https://169.254.169.254/latest/meta-data/");
 
@@ -175,6 +229,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   @DisplayName("非回调类渠道创建时不触发地址安全检查仍正常写库")
   void shouldNotValidateUrlForNonWebhookChannel() {
+    when(channelMapper.insert(any())).thenReturn(1);
     // 非 WEBHOOK 渠道(EMAIL/SMS 等)不经 callbackUrl SSRF 校验,避免误伤。
     when(channelMapper.selectByCode("tenant-a", "email-1")).thenReturn(null);
 
@@ -191,7 +246,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("渠道编码已存在时拒绝创建并提示编码重复")
   void shouldRejectDuplicateChannelCode() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+        .thenReturn(channelRow("email-1", "EMAIL", null));
 
     assertThatThrownBy(() -> service.createChannel(
             "tenant-a", channelUpsert("email-1", "Email One", "EMAIL", null, true)))
@@ -203,11 +258,10 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("更新渠道时按最新字段与当前操作人写库")
   void shouldUpdateChannel() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of(
-            "channelCode",
+        .thenReturn(channelRow(
             "email-1",
-            "config_json",
-            Map.of("url", "https://example.com/old", "token", "stored-token")));
+            "EMAIL",
+            "{\"url\":\"https://example.com/old\",\"token\":\"stored-token\"}"));
 
     NotificationChannelUpdateRequest update = new NotificationChannelUpdateRequest();
     update.setChannelName("Email Updated");
@@ -216,41 +270,39 @@ class DefaultConsoleNotificationApplicationServiceTest {
     update.setEnabled(false);
     service.updateChannel("tenant-a", "email-1", update);
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationChannelUpdateParam> captor = ArgumentCaptor.captor();
     verify(channelMapper).update(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("tenantId", "tenant-a")
-        .containsEntry("channelCode", "email-1")
-        .containsEntry("channelName", "Email Updated")
-        .containsEntry("channelType", "EMAIL")
-        .containsEntry(
-            "configJson", "{\"url\":\"https://example.com/old\",\"token\":\"stored-token\"}")
-        .containsEntry("enabled", false)
-        .containsEntry("updatedBy", "operator-1");
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+    assertThat(captor.getValue().channelCode()).isEqualTo("email-1");
+    assertThat(captor.getValue().channelName()).isEqualTo("Email Updated");
+    assertThat(captor.getValue().channelType()).isEqualTo("EMAIL");
+    assertThat(captor.getValue().configJson())
+        .isEqualTo("{\"url\":\"https://example.com/old\",\"token\":\"stored-token\"}");
+    assertThat(captor.getValue().enabled()).isEqualTo(false);
+    assertThat(captor.getValue().updatedBy()).isEqualTo("operator-1");
   }
 
   @Test
   @DisplayName("创建订阅规则时写入规则字段与创建人更新人")
   void shouldCreateRule() {
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+        .thenReturn(channelRow("email-1", "EMAIL", null));
 
     service.createRule(
         "tenant-a",
         ruleUpsert("default-rule", "email-1", "JOB_SUCCESS,JOB_FAILED", "HIGH", "JOB-*", true));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<SubscriptionRuleInsertParam> captor = ArgumentCaptor.captor();
     verify(ruleMapper).insert(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("tenantId", "tenant-a")
-        .containsEntry("ruleName", "default-rule")
-        .containsEntry("channelCode", "email-1")
-        .containsEntry("eventTypes", "JOB_SUCCESS,JOB_FAILED")
-        .containsEntry("severityFilter", "HIGH")
-        .containsEntry("jobCodeFilter", "JOB-*")
-        .containsEntry("enabled", true)
-        .containsEntry("createdBy", "operator-1")
-        .containsEntry("updatedBy", "operator-1");
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+    assertThat(captor.getValue().ruleName()).isEqualTo("default-rule");
+    assertThat(captor.getValue().channelCode()).isEqualTo("email-1");
+    assertThat(captor.getValue().eventTypes()).isEqualTo("JOB_SUCCESS,JOB_FAILED");
+    assertThat(captor.getValue().severityFilter()).isEqualTo("HIGH");
+    assertThat(captor.getValue().jobCodeFilter()).isEqualTo("JOB-*");
+    assertThat(captor.getValue().enabled()).isEqualTo(true);
+    assertThat(captor.getValue().createdBy()).isEqualTo("operator-1");
+    assertThat(captor.getValue().updatedBy()).isEqualTo("operator-1");
   }
 
   @Test
@@ -266,7 +318,7 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
@@ -277,25 +329,26 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   @DisplayName("更新订阅规则时按最新字段与当前操作人写库")
   void shouldUpdateRule() {
-    when(ruleMapper.selectById("tenant-a", 7L)).thenReturn(Map.of("id", 7L));
+    when(ruleMapper.selectById("tenant-a", 7L))
+        .thenReturn(new SubscriptionRuleRow(
+            7L, "tenant-a", null, null, null, null, null, true, null, null, null, null));
 
     when(channelMapper.selectByCode("tenant-a", "email-1"))
-        .thenReturn(Map.of("channelCode", "email-1"));
+        .thenReturn(channelRow("email-1", "EMAIL", null));
     service.updateRule(
         "tenant-a", 7L, ruleUpsert("updated-rule", "email-1", "JOB_FAILED", "LOW", "JOB-1", false));
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<SubscriptionRuleUpdateParam> captor = ArgumentCaptor.captor();
     verify(ruleMapper).update(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("tenantId", "tenant-a")
-        .containsEntry("id", 7L)
-        .containsEntry("ruleName", "updated-rule")
-        .containsEntry("channelCode", "email-1")
-        .containsEntry("eventTypes", "JOB_FAILED")
-        .containsEntry("severityFilter", "LOW")
-        .containsEntry("jobCodeFilter", "JOB-1")
-        .containsEntry("enabled", false)
-        .containsEntry("updatedBy", "operator-1");
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+    assertThat(captor.getValue().id()).isEqualTo(7L);
+    assertThat(captor.getValue().ruleName()).isEqualTo("updated-rule");
+    assertThat(captor.getValue().channelCode()).isEqualTo("email-1");
+    assertThat(captor.getValue().eventTypes()).isEqualTo("JOB_FAILED");
+    assertThat(captor.getValue().severityFilter()).isEqualTo("LOW");
+    assertThat(captor.getValue().jobCodeFilter()).isEqualTo("JOB-1");
+    assertThat(captor.getValue().enabled()).isEqualTo(false);
+    assertThat(captor.getValue().updatedBy()).isEqualTo("operator-1");
   }
 
   @Test
@@ -311,12 +364,28 @@ class DefaultConsoleNotificationApplicationServiceTest {
           BizException bx = (BizException) ex;
           boolean keyMatch = bx.getMessageKey() != null && bx.getMessageKey().contains("not_found");
           boolean argsMatch = bx.getMessageArgs() != null
-              && java.util.Arrays.stream(bx.getMessageArgs())
+              && Arrays.stream(bx.getMessageArgs())
                   .anyMatch(a -> a != null && a.toString().toLowerCase().contains("not found"));
           assertThat(keyMatch || argsMatch)
               .as("messageKey or args should imply not_found")
               .isTrue();
         });
+  }
+
+  private static NotificationChannelRow channelRow(
+      String channelCode, String channelType, String configJson) {
+    return new NotificationChannelRow(
+        1L,
+        "tenant-a",
+        channelCode,
+        channelCode,
+        channelType,
+        configJson,
+        true,
+        "operator-1",
+        "operator-1",
+        null,
+        null);
   }
 
   private static NotificationChannelUpsertRequest channelUpsert(
@@ -354,11 +423,14 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @Test
   @DisplayName("查询投递日志时请求条数超过上限被收敛为五百条")
   void shouldReturnLogsAndCapLimit() {
-    when(deliveryLogMapper.selectByTenant("tenant-a", 500)).thenReturn(List.of(Map.of("id", 1L)));
+    when(deliveryLogMapper.selectByTenant("tenant-a", 500))
+        .thenReturn(List.of(new NotificationDeliveryLogRow(
+            1L, null, null, null, null, null, null, null, null, null, null, null, null)));
 
     List<ConsoleNotificationDeliveryLogResponse> logs = service.deliveryLogs("tenant-a", 999);
 
     assertThat(logs).hasSize(1);
+    verify(deliveryLogMapper).bindTenant("tenant-a");
     verify(deliveryLogMapper).selectByTenant("tenant-a", 500);
   }
 
@@ -366,13 +438,8 @@ class DefaultConsoleNotificationApplicationServiceTest {
   @DisplayName("渠道测试会真实调用发送器, 成功后返回正常状态并写入投递日志")
   void shouldTestChannelBySendingRealMessageAndLogSuccess() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
-        .thenReturn(Map.of(
-            "channel_code",
-            "wecom-1",
-            "channel_type",
-            "WECOM",
-            "config_json",
-            "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        .thenReturn(channelRow(
+            "wecom-1", "WECOM", "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
     NotificationSender sender = mock(NotificationSender.class);
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any(NotificationMessage.class))).thenReturn(WebhookDeliveryResult.ok());
@@ -390,28 +457,22 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThat(result.success()).isTrue();
     assertThat(result.status()).isEqualTo("OK");
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("tenantId", "tenant-a")
-        .containsEntry("ruleId", 0)
-        .containsEntry("channelCode", "wecom-1")
-        .containsEntry("eventType", "TEST")
-        .containsEntry("deliveryStatus", "SUCCESS")
-        .containsEntry("attempt", 1);
+    assertThat(captor.getValue().tenantId()).isEqualTo("tenant-a");
+    assertThat(captor.getValue().ruleId()).isEqualTo(0L);
+    assertThat(captor.getValue().channelCode()).isEqualTo("wecom-1");
+    assertThat(captor.getValue().eventType()).isEqualTo("TEST");
+    assertThat(captor.getValue().deliveryStatus()).isEqualTo("SUCCESS");
+    assertThat(captor.getValue().attempt()).isEqualTo(1);
   }
 
   @Test
   @DisplayName("发送失败时返回失败状态并透传错误摘要, 日志记录失败原因")
   void shouldReportFailureAndPassThroughErrorWhenSendFails() {
     when(channelMapper.selectByCode("tenant-a", "wecom-1"))
-        .thenReturn(Map.of(
-            "channel_code",
-            "wecom-1",
-            "channel_type",
-            "WECOM",
-            "config_json",
-            "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+        .thenReturn(channelRow(
+            "wecom-1", "WECOM", "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
     NotificationSender sender = mock(NotificationSender.class);
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any(NotificationMessage.class)))
@@ -424,24 +485,48 @@ class DefaultConsoleNotificationApplicationServiceTest {
     assertThat(result.errorSummary()).isEqualTo("wecom errcode=93000");
     assertThat(result.message()).contains("wecom errcode=93000");
 
-    ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("deliveryStatus", "FAILED")
-        .containsEntry("errorMessage", "wecom errcode=93000");
+    assertThat(captor.getValue().deliveryStatus()).isEqualTo("FAILED");
+    assertThat(captor.getValue().errorMessage()).isEqualTo("wecom errcode=93000");
+  }
+
+  @Test
+  @DisplayName("渠道测试失败时响应与投递审计不回显发送器摘要中的凭据")
+  void shouldMaskSenderCredentialsInChannelTestResponseAndAudit() {
+    when(channelMapper.selectByCode("tenant-a", "wecom-1"))
+        .thenReturn(channelRow(
+            "wecom-1", "WECOM", "{\"url\":\"https://qyapi.weixin.qq.com/robot?key=x\"}"));
+    NotificationSender sender = mock(NotificationSender.class);
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any(NotificationMessage.class)))
+        .thenReturn(
+            WebhookDeliveryResult.failure(
+                500,
+                "{&quot;password&quot;:&quot;stored-secret&quot;} ｔｏｋｅｎ=unicode-secret; &lt;script&gt; retry later"));
+
+    ConsoleNotificationTestResultResponse result = service.testChannel("tenant-a", "wecom-1");
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.errorSummary())
+        .contains("password", "token=****", "&lt;script&gt;", "retry later")
+        .doesNotContain("stored-secret", "unicode-secret", "<script>");
+    assertThat(result.message())
+        .contains("&lt;script&gt;")
+        .doesNotContain("stored-secret", "unicode-secret", "<script>");
+    ArgumentCaptor<NotificationDeliveryLogInsertParam> captor = ArgumentCaptor.captor();
+    verify(deliveryLogMapper).insert(captor.capture());
+    assertThat(captor.getValue().errorMessage())
+        .contains("password", "token=****")
+        .doesNotContain("stored-secret", "unicode-secret");
   }
 
   @Test
   @DisplayName("回调类型渠道改走专用投递通道并携带密钥, 不经发送器注册表")
   void shouldRouteWebhookChannelThroughWebhookDispatcher() {
     when(channelMapper.selectByCode("tenant-a", "hook-1"))
-        .thenReturn(Map.of(
-            "channel_code",
-            "hook-1",
-            "channel_type",
-            "WEBHOOK",
-            "config_json",
-            "{\"url\":\"https://example.com/hook\",\"secret\":\"s3cr3t\"}"));
+        .thenReturn(channelRow(
+            "hook-1", "WEBHOOK", "{\"url\":\"https://example.com/hook\",\"secret\":\"s3cr3t\"}"));
     when(webhookDispatcher.attemptDelivery(
             any(WebhookSubscriptionEntity.class),
             any(WebhookEventPayload.class),
@@ -466,19 +551,13 @@ class DefaultConsoleNotificationApplicationServiceTest {
   void shouldRejectTestChannelWhenRateLimited() {
     // deliverTest 是可重复触发的 SSRF 放大点(赢 DNS-rebinding 竞态);超频时限流拦下,不再建连投递。
     when(channelMapper.selectByCode("tenant-a", "hook-1"))
-        .thenReturn(Map.of(
-            "channel_code",
-            "hook-1",
-            "channel_type",
-            "WEBHOOK",
-            "config_json",
-            "{\"url\":\"https://example.com/hook\"}"));
+        .thenReturn(channelRow("hook-1", "WEBHOOK", "{\"url\":\"https://example.com/hook\"}"));
     when(testChannelRateLimiter.tryAcquire(any(), ArgumentMatchers.anyInt())).thenReturn(false);
 
     assertThatThrownBy(() -> service.testChannel("tenant-a", "hook-1"))
         .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getCode())
-            .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.RATE_LIMITED));
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.RATE_LIMITED));
 
     // 拦在建连之前:没有走 webhook 投递,也没写投递日志
     verify(webhookDispatcher, never())

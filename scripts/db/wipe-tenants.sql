@@ -27,7 +27,6 @@ DELETE FROM batch.event_delivery_log        WHERE tenant_id IN :tenants;
 DELETE FROM batch.event_outbox_retry        WHERE tenant_id IN :tenants;
 DELETE FROM batch.outbox_event              WHERE tenant_id IN :tenants;
 DELETE FROM batch.retry_schedule            WHERE tenant_id IN :tenants;
-DELETE FROM batch.compensation_checkpoint   WHERE tenant_id IN :tenants;
 DELETE FROM batch.compensation_command      WHERE tenant_id IN :tenants;
 DELETE FROM batch.approval_command          WHERE tenant_id IN :tenants;
 DELETE FROM batch.idempotency_record        WHERE tenant_id IN :tenants;
@@ -37,26 +36,33 @@ DELETE FROM batch.dead_letter_task          WHERE tenant_id IN :tenants;
 DELETE FROM batch.file_error_record         WHERE tenant_id IN :tenants;
 DELETE FROM batch.file_dispatch_record      WHERE tenant_id IN :tenants;
 DELETE FROM batch.file_audit_log            WHERE tenant_id IN :tenants;
-DELETE FROM batch.file_record               WHERE tenant_id IN :tenants;
 DELETE FROM batch.file_channel_health       WHERE tenant_id IN :tenants;
 
 -- ── 作业实例链路：task → step → partition → instance ──────────────────
 DELETE FROM batch.job_task                  WHERE tenant_id IN :tenants;
 DELETE FROM batch.job_step_instance         WHERE tenant_id IN :tenants;
 DELETE FROM batch.job_partition             WHERE tenant_id IN :tenants;
-DELETE FROM batch.job_instance              WHERE tenant_id IN :tenants;
+-- 热分区可能仍需要 file_record 作为 bundle 输入；清除分区后才可删除源文件行。
+DELETE FROM batch.file_record               WHERE tenant_id IN :tenants;
 
 -- ── Workflow 运行实例（workflow_node_run 无 tenant_id，走 workflow_run 子查询） ──
 DELETE FROM batch.workflow_node_run
  WHERE workflow_run_id IN (SELECT id FROM batch.workflow_run WHERE tenant_id IN :tenants);
 DELETE FROM batch.workflow_run              WHERE tenant_id IN :tenants;
 
+-- 节点已移除后再删分区 JobInstance，避免留下 workflow_node_run.job_instance_id 孤儿。
+DELETE FROM batch.job_instance              WHERE tenant_id IN :tenants;
+
 -- ── Pipeline 运行实例（pipeline_step_run 无 tenant_id） ──────────────
+DELETE FROM batch.pipeline_progress         WHERE tenant_id IN :tenants;
 DELETE FROM batch.pipeline_step_run
  WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE tenant_id IN :tenants);
 DELETE FROM batch.pipeline_instance         WHERE tenant_id IN :tenants;
 
 -- ── 触发 / 批次日 / 配额状态 / 快照 ──────────────────────────────────
+DELETE FROM batch.job_dependency_waiting_launch WHERE tenant_id IN :tenants;
+DELETE FROM batch.workflow_launch_wait          WHERE tenant_id IN :tenants;
+DELETE FROM batch.batch_day_waiting_launch     WHERE tenant_id IN :tenants;
 DELETE FROM batch.trigger_request           WHERE tenant_id IN :tenants;
 DELETE FROM batch.batch_day_instance        WHERE tenant_id IN :tenants;
 DELETE FROM batch.quota_runtime_state       WHERE tenant_id IN :tenants;
@@ -68,6 +74,9 @@ DELETE FROM batch.notification_delivery_log WHERE tenant_id IN :tenants;
 DELETE FROM batch.job_execution_log         WHERE tenant_id IN :tenants;
 DELETE FROM batch.console_ai_audit_log      WHERE tenant_id IN :tenants;
 DELETE FROM batch.webhook_delivery_log      WHERE tenant_id IN :tenants;
+-- 回执删除在两个接收方表清理之后执行（V328 的 NO ACTION 引用）。
+DELETE FROM batch.console_push_job_delivery WHERE tenant_id IN :tenants;
+DELETE FROM batch.workflow_terminal_notification_receipt WHERE tenant_id IN :tenants;
 DELETE FROM batch.config_change_log         WHERE tenant_id IN :tenants;
 DELETE FROM batch.config_sync_log           WHERE tenant_id IN :tenants;
 DELETE FROM batch.config_release            WHERE tenant_id IN :tenants;
@@ -81,9 +90,6 @@ DELETE FROM batch.workflow_node
 DELETE FROM batch.workflow_definition       WHERE tenant_id IN :tenants;
 
 -- ── Pipeline 配置 ──────────────────────────────────────────────────────
-DELETE FROM batch.pipeline_step_definition
- WHERE pipeline_definition_id IN (SELECT id FROM batch.pipeline_definition WHERE tenant_id IN :tenants);
-DELETE FROM batch.pipeline_definition       WHERE tenant_id IN :tenants;
 
 -- ── Job 定义 ──────────────────────────────────────────────────────────
 DELETE FROM batch.job_definition            WHERE tenant_id IN :tenants;
@@ -92,6 +98,8 @@ DELETE FROM batch.job_definition            WHERE tenant_id IN :tenants;
 DELETE FROM batch.resource_queue            WHERE tenant_id IN :tenants;
 DELETE FROM batch.resource_tag              WHERE tenant_id IN :tenants;
 DELETE FROM batch.batch_window              WHERE tenant_id IN :tenants;
+DELETE FROM batch.batch_day_catchup_control_event WHERE tenant_id IN :tenants;
+DELETE FROM batch.batch_day_catchup_control  WHERE tenant_id IN :tenants;
 DELETE FROM batch.calendar_holiday
  WHERE calendar_id IN (SELECT id FROM batch.business_calendar WHERE tenant_id IN :tenants);
 DELETE FROM batch.business_calendar         WHERE tenant_id IN :tenants;

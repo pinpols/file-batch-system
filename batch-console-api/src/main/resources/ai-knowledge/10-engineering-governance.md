@@ -4,7 +4,7 @@ Console AI 可以回答本仓库工程治理、发布门禁和本地排障入口
 
 ## 文档治理
 - 当前架构事实入口是 `docs/architecture/architecture-truth.md`。
-- 当前待办入口是 `docs/analysis/todo-master.md`。
+- 当前待办入口是 `docs/plans/todo-master.md`。
 - 运维文档入口是 `docs/runbook/`，测试覆盖与验收入口是 `docs/testing/`。
 - 历史审计、一次性报告和过期快照进入 `docs/archive/`，不作为当前状态引用。
 - 文档结构和链接由 `scripts/ci/check-docs-structure.py` 检查；仓库卫生由 `scripts/ci/check-repository-hygiene.py` 检查。

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.TriggerMode;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -13,13 +14,16 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import lombok.Data;
 import org.springframework.scheduling.support.CronExpression;
 
 @Data
 public class JobDefinitionCreateRequest {
-  private static final Set<String> SUPPORTED_JOB_TYPES = DictEnum.codes(JobType.class);
+  private static final Set<String> SUPPORTED_JOB_TYPES =
+      DictEnum.codes(JobType.class).stream().collect(Collectors.toUnmodifiableSet());
   private static final Set<String> SUPPORTED_TRIGGER_MODES = DictEnum.codes(TriggerMode.class);
 
   @ValidTenantId
@@ -34,6 +38,15 @@ public class JobDefinitionCreateRequest {
       message = "dependsOnJobCode must start with a letter and contain only letters, digits,"
           + " underscore or hyphen")
   private String dependsOnJobCode;
+
+  /** 兼容上游列表：所有声明的上游都使用 SAME_DAY，且结果必须为 EFFECTIVE。 */
+  @Size(max = 32)
+  private List<@Size(max = 64) @Pattern(regexp = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$") String>
+      dependsOnJobCodes;
+
+  /** 指定后，定义每个上游的日期对齐方式，并优先于仅提供代码的字段。 */
+  @Size(max = 32)
+  private List<@Valid JobDependencyRuleRequest> jobDependencyRules;
 
   @Size(max = 256)
   private String jobName;
@@ -126,7 +139,9 @@ public class JobDefinitionCreateRequest {
   /** scheduleType=CRON 时 scheduleExpr 必须是合法 cron(Spring 6 段;5 段前补秒位),防止非法表达式入库后在运行期失败。 */
   @AssertTrue(message = "scheduleExpr must be a valid cron expression when scheduleType=CRON")
   public boolean isScheduleExprValidForCron() {
-    if (!"CRON".equals(scheduleType) || scheduleExpr == null || scheduleExpr.isBlank()) {
+    boolean cronValidationIsNotApplicable =
+        !"CRON".equals(scheduleType) || EmptyChecks.isBlank(scheduleExpr);
+    if (cronValidationIsNotApplicable) {
       return true;
     }
     try {
@@ -146,7 +161,7 @@ public class JobDefinitionCreateRequest {
   }
 
   /** jobType 必须与公共枚举及数据库 CHECK 使用同一词表。空值交由 {@link NotBlank} 报错。 */
-  @AssertTrue(message = "jobType must be a supported JobType")
+  @AssertTrue(message = "jobType must be an executable JobType")
   public boolean isJobTypeSupported() {
     return EmptyChecks.isBlank(jobType) || SUPPORTED_JOB_TYPES.contains(jobType);
   }
@@ -156,19 +171,15 @@ public class JobDefinitionCreateRequest {
     return EmptyChecks.isNull(triggerMode) || SUPPORTED_TRIGGER_MODES.contains(triggerMode);
   }
 
-  @AssertTrue(message = "monitoring thresholds must match the job schedule type and dependency")
+  /** 策略可预先配置给 Workflow 子作业；是否具备执行资格由运行事实决定。 */
+  @AssertTrue(message = "{error.job.monitoring_completion_modes_exclusive}")
   public boolean isScheduledMonitoringConfiguredCorrectly() {
-    boolean cron = "CRON".equals(scheduleType);
-    boolean dependency = EmptyChecks.isNotBlank(dependsOnJobCode);
-    boolean startGraceEnabled = EmptyChecks.isNotNull(startGraceSeconds) && startGraceSeconds > 0;
-    boolean localDeadlineEnabled = Boolean.TRUE.equals(completionDeadlineEnabled)
-        || EmptyChecks.isNotNull(completionDeadlineLocalTime);
+    boolean localDeadlineEnabled = !Boolean.FALSE.equals(completionDeadlineEnabled)
+        && (Boolean.TRUE.equals(completionDeadlineEnabled)
+            || EmptyChecks.isNotNull(completionDeadlineLocalTime));
     boolean dependencyWindowEnabled = EmptyChecks.isNotNull(dependencyCompletionWindowSeconds)
         && dependencyCompletionWindowSeconds > 0;
-    return (cron || dependency || !startGraceEnabled)
-        && (!localDeadlineEnabled || cron && !dependency)
-        && (!dependencyWindowEnabled || dependency)
-        && !(localDeadlineEnabled && dependencyWindowEnabled);
+    return !(localDeadlineEnabled && dependencyWindowEnabled);
   }
 
   @AssertTrue(

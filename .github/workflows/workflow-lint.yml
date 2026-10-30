@@ -4,7 +4,7 @@ name: workflow-lint
 #   1) actionlint — yaml 结构 + shellcheck on `run:` blocks(防 typo/语法错只能 push 试错)
 #   2) zizmor    — 安全规则集(action 注入 / unpinned ref / 危险 token 暴露等)
 #
-# 触发面:只有改 `.github/workflows/**` 或 `.github/actions/**` 才跑。秒级,几乎无成本。
+# 触发面:工作流、共享 Action 或 Zizmor 规则及工具依赖变化时运行。
 # 所有当前 workflow 和 composite action 一次扫描；既有精确 suppress/ignore 保留，新增问题直接阻断。
 
 on:
@@ -13,10 +13,16 @@ on:
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - '.github/zizmor.yml'
+      - '.github/ci-tools/python/pyproject.toml'
+      - '.github/ci-tools/python/uv.lock'
   pull_request:
     paths:
       - '.github/workflows/**'
       - '.github/actions/**'
+      - '.github/zizmor.yml'
+      - '.github/ci-tools/python/pyproject.toml'
+      - '.github/ci-tools/python/uv.lock'
 
 permissions:
   contents: read

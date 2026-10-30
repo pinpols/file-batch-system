@@ -1,7 +1,45 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper">
-    <select id="selectActiveByTenantAndCalendarCode" resultType="map">
+    <!--
+      ConsoleJobConfigViews 行投影是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致；列使用 camelCase 别名，null 列由调用方按 null 处理。
+      cutoff_time 为 TIME 列按 String 承载；late_arrival_tolerance_min / sla_offset_min 为 INTEGER。
+    -->
+    <resultMap id="activeCalendarRowMap"
+               type="io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews$ActiveCalendarRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenantId" javaType="java.lang.String"/>
+            <arg column="calendarCode" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="catchUpPolicy" javaType="java.lang.String"/>
+            <arg column="cutoffTime" javaType="java.lang.String"/>
+            <arg column="lateArrivalToleranceMin" javaType="java.lang.Integer"/>
+            <arg column="slaOffsetMin" javaType="java.lang.Integer"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="calendarQueryRowMap"
+               type="io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews$CalendarQueryRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenantId" javaType="java.lang.String"/>
+            <arg column="calendarCode" javaType="java.lang.String"/>
+            <arg column="calendarName" javaType="java.lang.String"/>
+            <arg column="timezone" javaType="java.lang.String"/>
+            <arg column="holidayRollRule" javaType="java.lang.String"/>
+            <arg column="catchUpPolicy" javaType="java.lang.String"/>
+            <arg column="catchUpMaxDays" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="createdAt" javaType="java.time.Instant"/>
+            <arg column="updatedAt" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectActiveByTenantAndCalendarCode" resultMap="activeCalendarRowMap">
         select
             id,
             tenant_id as tenantId,
@@ -20,7 +58,7 @@
         limit 1
     </select>
 
-    <select id="selectByTenantAndCalendarCode" resultType="map">
+    <select id="selectByTenantAndCalendarCode" resultMap="calendarQueryRowMap">
         select
             id,
             tenant_id as "tenantId",
@@ -31,14 +69,16 @@
             catch_up_policy as "catchUpPolicy",
             catch_up_max_days as "catchUpMaxDays",
             enabled,
-            description
+            description,
+            created_at as "createdAt",
+            updated_at as "updatedAt"
         from batch.business_calendar
         where tenant_id = #{tenantId}
           and calendar_code = #{calendarCode}
         limit 1
     </select>
 
-    <select id="selectByQuery" resultType="map">
+    <select id="selectByQuery" resultMap="calendarQueryRowMap">
         select
             id, tenant_id as "tenantId", calendar_code as "calendarCode",
             calendar_name as "calendarName", timezone,
@@ -69,7 +109,7 @@
         </if>
     </select>
 
-    <select id="selectById" resultType="map">
+    <select id="selectById" resultMap="calendarQueryRowMap">
         select
             id, tenant_id as "tenantId", calendar_code as "calendarCode",
             calendar_name as "calendarName", timezone,
@@ -99,7 +139,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.job.param.BusinessCalendarInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.business_calendar (
             tenant_id, calendar_code, calendar_name, timezone,
             holiday_roll_rule, catch_up_policy, catch_up_max_days, enabled, description
@@ -109,7 +149,7 @@
         )
     </insert>
 
-    <update id="update" parameterType="map">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.job.param.BusinessCalendarUpdateParam">
         update batch.business_calendar
         set calendar_name = #{calendarName},
             timezone = #{timezone},

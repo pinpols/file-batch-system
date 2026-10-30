@@ -1,18 +1,29 @@
 package io.github.pinpols.batch.console.domain.observability.service;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashboardQueryMapper;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ActivePartitionView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.AlertTrendView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DaySeverityCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SeverityCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaJobReportView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaReportView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaStatsView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.StatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TenantUsageView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TriggerStatsView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.TypeCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerLoadView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,7 +68,8 @@ public class ConsoleDashboardQueryService {
       byStatus.put(row.status() == null ? UNKNOWN : row.status(), count);
       total += count;
     }
-    return new JobStatsView(byStatus, total, repository.jobDailyTrend(resolved, days));
+    List<DayStatusCountView> dailyTrend = repository.jobDailyTrend(resolved, days);
+    return new JobStatsView(byStatus, total, dailyTrend);
   }
 
   public TriggerStatsView triggerStats(String tenantId, int days) {
@@ -70,8 +82,9 @@ public class ConsoleDashboardQueryService {
   }
 
   private TriggerStatsView loadTriggerStats(String resolved, int days) {
-    return new TriggerStatsView(
-        repository.triggerTypeCounts(resolved, days), repository.triggerDailyTrend(resolved, days));
+    List<TypeCountView> typeCounts = repository.triggerTypeCounts(resolved, days);
+    List<DayCountView> dailyTrend = repository.triggerDailyTrend(resolved, days);
+    return new TriggerStatsView(typeCounts, dailyTrend);
   }
 
   public WorkerLoadView workerLoad(String tenantId) {
@@ -84,10 +97,11 @@ public class ConsoleDashboardQueryService {
   }
 
   private WorkerLoadView loadWorkerLoad(String resolved) {
-    return new WorkerLoadView(
-        repository.workerStatusCounts(resolved),
-        repository.workerGroupStatusCounts(resolved),
-        repository.activePartitionsByWorker(resolved));
+    List<StatusCountView> statusCounts = repository.workerStatusCounts(resolved);
+    List<WorkerGroupStatusCountView> workerGroupStatusCounts =
+        repository.workerGroupStatusCounts(resolved);
+    List<ActivePartitionView> activePartitions = repository.activePartitionsByWorker(resolved);
+    return new WorkerLoadView(statusCounts, workerGroupStatusCounts, activePartitions);
   }
 
   public AlertTrendView alertTrend(String tenantId, int days) {
@@ -100,16 +114,17 @@ public class ConsoleDashboardQueryService {
   }
 
   private AlertTrendView loadAlertTrend(String resolved, int days) {
-    return new AlertTrendView(
-        repository.alertSeverityCounts(resolved, days), repository.alertDailyTrend(resolved, days));
+    List<SeverityCountView> severityCounts = repository.alertSeverityCounts(resolved, days);
+    List<DaySeverityCountView> dailyTrend = repository.alertDailyTrend(resolved, days);
+    return new AlertTrendView(severityCounts, dailyTrend);
   }
 
   public List<ExecutionProgressView> executionProgress(
       String tenantId, String jobCode, String bizDate) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return repository.executionProgress(resolved, jobCode, bizDate).stream()
-        .map(ExecutionProgressView::withDerivedProgress)
-        .toList();
+    List<ExecutionProgressView> progressRows =
+        repository.executionProgress(resolved, jobCode, bizDate);
+    return progressRows.stream().map(ExecutionProgressView::withDerivedProgress).toList();
   }
 
   public TenantUsageView tenantUsage(String tenantId, int days) {
@@ -122,14 +137,20 @@ public class ConsoleDashboardQueryService {
   }
 
   private TenantUsageView loadTenantUsage(String resolved, int days) {
+    long jobDefinitionCount = nullToZero(repository.countJobDefinitions(resolved));
+    long workflowDefinitionCount = nullToZero(repository.countWorkflowDefinitions(resolved));
+    long fileChannelCount = nullToZero(repository.countFileChannels(resolved));
+    long fileTemplateCount = nullToZero(repository.countFileTemplates(resolved));
+    long recentJobInstanceCount = nullToZero(repository.countRecentJobInstances(resolved, days));
+    long recentFileCount = nullToZero(repository.countRecentFiles(resolved, days));
     return new TenantUsageView(
         resolved,
-        nullToZero(repository.countJobDefinitions(resolved)),
-        nullToZero(repository.countWorkflowDefinitions(resolved)),
-        nullToZero(repository.countFileChannels(resolved)),
-        nullToZero(repository.countFileTemplates(resolved)),
-        nullToZero(repository.countRecentJobInstances(resolved, days)),
-        nullToZero(repository.countRecentFiles(resolved, days)),
+        jobDefinitionCount,
+        workflowDefinitionCount,
+        fileChannelCount,
+        fileTemplateCount,
+        recentJobInstanceCount,
+        recentFileCount,
         days);
   }
 
@@ -147,7 +168,8 @@ public class ConsoleDashboardQueryService {
   }
 
   private SlaReportView loadSlaReport(String resolved, int days) {
-    return new SlaReportView(resolved, days, repository.slaJobReport(resolved, days));
+    List<SlaJobReportView> jobs = repository.slaJobReport(resolved, days);
+    return new SlaReportView(resolved, days, jobs);
   }
 
   public SlaComplianceView slaCompliance(String tenantId, int days) {
@@ -161,12 +183,15 @@ public class ConsoleDashboardQueryService {
 
   private SlaComplianceView loadSlaCompliance(String resolved, int days) {
     SlaStatsView stats = repository.slaStats(resolved, days);
-    return new SlaComplianceView(
-        stats == null || stats.breached() == null ? 0L : stats.breached(),
-        stats == null || stats.onTime() == null ? 0L : stats.onTime(),
-        stats == null || stats.totalWithSla() == null ? 0L : stats.totalWithSla(),
-        stats == null ? null : stats.avgDurationSeconds(),
-        repository.slaDailyTrend(resolved, days));
+    Long breachedCount = EmptyChecks.isNull(stats) ? null : stats.breached();
+    Long breached = EmptyChecks.isNull(breachedCount) ? 0L : breachedCount;
+    Long onTimeCount = EmptyChecks.isNull(stats) ? null : stats.onTime();
+    Long onTime = EmptyChecks.isNull(onTimeCount) ? 0L : onTimeCount;
+    Long totalWithSlaCount = EmptyChecks.isNull(stats) ? null : stats.totalWithSla();
+    Long totalWithSla = EmptyChecks.isNull(totalWithSlaCount) ? 0L : totalWithSlaCount;
+    BigDecimal avgDurationSeconds = EmptyChecks.isNull(stats) ? null : stats.avgDurationSeconds();
+    List<SlaDayView> dailyTrend = repository.slaDailyTrend(resolved, days);
+    return new SlaComplianceView(breached, onTime, totalWithSla, avgDurationSeconds, dailyTrend);
   }
 
   private static String cacheTenant(String tenantId) {

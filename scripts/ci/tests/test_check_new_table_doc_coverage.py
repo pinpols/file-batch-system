@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Tests for incremental database table documentation coverage."""
+# 用途：新增数据库表文档门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_new_table_doc_coverage.py。
+"""验证新增数据库表文档覆盖检查。"""
 
 from __future__ import annotations
 

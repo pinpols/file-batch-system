@@ -4,7 +4,7 @@
 
 ## 总览
 
-按“谁来执行 SQL”可以分为 4 大类：
+按“谁来执行 SQL”可以分为 5 大类：
 
 1. Flyway 自动迁移（应用启动时执行）
 2. 测试前置脚本（`@Sql` 或测试资源加载）
@@ -17,7 +17,7 @@
 ## 1) 平台库 Flyway 迁移脚本
 
 - **目录（唯一 SQL 源）**：`db/migration/`
-- **文档入口**：`docs/sql/flyway/README.md`（仅说明，不再存放 `V*.sql` 副本）
+- **文档入口**：`docs/runbook/db-migration-checklist.md`
 - **典型文件**：`V1__create_schema.sql` 起至当前最新版本（例如 `V32__add_batch_day_support.sql`、`V34__create_console_user_account.sql`）
 - **作用**：
   - 演进平台库 `batch_platform` 结构（`batch`/`quartz` schema 下平台相关表）
@@ -25,7 +25,7 @@
   - 作为平台数据库结构的主干变更渠道
 - **执行方**：
   - 应用启动时由 Flyway 执行（`spring.flyway.enabled=true`）；**生产迁库以 `batch-orchestrator` 为准**
-  - 其它模块若需 `classpath:db/migration`，在各自 `pom.xml` 中 **复制 orchestrator 上述目录**（见各模块 `build` 配置）
+  - 其它模块若需 `classpath:db/migration`，在各自 `pom.xml` 中复制根目录 `db/migration/`（见各模块 `build` 配置）
   - 集成测试/E2E 通过 `testResource` 引入同一套脚本
 - **适用场景**：
   - 新增表/列/索引、约束
@@ -38,7 +38,7 @@
 
 ## 2) 系统测试数据脚本
 
-- **目录**：`docs/sql/system-test/`
+- **目录**：`scripts/db/test-seed/`
 - **典型文件**：
   - `platform_seed.sql`
   - `platform_edge_cases.sql`
@@ -59,7 +59,7 @@
 
 ## 3) E2E 业务库 schema 脚本（与 business 单源）
 
-- **权威文件**：`docs/sql/business/create_biz_tables.sql`（**非 Flyway**，文件名不带 `V__` 前缀）
+- **权威文件**：`scripts/db/business/create_biz_tables.sql`（**非 Flyway**，文件名不带 `V__` 前缀）
 - **测试 classpath**：`batch-e2e-tests` 的 `pom.xml` 将该文件复制到 `target/test-classes/sql/`，供 `@Sql` 使用（不再维护 `e2e-biz-schema.sql` 副本）
 - **作用**：
   - 为 E2E 测试创建 `batch_business.biz` 示例业务表（如导入/导出相关表）
@@ -154,11 +154,11 @@
 
 ## 选型建议（实践规则）
 
-1. **生产结构变更**：只改 `batch-orchestrator/.../db/migration/`，并遵循 Flyway 版本号规则
+1. **平台库结构变更**：使用 `db/migration/` 中的增量迁移，并遵循 Flyway 版本号规则
 2. **单个测试场景数据**：放 `src/test/resources/db/testdata/`，由 `@Sql` 加载
-3. **E2E 业务表示例**：维护在 `docs/sql/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
+3. **E2E 业务表示例**：维护在 `scripts/db/business/`，由 `batch-e2e-tests` 的 `testResource` 打进测试 classpath
 4. **本地容器起库**：仅改 `deploy/docker/postgres/init/`
-5. **系统联调固定数据**：使用 `docs/sql/system-test/`
+5. **系统联调固定数据**：使用 `scripts/db/test-seed/`
 6. **运维巡检查询**：放到 `scripts/ops/sql/` 或 `scripts/db/inspect/`，由脚本入口调用，不写内联 SQL
 
 ---

@@ -5,11 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema;
 import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.ParamSpec;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,7 +31,7 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@link ConsoleAtomicTaskTypeSchemaService} 拉 schema → taskType 必须命中四类内置(sql / stored_proc /
  *       shell / http);
  *   <li>parameters Map key 必须落 schema {@code parameters[].name} 集合;必填字段不可缺;
- *   <li>{@link SensitiveDataValidator} 拒入凭据关键字(#242);
+ *   <li>{@link SensitiveDataValidator} 拒入凭据关键字及 Shell 命令参数中的明确内联凭据;
  *   <li>同事务 INSERT,UNIQUE(tenant_id, task_type, name) DB 唯一约束防重复名。
  * </ol>
  *
@@ -74,9 +76,21 @@ public class ConsoleAtomicTaskConfigService {
     AtomicTaskTypeSchema schema = locateSchema(normalizedType);
 
     Map<String, Object> safeParams = parameters == null ? Map.of() : parameters;
-    // 1) 凭据字段静态拒入(#242 SensitiveDataValidator)
+    // 1) 凭据字段及 Shell 命令参数中的内联凭据在写库前拒入。
     SensitiveDataValidator.rejectIfContainsSensitiveKeys(
         safeParams, "atomic_task_config." + normalizedType + ".parameters");
+    if ("shell".equals(normalizedType)) {
+      Object args = safeParams.get("args");
+      if (args instanceof Iterable<?> values) {
+        SensitiveDataValidator.rejectIfContainsInlineCredentials(
+            values, "atomic_task_config.shell.parameters.args");
+      }
+      Object command = safeParams.get("command");
+      if (command instanceof String text) {
+        SensitiveDataValidator.rejectIfContainsInlineCredential(
+            text, "atomic_task_config.shell.parameters.command");
+      }
+    }
     // 2) parameters key 必须落 schema.parameters[].name;必填字段不可缺
     validateAgainstSchema(schema, safeParams);
 
@@ -143,9 +157,10 @@ public class ConsoleAtomicTaskConfigService {
         continue;
       }
       Object value = parameters.get(spec.name());
-      if (value == null
+      boolean requiredParameterIsMissing = EmptyChecks.isNull(value)
           || (value instanceof String strValue && strValue.isBlank())
-          || (value instanceof Map<?, ?> mapValue && mapValue.isEmpty())) {
+          || (value instanceof Map<?, ?> mapValue && EmptyChecks.isEmpty(mapValue));
+      if (requiredParameterIsMissing) {
         requiredMissing.add(spec.name());
       }
     }
@@ -156,6 +171,55 @@ public class ConsoleAtomicTaskConfigService {
           schema.taskType(),
           String.join(",", requiredMissing));
     }
+    Set<String> wrongTypes = new TreeSet<>();
+    for (ParamSpec spec : schema.parameters()) {
+      Object value = parameters.get(spec.name());
+      if (EmptyChecks.isNotNull(value)
+          && (!matchesType(spec.type(), value)
+              || invalidTimeout(spec.name(), value)
+              || invalidShellArguments(schema.taskType(), spec.name(), value))) {
+        wrongTypes.add(spec.name());
+      }
+    }
+    if (EmptyChecks.isNotEmpty(wrongTypes)) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT,
+          "error.atomic_task_config.parameters_type_invalid",
+          schema.taskType(),
+          String.join(",", wrongTypes));
+    }
+  }
+
+  private static boolean invalidTimeout(String name, Object value) {
+    if (!("timeoutSeconds".equals(name) || "statementTimeoutSeconds".equals(name))) {
+      return false;
+    }
+    if (!(value instanceof Number number)) {
+      return true;
+    }
+    try {
+      return new BigDecimal(number.toString()).longValueExact() <= 0;
+    } catch (NumberFormatException | ArithmeticException invalid) {
+      return true;
+    }
+  }
+
+  private static boolean matchesType(String type, Object value) {
+    return switch (type) {
+      case "string" -> value instanceof String;
+      case "number" -> value instanceof Number;
+      case "boolean" -> value instanceof Boolean;
+      case "list" -> value instanceof List<?>;
+      case "map" -> value instanceof Map<?, ?>;
+      default -> throw new IllegalStateException("unsupported atomic parameter type: " + type);
+    };
+  }
+
+  private static boolean invalidShellArguments(String taskType, String name, Object value) {
+    return "shell".equals(taskType)
+        && "args".equals(name)
+        && value instanceof List<?> args
+        && args.stream().anyMatch(arg -> !(arg instanceof String));
   }
 
   private static String requireTaskType(String taskType) {

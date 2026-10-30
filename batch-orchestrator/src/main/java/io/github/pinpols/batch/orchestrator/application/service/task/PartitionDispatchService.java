@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import java.time.Instant;
 import java.util.List;
@@ -16,7 +17,10 @@ public interface PartitionDispatchService {
 
   // T1 产物：启动请求携带的调用方参数，在 T2 中只读使用
   record DispatchRequest(
-      LaunchRequest request, Map<String, Object> effectiveParams, String traceId) {}
+      LaunchRequest request,
+      Map<String, Object> effectiveParams,
+      String traceId,
+      JobDefinitionEntity executionDefinition) {}
 
   // T1 产物：T1 事务写库后得到的实体引用，T2 据此创建分区和任务
   record DispatchRuntime(
@@ -54,6 +58,10 @@ public interface PartitionDispatchService {
 
     public String traceId() {
       return requestContext.traceId();
+    }
+
+    public JobDefinitionEntity executionDefinition() {
+      return requestContext.executionDefinition();
     }
 
     public JobInstanceEntity jobInstance() {

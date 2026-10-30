@@ -40,7 +40,7 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$GITHUB_REF" != 'refs/heads/main' ]]; then
-            echo '❌ 不通过 | code=SONAR_MAIN_BRANCH_ONLY | gate=Sonar Community Build 仅支持 main 分支分析' >&2
+            echo '❌ 不通过 | code=SONAR_MAIN_BRANCH_ONLY | gate=Sonar Community Build 仅支持 main 分支分析 | group=quality | mode=enforce | exit_code=1 | action=fix_and_retry' >&2
             exit 1
           fi
 
@@ -84,6 +84,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          source scripts/lib/gate-result.sh
           sudo sysctl -w vm.max_map_count=524288
           docker run -d --rm --name sonarqube-batch \
             --memory=6g --cpus=3 \
@@ -93,14 +94,14 @@ jobs:
           attempt=0
           while (( attempt < 120 )); do
             if curl -fsS http://127.0.0.1:9001/api/system/status | grep -q '"status":"UP"'; then
-              echo '✅ 通过 | code=SONAR_CONTAINER_READY | gate=临时SonarQube服务'
+              gate_result PASS SONAR_CONTAINER_READY "临时SonarQube服务" 0 quality enforce
               exit 0
             fi
             attempt=$((attempt + 1))
             sleep 5
           done
           docker logs sonarqube-batch --tail 80
-          echo '❌ 不通过 | code=SONAR_CONTAINER_STARTUP | gate=临时SonarQube服务 | timeout=600s' >&2
+          gate_result FAIL SONAR_CONTAINER_STARTUP "临时SonarQube服务" 1 quality enforce "启动超时600s"
           exit 1
 
       - name: Analyze and enforce Sonar Quality Gate

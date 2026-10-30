@@ -19,7 +19,7 @@
 3. 重复常量收敛：优先复用已有常量，再提取稳定协议键；拒绝无意义常量化。
 4. 增量门禁：精准阻断新增回退，存量通过明确基线逐步归零，不建立高误报的全局字符串禁令。
 
-这是首轮确认清单，不是“全仓所有 Map 必须消失”的计划。持续普查入口为[当前 Java 可读性清单](../analysis/java-readability-inventory-2026-08-12.md)：本地治理后仍有 54 个 public Map 词法候选，含 JSON 工具、插件参数、动态聚合及固定基础设施投影，不能把该数量等同于 54 个待修缺陷。
+这是首轮确认清单，不是“全仓所有 Map 必须消失”的计划。持续普查入口为[当前 Java 可读性清单](../stats/java-readability-inventory.md)：本地治理后仍有 54 个 public Map 词法候选，含 JSON 工具、插件参数、动态聚合及固定基础设施投影，不能把该数量等同于 54 个待修缺陷。
 
 后续逐项判断固定基础设施投影、SDK 传输组装和请求载荷；确认字段、消费点和所有者后再进入下一批。通用 JSON/配置转换、开放行数据及插件扩展保留 Map；固定投影应在所属模块类型化，不借本轮增加公共模块依赖或统一万能 DTO。
 
@@ -169,7 +169,7 @@ MyBatis 状态集合不得为消除字面量而统一参数化。共享生命周
 新增门禁必须同步：
 
 - `scripts/ci/README.md`
-- `docs/audit/convention-drift-guard-index.md`
+- `docs/standards/convention-drift-guard-index.md`
 - 对应 workflow / PR gate
 - 脚本自测
 - `docs/changelog.md`

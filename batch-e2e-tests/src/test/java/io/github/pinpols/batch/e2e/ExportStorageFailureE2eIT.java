@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -68,7 +68,7 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
   }
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -83,22 +83,34 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("对象存储不可达时导出任务反复重排队,重试预算耗尽后该分片写入死信记录,链路以死信终态收敛")
   void shouldDeadLetterPartition_whenStorageUnreachableAndRetryBudgetExhausted() {
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId = businessJdbc.queryForObject("""
+    final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
             returning id
-            """, Long.class, TENANT, BATCH_NO);
-    assertThat(batchId).isNotNull();
-
-    businessJdbc.update("""
+            """;
+    final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
-        """, TENANT, batchId, "E2E-MF-001", "C-MF-1");
+        """;
+
+    final String selectCountSql = """
+                      select count(*) from batch.dead_letter_task dlt
+                      join batch.job_partition jp on jp.id = dlt.source_id
+                      join batch.job_instance ji on ji.id = jp.job_instance_id
+                      where dlt.source_type = 'JOB_PARTITION'
+                        and ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    Long batchId =
+        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    assertThat(batchId).isNotNull();
+
+    businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, "E2E-MF-001", "C-MF-1");
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
@@ -115,7 +127,7 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -129,13 +141,8 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
         .pollInterval(Duration.ofMillis(500))
         .untilAsserted(() -> {
           e2eOutboxPublishSupport.publishAllPending(TENANT);
-          Long dlq = jdbcTemplate.queryForObject("""
-                      select count(*) from batch.dead_letter_task dlt
-                      join batch.job_partition jp on jp.id = dlt.source_id
-                      join batch.job_instance ji on ji.id = jp.job_instance_id
-                      where dlt.source_type = 'JOB_PARTITION'
-                        and ji.tenant_id = ? and ji.dedup_key = ?
-                      """, Long.class, TENANT, seed.dedupKey());
+          Long dlq =
+              jdbcTemplate.queryForObject(selectCountSql, Long.class, TENANT, seed.dedupKey());
           assertThat(dlq).isNotNull().isGreaterThanOrEqualTo(1L);
         });
   }

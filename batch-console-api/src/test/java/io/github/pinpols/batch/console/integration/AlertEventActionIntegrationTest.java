@@ -9,9 +9,11 @@ import io.github.pinpols.batch.console.application.contract.request.ops.AlertAct
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -80,10 +82,18 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
     assertThat(entity).isNotNull();
     assertThat(entity.getStatus()).isEqualTo("CLOSED");
+    assertThat(entity.getClosedAt()).isNotNull();
+    assertThat(entity.getCloseReason()).isEqualTo("MANUAL");
+    Instant originalClosedAt = entity.getClosedAt();
+    alertApplicationService.close(alertId, alertRequest(tenantId), "idem-3-repeat");
+    AlertEventEntity retried = alertEventMapper.selectById(tenantId, alertId);
+    assertThat(retried.getClosedAt()).isEqualTo(originalClosedAt);
+    int reopened = alertEventMapper.updateStatus(tenantId, alertId, "ACKED");
+    assertThat(reopened).isZero();
   }
 
   @Test
-  @DisplayName("同一 Alertmanager 告警组仅在最后一条未关闭事件结束后才可解除")
+  @DisplayName("同组活动计数按各实体状态统计，独立关闭不影响其他实体")
   void shouldCountActivePeersInSameAlertmanagerGroup() {
     String tenantId = "t-alert-group-" + BatchDateTimeSupport.utcEpochMillis();
     long firstId = insertAlertEvent(tenantId, "JOB_RUNNING_TOO_LONG", "WARN", "OPEN", "first");
@@ -94,19 +104,37 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     alertApplicationService.close(firstId, alertRequest(tenantId), "idem-group-1");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", firstId))
+            AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(firstId)
+                .build()))
         .isEqualTo(2);
 
     alertApplicationService.close(ackedId, alertRequest(tenantId), "idem-group-2");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ackedId))
+            AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(ackedId)
+                .build()))
         .isEqualTo(1);
 
     alertApplicationService.close(suppressedId, alertRequest(tenantId), "idem-group-3");
 
     assertThat(alertEventMapper.countActiveAlertsInAmGroup(
-            tenantId, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", suppressedId))
+            AlertEventActiveAlertsInAmGroupCountQuery.builder()
+                .tenantId(tenantId)
+                .serviceName("batch-orchestrator")
+                .alertType("JOB_RUNNING_TOO_LONG")
+                .severity("WARN")
+                .excludingId(suppressedId)
+                .build()))
         .isZero();
   }
 
@@ -120,29 +148,34 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
 
   private long insertAlertEvent(
       String tenantId, String alertType, String severity, String status, String title) {
+    final String insertAlertEventSql = """
+    INSERT INTO batch.alert_event
+    (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
+    occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
+    VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
+    1, ?, ?, ?, now(), now())
+    """;
+    String dedupFingerprint = tenantId + ":" + alertType + ":" + System.nanoTime();
+    Timestamp firstSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
+    Timestamp lastSeenAt = Timestamp.from(BatchDateTimeSupport.utcNow());
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.alert_event
-          (tenant_id, service_name, alert_type, severity, title, detail_json, dedup_fingerprint,
-           occurrence_count, first_seen_at, last_seen_at, status, created_at, updated_at)
-        VALUES (?, 'batch-orchestrator', ?, ?, ?, '{}', ?,
-                1, ?, ?, ?, now(), now())
-        """,
+        insertAlertEventSql,
         tenantId,
         alertType,
         severity,
         title,
-        tenantId + ":" + alertType + ":" + System.nanoTime(),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
-        Timestamp.from(BatchDateTimeSupport.utcNow()),
+        dedupFingerprint,
+        firstSeenAt,
+        lastSeenAt,
         status);
-    Long id = jdbcTemplate.queryForObject("""
-            select id
-            from batch.alert_event
-            where tenant_id = ?
-            order by id desc
-            limit 1
-            """, Long.class, tenantId);
+    final String latestAlertEventIdSql = """
+    select id
+    from batch.alert_event
+    where tenant_id = ?
+    order by id desc
+    limit 1
+    """;
+    Long id = jdbcTemplate.queryForObject(latestAlertEventIdSql, Long.class, tenantId);
     return id == null ? -1L : id;
   }
 

@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,10 +43,33 @@ class DefaultAlertEventServiceEmitTest {
         .severity("CRITICAL")
         .build();
 
+    AlertEventEntity persisted = new AlertEventEntity();
+    persisted.setId(42L);
+    persisted.setStatus("OPEN");
+    persisted.setFirstSeenAt(Instant.parse("2026-10-25T00:00:00Z"));
+    when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
+
     service().emit(request);
 
     verify(alertEventMapper).insertOrMerge(any(AlertEventEntity.class));
-    verify(publisher).publishFiring(any(AlertEventEntity.class));
+    verify(publisher).publishFiring(persisted);
+  }
+
+  @Test
+  @DisplayName("重复信号命中已关闭告警时不重新发送发生通知")
+  void shouldNotRepublishClosedAlert() {
+    AlertEventEntity persisted = new AlertEventEntity();
+    persisted.setStatus("CLOSED");
+    when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
+    AlertEmitRequest request = AlertEmitRequest.builder()
+        .tenantId("ta")
+        .alertType("JOB_RUNNING_TOO_LONG")
+        .resourceKey("42")
+        .build();
+
+    service().emit(request);
+
+    verify(publisher, never()).publishFiring(any());
   }
 
   @Test

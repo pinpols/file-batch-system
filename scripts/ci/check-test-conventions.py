@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：测试 @DisplayName 约定。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-test-conventions.py；参数与前置环境见下方说明及所属 README。
 """测试约定守护：``@DisplayName`` 与方法命名的存量报告与增量拦截。
 
 口径见 ``docs/coding-conventions.md`` §14.4 / §14.5 —— 全项目统一：类级与方法级都要中文
@@ -34,6 +36,7 @@ import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -258,10 +261,15 @@ def display_name_span(masked: str, block_start: int, block_end: int) -> tuple[in
     if not m:
         return None
     open_index = m.end() - 1
-    close = matching_brace(masked, open_index) if masked[open_index] == "(" else -1
-    if close == -1:
-        close = masked.find(")", open_index)
-    return (m.start(), close if close != -1 else block_end)
+    depth = 0
+    for index in range(open_index, block_end):
+        if masked[index] == "(":
+            depth += 1
+        elif masked[index] == ")":
+            depth -= 1
+            if depth == 0:
+                return (m.start(), index)
+    return (m.start(), block_end)
 
 
 def method_signature(masked: str, position: int) -> tuple[str, int] | None:
@@ -366,20 +374,26 @@ def scan_file(path: Path, rel: str) -> list[Finding]:
 
 
 def test_java_files() -> list[Path]:
-    roots: list[Path] = []
-    for dirpath, dirnames, _ in os.walk(ROOT):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
-        candidate = Path(dirpath)
-        if (
-            candidate.name == "java"
-            and candidate.parent.name == "test"
-            and candidate.parent.parent.name == "src"
-        ):
-            roots.append(candidate)
-    files: list[Path] = []
-    for root in roots:
-        files.extend(sorted(root.rglob("*.java")))
-    return sorted(set(files))
+    # 工作区备份也可能含 src/test/java；以 Git 资产范围保留新源码并排除忽略的副本。
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.java"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+    )
+    files: set[Path] = set()
+    for raw in result.stdout.split(b"\0"):
+        if not raw:
+            continue
+        relative = Path(os.fsdecode(raw))
+        if "/src/test/java/" not in f"/{relative.as_posix()}":
+            continue
+        if any(part in SKIP_DIRS for part in relative.parts):
+            continue
+        source = ROOT / relative
+        if source.is_file():
+            files.add(source)
+    return sorted(files)
 
 
 def scan() -> list[Finding]:

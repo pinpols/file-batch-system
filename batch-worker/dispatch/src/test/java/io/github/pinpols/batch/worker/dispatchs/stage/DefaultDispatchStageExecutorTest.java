@@ -11,7 +11,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -29,28 +28,27 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
- * Unit tests for DefaultDispatchStageExecutor — verifies three stage exit paths: - success: step
+ * DefaultDispatchStageExecutor 单元测试，校验三个阶段的退出路径：成功时步骤
  * returns DispatchStageResult.success - business error: step throws BizException → BUSINESS_ERROR
- * code, does not propagate - infra error: step throws RuntimeException → INFRA_ERROR code, does not
+ * 错误码不会向外传播；基础设施错误时，步骤抛出 RuntimeException 并返回 INFRA_ERROR，且不会
  * propagate
  */
 // LENIENT 保留:setUp() 在所有用例之前预置了 startStepRun 以及
 // stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("分发阶段执行器:成功、业务异常、基础设施异常与两类步骤缺失的出口路径及失败码映射")
 class DefaultDispatchStageExecutorTest {
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
-  // The step under test
+  // 当前被测步骤。
   private DispatchStageStep prepareStep;
 
   private DefaultDispatchStageExecutor executor;
@@ -65,7 +63,7 @@ class DefaultDispatchStageExecutorTest {
 
     when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
-    // Provide all required stages so buildDefaultStepDefinitions() does not throw
+    // 提供全部必需阶段，避免 buildDefaultStepDefinitions() 抛出异常。
     List<DispatchStageStep> allSteps = new ArrayList<>();
     allSteps.add(prepareStep);
     for (DispatchStage stage : DispatchStage.values()) {
@@ -74,8 +72,7 @@ class DefaultDispatchStageExecutorTest {
       }
     }
     meterRegistry = new SimpleMeterRegistry();
-    executor = new DefaultDispatchStageExecutor(
-        allSteps, pipelineDefinitions, pipelineRuns, meterRegistry);
+    executor = new DefaultDispatchStageExecutor(allSteps, pipelineRuns, meterRegistry);
   }
 
   @Test
@@ -136,8 +133,24 @@ class DefaultDispatchStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("upstream connection refused");
+    assertThat(results.get(0).message()).contains("upstream connection refused");
     verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("基础设施异常的阶段结果和日志不保存凭据")
+  void execute_masksCredentialInInfraFailure(CapturedOutput output) {
+    when(prepareStep.execute(any()))
+        .thenThrow(new RuntimeException("upstream token=probe-secret refused"));
+
+    List<DispatchStageResult> results = executor.execute(buildContext());
+
+    DispatchStageResult result = results.getFirst();
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(result.errorArgs()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   @Test
@@ -158,7 +171,6 @@ class DefaultDispatchStageExecutorTest {
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<DispatchStageResult> results = executor.execute(context);
 
@@ -177,7 +189,6 @@ class DefaultDispatchStageExecutorTest {
     context.setWorkerId("w1");
     context.setDispatchId("d1");
     PipelineStepDefinition step = new PipelineStepDefinition(
-        1L,
         1L,
         "DISPATCH_PREPARE",
         "Dispatch Prepare",

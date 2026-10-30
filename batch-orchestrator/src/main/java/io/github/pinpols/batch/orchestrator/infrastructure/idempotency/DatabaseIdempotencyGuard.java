@@ -37,9 +37,8 @@ public class DatabaseIdempotencyGuard implements IdempotencyGuard {
 
   @Override
   public boolean isAlreadyExecuted(String tenantId, String idempotencyKey) {
-    // 用 countByKey 而非 selectResultByKey != null,避免 race:executeOnce 占位行 result=null
-    // 期间并发调用本方法会判定"未执行"导致重复执行。占位行存在即视为"已认领",由占位
-    // 事务负责完成回写;调用方若需要等待结果,应轮询 selectResultByKey。
+    // count 可识别已提交但 result 为 null 的记录；其他事务未提交的占位行不可见。
+    // 本查询不能作为并发认领围栏，原子认领由 executeOnce 的唯一约束负责。
     return idempotencyRecordMapper.countByKey(tenantId, idempotencyKey) > 0;
   }
 }

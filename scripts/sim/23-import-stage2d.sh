@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：import-stage2d.sh:Import bad-record skip 阈值系统级验证。
+# 用法：在仓库根目录执行 bash scripts/sim/23-import-stage2d.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 23-import-stage2d.sh:Import bad-record skip 阈值系统级验证
 #
@@ -13,7 +15,7 @@
 #   - 1 条校验坏记录在阈值内被 skip,同批有效记录继续 LOAD
 #   - 2 条校验坏记录超过阈值,任务失败为 IMPORT_SKIP_THRESHOLD_EXCEEDED
 #
-# SQL fixture 位于 docs/test-data 的 bootstrap,脚本只负责编排、API 触发和断言。
+# SQL fixture 位于 test-data/sim 的 bootstrap,脚本只负责编排、API 触发和断言。
 # =========================================================
 set -euo pipefail
 
@@ -29,11 +31,32 @@ source "$ROOT/scripts/sim/env-common.sh"
 batch_require_python
 
 __RESTARTED_IMPORT_WITH_SKIP=0
+wait_import_ready() {
+  for _ in $(seq 1 40); do
+    if curl -fsS --max-time 3 "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "worker-import 恢复后未就绪" >&2
+  return 1
+}
+
 restore_import_default() {
+  local original_rc=$? restore_rc=0
+  trap - EXIT
   if [[ "$__RESTARTED_IMPORT_WITH_SKIP" == "1" && "${RESTORE_IMPORT_AFTER_SKIP:-1}" == "1" ]]; then
     echo "==> restore worker-import default config"
-    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null || true
+    if bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null; then
+      wait_import_ready || restore_rc=$?
+    else
+      restore_rc=$?
+    fi
   fi
+  if [[ "$original_rc" == "0" && "$restore_rc" != "0" ]]; then
+    exit "$restore_rc"
+  fi
+  exit "$original_rc"
 }
 trap restore_import_default EXIT
 
@@ -51,10 +74,10 @@ fi
 
 echo "==> apply bootstrap(XML import runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2d-reset-errors.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2d-reset-errors.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
@@ -65,6 +88,7 @@ import json
 import os
 import subprocess
 import sys
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import time
 import urllib.request
 from pathlib import Path
@@ -108,7 +132,7 @@ def launch(label, content, batch_no):
     rid = f"sim-stage2d-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": "TA_IMPORT_CUSTOMER_XML",
+        "workflowDefinitionId": workflow_id_for_fixture("ta", "TA_IMPORT_CUSTOMER_XML"),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,

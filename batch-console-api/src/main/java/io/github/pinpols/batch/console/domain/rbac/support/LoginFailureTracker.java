@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import java.util.Locale;
 import java.util.UUID;
@@ -56,8 +57,10 @@ public class LoginFailureTracker {
     long now = dateTimeSupport.currentEpochMillis();
     long windowStart = now - windowMillis();
     long ttlSeconds = (windowMillis() / 1000) + 1;
+    UUID attemptId = UUID.randomUUID();
+    String attemptIdText = attemptId.toString();
     return failureStore.recordFailure(
-        RATE_LIMIT_KEY_PREFIX + key, now, windowStart, UUID.randomUUID().toString(), ttlSeconds);
+        RATE_LIMIT_KEY_PREFIX + key, now, windowStart, attemptIdText, ttlSeconds);
   }
 
   private long count(String key) {
@@ -70,6 +73,10 @@ public class LoginFailureTracker {
   }
 
   private static String normalize(String raw) {
-    return raw == null ? "" : raw.trim().toLowerCase(Locale.ROOT);
+    if (EmptyChecks.isNull(raw)) {
+      return "";
+    }
+    String trimmedRaw = raw.trim();
+    return trimmedRaw.toLowerCase(Locale.ROOT);
   }
 }

@@ -30,30 +30,34 @@ public class ConsoleOidcLoginAudit {
 
   private void record(String tenantId, String operatorId, String result, String errorCode) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
-    OperationAuditEvent event = new OperationAuditEvent(
-        tenantId,
-        "auth",
-        operatorId,
-        "auth.oidc.login",
-        operatorId,
-        "OIDC",
-        result,
-        errorCode,
-        EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed",
-        null,
-        metadata.traceId(),
-        metadata.requestId(),
-        Hashes.sha256Short(metadata.clientIp()),
-        null,
-        1,
-        BatchDateTimeSupport.utcNow());
+    String errorDescription = EmptyChecks.isNull(errorCode) ? null : "OIDC authentication failed";
+    String traceId = metadata.traceId();
+    String requestId = metadata.requestId();
+    String clientIp = metadata.clientIp();
+    String clientIpHash = Hashes.sha256Short(clientIp);
+    OperationAuditEvent event = OperationAuditEvent.builder()
+        .tenantId(tenantId)
+        .aggregateType("auth")
+        .aggregateId(operatorId)
+        .action("auth.oidc.login")
+        .operatorId(operatorId)
+        .operatorRole("OIDC")
+        .result(result)
+        .errorCode(errorCode)
+        .errorMessage(errorDescription)
+        .traceId(traceId)
+        .requestId(requestId)
+        .ipHash(clientIpHash)
+        .eventVersion(1)
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .build();
     try {
       auditMapper.insert(event);
     } catch (RuntimeException exception) {
+      String sanitizedTenantId = LogSanitizer.value(tenantId);
+      String sanitizedResult = LogSanitizer.value(result);
       log.warn(
-          "OIDC login audit insert failed tenant={} result={}",
-          LogSanitizer.value(tenantId),
-          LogSanitizer.value(result));
+          "OIDC login audit insert failed tenant={} result={}", sanitizedTenantId, sanitizedResult);
     }
   }
 }

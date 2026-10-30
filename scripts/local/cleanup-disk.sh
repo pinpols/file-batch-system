@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地开发磁盘清理。默认只预览；数据卷、运行日志和构建产物均需显式启用。
+# 用法：在仓库根目录执行 bash scripts/local/cleanup-disk.sh；参数与前置环境见下方说明及所属 README。
 # 本地开发磁盘清理。默认只预览；数据卷、运行日志和构建产物均需显式启用。
 set -euo pipefail
 
@@ -33,9 +35,9 @@ usage() {
   --confirm-root <目录名>       与 --apply 一起使用，必须输入仓库根目录名
   --retention-days <天数>       仅处理早于该天数的资源，默认 7
   --include-anonymous-volumes   同时处理无引用的 Docker 匿名卷
-  --include-run-logs            同时处理 logs/runs 下的历史运行目录
+  --include-run-logs            将 logs/runs 历史运行目录委托日志策略脚本压缩归档
   --include-build-artifacts     同时处理仓库内 Maven target 目录
-  --include-app-logs            同时清理 logs/archive/app 下的历史应用归档日志
+  --include-app-logs            将历史应用日志委托日志策略脚本压缩归档
   --include-observability-volumes 同时清理本地观测栈命名卷
   --include-build-cache         清理超过保留期的 BuildKit 缓存
   --all-build-cache             清理全部未使用的 BuildKit 缓存，忽略保留周期
@@ -371,27 +373,20 @@ else
   echo 'Docker 不可用，跳过 Docker 清理'
 fi
 
-if [ "$INCLUDE_RUN_LOGS" = true ]; then
-  echo
-  echo "历史运行日志（超过 ${RETENTION_DAYS} 天）:"
-  if [ -d "$ROOT/logs/runs" ]; then
-    log_candidates="$(find "$ROOT/logs/runs" -mindepth 2 -maxdepth 2 -type d -mtime "+${RETENTION_DAYS}" -print)"
-    log_count="$(printf '%s\n' "$log_candidates" | grep -c . || true)"
-    echo "符合条件的历史运行目录: ${log_count}"
-    if [ -n "$log_candidates" ] && [ "$APPLY" = true ]; then
-      printf '%s\n' "$log_candidates" | while IFS= read -r directory; do
-        rm -rf "$directory"
-      done
-      echo "已删除 ${log_count} 个历史运行目录"
-    elif [ -n "$log_candidates" ]; then
-      awk 'NR <= 20 { print }' <<< "$log_candidates"
-      if [ "$log_count" -gt 20 ]; then
-        echo "... 其余 $((log_count - 20)) 个已省略"
-      fi
-    fi
+if [ "$INCLUDE_RUN_LOGS" = true ] || [ "$INCLUDE_APP_LOGS" = true ]; then
+  log_retention_args=(--root "$ROOT" --keep-days "$RETENTION_DAYS")
+  if [ "$INCLUDE_RUN_LOGS" = true ]; then
+    log_retention_args+=(--category runs)
   fi
+  if [ "$INCLUDE_APP_LOGS" = true ]; then
+    log_retention_args+=(--category app)
+  fi
+  if [ "$APPLY" = true ]; then
+    log_retention_args+=(--apply --confirm-root "$ROOT")
+  fi
+  bash "$ROOT/scripts/python.sh" "$ROOT/scripts/local/manage-logs.py" "${log_retention_args[@]}"
 else
-  echo '历史运行日志: 未启用清理（使用 --include-run-logs 显式启用）'
+  echo '日志归档: 未启用（使用 --include-run-logs / --include-app-logs；完整策略见 manage-logs.py）'
 fi
 
 if [ "$INCLUDE_BUILD_ARTIFACTS" = true ]; then
@@ -403,36 +398,6 @@ if [ "$INCLUDE_BUILD_ARTIFACTS" = true ]; then
   fi
 else
   echo 'Maven 构建目录: 未启用清理（使用 --include-build-artifacts 显式启用）'
-fi
-
-if [ "$INCLUDE_APP_LOGS" = true ]; then
-  echo
-  echo "历史应用归档日志（超过 ${RETENTION_DAYS} 天）:"
-  app_candidates=()
-  while IFS= read -r -d '' file; do
-    app_candidates+=("$file")
-  done < <(log_find_archived_log_files "$ROOT" app "$RETENTION_DAYS")
-
-  app_count="${#app_candidates[@]}"
-  echo "符合条件的应用日志文件: ${app_count}"
-  app_disk_size=""
-  if [ "$app_count" -gt 0 ]; then
-    app_disk_size="$(du -ch -- "${app_candidates[@]}" 2>/dev/null | awk 'END {print $1}')"
-  fi
-  [ -n "$app_disk_size" ] && echo "应用日志待清理空间: ${app_disk_size}"
-  if [ "$app_count" -gt 0 ]; then
-    if [ "$APPLY" = true ]; then
-      rm -f -- "${app_candidates[@]}"
-      echo "已删除 ${app_count} 个应用日志文件（清理空间: ${app_disk_size:-未知}）"
-    else
-      printf '%s\n' "${app_candidates[@]:0:20}"
-      if [ "$app_count" -gt 20 ]; then
-        echo "... 其余 $((app_count - 20)) 个已省略"
-      fi
-    fi
-  fi
-else
-  echo '历史应用归档日志: 未启用清理（使用 --include-app-logs 显式启用）'
 fi
 
 if [ "$INCLUDE_OBSERVABILITY_VOLUMES" = true ]; then

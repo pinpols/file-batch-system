@@ -7,10 +7,12 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
+import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -52,8 +54,7 @@ class PreprocessStepKmsDecryptTest {
     cryptoService = new BatchObjectCryptoService(security, kms);
 
     runtimeRepo = mock(PlatformFileRecordRepository.class);
-    PlatformPipelineDefinitionRepository pipelineDefinitions =
-        mock(PlatformPipelineDefinitionRepository.class);
+    PlatformFileTemplateRepository pipelineDefinitions = mock(PlatformFileTemplateRepository.class);
     when(pipelineDefinitions.loadLatestTemplateConfig(any(), any(), any())).thenReturn(Map.of());
     // updateFileStatus 返回 void — Mockito mock 默认不做任何操作
 
@@ -62,8 +63,8 @@ class PreprocessStepKmsDecryptTest {
         pipelineDefinitions,
         security,
         cryptoService,
-        mock(io.github.pinpols.batch.common.config.S3StorageProperties.class),
-        mock(io.github.pinpols.batch.common.storage.BatchObjectStore.class));
+        mock(S3StorageProperties.class),
+        mock(BatchObjectStore.class));
   }
 
   @Test

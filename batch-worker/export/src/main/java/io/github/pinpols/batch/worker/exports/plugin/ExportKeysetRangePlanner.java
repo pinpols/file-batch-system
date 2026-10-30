@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.plugin;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -12,7 +13,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 
-/** keyset-range 激活判定 + 每分区边界（缓存进 exportSnapshot，只算一次）。任何异常 → INACTIVE（退回 hashtext）。 */
+/** 导出分片规划：多分片暂统一使用 hashtext，保留原区间规划代码供后续设计共享计划。 */
 @Slf4j
 public class ExportKeysetRangePlanner {
 
@@ -20,10 +21,13 @@ public class ExportKeysetRangePlanner {
   private static final ObjectMapper OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
   /**
-   * @param minMaxSupplier 算游标列 [min,max] 的回调（BigDecimal[2]；非数值/空 → 元素 null 或抛异常）。
-   *     仅在激活且首次解析时调用一次；结果（含 INACTIVE）缓存进 exportSnapshot，后续页直接复用。
+   * @param minMaxSupplier 既有区间边界探测回调；多分片禁用区间时不会调用。
    */
   ExportKeysetRange resolve(ExportDataContext context, Supplier<BigDecimal[]> minMaxSupplier) {
+    // 独立范围探测无法保证所有分片使用同一方案，暂统一哈希，避免重叠或遗漏。
+    if (context.partitionCount() > 1) {
+      return ExportKeysetRange.inactiveFor(context.partitionCount(), context.partitionNo());
+    }
     Map<String, Object> snap = context.exportSnapshot();
     if (snap != null && snap.get(SNAP_KEY) instanceof ExportKeysetRange cached) {
       return cached;
@@ -37,12 +41,17 @@ public class ExportKeysetRangePlanner {
 
   private ExportKeysetRange compute(
       ExportDataContext context, Supplier<BigDecimal[]> minMaxSupplier) {
-    if (context.partitionCount() <= 1 || !optedIn(context)) {
+    boolean keysetRangeIsNotApplicable = context.partitionCount() <= 1 || !optedIn(context);
+    if (keysetRangeIsNotApplicable) {
       return ExportKeysetRange.inactiveFor(context.partitionCount(), context.partitionNo());
     }
     try {
       BigDecimal[] mm = minMaxSupplier.get();
-      if (mm == null || mm.length != 2 || mm[0] == null || mm[1] == null) {
+      boolean minMaxBoundsAreIncomplete = EmptyChecks.isNull(mm)
+          || mm.length != 2
+          || EmptyChecks.isNull(mm[0])
+          || EmptyChecks.isNull(mm[1]);
+      if (minMaxBoundsAreIncomplete) {
         return ExportKeysetRange.inactiveFor(context.partitionCount(), context.partitionNo());
       }
       return ExportKeysetRange.equalWidth(
@@ -58,17 +67,25 @@ public class ExportKeysetRangePlanner {
     if (tc == null || tc.isEmpty()) {
       return false;
     }
-    if (truthy(firstNonNull(tc.get("partition_keyset_range"), tc.get("partitionKeysetRange")))) {
+    Object templateRangeSetting =
+        firstNonNull(tc.get("partition_keyset_range"), tc.get("partitionKeysetRange"));
+    if (truthy(templateRangeSetting)) {
       return true;
     }
     Map<String, Object> qps = toMap(tc.get("query_param_schema"));
-    if (truthy(firstNonNull(qps.get("partition_keyset_range"), qps.get("partitionKeysetRange")))) {
+    Object querySchemaRangeSetting =
+        firstNonNull(qps.get("partition_keyset_range"), qps.get("partitionKeysetRange"));
+    if (truthy(querySchemaRangeSetting)) {
       return true;
     }
-    Map<String, Object> sqlTemplate =
-        toMap(firstNonNull(qps.get("sqlTemplateExport"), qps.get("sql_template_export")));
-    return truthy(firstNonNull(
-        sqlTemplate.get("partitionKeysetRange"), sqlTemplate.get("partition_keyset_range")));
+    Object camelCaseSqlTemplate = qps.get("sqlTemplateExport");
+    Object snakeCaseSqlTemplate = qps.get("sql_template_export");
+    Object sqlTemplateConfig = firstNonNull(camelCaseSqlTemplate, snakeCaseSqlTemplate);
+    Map<String, Object> sqlTemplate = toMap(sqlTemplateConfig);
+    Object camelCaseRangeSetting = sqlTemplate.get("partitionKeysetRange");
+    Object snakeCaseRangeSetting = sqlTemplate.get("partition_keyset_range");
+    Object sqlTemplateRangeSetting = firstNonNull(camelCaseRangeSetting, snakeCaseRangeSetting);
+    return truthy(sqlTemplateRangeSetting);
   }
 
   private static Object firstNonNull(Object... values) {

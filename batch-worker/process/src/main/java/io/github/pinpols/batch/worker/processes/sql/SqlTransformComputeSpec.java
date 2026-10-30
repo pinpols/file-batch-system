@@ -16,8 +16,10 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import lombok.Builder;
 
-/** 从 {@code pipeline_step_definition.step_params} 解析出的配置驱动 SQL 加工规格。 */
+/** 从 Job 冻结的 COMPUTE 阶段业务参数解析出的 SQL 加工规格。 */
+@Builder
 public record SqlTransformComputeSpec(
     String implCode,
     String sourceSql,
@@ -75,6 +77,7 @@ public record SqlTransformComputeSpec(
       PipelineRuntimeKeys.TRACE_ID,
       "stepCode",
       "batchKey",
+      "stagingGenerationId",
       "targetSchema",
       "targetTable",
       PipelineRuntimeKeys.PARTITION_NO,
@@ -90,48 +93,55 @@ public record SqlTransformComputeSpec(
     Map<String, Object> root = extractSpecRoot(stepParams, objectMapper);
     if (EmptyChecks.isEmpty(root)) {
       throw new IllegalArgumentException(
-          "sqlTransformCompute spec missing in pipeline_step_definition.step_params");
+          "sqlTransformCompute spec missing in COMPUTE step parameters");
     }
 
     String sourceSql = required(root, "sourceSql", "source_sql", "querySql", "query_sql");
-    String targetSchema = text(firstNonNull(root.get("targetSchema"), root.get("schema")));
+    Object configuredTargetSchema = firstNonNull(root.get("targetSchema"), root.get("schema"));
+    String targetSchema = text(configuredTargetSchema);
     if (!Texts.hasText(targetSchema)) {
       targetSchema = "biz";
     }
     String targetTable = required(root, "targetTable", "target_table", "table");
-    WriteMode writeMode =
-        parseWriteMode(firstNonNull(root.get("writeMode"), root.get("write_mode")));
-    StagingMode stagingMode =
-        parseStagingMode(firstNonNull(root.get("stagingMode"), root.get("staging_mode")));
+    Object configuredWriteMode = firstNonNull(root.get("writeMode"), root.get("write_mode"));
+    WriteMode writeMode = parseWriteMode(configuredWriteMode);
+    Object configuredStagingMode = firstNonNull(root.get("stagingMode"), root.get("staging_mode"));
+    StagingMode stagingMode = parseStagingMode(configuredStagingMode);
     List<ColumnMapping> columns = parseColumns(root.get("columns"));
     if (EmptyChecks.isEmpty(columns)) {
       throw new IllegalArgumentException("sqlTransformCompute.columns is required");
     }
-    List<String> conflictColumns =
-        parseStringList(firstNonNull(root.get("conflictColumns"), root.get("conflict_columns")));
-    String watermarkColumn =
-        text(firstNonNull(root.get("watermarkColumn"), root.get("watermark_column")));
-    Map<String, Object> params = parseMap(firstNonNull(root.get("params"), root.get("sqlParams")));
+    Object configuredConflictColumns =
+        firstNonNull(root.get("conflictColumns"), root.get("conflict_columns"));
+    List<String> conflictColumns = parseStringList(configuredConflictColumns);
+    Object configuredWatermarkColumn =
+        firstNonNull(root.get("watermarkColumn"), root.get("watermark_column"));
+    String watermarkColumn = text(configuredWatermarkColumn);
+    Object configuredParams = firstNonNull(root.get("params"), root.get("sqlParams"));
+    Map<String, Object> params = parseMap(configuredParams);
     List<ValidationRule> validations = parseValidations(root.get("validations"));
-    EmptyResultPolicy emptyResultPolicy = parseEmptyResultPolicy(
-        firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy")));
-    int maxStagedRows =
-        parseMaxStagedRows(firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows")));
+    Object configuredEmptyResultPolicy =
+        firstNonNull(root.get("emptyResultPolicy"), root.get("empty_result_policy"));
+    EmptyResultPolicy emptyResultPolicy = parseEmptyResultPolicy(configuredEmptyResultPolicy);
+    Object configuredMaxStagedRows =
+        firstNonNull(root.get("maxStagedRows"), root.get("max_staged_rows"));
+    int maxStagedRows = parseMaxStagedRows(configuredMaxStagedRows);
 
-    SqlTransformComputeSpec spec = new SqlTransformComputeSpec(
-        SqlTransformComputePlugin.PLUGIN_ID,
-        sourceSql,
-        targetSchema,
-        targetTable,
-        writeMode,
-        stagingMode,
-        columns,
-        conflictColumns,
-        watermarkColumn,
-        params,
-        validations,
-        emptyResultPolicy,
-        maxStagedRows);
+    SqlTransformComputeSpec spec = SqlTransformComputeSpec.builder()
+        .implCode(SqlTransformComputePlugin.PLUGIN_ID)
+        .sourceSql(sourceSql)
+        .targetSchema(targetSchema)
+        .targetTable(targetTable)
+        .writeMode(writeMode)
+        .stagingMode(stagingMode)
+        .columns(columns)
+        .conflictColumns(conflictColumns)
+        .watermarkColumn(watermarkColumn)
+        .params(params)
+        .validations(validations)
+        .emptyResultPolicy(emptyResultPolicy)
+        .maxStagedRows(maxStagedRows)
+        .build();
     spec.validateIdentifiers();
     return spec;
   }
@@ -144,7 +154,8 @@ public record SqlTransformComputeSpec(
     if (raw instanceof Number n) {
       value = n.intValue();
     } else {
-      String text = String.valueOf(raw).trim();
+      String rawText = String.valueOf(raw);
+      String text = rawText.trim();
       if (EmptyChecks.isEmpty(text)) {
         return DEFAULT_MAX_STAGED_ROWS;
       }
@@ -177,7 +188,8 @@ public record SqlTransformComputeSpec(
       return Optional.empty();
     }
     String name = text(m.get("name"));
-    String checkSql = text(firstNonNull(m.get("checkSql"), m.get("check_sql")));
+    Object configuredCheckSql = firstNonNull(m.get("checkSql"), m.get("check_sql"));
+    String checkSql = text(configuredCheckSql);
     return Texts.hasText(name) && Texts.hasText(checkSql)
         ? Optional.of(new ValidationRule(name, checkSql))
         : Optional.empty();
@@ -268,7 +280,8 @@ public record SqlTransformComputeSpec(
     if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return WriteMode.INSERT;
     }
-    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
     try {
       return WriteMode.valueOf(normalized);
     } catch (IllegalArgumentException ex) {
@@ -286,7 +299,8 @@ public record SqlTransformComputeSpec(
     if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return EmptyResultPolicy.SUCCESS;
     }
-    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
     try {
       return EmptyResultPolicy.valueOf(normalized);
     } catch (IllegalArgumentException ex) {
@@ -303,7 +317,8 @@ public record SqlTransformComputeSpec(
     if (value == null || value.isBlank()) { // empty-check: allow - Sonar S2259
       return StagingMode.JSONB;
     }
-    String normalized = value.trim().toUpperCase(Locale.ROOT);
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.toUpperCase(Locale.ROOT);
     try {
       return StagingMode.valueOf(normalized);
     } catch (IllegalArgumentException ex) {
@@ -328,8 +343,10 @@ public record SqlTransformComputeSpec(
       return Optional.of(new ColumnMapping(column, column));
     }
     if (item instanceof Map<?, ?> m) {
-      String source = text(firstNonNull(m.get("source"), m.get("from")));
-      String target = text(firstNonNull(m.get("target"), m.get("to")));
+      Object configuredSource = firstNonNull(m.get("source"), m.get("from"));
+      String source = text(configuredSource);
+      Object configuredTarget = firstNonNull(m.get("target"), m.get("to"));
+      String target = text(configuredTarget);
       return Texts.hasText(source) && Texts.hasText(target)
           ? Optional.of(new ColumnMapping(source, target))
           : Optional.empty();
@@ -361,7 +378,9 @@ public record SqlTransformComputeSpec(
   }
 
   private static String required(Map<String, Object> root, String... keys) {
-    String value = text(firstNonNull(values(root, keys)));
+    Object[] candidateValues = values(root, keys);
+    Object configuredValue = firstNonNull(candidateValues);
+    String value = text(configuredValue);
     if (!Texts.hasText(value)) {
       throw new IllegalArgumentException("sqlTransformCompute." + keys[0] + " is required");
     }
@@ -380,7 +399,8 @@ public record SqlTransformComputeSpec(
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return Texts.hasText(text) ? text : null;
   }
 }

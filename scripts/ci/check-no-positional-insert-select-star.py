@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：禁止位置式 INSERT SELECT *。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-no-positional-insert-select-star.py；参数与前置环境见下方说明及所属 README。
 """守护:禁止 mapper XML 里出现「位置式」INSERT ... SELECT *（无显式列名）。
 
 为什么:`INSERT INTO archive.x_archive SELECT * FROM batch.x` 是**按列位置**插入。

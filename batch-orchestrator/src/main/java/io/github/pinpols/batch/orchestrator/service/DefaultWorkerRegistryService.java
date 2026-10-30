@@ -77,38 +77,43 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         : (registry == null
             ? WorkerRegistryEntity.DEFAULT_MAX_CONCURRENT
             : registry.maxConcurrent());
-    JsonbString newTags = request.capabilityTags() != null
-        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-        : (registry == null ? null : registry.capabilityTags());
-    JsonbString newTaskCapabilities = EmptyChecks.isNotNull(request.taskCapabilities())
-        ? JsonbString.of(JsonUtils.toJson(request.taskCapabilities()))
-        : (EmptyChecks.isNull(registry) ? null : registry.taskCapabilities());
+    JsonbString newTags;
+    if (EmptyChecks.isNotNull(request.capabilityTags())) {
+      String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
+      newTags = JsonbString.of(capabilityTagsJson);
+    } else {
+      newTags = EmptyChecks.isNull(registry) ? null : registry.capabilityTags();
+    }
+    JsonbString newTaskCapabilities;
+    if (EmptyChecks.isNotNull(request.taskCapabilities())) {
+      String taskCapabilitiesJson = JsonUtils.toJson(request.taskCapabilities());
+      newTaskCapabilities = JsonbString.of(taskCapabilitiesJson);
+    } else {
+      newTaskCapabilities = EmptyChecks.isNull(registry) ? null : registry.taskCapabilities();
+    }
 
     if (registry == null) {
       // 缺口②:仅对新 worker_code 做 per-tenant 数量配额校验(opt-in,默认 max<=0 不限);
       // 幂等重注册已存在的 worker_code 走 else 分支,永不被配额拦截。
       rejectIfTenantWorkerQuotaExceeded(request.tenantId());
-      registry = new WorkerRegistryEntity(
-          null,
-          request.tenantId(),
-          request.workerCode(),
-          request.workerGroup(),
-          newTags,
-          null,
-          newStatus,
-          heartbeatAt,
-          newLoad,
-          newMaxConcurrent,
-          null,
-          null,
-          request.hostName(),
-          request.hostIp(),
-          request.processId(),
-          request.port(),
-          request.buildId(),
-          request.sdkVersion(),
-          resolveWorkerPoolCode(request),
-          newTaskCapabilities);
+      registry = WorkerRegistryEntity.builder()
+          .tenantId(request.tenantId())
+          .workerCode(request.workerCode())
+          .workerGroup(request.workerGroup())
+          .capabilityTags(newTags)
+          .status(newStatus)
+          .heartbeatAt(heartbeatAt)
+          .currentLoad(newLoad)
+          .maxConcurrent(newMaxConcurrent)
+          .hostName(request.hostName())
+          .hostIp(request.hostIp())
+          .processId(request.processId())
+          .port(request.port())
+          .buildId(request.buildId())
+          .sdkVersion(request.sdkVersion())
+          .workerPoolCode(resolveWorkerPoolCode(request))
+          .taskCapabilities(newTaskCapabilities)
+          .build();
     } else {
       // SDK-P5-3:register 刷新运行指纹(worker 重启可能换 host / 升 SDK 版本);request 未带的字段 mapper 端 coalesce
       // 保留旧值。
@@ -125,6 +130,15 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
           .withTaskCapabilities(newTaskCapabilities);
     }
     WorkerRegistryEntity saved = persistRegistration(registry, expectedStatus);
+    if (EmptyChecks.isNotNull(request.replayCapabilities())) {
+      String replayCapabilitiesJson = JsonUtils.toJson(request.replayCapabilities());
+      int updatedRows = workerRegistryMapper.updateReplayCapabilities(
+          request.tenantId(), request.workerCode(), replayCapabilitiesJson);
+      if (updatedRows != 1) {
+        throw new IllegalStateException(
+            "Worker replay capability catalogue was not persisted for the registered worker");
+      }
+    }
     // ADR-035 §2:SDK 自托管 worker 通过 workerGroup="sdk-self-hosted" 识别,标到列上让
     // console "我的 Worker" 页过滤。幂等。
     if ("sdk-self-hosted".equals(request.workerGroup())) {
@@ -220,10 +234,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     }
     Integer reportedMajor = SdkVersions.parseMajor(reportedSdkVersion);
     if (reportedMajor == null) {
+      String workerCodeForLog = LogSanitizer.value(request.workerCode());
+      String reportedSdkVersionForLog = LogSanitizer.value(reportedSdkVersion);
       log.warn(
           "Could not parse the major version from worker {} sdkVersion=\"{}\"; skipping the minimum SDK version gate",
-          LogSanitizer.value(request.workerCode()),
-          LogSanitizer.value(reportedSdkVersion));
+          workerCodeForLog,
+          reportedSdkVersionForLog);
       return;
     }
     if (reportedMajor < requiredMajor) {
@@ -246,17 +262,22 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return;
     }
     for (WorkerTaskTypeDescriptorDto descriptor : taskTypes) {
-      if (descriptor == null || descriptor.code() == null || descriptor.code().isBlank()) {
+      if (EmptyChecks.isNull(descriptor)) {
+        continue;
+      }
+      String taskTypeCode = descriptor.code();
+      if (EmptyChecks.isNull(taskTypeCode) || EmptyChecks.isBlank(taskTypeCode)) {
         continue;
       }
       // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
       // 拒了就让整次 register 抛 BizException(400),阻止凭据落入 custom_task_type_registry JSONB。
-      String ctxLabel = "sdk.taskType.descriptor[" + descriptor.code() + "]";
+      // code 来自上报载荷，不能拼入对外错误文案；拒入原因只保留固定上下文。
+      String ctxLabel = "sdk.taskType.descriptor";
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.defaults(), ctxLabel);
       SensitiveDataValidator.rejectIfContainsSensitiveKeys(descriptor.inputSchema(), ctxLabel);
       customTaskTypeRegistryMapper.upsertDeclared(CustomTaskTypeUpsertParam.builder()
           .tenantId(request.tenantId())
-          .taskTypeCode(descriptor.code())
+          .taskTypeCode(taskTypeCode)
           .displayName(descriptor.displayName())
           .descriptor(JsonUtils.toJson(descriptor))
           .descriptorVersion(descriptor.version())
@@ -279,9 +300,13 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     String newStatus = resolveHeartbeatStatus(request, registry.status());
     Integer newLoad =
         request.currentLoad() != null ? request.currentLoad() : registry.currentLoad();
-    JsonbString newTags = request.capabilityTags() != null
-        ? JsonbString.of(JsonUtils.toJson(request.capabilityTags()))
-        : registry.capabilityTags();
+    JsonbString newTags;
+    if (EmptyChecks.isNotNull(request.capabilityTags())) {
+      String capabilityTagsJson = JsonUtils.toJson(request.capabilityTags());
+      newTags = JsonbString.of(capabilityTagsJson);
+    } else {
+      newTags = registry.capabilityTags();
+    }
     // heartbeat_at 由 mapper xml 直接写为 DB current_timestamp（消除 worker 时钟漂移）。
     workerRegistryMapper.touchHeartbeat(TouchHeartbeatParam.builder()
         .tenantId(request.tenantId())
@@ -355,9 +380,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   }
 
   private String resolveWorkerPoolCode(WorkerHeartbeatDto request) {
-    return EmptyChecks.isBlank(request.workerPoolCode())
-        ? request.workerCode()
-        : request.workerPoolCode();
+    String requestedWorkerPoolCode = request.workerPoolCode();
+    if (EmptyChecks.isBlank(requestedWorkerPoolCode)) {
+      return request.workerCode();
+    }
+    return requestedWorkerPoolCode;
   }
 
   private String resolveIncomingStatus(
@@ -368,12 +395,16 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
     // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
     // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
-    if (requestedStatus == null
-        || requestedStatus.isBlank()
-        || !isValidRegistryStatus(requestedStatus)) {
-      return defaultStatus == null || defaultStatus.isBlank() ? currentStatus : defaultStatus;
+    boolean requestedRegistryStatusIsValid = EmptyChecks.isNotNull(requestedStatus)
+        && !EmptyChecks.isBlank(requestedStatus)
+        && isValidRegistryStatus(requestedStatus);
+    if (requestedRegistryStatusIsValid) {
+      return requestedStatus;
     }
-    return requestedStatus;
+    if (EmptyChecks.isNull(defaultStatus) || EmptyChecks.isBlank(defaultStatus)) {
+      return currentStatus;
+    }
+    return defaultStatus;
   }
 
   private static boolean isValidRegistryStatus(String code) {

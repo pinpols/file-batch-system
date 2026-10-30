@@ -60,7 +60,8 @@ public class ConsoleBusinessTenantPlacementService {
    * 空集合表示无可校验源,跳过(运行时 lenientFallback=false 回退)。
    */
   private Set<String> configuredShardKeys() {
-    Set<String> keys = new LinkedHashSet<>(shardCatalogMapper.findEnabledKeys());
+    List<String> enabledShardKeys = shardCatalogMapper.findEnabledKeys();
+    Set<String> keys = new LinkedHashSet<>(enabledShardKeys);
     if (!keys.isEmpty()) {
       return keys;
     }

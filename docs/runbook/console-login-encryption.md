@@ -25,11 +25,17 @@ helm Secret 模板守护（`helm/batch-platform/templates/secret.yaml`）：`req
 
 启动期生成密钥的路径**只适合单副本**。多副本场景下：
 
-```
-Pod A 自己生成 keypair (priv_A, pub_A)
-Pod B 自己生成 keypair (priv_B, pub_B)
-FE -> GET /auth/public-key  → 命中 Pod A 返 pub_A
-FE -> POST /auth/login (用 pub_A 加密) → 命中 Pod B → 用 priv_B 解 → 失败
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+sequenceDiagram
+  participant FE as 浏览器
+  participant A as Pod A（密钥 A）
+  participant B as Pod B（密钥 B）
+  Note over A,B: 错误示例：实例各自生成不同密钥
+  FE->>A: 获取登录公钥
+  A-->>FE: 公钥 A
+  FE->>B: 使用公钥 A 加密的登录请求
+  B-->>FE: 私钥 B 无法解密
 ```
 
 `helm/values-prod.yaml` 已强制 `required=true`，PEM 必填，helm 守卫阻止漏配。

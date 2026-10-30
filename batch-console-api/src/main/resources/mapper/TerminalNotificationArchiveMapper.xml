@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.TerminalNotificationArchiveMapper">
+    <!-- 只继承租户已保存的审计策略；缺失/禁用时没有候选，不推导新的保留期。 -->
+    <sql id="policyEnabled">
+        p.target_table='console_operation_audit' and p.archive_enabled
+        and p.retention_days &gt; 0 and p.batch_size &gt; 0
+    </sql>
+    <sql id="cutoff">current_timestamp - make_interval(days =&gt; p.retention_days)</sql>
+    <sql id="auditForReceipt">
+        a.tenant_id=r.tenant_id and a.aggregate_type='NOTIFICATION_DELIVERY'
+        and a.aggregate_id in (
+            select 'WEBHOOK:'||id from batch.webhook_delivery_log
+             where tenant_id=r.tenant_id and terminal_event_key=r.event_key
+            union all
+            select 'RULE:'||id from batch.notification_delivery_log
+             where tenant_id=r.tenant_id and terminal_event_key=r.event_key
+            union all
+            select 'PUSH:'||id from batch.console_push_job_delivery
+             where tenant_id=r.tenant_id and terminal_event_key=r.event_key)
+    </sql>
+    <sql id="closedFamily">
+        r.created_at &lt; <include refid="cutoff"/>
+        and not exists (
+            select 1 from batch.webhook_delivery_log d
+             where d.tenant_id=r.tenant_id and d.terminal_event_key=r.event_key
+               and (d.delivery_status &lt;&gt; 'SUCCESS' or d.next_retry_at is not null
+                    or d.delivery_claim_token is not null or d.delivery_claim_until is not null
+                    or d.created_at &gt;= <include refid="cutoff"/>))
+        and not exists (
+            select 1 from batch.notification_delivery_log d
+             where d.tenant_id=r.tenant_id and d.terminal_event_key=r.event_key
+               and (d.delivery_status &lt;&gt; 'SUCCESS' or d.next_retry_at is not null
+                    or d.delivery_claim_token is not null or d.delivery_claim_until is not null
+                    or d.created_at &gt;= <include refid="cutoff"/>))
+        and not exists (
+            select 1 from batch.console_push_job_delivery d
+             where d.tenant_id=r.tenant_id and d.terminal_event_key=r.event_key
+               and ((d.record_type='DEVICE' and d.delivery_status not in ('ACCEPTED','GONE'))
+                    or d.next_retry_at is not null or d.delivery_claim_token is not null
+                    or d.delivery_claim_until is not null or d.created_at &gt;= <include refid="cutoff"/>))
+        and not exists (
+            select 1 from batch.console_operation_audit a
+             where <include refid="auditForReceipt"/>
+               and a.created_at &gt;= <include refid="cutoff"/>)
+        <!-- 仅复制时，已成功归档的族不再占用批次；后续开启清理仍能选中它们。 -->
+        and (p.cleanup_enabled or not exists (
+            select 1 from archive.workflow_terminal_notification_receipt_archive c
+             where c.tenant_id=r.tenant_id and c.event_key=r.event_key))
+    </sql>
+    <select id="enabledTenants" resultType="string">
+        select p.tenant_id from batch.archive_policy p
+         where <include refid="policyEnabled"/> and p.tenant_id &gt; #{after}
+         order by p.tenant_id limit #{limit}
+    </select>
+    <select id="candidates" resultType="io.github.pinpols.batch.console.domain.notification.view.TerminalNotificationArchiveCandidate">
+        select r.tenant_id,r.event_key
+          from batch.workflow_terminal_notification_receipt r
+          join batch.archive_policy p on p.tenant_id=r.tenant_id
+         where r.tenant_id=#{tenantId} and <include refid="policyEnabled"/>
+           and <include refid="closedFamily"/>
+         order by r.created_at,r.event_key
+         limit least(#{limit},(
+             select batch_size from batch.archive_policy
+              where tenant_id=#{tenantId} and target_table='console_operation_audit'))
+    </select>
+    <select id="lockReadyReceipt" resultType="boolean">
+        select p.cleanup_enabled
+          from batch.workflow_terminal_notification_receipt r
+          join batch.archive_policy p on p.tenant_id=r.tenant_id
+         where r.tenant_id=#{candidate.tenantId} and r.event_key=#{candidate.eventKey}
+           and <include refid="policyEnabled"/> and <include refid="closedFamily"/>
+         for update of r
+    </select>
+    <sql id="hotTable">
+        <choose>
+            <when test="family.name() == 'RECEIPT'">batch.workflow_terminal_notification_receipt</when>
+            <when test="family.name() == 'WEBHOOK'">batch.webhook_delivery_log</when>
+            <when test="family.name() == 'RULE'">batch.notification_delivery_log</when>
+            <when test="family.name() == 'PUSH'">batch.console_push_job_delivery</when>
+            <otherwise>batch.console_operation_audit</otherwise>
+        </choose>
+    </sql>
+    <sql id="coldTable">
+        <choose>
+            <when test="family.name() == 'RECEIPT'">archive.workflow_terminal_notification_receipt_archive</when>
+            <when test="family.name() == 'WEBHOOK'">archive.webhook_delivery_log_archive</when>
+            <when test="family.name() == 'RULE'">archive.notification_delivery_log_archive</when>
+            <when test="family.name() == 'PUSH'">archive.console_push_job_delivery_archive</when>
+            <otherwise>archive.console_operation_audit_archive</otherwise>
+        </choose>
+    </sql>
+    <sql id="familyRows">
+        h.tenant_id=#{candidate.tenantId}
+        <choose>
+            <when test="family.name() == 'RECEIPT'">and h.event_key=#{candidate.eventKey}</when>
+            <when test="family.name() == 'AUDIT'">
+                and h.aggregate_type='NOTIFICATION_DELIVERY'
+                and h.aggregate_id in (
+                    select 'WEBHOOK:'||id from batch.webhook_delivery_log
+                     where tenant_id=#{candidate.tenantId} and terminal_event_key=#{candidate.eventKey}
+                    union all
+                    select 'RULE:'||id from batch.notification_delivery_log
+                     where tenant_id=#{candidate.tenantId} and terminal_event_key=#{candidate.eventKey}
+                    union all
+                    select 'PUSH:'||id from batch.console_push_job_delivery
+                     where tenant_id=#{candidate.tenantId} and terminal_event_key=#{candidate.eventKey})
+            </when>
+            <otherwise>and h.terminal_event_key=#{candidate.eventKey}</otherwise>
+        </choose>
+    </sql>
+    <!-- 冷表由 LIKE 热表创建；全行复制后逐行比较，任何结构/既存副本漂移都会回滚整族。 -->
+    <insert id="copyFamily">
+        insert into <include refid="coldTable"/>
+        select h.* from <include refid="hotTable"/> h
+         where <include refid="familyRows"/> on conflict do nothing
+    </insert>
+    <select id="mismatches" resultType="long">
+        select count(*) from <include refid="hotTable"/> h
+        left join <include refid="coldTable"/> c on c.tenant_id=h.tenant_id
+        <choose>
+            <when test="family.name() == 'RECEIPT'">and c.event_key=h.event_key</when>
+            <otherwise>and c.id=h.id</otherwise>
+        </choose>
+        where <include refid="familyRows"/> and to_jsonb(h) is distinct from to_jsonb(c)
+    </select>
+    <delete id="deleteFamily">
+        delete from <include refid="hotTable"/> h where <include refid="familyRows"/>
+    </delete>
+</mapper>

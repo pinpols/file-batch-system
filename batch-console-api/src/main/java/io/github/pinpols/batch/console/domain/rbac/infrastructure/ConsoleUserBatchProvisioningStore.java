@@ -34,9 +34,10 @@ public class ConsoleUserBatchProvisioningStore {
 
   /** 对读取到的完整快照做 CAS，版本与操作者校验不能与写入分离。 */
   public boolean replacePreview(String key, String expected, String replacement, Duration ttl) {
-    return Long.valueOf(1)
-        .equals(
-            redis.execute(CAS, List.of(key), expected, replacement, Long.toString(ttl.toMillis())));
+    List<String> keys = List.of(key);
+    String ttlMillis = Long.toString(ttl.toMillis());
+    Long compareAndSetResult = redis.execute(CAS, keys, expected, replacement, ttlMillis);
+    return Long.valueOf(1).equals(compareAndSetResult);
   }
 
   public void deletePreview(String key, String expected) {

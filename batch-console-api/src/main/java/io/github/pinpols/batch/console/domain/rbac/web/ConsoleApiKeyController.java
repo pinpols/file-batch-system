@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ApiKeyResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleApiKeyCreateResponse;
+import io.github.pinpols.batch.console.domain.rbac.entity.ApiKeyEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleApiKeyService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -42,15 +43,18 @@ public class ConsoleApiKeyController {
   /** 列出租户下所有 API Key（不含明文密钥）。 */
   @GetMapping
   public CommonResponse<List<ApiKeyResponse>> list(@RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(
-        apiKeyService.list(tenantId).stream().map(ApiKeyResponse::from).toList());
+    List<ApiKeyEntity> apiKeys = apiKeyService.list(tenantId);
+    List<ApiKeyResponse> responses = apiKeys.stream().map(ApiKeyResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   /** 查看 API Key 详情。 */
   @GetMapping("/{id}")
   public CommonResponse<ApiKeyResponse> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    return responseFactory.success(ApiKeyResponse.from(apiKeyService.detail(tenantId, id)));
+    ApiKeyEntity apiKey = apiKeyService.detail(tenantId, id);
+    ApiKeyResponse response = ApiKeyResponse.from(apiKey);
+    return responseFactory.success(response);
   }
 
   /** 创建 API Key，返回明文密钥（仅此一次可见）。双击/重试可能创建多把密钥 → 强制幂等。 */
@@ -66,12 +70,14 @@ public class ConsoleApiKeyController {
     String operator = requestMetadataResolver.current().operatorId();
     ConsoleApiKeyService.CreateResult result = apiKeyService.create(
         tenantId, request.keyName(), request.scopes(), request.expiresAt(), operator);
-    return responseFactory.success(new ConsoleApiKeyCreateResponse(
-        result.entity().getId(),
-        result.entity().getKeyName(),
-        result.entity().getKeyPrefix(),
+    ApiKeyEntity entity = result.entity();
+    ConsoleApiKeyCreateResponse response = new ConsoleApiKeyCreateResponse(
+        entity.getId(),
+        entity.getKeyName(),
+        entity.getKeyPrefix(),
         result.rawKey(),
-        result.entity().getCreatedAt()));
+        entity.getCreatedAt());
+    return responseFactory.success(response);
   }
 
   /** 吊销 API Key。 */

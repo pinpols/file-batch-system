@@ -2,9 +2,9 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
 
 /**
  * 告警路由配置行响应（{@code AlertRoutingConfigMapper} 投影）。
@@ -21,6 +21,7 @@ import java.util.Map;
  * <p>MyBatis {@code resultType="map"} 省略 null 列，{@code NON_NULL} 使各端点缺省的列自动省略 → 与各自历史 wire 键集逐一对等。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleAlertRoutingResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -42,29 +43,30 @@ public record ConsoleAlertRoutingResponse(
     @JsonProperty("updated_at") Instant updatedAt,
     @JsonProperty("is_deleted") Boolean isDeleted) {
 
-  public static ConsoleAlertRoutingResponse from(Map<String, Object> row) {
+  public static ConsoleAlertRoutingResponse from(AlertRoutingConfigRow row) {
     if (row == null) {
       return null;
     }
-    return new ConsoleAlertRoutingResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
-        ConsoleResponseFieldReader.stringValue(row, "route_code"),
-        ConsoleResponseFieldReader.stringValue(row, "route_name"),
-        ConsoleResponseFieldReader.stringValue(row, "team"),
-        ConsoleResponseFieldReader.stringValue(row, "alert_group"),
-        ConsoleResponseFieldReader.stringValue(row, "severity"),
-        ConsoleResponseFieldReader.stringValue(row, "receiver"),
-        ConsoleResponseFieldReader.stringValue(row, "group_by"),
-        ConsoleResponseFieldReader.integerValue(row, "group_wait_seconds"),
-        ConsoleResponseFieldReader.integerValue(row, "group_interval_seconds"),
-        ConsoleResponseFieldReader.integerValue(row, "repeat_interval_seconds"),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "description"),
-        ConsoleResponseFieldReader.stringValue(row, "created_by"),
-        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at"),
-        ConsoleResponseFieldReader.booleanValue(row, "is_deleted"));
+    return ConsoleAlertRoutingResponse.builder()
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .routeCode(row.routeCode())
+        .routeName(row.routeName())
+        .team(row.team())
+        .alertGroup(row.alertGroup())
+        .severity(row.severity())
+        .receiver(row.receiver())
+        .groupBy(row.groupBy())
+        .groupWaitSeconds(row.groupWaitSeconds())
+        .groupIntervalSeconds(row.groupIntervalSeconds())
+        .repeatIntervalSeconds(row.repeatIntervalSeconds())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdBy(row.createdBy())
+        .updatedBy(row.updatedBy())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .isDeleted(row.isDeleted())
+        .build();
   }
 }

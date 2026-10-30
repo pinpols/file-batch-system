@@ -182,8 +182,8 @@ ADR-026 中“dry-run 不写 outbox_event”需要按边界澄清：**业务副�
 
 | Worker | Dry-run 允许 | Dry-run 禁止 |
 |---|---|---|
-| Import | 读取源文件、解析、校验、分片估算 | 写 staging/业务表、推进正式 checkpoint |
-| Export | SQL EXPLAIN/只读抽样、模板与路径解析 | 生成正式对象、multipart 上传、发布 manifest |
+| Import | 读取源文件、解析、校验、分片估算；坏记录保留内存计数 | 创建或更新正式文件记录、持久化错误记录或输出错误文件、写业务 staging/业务表、推进正式 checkpoint |
+| Export | 模板与路径解析；`sql_template_export` 演练在 GENERATE 前明确返回不可用 | SQL 模板插件执行、生成正式对象、multipart 上传、发布 manifest |
 | Process | 源 SQL 校验、执行计划、参数和 schema 验证 | staging、目标表 merge/copy、正式 watermark |
 | Dispatch | 渠道配置、凭据引用、目标路径和连通性校验 | 真实 NAS/SFTP/OSS/HTTP 传输和回执推进 |
 | Atomic | SQL read-only explain、HTTP HEAD、安全策略检查 | DML/DDL、存储过程副作用、Shell、真实 HTTP mutation |
@@ -252,7 +252,7 @@ Dry-run 不产生外部副作用，但仍会占用真实控制面、Kafka、Work
 
 - prod profile 必须 fail-close 校验 DryRunGuard 已注册；缺失时拒绝启动演练能力，而不是降级真实执行。
 - 请求、审批、取消、每个被跳过的外部动作都写审计，敏感配置只记录引用和掩码。
-- SQL dry-run 只允许 AST 验证后的只读语句或 `EXPLAIN (ANALYZE FALSE)`；禁止依赖 JDBC `readOnly` 作为唯一防线。
+- L3 计划 API 的 SQL 探针只做 AST 静态校验，不执行 `EXPLAIN`：PostgreSQL 在计划阶段仍可能执行函数并产生副作用；禁止依赖 JDBC `readOnly` 作为唯一防线。其他运行级 dry-run 的 SQL 路径需分别核查。
 - HTTP 只允许 SSRF 校验后的 HEAD/OPTIONS 探针，不跟随到私网重定向。
 - Atomic Shell 在 dry-run 下直接标记 `SKIPPED_UNSAFE_CAPABILITY`，不启动进程。
 - SDK 自托管 Worker 必须通过 dry-run conformance 才能声明该 capability；不支持的 Worker 不得 claim 演练任务。

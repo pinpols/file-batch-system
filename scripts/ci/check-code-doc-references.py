@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Verify repo-local documentation paths referenced by backend code comments."""
+# 用途：代码文档引用。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-code-doc-references.py；参数与前置环境见下方说明及所属 README。
+"""核对后端代码注释引用的仓库内文档路径。"""
 
 from __future__ import annotations
 

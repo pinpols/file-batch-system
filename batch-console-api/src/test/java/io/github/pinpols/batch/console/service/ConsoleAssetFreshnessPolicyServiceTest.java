@@ -3,7 +3,9 @@ package io.github.pinpols.batch.console.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +36,7 @@ class ConsoleAssetFreshnessPolicyServiceTest {
     tenantGuard = mock(ConsoleTenantGuard.class);
     service = new ConsoleAssetFreshnessPolicyService(mapper, tenantGuard);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    when(mapper.lockJobDefinitionForPolicyWrite(anyString(), anyString())).thenReturn(1L);
   }
 
   @Test
@@ -79,6 +82,26 @@ class ConsoleAssetFreshnessPolicyServiceTest {
             .severity("WARN")
             .enabled(true)
             .build());
+    verify(mapper).lockJobDefinitionForPolicyWrite("t1", "JOB_A");
+  }
+
+  @Test
+  @DisplayName("同租户不存在对应作业时, 拒绝创建新鲜度策略且不落库")
+  void shouldRejectPolicyWhenJobDefinitionIsMissing() {
+    when(mapper.lockJobDefinitionForPolicyWrite("t1", "JOB_MISSING")).thenReturn(null);
+    AssetFreshnessPolicyUpsertParam input = AssetFreshnessPolicyUpsertParam.builder()
+        .tenantId("t1")
+        .assetCode("JOB_MISSING")
+        .expectedByLocalTime(LocalTime.NOON)
+        .build();
+
+    assertThatThrownBy(() -> service.upsert(input))
+        .isInstanceOf(BizException.class)
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+
+    verify(mapper, never()).upsert(any());
+    verify(mapper, never()).updateById(any());
   }
 
   @Test

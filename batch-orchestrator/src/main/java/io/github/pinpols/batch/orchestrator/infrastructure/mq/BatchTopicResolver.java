@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.mq;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
@@ -20,6 +22,7 @@ public class BatchTopicResolver {
 
   private final BatchMqTopicsProperties topicsProperties;
   private final MqRoutingProperties routingProperties;
+  private final BatchKafkaTopicNamespace topicNamespace;
 
   /**
    * 解析派发目标 topic。
@@ -29,7 +32,7 @@ public class BatchTopicResolver {
    * @return 解析后的 topic name；workerType 无效时返回 null（调用方走 fallback 路径）
    */
   public String resolve(String workerType, TaskDispatchMessage dispatch) {
-    String base = topicsProperties.resolveDispatchTopic(workerType);
+    String base = resolveBaseTopic(workerType);
     if (base == null) {
       return null;
     }
@@ -37,14 +40,30 @@ public class BatchTopicResolver {
       return base;
     }
     return switch (routingProperties.getMode()) {
-      case TENANT ->
-        Texts.hasText(dispatch.tenantId()) ? base + "." + safe(dispatch.tenantId()) : base;
-      case PRIORITY ->
-        Texts.hasText(dispatch.priorityBand())
-            ? base + "." + safe(dispatch.priorityBand()).toLowerCase(Locale.ROOT)
-            : base;
+      case TENANT -> {
+        if (!Texts.hasText(dispatch.tenantId())) {
+          yield base;
+        }
+        String tenantId = dispatch.tenantId();
+        String safeTenantId = safe(tenantId);
+        yield base + "." + safeTenantId;
+      }
+      case PRIORITY -> {
+        if (!Texts.hasText(dispatch.priorityBand())) {
+          yield base;
+        }
+        String priorityBand = dispatch.priorityBand();
+        String safePriorityBand = safe(priorityBand);
+        String normalizedPriorityBand = safePriorityBand.toLowerCase(Locale.ROOT);
+        yield base + "." + normalizedPriorityBand;
+      }
       default -> base;
     };
+  }
+
+  public String resolveBaseTopic(String workerType) {
+    String baseTopic = topicsProperties.resolveDispatchTopic(workerType);
+    return EmptyChecks.isNull(baseTopic) ? null : topicNamespace.topic(baseTopic);
   }
 
   private static String safe(String s) {

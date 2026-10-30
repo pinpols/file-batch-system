@@ -11,13 +11,18 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /** ADR-026 §dry-run 守护:dry-run 上下文下 HTTP executor 必须不发请求(用真 server 计请求数 = 0 验证)。 */
 @DisplayName("HTTP 任务执行器 dry-run 短路: 不发起真实请求")
+@ExtendWith(OutputCaptureExtension.class)
 class HttpTaskExecutorDryRunTest {
 
   private HttpExecutorProperties props;
@@ -86,7 +91,7 @@ class HttpTaskExecutorDryRunTest {
         .containsEntry("method", "POST")
         .containsEntry("url", url);
     assertThat(result.output().get("headerKeys"))
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.list(String.class))
+        .asInstanceOf(InstanceOfAssertFactories.list(String.class))
         .contains("X-Tenant", "Authorization");
     // 关键 1:真 server 一个请求都没收到
     assertThat(requestCount.get()).isZero();
@@ -95,5 +100,29 @@ class HttpTaskExecutorDryRunTest {
       String s = String.valueOf(v);
       return s.contains("SECRET") || s.contains("payload-with-pii");
     });
+  }
+
+  @Test
+  @DisplayName("dry-run 计划与日志中的目标地址应隐藏 URL 凭据")
+  void shouldMaskUrlCredentialsInDryRunPlan(CapturedOutput output) {
+    String url = "http://user:probe-secret@127.0.0.1:" + serverPort
+        + "/report?token=query-secret&mode=summary";
+    TaskContext ctx = new TaskContext(
+        "t1",
+        "job-1",
+        "ti-1",
+        "w-1",
+        Map.of("url", url),
+        Map.of(PipelineRuntimeKeys.DRY_RUN, true));
+
+    TaskResult result = executor.execute(ctx);
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.output().get("url").toString())
+        .contains("mode=summary")
+        .doesNotContain("probe-secret", "query-secret");
+    assertThat(result.message()).doesNotContain("probe-secret", "query-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret", "query-secret");
+    assertThat(requestCount.get()).isZero();
   }
 }

@@ -33,8 +33,8 @@ BEGIN
 END $$;
 
 COMMENT ON COLUMN batch.business_calendar.dst_gap_policy IS
-    'How to resolve local cutoff_time when it falls into a DST gap.';
+    '本地 cutoff_time 落入 DST 跳时区间时的处理方式。';
 COMMENT ON COLUMN batch.business_calendar.dst_overlap_policy IS
-    'How to resolve local cutoff_time when it falls into a DST overlap.';
+    '本地 cutoff_time 落入 DST 重叠区间时的处理方式。';
 COMMENT ON COLUMN batch.batch_day_instance.dst_policy_snapshot IS
-    'Snapshot of business_calendar DST policies used to calculate cutoff_at/sla_deadline_at.';
+    '用于计算 cutoff_at 和 sla_deadline_at 的 business_calendar DST 策略快照。';

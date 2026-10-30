@@ -3,6 +3,8 @@ package io.github.pinpols.batch.console.domain.file.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileTemplateApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftCommand;
+import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappingDraftResult;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileTemplateQueryRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileNamePreviewRequest;
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateCreateRequest;
@@ -70,8 +72,11 @@ public class ConsoleFileTemplateController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<FileTemplateMappingDraftResponse> draftMapping(
       @Valid @RequestBody FileTemplateMappingDraftRequest request) {
-    return responseFactory.success(FileTemplateMappingDraftResponse.from(
-        fileTemplateApplicationService.draftMapping(request.toCommand())));
+    FileTemplateMappingDraftCommand command = request.toCommand();
+    FileTemplateMappingDraftResult draftResult =
+        fileTemplateApplicationService.draftMapping(command);
+    FileTemplateMappingDraftResponse response = FileTemplateMappingDraftResponse.from(draftResult);
+    return responseFactory.success(response);
   }
 
   /** 使用导出 Worker 的同一规则预览最终文件名，不读取或修改模板配置。 */

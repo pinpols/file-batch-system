@@ -1,4 +1,5 @@
 -- 保留早期部署已写入记录使用的 claim 类型。
+
 ALTER TABLE batch.job_monitoring_alert_claim
     ADD CONSTRAINT ck_job_monitoring_alert_claim_type_deadline
     CHECK (violation_type IN (

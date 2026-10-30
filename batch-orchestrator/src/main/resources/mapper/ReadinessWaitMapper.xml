@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.ReadinessWaitMapper">
+    <!-- 幂等接管：同一 fire 身份只保留首次登记，重复 handover 不覆盖已推进状态。 -->
+    <insert id="insertIgnore">
+        insert into batch.readiness_wait (
+            tenant_id, workflow_definition_id, workflow_code, calendar_code, schedule_version,
+            depends_on_job_codes, biz_date, scheduled_fire_time, deferred_since, deadline,
+            wait_status, trace_id
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{workflowCode}, #{calendarCode},
+            #{scheduleVersion}, #{dependsOnJobCodes}, #{bizDate}, #{scheduledFireTime},
+            #{deferredSince}, #{deadline}, 'PENDING', #{traceId}
+        )
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time) do nothing
+    </insert>
+
+    <select id="selectDue"
+            resultType="io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity">
+        select id                    as id,
+               tenant_id             as tenantId,
+               workflow_definition_id as workflowDefinitionId,
+               workflow_code         as workflowCode,
+               calendar_code         as calendarCode,
+               schedule_version      as scheduleVersion,
+               depends_on_job_codes  as dependsOnJobCodes,
+               biz_date              as bizDate,
+               scheduled_fire_time   as scheduledFireTime,
+               deferred_since        as deferredSince,
+               deadline              as deadline,
+               wait_status           as waitStatus,
+               request_id            as requestId,
+               trace_id              as traceId,
+               last_error_code       as lastErrorCode
+        from batch.readiness_wait
+        where wait_status = 'PENDING'
+        order by updated_at asc, deadline asc, id asc
+        limit #{limit}
+    </select>
+
+    <!-- 探测时轮转扫描水位, 避免未就绪记录长期占据同一批次。 -->
+    <update id="recordProbe">
+        update batch.readiness_wait
+        set updated_at = clock_timestamp()
+        where id = #{id} and tenant_id = #{tenantId} and wait_status = 'PENDING'
+    </update>
+
+    <select id="selectByFireIdentity"
+            resultType="io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity">
+        select id                    as id,
+               tenant_id             as tenantId,
+               workflow_definition_id as workflowDefinitionId,
+               workflow_code         as workflowCode,
+               calendar_code         as calendarCode,
+               schedule_version      as scheduleVersion,
+               depends_on_job_codes  as dependsOnJobCodes,
+               biz_date              as bizDate,
+               scheduled_fire_time   as scheduledFireTime,
+               deferred_since        as deferredSince,
+               deadline              as deadline,
+               wait_status           as waitStatus,
+               request_id            as requestId,
+               trace_id              as traceId,
+               last_error_code       as lastErrorCode
+        from batch.readiness_wait
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and wait_status = 'PENDING'
+    </select>
+
+    <update id="markReleased">
+        update batch.readiness_wait
+        set wait_status = #{status},
+            request_id = #{requestId},
+            released_at = #{releasedAt},
+            updated_at = CURRENT_TIMESTAMP
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and wait_status = 'PENDING'
+    </update>
+
+    <update id="markTerminal">
+        update batch.readiness_wait
+        set wait_status = #{status},
+            timed_out_at = case when #{status} = 'TIMED_OUT' then #{occurredAt} else timed_out_at end,
+            last_error_code = #{errorCode},
+            updated_at = CURRENT_TIMESTAMP
+        where id = #{id}
+          and tenant_id = #{tenantId}
+          and wait_status = 'PENDING'
+    </update>
+
+</mapper>

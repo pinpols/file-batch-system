@@ -23,8 +23,44 @@ groups:
           summary: "Core service target {{ $labels.job }} is missing from Prometheus"
           description: "No scrape target is discovered for a required control-plane service. Check Prometheus service discovery, ServiceMonitor selection, and deployment labels."
 
+      - alert: BatchPrometheusDown
+        expr: absent(up{job="prometheus"}) or up{job="prometheus"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Prometheus 自监控目标缺失或抓取失败"
+          description: "Prometheus 未能抓取自身指标端点。此规则不能在 Prometheus 整体停止时自行送达，必须由栈外监控检测。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchPrometheusConfigReloadFailed
+        expr: prometheus_config_last_reload_successful == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Prometheus 配置重载失败"
+          description: "Prometheus 拒绝了最近一次配置重载，当前仍使用旧配置；检查抓取、规则文件和服务发现配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchPrometheusRuleEvaluationFailures
+        expr: increase(prometheus_rule_evaluation_failures_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "Prometheus 告警规则计算失败"
+          description: "最近五分钟内发生规则计算失败；检查 Prometheus 规则日志及查询耗时，确认业务告警仍可计算。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
       - alert: BatchAlertmanagerDown
-        expr: up{job="alertmanager"} == 0
+        expr: absent(up{job="alertmanager"}) or up{job="alertmanager"} == 0
         for: 2m
         labels:
           severity: critical
@@ -32,7 +68,7 @@ groups:
           alert_group: alerting
         annotations:
           summary: "Alertmanager scrape target is unavailable"
-          description: "Prometheus cannot scrape Alertmanager. This rule cannot deliver while Alertmanager is down; an independent monitor must page on the Prometheus alert state."
+          description: "Alertmanager 目标缺失或抓取失败。此规则不能在 Alertmanager 整体停止时自行送达，必须由栈外监控检测。"
 
       - alert: BatchAlertmanagerNotificationFailures
         expr: sum by (integration, reason) (increase(alertmanager_notifications_failed_total[5m])) > 0
@@ -67,6 +103,56 @@ groups:
           summary: "Dependency metrics target {{ $labels.job }} is unavailable"
           description: "The configured scrape target {{ $labels.instance }} is not reachable. Verify the dependency service, exporter and monitoring network."
 
+      - alert: BatchPostgresUnavailable
+        expr: pg_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "PostgreSQL 数据库探测失败"
+          description: "Exporter 抓取端点可达，但 pg_up 为 0；检查数据库连通性、认证和连接配置。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchRedisUnavailable
+        expr: redis_up == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "Redis 服务探测失败"
+          description: "Redis exporter 报告目标不可达；检查 Redis 实例、网络和鉴权。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchKafkaUnavailable
+        expr: kafka_brokers < 1
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "Kafka 未发现可用 Broker"
+          description: "Kafka exporter 发现的 Broker 数为 0；检查集群连通性和 exporter 权限。该规则不判定部分 Broker 故障。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchMinioNodesOffline
+        expr: |
+          max by (job, instance) (minio_cluster_nodes_offline_total) > 0
+          or max by (job, instance) (minio_cluster_drive_offline_total) > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "MinIO 集群出现离线节点或磁盘"
+          description: "MinIO 集群指标报告节点或磁盘离线；检查集群仲裁、磁盘和对象存储读写能力。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
       - alert: BatchAlertmanagerNotifySkipped
         expr: increase(am_notify_skipped_total[5m]) > 0
         labels:
@@ -87,6 +173,28 @@ groups:
         annotations:
           summary: "Alert notification delivery failed for {{ $labels.receiver }}"
           description: "Console matched a notification channel but its sender reported delivery failure. Inspect notification_delivery_log and verify an independent escalation channel."
+
+      - alert: BatchConsoleMaintenanceSuppressionUnavailable
+        expr: (batch_console_maintenance_enabled == 1) and on (job, instance) (batch_console_maintenance_alert_suppression_deadline_seconds > time()) and on (job, instance) (batch_console_maintenance_alert_suppression_available == 0)
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "维护通知抑制未确认"
+          description: "维护公告已启用，但部署范围、Alertmanager 地址、共享状态或控制信号同步尚未确认；预期停机告警仍可能通知，请核实配置与同步结果。"
+
+      - alert: BatchConsoleMaintenanceWindowOverdue
+        expr: (batch_console_maintenance_enabled == 1) and on (job, instance) (batch_console_maintenance_alert_suppression_deadline_seconds > 0) and on (job, instance) (batch_console_maintenance_alert_suppression_deadline_seconds <= time())
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: alerting
+        annotations:
+          summary: "维护通知窗口已到期"
+          description: "维护模式仍开启，但通知抑制窗口已结束；普通告警恢复通知，业务冻结不会自动解除。请核实维护进度，结束维护或显式调整窗口。"
 
       - alert: BatchConsoleMaintenanceStateUnavailable
         expr: batch_console_maintenance_shared_state_available == 0
@@ -209,25 +317,116 @@ groups:
           summary: "SLA violations detected"
           description: "At least one SLA violation is still outstanding."
 
+      - alert: BatchDayCatchupBacklog
+        expr: batch_batch_day_open_catchup_remaining_days > 0
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: batch-day
+        annotations:
+          summary: "Batch-day calendar catch-up is still behind"
+          description: "The maximum raw business-date backlog across enabled calendars has remained non-zero for 10 minutes. Check the batch_day_open scheduler and calendar catch-up runbook; this aggregate metric does not identify a tenant or calendar."
+
+      - alert: BatchDayCatchupScanFailures
+        expr: increase(batch_batch_day_open_catchup_scan_failures_total[10m]) > 0
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: batch-day
+        annotations:
+          summary: "Batch-day catch-up scan failed"
+          description: "At least one complete calendar scan failed in the last 10 minutes. The catch-up backlog gauge retains its previous complete snapshot; inspect Orchestrator logs before taking recovery action."
+
+      - alert: BatchJobDependencyWaitTooOld
+        expr: batch_job_dependency_waiting > 0 and batch_job_dependency_wait_oldest_age_seconds > 86400
+        for: 5m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-dependency
+        annotations:
+          summary: "A job dependency launch has been waiting for more than 24 hours"
+          description: "The aggregate WAITING dependency queue contains an item older than 24 hours. The metrics intentionally omit tenant and job labels; inspect the tenant-scoped Console waiting list and dependency timeout alert."
+
       - alert: BatchJobMonitoringScanFailures
-        expr: sum by (violation_type) (increase(batch_job_monitoring_scan_failures_total[5m])) > 0
+        expr: |
+          batch_job_monitoring_last_failure_timestamp_seconds{failure_stage="scan"}
+          > batch_job_monitoring_last_success_timestamp_seconds{failure_stage="scan"}
         labels:
           severity: warning
           team: batch-platform
           alert_group: job-monitoring
         annotations:
-          summary: "Job monitoring scan failed for {{ $labels.violation_type }}"
-          description: "The out-of-band job deadline monitor could not query candidates in the last five minutes. Check orchestrator database connectivity and JobMonitoringScheduler logs."
+          summary: "作业监控查询尚未恢复：{{ $labels.violation_type }}"
+          description: "最近一次查询失败晚于该类别最近一次成功查询；等待完整成功扫描后自动解除，并检查数据库和 JobMonitoringScheduler 日志。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
 
       - alert: BatchJobMonitoringEventFailures
-        expr: sum by (violation_type) (increase(batch_job_monitoring_alert_failures_total[5m])) > 0
+        expr: |
+          batch_job_monitoring_last_failure_timestamp_seconds{failure_stage="alert_persistence"}
+          > batch_job_monitoring_last_success_timestamp_seconds{failure_stage="alert_persistence"}
         labels:
           severity: warning
           team: batch-platform
           alert_group: job-monitoring
         annotations:
-          summary: "Job monitoring alert persistence failed for {{ $labels.violation_type }}"
-          description: "The monitor found a violation but could not persist its alert event in the last five minutes. Check orchestrator logs and alert event database health."
+          summary: "作业监控告警写入尚未恢复：{{ $labels.violation_type }}"
+          description: "最近一次告警持久化失败晚于该类别最近一次成功处理；等待该类别完整成功处理后自动解除，并检查 alert_event 数据库写入。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchWorkflowMonitoringFailures
+        expr: |
+          batch_workflow_monitoring_last_failure_timestamp_seconds
+          > batch_workflow_monitoring_last_success_timestamp_seconds
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: workflow-monitoring
+        annotations:
+          summary: "Workflow 监控扫描尚未恢复：{{ $labels.stage }}"
+          description: "最近一次完整 Workflow 监控扫描失败晚于最近一次成功扫描；修复租户目录、候选查询或告警写入后，成功完成整轮扫描会自动解除。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchJobMonitoringStale
+        expr: |
+          (
+            batch_job_monitoring_last_success_timestamp_seconds{failure_stage="scan"} == 0
+            or
+            time() - batch_job_monitoring_last_success_timestamp_seconds{failure_stage="scan"}
+              > on (job, instance) group_left
+                clamp_min(batch_job_monitoring_poll_interval_seconds * 5, 300)
+          )
+          and on (job, instance) (batch_job_monitoring_enabled == 1)
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: job-monitoring
+        annotations:
+          summary: "作业时限监控扫描长时间未成功"
+          description: "作业监控从未完成成功扫描，或距离上次成功扫描已超过扫描周期的五倍且至少五分钟；检查启用状态、ShedLock、扫描线程和数据库。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
+
+      - alert: BatchWorkflowMonitoringStale
+        expr: |
+          (
+            batch_workflow_monitoring_last_success_timestamp_seconds == 0
+            or
+            time() - batch_workflow_monitoring_last_success_timestamp_seconds
+              > on (job, instance) group_left
+                clamp_min(batch_workflow_monitoring_poll_interval_seconds * 5, 300)
+          )
+          and on (job, instance) (batch_workflow_monitoring_enabled == 1)
+        for: 1m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: workflow-monitoring
+        annotations:
+          summary: "Workflow 时限监控扫描长时间未成功"
+          description: "Workflow 监控从未完成成功整轮扫描，或距离上次成功扫描已超过扫描周期的五倍且至少五分钟；检查启用状态、租户目录、ShedLock、扫描线程和数据库。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
 
       - alert: BatchFinalPartitionFailures
         expr: increase(batch_job_monitoring_violation_total{violation_type="FAILED_PARTITION"}[10m]) > 0
@@ -370,11 +569,9 @@ groups:
           summary: "Scheduler queue oldest wait is high"
           description: "The oldest queued partition has waited more than five minutes. Inspect admission limits, worker capacity, Kafka lag, and PostgreSQL contention."
 
-      # 需 kafka-exporter（如 danielqsj/kafka-exporter）或 Prometheus Kafka 适配器
-      # 暴露 kafka_consumergroup_lag 指标。各 batch worker 使用的消费组为
-      # batch-worker-import、batch-worker-export、batch-worker-process、batch-worker-dispatch、batch-worker-atomic。
+      # 消费组名称来自 Worker、Trigger、Console 终态通知和可选 OpenLineage 消费者；命名空间前缀由部署配置统一追加。
       - alert: BatchKafkaConsumerLagHigh
-        expr: kafka_consumergroup_lag{consumergroup=~"batch-worker-(import|export|process|dispatch|atomic)"} > 1000
+        expr: kafka_consumergroup_lag{consumergroup=~"(.*\\.)?(batch-worker-(import|export|process|dispatch|atomic)|orchestrator-trigger-launch|batch-console-job-terminal-notifications|batch-console-workflow-terminal-notifications|batch-openlineage-emitter)"} > 1000
         for: 10m
         labels:
           severity: warning
@@ -383,6 +580,7 @@ groups:
         annotations:
           summary: "Kafka consumer lag is high for {{ $labels.consumergroup }}"
           description: "Consumer group {{ $labels.consumergroup }} topic {{ $labels.topic }} partition {{ $labels.partition }} lag exceeds 1000 messages for 10 minutes."
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射"
 
       - alert: BatchTaskClaimLatencyHigh
         expr: histogram_quantile(0.95, sum by (le, job) (rate(batch_task_claim_duration_seconds_bucket[5m]))) > 2
@@ -509,7 +707,7 @@ groups:
 
       # ── Outbox / DLQ 积压告警（BatchBacklogMetricsScheduler 每 30 秒采样） ──────────
       # 触发 → 人工：kubectl / make ops-inspect 看堆积明细
-      #         → 无根因消退则 scripts/ops/heal-stuck-outbox.sh / heal-dead-letters.sh
+      #         → 用 scripts/ops/heal-stuck-outbox.sh 只读诊断；FAILED/GIVE_UP 经 Orchestrator 审计接口处理
       # 禁止配自动 heal：隐藏真实故障（见 docs/runbook/troubleshooting-decision-tree.md）
       - alert: BatchOutboxBacklogHigh
         expr: batch_outbox_pending_events > 5000
@@ -569,7 +767,7 @@ groups:
           alert_group: outbox
         annotations:
           summary: "Outbox events transitioned to GIVE_UP terminal state"
-          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then run scripts/ops/heal-stuck-outbox.sh or POST /internal/outbox/republish."
+          description: "{{ $value }} outbox events/sec entered GIVE_UP in last 5min. These events are permanently failed and need ops intervention — check Kafka health, then use the audited Orchestrator POST /internal/outbox/republish operation."
 
       - alert: BatchOutboxCircuitBreakerOpen
         expr: batch_outbox_circuit_open == 1
@@ -628,7 +826,7 @@ groups:
           alert_group: dlq
         annotations:
           summary: "Dead letter tasks backlog is growing"
-          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Investigate root cause before running scripts/ops/heal-dead-letters.sh."
+          description: "{{ $value }} dead letter tasks in NEW+FAILED state for 30 minutes. Inspect candidates with scripts/ops/inspect-dead-letters.sh; submit replay through Console approval."
 
       - alert: BatchWorkerStaleOnlinePresent
         expr: batch_worker_registry_stale_online_count > 0
@@ -776,6 +974,28 @@ groups:
           summary: "Trigger launch Kafka queue age is high"
           description: "batch.trigger.launch.v1 消费前 p95 排队时间已超过 30 秒并持续 10 分钟。先检查 consumer group lag、topic 分区数是否至少等于 orchestrator 副本数 × BATCH_TRIGGER_CONSUMER_CONCURRENCY，以及 DB 连接池/launch 耗时。"
 
+      - alert: TriggerStaleAcceptedWithoutInstance
+        expr: batch_trigger_launch_stale_accepted_count > 0
+        for: 2m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Accepted trigger requests have no Workflow root run"
+          description: "{{ $value }} top-level ACCEPTED/PROCESSING trigger request(s) older than the configured threshold have no same-tenant workflow_run, excluding pending manual misfire/catch-up approval. Check outbox publication, Kafka consumer lag, and root launch errors."
+
+      - alert: TriggerRequestToInstanceLatencyHigh
+        expr: batch_trigger_launch_request_to_instance_samples >= 20 and batch_trigger_launch_request_to_instance_p95_seconds > 30
+        for: 10m
+        labels:
+          severity: warning
+          team: batch-platform
+          alert_group: trigger-async
+        annotations:
+          summary: "Trigger request to Workflow root latency is high"
+          description: "Recent top-level trigger request to workflow_run creation p95 is {{ $value }} seconds, including workflows without Job nodes. Check outbox publish latency, Kafka consumer lag, and Orchestrator root launch throughput."
+
       # outbox 行被标 GIVE_UP — 通常是 payload 反序列化失败 / 重试上限耗尽,
       # 任意 1 条都需要运维介入(数据问题, 等不到自愈).
       - alert: TriggerOutboxGiveUp
@@ -888,8 +1108,8 @@ groups:
           description: "线程在 connectionTimeout 内拿不到连接,请求会直接 fail。立刻排查池容量 / 数据库可用性 / 是否有泄漏的连接未归还。"
 
       - alert: HttpServerErrorRateHigh
-        # 按稳定的 Prometheus target job 隔离服务错误率，避免高流量服务稀释单个服务故障。
-        expr: (sum by (job) (rate(http_server_requests_seconds_count{status=~"5.."}[5m])) / sum by (job) (rate(http_server_requests_seconds_count[5m])) > 0.05) and on (job) (sum by (job) (increase(http_server_requests_seconds_count[5m])) >= 20)
+        # 按服务隔离错误率；仅排除过滤器确认的计划维护请求，真实 500 和状态失联 503 继续计算。
+        expr: (sum by (job) (rate(http_server_requests_seconds_count{status=~"5..", maintenance!="planned"}[5m])) / sum by (job) (rate(http_server_requests_seconds_count{maintenance!="planned"}[5m])) > 0.05) and on (job) (sum by (job) (increase(http_server_requests_seconds_count{maintenance!="planned"}[5m])) >= 20)
         for: 5m
         labels:
           severity: warning

@@ -38,7 +38,7 @@
         where fr.tenant_id = #{tenantId}
           and (
               (
-                  #{relatedJobInstanceId} is not null
+                  cast(#{relatedJobInstanceId,jdbcType=BIGINT} as bigint) is not null
                   and fr.id in (
                       select ji.related_file_id
                       from batch.job_instance ji
@@ -54,7 +54,7 @@
                   )
               )
               or (
-                  #{traceId} is not null
+                  cast(#{traceId,jdbcType=VARCHAR} as text) is not null
                   and #{traceId} &lt;&gt; ''
                   and fr.trace_id = #{traceId}
               )

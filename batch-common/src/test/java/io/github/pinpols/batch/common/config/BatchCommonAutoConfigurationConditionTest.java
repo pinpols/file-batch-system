@@ -77,7 +77,9 @@ class BatchCommonAutoConfigurationConditionTest {
   void shouldDecorateObjectStore_whenEncryptionDecoratorEnabled() {
     contextRunner
         .withConfiguration(AutoConfigurations.of(
-            BatchObjectCryptoAutoConfiguration.class, BatchObjectStoreAutoConfiguration.class))
+            BatchKafkaNamespaceAutoConfiguration.class,
+            BatchObjectCryptoAutoConfiguration.class,
+            BatchObjectStoreAutoConfiguration.class))
         .withPropertyValues(
             "spring.profiles.active=test",
             "batch.storage.backend=filesystem",

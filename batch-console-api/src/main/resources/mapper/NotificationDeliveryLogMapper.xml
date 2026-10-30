@@ -2,17 +2,48 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper">
 
-    <select id="selectByTenant" resultType="map">
+    <select id="bindTenant" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <sql id="hotAndColdHistory">
+        (select h.* from batch.notification_delivery_log h
+         union all
+         select c.* from archive.notification_delivery_log_archive c
+          where not exists (select 1 from batch.notification_delivery_log h
+                             where h.tenant_id=c.tenant_id and h.id=c.id)) history
+    </sql>
+
+    <resultMap id="notificationDeliveryLogRowMap"
+               type="io.github.pinpols.batch.console.domain.notification.view.NotificationDeliveryLogRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="rule_id" javaType="java.lang.Long"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="event_type" javaType="java.lang.String"/>
+            <arg column="alert_event_id" javaType="java.lang.Long"/>
+            <arg column="payload_json" javaType="java.lang.String"/>
+            <arg column="delivery_status" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="error_key" javaType="java.lang.String"/>
+            <arg column="error_args" javaType="java.lang.String"/>
+            <arg column="attempt" javaType="java.lang.Integer"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByTenant" resultMap="notificationDeliveryLogRowMap">
         SELECT id, tenant_id, rule_id, channel_code, event_type, alert_event_id,
                payload_json, delivery_status, error_message, error_key, error_args,
                attempt, created_at
-          FROM batch.notification_delivery_log
+          FROM <include refid="hotAndColdHistory"/>
          WHERE tenant_id = #{tenantId}
          ORDER BY created_at DESC
          LIMIT #{limit}
     </select>
 
-    <insert id="insert">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam">
         INSERT INTO batch.notification_delivery_log (tenant_id, rule_id, channel_code, event_type,
                                                      alert_event_id, payload_json, delivery_status,
                                                      error_message, attempt)
@@ -21,15 +52,4 @@
                 #{errorMessage,jdbcType=VARCHAR}, #{attempt})
     </insert>
 
-    <!-- 租户隔离:除主键外必须带 tenant_id 谓词,防未来接线用可枚举 id 跨租户改写别人的投递日志。 -->
-    <update id="updateStatus">
-        UPDATE batch.notification_delivery_log
-           SET delivery_status = #{deliveryStatus},
-               error_message = #{errorMessage},
-               error_key = #{errorKey},
-               error_args = #{errorArgs,jdbcType=VARCHAR}::jsonb,
-               attempt = #{attempt}
-         WHERE id = #{id}
-           AND tenant_id = #{tenantId}
-    </update>
 </mapper>

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
 import java.time.Instant;
+import lombok.Builder;
 
 /**
  * 通用控制台操作审计事件 — Aspect 构造,Service 写入数据库。
@@ -11,14 +12,14 @@ import java.time.Instant;
  * <p>所以新增字段务必:
  *
  * <ol>
- *   <li>非必填(老消费者读到 null 不挂)
- *   <li>同步升级 {@code eventVersion}
- *   <li>DB migration 给列 default 回退
+ *   <li>保持新增字段可选，兼容既有消费者
+ *   <li>同步维护 {@code eventVersion}
+ *   <li>数据库迁移为新增列提供兼容默认值
  * </ol>
  *
- * <p>没有静态工厂方法:构造器 canonical(record)受 docs/agent-baseline.md 豁免,Aspect 用 canonical 构造器 直接传 16 个字段(用 null
- * 占位选填项),避免 11-参数 of() 触发参数数量约束。
+ * <p>调用侧通过 Builder 按字段名构造可选审计信息；record 字段顺序、公开构造器和序列化契约保持不变。
  */
+@Builder
 public record OperationAuditEvent(
     String tenantId,
     String aggregateType,

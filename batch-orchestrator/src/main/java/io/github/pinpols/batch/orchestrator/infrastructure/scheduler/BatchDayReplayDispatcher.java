@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
@@ -55,6 +56,7 @@ public class BatchDayReplayDispatcher {
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
   private final BatchDayReplayEntryExecutor entryExecutor;
+  private final BatchDayReplayTerminalReconciler terminalReconciler;
   private final BatchDayReplayDispatchProperties properties;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
@@ -104,6 +106,7 @@ public class BatchDayReplayDispatcher {
    * 避免单条失败回滚整批。
    */
   void dispatchSession(BatchDayReplaySessionEntity session) {
+    terminalReconciler.reconcileAdmissions(session.tenantId(), session.id());
     Instant now = BatchDateTimeSupport.utcNow();
     entryMapper.resetStaleUnboundRunning(
         session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);

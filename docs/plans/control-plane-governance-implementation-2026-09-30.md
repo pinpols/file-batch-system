@@ -67,7 +67,7 @@ ORCHESTRATOR_URL=http://... \
 OTEL_COLLECTOR_METRICS_URL=http://.../metrics \
 PROMETHEUS_URL=http://... \
 EVIDENCE_DIR=artifacts/observability/staging-$(date -u +%Y%m%dT%H%M%SZ) \
-bash scripts/observability/capture-runtime-evidence.sh
+bash scripts/ops/capture-runtime-evidence.sh
 ```
 
 该脚本不会启动或重启服务。它只证明端点、Collector 指标和容量指标可查询；需要业务请求的 `traceId` 时，把真实请求产生的 `TRACEPARENT` 传入，并在 Tempo/Loki 中人工核对完整链路。
@@ -78,7 +78,7 @@ bash scripts/observability/capture-runtime-evidence.sh
 NAMESPACE=batch-staging \
 WORKER_DEPLOYMENTS=worker-import,worker-export,worker-process,worker-dispatch,worker-atomic \
 KUBE_CONTEXT=<staging-context> \
-bash scripts/staging/verify-worker-rolling-upgrade.sh
+bash scripts/ops/verify-worker-rolling-upgrade.sh
 ```
 
 发布动作仍按 [Worker 滚动升级 Runbook](../runbook/rolling-upgrade-workers.md) 先 drain、再 rollout；脚本不执行删除 Pod、强制下线或回滚。验收必须补充：非终态任务归零、lease 接管、Kafka lag 收敛、失败任务明确终态和业务结果对账。
@@ -100,4 +100,4 @@ bash scripts/staging/verify-worker-rolling-upgrade.sh
 - 日聚合：`db/migration/V216__create_console_usage_daily.sql`、`batch-console-api/.../domain/observability/`
 - AI 会话/用量/审计治理：`db/migration/V217__index_console_ai_audit_retention.sql`、`db/migration/V218__console_ai_conversations_and_cost_usage.sql`、`batch-console-api/.../domain/audit/infrastructure/ai/`
 - 告警和容量：`deploy/docker/observability/prometheus-batch-rules.yml`、`grafana-dashboard-batch-capacity.json`
-- 运行证据：`scripts/observability/capture-runtime-evidence.sh`、`scripts/staging/verify-worker-rolling-upgrade.sh`
+- 运行证据：`scripts/ops/capture-runtime-evidence.sh`、`scripts/ops/verify-worker-rolling-upgrade.sh`

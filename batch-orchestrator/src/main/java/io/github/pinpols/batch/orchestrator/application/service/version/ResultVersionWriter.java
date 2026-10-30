@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.ResultVersionPolicy;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
@@ -71,10 +72,11 @@ public class ResultVersionWriter {
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void writeOnTerminal(JobInstanceEntity instance, Map<String, Object> outputs) {
-    if (instance == null
+    boolean instanceIsNotEligibleForResultVersion = EmptyChecks.isNull(instance)
         || instance.getId() == null
         || !Texts.hasText(instance.getTenantId())
-        || !isSuccessTerminal(instance.getInstanceStatus())) {
+        || !isSuccessTerminal(instance.getInstanceStatus());
+    if (instanceIsNotEligibleForResultVersion) {
       return;
     }
     if (!Texts.hasText(instance.getJobCode()) || instance.getBizDate() == null) {
@@ -115,7 +117,9 @@ public class ResultVersionWriter {
       // 且不 supersede 旧 EFFECTIVE（部分失败的重跑不得把上一版好结果降级）。
       boolean partialFailed =
           JobInstanceStatus.PARTIAL_FAILED.code().equals(instance.getInstanceStatus());
-      if (dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy)) {
+      boolean versionCannotPromoteAutomatically =
+          dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy);
+      if (versionCannotPromoteAutomatically) {
         status = STATUS_PENDING;
         effectiveAt = null;
         if (partialFailed) {
@@ -148,6 +152,8 @@ public class ResultVersionWriter {
     int versionNo = (maxVersion == null ? 0 : maxVersion) + 1;
 
     final String finalDqGateStatus = dqGateStatus;
+    String payloadJson = serializeOutputs(outputs);
+    String generatedBy = resolveGeneratedBy(instance);
     ResultVersionEntity newVersion = ResultVersionEntity.builder()
         .dqGateStatus(finalDqGateStatus)
         .tenantId(tenantId)
@@ -157,9 +163,9 @@ public class ResultVersionWriter {
         .status(status)
         .effectiveAt(effectiveAt)
         .payloadStorage(PAYLOAD_STORAGE_INLINE_JSON)
-        .payloadJson(serializeOutputs(outputs))
+        .payloadJson(payloadJson)
         .generatedAt(now)
-        .generatedBy(resolveGeneratedBy(instance))
+        .generatedBy(generatedBy)
         .promotionPolicy(promotionPolicy)
         .createdAt(now)
         .updatedAt(now)

@@ -2,19 +2,37 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.ConfigApprovalMapper">
 
-    <select id="selectLatestByRelease" resultType="map">
+    <resultMap id="ConfigApprovalRowMap"
+               type="io.github.pinpols.batch.console.domain.ops.view.ConfigApprovalRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="release_id" javaType="java.lang.Long"/>
+            <arg column="approval_status" javaType="java.lang.String"/>
+            <arg column="requested_by" javaType="java.lang.String"/>
+            <arg column="requested_at" javaType="java.time.Instant"/>
+            <arg column="reviewed_by" javaType="java.lang.String"/>
+            <arg column="reviewed_at" javaType="java.time.Instant"/>
+            <arg column="review_comment" javaType="java.lang.String"/>
+            <arg column="expired_at" javaType="java.time.Instant"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectLatestByRelease" resultMap="ConfigApprovalRowMap">
         SELECT id,
-               tenant_id AS "tenantId",
-               release_id AS "releaseId",
-               approval_status AS "approvalStatus",
-               requested_by AS "requestedBy",
-               requested_at AS "requestedAt",
-               reviewed_by AS "reviewedBy",
-               reviewed_at AS "reviewedAt",
-               review_comment AS "reviewComment",
-               expired_at AS "expiredAt",
-               created_at AS "createdAt",
-               updated_at AS "updatedAt"
+               tenant_id,
+               release_id,
+               approval_status,
+               requested_by,
+               requested_at,
+               reviewed_by,
+               reviewed_at,
+               review_comment,
+               expired_at,
+               created_at,
+               updated_at
           FROM batch.config_approval
          WHERE tenant_id = #{tenantId}
            AND release_id = #{releaseId}
@@ -22,19 +40,19 @@
          LIMIT 1
     </select>
 
-    <select id="selectById" resultType="map">
+    <select id="selectById" resultMap="ConfigApprovalRowMap">
         SELECT id,
-               tenant_id AS "tenantId",
-               release_id AS "releaseId",
-               approval_status AS "approvalStatus",
-               requested_by AS "requestedBy",
-               requested_at AS "requestedAt",
-               reviewed_by AS "reviewedBy",
-               reviewed_at AS "reviewedAt",
-               review_comment AS "reviewComment",
-               expired_at AS "expiredAt",
-               created_at AS "createdAt",
-               updated_at AS "updatedAt"
+               tenant_id,
+               release_id,
+               approval_status,
+               requested_by,
+               requested_at,
+               reviewed_by,
+               reviewed_at,
+               review_comment,
+               expired_at,
+               created_at,
+               updated_at
           FROM batch.config_approval
          WHERE tenant_id = #{tenantId}
            AND id = #{id}

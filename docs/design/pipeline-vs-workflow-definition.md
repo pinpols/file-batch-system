@@ -1,5 +1,7 @@
 # Pipeline vs Workflow vs Job 边界
 
+> **当前开发分支口径（2026-10-24）**：单作业和组合图均由 WorkflowRun 承载顶层运行，JOB 节点按需创建独立 JobInstance；按 Job 类型解析系统固定 Pipeline。旧顶层 Job 包装、租户 Pipeline 编辑和旧配置包格式不作为新部署入口。ADR-048 采用全新数据库与隔离命名空间切换，不承诺旧载荷/旧运行原地兼容；部署验收另看当前矩阵。
+
 > **status**: 固化（2026-05-03）  
 > **scope**: 三套编排体系的职责切分、选型决策、跨域引用规则
 
@@ -7,13 +9,13 @@
 
 | 体系 | 定义表 | 运行表 | 适用场景 | 用户可定制 |
 |---|---|---|---|---|
-| **Pipeline** | `pipeline_definition` `pipeline_step_definition` | `pipeline_instance` `pipeline_step_run` | 文件处理流水线（IMPORT/EXPORT/DISPATCH/PROCESS） | ❌ 类型对应的阶段集合与顺序固定；步骤实现参数可配置 |
-| **Workflow** | `workflow_definition` `workflow_node` `workflow_edge` | `workflow_run` `workflow_node_run` | 用户 DAG 编排（多 Job 组合 / 分支 / 并发 / 补偿） | ✅ 前端配置 |
-| **Job** | `job_definition` | `job_instance` `job_partition` `job_task` | 单个执行单元（最小调度粒度） | ✅ 配置参数 |
+| **Pipeline** | `SystemPipelineCatalog` 固化阶段/版本，Job 保存业务参数；旧租户定义表及关联ID已在 V347 退役 | `pipeline_instance` `pipeline_step_run` | 文件类 Job 按类型执行的内部阶段链 | ❌ 阶段和顺序固定 |
+| **Workflow** | `workflow_definition` `workflow_node` `workflow_edge` | `workflow_run` `workflow_node_run` | 所有顶层运行入口；单 Job、多 Job、分支/并行 | ✅ 组合图与调度策略 |
+| **Job** | `job_definition` | `job_instance` `job_partition` `job_task` | 可复用执行单元，被 Workflow 节点引用 | ✅ 类型化业务参数 |
 
 ## 2. Pipeline —— 文件处理专用
 
-### 2.1 内置固定阶段（按 pipeline_type 分组）
+### 2.1 系统固定阶段（按 Job 类型映射）
 
 - **IMPORT**：RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK
 - **EXPORT**：PREPARE → GENERATE → STORE → REGISTER → COMPLETE
@@ -22,13 +24,11 @@
 
 ### 2.2 设计意图
 
-Pipeline = "**文件处理黄金路径**"，把各类型成熟阶段固化下来：
+Pipeline = "**文件处理黄金路径**"，按 Job 类型选择固定阶段：
 - 不允许用户拖拽节点改顺序（保持流水线可观测、可重试、可补偿语义一致）
-- 定义必须完整包含对应类型的全部阶段，不能缺失、重复或重排；`step_order` 由固定阶段位置决定
-- Worker 只执行与自身 `pipeline_type` 一致的定义，避免按 Job 找到异类型配置后执行错误阶段
-- 定义仍按 `tenant_id + job_code` 查找，用于承载每个 Job 的实现编码、参数、重试/超时等配置，不代表阶段骨架可变
 - step 失败的重试 / 补偿 / 跳过策略全在 worker 内部实现
-- 运维只看 pipeline_step_run 的 stage 进度，不需要理解用户自定义图
+- 新运行身份记录系统 Pipeline code/version；运维可继续通过 `pipeline_step_run` 看阶段进度
+- 保留 `pipeline_instance` / `pipeline_step_run` 运行历史；空库部署通过 V347 退役旧租户定义表，不提供旧库数据迁移兼容
 
 ### 2.3 不允许做的事
 
@@ -38,13 +38,15 @@ Pipeline = "**文件处理黄金路径**"，把各类型成熟阶段固化下来
 
 ## 3. Workflow —— 用户 DAG 编排
 
-### 3.1 节点类型（`workflow_node.node_type`）
+### 3.1 节点类型（新部署图）
 
-- `START` / `END`：流程边界
-- `TASK`：执行 Job（通过 `related_job_code` 绑定）
-- `JOB`：与 TASK 同义，新代码统一用 TASK
-- `FILE_STEP`：执行 Pipeline（通过 `related_pipeline_code` 绑定）
-- `GATEWAY`：分支 / 汇聚（条件 / ANY join / ALL join）
+- `START` / `END`：持久化流程边界，由 Orchestrator 推进，不派 Worker 任务。
+- `JOB`：通过 `related_job_code` 引用同租户 Job；节点到达后才创建该节点的 JobInstance。
+- `GATEWAY`：条件分支与汇聚。
+- `WAIT`：持久化 Sensor 等待，按超时策略失败或跳过下游，见 ADR-028。
+- `TASK` 枚举/辅助实现仅用于识别历史模型；新根运行没有父 Job，不能直接执行 TASK。`FILE_STEP` 与 `related_pipeline_code` 已退出新图契约。
+
+Workflow 是平面 DAG，不支持嵌套 Workflow，也没有独立的审批节点类型。高风险操作审批属于命令/操作域。
 
 ### 3.2 边类型（`workflow_edge.edge_type`）
 
@@ -57,60 +59,54 @@ Pipeline = "**文件处理黄金路径**"，把各类型成熟阶段固化下来
 
 Workflow = "**用户表达业务编排意图**"：
 - 前端配置（拖拽 / Excel 导入 / API 提交）
-- 支持人工干预（审批节点 / 暂停重跑 / 局部补偿）
+- 支持受权限与审批约束的暂停、重放等运维操作
 - 节点参数 DSL（`$.nodes.X.output.Y`）让上游产出可被下游引用（ADR-009）
 
 ### 3.4 与 Pipeline 的关系
 
-Workflow 节点 `node_type=FILE_STEP` 时通过 `related_pipeline_code` 引用一条 pipeline，即"工作流的某一步是跑一条文件流水线"。Pipeline 不反向引用 Workflow。
+新模型中 Workflow 执行节点统一引用 Job，Job 类型再决定系统 Pipeline；新节点不直接绑定 Pipeline 定义。全新数据库不保留 `FILE_STEP.related_pipeline_code` 字段，Workflow Excel、配置包与 API 只接受 Job 引用。Workflow Run 是整体运行事实，Pipeline Instance/Step Run 保留为执行明细。
 
-## 4. Job —— 最小执行单元
+## 4. Job —— 可复用执行配置
 
 ### 4.1 类型（`job_definition.job_type`）
 
 - `GENERAL` —— 通用 Java handler，handlerClass 跑业务代码
 - `IMPORT` / `EXPORT` / `DISPATCH` —— 触发对应类型 Pipeline 执行
 - `PROCESS` —— 触发 PROCESS Pipeline（WAP 模式）
-- `WORKFLOW` —— 触发一条 Workflow 执行
+- `ATOMIC` —— 专用原子任务执行器
+- `BUNDLE_IMPORT` / `BUNDLE_EXPORT` / `BUNDLE_DISPATCH` —— manifest 展开对应文件类型分区；`WORKFLOW` 已退出当前 JobType
 
 ### 4.2 设计意图
 
-Job = "**调度的最小可声明单元**"：
-- trigger 只能 fire 一个 Job（不能直接 fire 一个 Pipeline 或 Workflow node）
+Job = "**Workflow 引用的可复用执行配置**"：
+- Trigger 顶层目标是 Workflow 定义，单 Job 从其受管 Workflow 启动；不能把 Job code 当顶层请求目标
 - Job 是审批 / 配额 / 重试 / 补偿的语义边界
 - job_definition.job_type 决定运行时分发策略（worker_group / topic / handler）
 
-### 4.3 嵌套关系
+### 4.3 执行层级（不含子 Workflow）
 
 ```
-Trigger fire
+Trigger / API
   ↓
-Job (job_type=WORKFLOW)
-  ↓
-Workflow (workflow_definition)
-  ├─ Node A (TASK, related_job_code=child_job_1)
-  │   ↓ → 创建子 Job 实例
-  │       Child Job (job_type=IMPORT)
-  │       ↓
-  │       Pipeline (pipeline_type=IMPORT, fixed stages)
-  └─ Node B (FILE_STEP, related_pipeline_code=child_pipeline_1)
-      ↓ → 直接跑 Pipeline 不创建 Job 中介
+Workflow Run (workflow_definition)
+  ├─ JOB node (related_job_code=IMPORT_JOB)
+  │   ↓ → Job Instance / partitions / tasks
+  │       ↓ JobType.IMPORT
+  │       System Pipeline IMPORT (fixed stages)
+  └─ JOB node (related_job_code=EXPORT_JOB)
+      ↓ → Job Instance / partitions / tasks → System Pipeline EXPORT
 ```
 
 ## 5. 选型决策树
 
 ```
-新增调度场景
+新增执行场景
   ↓
-是不是文件处理（解析 / 生成 / 派发 / WAP）？
-  │
-  ├─ 是 → 对应类型的固定阶段够用？
-  │       ├─ 是 → Pipeline + Job(job_type=IMPORT/EXPORT/...)
-  │       └─ 否 → 类型对应的固定阶段不够，需要分支 / 跨 Pipeline → Workflow + 多个 FILE_STEP 节点
-  │
-  └─ 否 → 单一 Job 能完成？
-          ├─ 是 → Job(job_type=GENERAL) + handler 跑代码
-          └─ 否 → 多 Job 组合 / 需要审批 / 需要分支 → Workflow + 多个 TASK 节点
+定义或复用 Job（类型决定执行器与系统 Pipeline）
+  ↓
+通过 Workflow 表达任何顶层运行：单 Job 默认流程或组合 DAG
+  ↓
+运行记录以 Workflow Run 为整体，保留 Job/Partition/Task/Pipeline 阶段明细
 ```
 
 ## 6. 业务代码红线
@@ -132,12 +128,9 @@ SELECT instance_no, status, started_at FROM batch.workflow_run WHERE tenant_id =
 
 `pipeline_step_run` 由 worker 在执行 stage 时写入，外部代码（console-api / orchestrator API）禁止 UPDATE / DELETE。状态推进由 worker `report` 上报触发。
 
-### 6.3 workflow_node.related_pipeline_code 单向引用
+### 6.3 节点仅引用 Job
 
-- ✓ workflow_node 节点 → pipeline_definition.job_code（FILE_STEP 节点）
-- ❌ pipeline_definition → workflow_node（pipeline 不知道自己被哪条 workflow 引用）
-
-理由：pipeline 是被复用的"工作单元"，被多条 workflow 引用是正常的；反向引用会造成强耦合。
+`workflow_node.related_job_code → job_definition.job_code` 在同租户范围校验。Job 类型映射系统 Pipeline，Pipeline 不反向编排 Workflow。原 `FILE_STEP → pipeline_definition` 仅属于历史设计，不能据此配置新图。
 
 ## 7. 历史与未来
 
@@ -145,7 +138,7 @@ SELECT instance_no, status, started_at FROM batch.workflow_run WHERE tenant_id =
 
 V4/V5（早期）只有 workflow_definition + workflow_node。V6 加 pipeline_definition + pipeline_step_run，原因：
 
-- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的固定阶段总是手写一套，工程上抽象成"内置 pipeline"简化处理
+- 早期 workflow 节点支持任意 handler，但 IMPORT 等场景的 9 阶段总是手写一套，工程上抽象成"内置 pipeline"简化处理
 - pipeline_step_run 比 workflow_node_run 维度更细（精确到 stage），观测性更好
 
 ### 7.2 是否考虑合并两套体系

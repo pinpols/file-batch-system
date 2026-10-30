@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.infrastructure.progress;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
+import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
+import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import java.time.Clock;
 import java.time.Duration;
@@ -135,6 +137,66 @@ class PipelineStageProgressCacheTest {
     clock.advance(Duration.ofMinutes(6));
 
     assertThat(cache.snapshotByPipeline("ta", 99L)).isEmpty();
+  }
+
+  @Test
+  @DisplayName("旧执行迟到心跳不能覆盖同任务新认领的进度")
+  void shouldKeepCurrentInvocationWhenOldWorkerPublishesLate() {
+    cache.publish(
+        "ta",
+        "worker",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 2L, 100L, "new", 700L)));
+    cache.publish(
+        "ta",
+        "worker",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 999L, 100L, "old", 699L)));
+    var claims = List.of(new PipelineProgressClaimView(11L, "worker", "new"));
+    assertThat(cache.snapshotByPipeline(
+            "ta", 99L, claims, List.of(new PipelineProgressStageView(700L, "LOAD", 2))))
+        .extracting(PipelineSnapshot::rowsProcessed)
+        .containsExactly(2L);
+  }
+
+  @Test
+  @DisplayName("无有效认领或认领身份不匹配时不返回缓存进度")
+  void shouldWithholdProgressWithoutCurrentClaim() {
+    cache.publish(
+        "ta",
+        "worker",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 999L, 100L, "old", 699L)));
+    assertThat(cache.snapshotByPipeline("ta", 99L, List.of(), List.of())).isEmpty();
+    var claims = List.of(new PipelineProgressClaimView(11L, "other", "old"));
+    assertThat(cache.snapshotByPipeline(
+            "ta", 99L, claims, List.of(new PipelineProgressStageView(700L, "LOAD", 2))))
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("同名旧进程空心跳和计数回退不污染当前阶段，并行分片分别累加")
+  void shouldKeepCurrentSamplesAcrossEmptyHeartbeatAndRegressiveCounters() {
+    cache.publish(
+        "ta",
+        "worker",
+        List.of(
+            new WorkerPipelineProgressDto(11L, 99L, "LOAD", 20L, 100L, "a", 700L),
+            new WorkerPipelineProgressDto(12L, 99L, "LOAD", 30L, 100L, "b", 701L)));
+    cache.publish("ta", "worker", List.of());
+    cache.publish(
+        "ta",
+        "worker",
+        List.of(new WorkerPipelineProgressDto(11L, 99L, "LOAD", 2L, 100L, "a", 700L)));
+    var claims = List.of(
+        new PipelineProgressClaimView(11L, "worker", "a"),
+        new PipelineProgressClaimView(12L, "worker", "b"));
+    var stages = List.of(
+        new PipelineProgressStageView(700L, "LOAD", 1),
+        new PipelineProgressStageView(701L, "LOAD", 1));
+    assertThat(cache.snapshotByPipeline("ta", 99L, claims, stages))
+        .extracting(PipelineSnapshot::rowsProcessed)
+        .containsExactly(50L);
+    assertThat(cache.snapshotByPipeline("ta", 99L, claims, List.of())).isEmpty();
+    clock.advance(Duration.ofMinutes(6));
+    assertThat(cache.snapshotByPipeline("ta", 99L, claims, stages)).isEmpty();
   }
 
   private static final class MutableClock extends Clock {

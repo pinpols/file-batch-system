@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.support.excel;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.BatchColumnNames;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -77,12 +78,14 @@ public final class ConsoleSingleSheetExcelImportSupport {
 
   public static ResponseEntity<InputStreamResource> excelResponse(
       String fileName, byte[] workbookBytes) {
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(fileName).build().toString())
-        .contentType(EXCEL_MEDIA_TYPE)
-        .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+    String contentDisposition =
+        ContentDisposition.attachment().filename(fileName).build().toString();
+    responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
+    responseBuilder.contentType(EXCEL_MEDIA_TYPE);
+    ByteArrayInputStream workbookInputStream = new ByteArrayInputStream(workbookBytes);
+    InputStreamResource workbookResource = new InputStreamResource(workbookInputStream);
+    return responseBuilder.body(workbookResource);
   }
 
   /**
@@ -93,10 +96,11 @@ public final class ConsoleSingleSheetExcelImportSupport {
    */
   public static ResponseEntity<StreamingResponseBody> excelStreamingResponse(
       String fileName, StreamingResponseBody writer) {
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(fileName).build().toString())
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+    String contentDisposition =
+        ContentDisposition.attachment().filename(fileName).build().toString();
+    return responseBuilder
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition)
         .contentType(EXCEL_MEDIA_TYPE)
         .body(writer);
   }
@@ -140,19 +144,22 @@ public final class ConsoleSingleSheetExcelImportSupport {
           rowIndex <= sheet.getLastRowNum();
           rowIndex++) {
         Row row = sheet.getRow(rowIndex);
-        if (row == null || rowIsBlank(row, formatter)) {
+        boolean rowIsAbsentOrBlank = EmptyChecks.isNull(row) || rowIsBlank(row, formatter);
+        if (rowIsAbsentOrBlank) {
           continue;
         }
         Map<String, String> rowValues = new LinkedHashMap<>();
         for (String header : columns) {
           Integer columnIndex = headerIndex.get(header);
-          rowValues.put(header, normalize(cellText(row, columnIndex, formatter)));
+          String cellValue = cellText(row, columnIndex, formatter);
+          String normalizedCellValue = normalize(cellValue);
+          rowValues.put(header, normalizedCellValue);
         }
         fillTenantDefault(rowValues, columns, tenantId);
         rows.add(rowValues);
       }
-      return new ParsedWorkbook(
-          resolveFileName(originalFileName, defaultFileName), tenantId, sheetName, rows);
+      String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
+      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {
@@ -192,8 +199,8 @@ public final class ConsoleSingleSheetExcelImportSupport {
         xmlReader.parse(new InputSource(sheetStream));
         rows.addAll(handler.rows());
       }
-      return new ParsedWorkbook(
-          resolveFileName(originalFileName, defaultFileName), tenantId, sheetName, rows);
+      String resolvedFileName = resolveFileName(originalFileName, defaultFileName);
+      return new ParsedWorkbook(resolvedFileName, tenantId, sheetName, rows);
     } catch (BizException exception) {
       throw exception;
     } catch (Exception exception) {
@@ -260,7 +267,8 @@ public final class ConsoleSingleSheetExcelImportSupport {
         for (String header : columns) {
           Integer colIdx = headerIndex.get(header);
           String cellValue = colIdx != null ? currentCells.get(colIdx) : null;
-          currentRow.put(header, normalize(cellValue));
+          String normalizedCellValue = normalize(cellValue);
+          currentRow.put(header, normalizedCellValue);
         }
         fillTenantDefault(currentRow, columns, tenantId);
         // 跳过全空行

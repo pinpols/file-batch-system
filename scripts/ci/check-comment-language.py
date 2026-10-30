@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：检查新增的纯英文说明性注释。
+# 用法：python3 scripts/ci/check-comment-language.py --base-ref <基线引用>；也可用 --staged 或 --paths <路径...>。
 """检查新增的纯英文说明性注释。"""
 
 from __future__ import annotations
@@ -22,26 +24,40 @@ ENGLISH_HINT = re.compile(
     re.IGNORECASE,
 )
 DIRECTIVE = re.compile(
-    r"^(?:shellcheck\b|noqa\b|type:\s*ignore\b|pylint:\b|eslint\b|prettier\b|"
-    r"noinspection\b|go:(?:build|generate|embed)\b|flyway:|sqlfluff:|SPDX-License-Identifier\b)",
+    r"^(?:shellcheck\b|squawk-ignore\b|noqa\b|type:\s*ignore\b|pylint:\b|eslint\b|prettier\b|"
+    r"noinspection\b|go:(?:build|generate|embed)\b|flyway:|sqlfluff:|SPDX-License-Identifier\b|auto-generated\b)",
     re.IGNORECASE,
 )
 LICENSE = re.compile(r"^(?:copyright\b|all rights reserved\b|licensed under the\b|apache license\b)", re.IGNORECASE)
 SQL_EXAMPLE = re.compile(r"^(?:select|from|where|insert|update|delete|alter|create|drop|group by|order by)\b", re.IGNORECASE)
 CODE_EXAMPLE = re.compile(
     r"^(?:bash|sh|python|python3|mvn|make|docker|git|psql|curl|source|export|"
-    r"scripts/|\./|~/|/|-{1,2}[a-z][a-z0-9-]*\b|[A-Z][A-Z0-9_]*=|"
-    r"[a-z0-9_.-]+\.(?:sh|py|sql)\b)|"
-    r"\bON CONFLICT\b|\bLIKE\s+batch\.|\b[A-Za-z][A-Za-z0-9_]*\s*[=<>]|\{[^}]*\}",
+    r"scripts/|\./|~/|/|-{1,2}[a-z][a-z0-9-]*\b|[A-Z][A-Z0-9_]*=|return\b|public\s+(?:record|class|interface)\b|for\s*\(|"
+    r"[a-z0-9_.-]+\.(?:sh|py|sql)\b|if\s*\(|"
+    r"\.[A-Za-z_$][\w$]*\s*\(|[A-Za-z_$][\w$]*\s*\([^)]*\)\s*;?$)|"
+    r"\bON CONFLICT\b|\bLIKE\s+batch\.|\b[A-Za-z][A-Za-z0-9_]*\s*[=<>]|\{[^}]*\}|^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)+\s*\(",
 )
+SCHEMA_SNIPPET = re.compile(
+    r"^[A-Za-z_][\w.]*\s+(?:(?:BOOLEAN|BIGINT|INTEGER|JSONB|TEXT|DATE|TIMESTAMPTZ|VARCHAR\b)|NOT\s+NULL\b)",
+    re.IGNORECASE,
+)
+IDENTIFIER_LIST = re.compile(r"^[A-Z0-9_.*]+(?:\s*/\s*[A-Z0-9_.*]+)+[。.]?$", re.IGNORECASE)
+QUALIFIED_LINK = re.compile(r"^[\w.$#{}() ,]+\}?$", re.ASCII)
+JAVA_INVOCATION = re.compile(r"^(?:[A-Za-z_$][\w$]*|\.[A-Za-z_$][\w$]*)\s*\(.*\)\s*;?$")
+METHOD_LIST = re.compile(r"^[A-Za-z_$][\w$]*\*?(?:\s*/\s*[A-Za-z_$][\w$]*\*?)+\s*/?$")
 SUPPORTED = {
     ".java", ".go", ".py", ".rs", ".ts", ".tsx", ".js", ".jsx", ".sh",
     ".sql", ".yml", ".yaml", ".xml", ".properties", ".toml",
 }
+SQL_OBJECT_COMMENT = re.compile(
+    r"COMMENT\s+ON\s+(?:TABLE|COLUMN|INDEX|CONSTRAINT|FUNCTION|SCHEMA|TRIGGER)\s+"
+    r"[^;]*?\s+IS\s+'((?:''|[^'])*)'",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def prose_comment(line: str, suffix: str) -> str | None:
-    """Return comment prose when the line is a full-line English comment."""
+    """识别整行注释中的英文说明文本。"""
     stripped = line.lstrip()
     if stripped.startswith("#!"):
         return None
@@ -60,6 +76,10 @@ def prose_comment(line: str, suffix: str) -> str | None:
     text = re.sub(r"(?:\*/|-->)\s*$", "", text).strip()
     text = text.lstrip("*").strip()
     if not text or HAN.search(text) or DIRECTIVE.match(text) or LICENSE.match(text):
+        return None
+    if SCHEMA_SNIPPET.match(text) or IDENTIFIER_LIST.fullmatch(text) or METHOD_LIST.fullmatch(text):
+        return None
+    if QUALIFIED_LINK.fullmatch(text) and ("#" in text or text.startswith("io.")):
         return None
     if SQL_EXAMPLE.match(text) or re.fullmatch(r"[A-Z0-9_./:= -]+", text):
         return None
@@ -83,7 +103,7 @@ def prose_comment(line: str, suffix: str) -> str | None:
     words = WORD.findall(text)
     if "_" in text and not ENGLISH_HINT.search(text):
         return None
-    if CODE_EXAMPLE.search(text):
+    if CODE_EXAMPLE.search(text) or JAVA_INVOCATION.fullmatch(text):
         return None
     if len(words) >= 4 and ENGLISH_HINT.search(text):
         return text
@@ -92,13 +112,27 @@ def prose_comment(line: str, suffix: str) -> str | None:
     return None
 
 
+def sql_object_comment_prose(source: str) -> list[tuple[int, str]]:
+    """提取 PostgreSQL 对象说明中尚未翻译的英文文本。"""
+    findings: list[tuple[int, str]] = []
+    for match in SQL_OBJECT_COMMENT.finditer(source):
+        text = match.group(1).replace("''", "'").strip()
+        if len(WORD.findall(text)) >= 3 and ENGLISH_HINT.search(text) and not HAN.search(text):
+            line = source.count("\n", 0, match.start()) + 1
+            findings.append((line, text))
+    return findings
+
+
 def parse_diff(diff: str) -> list[tuple[str, int, str]]:
     findings: list[tuple[str, int, str]] = []
     path = ""
     line_number = 0
+    changed_sql_paths: set[str] = set()
     for line in diff.splitlines():
         if line.startswith("+++ b/"):
             path = line[6:]
+            if Path(path).suffix.lower() == ".sql":
+                changed_sql_paths.add(path)
             continue
         if line.startswith("@@"):
             match = re.search(r"\+(\d+)(?:,\d+)?", line)
@@ -113,6 +147,15 @@ def parse_diff(diff: str) -> list[tuple[str, int, str]]:
                     findings.append((path, line_number, prose))
         elif not line.startswith("-"):
             line_number += 1
+    for changed_path in sorted(changed_sql_paths):
+        source_path = ROOT / changed_path
+        if not source_path.is_file():
+            continue
+        source = source_path.read_text(encoding="utf-8")
+        findings.extend(
+            (changed_path, line, text)
+            for line, text in sql_object_comment_prose(source)
+        )
     return findings
 
 
@@ -131,7 +174,7 @@ def get_diff(staged: bool, base_ref: str | None) -> str:
 
 def scan_paths(paths: list[str]) -> list[tuple[str, int, str]]:
     listed = subprocess.run(
-        ["git", "ls-files", "-z", "--", *paths],
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", *paths],
         cwd=ROOT,
         check=True,
         capture_output=True,
@@ -141,12 +184,20 @@ def scan_paths(paths: list[str]) -> list[tuple[str, int, str]]:
         if not raw_path:
             continue
         path = raw_path.decode("utf-8")
+        if not (ROOT / path).is_file():
+            continue
         if Path(path).suffix.lower() not in SUPPORTED:
             continue
         for number, line in enumerate((ROOT / path).read_text(encoding="utf-8").splitlines(), 1):
             prose = prose_comment(line, Path(path).suffix.lower())
             if prose:
                 findings.append((path, number, prose))
+        if Path(path).suffix.lower() == ".sql":
+            source = (ROOT / path).read_text(encoding="utf-8")
+            findings.extend(
+                (path, number, prose)
+                for number, prose in sql_object_comment_prose(source)
+            )
     return findings
 
 

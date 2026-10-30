@@ -20,6 +20,7 @@
 -- 历史测试/人工导入数据可能已经存在 "非 MANUAL 但无 trigger_request_id"。
 -- 这些行不应阻断新版本启动；VALIDATE 前为它们补一条 synthetic trigger_request，
 -- 保留原 trigger_type 语义，而不是把运行实例改成 MANUAL。
+
 INSERT INTO batch.trigger_request (
     tenant_id,
     request_id,
@@ -62,7 +63,9 @@ WHERE ji.trigger_request_id IS NULL
   AND tr.request_id = 'legacy-job-instance-' || ji.id;
 
 -- archive 冷表没有 trigger_request 外键关系,但 V136 同步加了来源约束。
+
 -- 对历史归档行补一个稳定的 synthetic 非空值,避免旧冷数据阻断 VALIDATE。
+
 UPDATE archive.job_instance_archive
 SET trigger_request_id = -id,
     updated_at = CURRENT_TIMESTAMP

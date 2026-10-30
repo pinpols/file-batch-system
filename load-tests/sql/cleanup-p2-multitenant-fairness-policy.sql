@@ -7,10 +7,54 @@ WHERE policy_code = 'p2-fairness-profile'
   AND description = 'Ephemeral P2 fairness load-test policy'
   AND tenant_id IN ('p2fa', 'p2fb', 'p2fc');
 
+DELETE FROM batch.workflow_edge edge
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE edge.tenant_id = workflow.tenant_id
+  AND edge.workflow_definition_id = workflow.id
+  AND job.tenant_id IN ('p2fa', 'p2fb', 'p2fc')
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description = 'P2 local multi-tenant fairness definition'
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_node node
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE node.tenant_id = workflow.tenant_id
+  AND node.workflow_definition_id = workflow.id
+  AND job.tenant_id IN ('p2fa', 'p2fb', 'p2fc')
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description = 'P2 local multi-tenant fairness definition'
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_definition_version version
+USING batch.workflow_definition workflow
+JOIN batch.job_definition job
+  ON job.tenant_id = workflow.tenant_id
+ AND job.id = workflow.single_job_definition_id
+WHERE version.workflow_definition_id = workflow.id
+  AND job.tenant_id IN ('p2fa', 'p2fb', 'p2fc')
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description = 'P2 local multi-tenant fairness definition'
+  AND workflow.workflow_code = 'JOB-WF-' || job.id;
+
+DELETE FROM batch.workflow_definition workflow
+USING batch.job_definition job
+WHERE workflow.tenant_id = job.tenant_id
+  AND workflow.single_job_definition_id = job.id
+  AND workflow.workflow_code = 'JOB-WF-' || job.id
+  AND job.tenant_id IN ('p2fa', 'p2fb', 'p2fc')
+  AND job.job_code = 'atomic_sql_demo'
+  AND job.description = 'P2 local multi-tenant fairness definition';
+
 DELETE FROM batch.job_definition
 WHERE tenant_id IN ('p2fa', 'p2fb', 'p2fc')
   AND job_code = 'atomic_sql_demo'
-  AND description = 'P2 local multi-tenant fairness clone of default atomic_sql_demo';
+  AND description = 'P2 local multi-tenant fairness definition';
 
 DELETE FROM batch.tenant
 WHERE tenant_id IN ('p2fa', 'p2fb', 'p2fc')

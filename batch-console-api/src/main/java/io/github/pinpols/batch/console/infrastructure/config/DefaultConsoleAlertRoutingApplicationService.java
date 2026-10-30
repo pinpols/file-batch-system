@@ -10,11 +10,13 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleAl
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigCountQuery;
+import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
+import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
 import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -32,32 +34,39 @@ public class DefaultConsoleAlertRoutingApplicationService
   public PageResponse<ConsoleAlertRoutingResponse> list(AlertRoutingQueryRequest request) {
     String resolved = tenantGuard.resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
-    long total = alertRoutingConfigMapper.countByQuery(
-        resolved,
-        request.getKeyword(),
-        request.getRouteCode(),
-        request.getTeam(),
-        request.getSeverity(),
-        request.getEnabled());
-    List<Map<String, Object>> items = alertRoutingConfigMapper.selectByQuery(
-        resolved,
-        request.getKeyword(),
-        request.getRouteCode(),
-        request.getTeam(),
-        request.getSeverity(),
-        request.getEnabled(),
-        pageRequest);
-    return new PageResponse<>(
-        total,
-        pageRequest.pageNo(),
-        pageRequest.pageSize(),
-        items.stream().map(ConsoleAlertRoutingResponse::from).toList());
+    AlertRoutingConfigCountQuery alertRoutingConfigCountQuery =
+        AlertRoutingConfigCountQuery.builder()
+            .tenantId(resolved)
+            .keyword(request.getKeyword())
+            .routeCode(request.getRouteCode())
+            .team(request.getTeam())
+            .severity(request.getSeverity())
+            .enabled(request.getEnabled())
+            .build();
+    long total = alertRoutingConfigMapper.countByQuery(alertRoutingConfigCountQuery);
+    AlertRoutingConfigQuery alertRoutingConfigQuery = AlertRoutingConfigQuery.builder()
+        .tenantId(resolved)
+        .keyword(request.getKeyword())
+        .routeCode(request.getRouteCode())
+        .team(request.getTeam())
+        .severity(request.getSeverity())
+        .enabled(request.getEnabled())
+        .pageRequest(pageRequest)
+        .build();
+    List<AlertRoutingConfigRow> items =
+        alertRoutingConfigMapper.selectByQuery(alertRoutingConfigQuery);
+    long responseTotal = total;
+    int responsePageNo = pageRequest.pageNo();
+    int responsePageSize = pageRequest.pageSize();
+    List<ConsoleAlertRoutingResponse> responses =
+        items.stream().map(ConsoleAlertRoutingResponse::from).toList();
+    return new PageResponse<>(responseTotal, responsePageNo, responsePageSize, responses);
   }
 
   @Override
   public ConsoleAlertRoutingResponse create(AlertRoutingSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
+    AlertRoutingConfigRow existing =
         alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
     if (existing != null) {
       throw BizException.of(
@@ -67,18 +76,19 @@ public class DefaultConsoleAlertRoutingApplicationService
     }
     AlertRoutingConfigUpsertParam param = toParam(null, tenantId, request);
     alertRoutingConfigMapper.upsertAlertRoutingConfig(param);
-    return ConsoleAlertRoutingResponse.from(
-        alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode()));
+    AlertRoutingConfigRow createdRoute =
+        alertRoutingConfigMapper.selectByUniqueKey(tenantId, param.getRouteCode());
+    return ConsoleAlertRoutingResponse.from(createdRoute);
   }
 
   @Override
   public ConsoleAlertRoutingResponse update(Long id, AlertRoutingSaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing = Guard.requireFound(
-        alertRoutingConfigMapper.selectById(tenantId, id), "alert routing not found");
-    String existingRouteCode = String.valueOf(existing.get("route_code"));
+    AlertRoutingConfigRow selectedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
+    AlertRoutingConfigRow existing = Guard.requireFound(selectedRoute, "alert routing not found");
+    String existingRouteCode = existing.routeCode();
     if (!existingRouteCode.equals(request.getRouteCode())) {
-      Map<String, Object> duplicate =
+      AlertRoutingConfigRow duplicate =
           alertRoutingConfigMapper.selectByUniqueKey(tenantId, request.getRouteCode());
       if (duplicate != null) {
         throw BizException.of(
@@ -91,33 +101,34 @@ public class DefaultConsoleAlertRoutingApplicationService
     // PATCH 语义:request 没传的字段保留 existing 值,避免 NOT NULL 违反 (BE-ISSUE-6)
     mergeWithExisting(param, request, existing);
     alertRoutingConfigMapper.updateById(param);
-    return ConsoleAlertRoutingResponse.from(alertRoutingConfigMapper.selectById(tenantId, id));
+    AlertRoutingConfigRow updatedRoute = alertRoutingConfigMapper.selectById(tenantId, id);
+    return ConsoleAlertRoutingResponse.from(updatedRoute);
   }
 
   private static void mergeWithExisting(
       AlertRoutingConfigUpsertParam param,
       AlertRoutingSaveRequest request,
-      Map<String, Object> existing) {
+      AlertRoutingConfigRow existing) {
     if (request.getRouteName() == null) {
-      param.setRouteName((String) existing.get("route_name"));
+      param.setRouteName(existing.routeName());
     }
     if (request.getTeam() == null) {
-      param.setTeam((String) existing.get("team"));
+      param.setTeam(existing.team());
     }
     if (request.getAlertGroup() == null) {
-      param.setAlertGroup((String) existing.get("alert_group"));
+      param.setAlertGroup(existing.alertGroup());
     }
     if (request.getSeverity() == null) {
-      param.setSeverity((String) existing.get("severity"));
+      param.setSeverity(existing.severity());
     }
     if (request.getReceiver() == null) {
-      param.setReceiver((String) existing.get("receiver"));
+      param.setReceiver(existing.receiver());
     }
     if (request.getGroupBy() == null) {
-      param.setGroupBy((String) existing.get("group_by"));
+      param.setGroupBy(existing.groupBy());
     }
     if (request.getDescription() == null) {
-      param.setDescription((String) existing.get("description"));
+      param.setDescription(existing.description());
     }
   }
 
@@ -146,9 +157,12 @@ public class DefaultConsoleAlertRoutingApplicationService
     param.setSeverity(request.getSeverity());
     param.setReceiver(request.getReceiver());
     param.setGroupBy(request.getGroupBy());
-    param.setGroupWaitSeconds(defaultInt(request.getGroupWaitSeconds(), 0));
-    param.setGroupIntervalSeconds(defaultInt(request.getGroupIntervalSeconds(), 300));
-    param.setRepeatIntervalSeconds(defaultInt(request.getRepeatIntervalSeconds(), 3600));
+    Integer groupWaitSeconds = defaultInt(request.getGroupWaitSeconds(), 0);
+    param.setGroupWaitSeconds(groupWaitSeconds);
+    Integer groupIntervalSeconds = defaultInt(request.getGroupIntervalSeconds(), 300);
+    param.setGroupIntervalSeconds(groupIntervalSeconds);
+    Integer repeatIntervalSeconds = defaultInt(request.getRepeatIntervalSeconds(), 3600);
+    param.setRepeatIntervalSeconds(repeatIntervalSeconds);
     param.setEnabled(request.getEnabled() == null || request.getEnabled());
     param.setDescription(request.getDescription());
     param.setCreatedBy(operator);

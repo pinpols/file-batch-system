@@ -15,7 +15,6 @@ import io.github.pinpols.batch.common.enums.OutOfWindowAction;
 import io.github.pinpols.batch.common.enums.PipelineType;
 import io.github.pinpols.batch.common.enums.ScheduleType;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
-import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
@@ -43,6 +42,22 @@ import org.springframework.context.support.StaticMessageSource;
  */
 @DisplayName("配置包模板引导内容:示例 sheet、填写顺序与字段说明的防漂移校验")
 class ConfigPackageWorkbookGuidanceTest {
+
+  @Test
+  @DisplayName("Workflow 新图模板只提供可执行节点类型")
+  void shouldOfferOnlyRunnableWorkflowNodeTypes() throws Exception {
+    try (XSSFWorkbook workbook = buildTemplate()) {
+      assertDropdownValues(
+          workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
+          "node_type",
+          List.of("GATEWAY", "START", "END", "JOB", "WAIT"));
+      assertThat(rowOf(workbook.getSheet("字段说明"), "node_type").getCell(8).getStringCellValue())
+          .contains("WAIT", "TASK 为历史类型");
+      assertThat(rowOf(workbook.getSheet("字段说明"), "node_type").getCell(5).getStringCellValue())
+          .contains("JOB", "WAIT")
+          .doesNotContain("TASK");
+    }
+  }
 
   private XSSFWorkbook buildTemplate() throws Exception {
     StaticMessageSource ms = new StaticMessageSource();
@@ -104,7 +119,7 @@ class ConfigPackageWorkbookGuidanceTest {
     try (XSSFWorkbook processWb = buildSampleTemplate("PROCESS")) {
       assertThat(processWb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET))
           .isNull();
-      assertThat(processWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNotNull();
+      assertThat(processWb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertThat(processWb.getSheet(ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET))
           .isNull();
     }
@@ -119,10 +134,15 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
-  @DisplayName("完整模板路径保持原有工作簿结构和完整字段")
-  void shouldPreserveLegacyFullWorkbook_whenBuildingTemplate() throws Exception {
+  @DisplayName("新完整模板不再提供可编辑 Pipeline 定义表")
+  void shouldIncludeCurrentFullWorkbook_whenBuildingTemplate() throws Exception {
+    StaticMessageSource messages = new StaticMessageSource();
+    assertThat(ConfigPackageSampleDataFactory.sampleSheets("ALL"))
+        .hasSize(new ConfigPackageSheetSpecs(messages).build().size());
     try (XSSFWorkbook wb = buildTemplate()) {
-      assertThat(wb.getNumberOfSheets()).isEqualTo(20);
+      assertThat(wb.getNumberOfSheets()).isEqualTo(19);
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
+      assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET)).isNotNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET))
           .isNotNull();
@@ -183,10 +203,7 @@ class ConfigPackageWorkbookGuidanceTest {
           workbook.getSheet(ConfigPackageExcelValidator.CHANNEL_SHEET),
           "receipt_policy",
           DictEnum.codeList(FileReceiptPolicy.class));
-      assertDropdownValues(
-          workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET),
-          "pipeline_type",
-          DictEnum.codeList(PipelineType.class));
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_DEF_SHEET),
           "workflow_type",
@@ -194,7 +211,7 @@ class ConfigPackageWorkbookGuidanceTest {
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_NODE_SHEET),
           "node_type",
-          DictEnum.codeList(WorkflowNodeType.class));
+          List.of("GATEWAY", "START", "END", "JOB", "WAIT"));
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
           "edge_type",
@@ -219,10 +236,7 @@ class ConfigPackageWorkbookGuidanceTest {
           workbook.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET),
           "completion_deadline_severity",
           List.of("WARN", "ERROR", "CRITICAL"));
-      assertDropdownValues(
-          workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET),
-          "stage_code",
-          List.of(ConfigPackageSheetSpecs.STAGE_CODE_DROPDOWN));
+      assertThat(workbook.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
       assertDropdownValues(
           workbook.getSheet(ConfigPackageExcelValidator.JOB_SHEET),
           "enabled",
@@ -268,6 +282,8 @@ class ConfigPackageWorkbookGuidanceTest {
             "schedule_type",
             "schedule_expr",
             "depends_on_job_code",
+            "depends_on_job_codes",
+            "depends_on_biz_date_alignments",
             "calendar_code",
             "window_code",
             "default_params",
@@ -718,11 +734,11 @@ class ConfigPackageWorkbookGuidanceTest {
       // job_type 必须都是合法 JobType enum code(束类型新增/改名而示例未同步即挂)。
       Set<String> jobCodes = DictEnum.codes(JobType.class);
       assertThat(jobTypes).allMatch(jobCodes::contains);
-      // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + jobCode),不是占位。
+      // 每行的 manifest 示例必须是真实非空 .batch.json v2(含 schemaVersion + workflowCode),不是占位。
       assertThat(manifestExamples)
           .allSatisfy(m -> assertThat(m)
               .contains("batch-manifest-v2")
-              .contains("jobCode")
+              .contains("workflowCode")
               .contains("fileMapping"));
       // 导出束清单不含 requiredFiles(manifest-only 触发);导入/分发含。
       assertThat(manifestExamples.get(1)).doesNotContain("requiredFiles");
@@ -740,14 +756,16 @@ class ConfigPackageWorkbookGuidanceTest {
       Row header = sheet.getRow(1);
       assertThat(header.getCell(0).getStringCellValue()).isEqualTo("source_sheet");
       assertThat(header.getCell(4).getStringCellValue()).isEqualTo("db_fallback");
-      // 关键引用关系行必须在(job->queue / step->channel / default_params.templateCode->file_template)。
+      // 关键引用保留Job队列、通道和模板，退役的租户Pipeline不再出现在引导中。
       List<String> firstCol = new ArrayList<>();
       List<String> targets = new ArrayList<>();
       for (String[] r : ConfigPackageWorkbookSupplementWriter.DEPENDENCY_ROWS) {
         firstCol.add(r[0]);
         targets.add(r[2]);
       }
-      assertThat(firstCol).contains("job_definition", "pipeline_step_definition", "workflow_node");
+      assertThat(firstCol)
+          .contains("job_definition", "workflow_node")
+          .doesNotContain("pipeline_definition", "pipeline_step_definition");
       assertThat(targets).contains("resource_queue", "file_channel_config", "file_template_config");
     }
   }

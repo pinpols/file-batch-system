@@ -49,10 +49,12 @@ class SdkTypedParameters:
             return model_type.model_validate(payload)
         except ValidationError as e:
             # 紧凑单行,便于干净落地到 REPORT message。
-            errs = "; ".join(
-                f"{'.'.join(str(p) for p in err['loc']) or '<root>'}: {err['msg']}"
-                for err in e.errors()
-            )
+            formatted_errors: list[str] = []
+            for error in e.errors():
+                location_parts = (str(part) for part in error["loc"])
+                location = ".".join(location_parts) or "<root>"
+                formatted_errors.append(f"{location}: {error['msg']}")
+            errs = "; ".join(formatted_errors)
             raise ValueError(f"parameters do not match {model_type.__name__}: {errs}") from e
 
     @staticmethod

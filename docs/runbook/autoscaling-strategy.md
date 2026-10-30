@@ -1,6 +1,6 @@
 # 弹性伸缩策略
 
-本文讲清楚：6 个模块各自用什么扩缩机制、为什么，以及当前的设计是否合理。
+本文讲清楚各应用模块采用的扩缩机制、适用条件与运维边界。
 
 ## 一张总表
 
@@ -12,42 +12,51 @@
 | **worker-process** | **KEDA** by Kafka lag | consumer lag > 20 | `enabled: false` | SQL 加工任务,可能较长(staging publish)阈值同 import |
 | **worker-dispatch** | **KEDA** by Kafka lag | consumer lag > 10 | `enabled: false` | 单 dispatch 较重，阈值更小 |
 | **orchestrator** | **静态分片（默认）/ DYNAMIC + CPU HPA 或 KEDA Postgres backlog** | CPU % 或 Outbox 积压 | 2 副本 | 切到 `sharding.mode=dynamic` 才能安全自动扩，下文详述 |
-| **trigger** | **静态 HA 2 副本** | — | 1 副本（生产改 2） | Quartz 集群锁天然决定 |
+| **trigger** | **静态 HA 2 副本** | — | 1 副本（生产改 2） | 基线以 HA 为主；容量结合触发延迟评估 |
 
-**关键洞察**：**不是所有模块都该自动扩**。Worker / console 是纯执行/服务层，自动扩合理；orchestrator / trigger 是协调层，自动扩反而有害或无效。
+扩缩策略应按负载与协调机制选择：Worker 优先观察消费积压，Console 观察服务负载；Orchestrator 先确认分片模式，Trigger 结合触发延迟与数据库协调成本评估。
 
-## 为什么 worker 必须 KEDA 不能 CPU
+## 为什么 Worker 优先观察 Kafka 积压
 
-Worker 大部分时间**阻塞等 Kafka 消息**，CPU ≈ 0。如果用 CPU HPA：
+Worker 的 CPU 使用率不能独立代表消费积压；I/O 等待、下游限流或分区不均时，lag 可以持续增长而 CPU 仍低。只用 CPU HPA 可能出现：
 
-```
-情形：Kafka 积压 10 万任务
-  Worker 空转等消息 → CPU 低 → HPA 不扩容 → 积压继续堆
-  → 下游 SLA 违约
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  BACKLOG["任务积压上升"] --> IO["I/O 等待较多<br/>CPU 仍低"]
+  IO --> CPU["CPU HPA 未触发"]
+  CPU --> SLA["等待继续增长<br/>SLA 风险"]
 ```
 
 **KEDA by Kafka lag** 直接读 consumer group 的未消费消息数：
 
-```
-Kafka lag > 20 → KEDA 扩 Pod → 新 Pod 加入 consumer group → Kafka 自动 rebalance partition → 新 Pod 分到消息 → lag 下降
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  LAG["Kafka lag 超过阈值"] --> KEDA["KEDA 增加副本"]
+  KEDA --> GROUP["加入 consumer group"]
+  GROUP --> PART["分区重新分配"]
+  PART --> CAP["可并行分区获得消费容量"]
 ```
 
 这是**业务感知**的伸缩，不是机器指标的伸缩。
 
-## 为什么 trigger 不扩
+## Trigger 的扩容边界
 
-Trigger 跑的是 **Quartz JDBC 集群模式**：多个 Pod 的 Quartz scheduler 竞争同一把 DB 锁。
+Trigger 使用 **Quartz JDBC 集群模式**，通过数据库协调触发获取，保证同一次 fire 由一个实例取得；该次执行期间不意味着其他实例必须空转。
 
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  FIRE["同一次 Quartz fire"] --> ACQUIRE["集群协调触发获取"]
+  ACQUIRE --> OWNER["一个实例取得该 fire"]
+  OWNER --> EXEC["执行该次触发"]
+  OTHER["其他独立 fire"] --> PEER["其他实例可并行执行"]
 ```
-时刻 t：定时触发 job X
-  Pod 1 / Pod 2 / Pod 3 都尝试抢 QRTZ_LOCKS 表的锁
-  → 只有 1 个 Pod 抢到 → 执行 job X（耗时 Y 秒）
-  → 另外 2 个 Pod 空转 Y 秒
-```
 
-**扩 Pod 不加速 job 执行，只增加 DB 锁竞争**。Quartz 的并发能力在单 Pod 的 `threadPool.threadCount`（默认 10 线程），不在 Pod 数量。
+增加副本可提高可用性并分担不同 fire，但不会把同一次 fire 拆成多份执行。是否扩容应结合触发延迟、各实例线程池和数据库锁等待评估；CPU 不能单独代表调度容量。
 
-**trigger 扩副本只有 HA 冗余价值**：1 挂 1 接管。2 副本就够了，不需要 HPA。
+当前基线以静态副本提供 HA；增加副本前先验证调度积压和数据库承载，再确定是否需要自动扩缩。副本数不能替代同次触发的幂等与并发控制。
 
 ## 为什么 orchestrator 默认静态分片
 
@@ -61,10 +70,14 @@ shardTotal=2
 
 自动扩容会撞上一致性问题：
 
-```
-假设 HPA 扩 2 → 3，shardTotal 还是 2：
-  orch-2 启动 → 没活干（shardIndex=2 ≥ shardTotal=2）
-  或 orch-2 拿了 shardIndex=0 → 和 orch-0 重复处理 → 下游收双份消息
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  SCALE["副本从 2 增至 3<br/>shardTotal 仍为 2"] --> UNIQUE["新实例使用 index=2"]
+  SCALE --> DUP["新实例复用 index=0"]
+  UNIQUE --> EMPTY["索引超出范围<br/>没有有效分片"]
+  DUP --> OVERLAP["分片重叠<br/>增加重复竞争"]
+  OVERLAP --> FENCE["仍需数据库 claim / CAS<br/>与消息幂等防护"]
 ```
 
 因此 STATIC 模式只允许通过 `helm upgrade --set orchestrator.replicaCount=N` 扩缩。需要自动扩缩时，切换到下节已落地的 Redis 成员租约动态重排；模板会阻止 STATIC 与 HPA/KEDA 组合。
@@ -89,17 +102,17 @@ batch:
 
 ### 工作机制（dynamic 模式）
 
-```
-每个 orchestrator Pod：
-  Scheduled @ 5s: ZADD <release-scoped-members-key> <pod-name> <now>
-  每轮 outbox poll 前：
-    ZREMRANGEBYSCORE members 0 (now - 30s)   ← 清死成员
-    ZRANGE members 0 -1                       ← 取活成员列表
-    排序取 index；数量为 shardTotal
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  HEART["周期写入成员心跳"] --> MEMBERS["发布版本内的成员集合"]
+  POLL["每轮 Outbox poll"] --> CLEAN["清理超时成员"]
+  MEMBERS --> CLEAN
+  CLEAN --> SORT["读取并排序存活实例"]
+  SORT --> SHARD["序号为 shardIndex<br/>数量为 shardTotal"]
 ```
 
-**rebalance 触发**：任意 Pod 心跳超时（30s 未写入）或新 Pod 加入时，下一轮 poll 所有存活 Pod
-同时观察到新列表，自动重算自己的 shardIndex。
+**rebalance 触发**：成员心跳超时或新 Pod 加入后，各实例在后续 poll 中读取并重算成员视图与 shardIndex；不是跨实例同时生效的强一致屏障。重排期间仍依赖数据库 claim、CAS 和消息幂等防护。
 
 ### 切换步骤（零宕机灰度）
 
@@ -166,7 +179,7 @@ Pod 启动时向中央协调者（etcd / Redis）注册：「我活着，分配�
 |---|---|---|
 | **console-api CPU HPA** | 10/10 | 标准做法，无争议 |
 | **workers KEDA by Kafka lag** | 10/10 | 批处理 worker 的最优解 |
-| **trigger 静态 HA** | 10/10 | Quartz 天然决定，无选择 |
+| **trigger 静态 HA** | 10/10 | 静态 HA 是当前基线，扩容需结合调度容量评估 |
 | **orchestrator 静态分片** | **7-8/10** | 合理但保守 |
 
 ### 合理的理由

@@ -30,24 +30,30 @@ public class DefaultDispatchAdmissionLimiter implements DispatchAdmissionLimiter
     }
     // 先扣更细粒度的队列桶。若队列已满，不能先消耗租户令牌，否则一个热点队列会让同租户
     // 其它健康队列提前被限流。两个 Redis key 无法跨桶原子回滚；该顺序把保守误差限制在本队列内。
-    if (EmptyChecks.isNotNull(queue)
+    boolean queueRateLimitApplies = EmptyChecks.isNotNull(queue)
         && Texts.hasText(queue.queueCode())
         && EmptyChecks.isNotNull(queue.maxQps())
-        && queue.maxQps() > 0
-        && !tokenBucketRateLimiter.tryConsumePerSecond(
-            request.getTenantId(), QUEUE_ACTION_PREFIX + queue.queueCode(), queue.maxQps())) {
-      return ResourceCheck.waitForCapacity(
-          "QUEUE_DISPATCH_QPS_LIMIT", "resource queue dispatch rate exceeds maxQps");
+        && queue.maxQps() > 0;
+    if (queueRateLimitApplies) {
+      boolean queueTokenConsumed = tokenBucketRateLimiter.tryConsumePerSecond(
+          request.getTenantId(), QUEUE_ACTION_PREFIX + queue.queueCode(), queue.maxQps());
+      if (!queueTokenConsumed) {
+        return ResourceCheck.waitForCapacity(
+            "QUEUE_DISPATCH_QPS_LIMIT", "resource queue dispatch rate exceeds maxQps");
+      }
     }
     TenantQuotaPolicyEntity policy =
         configCacheService.findEnabledQuotaPolicy(request.getTenantId());
-    if (EmptyChecks.isNotNull(policy)
+    boolean tenantRateLimitApplies = EmptyChecks.isNotNull(policy)
         && EmptyChecks.isNotNull(policy.maxQpsPerTenant())
-        && policy.maxQpsPerTenant() > 0
-        && !tokenBucketRateLimiter.tryConsumePerSecond(
-            request.getTenantId(), TENANT_ACTION, policy.maxQpsPerTenant())) {
-      return ResourceCheck.waitForCapacity(
-          "TENANT_DISPATCH_QPS_LIMIT", "tenant dispatch rate exceeds maxQpsPerTenant");
+        && policy.maxQpsPerTenant() > 0;
+    if (tenantRateLimitApplies) {
+      boolean tenantTokenConsumed = tokenBucketRateLimiter.tryConsumePerSecond(
+          request.getTenantId(), TENANT_ACTION, policy.maxQpsPerTenant());
+      if (!tenantTokenConsumed) {
+        return ResourceCheck.waitForCapacity(
+            "TENANT_DISPATCH_QPS_LIMIT", "tenant dispatch rate exceeds maxQpsPerTenant");
+      }
     }
     return ResourceCheck.allow();
   }

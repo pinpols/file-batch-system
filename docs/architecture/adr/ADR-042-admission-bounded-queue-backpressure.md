@@ -1,5 +1,7 @@
 # ADR-042 · 超容准入:硬拒默认 → 有界队列 + 背压
 
+> **当前适用性（2026-10-24）**：准入按实际Job/分区及其newJobAdmission语义计量；Workflow根不创建虚拟父Job。等待与覆盖/义务、工作池容量是不同边界；不得为统一模型另造嵌套调度或扩容编排。 原决策与历史阶段记录保留。
+
 - **状态**:Accepted(路线图 Phase 2.3)
 - **日期**:2026-06-20
 - **关联**:ADR-003(T1/T2 launch 拆分)、ADR-010(trigger 异步解耦)、ADR-027(范围红线:挑 worker 不挑机器)、V89(`tenant_quota_policy.exceeded_strategy`)
@@ -9,7 +11,7 @@
 判定提问:**「这个调度策略是在挑 worker / 排队,还是在挑机器 / 扩容?」** 排队 / 准入 → 属本 ADR;扩容 / 挑节点 → 不属。
 
 **做**:
-- ✅ 超租户配额时**默认 defer(有界队列 + 背压)而非硬拒**:job_instance 留 WAITING,由既有 `WaitingPartitionDispatchScheduler` 周期重评,容量释放后 re-dispatch。
+- ✅ 超租户配额时**默认 defer(有界队列 + 背压)而非硬拒**:job_instance 留 WAITING,由既有 `WaitingPartitionDispatchScheduler` 周期重评,容量释放后 re-dispatch。 扫描在各批间按分片 ID 轮转，末尾回绕以重试早期候选；扫描水位、每轮固定的分片 ID 上界及执行模式存于全局系统表 `waiting_partition_scan_cursor`，按版本条件更新并跨实例共享；同一轮先评估正式分片，再评估演练分片，新增分片进入后续轮次。演练阶段开始后新出现的正式候选在后续轮次处理，不抢占已派发任务。水位推进后进程中断时，该批在后续回绕中重试。
 - ✅ 复用既有 `QuotaExceededStrategy`(V89)三态(`REJECT`/`QUEUE_DEFER`/`DEGRADE_PRIORITY`)+ 既有 outbox / WAITING 机制,**不新增表、不新增第 4 张同义事件表**。
 - ✅ 平台默认可配:`batch.resource-scheduler.default-exceeded-strategy`(默认 `QUEUE_DEFER`)。租户显式配了策略以租户为准。
 

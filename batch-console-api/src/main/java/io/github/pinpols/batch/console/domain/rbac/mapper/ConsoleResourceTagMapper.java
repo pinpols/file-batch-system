@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleResourceTagUpsertParam;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
@@ -32,14 +33,20 @@ public interface ConsoleResourceTagMapper {
       @Param("resourceCode") String resourceCode,
       @Param("tagKey") String tagKey);
 
-  /** Upsert：unique key 命中则更新 tag_value + created_by + created_at。 */
-  void upsert(
+  /** 串行化标签关联与同一资源的删除或标识变更操作。 */
+  Long lockResourceTagIdentity(
       @Param("tenantId") String tenantId,
       @Param("resourceType") String resourceType,
-      @Param("resourceCode") String resourceCode,
-      @Param("tagKey") String tagKey,
-      @Param("tagValue") String tagValue,
-      @Param("operator") String operator);
+      @Param("resourceCode") String resourceCode);
+
+  /** 返回匹配的租户资源；多态目标不存在时返回 null。 */
+  Long selectResourceTagTarget(
+      @Param("tenantId") String tenantId,
+      @Param("resourceType") String resourceType,
+      @Param("resourceCode") String resourceCode);
+
+  /** Upsert：unique key 命中则更新 tag_value + created_by + created_at。 */
+  void upsert(ConsoleResourceTagUpsertParam parameters);
 
   void deleteByResourceAndKey(
       @Param("tenantId") String tenantId,

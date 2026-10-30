@@ -29,7 +29,7 @@ public final class RlsTenantSessionSupport {
   /**
    * tenantId 形态白名单。
    *
-   * <p>P2-2(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):虽然 {@code
+   * <p>P2-2(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):虽然 {@code
    * set_config('app.tenant_id', ?, true)} 已是 PreparedStatement 绑定参数(SQL 注入路径关闭),仍保留形态白名单 做"纵深防御 +
    * 类型守护"——RLS 策略期望 tenant_id 是 ASCII 短串,任何 Unicode escape / 控制字符进 GUC 会让 RLS policy
    * 比较语义异常(NULL/类型转换/隐式 collation)。
@@ -60,7 +60,8 @@ public final class RlsTenantSessionSupport {
     }
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
-    try (PreparedStatement ps = conn.prepareStatement("SELECT set_config(?, ?, true)")) {
+    String setTenantSql = "SELECT set_config(?, ?, true)";
+    try (PreparedStatement ps = conn.prepareStatement(setTenantSql)) {
       // P2-2(2026-06-03):改 PreparedStatement,GUC 名与 tenantId 均走 bind 参数,
       // 关闭字符串拼接路径(任何 escape 漏洞 / Unicode 注入都不再相关)。
       // set_config(.,.,true) 等价于 SET LOCAL,事务结束(COMMIT/ROLLBACK)自动 reset。
@@ -85,7 +86,8 @@ public final class RlsTenantSessionSupport {
     Connection conn = DataSourceUtils.getConnection(dataSource);
     boolean releaseAfter = !DataSourceUtils.isConnectionTransactional(conn, dataSource);
     try (Statement stmt = conn.createStatement()) {
-      stmt.execute("RESET " + SESSION_VAR_NAME);
+      String resetTenantSql = "RESET " + SESSION_VAR_NAME;
+      stmt.execute(resetTenantSql);
     } catch (SQLException e) {
       throw new IllegalStateException("RLS RESET " + SESSION_VAR_NAME + " failed", e);
     } finally {

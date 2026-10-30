@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,32 +12,38 @@ import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappi
 import io.github.pinpols.batch.console.domain.file.application.contract.request.FileTemplateUpdateRequest;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("文件模板应用服务: 映射草稿生成、更新与插件引用落库")
+@ExtendWith(MockitoExtension.class)
 class DefaultConsoleFileTemplateApplicationServiceTest {
 
-  private final FileTemplateConfigMapper mapper = mock(FileTemplateConfigMapper.class);
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
-  private final DefaultConsoleFileTemplateApplicationService service =
-      new DefaultConsoleFileTemplateApplicationService(
-          mapper, tenantGuard, metadataResolver, new ObjectMapper());
+  @Mock
+  private FileTemplateConfigMapper mapper;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
+  private DefaultConsoleFileTemplateApplicationService service;
 
   @BeforeEach
   void setUp() {
-    when(metadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
+    service = new DefaultConsoleFileTemplateApplicationService(
+        mapper, tenantGuard, metadataResolver, new ObjectMapper());
   }
 
   @Test
@@ -75,34 +80,38 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   @Test
   @DisplayName("更新模板时持久化加载与导出插件引用")
   void update_shouldPersistPluginRefs() {
+    when(metadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(mapper.selectById("t1", 1L))
-        .thenReturn(Map.ofEntries(
-            Map.entry("template_code", "IMP-ORDER"),
-            Map.entry("version", 1),
-            Map.entry("template_name", "orders"),
-            Map.entry("template_type", "IMPORT"),
-            Map.entry("biz_type", "demo"),
-            Map.entry("file_format_type", "DELIMITED"),
-            Map.entry("charset", "UTF-8"),
-            Map.entry("target_charset", "UTF-8"),
-            Map.entry("with_bom", false),
-            Map.entry("record_length", 0),
-            Map.entry("header_rows", 1),
-            Map.entry("footer_rows", 0),
-            Map.entry("checksum_type", "NONE"),
-            Map.entry("compress_type", "NONE"),
-            Map.entry("encrypt_type", "NONE"),
-            Map.entry("streaming_enabled", true),
-            Map.entry("page_size", 1000),
-            Map.entry("fetch_size", 1000),
-            Map.entry("chunk_size", 500),
-            Map.entry("preview_masking_enabled", false),
-            Map.entry("error_line_masking_enabled", false),
-            Map.entry("log_masking_enabled", false),
-            Map.entry("content_encryption_enabled", false),
-            Map.entry("download_requires_approval", false),
-            Map.entry("enabled", true)));
+        .thenReturn(FileTemplateConfigQueryView.builder()
+            .templateCode("IMP-ORDER")
+            .version(1)
+            .templateName("orders")
+            .templateType("IMPORT")
+            .bizType("demo")
+            .fileFormatType("DELIMITED")
+            .charset("UTF-8")
+            .targetCharset("UTF-8")
+            .withBom(false)
+            .recordLength(0)
+            .headerRows(1)
+            .footerRows(0)
+            .checksumType("NONE")
+            .compressType("NONE")
+            .encryptType("NONE")
+            .streamingEnabled(true)
+            .pageSize(1000)
+            .fetchSize(1000)
+            .chunkSize(500)
+            .previewMaskingEnabled(false)
+            .errorLineMaskingEnabled(false)
+            .logMaskingEnabled(false)
+            .contentEncryptionEnabled(false)
+            .downloadRequiresApproval(false)
+            .enabled(true)
+            .build());
     FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
     request.setTenantId("t1");
     request.setLoadTargetRef("jdbc_mapped");
@@ -121,16 +130,20 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   @Test
   @DisplayName("更新时忽略传入版本号并就地更新既有行")
   void update_shouldIgnoreIncomingVersionAndPinToExistingRow() {
+    when(metadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "tester", "idem-1", "127.0.0.1"));
     // #9 (adv-review 2026-07-13):update 携带新 version 不得改 upsert 的 version 键,
     // 否则 on conflict(tenant,code,version)不命中 path id 的现有行 → INSERT 幽灵行(新 id),
     // 而回读仍按旧 id 取回陈旧行。此处断言 upsert 用的是现有行的 version(1),回读按 path id。
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
     when(mapper.selectById("t1", 1L))
-        .thenReturn(Map.ofEntries(
-            Map.entry("template_code", "IMP-ORDER"),
-            Map.entry("version", 1),
-            Map.entry("template_name", "orders"),
-            Map.entry("enabled", true)));
+        .thenReturn(FileTemplateConfigQueryView.builder()
+            .templateCode("IMP-ORDER")
+            .version(1)
+            .templateName("orders")
+            .enabled(true)
+            .build());
     FileTemplateUpdateRequest request = new FileTemplateUpdateRequest();
     request.setTenantId("t1");
     request.setVersion(9);

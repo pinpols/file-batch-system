@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Pipeline 摘要键契约门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_pipeline_summary_keys.py。
 """check-pipeline-summary-keys.py 的契约规则回归测试。
 
 重点是三件「编译通过、CI 全绿、运行时静默」的事:
@@ -17,6 +19,9 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+import subprocess
+import tempfile
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-pipeline-summary-keys.py"
@@ -26,6 +31,32 @@ MODULE = importlib.util.module_from_spec(SPEC)
 # dataclass 装饰器在定义 Violation / KeyTable 时依赖 cls.__module__ 能在 sys.modules 中解析。
 sys.modules["check_pipeline_summary_keys"] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+class WorktreeSourceBoundaryTest(unittest.TestCase):
+    def test_ignored_snapshots_do_not_expand_the_production_contract(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            (root / ".gitignore").write_text("tmp/\n")
+            paths = ["batch-worker/core/src/main/java/Probe.java", "tmp/old/batch-worker/core/src/main/java/Probe.java"]
+            for name in paths:
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("class Probe {}")
+            with patch.object(MODULE, "ROOT", root):
+                self.assertEqual([root / paths[0]], MODULE.java_sources())
+
+    def test_untracked_production_is_included_and_test_sources_are_excluded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            for name in ("batch-common/src/main/java/Probe.java", "batch-common/src/test/java/ProbeTest.java"):
+                target = root / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text("class Probe {}")
+            with patch.object(MODULE, "ROOT", root):
+                self.assertEqual([root / "batch-common/src/main/java/Probe.java"], MODULE.java_sources())
 
 
 # 逐字摘自 ../batch-console/src/utils/pipelineStepSummary.ts(StageCountKey / CountKeyFallback 两段声明)。
@@ -167,6 +198,77 @@ public class DemoExecutor extends AbstractStageExecutor<Ctx, Res> {
 
 class LiteralConstantMixingTest(unittest.TestCase):
     """R2:同一文件内同一 key 不得既写字面量又写常量。"""
+
+    def test_same_named_enum_is_not_a_key_reference(self) -> None:
+        fixture = '''
+enum Status { HIGH_WATER_MARK_OUT }
+void read(@Param("highWaterMarkOut") String watermark) {}
+'''
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_status_string_is_not_a_bare_key_reference(self) -> None:
+        fixture = 'String status = "HIGH_WATER_MARK_OUT"; attrs.get("highWaterMarkOut");'
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_qualified_name_inside_string_is_not_a_reference(self) -> None:
+        fixture = 'String hint = "PipelineRuntimeKeys.HIGH_WATER_MARK_OUT"; attrs.get("highWaterMarkOut");'
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_qualified_name_inside_text_block_is_not_a_reference(self) -> None:
+        fixture = '''
+String hint = """
+    "PipelineRuntimeKeys.HIGH_WATER_MARK_OUT"
+    """;
+attrs.get("highWaterMarkOut");
+'''
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_explicit_static_import_still_flags_mixed_literal(self) -> None:
+        fixture = '''
+import static example.PipelineRuntimeKeys.HIGH_WATER_MARK_OUT;
+attrs.get(HIGH_WATER_MARK_OUT);
+attrs.put("highWaterMarkOut", value);
+'''
+        violations = mixing_violations(fixture)
+        self.assertEqual([v.rule for v in violations], [MODULE.KEY_LITERAL_AND_CONSTANT])
+        self.assertIn("首次引用于第 3 行", violations[0].message)
+
+    def test_wildcard_static_import_still_flags_mixed_literal(self) -> None:
+        fixture = '''
+import static example.PipelineRuntimeKeys.*;
+attrs.get(HIGH_WATER_MARK_OUT);
+attrs.put("highWaterMarkOut", value);
+'''
+        self.assertEqual(
+            [v.rule for v in mixing_violations(fixture)], [MODULE.KEY_LITERAL_AND_CONSTANT]
+        )
+
+    def test_same_named_static_import_from_other_type_is_not_a_key(self) -> None:
+        fixture = '''
+import static example.Status.HIGH_WATER_MARK_OUT;
+Status status = HIGH_WATER_MARK_OUT;
+attrs.get("highWaterMarkOut");
+'''
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_unused_static_import_does_not_count_as_a_read(self) -> None:
+        fixture = '''
+import static example.PipelineRuntimeKeys.HIGH_WATER_MARK_OUT;
+attrs.get("highWaterMarkOut");
+'''
+        self.assertEqual(mixing_violations(fixture), [])
+
+    def test_key_owner_can_reference_its_own_bare_constant(self) -> None:
+        fixture = '''
+class PipelineRuntimeKeys {
+  static final String HIGH_WATER_MARK_OUT = "highWaterMarkOut";
+  Object read() { return attrs.get(HIGH_WATER_MARK_OUT); }
+  void write() { attrs.put("highWaterMarkOut", value); }
+}
+'''
+        self.assertEqual(
+            [v.rule for v in mixing_violations(fixture)], [MODULE.KEY_LITERAL_AND_CONSTANT]
+        )
 
     def test_read_constant_write_literal_is_flagged(self) -> None:
         fixture = (

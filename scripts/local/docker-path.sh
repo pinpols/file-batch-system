@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：供 start-all.sh / stop-all.sh source:在 PATH 中未找到 docker 时,补齐常见安装路径。
+# 用法：由调用脚本 source scripts/local/docker-path.sh 后使用公共变量或函数。
 # 供 start-all.sh / stop-all.sh source:在 PATH 中未找到 docker 时,补齐常见安装路径。
 #
 # Docker 在各平台的标准 / 常见路径(用作 PATH fallback 查找次序):
@@ -9,13 +11,13 @@
 #     /run/current-system/sw/bin/docker            NixOS
 #     ${HOME}/.nix-profile/bin/docker              Nix 单用户
 #   ── macOS ───────────────────────────────────────────────
-#     /usr/local/bin/docker                        Intel Mac Homebrew / Docker Desktop symlink
-#     /opt/homebrew/bin/docker                     Apple Silicon Homebrew
+# /usr/local/bin/docker：Intel Mac 的 Homebrew 或 Docker Desktop 软链。
+# /opt/homebrew/bin/docker：Apple Silicon 的 Homebrew 安装路径。
 #     /Applications/Docker.app/Contents/Resources/bin/docker   Docker Desktop 自带 (macOS)
 #     ${HOME}/.rd/bin/docker                       Rancher Desktop
 #     ${HOME}/.docker/bin/docker                   Docker CLI plugin 路径
 #   ── Windows(WSL2 走 Linux 路径;Git Bash 例外) ──────────
-#     /c/Program Files/Docker/Docker/resources/bin/docker      Docker Desktop on Windows (Git Bash)
+# /c/Program Files/Docker/Docker/resources/bin/docker：Windows Git Bash 的 Docker Desktop 路径。
 #     /mnt/c/Program Files/Docker/Docker/resources/bin/docker  WSL2 访问 host docker.exe(不推荐,慢)
 #
 # 注:WSL2 推荐启用 Docker Desktop "Use WSL 2 based engine",linux 侧自然 PATH 就有 docker。

@@ -1,9 +1,13 @@
+# 用途：回归验证直接配置 Key 读取快照。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_direct_config_key_access.py。
 from __future__ import annotations
 
 import importlib.util
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-direct-config-key-access.py"
@@ -13,6 +17,31 @@ MODULE = importlib.util.module_from_spec(SPEC)
 # dataclass 装饰器在定义 Finding 时依赖 cls.__module__ 能在 sys.modules 中解析。
 sys.modules["check_direct_config_key_access"] = MODULE
 SPEC.loader.exec_module(MODULE)
+
+
+class SourceEnumerationTest(unittest.TestCase):
+    def test_excludes_log_snapshots_but_keeps_project_sources(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "batch-common/src/main/java/example/Current.java"
+            snapshot = root / "logs/verification/before/src/main/java/example/Old.java"
+            test_source = root / "batch-common/src/test/java/example/CurrentTest.java"
+            test_snapshot = root / "logs/verification/before/src/test/java/example/OldTest.java"
+            for path in (source, snapshot, test_source, test_snapshot):
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(
+                    'class Example { Object x = env.getProperty("batch.new.flag"); }',
+                    encoding="utf-8",
+                )
+            with patch.object(MODULE, "ROOT", root):
+                self.assertEqual(MODULE.production_java_files(), [source])
+                self.assertEqual(MODULE.test_java_files(), [test_source])
+                findings = MODULE.scan()
+                self.assertEqual(
+                    [finding.path for finding in findings],
+                    ["batch-common/src/main/java/example/Current.java"],
+                )
+                self.assertEqual([finding.key for finding in findings], ["batch.new.flag"])
 
 
 class StripCommentsTest(unittest.TestCase):

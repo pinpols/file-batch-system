@@ -84,8 +84,14 @@ public final class JdbcSdkCheckpoint implements SdkCheckpoint {
         if (!rs.next()) {
           return Optional.empty();
         }
-        return Optional.of(new SdkCheckpointState(
-            readBreakPosition(rs.getString(1)), rs.getLong(2), rs.getLong(3), rs.getBoolean(4)));
+        String breakPositionJson = rs.getString(1);
+        Map<String, Object> breakPosition = readBreakPosition(breakPositionJson);
+        long succeedCount = rs.getLong(2);
+        long failCount = rs.getLong(3);
+        boolean completed = rs.getBoolean(4);
+        SdkCheckpointState checkpointState =
+            new SdkCheckpointState(breakPosition, succeedCount, failCount, completed);
+        return Optional.of(checkpointState);
       }
     } catch (Exception e) {
       throw new IllegalStateException("checkpoint load failed for taskId=" + taskId, e);
@@ -122,7 +128,9 @@ public final class JdbcSdkCheckpoint implements SdkCheckpoint {
   public void save(Connection connection, String taskId, SdkCheckpointState state) {
     try (PreparedStatement ps = connection.prepareStatement(UPSERT_SQL)) {
       ps.setString(1, taskId);
-      ps.setString(2, objectMapper.writeValueAsString(state.breakPosition()));
+      Map<String, Object> breakPosition = state.breakPosition();
+      String breakPositionJson = objectMapper.writeValueAsString(breakPosition);
+      ps.setString(2, breakPositionJson);
       ps.setLong(3, state.succeedCount());
       ps.setLong(4, state.failCount());
       ps.setBoolean(5, state.completed());

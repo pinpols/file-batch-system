@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：基础设施治理 profile 应用入口。默认只预览；可选择下发 Kafka topic 与 MinIO lifecycle。
+# 用法：在仓库根目录执行 bash scripts/ops/apply-infra-governance.sh；参数与前置环境见下方说明及所属 README。
 # 基础设施治理 profile 应用入口。默认只预览；可选择下发 Kafka topic 与 MinIO lifecycle。
 set -euo pipefail
 

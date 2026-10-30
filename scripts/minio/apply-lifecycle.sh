@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：对象存储 lifecycle 下发脚本。默认只预览；生产 apply 必须显式确认。
+# 用法：在仓库根目录执行 bash scripts/minio/apply-lifecycle.sh；参数与前置环境见下方说明及所属 README。
 # 对象存储 lifecycle 下发脚本。默认只预览；生产 apply 必须显式确认。
 set -eu
 

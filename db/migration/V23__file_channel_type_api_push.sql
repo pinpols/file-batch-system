@@ -1,7 +1,7 @@
 -- =========================================================
--- V22 - Allow API_PUSH channel type
+-- V23：允许通道类型使用 API_PUSH。
 -- 说明：
--- 1) Extend file_channel_config to support HTTP push delivery.
+-- 1) 扩展 file_channel_config，以支持 HTTP 推送投递。
 -- 2) 推送认证请求头和端点配置继续保存在 config_json 中。
 -- =========================================================
 

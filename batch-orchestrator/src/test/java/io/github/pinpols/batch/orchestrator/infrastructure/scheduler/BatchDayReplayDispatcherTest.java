@@ -19,6 +19,7 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
+import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
@@ -72,6 +73,7 @@ class BatchDayReplayDispatcherTest {
         entryMapper,
         new BatchDayReplayEntryExecutor(
             entryMapper, compensationCommandMapper, compensationService, dateTimeSupport),
+        mock(BatchDayReplayTerminalReconciler.class),
         properties,
         gracefulShutdown);
   }
@@ -130,7 +132,9 @@ class BatchDayReplayDispatcherTest {
   @DisplayName("全失败范围的会话逐条派发待处理条目,并透传会话的结果策略")
   void shouldDispatchEveryPendingEntry_whenSessionScopeIsAllFailed() {
     BatchDayReplaySessionEntity session =
-        sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION");
+        sessionAt(8L, "ALL_FAILED", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
+            .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
+            .build();
     when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
     BatchDayReplayEntryEntity e1 = BatchDayReplayEntryEntity.builder()
         .id(1L)
@@ -159,6 +163,8 @@ class BatchDayReplayDispatcherTest {
     verify(compensationService, times(2)).submit(captor.capture());
     assertThat(captor.getAllValues())
         .allSatisfy(cmd -> assertThat(cmd.replaySessionId()).isEqualTo(8L));
+    assertThat(captor.getAllValues())
+        .allSatisfy(cmd -> assertThat(cmd.batchNo()).isNull());
     assertThat(captor.getAllValues())
         .allSatisfy(cmd ->
             assertThat(cmd.resultPolicy()).isEqualTo("CREATE_NEW_VERSION")); // 透传 session policy
@@ -225,6 +231,38 @@ class BatchDayReplayDispatcherTest {
     assertThat(command.configVersion()).isEqualTo(12);
     assertThat(command.launchParams()).containsEntry("region", "cn");
     assertThat(command.replayEntryId()).isEqualTo(3L);
+    assertThat(command.batchNo()).isEqualTo("dry-run-session-10-entry-3");
+  }
+
+  @Test
+  @DisplayName("无源实例的计划回放继续使用条目级合成批次号")
+  void shouldKeepSyntheticBatchNo_whenReplayingSchedulePlanWithoutSourceInstance() {
+    BatchDayReplaySessionEntity session =
+        sessionAt(11L, "ALL", "RUNNING", "CREATE_NEW_VERSION").toBuilder()
+            .executionMode(BatchDayReplayExecutionMode.REPLAY.code())
+            .candidateSource(BatchDayReplayCandidateSource.SCHEDULE_PLAN.code())
+            .build();
+    when(sessionMapper.selectByStatus("RUNNING", 10)).thenReturn(List.of(session));
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(4L)
+        .sessionId(11L)
+        .tenantId("t1")
+        .jobCode("JOB_PLAN")
+        .planSnapshot("{\"jobDefinitionVersion\":12,\"defaultParams\":{\"region\":\"cn\"}}")
+        .status("PENDING")
+        .build();
+    when(entryMapper.selectBySessionAndStatus(11L, "t1", "PENDING", 20)).thenReturn(List.of(entry));
+    when(entryMapper.claimPending(eq(4L), eq("t1"), eq(11L), any())).thenReturn(1);
+    when(compensationService.submit(any(CompensationSubmitCommand.class))).thenReturn("CMD-PLAN");
+
+    dispatcher.scheduledDispatch();
+
+    ArgumentCaptor<CompensationSubmitCommand> captor =
+        ArgumentCaptor.forClass(CompensationSubmitCommand.class);
+    verify(compensationService).submit(captor.capture());
+    CompensationSubmitCommand command = captor.getValue();
+    assertThat(command.dryRun()).isFalse();
+    assertThat(command.batchNo()).isEqualTo("dry-run-session-11-entry-4");
   }
 
   @Test

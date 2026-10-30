@@ -1,19 +1,27 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.AlertFingerprints;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.LinkedHashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * Alertmanager 出口投递编排:接住 AM webhook → 按 {@code receiver} 路由到 {@code notification_channel} → 复用既有多渠道
@@ -32,8 +40,6 @@ import org.springframework.stereotype.Service;
 public class AlertmanagerNotifyService {
 
   private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
-  private static final String COL_CHANNEL_TYPE = "channel_type";
-  private static final String COL_CONFIG_JSON = "config_json";
   private static final String EVENT_TYPE = "ALERTMANAGER";
 
   /** 缺渠道丢弃告警的计数器名(供 Prometheus 对"关于告警的告警"再告警)。 */
@@ -48,10 +54,22 @@ public class AlertmanagerNotifyService {
   private final WebhookDispatcher webhookDispatcher;
   private final AlertmanagerAlertRenderer renderer;
   private final MeterRegistry meterRegistry;
+  private final AlertNotificationReceiptService receiptService;
 
   /** 投递结果(供接收端回执;delivered=false 且 status=SKIPPED 表示无对应渠道)。 */
   public record AmNotifyOutcome(
-      String receiver, String channelCode, boolean delivered, String status, String detail) {}
+      String receiver, String channelCode, boolean delivered, String status, String detail) {
+    private static final String DISABLED_STATUS = "DISABLED";
+
+    /** 主动禁用是已接收但不发送, 不记送达也不要求上游重试。 */
+    public boolean intentionallyDisabled() {
+      return DISABLED_STATUS.equals(status);
+    }
+
+    public static AmNotifyOutcome disabled(String receiver, String channelCode) {
+      return new AmNotifyOutcome(receiver, channelCode, false, DISABLED_STATUS, "channel disabled");
+    }
+  }
 
   /** AM alert 携带租户维度的 label 名(见迁移方案 §4:AM 单实例靠 label 携带租户)。 */
   private static final String LABEL_TENANT = "tenant";
@@ -60,7 +78,14 @@ public class AlertmanagerNotifyService {
   public AmNotifyOutcome deliver(String receiver, AlertmanagerWebhookPayload payload) {
     String tenantId = resolveTenant(payload);
     String channelCode = receiver;
-    Map<String, Object> channel = channelMapper.selectByCode(tenantId, channelCode);
+    for (AlertmanagerAlert alert : payload.safeAlerts()) {
+      String alertTenant = alert.label(LABEL_TENANT);
+      if (hasText(alertTenant) && !tenantId.equals(alertTenant.trim())) {
+        return new AmNotifyOutcome(
+            receiver, channelCode, false, "FAILED", "mixed tenant alert group");
+      }
+    }
+    NotificationChannelRow channel = channelMapper.selectByCode(tenantId, channelCode);
     if (channel == null) {
       // 固定标识符 am_notify_skipped 便于日志告警规则反查;计数器供 Prometheus 再告警。
       // 告警系统最不该有的失败:告警渠道没预建 → 告警静默蒸发。运维须为每个 receiver 预建同名渠道。
@@ -73,8 +98,50 @@ public class AlertmanagerNotifyService {
           receiver, channelCode, false, "SKIPPED", "no channel configured for receiver");
     }
 
-    String channelType = str(channel, COL_CHANNEL_TYPE);
-    String configJson = str(channel, COL_CONFIG_JSON);
+    if (!Boolean.TRUE.equals(channel.enabled())) {
+      log.debug(
+          "am_notify_disabled receiver={} tenantId={}",
+          LogSanitizer.value(receiver),
+          LogSanitizer.value(tenantId));
+      return AmNotifyOutcome.disabled(receiver, channelCode);
+    }
+
+    int batchSize = Math.max(1, properties.getMaxAlerts());
+    List<AlertmanagerAlert> alerts = payload.safeAlerts();
+    if (EmptyChecks.isEmpty(alerts)) {
+      return deliverBatch(tenantId, receiver, channel, payload);
+    }
+    for (int offset = 0; offset < alerts.size(); ) {
+      int end = offset + Math.min(batchSize, alerts.size() - offset);
+      List<AlertmanagerAlert> items = alerts.subList(offset, end);
+      AlertmanagerWebhookPayload batch = new AlertmanagerWebhookPayload(
+          payload.version(),
+          payload.groupKey(),
+          payload.truncatedAlerts(),
+          payload.status(),
+          payload.receiver(),
+          payload.groupLabels(),
+          payload.commonLabels(),
+          payload.commonAnnotations(),
+          payload.externalURL(),
+          items);
+      AmNotifyOutcome outcome = deliverBatch(tenantId, receiver, channel, batch);
+      if (!outcome.delivered()) {
+        return outcome;
+      }
+      offset = end;
+    }
+    return new AmNotifyOutcome(receiver, channelCode, true, "SUCCESS", null);
+  }
+
+  private AmNotifyOutcome deliverBatch(
+      String tenantId,
+      String receiver,
+      NotificationChannelRow channel,
+      AlertmanagerWebhookPayload payload) {
+    String channelCode = receiver;
+    String channelType = channel.channelType();
+    String configJson = channel.configJson();
 
     RenderedAlertNotification rendered = renderer.render(payload, properties.getMaxAlerts());
     String payloadJson = JsonUtils.toJson(rendered.structured());
@@ -85,16 +152,29 @@ public class AlertmanagerNotifyService {
         tenantId,
         EVENT_TYPE,
         "alertmanager",
-        payload.groupKey(),
+        notificationCursor(tenantId, receiver, payload),
         BatchDateTimeSupport.utcNow(),
         rendered.structured());
 
     WebhookDeliveryResult result =
         deliver(tenantId, channelCode, channelType, configJson, eventPayload, payloadJson);
+    String safeErrorSummary = safeFailureText(result.errorSummary());
 
-    writeDeliveryLog(tenantId, channelCode, payloadJson, result);
+    writeDeliveryLog(tenantId, channelCode, payloadJson, result, safeErrorSummary);
 
     if (result.success()) {
+      try {
+        receiptService.recordDelivered(tenantId, receiver, payload);
+      } catch (RuntimeException failure) {
+        meterRegistry.counter(METRIC_FAILED, "receiver", receiver).increment();
+        log.warn(
+            "AM notify receipt persistence failed: receiver={} tenantId={} cause={}",
+            LogSanitizer.value(receiver),
+            LogSanitizer.value(tenantId),
+            safeFailureText(SwallowedExceptionLogger.summary(failure)));
+        return new AmNotifyOutcome(
+            receiver, channelCode, false, "FAILED", "notification receipt persistence failed");
+      }
       log.info(
           "AM notify delivered: receiver={} channel={} alertCount={}",
           LogSanitizer.value(receiver),
@@ -107,9 +187,31 @@ public class AlertmanagerNotifyService {
         "AM notify delivery failed: receiver={} channel={} error={}",
         LogSanitizer.value(receiver),
         LogSanitizer.value(channelCode),
-        result.errorSummary());
-    return new AmNotifyOutcome(receiver, channelCode, false, "FAILED", result.errorSummary());
+        safeErrorSummary);
+    return new AmNotifyOutcome(receiver, channelCode, false, "FAILED", safeErrorSummary);
   }
+
+  /** 通知重试保持身份；不同实体集合及发生/恢复阶段使用不同身份。 */
+  private String notificationCursor(
+      String tenantId, String receiver, AlertmanagerWebhookPayload payload) {
+    List<String> identities = new ArrayList<>();
+    for (AlertmanagerAlert alert : payload.safeAlerts()) {
+      String fingerprint = alert.label("fingerprint");
+      if (EmptyChecks.isNull(fingerprint) || EmptyChecks.isBlank(fingerprint)) {
+        fingerprint = alert.fingerprint();
+      }
+      NotificationIdentity identity =
+          new NotificationIdentity(fingerprint, alert.status(), alert.startsAt());
+      String encodedIdentity = JsonUtils.toJson(identity);
+      identities.add(encodedIdentity);
+    }
+    identities.sort(String::compareTo);
+    String identityJson = JsonUtils.toJson(identities);
+    String resource = receiver + ":" + payload.groupKey() + ":" + identityJson;
+    return AlertFingerprints.build(tenantId, EVENT_TYPE, resource);
+  }
+
+  private record NotificationIdentity(String fingerprint, String status, String startsAt) {}
 
   /**
    * 按 AM payload 的 {@code tenant} label 反查租户(迁移方案 §4/§7 硬前置):AM 单实例全局,租户维度只能靠 label 携带。
@@ -138,11 +240,6 @@ public class AlertmanagerNotifyService {
     return value != null && !value.isBlank();
   }
 
-  private static String str(Map<String, Object> map, String key) {
-    Object value = map == null ? null : map.get(key);
-    return value == null ? null : value.toString();
-  }
-
   private WebhookDeliveryResult deliver(
       String tenantId,
       String channelCode,
@@ -165,23 +262,38 @@ public class AlertmanagerNotifyService {
   }
 
   private void writeDeliveryLog(
-      String tenantId, String channelCode, String payloadJson, WebhookDeliveryResult result) {
+      String tenantId,
+      String channelCode,
+      String payloadJson,
+      WebhookDeliveryResult result,
+      String safeErrorSummary) {
     try {
-      Map<String, Object> row = new LinkedHashMap<>();
-      row.put("tenantId", tenantId);
-      row.put("ruleId", 0);
-      row.put("channelCode", channelCode);
-      row.put("eventType", EVENT_TYPE);
-      row.put("alertEventId", null);
-      row.put("payloadJson", payloadJson);
-      row.put("deliveryStatus", result.success() ? "SUCCESS" : "FAILED");
-      row.put("errorMessage", result.errorSummary());
-      row.put("attempt", 1);
+      NotificationDeliveryLogInsertParam row = NotificationDeliveryLogInsertParam.builder()
+          .tenantId(tenantId)
+          .ruleId(0L)
+          .channelCode(channelCode)
+          .eventType(EVENT_TYPE)
+          .alertEventId(null)
+          .payloadJson(payloadJson)
+          .deliveryStatus(result.success() ? "SUCCESS" : "FAILED")
+          .errorMessage(safeErrorSummary)
+          .attempt(1)
+          .build();
       deliveryLogMapper.insert(row);
     } catch (RuntimeException ex) {
       // 日志写入是 off 关键路径的审计动作,失败只 warn,不影响回执 AM。
       log.warn(
-          "AM notify delivery log persist failed: channel={}", LogSanitizer.value(channelCode), ex);
+          "AM notify delivery log persist failed: channel={} cause={}",
+          LogSanitizer.value(channelCode),
+          safeFailureText(SwallowedExceptionLogger.summary(ex)));
     }
+  }
+
+  private static String safeFailureText(String value) {
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
+    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
   }
 }

@@ -197,3 +197,25 @@ GenerateStep 循环 `loadDetailPage`(每页 1000 行)→ 增量写出格式 → 
 - MinIO 容器内 `mc`,alias `local`,bucket `batch-dev`
 - 关键代码:`PreprocessStep.streamObjectToSpoolAndReturn` / `LoadStep.executeStreaming`(import);`SqlTemplateExportDataPlugin.loadDetailPage` + `GenerateStep`(export)
 - 配置开关:`batch.worker.import.max-object-bytes`(默认 512MiB,仅约束**回退 byte[] 路径**;流式路径不受限,仅受 /tmp 磁盘)
+
+## 历史测量明细承接（原记录 2026-06-06 至 2026-06-08）
+
+以下表格来自原单机调优手册的当时记录，保留 trace、任务、数据量与结果便于追溯；本轮没有重跑。它只证明当时的本地环境，不能作为当前实现、部署参数或生产容量承诺。未运行和待系统复验项保持原标记。
+
+| 类型 | 报告 / Trace | 覆盖内容 | 结果 |
+|---|---|---|---|
+| 导入 micro benchmark | 原手册 §1.6 / `scripts/local/import-copy-worth-benchmark.sh` | batch UPSERT vs COPY stage+merge vs direct replace COPY | COPY+UPSERT merge 主路径收益有限;direct replace COPY 约 `1.50×` |
+| 导入 1000w 端到端报告 | [import-partition-replace-copy-10m-system-2026-06-07](import-partition-replace-copy-10m-system-2026-06-07.md) | API 触发 → Kafka → worker-import → MinIO → PG 分区表 | trace `ed8dda76e86944c683e67898bd7521cc`,instance `4006`,10,000,000 行 SUCCESS |
+| 导入分片负向 | trace `be1d46...`,`2e9eff...` | 单大文件 + `PARTITION_REPLACE_COPY` + `partitionCount=2` | 旧行为半量;修复后 `IMPORT_LOAD_CONFIG_INVALID` fail-fast |
+| 导入单测 | `ParseStepFixedWidthAndXmlTest` | FIXED_WIDTH/XML 解析与 PG jsonb field mapping | 已通过;系统级待 worker 新 jar 复验 |
+| 导入 staging/swap IT | `GenericJdbcMappedImportLoadPluginCopyIntegrationTest` | `PARTITION_STAGE_SWAP_COPY` staging COPY + physical partition swap | 已通过,PostgreSQL Testcontainers |
+| 导入 1000w stage-swap 复验 | trace `973cddd39b564a7f83d2f537d77fba59`,instance `4027` | API → Kafka → worker-import → MinIO → staging partition → attach/swap | SUCCESS,10,000,000 行,305.485s |
+| PG session 单测 | `HikariPgSessionSupportTest` | `work_mem` / `maintenance_work_mem` 结构化 SET SQL | 已通过 |
+| 导出 seed 链路 | trace `export-smoke-1780821600`,instance `4019` | `jdbc_mapped_export` / DELIMITED | SUCCESS |
+| 导出 1000w 单片 benchmark | trace `export-wide-single-1780821897`,instance `4020` | SQL template / DELIMITED / 1000w | SUCCESS,`125.980s`,`1.407GB`,GENERATE `67.691s`,STORE `53.989s` |
+| 导出 1000w 4 分片 | trace `export-wide-shard4-1780822058`,instance `4021` | 4 文件分片导出正确性 | SUCCESS,10,000,000 行无重无漏;本地串行 |
+| 导出 1000w 4 分片收尾复验 | trace `995981ccb4bd434fa54882b9b890e826`,instance `4030` | 4 consumer + step_run 并发修复后复跑 | SUCCESS,10,000,000 行,1.088GB,156.308s,无 task error/retry;仍串行,作为后续对照 |
+| 导出 1000w 4 分片真并行最终复验 | trace `bb7343da2bd24313b8abbb99b8807c1f`,instance `6395` | partitionCount 下沉 + Kafka key 稳定分散 + long poll 参数 | SUCCESS,10,000,000 行,1.088GB,144.092s,4 task 同秒 RUNNING,Kafka lag=0 |
+| 导出格式覆盖 | trace `export-json/fixed/excel-smoke-1780822336-*` | JSON / FIXED_WIDTH / EXCEL | 三种格式均 SUCCESS |
+| 导出单测 | `SqlTemplateExportSpecTest`,`ExportKeysetRangePlannerTest` | PG jsonb config、fetch/keyset-range 读取 | 已通过,11 tests |
+| 导出并行/存储单测 | `KafkaOutboxPublisherTest`,`S3ObjectStoreExceptionMappingTest` | dispatch Kafka key 分散分片;S3 multipart complete/abort | 已通过 |

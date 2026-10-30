@@ -18,6 +18,7 @@
 -- ============================================================================
 
 -- V124 加的 6 处
+
 ALTER TABLE batch.batch_day_replay_session
     VALIDATE CONSTRAINT ck_replay_session_result_policy;
 
@@ -34,9 +35,11 @@ ALTER TABLE batch.calendar_holiday
     VALIDATE CONSTRAINT ck_calendar_holiday_group_code_required;
 
 -- V125 重建的 config_version_policy CHECK
+
 ALTER TABLE batch.batch_day_replay_session
     VALIDATE CONSTRAINT ck_replay_session_config_version_policy;
 
 -- V126 加的 worker_report_outbox.publish_status CHECK
+
 ALTER TABLE batch.worker_report_outbox
     VALIDATE CONSTRAINT ck_worker_report_outbox_publish_status;

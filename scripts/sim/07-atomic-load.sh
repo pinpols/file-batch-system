@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：执行 Atomic 模拟负载并核对任务终态。
+# 用法：在仓库根目录执行 bash scripts/sim/07-atomic-load.sh；参数与前置环境见下方说明及所属 README。
 if (( BASH_VERSINFO[0] < 4 )); then
   echo "❌ 需 bash 4+,macOS 默认 3.2 不支持新一代关联数组语法。请 brew install bash 后用 /usr/local/bin/bash 跑。" >&2
   exit 1
@@ -56,6 +58,10 @@ for round in $(seq 1 "$ROUNDS"); do
     total=$((total + 1))
     req_id="sim-atomic-${round}-${job}-$(date +%s%N | tail -c 8)"
     REQUEST_IDS+=("$req_id")
+    workflow_id=$("$PYTHON_BIN" "$ROOT/scripts/sim/launch_contract.py" "$ATOMIC_TENANT" "$job") || {
+      echo "!! managed Workflow fixture missing for $ATOMIC_TENANT/$job" >&2
+      exit 1
+    }
     resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
       -H "Content-Type: application/json" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" \
@@ -63,7 +69,7 @@ for round in $(seq 1 "$ROUNDS"); do
       -H "X-Tenant-Id: $ATOMIC_TENANT" \
       -H "X-Request-Id: $req_id" \
       "$TRIGGER_BASE/api/triggers/launch" \
-      -d "{\"tenantId\":\"$ATOMIC_TENANT\",\"jobCode\":\"$job\",\"triggerType\":\"API\",\"bizDate\":\"$round_biz_date\",\"requestId\":\"$req_id\"}" 2>&1)
+      -d "{\"tenantId\":\"$ATOMIC_TENANT\",\"workflowDefinitionId\":$workflow_id,\"triggerType\":\"API\",\"bizDate\":\"$round_biz_date\",\"requestId\":\"$req_id\"}" 2>&1)
     if echo "$resp" | grep -qE '"code"\s*:\s*"(SUCCESS|OK)"'; then
       succ=$((succ + 1))
       printf "."

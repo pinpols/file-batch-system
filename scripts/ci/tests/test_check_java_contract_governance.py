@@ -1,3 +1,5 @@
+# 用途：Java 契约治理门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_java_contract_governance.py。
 """固定契约门禁的正反例；禁止通过扩大字符串范围降低误报控制。"""
 import importlib.util
 from pathlib import Path

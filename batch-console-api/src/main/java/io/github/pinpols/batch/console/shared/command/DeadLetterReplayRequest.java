@@ -25,4 +25,9 @@ public class DeadLetterReplayRequest {
 
   @Size(max = 32, message = "strategy too long (max 32)")
   private String strategy;
+
+  private Boolean externalActionVerifiedNotExecuted;
+
+  @Size(max = 512, message = "external outcome evidence reference too long (max 512)")
+  private String externalOutcomeEvidenceReference;
 }

@@ -1,9 +1,6 @@
 package io.github.pinpols.batch.orchestrator.config;
 
-import jakarta.annotation.PostConstruct;
 import lombok.Data;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -29,46 +26,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <p>{@link #reclaimIntervalMillis} 控制 orchestrator 扫过期 lease 的节奏，独立于 TTL。
  */
 @Data
-@Slf4j
 @ConfigurationProperties(prefix = "batch.partition-lease")
 public class PartitionLeaseProperties {
-
-  /**
-   * R3-P2-10 / S1-4：启动期断言 lease.expire-seconds &lt; kafka max-poll-interval-ms。
-   *
-   * <p>背景：worker 消费 dispatch topic 时，CLAIM 成功 → 进 RUNNING。若 max-poll-interval（默认 600s）期内 worker 没
-   * commit offset，Kafka rebalance 把 partition 分给其他 worker。此时若 lease.expireSeconds 也已
-   * 过期，orchestrator 侧 reclaim 会重派 task；rebalanced consumer 又来一次 CLAIM → 双执行。 严格关系：{@code
-   * expireSeconds &lt; maxPollIntervalMs/1000}，留 50% 安全裕量。
-   *
-   * <p>{@code @Value} 注入 Kafka 容器配置；缺失时给保守默认 600s。
-   */
-  @Value("${spring.kafka.consumer.properties.max-poll-interval-ms:600000}")
-  private int maxPollIntervalMillisInjected = 600_000;
-
-  @PostConstruct
-  void assertLeaseVsMaxPollWindow() {
-    long maxPollSec = maxPollIntervalMillisInjected / 1000L;
-    if (expireSeconds >= maxPollSec) {
-      throw new IllegalStateException("FATAL: batch.partition-lease.expire-seconds ("
-          + expireSeconds
-          + "s) must be lower than spring.kafka.consumer.properties.max-poll-interval-ms ("
-          + maxPollSec
-          + "s)."
-          + " Rebalance and lease expiry in the same window can cause duplicate execution"
-          + " (worker reclaim plus Kafka redelivery to a new consumer)."
-          + " Recommended expire-seconds <= max-poll-interval/2 (current recommendation <= "
-          + (maxPollSec / 2)
-          + "s).");
-    }
-    if (expireSeconds >= maxPollSec / 2) {
-      log.warn(
-          "batch.partition-lease.expire-seconds ({}s) is close to half of max-poll-interval ({}s);"
-              + " lease overlap risk increases during rebalance; reduce it below one third.",
-          expireSeconds,
-          maxPollSec);
-    }
-  }
 
   /**
    * Lease TTL（秒）。默认 120s —— 覆盖 report 重试窗口 + 最近一次续期间隔 + 业务余量， 见类级 javadoc 推算。<b>调整下限</b>：&lt; 60s

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.BatchKmsProperties;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -54,8 +55,13 @@ public class BatchObjectCryptoService {
   }
 
   public boolean shouldEncrypt(Map<String, Object> security) {
-    return !securityProperties.isBypassMode()
-        && truthy(security == null ? null : security.get("content_encryption_enabled"));
+    boolean bypassMode = securityProperties.isBypassMode();
+    if (bypassMode) {
+      return false;
+    }
+    Object configuredEncryption =
+        EmptyChecks.isNull(security) ? null : security.get("content_encryption_enabled");
+    return truthy(configuredEncryption);
   }
 
   public String resolveKeyRef(Map<String, Object> security) {
@@ -81,7 +87,8 @@ public class BatchObjectCryptoService {
   }
 
   public byte[] decrypt(byte[] content) {
-    if (content == null || content.length == 0 || !isEncrypted(content)) {
+    boolean contentDoesNotNeedDecryption = EmptyChecks.isEmpty(content) || !isEncrypted(content);
+    if (contentDoesNotNeedDecryption) {
       return content;
     }
     try (InputStream inputStream = decryptIfNeeded(new ByteArrayInputStream(content))) {
@@ -109,14 +116,15 @@ public class BatchObjectCryptoService {
       byte[] iv = new byte[GCM_IV_BYTES];
       SECURE_RANDOM.nextBytes(iv);
       Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
-      cipher.init(
-          Cipher.ENCRYPT_MODE,
-          new SecretKeySpec(resolveKeyBytes(keyRef), CryptoAlgorithms.AES),
-          new GCMParameterSpec(GCM_TAG_BITS, iv));
+      byte[] encryptionKeyBytes = resolveKeyBytes(keyRef);
+      SecretKeySpec encryptionKey = new SecretKeySpec(encryptionKeyBytes, CryptoAlgorithms.AES);
+      GCMParameterSpec encryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+      cipher.init(Cipher.ENCRYPT_MODE, encryptionKey, encryptionParameters);
       DataOutputStream dataOutput = new DataOutputStream(encryptedOutput);
       dataOutput.write(MAGIC);
       dataOutput.writeByte(VERSION);
-      dataOutput.writeUTF(normalizedKeyRef(keyRef));
+      String persistedKeyRef = normalizedKeyRef(keyRef);
+      dataOutput.writeUTF(persistedKeyRef);
       dataOutput.writeByte(iv.length);
       dataOutput.write(iv);
       dataOutput.flush();
@@ -215,10 +223,10 @@ public class BatchObjectCryptoService {
       int ivLength = dataInputStream.readUnsignedByte();
       byte[] iv = dataInputStream.readNBytes(ivLength);
       Cipher cipher = Cipher.getInstance(CryptoAlgorithms.AES_GCM_NO_PADDING);
-      cipher.init(
-          Cipher.DECRYPT_MODE,
-          new SecretKeySpec(resolveKeyBytes(keyRef), CryptoAlgorithms.AES),
-          new GCMParameterSpec(GCM_TAG_BITS, iv));
+      byte[] decryptionKeyBytes = resolveKeyBytes(keyRef);
+      SecretKeySpec decryptionKey = new SecretKeySpec(decryptionKeyBytes, CryptoAlgorithms.AES);
+      GCMParameterSpec decryptionParameters = new GCMParameterSpec(GCM_TAG_BITS, iv);
+      cipher.init(Cipher.DECRYPT_MODE, decryptionKey, decryptionParameters);
       CipherInputStream cipherInputStream = new CipherInputStream(pushbackInputStream, cipher);
       closeGuard.release();
       return cipherInputStream;

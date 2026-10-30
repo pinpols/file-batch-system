@@ -4,11 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.DisplayName;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -34,12 +37,40 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
   }
 
   @Test
+  @Transactional
+  @DisplayName("相同更新时间超过页大小时，下一页仍能读到剩余实例")
+  void shouldReadNextPageWhenManyInstancesShareUpdateTime() {
+    String tenantId = unique("tenant-page");
+    Instant since = Instant.now().plus(1, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS);
+    Instant sharedUpdate = since.plusSeconds(1);
+    for (int i = 0; i < 3; i++) {
+      long pipelineId = insertPipelineInstance(tenantId, null);
+      insertProgress(tenantId, pipelineId, "LOAD", sharedUpdate);
+    }
+
+    List<PipelineProgressDirtyView> first = mapper.selectUpdatedSince(since, null, 2);
+    PipelineProgressDirtyView last = first.getLast();
+    DirtyCursor after =
+        new DirtyCursor(last.updatedAt(), last.tenantId(), last.pipelineInstanceId());
+    List<PipelineProgressDirtyView> second = mapper.selectUpdatedSince(since, after, 2);
+    HashSet<Long> seen = new HashSet<>();
+    first.forEach(row -> seen.add(row.pipelineInstanceId()));
+    second.forEach(row -> seen.add(row.pipelineInstanceId()));
+
+    assertThat(first).hasSize(2);
+    assertThat(second).hasSize(1);
+    assertThat(seen).hasSize(3);
+  }
+
+  @Test
   @DisplayName("进度查询: 每个实例只返回最新一条,他租户关联实例不会污染结果")
   void shouldSelectLatestProgressPerInstance_whenJoiningAcrossTenants() {
     String tenantA = unique("tenant-a");
     String tenantB = unique("tenant-b");
-    Long relatedJobInstanceId =
-        jdbcTemplate.queryForObject("select nextval('batch.job_instance_id_seq')", Long.class);
+    String nextJobInstanceIdSql = """
+        select nextval('batch.job_instance_id_seq')
+    """;
+    Long relatedJobInstanceId = jdbcTemplate.queryForObject(nextJobInstanceIdSql, Long.class);
     long pipelineA = insertPipelineInstance(tenantA, relatedJobInstanceId);
     long pipelineB = insertPipelineInstance(tenantB, null);
     Instant since = Instant.now().minus(1, ChronoUnit.HOURS);
@@ -49,9 +80,10 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
     insertProgress(tenantA, pipelineA, "LOAD", older);
     insertProgress(tenantA, pipelineA, "GENERATE", latest);
     insertProgress(tenantB, pipelineB, "LOAD", older);
-    insertProgress(tenantB, pipelineA, "LOAD", latest.plusSeconds(30));
+    // 新复合 FK(tenant_id, pipeline_instance_id) 禁止跨租户进度行；改为同租户第二批次进度。
+    insertProgress(tenantB, pipelineB, "GENERATE", latest.plusSeconds(30));
 
-    List<PipelineProgressDirtyView> rows = mapper.selectUpdatedSince(since, 10);
+    List<PipelineProgressDirtyView> rows = mapper.selectUpdatedSince(since, null, 10);
 
     assertThat(rows)
         .filteredOn(row -> row.pipelineInstanceId() == pipelineA)
@@ -69,29 +101,27 @@ class ConsolePipelineProgressDirtyMapperIntegrationTest extends AbstractIntegrat
 
   private long insertPipelineInstance(String tenantId, Long relatedJobInstanceId) {
     String jobCode = unique("job");
-    Long definitionId = jdbcTemplate.queryForObject("""
-            insert into batch.pipeline_definition(
-              tenant_id, job_code, pipeline_name, pipeline_type
-            ) values (?, ?, 'Dirty Progress Test', 'IMPORT')
-            returning id
-            """, Long.class, tenantId, jobCode);
-    return jdbcTemplate.queryForObject(
-        """
+    String insertPipelineInstanceSql = """
         insert into batch.pipeline_instance(
-          tenant_id, pipeline_definition_id, job_code, pipeline_type,
+          tenant_id, system_pipeline_code, system_pipeline_version, job_code, pipeline_type,
           related_job_instance_id, run_status
-        ) values (?, ?, ?, 'IMPORT', ?, 'RUNNING')
+        ) values (?, 'IMPORT', 1, ?, 'IMPORT', ?, 'RUNNING')
         returning id
-        """, Long.class, tenantId, definitionId, jobCode, relatedJobInstanceId);
+        """;
+    return jdbcTemplate.queryForObject(
+        insertPipelineInstanceSql, Long.class, tenantId, jobCode, relatedJobInstanceId);
   }
 
   private void insertProgress(
       String tenantId, long pipelineInstanceId, String stage, Instant updatedAt) {
-    jdbcTemplate.update("""
-        insert into batch.pipeline_progress(
-          tenant_id, pipeline_instance_id, stage, processed_count, updated_at
-        ) values (?, ?, ?, 1, ?)
-        """, tenantId, pipelineInstanceId, stage, Timestamp.from(updatedAt));
+    final String insertPipelineProgressSql = """
+    insert into batch.pipeline_progress(
+    tenant_id, pipeline_instance_id, stage, processed_count, updated_at
+    ) values (?, ?, ?, 1, ?)
+    """;
+    Timestamp persistedUpdatedAt = Timestamp.from(updatedAt);
+    jdbcTemplate.update(
+        insertPipelineProgressSql, tenantId, pipelineInstanceId, stage, persistedUpdatedAt);
   }
 
   private static String unique(String prefix) {

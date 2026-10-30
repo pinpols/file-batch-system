@@ -19,11 +19,12 @@ final class TaskConsumerFailurePolicy {
 
   static boolean isTransientOrchestratorFailure(Throwable throwable) {
     for (Throwable current = throwable; current != null; current = current.getCause()) {
-      if (current instanceof HttpServerErrorException
+      boolean isTransientDispatchFailure = current instanceof HttpServerErrorException
           || current instanceof ResourceAccessException
           || current instanceof ConnectException
           || current instanceof SocketTimeoutException
-          || current instanceof UnknownHostException) {
+          || current instanceof UnknownHostException;
+      if (isTransientDispatchFailure) {
         return true;
       }
     }

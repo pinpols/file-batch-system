@@ -24,4 +24,15 @@ excluded_rules = [
   "require-concurrent-index-deletion",
   "require-timeout-settings",
   "adding-foreign-key-constraint",
+
+# 2026-10-25：本项目仅支持空库部署（迁移只在空库执行，不提供存量库升级或在线滚动），
+# 以下规则针对在线表加锁/既有客户端兼容，空库场景不适用，按项目事实停用；
+# 重命名导致的应用绑定风险仍由 docs/agent-baseline.md 禁重命名红线与 Mapper 测试覆盖。
+  "ban-drop-table",
+  "ban-drop-not-null",
+  "changing-column-type",
+  "disallowed-unique-constraint",
+  "constraint-missing-not-valid",
+  "adding-not-nullable-field",
+  "renaming-table",
 ]

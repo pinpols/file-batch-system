@@ -1,7 +1,26 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="FileChannelConfigQueryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_name" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="target_endpoint" javaType="java.lang.String"/>
+            <arg column="auth_type" javaType="java.lang.String"/>
+            <arg column="config_json" javaType="java.lang.Object"/>
+            <arg column="receipt_policy" javaType="java.lang.String"/>
+            <arg column="timeout_seconds" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileChannelConfigQueryViewResultMap">
         select
             id,
             tenant_id,
@@ -50,8 +69,21 @@
         </if>
     </select>
 
-    <select id="selectByUniqueKey" resultType="map">
-        select *
+    <select id="selectByUniqueKey" resultMap="FileChannelConfigQueryViewResultMap">
+        select
+            id,
+            tenant_id,
+            channel_code,
+            channel_name,
+            channel_type,
+            target_endpoint,
+            auth_type,
+            config_json,
+            receipt_policy,
+            timeout_seconds,
+            enabled,
+            created_at,
+            updated_at
         from batch.file_channel_config
         where tenant_id = #{tenantId}
           and is_deleted = false
@@ -59,8 +91,22 @@
         limit 1
     </select>
 
-    <select id="selectById" resultType="map">
-        select * from batch.file_channel_config
+    <select id="selectById" resultMap="FileChannelConfigQueryViewResultMap">
+        select
+            id,
+            tenant_id,
+            channel_code,
+            channel_name,
+            channel_type,
+            target_endpoint,
+            auth_type,
+            config_json,
+            receipt_policy,
+            timeout_seconds,
+            enabled,
+            created_at,
+            updated_at
+        from batch.file_channel_config
         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
         limit 1
     </select>
@@ -133,7 +179,19 @@
     </insert>
 
     <!-- 租户就绪自检:只取完整性判定所需列,未删除渠道。config_json::text 供应用层判空占位。 -->
-    <select id="selectReadinessRows" resultType="map">
+    <resultMap id="FileChannelConfigReadinessViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView">
+        <constructor>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="auth_type" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="config_json" javaType="java.lang.String"/>
+            <arg column="target_endpoint" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectReadinessRows" resultMap="FileChannelConfigReadinessViewResultMap">
         select
             channel_code,
             channel_type,

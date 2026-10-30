@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.Map;
@@ -15,7 +16,12 @@ public final class DispatchReadbackVerifier {
   /** {@code readback_verify_enabled=true} 时启用投递后回读对账。 */
   public static boolean enabled(Map<String, Object> channelConfig) {
     Object raw = channelConfig == null ? null : channelConfig.get("readback_verify_enabled");
-    return raw != null && Boolean.parseBoolean(String.valueOf(raw).trim());
+    if (EmptyChecks.isNull(raw)) {
+      return false;
+    }
+    String rawValue = String.valueOf(raw);
+    String normalizedValue = rawValue.trim();
+    return Boolean.parseBoolean(normalizedValue);
   }
 
   /** 从 file_record 取期望字节数(file_size_bytes / fileSizeBytes);缺省 / 非数字返回 null(不参与回读)。 */
@@ -30,11 +36,17 @@ public final class DispatchReadbackVerifier {
     if (raw instanceof Number number) {
       return number.longValue();
     }
-    if (raw == null || !Texts.hasText(String.valueOf(raw))) {
+    if (EmptyChecks.isNull(raw)) {
       return null;
     }
+    String presenceText = String.valueOf(raw);
+    if (!Texts.hasText(presenceText)) {
+      return null;
+    }
+    String rawNumericValue = String.valueOf(raw);
+    String numericText = rawNumericValue.trim();
     try {
-      return Long.parseLong(String.valueOf(raw).trim());
+      return Long.parseLong(numericText);
     } catch (NumberFormatException ignored) {
       return null;
     }

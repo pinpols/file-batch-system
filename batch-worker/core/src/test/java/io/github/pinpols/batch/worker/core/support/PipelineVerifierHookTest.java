@@ -13,11 +13,15 @@ import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 
 @DisplayName("流水线校验钩子: 校验失败的明细写入与致命判定")
@@ -133,6 +137,56 @@ class PipelineVerifierHookTest {
 
     assertThat(result.fatalFailure()).isFalse();
     assertThat(result.firstFatalCode()).isNull();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("致命失败缺少错误码时仍拒绝成功，后续错误码不能覆盖首个失败")
+  void shouldKeepFirstFatalFailure_whenFailureCodeIsAbsent(boolean includeLaterFailure) {
+    FatalStubVerifier first = new FatalStubVerifier(
+        "DISPATCH_RECEIPT_PRESENT",
+        Set.of(JobType.DISPATCH),
+        VerifyResult.fail(null, "first failure"));
+    FatalStubVerifier later = new FatalStubVerifier(
+        "DISPATCH_CHECKSUM",
+        Set.of(JobType.DISPATCH),
+        VerifyResult.fail("LATER_FAILURE", "later failure"));
+    ObjectProvider<ContentVerifier> verifiers =
+        includeLaterFailure ? providerOf(first, later) : providerOf(first);
+    ContentVerifierRegistry registry = new ContentVerifierRegistry(verifiers, providerOf());
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
+    Map<String, Object> attributes = new HashMap<>();
+
+    PipelineVerifierHook.VerifierHookResult result =
+        hook.runVerifiers("tenant-fatal", "DISPATCH", 1L, 2L, "DISPATCH_PUBLISH", attributes);
+
+    assertThat(result.fatalFailure()).isTrue();
+    assertThat(result.firstFatalCode()).isNull();
+    assertThat(result.firstFatalMessage()).isEqualTo("first failure");
+    assertThat(attributes).containsKey(PipelineRuntimeKeys.VERIFIER_FAILURES);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"tr-TR", "az-AZ"})
+  @ResourceLock("java.util.Locale.default")
+  @DisplayName("字典忽略大小写仍能匹配土耳其语转换结果，排除校验器被语言绕过的候选")
+  void shouldStillRouteLowercaseType_whenDefaultLocaleHasDottedI(String language) {
+    FatalStubVerifier failing = new FatalStubVerifier(
+        "IMPORT_CONTENT", Set.of(JobType.IMPORT), VerifyResult.fail("IMPORT_INVALID", "invalid"));
+    ContentVerifierRegistry registry =
+        new ContentVerifierRegistry(providerOf(failing), providerOf());
+    PipelineVerifierHook hook = new PipelineVerifierHook(providerOf(registry));
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(language));
+      Map<String, Object> attributes = new HashMap<>();
+      PipelineVerifierHook.VerifierHookResult result =
+          hook.runVerifiers("tenant-locale", "import", 1L, 2L, "IMPORT_FINALIZE", attributes);
+      assertThat(result.fatalFailure()).isTrue();
+      assertThat(result.firstFatalCode()).isEqualTo("IMPORT_INVALID");
+    } finally {
+      Locale.setDefault(previous);
+    }
   }
 
   private static ContentVerifierRegistry registryWith(ContentVerifier... beans) {

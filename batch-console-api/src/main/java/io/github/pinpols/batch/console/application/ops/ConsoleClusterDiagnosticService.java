@@ -4,15 +4,28 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.DiagnosisSummary;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.Finding;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.InstanceSummary;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.OutboxStatusCount;
+import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.StatusCount;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleShedLockStatusResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleTerminalChildrenHealthResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleWorkerConsistencyResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.JobInstanceDiagnosticView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.OutboxStatusCountView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.ShedLockView;
+import io.github.pinpols.batch.console.domain.ops.view.cluster.WorkerGroupCapacityView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.time.Instant;
@@ -22,7 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -50,54 +62,50 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleClusterDiagnosticResponse diagnose(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":all";
     return cacheService.getOrLoad(
-        "diagnostic:" + cacheTenant(resolved) + ":all",
+        cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleClusterDiagnosticResponse>() {},
         () -> loadDiagnose(resolved));
   }
 
   private ConsoleClusterDiagnosticResponse loadDiagnose(String resolved) {
+    ConsoleShedLockStatusResponse shedLockStatus = loadShedLockStatus(resolved);
+    ConsoleWorkerConsistencyResponse workerConsistency = loadWorkerConsistency(resolved);
+    ConsoleOutboxHealthResponse outboxHealth = loadOutboxHealth(resolved);
+    ConsoleTerminalChildrenHealthResponse terminalChildrenHealth =
+        loadTerminalChildrenHealth(resolved);
     return new ConsoleClusterDiagnosticResponse(
-        loadShedLockStatus(resolved),
-        loadWorkerConsistency(resolved),
-        loadOutboxHealth(resolved),
-        loadTerminalChildrenHealth(resolved));
+        shedLockStatus, workerConsistency, outboxHealth, terminalChildrenHealth);
   }
 
   public ConsoleShedLockStatusResponse shedLockStatus(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":shedlock";
     return cacheService.getOrLoad(
-        "diagnostic:" + cacheTenant(resolved) + ":shedlock",
+        cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleShedLockStatusResponse>() {},
         () -> loadShedLockStatus(resolved));
   }
 
   private ConsoleShedLockStatusResponse loadShedLockStatus(String resolved) {
-    List<Map<String, Object>> locks = diagnosticMapper.shedlockAll().stream()
-        .map(v -> {
-          Map<String, Object> row = new LinkedHashMap<>();
-          row.put("name", v.getName());
-          row.put("lockUntil", v.getLockUntil());
-          row.put("lockedAt", v.getLockedAt());
-          row.put("lockedBy", v.getLockedBy());
-          return row;
-        })
-        .collect(Collectors.toList());
+    List<ShedLockView> rows = diagnosticMapper.shedlockAll();
     long activeLocks =
-        locks.stream().filter(row -> row.get("lockUntil") != null).count();
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("totalLocks", locks.size());
-    result.put("activeLocks", activeLocks);
-    result.put("locks", locks);
-    return ConsoleShedLockStatusResponse.from(result);
+        rows.stream().filter(row -> Boolean.TRUE.equals(row.active())).count();
+    List<ConsoleShedLockStatusResponse.LockEntry> locks = rows.stream()
+        .map(v -> new ConsoleShedLockStatusResponse.LockEntry(
+            v.name(), v.lockUntil(), v.lockedAt(), v.lockedBy()))
+        .toList();
+    return new ConsoleShedLockStatusResponse(locks.size(), activeLocks, locks);
   }
 
   public ConsoleWorkerConsistencyResponse workerConsistency(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":workers";
     return cacheService.getOrLoad(
-        "diagnostic:" + cacheTenant(resolved) + ":workers",
+        cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleWorkerConsistencyResponse>() {},
         () -> loadWorkerConsistency(resolved));
@@ -109,171 +117,200 @@ public class ConsoleClusterDiagnosticService {
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.DRAINING.code());
     long offline =
         workerRegistryMapper.countByStatus(resolved, WorkerRegistryStatus.OFFLINE.code());
-    long staleOnline =
-        valueOrZero(diagnosticMapper.countStaleOnlineWorkers(resolved, WORKER_STALE_SECONDS));
-    long drainingOverdue = valueOrZero(diagnosticMapper.countDrainingPastDeadlineWorkers(resolved));
-    long decommissionedActive =
-        valueOrZero(diagnosticMapper.countDecommissionedWorkersWithActiveTasks(resolved));
-    long invalidCapabilityTags = valueOrZero(diagnosticMapper.countInvalidCapabilityTags(resolved));
-    long running = valueOrZero(diagnosticMapper.countJobInstancesByStatuses(
-        resolved, List.of(JobInstanceStatus.RUNNING.code())));
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("onlineWorkers", online);
-    result.put("drainingWorkers", draining);
-    result.put("offlineWorkers", offline);
-    result.put("staleOnlineWorkers", staleOnline);
-    result.put("drainingPastDeadlineWorkers", drainingOverdue);
-    result.put("decommissionedWorkersWithActiveTasks", decommissionedActive);
-    result.put("invalidCapabilityTags", invalidCapabilityTags);
-    result.put("workerGroups", diagnosticMapper.workerGroupCapacity(resolved));
-    result.put("runningInstances", running);
-    result.put(
-        "healthy",
-        (online > 0 || running == 0)
-            && staleOnline == 0
-            && drainingOverdue == 0
-            && decommissionedActive == 0
-            && invalidCapabilityTags == 0);
-    return ConsoleWorkerConsistencyResponse.from(result);
+    Long staleOnlineCount =
+        diagnosticMapper.countStaleOnlineWorkers(resolved, WORKER_STALE_SECONDS);
+    long staleOnline = valueOrZero(staleOnlineCount);
+    Long drainingOverdueCount = diagnosticMapper.countDrainingPastDeadlineWorkers(resolved);
+    long drainingOverdue = valueOrZero(drainingOverdueCount);
+    Long decommissionedActiveCount =
+        diagnosticMapper.countDecommissionedWorkersWithActiveTasks(resolved);
+    long decommissionedActive = valueOrZero(decommissionedActiveCount);
+    Long invalidCapabilityTagsCount = diagnosticMapper.countInvalidCapabilityTags(resolved);
+    long invalidCapabilityTags = valueOrZero(invalidCapabilityTagsCount);
+    List<String> runningStatuses = List.of(JobInstanceStatus.RUNNING.code());
+    Long runningCount = diagnosticMapper.countJobInstancesByStatuses(resolved, runningStatuses);
+    long running = valueOrZero(runningCount);
+    List<ConsoleWorkerConsistencyResponse.WorkerGroupCapacity> workerGroups =
+        diagnosticMapper.workerGroupCapacity(resolved).stream()
+            .map(ConsoleClusterDiagnosticService::workerGroupCapacity)
+            .toList();
+    boolean healthy = (online > 0 || running == 0)
+        && staleOnline == 0
+        && drainingOverdue == 0
+        && decommissionedActive == 0
+        && invalidCapabilityTags == 0;
+    return new ConsoleWorkerConsistencyResponse(
+        online,
+        draining,
+        offline,
+        staleOnline,
+        drainingOverdue,
+        decommissionedActive,
+        invalidCapabilityTags,
+        workerGroups,
+        running,
+        healthy);
   }
 
   public ConsoleOutboxHealthResponse outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":outbox";
     return cacheService.getOrLoad(
-        "diagnostic:" + cacheTenant(resolved) + ":outbox",
+        cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleOutboxHealthResponse>() {},
         () -> loadOutboxHealth(resolved));
   }
 
   private ConsoleOutboxHealthResponse loadOutboxHealth(String resolved) {
-    List<Map<String, Object>> stats = diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
-        .map(v -> {
-          Map<String, Object> row = new LinkedHashMap<>();
-          row.put("deliveryStatus", v.getDeliveryStatus());
-          row.put("cnt", v.getCnt());
-          return row;
-        })
-        .collect(Collectors.toList());
+    List<ConsoleOutboxHealthResponse.DeliveryStat> stats =
+        diagnosticMapper.eventDeliveryStatusCounts(resolved).stream()
+            .map(v -> new ConsoleOutboxHealthResponse.DeliveryStat(v.deliveryStatus(), v.cnt()))
+            .toList();
     long pendingCount = diagnosticMapper.countPendingOutboxEvents(resolved);
-    long activeCount = valueOrZero(diagnosticMapper.countOutboxEventsByStatuses(
-        resolved,
-        List.of(
-            OutboxPublishStatus.NEW.code(),
-            OutboxPublishStatus.FAILED.code(),
-            OutboxPublishStatus.PUBLISHING.code())));
-    long stalePublishing = valueOrZero(diagnosticMapper.countStalePublishingOutboxEvents(
-        resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS));
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("pendingEvents", pendingCount);
-    result.put("activeEvents", activeCount);
-    result.put("stalePublishingEvents", stalePublishing);
-    result.put("deliveryStats", stats);
-    result.put("healthy", pendingCount < 1000 && stalePublishing == 0);
-    return ConsoleOutboxHealthResponse.from(result);
+    List<String> activeStatuses = List.of(
+        OutboxPublishStatus.NEW.code(),
+        OutboxPublishStatus.FAILED.code(),
+        OutboxPublishStatus.PUBLISHING.code());
+    Long activeEventCount = diagnosticMapper.countOutboxEventsByStatuses(resolved, activeStatuses);
+    long activeCount = valueOrZero(activeEventCount);
+    Long stalePublishingCount = diagnosticMapper.countStalePublishingOutboxEvents(
+        resolved, OutboxPublishStatus.PUBLISHING.code(), OUTBOX_STALE_SECONDS);
+    long stalePublishing = valueOrZero(stalePublishingCount);
+    return new ConsoleOutboxHealthResponse(
+        pendingCount,
+        activeCount,
+        stalePublishing,
+        stats,
+        pendingCount < 1000 && stalePublishing == 0);
   }
 
   public ConsoleTerminalChildrenHealthResponse terminalChildrenHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":terminal-children";
     return cacheService.getOrLoad(
-        "diagnostic:" + cacheTenant(resolved) + ":terminal-children",
+        cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleTerminalChildrenHealthResponse>() {},
         () -> loadTerminalChildrenHealth(resolved));
   }
 
   private ConsoleTerminalChildrenHealthResponse loadTerminalChildrenHealth(String resolved) {
+    Long terminalInstancesWithActiveChildrenCount =
+        diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved);
     long terminalInstancesWithActiveChildren =
-        valueOrZero(diagnosticMapper.countTerminalInstancesWithActiveChildren(resolved));
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("terminalInstancesWithActiveChildren", terminalInstancesWithActiveChildren);
-    result.put("healthy", terminalInstancesWithActiveChildren == 0);
-    return ConsoleTerminalChildrenHealthResponse.from(result);
+        valueOrZero(terminalInstancesWithActiveChildrenCount);
+    return new ConsoleTerminalChildrenHealthResponse(
+        terminalInstancesWithActiveChildren, terminalInstancesWithActiveChildren == 0);
   }
 
   public ConsoleInstanceDiagnosisResponse instanceDiagnosis(String tenantId, Long instanceId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, Object> instance = Guard.requireFound(
+    JobInstanceDiagnosticView instance = Guard.requireFound(
         diagnosticMapper.selectJobInstanceSummary(resolved, instanceId), "job instance not found");
-    List<Map<String, Object>> partitionStatusCounts =
+    List<ClusterStatusCountView> partitionStatusCounts =
         diagnosticMapper.partitionStatusCounts(resolved, instanceId);
-    List<Map<String, Object>> taskStatusCounts =
+    List<ClusterStatusCountView> taskStatusCounts =
         diagnosticMapper.taskStatusCounts(resolved, instanceId);
-    List<Map<String, Object>> outboxStatusCounts =
+    List<OutboxStatusCountView> outboxStatusCounts =
         diagnosticMapper.outboxStatusCountsForInstance(resolved, instanceId);
-    List<Map<String, Object>> workerIssues =
+    List<ActiveTaskWorkerIssueView> workerIssues =
         diagnosticMapper.activeTaskWorkerIssues(resolved, instanceId, TASK_HEARTBEAT_STALE_SECONDS);
-    long onlineWorkersForGroup = valueOrZero(diagnosticMapper.countOnlineWorkersForGroup(
-        resolved, stringValue(instance.get("workerGroup"), null)));
+    String workerGroup = instance.workerGroup();
+    String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup);
+    Long onlineWorkersForGroup = EmptyChecks.isNull(normalizedWorkerGroup)
+        ? null
+        : valueOrZero(diagnosticMapper.countOnlineWorkersForGroup(resolved, normalizedWorkerGroup));
 
-    List<Map<String, Object>> findings = new ArrayList<>();
+    List<Finding> findings = new ArrayList<>();
     long totalPartitions = totalCount(partitionStatusCounts);
     long totalTasks = totalCount(taskStatusCounts);
     long activePartitions = countStatuses(partitionStatusCounts, ACTIVE_CHILD_STATUSES);
     long activeTasks = countStatuses(taskStatusCounts, ACTIVE_CHILD_STATUSES);
-    long activeOutboxEvents = countStatuses(outboxStatusCounts, ACTIVE_OUTBOX_STATUSES);
+    long activeOutboxEvents = countOutboxStatuses(outboxStatusCounts, ACTIVE_OUTBOX_STATUSES);
 
-    String instanceStatus = stringValue(instance.get("instanceStatus"), "");
+    String currentStatus = instance.instanceStatus();
+    String instanceStatus = EmptyChecks.isNull(currentStatus) ? "" : currentStatus;
     boolean activeInstanceWithoutChildren =
         isActive(instanceStatus) && totalPartitions == 0 && totalTasks == 0;
     if (activeInstanceWithoutChildren) {
+      List<String> recommendations = List.of(
+          "Check whether launch T1/T2 was interrupted",
+          "Retry the instance or retrigger the same requestId");
+      Map<String, Object> evidence = Map.of("instanceStatus", instanceStatus);
       findings.add(finding(
           "ERROR",
           "INSTANCE_HAS_NO_CHILDREN",
           "The instance is still active, but has no partition or task records.",
-          List.of(
-              "Check whether launch T1/T2 was interrupted",
-              "Retry the instance or retrigger the same requestId"),
-          Map.of("instanceStatus", instanceStatus)));
+          recommendations,
+          evidence));
     }
-    if (isTerminal(instanceStatus) && (activePartitions > 0 || activeTasks > 0)) {
+    boolean terminalInstanceHasActiveChildren =
+        isTerminal(instanceStatus) && (activePartitions > 0 || activeTasks > 0);
+    if (terminalInstanceHasActiveChildren) {
+      List<String> recommendations = List.of(
+          "Check orchestrator terminal-state progression logs first",
+          "Use the controlled recovery endpoint for child nodes if needed");
+      Map<String, Object> evidence =
+          Map.of("activePartitions", activePartitions, "activeTasks", activeTasks);
       findings.add(finding(
           "ERROR",
           "TERMINAL_INSTANCE_HAS_ACTIVE_CHILDREN",
           "The instance is terminal, but active partitions or tasks still exist.",
-          List.of(
-              "Check orchestrator terminal-state progression logs first",
-              "Use the controlled recovery endpoint for child nodes if needed"),
-          Map.of("activePartitions", activePartitions, "activeTasks", activeTasks)));
+          recommendations,
+          evidence));
     }
-    if (isActive(instanceStatus) && onlineWorkersForGroup == 0) {
+    boolean activeInstanceWithoutOnlineWorker = isActive(instanceStatus)
+        && EmptyChecks.isNotNull(onlineWorkersForGroup)
+        && onlineWorkersForGroup == 0;
+    if (activeInstanceWithoutOnlineWorker) {
+      List<String> recommendations = List.of(
+          "Start or recover a worker in that workerGroup",
+          "Adjust job_definition.worker_group if needed");
+      String instanceWorkerGroup = instance.workerGroup();
+      String workerGroupEvidence =
+          EmptyChecks.isNull(instanceWorkerGroup) ? "" : instanceWorkerGroup;
+      Map<String, Object> evidence = Map.of("workerGroup", workerGroupEvidence);
       findings.add(finding(
           "WARN",
           "NO_ONLINE_WORKER_FOR_GROUP",
           "The instance's workerGroup has no ONLINE worker.",
-          List.of(
-              "Start or recover a worker in that workerGroup",
-              "Adjust job_definition.worker_group if needed"),
-          Map.of("workerGroup", stringValue(instance.get("workerGroup"), ""))));
+          recommendations,
+          evidence));
     }
     if (activeOutboxEvents > 0) {
+      List<String> recommendations =
+          List.of("Open the Outbox page", "Use controlled republish for FAILED/GIVE_UP events");
+      Map<String, Object> evidence =
+          Map.of("activeOutboxEvents", activeOutboxEvents, "statusCounts", outboxStatusCounts);
       findings.add(finding(
           "WARN",
           "OUTBOX_EVENTS_NOT_TERMINAL",
           "Not all outbox events for this instance have been published.",
-          List.of("Open the Outbox page", "Use controlled republish for FAILED/GIVE_UP events"),
-          Map.of("activeOutboxEvents", activeOutboxEvents, "statusCounts", outboxStatusCounts)));
+          recommendations,
+          evidence));
     }
-    workerIssues.forEach(issue -> findings.add(finding(
-        "WARN",
-        stringValue(issue.get("reasonCode"), "TASK_WORKER_ISSUE"),
-        "Active tasks have a worker assignment or heartbeat problem.",
-        List.of(
-            "Check worker registration status and heartbeats",
-            "Retry or cancel partitions after the lease is reclaimed"),
-        issue)));
+    workerIssues.forEach(issue -> {
+      String issueReason = issue.reasonCode();
+      String reasonCode = EmptyChecks.isNull(issueReason) ? "TASK_WORKER_ISSUE" : issueReason;
+      List<String> recommendations = List.of(
+          "Check worker registration status and heartbeats",
+          "Retry or cancel partitions after the lease is reclaimed");
+      findings.add(finding(
+          "WARN",
+          reasonCode,
+          "Active tasks have a worker assignment or heartbeat problem.",
+          recommendations,
+          workerIssueEvidence(issue)));
+    });
 
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("tenantId", resolved);
-    result.put("jobInstanceId", instance.get("id"));
-    result.put("healthy", findings.isEmpty());
-    result.put("instance", instanceSummary(instance));
-    result.put(
-        "summary",
-        summary(
-            partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup));
-    result.put("findings", findings);
-    return ConsoleInstanceDiagnosisResponse.from(result);
+    return new ConsoleInstanceDiagnosisResponse(
+        resolved,
+        instance.id(),
+        EmptyChecks.isEmpty(findings),
+        instanceSummary(instance),
+        summary(partitionStatusCounts, taskStatusCounts, outboxStatusCounts, onlineWorkersForGroup),
+        findings);
   }
 
   private static long valueOrZero(Long value) {
@@ -292,69 +329,96 @@ public class ConsoleClusterDiagnosticService {
     return TERMINAL_INSTANCE_STATUSES.contains(status);
   }
 
-  private static long totalCount(Collection<Map<String, Object>> rows) {
-    return rows.stream().mapToLong(row -> longValue(row.get("count"))).sum();
+  private static long totalCount(Collection<ClusterStatusCountView> rows) {
+    return rows.stream().mapToLong(row -> valueOrZero(row.count())).sum();
   }
 
-  private static long countStatuses(Collection<Map<String, Object>> rows, Set<String> statuses) {
+  private static long countStatuses(
+      Collection<? extends ClusterStatusCountView> rows, Set<String> statuses) {
     return rows.stream()
-        .filter(row -> statuses.contains(stringValue(row.get("status"), "")))
-        .mapToLong(row -> longValue(row.get("count")))
+        .filter(row -> statuses.contains(row.status()))
+        .mapToLong(row -> valueOrZero(row.count()))
         .sum();
   }
 
-  private static Map<String, Object> instanceSummary(Map<String, Object> instance) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("id", instance.get("id"));
-    result.put("instanceNo", instance.get("instanceNo"));
-    result.put("jobCode", instance.get("jobCode"));
-    result.put("bizDate", instance.get("bizDate"));
-    result.put("instanceStatus", instance.get("instanceStatus"));
-    result.put("queueCode", instance.get("queueCode"));
-    result.put("workerGroup", instance.get("workerGroup"));
-    result.put("traceId", instance.get("traceId"));
-    result.put("startedAt", instance.get("startedAt"));
-    result.put("deadlineAt", instance.get("deadlineAt"));
-    result.put("now", Instant.now());
-    return result;
+  private static long countOutboxStatuses(
+      Collection<OutboxStatusCountView> rows, Set<String> statuses) {
+    return rows.stream()
+        .filter(row -> statuses.contains(row.status()))
+        .mapToLong(row -> valueOrZero(row.count()))
+        .sum();
   }
 
-  private static Map<String, Object> summary(
-      List<Map<String, Object>> partitionStatusCounts,
-      List<Map<String, Object>> taskStatusCounts,
-      List<Map<String, Object>> outboxStatusCounts,
-      long onlineWorkersForGroup) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("partitionStatusCounts", partitionStatusCounts);
-    result.put("taskStatusCounts", taskStatusCounts);
-    result.put("outboxStatusCounts", outboxStatusCounts);
-    result.put("onlineWorkersForGroup", onlineWorkersForGroup);
-    return result;
+  private static ConsoleWorkerConsistencyResponse.WorkerGroupCapacity workerGroupCapacity(
+      WorkerGroupCapacityView row) {
+    return new ConsoleWorkerConsistencyResponse.WorkerGroupCapacity(
+        row.workerGroup(),
+        row.totalWorkers(),
+        row.onlineWorkers(),
+        row.drainingWorkers(),
+        row.offlineWorkers(),
+        row.decommissionedWorkers(),
+        row.currentLoad(),
+        row.maxConcurrent());
   }
 
-  private static Map<String, Object> finding(
+  private static InstanceSummary instanceSummary(JobInstanceDiagnosticView instance) {
+    return new InstanceSummary(
+        instance.id(),
+        instance.instanceNo(),
+        instance.jobCode(),
+        instance.bizDate(),
+        instance.instanceStatus(),
+        instance.queueCode(),
+        instance.workerGroup(),
+        instance.traceId(),
+        instance.startedAt(),
+        instance.deadlineAt(),
+        Instant.now());
+  }
+
+  private static DiagnosisSummary summary(
+      List<ClusterStatusCountView> partitionStatusCounts,
+      List<ClusterStatusCountView> taskStatusCounts,
+      List<OutboxStatusCountView> outboxStatusCounts,
+      Long onlineWorkersForGroup) {
+    List<StatusCount> partitionCounts = partitionStatusCounts.stream()
+        .map(row -> new StatusCount(row.status(), row.count()))
+        .toList();
+    List<StatusCount> taskCounts = taskStatusCounts.stream()
+        .map(row -> new StatusCount(row.status(), row.count()))
+        .toList();
+    List<OutboxStatusCount> outboxCounts = outboxStatusCounts.stream()
+        .map(row -> new OutboxStatusCount(row.status(), row.count(), row.oldest(), row.newest()))
+        .toList();
+    return new DiagnosisSummary(partitionCounts, taskCounts, outboxCounts, onlineWorkersForGroup);
+  }
+
+  private static Map<String, Object> workerIssueEvidence(ActiveTaskWorkerIssueView issue) {
+    Map<String, Object> evidence = new LinkedHashMap<>();
+    putWhenPresent(evidence, "taskId", issue.taskId());
+    putWhenPresent(evidence, "jobPartitionId", issue.jobPartitionId());
+    putWhenPresent(evidence, "taskStatus", issue.taskStatus());
+    putWhenPresent(evidence, "assignedWorkerCode", issue.assignedWorkerCode());
+    putWhenPresent(evidence, "heartbeatAt", issue.heartbeatAt());
+    putWhenPresent(evidence, "workerStatus", issue.workerStatus());
+    putWhenPresent(evidence, "workerHeartbeatAt", issue.workerHeartbeatAt());
+    putWhenPresent(evidence, "reasonCode", issue.reasonCode());
+    return evidence;
+  }
+
+  private static void putWhenPresent(Map<String, Object> target, String key, Object value) {
+    if (EmptyChecks.isNotNull(value)) {
+      target.put(key, value);
+    }
+  }
+
+  private static Finding finding(
       String severity,
       String reasonCode,
       String message,
       List<String> suggestedActions,
       Map<String, Object> evidence) {
-    Map<String, Object> result = new LinkedHashMap<>();
-    result.put("severity", severity);
-    result.put("reasonCode", reasonCode);
-    result.put("message", message);
-    result.put("suggestedActions", suggestedActions);
-    result.put("evidence", evidence);
-    return result;
-  }
-
-  private static long longValue(Object value) {
-    if (value instanceof Number n) {
-      return n.longValue();
-    }
-    return value == null ? 0L : Long.parseLong(value.toString());
-  }
-
-  private static String stringValue(Object value, String fallback) {
-    return value == null ? fallback : value.toString();
+    return new Finding(severity, reasonCode, message, suggestedActions, evidence);
   }
 }

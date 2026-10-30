@@ -105,6 +105,8 @@
         <bouncycastle.version>1.86</bouncycastle.version>
         <async-http-client.version>3.0.14</async-http-client.version>
         <lz4-java.version>1.11.4</lz4-java.version>
+        <!-- Kafka 客户端传递依赖：修复 CVE-2026-108106 / CVE-2026-93451。 -->
+        <snappy-java.version>1.1.10.9</snappy-java.version>
         <postgresql.version>42.7.13</postgresql.version>
         <!-- CVE-2026-54399 / CVE-2026-54428: Anthropic client 2.16.1 经 Spring AI BOM
              传入 httpcore5 5.4.2；5.4.3 起包含修复。统一覆盖 core 与 HTTP/2 变体，避免
@@ -254,6 +256,11 @@
                 <groupId>at.yawk.lz4</groupId>
                 <artifactId>lz4-java</artifactId>
                 <version>${lz4-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy-java.version}</version>
             </dependency>
             <dependency>
                 <groupId>org.apache.httpcomponents.core5</groupId>
@@ -483,7 +490,7 @@
                     <version>3.28.0</version>
                     <configuration>
                         <rulesets>
-                            <ruleset>${maven.multiModuleProjectDirectory}/build/pmd-ruleset.xml</ruleset>
+                            <ruleset>${maven.multiModuleProjectDirectory}/config/quality/pmd-ruleset.xml</ruleset>
                         </rulesets>
                         <failOnViolation>true</failOnViolation>
                         <printFailingErrors>true</printFailingErrors>
@@ -787,7 +794,7 @@ $1$2 $4 $5(</replacement>
                                 <xmlOutput>true</xmlOutput>
                                 <htmlOutput>true</htmlOutput>
                                 <!-- 聚焦 NP_*(NullPointer) / RCN_*(redundant null check) / UWF_*(unwritten field) -->
-                                <includeFilterFile>${maven.multiModuleProjectDirectory}/build/spotbugs-npe-filter.xml</includeFilterFile>
+                                <includeFilterFile>${maven.multiModuleProjectDirectory}/config/quality/spotbugs-npe-filter.xml</includeFilterFile>
                             </configuration>
                         </plugin>
                     </plugins>

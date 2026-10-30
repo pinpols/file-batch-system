@@ -24,6 +24,14 @@
 - `COMPOSE_PROJECT_NAME` 仍可由压测或隔离环境显式覆盖，但不同工作树不能共用固定的
   `batch-*` 容器名；切换工作树前应先停止上一套栈。
 
+## 应用容器停机宽限
+
+`deploy/docker/compose/app.yml` 的 8 个应用服务（Console API、Trigger、Orchestrator 和五类 Worker）共用 `stop_grace_period`，默认 `300s`。在所选 env 文件中设置 `BATCH_APP_STOP_GRACE_PERIOD` 可覆盖，例如 `600s` 或 `10m`；该配置由 Compose 消费，修改后需重新创建应用容器才生效；仅重启已有容器不会更新其停止宽限。
+
+该值是发送停止信号后允许进程退出的最长等待时间，进程提前退出不会等待满额。它不改变 Worker 默认 120 秒的排空上限，也不改变 Spring 每个关闭阶段的超时。提高应用内部超时、切换 profile 或引入更长的关闭阶段时，应按总关闭耗时增加此值；命令行显式指定更短的 `stop --timeout` 会覆盖服务宽限。部署 overlay 继承此配置，Helm 停机配置仍按各组件维护。
+
+本地裸 JVM 的 `scripts/local/stop-all.sh` 保留开发便利例外：默认每阶段等待 30 秒后强制结束残留进程，可用 `STOP_WAIT_SEC` 覆盖。该例外不代表长任务的完整优雅停机保障。
+
 ## 构建应用镜像
 
 ```bash
@@ -103,7 +111,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - Loki
 - Grafana
 
-对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability/)。
+对应脚本在 [scripts/docker/observability/](../../scripts/docker/observability)。
 
 如果你只需要业务运行，不需要监控面板和 trace/log 链路，这一层可以不启。
 业务栈和观测栈仍然是分开的 compose 文件，但会通过 `${COMPOSE_PROJECT_NAME:-batch-platform}_batch-network` 共享网络互通。
@@ -123,7 +131,7 @@ MinIO 主进程及 `minio-init` 应为 1001:1001，Valkey 的 PID 1 与服务进
 - 构建时通过 `MODULE` 参数选择模块
 - 运行时通过 `depends_on` 等待数据库、Kafka topic 初始化和 MinIO bucket 初始化完成
 - 镜像内置 `curl`，用于容器健康检查
-- 只有 `console-api`、`trigger`、`orchestrator` 暴露 HTTP 健康检查；三个 worker 是非 Web 进程，靠容器重启策略和启动顺序保障
+- `console-api`、`trigger`、`orchestrator` 与五类 Worker 均配置 HTTP 健康检查；Worker 的 Compose 探针访问各自业务端口（18083–18087）的 `/actuator/health`
 - `console-api` 的普通 REST 接口可以直接做负载均衡；SSE 实时接口通过 Redis Pub/Sub 广播并结合 replay buffer 回放，允许多实例部署
 - `console-api` realtime 层会消费 Redis Pub/Sub 并转发到本机 SSE 连接，不再依赖 sticky session
 

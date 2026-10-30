@@ -148,7 +148,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("新版批次清单里的按文件模板与作业标识写入文件记录元数据")
+  @DisplayName("新版批次清单里的按文件模板与Workflow 根目标写入文件记录元数据")
   void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
     String bucket = s3Bucket();
     String dataObject = "ingress/order-it.csv";
@@ -163,7 +163,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           "bizDate": "2026-05-05",
           "tenantId": "t1",
           "requiredFiles": ["order-it.csv"],
-          "jobCode": "BUNDLE_IMPORT_IT",
+          "workflowCode": "WF_BUNDLE_IMPORT_IT",
           "fileMapping": [ { "fileName": "order-it.csv", "templateCode": "TPL_ORDER" } ]
         }
         """;
@@ -195,9 +195,54 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     assertThat(String.valueOf(row.get("metadata_json")))
         .contains("bundleTemplateCode")
         .contains("TPL_ORDER")
-        // 2c-2a:本束该启动的 BUNDLE_IMPORT 作业 code 也写入数据库,供 2c-2b 满足条件后发 launch
-        .contains("bundleJobCode")
+        // 2c-2a:本束该启动的 BUNDLE_IMPORT Workflow code 也写入数据库,供 2c-2b 满足条件后发 launch
+        .contains("bundleWorkflowCode")
         .contains("BUNDLE_IMPORT_IT");
+  }
+
+  @Test
+  @DisplayName("旧 jobCode 根目标清单被扫描器拒绝,不写入文件束启动元数据")
+  void shouldRejectRetiredJobCodeManifestTarget() throws Exception {
+    String bucket = s3Bucket();
+    String dataObject = "ingress/retired-job-target.csv";
+    String manifestObject = "ingress/retired-job-target.batch.json";
+    S3Client client = s3Client();
+    String manifestJson = """
+        {
+          "schemaVersion": "batch-manifest-v2",
+          "fileGroupCode": "retired-job-target-group",
+          "bizDate": "2026-05-05",
+          "tenantId": "t1",
+          "requiredFiles": ["retired-job-target.csv"],
+          "jobCode": "BUNDLE_IMPORT_IT",
+          "fileMapping": [
+            { "fileName": "retired-job-target.csv", "templateCode": "TPL_ORDER" }
+          ]
+        }
+        """;
+    client.putObject(
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(manifestObject)
+            .contentType("application/json")
+            .build(),
+        RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
+    client.putObject(
+        PutObjectRequest.builder()
+            .bucket(bucket)
+            .key(dataObject)
+            .contentType("text/csv")
+            .build(),
+        RequestBody.fromBytes("id,name\n1,Retired\n".getBytes(StandardCharsets.UTF_8)));
+
+    scanner.scan();
+
+    Map<String, Object> row =
+        runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
+    assertThat(row).isNotEmpty();
+    assertThat(String.valueOf(row.get("metadata_json")))
+        .doesNotContain("bundleWorkflowCode")
+        .doesNotContain("bundleTemplateCode");
   }
 
   @Test
@@ -226,7 +271,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     Map<String, Object> before =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
     assertThat(before).isNotEmpty();
-    assertThat(String.valueOf(before.get("metadata_json"))).doesNotContain("bundleJobCode");
+    assertThat(String.valueOf(before.get("metadata_json"))).doesNotContain("bundleWorkflowCode");
 
     String manifestJson = """
         {
@@ -235,7 +280,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
           "bizDate": "2026-05-05",
           "tenantId": "t1",
           "requiredFiles": ["%s"],
-          "jobCode": "BUNDLE_IMPORT_LATE_IT",
+          "workflowCode": "WF_BUNDLE_IMPORT_LATE_IT",
           "fileMapping": [
             { "fileName": "%s", "templateCode": "TPL_ORDER_LATE" }
           ]
@@ -257,7 +302,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         .contains("requiredFileSet")
         .contains("bundleTemplateCode")
         .contains("TPL_ORDER_LATE")
-        .contains("bundleJobCode")
+        .contains("bundleWorkflowCode")
         .contains("BUNDLE_IMPORT_LATE_IT");
   }
 
@@ -322,15 +367,14 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
       scannerProperties.setPrefix(originalPrefix);
       scannerProperties.setRequireDoneFile(originalRequireDoneFile);
       scannerProperties.setDoneFileFormat(originalDoneFileFormat);
-      jdbcTemplate.update(
-          "delete from batch.file_audit_log where tenant_id = ? and evidence_ref = ?",
-          "t1",
-          objectName);
-      jdbcTemplate.update(
-          "delete from batch.file_record where tenant_id = ? and storage_bucket = ? and storage_path = ?",
-          "t1",
-          bucket,
-          objectName);
+      final String deleteBatchFileAuditLogSql = """
+          delete from batch.file_audit_log where tenant_id = ? and evidence_ref = ?
+      """;
+      jdbcTemplate.update(deleteBatchFileAuditLogSql, "t1", objectName);
+      final String deleteBatchFileRecordSql = """
+          delete from batch.file_record where tenant_id = ? and storage_bucket = ? and storage_path = ?
+      """;
+      jdbcTemplate.update(deleteBatchFileRecordSql, "t1", bucket, objectName);
       client.deleteObject(builder -> builder.bucket(bucket).key(manifestName));
       client.deleteObject(builder -> builder.bucket(bucket).key(objectName));
       client.close();

@@ -13,3 +13,12 @@
 GitOps ops 仓模板见 `deploy/gitops/ops-repo-template/`；真实 promotion PR、Argo CD 同步和
 staging/production 主机仍需外部环境接入。Compose CD 的配置项和激活步骤见
 `docs/runbook/compose-cd-roadmap.md`。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [compose-release.sh](compose-release.sh) | 按不可变 release manifest 部署后端 Compose 服务，并在失败时恢复上一稳定版本。 |
+| [release_manifest.py](release_manifest.py) | 校验发布清单、生成 Compose 覆盖层并提取后端镜像 digest。 |

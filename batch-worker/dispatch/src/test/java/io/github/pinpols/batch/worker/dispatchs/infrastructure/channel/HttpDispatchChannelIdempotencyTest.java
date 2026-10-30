@@ -34,6 +34,7 @@ class HttpDispatchChannelIdempotencyTest {
   private final Map<String, String> acceptedResults = new ConcurrentHashMap<>();
   private final AtomicInteger requests = new AtomicInteger();
   private final AtomicInteger sideEffects = new AtomicInteger();
+  private final AtomicInteger responseStatus = new AtomicInteger(200);
   private final CountDownLatch releaseFirstResponse = new CountDownLatch(1);
 
   @BeforeEach
@@ -56,7 +57,7 @@ class HttpDispatchChannelIdempotencyTest {
       }
       byte[] body = acceptedResult.getBytes(StandardCharsets.UTF_8);
       try {
-        exchange.sendResponseHeaders(200, body.length);
+        exchange.sendResponseHeaders(responseStatus.get(), body.length);
         exchange.getResponseBody().write(body);
       } catch (IOException ignored) {
         // 第一轮故意超过客户端读取期限，客户端断开是本用例的故障注入。
@@ -86,13 +87,14 @@ class HttpDispatchChannelIdempotencyTest {
   @Test
   @DisplayName("接收端处理后响应超时,重投仍使用同一幂等键")
   void dispatch_reusesIdempotencyKeyAfterResponseTimeout() {
-    DispatchCommand command = command();
+    DispatchCommand command = command("dispatch-identity-1", true);
 
     DispatchResult firstAttempt = adapter.dispatch(command);
     releaseFirstResponse.countDown();
     DispatchResult retryAttempt = adapter.dispatch(command);
 
     assertThat(firstAttempt.success()).isFalse();
+    assertThat(firstAttempt.externalOutcomeUnknown()).isFalse();
     assertThat(retryAttempt.success()).isTrue();
     assertThat(requests).hasValue(2);
     assertThat(sideEffects).as("接收端按幂等键复用首次处理结果，不重复产生业务副作用").hasValue(1);
@@ -100,6 +102,44 @@ class HttpDispatchChannelIdempotencyTest {
             "dispatch-identity-1".getBytes(StandardCharsets.UTF_8))
         .toString();
     assertThat(idempotencyKeys).containsExactly(expectedKey, expectedKey);
+  }
+
+  @Test
+  @DisplayName("接收端已产生副作用后返回错误响应时标记外部结果未知")
+  void dispatch_marksOutcomeUnknownWhenReceiverRespondsWithFailureAfterSideEffect() {
+    responseStatus.set(503);
+
+    DispatchResult result = adapter.dispatch(command());
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isTrue();
+    assertThat(requests).hasValue(1);
+    assertThat(sideEffects).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("显式声明接收端幂等契约后错误响应可以进入受限自动重试")
+  void dispatch_keepsKnownFailureWhenReceiverIdempotencyIsDeclared() {
+    responseStatus.set(503);
+
+    DispatchResult result = adapter.dispatch(command("dispatch-identity-1", true));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isFalse();
+    assertThat(requests).hasValue(1);
+    assertThat(sideEffects).hasValue(1);
+  }
+
+  @Test
+  @DisplayName("超时后没有接收端幂等声明时结果未知")
+  void dispatch_marksOutcomeUnknownAfterTimeoutWithoutReceiverIdempotencyDeclaration() {
+    DispatchResult result = adapter.dispatch(command());
+    releaseFirstResponse.countDown();
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.externalOutcomeUnknown()).isTrue();
+    assertThat(requests).hasValue(1);
+    assertThat(sideEffects).hasValue(1);
   }
 
   @Test
@@ -112,19 +152,53 @@ class HttpDispatchChannelIdempotencyTest {
     assertThat(idempotencyKeys.getFirst()).hasSize(36);
   }
 
+  @Test
+  @DisplayName("HTTP 投递结果不保存端点中的凭据")
+  void dispatch_masksCredentialsInPersistedEvidence() {
+    releaseFirstResponse.countDown();
+    String endpoint = "http://probe-user:probe-password@127.0.0.1:"
+        + server.getAddress().getPort()
+        + "/dispatch?token=probe-token&mode=push";
+    Map<String, Object> channelConfig = Map.of(
+        "channel_type", "API", "target_endpoint", endpoint, "receiver_idempotency_supported", true);
+    DispatchCommand command = command("dispatch-secret-1", endpoint, channelConfig);
+
+    DispatchResult success = adapter.dispatch(command);
+    responseStatus.set(503);
+    DispatchResult failure = adapter.dispatch(command);
+
+    assertThat(success.success()).isTrue();
+    assertThat(failure.success()).isFalse();
+    assertThat(failure.externalOutcomeUnknown()).isFalse();
+    assertThat(success.evidenceRef()).contains("/dispatch?token=****&mode=push");
+    assertThat(failure.evidenceRef()).contains("/dispatch?token=****&mode=push");
+    assertThat(success.evidenceRef()).doesNotContain("probe-user", "probe-password", "probe-token");
+    assertThat(failure.evidenceRef()).doesNotContain("probe-user", "probe-password", "probe-token");
+  }
+
   private DispatchCommand command() {
     return command("dispatch-identity-1");
   }
 
   private DispatchCommand command(String externalRequestId) {
     String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/dispatch";
+    Map<String, Object> channelConfig = Map.of("channel_type", "API", "target_endpoint", endpoint);
+    return command(externalRequestId, endpoint, channelConfig);
+  }
+
+  private DispatchCommand command(String externalRequestId, boolean receiverIdempotencySupported) {
+    String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/dispatch";
+    Map<String, Object> channelConfig = Map.of(
+        "channel_type", "API",
+        "target_endpoint", endpoint,
+        "receiver_idempotency_supported", receiverIdempotencySupported);
+    return command(externalRequestId, endpoint, channelConfig);
+  }
+
+  private DispatchCommand command(
+      String externalRequestId, String endpoint, Map<String, Object> channelConfig) {
     DispatchPayload payload = new DispatchPayload(
         "10", null, "CH1", "target", externalRequestId, null, null, null, null, null);
-    return new DispatchCommand(
-        "tenant-a",
-        "trace-1",
-        Map.of("id", 10L),
-        Map.of("channel_type", "API", "target_endpoint", endpoint),
-        payload);
+    return new DispatchCommand("tenant-a", "trace-1", Map.of("id", 10L), channelConfig, payload);
   }
 }

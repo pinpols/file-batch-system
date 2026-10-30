@@ -40,6 +40,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -57,6 +59,19 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务控制应用服务: 认领, 结果上报, 续租与批量处理口径")
 class TaskControllerApplicationServiceTest {
+
+  @ParameterizedTest
+  @EnumSource(
+      value = TaskStatus.class,
+      names = {"SUCCESS", "FAILED"})
+  @DisplayName("已结束的任务不能再次认领")
+  void shouldRejectClaimForCompletedTask(TaskStatus status) {
+    JobTaskEntity current = task(status.code(), "w1");
+    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(current);
+    assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
+        .isInstanceOf(BizException.class);
+    verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
+  }
 
   @Mock
   private TaskExecutionService taskExecutionService;
@@ -87,7 +102,9 @@ class TaskControllerApplicationServiceTest {
     when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
-        .isInstanceOf(BizException.class);
+        .isInstanceOf(BizException.class)
+        .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
+            .isEqualTo("error.task.claim_not_available"));
     verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 
@@ -520,22 +537,23 @@ class TaskControllerApplicationServiceTest {
       String errorCode,
       String errorMessage,
       List<Map<String, Object>> verifierFailures) {
-    return new TaskExecutionReportCommand(
-        taskId,
-        "ta",
-        "w1",
-        success,
-        code,
-        message,
-        null,
-        errorCode,
-        errorMessage,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        verifierFailures);
+    return TaskExecutionReportCommand.builder()
+        .taskId(taskId)
+        .tenantId("ta")
+        .workerId("w1")
+        .success(success)
+        .code(code)
+        .message(message)
+        .resultSummary(null)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .errorKey(null)
+        .errorArgs(null)
+        .highWaterMarkOut(null)
+        .outputs(null)
+        .partitionInvocationId(null)
+        .failureClass(null)
+        .verifierFailures(verifierFailures)
+        .build();
   }
 }

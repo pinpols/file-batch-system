@@ -28,3 +28,11 @@ description: 修改或审查 Java/Go/Python/TypeScript/Rust SDK、共享契约�
 - 优先运行受影响语言的单测、fixture conformance 和真实 transport 集成；无法运行时说明语言、原因和风险。
 - 报告中区分“Java 已完整验证”“其它语言 fixture 通过”“真实网络/代理/故障未验证”。
 - 生成代码或共享常量变化后，检查所有语言仓库文件是否同步提交。
+
+## 历史经验方法
+
+改造多语言协议、核对fixture盲点或审查SDK在途生命周期时，按需读取 [历史经验方法](references/historical-methods.md)。只复用调查与验证方法，当前规则和原始证据分别维护。
+
+## 当前文档与脚本的方法补充
+
+变更包元数据、校验构建产物或准备SDK发布时，按需读取[SDK源码、包与真发布的验证边界](references/artifact-validation.md)。只加载相关方法，不把文档列出的操作自动加入执行范围。

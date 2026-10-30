@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地真实上下游 worker 业务场景矩阵统一入口。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-worker-business-scenario-matrix.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # run-worker-business-scenario-matrix.sh
 #

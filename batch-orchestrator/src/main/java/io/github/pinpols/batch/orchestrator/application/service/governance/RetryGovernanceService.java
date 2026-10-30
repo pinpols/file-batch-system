@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -28,6 +29,17 @@ public interface RetryGovernanceService {
 
   void replayDeadLetter(String tenantId, Long deadLetterTaskId);
 
+  /** 补偿处理器加入既有业务事务，重放副作用与补偿成功记账共同提交或回滚。 */
+  void replayDeadLetterInCurrentTransaction(String tenantId, Long deadLetterTaskId);
+
+  /** 为操作员批准的外部结果核实结论持久化审计。 */
+  void auditVerifiedExternalOutcomeResolution(
+      String tenantId,
+      Long deadLetterTaskId,
+      String operatorId,
+      String reason,
+      String evidenceReference);
+
   /**
    * 人工运维触发的死信重放,带 audit(P1-1 修复)。 operatorId / reason 写入 job_execution_log,便于事后追溯"谁在何时为何重放了哪条死信"。
    * idempotencyKey 留作未来 dedupe 占位(当前 markReplaying CAS 已具备幂等保护,本字段会写入 audit 但暂不参与去重)。
@@ -40,6 +52,23 @@ public interface RetryGovernanceService {
       String idempotencyKey) {
     // 默认实现退化到不带 audit 的路径,具体实现类应覆盖以追加 audit。
     replayDeadLetter(tenantId, deadLetterTaskId);
+  }
+
+  default void replayDeadLetter(DeadLetterReplayInput input) {
+    String tenantId = input.tenantId();
+    Long deadLetterTaskId = input.deadLetterTaskId();
+    String operatorId = input.operatorId();
+    String reason = input.reason();
+    String idempotencyKey = input.idempotencyKey();
+    boolean externalActionVerifiedNotExecuted = input.externalActionVerifiedNotExecuted();
+    String externalOutcomeEvidenceReference = input.externalOutcomeEvidenceReference();
+
+    if (externalActionVerifiedNotExecuted
+        || EmptyChecks.isNotNull(externalOutcomeEvidenceReference)) {
+      throw new UnsupportedOperationException(
+          "verified external outcome recovery is not supported by this implementation");
+    }
+    replayDeadLetter(tenantId, deadLetterTaskId, operatorId, reason, idempotencyKey);
   }
 
   /**

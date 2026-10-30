@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -27,6 +27,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.Charset;
 import java.nio.charset.CharsetDecoder;
@@ -63,7 +64,7 @@ public class PreprocessStep implements ImportStageStep {
 
   private final PlatformFileRecordRepository fileRecords;
 
-  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private final PlatformFileTemplateRepository pipelineDefinitions;
 
   private final BatchSecurityProperties batchSecurityProperties;
   private final BatchObjectCryptoService cryptoService;
@@ -94,24 +95,28 @@ public class PreprocessStep implements ImportStageStep {
         attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
             ? payload
             : null;
-    if (!Texts.hasText(context.getRawPayload())
-        && (importPayload == null
-            || (!Texts.hasText(importPayload.content())
-                && !Texts.hasText(importPayload.contentBase64())
-                // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
-                && !Texts.hasText(importPayload.storagePath())))) {
-      return ImportStageResult.failure(
-          stage(),
-          ERROR_CODE_PREPROCESS_INVALID,
-          "error.import.preprocess.invalid",
-          new Object[] {"raw payload is blank"},
-          "raw payload is blank",
-          ERROR_OBJECT_MAPPER);
+    boolean rawPayloadIsBlank = !Texts.hasText(context.getRawPayload());
+    if (rawPayloadIsBlank) {
+      boolean importPayloadHasNoSource = EmptyChecks.isNull(importPayload)
+          || (!Texts.hasText(importPayload.content())
+              && !Texts.hasText(importPayload.contentBase64())
+              // 大文件对象自动加载:无内联内容但带 storagePath 时,源在对象存储,放行到 resolveRawBytes 拉取。
+              && !Texts.hasText(importPayload.storagePath()));
+      if (importPayloadHasNoSource) {
+        return ImportStageResult.failure(
+            stage(),
+            ERROR_CODE_PREPROCESS_INVALID,
+            "error.import.preprocess.invalid",
+            new Object[] {"raw payload is blank"},
+            "raw payload is blank",
+            ERROR_OBJECT_MAPPER);
+      }
     }
     try {
-      if (EmptyChecks.isNotNull(importPayload)
+      boolean templateSnapshotNeedsLoading = EmptyChecks.isNotNull(importPayload)
           && Texts.hasText(importPayload.templateCode())
-          && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG))) {
+          && !hasTemplateConfigSnapshot(attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG));
+      if (templateSnapshotNeedsLoading) {
         Map<String, Object> templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
             context.getTenantId(), importPayload.templateCode(), ImportWorkerType.IMPORT);
         if (!templateConfig.isEmpty()) {
@@ -148,10 +153,12 @@ public class PreprocessStep implements ImportStageStep {
         Charset directCharset = resolveCharset(importPayload, templateConfigObject);
         // 加密装饰层不支持明文 offset range 读(statSize 也是密文长度,不能做切片计算)→ 回退整份流式。
         // 文件束每片绑定整份独立文件，只允许普通单文件分片使用字节范围下载。
-        if (EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
-            && objectSource.supportsRangeRead()
-            && ImportPreprocessObjectSource.rangeSliceEligible(
-                importPayload, templateConfig, partitionNo, partitionCount, directCharset)) {
+        boolean sourceSupportsDirectRangeSlice =
+            EmptyChecks.isNull(attrs.get(PipelineRuntimeKeys.BUNDLE_SOURCE_FILE_ID))
+                && objectSource.supportsRangeRead()
+                && ImportPreprocessObjectSource.rangeSliceEligible(
+                    importPayload, templateConfig, partitionNo, partitionCount, directCharset);
+        if (sourceSupportsDirectRangeSlice) {
           return objectSource.streamObjectRangeToSpool(
               context,
               importPayload,
@@ -193,12 +200,16 @@ public class PreprocessStep implements ImportStageStep {
     } catch (ImportPreprocessException ex) {
       SwallowedExceptionLogger.info(PreprocessStep.class, "catch:ImportPreprocessException", ex);
 
+      ImportStage failureStage = stage();
+      String failureCode = ex.errorCode();
+      String localizedMessageArgument = ex.getMessage();
+      String fallbackMessage = ex.getMessage();
       return ImportStageResult.failure(
-          stage(),
-          ex.errorCode(),
+          failureStage,
+          failureCode,
           "error.import.preprocess.failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           ERROR_OBJECT_MAPPER);
     }
   }
@@ -272,7 +283,9 @@ public class PreprocessStep implements ImportStageStep {
       return n.intValue();
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String rawText = String.valueOf(value);
+      String text = rawText.trim();
+      return Integer.parseInt(text);
     } catch (NumberFormatException ignored) {
       SwallowedExceptionLogger.info(PreprocessStep.class, "catch:NumberFormatException", ignored);
       return null;
@@ -292,7 +305,8 @@ public class PreprocessStep implements ImportStageStep {
     if (source == null) {
       return "";
     }
-    String normalized = source.replace("\r\n", "\n").replace('\r', '\n');
+    String normalizedLineEndings = source.replace("\r\n", "\n");
+    String normalized = normalizedLineEndings.replace('\r', '\n');
     if (!normalized.isEmpty() && normalized.charAt(0) == '\uFEFF') {
       normalized = normalized.substring(1);
     }
@@ -303,11 +317,13 @@ public class PreprocessStep implements ImportStageStep {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object targetCharset = templateConfig.get("target_charset");
       if (targetCharset != null && Texts.hasText(String.valueOf(targetCharset))) {
-        return EncodingUtils.resolve(String.valueOf(targetCharset));
+        String targetCharsetName = String.valueOf(targetCharset);
+        return EncodingUtils.resolve(targetCharsetName);
       }
       Object charset = templateConfig.get("charset");
       if (charset != null && Texts.hasText(String.valueOf(charset))) {
-        return EncodingUtils.resolve(String.valueOf(charset));
+        String charsetName = String.valueOf(charset);
+        return EncodingUtils.resolve(charsetName);
       }
     }
     if (importPayload != null && Texts.hasText(importPayload.targetCharset())) {
@@ -335,18 +351,21 @@ public class PreprocessStep implements ImportStageStep {
       ImportPayload importPayload, Object templateConfigObject) {
     Charset charset = resolveCharset(importPayload, templateConfigObject);
     boolean explicit = hasExplicitCharset(importPayload, templateConfigObject);
-    return new DecodingSpec(
-        charset,
-        explicit,
-        resolveInvalidCharAction(templateConfigObject),
-        charsetDetectionEnabled(templateConfigObject));
+    CodingErrorAction invalidCharAction = resolveInvalidCharAction(templateConfigObject);
+    boolean detectionEnabled = charsetDetectionEnabled(templateConfigObject);
+    return new DecodingSpec(charset, explicit, invalidCharAction, detectionEnabled);
   }
 
   /** 探测回退开关：模板 {@code charset_detect=true} 才允许自动尝试 GB18030。 */
   private static boolean charsetDetectionEnabled(Object templateConfigObject) {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object raw = templateConfig.get("charset_detect");
-      return raw != null && "true".equalsIgnoreCase(String.valueOf(raw).trim());
+      if (EmptyChecks.isNull(raw)) {
+        return false;
+      }
+      String rawText = String.valueOf(raw);
+      String text = rawText.trim();
+      return "true".equalsIgnoreCase(text);
     }
     return false;
   }
@@ -374,8 +393,10 @@ public class PreprocessStep implements ImportStageStep {
   private static CodingErrorAction resolveInvalidCharAction(Object templateConfigObject) {
     if (templateConfigObject instanceof Map<?, ?> templateConfig) {
       Object policy = templateConfig.get("invalid_char_policy");
-      if (policy != null && Texts.hasText(String.valueOf(policy))) {
-        String raw = String.valueOf(policy).trim();
+      String presenceText = EmptyChecks.isNull(policy) ? null : String.valueOf(policy);
+      if (EmptyChecks.isNotNull(policy) && Texts.hasText(presenceText)) {
+        String rawPolicy = String.valueOf(policy);
+        String raw = rawPolicy.trim();
         if ("REPLACE".equalsIgnoreCase(raw)) {
           return CodingErrorAction.REPLACE;
         }
@@ -496,10 +517,11 @@ public class PreprocessStep implements ImportStageStep {
       decoded = decodeStrict(processed, charset, spec.invalidCharAction());
     } catch (ImportPreprocessException ex) {
       // D2：仅「显式开启探测 + 未显式配置」时回退；显式配置解码失败仍 fail-fast（设计：配置即契约）。
-      if (spec.charsetDetectionEnabled()
+      boolean defaultUtf8NeedsCharsetDetection = spec.charsetDetectionEnabled()
           && !spec.explicitlyConfigured()
           && StandardCharsets.UTF_8.equals(charset)
-          && hasNonAscii(processed)) {
+          && hasNonAscii(processed);
+      if (defaultUtf8NeedsCharsetDetection) {
         try {
           decoded = decodeStrict(processed, EncodingUtils.GB18030, CodingErrorAction.REPORT);
           charset = EncodingUtils.GB18030;
@@ -516,9 +538,10 @@ public class PreprocessStep implements ImportStageStep {
         throw ex;
       }
     }
-    if (!StandardCharsets.UTF_8.equals(charset)
+    boolean decodedTextMayActuallyBeUtf8 = !StandardCharsets.UTF_8.equals(charset)
         && hasNonAscii(processed)
-        && looksLikeUtf8(processed)) {
+        && looksLikeUtf8(processed);
+    if (decodedTextMayActuallyBeUtf8) {
       log.warn(
           "[ImportPreprocess] declared charset={} but bytes also pass UTF-8 strict decode;"
               + " source may actually be UTF-8. See file_record.metadata.charsetSuspect",
@@ -541,9 +564,10 @@ public class PreprocessStep implements ImportStageStep {
     CharsetDecoder decoder =
         charset.newDecoder().onMalformedInput(action).onUnmappableCharacter(action);
     try {
-      return decoder
-          .decode(ByteBuffer.wrap(bytes == null ? new byte[0] : bytes))
-          .toString();
+      byte[] sourceBytes = EmptyChecks.isNull(bytes) ? new byte[0] : bytes;
+      ByteBuffer sourceBuffer = ByteBuffer.wrap(sourceBytes);
+      CharBuffer decodedBuffer = decoder.decode(sourceBuffer);
+      return decodedBuffer.toString();
     } catch (CharacterCodingException ex) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DECODE_FAILED",

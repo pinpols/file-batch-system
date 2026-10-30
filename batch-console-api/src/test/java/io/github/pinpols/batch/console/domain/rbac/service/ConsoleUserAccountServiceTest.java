@@ -17,13 +17,15 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -31,7 +33,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 
@@ -81,24 +85,19 @@ class ConsoleUserAccountServiceTest {
         null,
         authSet.stream()
             .map(SimpleGrantedAuthority::new)
-            .map(a -> (org.springframework.security.core.GrantedAuthority) a)
+            .map(a -> (GrantedAuthority) a)
             .toList());
     SecurityContextHolder.getContext().setAuthentication(token);
   }
 
-  private Map<String, Object> accountRow(long id, String tenantId, String username) {
-    Map<String, Object> row = new HashMap<>();
-    row.put("id", id);
-    row.put("tenant_id", tenantId);
-    row.put("username", username);
-    row.put("display_name", username);
-    row.put("authorities_csv", ConsoleRoles.TENANT_USER);
-    row.put("enabled", Boolean.TRUE);
-    return row;
+  private ConsoleUserAccountRow accountRow(long id, String tenantId, String username) {
+    return new ConsoleUserAccountRow(
+        id, tenantId, username, username, ConsoleRoles.TENANT_USER, Boolean.TRUE, null, null, null);
   }
 
   private void activeTenant(String tenantId) {
-    when(tenantMapper.selectByTenantId(tenantId)).thenReturn(Map.of("status", "ACTIVE"));
+    when(tenantMapper.selectByTenantId(tenantId))
+        .thenReturn(new TenantRow(null, null, null, "ACTIVE", null, null, null, null));
   }
 
   @Nested
@@ -118,13 +117,12 @@ class ConsoleUserAccountServiceTest {
       service.create("tenant-b", "alice", "pw", "Alice", ConsoleRoles.TENANT_USER);
 
       verify(userAccountMapper)
-          .insert(
-              eq("tenant-a"),
-              eq("alice"),
-              eq("Alice"),
-              eq("hashed"),
-              eq(ConsoleRoles.TENANT_USER),
-              nullable(String.class));
+          .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+              && Objects.equals(parameters.tenantId(), "tenant-a")
+              && Objects.equals(parameters.username(), "alice")
+              && Objects.equals(parameters.displayName(), "Alice")
+              && Objects.equals(parameters.passwordHash(), "hashed")
+              && Objects.equals(parameters.authoritiesCsv(), ConsoleRoles.TENANT_USER)));
     }
 
     @Test
@@ -138,7 +136,7 @@ class ConsoleUserAccountServiceTest {
           .extracting(e -> ((BizException) e).getCode())
           .isEqualTo(ResultCode.FORBIDDEN);
       verify(userAccountMapper, never())
-          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.any(ConsoleUserAccountInsertParam.class));
     }
 
     @Test
@@ -169,13 +167,14 @@ class ConsoleUserAccountServiceTest {
           ConsoleRoles.TENANT_ADMIN + "," + ConsoleRoles.TENANT_USER);
 
       verify(userAccountMapper)
-          .insert(
-              eq("tenant-a"),
-              eq("carol"),
-              eq("Carol"),
-              eq("hashed"),
-              eq(ConsoleRoles.TENANT_ADMIN + "," + ConsoleRoles.TENANT_USER),
-              nullable(String.class));
+          .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+              && Objects.equals(parameters.tenantId(), "tenant-a")
+              && Objects.equals(parameters.username(), "carol")
+              && Objects.equals(parameters.displayName(), "Carol")
+              && Objects.equals(parameters.passwordHash(), "hashed")
+              && Objects.equals(
+                  parameters.authoritiesCsv(),
+                  ConsoleRoles.TENANT_ADMIN + "," + ConsoleRoles.TENANT_USER)));
     }
   }
 
@@ -195,13 +194,12 @@ class ConsoleUserAccountServiceTest {
       service.create("tenant-z", "dave", "pw", "Dave", ConsoleRoles.TENANT_ADMIN);
 
       verify(userAccountMapper)
-          .insert(
-              eq("tenant-z"),
-              eq("dave"),
-              eq("Dave"),
-              eq("hashed"),
-              eq(ConsoleRoles.TENANT_ADMIN),
-              nullable(String.class));
+          .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+              && Objects.equals(parameters.tenantId(), "tenant-z")
+              && Objects.equals(parameters.username(), "dave")
+              && Objects.equals(parameters.displayName(), "Dave")
+              && Objects.equals(parameters.passwordHash(), "hashed")
+              && Objects.equals(parameters.authoritiesCsv(), ConsoleRoles.TENANT_ADMIN)));
     }
 
     @Test
@@ -214,7 +212,7 @@ class ConsoleUserAccountServiceTest {
           .extracting(e -> ((BizException) e).getCode())
           .isEqualTo(ResultCode.INVALID_ARGUMENT);
       verify(userAccountMapper, never())
-          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.any(ConsoleUserAccountInsertParam.class));
     }
 
     @Test
@@ -230,7 +228,7 @@ class ConsoleUserAccountServiceTest {
           .isEqualTo(ResultCode.INVALID_ARGUMENT);
 
       verify(userAccountMapper, never())
-          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.any(ConsoleUserAccountInsertParam.class));
     }
 
     @Test
@@ -244,7 +242,7 @@ class ConsoleUserAccountServiceTest {
           .isEqualTo(ResultCode.INVALID_ARGUMENT);
 
       verify(userAccountMapper, never())
-          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.any(ConsoleUserAccountInsertParam.class));
     }
 
     @Test
@@ -252,7 +250,8 @@ class ConsoleUserAccountServiceTest {
     void shouldRejectTenantRoleWhenTenantMissingOrInactive() {
       asPrincipal("system", ConsoleRoles.ADMIN);
       when(tenantMapper.selectByTenantId("missing")).thenReturn(null);
-      when(tenantMapper.selectByTenantId("paused")).thenReturn(Map.of("status", "SUSPENDED"));
+      when(tenantMapper.selectByTenantId("paused"))
+          .thenReturn(new TenantRow(null, null, null, "SUSPENDED", null, null, null, null));
 
       assertThatThrownBy(
               () -> service.create("missing", "miss", "pw", "Miss", ConsoleRoles.TENANT_USER))
@@ -266,7 +265,7 @@ class ConsoleUserAccountServiceTest {
           .isEqualTo(ResultCode.INVALID_ARGUMENT);
 
       verify(userAccountMapper, never())
-          .insert(any(), any(), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.any(ConsoleUserAccountInsertParam.class));
     }
   }
 
@@ -360,7 +359,9 @@ class ConsoleUserAccountServiceTest {
       service.create("system", "eve", "pw", "Eve", ConsoleRoles.ADMIN);
 
       verify(userAccountMapper)
-          .insert(eq("system"), eq("eve"), any(), any(), any(), nullable(String.class));
+          .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+              && Objects.equals(parameters.tenantId(), "system")
+              && Objects.equals(parameters.username(), "eve")));
     }
   }
 

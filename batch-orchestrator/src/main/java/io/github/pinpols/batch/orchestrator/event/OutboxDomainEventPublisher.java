@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,7 +36,9 @@ public class OutboxDomainEventPublisher implements DomainEventPublisher {
     entity.setAggregateId(event.aggregateId());
     entity.setEventType(event.eventType());
     entity.setEventKey(event.eventKey());
-    entity.setPayloadJson(JsonUtils.toJson(event.payload()));
+    Map<String, Object> payload = event.payload();
+    String payloadJson = JsonUtils.toJson(payload);
+    entity.setPayloadJson(payloadJson);
     entity.setPublishStatus(OutboxPublishStatus.NEW.code());
     entity.setPublishAttempt(0);
     entity.setTraceId(event.traceId());

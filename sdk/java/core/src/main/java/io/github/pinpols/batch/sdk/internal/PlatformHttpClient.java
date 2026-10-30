@@ -4,13 +4,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.dispatcher.HeartbeatDirective;
+import io.github.pinpols.batch.sdk.task.SdkDependencyResultReference;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import okhttp3.Call;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -117,6 +121,12 @@ public class PlatformHttpClient {
         "/internal/tasks/" + taskId + "/claim", body, idempotencyKey, TaskClaimResponse.class);
   }
 
+  /** 非幂等动作前确认当前 task/worker/invocation，非 2xx 或传输失败均不能放行动作。 */
+  public void markNonIdempotentExecutionStarted(Long taskId, Map<String, Object> body)
+      throws IOException {
+    postJson("/internal/tasks/" + taskId + "/non-idempotent-started", body, null, Void.class);
+  }
+
   /** POST /internal/tasks/{taskId}/report — body schema = TaskExecutionReportDto。 */
   public void report(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
@@ -126,6 +136,18 @@ public class PlatformHttpClient {
   /** POST /internal/tasks/{taskId}/renew — body=TaskClaimRequest(同 claim 字段集)。 */
   public TaskRenewResponse renew(Long taskId, Map<String, Object> body) throws IOException {
     return postJson("/internal/tasks/" + taskId + "/renew", body, null, TaskRenewResponse.class);
+  }
+
+  /** 确认执行线程已到达业务入口；响应未知时禁止执行业务，返回值表示平台是否已请求取消。 */
+  public boolean confirmExecutionStarted(Long taskId, Map<String, Object> identity)
+      throws IOException {
+    Map<String, Object> body = new HashMap<>(identity);
+    body.put("details", Map.of("executionStarted", true));
+    TaskRenewResponse response = renew(taskId, body);
+    if (EmptyChecks.isNull(response)) {
+      throw new IOException("execution start response was empty");
+    }
+    return response.cancelRequested();
   }
 
   private <T> T postJson(String path, Object body, String idempotencyKey, Class<T> responseType)
@@ -156,14 +178,15 @@ public class PlatformHttpClient {
         .header("Accept", "application/json")
         .header("X-Batch-Tenant-Id", config.getTenantId())
         .post(RequestBody.create(payload, JSON));
-    if (config.getApiKey() != null && !config.getApiKey().isBlank()) {
-      req.header("X-Batch-Api-Key", config.getApiKey());
+    String apiKey = config.getApiKey();
+    if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(apiKey)) {
+      req.header("X-Batch-Api-Key", apiKey);
       // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
       if (config.isRequestSigningEnabled()) {
         String timestamp = Long.toString(System.currentTimeMillis());
-        String nonce = UUID.randomUUID().toString();
-        String signature =
-            RequestSigner.sign(config.getApiKey(), "POST", path, timestamp, nonce, payload);
+        UUID nonceUuid = UUID.randomUUID();
+        String nonce = nonceUuid.toString();
+        String signature = RequestSigner.sign(apiKey, "POST", path, timestamp, nonce, payload);
         req.header("X-Batch-Timestamp", timestamp)
             .header("X-Batch-Nonce", nonce)
             .header("X-Batch-Signature", signature);
@@ -173,10 +196,12 @@ public class PlatformHttpClient {
       req.header("Idempotency-Key", idempotencyKey);
     }
 
-    okhttp3.Call call = httpClient.newCall(req.build());
+    Call call = httpClient.newCall(req.build());
     if (EmptyChecks.isNotNull(timeoutOverride)) {
-      long timeoutMillis = Math.max(
-          1L, Math.min(timeoutOverride.toMillis(), config.getHttpTimeout().toMillis()));
+      long requestedTimeoutMillis = timeoutOverride.toMillis();
+      long configuredTimeoutMillis = config.getHttpTimeout().toMillis();
+      long boundedTimeoutMillis = Math.min(requestedTimeoutMillis, configuredTimeoutMillis);
+      long timeoutMillis = Math.max(1L, boundedTimeoutMillis);
       call.timeout().timeout(timeoutMillis, TimeUnit.MILLISECONDS);
     }
     try (Response resp = call.execute()) {
@@ -188,8 +213,9 @@ public class PlatformHttpClient {
         }
         return objectMapper.readValue(responseBytes, responseType);
       }
-      log.debug("non-2xx response: status={} responseBytes={}", resp.code(), responseBytes.length);
-      throw new PlatformHttpException(resp.code(), "HTTP " + resp.code() + " from " + path);
+      int statusCode = resp.code();
+      log.debug("non-2xx response: status={} responseBytes={}", statusCode, responseBytes.length);
+      throw new PlatformHttpException(statusCode, "HTTP " + statusCode + " from " + path);
     }
   }
 
@@ -197,8 +223,26 @@ public class PlatformHttpClient {
   public record WorkerRegistrationResponse(
       Long id, String tenantId, String workerCode, String status) {}
 
-  /** claim 回包中 SDK 执行栅栏需要的稳定字段。 */
-  public record TaskClaimResponse(String partitionInvocationId) {}
+  /** claim 回包中的 SDK 执行字段；payload 是由平台持久化任务载荷提供的权威业务参数 JSON。 */
+  public record TaskClaimResponse(
+      String partitionInvocationId,
+      String payload,
+      List<SdkDependencyResultReference> dependencyResultSnapshot) {
+    public TaskClaimResponse {
+      dependencyResultSnapshot = EmptyChecks.isNull(dependencyResultSnapshot)
+          ? List.of()
+          : List.copyOf(dependencyResultSnapshot);
+    }
+
+    public TaskClaimResponse(String partitionInvocationId) {
+      this(partitionInvocationId, null, List.of());
+    }
+
+    public TaskClaimResponse(
+        String partitionInvocationId, List<SdkDependencyResultReference> dependencyResultSnapshot) {
+      this(partitionInvocationId, null, dependencyResultSnapshot);
+    }
+  }
 
   /** renew 回包中的取消指令。 */
   public record TaskRenewResponse(boolean cancelRequested) {}

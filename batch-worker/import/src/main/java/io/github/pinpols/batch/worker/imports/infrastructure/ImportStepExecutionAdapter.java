@@ -1,12 +1,14 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
 import io.github.pinpols.batch.common.constants.NodeOutputKeys;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.support.AbstractPipelineStepExecutionAdapter;
 import io.github.pinpols.batch.worker.core.support.PipelineCompensationHook;
 import io.github.pinpols.batch.worker.core.support.PipelineVerifierHook;
@@ -38,15 +40,14 @@ public class ImportStepExecutionAdapter
 
   public ImportStepExecutionAdapter(
       ImportStageExecutor importStageExecutor,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileRecordRepository fileRecords,
       ObjectProvider<PipelineVerifierHook> verifierHookProvider,
       ObjectProvider<PipelineCompensationHook> compensationHookProvider) {
     super(
-        pipelineDefinitions,
         pipelineRuns,
         fileRecords,
+        importStageExecutor,
         verifierHookProvider,
         compensationHookProvider);
     this.importStageExecutor = importStageExecutor;
@@ -67,9 +68,26 @@ public class ImportStepExecutionAdapter
       StepExecutionRequest request, Map<String, Object> contextMap, Long fileId) {
     ImportJobContext context = new ImportJobContext();
     populateCommonFields(context, request, contextMap);
-    context.setBizDate(String.valueOf(contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "")));
+    Object rawBizDate = contextMap.getOrDefault(PipelineRuntimeKeys.BIZ_DATE, "");
+    String bizDate = String.valueOf(rawBizDate);
+    context.setBizDate(bizDate);
     context.setFileId(fileId == null ? "" : String.valueOf(fileId));
     return context;
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+    if (EmptyChecks.isNull(request) || !pipelineType().equalsIgnoreCase(request.stepCode())) {
+      return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    }
+    Map<String, Object> requestContext = request.context();
+    Map<String, Object> attributes = EmptyChecks.isNull(requestContext)
+        ? new LinkedHashMap<>()
+        : new LinkedHashMap<>(requestContext);
+    resolveSystemPipelineSteps(attributes);
+    Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
+    ImportJobContext context = buildContext(request, attributes, fileId);
+    return importStageExecutor.resolveReplayCapability(context);
   }
 
   @Override

@@ -2,29 +2,48 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 @DisplayName("导出准备阶段单测:载荷解析,模板配置装载与命名规则及分片命名语义")
 class PrepareStepTest {
+
+  private final ObjectMapper objectMapper = new ObjectMapper();
+
+  @Mock
+  private PlatformFileTemplateRepository runtimeRepository;
+
+  @Mock
+  private SecretPayloadProtector secretPayloadProtector;
+
+  private PrepareStep step;
+
+  @BeforeEach
+  void setUp() {
+    FrozenFileTemplateResolver resolver =
+        new FrozenFileTemplateResolver(runtimeRepository, secretPayloadProtector);
+    step = new PrepareStep(objectMapper, resolver);
+  }
 
   @Test
   @DisplayName("租户或原始载荷为空时返回准备阶段非法")
   void execute_returnsInvalid_whenTenantOrPayloadBlank() {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     ExportJobContext ctx = new ExportJobContext();
     ctx.setTenantId("t1");
@@ -39,10 +58,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("给出模板编码时:解析载荷,装载模板配置并回填文件名与对象名")
   void execute_parsesPayload_andLoadsTemplateConfig_whenTemplateCodeProvided() throws Exception {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig("t1", "TPL_1", ExportWorkerType.EXPORT))
         .thenReturn(Map.of(
@@ -86,10 +101,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("上下文中已有导出载荷时直接复用,不再解析原始报文")
   void execute_usesExistingExportPayloadFromAttributes_withoutJsonParse() {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "JSON"));
@@ -127,10 +138,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("载荷与上下文都缺业务日期时失败,并返回对应错误码")
   void execute_failsWhenBizDateMissingFromPayloadAndContext() throws Exception {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     ExportPayload payload = new ExportPayload(
         "FC1", "BIZ", null, "B001", null, null, null, null, Boolean.FALSE, null, Map.of());
@@ -148,10 +155,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("多分片时文件名,对象名与临时对象名都追加且只追加一次分片后缀")
   void execute_addsPartitionSuffix_toAllNames_whenMultiPartition() throws Exception {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "DELIMITED"));
@@ -191,10 +194,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("未指定分片时按单片处理,文件名不带分片后缀")
   void execute_noPartitionSuffix_whenSinglePartition() throws Exception {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "DELIMITED"));
@@ -230,10 +229,6 @@ class PrepareStepTest {
   @Test
   @DisplayName("载荷显式指定对象名时,多分片仍在其上追加分片后缀")
   void execute_tagsExplicitObjectName_whenMultiPartition() throws Exception {
-    ObjectMapper objectMapper = new ObjectMapper();
-    PlatformPipelineDefinitionRepository runtimeRepository =
-        mock(PlatformPipelineDefinitionRepository.class);
-    PrepareStep step = new PrepareStep(objectMapper, runtimeRepository);
 
     when(runtimeRepository.loadLatestTemplateConfig(any(), any(), any()))
         .thenReturn(Map.of("file_format_type", "JSON"));

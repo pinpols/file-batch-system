@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -14,6 +13,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.rbac.entity.ResourceTagEntity;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
+import io.github.pinpols.batch.console.domain.rbac.service.ResourceTagUpsertInput;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -22,16 +22,23 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("资源标签控制器: 按资源与标签查询、写入与删除委托")
+@ExtendWith(MockitoExtension.class)
 class ConsoleResourceTagControllerTest {
 
-  private final ConsoleResourceTagService tagService = mock(ConsoleResourceTagService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleResourceTagService tagService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -42,9 +49,6 @@ class ConsoleResourceTagControllerTest {
 
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -104,6 +108,9 @@ class ConsoleResourceTagControllerTest {
   @Test
   @DisplayName("写入资源标签时, 租户、资源、标签与操作人组装成入参")
   void shouldUpsertTag() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "t1", "operator-1", null, "127.0.0.1"));
     mockMvc
         .perform(post("/api/console/tags")
             .param("tenantId", "t1")
@@ -119,7 +126,15 @@ class ConsoleResourceTagControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    verify(tagService).upsert("t1", "JOB", "job-001", "env", "prod", "operator-1");
+    ResourceTagUpsertInput tagInput = ResourceTagUpsertInput.builder()
+        .tenantId("t1")
+        .resourceType("JOB")
+        .resourceCode("job-001")
+        .tagKey("env")
+        .tagValue("prod")
+        .operator("operator-1")
+        .build();
+    verify(tagService).upsert(tagInput);
   }
 
   @Test

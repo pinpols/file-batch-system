@@ -141,7 +141,8 @@ public class OutboxOpsApplicationService {
             ? AuditLogConstants.OPERATOR_TYPE_REQUEST
             : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
     extra.put("reason", reason);
-    audit.setExtraJson(JsonUtils.toJson(extra));
+    String extraJson = JsonUtils.toJson(extra);
+    audit.setExtraJson(extraJson);
     jobExecutionLogMapper.insert(audit);
   }
 }

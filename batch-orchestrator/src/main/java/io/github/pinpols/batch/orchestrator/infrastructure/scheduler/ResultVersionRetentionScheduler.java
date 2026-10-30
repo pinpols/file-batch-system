@@ -52,7 +52,8 @@ public class ResultVersionRetentionScheduler {
     int archived = demoteSupersededBatch(now);
     int deleted = purgeArchivedBatch(now);
     int dryRunArchived = archiveDryRunBatch(now);
-    if (archived > 0 || deleted > 0 || dryRunArchived > 0) {
+    boolean retentionChangedVersions = archived > 0 || deleted > 0 || dryRunArchived > 0;
+    if (retentionChangedVersions) {
       log.info(
           "result_version retention completed: archived={}, deleted={}, dryRunArchived={}, at={}",
           archived,
@@ -68,7 +69,9 @@ public class ResultVersionRetentionScheduler {
    * {@code @SchedulerLock} 嵌套顺序歧义）。返回真正成功 archived 的行数。
    */
   public int demoteSupersededBatch(Instant now) {
-    Instant cutoff = now.minus(Duration.ofDays(properties.getSupersededDays()));
+    int supersededRetentionDays = properties.getSupersededDays();
+    Duration supersededRetention = Duration.ofDays(supersededRetentionDays);
+    Instant cutoff = now.minus(supersededRetention);
     List<ResultVersionEntity> stale =
         resultVersionMapper.selectSupersededOlderThan(cutoff, properties.getBatchSize());
     if (EmptyChecks.isEmpty(stale)) {
@@ -96,7 +99,9 @@ public class ResultVersionRetentionScheduler {
 
   /** 删除超过 archived-days 的 batch 热表历史行；仍被 readiness 物化结果引用的行会保留。 */
   public int purgeArchivedBatch(Instant now) {
-    Instant cutoff = now.minus(Duration.ofDays(properties.getArchivedDays()));
+    int archivedRetentionDays = properties.getArchivedDays();
+    Duration archivedRetention = Duration.ofDays(archivedRetentionDays);
+    Instant cutoff = now.minus(archivedRetention);
     List<ResultVersionEntity> stale =
         resultVersionMapper.selectArchivedOlderThan(cutoff, properties.getBatchSize());
     if (EmptyChecks.isEmpty(stale)) {

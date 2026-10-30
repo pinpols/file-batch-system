@@ -51,11 +51,13 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   @Test
   @DisplayName("数据库中存在的每张物理归档表都能在登记清单中找到对应登记项")
   void shouldRegisterEveryPhysicalArchiveTable_whenComparingWithRegistry() {
-    List<String> physicalArchiveTables = jdbcTemplate.queryForList(
-        "SELECT table_name FROM information_schema.tables"
-            + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'"
-            + " ORDER BY table_name",
-        String.class);
+    String physicalArchiveTablesSql = """
+        select table_name from information_schema.tables
+        where table_schema = 'archive' and table_name like '%_archive'
+        order by table_name
+        """;
+    List<String> physicalArchiveTables =
+        jdbcTemplate.queryForList(physicalArchiveTablesSql, String.class);
 
     Set<String> registered = registeredArchivedTables();
 
@@ -95,10 +97,11 @@ class ArchiveSchemaDriftCoverageIntegrationTest extends AbstractIntegrationTest 
   @DisplayName("扣除豁免项后,登记项数量与物理归档表数量一致")
   void shouldMatchPhysicalArchiveCount_whenRegistryCompared() {
     // 数量级冗余守护:登记数应与 DB 中物理 archive 表数(去豁免后)一致
-    int physical = jdbcTemplate.queryForObject(
-            "SELECT count(*)::int FROM information_schema.tables"
-                + " WHERE table_schema = 'archive' AND table_name LIKE '%_archive'",
-            Integer.class)
+    String physicalArchiveCountSql = """
+        select count(*)::int from information_schema.tables
+        where table_schema = 'archive' and table_name like '%_archive'
+        """;
+    int physical = jdbcTemplate.queryForObject(physicalArchiveCountSql, Integer.class)
         - EXEMPTED_ARCHIVE_TABLES.size();
     int registered = registeredArchivedTables().size();
     assertThat(registered)

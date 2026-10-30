@@ -7,9 +7,11 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
 
 /** Trigger MQ 发布适配器；业务 relay 只依赖通用消息端口。 */
@@ -29,15 +31,16 @@ public class KafkaMqMessagePublisher implements MqMessagePublisher {
         new ProducerRecord<>(message.topic(), message.key(), message.payload());
     message.headers().forEach((name, value) -> {
       if (EmptyChecks.isNotNull(value)) {
-        producerRecord
-            .headers()
-            .add(new RecordHeader(name, value.getBytes(StandardCharsets.UTF_8)));
+        byte[] encodedHeaderValue = value.getBytes(StandardCharsets.UTF_8);
+        RecordHeader recordHeader = new RecordHeader(name, encodedHeaderValue);
+        producerRecord.headers().add(recordHeader);
       }
     });
-    return kafkaTemplate
-        .send(producerRecord)
-        .toCompletableFuture()
-        .thenApply(result -> new MqPublishResult(
-            result.getRecordMetadata().partition(), result.getRecordMetadata().offset()));
+    CompletableFuture<SendResult<String, String>> sendFuture =
+        kafkaTemplate.send(producerRecord).toCompletableFuture();
+    return sendFuture.thenApply(result -> {
+      RecordMetadata metadata = result.getRecordMetadata();
+      return new MqPublishResult(metadata.partition(), metadata.offset());
+    });
   }
 }

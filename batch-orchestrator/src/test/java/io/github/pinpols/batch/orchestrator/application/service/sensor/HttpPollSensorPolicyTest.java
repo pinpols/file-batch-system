@@ -97,7 +97,8 @@ class HttpPollSensorPolicyTest {
             "matchExpr",
             "status==2xx"),
         Map.of(),
-        Duration.ofSeconds(30));
+        Duration.ofSeconds(30),
+        null);
 
     SensorProbeResult result = transportPolicy.probe(context);
 
@@ -125,11 +126,33 @@ class HttpPollSensorPolicyTest {
             "matchExpr",
             "status==2xx"),
         Map.of(),
-        Duration.ofSeconds(30));
+        Duration.ofSeconds(30),
+        null);
 
     SensorProbeResult result = transportPolicy.probe(context);
 
     assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
     assertThat(result.errorArgs()).contains("HTTP_POLL", "HTTP_POLL header is not allowed: Host");
+  }
+
+  @Test
+  @DisplayName("HTTP 传感器异常不回传令牌并保留普通故障信息")
+  void shouldMaskCredentialsInTransportFailure() {
+    HttpPollSensorPolicy failing =
+        new HttpPollSensorPolicy(new SensorProperties(), new ObjectMapper(), request -> {
+          throw new IllegalStateException("service failed Authorization: Bearer sample-token");
+        });
+    SensorContext context = new SensorContext(
+        "tenant-a",
+        1L,
+        Map.of("url", "https://example.test/status", "matchExpr", "status==2xx"),
+        Map.of(),
+        Duration.ofSeconds(30),
+        null);
+    SensorProbeResult result = failing.probe(context);
+    assertThat(result.status()).isEqualTo(SensorProbeStatus.ERROR);
+    assertThat(result.errorArgs().toString())
+        .contains("HTTP_POLL", "service failed")
+        .doesNotContain("sample-token");
   }
 }

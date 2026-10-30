@@ -18,11 +18,11 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Synthetic worker lifecycle pressure for orchestrator task APIs:
+ * 针对 Orchestrator 任务 API 的模拟 Worker 生命周期压力：
  * {@code CLAIM -> optional pause -> REPORT}.
  *
  * <p>Input is an explicit CSV file with header {@code taskId,tenantId,workerId}. Use only with
- * isolated READY tasks that are not consumed by real workers; this scenario mutates task and
+ * 创建不会被真实 Worker 消费的独立 READY 任务；该场景会变更任务和
  * partition state.
  */
 public class WorkerTaskLifecycleSimulation extends Simulation {

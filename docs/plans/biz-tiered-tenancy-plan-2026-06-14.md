@@ -1,8 +1,7 @@
-# biz 数据层 Tiered 多租实施方案(设计存档)
+# biz 数据层 Tiered 多租方案与扩容触发条件
 
-> 状态:**设计存档,非当前缺口**。需求驱动——仅当 biz 撞单机墙时按本方案执行。
-> 定位:把"该做时照着做"的设计落到纸上,现在**不建**(YAGNI;customer_account ~22k 行,无需求)。
-> 关联:[`docs/analysis/scaling-state-and-biz-path-2026-06-14.md`](../analysis/scaling-state-and-biz-path-2026-06-14.md)(扩容现状+路径决策)、docs/agent-baseline.md「citus 冻结」。
+> 当前结论：应用层租户路由已在代码中实现；是否启用生产多片仍由容量证据、部署拓扑和运维准备决定。本文维护扩展触发条件与分片迁移原则，不作为从零实施路由的待办清单。
+> 关联:[biz 多租户分片路由](../runbook/biz-tenant-routing.md)、`docs/agent-baseline.md` 的租户隔离约束。当前部署事实和运维行为以 Runbook 与代码为准。
 
 ## 0. 一句话
 

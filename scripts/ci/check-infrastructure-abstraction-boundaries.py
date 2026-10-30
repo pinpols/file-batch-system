@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Prevent new application/domain code from depending on concrete infrastructure SDKs."""
+# 用途：基础设施抽象边界。
+# 用法：python3 scripts/ci/check-infrastructure-abstraction-boundaries.py --base <基线引用>。
+"""防止新增应用层与领域层代码依赖具体基础设施 SDK。"""
 
 from __future__ import annotations
 

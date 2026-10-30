@@ -4,6 +4,7 @@
 -- max_replay_count    — 自动重放上限, 超过后 scheduler 改 GIVE_UP, 人工仍可 /internal/dead-letters/{id}/replay
 -- error_class         — BUSINESS (硬错, 不自动重放) | SYSTEM (软错, 自动重放)
 --                       BUSINESS 来源: NON_RETRYABLE_ERROR_CODES (file_missing / channel_not_found 等)
+
 ALTER TABLE batch.dead_letter_task
     ADD COLUMN IF NOT EXISTS next_replay_at TIMESTAMPTZ;
 
@@ -21,6 +22,7 @@ ALTER TABLE batch.dead_letter_task
     CHECK (error_class IN ('BUSINESS', 'SYSTEM'));
 
 -- 自动重放轮询索引: 只对 NEW / FAILED + 已到 next_replay_at 的 SYSTEM 记录有效
+
 CREATE INDEX IF NOT EXISTS idx_dead_letter_auto_retry
     ON batch.dead_letter_task (replay_status, error_class, next_replay_at, replay_count)
     WHERE replay_status IN ('NEW', 'FAILED') AND error_class = 'SYSTEM';

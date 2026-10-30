@@ -17,7 +17,10 @@ public final class BatchTopics {
   /** ADR-010: trigger → orchestrator 异步 launch 事件 topic(版本化,协议演进时升 v2)。 */
   public static final String TRIGGER_LAUNCH_V1 = "batch.trigger.launch.v1";
 
-  /** workflow 终态事务 Outbox 的可靠血缘/监控事件。 */
+  /** Job 终态事实,与 Workflow 合同和消费组独立。 */
+  public static final String JOB_TERMINAL_V1 = "batch.job.terminal.v1";
+
+  /** Workflow 终态事务 Outbox 的可靠血缘/业务通知事件。 */
   public static final String WORKFLOW_TERMINAL_V1 = "batch.workflow.terminal.v1";
 
   /**

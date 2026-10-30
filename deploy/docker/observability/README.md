@@ -33,3 +33,11 @@
 仅使用字母、数字、`_` 或 `-`。同一变量会注入 Console API 和 Alertmanager；Alertmanager 启动时
 将其渲染进临时配置文件，缺失、格式错误或仍为模板占位符时拒绝启动。生产环境应通过 Secret 管理，
 不要复制本地开发令牌。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [prometheus-entrypoint.sh](prometheus-entrypoint.sh) | 生成本地服务发现目标并启动 Prometheus。 |

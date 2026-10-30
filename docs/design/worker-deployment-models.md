@@ -4,7 +4,7 @@
 **关联 ADR**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) · [ADR-036](../architecture/adr/ADR-036-sdk-task-handler-templates.md) · [ADR-029](../architecture/adr/ADR-029-dedicated-spi-worker.md)
 **关联模块**:`batch-worker-{core,import,export,process,dispatch,atomic}` · `batch-worker-sdk`
 
-> 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api/),具体演进历史在 ADR-035。
+> 本文档讲清两种 worker 的**边界、互补关系、混用方式、选型决策**。属架构基线,长期维护;具体协议字段在 [`docs/api/`](../api),具体演进历史在 ADR-035。
 
 ---
 
@@ -22,7 +22,7 @@
 |---|---|---|
 | **部署位置** | 平台 K8s | 租户 K8s / VM |
 | **运行时** | 平台统一 JDK / 依赖 | 租户自由定 |
-| **能力面** | 完整 5 阶段 Pipeline 状态机 + 直写 `file_record` / `pipeline_instance` | 只 CLAIM → EXECUTE → REPORT |
+| **能力面** | 四类固定阶段 Pipeline（各 5 或 6 阶段） + 直写 `file_record` / `pipeline_instance` | 只 CLAIM → EXECUTE → REPORT |
 | **依赖** | `batch-common`(MyBatis / Flyway / Redis / DB 凭据) | 4 个轻量(jackson / kafka / slf4j / JDK) |
 | **跟平台耦合** | 同 reactor 同代码库,版本必须一致 | 协议解耦,SDK 版本可滞后 |
 | **数据可达性** | 必须能访问平台 DB + 业务数据源 | **平台访问不到租户数据** |
@@ -37,7 +37,7 @@
 
 ### 类型 A:**只能平台 worker**(SDK 干不了)
 
-- **Pipeline 5 阶段任务**(IMPORT / EXPORT / PROCESS / DISPATCH 内置流水线)
+- **系统固定阶段 Pipeline 任务**(IMPORT / EXPORT / PROCESS / DISPATCH 内置流水线)
   - 原因:这些阶段直接写 `pipeline_instance` / `file_record` / `pipeline_stage_*`,worker 跟 orchestrator 同库强一致;SDK 协议层没暴露这些状态机
   - 红线:docs/agent-baseline.md「Worker 不能直接写 `job_instance` / `workflow_run`」,平台内置 worker 通过 `batch-common` 用专属接口写 pipeline 表,SDK 没这个口子
 - **跨租户共享的标准化任务**(平台统一格式转换 / 统一对账 / 跨租户聚合)
@@ -63,12 +63,16 @@
 
 关键点:**编排统一**,orchestrator 不区分下游 worker 是平台的还是自托管的。
 
-```
-workflow_definition (在 console-api 定义)
-├─ node-1: taskType=IMPORT_STANDARD     → 平台 worker-import 接(平台域)
-├─ node-2: taskType=tenant_xyz_validate → 自托管 SDK 接(租户内网验证)
-├─ node-3: taskType=EXPORT_STANDARD     → 平台 worker-export 接(平台域)
-└─ node-4: taskType=tenant_xyz_notify   → 自托管 SDK 接(租户内网 webhook)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  W[Workflow 定义] --> N[JOB 节点引用 Job]
+  N --> P[平台标准任务类型]
+  N --> T[租户自定义 taskType]
+  P --> I[平台 Import / Export 等 Worker]
+  T --> S[租户自托管 SDK]
+  I --> R[CLAIM / lease / REPORT]
+  S --> R
 ```
 
 orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
@@ -104,27 +108,9 @@ orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
 
 当前没有 `FIXED_DELAY`、`ONE_SHOT` 或 `ON_WORKFLOW_COMPLETE` schedule type。一次性、上游完成和文件到达场景应通过 API / EVENT / CATCH_UP 等现有来源进入统一 launch 链，不能把概念示例写成已支持的定义枚举。
 
-**典型配置**:
+**配置关系**：先按 [taskType 配置](sdk-task-type-configuration.md) 登记并验证 Job 的执行类型与 Worker 路由，再在 Workflow 中以 `JOB.related_job_code` 引用该 Job。日程写在 Workflow definition（如 `CRON`、表达式和时区），图包含 START、JOB、END 及对应边。
 
-```yaml
-job_definition:
-  # WORKFLOW 作业按 job_code 查找同租户、同名且已启用的 workflow_definition
-  job_code: tenant_xyz_import_wf
-  job_type: WORKFLOW
-  schedule_type: CRON
-  schedule_expr: "0 0 2 * * ?"           # 每天 2:00
-  timezone: Asia/Shanghai
-
-workflow_definition:
-  workflow_code: tenant_xyz_import_wf
-  nodes:
-    - taskType: tenant_xyz_import        # ← 派到自托管 SDK
-```
-
-每天 2:00 `batch-trigger` fire → orchestrator launch → 派单到租户 SDK。**租户进程零定时代码**。
-
-`WORKFLOW` 类型作业的 `job_code` 必须与目标 `workflow_code` 一致；当前 launch 链不使用
-`execution_handler` 建立两者关联。
+每天计划触发接纳一个 WorkflowRun；到达 JOB 节点时创建 JobInstance，再经 Outbox/Kafka 派给匹配的 Worker。`WORKFLOW` 不是当前 JobType，job_code 不必与 workflow_code 同名，Worker 进程不自行配置 cron。实际导入字段与校验以当前模板和 DTO 为准。
 
 #### B. 编排能力(`workflow_definition` 全支持)
 
@@ -132,24 +118,27 @@ workflow_definition:
 - ✅ **重试策略**:`retry_policy` (max_attempts / backoff / initial_delay) 全部生效
 - ✅ **GATEWAY 条件分支**:基于 `SdkTaskResult.outputs` 字段决策
 - ✅ **补偿 / Saga**:补偿节点同样派到自托管
-- ✅ **审批节点**:审批未通过前 SDK 不会被派单,自动等
-- ✅ **Fan-out 分片**:`partitionInvocationId` 分发到多副本 SDK 并发执行
+- **高风险操作审批**：属于操作命令域，不是图内节点类型；通过审批后仍受租户与运行准入约束
+- **Job 分区/分片**：按冻结分区计划执行；`partitionInvocationId` 是 CLAIM 尝试围栏，不是分片数或动态节点展开配置。旧 TASK fanOut 不属于新根图能力
 - ✅ **优先级 / 亲和性**(ADR-027 范围内):自托管 worker pool 是合法目标
 - ✅ **SLA 监控 / 超时告警**:基于 `created_at` / `started_at` / `completed_at`
-- ✅ **手动重跑 / 跳过 / 强制完成**:console 运维动作全可用
+- **运维操作**：按对象、当前状态、权限和 ReplayOperation 支持范围开放；不能据此承诺任意节点均可跳过或强制成功
 
 #### C. 为什么自托管也能享受这些
 
 trigger 不感知下游 worker 是谁,按 `taskType` 路由:
 
-```
-batch-trigger (cron / fixed-rate / event)
-    │  trigger_outbox_event
-    ▼
-orchestrator (launch workflow_run)
-    │  按 taskType 路由
-    ├──→ 内部 Kafka topic → 平台 worker 消费
-    └──→ batch.task.dispatch.<tenantId>.* → 自托管 SDK 消费
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T[Trigger：cron / fixed-rate / event] --> O[trigger_outbox_event]
+  O --> K[Kafka 触发消息]
+  K --> W[Orchestrator：WorkflowRun / JOB]
+  W --> D[任务 Outbox → Kafka dispatch]
+  D --> P[平台 Worker]
+  D --> S[租户自托管 SDK]
+  P --> C[CLAIM 后执行与 REPORT]
+  S --> C
 ```
 
 **自托管节点跟平台节点对 trigger / workflow 引擎完全无差别**。
@@ -174,17 +163,16 @@ orchestrator (launch workflow_run)
 
 日切门闩(`BatchDayGateService`)在 orchestrator **launch 阶段**就执行 — 在写入 Kafka 派单消息**之前**:
 
-```
-trigger fire
-   │
-   ▼
-LaunchService.launch
-   │
-   ▼
-BatchDayGateService.evaluateAndApply  ← 日切门闩在这里
-   │ ┌─ALLOW──→ 写 trigger_request=ACCEPTED + outbox + Kafka 派单 ──→ worker(平台 / SDK)
-   │ ├─WAIT───→ 写 batch_day_waiting_launch + trigger_request=WAITING(**不发 Kafka**)
-   │ └─REJECT─→ 写 trigger_request=REJECTED(**不发 Kafka**)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T[Trigger 请求与 Trigger Outbox] --> K[Kafka 触发消息]
+  K --> O[Orchestrator：相关启动门禁]
+  O --> G{BatchDayGateService}
+  G -->|ALLOW| A[创建执行任务与任务 Outbox]
+  A --> D[Kafka 任务派发 → 平台 Worker / SDK]
+  G -->|WAIT| W[等待台账 + trigger_request WAITING]
+  G -->|REJECT| R[trigger_request REJECTED]
 ```
 
 WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所以:
@@ -198,7 +186,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 要让某 job 拥有"批量行为"(Day-1 没结清 Day-2 等待 / 拒绝):
 
 1. `business_calendar.day_rollover_policy` ∈ {`WAIT_PREVIOUS_DAY`, `REJECT_IF_PREVIOUS_OPEN`}
-2. `job_definition.calendar_code` 非空 + `previous_day_dependency_scope` ≠ `NONE`
+2. 根 Workflow 的 `calendar_code` 已配置，并按已确认的前日依赖策略接纳
 3. 触发时 `LaunchRequest.bizDate` 非空
 
 配置矩阵 + 自动释放时序 + 排查指引 → [`docs/runbook/batch-day-gate-howto.md`](../runbook/batch-day-gate-howto.md)。
@@ -213,7 +201,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 
 | 能力 | 原因 |
 |---|---|
-| 内置 Pipeline taskType(IMPORT/EXPORT/PROCESS/DISPATCH/FILE_STEP) | 平台 worker 独占,SDK 注册被 `TaskTypeRegistry` reject |
+| 内置 Pipeline taskType(IMPORT/EXPORT/PROCESS/DISPATCH) | 平台 worker 独占,SDK 注册被 `TaskTypeRegistry` reject |
 | 直写 `file_record` / `pipeline_instance` / `pipeline_stage_*` | docs/agent-baseline.md 红线:Worker 不能直接写状态机表 |
 | Pipeline stage 级生命周期事件 | 平台只看 task 终态 + counts(ADR-035 §6 路径 3) |
 | `batch_day` 业务日历联动 | 平台 worker 用 `BatchDateService`,SDK 不暴露 |
@@ -282,7 +270,7 @@ WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所�
 |---|---|
 | `ConsoleOrchestratorProxyService` 运维(outbox cleanup / republish) | ❌ |
 | Dry-run / 对账 / Forensic(ADR-021/022/026) | ❌ |
-| 修改 `workflow_definition` / `trigger_definition` | ⚠️ 走 console-api 凭账号,SDK 不能改 |
+| 修改 `workflow_definition` / 日程配置 | ⚠️ 走 console-api 凭账号,SDK 不能改 |
 | 查看其他租户任务 | ❌ 多租隔离强制 |
 | 管理 worker 池容量 | ❌ 自家 SDK 进程扩缩容是租户运维事 |
 
@@ -411,6 +399,8 @@ public final class SdkTaskContext {
 
 #### D. Heartbeat 双向通道(server-driven directive)
 
+内置Worker的在途心跳绑定本地注册实例；下线或重新注册后，旧响应不能恢复缓存或将旧平台指令施加到新注册。Worker滚动关闭的执行池、租约及回报边界见[滚动升级手册](../runbook/rolling-upgrade-workers.md)。此处协议能力仍按各SDK实际实现分别验证。
+
 `heartbeat` response 不再只是 200 OK,带 platform directive:
 
 ```json
@@ -508,22 +498,16 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 ## 9. 选型决策树
 
-```
-租户提需求:有个 X 任务想跑
-   │
-   ├─ X 涉及租户私有数据 / 数据不能出域? ──── 是 ──→ 自托管 SDK
-   │
-   ├─ X 需要租户专属运行时(特殊驱动 / native deps)? ─ 是 ──→ 自托管 SDK
-   │
-   ├─ X 是合规审计要求"代码在我家执行"? ─────── 是 ──→ 自托管 SDK
-   │
-   ├─ X 跑租户自家 shell / 任意 SQL? ───────── 是 ──→ 自托管 SDK(避免给平台 atomic 任意命令权限)
-   │
-   ├─ X 是 Pipeline 5 阶段标准流水线? ──────── 是 ──→ 平台 worker(SDK 干不了)
-   │
-   ├─ X 跨多租户共享(平台统一对账等)? ─────── 是 ──→ 平台 worker
-   │
-   └─ X 是普通业务任务,数据不敏感,租户也不想运维 ──→ 平台 worker(默认)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  X[租户任务需求] --> P{数据驻留、专属运行时或<br/>代码须在租户域执行？}
+  P -->|是| S[自托管 SDK]
+  P -->|否| C{执行租户自定义 shell / SQL？}
+  C -->|是| S
+  C -->|否| F{平台固定文件 Pipeline？}
+  F -->|是| W[平台文件 Worker]
+  F -->|否| D[平台 Worker 为默认，按部署约束评估]
 ```
 
 ---

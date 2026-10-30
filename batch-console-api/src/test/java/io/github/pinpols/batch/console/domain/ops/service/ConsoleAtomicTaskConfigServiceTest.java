@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
+import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.stubbing.Answer;
 
 /**
  * R3-5 — {@link ConsoleAtomicTaskConfigService} 单测。
@@ -135,6 +137,88 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   @Test
+  @DisplayName("Shell 参数列表含内联令牌时创建前拒绝且不写库")
+  void shouldRejectInlineCredentialInShellArguments() {
+    Map<String, Object> params =
+        Map.of("command", "/usr/bin/echo", "args", List.of("--token=probe-secret"));
+
+    assertThatThrownBy(() -> service.create(TENANT, "shell", "unsafe", params, null))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.security.sensitive_in_payload")
+        .hasMessageNotContaining("probe-secret");
+    verify(mapper, never()).insertAtomicTaskConfig(any());
+  }
+
+  @Test
+  @DisplayName("四类任务无效超时在配置保存前拒绝")
+  void shouldRejectInvalidExecutorTimeoutBeforeWrite() {
+    List<String> types = List.of("sql", "stored_proc", "shell", "http");
+    List<String> requiredKeys = List.of("sql", "procedureName", "command", "url");
+    List<String> requiredValues =
+        List.of("select 1", "batch.p", "/bin/echo", "https://example.com");
+    List<String> timeoutKeys = List.of(
+        "statementTimeoutSeconds", "statementTimeoutSeconds", "timeoutSeconds", "timeoutSeconds");
+    List<Object> invalidValues = List.of(0, -1, 1.5d, new BigInteger("18446744073709551617"));
+    for (int i = 0; i < types.size(); i++) {
+      int index = i;
+      for (Object invalid : invalidValues) {
+        Map<String, Object> parameters = Map.of(
+            requiredKeys.get(index), requiredValues.get(index), timeoutKeys.get(index), invalid);
+        assertThatThrownBy(
+                () -> service.create(TENANT, types.get(index), "invalid-timeout", parameters, null))
+            .isInstanceOf(BizException.class)
+            .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
+      }
+    }
+    verify(mapper, never()).insertAtomicTaskConfig(any());
+  }
+
+  @Test
+  @DisplayName("参数类型与 schema 不符时拒绝创建，且不写库或回显参数值")
+  void shouldRejectWrongParameterTypesBeforeWrite() {
+    List<Map<String, Object>> invalidParameters = List.of(
+        Map.of("command", "/usr/bin/echo", "args", "--token=probe-secret"),
+        Map.of("url", "https://example.com", "headers", "not-a-map"),
+        Map.of("sql", "select 1", "statementTimeoutSeconds", "30"),
+        Map.of("sql", "select 1", "autoCommit", "true"));
+    List<String> taskTypes = List.of("shell", "http", "sql", "sql");
+
+    for (int i = 0; i < invalidParameters.size(); i++) {
+      int index = i;
+      assertThatThrownBy(() -> service.create(
+              TENANT, taskTypes.get(index), "wrong-type", invalidParameters.get(index), null))
+          .isInstanceOf(BizException.class)
+          .hasMessageContaining("error.atomic_task_config.parameters_type_invalid")
+          .hasMessageNotContaining("probe-secret");
+    }
+    verify(mapper, never()).insertAtomicTaskConfig(any());
+  }
+
+  @Test
+  @DisplayName("Shell 列表多层嵌套的凭据字段在写库前拒绝")
+  void shouldRejectSensitiveKeyInNestedShellArgumentsBeforeWrite() {
+    Map<String, Object> params = Map.of(
+        "command", "/usr/bin/echo", "args", List.of(List.of(Map.of("token", "probe-secret"))));
+
+    assertThatThrownBy(() -> service.create(TENANT, "shell", "nested", params, null))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.security.sensitive_in_payload");
+    verify(mapper, never()).insertAtomicTaskConfig(any());
+  }
+
+  @Test
+  @DisplayName("Shell args 必须是字符串列表，不能把嵌套对象存为执行参数")
+  void shouldRejectNonStringShellArgumentsBeforeWrite() {
+    Map<String, Object> params =
+        Map.of("command", "/usr/bin/echo", "args", List.of(Map.of("mode", "summary")));
+
+    assertThatThrownBy(() -> service.create(TENANT, "shell", "non-string", params, null))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.atomic_task_config.parameters_type_invalid");
+    verify(mapper, never()).insertAtomicTaskConfig(any());
+  }
+
+  @Test
   @DisplayName("列表查询:类型已知时按租户与类型返回全部记录")
   void shouldListByTaskType_whenTaskTypeIsKnown() {
     when(mapper.selectByTenantAndTaskType(TENANT, "sql"))
@@ -184,7 +268,7 @@ class ConsoleAtomicTaskConfigServiceTest {
   }
 
   /** 模拟 mapper.insertAtomicTaskConfig 的 useGeneratedKeys 副作用:回写 id 到 param。 */
-  private static org.mockito.stubbing.Answer<Integer> assignIdAndReturn(long id) {
+  private static Answer<Integer> assignIdAndReturn(long id) {
     return (InvocationOnMock inv) -> {
       AtomicTaskConfigCreateParam param = inv.getArgument(0);
       param.setId(id);

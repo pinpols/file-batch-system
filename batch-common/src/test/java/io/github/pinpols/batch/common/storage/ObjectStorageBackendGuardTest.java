@@ -11,9 +11,13 @@ import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import java.nio.file.Path;
+import java.util.Locale;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.parallel.ResourceLock;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.boot.context.properties.bind.Bindable;
 import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.mock.env.MockEnvironment;
@@ -63,6 +67,30 @@ class ObjectStorageBackendGuardTest {
     assertThatThrownBy(() -> guard(s3(), filesystem(), environment).desiredBackend())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("unsupported batch.storage.backend");
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "tr-TR,FILESYSTEM,filesystem",
+    "az-AZ,FILESYSTEM,filesystem",
+    "tr-TR,S3,s3",
+    "az-AZ,S3,s3"
+  })
+  @ResourceLock("java.util.Locale.default")
+  @DisplayName("存储类型大小写转换不受主机语言影响，保留合法大写配置")
+  void shouldKeepConfiguredBackendStable_whenDefaultLocaleChanges(
+      String language, String configured, String expected) {
+    MockEnvironment environment =
+        environment().withProperty(StorageBackendProperties.BACKEND_KEY, configured);
+    Locale previous = Locale.getDefault();
+    try {
+      Locale.setDefault(Locale.forLanguageTag(language));
+      StatefulBackendGuard.DesiredBackend desired =
+          guard(s3(), filesystem(), environment).desiredBackend();
+      assertThat(desired.backend()).isEqualTo(expected);
+    } finally {
+      Locale.setDefault(previous);
+    }
   }
 
   private ObjectStorageBackendGuard guard(

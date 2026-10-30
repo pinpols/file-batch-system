@@ -45,6 +45,7 @@ public final class HashAndSiloPlacementResolver implements BusinessPlacementReso
     if (silo != null) {
       return silo;
     }
-    return "shard-" + Math.floorMod(tenantId.hashCode(), pooledShardCount);
+    int shardIndex = Math.floorMod(tenantId.hashCode(), pooledShardCount);
+    return "shard-" + shardIndex;
   }
 }

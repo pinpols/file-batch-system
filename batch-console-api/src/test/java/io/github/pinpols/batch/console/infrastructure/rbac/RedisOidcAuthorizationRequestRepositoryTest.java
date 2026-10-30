@@ -19,6 +19,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -98,13 +99,13 @@ class RedisOidcAuthorizationRequestRepositoryTest {
     assertThat(repository.removeAuthorizationRequest(callback, mock(HttpServletResponse.class)))
         .as("缺少发起浏览器 Cookie 时不能消费 state")
         .isNull();
-    verify(values, org.mockito.Mockito.never()).getAndDelete(savedKey.get());
+    verify(values, Mockito.never()).getAndDelete(savedKey.get());
 
     callback.setCookies(new Cookie(savedCookie.get().getName(), "A".repeat(43)));
     assertThat(repository.removeAuthorizationRequest(callback, mock(HttpServletResponse.class)))
         .as("其他浏览器的 Cookie 不能消费 state")
         .isNull();
-    verify(values, org.mockito.Mockito.never()).getAndDelete(savedKey.get());
+    verify(values, Mockito.never()).getAndDelete(savedKey.get());
 
     callback.setCookies(savedCookie.get());
     MockHttpServletResponse callbackResponse = new MockHttpServletResponse();
@@ -134,7 +135,7 @@ class RedisOidcAuthorizationRequestRepositoryTest {
     assertThat(repository.removeAuthorizationRequest(
             new MockHttpServletRequest(), new MockHttpServletResponse()))
         .isNull();
-    org.mockito.Mockito.verifyNoInteractions(redis);
+    Mockito.verifyNoInteractions(redis);
   }
 
   @Test
@@ -143,7 +144,7 @@ class RedisOidcAuthorizationRequestRepositoryTest {
   void shouldRejectInvalidStateAndIgnoreCorruptedPayload() {
     StringRedisTemplate redis = mock(StringRedisTemplate.class);
     ValueOperations<String, String> values = mock(ValueOperations.class);
-    org.mockito.Mockito.when(redis.opsForValue()).thenReturn(values);
+    Mockito.when(redis.opsForValue()).thenReturn(values);
     RedisOidcAuthorizationRequestRepository repository =
         new RedisOidcAuthorizationRequestRepository(
             redis, new ObjectMapper(), new ConsoleSecurityProperties());

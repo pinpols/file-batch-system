@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：直接配置 Key 读取快照。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-direct-config-key-access.py；参数与前置环境见下方说明及所属 README。
 """扫描生产 Java 中通过字符串 key 读取配置的写法，输出治理 inventory。
 
 对应 docs/runbook/config-key-access-governance.md 的“阶段 0：报告模式”。本脚本只报告，
@@ -182,6 +184,8 @@ def java_files(glob: str) -> list[Path]:
     """按 glob 收集 Java 源码，剔除 target / 压测 / E2E / test-support。"""
     files: list[Path] = []
     for path in ROOT.glob(glob):
+        if path.relative_to(ROOT).parts[0] == "logs":
+            continue
         posix = path.as_posix()
         if any(part in posix for part in EXCLUDED_PARTS):
             continue
@@ -211,7 +215,7 @@ def strip_comments(text: str) -> str:
     out: list[str] = []
     i = 0
     length = len(text)
-    # code | line_comment | block_comment | string | char
+    # 词法状态依次为代码、行注释、块注释、字符串和字符字面量。
     state = "code"
     while i < length:
         ch = text[i]

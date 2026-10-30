@@ -91,7 +91,9 @@ func (r *RecordingProgressReporter) Report(percent int, message string) {
 // drives its own batch loop and calls Commit at each business-batch boundary;
 // the SDK supplies NO typed templates (thin BYO SDK).
 type TaskContext struct {
-	TaskID          string
+	TaskID string
+	// Parameters 是任务认领时从持久化载荷中读取的权威业务参数。
+	Parameters      map[string]any
 	EffectiveConfig map[string]any
 	TraceID         string
 	DryRun          bool
@@ -156,12 +158,15 @@ func (c *TaskContext) SetCheckpoint(cp SdkCheckpoint) { c.checkpoint = cp }
 // business-data write (see checkpoint.go header). The SDK cannot enforce this;
 // code review must.
 func (c *TaskContext) Commit(breakPosition map[string]any) error {
-	if err := c.Checkpoint().Save(c.TaskID, SdkCheckpointState{
+	checkpoint := c.Checkpoint()
+	taskID := c.TaskID
+	checkpointState := SdkCheckpointState{
 		BreakPosition: breakPosition,
 		SucceedCount:  c.SucceedCount,
 		FailCount:     c.FailCount,
 		Completed:     false,
-	}); err != nil {
+	}
+	if err := checkpoint.Save(taskID, checkpointState); err != nil {
 		return err
 	}
 
@@ -171,7 +176,9 @@ func (c *TaskContext) Commit(breakPosition map[string]any) error {
 		interval = 1
 	}
 	if !c.SelfReport && c.commitCounter%int64(interval) == 0 && c.Progress != nil {
-		c.Progress.Report(0, progressMessage(c.SucceedCount, c.FailCount, breakPosition))
+		progressReporter := c.Progress
+		progressMessageText := progressMessage(c.SucceedCount, c.FailCount, breakPosition)
+		progressReporter.Report(0, progressMessageText)
 	}
 
 	if c.IsCancelled() {

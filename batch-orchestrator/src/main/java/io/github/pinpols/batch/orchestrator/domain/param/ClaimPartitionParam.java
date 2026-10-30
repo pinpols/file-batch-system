@@ -19,7 +19,7 @@ public class ClaimPartitionParam {
   private final String toStatus;
   private final Long expectedVersion;
 
-  /** ADR-014: nullable — lifecycle/internal claims may omit (columns cleared). */
+  /** ADR-014：允许为空——生命周期或内部认领可省略该字段（对应列将被清空）。 */
   private final String currentInvocationId;
 
   private final Instant invocationStartedAt;

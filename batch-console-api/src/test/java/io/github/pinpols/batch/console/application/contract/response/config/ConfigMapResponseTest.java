@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.application.contract.response.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import java.sql.Timestamp;
+import io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.time.Instant;
-import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -12,23 +13,13 @@ import org.junit.jupiter.api.Test;
 class ConfigMapResponseTest {
 
   @Test
-  @DisplayName("配额策略行使用下划线列名时,租户、策略编码、并发上限与更新时间应正确映射")
-  void shouldNormalizeQuotaPolicy_whenColumnsAreSnakeCase() {
+  @DisplayName("配额策略行具名投影时,租户、策略编码、并发上限与更新时间应正确映射")
+  void shouldMapQuotaPolicy_whenRowIsTyped() {
     Instant updatedAt = Instant.parse("2026-07-11T04:00:00Z");
 
-    QuotaPolicyResponse response = QuotaPolicyResponse.from(Map.of(
-        "id",
-        7L,
-        "tenant_id",
-        "ta",
-        "policy_code",
-        "default",
-        "max_running_jobs_per_tenant",
-        10,
-        "enabled",
-        true,
-        "updated_at",
-        Timestamp.from(updatedAt)));
+    QuotaPolicyResponse response = QuotaPolicyResponse.from(new TenantQuotaPolicyRow(
+        7L, "ta", "default", 10, 0, 0, 1, true, null, null, updatedAt, null, null, null, null, null,
+        null));
 
     assertThat(response.tenantId()).isEqualTo("ta");
     assertThat(response.policyCode()).isEqualTo("default");
@@ -37,21 +28,11 @@ class ConfigMapResponseTest {
   }
 
   @Test
-  @DisplayName("资源队列行使用下划线列名时,队列编码、队列类型与分区并发上限应正确映射")
-  void shouldNormalizeResourceQueue_whenColumnsAreSnakeCase() {
-    ResourceQueueResponse response = ResourceQueueResponse.from(Map.of(
-        "id",
-        9L,
-        "tenant_id",
-        "ta",
-        "queue_code",
-        "import",
-        "queue_type",
-        "IMPORT",
-        "max_running_partitions",
-        8,
-        "enabled",
-        true));
+  @DisplayName("资源队列行具名投影时,队列编码、队列类型与分区并发上限应正确映射")
+  void shouldMapResourceQueue_whenRowIsTyped() {
+    ResourceQueueResponse response = ResourceQueueResponse.from(new ResourceQueueRow(
+        9L, "ta", "import", null, "IMPORT", null, 8, null, null, null, null, null, true, null, null,
+        null, null, null, null, null));
 
     assertThat(response.queueCode()).isEqualTo("import");
     assertThat(response.queueType()).isEqualTo("IMPORT");
@@ -63,25 +44,8 @@ class ConfigMapResponseTest {
   void shouldExposeTypedTimestamp_whenSyncLogCreatedAtPresent() {
     Instant createdAt = Instant.parse("2026-07-11T04:00:00Z");
 
-    ConfigSyncLogResponse response = ConfigSyncLogResponse.from(Map.of(
-        "id",
-        11L,
-        "tenantId",
-        "ta",
-        "syncDirection",
-        "IMPORT",
-        "totalItems",
-        5,
-        "successItems",
-        5,
-        "failedItems",
-        0,
-        "skippedItems",
-        0,
-        "syncStatus",
-        "SUCCESS",
-        "createdAt",
-        Timestamp.from(createdAt)));
+    ConfigSyncLogResponse response = ConfigSyncLogResponse.from(new ConfigSyncLogRow(
+        11L, "ta", "IMPORT", null, null, null, 5, 5, 0, 0, "SUCCESS", null, null, createdAt));
 
     assertThat(response.createdAt()).isEqualTo(createdAt);
   }

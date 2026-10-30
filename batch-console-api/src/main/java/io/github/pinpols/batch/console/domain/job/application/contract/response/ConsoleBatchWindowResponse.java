@@ -2,9 +2,10 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
 
 /**
  * 批量窗口响应（BatchWindowMapper 行投影）。
@@ -13,9 +14,10 @@ import java.util.Map;
  * snake_case（{@code window_code} 等）。故每个多词字段显式 {@code @JsonProperty} 回 snake_case，保持 JSON 键一字不差。
  * {@code startTime/endTime} 为 TIME 列，统一为 {@code HH:mm[:ss]} 字符串。
  *
- * <p>MyBatis {@code resultType="map"} 会省略 null 列，历史 wire 不含 null 键 → {@code NON_NULL} 保键集对等。
+ * <p>历史 Map 响应会省略 null 列，使用 {@code NON_NULL} 保持相同键集。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleBatchWindowResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -32,24 +34,25 @@ public record ConsoleBatchWindowResponse(
     @JsonProperty("created_at") Instant createdAt,
     @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleBatchWindowResponse from(Map<String, Object> row) {
-    if (row == null) {
+  public static ConsoleBatchWindowResponse from(BatchWindowRow row) {
+    if (EmptyChecks.isNull(row)) {
       return null;
     }
-    return new ConsoleBatchWindowResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id", "tenantId"),
-        ConsoleResponseFieldReader.stringValue(row, "window_code", "windowCode"),
-        ConsoleResponseFieldReader.stringValue(row, "window_name", "windowName"),
-        ConsoleResponseFieldReader.stringValue(row, "timezone"),
-        ConsoleResponseFieldReader.localTimeValue(row, "start_time", "startTime"),
-        ConsoleResponseFieldReader.localTimeValue(row, "end_time", "endTime"),
-        ConsoleResponseFieldReader.stringValue(row, "end_strategy", "endStrategy"),
-        ConsoleResponseFieldReader.stringValue(row, "out_of_window_action", "outOfWindowAction"),
-        ConsoleResponseFieldReader.booleanValue(row, "allow_cross_day", "allowCrossDay"),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "description"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at", "createdAt"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at", "updatedAt"));
+    return ConsoleBatchWindowResponse.builder()
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .windowCode(row.windowCode())
+        .windowName(row.windowName())
+        .timezone(row.timezone())
+        .startTime(row.startTime())
+        .endTime(row.endTime())
+        .endStrategy(row.endStrategy())
+        .outOfWindowAction(row.outOfWindowAction())
+        .allowCrossDay(row.allowCrossDay())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .build();
   }
 }

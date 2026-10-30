@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Import checkpoint 真实崩溃续跑故障注入场景:。
+# 用法：在仓库根目录执行 bash scripts/sim/25-import-stage2e-checkpoint-crash.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 25-import-stage2e-checkpoint-crash.sh
 #
@@ -9,7 +11,7 @@
 #   4. 等同一 instance/partition 进入 FAILED, 调 partition retry
 #   5. 重启 worker-import, 验证同一 pipeline_instance 从 checkpoint 续跑并最终 SUCCESS
 #
-# SQL 测试夹具: docs/test-data/sim-stage2e-import-checkpoint.sql
+# SQL 测试夹具: test-data/sim/sim-stage2e-import-checkpoint.sql
 # =========================================================
 set -euo pipefail
 
@@ -33,23 +35,76 @@ restart_import_with_checkpoint() {
 }
 
 __RESTARTED_IMPORT_WITH_CHECKPOINT=0
+CHECKPOINT_BASELINE_CHUNK_SIZE=""
+wait_import_ready() {
+  for _ in $(seq 1 40); do
+    if curl -fsS --max-time 3 "http://localhost:${WORKER_IMPORT_PORT}/actuator/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 1
+  done
+  echo "worker-import 恢复后未就绪" >&2
+  return 1
+}
+
+restore_checkpoint_chunk_size() {
+  [[ -n "$CHECKPOINT_BASELINE_CHUNK_SIZE" ]] || return 0
+  local restored_chunk_size
+  if ! restored_chunk_size=$(docker exec -i "$PG_CONTAINER" psql -X -q -tA -U "$POSTGRES_USER" \
+      -d "$PG_PLATFORM_DB" -v ON_ERROR_STOP=1 -v tenant_id=ta \
+      -v template_code=TA_IMPORT_CUSTOMER_XML_TPL -v chunk_size="$CHECKPOINT_BASELINE_CHUNK_SIZE" \
+      -f /dev/stdin < "$ROOT/scripts/sim/sql/restore-checkpoint-template-chunk-size.sql"); then
+    echo "checkpoint 场景 chunk_size 恢复失败" >&2
+    return 1
+  fi
+  if [[ "$restored_chunk_size" != "$CHECKPOINT_BASELINE_CHUNK_SIZE" ]]; then
+    echo "checkpoint 场景 chunk_size 已被其它写入改变，保留其值并报告恢复冲突" >&2
+    return 1
+  fi
+}
+
 restore_import_default() {
+  local original_rc=$? fixture_restore_rc=0 worker_restore_rc=0
+  trap - EXIT
+  # 先恢复数据库夹具，再启动默认 Worker，避免新进程缓存测试专属的慢速 chunk_size。
+  restore_checkpoint_chunk_size || fixture_restore_rc=$?
   if [[ "$__RESTARTED_IMPORT_WITH_CHECKPOINT" == "1" && "${RESTORE_IMPORT_AFTER_CHECKPOINT:-1}" == "1" ]]; then
     echo "==> restore worker-import default config"
-    bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null || true
+    if bash "$ROOT/scripts/local/restart.sh" worker-import >/dev/null; then
+      wait_import_ready || worker_restore_rc=$?
+    else
+      worker_restore_rc=$?
+    fi
   fi
+  if [[ "$original_rc" == "0" ]]; then
+    if [[ "$fixture_restore_rc" != "0" ]]; then
+      exit "$fixture_restore_rc"
+    fi
+    if [[ "$worker_restore_rc" != "0" ]]; then
+      exit "$worker_restore_rc"
+    fi
+  fi
+  exit "$original_rc"
 }
 trap restore_import_default EXIT
 
-# 灌入 bootstrap + checkpoint 测试夹具
+# 执行 bootstrap + checkpoint 测试夹具
 echo "==> apply bootstrap + checkpoint fixture"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
+CHECKPOINT_BASELINE_CHUNK_SIZE=$(docker exec -i "$PG_CONTAINER" psql -X -q -tA -U "$POSTGRES_USER" \
+  -d "$PG_PLATFORM_DB" -v ON_ERROR_STOP=1 -v tenant_id=ta \
+  -v template_code=TA_IMPORT_CUSTOMER_XML_TPL -f /dev/stdin \
+  < "$ROOT/scripts/sim/sql/select-checkpoint-template-chunk-size.sql")
+if [[ ! "$CHECKPOINT_BASELINE_CHUNK_SIZE" =~ ^[1-9][0-9]*$ ]]; then
+  echo "checkpoint 场景无法读取有效的 chunk_size 基线" >&2
+  exit 1
+fi
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2e-import-checkpoint.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2e-import-checkpoint.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_BUSINESS_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2e-import-checkpoint-business.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2e-import-checkpoint-business.sql >/dev/null
 
 if [[ "${RESTART_IMPORT_WITH_CHECKPOINT:-1}" == "1" ]]; then
   restart_import_with_checkpoint
@@ -69,6 +124,7 @@ import json
 import os
 import subprocess
 import sys
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import time
 import urllib.request
 
@@ -137,7 +193,7 @@ def launch():
     upload_object(object_name, xml_payload(EXPECTED_ROWS))
     body = {
         "tenantId": "ta",
-        "jobCode": "TA_IMPORT_CUSTOMER_XML",
+        "workflowDefinitionId": workflow_id_for_fixture("ta", "TA_IMPORT_CUSTOMER_XML"),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,

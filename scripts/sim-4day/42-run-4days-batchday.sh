@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · 真批量日版:每个业务日 open(由 launch 自动开)→ 跑批 → 手动日切 CLOSE(→SETTLED)→ 推进。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/42-run-4days-batchday.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · 真批量日版:每个业务日 open(由 launch 自动开)→ 跑批 → 手动日切 CLOSE(→SETTLED)→ 推进。
 # 时间压缩:不等真实一天,日切手动触发(绕过未来日期的 cutoffTime 时间门)。
 # 用法: bash 42-run-4days-batchday.sh [startDate 2026-06-10] [baseRows 300]

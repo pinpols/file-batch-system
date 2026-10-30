@@ -33,10 +33,11 @@ public class ConsoleCaptchaController {
   /** FE 拉取验证码配置:provider + 公开 siteKey + 登录防护是否开启。绝不下发 secretKey。 */
   @GetMapping("/config")
   public CommonResponse<ConsoleCaptchaConfigResponse> config() {
-    return responseFactory.success(new ConsoleCaptchaConfigResponse(
+    ConsoleCaptchaConfigResponse captchaConfig = new ConsoleCaptchaConfigResponse(
         captchaProperties.getProvider(),
         captchaProperties.getSiteKey(),
-        loginProtectionProperties.isEnabled()));
+        loginProtectionProperties.isEnabled());
+    return responseFactory.success(captchaConfig);
   }
 
   /** 兼容旧路由；当前验证码实现不使用此挑战接口，也不会生成或存储挑战。 */

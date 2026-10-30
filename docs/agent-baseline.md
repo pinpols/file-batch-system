@@ -374,7 +374,7 @@ Step 可声明：
 
 必须围绕以下真实运行链路建模：
 
-- 数据库 `pipeline_definition` / `pipeline_step_definition` 保存配置真相
+- `SystemPipelineCatalog` 固定四类文件 Pipeline 的阶段与版本；Job 保存业务参数，运行使用冻结参数，旧 Pipeline 定义表已退役
 - worker-core `ExecutionContext` / `AbstractStageExecutor` 维护阶段生命周期与公共不变量
 - 各 Worker 的步骤 Bean registrar 把实现登记到平台 step registry
 - Orchestrator 只做编排、路由和状态推进，不再维护一套无生产消费者的本地 `PipelineExecutor` / `Step SPI`
@@ -535,7 +535,7 @@ Step 可声明：
 ### 11.5 参数封装与方法边界
 
 - 方法参数超过 3 个时，默认优先评估是否应该封装成命令对象、查询对象或上下文对象
-- Mapper 参数遵循 `docs/coding-conventions.md` §9.3：6 个及以上必须封装；重复查询条件、多个 nullable 字段、固定字段 Map 和业务状态模式按语义优先类型化；不要求简单 CRUD 全部包对象
+- Mapper 公共方法参数遵循 `docs/coding-conventions.md` §1：5 个及以上必须封装为单一具名参数对象，不使用多个 `@Param` 暴露长位置参数；重复查询条件、多个 nullable 字段、固定字段 Map 和业务状态模式按语义优先类型化
 - 跨层传递的参数，应优先使用稳定语义对象，不要长期依赖裸 `String` / `Long` 组合
 - 触发、执行、回写、补偿这类流程型方法，优先显式封装上下文，减少长参数列表
 - 只有在参数非常少且语义非常单一时，才允许保留裸参数

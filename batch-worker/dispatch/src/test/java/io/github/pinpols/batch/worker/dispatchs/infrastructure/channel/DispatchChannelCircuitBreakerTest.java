@@ -40,7 +40,7 @@ class DispatchChannelCircuitBreakerTest {
   void shouldAllowBelowFailureThreshold() {
     circuitBreaker.recordFailure(CHANNEL);
     circuitBreaker.recordFailure(CHANNEL);
-    // threshold is 3, only 2 failures so far
+    // 阈值为 3，目前仅失败 2 次。
     assertThat(circuitBreaker.allow(CHANNEL)).isTrue();
   }
 
@@ -67,9 +67,9 @@ class DispatchChannelCircuitBreakerTest {
     circuitBreaker.recordFailure(CHANNEL);
     circuitBreaker.recordFailure(CHANNEL);
     circuitBreaker.recordSuccess(CHANNEL);
-    // failure counter reset; allow should return true
+    // 失败计数已重置；allow 应返回 true。
     assertThat(circuitBreaker.allow(CHANNEL)).isTrue();
-    // new failures should not carry over the old count
+    // 新的失败不应沿用之前的计数。
     circuitBreaker.recordFailure(CHANNEL);
     circuitBreaker.recordFailure(CHANNEL);
     assertThat(circuitBreaker.allow(CHANNEL)).isTrue(); // still below threshold
@@ -78,7 +78,7 @@ class DispatchChannelCircuitBreakerTest {
   @Test
   @DisplayName("冷却期结束之后重新放行,开路计数随之归零")
   void shouldAllowAfterCooldownExpires() throws InterruptedException {
-    // Use a very short cooldown for this test
+    // 本测试使用很短的冷却时间。
     properties.setCooldownMillis(10L);
     DispatchChannelCircuitBreaker shortCooldown = new DispatchChannelCircuitBreaker(properties);
 
@@ -96,7 +96,7 @@ class DispatchChannelCircuitBreakerTest {
     properties.setEnabled(false);
     DispatchChannelCircuitBreaker disabled = new DispatchChannelCircuitBreaker(properties);
 
-    // Even after many failures, should always allow
+    // 即使发生多次失败，也应始终允许通过。
     for (int i = 0; i < 10; i++) {
       disabled.recordFailure(CHANNEL);
     }
@@ -109,7 +109,7 @@ class DispatchChannelCircuitBreakerTest {
   void shouldIsolateFailuresByChannelKey() {
     triggerOpen("ch-bad");
 
-    // a different channel is unaffected
+    // 其他渠道不受影响。
     assertThat(circuitBreaker.allow("ch-good")).isTrue();
   }
 

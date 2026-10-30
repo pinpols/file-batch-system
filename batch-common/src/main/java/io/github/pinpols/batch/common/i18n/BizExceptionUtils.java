@@ -4,8 +4,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
@@ -46,20 +48,27 @@ public final class BizExceptionUtils {
     if (throwable instanceof BizException biz && biz.getMessageKey() != null) {
       String argsJson = serializeArgs(biz.getMessageArgs(), objectMapper);
       String rendered = resolver == null ? biz.getMessage() : resolver.resolve(biz);
-      return new LocalizedError(biz.getMessageKey(), argsJson, truncate(rendered));
+      String messageKey = biz.getMessageKey();
+      String boundedMessage = truncate(rendered);
+      return new LocalizedError(messageKey, argsJson, boundedMessage);
     }
-    return new LocalizedError(null, null, truncate(throwable.getMessage()));
+    String literalMessage = throwable.getMessage();
+    String boundedMessage = truncate(literalMessage);
+    return new LocalizedError(null, null, boundedMessage);
   }
 
   /** 仅传 message 的简化构造:用于第三方异常或 literal 字符串。 */
   public static LocalizedError ofLiteral(String message) {
-    return new LocalizedError(null, null, truncate(message));
+    String boundedMessage = truncate(message);
+    return new LocalizedError(null, null, boundedMessage);
   }
 
   /** 直接构造 i18n 三元组,callsite 自己组织 key + args 时用。 */
   public static LocalizedError of(
       String key, Object[] args, String renderedMessage, ObjectMapper objectMapper) {
-    return new LocalizedError(key, serializeArgs(args, objectMapper), truncate(renderedMessage));
+    String argsJson = serializeArgs(args, objectMapper);
+    String boundedMessage = truncate(renderedMessage);
+    return new LocalizedError(key, argsJson, boundedMessage);
   }
 
   /** 把持久化的 {@code error_args} JSONB 列(字符串)反序列化为 Object[]。null / 非法 JSON 返回空数组,渲染时占位符 {0} 留空字符串。 */
@@ -97,7 +106,8 @@ public final class BizExceptionUtils {
     }
     warnOnComplexArgs(args);
     try {
-      return objectMapper.writeValueAsString(Arrays.asList(args));
+      List<Object> argumentList = Arrays.asList(args);
+      return objectMapper.writeValueAsString(argumentList);
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(BizExceptionUtils.class, "catch:Exception", ignored);
 
@@ -112,17 +122,10 @@ public final class BizExceptionUtils {
    */
   private static void warnOnComplexArgs(Object[] args) {
     for (Object arg : args) {
-      if (arg == null
-          || arg instanceof CharSequence
-          || arg instanceof Number
-          || arg instanceof Boolean
-          || arg instanceof Enum<?>) {
+      if (isScalarErrorArgument(arg)) {
         continue;
       }
-      if (arg instanceof Throwable
-          || arg instanceof Map<?, ?>
-          || arg instanceof Collection<?>
-          || arg.getClass().isArray()) {
+      if (isComplexErrorArgument(arg)) {
         log.warn(
             "i18n error_args contains complex type {} — placeholder substitution will produce"
                 + " toString() literal; pass scalars only",
@@ -130,6 +133,22 @@ public final class BizExceptionUtils {
         return; // 一次警告即可，避免噪声
       }
     }
+  }
+
+  private static boolean isScalarErrorArgument(Object arg) {
+    return EmptyChecks.isNull(arg)
+        || arg instanceof CharSequence
+        || arg instanceof Number
+        || arg instanceof Boolean
+        || arg instanceof Enum<?>;
+  }
+
+  /** 仅在 null 和标量参数已跳过后调用。 */
+  private static boolean isComplexErrorArgument(Object arg) {
+    return arg instanceof Throwable
+        || arg instanceof Map<?, ?>
+        || arg instanceof Collection<?>
+        || arg.getClass().isArray();
   }
 
   /**

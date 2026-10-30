@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Verify that the current lean LOC snapshot matches the tracked source tree."""
+# 用途：代码量快照同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-loc-snapshot.py；参数与前置环境见下方说明及所属 README。
+"""核对当前代码量快照与受版本控制的源码树。"""
 
 from __future__ import annotations
 
@@ -44,7 +46,7 @@ def main() -> int:
     if not snapshot.is_file():
         return fail("docs/stats 缺少 loc-current-lean.md 当前代码量快照")
 
-    for index_path in (STATS_DIR / "README.md", STATS_DIR / "archive" / "README.md"):
+    for index_path in (STATS_DIR / "README.md", ROOT / "docs" / "archive" / "stats" / "README.md"):
         if snapshot.name not in read(index_path):
             return fail(f"{index_path.relative_to(ROOT)} 未指向最新代码量快照 {snapshot.name}")
 

@@ -1,24 +1,82 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper">
+    <resultMap id="FilePipelineStepRunQueryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FilePipelineStepRunQueryView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="step_code" javaType="java.lang.String"/>
+            <arg column="stage_code" javaType="java.lang.String"/>
+            <arg column="run_seq" javaType="java.lang.Integer"/>
+            <arg column="step_status" javaType="java.lang.String"/>
+            <arg column="input_summary" javaType="java.lang.Object"/>
+            <arg column="output_summary" javaType="java.lang.Object"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+            <arg column="error_message" javaType="java.lang.String"/>
+            <arg column="error_key" javaType="java.lang.String"/>
+            <arg column="error_args" javaType="java.lang.Object"/>
+            <arg column="retry_count" javaType="java.lang.Integer"/>
+            <arg column="duration_ms" javaType="java.lang.Long"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="FilePipelineProgressStepViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FilePipelineProgressStepView">
+        <constructor>
+            <idArg column="step_id" javaType="java.lang.Long"/>
+            <arg column="pipeline_instance_id" javaType="java.lang.Long"/>
+            <arg column="step_code" javaType="java.lang.String"/>
+            <arg column="stage_code" javaType="java.lang.String"/>
+            <arg column="step_status" javaType="java.lang.String"/>
+            <arg column="rows_processed" javaType="java.lang.Long"/>
+            <arg column="total_rows_hint" javaType="java.lang.Long"/>
+            <arg column="last_heartbeat_at" javaType="java.time.Instant"/>
+            <arg column="run_seq" javaType="java.lang.Integer"/>
+            <arg column="error_code" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="execution" type="io.github.pinpols.batch.console.domain.file.view.FilePipelineExecutionView">
+      <id column="id" property="pipelineInstanceId"/><result column="run_status" property="runStatus"/>
+      <result column="current_stage" property="currentStage"/>
+      <result column="system_pipeline_code" property="systemPipelineCode"/>
+      <result column="system_pipeline_version" property="systemPipelineVersion"/>
+    </resultMap>
+    <select id="setTenantContext" resultType="string">select set_config('app.tenant_id', #{tenantId}, true)</select>
+    <select id="selectExecution" resultMap="execution">
+      select id,run_status,current_stage,system_pipeline_code,system_pipeline_version
+      from batch.pipeline_instance where tenant_id=#{tenantId} and id=#{pipelineInstanceId}
+    </select>
+    <resultMap id="FilePipelineInfoViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FilePipelineInfoView">
+        <constructor>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="file_name" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
     <select id="selectTenantIdByPipelineInstanceId" resultType="string">
         select tenant_id
         from batch.pipeline_instance
         where id = #{pipelineInstanceId}
     </select>
 
-    <select id="selectProgressByPipelineInstance" resultType="map">
+    <select id="selectProgressByPipelineInstance" resultMap="FilePipelineProgressStepViewResultMap">
         select
             s.id as step_id,
             s.pipeline_instance_id,
             s.step_code,
             s.stage_code,
             s.step_status,
-            pr.processed_count as rows_processed,
+            <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessedRows"/>,
             null::bigint as total_rows_hint,
-            pr.updated_at as last_heartbeat_at
+            pr.updated_at as last_heartbeat_at, s.run_seq, s.error_code
         from batch.pipeline_step_run s
         join batch.pipeline_instance p on p.id = s.pipeline_instance_id
+        <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessStageCountJoin"/>
         left join batch.pipeline_progress pr
           on pr.tenant_id = p.tenant_id
          and pr.pipeline_instance_id = s.pipeline_instance_id
@@ -27,9 +85,30 @@
           and s.pipeline_instance_id = #{pipelineInstanceId}
         order by s.run_seq asc, s.id asc
     </select>
+    <select id="selectLatestProgressByPipelineInstance" resultMap="FilePipelineProgressStepViewResultMap">
+        select distinct on (s.stage_code)
+            s.id as step_id,
+            s.pipeline_instance_id,
+            s.step_code,
+            s.stage_code,
+            s.step_status,
+            <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessedRows"/>,
+            null::bigint as total_rows_hint,
+            pr.updated_at as last_heartbeat_at, s.run_seq, s.error_code
+        from batch.pipeline_step_run s
+        join batch.pipeline_instance p on p.id = s.pipeline_instance_id
+        <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessStageCountJoin"/>
+        left join batch.pipeline_progress pr
+          on pr.tenant_id = p.tenant_id
+         and pr.pipeline_instance_id = s.pipeline_instance_id
+         and pr.stage = s.stage_code
+        where p.tenant_id = #{tenantId}
+          and s.pipeline_instance_id = #{pipelineInstanceId}
+        order by s.stage_code, s.run_seq desc, s.id desc
+    </select>
 
     <!-- 缺口2:pipeline 级文件名透出。一个 pipeline_instance 对应一个 file_record(可空)。 -->
-    <select id="selectFileInfoByPipelineInstance" resultType="map">
+    <select id="selectFileInfoByPipelineInstance" resultMap="FilePipelineInfoViewResultMap">
         select
             p.file_id as file_id,
             fr.file_name as file_name
@@ -39,7 +118,7 @@
           and p.id = #{pipelineInstanceId}
     </select>
 
-    <select id="selectByQuery" resultType="map">
+    <select id="selectByQuery" resultMap="FilePipelineStepRunQueryViewResultMap">
         select
             s.id,
             s.pipeline_instance_id,

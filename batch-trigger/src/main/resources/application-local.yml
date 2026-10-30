@@ -1,5 +1,5 @@
 server:
-  port: 18081
+  port: ${BATCH_TRIGGER_PORT:18081}
 
 spring:
   main:
@@ -19,7 +19,7 @@ spring:
       org:
         quartz:
           scheduler:
-            instanceName: BatchTriggerScheduler
+            # 实例名由 QuartzMisfireRecoveryConfiguration 按部署命名空间派生。
           jobStore:
             tablePrefix: quartz.QRTZ_
             driverDelegateClass: org.quartz.impl.jdbcjobstore.PostgreSQLDelegate

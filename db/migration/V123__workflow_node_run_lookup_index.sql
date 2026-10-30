@@ -9,5 +9,6 @@
 -- 顺序扫秒级降到 ~O(log n) 微秒级；DAG 节点多（>20）且并发 workflow_run >50 时延迟收益明显。
 --
 -- IF NOT EXISTS 守护：如果某个集群通过手动 SQL 已建过同等索引（pg_dump → restore 场景），不报错。
+
 CREATE INDEX IF NOT EXISTS idx_workflow_node_run_run_id_node_code
     ON batch.workflow_node_run (workflow_run_id, node_code, run_seq DESC);

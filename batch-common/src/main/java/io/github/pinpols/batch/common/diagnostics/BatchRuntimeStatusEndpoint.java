@@ -66,7 +66,8 @@ public class BatchRuntimeStatusEndpoint {
     storage.put("backendCutoverConfigured", guard != null && Texts.hasText(guard.getCutoverId()));
     S3StorageProperties s3 = s3Provider.getIfAvailable();
     if ("s3".equalsIgnoreCase(backend) && s3 != null) {
-      storage.put("endpointHost", hostOf(s3.getEndpoint()));
+      String endpointHost = hostOf(s3.getEndpoint());
+      storage.put("endpointHost", endpointHost);
       storage.put("bucketConfigured", Texts.hasText(s3.getBucket()));
       storage.put(
           "credentialsConfigured",
@@ -105,7 +106,8 @@ public class BatchRuntimeStatusEndpoint {
       return "";
     }
     try {
-      return URI.create(endpoint).getHost();
+      URI endpointUri = URI.create(endpoint);
+      return endpointUri.getHost();
     } catch (IllegalArgumentException ex) {
       return "invalid-endpoint";
     }

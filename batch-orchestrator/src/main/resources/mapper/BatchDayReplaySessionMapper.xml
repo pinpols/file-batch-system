@@ -8,6 +8,7 @@
         <constructor>
             <idArg  column="id"                     javaType="java.lang.Long"/>
             <arg    column="tenant_id"              javaType="java.lang.String"/>
+            <arg    column="replay_operation_id"   javaType="java.lang.Long"/>
             <arg    column="calendar_code"          javaType="java.lang.String"/>
             <arg    column="biz_date"               javaType="java.time.LocalDate"/>
             <arg    column="scope"                  javaType="java.lang.String"/>
@@ -41,14 +42,14 @@
     <insert id="insert"
             parameterType="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity">
         insert into batch.batch_day_replay_session (
-            tenant_id, calendar_code, biz_date, scope, execution_mode, candidate_source,
+            tenant_id, replay_operation_id, calendar_code, biz_date, scope, execution_mode, candidate_source,
             scope_payload,
             result_policy, config_version_policy, config_version, reason, approval_id,
             status, total_count, succeeded_count, failed_count, in_flight_count,
             requested_by, approved_by, started_at, completed_at, trace_id,
             created_at, updated_at
         ) values (
-            #{tenantId}, #{calendarCode}, #{bizDate}, #{scope}, #{executionMode},
+            #{tenantId}, #{replayOperationId}, #{calendarCode}, #{bizDate}, #{scope}, #{executionMode},
             #{candidateSource},
             #{scopePayload,jdbcType=VARCHAR}::jsonb,
             #{resultPolicy}, #{configVersionPolicy}, #{configVersion}, #{reason}, #{approvalId},
@@ -61,6 +62,11 @@
     <select id="selectById" resultMap="ReplaySessionResultMap">
         select * from batch.batch_day_replay_session
         where tenant_id = #{tenantId} and id = #{id}
+    </select>
+
+    <select id="selectForUpdate" resultMap="ReplaySessionResultMap">
+        select * from batch.batch_day_replay_session
+        where tenant_id=#{tenantId} and id=#{id} for update
     </select>
 
     <select id="selectActiveByCalendarBizDate" resultMap="ReplaySessionResultMap">
@@ -85,6 +91,12 @@
           <foreach collection="expectedStatuses" item="s" open="(" separator="," close=")">
               #{s}
           </foreach>
+    </update>
+
+    <update id="reopenPartialFailedForRetryWithStatus">
+        update batch.batch_day_replay_session
+        set status = #{targetStatus}, completed_at = null, updated_at = #{now}
+        where tenant_id = #{tenantId} and id = #{id} and status = 'PARTIAL_FAILED'
     </update>
 
     <update id="updateCounts">
@@ -112,6 +124,12 @@
         </if>
         order by created_at desc, id desc
         limit #{limit}
+    </select>
+
+    <select id="selectByReplayOperation" resultMap="ReplaySessionResultMap">
+        select * from batch.batch_day_replay_session
+        where tenant_id = #{tenantId} and replay_operation_id = #{replayOperationId}
+        order by biz_date asc, id asc
     </select>
 
 </mapper>

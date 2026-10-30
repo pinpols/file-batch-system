@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,9 +19,13 @@ import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -35,16 +38,19 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P2: ConsolePushController VAPID 公开 + subscribe/unsubscribe 透传 endpoint+keys。 */
 @DisplayName("浏览器推送接口: 公钥读取与订阅注册注销的透传")
+@ExtendWith(MockitoExtension.class)
 class ConsolePushControllerTest {
 
   @Configuration(proxyBeanMethods = false)
   @EnableMethodSecurity
   static class MethodSecurityTestConfiguration {}
 
-  private final ConsolePushSubscriptionService subscriptionService =
-      mock(ConsolePushSubscriptionService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsolePushSubscriptionService subscriptionService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @Test
@@ -64,11 +70,9 @@ class ConsolePushControllerTest {
       var valid = new ConsolePushSubscribeRequest(
           "https://push.invalid", null, new ConsolePushSubscribeRequest.Keys("p256", "auth"));
       var request = new MockHttpServletRequest();
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", valid, request))
+      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", valid, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
-      org.assertj.core.api.Assertions.assertThatThrownBy(
-              () -> controller.subscribe("ta", null, request))
+      Assertions.assertThatThrownBy(() -> controller.subscribe("ta", null, request))
           .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
       verifyNoInteractions(subscriptionService);
     } finally {
@@ -81,11 +85,6 @@ class ConsolePushControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -99,6 +98,8 @@ class ConsolePushControllerTest {
   @Test
   @DisplayName("读取推送公钥时, 返回服务端配置的密钥")
   void shouldReturnConfiguredKey_whenReadingPublicKey() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(subscriptionService.vapidPublicKey()).thenReturn("BPK-xxx");
     mockMvc
         .perform(get("/api/console/push/vapid-public-key"))
@@ -109,6 +110,11 @@ class ConsolePushControllerTest {
   @Test
   @DisplayName("订阅请求以创建状态返回, 租户, 操作人与订阅体透传给服务")
   void shouldReturnCreatedAndForward_whenSubscribing() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(
             post("/api/console/push/subscribe")
@@ -124,6 +130,11 @@ class ConsolePushControllerTest {
   @Test
   @DisplayName("注销请求返回统一成功响应, 端点原样透传给服务")
   void shouldForwardEndpoint_whenUnsubscribing() throws Exception {
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "ta", "tester", null, "127.0.0.1"));
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     // unsubscribe 改返 CommonResponse(对齐 §Java 规则 #6,不再裸 204 no-content)
     mockMvc
         .perform(post("/api/console/push/unsubscribe")

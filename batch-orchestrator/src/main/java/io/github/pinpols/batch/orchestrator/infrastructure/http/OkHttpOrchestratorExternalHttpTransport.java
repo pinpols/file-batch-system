@@ -78,10 +78,13 @@ public class OkHttpOrchestratorExternalHttpTransport implements OutboundHttpTran
     switch (request.method()) {
       case GET -> builder.get();
       case HEAD -> builder.head();
-      case POST ->
-        builder.post(RequestBody.create(
-            EmptyChecks.isNull(request.body()) ? "" : request.body(),
-            MediaType.get(request.mediaType())));
+      case POST -> {
+        boolean bodyIsNull = EmptyChecks.isNull(request.body());
+        String bodyText = bodyIsNull ? "" : request.body();
+        MediaType mediaType = MediaType.get(request.mediaType());
+        RequestBody requestBody = RequestBody.create(bodyText, mediaType);
+        builder.post(requestBody);
+      }
     }
   }
 

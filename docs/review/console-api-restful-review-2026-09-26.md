@@ -130,7 +130,7 @@ GET  /exports/{id}/download
 
 详细待办见：
 
-- [`../backlog/rest-command-api-toggle-governance-2026-09-26.md`](../backlog/rest-command-api-toggle-governance-2026-09-26.md)
+- [docs/api/console-api-protocol.md](../api/console-api-protocol.md)
 
 ### 不建议改的项
 

@@ -30,7 +30,7 @@ public class UpdateMaintenanceRequest {
   /** 计划开始时间;空表示保存后立即生效。 */
   private Instant startsAt;
 
-  /** 受影响子系统 code 列表(<= 50 项,每项 <= 64 字符)。 */
+  /** 公告服务标记及固定应用编码的通知范围(最多 50 项，每项最多 64 字符)；未知标记不抑制通知。 */
   @Size(max = 50)
   private List<@Size(max = 64) String> affectedServices;
 }

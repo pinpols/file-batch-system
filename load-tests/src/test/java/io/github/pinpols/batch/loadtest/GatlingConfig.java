@@ -34,17 +34,31 @@ public final class GatlingConfig {
 
     // ── Test data ──────────────────────────────────────────────────────────────
 
-    /** Tenant ID used in load test requests. */
+    /** 负载测试请求使用的租户 ID。 */
     public static final String TENANT_ID =
             System.getProperty("tenantId", "t1");
 
-    /**
-     * Pre-existing job code (must be seeded in the target DB before running).
-     * Align with {@code docs/sql/load-test/load-test-seed.sql} or
-     * {@code batch-e2e-tests/src/test/resources/db/testdata/import-template-config-seed.sql} job codes.
-     */
-    public static final String JOB_CODE =
-            System.getProperty("jobCode", "E2E_IMPORT_LOAD");
+    /** 启动模拟必须显式提供顶层 Workflow 目标。 */
+    public static String requiredWorkflowDefinitionId() {
+        return requiredWorkflowDefinitionId("workflowDefinitionId");
+    }
+
+    /** 显式 Workflow 目标；延迟解析，因此只读模拟无需提供 ID。 */
+    public static String requiredWorkflowDefinitionId(String propertyName) {
+        String value = System.getProperty(propertyName);
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException("-D" + propertyName + " is required for launch simulations");
+        }
+        try {
+            long id = Long.parseLong(value);
+            if (id <= 0) {
+                throw new IllegalArgumentException("-D" + propertyName + " must be positive");
+            }
+            return Long.toString(id);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("-D" + propertyName + " must be a positive integer", exception);
+        }
+    }
 
     /** Business date for job launch requests (ISO-8601). */
     public static final String BIZ_DATE =
@@ -59,7 +73,7 @@ public final class GatlingConfig {
 
     /**
      * JSON object inserted as the launch {@code params}. Prefer {@code launch.paramsJsonFile} for
-     * large import payloads to avoid command-line length limits.
+     * 大体积导入载荷，避免超过命令行长度限制。
      */
     public static final String LAUNCH_PARAMS_JSON = resolveLaunchParamsJson();
 
@@ -69,7 +83,7 @@ public final class GatlingConfig {
     public static final int USERS_PEAK =
             Integer.parseInt(System.getProperty("users.peak", "20"));
 
-    /** Steady-state duration in seconds after ramp-up completes. */
+    /** 升压阶段结束后的稳定运行时长，单位为秒。 */
     public static final int DURATION_SECONDS =
             Integer.parseInt(System.getProperty("duration.seconds", "120"));
 
@@ -84,7 +98,7 @@ public final class GatlingConfig {
     public static final int PIPELINE_MAX_POLLS =
             Integer.parseInt(System.getProperty("pipeline.maxPolls", "90"));
 
-    /** Seconds to wait between instance status polls. */
+    /** 轮询实例状态之间的等待秒数。 */
     public static final int PIPELINE_POLL_INTERVAL_SEC =
             Integer.parseInt(System.getProperty("pipeline.pollIntervalSec", "2"));
 
@@ -95,33 +109,33 @@ public final class GatlingConfig {
     public static final int PIPELINE_COMPLETION_USERS =
             Integer.parseInt(System.getProperty("pipeline.completion.users", "10"));
 
-    /** Fixed write rate used by scheduling/backlog pressure scenarios. */
+    /** 调度或积压压力场景使用的固定写入速率。 */
     public static final double SCHEDULING_LAUNCH_RPS =
             Double.parseDouble(System.getProperty("scheduling.launch.rps", "5.0"));
 
-    /** Fixed scheduler/backlog read rate used by scheduling pressure scenarios. */
+    /** 调度压力场景使用的固定调度器或积压读取速率。 */
     public static final double SCHEDULING_READ_RPS =
             Double.parseDouble(System.getProperty("scheduling.read.rps", "5.0"));
 
-    /** Whether scheduling/backlog pressure should also call console read endpoints. */
+    /** 调度或积压压力场景是否同时调用 Console 读取接口。 */
     public static final boolean SCHEDULING_CONSOLE_READS_ENABLED =
             Boolean.parseBoolean(System.getProperty("scheduling.console.reads", "false"));
 
-    /** CSV file for synthetic worker lifecycle pressure: taskId,tenantId,workerId. */
+    /** 模拟 Worker 生命周期压力使用的 CSV 文件，字段为 taskId、tenantId、workerId。 */
     public static final String TASK_LIFECYCLE_CSV =
             System.getProperty("task.lifecycle.csv", "target/task-lifecycle-tasks.csv");
 
-    /** Optional pause between successful claim and report in synthetic worker lifecycle pressure. */
+    /** 模拟 Worker 生命周期压力中，成功认领与回报之间可选的暂停时长。 */
     public static final int TASK_LIFECYCLE_EXECUTE_PAUSE_MS =
             Integer.parseInt(System.getProperty("task.lifecycle.executePauseMs", "0"));
 
     // ── SLO thresholds ────────────────────────────────────────────────────────
 
-    /** Maximum acceptable p95 response time for write operations (ms). */
+    /** 写操作允许的最大 p95 响应时间（毫秒）。 */
     public static final int WRITE_P95_MS =
             Integer.parseInt(System.getProperty("slo.write.p95ms", "500"));
 
-    /** Maximum acceptable p99 response time for read operations (ms). */
+    /** 读操作允许的最大 p99 响应时间（毫秒）。 */
     public static final int READ_P99_MS =
             Integer.parseInt(System.getProperty("slo.read.p99ms", "300"));
 
@@ -129,7 +143,7 @@ public final class GatlingConfig {
     public static final double MAX_ERROR_RATE_PCT =
             Double.parseDouble(System.getProperty("slo.maxErrorPct", "1.0"));
 
-    /** Build an assertion that supports an exact zero-error requirement. */
+    /** 构建断言，以支持错误数必须严格为零的要求。 */
     public static Assertion maxErrorRateAssertion() {
         if (MAX_ERROR_RATE_PCT <= 0.0d) {
             return global().failedRequests().count().is(0L);

@@ -209,18 +209,6 @@ public class ConsoleQueryController {
     return responseFactory.success(applicationService.jobDefinitionCodes(tenantId));
   }
 
-  /**
-   * GET /pipeline-definitions/codes — workflow-dag-designer BE Spike 下拉数据源(FILE_STEP 跨域引用)。
-   *
-   * <p>仅 ACTIVE(enabled=true),按 jobCode 升序。 {@code workflow_node.related_pipeline_code →
-   * pipeline_definition.job_code}。
-   */
-  @GetMapping("/pipeline-definitions/codes")
-  public CommonResponse<List<CodeNameOption>> pipelineDefinitionCodes(
-      @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.pipelineDefinitionCodes(tenantId));
-  }
-
   /** GET /outbox-retries — Outbox 重试日志。 */
   @GetMapping("/outbox-retries")
   public CommonResponse<PageResponse<ConsoleOutboxRetryLogResponse>> outboxRetries(
@@ -238,13 +226,6 @@ public class ConsoleQueryController {
   /** GET /file-pipelines — 文件流水线。 */
   @GetMapping("/file-pipelines")
   public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> filePipelines(
-      @Valid @ModelAttribute FilePipelineQueryRequest request) {
-    return responseFactory.success(applicationService.filePipelines(request));
-  }
-
-  /** GET /pipeline-definitions — 兼容旧前端路由，实际返回文件流水线列表。 */
-  @GetMapping("/pipeline-definitions")
-  public CommonResponse<PageResponse<ConsoleFilePipelineResponse>> pipelineDefinitions(
       @Valid @ModelAttribute FilePipelineQueryRequest request) {
     return responseFactory.success(applicationService.filePipelines(request));
   }
@@ -462,13 +443,6 @@ public class ConsoleQueryController {
 
   @GetMapping("/file-pipelines/{id}")
   public CommonResponse<ConsoleFilePipelineResponse> filePipelineDetail(
-      @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
-  }
-
-  /** GET /pipeline-definitions/{id} — 兼容旧前端路由，实际返回文件流水线详情。 */
-  @GetMapping("/pipeline-definitions/{id}")
-  public CommonResponse<ConsoleFilePipelineResponse> pipelineDefinitionDetail(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(applicationService.filePipelineDetail(tenantId, id));
   }

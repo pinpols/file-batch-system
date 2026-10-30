@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogUpdateRetryFailureParam;
 import io.github.pinpols.batch.console.domain.notification.param.WebhookDeliveryLogInsertParam;
 import java.time.Instant;
 import java.util.List;
@@ -12,6 +15,9 @@ import org.apache.ibatis.annotations.Param;
  * ConsoleWebhookDeliveryLogRepository）。
  */
 public interface ConsoleWebhookDeliveryLogMapper {
+
+  /** 在当前事务中绑定已授权租户，供热冷历史查询共用。 */
+  String bindTenant(@Param("tenantId") String tenantId);
 
   enum PersistenceStatus {
     PENDING,
@@ -66,28 +72,39 @@ public interface ConsoleWebhookDeliveryLogMapper {
       @Param("httpStatus") Integer httpStatus,
       @Param("deliveryStatus") String deliveryStatus);
 
-  default int markRetryFailure(
-      Long id, int attempt, Integer httpStatus, String responseBody, Instant nextRetryAt) {
-    return updateRetryFailure(
-        id, attempt, httpStatus, responseBody, nextRetryAt, PersistenceStatus.EXHAUSTED.name());
+  default int markRetryFailure(ConsoleWebhookDeliveryLogMarkRetryFailureParam parameters) {
+    Long id = parameters.id();
+    int attempt = parameters.attempt();
+    Integer httpStatus = parameters.httpStatus();
+    String responseBody = parameters.responseBody();
+    Instant nextRetryAt = parameters.nextRetryAt();
+
+    ConsoleWebhookDeliveryLogUpdateRetryFailureParam
+        consoleWebhookDeliveryLogUpdateRetryFailureParam =
+            ConsoleWebhookDeliveryLogUpdateRetryFailureParam.builder()
+                .id(id)
+                .attempt(attempt)
+                .httpStatus(httpStatus)
+                .responseBody(responseBody)
+                .nextRetryAt(nextRetryAt)
+                .deliveryStatus(PersistenceStatus.EXHAUSTED.name())
+                .build();
+    return updateRetryFailure(consoleWebhookDeliveryLogUpdateRetryFailureParam);
   }
 
-  int updateRetryFailure(
-      @Param("id") Long id,
-      @Param("attempt") int attempt,
-      @Param("httpStatus") Integer httpStatus,
-      @Param("responseBody") String responseBody,
-      @Param("nextRetryAt") Instant nextRetryAt,
-      @Param("deliveryStatus") String deliveryStatus);
+  int updateRetryFailure(ConsoleWebhookDeliveryLogUpdateRetryFailureParam parameters);
 
   default int markGiveUp(Long id, int attempt, Integer httpStatus, String responseBody) {
-    return updateGiveUp(id, attempt, httpStatus, responseBody, PersistenceStatus.GIVE_UP.name());
+    ConsoleWebhookDeliveryLogUpdateGiveUpParam consoleWebhookDeliveryLogUpdateGiveUpParam =
+        ConsoleWebhookDeliveryLogUpdateGiveUpParam.builder()
+            .id(id)
+            .attempt(attempt)
+            .httpStatus(httpStatus)
+            .responseBody(responseBody)
+            .deliveryStatus(PersistenceStatus.GIVE_UP.name())
+            .build();
+    return updateGiveUp(consoleWebhookDeliveryLogUpdateGiveUpParam);
   }
 
-  int updateGiveUp(
-      @Param("id") Long id,
-      @Param("attempt") int attempt,
-      @Param("httpStatus") Integer httpStatus,
-      @Param("responseBody") String responseBody,
-      @Param("deliveryStatus") String deliveryStatus);
+  int updateGiveUp(ConsoleWebhookDeliveryLogUpdateGiveUpParam parameters);
 }

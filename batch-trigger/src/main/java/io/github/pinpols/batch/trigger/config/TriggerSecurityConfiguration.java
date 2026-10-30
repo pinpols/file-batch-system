@@ -4,12 +4,16 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.web.ServletRequestPaths;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
+import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,8 +33,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Trigger 模块安全配置。
  *
- * <p>所有端点都必须通过 {@code X-Internal-Secret} header 校验。 当 {@code batch.security.bypass-mode=true}
- * 时跳过校验，保持本地联调体验不变。
+ * <p>内部端点使用 {@code X-Internal-Secret}；受限租户 API Key 仅能访问外部 EVENT 启动及其状态查询。
+ * 当 {@code batch.security.bypass-mode=true} 时跳过校验，保持本地联调体验不变。
  */
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
@@ -38,20 +42,21 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class TriggerSecurityConfiguration {
 
   private final BatchSecurityProperties securityProperties;
+  private final TriggerApiKeyVerifier apiKeyVerifier;
 
   @Bean
   @SuppressWarnings("java:S4502")
   public SecurityFilterChain triggerSecurityFilterChain(HttpSecurity http) throws Exception {
-    // Internal-secret requests cannot be forged by a browser because the secret is not a cookie.
-    // Keep CSRF enabled for every other request so a future authentication path cannot silently
-    // inherit an unprotected state-changing endpoint.
-    http.csrf(csrf ->
-            csrf.ignoringRequestMatchers(new InternalSecretRequestMatcher(securityProperties)))
+    // 内部密钥请求无法由浏览器伪造，因为该密钥不存储在 Cookie 中。
+    // 其他请求仍须启用 CSRF，避免未来新增认证路径时无意间
+    // 继承未受保护的状态变更接口。
+    http.csrf(csrf -> csrf.ignoringRequestMatchers(
+            new InternalSecretRequestMatcher(securityProperties), new EventApiKeyRequestMatcher()))
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(auth ->
             auth.requestMatchers("/actuator/**").permitAll().anyRequest().authenticated())
         .addFilterBefore(
-            new InternalSecretFilter(securityProperties),
+            new InternalSecretFilter(securityProperties, apiKeyVerifier),
             UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }
@@ -73,12 +78,21 @@ public class TriggerSecurityConfiguration {
     }
   }
 
+  /** 跨已启用日历汇总的原始业务日期补扫积压低基数视图。 */
+  static final class EventApiKeyRequestMatcher implements RequestMatcher {
+
+    @Override
+    public boolean matches(HttpServletRequest request) {
+      return isApiKeyAllowedUri(request)
+          && EmptyChecks.isNotBlank(request.getHeader(CommonConstants.BATCH_API_KEY_HEADER));
+    }
+  }
+
   /**
    * 内部接口共享密钥校验过滤器，复用 batch-common 的 {@link BatchSecurityProperties}。
    *
-   * <p>当密钥校验通过（或 bypass-mode 模式）时，设置一个匿名认证令牌以满足 Spring Security 的 {@code authenticated()} 要求。
+   * <p>允许受限的租户 API Key 认证外部 EVENT source；其他路径仍要求平台内部密钥。
    */
-  @RequiredArgsConstructor
   static class InternalSecretFilter extends OncePerRequestFilter {
 
     private static final String HEADER_NAME = CommonConstants.INTERNAL_SECRET_HEADER;
@@ -86,6 +100,17 @@ public class TriggerSecurityConfiguration {
         "{\"code\":\"UNAUTHORIZED\",\"message\":\"Missing or invalid X-Internal-Secret\"}";
 
     private final BatchSecurityProperties securityProperties;
+    private final TriggerApiKeyVerifier apiKeyVerifier;
+
+    InternalSecretFilter(
+        BatchSecurityProperties securityProperties, TriggerApiKeyVerifier apiKeyVerifier) {
+      this.securityProperties = securityProperties;
+      this.apiKeyVerifier = apiKeyVerifier;
+    }
+
+    InternalSecretFilter(BatchSecurityProperties securityProperties) {
+      this(securityProperties, null);
+    }
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
@@ -106,15 +131,31 @@ public class TriggerSecurityConfiguration {
         return;
       }
 
+      String apiKey = request.getHeader(CommonConstants.BATCH_API_KEY_HEADER);
+      if (EmptyChecks.isNotBlank(apiKey)) {
+        String tenantId = request.getHeader(CommonConstants.BATCH_TENANT_ID_HEADER);
+        boolean apiKeyAuthenticationCanRun =
+            EmptyChecks.isNotNull(apiKeyVerifier) && isApiKeyAllowedUri(request);
+        if (apiKeyAuthenticationCanRun) {
+          Optional<TriggerApiKeyPrincipal> principal =
+              apiKeyVerifier.authenticate(apiKey, tenantId);
+          if (principal.isPresent()) {
+            setExternalEventSourceAuthenticated(principal.orElseThrow());
+            chain.doFilter(request, response);
+            return;
+          }
+        }
+        writeUnauthorized(response);
+        return;
+      }
+
       String header = request.getHeader(HEADER_NAME);
       if (EmptyChecks.isNotNull(header)
           && SecretComparator.constantTimeEquals(securityProperties.getInternalSecret(), header)) {
         setAuthenticated();
         chain.doFilter(request, response);
       } else {
-        response.setStatus(HttpStatus.UNAUTHORIZED.value());
-        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.getWriter().write(UNAUTHORIZED_BODY);
+        writeUnauthorized(response);
       }
     }
 
@@ -126,5 +167,27 @@ public class TriggerSecurityConfiguration {
           "internal", null, List.of(new SimpleGrantedAuthority("ROLE_INTERNAL")));
       SecurityContextHolder.getContext().setAuthentication(auth);
     }
+
+    private void setExternalEventSourceAuthenticated(TriggerApiKeyPrincipal principal) {
+      UsernamePasswordAuthenticationToken auth = UsernamePasswordAuthenticationToken.authenticated(
+          principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE")));
+      SecurityContextHolder.getContext().setAuthentication(auth);
+    }
+
+    private static void writeUnauthorized(HttpServletResponse response) throws IOException {
+      response.setStatus(HttpStatus.UNAUTHORIZED.value());
+      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+      response.getWriter().write(UNAUTHORIZED_BODY);
+    }
+  }
+
+  private static boolean isApiKeyAllowedUri(HttpServletRequest request) {
+    String path = ServletRequestPaths.applicationPath(request);
+    return ("POST".equalsIgnoreCase(request.getMethod()) && "/api/triggers/launch".equals(path))
+        || ("GET".equalsIgnoreCase(request.getMethod())
+            && "/api/triggers/launch/status".equals(path))
+        || ("POST".equalsIgnoreCase(request.getMethod()) && "/api/triggers/events".equals(path))
+        || ("GET".equalsIgnoreCase(request.getMethod())
+            && "/api/triggers/events/status".equals(path));
   }
 }

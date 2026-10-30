@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupPropertie
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
+import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -99,7 +100,8 @@ class WorkerPortBindingTest {
           configuration,
           new WorkerIdentityProperties(),
           new WorkerRegistryStartupProperties(),
-          new WorkerConcurrencyProperties());
+          new WorkerConcurrencyProperties(),
+          new ImportLoadPluginRegistry(List.of()));
     }
   }
 }

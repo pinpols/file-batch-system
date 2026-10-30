@@ -74,7 +74,6 @@ public abstract class BaseMapperXmlTenantGuardArchTest {
         "batch_runtime_default_parameter", // 运行时默认参数,全局系统表
         "business_shard_catalog", // 租户→分片路由目录,全局主数据(跨租,无 tenant_id 列)
         // ② run/config 明细子表:无 tenant_id 列(逐个据 DDL 核实),靠父表 FK + 父 id 隔离(父行按 tenant 校验)
-        "pipeline_step_definition", // V6:pipeline_definition 的配置子表,经 pipeline_definition_id 访问
         "pipeline_step_run", // V6:pipeline_instance 的 run 子表,经 pipeline_instance_id 访问
         "workflow_node_run"); // V5:workflow_run 的 run 子表,经 workflow_run_id 访问
     // 注:file_record / file_dispatch_record **有** tenant_id 列(V6 tenant_id NOT NULL)——它们是租户可达的

@@ -6,7 +6,16 @@ import java.util.List;
 
 public interface JobExecutionLogMapper {
 
-  int insert(JobExecutionLogEntity entity);
+  int insertWithInstanceReferenceGuard(JobExecutionLogEntity entity);
+
+  default int insert(JobExecutionLogEntity entity) {
+    int inserted = insertWithInstanceReferenceGuard(entity);
+    if (inserted != 1) {
+      throw new IllegalStateException(
+          "Job execution log references a missing or different-tenant JobInstance");
+    }
+    return inserted;
+  }
 
   List<JobExecutionLogEntity> selectByQuery(JobExecutionLogQuery query);
 }

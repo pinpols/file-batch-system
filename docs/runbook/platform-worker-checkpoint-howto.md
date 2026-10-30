@@ -11,13 +11,19 @@
 
 本特性引入持久化「续跑位点」表 `batch.pipeline_progress`,LoadStep 每完成一个 chunk
 就 UPSERT 当前行号 + 已处理累计;重派时从最后一次 advance 的行号续跑,前面已处理的 chunk
-不重做。
+不重做。LOAD 的 `position_marker` 格式为 `<物理行号>:<SHA-256>`，不匹配时保留位点和暂存文件，先核对业务记录及文件来源。
+
+文件重建后若内容不同，不应直接复用旧位点；须先确认该操作及插件的幂等和补偿策略，再通过受控恢复流程处置，不能盲目删除位点。 `IMPORT_LOAD_FAILED` 属于不可自动重试错误；人工分区重试还要求父作业及所属 Workflow 处于可执行状态，不能仅因位点存在就认定系统会自动续跑。
+
+LOAD 位点已完成时，恢复会使用位点的累计记录数回填加载和成功统计，并先更新文件状态再清理暂存文件；状态更新失败时保留暂存文件供后续重试。这里的成功数不替代业务库数据核对。 正式 LOAD 在校验暂存文件缺失，或有校验记录但文件为空时失败；校验阶段提供记录数时，LOAD 在写入每个分块前拒绝超过该数量的分块，并在完成前核对加载累计数，不匹配不完成位点。较早分块可能已经提交；恢复仍依赖幂等或执行围栏。单分区 LOAD 位点同时绑定校验文件的 SHA-256；重试时内容或顺序改变会拒绝续跑。每次启用位点的 LOAD 都会额外顺序读取文件计算摘要，性能与容量影响待单独测量；摘要计算后到消费期间的文件变化不在此保证范围内。旧的纯行号位点不能识别文件身份，会失败关闭；本方案仅按空库部署约定处理，不提供旧位点兼容。
+
+LOAD 插件必须确认整个分块：返回数须等于输入逻辑行数，幂等重放中已存在且确认完成的记录也计入。返回数不一致时阶段失败、不推进该分块位点并保留暂存文件；非幂等副作用按执行围栏处理。自定义插件应核对此返回契约，不能只返回新增行数。
 
 ## 开关
 
 | 配置 | 默认 | 含义 |
 |---|---|---|
-| `batch.worker.checkpoint.enabled` | `true`(P0,2026-07)| ADR-038 续跑位点总开关。默认启用;显式设 **`false`** + worker 重启即回滚到未引入本特性的行为(从 0 跑、不写位点)。 |
+| `batch.worker.checkpoint.enabled` | `true`(P0,2026-07)| ADR-038 续跑位点总开关。显式设 **`false`** 后 LOAD 从头处理且不读写位点；声明为非幂等或 UNKNOWN 的 Import 插件仍会在首个外部副作用前持久化执行围栏，失败或租约回收后按 UNKNOWN 处理，不自动重放。 |
 
 **P0 默认启用说明**:系统尚未上线(AM 迁移影子期同因取消),故无需影子期 / 按租户 profile 渐进灰度 —— sim/e2e
 全链验证通过后直接把默认值翻 `true`,开关保留作**回滚手段**。`PARTITION_REPLACE_COPY` 模板与行级续跑互斥,
@@ -28,12 +34,13 @@
 `(tenant, pipeline_instance_id, stage)` 会被各 partition **交叉读写**:LOAD 的行号 marker 让别的 partition 跳错行、
 GENERATE 的 markCompleted 让别的 partition 误判已完成 + 确定化文件 `inst-<id>.<ext>` 撞路径(bundle export e2e 实测
 `NoSuchFileException` 致任务死信)。因此 LOAD / GENERATE 对多分区任务**整体自动降级为不续跑**(行为同开关关,
-留 DEBUG 日志),无需配置;多分区的崩溃恢复由 `job_partition` 分区级重跑覆盖(与本特性正交,见设计文档 §1.8)。
+留 DEBUG 日志),无需配置;多分区通过 `job_partition` 分区级恢复。LOAD 的 `NONE` / `UNKNOWN` 插件还必须先持久化非幂等执行围栏；
+若副作用已开始后任务失败或 Worker 租约回收，转为 `EXTERNAL_OUTCOME_UNKNOWN`，需要先核对外部结果，不能盲目自动重放。
 **续跑只对单分区任务生效** —— 即设计主场景「单个超大文件 / 单大结果集」。按 partition 拆位点键属 P1+,P0 不做。
 
-> 回滚:显式 `false` + worker 重启即完全退回今天行为;已写位点行无害保留(见 §关闭 / 回滚)。
+> 回滚:显式 `false` + worker 重启会停用位点读写并从头处理；非幂等 LOAD 插件的执行围栏仍启用。
 > 上线前 checklist(非 P0 阻塞):非 `GenericJdbcMappedImportLoadPlugin` 的自定义 plugin 逐个核 `idempotencyCapability()`、
-> 生产观测面板接告警、真实数据量下续跑命中率 / 跳过行数首周复盘。
+> 生产面板同时观察 checkpoint failure 与 `EXTERNAL_OUTCOME_UNKNOWN`、真实数据量下续跑命中率 / 跳过行数首周复盘。
 
 专用指标：`batch.worker.checkpoint.operations.total{stage,operation,outcome}`。标签均为固定枚举，不带 tenant/instance：
 
@@ -72,49 +79,52 @@ Prometheus 规则 `BatchWorkerCheckpointPersistenceFailed` 会在 5 分钟窗口
 ADR-038 §决策二要求「chunk 业务写 + 位点更新同事务」。实际实施:
 
 - **Import LOAD**:业务数据写到**租户业务 DB**(`importBusinessDataSource`),位点写到**平台 DB**
-  (`batch.pipeline_progress`)。**跨库无法 1PC 原子**。本实现采用「业务先 commit → 位点后 advance」+
-  插件幂等(多租 `UNIQUE(tenant_id, ...)` + `ON CONFLICT`)回退。
+  (`batch.pipeline_progress`)。**跨库无法 1PC 原子**。本实现采用「业务先 commit → 位点后 advance」；续跑路径要求插件幂等，
+  以多租 `UNIQUE(tenant_id, ...)` + `ON CONFLICT` 吸收最多一个 chunk 的重复窗口。没有启用位点时，非幂等插件以任务执行围栏
+  阻止失败后的自动重放；该围栏不能证明外部结果，UNKNOWN 仍需人工核对。
 - **崩溃窗口**:业务 commit 完但 advance 失败的瞬间崩溃,重派时位点落后 ≤ 1 chunk,
-  会重做该 chunk;`strict-idempotency=true` 默认下 plugin 的 `INSERT ON CONFLICT DO NOTHING/UPDATE`
-  保证数据一致,只浪费一次 chunk 的 CPU。
-- **不可用场景**:plugin 未开 `strict-idempotency` + 业务表无唯一约束的场景,续跑会双写。
-  **必须确认 plugin 是 `GenericJdbcMappedImportLoadPlugin` 且 `strict-idempotency=true` 再启用**。
+  会重做该 chunk。`BATCH_UPSERT` 模板必须声明业务唯一键 `conflictColumns`；校验在所有环境都强制执行，
+  plugin 随后生成 `INSERT ON CONFLICT DO NOTHING/UPDATE`，以唯一约束吸收重做 chunk。
+- **不可用场景**:`BATCH_UPSERT` 缺少 `conflictColumns` 时会在写入前失败关闭，不能依赖续跑、重试或 reclaim
+  的副作用安全。当前没有追加写入策略；如业务确需允许重复行，必须先定义独立策略及其 checkpoint/replay 语义，
+  不得通过省略冲突键把 `BATCH_UPSERT` 当作追加写入。
 
 ## 前置校验(R3-3,自动拦截)
 
-跨库无 1PC 决定了「续跑数据安全 100% 靠 plugin 幂等」。R3-3 起 LoadStep 在进入续跑路径前**强制**
-校验 plugin 自报的幂等能力,声明不充分直接拒跑(`IMPORT_LOAD_CONFIG_INVALID`),避免运维忘记
-确认就把开关打开导致双写。
+跨库无 1PC 意味着位点落后于业务提交时最多会重做一个 chunk。单分区续跑开启时，R3-3 起 LoadStep 在读取位点前**强制**
+校验 plugin 自报的幂等能力，声明不充分直接拒跑(`IMPORT_LOAD_CONFIG_INVALID`)。关闭续跑或多分区降级时不做 checkpoint 能力拒跑；
+非幂等 plugin 必须先持久化任务执行围栏，围栏无法确认时返回 `EXTERNAL_OUTCOME_UNKNOWN` 且不调用 plugin。
 
-`ImportLoadPlugin#idempotencyCapability()`(`batch-common`)default 返回 `UNKNOWN`,plugin
-必须**显式 override** 才能在续跑开关下使用:
+`ImportLoadPlugin#idempotencyCapability()`(`batch-common`)default 返回 `UNKNOWN`。单分区续跑启用时，plugin
+必须**显式 override** 才能通过前置校验；关闭位点或多分区降级时由非幂等执行围栏保护:
 
-| 能力 | 含义 | 续跑开关行为 |
-|---|---|---|
-| `IDEMPOTENT_BY_UNIQUE_CONSTRAINT` | 业务表带多租 `UNIQUE(tenant_id, ...)` + `ON CONFLICT DO NOTHING/UPDATE` | 放行 |
-| `IDEMPOTENT_BY_PLUGIN_LOGIC` | plugin 自身在 `loadChunk` 内查后写 / 业务键去重 | 放行 |
-| `NONE` | 明确不幂等(裸 `INSERT`,无 ON CONFLICT) | 拒跑 |
-| `UNKNOWN`(默认) | plugin 未声明 | 拒跑 |
+| 能力 | 含义 | 单分区续跑开启 | 续跑关闭或多分区降级 |
+|---|---|---|---|
+| `IDEMPOTENT_BY_UNIQUE_CONSTRAINT` | 业务表带多租 `UNIQUE(tenant_id, ...)` + `ON CONFLICT DO NOTHING/UPDATE` | 放行 | 放行 |
+| `IDEMPOTENT_BY_PLUGIN_LOGIC` | plugin 自身在 `loadChunk` 内查后写 / 业务键去重 | 放行 | 放行 |
+| `NONE` | 明确不幂等(裸 `INSERT`,无 ON CONFLICT) | 写入前拒跑 | 先持久化执行围栏，再调用；失败按 UNKNOWN 处理 |
+| `UNKNOWN`(默认) | plugin 未声明 | 写入前拒跑 | 先持久化执行围栏，再调用；失败按 UNKNOWN 处理 |
 
 平台自带 plugin:
 - `GenericJdbcMappedImportLoadPlugin` → `IDEMPOTENT_BY_UNIQUE_CONSTRAINT`(依赖业务表多租 UNIQUE)
 
 **新增 plugin 接入续跑清单**:
 1. 确认业务表存在多租 UNIQUE 约束,或 plugin 内部做了行级去重
-2. override `idempotencyCapability()` 返回 `IDEMPOTENT_BY_*`
-3. 若达不到 1/2,保持 `UNKNOWN`(默认),续跑开关下自动拒跑 — 这是**期望的安全网**,不是 bug
+2. override `idempotencyCapability()` 返回 `IDEMPOTENT_BY_*`，且能力覆盖该插件所有支持的 LOAD 策略和重试方式
+3. 若不能保证重复执行安全，保持 `UNKNOWN`(默认)。单分区续跑开启时拒跑；关闭或多分区降级时由执行围栏保护，
+   UNKNOWN 结果必须先核对外部副作用，禁止盲目重放
 
 ## Export GENERATE 续跑(P3,2026-06-05)
 
 Export 的「全量重跑」痛点与 Import 同源:GENERATE 写大文件途中崩溃 / lease 回收,重派从第 0 行重新拉数据 + 重写文件。
-P3 用**单文件 + 字节位点截断**方案接入(spike `docs/spike/adr-038-p3-export-file-recovery.md` 原选 chunk-分片+STORE 拼接 Option A;
+P3 用**单文件 + 字节位点截断**方案接入；实现选择和边界记录在 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)；
 落地时改用更轻的单文件法 —— 崩溃安全性等价、无 concat 数据完整性风险、且与本配置 javadoc 既有的「续 cursor」语义一致)。
 
 机制:
 - **确定化文件路径**:续跑开启时生成文件落 `${java.io.tmpdir}/file-batch-export/inst-<pipelineInstanceId>.<ext>`(关闭时仍为随机 temp,行为不变)。同实例重派落同一文件,崩溃后能找回残文件。
 - **页边界 fsync + 位点**:每完成一页(`loadDetailPage` 一批)就 `flush + FileDescriptor.sync()` 落盘,把 `<byteOffset>@<typed-cursor>` 记进 `batch.pipeline_progress`(stage=`GENERATE`)。位点**仅在还有后继页时记**;终页 cursor=null 不记(交由完成时补记总行数),保证存下的 cursor 永远是有效续跑起点。
 - **续跑**:`FileChannel.truncate(byteOffset)` 截断崩溃残尾 → 数据插件从 `cursor` 续拉下一页 → append 续写。崩溃窗口最多重做「最后一个已记位点之后那一页」,因 truncate 先于重写故**不重复、不丢行**;JSON 收尾 `]}` 只在整体完成时写一次。
-- **幂等跳过**:GENERATE 已 `completed` 且文件仍在(STORE 未消费)→ 重派不重生成,补齐下游 attribute 即可。
+- **幂等跳过**:GENERATE 已 `completed` 且文件仍在(STORE 未消费)→ 重派不重生成,补齐下游 attribute 即可。 演练 STORE 成功计算摘要后也会删除本地生成文件；文件不可读或删除失败时 STORE 返回失败，不标记完成。文件不存在时保留现有处理语义。
 
 ### 前置约束(对齐 Import 的幂等校验)
 
@@ -166,11 +176,11 @@ ORDER BY updated_at DESC LIMIT 20;
 
 ### 启用步骤
 
-1. 续跑默认已开(P0)。验证 plugin 是 `GenericJdbcMappedImportLoadPlugin` 且 `strict-idempotency=true`;
-   自定义 plugin 须自报 `idempotencyCapability()`,否则续跑开启下自动拒跑
+1. 续跑默认已开(P0)。`BATCH_UPSERT` 模板必须声明正确的业务 `conflictColumns`，否则在写入前拒跑；
+   自定义 plugin 须自报 `idempotencyCapability()` 才能进入单分区续跑
 2. 只有需**关闭**时才显式配 `batch.worker.checkpoint.enabled=false`(如 `PARTITION_REPLACE_COPY` 模板)
 3. 重启 worker(配置非热加载)
-4. 观察 `batch.pipeline_progress` 表行数增长 = 正常工作
+4. 观察 checkpoint 指标；遇到 `EXTERNAL_OUTCOME_UNKNOWN` 先核对外部副作用，不要盲目重放
 
 ### 验证续跑
 
@@ -189,11 +199,18 @@ WHERE stage = 'LOAD' AND completed = true
 ORDER BY completed_at DESC;
 ```
 
+### 中断尝试与最终结果
+
+Worker进程中断后，checkpoint续跑可能使最新尝试成功。Job进入终态时，Orchestrator在同一收尾事务中将仍为RUNNING/RETRYING的历史Pipeline步骤标为FAILED，错误码为`PIPELINE_ATTEMPT_INTERRUPTED`；这表示该次尝试未完成，不代表最新尝试或整个Job失败。已结束步骤保持原结果，迟到Worker不能覆盖步骤终态。Job仍活跃时不会按这个规则关闭步骤，避免干扰并行分区。
+
+排查时同时核对Job终态、每阶段最新`run_seq`、历史尝试的错误码以及`pipeline_progress`的处理条数/完成标记；业务唯一行与checkpoint应独立对照，不能只以Pipeline成功或进度条100%判断无重无漏。
+
 ### 关闭 / 回滚
 
 - 配置改回 `batch.worker.checkpoint.enabled=false` + worker 重启;**已写入的位点行不删除**
   (无害,下次开关再打开时,正在进行中的实例可续跑)
-- 紧急回滚:删除 plugin 实现里的续跑逻辑代码无意义 —— 开关关掉即可,代码路径完全跳过。
+- 紧急回滚:删除 plugin 实现里的续跑逻辑代码无意义 —— 开关关掉即可停用位点读写；非幂等执行围栏仍保留，
+  防止不确定的外部副作用被自动重放。
   V164 migration 不可回滚(对 DB 结构无破坏),无需 backout 脚本。
 
 ## 未做项(follow-up)

@@ -43,6 +43,7 @@ CREATE INDEX IF NOT EXISTS idx_trigger_outbox_event_archive_created
 
 -- 加入 archive_policy 白名单(V139/V140/V141 三次累积扩展,每次仅 ALTER 一次,
 -- archive_policy 是低频写表,ACCESS EXCLUSIVE 锁窗口可忽略)
+
 ALTER TABLE batch.archive_policy
     DROP CONSTRAINT ck_archive_policy_table;
 
@@ -55,6 +56,7 @@ ALTER TABLE batch.archive_policy
     ));
 
 -- 给所有 ACTIVE 租户默认种子(与 outbox_event 同节奏:PUBLISHED 7 天,默认开归档+清理)
+
 INSERT INTO batch.archive_policy (
     tenant_id, target_table, retention_days,
     archive_enabled, cleanup_enabled, batch_size,

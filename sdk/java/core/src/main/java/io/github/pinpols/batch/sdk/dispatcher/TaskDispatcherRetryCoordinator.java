@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.sdk.dispatcher;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpException;
 import io.github.pinpols.batch.sdk.internal.ThrottledLogger;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,15 +55,19 @@ final class TaskDispatcherRetryCoordinator {
   ClaimResult claimWithRetry(
       TaskDispatchMessage message, String idempotencyKey, Map<String, Object> body) {
     int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
+    Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
+    long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
+    long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
     int attempt = 0;
     while (true) {
       try {
         PlatformHttpClient.TaskClaimResponse response =
             httpClient.claim(message.taskId(), idempotencyKey, body);
         resetClientErrorStreak();
-        return new ClaimResult(
-            true, response == null ? new PlatformHttpClient.TaskClaimResponse(null) : response);
+        PlatformHttpClient.TaskClaimResponse claimResponse = EmptyChecks.isNull(response)
+            ? new PlatformHttpClient.TaskClaimResponse(null)
+            : response;
+        return new ClaimResult(true, claimResponse);
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {
           markFatal(
@@ -73,6 +79,11 @@ final class TaskDispatcherRetryCoordinator {
         }
         if (httpEx.isConflict()) {
           log.info("CLAIM 409 for taskId={} (taken by peer), skipping", message.taskId());
+          return ClaimResult.notClaimed();
+        }
+        if (httpEx.statusCode() == 404) {
+          // 历史派单的任务可能已终态或清理，正常不可领取不应累计为客户端协议故障。
+          log.debug("CLAIM 404 for taskId={} (no longer claimable), skipping", message.taskId());
           return ClaimResult.notClaimed();
         }
         if (httpEx.isServerError()) {
@@ -136,7 +147,9 @@ final class TaskDispatcherRetryCoordinator {
   void reportWithRetry(Long taskId, String idempotencyKey, Map<String, Object> body)
       throws IOException {
     int maxRetries = Math.max(0, config.getClaimMax5xxRetries());
-    long baseDelayMs = Math.max(0L, config.getClaimRetryBaseDelay().toMillis());
+    Duration configuredBaseDelay = config.getClaimRetryBaseDelay();
+    long configuredBaseDelayMillis = configuredBaseDelay.toMillis();
+    long baseDelayMs = Math.max(0L, configuredBaseDelayMillis);
     int attempt = 0;
     while (true) {
       try {
@@ -200,10 +213,18 @@ final class TaskDispatcherRetryCoordinator {
     }
   }
 
+  /** Error 原样向调用线程传播，SDK 健康状态同时失败，阻止线程池重建后继续接收新派发。 */
+  void markExecutionFatal(Error executionError) {
+    String errorType = executionError.getClass().getSimpleName();
+    markFatal("SDK execution ended with {}; dispatcher is FATAL until restart", errorType);
+  }
+
   void recordClientError(int statusCode, long taskId, String operation) {
     int threshold = config.getClientErrorFailFastThreshold();
     int count = consecutiveClientErrors.incrementAndGet();
-    if (threshold > 0 && count >= threshold && fatal.compareAndSet(false, true)) {
+    boolean enteredFatalState =
+        threshold > 0 && count >= threshold && fatal.compareAndSet(false, true);
+    if (enteredFatalState) {
       log.error(
           "{} client error (HTTP {}) for taskId={} reached {} consecutive 4xx — marking dispatcher"
               + " FATAL; likely SDK/contract mismatch, SDK will reject subsequent dispatches and"

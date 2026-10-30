@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.application.contract.response;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import java.time.Instant;
 
-/** Public tenant-to-shard placement view. */
+/** 公开的租户与分片映射视图。 */
 public record BusinessTenantPlacementResponse(
     String tenantId, String placementKey, Instant updatedAt, String updatedBy) {
 

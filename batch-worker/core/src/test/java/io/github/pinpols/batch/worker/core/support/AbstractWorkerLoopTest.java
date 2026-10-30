@@ -38,6 +38,7 @@ import org.springframework.mock.env.MockEnvironment;
  * WorkerLifecycleManager - shutdown() 在从未启动时也是安全的
  */
 @ExtendWith(MockitoExtension.class)
+// LENIENT 原因：共享准备提供首次启动的注册结果；仅心跳、未启动关闭等分支不调用启动桩。
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("Worker 主循环基类: 注册幂等, 端口选择, 心跳与关闭委托")
 class AbstractWorkerLoopTest {
@@ -197,31 +198,36 @@ class AbstractWorkerLoopTest {
 
   @Test
   @DisplayName("注册完成后心跳委托给心跳服务并携带 Worker 标识")
-  void doHeartbeat_sendsHeartbeatAfterStart() {
-    loop.ensureStarted();
+  void doHeartbeat_sendsHeartbeatAfterApplicationReady() {
+    loop.onReady();
     loop.doHeartbeat();
 
     verify(heartbeatService, times(1)).beat("test-worker-001");
   }
 
   @Test
-  @DisplayName("尚未注册时心跳会先触发注册, 随后正常发送一次")
-  void doHeartbeat_doesNotFailBeforeStart() {
-    // 创建一个尚未调用 start() 的 loop
+  @DisplayName("ApplicationReady 前的初始定时心跳不触发注册或网络请求")
+  void doHeartbeat_waitsUntilApplicationReady() {
     TestWorkerLoop freshLoop =
         new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport);
-    // 对未启动的 loop 调用 doHeartbeat 应内部触发 ensureStarted
-    // 行为：ensureStarted() 返回有效注册信息，随后心跳正常执行
     freshLoop.doHeartbeat();
 
+    verify(workerLifecycleManager, never()).start(any());
+    verify(heartbeatService, never()).beat(any());
+  }
+
+  @Test
+  @DisplayName("ApplicationReady 回调完成首次注册")
+  void onReady_registersWorkerBeforeStartupAudit() {
+    loop.onReady();
+
     verify(workerLifecycleManager, times(1)).start(any());
-    verify(heartbeatService, times(1)).beat("test-worker-001");
   }
 
   @Test
   @DisplayName("心跳服务抛异常时静默容忍, 不向调用方抛出")
   void doHeartbeat_continuesGracefullyWhenFacadeThrows() {
-    loop.ensureStarted();
+    loop.onReady();
     doThrow(new RuntimeException("network error")).when(heartbeatService).beat(any());
 
     assertThatCode(() -> loop.doHeartbeat()).doesNotThrowAnyException();

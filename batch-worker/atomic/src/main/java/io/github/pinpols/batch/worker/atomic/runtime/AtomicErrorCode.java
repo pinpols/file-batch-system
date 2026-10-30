@@ -33,6 +33,9 @@ public enum AtomicErrorCode {
   /** 业务执行失败(命令非 0 退出、SQL 抛错、HTTP 非 2xx 等下游真错)。 */
   EXECUTION_FAILED,
 
+  /** 非幂等外部动作可能已提交,但 HTTP 响应或结果无法确认;必须人工核对后才能决定是否重做。 */
+  EXTERNAL_OUTCOME_UNKNOWN,
+
   /** 入参或配置非法(必填缺失、类型错、超上限等校验性拒绝)。 */
   CONFIG_INVALID,
 
@@ -47,12 +50,14 @@ public enum AtomicErrorCode {
    * code.name()), null)}, 但不动 TaskResult 类签名(它属于 batch-common SPI)。
    */
   public static TaskResult fail(AtomicErrorCode code, String message) {
-    return new TaskResult(false, message, Map.of(OUTPUT_KEY, code.name()), null);
+    Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
+    return new TaskResult(false, message, errorOutput, null);
   }
 
   /** 同上,附带原始 throwable 透传到 {@link TaskResult#error()}。 */
   public static TaskResult fail(AtomicErrorCode code, String message, Throwable cause) {
-    return new TaskResult(false, message, Map.of(OUTPUT_KEY, code.name()), cause);
+    Map<String, Object> errorOutput = Map.of(OUTPUT_KEY, code.name());
+    return new TaskResult(false, message, errorOutput, cause);
   }
 
   /** 同上,允许携带额外 output 字段(如 exitCode / statusCode);output 已含 error_code 时以本枚举为准覆盖。 */

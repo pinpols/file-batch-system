@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.micrometer.core.instrument.Counter;
@@ -42,6 +43,7 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   private static final int REVISION_TRACKER_MAX_SIZE = 100_000;
 
   private final StringRedisTemplate redisTemplate;
+  private final BatchRedisNamespace redisNamespace;
   private final OrchestratorConfigCacheService cacheService;
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong appliedRevision = new AtomicLong(0);
@@ -61,16 +63,26 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   @Autowired
   public OrchestratorConfigInvalidationSubscriber(
       StringRedisTemplate redisTemplate,
+      BatchRedisNamespace redisNamespace,
       OrchestratorConfigCacheService cacheService,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    this(redisTemplate, cacheService, meterRegistryProvider.getIfAvailable());
+    this(redisTemplate, redisNamespace, cacheService, meterRegistryProvider.getIfAvailable());
   }
 
   OrchestratorConfigInvalidationSubscriber(
       StringRedisTemplate redisTemplate,
       OrchestratorConfigCacheService cacheService,
       MeterRegistry meterRegistry) {
+    this(redisTemplate, new BatchRedisNamespace(""), cacheService, meterRegistry);
+  }
+
+  OrchestratorConfigInvalidationSubscriber(
+      StringRedisTemplate redisTemplate,
+      BatchRedisNamespace redisNamespace,
+      OrchestratorConfigCacheService cacheService,
+      MeterRegistry meterRegistry) {
     this.redisTemplate = redisTemplate;
+    this.redisNamespace = redisNamespace;
     this.cacheService = cacheService;
     if (EmptyChecks.isNull(meterRegistry)) {
       this.receivedCounter = null;
@@ -109,10 +121,11 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     listenerContainer = new RedisMessageListenerContainer();
     listenerContainer.setConnectionFactory(connectionFactory);
     listenerContainer.setErrorHandler(logErrorHandler());
-    listenerContainer.addMessageListener(this, new ChannelTopic(CHANNEL));
+    String redisChannel = redisNamespace.channel(CHANNEL);
+    listenerContainer.addMessageListener(this, new ChannelTopic(redisChannel));
     listenerContainer.afterPropertiesSet();
     listenerContainer.start();
-    log.info("orchestrator config invalidation subscriber started: channel={}", CHANNEL);
+    log.info("orchestrator config invalidation subscriber started: channel={}", redisChannel);
   }
 
   @Override
@@ -185,7 +198,9 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   }
 
   private synchronized void apply(ConfigCacheInvalidationEvent event) {
-    if (EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0) {
+    boolean invalidationRevisionIsInvalid =
+        EmptyChecks.isNull(event) || event.revision() <= 0 || event.keyRevision() <= 0;
+    if (invalidationRevisionIsInvalid) {
       increment(failureCounter);
       return;
     }
@@ -220,7 +235,10 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
     if (EmptyChecks.isNull(eventLagTimer) || EmptyChecks.isNull(changedAt)) {
       return;
     }
-    long lagMillis = Math.max(0, Duration.between(changedAt, Instant.now()).toMillis());
+    Instant observedAt = Instant.now();
+    Duration eventLag = Duration.between(changedAt, observedAt);
+    long measuredLagMillis = eventLag.toMillis();
+    long lagMillis = Math.max(0, measuredLagMillis);
     eventLagTimer.record(lagMillis, TimeUnit.MILLISECONDS);
   }
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：拉 forensic 证据包 → 本地 sim 回放 → SQL 比对。
+# 用法：bash scripts/local/replay-forensic-bundle.sh <bundle.zip> [--keep] [--no-launch]。
 # =========================================================
 # replay-forensic-bundle.sh — 拉 forensic 证据包 → 本地 sim 回放 → SQL 比对
 #
@@ -6,7 +8,7 @@
 # manifest + sha256),本脚本补"回放"侧:
 #   1. 解包 + sha256 校验
 #   2. schema 映射 + 数据还原(临时 namespace sim_replay_${exportId})
-#   3. 反推 launch request,POST 到 console-api 触发 + 轮终态
+#   3. 反推 launch request,POST Workflow-only Trigger API + 轮根运行/Job 节点终态
 #   4. 抽 replay snapshot + 调 analyze-replay.sh 做 5 维度 diff
 #   5. 出 markdown 报告
 #
@@ -18,13 +20,13 @@
 #
 # 前置(prerequisite):
 #   - sim 已起(scripts/sim/02-start-sim.sh)
-#   - console-api 跑在 ${CONSOLE_PORT:-18080}(scripts/local/start-all.sh)
+#   - Trigger 跑在 ${TRIGGER_PORT:-18081}(scripts/local/start-all.sh)
 #   - psql / unzip / jq / sha256sum(或 shasum -a 256) / curl 在 PATH
 #
 # 退出条件:任何步骤失败 → 立即 stop,unpacked/ 与临时 schema 留现场;exit 1。
 # =========================================================
 
-set -uo pipefail
+set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 SQL_DIR="$ROOT_DIR/scripts/local/sql"
@@ -74,7 +76,7 @@ PG_PLATFORM_DB="${PG_PLATFORM_DB:-$PLATFORM_DB}"
 # 不在 business 库(worker staging)。临时 replay schema 也建在 platform 库,
 # 这样 SQL 比对可以直接 JOIN batch.job_instance。
 PG_BUSINESS_DB="$PG_PLATFORM_DB"
-CONSOLE_BASE="${CONSOLE_BASE:-$CONSOLE_BASE_URL}"
+TRIGGER_BASE="${TRIGGER_BASE:-$TRIGGER_BASE_URL}"
 INTERNAL_SECRET="${INTERNAL_SECRET:-$BATCH_INTERNAL_SECRET}"
 WAIT_TIMEOUT_SEC="${REPLAY_WAIT_TIMEOUT_SEC:-300}"
 WAIT_INTERVAL_SEC="${REPLAY_WAIT_INTERVAL_SEC:-3}"
@@ -96,6 +98,12 @@ sha256_file() {
   else fail "no sha256sum/shasum available"
   fi
 }
+sha256_text() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then shasum -a 256 | awk '{print $1}'
+  else fail "no sha256sum/shasum available"
+  fi
+}
 
 psql_business() {
   psql -X -v ON_ERROR_STOP=1 -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_BUSINESS_DB" "$@"
@@ -109,11 +117,11 @@ for cmd in unzip jq curl psql "$PYTHON_BIN"; do
   command -v "$cmd" >/dev/null 2>&1 || fail "缺少依赖: $cmd"
 done
 
-# console-api 健康
+# Trigger 健康
 if [[ "$NO_LAUNCH" -eq 0 ]]; then
-  http_code=$(curl -s -o /dev/null -w '%{http_code}' "$CONSOLE_BASE/actuator/health" || echo 000)
+  http_code=$(curl -s --max-time "${REPLAY_HTTP_TIMEOUT_SEC:-30}" -o /dev/null -w '%{http_code}' "$TRIGGER_BASE/actuator/health" || echo 000)
   if [[ "$http_code" != "200" ]]; then
-    log "WARN: console-api 健康检查 $http_code(若未起请先 scripts/local/start-all.sh)"
+    log "WARN: Trigger 健康检查 $http_code(若未起请先 scripts/local/start-all.sh)"
     log "      可加 --no-launch 跳过 replay 触发,仅做解包 / 数据还原"
   fi
 fi
@@ -121,7 +129,7 @@ fi
 # ── Step 1:解包 + sha256 校验 ─────────────────────────────────────
 BUNDLE_ABS="$(cd "$(dirname "$BUNDLE")" && pwd)/$(basename "$BUNDLE")"
 BUNDLE_NAME="$(basename "$BUNDLE_ABS" .zip)"
-WORK_DIR="$WORK_BASE/$BUNDLE_NAME.$$"
+WORK_DIR=$(mktemp -d "$WORK_BASE/$BUNDLE_NAME.XXXXXXXX")
 UNPACKED="$WORK_DIR/unpacked"
 mkdir -p "$UNPACKED"
 log "Step 1/5 解包 + 校验  → $WORK_DIR"
@@ -152,7 +160,7 @@ REGISTERED_SHA=$(psql_platform -tA \
   -v export_id="$EXPORT_ID" \
   -f "$SQL_DIR/select-forensic-export-sha.sql" 2>/dev/null | tr -d '[:space:]' || true)
 if [[ -n "$REGISTERED_SHA" && "$REGISTERED_SHA" != "$BUNDLE_SHA" ]]; then
-  log "  WARN: 本地 platform 库 forensic_export_log.sha256=$REGISTERED_SHA 与文件 sha256 不一致(可能 bundle 来自异机,跳过强校验)"
+  fail "同一 tenant/exportId 的已登记 sha256 与证据包不一致，保留现场并拒绝回放"
 elif [[ -n "$REGISTERED_SHA" ]]; then
   log "  ✓ sha256 与 forensic_export_log 一致"
 fi
@@ -163,8 +171,9 @@ log "  rows: job_instances=$INSTANCE_ROWS, batch_day_audits=$AUDIT_ROWS"
 
 # ── Step 2:schema 映射 + 临时 ns 导入 ─────────────────────────────
 # 临时 schema 名(避免 - 和大写)
-SAFE_EXPORT=$(echo "$EXPORT_ID" | tr -c 'a-zA-Z0-9' '_' | tr 'A-Z' 'a-z' | sed 's/_*$//; s/^_*//')
-REPLAY_SCHEMA="sim_replay_${SAFE_EXPORT}"
+SAFE_EXPORT=$(echo "$EXPORT_ID" | tr -c 'a-zA-Z0-9' '_' | tr '[:upper:]' '[:lower:]' | sed 's/_*$//; s/^_*//')
+schema_suffix=$(printf '%s' "$TENANT_ID|$EXPORT_ID|$WORK_DIR" | sha256_text | cut -c1-16)
+REPLAY_SCHEMA="sim_replay_${SAFE_EXPORT:0:24}_${schema_suffix}"
 
 log "Step 2/5 创建临时 schema $REPLAY_SCHEMA + 装载 forensic snapshot"
 
@@ -204,7 +213,7 @@ jq -c '.[]' "$UNPACKED/batch-day-operation-audits.json" | while IFS= read -r row
     -v tenant_id="$tid" \
     -v snapshot="$row" \
     -f "$SQL_DIR/insert-forensic-day-audit.sql" \
-    >/dev/null || true
+    >/dev/null || fail "插入 forensic_batch_day_audits 失败 auditId=$rid"
 done
 
 log "  ✓ 临时 schema 装载完成"
@@ -217,55 +226,74 @@ if [[ "$NO_LAUNCH" -eq 1 ]]; then
   log "Step 3/5 --no-launch 模式:跳过 replay 触发"
   echo "[]" > "$REPLAY_SNAPSHOT"
 else
-  log "Step 3/5 触发 replay(console-api $CONSOLE_BASE)"
+  log "Step 3/5 触发 replay(Trigger $TRIGGER_BASE)"
 
-  # 从 forensic snapshot 取去重的 (jobCode, bizDate) 二元组
+  # 从 forensic snapshot 取去重的 (jobCode, bizDate) 对，再解析显式受管 Workflow。
   TRIGGER_PAIRS=$(psql_business -tA -F'|' \
     -v replay_schema="$REPLAY_SCHEMA" \
     -v tenant_id="$TENANT_ID" \
-    -f "$SQL_DIR/select-forensic-trigger-pairs.sql")
+    -f "$SQL_DIR/select-forensic-trigger-pairs.sql") || fail "查询回放目标失败"
 
   if [[ -z "$TRIGGER_PAIRS" ]]; then
-    log "  WARN: forensic snapshot 无可触发 (jobCode,bizDate) 对,跳过"
+    fail "forensic snapshot 无可触发 (jobCode,bizDate) 对；只查看证据请显式使用 --no-launch"
   fi
 
   TRIGGER_COUNT=0
   TRIGGERED_INSTANCES=()
   while IFS='|' read -r jc bd; do
     [[ -z "$jc" || -z "$bd" ]] && continue
-    payload=$(jq -nc \
-      --arg t "$TENANT_ID" --arg j "$jc" --arg d "$bd" \
-      '{tenantId:$t, jobCode:$j, bizDate:$d, triggerType:"MANUAL", dryRun:false}')
-    idem_key="replay-$EXPORT_ID-$jc-$bd"
-    log "  POST /api/console/jobs/trigger jobCode=$jc bizDate=$bd"
-    resp=$(curl -sS -X POST "$CONSOLE_BASE/api/console/jobs/trigger" \
+    workflow_id=$(psql_platform -tA \
+      -v tenant_id="$TENANT_ID" \
+      -v job_code="$jc" \
+      -f "$ROOT_DIR/scripts/sim/sql/select-single-job-workflow-id.sql" | tr -d '[:space:]') \
+      || fail "查询受管 Workflow 失败 jobCode=$jc"
+    if [[ ! "$workflow_id" =~ ^[0-9]+$ ]]; then
+      fail "缺少唯一受管单作业 Workflow，拒绝 Job 根回放 jobCode=$jc"
+    fi
+    request_suffix=$(printf '%s' "$EXPORT_ID|$jc|$bd" | sha256_text | cut -c1-32)
+    request_id="forensic-$request_suffix"
+    idem_key="$request_id"
+    log "  POST /api/triggers/launch workflowDefinitionId=$workflow_id jobCode=$jc bizDate=$bd"
+    launch_body=$(jq -nc --arg tenant "$TENANT_ID" --argjson workflowId "$workflow_id" \
+      --arg date "$bd" \
+      '{tenantId:$tenant,workflowDefinitionId:$workflowId,bizDate:$date,triggerType:"MANUAL",params:{forensicReplay:true}}')
+    resp=$(curl -sS --max-time "${REPLAY_HTTP_TIMEOUT_SEC:-30}" -w '\n%{http_code}' -X POST "$TRIGGER_BASE/api/triggers/launch" \
       -H 'Content-Type: application/json' \
+      -H "X-Tenant-Id: $TENANT_ID" \
       -H "Idempotency-Key: $idem_key" \
+      -H "X-Request-Id: $request_id" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" \
-      --data "$payload" 2>&1) || {
-        log "  WARN: 触发失败 jobCode=$jc:$resp"
-        continue
-      }
-    log "  → $resp"
+      --data "$launch_body" 2>&1) || fail "触发失败 jobCode=$jc:$resp"
+    http_code="${resp##*$'\n'}"
+    response_body="${resp%$'\n'*}"
+    if [[ "$http_code" != "200" ]] || ! jq -e '.code == "SUCCESS"' <<< "$response_body" >/dev/null; then
+      fail "Workflow 回放未接纳 jobCode=$jc HTTP=$http_code response=$response_body"
+    fi
+    psql_business -v replay_schema="$REPLAY_SCHEMA" \
+      -v tenant_id="$TENANT_ID" -v request_id="$request_id" \
+      -f "$SQL_DIR/insert-forensic-replay-request.sql" >/dev/null \
+      || fail "记录 replay Workflow Request 失败 requestId=$request_id"
+    log "  → $response_body"
     TRIGGER_COUNT=$((TRIGGER_COUNT+1))
-    TRIGGERED_INSTANCES+=("$jc|$bd")
+    TRIGGERED_INSTANCES+=("$jc|$bd|$request_id")
   done <<< "$TRIGGER_PAIRS"
 
   log "  共触发 $TRIGGER_COUNT 个 (jobCode,bizDate) 对,轮询终态…"
 
-  # 轮询 instance_status:每个 (jc,bd) 看是否出现 replay 新行 + 进终态
-  TERMINAL_RE="SUCCESS|FAILED|PARTIAL_FAILED|CANCELED|SKIPPED"
+  # 轮询根请求对应的 Workflow JOB 节点;不按 JobCode 猜测是哪次回放。
+  TERMINAL_RE="SUCCESS|FAILED|PARTIAL_FAILED|CANCELLED|TERMINATED|SUCCESS_DRY_RUN|FAILED_DRY_RUN"
+  pending="$TRIGGER_COUNT"
   deadline=$(( $(date +%s) + WAIT_TIMEOUT_SEC ))
   while (( $(date +%s) < deadline )); do
     pending=0
     for pair in "${TRIGGERED_INSTANCES[@]:-}"; do
       [[ -z "$pair" ]] && continue
-      jc="${pair%|*}"; bd="${pair#*|}"
+      IFS='|' read -r jc bd request_id <<< "$pair"
       st=$(psql_business -tA \
         -v tenant_id="$TENANT_ID" \
-        -v job_code="$jc" \
-        -v biz_date="$bd" \
-        -f "$SQL_DIR/select-latest-replay-instance-status.sql" 2>/dev/null | tr -d '[:space:]')
+        -v request_id="$request_id" \
+        -f "$SQL_DIR/select-latest-replay-instance-status.sql" | tr -d '[:space:]') \
+        || fail "查询回放终态失败 requestId=$request_id"
       if [[ -z "$st" ]] || ! echo "$st" | grep -qE "^($TERMINAL_RE)$"; then
         pending=$((pending+1))
       fi
@@ -277,18 +305,20 @@ else
     log "  …还在跑 $pending 个,sleep ${WAIT_INTERVAL_SEC}s"
     sleep "$WAIT_INTERVAL_SEC"
   done
+  (( pending == 0 )) || fail "回放等待超时，仍有 $pending 个请求未达根运行和 Job 终态"
 
-  # 抽 replay snapshot:每个 (jobCode,bizDate) 取最新一条 batch.job_instance(即 replay 新跑的)
+  # 只从本轮接纳的 Workflow Requests 关联 JOB 节点提取回放结果。
   log "  抽取 replay snapshot → $REPLAY_SNAPSHOT"
-  psql_business -tA \
+  psql_platform -tA \
+    -v replay_schema="$REPLAY_SCHEMA" \
     -v tenant_id="$TENANT_ID" \
     -v biz_from="$BIZ_FROM" \
     -v biz_to="$BIZ_TO" \
-    -f "$SQL_DIR/select-replay-snapshot.sql" > "$REPLAY_SNAPSHOT" 2>/dev/null || echo "[]" > "$REPLAY_SNAPSHOT"
-
-  # 空结果占位
-  [[ -s "$REPLAY_SNAPSHOT" ]] || echo "[]" > "$REPLAY_SNAPSHOT"
-  if grep -q '^$' "$REPLAY_SNAPSHOT" 2>/dev/null; then echo "[]" > "$REPLAY_SNAPSHOT"; fi
+    -f "$SQL_DIR/select-replay-snapshot.sql" > "$REPLAY_SNAPSHOT" \
+    || fail "读取已接纳回放结果失败"
+  jq -e --argjson expected "$TRIGGER_COUNT" \
+    'type == "array" and length == $expected' "$REPLAY_SNAPSHOT" >/dev/null \
+    || fail "回放结果数量与已接纳请求不一致"
 fi
 
 # ── Step 4:diff(委托 analyze-replay.sh) ────────────────────────
@@ -359,9 +389,10 @@ log "  原始 diff:  $ANALYZE_OUT"
 log "  解包目录:   $UNPACKED  (保留供排查)"
 
 # 退出码:有 status_changed 或 error_changed → 非 0,给 CI 用
-if [[ "$STATUS_CHANGED" -gt 0 || "$ERROR_CHANGED" -gt 0 ]]; then
+if [[ "$NO_LAUNCH" -eq 0 ]] && \
+    [[ "$STATUS_CHANGED" -gt 0 || "$ERROR_CHANGED" -gt 0 || "$MISSING" -gt 0 ]]; then
   log "  临时 schema:$REPLAY_SCHEMA  (检测到差异，保留现场)"
-  log "WARN: 出现 status/error 改判,exit 2(代码可能改判)"
+  log "WARN: 出现 status/error 改判或缺失结果，exit 2，保留现场"
   exit 2
 fi
 

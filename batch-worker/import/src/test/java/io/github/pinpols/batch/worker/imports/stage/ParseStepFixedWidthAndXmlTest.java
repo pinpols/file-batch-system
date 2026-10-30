@@ -12,14 +12,19 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.postgresql.util.PGobject;
 
 /**
@@ -73,6 +78,79 @@ class ParseStepFixedWidthAndXmlTest {
     assertNdjsonRecordCount(context, 3);
     assertNdjsonContains(context, "C00001", "Alice", "ACTIVE");
     assertNdjsonContains(context, "C00003", "Charlie", "ACTIVE");
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("invalidFixedWidthMappings")
+  @DisplayName("定长字段映射不允许小数、溢出或忽略无效字段")
+  void rejectsInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings)
+      throws Exception {
+    Map<String, Object> templateConfig =
+        Map.of("field_mappings", mappings, "jdbc_mapped_import", Map.of());
+    ImportJobContext context = buildContext("ABCDE\n", "FIXED_WIDTH", templateConfig);
+    try {
+      ImportStageResult result = parseStep.execute(context);
+      assertThat(result.success()).as(scenario).isFalse();
+    } finally {
+      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    }
+  }
+
+  private static Stream<Arguments> invalidFixedWidthMappings() {
+    return Stream.of(
+        Arguments.of(
+            "fractional start", List.of(Map.of("target", "id", "start", 1.9, "length", 1))),
+        Arguments.of(
+            "overflow start", List.of(Map.of("target", "id", "start", 4294967296L, "length", 1))),
+        Arguments.of(
+            "fractional length", List.of(Map.of("target", "id", "start", 0, "length", 1.9))),
+        Arguments.of(
+            "overflow length", List.of(Map.of("target", "id", "start", 0, "length", 4294967297L))),
+        Arguments.of(
+            "missing start",
+            List.of(
+                Map.of("target", "id", "start", 0, "length", 1),
+                Map.of("target", "other", "length", 1))));
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("otherInvalidFixedWidthMappings")
+  @DisplayName("定长字段映射拒绝负起点、零长度和无效目标")
+  void rejectsOtherInvalidFixedWidthMappings(String scenario, List<Map<String, Object>> mappings)
+      throws Exception {
+    ImportJobContext context =
+        buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", mappings));
+    try {
+      assertThat(parseStep.execute(context).success()).as(scenario).isFalse();
+    } finally {
+      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    }
+  }
+
+  private static Stream<Arguments> otherInvalidFixedWidthMappings() {
+    return Stream.of(
+        Arguments.of("negative start", List.of(Map.of("target", "id", "start", -1, "length", 1))),
+        Arguments.of("zero length", List.of(Map.of("target", "id", "start", 0, "length", 0))),
+        Arguments.of("blank target", List.of(Map.of("target", " ", "start", 0, "length", 1))),
+        Arguments.of("numeric target", List.of(Map.of("target", 123, "start", 0, "length", 1))));
+  }
+
+  @Test
+  @DisplayName("定长字段映射接受范围内 Long 与 BigInteger 并按原位置解析")
+  void shouldAcceptValidIntegralFixedWidthMappings() throws Exception {
+    Map<String, Object> mapping =
+        Map.of("target", "id", "start", 1L, "length", BigInteger.valueOf(2));
+    ImportJobContext context =
+        buildContext("ABCDE\n", "FIXED_WIDTH", Map.of("field_mappings", List.of(mapping)));
+    try {
+      assertThat(parseStep.execute(context).success()).isTrue();
+      assertNdjsonContains(context, "BC");
+    } finally {
+      Object path = context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
+      if (path != null) Files.deleteIfExists(Path.of(path.toString()));
+    }
   }
 
   /** header_rows + footer_rows 用于跳过头尾。 */

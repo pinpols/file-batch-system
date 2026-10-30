@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.scheduler;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
@@ -11,6 +12,9 @@ import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntit
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.QueueBacklogQueryParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView;
+import io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -62,12 +66,16 @@ public class TenantSchedulerSnapshotService {
           BatchDateTimeSupport.utcNow(), tenantId, List.of(), List.of(), List.of());
     }
     long tenantActiveJobs = jobInstanceMapper.countActiveByTenant(tenantId);
-    long tenantActivePartitions = jobPartitionMapper.countActiveByTenant(
-        tenantId,
-        PartitionStatus.WAITING.code(),
-        PartitionStatus.READY.code(),
-        PartitionStatus.RUNNING.code(),
-        PartitionStatus.RETRYING.code());
+    JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+        JobPartitionActiveByTenantCountQuery.builder()
+            .tenantId(tenantId)
+            .waitingStatus(PartitionStatus.WAITING.code())
+            .readyStatus(PartitionStatus.READY.code())
+            .runningStatus(PartitionStatus.RUNNING.code())
+            .retryingStatus(PartitionStatus.RETRYING.code())
+            .build();
+    long tenantActivePartitions =
+        jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
 
     List<SchedulerSnapshotResponse.PolicySnapshot> policies =
         buildQuotaSnapshot(tenantId, tenantActiveJobs, tenantActivePartitions);
@@ -92,10 +100,11 @@ public class TenantSchedulerSnapshotService {
     }
     Map<String, Long> groupCountMap = new HashMap<>();
     if (!groups.isEmpty()) {
-      for (Map<String, Object> row : jobInstanceMapper.countActiveByFairShareGroups(groups)) {
-        groupCountMap.put(
-            String.valueOf(row.get("fairShareGroup")),
-            ((Number) row.getOrDefault("cnt", 0L)).longValue());
+      for (FairShareGroupActiveCountView row :
+          jobInstanceMapper.countActiveByFairShareGroups(groups)) {
+        String fairShareGroup = row.fairShareGroup();
+        long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
+        groupCountMap.put(fairShareGroup, activeJobCount);
       }
     }
     for (TenantQuotaPolicyEntity p : quotaRows) {
@@ -108,31 +117,36 @@ public class TenantSchedulerSnapshotService {
       int baseParts = p.maxPartitionsPerTenant() == null ? 0 : p.maxPartitionsPerTenant();
       int pburst = p.partitionBurstLimit() == null ? 0 : Math.max(0, p.partitionBurstLimit());
       int effParts = baseParts > 0 ? baseParts + pburst : 0;
-      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
-          quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
-              new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "TENANT_JOBS", tenantId),
+      QuotaRuntimeStateService.QuotaReservationOwner quotaOwner =
+          new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "TENANT_JOBS", tenantId);
+      QuotaRuntimeStateService.QuotaDescribeRequest quotaRequest =
+          new QuotaRuntimeStateService.QuotaDescribeRequest(
+              quotaOwner,
               p.quotaResetPolicy(),
               burst,
-              resourceSchedulerProperties.getQuotaResetSlidingWindowHours()));
+              resourceSchedulerProperties.getQuotaResetSlidingWindowHours());
+      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
+          quotaRuntimeStateService.describe(quotaRequest);
       SchedulerSnapshotResponse.PolicySnapshot policySnapshot =
-          new SchedulerSnapshotResponse.PolicySnapshot(
-              p.policyCode(),
-              p.fairShareGroup(),
-              p.fairShareWeight(),
-              p.maxRunningJobsPerTenant(),
-              p.burstLimit(),
-              p.partitionBurstLimit(),
-              p.quotaResetPolicy(),
-              runtime.peakBorrowedCount(),
-              runtime.remainingBurst(),
-              runtime.windowStartedAt(),
-              runtime.windowExpiresAt(),
-              p.groupSharedMaxRunningJobs(),
-              tenantActiveJobs,
-              tenantActivePartitions,
-              groupJobs,
-              effJobs,
-              effParts);
+          SchedulerSnapshotResponse.PolicySnapshot.builder()
+              .policyCode(p.policyCode())
+              .fairShareGroup(p.fairShareGroup())
+              .fairShareWeight(p.fairShareWeight())
+              .maxRunningJobsPerTenant(p.maxRunningJobsPerTenant())
+              .burstLimit(p.burstLimit())
+              .partitionBurstLimit(p.partitionBurstLimit())
+              .quotaResetPolicy(p.quotaResetPolicy())
+              .quotaBurstPeakBorrowed(runtime.peakBorrowedCount())
+              .quotaBurstRemaining(runtime.remainingBurst())
+              .quotaResetWindowStartedAt(runtime.windowStartedAt())
+              .quotaResetWindowExpiresAt(runtime.windowExpiresAt())
+              .groupSharedMaxRunningJobs(p.groupSharedMaxRunningJobs())
+              .activeJobs(tenantActiveJobs)
+              .activePartitions(tenantActivePartitions)
+              .groupActiveJobs(groupJobs)
+              .effectiveTenantJobCap(effJobs)
+              .effectiveTenantPartitionCap(effParts)
+              .build();
       policies.add(policySnapshot);
     }
     return policies;
@@ -150,11 +164,11 @@ public class TenantSchedulerSnapshotService {
     }
     Map<String, Long> queueCountMap = new HashMap<>();
     if (!queueCodes.isEmpty()) {
-      for (Map<String, Object> row :
+      for (QueueActiveCountView row :
           jobInstanceMapper.countActiveByTenantAndQueueCodes(tenantId, queueCodes)) {
-        queueCountMap.put(
-            String.valueOf(row.get("queueCode")),
-            ((Number) row.getOrDefault("cnt", 0L)).longValue());
+        String queueCode = row.queueCode();
+        long activeJobCount = EmptyChecks.isNull(row.cnt()) ? 0L : row.cnt();
+        queueCountMap.put(queueCode, activeJobCount);
       }
     }
     Map<String, QueuePartitionBacklogStats> backlogMap = new HashMap<>();
@@ -182,41 +196,48 @@ public class TenantSchedulerSnapshotService {
       int qeff = qmax > 0 ? qmax + qburst : 0;
       int partitionCap = q.maxRunningPartitions() == null ? 0 : q.maxRunningPartitions();
       QueuePartitionBacklogStats backlog = backlogMap.getOrDefault(q.queueCode(), emptyBacklog(q));
-      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
-          quotaRuntimeStateService.describe(new QuotaRuntimeStateService.QuotaDescribeRequest(
-              new QuotaRuntimeStateService.QuotaReservationOwner(
-                  tenantId, "QUEUE_JOBS", q.queueCode()),
+      QuotaRuntimeStateService.QuotaReservationOwner quotaOwner =
+          new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, "QUEUE_JOBS", q.queueCode());
+      QuotaRuntimeStateService.QuotaDescribeRequest quotaRequest =
+          new QuotaRuntimeStateService.QuotaDescribeRequest(
+              quotaOwner,
               q.quotaResetPolicy(),
               qburst,
-              resourceSchedulerProperties.getQuotaResetSlidingWindowHours()));
+              resourceSchedulerProperties.getQuotaResetSlidingWindowHours());
+      QuotaRuntimeStateService.QuotaRuntimeSnapshot runtime =
+          quotaRuntimeStateService.describe(quotaRequest);
+      int waitingSharePermille = permille(backlog.waitingPartitions(), tenantWaitingPartitions);
+      int activePartitionPermille = permille(backlog.activePartitions(), partitionCap);
+      String queueBottleneckReason = bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups);
       SchedulerSnapshotResponse.QueueSnapshot queueSnapshot =
-          new SchedulerSnapshotResponse.QueueSnapshot(
-              q.queueCode(),
-              q.fairShareGroup(),
-              q.fairShareWeight(),
-              q.maxRunningJobs(),
-              q.maxRunningPartitions(),
-              q.burstLimit(),
-              qeff,
-              partitionCap,
-              q.quotaResetPolicy(),
-              runtime.peakBorrowedCount(),
-              runtime.remainingBurst(),
-              runtime.windowStartedAt(),
-              runtime.windowExpiresAt(),
-              q.groupSharedMaxRunningJobs(),
-              qj,
-              backlog.createdPartitions(),
-              backlog.waitingPartitions(),
-              backlog.readyPartitions(),
-              backlog.runningPartitions(),
-              backlog.retryingPartitions(),
-              backlog.queuedPartitions(),
-              backlog.activePartitions(),
-              backlog.oldestWaitingSeconds(),
-              permille(backlog.waitingPartitions(), tenantWaitingPartitions),
-              permille(backlog.activePartitions(), partitionCap),
-              bottleneckReason(q, qj, qeff, backlog, onlineWorkerGroups));
+          SchedulerSnapshotResponse.QueueSnapshot.builder()
+              .queueCode(q.queueCode())
+              .fairShareGroup(q.fairShareGroup())
+              .fairShareWeight(q.fairShareWeight())
+              .maxRunningJobs(q.maxRunningJobs())
+              .maxRunningPartitions(q.maxRunningPartitions())
+              .burstLimit(q.burstLimit())
+              .effectiveMaxRunningJobs(qeff)
+              .effectiveMaxRunningPartitions(partitionCap)
+              .quotaResetPolicy(q.quotaResetPolicy())
+              .quotaBurstPeakBorrowed(runtime.peakBorrowedCount())
+              .quotaBurstRemaining(runtime.remainingBurst())
+              .quotaResetWindowStartedAt(runtime.windowStartedAt())
+              .quotaResetWindowExpiresAt(runtime.windowExpiresAt())
+              .groupSharedMaxRunningJobs(q.groupSharedMaxRunningJobs())
+              .activeJobs(qj)
+              .createdPartitions(backlog.createdPartitions())
+              .waitingPartitions(backlog.waitingPartitions())
+              .readyPartitions(backlog.readyPartitions())
+              .runningPartitions(backlog.runningPartitions())
+              .retryingPartitions(backlog.retryingPartitions())
+              .queuedPartitions(backlog.queuedPartitions())
+              .activePartitions(backlog.activePartitions())
+              .oldestWaitingSeconds(backlog.oldestWaitingSeconds())
+              .tenantWaitingSharePermille(waitingSharePermille)
+              .partitionSaturationPermille(activePartitionPermille)
+              .bottleneckReason(queueBottleneckReason)
+              .build();
       queues.add(queueSnapshot);
     }
     return queues;
@@ -231,7 +252,9 @@ public class TenantSchedulerSnapshotService {
       return 0;
     }
     long scaled = numerator * 1000L / denominator;
-    return (int) Math.min(1000L, Math.max(0L, scaled));
+    long nonNegativePermille = Math.max(0L, scaled);
+    long cappedPermille = Math.min(1000L, nonNegativePermille);
+    return (int) cappedPermille;
   }
 
   private static String bottleneckReason(
@@ -250,9 +273,11 @@ public class TenantSchedulerSnapshotService {
     if (effectiveJobCap > 0 && activeJobs >= effectiveJobCap) {
       return BOTTLENECK_QUEUE_JOB_LIMIT;
     }
-    if (Texts.hasText(queue.workerGroup())
-        && !onlineWorkerGroups.contains(queue.workerGroup().toLowerCase(Locale.ROOT))) {
-      return BOTTLENECK_NO_ONLINE_WORKER;
+    if (Texts.hasText(queue.workerGroup())) {
+      String normalizedWorkerGroup = queue.workerGroup().toLowerCase(Locale.ROOT);
+      if (!onlineWorkerGroups.contains(normalizedWorkerGroup)) {
+        return BOTTLENECK_NO_ONLINE_WORKER;
+      }
     }
     return BOTTLENECK_WAITING_DISPATCH_BACKLOG;
   }
@@ -281,7 +306,8 @@ public class TenantSchedulerSnapshotService {
   }
 
   public List<TenantSchedulerSnapshotEntity> history(String tenantId, int limit) {
-    int boundedLimit = Math.min(Math.max(limit, 1), MAX_SNAPSHOT_LIMIT);
+    int minimumLimit = Math.max(limit, 1);
+    int boundedLimit = Math.min(minimumLimit, MAX_SNAPSHOT_LIMIT);
     return tenantSchedulerSnapshotMapper.listRecent(tenantId, boundedLimit);
   }
 }

@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.common.spi.task;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import java.util.Map;
+
 /**
  * Atomic Task SPI — 单步原子任务执行契约,加新任务类型只需实现本接口 + 注册即可。
  *
@@ -30,6 +33,24 @@ public interface BatchTaskExecutor {
 
   /** 资源 / 行为声明,给 worker registry 路由匹配 + orchestrator 调度策略使用。 */
   TaskCapability capability();
+
+  /** 解析冻结任务配置的全部副作用；默认声明不能证明重放安全。 */
+  default ReplayCapabilityDeclaration replayCapability(Map<String, Object> frozenConfig) {
+    return replayCapabilityDeclaration();
+  }
+
+  /** 注册目录采用保守声明，必须适用于该执行器的所有配置。 */
+  default ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+    return ReplayCapabilityDeclaration.unknown(taskType());
+  }
+
+  /**
+   * 当前具体调用在 Worker 租约到期后是否可以重放。大多数
+   * 执行器使用静态能力；支持按请求幂等的协议可以进一步细化此能力。
+   */
+  default boolean isSafeToReplay(TaskContext context) {
+    return capability().idempotent();
+  }
 
   /**
    * 真正的执行入口。实现方负责自己的超时 / 资源隔离 / 审计语义。

@@ -6,7 +6,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.i18n.BizMessageResolver;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.mq.MqMessage;
@@ -14,21 +19,23 @@ import io.github.pinpols.batch.common.mq.MqMessagePublisher;
 import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.config.MqRoutingProperties;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
-import io.github.pinpols.batch.orchestrator.mapper.EventDeliveryLogMapper;
 import io.opentelemetry.api.trace.Span;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.context.support.ResourceBundleMessageSource;
 
 @SuppressWarnings("unchecked")
 @DisplayName("出箱事件发布器: 主题选择, 投递失败日志落库, 追踪上下文恢复与逻辑分区映射")
@@ -37,7 +44,7 @@ class KafkaOutboxPublisherTest {
   private MqMessagePublisher mqMessagePublisher;
   private BatchMqTopicsProperties batchMqTopicsProperties;
   private OutboxProperties outboxProperties;
-  private EventDeliveryLogMapper eventDeliveryLogMapper;
+  private OutboxChildRecordService outboxChildRecordService;
   private KafkaOutboxPublisher publisher;
 
   @BeforeEach
@@ -45,21 +52,21 @@ class KafkaOutboxPublisherTest {
     mqMessagePublisher = mock(MqMessagePublisher.class);
     batchMqTopicsProperties = new BatchMqTopicsProperties();
     outboxProperties = new OutboxProperties();
-    eventDeliveryLogMapper = mock(EventDeliveryLogMapper.class);
+    outboxChildRecordService = mock(OutboxChildRecordService.class);
     BatchOrchestratorGovernanceProperties governance =
         mock(BatchOrchestratorGovernanceProperties.class);
     when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
     when(governance.outbox()).thenReturn(outboxProperties);
-    BatchTopicResolver topicResolver =
-        new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties());
+    BatchTopicResolver topicResolver = new BatchTopicResolver(
+        batchMqTopicsProperties, new MqRoutingProperties(), new BatchKafkaTopicNamespace(""));
     publisher = new KafkaOutboxPublisher(
         mqMessagePublisher,
         governance,
-        eventDeliveryLogMapper,
+        outboxChildRecordService,
         topicResolver,
-        new io.github.pinpols.batch.common.i18n.BizMessageResolver(
-            new org.springframework.context.support.ResourceBundleMessageSource()),
-        new com.fasterxml.jackson.databind.ObjectMapper(),
+        new BatchKafkaTopicNamespace(""),
+        new BizMessageResolver(new ResourceBundleMessageSource()),
+        new ObjectMapper(),
         Runnable::run);
   }
 
@@ -81,12 +88,81 @@ class KafkaOutboxPublisherTest {
     }
     ArgumentCaptor<EventDeliveryLogEntity> captor =
         ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
-    verify(eventDeliveryLogMapper).insert(captor.capture());
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
     EventDeliveryLogEntity log = captor.getValue();
     assertThat(log.getDeliveryStatus()).isEqualTo(OutboxPublishStatus.FAILED.code());
     assertThat(log.getTargetTopic()).isEqualTo("batch.task.dispatch.import");
     assertThat(log.getErrorMessage()).contains("kafka down");
     assertThat(log.getDeliveryAttempt()).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("发送失败时投递记录不保存异常消息中的凭据")
+  void shouldMaskCredentials_whenRecordingFailedDelivery() {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "redaction-key");
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(
+            CompletableFuture.failedFuture(new RuntimeException("broker password=probe-secret")));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    assertThat(captor.getValue().getErrorMessage())
+        .contains("password=")
+        .doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("本地化投递异常的参数不保存内嵌凭据")
+  void shouldMaskCredentials_whenRecordingLocalizedDeliveryArgs() {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "redaction-args");
+    BizException failure = BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
+        "token=probe-arg-secret",
+        Map.of("password", "probe-map-secret", "trace", "safe-trace"));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.failedFuture(failure));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    assertThat(captor.getValue().getErrorArgs())
+        .contains("token=", "safe-trace")
+        .doesNotContain("probe-arg-secret", "probe-map-secret");
+    assertThat(JsonUtils.fromJson(captor.getValue().getErrorArgs(), Object.class))
+        .isNotNull();
+  }
+
+  @Test
+  @DisplayName("本地化参数遮蔽规范化字段和转义赋值, 保留普通内容")
+  void shouldMaskEncodedCredentials_whenRecordingLocalizedDeliveryArgs() throws Exception {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "encoded-args");
+    BizException failure = BizException.of(
+        ResultCode.INVALID_ARGUMENT,
+        "error.common.invalid_argument_detail",
+        Map.of(
+            "ｐａｓｓｗｏｒｄ",
+            "probe-unicode-secret",
+            "message",
+            "token&#61;probe-html-secret",
+            "safe",
+            "left <right>"));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.failedFuture(failure));
+    assertThat(publisher.publish(event)).isCompletedExceptionally();
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    String args = captor.getValue().getErrorArgs();
+    assertThat(args).doesNotContain("probe-unicode-secret", "probe-html-secret");
+    var item = new ObjectMapper().readTree(args).get(0);
+    assertThat(item.path("safe").asText()).isEqualTo("left <right>");
+    assertThat(item.path("ｐａｓｓｗｏｒｄ").asText()).isEqualTo("****");
+    assertThat(item.path("message").asText()).contains("token=");
   }
 
   @Test
@@ -177,7 +253,7 @@ class KafkaOutboxPublisherTest {
     }
     ArgumentCaptor<EventDeliveryLogEntity> captor =
         ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
-    verify(eventDeliveryLogMapper).insert(captor.capture());
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
     EventDeliveryLogEntity log = captor.getValue();
     assertThat(log.getDeliveryStatus()).isEqualTo(OutboxPublishStatus.FAILED.code());
     assertThat(log.getTargetTopic()).isEqualTo(BatchTopics.OUTBOX_EVENT);
@@ -199,6 +275,62 @@ class KafkaOutboxPublisherTest {
     assertThat(captor.getValue().topic()).isEqualTo(BatchTopics.WORKFLOW_TERMINAL_V1);
     assertThat(captor.getValue().key()).isEqualTo("ta:workflow:100:terminal");
     assertThat(captor.getValue().payload()).isEqualTo(event.getPayloadJson());
+  }
+
+  @Test
+  @DisplayName("Job 终态事件发到独立 topic,不串入 Workflow 合同")
+  void shouldRouteJobTerminalToDedicatedTopic() {
+    OutboxEventEntity event = fallbackEvent("JOB_TERMINAL", "ta:job:100:terminal:SUCCESS");
+    when(mqMessagePublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+    assertThat(publisher.publish(event)).isCompletedWithValue(true);
+    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("batch.job.terminal.v1");
+  }
+
+  @Test
+  @DisplayName("受理的 Workflow 启动命令保持原信封发往既有 Trigger Launch 主题")
+  void shouldPublishOriginalEnvelope_whenWorkflowLaunchIsAccepted() {
+    var event = fallbackEvent("WORKFLOW_LAUNCH", "t1:workflow-launch:replay-7-102");
+    when(mqMessagePublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+    assertThat(publisher.publish(event)).isCompletedWithValue(true);
+    var message = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(message.capture());
+    assertThat(message.getValue().topic()).isEqualTo("batch.trigger.launch.v1");
+    assertThat(message.getValue().payload()).isEqualTo(event.getPayloadJson());
+  }
+
+  @Test
+  @DisplayName("命名空间应用于 Outbox 专用终态主题")
+  void shouldNamespaceDedicatedTopic() {
+    BatchKafkaTopicNamespace namespace = new BatchKafkaTopicNamespace("run-a");
+    BatchTopicResolver namespacedResolver =
+        new BatchTopicResolver(batchMqTopicsProperties, new MqRoutingProperties(), namespace);
+    publisher = new KafkaOutboxPublisher(
+        mqMessagePublisher,
+        mockGovernance(),
+        outboxChildRecordService,
+        namespacedResolver,
+        namespace,
+        new BizMessageResolver(new ResourceBundleMessageSource()),
+        new ObjectMapper(),
+        Runnable::run);
+    OutboxEventEntity event = fallbackEvent("WORKFLOW_TERMINAL", "ta:workflow:100:terminal");
+    when(mqMessagePublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(null));
+
+    assertThat(publisher.publish(event)).isCompletedWithValue(true);
+
+    ArgumentCaptor<MqMessage> captor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("run-a." + BatchTopics.WORKFLOW_TERMINAL_V1);
+  }
+
+  private BatchOrchestratorGovernanceProperties mockGovernance() {
+    BatchOrchestratorGovernanceProperties governance =
+        mock(BatchOrchestratorGovernanceProperties.class);
+    when(governance.mqTopics()).thenReturn(batchMqTopicsProperties);
+    when(governance.outbox()).thenReturn(outboxProperties);
+    return governance;
   }
 
   private static OutboxEventEntity dispatchEvent(String eventType, String eventKey) {
@@ -231,6 +363,7 @@ class KafkaOutboxPublisherTest {
         }
         """.formatted(eventKey));
     event.setPublishAttempt(0);
+    event.setCreatedAt(BatchDateTimeSupport.utcNow());
     event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-it-test");
     return event;
@@ -246,6 +379,7 @@ class KafkaOutboxPublisherTest {
     event.setEventKey(eventKey);
     event.setPayloadJson("{\"hello\":\"world\"}");
     event.setPublishAttempt(0);
+    event.setCreatedAt(BatchDateTimeSupport.utcNow());
     event.setNextPublishAt(BatchDateTimeSupport.utcNow());
     event.setTraceId("trace-fallback");
     return event;

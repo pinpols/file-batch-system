@@ -12,6 +12,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -133,7 +134,8 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     props.put(
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
     props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest");
+    // 首次订阅或位点过期时仍须接收保留的派单；是否可执行由租户校验和 CLAIM 裁决。
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
     // P3:per-tenant Kafka SASL/SCRAM(ACL 路径)。三个字段都置空 → 走 PLAINTEXT(本地联调);
     // 任一非空 → 全部按设值传给 Kafka client(prod 必填 protocol + mechanism + jaasConfig)。
     if (notBlank(config.getKafkaSecurityProtocol())) {
@@ -159,8 +161,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   @SuppressWarnings("java:S1181")
   public void run() {
     this.kafkaThread.set(Thread.currentThread());
-    consumer.subscribe(
-        Pattern.compile(config.getKafkaTopicPattern()), new PauseAwareRebalanceListener());
+    String subscriptionTopicPattern = config.getKafkaTopicPattern();
+    Pattern compiledTopicPattern = Pattern.compile(subscriptionTopicPattern);
+    consumer.subscribe(compiledTopicPattern, new PauseAwareRebalanceListener());
     log.info(
         "KafkaTaskConsumer started: tenant={}, topicPattern={}, group={}",
         config.getTenantId(),
@@ -254,7 +257,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     boolean capacityPause = inFlight >= max;
     boolean capacityResumeOk = inFlight < Math.max(1, max / 2);
     if (capacityPause || platformPaused) {
-      if (!paused && !consumer.assignment().isEmpty()) {
+      boolean consumerIsUnpausedWithAssignedPartitions =
+          !paused && !EmptyChecks.isEmpty(Objects.requireNonNull(consumer.assignment()));
+      if (consumerIsUnpausedWithAssignedPartitions) {
         consumer.pause(consumer.assignment());
         paused = true;
         log.info(
@@ -354,7 +359,10 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       return true;
     }
     try {
-      consumer.commitSync(Map.of(tp, new OffsetAndMetadata(rec.offset() + 1)));
+      long nextOffset = rec.offset() + 1;
+      OffsetAndMetadata committedOffset = new OffsetAndMetadata(nextOffset);
+      Map<TopicPartition, OffsetAndMetadata> offsets = Map.of(tp, committedOffset);
+      consumer.commitSync(offsets);
       return true;
     } catch (Exception ex) {
       log.warn(
@@ -448,8 +456,9 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
     Thread t = this.kafkaThread.get();
     if (t != null && t != Thread.currentThread()) {
-      long timeoutMs =
-          Math.max(0L, EmptyChecks.isNull(joinTimeout) ? 5_000L : joinTimeout.toMillis());
+      long configuredJoinTimeoutMs =
+          EmptyChecks.isNull(joinTimeout) ? 5_000L : joinTimeout.toMillis();
+      long timeoutMs = Math.max(0L, configuredJoinTimeoutMs);
       if (timeoutMs > 0L) {
         try {
           t.join(timeoutMs);

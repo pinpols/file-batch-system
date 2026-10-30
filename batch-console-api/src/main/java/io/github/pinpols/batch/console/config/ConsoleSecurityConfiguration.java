@@ -186,8 +186,8 @@ public class ConsoleSecurityConfiguration {
     // 必须有 double-submit CSRF 保护。FE axios 已固定读取 XSRF-TOKEN cookie 并回传 X-XSRF-TOKEN。
     // bypass-mode 仅供本地/联调/E2E 使用,这里通过 ignore matcher 放宽,避免禁用 CSRF filter 本身。
     // 例外 matcher 仅覆盖无 cookie 凭据的内部回调、登录前端点和本地 bypass-mode。
-    // XSRF-TOKEN intentionally stays readable by browser JavaScript: axios copies it into the
-    // X-XSRF-TOKEN header for Spring Security's double-submit CSRF validation.
+    // XSRF-TOKEN 按设计允许浏览器 JavaScript 读取：axios 会将其复制到
+    // X-XSRF-TOKEN 请求头，供 Spring Security 执行双提交 CSRF 校验。
     http.csrf(csrf -> csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
         // Console 是纯 JSON API，前端 Axios 把 cookie 原值复制到请求头。显式使用明文处理器，
         // 避免 Spring Security 默认 XOR 处理器把合法的 double-submit 请求误判为 403。

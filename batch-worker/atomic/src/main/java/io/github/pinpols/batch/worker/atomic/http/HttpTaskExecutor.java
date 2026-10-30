@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.http;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.CredentialEnvResolver;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
@@ -11,7 +12,9 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import jakarta.annotation.PreDestroy;
 import java.io.ByteArrayOutputStream;
@@ -193,6 +196,25 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   }
 
   @Override
+  public boolean isSafeToReplay(TaskContext context) {
+    Map<String, Object> parameters = context.parameters();
+    String method = stringParam(parameters, PARAM_METHOD, "GET").toUpperCase(Locale.ROOT);
+    if (IDEMPOTENT_METHODS.contains(method)) {
+      return true;
+    }
+    Object rawHeaders = parameters.get(PARAM_HEADERS);
+    if (!(rawHeaders instanceof Map<?, ?> headers)) {
+      return false;
+    }
+    // JOB_RERUN 复用其来源 JobInstance 中持久化的跨日结果载荷。若再次解析
+    // EFFECTIVE/LATEST，会悄悄改变不同尝试之间的业务输入。
+    return headers.entrySet().stream()
+        .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
+            && entry.getValue() instanceof String value
+            && EmptyChecks.isNotBlank(value));
+  }
+
+  @Override
   public TaskResult execute(TaskContext ctx) {
     try {
       // Lane C:扫 parameters,但排除 HTTP executor 协议显式的 `auth` 子树(其内
@@ -211,11 +233,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       if (ctx.isDryRun()) {
         // ADR-026 §dry-run:不发出 HTTP 请求,只回传将要发的 method + url + header keys + body 长度。
         // 不回传 header value(可能含 auth bearer / cookie),不回传 body 文本(可能含敏感载荷)。
+        String plannedEndpoint = SecretMasking.maskEndpoint(inv.uri.toString());
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "http");
         planned.put(PARAM_METHOD, inv.method);
-        planned.put(PARAM_URL, inv.uri.toString());
+        planned.put(PARAM_URL, plannedEndpoint);
         planned.put("headerKeys", List.copyOf(inv.headers.keySet()));
         planned.put(
             "bodyBytes", inv.body == null ? 0 : inv.body.getBytes(StandardCharsets.UTF_8).length);
@@ -227,8 +250,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
             ctx.tenantId(),
             ctx.jobCode(),
             inv.method,
-            inv.uri);
-        return TaskResult.ok("dry-run: " + inv.method + " " + inv.uri + " (not sent)", planned);
+            plannedEndpoint);
+        return TaskResult.ok(
+            "dry-run: " + inv.method + " " + plannedEndpoint + " (not sent)", planned);
       }
       return runWithRetry(ctx, inv);
     } catch (HttpValidationException ex) {
@@ -238,9 +262,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
               || ex.getMessage().contains("allowedHostPatterns")
               || ex.getMessage().contains("allowlist")
               || ex.getMessage().contains("resolves to blocked"));
-      return AtomicErrorCode.fail(
-          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID,
-          ex.getMessage());
+      AtomicErrorCode errorCode =
+          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
+      return AtomicErrorCode.fail(errorCode, ex.getMessage());
     } catch (BizException ex) {
       log.warn(
           "http executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
@@ -253,14 +277,14 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "http executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          ex);
+          "http executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
     }
   }
 
@@ -275,7 +299,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
     URI uri;
     try {
-      uri = new URI(urlString.trim());
+      String trimmedUrl = urlString.trim();
+      uri = new URI(trimmedUrl);
     } catch (URISyntaxException e) {
       throw new HttpValidationException("parameters.url not a valid URI: " + e.getMessage());
     }
@@ -284,7 +309,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
     validateHost(uri.getHost());
 
-    String method = stringParam(params, PARAM_METHOD, "GET").toUpperCase(Locale.ROOT);
+    String methodText = stringParam(params, PARAM_METHOD, "GET");
+    String method = methodText.toUpperCase(Locale.ROOT);
     if (!props.getAllowedMethods().contains(method)) {
       throw new HttpValidationException(
           "method " + method + " not in allowedMethods=" + props.getAllowedMethods());
@@ -298,13 +324,14 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
     Duration timeout = props.getDefaultTimeout();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number number) {
-      long sec = number.longValue();
-      if (sec <= 0) {
-        throw new HttpValidationException("timeoutSeconds must be positive");
+    if (EmptyChecks.isNotNull(t)) {
+      Long sec = AtomicParameterNumbers.positiveLong(t);
+      if (EmptyChecks.isNull(sec)) {
+        throw new HttpValidationException("timeoutSeconds must be positive integer");
       }
       Duration requested = Duration.ofSeconds(sec);
-      if (requested.compareTo(props.getDefaultTimeout()) < 0) {
+      boolean requestedTimeoutIsBelowDefault = requested.compareTo(props.getDefaultTimeout()) < 0;
+      if (requestedTimeoutIsBelowDefault) {
         timeout = requested;
       }
     }
@@ -384,11 +411,16 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         case '*' -> regex.append("[^.]*");
         case '.' -> regex.append("\\.");
         case '?' -> regex.append("[^.]");
-        default -> regex.append(Pattern.quote(String.valueOf(c)));
+        default -> {
+          String character = String.valueOf(c);
+          String quotedCharacter = Pattern.quote(character);
+          regex.append(quotedCharacter);
+        }
       }
     }
     regex.append("$");
-    return value.matches(regex.toString());
+    String regexPattern = regex.toString();
+    return value.matches(regexPattern);
   }
 
   private Set<Integer> parseExpectStatus(Object raw) {
@@ -421,8 +453,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
     @SuppressWarnings("unchecked")
     Map<String, Object> auth = (Map<String, Object>) rawAuth;
-    String type =
-        String.valueOf(auth.getOrDefault("type", AUTH_TYPE_NONE)).toLowerCase(Locale.ROOT);
+    Object typeValue = auth.getOrDefault("type", AUTH_TYPE_NONE);
+    String typeText = String.valueOf(typeValue);
+    String type = typeText.toLowerCase(Locale.ROOT);
     if (!props.getAllowedAuthTypes().contains(type)) {
       throw new HttpValidationException(
           "auth type " + type + " not in allowedAuthTypes=" + props.getAllowedAuthTypes());
@@ -480,7 +513,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  // ─── execution with retry ──────────────────────────────────────────────────
+  // ─── 带重试的执行 ──────────────────────────────────────────────────
 
   private TaskResult runWithRetry(TaskContext ctx, Invocation inv) {
     boolean idempotent = IDEMPOTENT_METHODS.contains(inv.method);
@@ -491,9 +524,13 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         TaskResult result = runOnce(inv, attempt);
-        // 5xx + 还有重试机会 → 走重试逻辑
+        // 显式接受的状态已满足调用方预期；未指定期望时保留默认 5xx 重试。
         Integer status = (Integer) result.output().get("statusCode");
-        if (status != null && status >= 500 && attempt < maxAttempts) {
+        boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
+            && status >= 500
+            && attempt < maxAttempts
+            && (EmptyChecks.isEmpty(inv.expectedStatus) || !result.success());
+        if (serverFailureCanBeRetried) {
           log.warn("http 5xx, retrying: status={}, attempt={}/{}", status, attempt, maxAttempts);
           sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
           continue;
@@ -518,6 +555,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
           Thread.currentThread().interrupt();
           break;
         }
+        if (!idempotent) {
+          return AtomicErrorCode.fail(
+              AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+              "http request outcome is unknown; the remote side effect may have committed",
+              ex);
+        }
         if (attempt < maxAttempts) {
           log.warn(
               "http I/O error, retrying: attempt={}/{}, ex={}",
@@ -526,9 +569,23 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
               SwallowedExceptionLogger.summary(ex));
           sleep(props.getRetryBackoff().toMillis() * (1L << (attempt - 1)));
         }
+      } catch (RuntimeException ex) {
+        if (!idempotent) {
+          return AtomicErrorCode.fail(
+              AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+              "http request outcome is unknown; the remote side effect may have committed",
+              ex);
+        }
+        throw ex;
       }
     }
-    // I/O 异常重试耗尽 = TIMEOUT / 网络层失败,归到 EXECUTION_FAILED(底层无法静态分辨 connect timeout vs read fail)
+    if (!idempotent && EmptyChecks.isNotNull(lastException)) {
+      return AtomicErrorCode.fail(
+          AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN,
+          "http request outcome is unknown; the remote side effect may have committed",
+          lastException);
+    }
+    // 幂等 HTTP 请求的 I/O 异常重试耗尽归为 EXECUTION_FAILED;非幂等路径在上方保守归为结果不明。
     return AtomicErrorCode.fail(
         AtomicErrorCode.EXECUTION_FAILED,
         "http failed after "
@@ -574,20 +631,31 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       String responseBody = new String(kept, StandardCharsets.UTF_8);
 
       output.put("statusCode", statusCode);
-      // P2-3(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
+      // P2-3(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
       // 出口 HTTP response 会被 worker 上报到 task_result.output JSONB(后续可被
       // console / forensic export 读到),Set-Cookie / Authorization 这类回声头若透传落
       // 库就形成"出口请求 session 泄露"。SensitiveDataValidator 只扫入参,响应需在此前置脱敏。
-      output.put("responseHeaders", sanitizeResponseHeaders(resp.headers().toMultimap()));
+      Map<String, List<String>> rawResponseHeaders = resp.headers().toMultimap();
+      Map<String, List<String>> sanitizedResponseHeaders =
+          sanitizeResponseHeaders(rawResponseHeaders);
+      output.put("responseHeaders", sanitizedResponseHeaders);
       output.put("responseBody", responseBody);
       output.put("responseTruncated", truncated);
     }
 
     boolean expectMatch = inv.expectedStatus.isEmpty() || inv.expectedStatus.contains(statusCode);
     if (!expectMatch) {
+      AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
+          ? AtomicErrorCode.EXECUTION_FAILED
+          : AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN;
+      String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
+          ? "; remote side effect may have committed, manual reconciliation is required"
+          : "";
       return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          "status " + statusCode + " not in expected " + inv.expectedStatus);
+          code,
+          "status " + statusCode + " not in expected " + inv.expectedStatus + outcomeNote,
+          Map.of("statusCode", statusCode),
+          null);
     }
     return TaskResult.ok("status=" + statusCode, output);
   }
@@ -600,11 +668,14 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   static byte[] readBounded(InputStream in, int max) throws IOException {
     long limit = max + 1L; // 用 long 防 max==Integer.MAX_VALUE 时 +1 溢出
     try (in) {
-      ByteArrayOutputStream buf = new ByteArrayOutputStream((int) Math.min(limit, 8192L));
+      long initialBufferCapacity = Math.min(limit, 8192L);
+      int initialBufferCapacityInt = (int) initialBufferCapacity;
+      ByteArrayOutputStream buf = new ByteArrayOutputStream(initialBufferCapacityInt);
       byte[] chunk = new byte[8192];
       long total = 0;
       while (total < limit) {
-        int toRead = (int) Math.min(chunk.length, limit - total);
+        long remainingReadAllowance = limit - total;
+        int toRead = (int) Math.min(chunk.length, remainingReadAllowance);
         int n = in.read(chunk, 0, toRead);
         if (n == -1) {
           break;
@@ -626,7 +697,8 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       return null; // DELETE 等可无 body
     }
     MediaType type = mediaTypeOf(inv.headers);
-    return RequestBody.create(content.getBytes(StandardCharsets.UTF_8), type);
+    byte[] contentBytes = content.getBytes(StandardCharsets.UTF_8);
+    return RequestBody.create(contentBytes, type);
   }
 
   /** 从请求头取 Content-Type 作为 body MediaType;缺省 null(OkHttp 不强制)。 */
@@ -642,7 +714,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
   /**
    * 出口 HTTP 响应头写入数据库前的固定脱敏黑名单(case-insensitive,RFC 7230 头名不区分大小写)。
    *
-   * <p>对应 docs/archive/analysis/2026-06-03-deep-scan-be-security.md P2-3。这些头若回声到 task_result.output 即等于把
+   * <p>对应 docs/archive/audit/deep-scan-be-security-2026-06-03.md P2-3。这些头若回声到 task_result.output 即等于把
    * 下游会话凭据落 DB / Kafka,后续 forensic export 一并外泄。
    */
   private static final Set<String> SENSITIVE_RESPONSE_HEADERS =

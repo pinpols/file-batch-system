@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.archive;
 
+import io.github.pinpols.batch.common.mapper.InformationSchemaColumnView;
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -62,21 +64,18 @@ public class ArchiveSchemaDriftCheck {
       "batch_day_replay_entry",
       // R7-A3-P0 / V118 (ADR-021) — 数据质量规则 + 校验记录；archive 镜像已建立但之前未注册，
       // 任何加列 migration 启动期不会 fail-fast，归档静默漂移。
-      "data_quality_rule",
       "data_quality_check",
       // V139 (DBA-2026-05-20 P0-3) — trigger_outbox_event 归档表;ADR-010 trigger 异步事件。
       "trigger_outbox_event",
       // V140 (DBA-2026-05-20 P0-4) — dead_letter_task 归档表;死信任务事故复盘。
       "dead_letter_task",
-      // V159 (SDK Phase 3 M3.1) — custom_task_type_registry 归档表;租户自定义 taskType 注册。
-      "custom_task_type_registry",
       // V164 (ADR-038 P1) — pipeline_progress 归档表;平台 worker LOAD/GENERATE 续跑位点。
       "pipeline_progress",
-      // V165 (Round-1 TOP-8 / R3-5) — atomic_task_config 归档表;租户保存的 atomic 节点配置。
-      "atomic_task_config",
-      // V167 (workflow-dag-designer Polish) — workflow_definition_version 归档表;fullUpdate
-      // 全量历史快照。
-      "workflow_definition_version");
+      "console_operation_audit",
+      "notification_delivery_log",
+      "console_push_job_delivery",
+      "workflow_terminal_notification_receipt",
+      "webhook_delivery_log");
 
   private final InformationSchemaMapper informationSchemaMapper;
 
@@ -120,7 +119,8 @@ public class ArchiveSchemaDriftCheck {
 
   /** Public 让 IT 测试直接调验证查询行为;运行期由 {@link #checkOnStartup()} 内部使用。 */
   public Set<String> columnsOf(String schema, String table) {
-    return Set.copyOf(informationSchemaMapper.listColumns(schema, table));
+    List<String> columns = informationSchemaMapper.listColumns(schema, table);
+    return Set.copyOf(columns);
   }
 
   /**
@@ -206,43 +206,23 @@ public class ArchiveSchemaDriftCheck {
   }
 
   private Map<String, ColumnMeta> columnMetaOf(String schema, String table) {
-    List<Map<String, Object>> rows = informationSchemaMapper.listColumnsWithTypes(schema, table);
+    List<InformationSchemaColumnView> rows =
+        informationSchemaMapper.listColumnsWithTypes(schema, table);
     Map<String, ColumnMeta> map = new LinkedHashMap<>();
-    for (Map<String, Object> row : rows) {
-      // PostgreSQL JDBC 通常以全小写键返回 information_schema 字段;某些驱动会大写,加防御。
-      String name = asString(row.get("column_name"));
-      if (name == null) {
-        name = asString(row.get("COLUMN_NAME"));
-      }
-      String dataType = firstNonNull(row.get("data_type"), row.get("DATA_TYPE"));
-      String isNullable = firstNonNull(row.get("is_nullable"), row.get("IS_NULLABLE"));
-      String columnDefault = firstNonNull(row.get("column_default"), row.get("COLUMN_DEFAULT"));
-      // P0 修复: PostgreSQL `data_type` 对 varchar/numeric 不带长度/精度
-      // (varchar(64) 与 varchar(128) 同样返回 'character varying'),长度差别在
-      // `character_maximum_length` / `numeric_precision` / `numeric_scale`,
-      // 必须显式比对,否则 ALTER COLUMN ... TYPE varchar(N) 的漂移会漏检。
-      String charMaxLen =
-          firstNonNull(row.get("character_maximum_length"), row.get("CHARACTER_MAXIMUM_LENGTH"));
-      String numPrec = firstNonNull(row.get("numeric_precision"), row.get("NUMERIC_PRECISION"));
-      String numScale = firstNonNull(row.get("numeric_scale"), row.get("NUMERIC_SCALE"));
-      if (name != null) {
+    for (InformationSchemaColumnView row : rows) {
+      if (EmptyChecks.isNotNull(row.columnName())) {
         map.put(
-            name,
-            new ColumnMeta(dataType, isNullable, columnDefault, charMaxLen, numPrec, numScale));
+            row.columnName(),
+            new ColumnMeta(
+                row.dataType(),
+                row.isNullable(),
+                row.columnDefault(),
+                row.characterMaximumLength(),
+                row.numericPrecision(),
+                row.numericScale()));
       }
     }
     return map;
-  }
-
-  private static String asString(Object v) {
-    return v == null ? null : v.toString();
-  }
-
-  private static String firstNonNull(Object a, Object b) {
-    if (a != null) {
-      return a.toString();
-    }
-    return b == null ? null : b.toString();
   }
 
   /**

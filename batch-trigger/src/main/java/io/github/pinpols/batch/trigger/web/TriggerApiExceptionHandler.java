@@ -11,6 +11,7 @@ import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingRequestHeaderException;
@@ -44,17 +45,22 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
     String message = exception.getBindingResult().getFieldErrors().stream()
         .map(FieldError::getDefaultMessage)
         .collect(Collectors.joining("; "));
-    return ResponseEntity.badRequest()
-        .body(CommonResponse.failure(
-            ResultCode.VALIDATION_ERROR,
-            EmptyChecks.isBlank(message) ? ResultCode.VALIDATION_ERROR.defaultMessage() : message));
+    if (EmptyChecks.isBlank(message)) {
+      message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+    }
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
   public ResponseEntity<CommonResponse<Void>> handleConstraintViolationException(
       ConstraintViolationException exception) {
-    return ResponseEntity.badRequest()
-        .body(CommonResponse.failure(ResultCode.VALIDATION_ERROR, exception.getMessage()));
+    String message = exception.getMessage();
+    if (EmptyChecks.isBlank(message)) {
+      message = resolveCommonCode(ResultCode.VALIDATION_ERROR, ResultCode.VALIDATION_ERROR.label());
+    }
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.VALIDATION_ERROR, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(MissingRequestHeaderException.class)
@@ -65,15 +71,25 @@ public class TriggerApiExceptionHandler extends AbstractApiExceptionHandler {
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
             : ResultCode.INVALID_ARGUMENT;
     // 不再透出 Spring 默认英文 "Required request header 'X' for method parameter type ..."
-    // 直接用 ResultCode.label()(已是中文),避免 standalone MockMvc 测试因为父类 protected
-    // helper 调用链 + null resolver 间接抛异常导致 response body 为空。
-    return ResponseEntity.badRequest().body(CommonResponse.failure(code, code.label()));
+    String message = resolveCommonCode(code, code.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+    return ResponseEntity.badRequest().body(failureBody);
+  }
+
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<CommonResponse<Void>> handleUnreadableRequestBody(
+      HttpMessageNotReadableException exception) {
+    String message =
+        resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label());
+    CommonResponse<Void> body = CommonResponse.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.badRequest().body(body);
   }
 
   @ExceptionHandler(TriggerSchedulerBusyException.class)
   public ResponseEntity<CommonResponse<Void>> handleTriggerSchedulerBusy(
       TriggerSchedulerBusyException exception) {
-    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-        .body(CommonResponse.failure(ResultCode.RATE_LIMITED, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.RATE_LIMITED, ResultCode.RATE_LIMITED.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.RATE_LIMITED, message);
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(failureBody);
   }
 }

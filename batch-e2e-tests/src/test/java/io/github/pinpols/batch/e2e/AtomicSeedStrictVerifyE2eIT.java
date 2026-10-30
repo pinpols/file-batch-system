@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -44,7 +44,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -67,8 +67,11 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("存储过程类型种子作业: 先建真实过程再以定义内协议空参触发, 经专属派发调用后任务终态落库为成功")
   void shouldRunStoredProcSeedTask_whenLaunchCarriesNoParams() {
-    jdbcTemplate.execute(
-        "CREATE OR REPLACE PROCEDURE batch.e2e_seed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
+    final String createProcedureSql = """
+        CREATE OR REPLACE PROCEDURE batch.e2e_seed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$
+    """;
+
+    jdbcTemplate.execute(createProcedureSql);
     runSeedJob("{\"taskType\":\"stored_proc\",\"procedureName\":\"batch.e2e_seed_proc\"}");
   }
 
@@ -96,20 +99,24 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
   /** 建 SPI job(default_params 携带执行器协议)→ launch(空参)→ 等终态 SUCCESS。 */
   private void runSeedJob(String defaultParamsJson) {
+    final String updateJobDefinitionSql = """
+        update batch.job_definition set default_params = ?::jsonb where tenant_id = ? and job_code = ?\
+        """;
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
 
     // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
-    jdbcTemplate.update(
-        "update batch.job_definition set default_params = ?::jsonb"
-            + " where tenant_id = ? and job_code = ?",
-        defaultParamsJson,
-        TENANT,
-        seed.jobCode());
+    jdbcTemplate.update(updateJobDefinitionSql, defaultParamsJson, TENANT, seed.jobCode());
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -122,11 +129,8 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
   }

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import java.io.InputStream;
 import java.util.List;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
@@ -49,8 +50,18 @@ class PipelineProgressMapperIntegrationTest {
     dataSource = new SingleConnectionDataSource(
         POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
     jdbc = new JdbcTemplate(dataSource);
-    jdbc.execute("CREATE SCHEMA IF NOT EXISTS batch");
-    jdbc.execute("""
+    final String createSql = """
+        CREATE SCHEMA IF NOT EXISTS batch
+    """;
+    jdbc.execute(createSql);
+    final String createBatchPipelineInstanceSql = """
+        CREATE TABLE batch.pipeline_instance (
+          id BIGINT PRIMARY KEY,
+          tenant_id VARCHAR(64) NOT NULL
+        )
+        """;
+    jdbc.execute(createBatchPipelineInstanceSql);
+    final String createBatchPipelineProgressSql = """
         CREATE TABLE batch.pipeline_progress (
           id                   BIGSERIAL   PRIMARY KEY,
           tenant_id            VARCHAR(64) NOT NULL,
@@ -64,7 +75,8 @@ class PipelineProgressMapperIntegrationTest {
           updated_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
           CONSTRAINT uk_pp UNIQUE (tenant_id, pipeline_instance_id, stage)
         )
-        """);
+        """;
+    jdbc.execute(createBatchPipelineProgressSql);
     Configuration configuration =
         new Configuration(new Environment("it", new JdbcTransactionFactory(), dataSource));
     String resource = "mapper/PipelineProgressMapper.xml";
@@ -83,7 +95,14 @@ class PipelineProgressMapperIntegrationTest {
 
   @BeforeEach
   void clean() {
-    jdbc.execute("TRUNCATE batch.pipeline_progress RESTART IDENTITY");
+    final String truncateSql = """
+        TRUNCATE batch.pipeline_progress RESTART IDENTITY
+    """;
+    jdbc.execute(truncateSql);
+    final String truncateSqlValue1 = """
+        TRUNCATE batch.pipeline_instance
+    """;
+    jdbc.execute(truncateSqlValue1);
   }
 
   @Test
@@ -91,12 +110,39 @@ class PipelineProgressMapperIntegrationTest {
   void deleteByInstance_removesAllStagesForInstanceOnly() {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PipelineProgressMapper mapper = session.getMapper(PipelineProgressMapper.class);
+      insertInstance("ta", 100L);
+      insertInstance("ta", 101L);
+      insertInstance("tb", 200L);
       // 目标实例 100:两个 stage 位点(LOAD + GENERATE)
-      mapper.advance("ta", 100L, "LOAD", "row:5", 5L);
-      mapper.advance("ta", 100L, "GENERATE", "S|c1", 3L);
+      mapper.advance(PipelineProgressAdvanceParam.builder()
+          .tenantId("ta")
+          .pipelineInstanceId(100L)
+          .stage("LOAD")
+          .positionMarker("row:5")
+          .processedCountIncrement(5L)
+          .build());
+      mapper.advance(PipelineProgressAdvanceParam.builder()
+          .tenantId("ta")
+          .pipelineInstanceId(100L)
+          .stage("GENERATE")
+          .positionMarker("S|c1")
+          .processedCountIncrement(3L)
+          .build());
       // 同租户他实例 101、他租户 tb 同实例号 100:都不应被删
-      mapper.advance("ta", 101L, "LOAD", "row:9", 9L);
-      mapper.advance("tb", 100L, "LOAD", "row:1", 1L);
+      mapper.advance(PipelineProgressAdvanceParam.builder()
+          .tenantId("ta")
+          .pipelineInstanceId(101L)
+          .stage("LOAD")
+          .positionMarker("row:9")
+          .processedCountIncrement(9L)
+          .build());
+      mapper.advance(PipelineProgressAdvanceParam.builder()
+          .tenantId("tb")
+          .pipelineInstanceId(200L)
+          .stage("LOAD")
+          .positionMarker("row:1")
+          .processedCountIncrement(1L)
+          .build());
 
       int deleted = mapper.deleteByInstance("ta", 100L);
 
@@ -105,9 +151,11 @@ class PipelineProgressMapperIntegrationTest {
       assertThat(mapper.findByInstanceAndStage("ta", 100L, "GENERATE")).isNull();
       // 他实例 / 他租户位点原样保留
       assertThat(mapper.findByInstanceAndStage("ta", 101L, "LOAD")).isNotNull();
-      assertThat(mapper.findByInstanceAndStage("tb", 100L, "LOAD")).isNotNull();
-      Integer remaining =
-          jdbc.queryForObject("SELECT count(*) FROM batch.pipeline_progress", Integer.class);
+      assertThat(mapper.findByInstanceAndStage("tb", 200L, "LOAD")).isNotNull();
+      final String selectBatchPipelineProgressSql = """
+          SELECT count(*) FROM batch.pipeline_progress
+      """;
+      Integer remaining = jdbc.queryForObject(selectBatchPipelineProgressSql, Integer.class);
       assertThat(remaining).isEqualTo(2);
     }
   }
@@ -117,7 +165,14 @@ class PipelineProgressMapperIntegrationTest {
   void deleteByInstance_clearsCompletedPositionsToo() {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PipelineProgressMapper mapper = session.getMapper(PipelineProgressMapper.class);
-      mapper.advance("ta", 200L, "LOAD", "row:10", 10L);
+      insertInstance("ta", 200L);
+      mapper.advance(PipelineProgressAdvanceParam.builder()
+          .tenantId("ta")
+          .pipelineInstanceId(200L)
+          .stage("LOAD")
+          .positionMarker("row:10")
+          .processedCountIncrement(10L)
+          .build());
       mapper.markCompleted("ta", 200L, "LOAD");
       assertThat(mapper.findByInstanceAndStage("ta", 200L, "LOAD").completed()).isTrue();
 
@@ -125,6 +180,35 @@ class PipelineProgressMapperIntegrationTest {
 
       assertThat(deleted).isEqualTo(1);
       assertThat(mapper.findByInstanceAndStage("ta", 200L, "LOAD")).isNull();
+    }
+  }
+
+  @Test
+  @DisplayName("advance 与 markCompleted 拒绝不属于调用租户的 Pipeline 实例")
+  void shouldRejectWrites_whenPipelineInstanceOwnedByAnotherTenant() {
+    insertInstance("tb", 300L);
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      PipelineProgressMapper mapper = session.getMapper(PipelineProgressMapper.class);
+      assertThat(mapper.advance(PipelineProgressAdvanceParam.builder()
+              .tenantId("ta")
+              .pipelineInstanceId(300L)
+              .stage("LOAD")
+              .positionMarker("row:1")
+              .processedCountIncrement(1L)
+              .build()))
+          .isZero();
+      assertThat(mapper.markCompleted("ta", 300L, "LOAD")).isZero();
+      assertThat(mapper.advance(PipelineProgressAdvanceParam.builder()
+              .tenantId("tb")
+              .pipelineInstanceId(300L)
+              .stage("LOAD")
+              .positionMarker("row:1")
+              .processedCountIncrement(1L)
+              .build()))
+          .isEqualTo(1);
+      assertThat(mapper.markCompleted("tb", 300L, "LOAD")).isEqualTo(1);
+      assertThat(mapper.findByInstanceAndStage("ta", 300L, "LOAD")).isNull();
+      assertThat(mapper.findByInstanceAndStage("tb", 300L, "LOAD").completed()).isTrue();
     }
   }
 
@@ -149,5 +233,12 @@ class PipelineProgressMapperIntegrationTest {
           .as(id)
           .isTrue();
     }
+  }
+
+  private void insertInstance(String tenantId, Long id) {
+    final String insertBatchPipelineInstanceSql = """
+        INSERT INTO batch.pipeline_instance(id, tenant_id) VALUES (?, ?)
+    """;
+    jdbc.update(insertBatchPipelineInstanceSql, id, tenantId);
   }
 }

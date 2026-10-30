@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：阻止 Shell 脚本新增内联 SQL，并约束历史债务只能减少。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-sql-config-boundaries.py；参数与前置环境见下方说明及所属 README。
 """阻止 Shell 脚本新增内联 SQL，并约束历史债务只能减少。"""
 
 from __future__ import annotations
@@ -12,7 +14,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BASELINE_FILE = ROOT / "scripts/ci/sql-inline-baseline.tsv"
+BASELINE_FILE = ROOT / "scripts/ci/baselines/sql-inline-baseline.tsv"
 SCAN_ROOTS = (ROOT / "scripts", ROOT / "load-tests", ROOT / "deploy")
 EXCLUDED_FILES = {Path("scripts/ci/check-sql-config-boundaries.sh")}
 GATE_CODE = "SQL_CONFIG_BOUNDARIES"
@@ -121,17 +123,18 @@ def read_base_baseline() -> dict[str, int] | None:
     base_ref = os.environ.get("GUARD_BASE")
     if not base_ref:
         return None
-    baseline_path = BASELINE_FILE.relative_to(ROOT).as_posix()
-    result = subprocess.run(
-        ["git", "show", f"{base_ref}:{baseline_path}"],
-        cwd=ROOT,
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        return None
-    return parse_baseline(result.stdout, f"{base_ref}:{baseline_path}")
+    # 目录迁移期间目标分支仍可能使用旧路径；缺少新路径不能取消防增长比较。
+    for baseline_path in (
+        BASELINE_FILE.relative_to(ROOT).as_posix(),
+        "scripts/ci/sql-inline-baseline.tsv",
+    ):
+        result = subprocess.run(
+            ["git", "show", f"{base_ref}:{baseline_path}"],
+            cwd=ROOT, check=False, capture_output=True, text=True,
+        )
+        if result.returncode == 0:
+            return parse_baseline(result.stdout, f"{base_ref}:{baseline_path}")
+    raise SystemExit(f"cannot read SQL boundary baseline from {base_ref}; restore the base revision before retrying")
 
 
 def print_inventory(inventory: dict[str, list[tuple[int, str]]]) -> None:

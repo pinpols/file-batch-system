@@ -1,10 +1,13 @@
 package io.github.pinpols.batch.orchestrator.service;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import java.util.Map;
 
 /**
  * 校验启动请求并加载所需定义，所有操作只读、无需事务。 从 {@link DefaultLaunchService} 中拆分以隔离校验关注点。
@@ -22,6 +25,67 @@ public interface LaunchValidationService {
       TriggerRequestEntity triggerRequest,
       JobDefinitionEntity jobDefinition,
       WorkflowDefinitionEntity workflowDefinition,
-      JobInstanceEntity existingInstance // 非空表示重复请求
-      ) {}
+      String workflowCalendarCode,
+      JobInstanceEntity existingInstance, // 非空表示重复请求
+      WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {
+
+    public LaunchLoadResult(
+        TriggerRequestEntity triggerRequest,
+        JobDefinitionEntity jobDefinition,
+        WorkflowDefinitionEntity workflowDefinition,
+        String workflowCalendarCode,
+        JobInstanceEntity existingInstance) {
+      this(
+          triggerRequest,
+          jobDefinition,
+          workflowDefinition,
+          workflowCalendarCode,
+          existingInstance,
+          null);
+    }
+
+    public LaunchLoadResult(
+        TriggerRequestEntity triggerRequest,
+        JobDefinitionEntity jobDefinition,
+        WorkflowDefinitionEntity workflowDefinition,
+        JobInstanceEntity existingInstance) {
+      this(
+          triggerRequest,
+          jobDefinition,
+          workflowDefinition,
+          EmptyChecks.isNull(workflowDefinition) ? null : workflowDefinition.calendarCode(),
+          existingInstance);
+    }
+
+    public String effectiveCalendarCode() {
+      if (EmptyChecks.isNotNull(workflowCalendarCode)
+          && EmptyChecks.isNotBlank(workflowCalendarCode)) {
+        return workflowCalendarCode;
+      }
+      return EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode();
+    }
+  }
+
+  /** 从父 Workflow 执行快照加载、经审批且绑定节点的输入。 */
+  record WorkflowReplayExecutionBinding(
+      Long replayOperationId,
+      Long workflowRunId,
+      String nodeCode,
+      ReplayExecutionGuard executionGuard,
+      Map<String, String> protectedFileTemplateSnapshots,
+      Map<String, String> protectedDispatchChannelSnapshots,
+      Map<String, Object> dispatchSecretBindings) {
+
+    public WorkflowReplayExecutionBinding {
+      protectedFileTemplateSnapshots = EmptyChecks.isNull(protectedFileTemplateSnapshots)
+          ? Map.of()
+          : Map.copyOf(protectedFileTemplateSnapshots);
+      protectedDispatchChannelSnapshots = EmptyChecks.isNull(protectedDispatchChannelSnapshots)
+          ? Map.of()
+          : Map.copyOf(protectedDispatchChannelSnapshots);
+      dispatchSecretBindings = EmptyChecks.isNull(dispatchSecretBindings)
+          ? Map.of()
+          : Map.copyOf(dispatchSecretBindings);
+    }
+  }
 }

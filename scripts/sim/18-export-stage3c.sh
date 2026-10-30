@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：export-stage3c.sh:Export 8 分片 + 多租户 + 幂等重放验证。
+# 用法：在仓库根目录执行 bash scripts/sim/18-export-stage3c.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 18-export-stage3c.sh:Export 8 分片 + 多租户 + 幂等重放验证
 #
@@ -7,7 +9,7 @@
 #   - 同 requestId 重放不重复创建 job_instance
 #   - ta/tb/tc 三租户并发导出均 SUCCESS 且登记 file_record
 #
-# SQL seed 独立放在 docs/test-data,脚本只负责编排、API 触发、轮询、断言。
+# SQL seed 独立放在 test-data/sim,脚本只负责编排、API 触发、轮询、断言。
 # =========================================================
 set -euo pipefail
 
@@ -24,13 +26,13 @@ batch_require_python
 
 echo "==> apply bootstrap + stage3b fixture + stage3c source"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage3b-export-fixtures.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage3b-export-fixtures.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" \
-  -f /dev/stdin < docs/test-data/sim-stage3c-export-source.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage3c-export-source.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
@@ -38,6 +40,8 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/export-stage3c.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.export_partition_evidence import verify_partition_contents
+from scripts.sim.launch_contract import workflow_id_for_fixture
 from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
@@ -59,7 +63,7 @@ def psql_file(sql_file, variables=None, tuples=False):
 def launch(tenant, job, rid, params):
     body = {
         "tenantId": tenant,
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture(tenant, job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -140,6 +144,15 @@ print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if summary != "1|1|8|8|8|80|3|3":
     print("❌ Export Stage3c assertion failed, expected 1|1|8|8|8|80|3|3", flush=True)
     sys.exit(1)
+
+objects_result = psql_file("select-export-partition-objects.sql", ta_vars, tuples=True)
+records = json.loads(objects_result.stdout)
+alias = os.environ.get("MINIO_MC_ALIAS") or "local"
+objects = [f"{alias}/{record['bucket']}/{record['path']}" for record in records]
+def read_object(path):
+    return subprocess.check_output(["bash", "scripts/lib/minio-mc.sh", "cat", path], text=True)
+verify_partition_contents(objects, 8, 80, read_object)
+print("  [contents] 80 customer keys present exactly once", flush=True)
 
 print(f"\n==> Stage 3c export scenario PASS: batchNo={BATCH} startTs={START_TS}", flush=True)
 PY

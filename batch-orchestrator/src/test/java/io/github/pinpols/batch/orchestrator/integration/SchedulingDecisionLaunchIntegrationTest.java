@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
@@ -31,7 +31,7 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -39,19 +39,19 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("存在在线执行节点匹配作业组时,派发事件至少落库一条")
   void shouldCreateOutboxWhenWorkerMatchesWorkerGroup() {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.SCHEDULED);
 
     LaunchRequest schedRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.SCHEDULED)
         .requestId(seed.requestId())
         .traceId("tr-sched")
         .params(Map.of())
         .build();
-    launchService.launch(schedRequest);
+    workflowRunLaunchService.launch(schedRequest);
 
     assertThat(LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT"))
         .isGreaterThanOrEqualTo(1L);
@@ -62,29 +62,33 @@ class SchedulingDecisionLaunchIntegrationTest extends AbstractIntegrationTest {
   void shouldNotWriteDispatchOutboxWhenNoOnlineWorkerForWorkerGroup() {
     long outboxBefore =
         LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithoutWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithoutWorker(
         jdbcTemplate, TENANT, "IMPORT", "NO_WORKER_GROUP_" + System.nanoTime(), TriggerType.API);
 
     LaunchRequest blockRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(LocalDate.of(2026, Month.JANUARY, 15))
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("tr-block")
         .params(Map.of())
         .build();
-    launchService.launch(blockRequest);
+    var response = workflowRunLaunchService.launch(blockRequest);
 
     long outboxAfter =
         LaunchIntegrationFixture.countOutboxByEventType(jdbcTemplate, TENANT, "IMPORT");
     assertThat(outboxAfter - outboxBefore).isZero();
 
-    Integer waiting = jdbcTemplate.queryForObject("""
+    String waitingPartitionCountSql = """
             select count(*)::int from batch.job_partition jp
             join batch.job_instance ji on ji.id = jp.job_instance_id
-            where ji.tenant_id = ? and ji.dedup_key = ? and jp.partition_status = 'WAITING'
-            """, Integer.class, TENANT, seed.dedupKey());
+            where ji.tenant_id = ? and ji.id = ? and jp.partition_status = 'WAITING'
+            """;
+    Long launchedJobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    Integer waiting = jdbcTemplate.queryForObject(
+        waitingPartitionCountSql, Integer.class, TENANT, launchedJobInstanceId);
     assertThat(waiting).isNotNull().isGreaterThanOrEqualTo(1);
   }
 }

@@ -45,6 +45,25 @@ class ImportEventArrivalControllerTest {
   }
 
   @Test
+  @DisplayName("扫描总开关关闭时不报告已触发或增加扫描计数")
+  void shouldNotReportScan_whenScannerDisabled() {
+    ImportScannerProperties properties = new ImportScannerProperties();
+    properties.setEnabled(false);
+    properties.getEventArrival().setEnabled(true);
+    ImportEventArrivalController controller =
+        new ImportEventArrivalController(importIngressScanner, properties, meterRegistry);
+
+    CommonResponse<ImportEventArrivalResponse> response = controller.objectArrival(null);
+
+    assertThat(response.data().triggered()).isFalse();
+    assertThat(response.data().reason()).isEqualTo("scanner-disabled");
+    assertThat(meterRegistry.counter("batch.import.event_arrival.notifications").count())
+        .isEqualTo(1);
+    assertThat(meterRegistry.find("batch.import.event_arrival.scans").counter()).isNull();
+    verify(importIngressScanner, never()).scan();
+  }
+
+  @Test
   @DisplayName("开关开启时即时触发一次扫描,回 triggered=true")
   void shouldScanOnce_whenEnabled() {
     // arrange

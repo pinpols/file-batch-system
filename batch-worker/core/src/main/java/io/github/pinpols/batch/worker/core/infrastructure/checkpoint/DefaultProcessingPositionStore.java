@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.infrastructure.checkpoint;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -71,8 +72,19 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
       String newMarker,
       long processedCountIncrement) {
     try {
-      mapper.advance(
-          tenantId, pipelineInstanceId, stage.code(), newMarker, processedCountIncrement);
+      PipelineProgressAdvanceParam pipelineProgressAdvanceParam =
+          PipelineProgressAdvanceParam.builder()
+              .tenantId(tenantId)
+              .pipelineInstanceId(pipelineInstanceId)
+              .stage(stage.code())
+              .positionMarker(newMarker)
+              .processedCountIncrement(processedCountIncrement)
+              .build();
+      int updated = mapper.advance(pipelineProgressAdvanceParam);
+      if (updated != 1) {
+        throw new IllegalStateException(
+            "Pipeline checkpoint write rejected: missing or inaccessible parent");
+      }
       recordCheckpointMetric(stage, "advance", "success");
     } catch (RuntimeException exception) {
       recordCheckpointMetric(stage, "advance", "failure");
@@ -83,7 +95,10 @@ public class DefaultProcessingPositionStore implements ProcessingPositionStore {
   @Override
   public void markCompleted(String tenantId, long pipelineInstanceId, ProcessingStage stage) {
     try {
-      mapper.markCompleted(tenantId, pipelineInstanceId, stage.code());
+      if (mapper.markCompleted(tenantId, pipelineInstanceId, stage.code()) != 1) {
+        throw new IllegalStateException(
+            "Pipeline checkpoint write rejected: missing or inaccessible parent");
+      }
       recordCheckpointMetric(stage, "complete", "success");
     } catch (RuntimeException exception) {
       recordCheckpointMetric(stage, "complete", "failure");

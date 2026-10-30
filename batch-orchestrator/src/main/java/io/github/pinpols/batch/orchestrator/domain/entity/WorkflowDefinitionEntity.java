@@ -7,4 +7,6 @@ public record WorkflowDefinitionEntity(
     String workflowName,
     String workflowType,
     Integer version,
-    Boolean enabled) {}
+    Boolean enabled,
+    Long singleJobDefinitionId,
+    String calendarCode) {}

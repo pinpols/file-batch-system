@@ -15,6 +15,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -49,19 +50,20 @@ public class ConsoleAssetFreshnessPolicyController {
       @RequestParam(value = "pageSize", defaultValue = "15") @Min(1) @Max(200) Integer pageSize) {
     PageResponse<AssetFreshnessPolicyEntity> page =
         policyService.list(tenantId, assetCode, enabled, pageNo, pageSize);
-    return responseFactory.success(new PageResponse<>(
-        page.total(),
-        page.pageNo(),
-        page.pageSize(),
-        page.items().stream().map(AssetFreshnessPolicyResponse::from).toList()));
+    List<AssetFreshnessPolicyResponse> items =
+        page.items().stream().map(AssetFreshnessPolicyResponse::from).toList();
+    PageResponse<AssetFreshnessPolicyResponse> response =
+        new PageResponse<>(page.total(), page.pageNo(), page.pageSize(), items);
+    return responseFactory.success(response);
   }
 
   @GetMapping("/{id}")
   public CommonResponse<AssetFreshnessPolicyResponse> get(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @PathVariable("id") Long id) {
-    return responseFactory.success(
-        AssetFreshnessPolicyResponse.from(policyService.get(tenantId, id)));
+    AssetFreshnessPolicyEntity policy = policyService.get(tenantId, id);
+    AssetFreshnessPolicyResponse response = AssetFreshnessPolicyResponse.from(policy);
+    return responseFactory.success(response);
   }
 
   @PostMapping

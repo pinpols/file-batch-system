@@ -6,11 +6,15 @@
 
 ## 0. 心智模型(先记这张图)
 
-```
-租户(tenant) ──维护──► 作业 / 文件模板 / 日历 / 窗口 ──引用──► 渠道(channel)
-     │                        │
-     │                        └─ template_type = IMPORT / EXPORT / PROCESS / DISPATCH
-     └─ 作业创建后由平台资源策略解析物理队列和 Worker 路由
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  TENANT["租户"] --> BUSINESS["Workflow / 作业<br/>日历 / 窗口"]
+  TENANT --> TEMPLATE["文件模板<br/>IMPORT / EXPORT / SHARED"]
+  BUSINESS -. "按场景引用" .-> TEMPLATE
+  TEMPLATE -. "外部文件交付" .-> CHANNEL["获准渠道"]
+  BUSINESS --> POLICY["平台资源策略"]
+  POLICY --> ROUTE["物理队列 / Worker 路由"]
 ```
 
 - **业务配置**:作业、文件模板、Pipeline/Workflow、日历和窗口按实际场景维护；按需生成单场景或组合配置包，不要求每个作业都维护无关 Sheet。
@@ -176,7 +180,7 @@ GET /api/console/config/tenant-package/excel/scenario-template?scenarios=IMPORT&
 ## 5. 跑起来
 
 - **再查一次就绪**:`GET /api/console/tenants/acme/readiness`,`ready:true` 即可跑。
-- **触发导入**:把文件放进对象存储的 **`ingress/<tenantId>/` 前缀**(如 `ingress/acme/customer-20260601.csv`),导入扫描器自动登记并触发 pipeline(IMPORT→PARSE→VALIDATE→LOAD)。无需手工调接口。
+- **触发导入**:把文件放进对象存储的 **`ingress/<tenantId>/` 前缀**(如 `ingress/acme/customer-20260601.csv`),启用扫描器并满足稳定性/完成标记条件后，扫描器只登记 `file_record`；还需配置匹配的 Workflow 触发或到达入口，由 Trigger/Orchestrator 调度 IMPORT Job。其固定阶段为 RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK。
 - **触发导出 / Job**:经触发器 / 调度跑(详见 `docs/runbook/` 触发相关 + `system-flow-overview.md`)。
 
 ---

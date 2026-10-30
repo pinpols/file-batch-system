@@ -34,7 +34,9 @@ class ConsoleMetaEnumRegistrationTest {
       "WorkflowNodeCode", // 内部节点标记常量（仅 START/END）
       "JobStatus", // 死代码（无其它引用），候选移除
       "BatchLifecycleStatus", // 派生公共投影，非可选字典；用户仍选具体 *Status，UI 不暴露
-      "FileIntegrityState" // 文件元数据内部校验标记，不是 Console 可选字典
+      "FileIntegrityState", // 文件元数据内部校验标记，不是 Console 可选字典
+      "ReplayOperationStatus", // 重放运维状态，Console 仅按 code 展示，不是用户可选字典
+      "ReplayOperationType" // 重放运维类型，同上
       );
 
   @Test
@@ -106,7 +108,9 @@ class ConsoleMetaEnumRegistrationTest {
     Set<String> names = new TreeSet<>();
     for (Resource resource : resources) {
       String filename = resource.getFilename();
-      if (filename == null || !filename.endsWith(".class") || filename.contains("$")) {
+      boolean classFileIsNotTopLevel =
+          filename == null || !filename.endsWith(".class") || filename.contains("$");
+      if (classFileIsNotTopLevel) {
         continue;
       }
       String simpleName = filename.substring(0, filename.length() - ".class".length());

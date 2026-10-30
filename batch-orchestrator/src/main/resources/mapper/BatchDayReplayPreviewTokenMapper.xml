@@ -41,12 +41,18 @@
     </update>
 
     <update id="linkSession">
-        update batch.batch_day_replay_preview_token
+        update batch.batch_day_replay_preview_token token
         set session_id = #{sessionId}
-        where tenant_id = #{tenantId}
-          and token_hash = #{tokenHash}
-          and consumed_at is not null
-          and session_id is null
+        where token.tenant_id = #{tenantId}
+          and token.token_hash = #{tokenHash}
+          and token.consumed_at is not null
+          and token.session_id is null
+          and exists (
+              select 1
+              from batch.batch_day_replay_session session
+              where session.tenant_id = token.tenant_id
+                and session.id = #{sessionId}
+          )
     </update>
 
     <delete id="deleteExpired">

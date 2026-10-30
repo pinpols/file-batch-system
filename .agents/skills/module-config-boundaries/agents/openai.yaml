@@ -1,0 +1,3 @@
+interface:
+  display_name: "模块与配置边界"
+  short_description: "追踪应用模块、测试、脚本、容器和部署配置的所有权与生命周期漂移"

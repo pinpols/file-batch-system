@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：KEDA 自动伸缩契约。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-keda-autoscaling.py；参数与前置环境见下方说明及所属 README。
 """在不依赖 Kubernetes 集群的情况下校验 KEDA Worker 自动扩缩容契约。
 
 topic 名从 BatchTopics.java 读取、consumerGroup 从各 worker 的 application.yml 读取，

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import io.github.pinpols.batch.worker.atomic.config.AtomicWorkerConfiguration;
 import io.github.pinpols.batch.worker.atomic.http.HttpExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.shell.ShellExecutorProperties;
@@ -11,6 +13,7 @@ import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.storedproc.StoredProcExecutorProperties;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Set;
 import javax.sql.DataSource;
@@ -20,14 +23,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.mock.env.MockEnvironment;
 
 /**
  * Round-3 #8:{@link AtomicRuntimeStatusService} 单测 — 4 个 executor 快照字段 + enforce-allowlist 来源分类
  * (explicit / prod-default / dev-default)+ SQL dialect 容错。
  */
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @DisplayName("原子运行时状态服务: 执行器快照与生效来源分类")
 class AtomicRuntimeStatusServiceTest {
 
@@ -147,10 +153,31 @@ class AtomicRuntimeStatusServiceTest {
     sql.setEnabled(true);
     when(sqlProvider.getIfAvailable()).thenReturn(sql);
     DataSource ds = mock(DataSource.class);
-    when(ds.getConnection()).thenThrow(new java.sql.SQLException("boom"));
+    when(ds.getConnection()).thenThrow(new SQLException("boom"));
     when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
 
     assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
+  }
+
+  @Test
+  @DisplayName("方言探测失败时调试日志不得输出原始凭据")
+  void shouldMaskDialectProbeFailureInDebugLog(CapturedOutput output) throws Exception {
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(true);
+    when(sqlProvider.getIfAvailable()).thenReturn(sql);
+    DataSource ds = mock(DataSource.class);
+    when(ds.getConnection()).thenThrow(new SQLException("connect password=probe-secret"));
+    when(dataSourceProvider.getIfAvailable()).thenReturn(ds);
+
+    Logger logger = (Logger) LoggerFactory.getLogger(AtomicRuntimeStatusService.class);
+    Level originalLevel = logger.getLevel();
+    try {
+      logger.setLevel(Level.DEBUG);
+      assertThat(newService().snapshot().sql().dialect()).isEqualTo("unknown");
+      assertThat(output.getOut()).doesNotContain("probe-secret");
+    } finally {
+      logger.setLevel(originalLevel);
+    }
   }
 
   @Test

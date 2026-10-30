@@ -27,14 +27,13 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=AtomicTaskDispatchSimulation \
- *       -DjobCode=atomic_sql_demo -DtenantId=default-tenant \
+ *       -DworkflowDefinitionId=123 -DtenantId=default-tenant \
  *       -Dusers.peak=50 -Dduration.seconds=180
  * </pre>
  */
 public class AtomicTaskDispatchSimulation extends Simulation {
 
-    private static final String SPI_JOB_CODE =
-            System.getProperty("jobCode", "atomic_sql_demo");
+    private static final String WORKFLOW_DEFINITION_ID = GatlingConfig.requiredWorkflowDefinitionId();
 
     private final HttpProtocolBuilder httpProtocol = http
             .baseUrl(GatlingConfig.TRIGGER_BASE_URL)
@@ -53,7 +52,7 @@ public class AtomicTaskDispatchSimulation extends Simulation {
     private final String requestBody = """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": %s
@@ -61,7 +60,7 @@ public class AtomicTaskDispatchSimulation extends Simulation {
             """
                 .formatted(
                     GatlingConfig.TENANT_ID,
-                    SPI_JOB_CODE,
+                    WORKFLOW_DEFINITION_ID,
                     GatlingConfig.BIZ_DATE,
                     GatlingConfig.LAUNCH_PARAMS_JSON);
 

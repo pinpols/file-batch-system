@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：清空本地 Docker 开发环境。
+# 用法：在仓库根目录执行 bash scripts/docker/reset-dev.sh；参数与前置环境见下方说明及所属 README。
 # 清空本地 Docker 开发环境。
 #
 # 默认只预览。执行删除必须显式传 --apply，并在交互确认或传 --yes 后才会继续。

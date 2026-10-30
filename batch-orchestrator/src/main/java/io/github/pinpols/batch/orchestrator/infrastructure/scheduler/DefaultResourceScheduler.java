@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ConcurrencyLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.DispatchAdmissionLimiter;
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
@@ -27,8 +29,10 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.LongSupplier;
@@ -105,6 +109,15 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   /** 资源调度统一收敛在这里，避免 launch、retry、DAG dispatch 各自散落窗口/并发/worker 判断。 */
   @Override
   public ResourceSchedulingDecision schedule(ResourceSchedulingRequest request) {
+    return evaluate(request, false);
+  }
+
+  @Override
+  public ResourceSchedulingDecision preview(ResourceSchedulingRequest request) {
+    return evaluate(request, true);
+  }
+
+  private ResourceSchedulingDecision evaluate(ResourceSchedulingRequest request, boolean preview) {
     ResourceQueueEntity queue = resourceQueueManager.resolveQueue(request);
     Integer priority = priorityScheduler.resolvePriority(request, queue);
     String priorityBand = priorityScheduler.resolvePriorityBand(priority);
@@ -112,13 +125,15 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     if (!windowCheck.allowed()) {
       return blockedDecision(request, queue, priority, priorityBand, windowCheck);
     }
-    ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
-    if (!concurrencyCheck.allowed()) {
-      return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
-    }
-    ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
-    if (!partitionCheck.allowed()) {
-      return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
+    if (!preview) {
+      ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
+      if (!concurrencyCheck.allowed()) {
+        return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
+      }
+      ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
+      if (!partitionCheck.allowed()) {
+        return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
+      }
     }
     WorkerRouteModel route = workerSelector.select(request, queue, priority);
     if (route == null || !Boolean.TRUE.equals(route.getAvailable())) {
@@ -134,16 +149,19 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     if (!downstreamCheck.allowed()) {
       return blockedDecision(request, queue, priority, priorityBand, downstreamCheck);
     }
-    ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
-    if (!dispatchRateCheck.allowed()) {
-      return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
+    if (!preview) {
+      ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
+      if (!dispatchRateCheck.allowed()) {
+        return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
+      }
     }
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
     decision.setAdmissionAction(ResourceAdmissionAction.ACCEPT);
     decision.setDispatchable(true);
     decision.setFailFast(false);
     decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
-    decision.setWorkerGroup(resolveWorkerGroup(request, queue));
+    String workerGroup = resolveWorkerGroup(request, queue);
+    decision.setWorkerGroup(workerGroup);
     decision.setPriority(priority);
     decision.setPriorityBand(priorityBand);
     decision.setPartitionStatus(PartitionStatus.CREATED.code());
@@ -176,7 +194,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     decision.setReasonCode(check.reasonCode());
     decision.setReasonMessage(check.reasonMessage());
     decision.setQueueCode(queue == null ? request.getQueueCode() : queue.queueCode());
-    decision.setWorkerGroup(resolveWorkerGroup(request, queue));
+    String workerGroup = resolveWorkerGroup(request, queue);
+    decision.setWorkerGroup(workerGroup);
     decision.setPriority(effectivePriority);
     decision.setPriorityBand(effectiveBand);
     decision.setPartitionStatus(PartitionStatus.WAITING.code());
@@ -204,11 +223,16 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private boolean isWithinWindow(BatchWindowEntity window) {
-    if (window == null || window.startTime() == null || window.endTime() == null) {
+    boolean batchWindowIsIncomplete = EmptyChecks.isNull(window)
+        || EmptyChecks.isNull(window.startTime())
+        || EmptyChecks.isNull(window.endTime());
+    if (batchWindowIsIncomplete) {
       return true;
     }
     ZoneId zoneId = timezoneProvider.resolveOrDefault(window.timezone());
-    LocalTime now = dateTimeSupport.nowInstant().atZone(zoneId).toLocalTime();
+    Instant currentInstant = dateTimeSupport.nowInstant();
+    ZonedDateTime currentTimeInWindowZone = currentInstant.atZone(zoneId);
+    LocalTime now = currentTimeInWindowZone.toLocalTime();
     LocalTime start = window.startTime();
     LocalTime end = window.endTime();
     if (start.equals(end)) {
@@ -252,8 +276,10 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     FairnessLoad fairnessLoad = new FairnessLoad(
         tenantActiveJobs, tenantActivePartitions, queueActiveJobs, queueActivePartitions);
     FairnessScoreContext fairnessContext = new FairnessScoreContext(fairnessWeights, fairnessLoad);
-    long fairnessScore = resolveFairnessScore(fairnessContext);
-    fairnessScore += resolveAgingBonus(request);
+    long baseScore = resolveFairnessScore(fairnessContext);
+    long agingBonus = resolveAgingBonus(request);
+    long fairnessScore =
+        baseScore > Long.MAX_VALUE - agingBonus ? Long.MAX_VALUE : baseScore + agingBonus;
     decision.setTenantWeight(tenantWeight);
     decision.setQueueWeight(queueWeight);
     decision.setTenantActiveJobs(tenantActiveJobs);
@@ -311,22 +337,26 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       return 0;
     }
     String tenantId = request.getTenantId();
-    long count = cachedCount(
-        "tp:" + tenantId,
-        () -> jobPartitionMapper.countActiveByTenant(
-            tenantId,
-            PartitionStatus.WAITING.code(),
-            PartitionStatus.READY.code(),
-            PartitionStatus.RUNNING.code(),
-            PartitionStatus.RETRYING.code()));
+    long count = cachedCount("tp:" + tenantId, () -> {
+      JobPartitionActiveByTenantCountQuery jobPartitionActiveByTenantCountQuery =
+          JobPartitionActiveByTenantCountQuery.builder()
+              .tenantId(tenantId)
+              .waitingStatus(PartitionStatus.WAITING.code())
+              .readyStatus(PartitionStatus.READY.code())
+              .runningStatus(PartitionStatus.RUNNING.code())
+              .retryingStatus(PartitionStatus.RETRYING.code())
+              .build();
+      return jobPartitionMapper.countActiveByTenant(jobPartitionActiveByTenantCountQuery);
+    });
     return safeNarrow(count);
   }
 
   private int resolveQueueActiveJobs(ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (request == null
+    boolean queueJobQueryContextIncomplete = EmptyChecks.isNull(request)
         || !Texts.hasText(request.getTenantId())
         || queue == null
-        || !Texts.hasText(queue.queueCode())) {
+        || !Texts.hasText(queue.queueCode());
+    if (queueJobQueryContextIncomplete) {
       return 0;
     }
     String tenantId = request.getTenantId();
@@ -339,10 +369,11 @@ public class DefaultResourceScheduler implements ResourceScheduler {
 
   private int resolveQueueActivePartitions(
       ResourceSchedulingRequest request, ResourceQueueEntity queue) {
-    if (request == null
+    boolean queuePartitionQueryContextIncomplete = EmptyChecks.isNull(request)
         || !Texts.hasText(request.getTenantId())
         || queue == null
-        || !Texts.hasText(queue.workerGroup())) {
+        || !Texts.hasText(queue.workerGroup());
+    if (queuePartitionQueryContextIncomplete) {
       return 0;
     }
     String tenantId = request.getTenantId();
@@ -369,8 +400,14 @@ public class DefaultResourceScheduler implements ResourceScheduler {
           case "MEDIUM" -> 200L;
           default -> 100L;
         };
-    int normalizedPriority =
-        weights.priority() == null ? 5 : Math.max(1, Math.min(weights.priority(), 9));
+    int normalizedPriority;
+    if (EmptyChecks.isNull(weights.priority())) {
+      normalizedPriority = 5;
+    } else {
+      int requestedPriority = weights.priority();
+      int upperBoundPriority = Math.min(requestedPriority, 9);
+      normalizedPriority = Math.max(1, upperBoundPriority);
+    }
     long loadPenalty = (long) load.tenantActiveJobs()
         + load.tenantActivePartitions()
         + load.queueActiveJobs()
@@ -383,19 +420,32 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   }
 
   private long resolveAgingBonus(ResourceSchedulingRequest request) {
-    if (request == null
+    boolean priorityAgingUnavailable = EmptyChecks.isNull(request)
         || request.getWaitingSince() == null
         || resourceSchedulerProperties == null
-        || !resourceSchedulerProperties.isPriorityAgingEnabled()) {
+        || !resourceSchedulerProperties.isPriorityAgingEnabled();
+    if (priorityAgingUnavailable) {
       return 0L;
     }
-    long waitedSeconds = Math.max(
-        0L,
-        Duration.between(request.getWaitingSince(), dateTimeSupport.nowInstant())
-            .toSeconds());
-    long stepSeconds = Math.max(1L, resourceSchedulerProperties.getPriorityAgingStepSeconds());
+    Instant waitingSince = request.getWaitingSince();
+    Instant now = dateTimeSupport.nowInstant();
+    Duration waitedDuration = Duration.between(waitingSince, now);
+    long elapsedSeconds = waitedDuration.toSeconds();
+    long waitedSeconds = Math.max(0L, elapsedSeconds);
+    long configuredStepSeconds = resourceSchedulerProperties.getPriorityAgingStepSeconds();
+    long stepSeconds = configuredStepSeconds > 0 ? configuredStepSeconds : 60L;
     long steps = waitedSeconds / stepSeconds;
-    long bonus = steps * Math.max(0L, resourceSchedulerProperties.getPriorityAgingBonusPerStep());
-    return Math.min(bonus, Math.max(0L, resourceSchedulerProperties.getPriorityAgingMaxBonus()));
+    long configuredBonusPerStep = resourceSchedulerProperties.getPriorityAgingBonusPerStep();
+    long bonusPerStep = Math.max(0L, configuredBonusPerStep);
+    long configuredMaximumBonus = resourceSchedulerProperties.getPriorityAgingMaxBonus();
+    long nonnegativeMaximumBonus = Math.max(0L, configuredMaximumBonus);
+    if (steps == 0 || bonusPerStep == 0 || nonnegativeMaximumBonus == 0) {
+      return 0;
+    }
+    // 先比较商再乘，避免上限截断前发生 long 溢出并颠倒调度顺序。
+    if (steps > nonnegativeMaximumBonus / bonusPerStep) {
+      return nonnegativeMaximumBonus;
+    }
+    return steps * bonusPerStep;
   }
 }

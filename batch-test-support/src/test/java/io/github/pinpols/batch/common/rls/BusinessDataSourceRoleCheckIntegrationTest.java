@@ -24,12 +24,15 @@ class BusinessDataSourceRoleCheckIntegrationTest {
 
   @BeforeAll
   static void startPostgres() {
+    final String createRoleSql = """
+        CREATE ROLE role_guard_writer LOGIN PASSWORD 'role_guard_password' NOSUPERUSER NOBYPASSRLS\
+        """;
+
     postgres = TestPostgresContainers.business();
     postgres.start();
     adminDataSource = dataSource(postgres.getUsername(), postgres.getPassword());
     JdbcTemplate jdbc = new JdbcTemplate(adminDataSource);
-    jdbc.execute("CREATE ROLE role_guard_writer LOGIN PASSWORD 'role_guard_password' "
-        + "NOSUPERUSER NOBYPASSRLS");
+    jdbc.execute(createRoleSql);
     writerDataSource = dataSource("role_guard_writer", "role_guard_password");
   }
 

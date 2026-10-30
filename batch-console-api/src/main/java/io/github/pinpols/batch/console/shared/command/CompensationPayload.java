@@ -25,4 +25,9 @@ public class CompensationPayload {
   private final String resultPolicy;
   private final String configVersionPolicy;
   private final Integer configVersion;
+  private final Long sourceWorkflowRunId;
+  private final Long sourceWorkflowNodeRunId;
+  private final Long replayOperationId;
+  private final Boolean externalActionVerifiedNotExecuted;
+  private final String externalOutcomeEvidenceReference;
 }

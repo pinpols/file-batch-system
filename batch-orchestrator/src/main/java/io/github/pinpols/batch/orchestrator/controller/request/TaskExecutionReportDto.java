@@ -57,7 +57,7 @@ public class TaskExecutionReportDto extends AbstractLocalizedErrorEntity {
    */
   private Map<String, Object> outputs;
 
-  /** ADR-014: optional; mismatched invocation → orchestrator rejects report with CONFLICT。 */
+  /** ADR-014：可选；调用信息不匹配时，Orchestrator 以 CONFLICT 拒绝该回报。 */
   private String partitionInvocationId;
 
   /**

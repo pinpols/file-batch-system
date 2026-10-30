@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：核心术语文档同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-terminology-doc-sync.py；参数与前置环境见下方说明及所属 README。
 """校验核心术语文档中的枚举值与 Java 事实源一致。"""
 
 from __future__ import annotations

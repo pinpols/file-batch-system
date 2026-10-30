@@ -10,6 +10,9 @@ import lombok.Getter;
 public class UpdateNodeRunStatusParam implements LocalizedErrorCarrier {
   private final Long id;
   private final String nodeStatus;
+  /** 可选的 CAS 来源状态，供不得覆盖并发变更的操作使用。 */
+  private final String expectedStatus;
+
   private final String errorCode;
   private final String errorMessage;
 
@@ -18,6 +21,9 @@ public class UpdateNodeRunStatusParam implements LocalizedErrorCarrier {
 
   /** i18n 占位符参数 JSON 数组。 */
   private final String errorArgs;
+
+  private final String skipReasonCode;
+  private final String skipReason;
 
   private final Long durationMs;
   private final Instant finishedAt;

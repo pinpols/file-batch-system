@@ -1,0 +1,460 @@
+repository,rule,status,path,line,detail
+backend,field_direct_mock,candidate,batch-common/src/test/java/io/github/pinpols/batch/common/storage/MeteredObjectStoreTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/application/OperationAuditQueryServiceTenantGuardTest.java,43,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/web/ConsoleAiControllerTest.java,33,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/web/ConsoleAiControllerTest.java,47,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/web/ConsoleAiControllerTest.java,49,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,45,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,46,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,48,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,49,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileApplicationServiceTest.java,50,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,42,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,44,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,47,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,48,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,50,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileDownloadApplicationServiceTest.java,52,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileTemplateApplicationServiceTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileTemplateApplicationServiceTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileTemplateApplicationServiceTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/query/ConsoleFilePreviewMaskingTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/query/ConsoleFilePreviewMaskingTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/query/ConsoleFilePreviewMaskingTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/infrastructure/query/ConsoleFilePreviewMaskingTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileChannelControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileChannelControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileControllerTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFilePipelineObservabilityControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFilePipelineObservabilityControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileTemplateControllerTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/ConsoleFileTemplateControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/realtime/ConsolePipelineProgressRealtimeControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/realtime/ConsolePipelineProgressRealtimeControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/file/web/realtime/ConsolePipelineProgressRealtimeControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/governance/web/ConsoleGovernanceControllerTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/governance/web/ConsoleGovernanceControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/governance/web/ConsoleGovernanceControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/infrastructure/JobDependencyRuleWriterTest.java,20,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchDayControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchDayControllerTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchDayReplayControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchDayReplayControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchWindowControllerBehaviorTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchWindowControllerBehaviorTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchWindowControllerValidationTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleBatchWindowControllerValidationTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarControllerBehaviorTest.java,44,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarControllerBehaviorTest.java,46,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarControllerValidationTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarControllerValidationTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarDependencyWaitControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleCalendarDependencyWaitControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleDryRunPlanControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleDryRunPlanControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleInstanceControllerTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleInstanceControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobBundleControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobBundleControllerTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobControllerTest.java,42,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobControllerTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobDefinitionControllerValidationTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobDefinitionControllerValidationTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobDependencyWaitControllerTest.java,25,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleJobDependencyWaitControllerTest.java,26,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleResultVersionControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleResultVersionControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSchedulerControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSchedulerControllerTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSchedulerSnapshotControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSchedulerSnapshotControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSelfServiceJobControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleSelfServiceJobControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleTriggerControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/ConsoleTriggerControllerTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/realtime/ConsoleJobInstanceRealtimeControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/realtime/ConsoleJobInstanceRealtimeControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/web/realtime/ConsoleJobInstanceRealtimeControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/infrastructure/JobTerminalNotificationConsumerTest.java,19,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/infrastructure/JobTerminalNotificationConsumerTest.java,21,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/infrastructure/WorkflowTerminalNotificationConsumerTest.java,19,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/infrastructure/WorkflowTerminalNotificationConsumerTest.java,21,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/ConsolePushSubscriptionServiceTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/JobPushIntakeServiceTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/JobPushIntakeServiceTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/JobTerminalNotificationServiceTest.java,19,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/JobTerminalNotificationServiceTest.java,21,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/JobTerminalNotificationServiceTest.java,23,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,25,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,27,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryServiceTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationServiceTest.java,20,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationServiceTest.java,22,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationServiceTest.java,24,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/support/ConsolePushJobNotifierTest.java,18,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/support/ConsolePushSenderTest.java,204,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertRoutingControllerBehaviorTest.java,28,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertRoutingControllerBehaviorTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertRoutingControllerBehaviorTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertRoutingControllerValidationTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleAlertRoutingControllerValidationTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleEventCatalogControllerTest.java,27,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleNotificationControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleNotificationControllerTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsolePushControllerTest.java,45,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsolePushControllerTest.java,47,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleWebhookControllerTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/notification/web/ConsoleWebhookControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleOpsSummaryRealtimeStreamTest.java,33,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeRedisPubSubConsumerTest.java,30,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeReplayStoreTest.java,30,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleDashboardControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleDashboardControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleQueryControllerTest.java,46,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleQueryControllerTest.java,48,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleSystemControllerTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleSystemControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleSystemParameterControllerTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleSystemParameterControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/observability/web/ConsoleTelemetryControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminMaintenanceControllerTest.java,44,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminTestDataControllerTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminTestDataControllerTest.java,45,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAdminTestDataControllerTest.java,46,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleApprovalControllerTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleApprovalControllerTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAtomicRuntimeStatusControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleAtomicRuntimeStatusControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleClusterDiagnosticControllerTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleClusterDiagnosticControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleConfigApprovalControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleConfigApprovalControllerTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleForensicControllerTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleForensicControllerTest.java,44,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleOpsControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleOpsControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleOpsControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleOpsControllerTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleWorkerControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/ConsoleWorkerControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/realtime/ConsoleOpsRealtimeControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/realtime/ConsoleOpsRealtimeControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/realtime/ConsoleOutboxRealtimeControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/realtime/ConsoleOutboxRealtimeControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/web/realtime/ConsoleOutboxRealtimeControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleTenantReadinessServiceTest.java,37,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuardTest.java,22,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleApiKeyControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleApiKeyControllerTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleMetaControllerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleMetaControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleTenantSelfServiceControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleTenantSelfServiceControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleTenantSelfServiceControllerTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/web/ConsoleTenantSelfServiceControllerTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/application/WorkflowDesignLockServiceTest.java,41,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/DefaultConsoleWorkflowTriggerServiceTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/DefaultConsoleWorkflowTriggerServiceTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/DefaultConsoleWorkflowTriggerServiceTest.java,40,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowDefinitionControllerValidationTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowDefinitionControllerValidationTest.java,42,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowDefinitionControllerValidationTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowRunControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/ConsoleWorkflowRunControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleAlertRoutingApplicationServiceTest.java,3,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleAlertRoutingApplicationServiceTest.java,23,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleAlertRoutingApplicationServiceTest.java,24,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleAlertRoutingApplicationServiceTest.java,25,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,63,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,64,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,65,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,66,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,67,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,69,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,71,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,72,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,74,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,75,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,76,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,84,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelMonitoringPolicyApplyTest.java,88,静态定位；按§14复核，不计作业务缺陷
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowScheduleUpdateTest.java,3,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowScheduleUpdateTest.java,4,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,junit_assertions_import,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowScheduleUpdateTest.java,32,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/shared/approval/OrchestratorApprovalClientTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/shared/approval/OrchestratorApprovalClientTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/support/security/SsrfGuardedDnsTest.java,22,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/support/web/ConsoleIdempotencyOwnershipTest.java,23,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleArchivePolicyControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleArchivePolicyControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleAssetFreshnessPolicyControllerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleAssetFreshnessPolicyControllerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleAssetPartitionControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleAssetPartitionControllerTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleCapacityProfileControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleCapacityProfileControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleConfigCacheControllerTest.java,26,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleConfigCacheControllerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleConfigControllerTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleConfigControllerTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleLineageEvidenceControllerTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleLineageEvidenceControllerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleQuotaPolicyControllerBehaviorTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleQuotaPolicyControllerBehaviorTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleQuotaPolicyControllerValidationTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleQuotaPolicyControllerValidationTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleResourceQueueControllerBehaviorTest.java,26,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleResourceQueueControllerBehaviorTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleResourceTagControllerTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-console-api/src/test/java/io/github/pinpols/batch/console/web/ConsoleResourceTagControllerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,junit_assertions_import,confirmed_convention,batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/SpringWiringGuardArchTest.java,13,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/CountContinuityOutboxServiceTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/CountContinuityOutboxServiceTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/CountContinuityOutboxServiceTest.java,36,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,confirmed_missing_reason,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/DefaultScheduleForwarderSetBasedTest.java,47,§14.3 缺少LENIENT的中文豁免理由
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/JobTerminalOutboxServiceTest.java,24,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/JobTerminalOutboxServiceTest.java,25,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/engine/JobTerminalOutboxServiceTest.java,26,静态定位；按§14复核，不计作业务缺陷
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/scheduler/TenantSchedulerSnapshotServiceTest.java,76,§14.2 禁止命令式openMocks初始化
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,38,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,39,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,41,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/ExternalEventExpectationServiceTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/FileGroupExpectationServiceTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/FileGroupExpectationServiceTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/FileGroupExpectationServiceTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/FileGroupExpectationServiceTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/batchday/FileGroupExpectationServiceTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/capacity/CapacityProfileServiceTest.java,24,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceServiceTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceServiceTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/lineage/LineageEvidenceServiceTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/sensor/SensorStateMachineTest.java,49,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultPartitionLifecycleServiceTest.java,76,§14.2 禁止命令式openMocks初始化
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/task/JobInstanceTerminalChildStateReconcilerTest.java,45,§14.2 禁止命令式openMocks初始化
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/task/JobInstanceTerminalStatusApplicationServiceTest.java,65,§14.2 禁止命令式openMocks初始化
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/task/LaunchApplicationServiceTest.java,67,§14.2 禁止命令式openMocks初始化
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/task/TaskOutcomeNodeRunRecorderTest.java,61,§14.2 禁止命令式openMocks初始化
+backend,lenient_setting,confirmed_missing_reason,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowNodeDispatchServiceAllTypesTest.java,62,§14.3 缺少LENIENT的中文豁免理由
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunReportLockTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunReportLockTest.java,31,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunReportLockTest.java,33,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/config/ShardingConfigurationTest.java,17,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/admin/AdminTestDataCleanupRepositoryTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/metrics/SchedulerQueueBacklogMetricsSchedulerTest.java,31,§14.2 禁止命令式openMocks初始化
+backend,lenient_setting,confirmed_missing_reason,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/OutboxPublishCircuitBreakerTest.java,26,§14.3 缺少LENIENT的中文豁免理由
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultDispatchAdmissionLimiterTest.java,21,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultDispatchAdmissionLimiterTest.java,22,静态定位；按§14复核，不计作业务缺陷
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultResourceSchedulerTest.java,93,§14.2 禁止命令式openMocks初始化
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DispatchChannelAdmissionGuardTest.java,17,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/FairShareGroupAdmissionGuardTest.java,19,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/GlobalJobAdmissionGuardTest.java,19,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/GlobalJobAdmissionGuardTest.java,20,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,28,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,32,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,34,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,35,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/timeout/WorkflowRunStuckReconcilerTest.java,37,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchServiceTest.java,103,静态定位；按§14复核，不计作业务缺陷
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchValidationServiceTest.java,64,§14.2 禁止命令式openMocks初始化
+backend,openMocks,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/service/LaunchBatchDayServiceTest.java,94,§14.2 禁止命令式openMocks初始化
+backend,lenient_setting,reason_present_needs_semantic_review,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/application/TriggerOutboxRelayTest.java,56,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,openMocks,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/event/TriggerOutboxDomainEventPublisherTest.java,38,§14.2 禁止命令式openMocks初始化
+backend,lenient_setting,confirmed_missing_reason,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/infrastructure/mq/KafkaTriggerEventPublisherTest.java,46,§14.3 缺少LENIENT的中文豁免理由
+backend,junit_assertions_import,timeout_semantics_review,batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorTest.java,5,抢占式超时断言有独立执行语义，不机械等同普通AssertJ断言替换
+backend,field_direct_mock,candidate,batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapperClaimLeaseTest.java,43,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapperClaimLeaseTest.java,44,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapterDefinitionTest.java,29,静态定位；按§14复核，不计作业务缺陷
+backend,field_direct_mock,candidate,batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapterDefinitionTest.java,30,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,confirmed_missing_reason,batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/AbstractWorkerLoopTest.java,41,§14.3 缺少LENIENT的中文豁免理由
+backend,junit_assertions_import,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapterTest.java,4,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,lenient_setting,reason_present_needs_semantic_review,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/DefaultDispatchStageExecutorTest.java,42,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,junit_assertions_import,confirmed_convention,batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/plugin/ExportKeysetRangePlannerTest.java,11,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,junit_assertions_import,confirmed_convention,batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSpecTest.java,7,§14.6普通JUnit断言，已人工确认实际调用；导入条目数不等于调用数
+backend,lenient_setting,reason_present_needs_semantic_review,batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/stage/DefaultExportStageExecutorTest.java,45,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,lenient_setting,reason_present_needs_semantic_review,batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/DefaultImportStageExecutorTest.java,55,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,field_direct_mock,candidate,batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingBusinessCleanupServiceTest.java,16,静态定位；按§14复核，不计作业务缺陷
+backend,lenient_setting,reason_present_needs_semantic_review,batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/DefaultProcessStageExecutorTest.java,45,已看到理由文字；未逐个执行严格模式验证，ConsoleTenantReadinessServiceTest为行尾说明
+backend,junit_assertions_import,documented_legacy_exception,security-scan/src/test/java/io/github/pinpols/batch/securityscan/SecurityScanOptionsTest.java,6,§14.6明确允许的security-scan legacy文件
+backend,junit_assertions_import,documented_legacy_exception,security-scan/src/test/java/io/github/pinpols/batch/securityscan/SecurityScanOptionsTest.java,7,§14.6明确允许的security-scan legacy文件
+backend,junit_assertions_import,documented_legacy_exception,security-scan/src/test/java/io/github/pinpols/batch/securityscan/SecurityScanOptionsTest.java,8,§14.6明确允许的security-scan legacy文件
+backend,junit_assertions_import,documented_legacy_exception,security-scan/src/test/java/io/github/pinpols/batch/securityscan/SecurityScanOrchestratorTest.java,8,§14.6明确允许的security-scan legacy文件
+backend,junit_assertions_import,documented_legacy_exception,security-scan/src/test/java/io/github/pinpols/batch/securityscan/SecurityScanOrchestratorTest.java,9,§14.6明确允许的security-scan legacy文件
+backend,jdbc_sql_argument,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/TriggerLaunchRecoveryMapperIntegrationTest.java,50,"""delete from batch.trigger_launch_recovery where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/TriggerLaunchRecoveryMapperIntegrationTest.java,76,"""update batch.trigger_launch_recovery set next_attempt_at = now() - interval '1 minute'""
+            + "" where tenant_id = ? and request_id = 'req-due'"""
+backend,jdbc_sql_argument,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/TriggerLaunchRecoveryMapperIntegrationTest.java,80,"""update batch.trigger_launch_recovery set next_attempt_at = now() + interval '1 hour'""
+            + "" where tenant_id = ? and request_id = 'req-future'"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,77,"""insert into batch.tenant (tenant_id, tenant_name, status) values (?, ?, 'ACTIVE')"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,81,"""""""
+          insert into batch.business_calendar (
+              tenant_id, calendar_code, calendar_name, timezone, holiday_roll_rule,
+              catch_up_policy, catch_up_max_days, cutoff_time, late_arrival_tolerance_min,
+              sla_offset_min, enabled
+          ) values (?, 'repro_cal', 'Repro calendar', 'UTC', 'SKIP', 'AUTO', 3,
+                    ?, 30, 120, true)
+          """""""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,90,"""""""
+              insert into batch.workflow_definition (
+                  tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+                  schedule_type, schedule_expr, timezone, trigger_mode, schedule_enabled,
+                  calendar_code, depends_on_job_code
+              ) values (?, ?, ?, 'DAG', 1, true, 'CRON', '0 0 * * * ?', 'UTC', 'SCHEDULED', true,
+         "
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,102,"""delete from batch.trigger_outbox_event where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,103,"""delete from batch.trigger_request where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,104,"""delete from batch.scheduled_occurrence where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,105,"""delete from batch.workflow_definition where tenant_id = ? and id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,109,"""delete from batch.business_calendar where tenant_id = ? and calendar_code = 'repro_cal'"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,112,"""delete from batch.tenant where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,122,"""""""
+          update batch.workflow_definition
+          set depends_on_job_code = null, version = version + 1, updated_at = current_timestamp
+          where tenant_id = ? and id = ?
+          """""""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,134,"""select count(*) from batch.trigger_request where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,136,"""select schedule_version from batch.scheduled_occurrence""
+            + "" where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,163,"""select occurrence_status from batch.scheduled_occurrence""
+            + "" where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,178,"""select occurrence_status from batch.scheduled_occurrence""
+            + "" where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,185,"""select count(*) from batch.trigger_request where tenant_id = ?"""
+backend,jdbc_sql_argument,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ReadinessRecoveryReproTest.java,200,"""""""
+          insert into batch.scheduled_occurrence (
+              tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
+              scheduled_fire_time, biz_date, occurrence_status,
+              readiness_deferred_since, readiness_deadline
+          ) values (?, ?, ?, ?, 'repro_cal', ?, ?, 'WAITING_READINESS', ?, ?)
+          """""""
+backend,jdbc_sql_file_read_argument,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,235,SQL已外置，Files.readString(cleanupSql)仍应在当前调用点先承接具名局部变量；保留两次读取/执行时机
+backend,jdbc_sql_file_read_argument,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,236,SQL已外置，Files.readString(cleanupSql)仍应在当前调用点先承接具名局部变量；保留两次读取/执行时机
+backend,jdbc_inside_assertion,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java,1903,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java,2187,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DeadLetterApprovalReplayE2eIT.java,464,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java,3236,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/SensorProbeTransactionExecutorIntegrationTest.java,1075,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/PipelineProgressArchiveIntegrationTest.java,412,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/PipelineProgressArchiveIntegrationTest.java,413,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/TriggerTypeLaunchIntegrationTest.java,1195,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/WorkflowGraphTenantForeignKeyIntegrationTest.java,328,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/WorkflowGraphTenantForeignKeyIntegrationTest.java,329,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,94,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,96,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,190,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,233,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,243,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,250,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,254,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsScriptPartitionIntegrationTest.java,259,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ScheduledOccurrenceMapperIntegrationTest.java,419,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ScheduledOccurrenceMapperIntegrationTest.java,423,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,183,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,195,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,201,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchChannelHealthServiceIntegrationTest.java,248,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/integration/BatchWorkerProcessApplicationIntegrationTest.java,88,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+backend,jdbc_inside_assertion,confirmed_convention,batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/PlatformProcessInvocationFenceIntegrationTest.java,219,§14.8查询结果/受影响行数先具名承接；事务、轮询和异常回调内的求值位置必须保留
+frontend,fixed_browser_wait,candidate,e2e/a11y.spec.ts,36,1500
+frontend,fixed_browser_wait,candidate,e2e/admin-no-tenant-crash-guard.spec.ts,69,1500
+frontend,fixed_browser_wait,candidate,e2e/alert-outbox-ops.spec.ts,74,400
+frontend,fixed_browser_wait,candidate,e2e/all-pages-zero-error.spec.ts,124,800
+frontend,fixed_browser_wait,candidate,e2e/api-key-crud.spec.ts,43,400
+frontend,fixed_browser_wait,candidate,e2e/api-key-crud.spec.ts,67,1500
+frontend,fixed_browser_wait,candidate,e2e/api-key-crud.spec.ts,78,200
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,43,800
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,56,800
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,90,800
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,112,800
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,142,800
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,180,400
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,193,1000
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,265,2000
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,292,1000
+frontend,fixed_browser_wait,candidate,e2e/business-flows.spec.ts,312,800
+frontend,fixed_browser_wait,candidate,e2e/customer-visible-errors.spec.ts,105,1800
+frontend,fixed_browser_wait,candidate,e2e/error-states.spec.ts,102,300
+frontend,fixed_browser_wait,candidate,e2e/error-states.spec.ts,141,2500
+frontend,fixed_browser_wait,candidate,e2e/excel-import.spec.ts,43,2_000 * (attempt + 1)
+frontend,fixed_browser_wait,candidate,e2e/file-template-channel-crud.spec.ts,17,400
+frontend,fixed_browser_wait,candidate,e2e/file-template-channel-crud.spec.ts,42,400
+frontend,fixed_browser_wait,candidate,e2e/flows-ui/02-file-pipeline-ui.spec.ts,39,300
+frontend,fixed_browser_wait,candidate,e2e/flows-ui/06-quota-ui.spec.ts,41,300
+frontend,fixed_browser_wait,candidate,e2e/flows-ui/13-workflow-dag-ui.spec.ts,45,500
+frontend,fixed_browser_wait,candidate,e2e/job-definition-crud.spec.ts,52,800
+frontend,fixed_browser_wait,candidate,e2e/keyboard-flow.spec.ts,23,400
+frontend,fixed_browser_wait,candidate,e2e/keyboard-flow.spec.ts,33,400
+frontend,fixed_browser_wait,candidate,e2e/keyboard-flow.spec.ts,54,500
+frontend,fixed_browser_wait,candidate,e2e/keyboard-flow.spec.ts,91,800
+frontend,fixed_browser_wait,candidate,e2e/login-validation.spec.ts,54,800
+frontend,fixed_browser_wait,candidate,e2e/notification-crud.spec.ts,23,400
+frontend,fixed_browser_wait,candidate,e2e/notification-crud.spec.ts,76,400
+frontend,fixed_browser_wait,candidate,e2e/notification-crud.spec.ts,96,400
+frontend,fixed_browser_wait,candidate,e2e/notification-rule-crud.spec.ts,26,400
+frontend,fixed_browser_wait,candidate,e2e/notification-rule-crud.spec.ts,72,400
+frontend,fixed_browser_wait,candidate,e2e/ops-shard-catalog-crud.spec.ts,35,400
+frontend,fixed_browser_wait,candidate,e2e/ops-tenant-placement-crud.spec.ts,29,400
+frontend,fixed_browser_wait,candidate,e2e/ops-tenant-placement-crud.spec.ts,50,400
+frontend,fixed_browser_wait,candidate,e2e/pipeline-definition-crud.spec.ts,17,400
+frontend,fixed_browser_wait,candidate,e2e/pipeline-definition-validation.spec.ts,16,400
+frontend,fixed_browser_wait,candidate,e2e/pipeline-definition-validation.spec.ts,34,400
+frontend,fixed_browser_wait,candidate,e2e/queue-config-crud.spec.ts,22,400
+frontend,fixed_browser_wait,candidate,e2e/queue-config-crud.spec.ts,56,300
+frontend,fixed_browser_wait,candidate,e2e/queue-config-crud.spec.ts,84,400
+frontend,fixed_browser_wait,candidate,e2e/queue-config-crud.spec.ts,103,400
+frontend,fixed_browser_wait,candidate,e2e/queue-config-validation.spec.ts,46,200
+frontend,fixed_browser_wait,candidate,e2e/quota-policy-crud.spec.ts,17,400
+frontend,fixed_browser_wait,candidate,e2e/quota-policy-validation.spec.ts,40,200
+frontend,fixed_browser_wait,candidate,e2e/rbac-denial.spec.ts,36,2000
+frontend,fixed_browser_wait,candidate,e2e/rbac-denial.spec.ts,94,3500
+frontend,fixed_browser_wait,candidate,e2e/row-actions-coverage.spec.ts,66,500
+frontend,fixed_browser_wait,candidate,e2e/row-actions-coverage.spec.ts,90,800
+frontend,fixed_browser_wait,candidate,e2e/row-actions-coverage.spec.ts,108,800
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,38,500
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,54,500
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,69,500
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,89,300
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,100,300
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,108,200
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,120,300
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,127,200
+frontend,fixed_browser_wait,candidate,e2e/runs-and-palette.spec.ts,136,300
+frontend,fixed_browser_wait,candidate,e2e/tag-resource-crud.spec.ts,51,400
+frontend,fixed_browser_wait,candidate,e2e/trigger-crud.spec.ts,32,400
+frontend,fixed_browser_wait,candidate,e2e/user-batch-provisioning.spec.ts,134,350
+frontend,fixed_browser_wait,candidate,e2e/user-journey.spec.ts,125,500
+frontend,fixed_browser_wait,candidate,e2e/webhook-crud.spec.ts,26,400
+frontend,fixed_browser_wait,candidate,e2e/workflow-definition-crud.spec.ts,25,500
+frontend,fixed_browser_wait,candidate,e2e/workflow-designer-save-flow.spec.ts,110,800
+frontend,unit_should_title,confirmed_convention,src/composables/useOnboardingTour.test.ts,59,shouldShowOnboarding:首次访问(localStorage 无标记)→ true
+frontend,unit_should_title,confirmed_convention,src/composables/useOnboardingTour.test.ts,63,shouldShowOnboarding:已完成(localStorage 标 1)→ false
+frontend,mock_reset_review,candidate,src/api/configReleases.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/api/interceptors.degradation.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/api/interceptors.integration.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/api/userAccounts.batch.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/composables/useAutoRefresh.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/composables/useFormValidate.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/composables/useNetworkStatus.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/composables/useOnboardingTour.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/directives/permission.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/stores/auth.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/utils/errorCatalog.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/utils/safeHtml.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/views/workflow/designer/inspector/EdgeInspector.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/views/workflow/designer/inspector/JobNodeForm.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染
+frontend,mock_reset_review,candidate,src/views/workflow/designer/palette/QuickPalette.test.ts,1,局部未找到mockReset/resetAllMocks；需核对mockClear、稳定实现和共享生命周期，不自动认定状态污染

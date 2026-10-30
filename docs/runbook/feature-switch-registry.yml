@@ -6,6 +6,22 @@
 # - helmRequired: true 表示生产 Helm Chart 必须显式渲染，防生产开关无入口。
 # - 本文件是 CI required-vars 的唯一登记源；运维说明仍写在 feature-switches.md。
 switches:
+  - key: batch.worker.batch-claim.enabled
+    module: worker-core
+    env:
+      - BATCH_WORKER_BATCH_CLAIM_ENABLED
+      - BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE
+    composeRequired: true
+    helmRequired: true
+
+  - key: batch.worker.task-client.report-batch-enabled
+    module: worker-core
+    env:
+      - BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED
+      - BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS
+    composeRequired: true
+    helmRequired: true
+
   - key: batch.replay.dry-run.enabled
     module: orchestrator
     env:

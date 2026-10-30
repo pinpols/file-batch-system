@@ -11,6 +11,7 @@ import java.util.Map;
 public record ConsoleLaunchCommand(
     String tenantId,
     String jobCode,
+    Long workflowDefinitionId,
     String bizDate,
     TriggerType triggerType,
     Map<String, Object> params,

@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.TimeoutEnforcerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -51,6 +53,7 @@ class TaskTimeoutEnforcerTest {
     t.setId(id);
     t.setTenantId(tenantId);
     t.setTaskTimeoutSeconds(60);
+    t.setVersion(0L);
     return t;
   }
 
@@ -73,7 +76,7 @@ class TaskTimeoutEnforcerTest {
 
     enforcer.enforce();
 
-    verify(jobTaskMapper, never()).requestCancel(anyString(), anyLong());
+    verify(jobTaskMapper, never()).requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
   }
 
   @Test
@@ -83,13 +86,35 @@ class TaskTimeoutEnforcerTest {
     when(governance.timeout()).thenReturn(timeoutProps);
     when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))
         .thenReturn(List.of(task(1L, "t1"), task(2L, "t1")));
-    when(jobTaskMapper.requestCancel("t1", 1L)).thenReturn(1);
-    when(jobTaskMapper.requestCancel("t1", 2L)).thenReturn(1);
+    when(jobTaskMapper.requestCancelIfTimedOut("t1", 1L, 0L)).thenReturn(1);
+    when(jobTaskMapper.requestCancelIfTimedOut("t1", 2L, 0L)).thenReturn(1);
 
     enforcer.enforce();
 
-    verify(jobTaskMapper).requestCancel("t1", 1L);
-    verify(jobTaskMapper).requestCancel("t1", 2L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 2L, 0L);
     assertThat(meterRegistry.counter("batch.task.timeout.cancel.total").count()).isEqualTo(2.0);
+  }
+
+  @Test
+  @DisplayName("跨租户候选逐条在各自租户上下文中请求取消并清理上下文")
+  void shouldScopeCancelRequestToCandidateTenant() {
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    when(governance.timeout()).thenReturn(timeoutProps);
+    when(jobTaskMapper.selectTaskTimeoutCandidates(anyInt()))
+        .thenReturn(List.of(task(1L, "t1"), task(2L, "t2")));
+    doAnswer(invocation -> {
+          String tenantId = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+          return 1;
+        })
+        .when(jobTaskMapper)
+        .requestCancelIfTimedOut(anyString(), anyLong(), anyLong());
+
+    enforcer.enforce();
+
+    verify(jobTaskMapper).requestCancelIfTimedOut("t1", 1L, 0L);
+    verify(jobTaskMapper).requestCancelIfTimedOut("t2", 2L, 0L);
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 }

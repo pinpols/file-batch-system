@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Prepare the same next SemVer release in the backend and paired console."""
+# 用途：核对双仓版本并计算下一统一版本及 Release 准备参数。
+# 用法：python3 scripts/ci/prepare-platform-release.py --frontend-root <前端仓库路径> --bump patch|minor|major；其余参数见 --help。
+"""为后端和配对 Console 准备相同的下一 SemVer 版本。"""
 
 from __future__ import annotations
 

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobDependencyMapper">
+    <select id="selectUpstreamJobCodes" resultType="string">
+        select upstream_job_code
+        from batch.job_dependency
+        where tenant_id = #{tenantId}
+          and downstream_job_code = #{downstreamJobCode}
+        order by dependency_order
+    </select>
+    <select id="selectUpstreamRules"
+            resultType="io.github.pinpols.batch.orchestrator.domain.query.JobDependencyRule">
+        select upstream_job_code as "upstreamJobCode",
+               biz_date_alignment as "bizDateAlignment"
+        from batch.job_dependency
+        where tenant_id = #{tenantId}
+          and downstream_job_code = #{downstreamJobCode}
+        order by dependency_order
+    </select>
+    <select id="selectCalendarCodeByTenantAndJob" resultType="string">
+        select calendar_code
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </select>
+    <select id="selectJobDefinitionIdByTenantAndJob" resultType="long">
+        select id
+        from batch.job_definition
+        where tenant_id = #{tenantId}
+          and job_code = #{jobCode}
+    </select>
+</mapper>

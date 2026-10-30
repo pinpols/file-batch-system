@@ -1,36 +1,29 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.common.model.PageRequest;
+import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
+import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface ResourceQueueMapper {
 
-  List<Map<String, Object>> selectByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("queueCode") String queueCode,
-      @Param("queueType") String queueType,
-      @Param("enabled") Boolean enabled,
-      @Param("pageRequest") PageRequest pageRequest);
+  List<ResourceQueueRow> selectByQuery(ResourceQueueQuery query);
 
-  long countByQuery(
-      @Param("tenantId") String tenantId,
-      @Param("queueCode") String queueCode,
-      @Param("queueType") String queueType,
-      @Param("enabled") Boolean enabled);
+  long countByQuery(ResourceQueueQuery query);
 
-  Map<String, Object> selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
+  ResourceQueueRow selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
-  Map<String, Object> selectByUniqueKey(
+  ResourceQueueRow selectByUniqueKey(
       @Param("tenantId") String tenantId, @Param("queueCode") String queueCode);
 
   int upsertResourceQueue(ResourceQueueUpsertParam param);
 
-  int insert(Map<String, Object> params);
+  int insert(ResourceQueueInsertParam params);
 
-  int update(Map<String, Object> params);
+  int update(ResourceQueueUpdateParam params);
 
   int toggleEnabled(
       @Param("tenantId") String tenantId, @Param("id") Long id, @Param("enabled") Boolean enabled);

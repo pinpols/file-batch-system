@@ -2,16 +2,25 @@ package io.github.pinpols.batch.worker.core.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.IOException;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.context.properties.bind.Binder;
 import org.springframework.boot.context.properties.bind.validation.BindValidationException;
+import org.springframework.boot.env.YamlPropertySourceLoader;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.boot.validation.autoconfigure.ValidationAutoConfiguration;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.PropertySource;
+import org.springframework.core.env.SystemEnvironmentPropertySource;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("Worker 启动期配置绑定与参数校验")
 class WorkerPropertiesBindingTest {
@@ -38,6 +47,7 @@ class WorkerPropertiesBindingTest {
       assertThat(context.getBean(WorkerConcurrencyProperties.class).getMaxConcurrentTasks())
           .isPositive();
       WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
+      assertThat(lease.getRenewIntervalMillis()).isEqualTo(10_000L);
       assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(3);
       assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(5);
       assertThat(lease.getRenewBatchMaxItems()).isEqualTo(256);
@@ -57,6 +67,7 @@ class WorkerPropertiesBindingTest {
             "spring.kafka.consumer.metadata-max-age-ms=0",
             "spring.kafka.listener.concurrency=2",
             "batch.worker.max-concurrent-tasks=8",
+            "batch.worker.lease.renew-interval-millis=2500",
             "batch.worker.lease.consecutive-failure-alert-threshold=4",
             "batch.worker.lease.circuit-half-open-tick-interval=6",
             "batch.worker.lease.renew-batch-max-items=128")
@@ -73,6 +84,7 @@ class WorkerPropertiesBindingTest {
           assertThat(context.getBean(WorkerConcurrencyProperties.class).getMaxConcurrentTasks())
               .isEqualTo(8);
           WorkerLeaseProperties lease = context.getBean(WorkerLeaseProperties.class);
+          assertThat(lease.getRenewIntervalMillis()).isEqualTo(2_500L);
           assertThat(lease.getConsecutiveFailureAlertThreshold()).isEqualTo(4);
           assertThat(lease.getCircuitHalfOpenTickInterval()).isEqualTo(6);
           assertThat(lease.getRenewBatchMaxItems()).isEqualTo(128);
@@ -91,6 +103,7 @@ class WorkerPropertiesBindingTest {
         "spring.kafka.consumer.metadata-max-age-ms=-1",
         "spring.kafka.listener.concurrency=0",
         "batch.worker.max-concurrent-tasks=0",
+        "batch.worker.lease.renew-interval-millis=0",
         "batch.worker.lease.consecutive-failure-alert-threshold=0",
         "batch.worker.lease.circuit-half-open-tick-interval=0",
         "batch.worker.lease.renew-batch-max-items=0"
@@ -101,6 +114,62 @@ class WorkerPropertiesBindingTest {
       assertThat(context).hasFailed();
       assertThat(context.getStartupFailure()).hasRootCauseInstanceOf(BindValidationException.class);
     });
+  }
+
+  @Test
+  @DisplayName("实际共享YAML缺省关闭批量领取和上报，保留5ms微批等待及32项上限")
+  void shouldBindBatchTransportDefaultsFromSharedYaml() throws IOException {
+    MockEnvironment environment = sharedDefaultsEnvironment(Map.of());
+
+    OrchestratorTaskClientProperties client = Binder.get(environment)
+        .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
+        .get();
+    WorkerBatchClaimProperties claim = Binder.get(environment)
+        .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
+        .get();
+
+    assertThat(client.isReportBatchEnabled()).isFalse();
+    assertThat(client.getReportBatchWaitMillis()).isEqualTo(5L);
+    assertThat(claim.isEnabled()).isFalse();
+    assertThat(claim.effectiveBatchSize()).isEqualTo(32);
+  }
+
+  @Test
+  @DisplayName("环境桥接实际绑定批量开关与claim上限，显式零等待不被默认值覆盖")
+  void shouldBindBatchTransportEnvironmentAndPreserveZeroWait() throws IOException {
+    Map<String, Object> variables = Map.of(
+        "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED", "true",
+        "BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS", "0",
+        "BATCH_WORKER_BATCH_CLAIM_ENABLED", "true",
+        "BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE", "5");
+    MockEnvironment environment = sharedDefaultsEnvironment(variables);
+
+    OrchestratorTaskClientProperties client = Binder.get(environment)
+        .bind("batch.worker.task-client", OrchestratorTaskClientProperties.class)
+        .get();
+    WorkerBatchClaimProperties claim = Binder.get(environment)
+        .bind("batch.worker.batch-claim", WorkerBatchClaimProperties.class)
+        .get();
+
+    assertThat(client.isReportBatchEnabled()).isTrue();
+    assertThat(client.getReportBatchWaitMillis()).isZero();
+    assertThat(claim.isEnabled()).isTrue();
+    assertThat(claim.effectiveBatchSize()).isEqualTo(5);
+  }
+
+  private static MockEnvironment sharedDefaultsEnvironment(Map<String, Object> variables)
+      throws IOException {
+    MockEnvironment environment = new MockEnvironment();
+    SystemEnvironmentPropertySource envSource =
+        new SystemEnvironmentPropertySource("batch-transport-env", variables);
+    environment.getPropertySources().addFirst(envSource);
+    YamlPropertySourceLoader loader = new YamlPropertySourceLoader();
+    ClassPathResource resource = new ClassPathResource("batch-defaults.yml");
+    List<PropertySource<?>> sources = loader.load("actual-batch-defaults", resource);
+    for (PropertySource<?> source : sources) {
+      environment.getPropertySources().addLast(source);
+    }
+    return environment;
   }
 
   @Configuration(proxyBeanMethods = false)

@@ -44,6 +44,58 @@ class CalendarBizDateResolverTest {
   }
 
   @Test
+  @DisplayName("cutoff 使用严格小于语义,等于 cutoff 的 fire 归当天业务日")
+  void shouldTreatExactCutoffAsCurrentBusinessDay() {
+    CalendarBizDateDefinition calendar =
+        calendar("America/New_York", LocalTime.of(6, 0), "SKIP", Set.of(), Set.of());
+
+    assertThat(resolver.resolve(instant("2026-01-15T10:59:59Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 1, 14));
+    assertThat(resolver.resolve(instant("2026-01-15T11:00:00Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 1, 15));
+  }
+
+  @Test
+  @DisplayName("DST 春季跳时的 02:30 cutoff 在缺失时刻前后保持连续业务日边界")
+  void shouldResolveCutoffAcrossSpringDaylightSavingGap() {
+    CalendarBizDateDefinition calendar =
+        calendar("America/New_York", LocalTime.of(2, 30), "SKIP", Set.of(), Set.of());
+
+    assertThat(resolver.resolve(instant("2026-03-08T06:59:59Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 3, 7));
+    assertThat(resolver.resolve(instant("2026-03-08T07:00:00Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 3, 8));
+  }
+
+  @Test
+  @DisplayName("DST 秋季重复 01:30 cutoff 的两次真实 instant 均映射到同一业务日")
+  void shouldResolveBothFallDaylightSavingFoldInstants() {
+    CalendarBizDateDefinition calendar =
+        calendar("America/New_York", LocalTime.of(1, 30), "SKIP", Set.of(), Set.of());
+
+    assertThat(resolver.resolve(instant("2026-11-01T05:29:59Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 10, 31));
+    assertThat(resolver.resolve(instant("2026-11-01T05:30:00Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 11, 1));
+    assertThat(resolver.resolve(instant("2026-11-01T06:30:00Z"), ZoneId.of("UTC"), calendar))
+        .isEqualTo(LocalDate.of(2026, 11, 1));
+  }
+
+  @Test
+  @DisplayName("DST 回拨后的重复时段不能把已切换的业务日再退回前一天")
+  void shouldKeepBusinessDayMonotonic_whenClockRepeatsBeforeCutoff() {
+    CalendarBizDateDefinition calendar =
+        calendar("America/New_York", LocalTime.of(1, 30), "SKIP", Set.of(), Set.of());
+    LocalDate expected = LocalDate.of(2026, 11, 1);
+    LocalDate afterFirstCutoff =
+        resolver.resolve(instant("2026-11-01T05:40:00Z"), ZoneId.of("UTC"), calendar);
+    LocalDate repeatedHourBeforeCutoff =
+        resolver.resolve(instant("2026-11-01T06:10:00Z"), ZoneId.of("UTC"), calendar);
+    assertThat(afterFirstCutoff).isEqualTo(expected);
+    assertThat(repeatedHourBeforeCutoff).isEqualTo(expected);
+  }
+
+  @Test
   @DisplayName("回退到的业务日期是节假日且滚动规则为 SKIP 时返回 null,提示调用方跳过调度")
   void shouldSkipWhenPreviousBusinessDayIsHolidayAndRuleIsSkip() {
     LocalDate bizDate = resolver.resolve(
@@ -85,6 +137,16 @@ class CalendarBizDateResolverTest {
       Set<LocalDate> workdayOverrides) {
     return new CalendarBizDateDefinition(
         timezone, LocalTime.of(6, 0), holidayRollRule, holidays, workdayOverrides);
+  }
+
+  private CalendarBizDateDefinition calendar(
+      String timezone,
+      LocalTime cutoffTime,
+      String holidayRollRule,
+      Set<LocalDate> holidays,
+      Set<LocalDate> workdayOverrides) {
+    return new CalendarBizDateDefinition(
+        timezone, cutoffTime, holidayRollRule, holidays, workdayOverrides);
   }
 
   private Instant instant(String value) {

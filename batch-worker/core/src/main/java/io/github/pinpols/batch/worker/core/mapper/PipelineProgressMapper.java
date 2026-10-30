@@ -1,13 +1,14 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
 import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
+import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import org.apache.ibatis.annotations.Param;
 
 /**
  * {@code batch.pipeline_progress} 数据访问 — ADR-038 续跑位点。
  *
- * <p>设计点:{@link #advance} 是 UPSERT,首次为 INSERT,之后为 UPDATE;与 chunk/page 业务写**必须在同一事务**,由调用方 (LoadStep
- * / GenerateStep)保证。
+ * <p>设计点:{@link #advance} 是 UPSERT,首次为 INSERT,之后为 UPDATE，参与调用方平台库事务。Import 业务写位于租户业务库时，按
+ * ADR-038 使用业务先提交、位点后推进及插件幂等，不能假设两个数据源自动组成单库原子事务。
  */
 public interface PipelineProgressMapper {
 
@@ -18,15 +19,10 @@ public interface PipelineProgressMapper {
       @Param("stage") String stage);
 
   /**
-   * UPSERT 位点;与本批业务写同事务调用。{@code processedCountIncrement} 累加到当前 processed_count(NULL 视 0)。 已
+   * UPSERT 位点；返回0表示父实例不存在或不属于调用租户，调用方必须拒绝成功。{@code processedCountIncrement} 累加到当前 processed_count。已
    * completed 的行不会被回写位点(防止迟到 chunk 把已完成位点撤回)。
    */
-  int advance(
-      @Param("tenantId") String tenantId,
-      @Param("pipelineInstanceId") long pipelineInstanceId,
-      @Param("stage") String stage,
-      @Param("positionMarker") String positionMarker,
-      @Param("processedCountIncrement") long processedCountIncrement);
+  int advance(PipelineProgressAdvanceParam parameters);
 
   /** 阶段整体完成时调用;completed=true + completed_at = now。幂等(已 completed 不变)。 */
   int markCompleted(

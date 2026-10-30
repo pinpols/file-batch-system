@@ -2,6 +2,7 @@ package io.github.pinpols.batch.common.lock;
 
 import io.github.pinpols.batch.common.config.BatchShedLockAutoConfiguration;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
+import org.aspectj.lang.annotation.Aspect;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -16,7 +17,7 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration
 @AutoConfigureAfter(BatchShedLockAutoConfiguration.class)
-@ConditionalOnClass({LockingTaskExecutor.class, org.aspectj.lang.annotation.Aspect.class})
+@ConditionalOnClass({LockingTaskExecutor.class, Aspect.class})
 @ConditionalOnProperty(
     name = "batch.lock.distributed.enabled",
     havingValue = "true",

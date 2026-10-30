@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
@@ -13,8 +14,8 @@ import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam
 import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -44,7 +45,7 @@ public class DefaultConsoleQuotaPolicyApplicationService
   @Override
   public QuotaPolicyResponse create(QuotaPolicySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
+    TenantQuotaPolicyRow existing =
         quotaPolicyMapper.selectByUniqueKey(tenantId, request.getPolicyCode());
     if (existing != null) {
       throw BizException.of(
@@ -66,44 +67,46 @@ public class DefaultConsoleQuotaPolicyApplicationService
         .build();
     quotaPolicyMapper.insert(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return QuotaPolicyResponse.from(
-        quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode()));
+    TenantQuotaPolicyRow createdPolicy =
+        quotaPolicyMapper.selectByUniqueKey(tenantId, param.getPolicyCode());
+    return QuotaPolicyResponse.from(createdPolicy);
   }
 
   @Override
   public QuotaPolicyResponse update(Long id, QuotaPolicySaveRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    Map<String, Object> existing =
-        Guard.requireFound(quotaPolicyMapper.selectById(tenantId, id), "quota policy not found");
+    TenantQuotaPolicyRow selectedPolicy = quotaPolicyMapper.selectById(tenantId, id);
+    TenantQuotaPolicyRow existing = Guard.requireFound(selectedPolicy, "quota policy not found");
     TenantQuotaPolicyUpdateParam param = TenantQuotaPolicyUpdateParam.builder()
         .tenantId(tenantId)
         .id(id)
         .maxRunningJobsPerTenant(
             request.getMaxRunningJobsPerTenant() != null
                 ? request.getMaxRunningJobsPerTenant()
-                : (Integer) existing.get("max_running_jobs_per_tenant"))
+                : existing.maxRunningJobsPerTenant())
         .maxPartitionsPerTenant(
             request.getMaxPartitionsPerTenant() != null
                 ? request.getMaxPartitionsPerTenant()
-                : (Integer) existing.get("max_partitions_per_tenant"))
+                : existing.maxPartitionsPerTenant())
         .maxQpsPerTenant(
             request.getMaxQpsPerTenant() != null
                 ? request.getMaxQpsPerTenant()
-                : (Integer) existing.get("max_qps_per_tenant"))
+                : existing.maxQpsPerTenant())
         .fairShareWeight(
             request.getFairShareWeight() != null
                 ? request.getFairShareWeight()
-                : (Integer) existing.get("fair_share_weight"))
+                : existing.fairShareWeight())
         .enabled(
-            request.getEnabled() != null ? request.getEnabled() : (Boolean) existing.get("enabled"))
+            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
         .description(
-            request.getDescription() != null
+            EmptyChecks.isNotNull(request.getDescription())
                 ? request.getDescription()
-                : (String) existing.get("description"))
+                : existing.description())
         .build();
     quotaPolicyMapper.update(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);
-    return QuotaPolicyResponse.from(quotaPolicyMapper.selectById(tenantId, id));
+    TenantQuotaPolicyRow updatedPolicy = quotaPolicyMapper.selectById(tenantId, id);
+    return QuotaPolicyResponse.from(updatedPolicy);
   }
 
   @Override

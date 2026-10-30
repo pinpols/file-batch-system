@@ -5,10 +5,10 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import java.time.Instant;
-import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 
 /**
  * 通知渠道行响应（{@code NotificationChannelMapper.selectByTenant/selectByCode} 投影）。
@@ -20,6 +20,7 @@ import java.util.Set;
  * <p>MyBatis {@code resultType="map"} 省略 null 列，历史 wire 不含 null 键 → {@code NON_NULL} 保键集对等。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Builder
 public record ConsoleNotificationChannelResponse(
     Long id,
     @JsonProperty("tenant_id") String tenantId,
@@ -33,22 +34,23 @@ public record ConsoleNotificationChannelResponse(
     @JsonProperty("created_at") Instant createdAt,
     @JsonProperty("updated_at") Instant updatedAt) {
 
-  public static ConsoleNotificationChannelResponse from(Map<String, Object> row) {
+  public static ConsoleNotificationChannelResponse from(NotificationChannelRow row) {
     if (row == null) {
       return null;
     }
-    return new ConsoleNotificationChannelResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "tenant_id"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_code"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_name"),
-        ConsoleResponseFieldReader.stringValue(row, "channel_type"),
-        safeConfig(row.get("config_json")),
-        ConsoleResponseFieldReader.booleanValue(row, "enabled"),
-        ConsoleResponseFieldReader.stringValue(row, "created_by"),
-        ConsoleResponseFieldReader.stringValue(row, "updated_by"),
-        ConsoleResponseFieldReader.instantValue(row, "created_at"),
-        ConsoleResponseFieldReader.instantValue(row, "updated_at"));
+    return ConsoleNotificationChannelResponse.builder()
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .channelCode(row.channelCode())
+        .channelName(row.channelName())
+        .channelType(row.channelType())
+        .configJson(safeConfig(row.configJson()))
+        .enabled(row.enabled())
+        .createdBy(row.createdBy())
+        .updatedBy(row.updatedBy())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .build();
   }
 
   private static Object safeConfig(Object value) {

@@ -17,6 +17,7 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * Lane E #4-Java + #5:{@link BatchPlatformClient#stop(Duration)} 预算重分配 + fatal-auth 跳 deactivate
@@ -122,16 +123,14 @@ class BatchPlatformClientStopBudgetTest {
     client.stop(Duration.ofMillis(totalMs));
 
     // capture kafka close duration arg
-    org.mockito.ArgumentCaptor<Duration> kafkaCap =
-        org.mockito.ArgumentCaptor.forClass(Duration.class);
+    ArgumentCaptor<Duration> kafkaCap = ArgumentCaptor.forClass(Duration.class);
     verify(kafka).close(kafkaCap.capture());
     long kafkaMs = kafkaCap.getValue().toMillis();
     // 15% of 10s = 1500ms (允许 ±100ms jitter)
     assertThat(kafkaMs).isBetween(1_400L, 1_600L);
 
     // dispatcher 拿到剩余 - 15%,接近 8500ms 上下
-    org.mockito.ArgumentCaptor<Duration> dispCap =
-        org.mockito.ArgumentCaptor.forClass(Duration.class);
+    ArgumentCaptor<Duration> dispCap = ArgumentCaptor.forClass(Duration.class);
     verify(dispatcher).stop(dispCap.capture());
     long dispMs = dispCap.getValue().toMillis();
     // remainingMs (≈10000) - 15% (1500) = 8500;允许 ±500ms 因为前两步实际耗时极小

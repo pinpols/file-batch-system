@@ -25,16 +25,8 @@ public class ResourceSchedulingRequest {
 
   /**
    * 本次调度是否会把一个新的 {@code job_instance} 推进为活跃态。初始 launch 保持 {@code true}；
-   * 已有实例的 DAG 后续节点和 WAITING 重派必须设为 {@code false}，避免重复占用全局 job 配额。
+   * 父实例仍在 WAITING 时的首次释放保持 {@code true}；父实例已活跃的后续分区或 DAG 节点设为
+   * {@code false}，避免重复占用全局、租户、队列及公平共享组的 Job 配额。
    */
   private boolean newJobAdmission = true;
-
-  /**
-   * 是否在本次判断中取得公平组的事务级准入锁。
-   *
-   * <p>新建任务会在同一事务内将实例推进到 RUNNING，必须保持默认 {@code true}。WAITING 队列的首轮判断只用于
-   * 排序，真正派发前会在独立事务中再次校验，因此可以设为 {@code false}，避免一批候选为同一公平组反复争抢
-   * advisory lock。
-   */
-  private boolean enforceFairShareAdmission = true;
 }

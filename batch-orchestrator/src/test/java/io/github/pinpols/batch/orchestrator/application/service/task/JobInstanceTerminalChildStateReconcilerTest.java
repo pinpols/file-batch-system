@@ -4,18 +4,22 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.StepInstanceStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.orchestrator.domain.param.CloseRunningPipelineStepsParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护实例终态 → 子表(partition/task)收敛的映射:
@@ -30,6 +34,7 @@ import org.mockito.MockitoAnnotations;
  * </ul>
  */
 @DisplayName("作业实例终态子表收敛器: 终态映射与非终态空操作口径")
+@ExtendWith(MockitoExtension.class)
 class JobInstanceTerminalChildStateReconcilerTest {
 
   @Mock
@@ -38,17 +43,15 @@ class JobInstanceTerminalChildStateReconcilerTest {
   @Mock
   private JobTaskMapper taskMapper;
 
+  @Mock
+  private JobInstanceMapper instanceMapper;
+
   private JobInstanceTerminalChildStateReconciler reconciler;
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
-    reconciler = new JobInstanceTerminalChildStateReconciler(partitionMapper, taskMapper);
-    when(partitionMapper.closeNonTerminalPartitionsForTerminalInstance(
-            anyString(), anyLong(), anyString()))
-        .thenReturn(0);
-    when(taskMapper.closeNonTerminalTasksForTerminalInstance(anyString(), anyLong(), anyString()))
-        .thenReturn(0);
+    reconciler =
+        new JobInstanceTerminalChildStateReconciler(partitionMapper, taskMapper, instanceMapper);
   }
 
   @Test
@@ -60,6 +63,30 @@ class JobInstanceTerminalChildStateReconcilerTest {
         .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
     verify(taskMapper)
         .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
+    verify(instanceMapper)
+        .closeRunningPipelineStepsForTerminalInstance(CloseRunningPipelineStepsParam.builder()
+            .tenantId("ta")
+            .id(100L)
+            .terminalInstanceStatus("SUCCESS")
+            .interruptedStepStatus(StepInstanceStatus.FAILED.code())
+            .terminalStatusCodes(JobInstanceStatus.terminalCodes())
+            .build());
+  }
+
+  @Test
+  @DisplayName("dry-run 终态按对应成功/失败状态收敛子表")
+  void shouldReconcileDryRunTerminalStates() {
+    reconciler.reconcile("ta", 100L, JobInstanceStatus.SUCCESS_DRY_RUN.code());
+    reconciler.reconcile("ta", 101L, JobInstanceStatus.FAILED_DRY_RUN.code());
+
+    verify(partitionMapper)
+        .closeNonTerminalPartitionsForTerminalInstance("ta", 100L, PartitionStatus.SUCCESS.code());
+    verify(taskMapper)
+        .closeNonTerminalTasksForTerminalInstance("ta", 100L, TaskStatus.SUCCESS.code());
+    verify(partitionMapper)
+        .closeNonTerminalPartitionsForTerminalInstance("ta", 101L, PartitionStatus.FAILED.code());
+    verify(taskMapper)
+        .closeNonTerminalTasksForTerminalInstance("ta", 101L, TaskStatus.FAILED.code());
   }
 
   @Test
@@ -112,6 +139,8 @@ class JobInstanceTerminalChildStateReconcilerTest {
   @DisplayName("非业务终态 RUNNING → no-op,不写子表(防止节流计数泄漏)")
   void shouldDoNothing_whenInstanceRunning() {
     reconciler.reconcile("ta", 100L, JobInstanceStatus.RUNNING.code());
+
+    verifyNoInteractions(instanceMapper);
 
     verify(partitionMapper, never())
         .closeNonTerminalPartitionsForTerminalInstance(anyString(), anyLong(), anyString());

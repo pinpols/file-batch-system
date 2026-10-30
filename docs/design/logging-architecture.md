@@ -8,29 +8,23 @@
 
 ## 1. 整体架构
 
-```
-┌──────────────────────────────────────────────────────────────────┐
-│                          前端（Vue）                              │
-│                                                                  │
-│  logger.ts（环形缓冲区 500 条）                                    │
-│    ├─→ localStorage（本地快照，用户自助导出排障）                    │
-│    └─→ POST /api/console/telemetry/events（批量上报到后端）         │
-└──────────────────────────┬───────────────────────────────────────┘
-                           ↓
-┌──────────────────────────────────────────────────────────────────┐
-│                     后端（Spring Boot）                           │
-│                                                                  │
-│  console-api / orchestrator / trigger / worker-*                 │
-│    ├─→ slf4j + MDC → 结构化 stdout + OTLP logs                    │
-│    └─→ 业务审计表（PostgreSQL batch schema）                      │
-└──────────────────────────┬───────────────────────────────────────┘
-                           ↓
-┌──────────────────────────────────────────────────────────────────┐
-│                      日志管道（Loki 方案）                         │
-│                                                                  │
-│  OTel Collector → Loki → Grafana                                 │
-│  （低基数 label 检索，高基数字段保留为 structured metadata）       │
-└──────────────────────────────────────────────────────────────────┘
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph browser[Console 浏览器]
+    L[logger.ts：环形缓冲 500 条]
+    S[localStorage 快照 / 用户导出]
+    L --> S
+  end
+  L -->|启用遥测后批量上报| T[ConsoleTelemetryController]
+  B[后端应用] --> R[SLF4J + MDC]
+  T --> R
+  R --> SOUT[结构化 stdout]
+  R --> OT[OTLP logs]
+  OT --> C[OTel Collector]
+  C --> K[Loki]
+  K --> G[Grafana]
+  B -->|业务审计事件| A[PostgreSQL 业务审计表]
 ```
 
 ---
@@ -97,14 +91,14 @@ WARN，默认抑制完整转储（可能包含敏感配置）；运行状态由�
 
 **应用运行日志不存数据库**，走结构化 stdout/OTLP + Loki 管道：
 
-```
-应用 logback → 结构化 stdout（容器平台兜底）+ OTLP logs
-    ↓
-OTel Collector（内存保护、批量、持久队列、失败重试）
-    ↓
-Loki（按标签查询，不做全文索引）
-    ↓
-Grafana（可视化看板）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  L[Logback] --> S[结构化 stdout]
+  L --> O[OTLP logs]
+  O --> C[OTel Collector<br/>批量、队列与重试]
+  C --> K[Loki]
+  K --> G[Grafana]
 ```
 
 不存数据库的原因：
@@ -140,6 +134,10 @@ management:
 ## 3. 业务审计日志
 
 业务审计日志存数据库表，用于合规审计和运维排查，与应用运行日志分离。
+
+控制台操作审计使用 `OperationAuditEvent` 的稳定 record 字段契约；调用方通过 Builder 按字段名构造，
+保持原字段、事件版本和请求/操作者来源。终态投递人工重试的五项证据由私有类型承接；
+重放核对仍在 JSON 边界比较完整字段集合，不能因宽容 DTO 反序列化忽略未知字段而误判幂等。
 
 ### 3.1 审计表清单
 
@@ -185,16 +183,17 @@ management:
 
 前端批量上报到后端，后端通过 slf4j 打到结构化 stdout/OTLP logs，复用 Collector → Loki 管道：
 
-```
-前端 logger.ts
-    ├─→ localStorage（本地快照）
-    └─→ POST /api/console/telemetry/events（批量上报）
-              ↓
-         ConsoleTelemetryController
-              ↓ slf4j log.info/warn/error + MDC
-         结构化 stdout + OTLP logs
-              ↓
-         OTel Collector → Loki → Grafana
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  L[前端 logger.ts] --> S[localStorage 快照]
+  L -->|POST telemetry/events| T[ConsoleTelemetryController]
+  T --> M[SLF4J + MDC]
+  M --> SOUT[结构化 stdout]
+  M --> OT[OTLP logs]
+  OT --> C[OTel Collector]
+  C --> K[Loki]
+  K --> G[Grafana]
 ```
 
 ### 4.4 上报策略
@@ -291,3 +290,7 @@ Authorization: Bearer <jwt>
 # 按 traceId 追踪完整链路
 {service_name=~"batch-.+"} | traceId="abc123"
 ```
+
+## 重复故障的降噪与根因闭环
+
+重复日志可以按已有策略聚合或限频，但缺表、错误配置、租户拒绝和外部结果未知必须保留可检索的任务/请求标识、原因分类及指标。降低日志级别不等于修复根因，不能把持续失败显示成正常空态或成功。异常摘要沿用统一脱敏工具，禁止输出凭据、完整请求体或未经处理的异常消息。

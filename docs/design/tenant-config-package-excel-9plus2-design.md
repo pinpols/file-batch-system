@@ -1,17 +1,10 @@
 # 租户配置包 Excel 9+2 设计
 
-> 状态：方案设计 v3（决定不兼容旧 8-sheet 格式，硬切到新格式）。
+> **当前规格**：完整配置包导出 **11 个数据 sheet**：8 个业务定义 + 3 个可选基础依赖。历史文件名 `9plus2` 保留以维持引用，不代表当前数量。
 >
-> **新格式 = 8 业务核心 sheet + 3 可选基础依赖 sheet** = 总计 11 个数据 sheet。
+> `ConfigPackageSheetSpecs` 仅保留当前 11 张数据 sheet 的规格，旧 Pipeline sheet 规格及示例已删除。解析器显式拒绝 `pipeline_definition`、`pipeline_step_definition` 旧 sheet，不做转换。新运行按 Job 类型选择系统 Pipeline，Job 保存阶段业务参数，调度归属 Workflow。
 >
-> **当前实现**：完整配置包另有必需的 `job_monitoring_policy` sheet，用于作业耗时过久、启动过晚、完成过晚的阈值与告警级别，导入与导出均为 12 个数据 sheet。该 sheet 不属于作业基础定义；当前格式不兼容缺少该 sheet 的旧工作簿。下文 11-sheet 数量是原 9+2 基线设计，涉及当前实现状态的数量以本增量说明和 SLA 文档为准。
->
-> 配置包模板、导出和预览工作簿还会生成只读的“字典”辅助 sheet，集中展示枚举编码及本地化含义；它不计入 12 个数据 sheet，也不参与导入。数据区按文本格式写入，表头冻结、筛选范围覆盖实际数据，字典/说明表可筛选；数据校验下拉和必填校验覆盖 XLSX 全部可用数据行。
-> 旧 8-sheet 格式（含 `alert_routing_config`）**直接停用**，不做过渡兼容。
->
-> 相对历史 8 sheet 的变化：
-> - **新增** 4 个 sheet：`file_template_config`（必填）+ `resource_queue / business_calendar / batch_window`（均可选，引用时必填且允许 DB fallback）
-> - **移除** 1 个 sheet：`alert_routing_config` —— 改走前端独立 CRUD 页 `/observability/alert-routings`（`AlertRoutingPanel.vue` 已落地，含 search/create/edit/toggle 全套；后端走 `ConsoleAlertRoutingController` 单条 CRUD API，**不再提供 Excel 批量入口**——告警路由本身规模小、且 receiver/team 强环境相关，单条 CRUD 已经足够）
+> 字典、填写说明、填写顺序和校验结果等辅助 sheet 不计入数据 sheet。场景专用模板按场景投影，不一定包含完整包的 11 个数据 sheet；空表/必需表规则以当前解析器和模板为准。旧 Pipeline/FILE_STEP 配置数据不得静默转换或导入。
 
 ## 背景
 
@@ -22,7 +15,7 @@
 - Export 查询 SQL 在 `file_template_config.default_query_sql`。
 - Export 的表结构式配置在 `file_template_config.query_param_schema.jdbcMappedExport`。
 
-因此当前 8-Sheet 包适合“已有基础模板的环境内维护”，不适合“跨环境迁移、压测复现、从零导入一条可运行链路”。
+因此当时的 8-Sheet 包适合“已有基础模板的环境内维护”，不适合“跨环境迁移、压测复现、从零导入一条可运行链路”。
 
 ## 设计目标
 
@@ -44,46 +37,32 @@
 - 不通过配置包创建业务表结构；只校验业务表和列存在。
 - 不把归档、巡检、观测、告警事件等环境治理配置放入配置包。
 - **不把 `alert_routing_config` 放入配置包**：告警路由（team / receiver / severity → channel 映射）是**环境侧治理资产**，prod / staging / dev 各有自己的 oncall 拓扑，跨环境照搬反而是反模式。`alert_routing` 已有前端独立 CRUD 页 `/observability/alert-routings`（`AlertRoutingPanel.vue`）+ 后端 `ConsoleAlertRoutingController` 单条 CRUD API，**不再提供 Excel 批量入口**（规模小、强环境相关，Excel 批量没价值）。
-- **Excel 不拆成 logical skeleton + per-env overlay 双文件格式**：本设计仍保持 11-sheet 单包，避免让一线租户维护两份 Excel。轻量的 base package + tenant overlay 已在 Console REST 层落地：`/api/console/config/tenant-overlay/preview` 以基础租户为 base，按目标租户生成只含 add/update 的 `overlayBundle`，并对 `file_channel`、`resource_queue`、`batch_window`、`business_calendar` 等环境特定配置给出 review 提示。
+- **Excel 不拆成 logical skeleton + per-env overlay 双文件格式**：本设计仍保持 单工作簿，避免让一线租户维护两份 Excel。轻量的 base package + tenant overlay 已在 Console REST 层落地：`/api/console/config/tenant-overlay/preview` 以基础租户为 base，按目标租户生成只含 add/update 的 `overlayBundle`，并对 `file_channel`、`resource_queue`、`batch_window`、`business_calendar` 等环境特定配置给出 review 提示。
 
-## 9+2 Sheet 范围
+## 当前 Sheet 范围
 
-> **范围口径**：9 = 业务核心 sheet（作业链路自身定义）；+2 = 可选基础依赖 sheet（队列 / 日历 / 窗口 ─ 引用时必填，允许 DB fallback）。
->
-> 实际可选 sheet 是 **3 个**（resource_queue / business_calendar / batch_window），名字保留 "9+2" 是因为 resource_queue 历史上被算作核心；本次设计统一降到可选区。
+### 业务定义 8 Sheet
 
-### 业务核心 9 Sheet（作业链路自身）
+| Sheet | 定位 |
+|---|---|
+| `job_definition` | 类型、Worker 路由、执行策略与业务参数；不是顶层日程 |
+| `job_monitoring_policy` | 作业启动、完成、耗时阈值及告警级别；与执行定义分离 |
+| `file_template_config` | Import/Export 模板、字段映射与查询参数 |
+| `file_channel_config` | 文件来源与外部投递渠道引用 |
+| `workflow_definition` | 顶层运行图、日程、日历、时区与启停 |
+| `workflow_monitoring_policy` | Workflow 根级启动、完成、耗时阈值及告警级别；按工作流编码和版本引用 |
+| `workflow_node` | START/END/JOB/GATEWAY/WAIT；JOB 引用 `related_job_code` |
+| `workflow_edge` | 同图依赖、条件分支与汇聚 |
 
-Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再放作业依赖的模板、通道，最后执行 / 编排定义。
+### 可选基础依赖 3 Sheet
 
-| 顺序 | Sheet | 定位 | 是否可空 |
-|---:|---|---|---|
-| 1 | `job_definition` | 作业入口；调度、worker 分组、默认参数 | 建议非空 |
-| 2 | `file_template_config` | 文件模板；Import 目标表、字段映射、Export SQL 的核心配置 | 建议非空 |
-| 3 | `file_channel_config` | 文件 / 派发通道；Dispatch 和文件投递运行依赖 | 依赖 Dispatch 场景 |
-| 4 | `pipeline_definition` | Worker 执行流水线定义 | 依赖 worker 场景 |
-| 5 | `pipeline_step_definition` | Worker 执行步骤；`stage_code / impl_code / step_params` | 依赖 worker 场景 |
-| 6 | `workflow_definition` | 工作流定义 | 依赖 workflow 场景 |
-| 7 | `workflow_node` | 工作流节点，关联 job / pipeline | 依赖 workflow 场景 |
-| 8 | `workflow_edge` | 工作流边，定义 DAG / 条件流转 | 依赖 workflow 场景 |
+| Sheet | 引用规则 |
+|---|---|
+| `resource_queue` | 被 Job 引用时须在本包或目标租户库存在 |
+| `business_calendar` | 被 Workflow 引用时须存在；是批量日解析依据 |
+| `batch_window` | Job/节点的资源准入窗口引用，不扩张为全图运行窗口 |
 
-> 历史 8 sheet 里的 `alert_routing_config` 已剔除（见 §设计目标·非目标），1-8 是真正属于"作业链路自身"的核心定义。
-
-### 可选基础依赖 3 Sheet（引用时必填，允许 DB fallback）
-
-三者语义对称：包内不存在但被引用时，会先在 DB 回退查找；DB 也没有才报错。
-
-| 顺序 | Sheet | 定位 | 触发要求 |
-|---:|---|---|---|
-| 9 | `resource_queue` | 调度资源队列，支撑 `job_definition.queue_code` / 调度压测 / waiting dispatch 复现 | 任意 `job_definition.queue_code` 有值时，必须在本包或库中存在 |
-| 10 | `business_calendar` | 业务日历 | 任意 `job_definition.calendar_code` 有值时，必须在本包或库中存在 |
-| 11 | `batch_window` | 批次窗口 | 任意 `job_definition.window_code` 或 `workflow_node.window_code` 有值时，必须在本包或库中存在 |
-
-说明：
-
-- Excel 模板**固定生成 11 个数据 sheet**，但 9-11 在填写说明里明确为"可留空，仅引用时需要"。
-- Excel 展示顺序不等于后端写入数据库顺序。后端导入顺序不依赖用户调整后的 sheet 顺序，必须按依赖拓扑顺序写入数据库（见 §导入执行顺序）。
-- **不出现在配置包内的相关 sheet**：`alert_routing_config`（已迁独立 CRUD 页）、`tenant_quota_policy`（租户治理）、`worker_registry / step_registry`（运行时上报）。
+Excel 展示顺序由当前模板生成器确定，不作为服务端事务写入顺序。不能导入 `pipeline_definition`、`pipeline_step_definition`、`FILE_STEP.related_pipeline_code` 或 `job_type=WORKFLOW`。告警路由、租户配额、Worker/Step 注册继续走各自治理入口，不混入业务配置包。
 
 ### Environment-specific 字段标识
 
@@ -101,11 +80,11 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 
 ## Workbook 辅助 Sheet
 
-除 9+2 数据 sheet 外，保留并优化辅助 sheet：
+除当前数据 sheet 外，保留并优化辅助 sheet：
 
 | Sheet | 用途 | 要求 |
 |---|---|---|
-| `填写说明` | 面向用户的填写入口说明 | 说明 9+2 范围、导入流程、可选 sheet、注意事项 |
+| `填写说明` | 面向用户的填写入口说明 | 说明当前范围、导入流程、可选 sheet、注意事项 |
 | `依赖说明` | 单独说明跨 sheet / 数据库依赖关系 | 新增；按依赖来源、字段、目标、是否允许库中已有、错误示例组织 |
 | `字段说明` | 每个字段的必填、填写层级、类型、枚举、示例、填写示例 | 第一列按 sheet 合并单元格；用“填写层级”区分必填/常用/高级；跨 sheet 关联关系放到 `依赖说明` |
 | `五类Worker示例` | 展示 IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC 的典型配置组合 | 新增；仅说明用途，不参与导入解析；ATOMIC 无 Pipeline |
@@ -134,13 +113,8 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 | `job_definition` | `calendar_code` | `business_calendar` | `calendar_code` | `TRUE` | `calendar_code 非空` |
 | `job_definition` | `window_code` | `batch_window` | `window_code` | `TRUE` | `window_code 非空` |
 | `job_definition` | `default_params.templateCode` | `file_template_config` | `template_code + version` | `TRUE` | `templateCode 非空` |
-| `pipeline_definition` | `job_code` | `job_definition` | `job_code` | `TRUE` | `总是` |
-| `pipeline_step_definition` | `job_code + version` | `pipeline_definition` | `job_code + version` | `FALSE` | `总是` |
-| `pipeline_step_definition` | `step_params.templateCode` | `file_template_config` | `template_code + version` | `TRUE` | `templateCode 非空` |
-| `pipeline_step_definition` | `step_params.channelCode / fileChannelCode` | `file_channel_config` | `channel_code` | `TRUE` | `channelCode 非空` |
 | `workflow_node` | `workflow_code + workflow_version` | `workflow_definition` | `workflow_code + version` | `FALSE` | `总是` |
 | `workflow_node` | `related_job_code` | `job_definition` | `job_code` | `TRUE` | `related_job_code 非空` |
-| `workflow_node` | `related_pipeline_code` | `pipeline_definition` | `job_code` | `TRUE` | `related_pipeline_code 非空` |
 | `workflow_node` | `window_code` | `batch_window` | `window_code` | `TRUE` | `window_code 非空` |
 | `workflow_edge` | `workflow_code + workflow_version` | `workflow_definition` | `workflow_code + version` | `FALSE` | `总是` |
 | `workflow_edge` | `from_node_code / to_node_code` | `workflow_node` | `node_code` | `FALSE` | `总是` |
@@ -191,7 +165,7 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 |---|---|
 | `worker_type` | `IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC` |
 | `job_type` | 对应 `job_definition.job_type` |
-| `pipeline_type` | 对应 `pipeline_definition.pipeline_type` |
+| `pipeline_type` | 由 Job 类型映射的系统 Pipeline 类型（不是导入字段） |
 | `stage_chain` | 典型 stage 顺序 |
 | `required_sheets` | 最少需要填写的数据 sheet |
 | `template_requirement` | 是否需要 `file_template_config` |
@@ -203,10 +177,10 @@ Excel 展示顺序优先服务“人怎么填”：先放作业主入口，再�
 
 | worker_type | job_type | pipeline_type | stage_chain | required_sheets | template_requirement | channel_requirement | key_params | demo_description |
 |---|---|---|---|---|---|---|---|---|
-| `IMPORT` | `IMPORT` | `IMPORT` | `RECEIVE -> PREPROCESS -> PARSE -> VALIDATE -> LOAD -> FEEDBACK` | `job_definition, file_template_config, pipeline_definition, pipeline_step_definition` | `query_param_schema.jdbcMappedImport` 配 `schema/table/columnMappings/conflictColumns` | 可选，取决于 RECEIVE 来源 | `default_params.templateCode` / `step_params.templateCode` | 文件导入到业务表 |
-| `EXPORT` | `EXPORT` | `EXPORT` | `PREPARE -> GENERATE -> STORE -> REGISTER -> COMPLETE` | `job_definition, file_template_config, pipeline_definition, pipeline_step_definition` | `default_query_sql` 或 `query_param_schema.jdbcMappedExport` | STORE 可依赖对象存储配置；派发另配 DISPATCH | `default_params.templateCode` / `query_param_schema.sqlTemplateExport.cursorColumn` | 查询业务表生成文件 |
-| `PROCESS` | `PROCESS` | `PROCESS` | `PREPARE -> COMPUTE -> VALIDATE -> COMMIT -> FEEDBACK` | `job_definition, pipeline_definition, pipeline_step_definition` | 通常不需要文件模板 | 不需要 | `step_params.targetSchema/targetTable/sql/columnMappings` | SQL transform / 加工落表 |
-| `DISPATCH` | `DISPATCH` | `DISPATCH` | `PREPARE -> DISPATCH -> ACK -> RETRY -> COMPENSATE -> COMPLETE` | `job_definition, file_channel_config, pipeline_definition, pipeline_step_definition` | 通常不需要文件模板；若派发导出文件则引用 export 产物 | 必须，`channelCode` 指向 `file_channel_config.channel_code` | `step_params.channelCode/fileChannelCode` | 推送文件或消息到外部系统 |
+| `IMPORT` | `IMPORT` | `IMPORT` | `RECEIVE -> PREPROCESS -> PARSE -> VALIDATE -> LOAD -> FEEDBACK` | `job_definition, file_template_config, workflow_definition, workflow_node, workflow_edge` | `query_param_schema.jdbcMappedImport` 配 `schema/table/columnMappings/conflictColumns` | 可选，取决于 RECEIVE 来源 | `default_params.templateCode` 与对应阶段业务参数 | 文件导入到业务表 |
+| `EXPORT` | `EXPORT` | `EXPORT` | `PREPARE -> GENERATE -> STORE -> REGISTER -> COMPLETE` | `job_definition, file_template_config, workflow_definition, workflow_node, workflow_edge` | `default_query_sql` 或 `query_param_schema.jdbcMappedExport` | STORE 可依赖对象存储配置；派发另配 DISPATCH | `default_params.templateCode` / `query_param_schema.sqlTemplateExport.cursorColumn` | 查询业务表生成文件 |
+| `PROCESS` | `PROCESS` | `PROCESS` | `PREPARE -> COMPUTE -> VALIDATE -> COMMIT -> FEEDBACK` | `job_definition, workflow_definition, workflow_node, workflow_edge` | 通常不需要文件模板 | 不需要 | COMPUTE 阶段业务参数（冻结于Job配置） | SQL transform / 加工落表 |
+| `DISPATCH` | `DISPATCH` | `DISPATCH` | `PREPARE -> DISPATCH -> ACK -> RETRY -> COMPENSATE -> COMPLETE` | `job_definition, file_channel_config, workflow_definition, workflow_node, workflow_edge` | 通常不需要文件模板；若派发导出文件则引用 export 产物 | 必须，`channelCode` 指向 `file_channel_config.channel_code` | 渠道引用与DISPATCH阶段业务参数 | 推送文件或消息到外部系统 |
 
 实现要求：
 
@@ -380,7 +354,7 @@ description
 
 校验模型：
 
-1. 先读取所有 9+2 sheet，建立本包内索引。
+1. 先读取全部当前数据 sheet，建立本包内索引。
 2. 再对引用字段检查“本包存在或数据库已存在”。
 3. 对不允许 DB fallback 的关系，只能在本包内存在。
 4. 输出所有问题到 preview，而不是遇到第一条就中断。
@@ -388,15 +362,13 @@ description
 必须校验：
 
 - `job_definition.queue_code` → `resource_queue.queue_code`
-- `job_definition.calendar_code` → `business_calendar.calendar_code`
+- `workflow_definition.calendar_code` → `business_calendar.calendar_code`
 - `job_definition.window_code` → `batch_window.window_code`
 - `job_definition.default_params.templateCode` → `file_template_config.template_code`
-- `pipeline_definition.job_code` → `job_definition.job_code`
-- `pipeline_step_definition.job_code + version` → `pipeline_definition.job_code + version`
-- `pipeline_step_definition.step_params.templateCode` → `file_template_config.template_code`
-- `pipeline_step_definition.step_params.channelCode / fileChannelCode` → `file_channel_config.channel_code`
+- Job有效参数中的模板引用 → `file_template_config.template_code`
+- Job有效参数中的渠道引用 → `file_channel_config.channel_code`
 - `workflow_node.related_job_code` → `job_definition.job_code`
-- `workflow_node.related_pipeline_code` → `pipeline_definition.job_code`
+- `workflow_node.related_job_code` → `job_definition.job_code`
 - `workflow_node.window_code` → `batch_window.window_code`
 - `workflow_edge.from_node_code / to_node_code` → `workflow_node.node_code`
 
@@ -449,37 +421,35 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 4. file_template_config
 5. file_channel_config
 6. job_definition
-7. pipeline_definition
-8. pipeline_step_definition
-9. workflow_definition
-10. workflow_node
-11. workflow_edge
+7. job_monitoring_policy
+8. workflow_definition
+9. workflow_node
+10. workflow_edge
 ```
 
 > `alert_routing_config` 不在此列：从配置包剔除，由独立 CRUD 页写入数据库。
 
 执行策略：
 
-- **单事务原子提交**：跨 11 张配置表的 upsert 必须在同一个 `@Transactional` 里，preview 有任何 invalid 行或跨引用错误时禁止 apply。
+- **单事务原子提交**：跨当前业务配置对象的 upsert 必须在同一个 `@Transactional` 里，preview 有任何 invalid 行或跨引用错误时禁止 apply。
 - **业务表存在性检查（用于 jdbcMappedImport / SQL 校验）走独立连接 / 独立事务**：业务表通常在 routing datasource 的"业务库"端，校验仅 read-only metadata 查询，不影响配置表事务边界。注意 `@Transactional(propagation = NOT_SUPPORTED)` 标注，避免被外层事务卷入。
-- `file_template_config` 与 `pipeline_definition` 这类父子结构必须先父后子。
-- `pipeline_step_definition` 对同一 pipeline 的步骤建议采用"删除后重建"或显式差异更新，但必须保持幂等。
+- 模板、渠道等被引用配置先校验，Job 与其监控策略关联校验，Workflow definition 先于节点和边写入。系统 Pipeline 不参与配置写入。
 - 工作流节点和边必须在 definition upsert 后重建或差异更新。
-- **事务监控**：长事务期间会锁住 11 张配置表的行，建议加 metric `config_package_apply_duration_seconds`，p95 > 5s 报警。
+- **事务监控**：长事务可能持有多个配置对象的行锁，建议加 metric `config_package_apply_duration_seconds`，p95 > 5s 报警。
 
 ## 前端呈现建议
 
 - 租户配置包页面标题仍保留"租户配置包"。
-- 下载模板提示"8 个业务核心 sheet + 3 个可选基础依赖 sheet"。
+- 下载模板提示"7 个业务定义 sheet + 3 个可选基础依赖 sheet"。
 - preview 结果按数据 sheet 分组，并额外显示"依赖错误"分组和"environment-specific 字段需 review"分组。
 - 对 `resource_queue / business_calendar / batch_window` 标记"可选；仅引用时需要"。
 - 对 environment-specific 字段（见 §Environment-specific 字段标识表）：preview 时无条件弹 WARNING 分组，列出该字段在源包的值，引导跨环境迁移的用户 review。
 - 对 `file_template_config.default_query_sql` 和 `query_param_schema` 提供大文本预览，避免在表格里横向超过。建议复用 workflow designer 的 DSL 编辑器（CodeMirror）做只读高亮。
-- **拒绝旧 8-sheet 包上传**：上传时若检测到 `alert_routing_config` sheet 或缺少 `file_template_config` sheet，preview 直接报错 `LEGACY_8_SHEET_FORMAT`，提示用户「请下载新模板（11 个数据 sheet）后重新填写；告警路由请走 `/observability/alert-routings` CRUD 页单条维护」。不做容忍式忽略。
+- **拒绝旧 8-sheet 包上传**：上传时若检测到 `alert_routing_config` sheet 或缺少 `file_template_config` sheet，preview 直接报错 `LEGACY_8_SHEET_FORMAT`，提示用户「请下载当前模板后重新填写；告警路由请走 `/observability/alert-routings` CRUD 页单条维护」。不做容忍式忽略。
 
-## 当前模板审计与体验优化
+## 历史模板体验审计（原模板时点，非当前规格）
 
-审计对象：`tenant-package-template.xlsx` 当前导出模板。
+以下保留原11-sheet时期模板审计与体验建议，数量、缺口和排期不代表当前状态；当前数据表范围与导出事实见本文前部。
 
 现状：
 
@@ -560,26 +530,23 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 - **旧 8-sheet 包上传拒绝测试**：含 `alert_routing_config` 或缺 `file_template_config` 时 preview 报 `LEGACY_8_SHEET_FORMAT`，引导跳转CRUD 页。
 - Environment-specific 字段 preview WARNING 测试。
 
-## 硬切策略（不兼容旧 8-sheet）
+## 当前格式与跨环境迁移
 
-- 新格式（11 sheet）是**唯一格式**，旧 8-sheet 不再被接受。
-- 上传时按以下规则识别旧包并直接拒绝：
-  - 含 `alert_routing_config` sheet → 报 `LEGACY_8_SHEET_FORMAT_ALERT_ROUTING`，提示去 `/observability/alert-routings` CRUD 页。
-  - 缺 `file_template_config` sheet → 报 `LEGACY_8_SHEET_FORMAT_MISSING_FILE_TEMPLATE`，提示下载新模板。
-- 后端 export / 模板下载一律产出 11 sheet。
-- 已存在的旧包**由使用方负责手工迁移**（导出现有配置 → 调整为新模板 → 上传），不提供自动转换脚本。
-
-### 跨环境迁移流程建议
-
-1. 源环境导出 11 sheet 包。
-2. 目标环境运维 review 包内所有 `[env-specific]` 字段，按目标 env 调整（resource_queue 容量 / file_channel endpoint / calendar holidays / batch_window 时段 / schema 名）。
-3. 目标环境 preview，确认无 ERROR / WARNING 后 apply。
-4. 单独走 `/observability/alert-routings` 入口配置目标 env 的告警路由。
+- 完整模板/导出为10数据sheet，辅助sheet另计，场景模板按投影生成；没有租户Pipeline定义数据。
+- 上传先做逐行与跨引用校验。旧Pipeline配置行被标记为退役错误，不自动转换；旧FILE_STEP引用与WORKFLOW包装类型不进入新执行图。
+- 旧工作簿应由使用方按当前导出模板重建业务配置，不能照搬历史11/12-sheet数量或历史错误码作为当前判断。
+- 源环境导出后，对目标队列容量、渠道端点、日历/时区/窗口、业务schema和Secret引用做审核，再preview；错误清除、警告逐项复核后按权限apply。告警路由和其它环境治理仍走独立入口。
 
 ### Base Package + Tenant Overlay 轻量方案
 
-- 基础包仍由一个基准租户承载，包含 job / pipeline / workflow / template / channel / queue / calendar / window 等完整骨架。
+- 基础包仍由一个基准租户承载，包含 job / workflow / template / channel / queue / calendar / window 等完整骨架；系统Pipeline不复制成租户定义。
 - 租户差异不通过第二份 Excel 表达，而由 `POST /api/console/config/tenant-overlay/preview` 计算：目标租户缺失项为 `ADD`，内容不同为 `UPDATE`，相同项默认不展示，目标租户独有项只作为 `DELETE_CANDIDATE` 提示且不自动删除。
-- job 粒度复制和预览使用 dependency-aware bundle：先取 job，再取关联 pipeline / workflow / queue / window / calendar，并从 job default params、pipeline step params、workflow node params 递归识别 `templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` 等显式引用；无显式引用时才保留旧 `bizType` template/channel 兜底。
+- job 粒度复制和预览使用 dependency-aware bundle：先取 job，再取关联 workflow / queue / window / calendar，并从 job default params、系统阶段业务参数、workflow node params 递归识别 `templateCode` / `fileTemplateCode` / `channelCode` / `fileChannelCode` 等显式引用；无显式引用时才保留旧 `bizType` template/channel 兜底。
 - 同一 job 多租户配置漂移由 `POST /api/console/config/tenant-config-matrix` 展示，重点看 schedule、queue、calendar、window、workerGroup、template、channel。
 - 边界：不做通用配置中心，不做跨租户自动删除，不把 alert routing / quota / worker registry 重新塞回 Excel。
+
+## 已有 Workflow 的说明字段更新
+
+`workflow_definition.description` 与名称、日程等字段一起进入版本比较更新。应用已有定义时保留 CAS,
+说明字段与版本在同一更新中落库, 不能只增加 updated 统计而忽略输入。
+未提供说明的普通定义更新保留当前说明; Excel 的空值/缺列继续使用既有合并规则。

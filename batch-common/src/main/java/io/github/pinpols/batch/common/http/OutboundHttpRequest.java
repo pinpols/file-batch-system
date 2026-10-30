@@ -23,10 +23,11 @@ public record OutboundHttpRequest(
     Objects.requireNonNull(connectTimeout, "connectTimeout");
     Objects.requireNonNull(requestTimeout, "requestTimeout");
     Objects.requireNonNull(addressPolicy, "addressPolicy");
-    if (connectTimeout.isNegative()
+    boolean timeoutIsNotPositive = connectTimeout.isNegative()
         || connectTimeout.isZero()
         || requestTimeout.isNegative()
-        || requestTimeout.isZero()) {
+        || requestTimeout.isZero();
+    if (timeoutIsNotPositive) {
       throw new IllegalArgumentException("outbound HTTP timeouts must be positive");
     }
     if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme())) {
@@ -47,8 +48,9 @@ public record OutboundHttpRequest(
       Duration connectTimeout,
       Duration requestTimeout,
       OutboundAddressPolicy addressPolicy) {
+    URI requestUri = URI.create(url);
     return new OutboundHttpRequest(
-        URI.create(url),
+        requestUri,
         OutboundHttpMethod.GET,
         headers,
         null,
@@ -64,8 +66,9 @@ public record OutboundHttpRequest(
       Duration connectTimeout,
       Duration requestTimeout,
       OutboundAddressPolicy addressPolicy) {
+    URI requestUri = URI.create(url);
     return new OutboundHttpRequest(
-        URI.create(url),
+        requestUri,
         OutboundHttpMethod.HEAD,
         headers,
         null,
@@ -78,17 +81,17 @@ public record OutboundHttpRequest(
   public static OutboundHttpRequest post(
       String url,
       Map<String, String> headers,
-      String body,
-      String mediaType,
+      OutboundHttpContent content,
       Duration connectTimeout,
       Duration requestTimeout,
       OutboundAddressPolicy addressPolicy) {
+    URI requestUri = URI.create(url);
     return new OutboundHttpRequest(
-        URI.create(url),
+        requestUri,
         OutboundHttpMethod.POST,
         headers,
-        body,
-        mediaType,
+        content.body(),
+        content.mediaType(),
         connectTimeout,
         requestTimeout,
         addressPolicy);

@@ -32,6 +32,12 @@ class BatchDaySqlMigrationsIntegrationTest {
   @Test
   @DisplayName("空库全量迁移后批次日实例表,业务日历新增列与乐观锁列齐备且唯一约束生效")
   void emptyDb_migration_createsBatchDayInstanceAndBusinessCalendarColumns() {
+    final String insertBatchDayInstanceSql = """
+            insert into batch.batch_day_instance(
+              tenant_id, calendar_code, biz_date, day_status
+            ) values ('t1', 'CAL', date '2026-03-27', 'NOT_REAL')
+            """;
+
     resetDb();
 
     flywayConfiguration().load().migrate();
@@ -56,11 +62,7 @@ class BatchDaySqlMigrationsIntegrationTest {
 
       // sanity check：day_status check constraint 至少可用（非法值应失败）
       try {
-        jdbc.update("""
-            insert into batch.batch_day_instance(
-              tenant_id, calendar_code, biz_date, day_status
-            ) values ('t1', 'CAL', date '2026-03-27', 'NOT_REAL')
-            """);
+        jdbc.update(insertBatchDayInstanceSql);
         assertThat(true)
             .as("invalid day_status should fail by check constraint")
             .isFalse();
@@ -164,37 +166,43 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   private static boolean tableExists(JdbcTemplate jdbc, String schema, String table) {
-    Long cnt = jdbc.queryForObject("""
+    final String selectCountSql = """
             select count(*)
             from information_schema.tables
             where table_schema = ?
               and table_name = ?
-            """, Long.class, schema, table);
+            """;
+
+    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table);
     return cnt != null && cnt > 0;
   }
 
   private static boolean columnExists(
       JdbcTemplate jdbc, String schema, String table, String column) {
-    Long cnt = jdbc.queryForObject("""
+    final String selectCountSql = """
             select count(*)
             from information_schema.columns
             where table_schema = ?
               and table_name = ?
               and column_name = ?
-            """, Long.class, schema, table, column);
+            """;
+
+    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, column);
     return cnt != null && cnt > 0;
   }
 
   private static boolean uniqueConstraintExists(
       JdbcTemplate jdbc, String schema, String table, String constraintName) {
-    Long cnt = jdbc.queryForObject("""
+    final String selectCountSql = """
             select count(*)
             from information_schema.table_constraints tc
             where tc.table_schema = ?
               and tc.table_name = ?
               and tc.constraint_name = ?
               and tc.constraint_type in ('UNIQUE', 'PRIMARY KEY')
-            """, Long.class, schema, table, constraintName);
+            """;
+
+    Long cnt = jdbc.queryForObject(selectCountSql, Long.class, schema, table, constraintName);
     return cnt != null && cnt > 0;
   }
 
@@ -213,6 +221,10 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   private static long flywayHistoryCount(JdbcTemplate jdbc) {
-    return jdbc.queryForObject("select count(*) from batch.flyway_schema_history", Long.class);
+    final String selectCountSql = """
+        select count(*) from batch.flyway_schema_history
+    """;
+
+    return jdbc.queryForObject(selectCountSql, Long.class);
   }
 }

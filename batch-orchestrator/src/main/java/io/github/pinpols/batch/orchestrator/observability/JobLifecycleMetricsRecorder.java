@@ -99,16 +99,14 @@ public class JobLifecycleMetricsRecorder {
           if (instance == null || instance.getCreatedAt() == null) {
             return;
           }
-          recordSnapshot(
-              new CompletionSnapshot(
-                  tenantId,
-                  jobInstanceId,
-                  instance.getJobDefinitionId(),
-                  instance.getCreatedAt(),
-                  Boolean.TRUE.equals(instance.getDryRun()),
-                  instance.getFailureClass()),
-              terminalStatus,
-              finishedAt);
+          Long jobDefinitionId = instance.getJobDefinitionId();
+          Instant createdAt = instance.getCreatedAt();
+          Boolean dryRunValue = instance.getDryRun();
+          boolean dryRun = Boolean.TRUE.equals(dryRunValue);
+          String failureClass = instance.getFailureClass();
+          CompletionSnapshot completionSnapshot = new CompletionSnapshot(
+              tenantId, jobInstanceId, jobDefinitionId, createdAt, dryRun, failureClass);
+          recordSnapshot(completionSnapshot, terminalStatus, finishedAt);
         } catch (RuntimeException ex) {
           logFailure(tenantId, jobInstanceId, ex);
         }
@@ -143,11 +141,11 @@ public class JobLifecycleMetricsRecorder {
         snapshot.tenantId(), jobType, terminalStatus, snapshot.dryRun(), duration);
     // 失败指标必须使用终态 CAS 写入的 failure_class，不能从更新前的实体快照反推。
     if (FAILED_TERMINAL_STATUSES.contains(terminalStatus)) {
-      jobLifecycleMetrics.recordFailure(
-          snapshot.tenantId(),
-          jobType,
-          resolveErrorCode(snapshot.failureClass()),
-          snapshot.dryRun());
+      String tenantId = snapshot.tenantId();
+      String failureClass = snapshot.failureClass();
+      String errorCode = resolveErrorCode(failureClass);
+      boolean dryRun = snapshot.dryRun();
+      jobLifecycleMetrics.recordFailure(tenantId, jobType, errorCode, dryRun);
     }
   }
 

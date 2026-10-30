@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
@@ -16,7 +17,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 import org.xml.sax.InputSource;
 
-/** Parses XML payloads into NDJSON records. */
+/** 将 XML 载荷解析为 NDJSON 记录。 */
 public class XmlFormatParser implements FormatParser {
 
   private static final String ERROR_CODE_XML_INVALID = "IMPORT_PARSE_XML_INVALID";
@@ -62,9 +63,10 @@ public class XmlFormatParser implements FormatParser {
         NodeList children = element.getChildNodes();
         for (int j = 0; j < children.getLength(); j++) {
           if (children.item(j) instanceof Element child) {
-            row.put(
-                localElementName(child),
-                child.getTextContent() == null ? null : child.getTextContent().trim());
+            String fieldName = localElementName(child);
+            String childText = child.getTextContent();
+            String trimmedChildText = EmptyChecks.isNull(childText) ? null : childText.trim();
+            row.put(fieldName, trimmedChildText);
           }
         }
         support.collectSchemaFields(context, row);
@@ -92,13 +94,21 @@ public class XmlFormatParser implements FormatParser {
   private String resolveXmlRecordElement(Object templateConfigObject) {
     Map<String, Object> hints = support.parseHints(templateConfigObject);
     Object v = hints.get("xmlRecordElement");
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return String.valueOf(v).trim();
+    if (EmptyChecks.isNotNull(v)) {
+      String presenceText = String.valueOf(v);
+      if (Texts.hasText(presenceText)) {
+        String rawRecordElement = String.valueOf(v);
+        return rawRecordElement.trim();
+      }
     }
     if (templateConfigObject instanceof Map<?, ?> map) {
       Object direct = map.get("xml_record_element");
-      if (direct != null && Texts.hasText(String.valueOf(direct))) {
-        return String.valueOf(direct).trim();
+      if (EmptyChecks.isNotNull(direct)) {
+        String presenceText = String.valueOf(direct);
+        if (Texts.hasText(presenceText)) {
+          String rawRecordElement = String.valueOf(direct);
+          return rawRecordElement.trim();
+        }
       }
     }
     return "record";
@@ -111,7 +121,8 @@ public class XmlFormatParser implements FormatParser {
     }
     String tag = element.getTagName();
     if (tag != null && tag.contains(":")) {
-      return tag.substring(tag.indexOf(':') + 1);
+      int namespaceSeparatorIndex = tag.indexOf(':');
+      return tag.substring(namespaceSeparatorIndex + 1);
     }
     return tag;
   }

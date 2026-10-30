@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：执行五语言 SDK 的单栈、双栈与黑洞连接矩阵。
+# 用法：在仓库根目录执行 bash scripts/ci/run-sdk-happy-eyeballs-gate.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 # 五语言 SDK 控制面 HTTP 的真实 loopback socket 故障矩阵。DNS 顺序由测试注入，

@@ -77,14 +77,16 @@ public class VerifierFailureOutboxService {
         index++;
         continue;
       }
-      domainEventPublisher.publish(buildEvent(command, task, failure, index));
+      DomainEvent failureEvent = buildEvent(command, task, failure, index);
+      domainEventPublisher.publish(failureEvent);
       written++;
       index++;
     }
     if (log.isInfoEnabled()) {
+      String tenantIdForLog = LogSanitizer.value(command.tenantId());
       log.info(
           "ContentVerifier failures persisted as outbox events: tenantId={}, taskId={}, count={}",
-          LogSanitizer.value(command.tenantId()),
+          tenantIdForLog,
           command.taskId(),
           written);
     }

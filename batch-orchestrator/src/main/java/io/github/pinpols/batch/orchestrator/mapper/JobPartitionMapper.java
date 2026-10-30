@@ -5,13 +5,19 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
 import io.github.pinpols.batch.orchestrator.domain.param.CountActiveByGroupParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionMarkRetryingParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.QueueBacklogQueryParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchItem;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionActiveByTenantCountQuery;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
+import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanCursor;
+import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import java.time.Instant;
@@ -38,7 +44,7 @@ public interface JobPartitionMapper {
   PartitionStatusSummary selectStatusSummaryByInstance(
       @Param("tenantId") String tenantId, @Param("jobInstanceId") Long jobInstanceId);
 
-  // C-2: row-level lock to serialize concurrent partition counting during task outcome processing
+  // C-2：使用行级锁串行化任务结果处理期间的并发分区计数。
   List<JobPartitionEntity> selectByQueryForUpdate(JobPartitionQuery query);
 
   int insert(JobPartitionEntity entity);
@@ -70,12 +76,7 @@ public interface JobPartitionMapper {
 
   int renewLease(RenewLeaseParam param);
 
-  int markRetrying(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("retryCount") Integer retryCount,
-      @Param("retryingStatus") String retryingStatus,
-      @Param("expectedVersion") Long expectedVersion);
+  int markRetrying(JobPartitionMarkRetryingParam parameters);
 
   int updateOutputSummary(
       @Param("tenantId") String tenantId,
@@ -118,8 +119,20 @@ public interface JobPartitionMapper {
       @Param("olderThan") Instant olderThan,
       @Param("batchSize") int batchSize);
 
+  WaitingPartitionScanCursor selectWaitingPartitionScanCursor();
+
+  int advanceWaitingPartitionScanCursor(
+      @Param("lastPartitionId") long lastPartitionId,
+      @Param("cycleUpperId") long cycleUpperId,
+      @Param("dryRunPhase") boolean dryRunPhase,
+      @Param("expectedVersion") long expectedVersion);
+
+  long selectLatestPartitionId();
+
   List<JobPartitionEntity> selectWaitingPartitionsGlobal(
       @Param("batchSize") int batchSize, @Param("waitingStatus") String waitingStatus);
+
+  List<JobPartitionEntity> selectWaitingPartitionsGlobalInCycle(WaitingPartitionScanQuery query);
 
   int resetForDispatch(
       @Param("tenantId") String tenantId,
@@ -127,19 +140,19 @@ public interface JobPartitionMapper {
       @Param("readyStatus") String readyStatus,
       @Param("expectedVersion") Long expectedVersion);
 
-  int promoteStatus(
+  /**
+   * 租约回收专用复位：只恢复暂停前已派发但租约已过期的分区；普通重试/文件重派继续使用
+   * {@link #resetForDispatch}，其父 Job 或 Workflow 暂停时不会放行。
+   */
+  int resetForLeaseReclaim(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
-      @Param("fromStatus") String fromStatus,
-      @Param("toStatus") String toStatus,
+      @Param("readyStatus") String readyStatus,
       @Param("expectedVersion") Long expectedVersion);
 
-  long countActiveByTenant(
-      @Param("tenantId") String tenantId,
-      @Param("waitingStatus") String waitingStatus,
-      @Param("readyStatus") String readyStatus,
-      @Param("runningStatus") String runningStatus,
-      @Param("retryingStatus") String retryingStatus);
+  int promoteStatus(JobPartitionPromoteStatusParam parameters);
+
+  long countActiveByTenant(JobPartitionActiveByTenantCountQuery parameters);
 
   long countActiveByTenantAndWorkerGroup(CountActiveByGroupParam param);
 
@@ -147,11 +160,7 @@ public interface JobPartitionMapper {
       QueueBacklogQueryParam param);
 
   QueuePartitionBacklogStats summarizeGlobalQueueBacklog(
-      @Param("createdStatus") String createdStatus,
-      @Param("waitingStatus") String waitingStatus,
-      @Param("readyStatus") String readyStatus,
-      @Param("runningStatus") String runningStatus,
-      @Param("retryingStatus") String retryingStatus);
+      JobPartitionGlobalQueueBacklogSummaryQuery parameters);
 
   /**
    * 启动审计：统计 {@link PartitionStatus#READY}/{@link PartitionStatus#RUNNING} 且 lease 已过期、与 {@link

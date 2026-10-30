@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -12,10 +13,15 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.FailureClass;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
@@ -32,7 +38,10 @@ import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenc
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.StateTransition;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
@@ -47,6 +56,8 @@ import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -56,6 +67,7 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("任务结果服务: 结果应用的前置校验, 锁顺序与终态提升口径")
@@ -128,19 +140,16 @@ class DefaultTaskOutcomeServiceTest {
         workflowDagService,
         workflowNodeDispatchServiceProvider,
         workflowTerminalOutboxService,
-        mock(
-            io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService
-                .class),
+        mock(VerifierFailureOutboxService.class),
         meterRegistry,
         jobInstanceTerminalChildStateReconciler,
         mock(ResultVersionWriter.class),
         mock(BatchDayReplayTerminalReconciler.class),
         failureClassifier,
         mock(JobLifecycleMetricsRecorder.class),
-        mock(
-            io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService
-                .class),
-        mock(org.springframework.context.ApplicationEventPublisher.class));
+        mock(CountContinuityOutboxService.class),
+        mock(ApplicationEventPublisher.class),
+        mock(SecretPayloadProtector.class));
     service = TaskOutcomeServiceFixture.create(jobMappers, workflowMappers, collaborators);
   }
 
@@ -207,12 +216,10 @@ class DefaultTaskOutcomeServiceTest {
     // （参见 RequiresNewTransactionBoundaryIntegrationTest 集成测试覆盖）。
     // 这里把断言改成"验证 selectByQueryForUpdate 在 JobTaskMapper 接口上存在"，
     // 至少 contract-test 级地保护方法签名（mapper xml ↔ Java interface 漂移会被 javac 接住）。
-    var partitionMethod =
-        io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper.class.getDeclaredMethod(
-            "selectByQueryForUpdate",
-            io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery.class);
+    var partitionMethod = JobPartitionMapper.class.getDeclaredMethod(
+        "selectByQueryForUpdate", JobPartitionQuery.class);
     assertThat(partitionMethod).isNotNull();
-    assertThat(partitionMethod.getReturnType()).isAssignableFrom(java.util.List.class);
+    assertThat(partitionMethod.getReturnType()).isAssignableFrom(List.class);
   }
 
   /**
@@ -267,7 +274,7 @@ class DefaultTaskOutcomeServiceTest {
     JobTaskEntity outcome = service.applyTaskOutcome(command);
 
     assertThat(outcome).isSameAs(task);
-    verify(jobTaskMapper, times(1)).selectOutcomePersistenceContext("t1", 1L);
+    verify(jobTaskMapper, times(2)).selectOutcomePersistenceContext("t1", 1L);
     verify(jobPartitionMapper, never()).selectStatusRefsByInstance("t1", 10L);
     verify(jobPartitionMapper, never()).selectStatusSummaryByInstance("t1", 10L);
     verify(jobTaskMapper, never()).selectNodeAssignmentsByInstance("t1", 10L);
@@ -288,6 +295,68 @@ class DefaultTaskOutcomeServiceTest {
     // A6:锁的阻塞获取被 batch.report.advisory_lock.wait Timer 计时(至少一次)。
     assertThat(meterRegistry.get("batch.report.advisory_lock.wait").timer().count())
         .isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("非幂等执行已开始后失败回报归为外部结果未知且不按普通错误重试")
+  void applyTaskOutcome_nonIdempotentStartedFailure_blocksAutomaticRetry() {
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(1L);
+    task.setTenantId("t1");
+    task.setJobInstanceId(10L);
+    task.setJobPartitionId(99L);
+    task.setTaskStatus(TaskStatus.RUNNING.code());
+    task.setAssignedWorkerCode("w1");
+    task.setVersion(1L);
+    task.setNonIdempotentStartedAt(Instant.parse("2026-10-21T00:00:00Z"));
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(99L);
+    partition.setTenantId("t1");
+    partition.setJobInstanceId(10L);
+    partition.setPartitionStatus(PartitionStatus.RUNNING.code());
+    partition.setCurrentInvocationId("inv-1");
+    partition.setVersion(1L);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(10L);
+    instance.setTenantId("t1");
+    instance.setInstanceStatus(JobInstanceStatus.RUNNING.code());
+
+    when(jobTaskMapper.selectOutcomePersistenceContext("t1", 1L))
+        .thenReturn(persistenceContext(task, partition));
+    when(jobInstanceMapper.selectById("t1", 10L)).thenReturn(instance);
+    when(jobTaskMapper.finishTask(any())).thenReturn(task);
+    when(lifecycleEventMapper.map(any(), anyString()))
+        .thenReturn(new StateTransition("RUNNING", "evt", "RUNNING"));
+    when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
+    when(retryGovernanceService.scheduleRetryIfNecessary(
+            any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString()))
+        .thenReturn(false);
+    when(failureClassifier.classify(FailureClass.UNKNOWN.code(), null))
+        .thenReturn(FailureClass.UNKNOWN);
+
+    TaskOutcomeCommand command = TaskOutcomeCommand.builder()
+        .tenantId("t1")
+        .taskId(1L)
+        .workerId("w1")
+        .success(false)
+        .errorCode("HTTP_TIMEOUT")
+        .errorMessage("remote request timed out")
+        .failureClass("TRANSIENT")
+        .partitionInvocationId("inv-1")
+        .build();
+
+    service.applyTaskOutcome(command);
+
+    ArgumentCaptor<FinishTaskParam> finishCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
+    verify(jobTaskMapper).finishTask(finishCaptor.capture());
+    assertThat(finishCaptor.getValue().getErrorCode())
+        .isEqualTo(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN);
+    assertThat(finishCaptor.getValue().getFailureClass()).isEqualTo(FailureClass.UNKNOWN.code());
+    verify(retryGovernanceService)
+        .scheduleRetryIfNecessary(
+            any(), any(), any(), eq(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN), anyString());
   }
 
   @Test
@@ -325,7 +394,7 @@ class DefaultTaskOutcomeServiceTest {
     when(jobPartitionMapper.markTerminalStatusAndLoadInstance(any()))
         .thenReturn(progressedInstance);
     when(jobPartitionMapper.selectStatusSummaryByInstance("t1", 10L))
-        .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L));
+        .thenReturn(new PartitionStatusSummary(1L, 1L, 0L, 0L, 0L, 0L));
     when(lifecycleEventMapper.map(any(), anyString()))
         .thenReturn(new StateTransition("FAILED", "SUCCESS", "FAILED"));
     when(jobInstanceMapper.updateProgress(any())).thenReturn(1);
@@ -338,16 +407,15 @@ class DefaultTaskOutcomeServiceTest {
         .build();
     service.applyTaskOutcome(command);
 
-    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam>
-        captor = ArgumentCaptor.forClass(
-            io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam.class);
+    ArgumentCaptor<UpdateInstanceProgressParam> captor =
+        ArgumentCaptor.forClass(UpdateInstanceProgressParam.class);
     verify(jobInstanceMapper).updateProgress(captor.capture());
     verify(jobInstanceMapper, never()).selectById("t1", 10L);
     assertThat(captor.getValue().getInstanceStatus()).isEqualTo(JobInstanceStatus.SUCCESS.code());
   }
 
   @Test
-  @DisplayName("平台取消的任务回报 CANCELLED 时落取消终态且不安排重试")
+  @DisplayName("平台取消的任务回报 Worker 取消码时落取消终态且不安排重试")
   void applyTaskOutcome_platformCancellation_isCancelledWithoutRetry() {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(1L);
@@ -375,15 +443,13 @@ class DefaultTaskOutcomeServiceTest {
         .taskId(1L)
         .workerId("w1")
         .success(false)
-        .errorCode("CANCELLED")
+        .errorCode("WORKER_EXECUTION_CANCELLED")
         .failureClass("UNKNOWN")
         .build();
 
     service.applyTaskOutcome(command);
 
-    ArgumentCaptor<io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam> taskCaptor =
-        ArgumentCaptor.forClass(
-            io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam.class);
+    ArgumentCaptor<FinishTaskParam> taskCaptor = ArgumentCaptor.forClass(FinishTaskParam.class);
     verify(jobTaskMapper).finishTask(taskCaptor.capture());
     assertThat(taskCaptor.getValue().getTaskStatus()).isEqualTo(TaskStatus.CANCELLED.code());
     assertThat(taskCaptor.getValue().getFailureClass()).isNull();

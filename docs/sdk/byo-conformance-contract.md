@@ -10,7 +10,7 @@
 本契约用两个自动化锚点消除这个洞:
 
 1. **常量**锚在 [`docs/api/sdk-shared-constants.yaml`](../api/sdk-shared-constants.yaml)(各语言 **consume,禁 re-author**)。
-2. **行为**锚在 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 每个 fixture 的 `then.expect`**结构化字段**(各语言断言同一组离散字段,不解读 prose)。
+2. **行为**锚在 [`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) 每个 fixture 的 `then.expect`**结构化字段**(各语言断言同一组离散字段,不解读 prose)。
 
 ## 1. 四条强制约束(不满足 = 不合规)
 
@@ -163,6 +163,6 @@ fixture/mock。
 
 - 协议:[`wire-protocol.md`](wire-protocol.md) §A/§B/§C · [`byo-sdk-guide.md`](byo-sdk-guide.md)
 - 常量源:[`docs/api/sdk-shared-constants.yaml`](../api/sdk-shared-constants.yaml)
-- fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) + `fixture-schema.json`(`then.expect` 闭集)
+- fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) + `fixture-schema.json`(`then.expect` 闭集)
 - CI:[`.github/workflows/sdk-contract-parity.yml`](../../.github/workflows/sdk-contract-parity.yml)
 - ADR-035 §3/§4/§11

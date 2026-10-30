@@ -2,23 +2,271 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.SuccessInstanceArchiveMapper">
 
+    <!-- true 限定当前事务；提交和回滚均恢复连接原设置，不影响池中后续业务。 -->
+    <select id="disableJitForCurrentTransaction" resultType="string" useCache="false" flushCache="true">
+        select set_config('jit', 'off', true)
+    </select>
+
     <!-- 选所有终态 instance id（含正式执行与 dry-run 终态）
          且 finished_at 早于 cutoff（按 id asc 防 missed delete，带 limit）。
+         仍被独立/其它 Workflow 热 JOB 节点引用的实例留在热表，等待其 Workflow 运行先完成冷归档；
+         与 Job 同批删除的旧式 Workflow wrapper 节点仍由本归档事务按既有顺序清理。
          2026-04-26 V5-P3-3 扩展状态集：原仅 SUCCESS/PARTIAL_FAILED 导致 FAILED/CANCELLED
          在主表无限堆积（实测 1224 FAILED + 24 CANCELLED 噪音）。所有终态进 archive 冷表，
          retentionDays 控保留窗口；FAILED 仍可在 archive.job_instance_archive 查到。 -->
-    <select id="selectArchivableInstanceIds" resultType="java.lang.Long">
-        select id
-        from batch.job_instance
-        where instance_status in (
+    <sql id="hasInvalidArchiveReference">
+        (
+            exists (
+                select 1 from batch.job_definition child
+                where child.id = root.job_definition_id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.job_instance parent
+                where parent.id = root.parent_instance_id and parent.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.job_instance child
+                where child.parent_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or
+            exists (
+                select 1 from batch.trigger_request child
+                where child.id = root.trigger_request_id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1
+                from batch.workflow_run parent
+                join batch.workflow_definition definition on definition.id = parent.workflow_definition_id
+                where parent.related_job_instance_id = root.id
+                  and definition.tenant_id &lt;&gt; parent.tenant_id
+            )
+            or
+            exists (select 1 from batch.job_partition child where child.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.job_task child where child.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.job_step_instance child where child.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (
+                select 1
+                from batch.job_task child
+                join batch.job_partition parent on parent.id = child.job_partition_id
+                where child.job_instance_id = root.id
+                  and (parent.tenant_id &lt;&gt; child.tenant_id or parent.job_instance_id &lt;&gt; child.job_instance_id)
+            )
+            or exists (
+                select 1
+                from batch.job_step_instance child
+                join batch.job_partition parent on parent.id = child.job_partition_id
+                where child.job_instance_id = root.id
+                  and (parent.tenant_id &lt;&gt; child.tenant_id or parent.job_instance_id &lt;&gt; child.job_instance_id)
+            )
+            or exists (
+                select 1
+                from batch.job_step_instance child
+                join batch.job_task parent on parent.id = child.job_task_id
+                where child.job_instance_id = root.id
+                  and (parent.tenant_id &lt;&gt; child.tenant_id or parent.job_instance_id &lt;&gt; child.job_instance_id)
+            )
+            or exists (select 1 from batch.pipeline_instance child where child.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.workflow_run child where child.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.job_execution_log child where child.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (
+                select 1
+                from batch.job_execution_log child
+                join batch.job_partition parent on parent.id = child.job_partition_id
+                where child.job_instance_id = root.id
+                  and (parent.tenant_id &lt;&gt; child.tenant_id or parent.job_instance_id &lt;&gt; child.job_instance_id)
+            )
+            or exists (select 1 from batch.compensation_command child where child.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.job_monitoring_alert_claim child where child.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (select 1 from batch.file_record child where child.id = root.related_file_id and child.tenant_id &lt;&gt; root.tenant_id)
+            or exists (
+                select 1 from batch.pipeline_instance parent
+                join batch.file_record child on child.id = parent.file_id
+                where parent.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.job_step_instance step
+                join batch.file_record child on child.id = step.related_file_id
+                where step.job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.compensation_command command
+                join batch.file_record child on child.id = command.related_file_id
+                where command.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.file_dispatch_record dispatch
+                join batch.pipeline_instance parent on parent.id = dispatch.pipeline_instance_id
+                join batch.file_record child on child.id = dispatch.file_id
+                where parent.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+            or exists (
+                select 1 from batch.file_dispatch_record child
+                join batch.pipeline_instance parent on parent.id = child.pipeline_instance_id
+                where parent.related_job_instance_id = root.id and child.tenant_id &lt;&gt; root.tenant_id
+            )
+        )
+    </sql>
+
+    <resultMap id="ArchiveIntegrityCandidateSummaryResultMap"
+               type="io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="affected_instance_count" javaType="java.lang.Long"/>
+            <arg column="sample_instance_id" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectInvalidArchiveReferenceSummaries"
+            resultMap="ArchiveIntegrityCandidateSummaryResultMap">
+        select root.tenant_id,
+               count(*) as affected_instance_count,
+               min(root.id) as sample_instance_id
+        from batch.job_instance root
+        where root.instance_status in (
             'SUCCESS', 'PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED',
             'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
         )
-          and finished_at is not null
-          and finished_at &lt; #{cutoff}
-        order by id asc
-        limit #{limit}
+          and root.finished_at is not null
+          and root.finished_at &lt; #{cutoff}
+          and <include refid="hasInvalidArchiveReference"/>
+        group by root.tenant_id
+        order by root.tenant_id
     </select>
+
+    <select id="selectArchivableInstanceIds" resultType="java.lang.Long">
+        select root.id
+        from batch.job_instance root
+        where root.instance_status in (
+            'SUCCESS', 'PARTIAL_FAILED', 'FAILED', 'CANCELLED', 'TERMINATED',
+            'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN'
+        )
+          and root.finished_at is not null
+          and root.finished_at &lt; #{cutoff}
+          and not <include refid="hasInvalidArchiveReference"/>
+          and not exists (
+              select 1
+              from batch.workflow_node_run node_run
+              join batch.workflow_run workflow on workflow.id = node_run.workflow_run_id
+              where node_run.job_instance_id = root.id
+                and workflow.related_job_instance_id is distinct from root.id
+          )
+        order by root.id asc
+        limit #{limit}
+        for update of root skip locked
+    </select>
+
+    <!-- 根实例和 Pipeline 父行已持锁；复制前锁定本批会删除的现存子行。 -->
+    <select id="lockRuntimeTreeRows" resultType="long" flushCache="true">
+        with
+        partitions as materialized (
+            select id from batch.job_partition
+            where job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        ),
+        tasks as materialized (
+            select id from batch.job_task
+            where job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        ),
+        job_steps as materialized (
+            select id from batch.job_step_instance
+            where job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        ),
+        pipeline_steps as materialized (
+            select id from batch.pipeline_step_run
+            where pipeline_instance_id in (select id from batch.pipeline_instance where related_job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+            order by id for update
+        ),
+        dispatches as materialized (
+            select id from batch.file_dispatch_record
+            where pipeline_instance_id in (select id from batch.pipeline_instance where related_job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+            order by id for update
+        ),
+        workflow_runs as materialized (
+            select id from batch.workflow_run
+            where related_job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        ),
+        workflow_nodes as materialized (
+            select id from batch.workflow_node_run
+            where workflow_run_id in (select id from batch.workflow_run where related_job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+            order by id for update
+        ),
+        execution_logs as materialized (
+            select id from batch.job_execution_log
+            where job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        ),
+        compensations as materialized (
+            select id from batch.compensation_command
+            where related_job_instance_id in <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            order by id for update
+        )
+        select (select count(*) from partitions) +
+               (select count(*) from tasks) +
+               (select count(*) from job_steps) +
+               (select count(*) from pipeline_steps) +
+               (select count(*) from dispatches) +
+               (select count(*) from workflow_runs) +
+               (select count(*) from workflow_nodes) +
+               (select count(*) from execution_logs) +
+               (select count(*) from compensations)
+    </select>
+
+    <select id="selectPipelineInstanceIdsForUpdate" resultType="java.lang.Long">
+        select id from batch.pipeline_instance
+        where related_job_instance_id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by id
+        for update
+    </select>
+
+    <select id="selectPipelineProgressIdsForUpdate" resultType="java.lang.Long">
+        select id from batch.pipeline_progress
+        where pipeline_instance_id in
+        <foreach collection="pipelineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by id
+        for update
+    </select>
+
+    <!-- 位点只处理已持父锁的固定 Pipeline 集合；FK 阻止此后首次插入，行锁阻止已有位点改写。 -->
+    <insert id="archivePipelineProgressByPipelineIds">
+        insert into archive.pipeline_progress_archive (
+            id, tenant_id, pipeline_instance_id, stage, position_marker, processed_count,
+            completed, completed_at, created_at, updated_at
+        )
+        select id, tenant_id, pipeline_instance_id, stage, position_marker, processed_count,
+            completed, completed_at, created_at, updated_at
+        from batch.pipeline_progress
+        where pipeline_instance_id in
+        <foreach collection="pipelineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+
+    <select id="countPipelineCheckpointArchiveMismatches" resultType="long">
+        select
+            (select count(*) from batch.pipeline_instance hot
+             left join archive.pipeline_instance_archive cold on cold.id = hot.id
+             where hot.id in
+             <foreach collection="pipelineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+               and to_jsonb(hot) is distinct from to_jsonb(cold))
+            +
+            (select count(*) from batch.pipeline_progress hot
+             left join archive.pipeline_progress_archive cold on cold.id = hot.id
+             where hot.pipeline_instance_id in
+             <foreach collection="pipelineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+               and to_jsonb(hot) is distinct from to_jsonb(cold))
+    </select>
+
+    <delete id="deletePipelineProgressByPipelineIds">
+        delete from batch.pipeline_progress progress
+        using batch.pipeline_instance pipeline
+        where progress.pipeline_instance_id = pipeline.id
+          and progress.tenant_id = pipeline.tenant_id
+          and pipeline.id in
+        <foreach collection="pipelineIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
 
     <!-- ============ 冷表归档（按 instanceIds 列表，先复制后删除）============ -->
 
@@ -41,9 +289,12 @@
             expected_partition_count,
             success_partition_count,
             failed_partition_count,
+            cancelled_partition_count,
+            terminated_partition_count,
             trace_id,
             params_snapshot,
             started_at,
+            execution_started_at,
             finished_at,
             created_at,
             updated_at,
@@ -87,9 +338,12 @@
             expected_partition_count,
             success_partition_count,
             failed_partition_count,
+            cancelled_partition_count,
+            terminated_partition_count,
             trace_id,
             params_snapshot,
             started_at,
+            execution_started_at,
             finished_at,
             created_at,
             updated_at,
@@ -120,13 +374,24 @@
         on conflict (id) do nothing
     </insert>
 
+    <select id="countJobInstanceArchiveMismatches" resultType="long">
+        select count(*)
+        from batch.job_instance hot
+        left join archive.job_instance_archive cold on cold.id = hot.id
+        where hot.id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+    </select>
+
     <insert id="archiveJobPartitionsByInstanceIds">
         insert into archive.job_partition_archive (
-            id, tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group,
+            id, tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_key,
+            source_file_id, template_code, target_ref, partition_status, worker_group,
             worker_code, lease_expire_at, retry_count, business_key, idempotency_key, input_snapshot,
             output_summary, started_at, finished_at, created_at, updated_at, version,
             current_invocation_id, invocation_started_at, dry_run)
-        select id, tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group,
+        select id, tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_key,
+            source_file_id, template_code, target_ref, partition_status, worker_group,
             worker_code, lease_expire_at, retry_count, business_key, idempotency_key, input_snapshot,
             output_summary, started_at, finished_at, created_at, updated_at, version,
             current_invocation_id, invocation_started_at, dry_run
@@ -138,21 +403,36 @@
 
     <insert id="archiveJobTasksByInstanceIds">
         insert into archive.job_task_archive (
-            id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
+            id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id,
+            task_type, task_seq, task_status,
             assigned_worker_code, task_payload, result_summary, error_code, error_message, started_at,
             finished_at, created_at, updated_at, version, error_key, error_args, priority, failure_class,
             dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
-            task_timeout_seconds)
-        select id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
+            task_timeout_seconds, process_staging_generation_id, process_staging_batch_key,
+            external_outcome_resolution_version, external_outcome_resolution_trigger_request_id,
+            external_outcome_resolution_consumed_at)
+        select id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id,
+            task_type, task_seq, task_status,
             assigned_worker_code, task_payload, result_summary, error_code, error_message, started_at,
             finished_at, created_at, updated_at, version, error_key, error_args, priority, failure_class,
             dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
-            task_timeout_seconds
+            task_timeout_seconds, process_staging_generation_id, process_staging_batch_key,
+            external_outcome_resolution_version, external_outcome_resolution_trigger_request_id,
+            external_outcome_resolution_consumed_at
         from batch.job_task
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         on conflict (id) do nothing
     </insert>
+
+    <select id="countJobTaskArchiveMismatches" resultType="long">
+        select count(*)
+        from batch.job_task hot
+        left join archive.job_task_archive cold on cold.id = hot.id
+        where hot.job_instance_id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+          and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+    </select>
 
     <insert id="archiveJobStepInstancesByInstanceIds">
         insert into archive.job_step_instance_archive (
@@ -170,10 +450,12 @@
 
     <insert id="archivePipelineInstancesByInstanceIds">
         insert into archive.pipeline_instance_archive (
-            id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+            id, tenant_id, system_pipeline_code, system_pipeline_version,
+            job_code, pipeline_type, file_id,
             related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
             finished_at, created_at, updated_at)
-        select id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id,
+        select id, tenant_id, system_pipeline_code, system_pipeline_version,
+            job_code, pipeline_type, file_id,
             related_job_instance_id, current_stage, last_success_stage, run_status, trace_id, started_at,
             finished_at, created_at, updated_at
         from batch.pipeline_instance
@@ -265,18 +547,37 @@
             where ji.id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
               and ji.related_file_id is not null
+              and ji.tenant_id = fr.tenant_id
             union
             select pi.file_id
             from batch.pipeline_instance pi
             where pi.related_job_instance_id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
               and pi.file_id is not null
+              and pi.tenant_id = fr.tenant_id
+            union
+            select step.related_file_id
+            from batch.job_step_instance step
+            where step.job_instance_id in
+            <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              and step.related_file_id is not null
+              and step.tenant_id = fr.tenant_id
+            union
+            select command.related_file_id
+            from batch.compensation_command command
+            where command.related_job_instance_id in
+            <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              and command.related_file_id is not null
+              and command.tenant_id = fr.tenant_id
             union
             select fdr.file_id
             from batch.file_dispatch_record fdr
-            join batch.pipeline_instance pi on pi.id = fdr.pipeline_instance_id
+            join batch.pipeline_instance pi
+              on pi.id = fdr.pipeline_instance_id
+             and pi.tenant_id = fdr.tenant_id
             where pi.related_job_instance_id in
             <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+              and fdr.tenant_id = fr.tenant_id
         )
         on conflict (id) do nothing
     </insert>
@@ -299,10 +600,14 @@
 
     <insert id="archiveWorkflowRunsByInstanceIds">
         insert into archive.workflow_run_archive (
-            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
-            current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run)
-        select id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date, run_status,
-            current_node_code, trace_id, started_at, finished_at, created_at, updated_at, dry_run
+            id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id,
+            trigger_request_id, workflow_version_snapshot, data_interval_start, data_interval_end,
+            execution_snapshot, biz_date, run_status, current_node_code, trace_id, started_at,
+            finished_at, created_at, updated_at, dry_run)
+        select id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id,
+            trigger_request_id, workflow_version_snapshot, data_interval_start, data_interval_end,
+            execution_snapshot, biz_date, run_status, current_node_code, trace_id, started_at,
+            finished_at, created_at, updated_at, dry_run
         from batch.workflow_run
         where related_job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -311,12 +616,16 @@
 
     <insert id="archiveWorkflowNodeRunsByInstanceIds">
         insert into archive.workflow_node_run_archive (
-            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
+            id, workflow_run_id, job_instance_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
             error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
-            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count)
-        select id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
+            skip_reason_code, skip_reason,
+            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count,
+            source_payload_protected)
+        select id, workflow_run_id, job_instance_id, node_code, node_type, run_seq, node_status, retry_count, error_code,
             error_message, started_at, finished_at, duration_ms, output, error_key, error_args,
-            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count
+            skip_reason_code, skip_reason,
+            sensor_next_probe_at, sensor_last_probe_at, sensor_probe_count, sensor_error_count,
+            source_payload_protected
         from batch.workflow_node_run
         where workflow_run_id in (
             select id from batch.workflow_run where related_job_instance_id in
@@ -339,12 +648,12 @@
 
     <insert id="archiveCompensationCommandsByInstanceIds">
         insert into archive.compensation_command_archive (
-            id, tenant_id, command_no, compensation_type, target_id, job_code, biz_date, batch_no,
-            related_job_instance_id, related_file_id, approval_id, operator_id, reason, strategy,
+            id, tenant_id, command_no, compensation_type, target_id, source_workflow_run_id, job_code, biz_date, batch_no,
+            related_job_instance_id, related_file_id, approval_id, request_fingerprint, operator_id, reason, strategy,
             command_status, trace_id, result_summary, error_code, error_message, created_at, finished_at,
             error_key, error_args)
-        select id, tenant_id, command_no, compensation_type, target_id, job_code, biz_date, batch_no,
-            related_job_instance_id, related_file_id, approval_id, operator_id, reason, strategy,
+        select id, tenant_id, command_no, compensation_type, target_id, source_workflow_run_id, job_code, biz_date, batch_no,
+            related_job_instance_id, related_file_id, approval_id, request_fingerprint, operator_id, reason, strategy,
             command_status, trace_id, result_summary, error_code, error_message, created_at, finished_at,
             error_key, error_args
         from batch.compensation_command
@@ -352,6 +661,72 @@
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
         on conflict (id) do nothing
     </insert>
+
+    <sql id="ArchiveCandidateIds">
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </sql>
+
+    <!-- 只核对随后会删除的运行树行；共享 file_record 不在本批删除范围。 -->
+    <select id="countRuntimeTreeArchiveMismatches" resultType="long">
+        select count(*) from (
+            select 1
+            from batch.job_partition hot
+            left join archive.job_partition_archive cold on cold.id = hot.id
+            where hot.job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.job_step_instance hot
+            left join archive.job_step_instance_archive cold on cold.id = hot.id
+            where hot.job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.pipeline_instance hot
+            left join archive.pipeline_instance_archive cold on cold.id = hot.id
+            where hot.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.pipeline_step_run hot
+            join batch.pipeline_instance parent on parent.id = hot.pipeline_instance_id
+            left join archive.pipeline_step_run_archive cold on cold.id = hot.id
+            where parent.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.file_dispatch_record hot
+            join batch.pipeline_instance parent on parent.id = hot.pipeline_instance_id
+            left join archive.file_dispatch_record_archive cold on cold.id = hot.id
+            where parent.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.workflow_run hot
+            left join archive.workflow_run_archive cold on cold.id = hot.id
+            where hot.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.workflow_node_run hot
+            join batch.workflow_run parent on parent.id = hot.workflow_run_id
+            left join archive.workflow_node_run_archive cold on cold.id = hot.id
+            where parent.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.job_execution_log hot
+            left join archive.job_execution_log_archive cold on cold.id = hot.id
+            where hot.job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+            union all
+            select 1
+            from batch.compensation_command hot
+            left join archive.compensation_command_archive cold on cold.id = hot.id
+            where hot.related_job_instance_id in <include refid="ArchiveCandidateIds"/>
+              and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+        ) mismatches
+    </select>
 
     <!-- ============ 级联删（按 instanceIds 列表）============ -->
 
@@ -444,6 +819,36 @@
     <delete id="deleteJobInstancesByIds">
         delete from batch.job_instance
         where id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </delete>
+
+    <!-- 父实例已FOR UPDATE，新增检查写入的KEY SHARE围栏会等待；子行也锁定防止并发修改。 -->
+    <select id="selectDataQualityCheckIdsForUpdate" resultType="java.lang.Long">
+        select check_row.id from batch.data_quality_check check_row
+        join batch.job_instance root on root.id = check_row.job_instance_id and root.tenant_id = check_row.tenant_id
+        where root.id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        order by check_row.id for update of check_row
+    </select>
+    <insert id="archiveDataQualityChecksByInstanceIds">
+        insert into archive.data_quality_check_archive (id, tenant_id, job_instance_id, rule_id, rule_code, rule_type, severity, status, metrics_json, failure_sample, error_message, checked_at, created_at, updated_at)
+        select hot.id, hot.tenant_id, hot.job_instance_id, hot.rule_id, hot.rule_code, hot.rule_type, hot.severity, hot.status, hot.metrics_json, hot.failure_sample, hot.error_message, hot.checked_at, hot.created_at, hot.updated_at from batch.data_quality_check hot
+        join batch.job_instance root on root.id = hot.job_instance_id and root.tenant_id = hot.tenant_id
+        where root.id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        on conflict (id) do nothing
+    </insert>
+    <select id="countDataQualityCheckArchiveMismatches" resultType="int">
+        select count(*) from batch.data_quality_check hot
+        join batch.job_instance root on root.id = hot.job_instance_id and root.tenant_id = hot.tenant_id
+        left join archive.data_quality_check_archive cold on cold.id = hot.id
+        where root.id in
+        <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+        and (cold.id is null or to_jsonb(hot) is distinct from to_jsonb(cold))
+    </select>
+    <delete id="deleteDataQualityChecksByInstanceIds">
+        delete from batch.data_quality_check hot using batch.job_instance root
+        where root.id = hot.job_instance_id and root.tenant_id = hot.tenant_id and root.id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
     </delete>
 </mapper>

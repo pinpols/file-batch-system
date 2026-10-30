@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleSystemParameterMapper;
+import io.github.pinpols.batch.console.domain.observability.param.ConsoleSystemParameterUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.observability.RedisSystemParameterCacheStore;
 import java.time.Duration;
@@ -94,7 +95,14 @@ class ConsoleSystemParameterServiceTest {
   void shouldUpsertAndClearCache() {
     service.upsert("t1", "batch.size", "300", "batch size config", "admin");
 
-    verify(repository).upsert("t1", "batch.size", "300", "batch size config", "admin");
+    verify(repository)
+        .upsert(ConsoleSystemParameterUpsertParam.builder()
+            .tenantId("t1")
+            .paramKey("batch.size")
+            .paramValue("300")
+            .description("batch size config")
+            .operator("admin")
+            .build());
     verify(redisTemplate).delete("sys-param:t1:batch.size");
   }
 

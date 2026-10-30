@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：ADR-035 Phase 3:per-tenant Kafka SASL/SCRAM 用户 + ACL。
+# 用法：在仓库根目录执行 bash scripts/data/init-tenant-kafka-acl.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # init-tenant-kafka-acl.sh — ADR-035 Phase 3:per-tenant Kafka SASL/SCRAM 用户 + ACL
 #
@@ -18,7 +20,7 @@
 # admin-client.properties 必须有 sasl 管理员凭据(创 SCRAM user / ACL 用)。
 #
 # 输出:把生成的 sasl.jaas.config 字符串写到 stdout,运维拷贝到 K8s Secret
-# (worker-tenant.yaml envFrom → BATCH_KAFKA_SASL_JAAS)。
+# 部署侧通过 worker-tenant.yaml 的 envFrom 注入 BATCH_KAFKA_SASL_JAAS。
 #
 # 见 docs/runbook/per-tenant-worker-onboarding.md §kafka-acl
 # =========================================================
@@ -33,6 +35,8 @@ admin_config="${ADMIN_CONFIG:?required, e.g. /tmp/admin-client.properties}"
 tenant_id="${TENANT_ID:?required}"
 tenant_password="${TENANT_PASSWORD:?required, 32+ chars random}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
+topic_namespace="${BATCH_KAFKA_NAMESPACE:-}"
+batch_validate_kafka_namespace "$topic_namespace"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
 
 # 与 init-tenant-topics.sh 保持一致的 sanitize 规则
@@ -42,6 +46,7 @@ sanitize() {
 safe_tenant="$(sanitize "${tenant_id}")"
 scram_user="batch-tenant-${safe_tenant}"
 group_id="${safe_tenant}-sample-workers"
+group_id="$(batch_namespace_kafka_name "$group_id" "$topic_namespace")"
 
 echo "==> [1/3] 创建 SCRAM-SHA-512 用户 ${scram_user}"
 "${kafka_container_bin_dir}/kafka-configs.sh" \
@@ -57,6 +62,7 @@ for raw_type in $(IFS=','; echo $worker_types_csv); do
   wt="$(echo "${raw_type}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
   [ -n "${wt}" ] || continue
   topic="batch.task.dispatch.${wt}.${safe_tenant}"
+  topic="$(batch_namespace_kafka_name "$topic" "$topic_namespace")"
   echo "    + topic ${topic} → User:${scram_user} READ + DESCRIBE"
   "${kafka_container_bin_dir}/kafka-acls.sh" \
     --bootstrap-server "${bootstrap_server}" \

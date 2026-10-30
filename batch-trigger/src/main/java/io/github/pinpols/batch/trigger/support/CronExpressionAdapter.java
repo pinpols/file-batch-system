@@ -44,7 +44,8 @@ public class CronExpressionAdapter {
   public Instant next(String cronExpr, ZoneId zone, Instant after) {
     CronExpression expression = parseOrCache(cronExpr, zone);
     // setTimeZone 不再调（已在构建时固化），避免跨线程写
-    Date nextFire = expression.getNextValidTimeAfter(Date.from(after));
+    Date afterDate = Date.from(after);
+    Date nextFire = expression.getNextValidTimeAfter(afterDate);
     return EmptyChecks.isNull(nextFire) ? null : nextFire.toInstant();
   }
 

@@ -32,27 +32,25 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_PARAMS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_NODE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PARAM_SCHEMA;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PIPELINE_NAME;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PIPELINE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_QUEUE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RECEIPT_POLICY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_PIPELINE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_MAX_COUNT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_POLICY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_ENABLED;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SHARD_STRATEGY;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SINGLE_JOB_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SOFT_RUNTIME_SEVERITY;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STAGE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SECONDS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_START_GRACE_SEVERITY;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_STEP_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TENANT_ID;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEOUT_SECONDS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TIMEZONE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TO_NODE_CODE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_TRIGGER_MODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_VERSION;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WATERMARK_FIELD;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WINDOW_CODE;
@@ -64,28 +62,27 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PIPELINE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.STEP_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_DEF_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_EDGE_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WF_NODE_SHEET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BATCH_WINDOW_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.BUSINESS_CALENDAR_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.CHANNEL_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.FILE_TEMPLATE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.JOB_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.PIPELINE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.RESOURCE_QUEUE_COLUMNS;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.STEP_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_DEF_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_EDGE_COLUMNS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WF_NODE_COLUMNS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.WORKFLOW_MONITORING_POLICY_COLUMNS;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.addDropdownValidation;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.optionalColumn;
 import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.requiredColumn;
 
+import io.github.pinpols.batch.common.enums.AlertSeverity;
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.CatchUpPolicyType;
 import io.github.pinpols.batch.common.enums.DictEnum;
@@ -111,7 +108,9 @@ import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.ColumnGuide;
+import io.github.pinpols.batch.console.support.excel.DropdownValidationSpec;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -138,7 +137,10 @@ public final class ConfigPackageSheetSpecs {
   private static final String SCENARIO_IMPORT = "IMPORT";
   private static final String SCENARIO_EXPORT = "EXPORT";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
-  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {"WARN", "ERROR", "CRITICAL"};
+  private static final String DEFAULT_MONITORING_SEVERITY = AlertSeverity.WARN.code();
+  private static final String[] JOB_MONITORING_SEVERITY_CHOICES = {
+    DEFAULT_MONITORING_SEVERITY, AlertSeverity.ERROR.code(), AlertSeverity.CRITICAL.code()
+  };
 
   /**
    * 枚举下拉数组 — 单一权威源，全部从 enum 声明顺序 + ConfigPackageExcelValidator 集合派生。
@@ -207,7 +209,9 @@ public final class ConfigPackageSheetSpecs {
   private static final String[] WORKFLOW_TYPE_DROPDOWN =
       DictEnum.codeList(WorkflowType.class).toArray(String[]::new);
   private static final String[] WORKFLOW_NODE_TYPE_DROPDOWN =
-      DictEnum.codeList(WorkflowNodeType.class).toArray(String[]::new);
+      DictEnum.codeList(WorkflowNodeType.class).stream()
+          .filter(code -> !WorkflowNodeType.TASK.code().equals(code))
+          .toArray(String[]::new);
   private static final String[] WORKFLOW_EDGE_TYPE_DROPDOWN =
       DictEnum.codeList(WorkflowEdgeType.class).toArray(String[]::new);
   private static final String[] FILE_CHECKSUM_TYPE_DROPDOWN =
@@ -256,7 +260,7 @@ public final class ConfigPackageSheetSpecs {
 
   /**
    * import 的
-   * query_param_schema.jdbcMappedImport：schema/table/columnMappings/conflictColumns/systemBindings。
+   * query_param_schema.jdbcMappedImport 的字段包括 schema、table、columnMappings、conflictColumns 和 systemBindings。
    */
   private static final String EXAMPLE_IMPORT_QUERY_PARAM_SCHEMA =
       GUIDANCE.fragment("importQueryParamSchema");
@@ -311,12 +315,7 @@ public final class ConfigPackageSheetSpecs {
               Map.entry("validation_rule_set", EXAMPLE_IMPORT_VALIDATION_RULE_SET),
               Map.entry("default_query_sql", EXAMPLE_EXPORT_QUERY_SQL))),
       Map.entry(CHANNEL_SHEET, Map.of(COL_CONFIG_JSON, EXAMPLE_CHANNEL_CONFIG_JSON)),
-      Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)),
-      Map.entry(STEP_SHEET, Map.of("step_params", """
-              PROCESS: %s
-              DISPATCH: %s
-              """.formatted(
-          EXAMPLE_PROCESS_STEP_PARAMS, EXAMPLE_DISPATCH_STEP_PARAMS).stripTrailing())));
+      Map.entry(JOB_SHEET, Map.of(COL_DEFAULT_PARAMS, EXAMPLE_JOB_DEFAULT_PARAMS)));
 
   private static final Set<String> FILE_TEMPLATE_TYPES = DictEnum.codes(FileTemplateType.class);
   private static final Set<String> FILE_FORMAT_TYPES = DictEnum.codes(FileTemplateFormat.class);
@@ -344,46 +343,58 @@ public final class ConfigPackageSheetSpecs {
       BiConsumer<Sheet, Locale> validationApplier) {}
 
   public List<SheetDef> build() {
-    return List.of(
+    Map<String, ColumnGuide> resourceQueueGuides = buildResourceQueueGuides();
+    Map<String, ColumnGuide> businessCalendarGuides = buildBusinessCalendarGuides();
+    Map<String, ColumnGuide> batchWindowGuides = buildBatchWindowGuides();
+    Map<String, ColumnGuide> jobGuides = buildJobGuides();
+    Map<String, ColumnGuide> jobMonitoringPolicyGuides = buildJobMonitoringPolicyGuides();
+    Map<String, ColumnGuide> channelGuides = buildChannelGuides();
+    Map<String, ColumnGuide> fileTemplateGuides = buildFileTemplateGuides();
+    Map<String, ColumnGuide> workflowDefinitionGuides = buildWfDefGuides();
+    Map<String, ColumnGuide> workflowNodeGuides = buildWfNodeGuides();
+    Map<String, ColumnGuide> workflowEdgeGuides = buildWfEdgeGuides();
+    Map<String, ColumnGuide> workflowMonitoringPolicyGuides = buildWorkflowMonitoringPolicyGuides();
+
+    List<SheetDef> sheetDefinitions = List.of(
         new SheetDef(
             RESOURCE_QUEUE_SHEET,
             RESOURCE_QUEUE_COLUMNS,
-            buildResourceQueueGuides(),
+            resourceQueueGuides,
             this::applyResourceQueueValidations),
         new SheetDef(
             BUSINESS_CALENDAR_SHEET,
             BUSINESS_CALENDAR_COLUMNS,
-            buildBusinessCalendarGuides(),
+            businessCalendarGuides,
             this::applyBusinessCalendarValidations),
         new SheetDef(
             BATCH_WINDOW_SHEET,
             BATCH_WINDOW_COLUMNS,
-            buildBatchWindowGuides(),
+            batchWindowGuides,
             this::applyBatchWindowValidations),
-        new SheetDef(JOB_SHEET, JOB_COLUMNS, buildJobGuides(), this::applyJobValidations),
+        new SheetDef(JOB_SHEET, JOB_COLUMNS, jobGuides, this::applyJobValidations),
         new SheetDef(
             JOB_MONITORING_POLICY_SHEET,
             JOB_MONITORING_POLICY_COLUMNS,
-            buildJobMonitoringPolicyGuides(),
+            jobMonitoringPolicyGuides,
             this::applyJobMonitoringPolicyValidations),
-        new SheetDef(
-            CHANNEL_SHEET, CHANNEL_COLUMNS, buildChannelGuides(), this::applyChannelValidations),
+        new SheetDef(CHANNEL_SHEET, CHANNEL_COLUMNS, channelGuides, this::applyChannelValidations),
         new SheetDef(
             FILE_TEMPLATE_SHEET,
             FILE_TEMPLATE_COLUMNS,
-            buildFileTemplateGuides(),
+            fileTemplateGuides,
             this::applyFileTemplateValidations),
         new SheetDef(
-            PIPELINE_SHEET,
-            PIPELINE_COLUMNS,
-            buildPipelineGuides(),
-            this::applyPipelineValidations),
-        new SheetDef(STEP_SHEET, STEP_COLUMNS, buildStepGuides(), this::applyStepValidations),
-        new SheetDef(WF_DEF_SHEET, WF_DEF_COLUMNS, buildWfDefGuides(), this::applyWfDefValidations),
+            WF_DEF_SHEET, WF_DEF_COLUMNS, workflowDefinitionGuides, this::applyWfDefValidations),
         new SheetDef(
-            WF_NODE_SHEET, WF_NODE_COLUMNS, buildWfNodeGuides(), this::applyWfNodeValidations),
+            WF_NODE_SHEET, WF_NODE_COLUMNS, workflowNodeGuides, this::applyWfNodeValidations),
         new SheetDef(
-            WF_EDGE_SHEET, WF_EDGE_COLUMNS, buildWfEdgeGuides(), this::applyWfEdgeValidations));
+            WF_EDGE_SHEET, WF_EDGE_COLUMNS, workflowEdgeGuides, this::applyWfEdgeValidations),
+        new SheetDef(
+            WORKFLOW_MONITORING_POLICY_SHEET,
+            WORKFLOW_MONITORING_POLICY_COLUMNS,
+            workflowMonitoringPolicyGuides,
+            this::applyJobMonitoringPolicyValidations));
+    return sheetDefinitions;
   }
 
   /**
@@ -424,12 +435,10 @@ public final class ConfigPackageSheetSpecs {
           "EXPORT_EXCEL",
           "EXPORT_JSON" -> {
         includedSheets.add(FILE_TEMPLATE_SHEET);
-        includePipelineSheets(includedSheets);
       }
-      case "PROCESS" -> includePipelineSheets(includedSheets);
+      case "PROCESS" -> {}
       case "DISPATCH" -> {
         includedSheets.add(CHANNEL_SHEET);
-        includePipelineSheets(includedSheets);
       }
       case SCENARIO_WORKFLOW -> {
         includedSheets.add(FILE_TEMPLATE_SHEET);
@@ -437,7 +446,7 @@ public final class ConfigPackageSheetSpecs {
         includedSheets.add(WF_DEF_SHEET);
         includedSheets.add(WF_NODE_SHEET);
         includedSheets.add(WF_EDGE_SHEET);
-        includePipelineSheets(includedSheets);
+        includedSheets.add(WORKFLOW_MONITORING_POLICY_SHEET);
       }
       case "SCHEDULE" -> {
         includedSheets.add(BUSINESS_CALENDAR_SHEET);
@@ -491,6 +500,7 @@ public final class ConfigPackageSheetSpecs {
                 COL_JOB_TYPE,
                 ConfigPackageExcelSchema.COL_SCHEDULE_TYPE);
           case JOB_MONITORING_POLICY_SHEET -> Set.of(COL_JOB_CODE);
+          case WORKFLOW_MONITORING_POLICY_SHEET -> Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_VERSION);
           case CHANNEL_SHEET ->
             Set.of(
                 COL_CHANNEL_CODE,
@@ -504,17 +514,6 @@ public final class ConfigPackageSheetSpecs {
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_NAME,
                 ConfigPackageExcelSchema.FileTemplate.COL_TEMPLATE_TYPE,
                 ConfigPackageExcelSchema.FileTemplate.COL_FILE_FORMAT_TYPE);
-          case PIPELINE_SHEET ->
-            Set.of(COL_JOB_CODE, COL_PIPELINE_NAME, COL_PIPELINE_TYPE, COL_VERSION);
-          case STEP_SHEET ->
-            Set.of(
-                COL_JOB_CODE,
-                COL_VERSION,
-                COL_STEP_CODE,
-                COL_STEP_NAME,
-                COL_STAGE_CODE,
-                ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
-                ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE);
           case WF_DEF_SHEET ->
             Set.of(COL_WORKFLOW_CODE, COL_WORKFLOW_NAME, COL_WORKFLOW_TYPE, COL_VERSION);
           case WF_NODE_SHEET ->
@@ -535,11 +534,6 @@ public final class ConfigPackageSheetSpecs {
     return required;
   }
 
-  private static void includePipelineSheets(Set<String> includedSheets) {
-    includedSheets.add(PIPELINE_SHEET);
-    includedSheets.add(STEP_SHEET);
-  }
-
   private static List<String> projectedColumns(
       String sheetName, List<String> allColumns, Set<String> scenarios) {
     Set<String> selected =
@@ -553,6 +547,8 @@ public final class ConfigPackageSheetSpecs {
                 COL_SCHEDULE_TYPE,
                 COL_SCHEDULE_EXPR,
                 COL_DEPENDS_ON_JOB_CODE,
+                ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+                ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
                 COL_CALENDAR_CODE,
                 COL_WINDOW_CODE,
                 COL_DEFAULT_PARAMS,
@@ -577,26 +573,17 @@ public final class ConfigPackageSheetSpecs {
                 COL_COMPLETION_DEADLINE_DAY_OFFSET,
                 COL_DEPENDENCY_COMPLETION_WINDOW_SECONDS,
                 COL_COMPLETION_DEADLINE_SEVERITY);
-          case PIPELINE_SHEET ->
+          case WORKFLOW_MONITORING_POLICY_SHEET ->
             Set.of(
-                COL_JOB_CODE,
-                COL_PIPELINE_NAME,
-                COL_PIPELINE_TYPE,
-                COL_BIZ_TYPE,
-                COL_VERSION,
-                COL_ENABLED,
-                COL_DESCRIPTION);
-          case STEP_SHEET ->
-            Set.of(
-                COL_JOB_CODE,
-                COL_VERSION,
-                COL_STEP_CODE,
-                COL_STEP_NAME,
-                COL_STAGE_CODE,
-                ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
-                ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
-                ConfigPackageExcelSchema.PipelineStep.COL_STEP_PARAMS,
-                COL_ENABLED);
+                COL_WORKFLOW_CODE,
+                COL_WORKFLOW_VERSION,
+                COL_SOFT_RUNTIME_SECONDS,
+                COL_SOFT_RUNTIME_SEVERITY,
+                COL_START_GRACE_SECONDS,
+                COL_START_GRACE_SEVERITY,
+                COL_COMPLETION_DEADLINE_LOCAL_TIME,
+                COL_COMPLETION_DEADLINE_DAY_OFFSET,
+                COL_COMPLETION_DEADLINE_SEVERITY);
           case WF_NODE_SHEET ->
             Set.of(
                 COL_WORKFLOW_CODE,
@@ -605,7 +592,6 @@ public final class ConfigPackageSheetSpecs {
                 COL_NODE_NAME,
                 COL_NODE_TYPE,
                 COL_RELATED_JOB_CODE,
-                COL_RELATED_PIPELINE_CODE,
                 COL_WINDOW_CODE,
                 COL_NODE_ORDER,
                 COL_NODE_PARAMS,
@@ -619,10 +605,11 @@ public final class ConfigPackageSheetSpecs {
 
   private static Set<String> fileTemplateColumns(Set<String> scenarios) {
     List<ConfigPackageFileScenario> profiles = fileProfiles(scenarios);
-    if (EmptyChecks.isNotEmpty(profiles)
+    boolean onlyNonWorkflowProfilesAreSelected = EmptyChecks.isNotEmpty(profiles)
         && !scenarios.contains(SCENARIO_IMPORT)
         && !scenarios.contains(SCENARIO_EXPORT)
-        && !scenarios.contains(SCENARIO_WORKFLOW)) {
+        && !scenarios.contains(SCENARIO_WORKFLOW);
+    if (onlyNonWorkflowProfilesAreSelected) {
       return focusedFileTemplateColumns(profiles);
     }
     Set<String> selected = new LinkedHashSet<>(Set.of(
@@ -667,9 +654,10 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private static Optional<Set<String>> focusedFileFormats(Set<String> scenarios) {
-    if (scenarios.contains(SCENARIO_IMPORT)
+    boolean scenarioDoesNotRestrictFileFormat = scenarios.contains(SCENARIO_IMPORT)
         || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains(SCENARIO_WORKFLOW)) {
+        || scenarios.contains(SCENARIO_WORKFLOW);
+    if (scenarioDoesNotRestrictFileFormat) {
       return Optional.empty();
     }
     Set<String> formats = new LinkedHashSet<>();
@@ -682,9 +670,10 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private static String focusedFileDirection(Set<String> scenarios) {
-    if (scenarios.contains(SCENARIO_IMPORT)
+    boolean scenarioDoesNotRestrictFileDirection = scenarios.contains(SCENARIO_IMPORT)
         || scenarios.contains(SCENARIO_EXPORT)
-        || scenarios.contains(SCENARIO_WORKFLOW)) {
+        || scenarios.contains(SCENARIO_WORKFLOW);
+    if (scenarioDoesNotRestrictFileDirection) {
       return null;
     }
     Set<String> directions = fileProfiles(scenarios).stream()
@@ -1041,8 +1030,15 @@ public final class ConfigPackageSheetSpecs {
       Locale locale) {
     int columnIndex = columnIndex(sheet, column);
     if (columnIndex >= 0) {
-      addDropdownValidation(
-          sheet, columnIndex, choices, titleKey, promptKey, messageSource, locale);
+      DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
+          .values(choices)
+          .promptTitle(titleKey)
+          .promptText(promptKey)
+          .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
+          .messageSource(messageSource)
+          .locale(locale)
+          .build();
+      addDropdownValidation(sheet, columnIndex, validationSpec);
     }
   }
 
@@ -1064,59 +1060,6 @@ public final class ConfigPackageSheetSpecs {
     return DictEnum.codeList(enumType).stream()
         .filter(allowedValues::contains)
         .toArray(String[]::new);
-  }
-
-  private void applyPipelineValidations(Sheet sheet, Locale locale) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_PIPELINE_TYPE,
-        PIPELINE_TYPE_DROPDOWN,
-        "excel.pipeline.def.pipeline_type.prompt_title",
-        "excel.pipeline.def.pipeline_type.prompt_box",
-        locale);
-    boolDropdown(sheet, COL_ENABLED, locale);
-  }
-
-  void applyStepValidations(Sheet sheet, Locale locale) {
-    applyStepValidations(sheet, locale, Map.of());
-  }
-
-  void applyStepValidations(
-      Sheet sheet, Locale locale, Map<String, List<String>> registeredImplCodesByModule) {
-    addColumnDropdownValidation(
-        sheet,
-        COL_STAGE_CODE,
-        STAGE_CODE_DROPDOWN,
-        "excel.pipeline.step.stage_code.prompt_title",
-        "excel.pipeline.step.stage_code.prompt_box",
-        locale);
-    addColumnDropdownValidation(
-        sheet,
-        COL_RETRY_POLICY,
-        RETRY_POLICY_DROPDOWN,
-        "excel.pipeline.step.retry_policy.prompt_title",
-        "excel.pipeline.step.retry_policy.prompt_box",
-        locale);
-    // impl_code(第 7 列 index=6):动态下拉,格式 MODULE:beanName 让用户一眼看出模块归属。
-    // registry 空时不加下拉(首次部署没 worker 启动过也能下载模板)。
-    if (EmptyChecks.isNotEmpty(registeredImplCodesByModule)) {
-      List<String> options = new ArrayList<>();
-      registeredImplCodesByModule.forEach((module, beans) -> {
-        for (String bean : beans) {
-          options.add(module + ":" + bean);
-        }
-      });
-      if (EmptyChecks.isNotEmpty(options)) {
-        addColumnDropdownValidation(
-            sheet,
-            ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
-            options.toArray(String[]::new),
-            "excel.package.impl_code.prompt_title",
-            "excel.package.impl_code.prompt_box",
-            locale);
-      }
-    }
-    boolDropdown(sheet, COL_ENABLED, locale);
   }
 
   private void applyWfDefValidations(Sheet sheet, Locale locale) {
@@ -1167,18 +1110,19 @@ public final class ConfigPackageSheetSpecs {
   }
 
   private void addBooleanDropdownValidation(Sheet sheet, int columnIndex, Locale locale) {
-    addDropdownValidation(
-        sheet,
-        columnIndex,
-        new String[] {GUIDE_TRUE, GUIDE_FALSE},
-        "excel.common.enabled.prompt_title",
-        "excel.common.enabled.prompt_box",
-        messageSource,
-        locale);
+    DropdownValidationSpec validationSpec = DropdownValidationSpec.builder()
+        .values(new String[] {GUIDE_TRUE, GUIDE_FALSE})
+        .promptTitle("excel.common.enabled.prompt_title")
+        .promptText("excel.common.enabled.prompt_box")
+        .maxRow(ConsoleExcelStyles.DEFAULT_DROPDOWN_MAX_ROW)
+        .messageSource(messageSource)
+        .locale(locale)
+        .build();
+    addDropdownValidation(sheet, columnIndex, validationSpec);
   }
 
   private Map<String, ColumnGuide> buildJobGuides() {
-    return Map.ofEntries(
+    Map<String, ColumnGuide> guides = Map.ofEntries(
         Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_JOB_CODE, requiredColumn("作业唯一编码。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_JOB_NAME, requiredColumn("作业名称。", GUIDE_STR, "客户导入作业")),
@@ -1208,6 +1152,16 @@ public final class ConfigPackageSheetSpecs {
             COL_DEPENDS_ON_JOB_CODE,
             optionalColumn(
                 "上游作业编码；填写后 scheduled fire 前会等待同 bizDate 上游就绪。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+        Map.entry(
+            ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODES,
+            optionalColumn(
+                "多个上游作业编码用英文逗号分隔；所有上游在同 bizDate 均就绪后才触发。", GUIDE_STR, "IMPORT_A,IMPORT_B")),
+        Map.entry(
+            ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS,
+            optionalColumn(
+                "依赖日期对齐枚举，与上游编码按位置对应；留空按 SAME_DAY；PREVIOUS_BIZ_DAY 按下游作业业务日历解析，未配置业务日历时按周一至周五计算。",
+                GUIDE_STR,
+                "SAME_DAY,PREVIOUS_BIZ_DAY")),
         Map.entry(COL_CALENDAR_CODE, optionalColumn("业务日历编码。", GUIDE_STR, "default-calendar")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(
@@ -1247,10 +1201,11 @@ public final class ConfigPackageSheetSpecs {
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入作业")));
+    return guides;
   }
 
   private Map<String, ColumnGuide> buildJobMonitoringPolicyGuides() {
-    return Map.ofEntries(
+    Map<String, ColumnGuide> guides = Map.ofEntries(
         Map.entry(COL_TENANT_ID, optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
             COL_JOB_CODE, requiredColumn("策略对应的作业编码，需在本包或当前租户中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
@@ -1260,7 +1215,11 @@ public final class ConfigPackageSheetSpecs {
                 "作业开始执行后运行超过此秒数时告警；所有调度类型均适用。新建作业不统一启用默认值；配置包中 0 或留空表示关闭。", GUIDE_INT, "")),
         Map.entry(
             COL_SOFT_RUNTIME_SEVERITY,
-            optionalColumn("运行超时告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+            optionalColumn(
+                "运行超时告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)),
         Map.entry(
             COL_START_GRACE_SECONDS,
             optionalColumn(
@@ -1269,7 +1228,11 @@ public final class ConfigPackageSheetSpecs {
                 "300")),
         Map.entry(
             COL_START_GRACE_SEVERITY,
-            optionalColumn("启动过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)),
+            optionalColumn(
+                "启动过晚告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)),
         Map.entry(
             COL_COMPLETION_DEADLINE_LOCAL_TIME,
             optionalColumn(
@@ -1285,7 +1248,46 @@ public final class ConfigPackageSheetSpecs {
                 "")),
         Map.entry(
             COL_COMPLETION_DEADLINE_SEVERITY,
-            optionalColumn("完成过晚告警级别。", GUIDE_ENUM, "WARN", JOB_MONITORING_SEVERITY_CHOICES)));
+            optionalColumn(
+                "完成过晚告警级别。",
+                GUIDE_ENUM,
+                DEFAULT_MONITORING_SEVERITY,
+                JOB_MONITORING_SEVERITY_CHOICES)));
+    return guides;
+  }
+
+  private Map<String, ColumnGuide> buildWorkflowMonitoringPolicyGuides() {
+    ColumnGuide tenantGuide = optionalColumn("所属租户，留空使用当前租户。", GUIDE_STR, GUIDE_TENANT_EXAMPLE);
+    ColumnGuide workflowCodeGuide =
+        requiredColumn("策略对应的工作流编码，需在本包或当前租户中存在。", GUIDE_STR, "daily_settlement");
+    ColumnGuide workflowVersionGuide = requiredColumn("策略对应的工作流版本号。", GUIDE_INT, GUIDE_VERSION_ONE);
+    ColumnGuide softRuntimeSecondsGuide =
+        optionalColumn("工作流开始后运行超过此秒数时告警；0 或留空表示关闭。", GUIDE_INT, "0");
+    ColumnGuide softRuntimeSeverityGuide = optionalColumn(
+        "运行超时告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+    ColumnGuide startGraceSecondsGuide =
+        optionalColumn("工作流进入执行资格后允许延迟启动的时长（秒）；0 或留空表示关闭。", GUIDE_INT, "0");
+    ColumnGuide startGraceSeverityGuide = optionalColumn(
+        "启动过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+    ColumnGuide completionDeadlineTimeGuide =
+        optionalColumn("工作流完成截止钟点（HH:mm）；到期仍未结束时告警，留空关闭。", GUIDE_STR, "04:00");
+    ColumnGuide completionDeadlineDayOffsetGuide =
+        optionalColumn("截止日期相对计划触发日的偏移，0 当日，1 次日。", GUIDE_ENUM, "0", "0", "1");
+    ColumnGuide completionDeadlineSeverityGuide = optionalColumn(
+        "完成过晚告警级别。", GUIDE_ENUM, DEFAULT_MONITORING_SEVERITY, JOB_MONITORING_SEVERITY_CHOICES);
+
+    Map<String, ColumnGuide> guides = Map.ofEntries(
+        Map.entry(COL_TENANT_ID, tenantGuide),
+        Map.entry(COL_WORKFLOW_CODE, workflowCodeGuide),
+        Map.entry(COL_WORKFLOW_VERSION, workflowVersionGuide),
+        Map.entry(COL_SOFT_RUNTIME_SECONDS, softRuntimeSecondsGuide),
+        Map.entry(COL_SOFT_RUNTIME_SEVERITY, softRuntimeSeverityGuide),
+        Map.entry(COL_START_GRACE_SECONDS, startGraceSecondsGuide),
+        Map.entry(COL_START_GRACE_SEVERITY, startGraceSeverityGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_LOCAL_TIME, completionDeadlineTimeGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_DAY_OFFSET, completionDeadlineDayOffsetGuide),
+        Map.entry(COL_COMPLETION_DEADLINE_SEVERITY, completionDeadlineSeverityGuide));
+    return guides;
   }
 
   private Map<String, ColumnGuide> buildChannelGuides() {
@@ -1444,73 +1446,8 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户导入文件模板")));
   }
 
-  private Map<String, ColumnGuide> buildPipelineGuides() {
-    return Map.ofEntries(
-        Map.entry(
-            COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
-        Map.entry(
-            COL_JOB_CODE, requiredColumn("关联作业编码，与 version 组成联合键。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(COL_PIPELINE_NAME, requiredColumn("流水线名称。", GUIDE_STR, "客户导入流水线")),
-        Map.entry(
-            COL_PIPELINE_TYPE,
-            requiredColumn(
-                "流水线类型。",
-                GUIDE_ENUM,
-                GUIDE_IMPORT,
-                // 与 PipelineType enum / PIPELINE_TYPES 对齐：
-                // IMPORT / EXPORT / PROCESS / DISPATCH
-                PIPELINE_TYPE_DROPDOWN)),
-        Map.entry(COL_BIZ_TYPE, optionalColumn("业务类型。", GUIDE_STR, "CUSTOMER")),
-        Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
-        Map.entry(
-            COL_VERSION, requiredColumn("版本号，与 job_code 组成联合键。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
-        Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "客户文件导入流水线")));
-  }
-
-  private Map<String, ColumnGuide> buildStepGuides() {
-    return Map.ofEntries(
-        Map.entry(COL_JOB_CODE, requiredColumn("关联流水线的 job_code。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(COL_VERSION, requiredColumn("关联流水线的版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry(COL_STEP_CODE, requiredColumn("步骤唯一编码。", GUIDE_STR, "STEP_PARSE")),
-        Map.entry(COL_STEP_NAME, requiredColumn("步骤名称。", GUIDE_STR, "解析文件")),
-        Map.entry(
-            COL_STAGE_CODE,
-            requiredColumn(
-                "阶段。按 pipeline_type 选对应"
-                    + " stage：IMPORT[RECEIVE,PREPROCESS,PARSE,VALIDATE,LOAD,FEEDBACK]"
-                    + "；EXPORT[PREPARE,GENERATE,STORE,REGISTER,COMPLETE]"
-                    + "；PROCESS[PREPARE,COMPUTE,VALIDATE,COMMIT,FEEDBACK]"
-                    + "；DISPATCH[PREPARE,DISPATCH,ACK,RETRY,COMPENSATE,COMPLETE]。",
-                GUIDE_ENUM,
-                "PARSE",
-                // 17 个 stage 的 union，validator 按 pipeline_type 进一步收窄（STAGES_BY_TYPE）；
-                // 旧值 TRANSFER 已删除（validator 不接受），文档侧不再出现
-                STAGE_CODE_DROPDOWN)),
-        Map.entry("step_order", optionalColumn("步骤顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
-        Map.entry("impl_code", optionalColumn("实现插件编码。", GUIDE_STR, "csvParser")),
-        Map.entry(
-            "step_params",
-            optionalColumn(
-                "步骤参数 JSON。IMPORT/EXPORT 用 templateCode 引用模板；PROCESS 用"
-                    + " targetSchema/targetTable/sql/columnMappings；DISPATCH 用 channelCode 引用"
-                    + " file_channel_config。见填写示例列。",
-                GUIDE_JSON,
-                EXAMPLE_PROCESS_STEP_PARAMS)),
-        Map.entry(COL_TIMEOUT_SECONDS, optionalColumn(GUIDE_TIMEOUT_DESC, GUIDE_INT, "300")),
-        Map.entry(
-            COL_RETRY_POLICY,
-            optionalColumn("重试策略。", GUIDE_ENUM, GUIDE_NONE, GUIDE_NONE, "FIXED", "EXPONENTIAL")),
-        Map.entry(COL_RETRY_MAX_COUNT, optionalColumn("最大重试次数。", GUIDE_INT, "0")),
-        Map.entry(
-            COL_ENABLED,
-            optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
-  }
-
   private Map<String, ColumnGuide> buildWfDefGuides() {
-    return Map.ofEntries(
+    Map<String, ColumnGuide> guides = Map.ofEntries(
         Map.entry(
             COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(
@@ -1522,13 +1459,31 @@ public final class ConfigPackageSheetSpecs {
             requiredColumn("工作流拓扑类型。", GUIDE_ENUM, "DAG", "DAG", "PIPELINE", "MIXED")),
         Map.entry(COL_VERSION, requiredColumn("版本号。", GUIDE_INT, GUIDE_VERSION_ONE)),
         Map.entry(
+            COL_SINGLE_JOB_CODE,
+            optionalColumn("受管单作业工作流关联的作业编码；必须在本包或目标租户中存在。组合工作流留空。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
+        Map.entry(
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_SCHEDULE_ENABLED,
+            optionalColumn("是否启用此工作流的定时触发。", GUIDE_BOOL, GUIDE_FALSE, GUIDE_TRUE, GUIDE_FALSE)),
+        Map.entry(
+            COL_SCHEDULE_TYPE,
+            optionalColumn("工作流调度类型。", GUIDE_ENUM, "MANUAL", "CRON", "FIXED_RATE", "MANUAL")),
+        Map.entry(COL_SCHEDULE_EXPR, optionalColumn("CRON/FIXED_RATE 表达式。", GUIDE_STR, EMPTY)),
+        Map.entry(COL_TIMEZONE, optionalColumn("调度时区。", GUIDE_STR, "UTC")),
+        Map.entry(
+            COL_TRIGGER_MODE,
+            optionalColumn(
+                "工作流触发模式。", GUIDE_ENUM, "MANUAL", "SCHEDULED", "API", "MANUAL", "EVENT", "MIXED")),
+        Map.entry(COL_CALENDAR_CODE, optionalColumn("关联业务日历编码。", GUIDE_STR, EMPTY)),
+        Map.entry(COL_DEPENDS_ON_JOB_CODE, optionalColumn("依赖作业编码。", GUIDE_STR, EMPTY)),
         Map.entry(COL_DESCRIPTION, optionalColumn(GUIDE_DESC_DESC, GUIDE_STR, "清算批量工作流")));
+    return guides;
   }
 
   private Map<String, ColumnGuide> buildWfNodeGuides() {
-    return Map.ofEntries(
+    Map<String, ColumnGuide> guides = Map.ofEntries(
         Map.entry(
             COL_TENANT_ID, optionalColumn(GUIDE_TENANT_DESC, GUIDE_STR, GUIDE_TENANT_EXAMPLE)),
         Map.entry(COL_WORKFLOW_CODE, requiredColumn("所属工作流编码。", GUIDE_STR, "WF_SETTLEMENT")),
@@ -1536,19 +1491,11 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(COL_NODE_CODE, requiredColumn("节点唯一编码。", GUIDE_STR, "NODE_IMPORT")),
         Map.entry(COL_NODE_NAME, requiredColumn("节点名称。", GUIDE_STR, "导入节点")),
         Map.entry(
-            COL_NODE_TYPE,
-            requiredColumn(
-                "节点类型。", GUIDE_ENUM, "JOB", "TASK", "GATEWAY", "FILE_STEP", "START", "END", "JOB")),
+            COL_NODE_TYPE, requiredColumn("节点类型。", GUIDE_ENUM, "JOB", WORKFLOW_NODE_TYPE_DROPDOWN)),
         Map.entry(
             COL_RELATED_JOB_CODE,
             optionalColumn(
                 "关联的作业编码，需在本包 job_definition sheet 或库中存在。", GUIDE_STR, GUIDE_JOB_EXAMPLE)),
-        Map.entry(
-            COL_RELATED_PIPELINE_CODE,
-            optionalColumn(
-                "关联的流水线 job_code，需在本包 pipeline_definition sheet 或库中存在。",
-                GUIDE_STR,
-                GUIDE_JOB_EXAMPLE)),
         Map.entry(COL_WORKER_GROUP, optionalColumn("Worker 分组。", GUIDE_STR, "import")),
         Map.entry(COL_WINDOW_CODE, optionalColumn("批量窗口编码。", GUIDE_STR, "always-open")),
         Map.entry(COL_NODE_ORDER, optionalColumn("节点顺序号。", GUIDE_INT, GUIDE_VERSION_ONE)),
@@ -1561,6 +1508,7 @@ public final class ConfigPackageSheetSpecs {
         Map.entry(
             COL_ENABLED,
             optionalColumn(GUIDE_ENABLED_DESC, GUIDE_BOOL, GUIDE_TRUE, GUIDE_TRUE, GUIDE_FALSE)));
+    return guides;
   }
 
   private Map<String, ColumnGuide> buildWfEdgeGuides() {

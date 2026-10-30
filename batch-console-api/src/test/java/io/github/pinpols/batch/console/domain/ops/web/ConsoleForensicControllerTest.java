@@ -2,10 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -25,11 +23,17 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleForensicExportResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.OutputStream;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -37,11 +41,15 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 /** P0: ConsoleForensicController (admin-only 取证导出)。 */
 @DisplayName("取证导出接口:非法租户格式拒绝, 合法请求透传编排层, 下载以附件头返回压缩字节流")
+@ExtendWith(MockitoExtension.class)
 class ConsoleForensicControllerTest {
 
-  private final ConsoleOrchestratorPort proxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort proxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -49,11 +57,6 @@ class ConsoleForensicControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(requestMetadataResolver.current())
-        .thenReturn(new io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata(
-            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -70,6 +73,8 @@ class ConsoleForensicControllerTest {
   @Test
   @DisplayName("非法租户:包含路径穿越字符的租户标识返回参数错误")
   void shouldRejectInvalidTenantIdFormat_whenRequestingExport() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(post("/api/console/forensic/export")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
@@ -83,7 +88,15 @@ class ConsoleForensicControllerTest {
   @Test
   @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
   void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
-    when(proxy.requestForensicExport(anyString(), any(), any(), any(), anyString(), anyString()))
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata(
+            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
+    when(proxy.requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+            && command.tenantId() != null
+            && command.exportFormat() != null
+            && command.requestedBy() != null)))
         .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
     mockMvc
         .perform(post("/api/console/forensic/export")
@@ -96,8 +109,10 @@ class ConsoleForensicControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.exportId").value("fx-001"));
     verify(proxy)
-        .requestForensicExport(
-            eq("t1"), any(), any(), any(), eq("BUNDLE"), eq("authenticated-admin"));
+        .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+            && Objects.equals(command.tenantId(), "t1")
+            && Objects.equals(command.exportFormat(), "BUNDLE")
+            && Objects.equals(command.requestedBy(), "authenticated-admin")));
   }
 
   @Test

@@ -58,8 +58,8 @@ public class ConsoleTenantController {
       @RequestParam(required = false) String status,
       @RequestParam(defaultValue = "1") int pageNo,
       @RequestParam(defaultValue = "20") int pageSize) {
-    return responseFactory.success(
-        tenantService.listTenants(keyword, status, new PageRequest(pageNo, pageSize)));
+    PageRequest pageRequest = new PageRequest(pageNo, pageSize);
+    return responseFactory.success(tenantService.listTenants(keyword, status, pageRequest));
   }
 
   @GetMapping("/{tenantId}")
@@ -126,8 +126,9 @@ public class ConsoleTenantController {
       targetTenantParam = "#tenantId")
   public CommonResponse<ConsoleTenantResponse> update(
       @PathVariable String tenantId, @Validated @RequestBody UpdateTenantRequest request) {
-    return responseFactory.success(
-        tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription()));
+    ConsoleTenantResponse updatedTenant =
+        tenantService.updateTenant(tenantId, request.getTenantName(), request.getDescription());
+    return responseFactory.success(updatedTenant);
   }
 
   @PostMapping("/{tenantId}/suspend")

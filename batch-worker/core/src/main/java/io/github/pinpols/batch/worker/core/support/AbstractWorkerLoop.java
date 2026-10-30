@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.constants.WorkerCapabilities;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -29,6 +30,8 @@ import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.EnvironmentAware;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 
 /**
@@ -59,6 +62,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
   private final int maxConcurrentTasks;
   private final boolean failFastOnStartup;
   private final AtomicBoolean started = new AtomicBoolean(false);
+  private final AtomicBoolean applicationReady = new AtomicBoolean(false);
   private final AtomicBoolean stopping = new AtomicBoolean(false);
   private final AtomicReference<WorkerRegistration> registration = new AtomicReference<>();
 
@@ -123,6 +127,11 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     return List.of();
   }
 
+  /** 本 Worker 实际可执行插件的 Replay 声明目录；缺省为空，调用方按未知能力失败关闭。 */
+  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+    return List.of();
+  }
+
   @Override
   public void setEnvironment(Environment environment) {
     this.environment = environment;
@@ -146,8 +155,10 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     return port;
   }
 
+  @Order(Ordered.LOWEST_PRECEDENCE - 100)
   @EventListener(ApplicationReadyEvent.class)
   public void onReady() {
+    applicationReady.set(true);
     try {
       ensureStarted();
     } catch (Exception ex) {
@@ -167,7 +178,7 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
    * <p>把 {@code @Scheduled} 放在子类，是为了避免在抽象层硬编码配置 key（各 worker 的心跳间隔配置可能不同）。
    */
   protected void doHeartbeat() {
-    if (stopping.get()) {
+    if (stopping.get() || !applicationReady.get()) {
       return;
     }
     WorkerRegistration current;
@@ -206,23 +217,29 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
       WorkerConfiguration cfg = workerConfiguration();
       String workerPoolCode = resolveWorkerPoolCode(cfg);
       WorkerRegistration workerRegistration = new WorkerRegistration();
-      workerRegistration.setWorkerId(buildWorkerId(workerPoolCode));
+      String workerId = buildWorkerId(workerPoolCode);
+      workerRegistration.setWorkerId(workerId);
       workerRegistration.setWorkerCode(workerPoolCode);
       workerRegistration.setTenantId(cfg.tenantId());
       workerRegistration.setWorkerType(cfg.workerType());
       // 源头归一 workerGroup 为大写，避免 IMPORT / import 同语义字符串被 ResourceScheduler 等值比较误失配
-      workerRegistration.setWorkerGroup(CodeNormalizer.toUpperOrNull(workerGroup()));
-      workerRegistration.setHost(resolveHostName());
-      workerRegistration.setPort(resolveWorkerPort());
+      String normalizedWorkerGroup = CodeNormalizer.toUpperOrNull(workerGroup());
+      workerRegistration.setWorkerGroup(normalizedWorkerGroup);
+      String workerHost = resolveHostName();
+      workerRegistration.setHost(workerHost);
+      int workerPort = resolveWorkerPort();
+      workerRegistration.setPort(workerPort);
       OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
       workerRegistration.setRegisteredAt(now);
       workerRegistration.setLastHeartbeatAt(now);
       workerRegistration.setMaxConcurrent(maxConcurrentTasks);
-      workerRegistration.setCapabilityTags(
-          Stream.concat(cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
-              .distinct()
-              .toList());
+      List<String> effectiveCapabilityTags = Stream.concat(
+              cfg.capabilityTags().stream(), Stream.of(WorkerCapabilities.DRY_RUN_SAFE))
+          .distinct()
+          .toList();
+      workerRegistration.setCapabilityTags(effectiveCapabilityTags);
       workerRegistration.setTaskCapabilities(taskCapabilities());
+      workerRegistration.setReplayCapabilities(replayCapabilities());
       WorkerRegistration startedRegistration = workerLifecycleManager.start(workerRegistration);
       registration.set(startedRegistration);
       started.set(true);
@@ -273,7 +290,8 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     int suffixLength = Math.min(normalizedInstanceId.length(), 64);
     String suffix = normalizedInstanceId.substring(normalizedInstanceId.length() - suffixLength);
     int poolLength = Math.max(1, 127 - suffixLength);
-    return poolCode.substring(0, Math.min(poolCode.length(), poolLength)) + "-" + suffix;
+    int poolPrefixEnd = Math.min(poolCode.length(), poolLength);
+    return poolCode.substring(0, poolPrefixEnd) + "-" + suffix;
   }
 
   private String resolveWorkerPoolCode(WorkerConfiguration cfg) {

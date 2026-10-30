@@ -10,11 +10,14 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClientException;
 
 @DisplayName("下游调用降级与熔断:成功与失败的回退路径,熔断状态机以及开关旁路")
 class DownstreamFallbackTest {
@@ -172,7 +175,7 @@ class DownstreamFallbackTest {
     }
     // OPEN:短路仍以 RestClientException 抛出(调用方 catch 语义不变)
     assertThatThrownBy(() -> cb.callOrThrow("flaky2", "op", () -> "x"))
-        .isInstanceOf(org.springframework.web.client.RestClientException.class)
+        .isInstanceOf(RestClientException.class)
         .hasMessageContaining("circuit open");
   }
 
@@ -256,9 +259,8 @@ class DownstreamFallbackTest {
   @SuppressWarnings("unchecked")
   private static ObjectProvider<CircuitBreakerRegistry> emptyProvider() {
     ObjectProvider<CircuitBreakerRegistry> mock = mock(ObjectProvider.class);
-    when(mock.getIfAvailable(org.mockito.ArgumentMatchers.any()))
-        .thenAnswer(inv ->
-            ((java.util.function.Supplier<CircuitBreakerRegistry>) inv.getArgument(0)).get());
+    when(mock.getIfAvailable(ArgumentMatchers.any()))
+        .thenAnswer(inv -> ((Supplier<CircuitBreakerRegistry>) inv.getArgument(0)).get());
     return mock;
   }
 }

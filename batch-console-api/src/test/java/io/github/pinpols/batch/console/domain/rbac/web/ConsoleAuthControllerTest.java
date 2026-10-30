@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.application.observability.SseTicketServic
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
@@ -51,9 +52,7 @@ class ConsoleAuthControllerTest {
             securityProperties,
             mock(ConsoleJwtService.class),
             mock(ConsoleLoginKeyPairService.class),
-            mock(
-                io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService
-                    .class),
+            mock(ConsoleUserAccountService.class),
             new ConsoleTokenCookieWriter(securityProperties)))
         .build();
   }

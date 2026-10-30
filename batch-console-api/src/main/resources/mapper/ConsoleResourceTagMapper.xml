@@ -60,6 +60,39 @@
          limit 1
     </select>
 
+    <select id="lockResourceTagIdentity" resultType="long">
+        select batch.lock_resource_tag_identity(#{tenantId}, #{resourceType}, #{resourceCode})
+    </select>
+
+    <select id="selectResourceTagTarget" resultType="long">
+        <choose>
+            <when test="resourceType == 'JOB'">
+                select id from batch.job_definition
+                 where tenant_id = #{tenantId} and job_code = #{resourceCode}
+                 limit 1
+            </when>
+            <when test="resourceType == 'WORKFLOW'">
+                select id from batch.workflow_definition
+                 where tenant_id = #{tenantId} and workflow_code = #{resourceCode}
+                 order by version desc, id desc
+                 limit 1
+            </when>
+            <when test="resourceType == 'FILE_CHANNEL'">
+                select id from batch.file_channel_config
+                 where tenant_id = #{tenantId} and channel_code = #{resourceCode}
+                 limit 1
+            </when>
+            <when test="resourceType == 'FILE_TEMPLATE'">
+                select id from batch.file_template_config
+                 where tenant_id = #{tenantId} and template_code = #{resourceCode}
+                 limit 1
+            </when>
+            <otherwise>
+                select null::bigint where false
+            </otherwise>
+        </choose>
+    </select>
+
     <insert id="upsert">
         insert into batch.resource_tag (
             tenant_id, resource_type, resource_code, tag_key, tag_value, created_by, created_at

@@ -12,13 +12,16 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.rbac.ConsoleTenantReadinessService;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigReadinessView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigReadinessView;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
-import java.util.HashMap;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -31,7 +34,8 @@ import org.mockito.quality.Strictness;
 
 /** 租户就绪自检:验证 template / channel / queue 三类阻断与警告判定。 */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT) // 各用例只触发部分 mapper,共享 setUp stub
+// LENIENT 原因：各用例只触发部分 Mapper，共享准备桩覆盖不同的就绪阻断分支。
+@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("租户就绪自检服务: 模板、通道与队列配置的阻断与警告判定")
 class ConsoleTenantReadinessServiceTest {
 
@@ -51,26 +55,19 @@ class ConsoleTenantReadinessServiceTest {
   private JobDefinitionMapper jobDefinitionMapper;
 
   @Mock
-  private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+  private ConsoleTenantGuard tenantGuard;
 
   @InjectMocks
   private ConsoleTenantReadinessService service;
 
   @BeforeEach
   void setUp() {
-    when(tenantMapper.selectByTenantId("t1")).thenReturn(Map.of("tenant_id", "t1"));
+    when(tenantMapper.selectByTenantId("t1"))
+        .thenReturn(new TenantRow(null, "t1", null, null, null, null, null, null));
     when(templateMapper.selectReadinessRows("t1")).thenReturn(List.of());
     when(channelMapper.selectReadinessRows("t1")).thenReturn(List.of());
     when(resourceQueueMapper.selectQueueCodes("t1")).thenReturn(List.of());
     when(jobDefinitionMapper.selectEnabledJobQueueRefs("t1")).thenReturn(List.of());
-  }
-
-  private Map<String, Object> row(Object... kv) {
-    Map<String, Object> m = new HashMap<>();
-    for (int i = 0; i < kv.length; i += 2) {
-      m.put((String) kv[i], kv[i + 1]);
-    }
-    return m;
   }
 
   @Test
@@ -101,13 +98,13 @@ class ConsoleTenantReadinessServiceTest {
   @DisplayName("启用的导出模板缺少取数语句时判定阻断, 并给出可操作提示与文档引用")
   void shouldBlock_whenEnabledExportTemplateMissingQuerySql() {
     when(templateMapper.selectReadinessRows("t1"))
-        .thenReturn(List.of(row(
-            "template_code", "exp1",
-            "template_type", "EXPORT",
-            "enabled", Boolean.TRUE,
-            "default_query_sql", null,
-            "field_mappings", "{\"a\":1}",
-            "naming_rule", "n")));
+        .thenReturn(List.of(FileTemplateConfigReadinessView.builder()
+            .templateCode("exp1")
+            .templateType("EXPORT")
+            .enabled(Boolean.TRUE)
+            .fieldMappings("{\"a\":1}")
+            .namingRule("n")
+            .build()));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -126,19 +123,11 @@ class ConsoleTenantReadinessServiceTest {
   @DisplayName("未启用的模板配置不完整时只告警不阻断")
   void shouldWarnNotBlock_whenDisabledTemplateIncomplete() {
     when(templateMapper.selectReadinessRows("t1"))
-        .thenReturn(List.of(row(
-            "template_code",
-            "imp1",
-            "template_type",
-            "IMPORT",
-            "enabled",
-            Boolean.FALSE,
-            "default_query_sql",
-            null,
-            "field_mappings",
-            null,
-            "naming_rule",
-            null)));
+        .thenReturn(List.of(FileTemplateConfigReadinessView.builder()
+            .templateCode("imp1")
+            .templateType("IMPORT")
+            .enabled(Boolean.FALSE)
+            .build()));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -151,13 +140,14 @@ class ConsoleTenantReadinessServiceTest {
   @DisplayName("启用的通道配置体为空对象时判定阻断")
   void shouldBlock_whenEnabledChannelHasEmptyConfigJson() {
     when(channelMapper.selectReadinessRows("t1"))
-        .thenReturn(List.of(row(
-            "channel_code", "ch1",
-            "channel_type", "SFTP",
-            "auth_type", "PASSWORD",
-            "enabled", Boolean.TRUE,
-            "config_json", "{}",
-            "target_endpoint", "sftp://x")));
+        .thenReturn(List.of(FileChannelConfigReadinessView.builder()
+            .channelCode("ch1")
+            .channelType("SFTP")
+            .authType("PASSWORD")
+            .enabled(Boolean.TRUE)
+            .configJson("{}")
+            .targetEndpoint("sftp://x")
+            .build()));
 
     TenantReadinessResponse r = service.check("t1");
 
@@ -171,13 +161,13 @@ class ConsoleTenantReadinessServiceTest {
   @DisplayName("通道免认证时不判定阻断")
   void shouldNotBlock_whenChannelAuthNone() {
     when(channelMapper.selectReadinessRows("t1"))
-        .thenReturn(List.of(row(
-            "channel_code", "ch2",
-            "channel_type", "LOCAL",
-            "auth_type", "NONE",
-            "enabled", Boolean.TRUE,
-            "config_json", "{}",
-            "target_endpoint", null)));
+        .thenReturn(List.of(FileChannelConfigReadinessView.builder()
+            .channelCode("ch2")
+            .channelType("LOCAL")
+            .authType("NONE")
+            .enabled(Boolean.TRUE)
+            .configJson("{}")
+            .build()));
 
     TenantReadinessResponse r = service.check("t1");
     assertThat(r.ready()).isTrue();
@@ -188,7 +178,7 @@ class ConsoleTenantReadinessServiceTest {
   void shouldBlock_whenJobReferencesMissingQueue() {
     when(resourceQueueMapper.selectQueueCodes("t1")).thenReturn(List.of("q-existing"));
     when(jobDefinitionMapper.selectEnabledJobQueueRefs("t1"))
-        .thenReturn(List.of(row("job_code", "job1", "queue_code", "q-missing")));
+        .thenReturn(List.of(new JobDefinitionQueueRefView("job1", "q-missing")));
 
     TenantReadinessResponse r = service.check("t1");
 

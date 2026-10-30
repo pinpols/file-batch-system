@@ -12,6 +12,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepos
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -77,7 +78,7 @@ class FeedbackStepTest {
     assertThat(audit.getOperatorId()).isEqualTo("worker-A");
     assertThat(audit.getTraceId()).isEqualTo("trace-xyz");
     assertThat(audit.getDetailSummary())
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
         .containsEntry(PipelineRuntimeKeys.IMPORT_PARSED_COUNT, 100L)
         .containsEntry(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT, 95L)
         .containsEntry(PipelineRuntimeKeys.IMPORT_LOADED_COUNT, 90L)
@@ -110,7 +111,7 @@ class FeedbackStepTest {
     verify(runtimeRepository).appendAudit(captor.capture());
     assertThat(captor.getValue().getFileId()).isNull();
     assertThat(captor.getValue().getDetailSummary())
-        .asInstanceOf(org.assertj.core.api.InstanceOfAssertFactories.MAP)
+        .asInstanceOf(InstanceOfAssertFactories.MAP)
         .containsKeys("parsedCount", "validatedCount", "loadedCount", "pipelineInstanceId");
   }
 

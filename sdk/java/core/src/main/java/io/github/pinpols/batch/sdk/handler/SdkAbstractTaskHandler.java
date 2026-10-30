@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.sdk.handler;
 
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -37,32 +39,41 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
       return r == null ? SdkTaskResult.fail("handler returned null SdkTaskResult") : r;
     } catch (SdkTaskStoppedException stopped) {
       // ADR-037 决策三:协作式取消停在已提交安全点 → cancelled 终态,而非 fail。
+      String handlerName = getClass().getSimpleName();
+      String currentTaskType = taskType();
+      Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+      Map<String, Object> stoppedPositionForLog = stopped.breakPosition();
       log.info(
           "SDK handler {} stopped cooperatively (taskType={}, taskId={}) at {}",
-          getClass().getSimpleName(),
-          taskType(),
-          ctx == null ? null : ctx.taskId(),
-          stopped.breakPosition());
+          handlerName,
+          currentTaskType,
+          currentTaskId,
+          stoppedPositionForLog);
       return SdkTaskResult.cancelled(stopped.breakPosition());
     } catch (Exception t) {
+      String handlerName = getClass().getSimpleName();
+      String currentTaskType = taskType();
+      Long currentTaskId = EmptyChecks.isNull(ctx) ? null : ctx.taskId();
+      String exceptionSummary = ExceptionLogSummary.of(t);
       log.error(
           "SDK handler {} failed (taskType={}, taskId={}): {}",
-          getClass().getSimpleName(),
-          taskType(),
-          ctx == null ? null : ctx.taskId(),
-          ExceptionLogSummary.of(t),
+          handlerName,
+          currentTaskType,
+          currentTaskId,
+          exceptionSummary,
           t);
-      return SdkTaskResult.fail(
-          t.getMessage() == null ? t.getClass().getSimpleName() : t.getMessage(), t);
+      String exceptionMessage = t.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? t.getClass().getSimpleName() : t.getMessage();
+      return SdkTaskResult.fail(failureMessage, t);
     } finally {
       if (started) {
         try {
           cleanup(ctx);
         } catch (Exception cleanupEx) {
-          log.warn(
-              "SDK handler {} cleanup() failed: {}",
-              getClass().getSimpleName(),
-              ExceptionLogSummary.of(cleanupEx));
+          String handlerName = getClass().getSimpleName();
+          String cleanupExceptionSummary = ExceptionLogSummary.of(cleanupEx);
+          log.warn("SDK handler {} cleanup() failed: {}", handlerName, cleanupExceptionSummary);
         }
       }
     }

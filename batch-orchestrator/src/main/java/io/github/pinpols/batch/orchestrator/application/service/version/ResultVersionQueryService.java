@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.version;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
@@ -75,6 +76,49 @@ public class ResultVersionQueryService {
     return resultVersionMapper.listVersionsByBusinessKey(tenantId, businessKey, limit);
   }
 
+  /** 精确读取指定 Job 业务日的版本，不经过控制台列表分页。 */
+  public Optional<ResultVersionEntity> findVersionByJob(
+      String tenantId, String jobCode, LocalDate bizDate, int versionNo) {
+    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
+        || !Texts.hasText(jobCode)
+        || EmptyChecks.isNull(bizDate)
+        || versionNo <= 0;
+    if (versionQueryIsInvalid) {
+      return Optional.empty();
+    }
+    String businessKey = jobBusinessKey(jobCode, bizDate);
+    return Optional.ofNullable(
+        resultVersionMapper.selectByBusinessKeyAndVersionNo(tenantId, businessKey, versionNo));
+  }
+
+  /** 同一正式/试运行模式下，可供跨日依赖使用的最新版本。 */
+  public Optional<ResultVersionEntity> findLatestCrossDayDependencyVersion(
+      String tenantId, String jobCode, LocalDate bizDate, boolean dryRun) {
+    if (!Texts.hasText(tenantId) || !Texts.hasText(jobCode) || EmptyChecks.isNull(bizDate)) {
+      return Optional.empty();
+    }
+    String businessKey = jobBusinessKey(jobCode, bizDate);
+    ResultVersionEntity latestVersion =
+        resultVersionMapper.selectLatestCrossDayDependencyVersion(tenantId, businessKey, dryRun);
+    return Optional.ofNullable(latestVersion);
+  }
+
+  /** 仅查找同一正式/试运行执行模式中的指定版本。 */
+  public Optional<ResultVersionEntity> findCrossDayDependencyVersion(
+      String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
+    boolean versionQueryIsInvalid = !Texts.hasText(tenantId)
+        || !Texts.hasText(jobCode)
+        || EmptyChecks.isNull(bizDate)
+        || versionNo <= 0;
+    if (versionQueryIsInvalid) {
+      return Optional.empty();
+    }
+    String businessKey = jobBusinessKey(jobCode, bizDate);
+    ResultVersionEntity version = resultVersionMapper.selectCrossDayDependencyVersion(
+        tenantId, businessKey, versionNo, dryRun);
+    return Optional.ofNullable(version);
+  }
+
   /** 按租户和版本 id 查询详情；Controller 不直接触碰 Mapper，避免绕过应用层的不变量。 */
   public ResultVersionEntity getByIdOrThrow(String tenantId, Long id) {
     if (!Texts.hasText(tenantId) || id == null) {
@@ -85,6 +129,14 @@ public class ResultVersionQueryService {
       throw BizException.of(ResultCode.NOT_FOUND, "error.result_version.not_found");
     }
     return entity;
+  }
+
+  /** 按精确租户身份查询重放快照；缺少版本时由调用方决定拒绝方式。 */
+  public Optional<ResultVersionEntity> findById(String tenantId, Long id) {
+    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(id) || id <= 0) {
+      return Optional.empty();
+    }
+    return Optional.ofNullable(resultVersionMapper.selectById(tenantId, id));
   }
 
   private String jobBusinessKey(String jobCode, LocalDate bizDate) {

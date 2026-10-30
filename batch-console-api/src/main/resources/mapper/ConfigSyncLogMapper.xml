@@ -2,25 +2,80 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper">
 
-    <select id="selectByTenant" resultType="map">
-        SELECT id,
-               tenant_id AS tenantId,
-               sync_direction AS syncDirection,
-               source_env AS sourceEnv,
-               target_env AS targetEnv,
-               config_types AS configTypes,
-               total_items AS totalItems,
-               success_items AS successItems,
-               failed_items AS failedItems,
-               skipped_items AS skippedItems,
-               sync_status AS syncStatus,
-               detail_json AS detailJson,
-               operator_id AS operatorId,
-               created_at AS createdAt
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="ConfigSyncLogRowMap"
+               type="io.github.pinpols.batch.console.domain.config.view.ConfigSyncLogRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="sync_direction" javaType="java.lang.String"/>
+            <arg column="source_env" javaType="java.lang.String"/>
+            <arg column="target_env" javaType="java.lang.String"/>
+            <arg column="config_types" javaType="java.lang.String"/>
+            <arg column="total_items" javaType="java.lang.Integer"/>
+            <arg column="success_items" javaType="java.lang.Integer"/>
+            <arg column="failed_items" javaType="java.lang.Integer"/>
+            <arg column="skipped_items" javaType="java.lang.Integer"/>
+            <arg column="sync_status" javaType="java.lang.String"/>
+            <arg column="detail_json" javaType="java.lang.String"/>
+            <arg column="operator_id" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="syncLogColumns">
+        id,
+        tenant_id,
+        sync_direction,
+        source_env,
+        target_env,
+        config_types,
+        total_items,
+        success_items,
+        failed_items,
+        skipped_items,
+        sync_status,
+        detail_json,
+        operator_id,
+        created_at
+    </sql>
+
+    <select id="selectByTenant" resultMap="ConfigSyncLogRowMap">
+        SELECT
+        <include refid="syncLogColumns"/>
           FROM batch.config_sync_log
          WHERE tenant_id = #{tenantId}
          ORDER BY id DESC
          LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+    <select id="selectByIdForUpdate" resultMap="ConfigSyncLogRowMap">
+        SELECT
+        <include refid="syncLogColumns"/>
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+           AND id = #{logId}
+         FOR UPDATE
+    </select>
+
+    <select id="selectByRequestKey" resultMap="ConfigSyncLogRowMap">
+        SELECT
+        <include refid="syncLogColumns"/>
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+           AND sync_direction = 'IMPORT'
+           AND detail_json->>'requestKeyHash' = #{requestKeyHash}
+    </select>
+
+    <select id="selectIdByRequestKey" resultType="long">
+        SELECT id
+          FROM batch.config_sync_log
+         WHERE tenant_id = #{tenantId}
+           AND sync_direction = 'IMPORT'
+           AND detail_json->>'requestKeyHash' = #{requestKeyHash}
     </select>
 
     <select id="countByTenant" resultType="long">
@@ -29,7 +84,7 @@
          WHERE tenant_id = #{tenantId}
     </select>
 
-    <insert id="insert" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         INSERT INTO batch.config_sync_log (
             tenant_id, sync_direction, source_env, target_env, config_types,
             total_items, success_items, failed_items, skipped_items,
@@ -41,14 +96,23 @@
         )
     </insert>
 
-    <update id="updateResult">
+    <update id="updateResult" parameterType="io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam">
         UPDATE batch.config_sync_log
            SET success_items = #{successItems},
                failed_items = #{failedItems},
                skipped_items = #{skippedItems},
                sync_status = #{syncStatus},
-               detail_json = #{detailJson,jdbcType=VARCHAR}::jsonb
+               detail_json =
+               <choose>
+                   <when test="mergeDetail == true">
+                       coalesce(detail_json, '{}'::jsonb) || #{detailJson,jdbcType=VARCHAR}::jsonb
+                   </when>
+                   <otherwise>
+                       #{detailJson,jdbcType=VARCHAR}::jsonb
+                   </otherwise>
+               </choose>
          WHERE tenant_id = #{tenantId}
            AND id = #{id}
+           AND (sync_status = 'RUNNING' OR #{syncStatus} != 'RUNNING')
     </update>
 </mapper>

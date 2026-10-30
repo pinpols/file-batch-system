@@ -24,6 +24,9 @@ public class TriggerOutboxEventEntity {
   /** 对齐 {@link io.github.pinpols.batch.common.enums.OutboxPublishStatus} code。 */
   private String publishStatus;
 
+  /** 当前 PUBLISHING 领取轮次；离开该状态时清空。 */
+  private String publishClaimToken;
+
   /** 已尝试发布次数(失败时 ++,成功不变)。 */
   private int publishAttempt;
 

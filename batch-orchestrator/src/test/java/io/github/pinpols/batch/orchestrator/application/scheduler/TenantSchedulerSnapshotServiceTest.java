@@ -12,7 +12,10 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.FairShareGroupActiveCountView;
+import io.github.pinpols.batch.orchestrator.domain.view.QueueActiveCountView;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -22,13 +25,15 @@ import io.github.pinpols.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * 守护租户调度快照的输入约束:
@@ -39,6 +44,7 @@ import org.mockito.MockitoAnnotations;
  * </ul>
  */
 @DisplayName("租户调度快照服务: 入参约束, 队列积压判定与历史条数收敛口径")
+@ExtendWith(MockitoExtension.class)
 class TenantSchedulerSnapshotServiceTest {
 
   @Mock
@@ -69,7 +75,6 @@ class TenantSchedulerSnapshotServiceTest {
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
     service = new TenantSchedulerSnapshotService(
         quotaMapper,
         snapshotMapper,
@@ -106,7 +111,12 @@ class TenantSchedulerSnapshotServiceTest {
   void shouldIncludeBacklog_whenBuildingLiveSnapshot() {
     when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(2L);
     when(jobPartitionMapper.countActiveByTenant(
-            anyString(), anyString(), anyString(), anyString(), anyString()))
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.waitingStatus() != null
+                && parameters.readyStatus() != null
+                && parameters.runningStatus() != null
+                && parameters.retryingStatus() != null)))
         .thenReturn(3L);
     when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
     when(queueMapper.selectByTenantAndEnabled("ta", true))
@@ -115,11 +125,11 @@ class TenantSchedulerSnapshotServiceTest {
         .thenReturn(List.of(worker("IMPORT")));
     when(jobInstanceMapper.countActiveByTenantAndQueueCodes(
             argThat("ta"::equals), argThat(c -> c.contains("import_queue"))))
-        .thenReturn(List.of(Map.of("queueCode", "import_queue", "cnt", 2L)));
+        .thenReturn(List.of(new QueueActiveCountView("import_queue", 2L)));
     when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
             argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("import_queue"))))
         .thenReturn(List.of(new QueuePartitionBacklogStats("import_queue", 1, 3, 2, 1, 0, 120)));
-    when(quotaRuntimeStateService.describe(org.mockito.ArgumentMatchers.any()))
+    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
         .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
     SchedulerSnapshotResponse resp = service.buildLive("ta");
@@ -141,11 +151,62 @@ class TenantSchedulerSnapshotServiceTest {
   }
 
   @Test
+  @DisplayName("buildLive: 配额快照区分租户活跃作业与公平组活跃作业并计算有效上限")
+  void shouldMapTenantAndFairShareCounts_whenBuildingLiveQuotaSnapshot() {
+    when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(4L);
+    when(jobPartitionMapper.countActiveByTenant(
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.waitingStatus() != null
+                && parameters.readyStatus() != null
+                && parameters.runningStatus() != null
+                && parameters.retryingStatus() != null)))
+        .thenReturn(6L);
+    when(quotaMapper.selectByTenantAndEnabled("ta", true))
+        .thenReturn(List.of(new TenantQuotaPolicyEntity(
+            1L,
+            "ta",
+            "settlement-policy",
+            3,
+            10,
+            0,
+            2,
+            "settlement",
+            2,
+            4,
+            "NONE",
+            8,
+            true,
+            "QUEUE_DEFER")));
+    when(jobInstanceMapper.countActiveByFairShareGroups(Set.of("settlement")))
+        .thenReturn(List.of(new FairShareGroupActiveCountView("settlement", 7L)));
+    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
+        .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 1));
+    when(queueMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
+    when(workerRegistryMapper.selectByTenantAndStatus("ta", "ONLINE")).thenReturn(List.of());
+
+    SchedulerSnapshotResponse.PolicySnapshot snapshot =
+        service.buildLive("ta").policies().getFirst();
+
+    assertThat(snapshot.activeJobs()).isEqualTo(4);
+    assertThat(snapshot.activePartitions()).isEqualTo(6);
+    assertThat(snapshot.groupActiveJobs()).isEqualTo(7);
+    assertThat(snapshot.effectiveTenantJobCap()).isEqualTo(5);
+    assertThat(snapshot.effectiveTenantPartitionCap()).isEqualTo(14);
+    assertThat(snapshot.groupSharedMaxRunningJobs()).isEqualTo(8);
+  }
+
+  @Test
   @DisplayName("buildLive: WAITING 队列无在线 worker group → bottleneckReason=NO_ONLINE_WORKER")
   void shouldMarkNoOnlineWorker_whenQueueHasNoOnlineWorker() {
     when(jobInstanceMapper.countActiveByTenant("ta")).thenReturn(0L);
     when(jobPartitionMapper.countActiveByTenant(
-            anyString(), anyString(), anyString(), anyString(), anyString()))
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && parameters.tenantId() != null
+                && parameters.waitingStatus() != null
+                && parameters.readyStatus() != null
+                && parameters.runningStatus() != null
+                && parameters.retryingStatus() != null)))
         .thenReturn(0L);
     when(quotaMapper.selectByTenantAndEnabled("ta", true)).thenReturn(List.of());
     when(queueMapper.selectByTenantAndEnabled("ta", true))
@@ -157,7 +218,7 @@ class TenantSchedulerSnapshotServiceTest {
     when(jobPartitionMapper.summarizeQueueBacklogByTenantAndQueueCodes(
             argThat(p -> p.tenantId().equals("ta") && p.queueCodes().contains("dispatch_queue"))))
         .thenReturn(List.of(new QueuePartitionBacklogStats("dispatch_queue", 0, 1, 0, 0, 0, 30)));
-    when(quotaRuntimeStateService.describe(org.mockito.ArgumentMatchers.any()))
+    when(quotaRuntimeStateService.describe(ArgumentMatchers.any()))
         .thenReturn(QuotaRuntimeStateService.QuotaRuntimeSnapshot.withoutWindow(null, 0));
 
     SchedulerSnapshotResponse resp = service.buildLive("ta");

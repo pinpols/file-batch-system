@@ -60,11 +60,10 @@ final class TaskOutcomeSummaryBuilder {
       JobInstanceEntity jobInstance,
       List<JobPartitionEntity> partitions,
       TaskOutcomeCommand command) {
+    long successfulPartitionCount = countByStatus(partitions, PartitionStatus.SUCCESS.code());
+    long failedPartitionCount = countFailedPartitions(partitions);
     return buildJobInstanceResultSummary(
-        jobInstance,
-        countByStatus(partitions, PartitionStatus.SUCCESS.code()),
-        countFailedPartitions(partitions),
-        command);
+        jobInstance, successfulPartitionCount, failedPartitionCount, command);
   }
 
   /**
@@ -117,19 +116,19 @@ final class TaskOutcomeSummaryBuilder {
    * <ul>
    *   <li>单个成功分片：返回该分片原始 outputs，保持历史 payload 形状；
    *   <li>多个成功分片：返回 partitionedOutputs 包装，避免最后一个 report 覆盖其它分片产物；
-   *   <li>历史数据没有 outputs 字段时，用当前 command.outputs 作为单分片 fallback，多分片则显式保留 null。
+   *   <li>历史数据没有 outputs 字段时，仅成功报告可用 command.outputs 作为单分片 fallback，多分片显式保留 null。
    * </ul>
    */
   static Map<String, Object> aggregateSuccessfulPartitionOutputs(
       List<JobPartitionEntity> partitions, TaskOutcomeCommand command) {
     List<JobPartitionEntity> successful = successfulPartitions(partitions);
     if (EmptyChecks.isEmpty(successful)) {
-      return emptyMapIfBlank(EmptyChecks.isNull(command) ? null : command.outputs());
+      return successfulCommandOutputs(command);
     }
     if (successful.size() == 1) {
       Map<String, Object> outputs = extractOutputs(successful.get(0));
       if (EmptyChecks.isEmpty(outputs)) {
-        return emptyMapIfBlank(EmptyChecks.isNull(command) ? null : command.outputs());
+        return successfulCommandOutputs(command);
       }
       return outputs;
     }
@@ -217,7 +216,11 @@ final class TaskOutcomeSummaryBuilder {
     return null;
   }
 
-  private static Map<String, Object> emptyMapIfBlank(Map<String, Object> outputs) {
+  private static Map<String, Object> successfulCommandOutputs(TaskOutcomeCommand command) {
+    if (EmptyChecks.isNull(command) || !command.success()) {
+      return Collections.emptyMap();
+    }
+    Map<String, Object> outputs = command.outputs();
     if (EmptyChecks.isEmpty(outputs)) {
       return Collections.emptyMap();
     }

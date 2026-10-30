@@ -1,7 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.mapper.AuditLogMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="FileAuditLogRowMap"
+               type="io.github.pinpols.batch.console.domain.audit.view.FileAuditLogRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="file_id" javaType="java.lang.Long"/>
+            <arg column="operation_type" javaType="java.lang.String"/>
+            <arg column="operation_result" javaType="java.lang.String"/>
+            <arg column="operator_type" javaType="java.lang.String"/>
+            <arg column="operator_id" javaType="java.lang.String"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="evidence_ref" javaType="java.lang.String"/>
+            <arg column="detail_summary" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileAuditLogRowMap">
         select
             id,
             tenant_id,

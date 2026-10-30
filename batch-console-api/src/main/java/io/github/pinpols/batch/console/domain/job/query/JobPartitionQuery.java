@@ -7,10 +7,11 @@ public record JobPartitionQuery(
     Long jobInstanceId,
     String partitionStatus,
     PageRequest pageRequest,
-    Long cursorId) {
+    Long cursorId,
+    boolean cursorMode) {
 
   /** 仅按 (tenantId, jobInstanceId) 取全部分区的最小查询;状态/分页字段留空。 */
   public static JobPartitionQuery forJobInstance(String tenantId, Long jobInstanceId) {
-    return new JobPartitionQuery(tenantId, jobInstanceId, null, null, null);
+    return new JobPartitionQuery(tenantId, jobInstanceId, null, null, null, false);
   }
 }

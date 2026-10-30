@@ -15,47 +15,84 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.LocalDate;
 import java.time.Month;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.InOrder;
 import org.postgresql.util.PGobject;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.transaction.PlatformTransactionManager;
 
-@DisplayName("束文件到达启动器,校验到达组内束作业识别,文件绑定解析与失败快速返回")
+@DisplayName("束文件到达启动器,校验到达组内束Workflow 识别,文件绑定解析与失败快速返回")
 class BundleArrivalLauncherTest {
 
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
   private TriggerRequestMapper triggerRequestMapper;
+  private ExpectedWorkOccurrenceMapper expectedWorkOccurrenceMapper;
+  private BatchDayInstanceMapper batchDayInstanceMapper;
+  private WorkflowDefinitionMapper workflowDefinitionMapper;
   private BundleArrivalLauncher launcher;
 
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setUp() {
-    launchService = mock(LaunchService.class);
+    launchService = mock(WorkflowRunLaunchService.class);
     triggerRequestMapper = mock(TriggerRequestMapper.class);
-    ObjectProvider<LaunchService> provider = mock(ObjectProvider.class);
+    expectedWorkOccurrenceMapper = mock(ExpectedWorkOccurrenceMapper.class);
+    batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
+    workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
+    ObjectProvider<WorkflowRunLaunchService> provider = mock(ObjectProvider.class);
     when(provider.getObject()).thenReturn(launchService);
-    launcher = new BundleArrivalLauncher(provider, triggerRequestMapper);
+    when(workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+            anyString(), anyString(), ArgumentMatchers.eq(true)))
+        .thenReturn(new WorkflowDefinitionEntity(
+            901L, "t1", "WF_BUNDLE", "Bundle", "DAG", 1, true, 301L, "CALENDAR_A"));
+    launcher = new BundleArrivalLauncher(
+        provider,
+        triggerRequestMapper,
+        expectedWorkOccurrenceMapper,
+        batchDayInstanceMapper,
+        workflowDefinitionMapper,
+        mock(PlatformTransactionManager.class));
   }
 
   private static FileGovernanceArrivalViews.ArrivalCandidateView file(
       long id, Object metadataJson) {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", id);
-    row.put("tenant_id", "t1");
-    row.put("biz_date", "2026-06-21");
-    row.put("metadata_json", metadataJson);
-    return FileGovernanceArrivalViews.arrivalCandidate(row);
+    return FileGovernanceArrivalViews.arrivalCandidate(new FileGovernanceViews.ArrivalCandidateRow(
+        id,
+        "t1",
+        null,
+        null,
+        LocalDate.of(2026, Month.JUNE, 21),
+        null,
+        null,
+        null,
+        metadataJson,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null));
   }
 
   /** 复刻 JDBC 对 PG jsonb 列的映射结果:org.postgresql.util.PGobject(不是 String)。 */
@@ -67,43 +104,74 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
-  @DisplayName("元数据由数据库驱动以对象形式返回时仍识别为束作业并启动,启动请求携带作业编码与业务日期")
+  @DisplayName("元数据由数据库驱动以对象形式返回时仍识别为束作业并启动,启动请求携带Workflow 编码与业务日期")
   void shouldLaunchBundle_whenMetadataJsonArrivesAsDriverObject() throws Exception {
     // 回归:selectArrivalGroupFiles 的 metadata_json 是 jsonb → 驱动给 PGobject。
     // 若只认 String,这里会静默 NOT_BUNDLE,到达组永远不 launch(线上真实缺陷,见 stage 26)。
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
         file(
             101,
-            pgJsonb(
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}")),
+            pgJsonb("{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}")),
         file(
             102,
-            pgJsonb(
-                "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_CUST\"}")));
+            pgJsonb("{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_CUST\"}")));
 
     launcher.launchIfBundle("t1", "bundle-daily", groupFiles);
 
     ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
     verify(launchService).launch(captor.capture());
-    Assertions.assertThat(captor.getValue().jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    Assertions.assertThat(captor.getValue().workflowDefinitionId()).isEqualTo(901L);
     Assertions.assertThat(captor.getValue().bizDate())
         .isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
   }
 
   @Test
-  @DisplayName("到达组携带束作业编码时先登记触发请求再启动,请求号按组与业务日期确定,载荷含每个源文件的模板绑定")
+  @DisplayName("完整文件束登记并结清对应业务日预期项")
+  void shouldSatisfyExpectedWorkAfterBundleRequestIsAccepted() {
+    when(launchService.launch(any()))
+        .thenReturn(new LaunchResponse("INST-EXPECTED", "trace-expected"));
+
+    launcher.launchIfBundle(
+        "t1",
+        "GROUP-EXPECTED",
+        List.of(file(
+            801,
+            "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_EXPECTED\"}")));
+
+    verify(expectedWorkOccurrenceMapper)
+        .insertIfAbsent(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.calendarCode(), "CALENDAR_A")
+            && Objects.equals(parameters.bizDate(), LocalDate.of(2026, 6, 21))
+            && Objects.equals(parameters.workflowDefinitionId(), 901L)
+            && Objects.equals(parameters.sourceType(), "FILE_GROUP")
+            && Objects.equals(parameters.sourceKey(), "GROUP-EXPECTED")
+            && parameters.dueAt() == null));
+    verify(expectedWorkOccurrenceMapper)
+        .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
+            .tenantId("t1")
+            .calendarCode("CALENDAR_A")
+            .workflowDefinitionId(901L)
+            .sourceType("FILE_GROUP")
+            .sourceKey("GROUP-EXPECTED")
+            .bizDate(LocalDate.of(2026, 6, 21))
+            .generation(null)
+            .expectedStatus("ARRIVED")
+            .newStatus("SATISFIED")
+            .triggerRequestId("bundle-arrival-t1-901-GROUP-EXPECTED-2026-06-21")
+            .build());
+  }
+
+  @Test
+  @DisplayName("到达组携带束作业编码时先登记触发请求再启动,请求号按租户/Workflow/组/业务日期确定,载荷含每个源文件的模板绑定")
   void shouldLaunchBundle_whenGroupCarriesBundleJobCode() {
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
-        file(
-            101,
-            "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"),
-        file(
-            102,
-            "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_CUST\"}"));
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"),
+        file(102, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_CUST\"}"));
 
     launcher.launchIfBundle("t1", "bundle-daily", groupFiles);
 
@@ -111,21 +179,23 @@ class BundleArrivalLauncherTest {
     verify(launchService).launch(captor.capture());
     LaunchRequest req = captor.getValue();
     Assertions.assertThat(req.tenantId()).isEqualTo("t1");
-    Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    Assertions.assertThat(req.workflowDefinitionId()).isEqualTo(901L);
+    Assertions.assertThat(req.jobCode()).isNull();
     Assertions.assertThat(req.bizDate()).isEqualTo(LocalDate.of(2026, Month.JUNE, 21));
     Assertions.assertThat(req.triggerType()).isEqualTo(TriggerType.EVENT);
-    // 确定性幂等 requestId(同组同 bizDate → 同 id)
-    Assertions.assertThat(req.requestId()).isEqualTo("bundle-arrival-t1-bundle-daily-2026-06-21");
-    // 关键顺序:DefaultLaunchService 按 requestId 查 trigger_request,查不到直接抛
-    // error.trigger.request_not_found → 必须先落 ACCEPTED 行再 launch(与其它内部 launcher 一致)。
+    // 确定性幂等 requestId(同租户/Workflow/组/bizDate → 同 id)
+    Assertions.assertThat(req.requestId())
+        .isEqualTo("bundle-arrival-t1-901-bundle-daily-2026-06-21");
+    // 根触发请求先持久化为显式 Workflow 目标，再进入 WorkflowRunLaunchService。
     ArgumentCaptor<TriggerRequestEntity> entityCaptor =
         ArgumentCaptor.forClass(TriggerRequestEntity.class);
     InOrder order = inOrder(triggerRequestMapper, launchService);
     order.verify(triggerRequestMapper).insertIfAbsent(entityCaptor.capture());
-    order.verify(launchService).launch(org.mockito.ArgumentMatchers.any());
+    order.verify(launchService).launch(ArgumentMatchers.any());
     TriggerRequestEntity entity = entityCaptor.getValue();
     Assertions.assertThat(entity.getRequestId()).isEqualTo(req.requestId());
-    Assertions.assertThat(entity.getJobCode()).isEqualTo("BUNDLE_IMPORT_DAILY");
+    Assertions.assertThat(entity.getJobCode()).isNull();
+    Assertions.assertThat(entity.getWorkflowDefinitionId()).isEqualTo(901L);
     Assertions.assertThat(entity.getTriggerType()).isEqualTo(TriggerType.EVENT.code());
     Assertions.assertThat(entity.getRequestStatus())
         .isEqualTo(TriggerRequestStatus.ACCEPTED.code());
@@ -141,21 +211,38 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
+  @DisplayName("束作业没有显式启用的受管 Workflow 时拒绝接纳且不写触发请求")
+  void shouldRejectBundle_whenManagedWorkflowIsMissing() {
+    when(workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+            anyString(), anyString(), ArgumentMatchers.eq(true)))
+        .thenReturn(null);
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+
+    assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", files))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("no enabled managed Workflow");
+
+    verify(triggerRequestMapper, never()).insertIfAbsent(any());
+    verify(launchService, never()).launch(any());
+  }
+
+  @Test
   @DisplayName("分发束文件携带下游渠道引用时按渠道生成文件清单,条目不含模板绑定")
   void shouldLaunchDispatchBundle_whenFilesCarryTargetRef() {
     // ADR-046 Phase3:分发束——文件到达带 bundleTargetRef(下游渠道),emit {sourceFileId, targetRef}
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-2", "trace-2"));
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
-        file(201, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_SFTP\"}"),
-        file(202, "{\"bundleJobCode\":\"BUNDLE_DISPATCH_EOD\",\"bundleTargetRef\":\"CH_OSS\"}"));
+        file(201, "{\"bundleWorkflowCode\":\"WF_DISPATCH\",\"bundleTargetRef\":\"CH_SFTP\"}"),
+        file(202, "{\"bundleWorkflowCode\":\"WF_DISPATCH\",\"bundleTargetRef\":\"CH_OSS\"}"));
 
     launcher.launchIfBundle("t1", "dispatch-eod", groupFiles);
 
     ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
     verify(launchService).launch(captor.capture());
     LaunchRequest req = captor.getValue();
-    Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_DISPATCH_EOD");
+    Assertions.assertThat(req.workflowDefinitionId()).isEqualTo(901L);
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> bundleFiles =
         (List<Map<String, Object>>) req.params().get("bundleFiles");
@@ -174,11 +261,11 @@ class BundleArrivalLauncherTest {
   void shouldLaunchExportBundle_whenManifestListsTemplates() {
     // ADR-046 Phase3:导出束 manifest-only——一条 trigger 记录的 bundleExportTemplates 列表展成 N 项
     // {templateCode}(无 sourceFileId)。
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-3", "trace-3"));
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(file(
         301,
-        "{\"bundleJobCode\":\"BUNDLE_EXPORT_EOD\","
+        "{\"bundleWorkflowCode\":\"WF_EXPORT\","
             + "\"bundleExportTemplates\":[\"EXP_RISK\",\"EXP_TRADE\"]}"));
 
     launcher.launchIfBundle("t1", "export-eod", groupFiles);
@@ -186,7 +273,7 @@ class BundleArrivalLauncherTest {
     ArgumentCaptor<LaunchRequest> captor = ArgumentCaptor.forClass(LaunchRequest.class);
     verify(launchService).launch(captor.capture());
     LaunchRequest req = captor.getValue();
-    Assertions.assertThat(req.jobCode()).isEqualTo("BUNDLE_EXPORT_EOD");
+    Assertions.assertThat(req.workflowDefinitionId()).isEqualTo(901L);
     @SuppressWarnings("unchecked")
     List<Map<String, Object>> bundleFiles =
         (List<Map<String, Object>>) req.params().get("bundleFiles");
@@ -198,39 +285,51 @@ class BundleArrivalLauncherTest {
   }
 
   @Test
+  @DisplayName("旧 bundleJobCode 不再作为根目标,不能启动文件束")
+  void shouldNotLaunchBundle_whenMetadataUsesRetiredJobTarget() {
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(file(
+        1, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+
+    Assertions.assertThat(launcher.launchIfBundle("t1", "legacy-bundle", groupFiles))
+        .isEqualTo(BundleArrivalLauncher.LaunchOutcome.NOT_BUNDLE);
+    verify(triggerRequestMapper, never()).insertIfAbsent(any());
+    verify(launchService, never()).launch(any());
+  }
+
+  @Test
   @DisplayName("到达组元数据不含束作业编码时判定为非束组并不发起启动调用")
   void shouldSkipLaunch_whenGroupHasNoBundleJobCode() {
-    // 普通到达组:metadata 无 bundleJobCode → 不发 launch
+    // 普通到达组:metadata 无 bundleWorkflowCode → 不发 launch
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles =
         List.of(file(1, "{\"scanner\":\"objectStore-import\",\"fileGroupCode\":\"plain\"}"));
 
     Assertions.assertThat(launcher.launchIfBundle("t1", "plain", groupFiles))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.NOT_BUNDLE);
 
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 
   @Test
   @DisplayName("存在束作业编码但所有文件都缺少可用绑定时快速失败且不发起启动调用,使到达组保持可重试")
   void shouldFailFast_whenBundleJobCodeHasNoUsableBinding() {
-    // 有 bundleJobCode 但所有文件都缺 binding → fail-fast,由到达组调度保持 retryable
+    // 有 bundleWorkflowCode 但所有文件都缺 binding → fail-fast,由到达组调度保持 retryable
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles =
-        List.of(file(1, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\"}"));
+        List.of(file(1, "{\"bundleWorkflowCode\":\"WF_BUNDLE\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("without usable binding");
 
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 
   @Test
   @DisplayName("启动过程抛出运行时异常时原样向上传递,使到达组调度可重试")
   void shouldPropagateException_whenLaunchFails() {
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("launch boom"));
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(RuntimeException.class)
@@ -241,35 +340,35 @@ class BundleArrivalLauncherTest {
   @DisplayName("同一到达组混用不同束作业编码时拒绝启动,且不发起任何启动调用")
   void shouldRejectLaunch_whenGroupMixesBundleJobCodes() {
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
-        file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
-        file(102, "{\"bundleJobCode\":\"BUNDLE_IMPORT_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
+        file(101, "{\"bundleWorkflowCode\":\"WF_A\",\"bundleTemplateCode\":\"TPL_A\"}"),
+        file(102, "{\"bundleWorkflowCode\":\"WF_B\",\"bundleTemplateCode\":\"TPL_B\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("mixes bundleJobCode");
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+        .hasMessageContaining("mixes bundleWorkflowCode");
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 
   @Test
   @DisplayName("已判定为束组的到达组中出现缺少束作业编码的绑定时拒绝启动,且不发起任何启动调用")
   void shouldRejectLaunch_whenBindingMissesBundleJobCode() {
     List<FileGovernanceArrivalViews.ArrivalCandidateView> groupFiles = List.of(
-        file(101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_A\"}"),
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_A\"}"),
         file(102, "{\"bundleTemplateCode\":\"TPL_B\"}"));
 
     assertThatThrownBy(() -> launcher.launchIfBundle("t1", "g", groupFiles))
         .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("binding without bundleJobCode");
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+        .hasMessageContaining("binding without bundleWorkflowCode");
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 
   @Test
   @DisplayName("长租户和到达组编码生成有界稳定请求号,不同组不共用幂等键")
   void shouldBoundRequestId_whenTenantAndGroupCodesAreLong() {
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(new LaunchResponse("INST-1", "trace-1"));
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     String tenant = "t".repeat(64);
     String group = "g".repeat(64);
     launcher.launchIfBundle(tenant, group, files);
@@ -290,15 +389,15 @@ class BundleArrivalLauncherTest {
     waiting.setRequestStatus(TriggerRequestStatus.WAITING.code());
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(null, null, waiting, waiting);
-    when(launchService.launch(org.mockito.ArgumentMatchers.any()))
+    when(launchService.launch(ArgumentMatchers.any()))
         .thenReturn(LaunchResponse.skipped("trace-1"));
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.WAITING);
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.WAITING);
-    verify(launchService).launch(org.mockito.ArgumentMatchers.any());
+    verify(launchService).launch(ArgumentMatchers.any());
     verify(triggerRequestMapper).insertIfAbsent(any());
   }
 
@@ -310,8 +409,8 @@ class BundleArrivalLauncherTest {
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(null, null, rejected);
     when(launchService.launch(any())).thenReturn(LaunchResponse.skipped("trace-1"));
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
@@ -328,8 +427,8 @@ class BundleArrivalLauncherTest {
     launched.setRequestStatus(TriggerRequestStatus.LAUNCHED.code());
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(null, launched);
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
     verify(launchService, never()).launch(any());
@@ -342,17 +441,17 @@ class BundleArrivalLauncherTest {
     rejected.setRequestStatus(TriggerRequestStatus.REJECTED.code());
     when(triggerRequestMapper.selectByTenantAndRequestId(anyString(), anyString()))
         .thenReturn(rejected);
-    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(file(
-        101, "{\"bundleJobCode\":\"BUNDLE_IMPORT_DAILY\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
+    List<FileGovernanceArrivalViews.ArrivalCandidateView> files = List.of(
+        file(101, "{\"bundleWorkflowCode\":\"WF_BUNDLE\",\"bundleTemplateCode\":\"TPL_ORDER\"}"));
     Assertions.assertThat(launcher.launchIfBundle("t1", "g", files))
         .isEqualTo(BundleArrivalLauncher.LaunchOutcome.REJECTED);
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 
   @Test
   @DisplayName("到达组文件列表为空时不发起任何启动调用")
   void shouldSkipLaunch_whenGroupIsEmpty() {
     launcher.launchIfBundle("t1", "g", List.of());
-    verify(launchService, never()).launch(org.mockito.ArgumentMatchers.any());
+    verify(launchService, never()).launch(ArgumentMatchers.any());
   }
 }

@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-"""校验 docs 文档日期命名和历史归档策略。"""
+# 用途：文档日期命名策略。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-doc-timestamp-policy.py；参数与前置环境见下方说明及所属 README。
+"""校验文档资产、增量报告和历史归档的统一命名策略。"""
 
 from __future__ import annotations
 
 import re
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 GATE_CODE = "DOC_TIMESTAMP_POLICY"
 GATE_NAME = "文档日期命名策略"
-DATE_RE = re.compile(r"\d{4}-\d{2}(?:-\d{2})?")
+DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+NAME_RE = re.compile(r"(?:[a-z0-9]+(?:-[a-z0-9]+)*|ADR-\d{3}-[a-z0-9]+(?:-[a-z0-9]+)*)\.md")
+DATE_SUFFIX_RE = re.compile(r"\d{4}-\d{2}-\d{2}\.md$")
+CANONICAL_FILENAMES = {"README.md", "RELEASING.md", "THIRD-PARTY-LICENSES.md"}
 
 CURRENT_DOC_PREFIXES = (
     "docs/api/",
@@ -25,58 +31,23 @@ CURRENT_DOC_PREFIXES = (
     "docs/testing/",
 )
 REPORT_DOC_PREFIXES = (
-    "docs/analysis/",
     "docs/audit/",
-    "docs/backlog/",
     "docs/plans/",
     "docs/review/",
     "docs/verifications/",
 )
 
-# 已存在的历史材料。它们保留原路径以避免破坏链接，但不得继续新增同类文件。
-DATED_CURRENT_DOC_ALLOWLIST = {
-    "docs/architecture/deficiencies-2026-05-30.md",
-    "docs/architecture/runtime-compatibility-contract-2026-09-01.md",
-    "docs/design/file-integrity-sidecar-manifest-design-2026-06-07.md",
-    "docs/design/import-export-column-mapping-default-inference-2026-06-20.md",
-    "docs/runbook/ci-cd-followup-2026-05-22.md",
-    "docs/runbook/ci-speedup-2026-06-02.md",
-    "docs/runbook/e2e-it-optimization-2026-05-22.md",
-    "docs/runbook/gitops-onboarding-2026-05-22.md",
-    "docs/runbook/go-live-realism-audit-2026-06-21.md",
-    "docs/runbook/sql-audit-2026-05-20.md",
-    "docs/runbook/tia-poc-2026-05-22.md",
-    "docs/sdk/conformance-gap-analysis-2026-06-16.md",
-}
+# 当前无例外；长期有效文档不得使用日期戳，历史快照应归档或放入报告目录。
+DATED_CURRENT_DOC_ALLOWLIST: set[str] = set()
 
 # 这些是当前跟踪入口、模板或长生命周期工作清单，不按一次性报告命名。
 UNDATED_REPORT_DOC_ALLOWLIST = {
-    "docs/analysis/deep-issue-analysis.md",
-    "docs/analysis/fix-report.md",
-    "docs/analysis/hardening-backlog.md",
-    "docs/analysis/industry-benchmark-improvement-plan.md",
-    "docs/analysis/project-assessment.md",
-    "docs/analysis/system-scope-boundary.md",
-    "docs/analysis/todo-master.md",
-    "docs/audit/convention-drift-guard-index.md",
-    "docs/backlog/be-acceptance-template.md",
+    "docs/plans/hardening-backlog.md",
+    "docs/plans/todo-master.md",
 }
 
-# 阶段性计划按半年度或月度管理，允许 YYYY-MM / YYYY-h2 等非日粒度。
-MONTH_OR_PHASE_PLAN_ALLOWLIST = {
-    "docs/plans/ai-integration-plan-2026-07.md",
-    "docs/plans/alertmanager-migration-plan-2026-07.md",
-    "docs/plans/backend-borrowings-and-improvements-2026-07.md",
-    "docs/plans/checkpoint-resume-design-2026-07.md",
-    "docs/plans/fe-worklist-2026-h2-atomic-sdk.md",
-    "docs/plans/ipv6-happy-eyeballs-rollout-2026-09.md",
-    "docs/plans/r3-1-chaos-toxiproxy-it.md",
-    "docs/plans/r3-2-runbook-playbooks.md",
-    "docs/plans/r3-3-soak-tests.md",
-    "docs/plans/r3-4-forensic-replay.md",
-    "docs/plans/sdk-roadmap-2026-h2-progress.md",
-    "docs/plans/sdk-roadmap-2026-h2.md",
-}
+# 阶段标记放入主题；所有日期统一为 YYYY-MM-DD。
+MONTH_OR_PHASE_PLAN_ALLOWLIST: set[str] = set()
 
 
 def tracked_markdown() -> list[str]:
@@ -106,6 +77,9 @@ def under_any(path: str, prefixes: tuple[str, ...]) -> bool:
 
 def main() -> int:
     errors: list[str] = []
+    for retired in ("analysis", "backlog", "spike", "test-data"):
+        if (ROOT / "docs" / retired).exists():
+            errors.append(f"retired docs directory must not be recreated: docs/{retired}/; use document-routing-guide.md")
     dated_count = 0
     undated_count = 0
 
@@ -114,6 +88,30 @@ def main() -> int:
             dated_count += 1
         else:
             undated_count += 1
+
+        filename = Path(path).name
+        if re.search(r"\d{4}-(?:\d{2}|h[12])\.md$", filename):
+            errors.append(f"doc date must use complete YYYY-MM-DD: {path}")
+        for recorded in DATE_RE.findall(filename):
+            try:
+                date.fromisoformat(recorded)
+            except ValueError:
+                errors.append(f"invalid calendar date in doc filename: {path}")
+        if path.startswith("docs/archive/"):
+            category = Path(path).parts[2] if len(Path(path).parts) > 3 else None
+            if category and not (ROOT / "docs" / category).is_dir():
+                errors.append(f"archive category must match a current docs directory: {path}")
+            if re.match(r"(?i)^adr-?\d", filename):
+                errors.append(f"archived supporting material should use its business topic; retain ADR links in body: {path}")
+        if filename not in CANONICAL_FILENAMES:
+            if not NAME_RE.fullmatch(filename):
+                errors.append(f"doc filename must use English kebab-case or an ADR identifier: {path}")
+            if re.match(r"^\d{4}-", filename):
+                errors.append(f"doc date must follow the topic, not precede it: {path}")
+            if has_date(path) and not DATE_SUFFIX_RE.search(filename):
+                errors.append(f"doc date must be at the end of the filename: {path}")
+            if is_archive(path) and not DATE_SUFFIX_RE.search(filename):
+                errors.append(f"archived snapshot must retain its original date: {path}")
 
         if is_archive(path) or path.endswith("/README.md"):
             continue

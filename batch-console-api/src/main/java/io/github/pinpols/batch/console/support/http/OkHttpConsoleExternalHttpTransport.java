@@ -78,10 +78,12 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
     switch (request.method()) {
       case GET -> builder.get();
       case HEAD -> builder.head();
-      case POST ->
-        builder.post(RequestBody.create(
-            EmptyChecks.isNull(request.body()) ? "" : request.body(),
-            MediaType.get(request.mediaType())));
+      case POST -> {
+        String body = EmptyChecks.isNull(request.body()) ? "" : request.body();
+        MediaType mediaType = MediaType.get(request.mediaType());
+        RequestBody requestBody = RequestBody.create(body, mediaType);
+        builder.post(requestBody);
+      }
     }
   }
 
@@ -113,7 +115,9 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
   }
 
   private static boolean sameHost(String left, String right) {
-    return stripIpv6Brackets(left).equalsIgnoreCase(stripIpv6Brackets(right));
+    String normalizedLeftHost = stripIpv6Brackets(left);
+    String normalizedRightHost = stripIpv6Brackets(right);
+    return normalizedLeftHost.equalsIgnoreCase(normalizedRightHost);
   }
 
   private static String stripIpv6Brackets(String host) {

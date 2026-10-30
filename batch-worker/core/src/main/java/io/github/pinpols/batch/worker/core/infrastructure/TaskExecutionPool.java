@@ -6,6 +6,7 @@ import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperti
 import io.github.pinpols.batch.worker.core.config.WorkerRuntimeConfiguration;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
@@ -63,7 +64,9 @@ public class TaskExecutionPool {
     this.delegate = new ThreadPoolExecutor(
         size, size, 0L, TimeUnit.MILLISECONDS, new ArrayBlockingQueue<>(size), runnable -> {
           Thread thread = new Thread(runnable);
-          thread.setName("worker-task-exec-" + threadIndex.incrementAndGet());
+          long threadNumber = threadIndex.incrementAndGet();
+          String threadName = "worker-task-exec-" + threadNumber;
+          thread.setName(threadName);
           thread.setDaemon(properties.isDaemonThreads());
           return thread;
         });
@@ -88,6 +91,16 @@ public class TaskExecutionPool {
     return future;
   }
 
+  private void shutdownNowAndCancelQueuedTasks() {
+    List<Runnable> queuedTasks = delegate.shutdownNow();
+    // shutdownNow只移出队列，不会终结Future；等待方必须立即获知任务未执行且已取消。
+    for (Runnable queuedTask : queuedTasks) {
+      if (queuedTask instanceof Future<?> future) {
+        future.cancel(false);
+      }
+    }
+  }
+
   @PreDestroy
   void shutdown() {
     if (delegate == null) {
@@ -100,7 +113,7 @@ public class TaskExecutionPool {
       long graceSeconds = Math.max(1L, properties.getShutdownGraceSeconds());
       if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
         log.warn("TaskExecutionPool forced shutdown after {}s wait", graceSeconds);
-        delegate.shutdownNow();
+        shutdownNowAndCancelQueuedTasks();
         if (!delegate.awaitTermination(graceSeconds, TimeUnit.SECONDS)) {
           log.warn("TaskExecutionPool did not terminate after forced shutdown");
         }
@@ -109,7 +122,7 @@ public class TaskExecutionPool {
       SwallowedExceptionLogger.info(TaskExecutionPool.class, "catch:InterruptedException", ex);
 
       Thread.currentThread().interrupt();
-      delegate.shutdownNow();
+      shutdownNowAndCancelQueuedTasks();
     }
   }
 }

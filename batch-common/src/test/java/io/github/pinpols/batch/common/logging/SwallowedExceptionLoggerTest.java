@@ -48,4 +48,18 @@ class SwallowedExceptionLoggerTest {
         .hasSize(SwallowedExceptionLogger.MAX_SUMMARY_LENGTH)
         .endsWith("...");
   }
+
+  @Test
+  @DisplayName("无异常对象的错误文本保留普通内容并隐藏常见凭据")
+  void shouldSanitizeFailureMessageWithoutThrowable() {
+    assertThat(SwallowedExceptionLogger.safeMessage(null)).isNull();
+    assertThat(SwallowedExceptionLogger.safeMessage("syntax error")).isEqualTo("syntax error");
+    assertThat(SwallowedExceptionLogger.safeMessage(
+            "invalid URL: https://user:probe-secret@example.test/path?token=query-secret"))
+        .contains("invalid URL:")
+        .doesNotContain("probe-secret", "query-secret");
+    assertThat(SwallowedExceptionLogger.safeMessage("x".repeat(3000), 2000))
+        .hasSize(2000)
+        .endsWith("...");
+  }
 }

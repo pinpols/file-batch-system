@@ -1,12 +1,13 @@
 package io.github.pinpols.batch.console.domain.file.realtime;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.config.ConsolePipelineProgressDirtyProperties;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsolePipelineProgressDirtyEventResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper;
+import io.github.pinpols.batch.console.domain.file.mapper.ConsolePipelineProgressDirtyMapper.DirtyCursor;
 import io.github.pinpols.batch.console.domain.file.view.PipelineProgressDirtyView;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Duration;
 import java.time.Instant;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
@@ -53,6 +55,7 @@ public class ConsolePipelineProgressDirtyPublisher {
 
   private ScheduledExecutorService scheduler;
   private volatile Instant lastSeen = Instant.now().minusSeconds(30);
+  private DirtyCursor scanCursor;
 
   private long intervalMillis;
   private long initialDelayMillis;
@@ -60,8 +63,10 @@ public class ConsolePipelineProgressDirtyPublisher {
   private long throttleMillis;
   private int batchSize;
 
-  @PostConstruct
+  @EventListener(ApplicationReadyEvent.class)
   void start() {
+    // Flyway 初始化会先于 ApplicationReadyEvent 完成。若从
+    // @PostConstruct 启动轮询器，新数据库仍在迁移时就可能查询 pipeline_progress。
     intervalMillis = Math.max(1_000L, properties.getIntervalMillis());
     initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
     lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());
@@ -115,44 +120,48 @@ public class ConsolePipelineProgressDirtyPublisher {
             SwallowedExceptionLogger.summary(ex));
         return;
       }
-      log.warn("pipeline progress dirty poll failed", ex);
+      log.warn("pipeline progress dirty poll failed: {}", SwallowedExceptionLogger.summary(ex));
     }
   }
 
   void pollOnce() {
     Instant since = lastSeen.minusMillis(lookbackOverlapMillis);
-    List<PipelineProgressDirtyView> rows = dirtyMapper.selectUpdatedSince(since, batchSize);
+    List<PipelineProgressDirtyView> rows =
+        dirtyMapper.selectUpdatedSince(since, scanCursor, batchSize);
     if (rows.isEmpty()) {
+      scanCursor = null;
       return;
     }
 
-    Instant maxSeen = lastSeen;
     Instant now = Instant.now();
     for (PipelineProgressDirtyView row : rows) {
-      if (row.updatedAt().isAfter(maxSeen)) {
-        maxSeen = row.updatedAt();
-      }
-      if (shouldPublish(row, now)) {
+      String key = row.tenantId() + "|" + row.pipelineInstanceId();
+      Instant publishedUpdate = lastPublishedUpdateByPipeline.get(key);
+      if (EmptyChecks.isNull(publishedUpdate) || row.updatedAt().isAfter(publishedUpdate)) {
+        Instant lastEmittedAt = lastEmittedAtByPipeline.get(key);
+        if (EmptyChecks.isNotNull(lastEmittedAt)
+            && Duration.between(lastEmittedAt, now).toMillis() < throttleMillis) {
+          pruneTrackedKeysIfNeeded();
+          return;
+        }
+        // 发布失败时不推进游标，也不登记为已发布；下次扫描重试同一更新。
         publish(row);
+        lastPublishedUpdateByPipeline.put(key, row.updatedAt());
+        lastEmittedAtByPipeline.put(key, now);
       }
+      advancePast(row);
     }
-    lastSeen = maxSeen;
+    if (rows.size() < batchSize) {
+      scanCursor = null;
+    }
     pruneTrackedKeysIfNeeded();
   }
 
-  private boolean shouldPublish(PipelineProgressDirtyView row, Instant now) {
-    String key = row.tenantId() + "|" + row.pipelineInstanceId();
-    Instant lastPublishedUpdate = lastPublishedUpdateByPipeline.get(key);
-    if (lastPublishedUpdate != null && !row.updatedAt().isAfter(lastPublishedUpdate)) {
-      return false;
+  private void advancePast(PipelineProgressDirtyView row) {
+    if (row.updatedAt().isAfter(lastSeen)) {
+      lastSeen = row.updatedAt();
     }
-    Instant lastEmittedAt = lastEmittedAtByPipeline.get(key);
-    if (lastEmittedAt != null && Duration.between(lastEmittedAt, now).toMillis() < throttleMillis) {
-      return false;
-    }
-    lastPublishedUpdateByPipeline.put(key, row.updatedAt());
-    lastEmittedAtByPipeline.put(key, now);
-    return true;
+    scanCursor = new DirtyCursor(row.updatedAt(), row.tenantId(), row.pipelineInstanceId());
   }
 
   private void publish(PipelineProgressDirtyView row) {

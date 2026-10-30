@@ -7,6 +7,7 @@ import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig.BatchPlatformClientConfigBuilder;
 import io.github.pinpols.batch.sdk.dispatcher.TaskDispatchMessage;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -17,11 +18,13 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -44,7 +47,8 @@ import org.springframework.kafka.test.EmbeddedKafkaKraftBroker;
  * <ul>
  *   <li><b>EmbeddedKafka</b>(KRaft,纯 JVM 无 Docker):派单 topic,{@link #dispatch} 真发消息给 SDK consumer
  *   <li><b>JDK HttpServer</b>:stub orchestrator {@code /internal/*}(register / heartbeat /
- *       deactivate / claim / report / renew),全部 200,并<b>录下</b> register / claim / report 供断言
+ *       deactivate / claim / non-idempotent-started / report / renew)，并录下注册、认领、开始与报告。
+ *       CLAIM 返回本次权威 invocation，开始、续租、报告按当前 tenant/worker/invocation 校验
  * </ul>
  *
  * <p>因此 SDK 的 {@code BatchPlatformClient} 不用改一行就能端到端跑:start → consumer 订到内嵌 broker → dispatch 投消息 →
@@ -72,11 +76,20 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private final ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
 
   private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
+  /** 租户和载荷作为同一派单快照发布，避免读到部分写入。 */
+  private record DispatchedTask(String tenantId, String payload) {}
+
+  private final Map<Long, DispatchedTask> dispatchedTasks = new ConcurrentHashMap<>();
+
   private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
   private final List<Long> claims = new CopyOnWriteArrayList<>();
 
-  /** taskId → claim 时携带的 partitionInvocationId(仅分区任务),供 renew/report 回校防回归。 */
-  private final Map<Long, String> claimedInvocations = new ConcurrentHashMap<>();
+  /** CLAIM 身份由平台产生，不能采信 Kafka 消息或认领请求里的旧 invocation。 */
+  private record ClaimedExecution(
+      String tenantId, String workerId, String invocationId, String payload, boolean completed) {}
+
+  private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
+  private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
 
   private final AtomicReference<Producer<String, byte[]>> producer = new AtomicReference<>();
 
@@ -138,15 +151,23 @@ public final class FakeBatchPlatform implements AutoCloseable {
   // ─── 派单 ───────────────────────────────────────────────────────────────────
 
   /**
-   * 投一条派单消息给 SDK consumer。先等 consumer 拿到 partition assignment(SDK 端 {@code
-   * auto.offset.reset=latest},必须等订阅生效后再发,否则消息被跳过),再真发到内嵌 broker。
+   * 投一条派单消息给 SDK consumer。该辅助入口等待 partition assignment 后发送，
+   * 便于测试就绪状态；SDK 无提交位点时从 earliest 读取，先派单后启动由真实 Kafka E2E 覆盖。
    */
   public void dispatch(TaskDispatchMessage msg) {
+    if (EmptyChecks.isNull(msg)
+        || EmptyChecks.isNull(msg.taskId())
+        || EmptyChecks.isBlank(msg.tenantId())) {
+      throw new IllegalArgumentException("taskId and tenantId are required");
+    }
     awaitTopicAssignment(ASSIGNMENT_TIMEOUT);
-    sleepQuietly(250); // assignment 可见后给 consumer 一点时间把 position 落到 log end
+    sleepQuietly(250); // assignment 可见后为消费者完成首次 poll 保留既有缓冲
     byte[] payload;
     try {
       payload = objectMapper.writeValueAsBytes(msg);
+      Long taskId = msg.taskId();
+      String parametersJson = objectMapper.writeValueAsString(msg.parameters());
+      dispatchedTasks.put(taskId, new DispatchedTask(msg.tenantId(), parametersJson));
     } catch (IOException e) {
       throw new IllegalArgumentException("cannot serialize dispatch message", e);
     }
@@ -158,6 +179,26 @@ public final class FakeBatchPlatform implements AutoCloseable {
       throw new IllegalStateException("dispatch interrupted", e);
     } catch (ExecutionException e) {
       throw new IllegalStateException("dispatch send failed", e);
+    }
+  }
+
+  /** 将已完成的任务显式重置为可认领状态；保留最后一次派单快照，不自动发送新消息。 */
+  public void requeue(Long taskId) {
+    if (EmptyChecks.isNull(taskId)) {
+      throw new IllegalArgumentException("taskId is required");
+    }
+    AtomicBoolean reset = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (!current.completed()) {
+        return current;
+      }
+      reports.remove(id);
+      nonIdempotentStarts.remove(id);
+      reset.set(true);
+      return null;
+    });
+    if (!reset.get()) {
+      throw new IllegalStateException("task is not completed: " + taskId);
     }
   }
 
@@ -198,6 +239,11 @@ public final class FakeBatchPlatform implements AutoCloseable {
     return List.copyOf(claims);
   }
 
+  /** 已确认的非幂等开始快照(taskId → 当前调用标识)。 */
+  public Map<Long, String> nonIdempotentStarts() {
+    return Map.copyOf(nonIdempotentStarts);
+  }
+
   /** 已收到的 report 快照(taskId → report)。 */
   public Map<Long, RecordedReport> reports() {
     return Map.copyOf(reports);
@@ -208,23 +254,46 @@ public final class FakeBatchPlatform implements AutoCloseable {
   private void handleHttp(HttpExchange exchange) throws IOException {
     String path = exchange.getRequestURI().getPath();
     try {
+      boolean supported = path.equals("/internal/workers/register")
+          || path.matches("/internal/workers/[^/]+/(heartbeat|deactivate)")
+          || path.matches("/internal/tasks/[^/]+/(claim|report|renew|non-idempotent-started)");
+      if (!supported) {
+        respond(exchange, 404);
+        return;
+      }
+      if (!"POST".equals(exchange.getRequestMethod())) {
+        respond(exchange, 405);
+        return;
+      }
       if (path.endsWith("/register")) {
-        registrations.add(readBody(exchange));
+        Map<String, Object> registration = readBody(exchange);
+        registrations.add(registration);
       } else if (path.endsWith("/report")) {
         Map<String, Object> body = readBody(exchange);
-        recordReport(body);
-        // 守护回归:claim 带过 partitionInvocationId 的任务,report 必须也带(平台 R3-P0-5 late-report CAS 依赖它)。
-        if (missingClaimedInvocation(path, body)) {
+        if (!recordReport(taskIdFromPath(path), body)) {
           respond(exchange, 409);
           return;
         }
       } else if (path.endsWith("/claim")) {
-        captureClaimInvocation(taskIdFromPath(path), readBody(exchange));
-        claims.add(taskIdFromPath(path));
+        Long taskId = taskIdFromPath(path);
+        Map<String, Object> claimBody = readBody(exchange);
+        ClaimedExecution claimed = claimExecution(taskId, claimBody);
+        if (EmptyChecks.isNull(claimed)) {
+          respond(exchange, 409);
+          return;
+        }
+        claims.add(taskId);
+        respondWithClaimPayload(exchange, claimed.payload(), claimed.invocationId());
+        return;
+      } else if (path.endsWith("/non-idempotent-started")) {
+        Map<String, Object> body = readBody(exchange);
+        if (!recordStart(taskIdFromPath(path), body)) {
+          respond(exchange, 409);
+          return;
+        }
       } else if (path.endsWith("/renew")) {
         Map<String, Object> body = readBody(exchange);
-        // 守护回归:分区任务 renew 缺 partitionInvocationId,平台 R3-P1-10 会 409→不续租→双跑。这里如实拒。
-        if (missingClaimedInvocation(path, body)) {
+        if (!hasCurrentClaimOwner(path, body, true)) {
           respond(exchange, 409);
           return;
         }
@@ -237,42 +306,85 @@ public final class FakeBatchPlatform implements AutoCloseable {
     }
   }
 
-  /** claim 时若带了 partitionInvocationId 则留存,供 renew/report 回校(非分区任务 claim 无此字段,不留存)。 */
-  private void captureClaimInvocation(Long taskId, Map<String, Object> claimBody) {
-    if (taskId == null) {
-      return;
+  private ClaimedExecution claimExecution(Long taskId, Map<String, Object> body) {
+    String tenantId = asString(body.get("tenantId"));
+    String workerId = asString(body.get("workerId"));
+    DispatchedTask dispatched = EmptyChecks.isNull(taskId) ? null : dispatchedTasks.get(taskId);
+    if (EmptyChecks.isNull(dispatched)
+        || !dispatched.tenantId().equals(tenantId)
+        || EmptyChecks.isBlank(workerId)) {
+      return null;
     }
-    Object pInv = claimBody.get("partitionInvocationId");
-    if (pInv != null && !pInv.toString().isBlank()) {
-      claimedInvocations.put(taskId, pInv.toString());
-    }
+    ClaimedExecution candidate = new ClaimedExecution(
+        tenantId, workerId, UUID.randomUUID().toString(), dispatched.payload(), false);
+    AtomicReference<ClaimedExecution> accepted = new AtomicReference<>();
+    claimedExecutions.compute(taskId, (id, existing) -> {
+      ClaimedExecution current = EmptyChecks.isNull(existing) ? candidate : existing;
+      if (!current.completed()
+          && current.tenantId().equals(tenantId)
+          && current.workerId().equals(workerId)) {
+        accepted.set(current);
+      }
+      return current;
+    });
+    return accepted.get();
   }
 
-  /** 该 task claim 过 invocation,但本次 renew/report body 缺(或空)→ true,模拟平台拒绝。 */
-  private boolean missingClaimedInvocation(String path, Map<String, Object> body) {
+  private boolean hasCurrentClaimOwner(
+      String path, Map<String, Object> body, boolean requireRunning) {
     Long taskId = taskIdFromPath(path);
-    if (taskId == null || !claimedInvocations.containsKey(taskId)) {
+    if (EmptyChecks.isNull(taskId)) {
       return false;
     }
-    Object pInv = body.get("partitionInvocationId");
-    return pInv == null || pInv.toString().isBlank();
+    ClaimedExecution current = claimedExecutions.get(taskId);
+    return isCurrentClaimOwner(current, body, requireRunning);
   }
 
-  private void recordReport(Map<String, Object> body) {
-    Long taskId = asLong(body.get("taskId"));
-    if (taskId == null) {
-      return;
-    }
+  private boolean isCurrentClaimOwner(
+      ClaimedExecution current, Map<String, Object> body, boolean requireRunning) {
+    String bodyTenantId = asString(body.get("tenantId"));
+    String bodyWorkerId = asString(body.get("workerId"));
+    String bodyInvocationId = asString(body.get("partitionInvocationId"));
+    return EmptyChecks.isNotNull(current)
+        && (!requireRunning || !current.completed())
+        && current.tenantId().equals(bodyTenantId)
+        && current.workerId().equals(bodyWorkerId)
+        && current.invocationId().equals(bodyInvocationId);
+  }
+
+  private boolean recordStart(Long taskId, Map<String, Object> body) {
+    if (EmptyChecks.isNull(taskId)) return false;
+    AtomicBoolean accepted = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (isCurrentClaimOwner(current, body, true)) {
+        nonIdempotentStarts.put(id, current.invocationId());
+        accepted.set(true);
+      }
+      return current;
+    });
+    return accepted.get();
+  }
+
+  private boolean recordReport(Long taskId, Map<String, Object> body) {
+    if (EmptyChecks.isNull(taskId)) return false;
     boolean success = Boolean.TRUE.equals(body.get("success"));
-    reports.put(
-        taskId,
-        new RecordedReport(
-            taskId,
-            success,
-            asString(body.get("message")),
-            asMap(body.get("outputs")),
-            asString(body.get("errorCode")),
-            body));
+    String message = asString(body.get("message"));
+    Map<String, Object> outputs = asMap(body.get("outputs"));
+    String errorCode = asString(body.get("errorCode"));
+    AtomicBoolean accepted = new AtomicBoolean();
+    claimedExecutions.computeIfPresent(taskId, (id, current) -> {
+      if (!isCurrentClaimOwner(current, body, false)) {
+        return current;
+      }
+      accepted.set(true);
+      if (current.completed()) {
+        return current;
+      }
+      reports.put(taskId, new RecordedReport(taskId, success, message, outputs, errorCode, body));
+      return new ClaimedExecution(
+          current.tenantId(), current.workerId(), current.invocationId(), current.payload(), true);
+    });
+    return accepted.get();
   }
 
   private Map<String, Object> readBody(HttpExchange exchange) {
@@ -297,6 +409,21 @@ public final class FakeBatchPlatform implements AutoCloseable {
     exchange.sendResponseHeaders(status, EMPTY_JSON.length);
     try (OutputStream os = exchange.getResponseBody()) {
       os.write(EMPTY_JSON);
+    }
+  }
+
+  private void respondWithClaimPayload(HttpExchange exchange, String payload, String invocationId)
+      throws IOException {
+    Map<String, Object> body = Map.of(
+        "payload",
+        EmptyChecks.isNull(payload) ? "{}" : payload,
+        "partitionInvocationId",
+        invocationId);
+    byte[] response = objectMapper.writeValueAsBytes(body);
+    exchange.getResponseHeaders().add(CONTENT_TYPE, JSON_MIME);
+    exchange.sendResponseHeaders(200, response.length);
+    try (OutputStream os = exchange.getResponseBody()) {
+      os.write(response);
     }
   }
 
@@ -399,10 +526,6 @@ public final class FakeBatchPlatform implements AutoCloseable {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
     }
-  }
-
-  private static Long asLong(Object value) {
-    return value instanceof Number n ? n.longValue() : null;
   }
 
   private static String asString(Object value) {

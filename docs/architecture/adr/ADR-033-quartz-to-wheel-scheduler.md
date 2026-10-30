@@ -49,7 +49,7 @@
 
 技术核心:
 
-- **时间轮 tick** = 100ms(批处理 SLA 够用,实时交易场景不适用 — SLA 矩阵见 [`quartz-replacement-design.md`](../quartz-replacement-design.md) §4)
+- **时间轮 tick** = 100ms(批处理 SLA 够用,实时交易场景不适用；该参数属于已撤销提案，不是当前运行配置)
 - **leader 选举**:ShedLock(已在用)选 1 trigger 实例为 leader,只 leader 推 trigger 到时间轮
 - **滑动窗口预扫**:每分钟扫"未来 5 min 内将 fire"的 trigger 推到内存时间轮;内存 dedup set 防重复 push
 - **fire 强约束**:DB 加 `UNIQUE(trigger_id, scheduled_fire_time)` 回退,GC pause + 锁过期场景应用层幂等防不住的双 fire 由 DB 兜
@@ -114,12 +114,10 @@
 
 ## 5. 关联文档
 
-- [`docs/architecture/quartz-replacement-evaluation.md`](../quartz-replacement-evaluation.md) — 战略层评估(为什么换、何时换的 5 项风险回退校准)
-- [`docs/architecture/quartz-replacement-design.md`](../quartz-replacement-design.md) — 战术层实施(详细架构 + 5 项风险回退 + Pre-flight Checklist)
 - [`docs/runbook/quartz-capacity-baseline.md`](../../runbook/quartz-capacity-baseline.md) — 当前 Quartz 容量基线测算
 - [`scripts/db/quartz-replacement-preflight-scan.sql`](../../../scripts/db/quartz-replacement-preflight-scan.sql) — 切换前 SQL 预扫(cron 兼容性 / fire 唯一约束验证)
-- [`docs/analysis/todo-master.md`](../../analysis/todo-master.md) §三-E — Quartz 切换 backlog 7 项(staging/ops 配合)
-- [`docs/analysis/hardening-backlog.md`](../../analysis/hardening-backlog.md) — 暂缓状态登记
+- [`docs/plans/todo-master.md`](../../plans/todo-master.md) §三-E — Quartz 切换 backlog 7 项(staging/ops 配合)
+- [`docs/plans/hardening-backlog.md`](../../plans/hardening-backlog.md) — 暂缓状态登记
 
 ## 6. Revisit Cadence
 

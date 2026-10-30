@@ -82,6 +82,11 @@ public final class SdkIdempotentHandler implements SdkTaskHandler {
   }
 
   @Override
+  public boolean isSafeToReplay(SdkTaskContext ctx) {
+    return delegate.isSafeToReplay(ctx);
+  }
+
+  @Override
   public SdkTaskResult execute(SdkTaskContext ctx) {
     String key;
     try {

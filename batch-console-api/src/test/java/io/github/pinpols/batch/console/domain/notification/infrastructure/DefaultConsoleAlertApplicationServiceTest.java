@@ -14,11 +14,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("Console 告警关闭与 Alertmanager 活动组解除")
+@DisplayName("Console 告警关闭与 Alertmanager 单实体解除")
 class DefaultConsoleAlertApplicationServiceTest {
 
   private static final String TENANT_ID = "tenant-a";
@@ -47,25 +48,19 @@ class DefaultConsoleAlertApplicationServiceTest {
     when(alertEventMapper.updateStatus(TENANT_ID, ALERT_ID, "CLOSED")).thenReturn(1);
   }
 
-  @DisplayName("同组仍有 OPEN 告警时不发送整组解除")
+  @DisplayName("同组另一实体仍 OPEN 时，仅按当前指纹解除已关闭实体")
   @Test
-  void shouldKeepAmGroupOpenWhenAnotherMatchingAlertIsOpen() {
-    when(alertEventMapper.countActiveAlertsInAmGroup(
-            TENANT_ID, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ALERT_ID))
-        .thenReturn(1L);
-
+  void shouldResolveClosedEntityWhenAnotherMatchingAlertIsOpen() {
     service.close(ALERT_ID, request(), "close-1");
 
-    verify(alertmanagerSilenceBridge, never()).resolve(org.mockito.ArgumentMatchers.any());
+    verify(alertmanagerSilenceBridge).resolve(activeAlert());
+    verify(alertEventMapper, never()).countActiveAlertsInAmGroup(ArgumentMatchers.any());
   }
 
   @DisplayName("同组最后一条 OPEN 告警关闭后发送解除")
   @Test
   void shouldResolveAmGroupWhenNoMatchingAlertRemainsOpen() {
     AlertEventEntity alert = activeAlert();
-    when(alertEventMapper.countActiveAlertsInAmGroup(
-            TENANT_ID, "batch-orchestrator", "JOB_RUNNING_TOO_LONG", "WARN", ALERT_ID))
-        .thenReturn(0L);
 
     service.close(ALERT_ID, request(), "close-2");
 

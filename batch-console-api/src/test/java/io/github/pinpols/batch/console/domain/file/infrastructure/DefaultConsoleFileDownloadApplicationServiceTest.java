@@ -14,10 +14,12 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalRecord;
@@ -25,40 +27,62 @@ import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClien
 import io.github.pinpols.batch.console.shared.client.OrchestratorInternalRestClient;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.io.ByteArrayInputStream;
-import java.util.Map;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestClient;
 
 /**
  * {@link DefaultConsoleFileDownloadApplicationService} 审批门控单测,聚焦审查修复:加密文件下载的审批必须绑定 fileId,
  * 同租户内不得拿一个 file 的 APPROVED 单去解锁另一个 file。
  */
-@DisplayName("加密文件下载服务: 审批单与文件标识的绑定校验")
+@DisplayName("文件下载与错误记录导出: 审批绑定和 CSV 转义")
+@ExtendWith(MockitoExtension.class)
 class DefaultConsoleFileDownloadApplicationServiceTest {
 
-  private final ConsoleTenantGuard tenantGuard = mock(ConsoleTenantGuard.class);
-  private final FileRecordMapper fileRecordMapper = mock(FileRecordMapper.class);
-  private final FileErrorRecordMapper fileErrorRecordMapper = mock(FileErrorRecordMapper.class);
-  private final FileTemplateConfigMapper fileTemplateConfigMapper =
-      mock(FileTemplateConfigMapper.class);
-  private final S3StorageProperties s3StorageProperties = new S3StorageProperties();
-  private final BatchObjectStore objectStore = mock(BatchObjectStore.class);
-  private final BatchObjectCryptoService cryptoService = mock(BatchObjectCryptoService.class);
-  private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
-  private final OrchestratorInternalRestClient orchestratorInternalRestClient =
-      mock(OrchestratorInternalRestClient.class);
-  private final ConsoleRequestMetadataResolver metadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private FileRecordMapper fileRecordMapper;
+
+  @Mock
+  private FileErrorRecordMapper fileErrorRecordMapper;
+
+  @Mock
+  private FileTemplateConfigMapper fileTemplateConfigMapper;
+
+  private S3StorageProperties s3StorageProperties;
+
+  @Mock
+  private BatchObjectStore objectStore;
+
+  @Mock
+  private BatchObjectCryptoService cryptoService;
+
+  private BatchSecurityProperties batchSecurityProperties;
+
+  @Mock
+  private OrchestratorInternalRestClient orchestratorInternalRestClient;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
   // 用真实共享审批客户端 + mock 的 REST 层：保持本测试仍然端到端覆盖"审批必须绑定 fileId"行为。
-  private final OrchestratorApprovalClient approvalClient =
-      new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
+  private OrchestratorApprovalClient approvalClient;
 
   private DefaultConsoleFileDownloadApplicationService service;
 
   @BeforeEach
   void setUp() {
+    s3StorageProperties = new S3StorageProperties();
+    batchSecurityProperties = new BatchSecurityProperties();
+    approvalClient =
+        new OrchestratorApprovalClient(orchestratorInternalRestClient, metadataResolver);
     s3StorageProperties.setBucket("default-bucket");
     batchSecurityProperties.setBypassMode(false);
     service = new DefaultConsoleFileDownloadApplicationService(
@@ -79,13 +103,45 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
     RestClient restClient = mock(RestClient.class, RETURNS_DEEP_STUBS);
     when(orchestratorInternalRestClient.client()).thenReturn(restClient);
     ApprovalRecordResponse response =
-        new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId));
+        new ApprovalRecordResponse(new ApprovalRecord(status, targetType, targetId, null, null));
     when(restClient
             .get()
             .uri(anyString(), any(Object[].class))
             .retrieve()
             .body(ApprovalRecordResponse.class))
         .thenReturn(response);
+  }
+
+  @Test
+  @DisplayName("导出错误记录时单独回车保留在带引号的 CSV 字段中")
+  void shouldQuoteStandaloneCarriageReturnInErrorExport() throws Exception {
+    FileErrorRecordEntity error = new FileErrorRecordEntity();
+    error.setId(1L);
+    error.setFileId(100L);
+    error.setRawRecord("first\rsecond");
+    when(fileErrorRecordMapper.selectByQuery(any())).thenReturn(List.of(error));
+
+    var response = service.exportFileErrors("t1", 100L, null);
+    String csv =
+        new String(response.getBody().getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+
+    assertThat(csv).contains(",\"first\rsecond\",");
+  }
+
+  @Test
+  @DisplayName("导出错误记录时逗号、引号和换行仍按 CSV 规则转义")
+  void shouldPreserveExistingCsvEscaping() throws Exception {
+    FileErrorRecordEntity error = new FileErrorRecordEntity();
+    error.setId(1L);
+    error.setFileId(100L);
+    error.setRawRecord("a,\"b\"\nc");
+    when(fileErrorRecordMapper.selectByQuery(any())).thenReturn(List.of(error));
+
+    var response = service.exportFileErrors("t1", 100L, null);
+    String csv =
+        new String(response.getBody().getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+
+    assertThat(csv).contains(",\"a,\"\"b\"\"\nc\",");
   }
 
   private void stubEncryptedFile(long fileId) {
@@ -101,7 +157,9 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
             null));
     when(fileRecordMapper.selectTemplateCodeByFileId("t1", fileId)).thenReturn("TPL");
     when(fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode("t1", "TPL"))
-        .thenReturn(Map.of("content_encryption_enabled", Boolean.TRUE));
+        .thenReturn(FileTemplateSecurityFlagsView.builder()
+            .contentEncryptionEnabled(true)
+            .build());
   }
 
   @Test

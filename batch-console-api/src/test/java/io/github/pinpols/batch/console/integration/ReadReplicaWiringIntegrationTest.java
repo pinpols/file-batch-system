@@ -69,6 +69,10 @@ class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("副本不可达: 只读查询降级到主库仍返回正确结果,失败切换计数被记录")
   void shouldFailOpenToPrimaryAndCountFailover_whenReplicaUnreachable() {
+    final String select1Sql = """
+        SELECT 1
+    """;
+
     assertThat(dataSource)
         .as("read-replica.enabled=true 应让 @Primary DataSource 走 LazyConnectionDataSourceProxy 包裹的"
             + " routing DS")
@@ -77,7 +81,7 @@ class ReadReplicaWiringIntegrationTest extends AbstractIntegrationTest {
     TransactionTemplate readOnly = new TransactionTemplate(transactionManager);
     readOnly.setReadOnly(true);
     Integer one = readOnly.execute(
-        status -> new JdbcTemplate(dataSource).queryForObject("SELECT 1", Integer.class));
+        status -> new JdbcTemplate(dataSource).queryForObject(select1Sql, Integer.class));
 
     assertThat(one)
         .as("readOnly 查询路由到不可达 replica 后应 fail-open 落到 primary，结果仍然正确")

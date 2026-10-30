@@ -9,9 +9,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
@@ -31,28 +31,27 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
- * Unit tests for DefaultExportStageExecutor — verifies three stage exit paths: - success: step
+ * DefaultExportStageExecutor 单元测试，校验三个阶段的退出路径：成功时步骤
  * returns ExportStageResult.success - business error: step throws BizException → BUSINESS_ERROR
- * code, does not propagate - infra error: step throws RuntimeException → INFRA_ERROR code, does not
+ * 错误码不会向外传播；基础设施错误时，步骤抛出 RuntimeException 并返回 INFRA_ERROR，且不会
  * propagate
  */
 // LENIENT 保留:setUp() 在所有用例之前预置了 startStepRun 以及
 // stubStep() 内部对 stage()/implCode()/stepCode()/stepName() 的共享 stub,
 // 但 STEP_NOT_FOUND / PIPELINE_STEP_MISSING 等用例不会触发其中部分调用,严格模式会误报 UnnecessaryStubbing。
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 @MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("导出阶段执行器单测:成功,业务异常,基础设施异常与步骤缺失的结果归类")
 class DefaultExportStageExecutorTest {
 
   @Mock
-  private PlatformPipelineDefinitionRepository pipelineDefinitions;
-
-  @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
-  // The step under test
+  // 当前被测步骤。
   private ExportStageStep prepareStep;
 
   private DefaultExportStageExecutor executor;
@@ -68,7 +67,7 @@ class DefaultExportStageExecutorTest {
 
     when(pipelineRuns.startStepRun(any(), any(), any(), any())).thenReturn(STEP_RUN_ID);
 
-    // Provide all required stages so buildDefaultStepDefinitions() does not throw
+    // 提供全部必需阶段，避免 buildDefaultStepDefinitions() 抛出异常。
     List<ExportStageStep> allSteps = new ArrayList<>();
     allSteps.add(prepareStep);
     for (ExportStage stage : ExportStage.values()) {
@@ -79,8 +78,46 @@ class DefaultExportStageExecutorTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
     when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
-    executor = new DefaultExportStageExecutor(
-        allSteps, pipelineDefinitions, pipelineRuns, meterRegistryProvider);
+    executor = new DefaultExportStageExecutor(allSteps, pipelineRuns, meterRegistryProvider);
+  }
+
+  @Test
+  @DisplayName("回放能力由真实 PREPARE 模板与 GENERATE 阶段插件配置解析")
+  @SuppressWarnings("unchecked")
+  void replayCapability_resolvesFrozenTemplateFromPrepareAndSelectedGenerateStep() {
+    PrepareStep configuredPrepareStep = mock(PrepareStep.class);
+    when(configuredPrepareStep.stage()).thenReturn(ExportStage.PREPARE);
+    when(configuredPrepareStep.implCode()).thenReturn("EXPORT_PREPARE");
+    when(configuredPrepareStep.stepCode()).thenReturn("EXPORT_PREPARE");
+    when(configuredPrepareStep.stepName()).thenReturn("Prepare");
+    GenerateStep configuredGenerateStep = mock(GenerateStep.class);
+    when(configuredGenerateStep.stage()).thenReturn(ExportStage.GENERATE);
+    when(configuredGenerateStep.implCode()).thenReturn("EXPORT_GENERATE");
+    when(configuredGenerateStep.stepCode()).thenReturn("EXPORT_GENERATE");
+    when(configuredGenerateStep.stepName()).thenReturn("Generate");
+    Map<String, Object> frozenTemplateConfig = Map.of("export_data_ref", "settlement-export");
+    ExportJobContext context = buildContext();
+    when(configuredPrepareStep.resolveTemplateConfig(context)).thenReturn(frozenTemplateConfig);
+    ReplayCapabilityDeclaration expected = ReplayCapabilityDeclaration.unknown("settlement-export");
+    when(configuredGenerateStep.replayCapability(frozenTemplateConfig)).thenReturn(expected);
+    List<ExportStageStep> configuredSteps = new ArrayList<>();
+    configuredSteps.add(configuredPrepareStep);
+    configuredSteps.add(configuredGenerateStep);
+    for (ExportStage stage : ExportStage.values()) {
+      if (stage != ExportStage.PREPARE && stage != ExportStage.GENERATE) {
+        configuredSteps.add(stubStep(stage));
+      }
+    }
+    ObjectProvider<MeterRegistry> meterRegistryProvider = mock(ObjectProvider.class);
+    when(meterRegistryProvider.getIfAvailable()).thenReturn(meterRegistry);
+    DefaultExportStageExecutor replayExecutor =
+        new DefaultExportStageExecutor(configuredSteps, pipelineRuns, meterRegistryProvider);
+
+    ReplayCapabilityDeclaration actual = replayExecutor.resolveReplayCapability(context);
+
+    assertThat(actual).isEqualTo(expected);
+    verify(configuredPrepareStep).resolveTemplateConfig(context);
+    verify(configuredGenerateStep).replayCapability(frozenTemplateConfig);
   }
 
   @Test
@@ -146,9 +183,10 @@ class DefaultExportStageExecutorTest {
   }
 
   @Test
-  @DisplayName("步骤抛运行时异常时归类为基础设施错误,并原样保留异常消息")
-  void execute_returnsInfraError_whenStepThrowsRuntimeException() {
-    when(prepareStep.execute(any())).thenThrow(new RuntimeException("connection timeout"));
+  @DisplayName("步骤抛运行时异常时归类为基础设施错误,且不保存异常中的凭据")
+  void execute_returnsInfraError_whenStepThrowsRuntimeException(CapturedOutput output) {
+    when(prepareStep.execute(any()))
+        .thenThrow(new RuntimeException("connection token=probe-secret timeout"));
     ExportJobContext context = buildContext();
 
     List<ExportStageResult> results = executor.execute(context);
@@ -156,7 +194,9 @@ class DefaultExportStageExecutorTest {
     assertThat(results).hasSize(1);
     assertThat(results.get(0).success()).isFalse();
     assertThat(results.get(0).code()).isEqualTo(StageFailureCode.INFRA_ERROR.name());
-    assertThat(results.get(0).message()).isEqualTo("connection timeout");
+    assertThat(results.get(0).message()).contains("connection").doesNotContain("probe-secret");
+    assertThat(results.get(0).errorArgs()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
     verify(pipelineRuns).finishStepRunFailure(eq(STEP_RUN_ID), any(), any(), any(), any(), any());
   }
 
@@ -178,7 +218,6 @@ class DefaultExportStageExecutorTest {
     ExportJobContext context = new ExportJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, List.of());
-    when(pipelineDefinitions.loadPipelineSteps(any())).thenReturn(List.of());
 
     List<ExportStageResult> results = executor.execute(context);
 
@@ -197,7 +236,6 @@ class DefaultExportStageExecutorTest {
     context.setWorkerId("w1");
     context.setJobCode("JOB_001");
     PipelineStepDefinition step = new PipelineStepDefinition(
-        1L,
         1L,
         "EXPORT_PREPARE",
         "Export Prepare",

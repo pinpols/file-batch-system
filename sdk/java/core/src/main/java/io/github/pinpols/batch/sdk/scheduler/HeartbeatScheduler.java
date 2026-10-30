@@ -105,7 +105,9 @@ public class HeartbeatScheduler implements AutoCloseable {
       body.put("tenantId", config.getTenantId());
       body.put("workerCode", config.getWorkerCode());
       body.put("status", "RUNNING");
-      body.put("heartbeatAt", Instant.now().toString());
+      Instant heartbeatAt = Instant.now();
+      String heartbeatAtText = heartbeatAt.toString();
+      body.put("heartbeatAt", heartbeatAtText);
       body.put("currentLoad", dispatcher.inFlightCount());
       // Lane I / Python SDK PR #320 对齐:把 register 时已上报的 6 字段也带到每次 heartbeat。
       // 动机:DefaultWorkerRegistryService#heartbeat 在 registry 行不存在时会回退降级到 register
@@ -194,7 +196,8 @@ public class HeartbeatScheduler implements AutoCloseable {
     }
     scheduler.shutdown();
     try {
-      long timeoutMillis = Math.max(0L, EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis());
+      long requestedTimeoutMillis = EmptyChecks.isNull(timeout) ? 0L : timeout.toMillis();
+      long timeoutMillis = Math.max(0L, requestedTimeoutMillis);
       if (!scheduler.awaitTermination(timeoutMillis, TimeUnit.MILLISECONDS)) {
         scheduler.shutdownNow();
       }

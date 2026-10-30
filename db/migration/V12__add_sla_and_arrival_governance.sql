@@ -1,7 +1,7 @@
 -- =========================================================
--- V11 - Add SLA and arrival governance columns
+-- V12：增加 SLA 和到达治理字段。
 -- 说明：
--- 1) Track deadline, expected duration, and SLA alert state on job_instance.
+-- 1) 在 job_instance 中记录截止时间、预期时长和 SLA 告警状态。
 -- 2) 支持到达与处理治理查询及告警。
 -- =========================================================
 

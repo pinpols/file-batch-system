@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.sql;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
@@ -9,11 +10,14 @@ import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
 import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -116,9 +120,9 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     } catch (SqlValidationException ex) {
       // SqlValidationException 同时承担「输入非法」和「OS-capable role 闸拒绝」语义,后者走 SECURITY_REJECTED
       boolean security = ex.getMessage() != null && ex.getMessage().contains("OS-capable");
-      return AtomicErrorCode.fail(
-          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID,
-          ex.getMessage());
+      AtomicErrorCode errorCode =
+          security ? AtomicErrorCode.SECURITY_REJECTED : AtomicErrorCode.CONFIG_INVALID;
+      return AtomicErrorCode.fail(errorCode, ex.getMessage());
     } catch (BizException ex) {
       log.warn(
           "sql executor rejected by SensitiveDataValidator: tenantId={}, jobCode={}, key={}",
@@ -131,14 +135,14 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "sql executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          ex);
+          "sql executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : ex.getMessage();
+      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
     }
   }
 
@@ -200,13 +204,13 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
     Object t = params.get(PARAM_STMT_TIMEOUT);
-    if (t instanceof Number number) {
-      long requested = number.longValue();
-      if (requested <= 0) {
-        throw new SqlValidationException("statementTimeoutSeconds must be positive");
+    if (EmptyChecks.isNotNull(t)) {
+      Long requested = AtomicParameterNumbers.positiveLong(t);
+      if (EmptyChecks.isNull(requested)) {
+        throw new SqlValidationException("statementTimeoutSeconds must be positive integer");
       }
       if (requested < timeoutSec) {
-        timeoutSec = (int) requested;
+        timeoutSec = requested.intValue();
       }
     }
 
@@ -320,7 +324,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     }
 
     private void flush() {
-      String s = buf.toString().trim();
+      String bufferedStatement = buf.toString();
+      String s = bufferedStatement.trim();
       if (!s.isEmpty()) out.add(s);
       buf.setLength(0);
     }
@@ -517,10 +522,12 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         }
         if (inv.allSelect) {
           try (Statement guard = conn.createStatement()) {
-            guard.execute("SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L));
+            String setStatementTimeoutSql =
+                "SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L);
+            guard.execute(setStatementTimeoutSql);
           } catch (SQLException setEx) {
-            log.warn(
-                "SET LOCAL statement_timeout failed: {}", SwallowedExceptionLogger.summary(setEx));
+            String causeSummary = SwallowedExceptionLogger.summary(setEx);
+            log.warn("SET LOCAL statement_timeout failed: {}", causeSummary);
           }
         }
         for (String sql : inv.statements) {
@@ -546,7 +553,8 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       });
     } catch (SQLException ex) {
       // PG statement_timeout → SQLState "57014" (query_canceled);其它驱动语义不同,这里做最常见识别
-      boolean isTimeout = "57014".equals(ex.getSQLState())
+      boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
+      boolean isTimeout = hasTimeoutSqlState
           || (ex.getMessage() != null
               && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
       return AtomicErrorCode.fail(
@@ -588,7 +596,23 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       if (rows.size() < props.getMaxResultRows()) {
         Map<String, Object> row = new LinkedHashMap<>();
         for (int i = 1; i <= colCount; i++) {
-          row.put(md.getColumnLabel(i), rs.getObject(i));
+          String type = md.getColumnTypeName(i);
+          if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
+            String json = rs.getString(i);
+            row.put(
+                md.getColumnLabel(i),
+                EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class));
+          } else {
+            Object value = rs.getObject(i);
+            if (value instanceof Array sqlArray) {
+              try {
+                value = sqlArray.getArray();
+              } finally {
+                sqlArray.free();
+              }
+            }
+            row.put(md.getColumnLabel(i), value);
+          }
         }
         rows.add(row);
       } else if (!trunc) {

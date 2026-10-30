@@ -194,10 +194,12 @@ public final class ImportPreprocessPipeline {
     List<Map<String, Object>> implicit = new ArrayList<>();
     appendImplicitStep(implicit, IMPLICIT_COMPRESS_STEPS, stringProp(template, "compress_type"));
     String enc = stringProp(template, "encrypt_type");
-    if (!appendImplicitStep(implicit, IMPLICIT_ENCRYPT_STEPS, enc)
-        && Texts.hasText(enc)
-        && !POLICY_NONE.equalsIgnoreCase(enc)
-        && !bypassMode) {
+    boolean implicitEncryptStepIsUnsupported =
+        !appendImplicitStep(implicit, IMPLICIT_ENCRYPT_STEPS, enc)
+            && Texts.hasText(enc)
+            && !POLICY_NONE.equalsIgnoreCase(enc)
+            && !bypassMode;
+    if (implicitEncryptStepIsUnsupported) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED",
           "encrypt_type "
@@ -221,7 +223,9 @@ public final class ImportPreprocessPipeline {
     if (stepType == null) {
       return false;
     }
-    implicit.add(new LinkedHashMap<>(Map.of(KEY_TYPE, stepType)));
+    Map<String, Object> stepAttributes = Map.of(KEY_TYPE, stepType);
+    Map<String, Object> mutableStepAttributes = new LinkedHashMap<>(stepAttributes);
+    implicit.add(mutableStepAttributes);
     return true;
   }
 
@@ -254,10 +258,15 @@ public final class ImportPreprocessPipeline {
       ImportPayload payload,
       WorkerImportPayloadProperties properties) {
     String entryName = stringProp(step, "entryName");
-    if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
-      Object v = payload.metadata().get("zipEntryName");
-      if (v != null && Texts.hasText(String.valueOf(v))) {
-        entryName = String.valueOf(v);
+    if (!Texts.hasText(entryName) && EmptyChecks.isNotNull(payload)) {
+      Map<String, Object> payloadMetadata = payload.metadata();
+      if (EmptyChecks.isNotNull(payloadMetadata)) {
+        Object metadataEntryName = payloadMetadata.get("zipEntryName");
+        boolean hasMetadataEntryName = EmptyChecks.isNotNull(metadataEntryName)
+            && Texts.hasText(String.valueOf(metadataEntryName));
+        if (hasMetadataEntryName) {
+          entryName = String.valueOf(metadataEntryName);
+        }
       }
     }
     try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(input))) {
@@ -293,10 +302,15 @@ public final class ImportPreprocessPipeline {
       ImportPayload payload,
       WorkerImportPayloadProperties properties) {
     String entryName = stringProp(step, "entryName");
-    if (!Texts.hasText(entryName) && payload != null && payload.metadata() != null) {
-      Object v = payload.metadata().get("tarEntryName");
-      if (v != null && Texts.hasText(String.valueOf(v))) {
-        entryName = String.valueOf(v);
+    if (!Texts.hasText(entryName) && EmptyChecks.isNotNull(payload)) {
+      Map<String, Object> payloadMetadata = payload.metadata();
+      if (EmptyChecks.isNotNull(payloadMetadata)) {
+        Object metadataEntryName = payloadMetadata.get("tarEntryName");
+        boolean hasMetadataEntryName = EmptyChecks.isNotNull(metadataEntryName)
+            && Texts.hasText(String.valueOf(metadataEntryName));
+        if (hasMetadataEntryName) {
+          entryName = String.valueOf(metadataEntryName);
+        }
       }
     }
     try (TarArchiveInputStream tis = new TarArchiveInputStream(new ByteArrayInputStream(input))) {
@@ -330,7 +344,8 @@ public final class ImportPreprocessPipeline {
       throws IOException {
     long capRatio = (long) Math.max(inputLen, 1) * properties.getMaxDecompressRatio();
     long cap = Math.min(properties.getMaxDecompressBytes(), capRatio);
-    ByteArrayOutputStream baos = new ByteArrayOutputStream(Math.min(inputLen * 4, 1024 * 1024));
+    int initialBufferCapacity = Math.min(inputLen * 4, 1024 * 1024);
+    ByteArrayOutputStream baos = new ByteArrayOutputStream(initialBufferCapacity);
     byte[] buf = new byte[8192];
     long total = 0;
     int n;
@@ -383,8 +398,10 @@ public final class ImportPreprocessPipeline {
   private static void verifyDigest(
       byte[] input, Map<String, Object> step, ImportPayload payload, Map<String, Object> template)
       throws NoSuchAlgorithmException {
-    String algorithm = normalizeDigestName(
-        firstNonBlank(stringProp(step, "algorithm"), digestAlgorithm(template, payload)));
+    String stepAlgorithm = stringProp(step, "algorithm");
+    String templateAlgorithm = digestAlgorithm(template, payload);
+    String selectedAlgorithm = firstNonBlank(stepAlgorithm, templateAlgorithm);
+    String algorithm = normalizeDigestName(selectedAlgorithm);
     if (POLICY_NONE.equalsIgnoreCase(algorithm)) {
       throw new ImportPreprocessException(
           "IMPORT_PREPROCESS_DIGEST_ALGORITHM_MISSING",
@@ -427,10 +444,9 @@ public final class ImportPreprocessPipeline {
   }
 
   private static String digestAlgorithm(Map<String, Object> template, ImportPayload payload) {
-    if (payload != null
-        && Texts.hasText(payload.checksumType())
-        && !POLICY_NONE.equalsIgnoreCase(payload.checksumType())) {
-      return normalizeDigestName(payload.checksumType());
+    String payloadChecksumType = EmptyChecks.isNull(payload) ? null : payload.checksumType();
+    if (Texts.hasText(payloadChecksumType) && !POLICY_NONE.equalsIgnoreCase(payloadChecksumType)) {
+      return normalizeDigestName(payloadChecksumType);
     }
     String fromTemplate = stringProp(template, "checksum_type");
     if (Texts.hasText(fromTemplate) && !POLICY_NONE.equalsIgnoreCase(fromTemplate)) {
@@ -471,9 +487,11 @@ public final class ImportPreprocessPipeline {
   private static void verifyRsaSha256(byte[] input, Map<String, Object> step, ImportPayload payload)
       throws GeneralSecurityException, SignatureException {
     String pem = stringProp(step, "publicKeyPem");
-    String signatureB64 = firstNonBlank(
-        stringProp(step, "signatureBase64"),
-        metaString(payload == null ? Map.of() : payload.metadata(), "signatureBase64"));
+    String stepSignature = stringProp(step, "signatureBase64");
+    Map<String, Object> payloadMetadata =
+        EmptyChecks.isNull(payload) ? Map.of() : payload.metadata();
+    String metadataSignature = metaString(payloadMetadata, "signatureBase64");
+    String signatureB64 = firstNonBlank(stepSignature, metadataSignature);
     pem = trimToNull(pem);
     if (pem == null || signatureB64 == null) {
       throw new ImportPreprocessException(
@@ -498,7 +516,9 @@ public final class ImportPreprocessPipeline {
         .replaceAll("\\s", EMPTY);
     byte[] decoded = Base64.getDecoder().decode(stripped);
     X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
-    return KeyFactory.getInstance("RSA").generatePublic(spec);
+    KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+    PublicKey publicKey = keyFactory.generatePublic(spec);
+    return publicKey;
   }
 
   /**
@@ -526,7 +546,8 @@ public final class ImportPreprocessPipeline {
     // ⚠3 (2026-05-03): 之前 new String(input, fromCs) 把整个文件物化为 UTF-16 String, 100 MB 输入 = 200 MB
     // 中间堆峰 (input byte[] + UTF-16 String) + 100 MB 输出 byte[] = 总 300 MB+ 峰值. 现在改 reader/writer
     // chunk 转码, 中间 buffer 仅 8 KiB; 输出 BAOS 同时检 cap 触发即抛, 不让超量数据继续累积.
-    ByteArrayOutputStream out = new ByteArrayOutputStream(Math.min(input.length, 1 << 16));
+    int initialBufferCapacity = Math.min(input.length, 1 << 16);
+    ByteArrayOutputStream out = new ByteArrayOutputStream(initialBufferCapacity);
     try (Reader reader = new InputStreamReader(new ByteArrayInputStream(input), fromCs);
         Writer writer = new OutputStreamWriter(out, toCs)) {
       char[] buf = new char[8192];

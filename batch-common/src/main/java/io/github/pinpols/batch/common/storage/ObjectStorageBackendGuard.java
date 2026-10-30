@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.config.StorageBackendGuardProperties;
 import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.stateful.StatefulBackendGuard;
 import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
+import java.util.Locale;
 import javax.sql.DataSource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -14,7 +15,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
 
-/** Refuses unmarked S3/filesystem backend and location changes before the service becomes ready. */
+/** 服务就绪前拒绝未标记的 S3/文件系统后端及位置变更。 */
 @Slf4j
 public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
 
@@ -55,7 +56,9 @@ public class ObjectStorageBackendGuard implements ApplicationRunner, Ordered {
   }
 
   StatefulBackendGuard.DesiredBackend desiredBackend() {
-    String backend = backendProperties.getBackend().trim().toLowerCase();
+    String configuredBackend = backendProperties.getBackend();
+    String trimmedBackend = configuredBackend.trim();
+    String backend = trimmedBackend.toLowerCase(Locale.ROOT);
     String identity =
         switch (backend) {
           case ObjectStorageBackends.S3 ->

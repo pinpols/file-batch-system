@@ -11,7 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Pure node-level partition progress calculation used by task outcome processing. */
+/** 供任务结果处理使用的纯节点级分区进度计算逻辑。 */
 final class NodePartitionProgressCalculator {
 
   private NodePartitionProgressCalculator() {}
@@ -22,7 +22,7 @@ final class NodePartitionProgressCalculator {
       String nodeCode,
       WorkflowRunEntity workflowRun) {
     if (EmptyChecks.isBlank(nodeCode)) {
-      return new Result(0, 0, 0, Set.of());
+      return new Result(0, 0, 0, 0, 0, Set.of());
     }
 
     Map<Long, String> statusById = new LinkedHashMap<>();
@@ -45,15 +45,27 @@ final class NodePartitionProgressCalculator {
 
     long successCount = 0L;
     long failedCount = 0L;
+    long cancelledCount = 0L;
+    long terminatedCount = 0L;
     for (Long partitionId : nodePartitionIds) {
       String status = statusById.get(partitionId);
       if (PartitionStatus.SUCCESS.code().equals(status)) {
         successCount++;
       } else if (PartitionStatus.FAILED.code().equals(status)) {
         failedCount++;
+      } else if (PartitionStatus.CANCELLED.code().equals(status)) {
+        cancelledCount++;
+      } else if (PartitionStatus.TERMINATED.code().equals(status)) {
+        terminatedCount++;
       }
     }
-    return new Result(nodePartitionIds.size(), successCount, failedCount, nodePartitionIds);
+    return new Result(
+        nodePartitionIds.size(),
+        successCount,
+        failedCount,
+        cancelledCount,
+        terminatedCount,
+        nodePartitionIds);
   }
 
   private static String resolveTaskNodeCode(
@@ -61,9 +73,10 @@ final class NodePartitionProgressCalculator {
     if (EmptyChecks.isNotBlank(payloadNodeCode)) {
       return payloadNodeCode;
     }
-    if (EmptyChecks.isNotNull(workflowRun)
+    boolean workflowHasCurrentNode = EmptyChecks.isNotNull(workflowRun)
         && EmptyChecks.isNotNull(workflowRun.getCurrentNodeCode())
-        && EmptyChecks.isNotBlank(workflowRun.getCurrentNodeCode())) {
+        && EmptyChecks.isNotBlank(workflowRun.getCurrentNodeCode());
+    if (workflowHasCurrentNode) {
       Set<String> activeNodes =
           TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
       if (activeNodes.size() == 1) {
@@ -73,10 +86,20 @@ final class NodePartitionProgressCalculator {
     return fallbackNodeCode;
   }
 
-  record Result(int partitionCount, long successCount, long failedCount, Set<Long> partitionIds) {
+  record Result(
+      int partitionCount,
+      long successCount,
+      long failedCount,
+      long cancelledCount,
+      long terminatedCount,
+      Set<Long> partitionIds) {
+
+    long unsuccessfulCount() {
+      return failedCount + cancelledCount + terminatedCount;
+    }
 
     boolean allFinished() {
-      return partitionCount > 0 && successCount + failedCount == partitionCount;
+      return partitionCount > 0 && successCount + unsuccessfulCount() == partitionCount;
     }
   }
 }

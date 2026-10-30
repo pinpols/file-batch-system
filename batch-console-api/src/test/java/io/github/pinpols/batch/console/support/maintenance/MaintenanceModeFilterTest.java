@@ -9,18 +9,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
+import io.micrometer.common.KeyValue;
+import io.micrometer.common.KeyValues;
 import jakarta.servlet.FilterChain;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.server.observation.ServerRequestObservationContext;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.filter.ServerHttpObservationFilter;
 
 @DisplayName("维护模式过滤器: 全屏拦截、只读放行与管理员受限旁路")
 class MaintenanceModeFilterTest {
@@ -55,6 +60,36 @@ class MaintenanceModeFilterTest {
     SecurityContextHolder.clearContext();
   }
 
+  @Test
+  @DisplayName("计划维护拒绝标记为预期 HTTP 请求，真实共享状态故障不做同类标记")
+  void shouldTagOnlyPlannedMaintenanceRejections() throws Exception {
+    MaintenanceState active =
+        new MaintenanceState(true, false, "维护", null, null, List.of(), 1L, Instant.now(), true);
+    stateHolder.update(active);
+    MockHttpServletRequest request = get("/api/console/jobs");
+    ServerRequestObservationContext observation =
+        new ServerRequestObservationContext(request, response);
+    request.setAttribute(
+        ServerHttpObservationFilter.CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE, observation);
+    filter.doFilterInternal(request, response, chain);
+    MaintenanceHttpObservationConvention convention = new MaintenanceHttpObservationConvention();
+    KeyValues plannedTags = convention.getLowCardinalityKeyValues(observation);
+    assertThat(plannedTags).contains(KeyValue.of("maintenance", "planned"));
+
+    properties.setEnabled(false);
+    stateHolder.initFromProperties();
+    MockHttpServletResponse unavailableResponse = new MockHttpServletResponse();
+    MockHttpServletRequest write = new MockHttpServletRequest("POST", "/api/console/jobs");
+    ServerRequestObservationContext unavailable =
+        new ServerRequestObservationContext(write, unavailableResponse);
+    write.setAttribute(
+        ServerHttpObservationFilter.CURRENT_OBSERVATION_CONTEXT_ATTRIBUTE, unavailable);
+    filter.doFilterInternal(write, unavailableResponse, chain);
+    assertThat(unavailableResponse.getStatus()).isEqualTo(503);
+    KeyValues failedTags = convention.getLowCardinalityKeyValues(unavailable);
+    assertThat(failedTags).contains(KeyValue.of("maintenance", "none"));
+  }
+
   private void refresh() {
     stateHolder.initFromProperties();
   }
@@ -72,12 +107,7 @@ class MaintenanceModeFilterTest {
   @DisplayName("计划维护开始前公告生效但业务写请求仍放行")
   void shouldAllowWritesBeforeScheduledStart() throws Exception {
     stateHolder.update(new MaintenanceState(
-        true,
-        true,
-        "planned maintenance",
-        null,
-        java.time.Instant.now().plusSeconds(3600),
-        List.of()));
+        true, true, "planned maintenance", null, Instant.now().plusSeconds(3600), List.of()));
 
     filter.doFilterInternal(
         new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);
@@ -90,12 +120,7 @@ class MaintenanceModeFilterTest {
   @DisplayName("计划开始时间到达后维护拦截立即生效")
   void shouldBlockAfterScheduledStart() throws Exception {
     stateHolder.update(new MaintenanceState(
-        true,
-        true,
-        "maintenance active",
-        null,
-        java.time.Instant.now().minusSeconds(1),
-        List.of()));
+        true, true, "maintenance active", null, Instant.now().minusSeconds(1), List.of()));
 
     filter.doFilterInternal(
         new MockHttpServletRequest("POST", "/api/console/jobs"), response, chain);
@@ -214,7 +239,7 @@ class MaintenanceModeFilterTest {
     properties.setReadOnly(true);
     refresh();
 
-    // GET: passes through with X-Maintenance: read-only
+    // GET 请求：携带 X-Maintenance: read-only 后应正常通过。
     filter.doFilterInternal(get("/api/console/jobs"), response, chain);
     assertThat(chainInvoked).isTrue();
     assertThat(response.getHeader("X-Maintenance")).isEqualTo("read-only");

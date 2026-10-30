@@ -2,13 +2,22 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.res
 
 import java.time.Instant;
 import java.util.List;
+import lombok.Builder;
 
+@Builder
 public record WorkflowDefinitionDetailResponse(
     Long id,
     String tenantId,
     String workflowCode,
     String workflowName,
     String workflowType,
+    Long singleJobDefinitionId,
+    String scheduleType,
+    String scheduleExpr,
+    String timezone,
+    String triggerMode,
+    String calendarCode,
+    String dependsOnJobCode,
     Integer version,
     Boolean enabled,
     String description,

@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WorkflowMonitoringMapper">
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="acquireAlertLock" resultType="string">
+        SELECT pg_advisory_xact_lock(hashtextextended(
+            'runtime-sla:' || #{tenantId} || ':' || #{resourceKey} || ':' || #{violation}, 0))
+    </select>
+
+    <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="workflow_definition_id" javaType="java.lang.Long"/>
+            <arg column="workflow_code" javaType="java.lang.String"/>
+            <arg column="workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="occurrence_id" javaType="java.lang.Long"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="trace_id" javaType="java.lang.String"/>
+            <arg column="resource_key" javaType="java.lang.String"/>
+            <arg column="expected_at" javaType="java.time.Instant"/>
+            <arg column="started_at" javaType="java.time.Instant"/>
+            <arg column="finished_at" javaType="java.time.Instant"/>
+            <arg column="opportunity_closed_at" javaType="java.time.Instant"/>
+            <arg column="monitoring_deadline_at" javaType="java.time.Instant"/>
+            <arg column="severity" javaType="java.lang.String"/>
+            <arg column="violation" javaType="io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate$Violation"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectCandidates" resultMap="candidateMap" timeout="5">
+        WITH policies AS (
+            SELECT policy.*, definition.workflow_code, definition.timezone
+            FROM batch.workflow_monitoring_policy policy
+            JOIN batch.workflow_definition definition
+              ON definition.tenant_id = policy.tenant_id AND definition.id = policy.workflow_definition_id
+            WHERE policy.tenant_id = #{tenantId}
+        ), opportunities AS (
+            SELECT policy.*, occurrence.id AS occurrence_id, occurrence.biz_date,
+                   occurrence.scheduled_fire_time AS expected_at,
+                   'scheduled_occurrence:' || occurrence.id AS resource_key,
+                   occurrence.request_id,
+                   CASE WHEN occurrence.occurrence_status NOT IN
+                        ('PLANNED', 'REQUESTED', 'WAITING_READINESS', 'MISFIRE_PENDING')
+                        THEN occurrence.updated_at END AS opportunity_closed_at
+            FROM policies policy
+            JOIN batch.scheduled_occurrence occurrence
+              ON occurrence.tenant_id = policy.tenant_id
+             AND occurrence.workflow_definition_id = policy.workflow_definition_id
+            UNION ALL
+            SELECT policy.*, occurrence.id AS occurrence_id, occurrence.biz_date,
+                   COALESCE(occurrence.due_at, occurrence.expected_at) AS expected_at,
+                   'expected_work_occurrence:' || occurrence.id AS resource_key,
+                   occurrence.trigger_request_id AS request_id,
+                   CASE WHEN occurrence.occurrence_status IN ('CANCELLED', 'EXPIRED')
+                        THEN occurrence.updated_at END AS opportunity_closed_at
+            FROM policies policy
+            JOIN batch.expected_work_occurrence occurrence
+              ON occurrence.tenant_id = policy.tenant_id
+             AND occurrence.workflow_definition_id = policy.workflow_definition_id
+        ), observed AS (
+            SELECT opportunity.*, run.id AS workflow_run_id,
+                   COALESCE(run.trace_id, request.trace_id) AS trace_id,
+                   run.started_at, run.finished_at,
+                   CASE WHEN run.id IS NULL THEN opportunity.opportunity_closed_at END AS closed_without_run_at,
+                   opportunity.expected_at + opportunity.start_grace_seconds * INTERVAL '1 second' AS start_deadline,
+                   ((opportunity.expected_at AT TIME ZONE opportunity.timezone)::date
+                     + opportunity.completion_deadline_day_offset
+                     + opportunity.completion_deadline_local_time) AT TIME ZONE opportunity.timezone AS completion_deadline
+            FROM opportunities opportunity
+            LEFT JOIN batch.trigger_request request
+              ON request.tenant_id = opportunity.tenant_id AND request.request_id = opportunity.request_id
+             AND request.workflow_definition_id = opportunity.workflow_definition_id
+             AND request.parent_workflow_run_id IS NULL
+            <!-- 归档不能抹去已执行事实; 冷表仅在同一请求不存在热记录时参与。 -->
+            LEFT JOIN LATERAL (
+                SELECT run.id, run.trace_id, run.started_at, run.finished_at, run.dry_run
+                FROM batch.workflow_run run
+                WHERE run.tenant_id = request.tenant_id AND run.trigger_request_id = request.id
+                  AND run.workflow_definition_id = opportunity.workflow_definition_id
+                UNION ALL
+                SELECT run.id, run.trace_id, run.started_at, run.finished_at, run.dry_run
+                FROM archive.workflow_run_archive run
+                WHERE run.tenant_id = request.tenant_id AND run.trigger_request_id = request.id
+                  AND run.workflow_definition_id = opportunity.workflow_definition_id
+                  AND NOT EXISTS (
+                      SELECT 1 FROM batch.workflow_run hot
+                      WHERE hot.tenant_id = request.tenant_id AND hot.trigger_request_id = request.id
+                        AND hot.workflow_definition_id = opportunity.workflow_definition_id)
+            ) run ON true
+            WHERE opportunity.expected_at IS NOT NULL AND COALESCE(run.dry_run, false) = false
+              AND COALESCE(request.dry_run, false) = false
+        ), candidates AS (
+            SELECT tenant_id, workflow_definition_id, workflow_code, workflow_run_id, occurrence_id,
+                   biz_date, trace_id, resource_key, expected_at, started_at, finished_at,
+                   closed_without_run_at AS opportunity_closed_at, start_deadline AS monitoring_deadline_at,
+                   start_grace_severity AS severity, 'NOT_STARTED' AS violation,
+                   'WORKFLOW_NOT_STARTED_BY_DEADLINE' AS alert_type
+            FROM observed
+            WHERE start_grace_seconds &gt; 0 AND start_deadline &lt; CURRENT_TIMESTAMP
+              AND COALESCE(started_at, finished_at, closed_without_run_at, CURRENT_TIMESTAMP) &gt; start_deadline
+              AND COALESCE(started_at, finished_at, closed_without_run_at, CURRENT_TIMESTAMP) &gt;= policy_effective_at
+            UNION ALL
+            SELECT tenant_id, workflow_definition_id, workflow_code, workflow_run_id, occurrence_id,
+                   biz_date, trace_id, resource_key, expected_at, started_at, finished_at,
+                   closed_without_run_at, completion_deadline, completion_deadline_severity,
+                   'NOT_COMPLETED_BY_DEADLINE', 'WORKFLOW_NOT_COMPLETED_BY_DEADLINE'
+            FROM observed
+            WHERE completion_deadline_local_time IS NOT NULL AND completion_deadline &lt; CURRENT_TIMESTAMP
+              AND COALESCE(finished_at, closed_without_run_at, CURRENT_TIMESTAMP) &gt; completion_deadline
+              AND COALESCE(finished_at, closed_without_run_at, CURRENT_TIMESTAMP) &gt;= policy_effective_at
+            UNION ALL
+            SELECT run.tenant_id, run.workflow_definition_id, policy.workflow_code, run.id,
+                   NULL::bigint, run.biz_date, run.trace_id, 'workflow_run:' || run.id,
+                   NULL::timestamptz, run.started_at, run.finished_at, NULL::timestamptz,
+                   run.started_at + policy.soft_runtime_seconds * INTERVAL '1 second',
+                   policy.soft_runtime_severity, 'RUNNING_TOO_LONG', 'WORKFLOW_RUNNING_TOO_LONG'
+            FROM batch.workflow_run run
+            JOIN policies policy
+              ON policy.tenant_id = run.tenant_id AND policy.workflow_definition_id = run.workflow_definition_id
+            WHERE run.dry_run = false AND run.started_at IS NOT NULL AND policy.soft_runtime_seconds &gt; 0
+              AND COALESCE(run.finished_at, CURRENT_TIMESTAMP) &gt;
+                  run.started_at + policy.soft_runtime_seconds * INTERVAL '1 second'
+              AND COALESCE(run.finished_at, CURRENT_TIMESTAMP) &gt;= policy.policy_effective_at
+        )
+        SELECT candidate.* FROM candidates candidate
+        WHERE NOT EXISTS (
+            SELECT 1 FROM batch.alert_event alert
+            WHERE alert.tenant_id = candidate.tenant_id AND alert.alert_type = candidate.alert_type
+              AND alert.detail_json -&gt;&gt; 'monitoringResourceKey' = candidate.resource_key
+        )
+        <if test="resourceKey != null">AND candidate.resource_key = #{resourceKey}</if>
+        <if test="violation != null">AND candidate.violation = #{violation}</if>
+        ORDER BY candidate.monitoring_deadline_at, candidate.resource_key, candidate.violation
+        LIMIT #{limit}
+    </select>
+</mapper>

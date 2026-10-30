@@ -14,6 +14,7 @@ import lombok.Builder;
 public record BatchDayReplaySessionEntity(
     Long id,
     String tenantId,
+    Long replayOperationId,
     String calendarCode,
     LocalDate bizDate,
     String scope,
@@ -67,6 +68,7 @@ public record BatchDayReplaySessionEntity(
     this(
         id,
         tenantId,
+        null,
         calendarCode,
         bizDate,
         scope,

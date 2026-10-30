@@ -114,6 +114,7 @@
             <arg column="failed_count" javaType="java.lang.Long"/>
             <arg column="sla_breached" javaType="java.lang.Long"/>
             <arg column="sla_on_time" javaType="java.lang.Long"/>
+            <arg column="sla_total_with_sla" javaType="java.lang.Long"/>
             <arg column="avg_duration_seconds" javaType="java.math.BigDecimal"/>
             <arg column="max_duration_seconds" javaType="java.math.BigDecimal"/>
             <arg column="total_partitions" javaType="java.lang.Long"/>
@@ -334,7 +335,7 @@
 
     <select id="slaStats" resultMap="SlaStatsResultMap">
         select count(1) filter (where deadline_at is not null and finished_at &gt; deadline_at) as breached,
-               count(1) filter (where deadline_at is not null and (finished_at is null or finished_at &lt;= deadline_at)) as on_time,
+               count(1) filter (where deadline_at is not null and finished_at is not null and finished_at &lt;= deadline_at) as on_time,
                count(1) filter (where deadline_at is not null) as total_with_sla,
                round(avg(extract(epoch from (finished_at - started_at)))::numeric, 2) as avg_duration_seconds
           from batch.job_instance
@@ -350,7 +351,8 @@
                count(1) filter (where i.instance_status = 'SUCCESS') as success_count,
                count(1) filter (where i.instance_status in ('FAILED','PARTIAL_FAILED')) as failed_count,
                count(1) filter (where i.deadline_at is not null and i.finished_at &gt; i.deadline_at) as sla_breached,
-               count(1) filter (where i.deadline_at is not null and (i.finished_at is null or i.finished_at &lt;= i.deadline_at)) as sla_on_time,
+               count(1) filter (where i.deadline_at is not null and i.finished_at is not null and i.finished_at &lt;= i.deadline_at) as sla_on_time,
+               count(1) filter (where i.deadline_at is not null) as sla_total_with_sla,
                round(avg(extract(epoch from (i.finished_at - i.started_at)))::numeric, 2) as avg_duration_seconds,
                round(max(extract(epoch from (i.finished_at - i.started_at)))::numeric, 2) as max_duration_seconds,
                coalesce(sum(i.expected_partition_count), 0) as total_partitions

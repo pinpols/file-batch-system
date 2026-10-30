@@ -1,7 +1,10 @@
 package io.github.pinpols.batch.worker.core.domain;
 
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import lombok.Data;
 
 /**
@@ -63,6 +66,12 @@ public class PulledTask {
 
   /** ADR-014: partition 认领 invocation id（claim 返回的 EffectiveTaskConfig 快照）。 */
   private String partitionInvocationId;
+
+  /** 为显式 Workflow Trigger 目标创建根 Workflow Run，并派发入口节点。 */
+  private List<DependencyResultReference> dependencyResultSnapshot = List.of();
+
+  /** CLAIM 返回的整 Workflow Replay 能力围栏；缺失时不启用重放专用分支。 */
+  private ReplayExecutionGuard replayExecutionGuard;
 
   /**
    * P0-1: task 超时秒数 (从 EffectiveTaskConfig.timeoutSeconds 透传, 即 step_definition.timeout_seconds).

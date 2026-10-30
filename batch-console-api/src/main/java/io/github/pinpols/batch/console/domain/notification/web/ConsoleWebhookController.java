@@ -5,6 +5,8 @@ import io.github.pinpols.batch.console.application.contract.request.ops.CreateWe
 import io.github.pinpols.batch.console.application.contract.request.ops.UpdateWebhookRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.WebhookDeliveryLogResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.WebhookSubscriptionResponse;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
+import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.UpdateSubscriptionCommand;
@@ -42,9 +44,10 @@ public class ConsoleWebhookController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   public CommonResponse<List<WebhookSubscriptionResponse>> list(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(webhookService.listSubscriptions(tenantId).stream()
-        .map(WebhookSubscriptionResponse::from)
-        .toList());
+    List<WebhookSubscriptionEntity> subscriptions = webhookService.listSubscriptions(tenantId);
+    List<WebhookSubscriptionResponse> responses =
+        subscriptions.stream().map(WebhookSubscriptionResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   @GetMapping("/delivery-logs")
@@ -53,20 +56,22 @@ public class ConsoleWebhookController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    return responseFactory.success(
-        webhookService
-            .deliveryLogs(tenantId, subscriptionId, Math.min(Math.max(limit, 1), 200))
-            .stream()
-            .map(WebhookDeliveryLogResponse::from)
-            .toList());
+    int minimumLimit = Math.max(limit, 1);
+    int effectiveLimit = Math.min(minimumLimit, 200);
+    List<WebhookDeliveryLogEntity> deliveryLogs =
+        webhookService.deliveryLogs(tenantId, subscriptionId, effectiveLimit);
+    List<WebhookDeliveryLogResponse> responses =
+        deliveryLogs.stream().map(WebhookDeliveryLogResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   @GetMapping("/{id}")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
   public CommonResponse<WebhookSubscriptionResponse> detail(
       @RequestParam("tenantId") String tenantId, @PathVariable Long id) {
-    return responseFactory.success(
-        WebhookSubscriptionResponse.from(webhookService.getSubscription(tenantId, id)));
+    WebhookSubscriptionEntity subscription = webhookService.getSubscription(tenantId, id);
+    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+    return responseFactory.success(response);
   }
 
   @PostMapping
@@ -83,8 +88,9 @@ public class ConsoleWebhookController {
         .enabled(request.enabled() == null || request.enabled())
         .operator(operator)
         .build();
-    return responseFactory.success(
-        WebhookSubscriptionResponse.from(webhookService.createSubscription(createCommand)));
+    WebhookSubscriptionEntity subscription = webhookService.createSubscription(createCommand);
+    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+    return responseFactory.success(response);
   }
 
   @PutMapping("/{id}")
@@ -103,8 +109,9 @@ public class ConsoleWebhookController {
         .enabled(request.enabled() == null || request.enabled())
         .operator(operator)
         .build();
-    return responseFactory.success(
-        WebhookSubscriptionResponse.from(webhookService.updateSubscription(updateCommand)));
+    WebhookSubscriptionEntity subscription = webhookService.updateSubscription(updateCommand);
+    WebhookSubscriptionResponse response = WebhookSubscriptionResponse.from(subscription);
+    return responseFactory.success(response);
   }
 
   @DeleteMapping("/{id}")

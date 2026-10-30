@@ -1,8 +1,12 @@
 package io.github.pinpols.batch.worker.dispatchs.mapper;
 
-import java.util.LinkedHashMap;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthBackoffParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthFailureParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthProbeClaimParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthSuccessParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthUpsertParam;
+import java.sql.Timestamp;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface DispatchChannelHealthMapper {
@@ -13,13 +17,13 @@ public interface DispatchChannelHealthMapper {
     UNHEALTHY
   }
 
-  List<Map<String, Object>> findEnabledProbeChannels(
+  List<DispatchChannelConfigView> findEnabledProbeChannels(
       @Param("types") List<String> types, @Param("limit") int limit);
 
-  Map<String, Object> findHealth(
+  DispatchChannelHealthView findHealth(
       @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
 
-  int upsertHealth(Map<String, Object> params);
+  int upsertHealth(DispatchChannelHealthUpsertParam params);
 
   /**
    * A-3.9：CAS 抢占半开探针机会。仅当 next_probe_at &lt;= now 且 health_status 非 HEALTHY 时 将 next_probe_at 更新为
@@ -27,34 +31,35 @@ public interface DispatchChannelHealthMapper {
    *
    * @return 1=本线程抢到半开通行证；0=另一线程已抢走或已恢复 HEALTHY
    */
-  int tryClaimHalfOpenProbe(Map<String, Object> params);
+  int tryClaimHalfOpenProbe(DispatchChannelHealthProbeClaimParam params);
 
   /** P2：成功结果原子 UPSERT —— 置 HEALTHY + consecutive_failures=0。 */
-  default int upsertSuccess(Map<String, Object> params) {
-    Map<String, Object> statementParams = new LinkedHashMap<>(params);
-    statementParams.put("healthyStatus", HealthStatus.HEALTHY.name());
-    return upsertSuccessWithStatus(statementParams);
+  default int upsertSuccess(DispatchChannelHealthSuccessParam params) {
+    return upsertSuccessWithStatus(params, HealthStatus.HEALTHY.name());
   }
 
-  int upsertSuccessWithStatus(Map<String, Object> params);
+  int upsertSuccessWithStatus(
+      @Param("params") DispatchChannelHealthSuccessParam params,
+      @Param("healthyStatus") String healthyStatus);
 
   /**
    * P2：失败结果原子 UPSERT —— consecutive_failures 按数据库 COALESCE+1 递增， 消除 Java 侧读-改-写的
    * lost-update；health_status 按 failureThreshold 动态判。
    */
-  default int upsertFailureAndBump(Map<String, Object> params) {
-    Map<String, Object> statementParams = new LinkedHashMap<>(params);
-    statementParams.put("degradedStatus", HealthStatus.DEGRADED.name());
-    statementParams.put("unhealthyStatus", HealthStatus.UNHEALTHY.name());
-    return upsertFailureAndBumpWithStatuses(statementParams);
+  default int upsertFailureAndBump(DispatchChannelHealthFailureParam params) {
+    return upsertFailureAndBumpWithStatuses(
+        params, HealthStatus.DEGRADED.name(), HealthStatus.UNHEALTHY.name());
   }
 
-  int upsertFailureAndBumpWithStatuses(Map<String, Object> params);
+  int upsertFailureAndBumpWithStatuses(
+      @Param("params") DispatchChannelHealthFailureParam params,
+      @Param("degradedStatus") String degradedStatus,
+      @Param("unhealthyStatus") String unhealthyStatus);
 
   /** P1：仅在失败次数仍等于本次递增结果时回写退避时间，避免并发旧结果覆盖新结果。 */
-  int recalcBackoff(Map<String, Object> params);
+  int recalcBackoff(DispatchChannelHealthBackoffParam params);
 
   long countByHealthStatus(@Param("healthStatus") String healthStatus);
 
-  long countProbeOverdue(@Param("now") java.sql.Timestamp now);
+  long countProbeOverdue(@Param("now") Timestamp now);
 }

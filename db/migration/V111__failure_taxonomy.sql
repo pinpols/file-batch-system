@@ -41,6 +41,7 @@ ALTER TABLE batch.job_task ADD CONSTRAINT ck_job_task_failure_class
     ));
 
 -- archive 镜像同步 (§archive 冷表对齐红线):
+
 ALTER TABLE archive.job_instance_archive
     ADD COLUMN IF NOT EXISTS failure_class VARCHAR(32);
 
@@ -48,6 +49,7 @@ ALTER TABLE archive.job_task_archive
     ADD COLUMN IF NOT EXISTS failure_class VARCHAR(32);
 
 -- 监控 / 失败聚类查询用部分索引 (只索引非 NULL 行, 减少 hot 表负担)
+
 CREATE INDEX IF NOT EXISTS idx_job_instance_failure_class
     ON batch.job_instance (tenant_id, failure_class, finished_at DESC)
     WHERE failure_class IS NOT NULL;

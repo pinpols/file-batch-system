@@ -65,7 +65,8 @@ public class ConsoleAuthApplicationService {
     String username = username(authentication);
     String tenantId = tenantId(authentication);
     long sessionVersion = sessionRegistry.nextSessionVersion(username, tenantId);
-    return jwtService.issueToken(username, tenantId, authorities(authentication), sessionVersion);
+    Set<String> resolvedAuthorities = authorities(authentication);
+    return jwtService.issueToken(username, tenantId, resolvedAuthorities, sessionVersion);
   }
 
   /** OIDC 只负责证明外部身份；签发平台会话时仍重新读取本地账号状态和角色。 */
@@ -81,21 +82,21 @@ public class ConsoleAuthApplicationService {
             () -> BizException.of(ResultCode.UNAUTHORIZED, "error.auth.invalid_credentials"));
     long sessionVersion =
         sessionRegistry.nextSessionVersion(account.username(), account.tenantId());
-    return jwtService
-        .issueToken(account.username(), account.tenantId(), account.authorities(), sessionVersion)
-        .withMustChangePassword(account.mustChangePassword());
+    ConsoleAuthTokenResponse token = jwtService.issueToken(
+        account.username(), account.tenantId(), account.authorities(), sessionVersion);
+    boolean mustChangePassword = account.mustChangePassword();
+    return token.withMustChangePassword(mustChangePassword);
   }
 
   public ConsoleAuthProfileResponse profile(Authentication authentication) {
     Set<String> auths = authorities(authentication);
     String username = username(authentication);
+    String resolvedTenantId = tenantId(authentication);
+    List<ConsoleMenuRegistry.MenuGroup> menus = menuRegistry.filterByAuthorities(auths);
+    Set<String> profileCapabilities = capabilities(username, auths);
+    boolean passwordChangeRequired = mustChangePassword(username);
     return new ConsoleAuthProfileResponse(
-        username,
-        tenantId(authentication),
-        auths,
-        menuRegistry.filterByAuthorities(auths),
-        capabilities(username, auths),
-        mustChangePassword(username));
+        username, resolvedTenantId, auths, menus, profileCapabilities, passwordChangeRequired);
   }
 
   private Set<String> capabilities(String username, Set<String> authorities) {

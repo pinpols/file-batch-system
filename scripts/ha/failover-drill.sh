@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：④ HA 故障演练(混沌):逐组件 kill leader / 滚动重启,断言自动恢复。
+# 用法：在仓库根目录执行 bash scripts/ha/failover-drill.sh；参数与前置环境见下方说明及所属 README。
 # ④ HA 故障演练(混沌):逐组件 kill leader / 滚动重启,断言自动恢复。
 # 这是"HA 真的成立"的证据——把 deploy/ha/README.md 的验证表变成可重复跑的脚本。
 # ⚠️ 会真删 pod,**只在非生产/演练集群跑**(prod 演练需变更窗口 + 知会)。

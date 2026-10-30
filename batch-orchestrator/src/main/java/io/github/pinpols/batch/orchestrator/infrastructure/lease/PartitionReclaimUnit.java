@@ -2,11 +2,16 @@ package io.github.pinpols.batch.orchestrator.infrastructure.lease;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -16,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.List;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.CannotAcquireLockException;
@@ -43,6 +49,7 @@ public class PartitionReclaimUnit {
   private final JobStepInstanceMapper jobStepInstanceMapper;
   private final JobInstanceMapper jobInstanceMapper;
   private final TaskDispatchOutboxService taskDispatchOutboxService;
+  private final TaskOutcomeService taskOutcomeService;
   private final BatchOrchestratorGovernanceProperties governance;
 
   /**
@@ -52,6 +59,10 @@ public class PartitionReclaimUnit {
    */
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void reclaim(JobPartitionEntity partition) {
+    // 与 outcome、重试重排及实例终态化共用围栏。必须在查询/锁定 task、partition 之前取得，
+    // 使 PROCESS Worker 可以在业务库副作用期间持有同一围栏，阻止旧 invocation 与回收交错。
+    jobInstanceMapper.acquireInstanceAdvisoryLock(
+        partition.getTenantId(), partition.getJobInstanceId());
     JobTaskQuery runningTaskQuery = JobTaskQuery.ofPartition(
         partition.getTenantId(),
         partition.getJobInstanceId(),
@@ -63,7 +74,7 @@ public class PartitionReclaimUnit {
     if (task == null) {
       // 无 RUNNING task：partition 在 READY 状态等待被 claim，直接重置版本即可。
       // CAS 冲突说明已被其他流程推进，安静放弃；不需要写 outbox（无 task 可派发）。
-      int reset = jobPartitionMapper.resetForDispatch(
+      int reset = jobPartitionMapper.resetForLeaseReclaim(
           partition.getTenantId(),
           partition.getId(),
           PartitionStatus.READY.code(),
@@ -102,7 +113,46 @@ public class PartitionReclaimUnit {
 
   private void doReclaim(
       JobPartitionEntity partition, JobTaskEntity task, JobInstanceEntity jobInstance) {
-    if (jobPartitionMapper.resetForDispatch(
+    if (EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
+      JobPartitionEntity currentPartition =
+          jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
+      if (EmptyChecks.isNull(currentPartition)
+          || EmptyChecks.isNull(currentPartition.getCurrentInvocationId())
+          || EmptyChecks.isBlank(
+              Objects.requireNonNull(currentPartition.getCurrentInvocationId()))) {
+        throw new ReclaimRetryableException(
+            "non-idempotent task reclaim has no current partition invocation: partitionId="
+                + partition.getId()
+                + ", taskId="
+                + task.getId());
+      }
+      JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(TaskOutcomeCommand.builder()
+          .tenantId(task.getTenantId())
+          .taskId(task.getId())
+          .workerId(task.getAssignedWorkerCode())
+          .success(false)
+          .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
+          .errorMessage(
+              "Worker lease expired after non-idempotent execution started; external outcome requires reconciliation.")
+          .partitionInvocationId(currentPartition.getCurrentInvocationId())
+          .build());
+      if (EmptyChecks.isNull(outcome)) {
+        throw new ReclaimRetryableException(
+            "non-idempotent task outcome was not recorded: partitionId="
+                + partition.getId()
+                + ", taskId="
+                + task.getId());
+      }
+      log.warn(
+          "expired non-idempotent task closed as external outcome unknown: tenantId={},"
+              + " partitionId={}, taskId={}, invocationId={}",
+          task.getTenantId(),
+          partition.getId(),
+          task.getId(),
+          currentPartition.getCurrentInvocationId());
+      return;
+    }
+    if (jobPartitionMapper.resetForLeaseReclaim(
             partition.getTenantId(),
             partition.getId(),
             PartitionStatus.READY.code(),
@@ -117,9 +167,8 @@ public class PartitionReclaimUnit {
     // partition(markStatus)。
     // 若这里直接 resetForRetry(task 行锁)采用默认「等待」语义,当 outcome 正持有该 task 行、并反向等待本事务已持有的
     // partition 行时,构成 40P01 行锁反转死锁(OutcomeVsReclaimDeadlockIntegrationTest 已真复现)。#768 的
-    // instance advisory lock 只串行化 outcome-vs-outcome(reclaim 不取该 advisory lock),无法限制这条 2 行反转。
-    // 修法:reclaim 是尽力而为的后台清理,先用 FOR UPDATE NOWAIT 试取 task 行锁——抢不到(=该 task 正被 outcome 回报)
-    // 就抛 ReclaimRetryableException 让本事务回滚(撤销上面的 partition reset)、本轮让路,由 15s 后的下一轮重试。
+    // 当前 reclaim 和 outcome 在各自行锁操作前共用 instance advisory lock；NOWAIT 仍保留，
+    // 对未使用该围栏且持有 task 行锁的并发操作主动让路，并回滚上面的 partition reset，等待下一轮重试。
     // reclaim 因此永不「等待」task 行锁,不再参与任何等待环。CAS/version/前态条件一律不变。
     try {
       jobTaskMapper.lockForReclaimNoWait(partition.getTenantId(), task.getId());
@@ -130,7 +179,7 @@ public class PartitionReclaimUnit {
               + ", taskId="
               + task.getId());
     }
-    if (jobTaskMapper.resetForRetry(
+    if (jobTaskMapper.resetForLeaseReclaim(
             partition.getTenantId(), task.getId(), TaskStatus.READY.code(), task.getVersion())
         <= 0) {
       // 第二步 CAS 失败：partition 已被本事务 reset 为 READY 但 task 仍 RUNNING。
@@ -151,6 +200,10 @@ public class PartitionReclaimUnit {
               + ", taskId="
               + task.getId());
     }
+    // resetForRetry 会清除已持久化的分配信息。让下方用于
+    // 构造 Outbox 的内存快照保持一致，使回收任务路由到 Worker 池，而不是
+    // 路由到上一次尝试中的失效 Worker 实例。
+    task.setAssignedWorkerCode(null);
 
     // eventKey 包含 partition.version（reset 前读到的值），保证同一 partition 多次 reclaim 写入不同 outbox 行：
     // outbox_event 的 UNIQUE(tenant_id, event_key) 在 ON CONFLICT DO NOTHING 语义下，
@@ -158,8 +211,15 @@ public class PartitionReclaimUnit {
     // partition 永远等不到派发事件。
     String eventKey =
         partition.getTenantId() + ":reclaim:" + partition.getId() + ":v" + partition.getVersion();
-    taskDispatchOutboxService.writeDispatchEvent(
-        jobInstance, task, partition, jobInstance.getTraceId(), eventKey, RunMode.RECOVER);
+    TaskDispatchEventCommand dispatchCommand = TaskDispatchEventCommand.builder()
+        .jobInstance(jobInstance)
+        .task(task)
+        .partition(partition)
+        .traceId(jobInstance.getTraceId())
+        .eventKey(eventKey)
+        .runModeOverride(RunMode.RECOVER)
+        .build();
+    taskDispatchOutboxService.writeDispatchEvent(dispatchCommand);
     log.warn(
         "expired partition reclaimed and re-dispatched: tenantId={},"
             + " partitionId={}, taskId={}, resetSteps={}, fromVersion={}, leaseWindowSeconds={}",

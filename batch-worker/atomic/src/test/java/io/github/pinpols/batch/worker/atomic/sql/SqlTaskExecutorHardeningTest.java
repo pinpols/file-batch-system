@@ -28,7 +28,7 @@ class SqlTaskExecutorHardeningTest {
     executor = new SqlTaskExecutor(props, beanFactory, ds);
   }
 
-  // ─── (a) DO block → DDL ──────────────────────────────────────────────────────
+  // ─── (a) DO 代码块创建 DDL ──────────────────────────────────────────────────────
 
   @Test
   @DisplayName("匿名代码块语句应被识别为结构变更类型")

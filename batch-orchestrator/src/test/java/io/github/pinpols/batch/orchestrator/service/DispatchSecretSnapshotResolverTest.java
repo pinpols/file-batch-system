@@ -2,16 +2,18 @@ package io.github.pinpols.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -27,9 +29,6 @@ class DispatchSecretSnapshotResolverTest {
   @Mock
   private DispatchSecretBindingMapper bindingMapper;
 
-  @Mock
-  private WorkflowNodeMapper workflowNodeMapper;
-
   @Test
   @DisplayName("Dispatch 实例快照保存版本 ID 和版本号,不保存密钥材料")
   void pinsCurrentVersion_whenDispatchInstanceCreated() {
@@ -38,34 +37,123 @@ class DispatchSecretSnapshotResolverTest {
         .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", 42L, 3)));
 
     Map<String, Object> result =
-        resolver.pin("t1", JobType.DISPATCH.code(), null, Map.of("channelCode", "CH1"));
+        resolver.pin("t1", JobType.DISPATCH.code(), Map.of("channelCode", "CH1"));
 
     assertThat(result)
         .containsEntry(
-            DispatchSecretSnapshotResolver.SNAPSHOT_KEY,
+            DispatchTaskKeys.SECRET_BINDINGS,
             Map.of(
                 "CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42L, "versionNo", 3)))
         .doesNotContainValue("secret material");
-    verifyNoInteractions(workflowNodeMapper);
   }
 
   @Test
-  @DisplayName("Workflow 节点渠道引用固定到父实例快照")
-  void pinsWorkflowNodeVersions_whenWorkflowInstanceCreated() {
-    WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeParams("{\"channelCode\":\"CH1\"}");
-    when(workflowNodeMapper.selectByWorkflowDefinitionId(9L)).thenReturn(List.of(node));
+  @DisplayName("文件束分发为各分区渠道固定凭据版本")
+  void pinsCurrentVersion_whenBundleDispatchInstanceCreated() {
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
         .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", 42L, 3)));
+    Map<String, Object> params =
+        Map.of("bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")));
 
-    Map<String, Object> result = resolver().pin("t1", JobType.WORKFLOW.code(), 9L, Map.of());
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
 
     assertThat(result)
         .containsEntry(
-            DispatchSecretSnapshotResolver.SNAPSHOT_KEY,
+            DispatchTaskKeys.SECRET_BINDINGS,
             Map.of(
                 "CH1",
                 Map.of("secretRef", "dispatch/key", "secretVersionId", 42L, "versionNo", 3)));
+  }
+
+  @Test
+  @DisplayName("文件束不同分区分别固定各自渠道的凭据版本")
+  void pinsEachChannelVersion_whenBundleHasMultipleTargets() {
+    when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1", "CH2")))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("CH2", "key/two", 51L, 4)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 1, "targetRef", "CH1"),
+            Map.of("sourceFileId", 2, "targetRef", "CH2")));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of(
+                "CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3),
+                "CH2", Map.of("secretRef", "key/two", "secretVersionId", 51L, "versionNo", 4)));
+  }
+
+  @Test
+  @DisplayName("文件束只查询有效分区的渠道密钥，不把业务元数据当渠道")
+  void ignoresUnrelatedTargetRef_whenBundleDispatch() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")),
+        "metadata", Map.of("targetRef", "business-value"));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of("CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3)));
+    verify(bindingMapper).selectCurrentByChannels("t1", List.of("CH1"));
+  }
+
+  @Test
+  @DisplayName("普通分发明确渠道可用时，不因业务元数据引用的其他渠道密钥缺失而阻断")
+  void shouldIgnoreUnavailableUnselectedChannel_whenExplicitTargetIsValid() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("OTHER", "key/other", null, null)));
+    Map<String, Object> params =
+        Map.of("channelCode", "CH1", "metadata", Map.of("targetRef", "OTHER"));
+
+    Map<String, Object> result = resolver().pin("t1", JobType.DISPATCH.code(), params);
+
+    assertThat(result)
+        .containsEntry(
+            DispatchTaskKeys.SECRET_BINDINGS,
+            Map.of("CH1", Map.of("secretRef", "key/one", "secretVersionId", 42L, "versionNo", 3)));
+  }
+
+  @Test
+  @DisplayName("没有明确渠道时未解析候选仍失败关闭")
+  void shouldRejectUnavailableCandidate_whenNoExplicitTargetExists() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+    Map<String, Object> params = Map.of("metadata", Map.of("targetRef", "CH2"));
+
+    assertThatThrownBy(() -> resolver().pin("t1", JobType.DISPATCH.code(), params))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.CREDENTIAL_REF_UNRESOLVED);
+  }
+
+  @Test
+  @DisplayName("文件束任一目标渠道的密钥缺失仍失败关闭")
+  void shouldRejectUnavailableBundleTarget_whenAnotherChannelIsValid() {
+    when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
+        .thenReturn(List.of(
+            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+    Map<String, Object> params = Map.of(
+        "bundleFiles",
+        List.of(
+            Map.of("sourceFileId", 1, "targetRef", "CH1"),
+            Map.of("sourceFileId", 2, "targetRef", "CH2")));
+
+    assertThatThrownBy(() -> resolver().pin("t1", JobType.BUNDLE_DISPATCH.code(), params))
+        .isInstanceOf(BizException.class)
+        .extracting("code")
+        .isEqualTo(ResultCode.CREDENTIAL_REF_UNRESOLVED);
   }
 
   @Test
@@ -77,7 +165,7 @@ class DispatchSecretSnapshotResolverTest {
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
         .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", null, null)));
 
-    assertThatThrownBy(() -> resolver.pin("t1", jobType, null, params))
+    assertThatThrownBy(() -> resolver.pin("t1", jobType, params))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.CREDENTIAL_REF_UNRESOLVED);
@@ -88,21 +176,8 @@ class DispatchSecretSnapshotResolverTest {
   void skipsLookup_whenJobTypeIsNotDispatch() {
     Map<String, Object> params = Map.of("channelCode", "CH1");
 
-    assertThat(resolver().pin("t1", JobType.IMPORT.code(), null, params)).isSameAs(params);
+    assertThat(resolver().pin("t1", JobType.IMPORT.code(), params)).isSameAs(params);
 
-    verifyNoInteractions(bindingMapper, workflowNodeMapper);
-  }
-
-  @Test
-  @DisplayName("Workflow 节点参数为 JSON null 时按空对象处理")
-  void treatsNullNodeParams_asEmptyObject() {
-    WorkflowNodeEntity node = new WorkflowNodeEntity();
-    node.setNodeParams("null");
-    when(workflowNodeMapper.selectByWorkflowDefinitionId(9L)).thenReturn(List.of(node));
-
-    Map<String, Object> result = resolver().pin("t1", JobType.WORKFLOW.code(), 9L, Map.of());
-
-    assertThat(result).isEmpty();
     verifyNoInteractions(bindingMapper);
   }
 
@@ -112,30 +187,30 @@ class DispatchSecretSnapshotResolverTest {
     Map<String, Object> params = Map.of(
         "channelCode",
         "CH1",
-        DispatchSecretSnapshotResolver.SNAPSHOT_KEY,
+        DispatchTaskKeys.SECRET_BINDINGS,
         Map.of("CH1", Map.of("secretRef", "dispatch/old", "secretVersionId", 1L)));
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1"))).thenReturn(List.of());
 
-    Map<String, Object> result = resolver().pin("t1", JobType.DISPATCH.code(), null, params);
+    Map<String, Object> result = resolver().pin("t1", JobType.DISPATCH.code(), params);
 
     assertThat(result)
         .containsEntry("channelCode", "CH1")
-        .doesNotContainKey(DispatchSecretSnapshotResolver.SNAPSHOT_KEY);
+        .doesNotContainKey(DispatchTaskKeys.SECRET_BINDINGS);
   }
 
   @Test
   @DisplayName("非 Dispatch 作业也不传播调用方提供的内部密钥绑定")
   void stripsCallerBindings_whenJobTypeIsNotDispatch() {
     Map<String, Object> params = Map.of(
-        DispatchSecretSnapshotResolver.SNAPSHOT_KEY,
+        DispatchTaskKeys.SECRET_BINDINGS,
         Map.of("CH1", Map.of("secretRef", "dispatch/old", "secretVersionId", 1L)));
 
-    assertThat(resolver().pin("t1", JobType.IMPORT.code(), null, params))
-        .doesNotContainKey(DispatchSecretSnapshotResolver.SNAPSHOT_KEY);
-    verifyNoInteractions(bindingMapper, workflowNodeMapper);
+    assertThat(resolver().pin("t1", JobType.IMPORT.code(), params))
+        .doesNotContainKey(DispatchTaskKeys.SECRET_BINDINGS);
+    verifyNoInteractions(bindingMapper);
   }
 
   private DispatchSecretSnapshotResolver resolver() {
-    return new DispatchSecretSnapshotResolver(bindingMapper, workflowNodeMapper);
+    return new DispatchSecretSnapshotResolver(bindingMapper);
   }
 }

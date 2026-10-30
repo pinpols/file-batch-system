@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：给本地 console-api 种入 FE e2e RBAC matrix 期望的 2 个租户角色用户。
+# 用法：在仓库根目录执行 bash scripts/local/seed-test-role-users.sh；参数与前置环境见下方说明及所属 README。
 # =============================================================
 # seed-test-role-users.sh
 #

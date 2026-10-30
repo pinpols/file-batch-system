@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
+import io.github.pinpols.batch.sdk.task.SdkCommitCoordinator;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import io.github.pinpols.batch.sdk.task.SdkTaskStoppedException;
@@ -36,8 +38,7 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R>
     super(SdkTypedParameters.defaultObjectMapper(), SdkAbstractTypedExportHandler.class);
   }
 
-  protected SdkAbstractTypedExportHandler(
-      com.fasterxml.jackson.databind.ObjectMapper objectMapper) {
+  protected SdkAbstractTypedExportHandler(ObjectMapper objectMapper) {
     super(objectMapper, SdkAbstractTypedExportHandler.class);
   }
 
@@ -111,16 +112,20 @@ public abstract class SdkAbstractTypedExportHandler<I, O, R>
           if (++sinceCommit >= interval) {
             // ADR-037 决策二 + 三:断点保存 + 限流上报三合一;提交后命中取消则安全点抛停止。
             ctx.commitCoordinator().recordBatch(sinceCommit, 0);
-            ctx.commit(breakPosition(input, row));
+            Map<String, Object> batchBreakPosition = breakPosition(input, row);
+            ctx.commit(batchBreakPosition);
             sinceCommit = 0;
           }
         }
       }
       if (sinceCommit > 0) {
         ctx.commitCoordinator().recordBatch(sinceCommit, 0);
-        ctx.commit(breakPosition(input, lastRow));
+        Map<String, Object> batchBreakPosition = breakPosition(input, lastRow);
+        ctx.commit(batchBreakPosition);
       }
-      ctx.commitCoordinator().markCompleted(breakPosition(input, lastRow));
+      SdkCommitCoordinator commitCoordinator = ctx.commitCoordinator();
+      Map<String, Object> completedBreakPosition = breakPosition(input, lastRow);
+      commitCoordinator.markCompleted(completedBreakPosition);
       SdkTaskResult explicit = writeOut(input, ctx, counts);
       if (explicit != null) {
         return explicit;

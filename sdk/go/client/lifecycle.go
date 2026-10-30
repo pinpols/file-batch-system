@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -213,6 +214,14 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 				return
 			}
 			msg, disp := w.pipeline.OnMessage(rec)
+			if disp == DispositionBackpressure {
+				// 当前记录已被适配器取出, 必须原地保留到容量恢复, 不能继续拉取并跨过其 offset。
+				w.consumer.Pause()
+				if !w.awaitCapacity(ctx) {
+					return
+				}
+				msg, disp = w.pipeline.OnMessage(rec)
+			}
 			switch disp {
 			case DispositionAccepted:
 				// dispatch() reports whether the offset is safe to commit: claim
@@ -244,6 +253,28 @@ func (w *Worker) consumeLoop(ctx context.Context) {
 	}
 }
 
+// awaitCapacity 保持当前消费记录, 使用原有低水位判定恢复, 停机时及时退出。
+func (w *Worker) awaitCapacity(ctx context.Context) bool {
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if w.draining.Load() || ctx.Err() != nil {
+			return false
+		}
+		decision := protocol.DecideBackpressure(w.registry.Count(), w.cfg.MaxConcurrentTasks, true)
+		if decision.Kafka != nil && *decision.Kafka == "resume" {
+			w.fsm.ApplyKafkaDirective(decision.Kafka)
+			w.consumer.Resume()
+			return true
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}
+
 // dispatch claims, validates parameters, runs the handler, and reports the
 // terminal result. Runs the handler in a goroutine bounded by maxConcurrent via
 // the in-flight registry (backpressure gate already enforced upstream).
@@ -260,11 +291,16 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 	invID := partitionInvocationID(msg)
 	// Mint a FRESH Idempotency-Key per distinct write (fixture 24); do NOT reuse
 	// the Kafka delivery key (which is also empty when the platform omits it).
-	claim, err := w.transport.Claim(ctx, msg.TaskID, protocol.NewIdempotencyKey(), ClaimRequest{
+	claimCall := w.transport.Claim
+	claimContext := ctx
+	taskID := msg.TaskID
+	claimIdempotencyKey := protocol.NewIdempotencyKey()
+	claimRequest := ClaimRequest{
 		TenantID:              w.cfg.TenantID,
 		WorkerID:              w.cfg.WorkerCode,
 		PartitionInvocationID: invID,
-	})
+	}
+	claim, err := claimCall(claimContext, taskID, claimIdempotencyKey, claimRequest)
 	if err != nil {
 		if _, ok := errAsDrop(err); ok {
 			// 404: the task no longer exists; commit-skip (nothing to redeliver).
@@ -291,15 +327,13 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 	w.taskWg.Add(1)
 	go func() {
 		defer w.taskWg.Done()
-		defer w.registry.Remove(msg.TaskID)
 		defer func() {
-			// A slot just freed (registry.Remove ran first). Route the resume
-			// decision through the shared core so the max/2 hysteresis applies:
-			// stay paused while in-flight is still in the [max/2, max) band,
-			// resume only once it drops below max/2. This avoids pause/resume
-			// thrash at the capacity boundary.
+			// 先归还容量再判断恢复, 避免最后一个任务仍被计入在途数。
+			w.registry.Remove(msg.TaskID)
 			if w.fsm.Paused() {
-				d := protocol.DecideBackpressure(w.registry.Count(), w.cfg.MaxConcurrentTasks, true)
+				inFlight := w.registry.Count()
+				maxConcurrent := w.cfg.MaxConcurrentTasks
+				d := protocol.DecideBackpressure(inFlight, maxConcurrent, true)
 				if d.Action == "backpressure" && d.Kafka != nil && *d.Kafka == "resume" {
 					w.fsm.ApplyKafkaDirective(d.Kafka)
 					w.consumer.Resume()
@@ -321,23 +355,53 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 					return
 				}
 				w.logger.Printf("ERROR handler panic taskId=%s: %v", msg.TaskID, r)
-				w.report(msg, invID, Fail(protocol.ErrorCodeExecutionFailed, fmt.Sprintf("panic: %v", r)))
+				panicSummary := fmt.Sprintf("panic: %v", r)
+				failure := Fail(protocol.ErrorCodeExecutionFailed, panicSummary)
+				w.report(msg, invID, failure)
 			}
 		}()
 
 		// §1.8 parameters-path sensitive scan -> SECURITY_REJECTED.
-		if res, rejected := w.validator.ValidateParameters(claim.EffectiveConfig); rejected {
+		parameters := claim.EffectiveConfig
+		if claim.Payload != "" {
+			var payloadParameters map[string]any
+			payloadBytes := []byte(claim.Payload)
+			payloadParseError := json.Unmarshal(payloadBytes, &payloadParameters)
+			claimPayloadIsNotObject := payloadParseError != nil || payloadParameters == nil
+			if claimPayloadIsNotObject {
+				failure := Fail(protocol.ErrorCodeExecutionFailed, "invalid claim payload: expected JSON object")
+				w.report(msg, invID, failure)
+				return
+			}
+			parameters = payloadParameters
+		}
+		if res, rejected := w.validator.ValidateParameters(parameters); rejected {
 			w.report(msg, invID, res)
 			return
 		}
 
 		tc := &TaskContext{
 			TaskID:          msg.TaskID,
-			EffectiveConfig: claim.EffectiveConfig,
+			Parameters:      parameters,
+			EffectiveConfig: parameters,
 			TraceID:         claim.TraceID,
-			DryRun:          dryRunAttribute(msg.RuntimeAttributes, claim.EffectiveConfig),
+			DryRun:          dryRunAttribute(msg.RuntimeAttributes, parameters),
 			Cancellation:    sig,
 			Progress:        NoopProgressReporter{},
+		}
+		// 在业务协程实际进入处理器前确认当前身份；拒绝或响应未知均不伪造业务失败。
+		startRequest := RenewRequest{TenantID: w.cfg.TenantID, WorkerID: w.cfg.WorkerCode,
+			PartitionInvocationID: invID, Details: map[string]any{"executionStarted": true}}
+		startResult, startError := w.transport.Renew(ctx, msg.TaskID, startRequest)
+		if startError != nil || startResult.Revoked {
+			w.logger.Printf("WARN execution start was not confirmed taskId=%s: %v", msg.TaskID, startError)
+			return
+		}
+		if (startResult.CancelRequested != nil && *startResult.CancelRequested) || sig.IsCancellationRequested() {
+			sig.MarkCancelled()
+			cancelled := Fail(protocol.ErrorCodeCancelled, "task cancelled before handler entry")
+			w.report(msg, invID, cancelled)
+			return
 		}
 		result := w.handler.Execute(tc)
 		// If cancelled and handler didn't set a terminal cancel code, normalize.
@@ -390,7 +454,8 @@ func ResultFromError(err error) TaskResult {
 	if stop, ok := IsSdkTaskStopped(err); ok {
 		return stoppedResult(stop)
 	}
-	return Fail(protocol.ErrorCodeExecutionFailed, err.Error())
+	failureSummary := err.Error()
+	return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
 }
 
 // report posts the terminal result with the dispatch idempotency key. It uses a
@@ -404,7 +469,12 @@ func (w *Worker) report(msg TaskDispatchMessage, partitionInvocationID string, r
 	// report cannot replay a stale outcome (fixture 24). partitionInvocationId
 	// threaded through from claim keeps the invariant across claim→renew→report.
 	req := NewReportRequest(msg.TaskID, w.cfg.TenantID, w.cfg.WorkerCode, partitionInvocationID, result)
-	if err := w.transport.Report(ctx, msg.TaskID, protocol.NewIdempotencyKey(), req); err != nil {
+	reportCall := w.transport.Report
+	reportContext := ctx
+	taskID := msg.TaskID
+	reportIdempotencyKey := protocol.NewIdempotencyKey()
+	reportRequest := req
+	if err := reportCall(reportContext, taskID, reportIdempotencyKey, reportRequest); err != nil {
 		w.logger.Printf("WARN report failed taskId=%s code=%s: %v", msg.TaskID, result.ErrorCode, err)
 	}
 }
@@ -458,7 +528,8 @@ func (w *Worker) Stop(timeout time.Duration) {
 		if !w.started.Load() {
 			return
 		}
-		plan := protocol.PlanStop(int(timeout / time.Millisecond))
+		timeoutMillis := int(timeout / time.Millisecond)
+		plan := protocol.PlanStop(timeoutMillis)
 		w.logger.Printf("INFO graceful stop worker=%s within=%dms", w.cfg.WorkerCode, *plan.WithinMs)
 
 		w.draining.Store(true) // reject new Kafka messages immediately.

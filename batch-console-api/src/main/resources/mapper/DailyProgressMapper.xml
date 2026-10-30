@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.observability.mapper.DailyProgressMapper">
+  <resultMap id="count" type="io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressResponse$StatusCount">
+    <constructor><arg column="scope" javaType="java.lang.String"/><arg column="status" javaType="java.lang.String"/><arg column="count" javaType="java.lang.Long"/></constructor>
+  </resultMap>
+  <resultMap id="coverage" type="io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressResponse$Coverage">
+    <constructor><arg column="scheduled" javaType="java.lang.Long"/><arg column="uncovered" javaType="java.lang.Long"/></constructor>
+  </resultMap>
+  <select id="setTenantContext" resultType="string">select set_config('app.tenant_id', #{tenantId}, true)</select>
+  <select id="selectCounts" resultMap="count">
+    with counts as (
+      select 'SCHEDULED_OCCURRENCE' as scope,
+             case when run.run_status is not null then 'RUN_' || run.run_status else occurrence.occurrence_status end as status,
+             count(*) as count
+        from batch.scheduled_occurrence occurrence
+        left join batch.trigger_request request on request.tenant_id = occurrence.tenant_id
+          and request.request_id = occurrence.request_id and request.workflow_definition_id = occurrence.workflow_definition_id
+          and request.biz_date is not distinct from occurrence.biz_date and request.dry_run = false
+        left join batch.workflow_run run on run.tenant_id = request.tenant_id and run.trigger_request_id = request.id
+          and run.workflow_definition_id = occurrence.workflow_definition_id
+          and run.biz_date is not distinct from occurrence.biz_date and run.dry_run = false
+       where occurrence.tenant_id = #{tenantId} and occurrence.biz_date = #{bizDate}
+         and occurrence.occurrence_status != 'SUPERSEDED'
+       group by case when run.run_status is not null then 'RUN_' || run.run_status else occurrence.occurrence_status end
+      union all
+      select 'TRIGGER_REQUEST', request_status, count(*) from batch.trigger_request
+       where tenant_id = #{tenantId} and biz_date = #{bizDate} and dry_run = false
+         and workflow_definition_id is not null and parent_workflow_run_id is null
+       group by request_status
+      union all
+      select 'WORKFLOW_RUN', run_status, count(*) from batch.workflow_run
+       where tenant_id = #{tenantId} and biz_date = #{bizDate} and dry_run = false group by run_status
+      union all
+      select 'JOB_INSTANCE', instance_status, count(*) from batch.job_instance
+       where tenant_id = #{tenantId} and biz_date = #{bizDate} and dry_run = false group by instance_status
+      union all
+      select 'JOB_TASK', task.task_status, count(*) from batch.job_task task
+        join batch.job_instance job on job.tenant_id = task.tenant_id and job.id = task.job_instance_id
+          and job.biz_date = #{bizDate} and job.dry_run = false
+       where task.tenant_id = #{tenantId} and task.dry_run = false
+         and (task.job_instance_biz_date = #{bizDate} or task.job_instance_biz_date is null)
+       group by task.task_status
+    ) select scope, status, count from counts order by scope, status
+  </select>
+  <!-- 与日结覆盖判定保持同一边界：日历cutoff、当前版本和配置修订均需被水位覆盖。 -->
+  <select id="selectCoverage" resultMap="coverage">
+    select count(*) as scheduled,
+           count(*) filter (where day.cutoff_at is null or workflow.schedule_type not in ('CRON','FIXED_RATE') or not exists (
+             select 1 from batch.scheduled_occurrence_coverage coverage
+              where coverage.tenant_id = workflow.tenant_id and coverage.workflow_definition_id = workflow.id
+                and coverage.schedule_version = workflow.version
+                and coverage.calendar_code is not distinct from workflow.calendar_code
+                and coverage.coverage_from_at &lt;= day.cutoff_at and coverage.coverage_through_at &gt;= day.cutoff_at
+                and coverage.last_success_at &gt;= coalesce((select revision.updated_at from batch.tenant_configuration_revision revision where revision.tenant_id = workflow.tenant_id), '-infinity'::timestamptz)
+           )) as uncovered
+      from batch.workflow_definition workflow
+      left join batch.batch_day_instance day on day.tenant_id = workflow.tenant_id
+        and day.calendar_code = workflow.calendar_code and day.biz_date = #{bizDate}
+     where workflow.tenant_id = #{tenantId} and workflow.enabled = true and workflow.schedule_enabled = true
+       and workflow.schedule_type not in ('MANUAL','EVENT') and workflow.trigger_mode in ('SCHEDULED','MIXED')
+  </select>
+</mapper>

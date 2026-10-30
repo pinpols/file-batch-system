@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper">
+    <!-- 冲突时保留冻结载荷；调用方在持锁核对相同请求后处理重复投递。 -->
+    <insert id="insertPending">
+        insert into batch.trigger_launch_recovery
+            (tenant_id, request_id, envelope_ciphertext, trace_id, next_attempt_at)
+        values
+            (#{tenantId}, #{requestId}, #{envelopeCiphertext}, #{traceId}, CURRENT_TIMESTAMP)
+        on conflict (tenant_id, request_id) do nothing
+    </insert>
+
+    <select id="selectByIdentityForUpdate" resultType="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity">
+        select tenant_id as tenantId, request_id as requestId,
+               envelope_ciphertext as envelopeCiphertext, trace_id as traceId,
+               attempts, recovery_generation as recoveryGeneration,
+               recovery_status as recoveryStatus, last_error_code as lastErrorCode
+        from batch.trigger_launch_recovery
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+        for update
+    </select>
+
+    <update id="requeueDead">
+        update batch.trigger_launch_recovery
+        set recovery_status = #{nextStatus}, attempts = 0, recovery_generation = recovery_generation + 1,
+            next_attempt_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId} and recovery_status = 'DEAD'
+    </update>
+
+    <select id="selectDue"
+            resultType="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity">
+        select tenant_id    as tenantId,
+               request_id   as requestId,
+               envelope_ciphertext as envelopeCiphertext,
+               trace_id     as traceId,
+               attempts     as attempts,
+               recovery_generation as recoveryGeneration,
+               recovery_status as recoveryStatus,
+               last_error_code as lastErrorCode
+        from batch.trigger_launch_recovery
+        where recovery_status = 'PENDING'
+          and next_attempt_at &lt;= #{now}
+        order by next_attempt_at asc
+        limit #{limit}
+    </select>
+
+    <update id="markDone">
+        <!-- 同一冻结请求的成功回执优先于重叠恢复写入的失败终态。 -->
+        update batch.trigger_launch_recovery
+        set recovery_status = #{status},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+          and recovery_status in ('PENDING', 'DEAD', 'REJECTED')
+    </update>
+
+    <update id="markAttempt">
+        update batch.trigger_launch_recovery
+        set attempts = attempts + 1,
+            recovery_status = #{status},
+            next_attempt_at = coalesce(#{nextAttemptAt}, next_attempt_at),
+            last_error_code = #{errorCode},
+            last_error_at = CURRENT_TIMESTAMP,
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and request_id = #{requestId}
+          and recovery_generation = #{recoveryGeneration}
+          and recovery_status = 'PENDING'
+    </update>
+
+    <select id="markRetryOrDead" resultType="string" affectData="true" flushCache="true">
+        update batch.trigger_launch_recovery
+        set attempts = attempts + 1,
+            recovery_status = case when attempts + 1 &gt;= #{maxAttempts} then 'DEAD' else 'PENDING' end,
+            next_attempt_at = case when attempts + 1 &gt;= #{maxAttempts} then next_attempt_at
+                else #{now}::timestamptz + make_interval(secs =&gt; least(#{maxBackoffSeconds}::numeric,
+                    greatest(1::numeric, #{baseBackoffSeconds}::numeric * power(2::numeric, least(greatest(attempts, 0), 10))))::double precision) end,
+            last_error_code = #{errorCode}, last_error_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+          and recovery_generation = #{recoveryGeneration} and recovery_status = 'PENDING'
+        returning recovery_status
+    </select>
+</mapper>

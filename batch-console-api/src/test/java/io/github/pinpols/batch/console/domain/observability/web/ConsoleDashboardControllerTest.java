@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -30,16 +29,23 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleDashboardController 8 个端点透传 tenantId + days 参数到 query service。 */
 @DisplayName("看板查询接口:租户与天数参数透传及统计视图返回")
+@ExtendWith(MockitoExtension.class)
 class ConsoleDashboardControllerTest {
 
-  private final ConsoleDashboardQueryService service = mock(ConsoleDashboardQueryService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleDashboardQueryService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach

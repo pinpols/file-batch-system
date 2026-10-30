@@ -11,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.infrastructure.mq.OutboxPublishCircuitBreaker;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.testing.chaos.AbstractChaosIntegrationTest;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,8 +53,8 @@ class OutboxCircuitBreakerRedisDownIntegrationTest extends AbstractChaosIntegrat
 
       StringRedisTemplate template = new StringRedisTemplate(factory);
       OrchestratorRedisSupport redis = new OrchestratorRedisSupport(template, new ObjectMapper());
-      OutboxPublishCircuitBreaker breaker = new OutboxPublishCircuitBreaker(
-          governance, redis, new io.micrometer.core.instrument.simple.SimpleMeterRegistry());
+      OutboxPublishCircuitBreaker breaker =
+          new OutboxPublishCircuitBreaker(governance, redis, new SimpleMeterRegistry());
 
       // 预热:Redis 正常时 allowNow 走通(闭合 → 放行)
       assertThat(breaker.allowNow()).isTrue();

@@ -123,7 +123,8 @@ public class AssetFreshnessPolicyService {
         .detailJson(JsonUtils.toJson(detail))
         .resourceKey(resourceKey)
         .build();
-    alertEventService.emit(alertRequest);
+    RlsTenantContextHolder.runWithTenant(
+        policy.tenantId(), () -> alertEventService.emit(alertRequest));
   }
 
   private boolean validPolicy(AssetFreshnessPolicyEntity policy) {
@@ -140,7 +141,8 @@ public class AssetFreshnessPolicyService {
     if (value == null) {
       return 1;
     }
-    return Math.min(31, Math.max(1, value));
+    int minimumLookbackDays = Math.max(1, value);
+    return Math.min(31, minimumLookbackDays);
   }
 
   private ZoneId resolveZone(String timezone) {

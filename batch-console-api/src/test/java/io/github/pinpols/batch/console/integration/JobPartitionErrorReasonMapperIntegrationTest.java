@@ -91,40 +91,57 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
 
   private long insertJobInstance(String tenantId) {
     String jobCode = "JOB_" + BatchDateTimeSupport.utcEpochMillis();
+    String insertJobDefinitionSql = """
+        INSERT INTO batch.job_definition
+          (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
+        VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
+        RETURNING id
+        """;
+    String jobName = jobCode + "-name";
     long jobDefinitionId =
-        jdbcTemplate.queryForObject("""
-            INSERT INTO batch.job_definition
-              (tenant_id, job_code, job_name, job_type, schedule_type, timezone, created_at, updated_at)
-            VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'Asia/Shanghai', now(), now())
-            RETURNING id
-            """, Long.class, tenantId, jobCode, jobCode + "-name");
+        jdbcTemplate.queryForObject(insertJobDefinitionSql, Long.class, tenantId, jobCode, jobName);
     String instanceNo = "INST-" + BatchDateTimeSupport.utcEpochMillis();
-    return jdbcTemplate.queryForObject(
-        """
+    Date bizDate = Date.valueOf(LocalDate.now());
+    String insertJobInstanceSql = """
         INSERT INTO batch.job_instance
           (tenant_id, job_definition_id, job_code, instance_no, biz_date,
            trigger_type, instance_status, priority, dedup_key, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, 'MANUAL', 'PARTIAL_FAILED', 5, ?, now(), now())
         RETURNING id
-        """,
+        """;
+    String dedupKey = tenantId + ":" + instanceNo;
+    return jdbcTemplate.queryForObject(
+        insertJobInstanceSql,
         Long.class,
         tenantId,
         jobDefinitionId,
         jobCode,
         instanceNo,
-        Date.valueOf(LocalDate.now()),
-        tenantId + ":" + instanceNo);
+        bizDate,
+        dedupKey);
   }
 
   private long insertPartition(
       String tenantId, long jobInstanceId, int partitionNo, String status) {
+    final String insertPartitionSql = """
+    INSERT INTO batch.job_partition
+    (tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_status,
+    created_at, updated_at)
+    VALUES (
+    ?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ? AND id = ?), ?, ?,
+    now(), now()
+    )
+    RETURNING id
+    """;
     return jdbcTemplate.queryForObject(
-        """
-        INSERT INTO batch.job_partition
-          (tenant_id, job_instance_id, partition_no, partition_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, now(), now())
-        RETURNING id
-        """, Long.class, tenantId, jobInstanceId, partitionNo, status);
+        insertPartitionSql,
+        Long.class,
+        tenantId,
+        jobInstanceId,
+        tenantId,
+        jobInstanceId,
+        partitionNo,
+        status);
   }
 
   private void insertTask(
@@ -135,17 +152,24 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
       String errorCode,
       String errorMessage,
       String finishedAtIso) {
+    final String insertJobTaskSql = """
+    INSERT INTO batch.job_task
+    (tenant_id, job_instance_id, job_instance_biz_date, job_partition_id, task_type, task_seq,
+    task_status, error_code, error_message, finished_at, created_at, updated_at)
+    VALUES (
+    ?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ? AND id = ?), ?,
+    'EXECUTION', ?, ?, ?, ?, ?::timestamptz, now(), now()
+    )
+    """;
+    int taskSequence = taskSeq.incrementAndGet();
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.job_task
-          (tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status,
-           error_code, error_message, finished_at, created_at, updated_at)
-        VALUES (?, ?, ?, 'EXECUTION', ?, ?, ?, ?, ?::timestamptz, now(), now())
-        """,
+        insertJobTaskSql,
+        tenantId,
+        jobInstanceId,
         tenantId,
         jobInstanceId,
         partitionId,
-        taskSeq.incrementAndGet(),
+        taskSequence,
         status,
         errorCode,
         errorMessage,

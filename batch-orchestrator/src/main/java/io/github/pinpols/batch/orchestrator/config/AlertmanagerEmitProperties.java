@@ -25,10 +25,10 @@ public class AlertmanagerEmitProperties {
   /** 连接超时（毫秒）。 */
   private long connectTimeoutMillis = 2000L;
 
-  /** OPEN 告警周期重发间隔（秒），维持 AM firing 状态；须 &lt; AM resolve_timeout(默认 5m)。 */
+  /** 活动告警维持及待确认关闭通知的周期重发间隔（秒），维持 AM firing 状态；须 &lt; AM resolve_timeout(默认 5m)。 */
   private int resendIntervalSeconds = 60;
 
-  /** 单轮重发最多取多少条 OPEN 告警。 */
+  /** 每租户每轮分别选取的活动/待确认关闭告警上限；按尝试水位公平轮询，不把限批当成成功。 */
   private int reemitBatchSize = 200;
 
   /** 异步推送线程池上限（off 关键路径，1-2 足够）。 */

@@ -1,59 +1,98 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
+import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
+import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 import java.util.List;
-import java.util.Map;
+import org.apache.ibatis.annotations.Param;
 
 public interface PlatformFileRuntimeMapper {
 
-  Map<String, Object> selectFileRecord(Map<String, Object> params);
+  PlatformFileRecordView selectFileRecord(
+      @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
-  Long countFileRecordByStoragePath(Map<String, Object> params);
+  Long countFileRecordByStoragePath(
+      @Param("tenantId") String tenantId,
+      @Param("storageBucket") String storageBucket,
+      @Param("storagePath") String storagePath);
 
-  Map<String, Object> selectFileRecordByStoragePath(Map<String, Object> params);
+  PlatformFileRecordView selectFileRecordByStoragePath(
+      @Param("tenantId") String tenantId,
+      @Param("storageBucket") String storageBucket,
+      @Param("storagePath") String storagePath);
 
-  Map<String, Object> selectLatestTemplateConfig(Map<String, Object> params);
+  PlatformFileTemplateConfigView selectLatestTemplateConfig(
+      @Param("tenantId") String tenantId,
+      @Param("templateCode") String templateCode,
+      @Param("templateType") String templateType);
 
-  Map<String, Object> selectLatestPipelineDefinition(Map<String, Object> params);
+  int insertPipelineInstance(PlatformPipelineInsertParam params);
 
-  List<Map<String, Object>> selectPipelineStepDefinitions(Map<String, Object> params);
+  int bindFileToPipelineInstance(
+      @Param("tenantId") String tenantId,
+      @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("fileId") Long fileId);
 
-  int insertPipelineInstance(Map<String, Object> params);
+  int updatePipelineStage(
+      @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("currentStage") String currentStage,
+      @Param("lastSuccessStage") String lastSuccessStage);
 
-  int bindFileToPipelineInstance(Map<String, Object> params);
+  int markPipelineSuccess(
+      @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("currentStage") String currentStage,
+      @Param("lastSuccessStage") String lastSuccessStage,
+      @Param("runStatus") String runStatus);
 
-  int updatePipelineStage(Map<String, Object> params);
+  int markPipelineFailed(
+      @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("currentStage") String currentStage,
+      @Param("lastSuccessStage") String lastSuccessStage,
+      @Param("runStatus") String runStatus);
 
-  int markPipelineSuccess(Map<String, Object> params);
+  int markPipelineCompensating(
+      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("runStatus") String runStatus);
 
-  int markPipelineFailed(Map<String, Object> params);
+  Integer selectNextStepRunSeq(
+      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  int markPipelineCompensating(Map<String, Object> params);
+  int lockStepRunSequence(
+      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  Integer selectNextStepRunSeq(Map<String, Object> params);
+  List<String> selectSucceededStepCodes(@Param("pipelineInstanceId") Long pipelineInstanceId);
 
-  int lockStepRunSequence(Map<String, Object> params);
+  String selectLatestSucceededStepOutputSummary(
+      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);
 
-  List<String> selectSucceededStepCodes(Map<String, Object> params);
+  int insertStepRun(PlatformStepRunInsertParam params);
 
-  String selectLatestSucceededStepOutputSummary(Map<String, Object> params);
+  int finishStepRun(PlatformStepRunFinishParam params);
 
-  int insertStepRun(Map<String, Object> params);
+  /** 在分配文件版本前锁住租户与逻辑文件身份；事务结束自动释放，也覆盖尚无文件行的首代登记。 */
+  int lockFileGeneration(@Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  int finishStepRun(Map<String, Object> params);
+  Integer selectMaxFileGenerationNo(
+      @Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  Integer selectMaxFileGenerationNo(Map<String, Object> params);
+  int markHistoricalFileNotLatest(
+      @Param("tenantId") String tenantId, @Param("fileCode") String fileCode);
 
-  int markHistoricalFileNotLatest(Map<String, Object> params);
+  int insertFileRecord(PlatformFileInsertParam params);
 
-  int insertFileRecord(Map<String, Object> params);
+  String selectFileStatus(@Param("fileId") Long fileId);
 
-  String selectFileStatus(Map<String, Object> params);
+  int updateFileRecordStatus(
+      @Param("fileId") Long fileId,
+      @Param("fileStatus") String fileStatus,
+      @Param("metadataJson") String metadataJson);
 
-  int updateFileRecordStatus(Map<String, Object> params);
+  int updateFileRecordMetadata(
+      @Param("fileId") Long fileId, @Param("metadataJson") String metadataJson);
 
-  int updateFileRecordMetadata(Map<String, Object> params);
+  int insertFileErrorRecord(PlatformFileErrorInsertParam params);
 
-  int insertFileErrorRecord(Map<String, Object> params);
-
-  int insertFileAuditLog(Map<String, Object> params);
+  int insertFileAuditLog(PlatformFileAuditInsertParam params);
 }

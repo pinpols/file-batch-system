@@ -1,5 +1,7 @@
 # ADR-002: 使用事务性 Outbox 模式发布 Kafka 事件，不直接写 Kafka
 
+> **当前适用性（2026-10-24）**：事务性 Outbox 继续适用；V182 全局去重台账控制跨分区事件身份，Mapper 同事务认领后写事件。Job/Workflow 终态事件与消费回执独立，不能把发布ACK当业务交付完成。 原决策与历史阶段记录保留。
+
 - **状态**: 已采纳
 - **日期**: 2026-03-25
 - **决策人**: 后端平台团队
@@ -79,26 +81,18 @@ V80 另起 `batch.trigger_outbox_event`（trigger → orchestrator 异步 launch
 
 ### 状态机
 
-```
-            insert
-        ┌──────────────────────────────┐
-        │                              ▼
-     [NEW]                        markPublishing (CAS, NEW|FAILED→PUBLISHING)
-        │                              │  publish_attempt += 1
-        │                              ▼
-        │                         [PUBLISHING] ──── Kafka send 阶段三 ────┐
-        │                              │                                  │
-        │                              │ stale > 120s                     │
-        │                              │ resetStalePublishing             │
-        │                              ▼                                  │
-        │                         [FAILED] ◄──── markFailed (next_publish_at = now + backoff)
-        │                              │
-        │                              │ publish_attempt >= 5
-        │                              ▼
-        │                         [GIVE_UP] ── 终态，需手工 republish
-        │
-        ▼
-   [PUBLISHED] ── 终态，归档/清理 cutoff 后删除
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+stateDiagram-v2
+  [*] --> NEW: INSERT
+  NEW --> PUBLISHING: CAS 认领
+  FAILED --> PUBLISHING: 到期重试
+  PUBLISHING --> PUBLISHED: Kafka ACK
+  PUBLISHING --> FAILED: 失败 / 陈旧回收
+  FAILED --> GIVE_UP: 尝试耗尽
+  PUBLISHED --> [*]
+  GIVE_UP --> [*]
 ```
 
 `selectPending` 拉 `NEW + FAILED`（PUBLISHING 不拉，由 `resetStalePublishing` 拨回）。GIVE_UP 转入条件：`publishAttempt >= maxRetryAttempts(=5)`。

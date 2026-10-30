@@ -1,77 +1,99 @@
 package io.github.pinpols.batch.common.stateful;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.Locale;
 
-/** Builds stable, non-secret location identities for guarded stateful backends. */
+/** 为受保护的有状态后端生成稳定且不含秘密信息的位置标识。 */
 public final class StatefulBackendIdentity {
 
   private StatefulBackendIdentity() {}
 
   public static String database(String jdbcUrl) {
-    return "jdbc=" + normalized(sanitizeJdbcLocation(jdbcUrl));
+    String sanitizedJdbcLocation = sanitizeLocation(jdbcUrl, true);
+    return "jdbc=" + sanitizedJdbcLocation;
   }
 
   public static String redis(
       String host, int port, int database, String sentinelMaster, String sentinelNodes) {
-    if (hasText(sentinelMaster)) {
-      return "sentinel="
-          + normalized(sentinelMaster)
-          + "|nodes="
-          + normalized(sentinelNodes)
-          + "|db="
-          + database;
-    }
+    return hasText(sentinelMaster)
+        ? redisSentinel(sentinelMaster, sentinelNodes, database)
+        : redisStandalone(host, port, database);
+  }
+
+  public static String redisStandalone(String host, int port, int database) {
     return "host=" + normalized(host) + "|port=" + port + "|db=" + database;
+  }
+
+  public static String redisSentinel(String master, String nodes, int database) {
+    return "sentinel=" + trimmed(master) + "|nodes=" + normalized(nodes) + "|db=" + database;
+  }
+
+  public static String redisCluster(String nodes) {
+    return "cluster=" + normalized(nodes);
+  }
+
+  public static String redisMasterReplica(String nodes) {
+    return "master-replica=" + normalized(nodes);
   }
 
   public static String s3(String endpoint, String region, String bucket) {
     return "endpoint="
-        + normalized(endpoint)
+        + sanitizeLocation(endpoint, false)
         + "|region="
-        + normalized(region)
+        + trimmed(region)
         + "|bucket="
-        + normalized(bucket);
+        + trimmed(bucket);
   }
 
   public static String filesystem(String root, String bucket) {
-    String normalizedRoot =
-        hasText(root) ? Path.of(root).toAbsolutePath().normalize().toString() : "";
-    return "root=" + normalizedRoot + "|bucket=" + normalized(bucket);
+    String normalizedRoot = "";
+    if (hasText(root)) {
+      Path rootPath = Path.of(root);
+      Path absoluteRoot = rootPath.toAbsolutePath();
+      Path normalizedPath = absoluteRoot.normalize();
+      normalizedRoot = normalizedPath.toString();
+    }
+    return "root=" + normalizedRoot + "|bucket=" + trimmed(bucket);
   }
 
   public static String sqlite(Path path) {
-    return "path=" + path.toAbsolutePath().normalize();
+    Path absolutePath = path.toAbsolutePath();
+    Path normalizedPath = absolutePath.normalize();
+    return "path=" + normalizedPath;
   }
 
-  private static String sanitizeJdbcLocation(String jdbcUrl) {
-    if (!hasText(jdbcUrl)) {
+  private static String sanitizeLocation(String location, boolean omitParameters) {
+    if (!hasText(location)) {
       return "";
     }
-    String value = jdbcUrl.trim();
-    int queryStart = value.indexOf('?');
+    String value = location.trim();
+    int queryStart = omitParameters ? value.indexOf('?') : -1;
     if (queryStart >= 0) {
       value = value.substring(0, queryStart);
     }
-    int fragmentStart = value.indexOf('#');
+    int fragmentStart = omitParameters ? value.indexOf('#') : -1;
     if (fragmentStart >= 0) {
       value = value.substring(0, fragmentStart);
     }
-    if (!value.startsWith("jdbc:")) {
-      return stripAuthorityUserInfo(value);
-    }
-
-    String uriValue = value.substring("jdbc:".length());
+    String prefix = value.startsWith("jdbc:") ? "jdbc:" : "";
+    String uriValue = value.substring(prefix.length());
     try {
       URI uri = new URI(uriValue);
       if (uri.getHost() == null) {
         return stripAuthorityUserInfo(value);
       }
-      URI sanitized =
-          new URI(uri.getScheme(), null, uri.getHost(), uri.getPort(), uri.getPath(), null, null);
-      return "jdbc:" + sanitized;
+      // 协议和DNS主机名可统一大小写，资源路径及其百分号编码必须按连接位置保留。
+      String scheme =
+          EmptyChecks.isNull(uri.getScheme()) ? null : uri.getScheme().toLowerCase(Locale.ROOT);
+      URI authority = new URI(
+          scheme, null, uri.getHost().toLowerCase(Locale.ROOT), uri.getPort(), null, null, null);
+      String resourcePath = EmptyChecks.isNull(uri.getRawPath()) ? "" : uri.getRawPath();
+      String parameters = EmptyChecks.isNull(uri.getRawQuery()) ? "" : "?" + uri.getRawQuery();
+      String fragment = EmptyChecks.isNull(uri.getRawFragment()) ? "" : "#" + uri.getRawFragment();
+      return prefix + authority + resourcePath + parameters + fragment;
     } catch (URISyntaxException ex) {
       return stripAuthorityUserInfo(value);
     }
@@ -91,7 +113,11 @@ public final class StatefulBackendIdentity {
   }
 
   private static String normalized(String value) {
-    return value == null ? "" : value.trim().toLowerCase(Locale.ROOT);
+    return trimmed(value).toLowerCase(Locale.ROOT);
+  }
+
+  private static String trimmed(String value) {
+    return EmptyChecks.isNull(value) ? "" : value.trim();
   }
 
   private static boolean hasText(String value) {

@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
@@ -41,6 +42,20 @@ class DispatchTaskExecutorTest {
     assertThat(executor.capability().resourceKinds()).contains(ResourceKind.NET, ResourceKind.DISK);
     assertThat(executor.capability().idempotent()).isFalse();
     assertThat(executor.capability().cancellable()).isTrue();
+  }
+
+  @Test
+  @DisplayName("注册目录声明持久文件渠道状态机的重放合同")
+  void shouldDeclareDurableDispatchReplayContract_whenWorkerRegisters() {
+    var declaration = executor.replayCapabilityDeclaration();
+
+    assertThat(declaration.pluginId()).isEqualTo("DISPATCH");
+    assertThat(declaration.pluginVersion()).isEqualTo("1");
+    assertThat(declaration.externalEffectCategories()).containsExactly("FILE_CHANNEL_DELIVERY");
+    assertThat(declaration.idempotencyCapability())
+        .isEqualTo(IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT);
+    assertThat(declaration.idempotencyKeyScope()).isEqualTo("tenantId:fileId:channelCode");
+    assertThat(declaration.recoveryProtocolId()).isEqualTo("file-dispatch-record-state-machine-v1");
   }
 
   @Test

@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
@@ -15,6 +16,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileErrorRecordQuery;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalTargetBinding;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -22,7 +24,6 @@ import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ContentDisposition;
@@ -75,7 +76,10 @@ public class DefaultConsoleFileDownloadApplicationService
     if (fileRecord == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
-    Map<String, Object> security = templateSecurity(effectiveTenant, fileId);
+    String templateCode = fileRecordMapper.selectTemplateCodeByFileId(effectiveTenant, fileId);
+    FileTemplateSecurityFlagsView security = Texts.hasText(templateCode)
+        ? fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(effectiveTenant, templateCode)
+        : null;
     boolean downloadApprovalRequired = requiresDownloadApproval(security)
         && !Texts.hasText(approvalId)
         && !batchSecurityProperties.isBypassMode();
@@ -110,15 +114,15 @@ public class DefaultConsoleFileDownloadApplicationService
           return -1;
         }
       };
-      return ResponseEntity.ok()
-          .header(
-              HttpHeaders.CONTENT_DISPOSITION,
-              ContentDisposition.attachment()
-                  .filename(fileName == null ? objectName : fileName)
-                  .build()
-                  .toString())
-          .contentType(MediaType.parseMediaType(contentType))
-          .body(resource);
+      ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+      ContentDisposition contentDisposition = ContentDisposition.attachment()
+          .filename(EmptyChecks.isNull(fileName) ? objectName : fileName)
+          .build();
+      String contentDispositionHeader = contentDisposition.toString();
+      responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDispositionHeader);
+      MediaType mediaType = MediaType.parseMediaType(contentType);
+      responseBuilder.contentType(mediaType);
+      return responseBuilder.body(resource);
     } catch (ObjectNotFoundException exception) {
       // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
       // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
@@ -164,7 +168,8 @@ public class DefaultConsoleFileDownloadApplicationService
           .append(e.getCreatedAt())
           .append('\n');
     }
-    byte[] bytes = csv.toString().getBytes(StandardCharsets.UTF_8);
+    String csvText = csv.toString();
+    byte[] bytes = csvText.getBytes(StandardCharsets.UTF_8);
     InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(bytes));
     String filename = "file-errors-" + fileId + ".csv";
     return ResponseEntity.ok()
@@ -179,7 +184,10 @@ public class DefaultConsoleFileDownloadApplicationService
     if (value == null) {
       return "";
     }
-    if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+    if (value.contains(",")
+        || value.contains("\"")
+        || value.contains("\n")
+        || value.contains("\r")) {
       return "\"" + value.replace("\"", "\"\"") + "\"";
     }
     return value;
@@ -204,29 +212,14 @@ public class DefaultConsoleFileDownloadApplicationService
     return false;
   }
 
-  private Map<String, Object> templateSecurity(String tenantId, Long fileId) {
-    String templateCode = fileRecordMapper.selectTemplateCodeByFileId(tenantId, fileId);
-    if (!Texts.hasText(templateCode)) {
-      return Map.of();
-    }
-    Map<String, Object> security =
-        fileTemplateConfigMapper.selectSecurityFlagsByTemplateCode(tenantId, templateCode);
-    return security == null ? Map.of() : security;
-  }
-
-  private boolean requiresDownloadApproval(Map<String, Object> security) {
-    if (batchSecurityProperties.isBypassMode() || security == null || security.isEmpty()) {
+  private boolean requiresDownloadApproval(FileTemplateSecurityFlagsView security) {
+    boolean downloadApprovalIsNotRequired =
+        batchSecurityProperties.isBypassMode() || EmptyChecks.isNull(security);
+    if (downloadApprovalIsNotRequired) {
       return false;
     }
-    return truthy(security.get("download_requires_approval"))
-        || truthy(security.get("content_encryption_enabled"));
-  }
-
-  private boolean truthy(Object value) {
-    if (value instanceof Boolean bool) {
-      return bool;
-    }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value));
+    return Boolean.TRUE.equals(security.downloadRequiresApproval())
+        || Boolean.TRUE.equals(security.contentEncryptionEnabled());
   }
 
   private String stringValue(Object value) {

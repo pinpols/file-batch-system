@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -13,9 +14,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +46,7 @@ class FileGovernanceArrivalGroupGuardTest {
   private FileGovernanceProperties properties;
   private BundleArrivalLauncher bundleArrivalLauncher;
   private FileGovernanceScheduler scheduler;
+  private SimpleMeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
@@ -52,13 +58,64 @@ class FileGovernanceArrivalGroupGuardTest {
     when(properties.getArrival().getDefaultTimeoutAction()).thenReturn("MANUAL_CONFIRM");
 
     bundleArrivalLauncher = mock(BundleArrivalLauncher.class);
+    meterRegistry = new SimpleMeterRegistry();
+    when(repository.selectArrivalGroupBacklogMetrics())
+        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L));
+    when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
+        .thenReturn(1);
     scheduler = new FileGovernanceScheduler(
         repository,
         mock(S3GovernanceStorage.class),
         properties,
         mock(FileGovernanceMetricsCacheService.class),
-        new SimpleMeterRegistry(),
+        meterRegistry,
         bundleArrivalLauncher);
+    scheduler.initializeMeters();
+  }
+
+  @Test
+  @DisplayName("等待组指标读取全量持久化聚合,候选页为空时也不会误报零")
+  void shouldRefreshArrivalGroupBacklogFromDatabaseAggregate() {
+    when(repository.selectArrivalGroupBacklogMetrics())
+        .thenReturn(new FileGovernanceArrivalViews.ArrivalGroupBacklogView(37L, 9_200L));
+
+    scheduler.manageFileArrivalGroups();
+
+    assertThat(
+            meterRegistry.get("batch.file.arrival.group.waiting.count").gauge().value())
+        .isEqualTo(37.0);
+    assertThat(meterRegistry
+            .get("batch.file.arrival.group.oldest_wait.seconds")
+            .gauge()
+            .value())
+        .isEqualTo(9_200.0);
+  }
+
+  @Test
+  @DisplayName("全局到达组扫描按候选租户执行文件更新和审计并清理上下文")
+  void shouldScopeGlobalArrivalGroupWritesToCandidateTenant() {
+    Map<String, Object> tenantA = waitingCandidate(6101L, "tenant-a", "group-a");
+    Map<String, Object> tenantB = waitingCandidate(6102L, "tenant-b", "group-b");
+    when(repository.selectArrivalGovernanceCandidates(anyInt()))
+        .thenReturn(candidateViews(List.of(tenantA, tenantB)));
+    List<String> writeContexts = new ArrayList<>();
+    when(repository.updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any()))
+        .thenAnswer(invocation -> {
+          writeContexts.add(RlsTenantContextHolder.get());
+          return 1;
+        });
+    doAnswer(invocation -> {
+          writeContexts.add(RlsTenantContextHolder.get());
+          return null;
+        })
+        .when(repository)
+        .appendAudit(any());
+
+    scheduler.manageFileArrivalGroups();
+
+    assertThat(writeContexts)
+        .containsExactlyInAnyOrder("tenant-a", "tenant-a", "tenant-b", "tenant-b");
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test
@@ -73,7 +130,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, never()).updateFileMetadata(anyString(), anyLong(), any());
+    verify(repository, never())
+        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
     verify(repository, never()).appendAudit(any());
   }
 
@@ -90,7 +148,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, never()).updateFileMetadata(anyString(), anyLong(), any());
+    verify(repository, never())
+        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
     verify(repository, never()).appendAudit(any());
   }
 
@@ -106,7 +165,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5300L), any());
+    verify(repository, times(1))
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5300L), any());
     verify(repository, times(1)).appendAudit(any());
   }
 
@@ -126,7 +186,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5400L), captor.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5400L), captor.capture());
     assertThat(captor.getValue()).containsEntry("arrivalState", "WAITING_ARRIVAL");
     assertThat(captor.getValue()).containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
   }
@@ -148,7 +209,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5401L), captor.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5401L), captor.capture());
     assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
   }
 
@@ -167,7 +229,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5402L), captor.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5402L), captor.capture());
     assertThat(captor.getValue()).containsEntry("arrivalState", "TRIGGERED");
   }
 
@@ -186,7 +249,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5403L), captor.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5403L), captor.capture());
     assertThat(captor.getValue())
         .containsEntry("arrivalState", "WAITING_ARRIVAL")
         .containsEntry("arrivalReason", "ARRIVED_PENDING_VERIFY");
@@ -206,7 +270,9 @@ class FileGovernanceArrivalGroupGuardTest {
             BundleArrivalLauncher.LaunchOutcome.LAUNCHED);
     scheduler.manageFileArrivalGroups();
     ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5501L), metadata.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(
+            eq("default-tenant"), eq(5501L), metadata.capture());
     assertThat(metadata.getValue())
         .containsEntry("arrivalState", "WAITING_ARRIVAL")
         .containsEntry("arrivalReason", "BUNDLE_LAUNCH_WAITING");
@@ -216,7 +282,8 @@ class FileGovernanceArrivalGroupGuardTest {
         .thenReturn(candidateViews(List.of(file)));
     scheduler.manageFileArrivalGroups();
     verify(repository, times(2))
-        .updateFileMetadata(eq("default-tenant"), eq(5501L), metadata.capture());
+        .updateArrivalGroupMetadataIfNonTerminal(
+            eq("default-tenant"), eq(5501L), metadata.capture());
     assertThat(metadata.getValue()).containsEntry("arrivalState", "TRIGGERED");
   }
 
@@ -232,7 +299,9 @@ class FileGovernanceArrivalGroupGuardTest {
         .thenReturn(BundleArrivalLauncher.LaunchOutcome.REJECTED);
     scheduler.manageFileArrivalGroups();
     ArgumentCaptor<Map<String, Object>> metadata = ArgumentCaptor.captor();
-    verify(repository).updateFileMetadata(eq("default-tenant"), eq(5502L), metadata.capture());
+    verify(repository)
+        .updateArrivalGroupMetadataIfNonTerminal(
+            eq("default-tenant"), eq(5502L), metadata.capture());
     assertThat(metadata.getValue())
         .containsEntry("arrivalState", "WAITING_MANUAL_CONFIRM")
         .containsEntry("arrivalReason", "BUNDLE_LAUNCH_REJECTED");
@@ -251,7 +320,8 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, never()).updateFileMetadata(anyString(), anyLong(), any());
+    verify(repository, never())
+        .updateArrivalGroupMetadataIfNonTerminal(anyString(), anyLong(), any());
     verify(repository, never()).appendAudit(any());
   }
 
@@ -271,8 +341,10 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5600L), any());
-    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5601L), any());
+    verify(repository, times(1))
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5600L), any());
+    verify(repository, times(1))
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5601L), any());
   }
 
   @Test
@@ -287,14 +359,47 @@ class FileGovernanceArrivalGroupGuardTest {
 
     scheduler.manageFileArrivalGroups();
 
-    verify(repository, times(1)).updateFileMetadata(eq("default-tenant"), eq(5700L), any());
+    verify(repository, times(1))
+        .updateArrivalGroupMetadataIfNonTerminal(eq("default-tenant"), eq(5700L), any());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static List<FileGovernanceArrivalViews.ArrivalCandidateView> candidateViews(
       List<Map<String, Object>> rows) {
-    return rows.stream().map(FileGovernanceArrivalViews::arrivalCandidate).toList();
+    return rows.stream()
+        .map(row -> FileGovernanceArrivalViews.arrivalCandidate(candidateRow(row)))
+        .toList();
+  }
+
+  private static FileGovernanceViews.ArrivalCandidateRow candidateRow(Map<String, Object> row) {
+    return new FileGovernanceViews.ArrivalCandidateRow(
+        (Long) row.get("id"),
+        text(row.get("tenant_id")),
+        text(row.get("checksum_type")),
+        text(row.get("file_name")),
+        bizDate(row.get("biz_date")),
+        text(row.get("file_status")),
+        null,
+        null,
+        row.get("metadata_json"),
+        text(row.get("file_group_code")),
+        text(row.get("wait_file_group_mode")),
+        text(row.get("required_file_set")),
+        text(row.get("arrival_timeout_action")),
+        text(row.get("arrival_state")),
+        text(row.get("arrival_reason")),
+        text(row.get("expected_arrival_time")),
+        text(row.get("latest_tolerable_time")),
+        text(row.get("trigger_on_complete")));
+  }
+
+  private static String text(Object value) {
+    return value == null ? null : String.valueOf(value);
+  }
+
+  private static LocalDate bizDate(Object value) {
+    return value == null ? null : LocalDate.parse(String.valueOf(value));
   }
 
   private static Map<String, Object> baseFile(
@@ -311,6 +416,14 @@ class FileGovernanceArrivalGroupGuardTest {
     file.put("arrival_state", arrivalState);
     file.put("arrival_reason", arrivalReason);
     file.put("trigger_on_complete", "true");
+    return file;
+  }
+
+  private static Map<String, Object> waitingCandidate(long id, String tenantId, String groupCode) {
+    Map<String, Object> file = baseFile(id, "present.csv", "WAITING_ARRIVAL", "OLD_REASON");
+    file.put("tenant_id", tenantId);
+    file.put("file_group_code", groupCode);
+    file.put("required_file_set", "missing.csv");
     return file;
   }
 }

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.time.Month;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
@@ -40,6 +42,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * ADR-010 Stage 5 Layer 1: 4 个 trigger 端 E2E 守护场景。
@@ -81,11 +84,18 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private TriggerOutboxEventMapper outboxMapper;
 
+  private final JdbcTemplate jdbcTemplate;
+
   @Value("${" + TriggerKafkaProducerConfiguration.BOOTSTRAP_SERVERS_KEY + "}")
   private String bootstrapServers;
 
   private Consumer<String, String> kafkaConsumer;
   private String tenantId;
+
+  @Autowired
+  TriggerAsyncLaunchIntegrationTest(JdbcTemplate jdbcTemplate) {
+    this.jdbcTemplate = jdbcTemplate;
+  }
 
   @BeforeEach
   void setUp() {
@@ -131,7 +141,8 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     LaunchEnvelope envelope = JsonUtils.fromJson(record.value(), LaunchEnvelope.class);
     assertThat(envelope.envelopeVersion()).isEqualTo(LaunchEnvelope.CURRENT_VERSION);
     assertThat(envelope.launchRequest().tenantId()).isEqualTo(tenantId);
-    assertThat(envelope.launchRequest().jobCode()).isEqualTo("JOB_HAPPY");
+    assertThat(envelope.launchRequest().jobCode()).isNull();
+    assertThat(envelope.launchRequest().workflowDefinitionId()).isNotNull();
     assertThat(envelope.launchRequest().requestId()).isEqualTo(requestId);
     assertThat(envelope.dedupKey()).isEqualTo("idem-" + requestId);
     assertThat(envelope.sourceFireTime()).isNotNull();
@@ -174,21 +185,22 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   void processCrashRecovery_relayResumesPublishing() {
     // 模拟"fire 写了 outbox 但 trigger 崩溃前没等到 relay 投":手工 INSERT 一条 NEW
     String requestId = "req-recover-" + UUID.randomUUID();
+    Long workflowDefinitionId = insertSourceRequest(requestId);
     TriggerOutboxEventEntity orphan = new TriggerOutboxEventEntity();
     orphan.setTenantId(tenantId);
     orphan.setRequestId(requestId);
     orphan.setTopic(BatchTopics.TRIGGER_LAUNCH_V1);
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(tenantId)
+        .workflowDefinitionId(workflowDefinitionId)
+        .bizDate(LocalDate.of(2026, Month.APRIL, 30))
+        .triggerType(TriggerType.MANUAL)
+        .requestId(requestId)
+        .traceId("tr-recover")
+        .params(Map.of())
+        .build();
     orphan.setPayload(JsonUtils.toJson(LaunchEnvelope.of(
-        new io.github.pinpols.batch.common.dto.LaunchRequest(
-            tenantId,
-            "JOB_RECOVER",
-            LocalDate.of(2026, Month.APRIL, 30),
-            TriggerType.MANUAL,
-            requestId,
-            "tr-recover",
-            Map.of()),
-        "idem-recover-" + requestId,
-        BatchDateTimeSupport.utcNow())));
+        launchRequest, "idem-recover-" + requestId, BatchDateTimeSupport.utcNow())));
     orphan.setPublishStatus(OutboxPublishStatus.NEW.code());
     orphan.setPublishAttempt(0);
     orphan.setTraceId("tr-recover");
@@ -216,6 +228,7 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   void corruptedPayload_marksGiveUpAndDoesNotPublish() {
     // 模拟"DB 行的 payload 是坏 JSON":relay 反序列化失败应直接 GIVE_UP,不重试,不投递
     String requestId = "req-corrupt-" + UUID.randomUUID();
+    insertSourceRequest(requestId);
     TriggerOutboxEventEntity bad = new TriggerOutboxEventEntity();
     bad.setTenantId(tenantId);
     bad.setRequestId(requestId);
@@ -253,10 +266,45 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   // 辅助方法
   // ───────────────────────────────────────────────────────────────────────────
 
+  private Long insertSourceRequest(String requestId) {
+    String workflowCode = "trigger-outbox-fixture-" + UUID.randomUUID();
+    String insertWorkflowDefinitionSql = """
+        insert into batch.workflow_definition (
+          tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
+        ) values (?, ?, ?, 'DAG', 1, true, 'TEST_CAL') returning id
+        """;
+    Long workflowId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
+    String insertTriggerRequestSql = """
+        insert into batch.trigger_request (
+          tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
+          request_status, trace_id
+        ) values (?, ?, 'MANUAL', ?, ?, ?, 'ACCEPTED', ?)
+        """;
+    LocalDate businessDate = LocalDate.of(2026, Month.APRIL, 30);
+    String dedupKey = "fixture-" + requestId;
+    String traceId = "trace-" + requestId;
+    jdbcTemplate.update(
+        insertTriggerRequestSql, tenantId, requestId, workflowId, businessDate, dedupKey, traceId);
+    return workflowId;
+  }
+
   private TriggerLaunchRequest buildRequest(String tenantId, String jobCode) {
+    String normalizedJobCode = jobCode.toLowerCase(Locale.ROOT);
+    String workflowCode = "trigger-async-" + normalizedJobCode;
+    String insertWorkflowDefinitionSql = """
+        insert into batch.workflow_definition (
+          tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, calendar_code
+        ) values (?, ?, ?, 'DAG', 1, true, 'TEST_CAL')
+        on conflict (tenant_id, workflow_code, version)
+        do update set updated_at = now()
+        returning id
+        """;
+    Long workflowId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, workflowCode, workflowCode);
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId(tenantId);
-    request.setJobCode(jobCode);
+    request.setWorkflowDefinitionId(workflowId);
     request.setBizDate(LocalDate.of(2026, Month.APRIL, 30));
     request.setTriggerType(TriggerType.API);
     request.setParams(new HashMap<>());

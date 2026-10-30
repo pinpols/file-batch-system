@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import io.github.pinpols.batch.orchestrator.config.TimeoutEnforcerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -20,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -72,13 +74,20 @@ class JobInstanceTimeoutEnforcerTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(governance.timeout()).thenReturn(timeoutProperties);
     when(jobInstanceMapper.selectTimedOutCandidates(anyInt())).thenReturn(List.of(candidate));
-    when(terminalStatusService.updateTerminalStatusAndReconcileChildren(any())).thenReturn(1);
+    when(terminalStatusService.enforceTimeoutAndReconcileWorkflow(any())).thenReturn(1);
 
     enforcer.enforce();
 
-    verify(terminalStatusService).updateTerminalStatusAndReconcileChildren(any());
+    ArgumentCaptor<JobInstanceTerminalStatusCommand> command =
+        ArgumentCaptor.forClass(JobInstanceTerminalStatusCommand.class);
+    verify(terminalStatusService).enforceTimeoutAndReconcileWorkflow(command.capture());
+    assertThat(command.getValue().tenantId()).isEqualTo("t1");
+    assertThat(command.getValue().id()).isEqualTo(1L);
+    assertThat(command.getValue().terminalInstanceStatus())
+        .isEqualTo(JobInstanceStatus.FAILED.code());
+    assertThat(command.getValue().expectedVersion()).isEqualTo(3L);
+    assertThat(command.getValue().finishedAt()).isNotNull();
     assertThat(meterRegistry.counter("batch.timeout.enforcer.failed.total").count())
         .isEqualTo(1.0);
-    assertThat(JobInstanceStatus.FAILED.code()).isEqualTo("FAILED");
   }
 }

@@ -126,7 +126,8 @@ public class ConsoleAiPromptGuard {
           .filter(keyword -> contains(normalized, lower, keyword))
           .findFirst()
           .orElse(matchedPhrase);
-      return AiPromptGateResult.approved(resolveCategory(categoryKeyword), normalized);
+      AiPromptCategory resolvedCategory = resolveCategory(categoryKeyword);
+      return AiPromptGateResult.approved(resolvedCategory, normalized);
     }
     return AiPromptGateResult.rejected(
         AiPromptDecision.REJECTED_SCOPE,
@@ -144,22 +145,24 @@ public class ConsoleAiPromptGuard {
 
   private AiPromptCategory resolveCategory(String keyword) {
     String normalized = keyword.toLowerCase(Locale.ROOT);
-    if (normalized.contains("file")
+    boolean promptTargetsFileGovernance = normalized.contains("file")
         || normalized.contains("文件")
         || normalized.contains("archive")
         || normalized.contains("dispatch")
         || normalized.contains("reconcile")
         || normalized.contains("归档")
-        || normalized.contains("重分发")) {
+        || normalized.contains("重分发");
+    if (promptTargetsFileGovernance) {
       return AiPromptCategory.FILE_GOVERNANCE;
     }
-    if (normalized.contains("workflow")
+    boolean promptTargetsWorkflow = normalized.contains("workflow")
         || normalized.contains("dag")
         || normalized.contains("节点")
-        || normalized.contains("工作流")) {
+        || normalized.contains("工作流");
+    if (promptTargetsWorkflow) {
       return AiPromptCategory.WORKFLOW;
     }
-    if (normalized.contains("worker")
+    boolean promptTargetsExecutionOperations = normalized.contains("worker")
         || normalized.contains("trigger")
         || normalized.contains("orchestrator")
         || normalized.contains("job")
@@ -167,7 +170,8 @@ public class ConsoleAiPromptGuard {
         || normalized.contains("task")
         || normalized.contains("调度")
         || normalized.contains("实例")
-        || normalized.contains("分片")) {
+        || normalized.contains("分片");
+    if (promptTargetsExecutionOperations) {
       return AiPromptCategory.PLATFORM;
     }
     return AiPromptCategory.OPERATIONS;

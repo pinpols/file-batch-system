@@ -1,19 +1,34 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper">
-    <select id="selectSlaViolationCandidates"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
-        <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
-        SELECT *
-        FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
+    <sql id="slaViolationTerminalStatuses">
+        'PARTIAL_FAILED', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED'
+    </sql>
+    <sql id="slaViolationEvaluationTime">
+        CASE
+            WHEN instance_status IN (<include refid="slaViolationTerminalStatuses"/>)
+                THEN finished_at
+            ELSE current_timestamp
+        END
+    </sql>
+    <!-- SLA 是专属业务策略,不等同于所有活跃生命周期状态。写入时重复准入,防扫描后的终态/策略竞争。 -->
+    <sql id="slaViolationEligibility">
+        (
+            instance_status IN ('WAITING', 'READY', 'RUNNING')
+            OR (
+                finished_at IS NOT NULL
+                AND instance_status IN (<include refid="slaViolationTerminalStatuses"/>)
+            )
+        )
+          AND dry_run = false
           AND sla_alerted_at IS NULL
           AND (
-                (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
+                (deadline_at IS NOT NULL AND deadline_at &lt; (<include refid="slaViolationEvaluationTime"/>))
                 OR (
                     expected_duration_seconds &gt; 0
-                    AND started_at IS NOT NULL
-                    AND started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
+                    AND execution_started_at IS NOT NULL
+                    AND execution_started_at &lt; (<include refid="slaViolationEvaluationTime"/>)
+                        - (expected_duration_seconds * interval '1 second')
                     AND NOT EXISTS (
                         SELECT 1
                         FROM batch.job_monitoring_policy mp
@@ -23,10 +38,38 @@
                     )
                 )
               )
+    </sql>
+    <sql id="slaEscalationEligibility">
+        instance_status IN ('WAITING', 'READY', 'RUNNING')
+        AND dry_run = false
+        AND sla_alerted_at IS NOT NULL
+        AND sla_alerted_at &lt; #{escalationBefore}
+    </sql>
+    <sql id="slaWorkflowContextColumns">
+        workflow_context.parent_workflow_run_id,
+        workflow_context.parent_node_code
+    </sql>
+    <sql id="slaWorkflowContextJoin">
+        LEFT JOIN LATERAL (
+            SELECT tr.parent_workflow_run_id, tr.parent_node_code
+            FROM batch.trigger_request tr
+            WHERE tr.tenant_id = job_instance.tenant_id
+              AND tr.id = job_instance.trigger_request_id
+        ) workflow_context ON true
+    </sql>
+
+    <select id="selectSlaViolationCandidates"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
+        FROM batch.job_instance
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE <include refid="slaViolationEligibility"/>
         ORDER BY tenant_id ASC,
                  coalesce(
                     deadline_at,
-                    started_at + (expected_duration_seconds * interval '1 second'),
+                    execution_started_at + (expected_duration_seconds * interval '1 second'),
                     created_at
                  ) ASC,
                  id ASC
@@ -36,23 +79,8 @@
     <select id="countSlaViolationCandidates" resultType="long">
         SELECT count(1)
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NULL
-          AND (
-                (deadline_at IS NOT NULL AND deadline_at &lt; current_timestamp)
-                OR (
-                    expected_duration_seconds &gt; 0
-                    AND started_at IS NOT NULL
-                    AND started_at &lt; current_timestamp - (expected_duration_seconds * interval '1 second')
-                    AND NOT EXISTS (
-                        SELECT 1
-                        FROM batch.job_monitoring_policy mp
-                        WHERE mp.tenant_id = job_instance.tenant_id
-                          AND mp.job_definition_id = job_instance.job_definition_id
-                          AND mp.soft_runtime_seconds &gt; 0
-                    )
-                )
-              )
+        WHERE <include refid="slaViolationEligibility"/>
+
     </select>
 
     <update id="markSlaAlerted">
@@ -60,16 +88,26 @@
         SET sla_alerted_at = #{slaAlertedAt}, updated_at = current_timestamp
         WHERE tenant_id = #{tenantId}
           AND id = #{id}
-          AND sla_alerted_at IS NULL
+          AND <include refid="slaViolationEligibility"/>
     </update>
+
+    <select id="selectSlaViolationCandidate"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
+        FROM batch.job_instance
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE job_instance.tenant_id = #{tenantId}
+          AND job_instance.id = #{id}
+    </select>
 
     <select id="selectSlaEscalationCandidates"
             resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
-        SELECT *
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NOT NULL
-          AND sla_alerted_at &lt; #{escalationBefore}
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE <include refid="slaEscalationEligibility"/>
         ORDER BY tenant_id ASC, sla_alerted_at ASC, id ASC
         LIMIT #{limit}
     </select>
@@ -77,14 +115,24 @@
     <select id="countSlaEscalationCandidates" resultType="long">
         SELECT count(1)
         FROM batch.job_instance
-        WHERE instance_status IN ('WAITING', 'READY', 'RUNNING')
-          AND sla_alerted_at IS NOT NULL
-          AND sla_alerted_at &lt; #{escalationBefore}
+        WHERE <include refid="slaEscalationEligibility"/>
+
+    </select>
+    <select id="selectSlaEscalationCandidateForUpdate"
+            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+        SELECT job_instance.*,
+               <include refid="slaWorkflowContextColumns"/>
+        FROM batch.job_instance
+        <include refid="slaWorkflowContextJoin"/>
+        WHERE tenant_id=#{tenantId} AND id=#{id}
+          AND <include refid="slaEscalationEligibility"/>
+        FOR UPDATE OF job_instance
     </select>
     <resultMap id="candidateMap" type="io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate">
         <constructor>
             <arg column="tenant_id" javaType="java.lang.String"/>
             <arg column="job_instance_id" javaType="java.lang.Long"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="instance_no" javaType="java.lang.String"/>
             <arg column="instance_status" javaType="java.lang.String"/>
@@ -97,6 +145,10 @@
             <arg column="threshold_seconds" javaType="java.lang.Integer"/>
             <arg column="failed_partition_count" javaType="java.lang.Integer"/>
             <arg column="severity" javaType="java.lang.String"/>
+            <arg column="workflow_run_id" javaType="java.lang.Long"/>
+            <arg column="node_code" javaType="java.lang.String"/>
+            <arg column="execution_started_at" javaType="java.time.Instant"/>
+            <arg column="trigger_request_id" javaType="java.lang.Long"/>
         </constructor>
     </resultMap>
 
@@ -104,6 +156,7 @@
         CASE
             WHEN ji.params_snapshot #>> '{effectiveParams,scheduledAt}' ~
                  '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+             AND pg_input_is_valid(ji.params_snapshot #>> '{effectiveParams,scheduledAt}', 'timestamp with time zone')
             THEN (ji.params_snapshot #>> '{effectiveParams,scheduledAt}')::timestamptz
             ELSE NULL
         END
@@ -113,14 +166,52 @@
         CASE
             WHEN ji.params_snapshot #&gt;&gt; '{effectiveParams,dependencyReadyAt}' ~
                  '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\.[0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$'
+             AND pg_input_is_valid(ji.params_snapshot #&gt;&gt; '{effectiveParams,dependencyReadyAt}', 'timestamp with time zone')
             THEN (ji.params_snapshot #&gt;&gt; '{effectiveParams,dependencyReadyAt}')::timestamptz
             ELSE NULL
         END
     </sql>
 
+    <!-- 当前子 Job 的资格来自节点激活请求与已捕获依赖；根计划时间不能代替子节点就绪。 -->
+    <sql id="jobMonitoringEligibilityJoins">
+        CROSS JOIN LATERAL (SELECT <include refid="scheduledAtExpression"/> AS planned_at) scheduled_at
+        CROSS JOIN LATERAL (SELECT <include refid="dependencyReadyAtExpression"/> AS ready_at) dependency_ready
+        CROSS JOIN LATERAL (
+            SELECT tr.parent_workflow_run_id IS NOT NULL
+               AND ji.params_snapshot #&gt;&gt; '{effectiveParams,_parentNodeRunId}' ~ '^[0-9]+$' AS enabled
+        ) workflow_child
+        CROSS JOIN LATERAL (
+            SELECT COUNT(*) AS reference_count,
+                   COUNT(CASE WHEN pg_input_is_valid(reference.value -&gt;&gt; 'effectiveAt', 'timestamp with time zone')
+                              THEN 1 END) AS valid_reference_count,
+                   MAX(CASE WHEN pg_input_is_valid(reference.value -&gt;&gt; 'effectiveAt', 'timestamp with time zone')
+                            THEN (reference.value -&gt;&gt; 'effectiveAt')::timestamptz END) AS ready_at
+            FROM jsonb_array_elements(CASE
+                WHEN workflow_child.enabled AND jsonb_typeof(ji.params_snapshot -&gt; 'dependencyResultSnapshot') = 'array'
+                THEN ji.params_snapshot -&gt; 'dependencyResultSnapshot' ELSE '[]'::jsonb END) reference
+        ) captured_dependencies
+        CROSS JOIN LATERAL (
+            SELECT CASE
+                WHEN workflow_child.enabled THEN CASE
+                    WHEN (jsonb_exists(ji.params_snapshot, 'dependencyResultSnapshot')
+                          AND jsonb_typeof(ji.params_snapshot -&gt; 'dependencyResultSnapshot') IS DISTINCT FROM 'array')
+                      OR captured_dependencies.reference_count != captured_dependencies.valid_reference_count
+                    THEN NULL
+                    ELSE GREATEST(tr.created_at, captured_dependencies.ready_at)
+                END
+                WHEN jd.depends_on_job_code IS NOT NULL AND dependency_ready.ready_at IS NOT NULL
+                    THEN GREATEST(COALESCE(scheduled_at.planned_at, dependency_ready.ready_at), dependency_ready.ready_at)
+                WHEN jd.depends_on_job_code IS NULL AND jd.schedule_type = 'CRON'
+                    THEN scheduled_at.planned_at
+                ELSE NULL
+            END AS eligible_at
+        ) eligibility
+    </sql>
+
     <sql id="candidateColumns">
         ji.tenant_id,
         ji.id AS job_instance_id,
+        ji.biz_date,
         ji.job_code,
         ji.instance_no,
         ji.instance_status,
@@ -128,102 +219,198 @@
         ji.trace_id,
         ji.created_at,
         ji.started_at,
+        ji.execution_started_at,
         ji.finished_at,
-        ji.failed_partition_count
+        ji.failed_partition_count,
+        tr.parent_workflow_run_id AS workflow_run_id,
+        tr.parent_node_code AS node_code,
+        tr.id AS trigger_request_id
     </sql>
 
-    <select id="selectRunningTooLong" resultMap="candidateMap" timeout="5">
+    <sql id="triggerWorkflowContextJoin">
+        LEFT JOIN batch.trigger_request tr
+          ON tr.tenant_id = ji.tenant_id AND tr.id = ji.trigger_request_id
+    </sql>
+
+    <sql id="workflowChildRequestMonitoringJoins">
+        JOIN batch.workflow_run wr
+          ON wr.tenant_id = tr.tenant_id AND wr.id = tr.parent_workflow_run_id
+         AND wr.run_status IN ('CREATED', 'RUNNING') AND wr.dry_run = false
+        JOIN batch.job_definition jd
+          ON jd.tenant_id = tr.tenant_id AND jd.job_code = tr.job_code
+        JOIN batch.job_monitoring_policy mp
+          ON mp.tenant_id = jd.tenant_id AND mp.job_definition_id = jd.id
+        LEFT JOIN batch.batch_day_waiting_launch bdl
+          ON bdl.tenant_id = tr.tenant_id AND bdl.request_id = tr.request_id
+        LEFT JOIN batch.job_dependency_waiting_launch jdl
+          ON jdl.tenant_id = tr.tenant_id AND jdl.request_id = tr.request_id
+        CROSS JOIN LATERAL (
+            SELECT GREATEST(tr.created_at, bdl.released_at, jdl.released_at) AS eligible_at
+        ) request_eligibility
+    </sql>
+
+    <sql id="workflowChildRequestCandidateColumns">
+        tr.tenant_id,
+        NULL::bigint AS job_instance_id,
+        tr.biz_date,
+        jd.job_code,
+        NULL::varchar AS instance_no,
+        tr.request_status AS instance_status,
+        tr.trigger_type,
+        tr.trace_id,
+        tr.created_at,
+        NULL::timestamptz AS started_at,
+        NULL::timestamptz AS execution_started_at,
+        NULL::timestamptz AS finished_at,
+        0::integer AS failed_partition_count,
+        tr.parent_workflow_run_id AS workflow_run_id,
+        tr.parent_node_code AS node_code,
+        tr.id AS trigger_request_id
+    </sql>
+
+    <sql id="workflowChildRequestIsEligible">
+        tr.parent_workflow_run_id IS NOT NULL
+        AND tr.dry_run = false
+        AND tr.request_status IN ('PENDING', 'PROCESSING', 'ACCEPTED', 'LAUNCHED', 'FORWARD_FAILED')
+        AND (bdl.request_id IS NULL OR (bdl.wait_status = 'RELEASED' AND bdl.released_at IS NOT NULL))
+        AND (jdl.request_id IS NULL OR (jdl.wait_status = 'RELEASED' AND jdl.released_at IS NOT NULL))
+        AND request_eligibility.eligible_at IS NOT NULL
+        AND NOT EXISTS (
+            SELECT 1 FROM batch.job_instance linked
+            WHERE linked.tenant_id = tr.tenant_id
+              AND (linked.trigger_request_id = tr.id OR linked.id = tr.related_job_instance_id)
+        )
+    </sql>
+
+    <sql id="workflowChildRequestNotStartedAlertExists">
+        EXISTS (
+            SELECT 1 FROM batch.alert_event alert
+            WHERE alert.tenant_id = tr.tenant_id
+              AND alert.alert_type = 'JOB_NOT_STARTED_BY_DEADLINE'
+              AND alert.detail_json -&gt;&gt; 'monitoringResourceKey' = 'workflow_job_request:' || tr.id
+        )
+    </sql>
+
+    <sql id="workflowChildRequestNotCompletedAlertExists">
+        EXISTS (
+            SELECT 1 FROM batch.alert_event alert
+            WHERE alert.tenant_id = tr.tenant_id
+              AND alert.alert_type = 'JOB_NOT_COMPLETED_BY_DEADLINE'
+              AND alert.detail_json -&gt;&gt; 'monitoringResourceKey' = 'workflow_job_request:' || tr.id
+        )
+    </sql>
+
+    <sql id="candidateRunningTooLong">
         SELECT <include refid="candidateColumns"/>,
-               ji.started_at + (mp.soft_runtime_seconds * interval '1 second') AS monitoring_deadline_at,
+               ji.execution_started_at + (mp.soft_runtime_seconds * interval '1 second') AS monitoring_deadline_at,
                mp.soft_runtime_seconds AS threshold_seconds,
                mp.soft_runtime_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
-        WHERE ji.instance_status = 'RUNNING'
-          AND ji.started_at IS NOT NULL
+        WHERE (ji.instance_status = 'RUNNING' OR ji.finished_at IS NOT NULL)
+          AND ji.execution_started_at IS NOT NULL
           AND ji.dry_run = false
           AND mp.soft_runtime_seconds &gt; 0
-          AND ji.started_at + (mp.soft_runtime_seconds * interval '1 second') &lt; current_timestamp
+          AND ji.execution_started_at + (mp.soft_runtime_seconds * interval '1 second')
+              &lt; COALESCE(ji.finished_at, current_timestamp)
+          AND COALESCE(ji.finished_at, current_timestamp) &gt;= mp.soft_runtime_updated_at
           AND NOT EXISTS (
               SELECT 1 FROM batch.job_monitoring_alert_claim c
               WHERE c.tenant_id = ji.tenant_id
                 AND c.job_instance_id = ji.id
                 AND c.violation_type = 'RUNNING_TOO_LONG'
           )
-        ORDER BY ji.tenant_id, ji.started_at, ji.id
+    </sql>
+
+    <select id="selectRunningTooLong" resultMap="candidateMap" timeout="5">
+        <include refid="candidateRunningTooLong"/>
+        ORDER BY ji.tenant_id, ji.execution_started_at, ji.id
         LIMIT #{limit}
     </select>
 
-    <select id="selectNotStarted" resultMap="candidateMap" timeout="5">
+    <sql id="candidateNotStarted">
         SELECT <include refid="candidateColumns"/>,
                eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
                mp.start_grace_seconds AS threshold_seconds,
                mp.start_grace_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
         JOIN batch.job_definition jd
           ON jd.tenant_id = ji.tenant_id AND jd.id = ji.job_definition_id
-        CROSS JOIN LATERAL (SELECT <include refid="scheduledAtExpression"/> AS planned_at) scheduled_at
-        CROSS JOIN LATERAL (SELECT <include refid="dependencyReadyAtExpression"/> AS ready_at) dependency_ready
-        CROSS JOIN LATERAL (
-            SELECT CASE
-                WHEN jd.depends_on_job_code IS NOT NULL AND dependency_ready.ready_at IS NOT NULL
-                    THEN GREATEST(COALESCE(scheduled_at.planned_at, dependency_ready.ready_at), dependency_ready.ready_at)
-                WHEN jd.depends_on_job_code IS NULL AND jd.schedule_type = 'CRON'
-                    THEN scheduled_at.planned_at
-                ELSE NULL
-            END AS eligible_at
-        ) eligibility
-        WHERE ji.instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING')
-          AND ji.started_at IS NULL
+        <include refid="jobMonitoringEligibilityJoins"/>
+        WHERE (
+              (ji.execution_started_at IS NULL AND ji.finished_at IS NULL
+               AND ji.instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING'))
+              OR ji.execution_started_at IS NOT NULL
+          )
           AND ji.dry_run = false
           AND mp.start_grace_seconds &gt; 0
           AND eligibility.eligible_at IS NOT NULL
-          AND eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') &lt; current_timestamp
+          AND eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second')
+              &lt; COALESCE(ji.execution_started_at, current_timestamp)
+          AND COALESCE(ji.execution_started_at, current_timestamp) &gt;= mp.start_grace_updated_at
+          AND (tr.parent_workflow_run_id IS NULL OR NOT <include refid="workflowChildRequestNotStartedAlertExists"/>)
           AND NOT EXISTS (
               SELECT 1 FROM batch.job_monitoring_alert_claim c
               WHERE c.tenant_id = ji.tenant_id
                 AND c.job_instance_id = ji.id
                 AND c.violation_type = 'NOT_STARTED'
           )
-        ORDER BY ji.tenant_id, eligibility.eligible_at, ji.id
+    </sql>
+
+    <sql id="candidateWorkflowChildRequestNotStarted">
+        SELECT <include refid="workflowChildRequestCandidateColumns"/>,
+               request_eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
+               mp.start_grace_seconds AS threshold_seconds,
+               mp.start_grace_severity AS severity
+        FROM batch.trigger_request tr
+        <include refid="workflowChildRequestMonitoringJoins"/>
+        WHERE <include refid="workflowChildRequestIsEligible"/>
+          AND mp.start_grace_seconds &gt; 0
+          AND request_eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') &lt; current_timestamp
+          AND current_timestamp &gt;= mp.start_grace_updated_at
+          AND NOT <include refid="workflowChildRequestNotStartedAlertExists"/>
+    </sql>
+
+    <select id="selectNotStarted" resultMap="candidateMap" timeout="5">
+        SELECT candidate.*
+        FROM (
+            <include refid="candidateNotStarted"/>
+            UNION ALL
+            <include refid="candidateWorkflowChildRequestNotStarted"/>
+        ) candidate
+        ORDER BY candidate.tenant_id, candidate.monitoring_deadline_at,
+                 candidate.job_instance_id NULLS FIRST, candidate.trigger_request_id
         LIMIT #{limit}
     </select>
 
-    <select id="selectNotCompletedByDeadline" resultMap="candidateMap" timeout="5">
+    <sql id="candidateNotCompletedByDeadline">
         SELECT <include refid="candidateColumns"/>,
                due.deadline_at AS monitoring_deadline_at,
-               CASE WHEN jd.depends_on_job_code IS NOT NULL
+               CASE WHEN mp.dependency_completion_window_seconds &gt; 0
                     THEN mp.dependency_completion_window_seconds
                     ELSE NULL::integer
                END AS threshold_seconds,
                mp.completion_deadline_severity AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
           ON mp.tenant_id = ji.tenant_id AND mp.job_definition_id = ji.job_definition_id
         JOIN batch.job_definition jd
           ON jd.tenant_id = ji.tenant_id AND jd.id = ji.job_definition_id
-        CROSS JOIN LATERAL (SELECT <include refid="scheduledAtExpression"/> AS planned_at) scheduled_at
-        CROSS JOIN LATERAL (SELECT <include refid="dependencyReadyAtExpression"/> AS ready_at) dependency_ready
+        <include refid="jobMonitoringEligibilityJoins"/>
         CROSS JOIN LATERAL (
             SELECT CASE
-                WHEN jd.depends_on_job_code IS NOT NULL AND dependency_ready.ready_at IS NOT NULL
-                    THEN GREATEST(COALESCE(scheduled_at.planned_at, dependency_ready.ready_at), dependency_ready.ready_at)
-                WHEN jd.depends_on_job_code IS NULL AND jd.schedule_type = 'CRON'
-                    THEN scheduled_at.planned_at
-                ELSE NULL
-            END AS eligible_at
-        ) eligibility
-        CROSS JOIN LATERAL (
-            SELECT CASE
-                WHEN jd.depends_on_job_code IS NOT NULL
-                     AND mp.dependency_completion_window_seconds &gt; 0 THEN
+                WHEN mp.dependency_completion_window_seconds &gt; 0 THEN
                     eligibility.eligible_at
                     + (mp.dependency_completion_window_seconds * interval '1 second')
-                WHEN jd.schedule_type = 'CRON' THEN
-                    ((scheduled_at.planned_at AT TIME ZONE jd.timezone)::date
+                WHEN mp.completion_deadline_local_time IS NOT NULL THEN
+                    ((CASE WHEN workflow_child.enabled OR scheduled_at.planned_at IS NULL THEN ji.biz_date
+                           ELSE (scheduled_at.planned_at AT TIME ZONE jd.timezone)::date END)
                      + mp.completion_deadline_day_offset
                      + mp.completion_deadline_local_time) AT TIME ZONE jd.timezone
                 ELSE NULL
@@ -233,29 +420,64 @@
           AND COALESCE(ji.finished_at, current_timestamp) >= mp.completion_deadline_updated_at
           AND ji.dry_run = false
           AND eligibility.eligible_at IS NOT NULL
-          AND ((jd.depends_on_job_code IS NOT NULL
-                AND (mp.dependency_completion_window_seconds &gt; 0
-                     OR (jd.schedule_type = 'CRON' AND mp.completion_deadline_local_time IS NOT NULL)))
-               OR (jd.depends_on_job_code IS NULL
-                   AND jd.schedule_type = 'CRON'
-                   AND mp.completion_deadline_local_time IS NOT NULL))
+          AND due.deadline_at IS NOT NULL
           AND due.deadline_at &lt; current_timestamp
+          AND (tr.parent_workflow_run_id IS NULL OR NOT <include refid="workflowChildRequestNotCompletedAlertExists"/>)
           AND NOT EXISTS (
               SELECT 1 FROM batch.job_monitoring_alert_claim c
               WHERE c.tenant_id = ji.tenant_id
                 AND c.job_instance_id = ji.id
                 AND c.violation_type = 'NOT_COMPLETED_BY_DEADLINE'
           )
-        ORDER BY ji.tenant_id, due.deadline_at, ji.id
+    </sql>
+
+    <sql id="candidateWorkflowChildRequestNotCompletedByDeadline">
+        SELECT <include refid="workflowChildRequestCandidateColumns"/>,
+               due.deadline_at AS monitoring_deadline_at,
+               CASE WHEN mp.dependency_completion_window_seconds &gt; 0
+                    THEN mp.dependency_completion_window_seconds
+                    ELSE NULL::integer
+               END AS threshold_seconds,
+               mp.completion_deadline_severity AS severity
+        FROM batch.trigger_request tr
+        <include refid="workflowChildRequestMonitoringJoins"/>
+        CROSS JOIN LATERAL (
+            SELECT CASE
+                WHEN mp.dependency_completion_window_seconds &gt; 0 THEN
+                    request_eligibility.eligible_at
+                    + (mp.dependency_completion_window_seconds * interval '1 second')
+                WHEN mp.completion_deadline_local_time IS NOT NULL THEN
+                    (tr.biz_date + mp.completion_deadline_day_offset + mp.completion_deadline_local_time)
+                    AT TIME ZONE jd.timezone
+                ELSE NULL
+            END AS deadline_at
+        ) due
+        WHERE <include refid="workflowChildRequestIsEligible"/>
+          AND due.deadline_at IS NOT NULL
+          AND due.deadline_at &lt; current_timestamp
+          AND current_timestamp &gt;= mp.completion_deadline_updated_at
+          AND NOT <include refid="workflowChildRequestNotCompletedAlertExists"/>
+    </sql>
+
+    <select id="selectNotCompletedByDeadline" resultMap="candidateMap" timeout="5">
+        SELECT candidate.*
+        FROM (
+            <include refid="candidateNotCompletedByDeadline"/>
+            UNION ALL
+            <include refid="candidateWorkflowChildRequestNotCompletedByDeadline"/>
+        ) candidate
+        ORDER BY candidate.tenant_id, candidate.monitoring_deadline_at,
+                 candidate.job_instance_id NULLS FIRST, candidate.trigger_request_id
         LIMIT #{limit}
     </select>
 
-    <select id="selectFinalPartitionFailures" resultMap="candidateMap" timeout="5">
+    <sql id="candidateFinalPartitionFailures">
         SELECT <include refid="candidateColumns"/>,
                ji.finished_at AS monitoring_deadline_at,
                0::integer AS threshold_seconds,
                'WARN'::varchar AS severity
         FROM batch.job_instance ji
+        <include refid="triggerWorkflowContextJoin"/>
         WHERE ji.instance_status IN ('FAILED', 'PARTIAL_FAILED')
           AND ji.failed_partition_count &gt; 0
           AND ji.finished_at &gt;= current_timestamp - (#{lookbackSeconds} * interval '1 second')
@@ -266,8 +488,65 @@
                 AND c.job_instance_id = ji.id
                 AND c.violation_type = 'FAILED_PARTITION'
           )
+    </sql>
+
+    <select id="selectFinalPartitionFailures" resultMap="candidateMap" timeout="5">
+        <include refid="candidateFinalPartitionFailures"/>
         ORDER BY ji.finished_at, ji.tenant_id, ji.id
         LIMIT #{limit}
+    </select>
+
+    <!-- 复用执行起点及回报的实例锁；竞争时跳过本轮，不等待业务事务。 -->
+    <select id="tryAcquireInstanceAdvisoryLock" resultType="boolean">
+        SELECT pg_try_advisory_xact_lock(hashtext(#{tenantId} || ':' || #{jobInstanceId}::text))
+    </select>
+
+    <select id="tryAcquireRequestAdvisoryLock" resultType="boolean">
+        SELECT pg_try_advisory_xact_lock(
+            hashtext(#{tenantId} || ':workflow-job-request:' || #{triggerRequestId}::text))
+    </select>
+
+    <select id="setTenantContext" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectCandidateForRecheck" resultMap="candidateMap" timeout="5">
+        <choose>
+            <when test="jobInstanceId == null and triggerRequestId != null and violationType == 'NOT_STARTED'">
+                <include refid="candidateWorkflowChildRequestNotStarted"/>
+                AND tr.tenant_id = #{tenantId}
+                AND tr.id = #{triggerRequestId}
+                FOR UPDATE OF tr SKIP LOCKED
+            </when>
+            <when test="jobInstanceId == null and triggerRequestId != null and violationType == 'NOT_COMPLETED_BY_DEADLINE'">
+                <include refid="candidateWorkflowChildRequestNotCompletedByDeadline"/>
+                AND tr.tenant_id = #{tenantId}
+                AND tr.id = #{triggerRequestId}
+                FOR UPDATE OF tr SKIP LOCKED
+            </when>
+            <otherwise>
+                <choose>
+            <when test="violationType == 'RUNNING_TOO_LONG'">
+                <include refid="candidateRunningTooLong"/>
+            </when>
+            <when test="violationType == 'NOT_STARTED'">
+                <include refid="candidateNotStarted"/>
+            </when>
+            <when test="violationType == 'NOT_COMPLETED_BY_DEADLINE'">
+                <include refid="candidateNotCompletedByDeadline"/>
+            </when>
+            <when test="violationType == 'FAILED_PARTITION'">
+                <include refid="candidateFinalPartitionFailures"/>
+            </when>
+                </choose>
+                AND ji.tenant_id = #{tenantId}
+                AND ji.id = #{jobInstanceId}
+                <if test="triggerRequestId != null">
+                    AND tr.id = #{triggerRequestId}
+                </if>
+            </otherwise>
+        </choose>
+        LIMIT 1
     </select>
 
     <insert id="claimAlert">

@@ -91,7 +91,7 @@ public class ReservedPrefixGuard {
    */
   public static void checkResourceCode(String code, boolean strict) {
     if (!strict || code == null || code.isBlank()) return;
-    String upper = code.toUpperCase();
+    String upper = code.toUpperCase(Locale.ROOT);
     for (String prefix : RESERVED_CODE_PREFIXES) {
       if (upper.startsWith(prefix)) {
         throw BizException.of(

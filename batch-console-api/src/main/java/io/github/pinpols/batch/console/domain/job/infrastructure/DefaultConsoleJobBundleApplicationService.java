@@ -38,8 +38,8 @@ public class DefaultConsoleJobBundleApplicationService
     if (bundle.getJobDefinitions() == null || bundle.getJobDefinitions().isEmpty()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found", jobCode);
     }
-    return new ConsoleJobBundleExportResponse(
-        resolvedTenantId, jobCode, ConsoleJobBundleSummaryResponse.from(bundle), bundle);
+    ConsoleJobBundleSummaryResponse summary = ConsoleJobBundleSummaryResponse.from(bundle);
+    return new ConsoleJobBundleExportResponse(resolvedTenantId, jobCode, summary, bundle);
   }
 
   @Override
@@ -51,10 +51,14 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setDryRun(request.isDryRun());
     // Job Bundle 严格 all-or-nothing：任一 spec 失败即整体回滚（文档 console-api.openapi.yaml#3557 已声明）
     initRequest.setStrict(true);
-    TenantConfigBatchInitResponse response = initApplicationService.batchInit(
-        initRequest, operator(), UUID.randomUUID().toString());
-    return new ConsoleJobBundleResultResponse(
-        tenantId, ConsoleJobBundleSummaryResponse.from(request.getBundle()), response);
+    String operator = operator();
+    UUID operationId = UUID.randomUUID();
+    String operationIdText = operationId.toString();
+    TenantConfigBatchInitResponse response =
+        initApplicationService.batchInit(initRequest, operator, operationIdText);
+    ConsoleJobBundleSummaryResponse summary =
+        ConsoleJobBundleSummaryResponse.from(request.getBundle());
+    return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
 
   @Override
@@ -66,10 +70,14 @@ public class DefaultConsoleJobBundleApplicationService
     initRequest.setDryRun(request.isDryRun());
     // Job Bundle 严格 all-or-nothing：任一 spec 失败即整体回滚（文档 console-api.openapi.yaml#3557 已声明）
     initRequest.setStrict(true);
-    TenantConfigBatchInitResponse response = initApplicationService.batchInit(
-        initRequest, operator(), UUID.randomUUID().toString());
-    return new ConsoleJobBundleResultResponse(
-        tenantId, ConsoleJobBundleSummaryResponse.from(request.getBundle()), response);
+    String operator = operator();
+    UUID operationId = UUID.randomUUID();
+    String operationIdText = operationId.toString();
+    TenantConfigBatchInitResponse response =
+        initApplicationService.batchInit(initRequest, operator, operationIdText);
+    ConsoleJobBundleSummaryResponse summary =
+        ConsoleJobBundleSummaryResponse.from(request.getBundle());
+    return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncBundlePayload bundle) {
@@ -79,7 +87,6 @@ public class DefaultConsoleJobBundleApplicationService
     TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
     request.setJobDefinitions(bundle.getJobDefinitions());
     request.setWorkflowDefinitions(bundle.getWorkflowDefinitions());
-    request.setPipelineDefinitions(bundle.getPipelineDefinitions());
     request.setFileChannels(bundle.getFileChannels());
     request.setFileTemplates(bundle.getFileTemplates());
     request.setResourceQueues(bundle.getResourceQueues());

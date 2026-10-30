@@ -52,17 +52,20 @@ public class SmsNotificationSender implements NotificationSender {
     }
     SmsProvider provider = resolve(providerName);
     if (EmptyChecks.isNull(provider)) {
+      String sanitizedChannelCode = LogSanitizer.value(message.channelCode());
       log.warn(
           "SMS channel selected but no provider impl for '{}'; skipping: channelCode={}",
           providerName,
-          LogSanitizer.value(message.channelCode()));
+          sanitizedChannelCode);
       return WebhookDeliveryResult.failure(null, "sms provider not available: " + providerName);
     }
     return provider.send(phoneNumbers, message);
   }
 
   private SmsProvider resolve(String providerName) {
-    return providersByCode.get(providerName.trim().toLowerCase(Locale.ROOT));
+    String normalizedProviderName = providerName.trim();
+    String providerCode = normalizedProviderName.toLowerCase(Locale.ROOT);
+    return providersByCode.get(providerCode);
   }
 
   private static Map<String, SmsProvider> indexProviders(List<SmsProvider> providers) {
@@ -73,7 +76,8 @@ public class SmsNotificationSender implements NotificationSender {
         throw new IllegalStateException(
             "SmsProvider providerCode must not be blank: " + provider.getClass().getName());
       }
-      String normalized = code.trim().toLowerCase(Locale.ROOT);
+      String trimmedCode = code.trim();
+      String normalized = trimmedCode.toLowerCase(Locale.ROOT);
       SmsProvider duplicate = registered.putIfAbsent(normalized, provider);
       if (EmptyChecks.isNotNull(duplicate)) {
         throw new IllegalStateException("duplicate SmsProvider providerCode: " + normalized);

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：ADR-sim 4day · P5 监控仪表盘:批量调度过程一屏看。
+# 用法：在仓库根目录执行 bash scripts/sim-4day/50-watch.sh；参数与前置环境见下方说明及所属 README。
 # ADR-sim 4day · P5 监控仪表盘:批量调度过程一屏看。
 # 用法: bash 50-watch.sh            # 跑一次
 #        bash 50-watch.sh --loop     # 每 20s 刷新(Ctrl-C 退)

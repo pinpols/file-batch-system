@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Validate environment-variable governance docs and critical entry points."""
+# 用途：环境变量治理。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-env-variable-governance.py；参数与前置环境见下方说明及所属 README。
+"""核对环境变量治理文档与关键执行入口。"""
 
 from __future__ import annotations
 

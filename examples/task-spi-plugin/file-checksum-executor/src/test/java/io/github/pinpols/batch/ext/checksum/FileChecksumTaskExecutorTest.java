@@ -4,22 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
+
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 import java.util.ServiceLoader;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 @DisplayName("文件校验和任务执行器")
 class FileChecksumTaskExecutorTest {
 
-  @TempDir java.nio.file.Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   @DisplayName("计算 SHA-256 并返回读取字节数")
   void shouldComputeSha256AndReportReadBytes_whenFileExists() throws Exception {
-    java.nio.file.Path file = tempDir.resolve("input.txt");
+    Path file = tempDir.resolve("input.txt");
     Files.writeString(file, "abc");
     TaskContext context = context(file.toString());
 
@@ -36,7 +38,7 @@ class FileChecksumTaskExecutorTest {
   void shouldRejectMissingOrNonRegularInput_whenExecuting() throws Exception {
     assertThat(new FileChecksumTaskExecutor().execute(context(" ")).success()).isFalse();
 
-    java.nio.file.Path directory = Files.createDirectory(tempDir.resolve("directory"));
+    Path directory = Files.createDirectory(tempDir.resolve("directory"));
     assertThat(new FileChecksumTaskExecutor().execute(context(directory.toString())).success())
         .isFalse();
   }

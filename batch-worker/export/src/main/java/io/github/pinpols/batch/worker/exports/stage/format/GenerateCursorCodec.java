@@ -42,7 +42,8 @@ public class GenerateCursorCodec {
       return Optional.of("L|" + v);
     }
     if (cursor instanceof Integer || cursor instanceof Short || cursor instanceof Byte) {
-      return Optional.of("I|" + ((Number) cursor).intValue());
+      int integerValue = ((Number) cursor).intValue();
+      return Optional.of("I|" + integerValue);
     }
     if (cursor instanceof BigInteger v) {
       return Optional.of("BI|" + v);
@@ -51,15 +52,19 @@ public class GenerateCursorCodec {
       return Optional.of("D|" + v.toPlainString());
     }
     if (cursor instanceof Double || cursor instanceof Float) {
-      return Optional.of(
-          "D|" + BigDecimal.valueOf(((Number) cursor).doubleValue()).toPlainString());
+      double numericValue = ((Number) cursor).doubleValue();
+      BigDecimal decimalValue = BigDecimal.valueOf(numericValue);
+      String encodedValue = decimalValue.toPlainString();
+      return Optional.of("D|" + encodedValue);
     }
     if (cursor instanceof Boolean v) {
       return Optional.of("B|" + v);
     }
     if (cursor instanceof Timestamp v) {
       // 纳秒精度经 Instant 往返保真;还原为 java.sql.Timestamp 以匹配 timestamp(tz) 列绑定。
-      return Optional.of("TS|" + v.toInstant().toString());
+      Instant instant = v.toInstant();
+      String encodedInstant = instant.toString();
+      return Optional.of("TS|" + encodedInstant);
     }
     if (cursor instanceof Instant v) {
       return Optional.of("TS|" + v);
@@ -100,7 +105,10 @@ public class GenerateCursorCodec {
       case "BI" -> new BigInteger(value);
       case "D" -> new BigDecimal(value);
       case "B" -> Boolean.valueOf(value);
-      case "TS" -> Timestamp.from(Instant.parse(value));
+      case "TS" -> {
+        Instant parsedInstant = Instant.parse(value);
+        yield Timestamp.from(parsedInstant);
+      }
       case "LDT" -> LocalDateTime.parse(value);
       case "DT" -> Date.valueOf(value);
       case "S" -> value;

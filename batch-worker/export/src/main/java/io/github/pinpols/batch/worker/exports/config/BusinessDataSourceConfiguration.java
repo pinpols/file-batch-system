@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.config;
 
 import com.zaxxer.hikari.HikariConfig;
+import io.github.pinpols.batch.common.config.ApplicationNameProvider;
 import io.github.pinpols.batch.common.config.BatchPgSessionProperties;
 import io.github.pinpols.batch.common.config.BusinessDataSourceProperties;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
@@ -51,14 +52,9 @@ public class BusinessDataSourceConfiguration {
       BusinessRoutingProperties routingProperties,
       BusinessTenantPlacementMapper placementMapper,
       @Qualifier("exportBusinessHikariConfig") HikariConfig hikariConfig) {
+    String appName = ApplicationNameProvider.resolve(environment, "batch-worker-export");
     return WorkerDataSourceSupport.buildBusinessDataSource(
-        hikariConfig,
-        properties,
-        pgSessionProperties,
-        routingProperties,
-        placementMapper,
-        environment,
-        "batch-worker-export");
+        hikariConfig, properties, pgSessionProperties, routingProperties, placementMapper, appName);
   }
 
   @Bean(name = "exportBusinessSqlSessionFactory")

@@ -5,25 +5,28 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.DeadLetterReplayStatus;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
-import java.time.Month;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -51,10 +54,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 20);
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 24);
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskExecutionService taskExecutionService;
@@ -116,11 +119,13 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     LaunchedJob job = launchAndClaim("RECLAIM_BOUNDARY");
     // D4 修复：resetForDispatch 现在守护 lease_expire_at < now 防止 reclaim 抢答活 worker。
     // 测试场景模拟"lease 真实过期后被 scheduler 回收"——手动把 lease 过期掉。
-    jdbcTemplate.update(
-        "update batch.job_partition set lease_expire_at = now() - interval '1 minute' where"
-            + " tenant_id = ? and id = (select job_partition_id from batch.job_task where id = ?)",
-        TENANT,
-        job.taskId);
+    String expireJobPartitionLeaseSql = """
+        update batch.job_partition
+           set lease_expire_at = now() - interval '1 minute'
+         where tenant_id = ?
+           and id = (select job_partition_id from batch.job_task where id = ?)
+        """;
+    jdbcTemplate.update(expireJobPartitionLeaseSql, TENANT, job.taskId);
 
     long outboxBefore = countOutbox();
 
@@ -142,11 +147,11 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         .isEqualTo(TaskStatus.READY.code());
   }
 
-  // ── replayDeadLetter: REQUIRES_NEW 内部提交独立于外部回滚 ────────────────
+  // ── replayDeadLetter: 终态拒绝记账独立于外部回滚 ────────────────────────
 
   @Test
-  @DisplayName("外部事务回滚时死信重放的内部事务仍独立提交,派发事件数量增加且重放状态标记为成功")
-  void replayDeadLetter_innerCommitSurvivesOuterRollback() {
+  @DisplayName("终态父执行拒绝重放并保持业务状态,失败记账在外部事务回滚后仍保留")
+  void shouldRetainReplayRejection_whenOuterTransactionRollsBack() {
     LaunchedJob job = launchAndExhaustRetries("REPLAY_DL_BOUNDARY");
 
     // 确认已产生死信
@@ -156,23 +161,40 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
     long outboxBefore = countOutbox();
 
     TransactionTemplate outer = new TransactionTemplate(transactionManager);
-    outer.execute(status -> {
-      retryGovernanceService.replayDeadLetter(TENANT, deadLetterId);
-      status.setRollbackOnly();
-      return null;
-    });
+    assertThatThrownBy(() -> outer.execute(status -> {
+          status.setRollbackOnly();
+          retryGovernanceService.replayDeadLetter(TENANT, deadLetterId);
+          return null;
+        }))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.partition.retry_execution_closed");
 
     long outboxAfter = countOutbox();
     assertThat(outboxAfter)
-        .as("replayDeadLetter REQUIRES_NEW should commit despite outer rollback")
-        .isGreaterThan(outboxBefore);
+        .as("closed execution must not create a new dispatch")
+        .isEqualTo(outboxBefore);
 
-    // 死信状态应为 SUCCESS（内部事务已提交）
-    String replayStatus = jdbcTemplate.queryForObject(
-        "select replay_status from batch.dead_letter_task where id = ?",
-        String.class,
-        deadLetterId);
-    assertThat(replayStatus).isEqualTo(DeadLetterReplayStatus.SUCCESS.code());
+    // 拒绝记账独立提交；终态父执行不能被重放复活。
+    String selectReplayStatusSql = """
+        select replay_status from batch.dead_letter_task where id = ?
+    """;
+    String replayStatus =
+        jdbcTemplate.queryForObject(selectReplayStatusSql, String.class, deadLetterId);
+    assertThat(replayStatus).isEqualTo(DeadLetterReplayStatus.GIVE_UP.code());
+    String selectReplayCountSql = """
+        select replay_count from batch.dead_letter_task where tenant_id = ? and id = ?
+    """;
+    Integer selectedReplayCount =
+        jdbcTemplate.queryForObject(selectReplayCountSql, Integer.class, TENANT, deadLetterId);
+    assertThat(selectedReplayCount)
+        .as("terminal rejection closes the dead letter without starting a replay attempt")
+        .isZero();
+    assertThat(jobInstanceMapper.selectById(TENANT, job.instanceId).getInstanceStatus())
+        .isEqualTo(JobInstanceStatus.FAILED.code());
+    assertThat(jobPartitionMapper.selectById(TENANT, job.partitionId).getPartitionStatus())
+        .isEqualTo(PartitionStatus.FAILED.code());
+    assertThat(jobTaskMapper.selectById(TENANT, job.taskId).getTaskStatus())
+        .isEqualTo(TaskStatus.FAILED.code());
   }
 
   // ── retryTask: 非终态任务拒绝重试 ────────────────────────────────────────
@@ -238,152 +260,75 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
 
   /** 启动任务（READY 状态），不 claim。 */
   private LaunchedJob launchJob(String prefix) {
-    String suffix = Long.toUnsignedString(System.nanoTime());
-    String jobCode = "IT_" + prefix + "_" + suffix;
-    String requestId = "req-" + prefix.toLowerCase() + "-" + suffix;
-    String dedupKey = "dedup-" + prefix.toLowerCase() + "-" + suffix;
-    String workerCode = "WK-" + prefix + "-" + suffix;
-
-    jdbcTemplate.update("""
-        insert into batch.job_definition (
-            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
-            priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
-            retry_policy, retry_max_count, timeout_seconds, enabled, version
-        ) values (?, ?, ?, 'IMPORT', 'IT', 'MANUAL', 'UTC',
-            5, 'q-it', ?, 'API', false, 'NONE',
-            'FIXED', 1, 0, true, 1)
-        """, TENANT, jobCode, "IT " + jobCode, workerCode);
-
-    jdbcTemplate.update("""
-        insert into batch.workflow_definition (
-            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
-        ) values (?, ?, 'IT wf', 'DAG', 1, true)
-        """, TENANT, jobCode);
-
-    jdbcTemplate.update("""
-        insert into batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
-            request_status, trace_id
-        ) values (?, ?, 'API', ?, date '2026-01-20', ?, 'ACCEPTED', 'trace-it')
-        """, TENANT, requestId, jobCode, dedupKey);
-
-    jdbcTemplate.update("""
-        insert into batch.worker_registry (
-            tenant_id, worker_code, worker_group, capability_tags, status,
-            heartbeat_at, current_load
-        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
-        """, TENANT, workerCode, workerCode);
-
-    LaunchRequest launchRequest = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .jobCode(jobCode)
-        .bizDate(BIZ_DATE)
-        .triggerType(TriggerType.API)
-        .requestId(requestId)
-        .traceId("trace-" + suffix)
-        .params(Map.of())
-        .build();
-    launchService.launch(launchRequest);
-
-    JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
-    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(TENANT, instance.getId(), null, null));
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null));
-
-    return new LaunchedJob(
-        instance.getId(),
-        partitions.isEmpty() ? null : partitions.get(0).getId(),
-        tasks.get(0).getId(),
-        workerCode);
+    return launchWorkflowJob(prefix, "FIXED", 1);
   }
 
-  /** 启动任务，失败，耗尽重试（retry_max_count=1），产生死信。 */
+  /** 启动任务，失败并立即进入死信（retry_policy=NONE）。 */
   private LaunchedJob launchAndExhaustRetries(String prefix) {
-    String suffix = Long.toUnsignedString(System.nanoTime());
-    String jobCode = "IT_" + prefix + "_" + suffix;
-    String requestId = "req-" + prefix.toLowerCase() + "-" + suffix;
-    String dedupKey = "dedup-" + prefix.toLowerCase() + "-" + suffix;
-    String workerCode = "WK-" + prefix + "-" + suffix;
-
-    // retry_policy=NONE, retry_max_count=0 → 立即进死信
-    jdbcTemplate.update("""
-        insert into batch.job_definition (
-            tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
-            priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
-            retry_policy, retry_max_count, timeout_seconds, enabled, version
-        ) values (?, ?, ?, 'IMPORT', 'IT', 'MANUAL', 'UTC',
-            5, 'q-it', ?, 'API', false, 'NONE',
-            'NONE', 0, 0, true, 1)
-        """, TENANT, jobCode, "IT " + jobCode, workerCode);
-
-    jdbcTemplate.update("""
-        insert into batch.workflow_definition (
-            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
-        ) values (?, ?, 'IT wf', 'DAG', 1, true)
-        """, TENANT, jobCode);
-
-    jdbcTemplate.update("""
-        insert into batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key,
-            request_status, trace_id
-        ) values (?, ?, 'API', ?, date '2026-01-20', ?, 'ACCEPTED', 'trace-it')
-        """, TENANT, requestId, jobCode, dedupKey);
-
-    jdbcTemplate.update("""
-        insert into batch.worker_registry (
-            tenant_id, worker_code, worker_group, capability_tags, status,
-            heartbeat_at, current_load
-        ) values (?, ?, ?, '[]'::jsonb, 'ONLINE', now(), 0)
-        """, TENANT, workerCode, workerCode);
-
-    LaunchRequest exhaustRequest = LaunchRequest.builder()
-        .tenantId(TENANT)
-        .jobCode(jobCode)
-        .bizDate(BIZ_DATE)
-        .triggerType(TriggerType.API)
-        .requestId(requestId)
-        .traceId("trace-" + suffix)
-        .params(Map.of())
-        .build();
-    launchService.launch(exhaustRequest);
-
-    JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(TENANT, dedupKey);
-    List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(
-        new JobPartitionQuery(TENANT, instance.getId(), null, null));
-    List<JobTaskEntity> tasks =
-        jobTaskMapper.selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null));
-
-    Long taskId = tasks.get(0).getId();
-    Long partitionId = partitions.isEmpty() ? null : partitions.get(0).getId();
-
-    // claim + fail → 进死信（因为 NONE / 0）
-    taskExecutionService.assignWorker(TENANT, taskId, workerCode);
+    LaunchedJob job = launchWorkflowJob(prefix, "NONE", 0);
+    taskExecutionService.assignWorker(TENANT, job.taskId, job.workerCode);
     TaskOutcomeCommand exhaustOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
-        .taskId(taskId)
+        .taskId(job.taskId)
         .errorCode("EXHAUST_ERROR")
         .errorMessage("exhaust retries")
-        // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(R3-P1-10 report invocation fence)。
-        .partitionInvocationId(currentInvocationId(partitionId))
+        .partitionInvocationId(currentInvocationId(job.partitionId))
         .build();
     taskExecutionService.applyTaskOutcome(exhaustOutcome);
+    return job;
+  }
 
-    return new LaunchedJob(instance.getId(), partitionId, taskId, workerCode);
+  private LaunchedJob launchWorkflowJob(String prefix, String retryPolicy, int retryMaxCount) {
+    String workerGroup = "WG_" + prefix;
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", workerGroup, TriggerType.API, BIZ_DATE);
+    String updateJobDefinitionRetryPolicySql = """
+        update batch.job_definition set retry_policy = ?, retry_max_count = ?
+         where tenant_id = ? and job_code = ?
+        """;
+    jdbcTemplate.update(
+        updateJobDefinitionRetryPolicySql, retryPolicy, retryMaxCount, TENANT, seed.jobCode());
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-" + prefix + "-" + seed.requestId())
+        .params(Map.of())
+        .build();
+    var response = workflowRunLaunchService.launch(launchRequest);
+    Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, instanceId);
+    List<JobPartitionEntity> partitions =
+        jobPartitionMapper.selectByQuery(JobPartitionQuery.ofJobInstance(TENANT, instanceId));
+    List<JobTaskEntity> tasks =
+        jobTaskMapper.selectByQuery(JobTaskQuery.ofJobInstance(TENANT, instanceId));
+    return new LaunchedJob(
+        instanceId,
+        partitions.isEmpty() ? null : partitions.get(0).getId(),
+        tasks.get(0).getId(),
+        seed.workerCode());
   }
 
   private Long findDeadLetterForPartition(Long partitionId) {
-    List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-        "select id from batch.dead_letter_task where tenant_id = ? and source_id = ?"
-            + " and source_type = 'JOB_PARTITION' order by id desc limit 1",
-        TENANT,
-        partitionId);
+    String selectDeadLetterByPartitionSql = """
+        select id from batch.dead_letter_task
+         where tenant_id = ? and source_id = ?
+           and source_type = 'JOB_PARTITION'
+         order by id desc limit 1
+        """;
+    List<Map<String, Object>> rows =
+        jdbcTemplate.queryForList(selectDeadLetterByPartitionSql, TENANT, partitionId);
     return rows.isEmpty() ? null : ((Number) rows.get(0).get("id")).longValue();
   }
 
   private long countOutbox() {
-    Long n = jdbcTemplate.queryForObject(
-        "select count(*) from batch.outbox_event where tenant_id = ?", Long.class, TENANT);
+    String countOutboxEventsSql = """
+        select count(*) from batch.outbox_event where tenant_id = ?
+    """;
+    Long n = jdbcTemplate.queryForObject(countOutboxEventsSql, Long.class, TENANT);
     return n == null ? 0L : n;
   }
 }

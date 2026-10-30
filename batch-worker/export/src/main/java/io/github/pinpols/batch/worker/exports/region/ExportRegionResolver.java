@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.exports.region;
 
 import io.github.pinpols.batch.common.exception.WorkerConfigException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 导出地区(region)解析(per-run + 默认回退 + 字典校验),与导入 {@code GenericJdbcMappedImportLoadPlugin#applyRegion}
@@ -35,15 +37,21 @@ public final class ExportRegionResolver {
   public static String resolve(Map<String, Object> templateConfig, Map<String, Object> metadata) {
     String triggerRegion = stringValue(metadata == null ? null : metadata.get("region"));
     Map<String, Object> regionCfg = regionConfig(templateConfig);
-    String defaultRegion = firstNonBlank(
-        stringValue(regionCfg.get("defaultRegion")), stringValue(regionCfg.get("default_region")));
-    List<String> allowed =
-        stringList(regionCfg.get("allowedRegions"), regionCfg.get("allowed_regions"));
+    String camelCaseDefaultRegion = stringValue(regionCfg.get("defaultRegion"));
+    String snakeCaseDefaultRegion = stringValue(regionCfg.get("default_region"));
+    String defaultRegion = firstNonBlank(camelCaseDefaultRegion, snakeCaseDefaultRegion);
+    Object camelCaseAllowedRegions = regionCfg.get("allowedRegions");
+    Object snakeCaseAllowedRegions = regionCfg.get("allowed_regions");
+    List<String> allowed = stringList(camelCaseAllowedRegions, snakeCaseAllowedRegions);
 
     String region = Texts.hasText(triggerRegion) ? triggerRegion : defaultRegion;
-    if (!allowed.isEmpty() && (region == null || !allowed.contains(region))) {
-      throw new WorkerConfigException(
-          "export region not in allowedRegions: region=" + region + ", allowed=" + allowed);
+    if (!EmptyChecks.isEmpty(Objects.requireNonNull(allowed))) {
+      boolean regionMissing = EmptyChecks.isNull(region);
+      boolean regionNotAllowed = !regionMissing && !allowed.contains(region);
+      if (regionMissing || regionNotAllowed) {
+        throw new WorkerConfigException(
+            "export region not in allowedRegions: region=" + region + ", allowed=" + allowed);
+      }
     }
     return region;
   }
@@ -91,7 +99,11 @@ public final class ExportRegionResolver {
   }
 
   private static String stringValue(Object v) {
-    return v == null ? null : String.valueOf(v).trim();
+    if (EmptyChecks.isNull(v)) {
+      return null;
+    }
+    String valueText = String.valueOf(v);
+    return valueText.trim();
   }
 
   private static String firstNonBlank(String a, String b) {
@@ -104,8 +116,17 @@ public final class ExportRegionResolver {
       return List.of();
     }
     return list.stream()
-        .filter(o -> o != null && Texts.hasText(String.valueOf(o)))
-        .map(o -> String.valueOf(o).trim())
+        .filter(value -> {
+          if (EmptyChecks.isNull(value)) {
+            return false;
+          }
+          String filterText = String.valueOf(value);
+          return Texts.hasText(filterText);
+        })
+        .map(value -> {
+          String mappedText = String.valueOf(value);
+          return mappedText.trim();
+        })
         .toList();
   }
 }

@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments">
+    <!-- 调用方以s/p/pr分别引用步骤、Pipeline与checkpoint；摘要只补对应成功尝试。 -->
+    <sql id="ProcessStageCountJoin">
+        left join lateral (
+            select case when p.system_pipeline_code = 'PROCESS' and s.step_status = 'SUCCESS'
+                then case when s.stage_code = 'COMMIT'
+                    then s.output_summary -&gt; 'publishedCount'
+                    else s.output_summary -&gt; 'processedCount' end
+                end as value
+        ) process_summary on true
+        left join lateral (
+            select case when jsonb_typeof(process_summary.value) = 'number'
+                then process_summary.value::text::numeric end as value
+        ) process_count on true
+    </sql>
+    <!-- 只接受非负Long整数，不把字符串、溢出或未知值转换成伪造的0。 -->
+    <sql id="ProcessedRows">
+        coalesce(pr.processed_count,
+            case when process_count.value between 0 and 9223372036854775807
+                      and trunc(process_count.value) = process_count.value
+                then process_count.value::bigint end) as rows_processed
+    </sql>
+</mapper>

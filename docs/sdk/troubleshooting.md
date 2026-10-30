@@ -85,4 +85,4 @@ Spring Boot starter 启动比 plain SDK 慢(autoconfigure + bean 扫描):
 
 - 看 [ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)「实施记录:协议字段细节」对照 wire payload
 - 看 [`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md) §「常见接入问题」
-- 平台运维侧:[`docs/runbook/`](../runbook/) 内对应 `kafka-*` / `outbox-*` runbook
+- 平台运维侧:[`docs/runbook/`](../runbook) 内对应 `kafka-*` / `outbox-*` runbook

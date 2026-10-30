@@ -1,0 +1,27 @@
+# Docker Compose 固定抓取目标清单；不用于目标集合由站点动态管理的 Helm 部署。
+groups:
+  - name: batch.docker-target-inventory
+    rules:
+      - alert: BatchDependencyTargetMissing
+        expr: absent(up{job="redis-exporter"}) or absent(up{job="postgres-exporter"}) or absent(up{job="kafka-exporter"}) or absent(up{job="minio"})
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: dependency
+        annotations:
+          summary: "依赖监控目标缺失：{{ $labels.job }}"
+          description: "Prometheus 未发现 Docker 固定清单中的依赖指标抓取目标。检查 scrape 配置、服务发现和目标服务。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/observability-stack.md#5-验收"
+
+      - alert: BatchTelemetryBackendTargetMissing
+        expr: absent(up{job="loki"}) or absent(up{job="tempo"})
+        for: 2m
+        labels:
+          severity: critical
+          team: batch-platform
+          alert_group: observability
+        annotations:
+          summary: "遥测后端监控目标缺失：{{ $labels.job }}"
+          description: "Prometheus 未发现 Docker 固定清单中的 Loki/Tempo 指标目标。检查服务发现、配置挂载和观测栈部署。"
+          runbook_url: "https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/observability-stack.md#5-验收"

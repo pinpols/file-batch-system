@@ -1,8 +1,6 @@
 package io.github.pinpols.batch.console.application.ops.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import io.github.pinpols.batch.console.support.web.ConsoleResponseFieldReader;
-import java.util.Map;
 
 /**
  * 实例生命周期动作（cancel / terminate / pause / resume）结果。
@@ -12,16 +10,4 @@ import java.util.Map;
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ConsoleInstanceActionResponse(
-    Long id, String instanceNo, String status, Integer cancelRequestedTasks) {
-
-  public static ConsoleInstanceActionResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleInstanceActionResponse(
-        ConsoleResponseFieldReader.longValue(row, "id"),
-        ConsoleResponseFieldReader.stringValue(row, "instanceNo"),
-        ConsoleResponseFieldReader.stringValue(row, "status"),
-        ConsoleResponseFieldReader.integerValue(row, "cancelRequestedTasks"));
-  }
-}
+    Long id, String instanceNo, String status, Integer cancelRequestedTasks) {}

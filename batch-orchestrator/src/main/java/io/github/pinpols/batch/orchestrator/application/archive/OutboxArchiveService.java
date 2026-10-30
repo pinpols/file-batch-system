@@ -44,6 +44,13 @@ public class OutboxArchiveService {
     int retention = Math.max(1, retentionDays);
     int batchSize = Math.max(1, properties.getBatchSize());
     Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofDays(retention));
+    if (outboxEventMapper.existsTenantMismatchedArchiveCandidate(publishStatus, cutoff)) {
+      log.warn(
+          "outbox archive skipped one or more events with tenant-mismatched child records:"
+              + " status={}, cutoff={}, action=manual-integrity-review-required",
+          publishStatus,
+          cutoff);
+    }
     List<Long> ids = outboxEventMapper.selectArchivableIds(publishStatus, cutoff, batchSize);
     if (ids.isEmpty()) {
       return ArchiveBatchResult.empty(cutoff);

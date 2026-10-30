@@ -34,6 +34,8 @@ public class ArchiveSchedulerHealthMetrics {
 
   public void markSuccess(String scheduler) {
     register(scheduler);
-    lastSuccessByScheduler.get(scheduler).set(Instant.now().getEpochSecond());
+    AtomicLong lastSuccessEpochSeconds = lastSuccessByScheduler.get(scheduler);
+    long currentEpochSecond = Instant.now().getEpochSecond();
+    lastSuccessEpochSeconds.set(currentEpochSecond);
   }
 }

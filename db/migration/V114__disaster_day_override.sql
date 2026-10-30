@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS batch.disaster_day_override (
 -- index predicate must be marked IMMUTABLE"），CURRENT_TIMESTAMP 是 STABLE 不能进
 -- partial index predicate。disaster override 是"每业务日至多 1 条"语义，去掉
 -- partial 过滤后约束等价（同一业务日不会同时有多个 override 互相竞争）。
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_disaster_active
     ON batch.disaster_day_override (tenant_id, calendar_code, biz_date);
 

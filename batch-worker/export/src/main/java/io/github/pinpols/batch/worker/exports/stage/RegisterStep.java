@@ -7,10 +7,12 @@ import io.github.pinpols.batch.common.enums.FileChecksumType;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.enums.OperationResult;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
@@ -23,6 +25,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepos
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
@@ -59,18 +62,21 @@ public class RegisterStep implements ExportStageStep {
   private final PlatformFileAuditRepository fileAudits;
   private final ExportDataPluginRegistry exportDataPluginRegistry;
   private final S3StorageProperties s3StorageProperties;
+  private final TaskExecutionClient taskExecutionClient;
 
   public RegisterStep(
       PlatformFileRecordRepository fileRecords,
       PlatformPipelineRunRepository pipelineRuns,
       PlatformFileAuditRepository fileAudits,
       ExportDataPluginRegistry exportDataPluginRegistry,
-      S3StorageProperties s3StorageProperties) {
+      S3StorageProperties s3StorageProperties,
+      TaskExecutionClient taskExecutionClient) {
     this.fileRecords = fileRecords;
     this.pipelineRuns = pipelineRuns;
     this.fileAudits = fileAudits;
     this.exportDataPluginRegistry = exportDataPluginRegistry;
     this.s3StorageProperties = s3StorageProperties;
+    this.taskExecutionClient = taskExecutionClient;
   }
 
   @Override
@@ -81,8 +87,10 @@ public class RegisterStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不创建 file_record / 不调 plugin.onRegistered（避免污染平台 file 视图）。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
+    boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
+    if (dryRun) {
       return ExportStageResult.success(stage());
     }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
@@ -109,36 +117,121 @@ public class RegisterStep implements ExportStageStep {
     }
     String objectName = String.valueOf(attrs.get(KEY_OBJECT_NAME));
     String fileName = String.valueOf(attrs.get(PipelineRuntimeKeys.FILE_NAME));
-    String fileFormatType = String.valueOf(attrs.getOrDefault(
-        PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code()));
+    Object configuredFileFormatType = attrs.getOrDefault(
+        PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
+    String fileFormatType = String.valueOf(configuredFileFormatType);
     String bucket = s3StorageProperties.getBucket();
     String expectedChecksum = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
     // 相同路径的 file_record 已存在时进行幂等复用（STORE → REGISTER 重试场景）
     if (fileRecords.existsFileRecordByStoragePath(context.getTenantId(), bucket, objectName)) {
       Map<String, Object> existing =
           fileRecords.loadFileRecordByStoragePath(context.getTenantId(), bucket, objectName);
-      String existingChecksum = nullableText(existing.get("checksum_value"));
-      if (Texts.hasText(expectedChecksum)
-          && Texts.hasText(existingChecksum)
-          && !expectedChecksum.equalsIgnoreCase(existingChecksum)) {
-        return ExportStageResult.failure(
-            stage(),
-            "EXPORT_REGISTER_CHECKSUM_CONFLICT",
-            "error.export.register.checksum_conflict",
-            new Object[0],
-            "existing file_record checksum does not match expected checksum",
-            ERROR_OBJECT_MAPPER);
-      }
-      return reuseExistingFileRecord(context, batch, existing);
+      return reuseMatchingArtifact(context, batch, existing, expectedChecksum);
     }
 
+    Map<String, Object> metadata = buildFileMetadata(context, exportPayload, objectName, attrs);
+    Long fileSizeBytes =
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
+    String checksumType = String.valueOf(
+        attrs.getOrDefault(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code()));
+    FileRecordParam.FileRecordParamBuilder fileRecordBuilder = FileRecordParam.builder()
+        .tenantId(context.getTenantId())
+        .fileCode(exportPayload.fileCode());
+    String businessType =
+        Texts.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode();
+    fileRecordBuilder
+        .bizType(businessType)
+        .fileCategory("OUTPUT")
+        .fileName(fileName)
+        .originalFileName(fileName)
+        .fileFormatType(fileFormatType)
+        .charset(exportCharset(attrs))
+        .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
+        .checksumType(checksumType);
+    String checksumValue = nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE));
+    fileRecordBuilder
+        .checksumValue(checksumValue)
+        .storageType("S3")
+        .storagePath(objectName)
+        .storageBucket(bucket)
+        .fileVersion(null);
+    String payloadBizDate = exportPayload.bizDate();
+    String contextBizDate = context.getBizDate();
+    LocalDate fileBizDate = parseBizDate(payloadBizDate, contextBizDate);
+    fileRecordBuilder
+        .bizDate(fileBizDate)
+        .sourceType("GENERATED")
+        .sourceRef(exportPayload.batchNo())
+        .fileStatus(FileStatus.GENERATED.code());
+    String fileRecordTraceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
+    FileRecordParam fileRecordParam =
+        fileRecordBuilder.traceId(fileRecordTraceId).metadata(metadata).build();
+    Long fileId = fileRecords.createFileRecord(fileRecordParam);
+    Map<String, Object> fileRecord = fileRecords.loadFileRecord(context.getTenantId(), fileId);
+    attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
+    attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
+    context.setFileId(String.valueOf(fileId));
+    String tenantId = context.getTenantId();
+    Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
+    Integer exportVersion =
+        fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
+    String traceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
+    ExportDataPlugin exportPlugin = resolvePlugin(context);
+    ExportStageResult callbackFailure = invokeRegistrationCallback(
+        context, exportPlugin, exportPayload, batchId, exportVersion, traceId);
+    if (EmptyChecks.isNotNull(callbackFailure)) {
+      return callbackFailure;
+    }
+    return ExportStageResult.success(stage());
+  }
+
+  private ExportStageResult reuseMatchingArtifact(
+      ExportJobContext context,
+      Map<?, ?> batch,
+      Map<String, Object> existing,
+      String expectedChecksum) {
+    if (!ExportArtifactIdentity.belongsToJob(context, existing)) {
+      String reason = "registered artifact belongs to another or unknown Job instance";
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_REGISTER_ARTIFACT_CONFLICT",
+          "error.export.store.artifact_conflict",
+          new Object[] {reason},
+          reason,
+          ERROR_OBJECT_MAPPER);
+    }
+    String existingChecksum = nullableText(existing.get("checksum_value"));
+    boolean existingFileRecordHasChecksumConflict = Texts.hasText(expectedChecksum)
+        && Texts.hasText(existingChecksum)
+        && !expectedChecksum.equalsIgnoreCase(existingChecksum);
+    if (existingFileRecordHasChecksumConflict) {
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_REGISTER_CHECKSUM_CONFLICT",
+          "error.export.register.checksum_conflict",
+          new Object[0],
+          "existing file_record checksum does not match expected checksum",
+          ERROR_OBJECT_MAPPER);
+    }
+    return reuseExistingFileRecord(context, batch, existing);
+  }
+
+  /** 用户元数据合并后再固定产物所属实例，避免它覆盖平台维护的血缘身份。 */
+  private Map<String, Object> buildFileMetadata(
+      ExportJobContext context,
+      ExportPayload exportPayload,
+      String objectName,
+      Map<String, Object> attrs) {
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put(PipelineRuntimeKeys.RECORD_COUNT, attrs.get(PipelineRuntimeKeys.RECORD_COUNT));
     metadata.put(KEY_TOTAL_AMOUNT, attrs.get(KEY_TOTAL_AMOUNT));
     metadata.put("templateCode", exportPayload.templateCode());
     metadata.put(KEY_OBJECT_NAME, objectName);
     mergeSecurityMetadata(metadata, attrs);
-    if (attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT) != null) {
+    if (EmptyChecks.isNotNull(attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT))) {
       metadata.put(
           PipelineRuntimeKeys.EXPORT_SNAPSHOT, attrs.get(PipelineRuntimeKeys.EXPORT_SNAPSHOT));
     }
@@ -153,47 +246,13 @@ public class RegisterStep implements ExportStageStep {
       metadata.put(ExportRuntimeKeys.EXPORT_WITH_BOM, attrs.get(ExportRuntimeKeys.EXPORT_WITH_BOM));
     }
     mergeUserMetadata(metadata, exportPayload.metadata());
-    Long fileSizeBytes =
-        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
-    FileRecordParam fileRecordParam = FileRecordParam.builder()
-        .tenantId(context.getTenantId())
-        .fileCode(exportPayload.fileCode())
-        .bizType(
-            Texts.hasText(exportPayload.bizType()) ? exportPayload.bizType() : context.getJobCode())
-        .fileCategory("OUTPUT")
-        .fileName(fileName)
-        .originalFileName(fileName)
-        .fileFormatType(fileFormatType)
-        .charset(exportCharset(attrs))
-        .fileSizeBytes(EmptyChecks.isNull(fileSizeBytes) ? 0L : fileSizeBytes)
-        .checksumType(String.valueOf(
-            attrs.getOrDefault(PipelineRuntimeKeys.CHECKSUM_TYPE, FileChecksumType.SHA_256.code())))
-        .checksumValue(nullableText(attrs.get(PipelineRuntimeKeys.CHECKSUM_VALUE)))
-        .storageType("S3")
-        .storagePath(objectName)
-        .storageBucket(bucket)
-        .fileVersion(null)
-        .bizDate(parseBizDate(exportPayload.bizDate(), context.getBizDate()))
-        .sourceType("GENERATED")
-        .sourceRef(exportPayload.batchNo())
-        .fileStatus(FileStatus.GENERATED.code())
-        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-        .metadata(metadata)
-        .build();
-    Long fileId = fileRecords.createFileRecord(fileRecordParam);
-    Map<String, Object> fileRecord = fileRecords.loadFileRecord(context.getTenantId(), fileId);
-    attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
-    attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
-    context.setFileId(String.valueOf(fileId));
-    pipelineRuns.bindFileToPipelineInstance(
-        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)), fileId);
-    Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
-    Integer exportVersion =
-        fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
-    String traceId = String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID));
-    resolvePlugin(context)
-        .onRegistered(buildDataContext(context, exportPayload), batchId, exportVersion, traceId);
-    return ExportStageResult.success(stage());
+    Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
+    if (EmptyChecks.isNull(jobInstanceId)) {
+      metadata.remove(PipelineRuntimeKeys.JOB_INSTANCE_ID);
+    } else {
+      metadata.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, jobInstanceId);
+    }
+    return metadata;
   }
 
   /** 登记 GENERATE 实际使用的目标编码；未显式下发（旧实例重放等）回退 UTF-8。 */
@@ -217,21 +276,30 @@ public class RegisterStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, fileId);
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, existing);
     context.setFileId(String.valueOf(fileId));
-    pipelineRuns.bindFileToPipelineInstance(
-        PlatformRuntimeValues.toLong(
-            context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-        fileId);
+    String tenantId = context.getTenantId();
+    Map<String, Object> attributes = context.getAttributes();
+    Object pipelineInstanceIdValue = attributes.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
     Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         existing.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
     String traceId = String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID));
     ExportPayload exportPayload2 =
         (ExportPayload) context.getAttributes().get(ExportRuntimeKeys.EXPORT_PAYLOAD);
-    resolvePlugin(context)
-        .onRegistered(buildDataContext(context, exportPayload2), batchId, exportVersion, traceId);
+    ExportDataPlugin exportPlugin = resolvePlugin(context);
+    ExportStageResult callbackFailure = invokeRegistrationCallback(
+        context, exportPlugin, exportPayload2, batchId, exportVersion, traceId);
+    if (EmptyChecks.isNotNull(callbackFailure)) {
+      return callbackFailure;
+    }
     Map<String, Object> audit = new LinkedHashMap<>();
     audit.put("reason", "STORE_TO_REGISTER_RETRY");
     audit.put(KEY_OBJECT_NAME, context.getAttributes().get(KEY_OBJECT_NAME));
+    Object auditTraceId = context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID);
+    String auditTraceIdText = String.valueOf(auditTraceId);
+    Object auditObjectName = context.getAttributes().get(KEY_OBJECT_NAME);
+    String auditObjectNameText = String.valueOf(auditObjectName);
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
@@ -239,11 +307,67 @@ public class RegisterStep implements ExportStageStep {
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
-        .traceId(String.valueOf(context.getAttributes().get(PipelineRuntimeKeys.TRACE_ID)))
-        .evidenceRef(String.valueOf(context.getAttributes().get(KEY_OBJECT_NAME)))
+        .traceId(auditTraceIdText)
+        .evidenceRef(auditObjectNameText)
         .detailSummary(audit)
         .build());
     return ExportStageResult.success(stage());
+  }
+
+  private ExportStageResult invokeRegistrationCallback(
+      ExportJobContext context,
+      ExportDataPlugin plugin,
+      ExportPayload payload,
+      Long batchId,
+      int exportVersion,
+      String traceId) {
+    if (!isReplaySafe(plugin.registrationCallbackIdempotencyCapability())
+        && !markNonIdempotentExecutionStarted(context)) {
+      return ExportStageResult.failure(
+          stage(),
+          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+          "error.export.register.failed",
+          new Object[] {"non-idempotent plugin callback execution fence was not confirmed"},
+          "non-idempotent plugin callback execution fence was not confirmed",
+          ERROR_OBJECT_MAPPER);
+    }
+    ExportDataContext dataContext = buildDataContext(context, payload);
+    plugin.onRegistered(dataContext, batchId, exportVersion, traceId);
+    return null;
+  }
+
+  private boolean markNonIdempotentExecutionStarted(ExportJobContext context) {
+    Map<String, Object> attributes = context.getAttributes();
+    Long taskId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID));
+    Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+    if (EmptyChecks.isNull(taskExecutionClient)) {
+      return false;
+    }
+    if (EmptyChecks.isNull(taskId)) {
+      return false;
+    }
+    if (!Texts.hasText(context.getWorkerId())) {
+      return false;
+    }
+    if (!(invocationValue instanceof String invocationId)) {
+      return false;
+    }
+    if (!Texts.hasText(invocationId)) {
+      return false;
+    }
+    try {
+      return taskExecutionClient.markNonIdempotentExecutionStarted(
+          context.getTenantId(), taskId, context.getWorkerId(), invocationId);
+    } catch (RuntimeException exception) {
+      SwallowedExceptionLogger.warn(
+          RegisterStep.class, "catch:nonIdempotentPluginExecutionFence", exception);
+      return false;
+    }
+  }
+
+  private static boolean isReplaySafe(IdempotencyCapability capability) {
+    return capability == IdempotencyCapability.IDEMPOTENT_BY_UNIQUE_CONSTRAINT
+        || capability == IdempotencyCapability.IDEMPOTENT_BY_PLUGIN_LOGIC;
   }
 
   private LocalDate parseBizDate(String payloadBizDate, String fallbackBizDate) {

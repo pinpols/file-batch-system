@@ -8,6 +8,7 @@
 
 -- A) 建分区父表(列集 = pg_dump 实库 DDL,2026-06-10;biz_date 升 NOT NULL,
 --    INSERT 时 COALESCE(biz_date, created_at::date) 兜底——分区键不可为 NULL)
+
 CREATE TABLE batch.job_instance_p (
     id                        BIGINT       NOT NULL,
     tenant_id                 VARCHAR(64)  NOT NULL,
@@ -86,6 +87,7 @@ ALTER TABLE batch.job_instance_p
     ALTER COLUMN id SET DEFAULT nextval('batch.job_instance_id_seq'::regclass);
 
 -- 出向 FK(分区表 → 普通表,PG 12+ 支持)对齐实库
+
 ALTER TABLE batch.job_instance_p
     ADD CONSTRAINT job_instance_p_job_definition_id_fkey
     FOREIGN KEY (job_definition_id) REFERENCES batch.job_definition(id);
@@ -94,6 +96,7 @@ ALTER TABLE batch.job_instance_p
     FOREIGN KEY (trigger_request_id) REFERENCES batch.trigger_request(id);
 
 -- B) 建月分区（同 outbox-event 模式，前 24 月 + 后 12 月 + 默认）
+
 DO $$
 DECLARE
     m INT;
@@ -115,11 +118,13 @@ BEGIN
 END$$;
 
 -- C) 业务查询索引(对齐实库全部 12 个二级索引;_p 命名与 legacy 共存)
+
 CREATE INDEX idx_job_instance_p_status ON batch.job_instance_p (tenant_id, instance_status, biz_date);
 CREATE INDEX idx_job_instance_p_job_code ON batch.job_instance_p (tenant_id, job_code, biz_date);
 CREATE INDEX idx_job_instance_p_finished_at ON batch.job_instance_p (finished_at)
     WHERE finished_at IS NOT NULL;
 -- DBA-2026-05-20 P1-1 — 活跃实例 partial, scheduler/wait 队列扫描专用
+
 CREATE INDEX idx_job_instance_p_active_tenant_created ON batch.job_instance_p (tenant_id, created_at)
     WHERE instance_status IN ('CREATED','WAITING','READY','RUNNING');
 CREATE INDEX idx_job_instance_p_batch_lookup ON batch.job_instance_p (tenant_id, job_code, biz_date, batch_no);
@@ -132,11 +137,13 @@ CREATE INDEX idx_job_instance_p_job_status ON batch.job_instance_p (tenant_id, j
 CREATE INDEX idx_job_instance_p_related_file ON batch.job_instance_p (tenant_id, related_file_id);
 CREATE INDEX idx_job_instance_p_sla_tracking ON batch.job_instance_p (instance_status, deadline_at, sla_alerted_at);
 -- DBA-2026-05-20 P0-2 / P1-1 — cleanup-success-instances.sql 与 console biz_date 列表 ORDER BY DESC
+
 CREATE INDEX idx_job_instance_p_tenant_bizdate_status ON batch.job_instance_p (tenant_id, biz_date DESC, instance_status);
 CREATE INDEX idx_job_instance_p_tenant_status_started ON batch.job_instance_p (tenant_id, instance_status, started_at DESC);
 CREATE INDEX idx_job_instance_p_trace_id ON batch.job_instance_p (trace_id);
 
 -- D) 复制数据(显式全列;biz_date NULL 用 created_at::date 兜底)
+
 INSERT INTO batch.job_instance_p (
     id, tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
     biz_date, trigger_type, instance_status, queue_code, worker_group, priority,
@@ -165,6 +172,7 @@ SELECT setval('batch.job_instance_id_seq',
               COALESCE((SELECT MAX(id) FROM batch.job_instance_p), 1));
 
 -- E) 解所有 FK（自引用 + 8 张子表）
+
 ALTER TABLE batch.job_task DROP CONSTRAINT IF EXISTS job_task_job_instance_id_fkey;
 ALTER TABLE batch.job_partition DROP CONSTRAINT IF EXISTS job_partition_job_instance_id_fkey;
 ALTER TABLE batch.job_step_instance DROP CONSTRAINT IF EXISTS job_step_instance_job_instance_id_fkey;
@@ -175,16 +183,20 @@ ALTER TABLE batch.compensation_command DROP CONSTRAINT IF EXISTS compensation_co
 ALTER TABLE batch.job_instance DROP CONSTRAINT IF EXISTS job_instance_parent_instance_id_fkey;
 
 -- F) 切换名字
+
 ALTER TABLE batch.job_instance RENAME TO job_instance_legacy;
 ALTER TABLE batch.job_instance_p RENAME TO job_instance;
 
 -- 不重建跨分区 FK（PG 原生不支持）；应用层 SuccessInstanceArchiveScheduler 已带级联删
 
 -- 修复序列 ownership（RENAME 不转移 SEQUENCE OWNED BY，直接 DROP legacy 会级联删序列）
+
 ALTER SEQUENCE batch.job_instance_id_seq OWNED BY batch.job_instance.id;
 DROP TABLE batch.job_instance_legacy;
 
 -- legacy 已 DROP 释放原约束名,改回兼容名(DefaultLaunchService:531 按 contains
+
 -- "uk_job_instance_tenant_dedup" 判 dedup 幂等;建表期用 _p_* 仅为避开与 legacy 撞名)。
+
 ALTER TABLE batch.job_instance RENAME CONSTRAINT uk_job_instance_p_dedup TO uk_job_instance_tenant_dedup_attempt;
 ALTER TABLE batch.job_instance RENAME CONSTRAINT uk_job_instance_p_instance_no TO uk_job_instance_tenant_instance_no;

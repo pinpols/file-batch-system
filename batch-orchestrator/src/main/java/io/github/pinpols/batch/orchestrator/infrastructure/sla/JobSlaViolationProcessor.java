@@ -37,6 +37,12 @@ public class JobSlaViolationProcessor {
     if (jobMonitoringMapper.markSlaAlerted(candidate.getTenantId(), candidate.getId(), now) <= 0) {
       return false;
     }
+    JobInstanceEntity claimedCandidate =
+        jobMonitoringMapper.selectSlaViolationCandidate(candidate.getTenantId(), candidate.getId());
+    if (EmptyChecks.isNull(claimedCandidate)) {
+      throw new IllegalStateException("claimed SLA violation candidate is no longer available");
+    }
+    candidate = claimedCandidate;
     BatchMdc.put(StructuredLogField.TENANT_ID, candidate.getTenantId());
     BatchMdc.put(StructuredLogField.TRACE_ID, candidate.getTraceId());
     BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, String.valueOf(candidate.getId()));
@@ -50,7 +56,8 @@ public class JobSlaViolationProcessor {
       alertLog.setTraceId(candidate.getTraceId());
       alertLog.setMessage("job SLA violated: " + extra.get(KEY_VIOLATION_REASON));
       alertLog.setDetailRef(AuditLogConstants.DETAIL_REF_JOB_SLA);
-      alertLog.setExtraJson(JsonUtils.toJson(extra));
+      String alertExtraJson = JsonUtils.toJson(extra);
+      alertLog.setExtraJson(alertExtraJson);
       jobExecutionLogMapper.insert(alertLog);
 
       JobExecutionLogEntity auditLog = new JobExecutionLogEntity();
@@ -64,7 +71,8 @@ public class JobSlaViolationProcessor {
       Map<String, Object> auditExtra = new LinkedHashMap<>(extra);
       auditExtra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM_SLA_SCHEDULER);
       auditExtra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-      auditLog.setExtraJson(JsonUtils.toJson(auditExtra));
+      String auditExtraJson = JsonUtils.toJson(auditExtra);
+      auditLog.setExtraJson(auditExtraJson);
       jobExecutionLogMapper.insert(auditLog);
 
       AlertEmitRequest request = AlertEmitRequest.builder()
@@ -92,40 +100,89 @@ public class JobSlaViolationProcessor {
     }
   }
 
+  /** 候选扫描之外再锁定当前实例,让终态提交与升级通知有确定的先后顺序。 */
+  @Transactional
+  public boolean processEscalation(
+      JobInstanceEntity observed, Instant now, long delaySeconds, String severity) {
+    JobInstanceEntity candidate = jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
+        observed.getTenantId(), observed.getId(), now.minusSeconds(delaySeconds));
+    if (EmptyChecks.isNull(candidate)) {
+      return false;
+    }
+    Map<String, Object> extra = buildEscalationExtra(candidate, now, delaySeconds);
+    AlertEmitRequest.AlertEmitRequestBuilder requestBuilder = AlertEmitRequest.builder()
+        .tenantId(candidate.getTenantId())
+        .serviceName("batch-orchestrator")
+        .alertType("JOB_SLA_VIOLATION_ESCALATED")
+        .severity(severity)
+        .title("job SLA still violating after escalation window");
+    String detailJson = JsonUtils.toJson(extra);
+    AlertEmitRequest request = requestBuilder
+        .detailJson(detailJson)
+        .resourceKey(String.valueOf(candidate.getId()))
+        .traceId(candidate.getTraceId())
+        .build();
+    alertEventService.emit(request);
+    return true;
+  }
+
   Map<String, Object> buildEscalationExtra(
       JobInstanceEntity candidate, Instant now, long delaySeconds) {
-    Map<String, Object> extra = new LinkedHashMap<>(buildExtra(candidate, now));
+    Map<String, Object> baseExtra = buildExtra(candidate, now);
+    Map<String, Object> extra = new LinkedHashMap<>(baseExtra);
     extra.put("escalationDelaySeconds", delaySeconds);
     extra.put("slaAlertedAt", candidate.getSlaAlertedAt());
     if (EmptyChecks.isNotNull(candidate.getSlaAlertedAt())) {
-      extra.put(
-          "alertedElapsedSeconds",
-          Duration.between(candidate.getSlaAlertedAt(), now).getSeconds());
+      Duration elapsedSinceAlert = Duration.between(candidate.getSlaAlertedAt(), now);
+      long alertedElapsedSeconds = elapsedSinceAlert.getSeconds();
+      extra.put("alertedElapsedSeconds", alertedElapsedSeconds);
     }
     return extra;
   }
 
   private Map<String, Object> buildExtra(JobInstanceEntity candidate, Instant now) {
     Map<String, Object> extra = new LinkedHashMap<>();
+    extra.put("jobInstanceId", String.valueOf(candidate.getId()));
+    extra.put(
+        "bizDate",
+        EmptyChecks.isNull(candidate.getBizDate())
+            ? null
+            : candidate.getBizDate().toString());
+    if (EmptyChecks.isNotNull(candidate.getParentWorkflowRunId())) {
+      extra.put("workflowRunId", candidate.getParentWorkflowRunId().toString());
+    }
+    if (!EmptyChecks.isBlank(candidate.getParentNodeCode())) {
+      extra.put("nodeCode", candidate.getParentNodeCode());
+    }
     extra.put("instanceNo", candidate.getInstanceNo());
     extra.put("jobCode", candidate.getJobCode());
     extra.put("instanceStatus", candidate.getInstanceStatus());
     extra.put("deadlineAt", candidate.getDeadlineAt());
     extra.put("expectedDurationSeconds", candidate.getExpectedDurationSeconds());
+    extra.put("dispatchedAt", candidate.getStartedAt());
+    extra.put("executionStartedAt", candidate.getExecutionStartedAt());
+    Instant finishedAt = candidate.getFinishedAt();
+    Instant evaluatedAt = EmptyChecks.isNotNull(finishedAt) ? finishedAt : now;
+    extra.put("finishedAt", finishedAt);
+    extra.put("violationDetectedAt", now);
+    extra.put("violationEvaluatedAt", evaluatedAt);
     if (EmptyChecks.isNotNull(candidate.getDeadlineAt())
-        && candidate.getDeadlineAt().isBefore(now)) {
+        && candidate.getDeadlineAt().isBefore(evaluatedAt)) {
       extra.put(KEY_VIOLATION_REASON, "DEADLINE_EXCEEDED");
-      extra.put(
-          "deadlineDelaySeconds",
-          Duration.between(candidate.getDeadlineAt(), now).getSeconds());
+      Duration deadlineOverrun = Duration.between(candidate.getDeadlineAt(), evaluatedAt);
+      long deadlineDelaySeconds = deadlineOverrun.getSeconds();
+      extra.put("deadlineDelaySeconds", deadlineDelaySeconds);
     } else if (EmptyChecks.isNotNull(candidate.getExpectedDurationSeconds())
         && candidate.getExpectedDurationSeconds() > 0
-        && EmptyChecks.isNotNull(candidate.getStartedAt())) {
-      Instant expectedFinish =
-          candidate.getStartedAt().plusSeconds(candidate.getExpectedDurationSeconds());
+        && EmptyChecks.isNotNull(candidate.getExecutionStartedAt())) {
+      Instant startedAt = candidate.getExecutionStartedAt();
+      long expectedDurationSeconds = candidate.getExpectedDurationSeconds();
+      Instant expectedFinish = startedAt.plusSeconds(expectedDurationSeconds);
       extra.put(KEY_VIOLATION_REASON, "EXPECTED_DURATION_EXCEEDED");
       extra.put("expectedFinishAt", expectedFinish);
-      extra.put("durationDelaySeconds", Duration.between(expectedFinish, now).getSeconds());
+      Duration durationOverrun = Duration.between(expectedFinish, evaluatedAt);
+      long durationDelaySeconds = durationOverrun.getSeconds();
+      extra.put("durationDelaySeconds", durationDelaySeconds);
     } else {
       extra.put(KEY_VIOLATION_REASON, "UNKNOWN");
     }

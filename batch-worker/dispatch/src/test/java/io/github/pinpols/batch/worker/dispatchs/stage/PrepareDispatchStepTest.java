@@ -1,10 +1,18 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -12,12 +20,19 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchSecretVersionMapper;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -31,11 +46,15 @@ class PrepareDispatchStepTest {
   @Mock
   private PlatformPipelineRunRepository pipelineRuns;
 
+  @Mock
+  private FrozenDispatchChannelResolver frozenDispatchChannelResolver;
+
   private PrepareDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new PrepareDispatchStep(new ObjectMapper(), fileDispatchRepository, pipelineRuns);
+    step = new PrepareDispatchStep(
+        new ObjectMapper(), fileDispatchRepository, pipelineRuns, frozenDispatchChannelResolver);
   }
 
   @Test
@@ -91,6 +110,31 @@ class PrepareDispatchStepTest {
     assertThat(result.code()).isEqualTo("DISPATCH_PREPARE_FILE_NOT_FOUND");
   }
 
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "{\"fileId\":\"10\",\"metadata\":{\"channelCode\":\"CH1\"}}",
+        "{\"fileId\":\"10\",\"channelCode\":\"   \"}"
+      })
+  @DisplayName("没有明确目标或仅有业务 metadata 渠道时明确拒绝")
+  void execute_doesNotUseMetadataChannelAsDispatchTarget(String payload) {
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    PrepareDispatchStep actualResolverStep = new PrepareDispatchStep(
+        new ObjectMapper(),
+        fileDispatchRepository,
+        pipelineRuns,
+        new FrozenDispatchChannelResolver(mock(SecretPayloadProtector.class)));
+    DispatchJobContext context = buildContext(payload);
+
+    DispatchStageResult result = actualResolverStep.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_PREPARE_CHANNEL_NOT_FOUND");
+    verify(fileDispatchRepository, never())
+        .loadChannel(nullable(String.class), nullable(String.class));
+    verifyNoInteractions(pipelineRuns);
+  }
+
   @Test
   @DisplayName("渠道配置查不到时判定失败,并给出渠道不存在错误码")
   void execute_failsWhenChannelNotFound() {
@@ -122,7 +166,114 @@ class PrepareDispatchStepTest {
     DispatchPayload preparedPayload =
         (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     assertThat(preparedPayload.externalRequestId()).isNotBlank();
-    verify(pipelineRuns).bindFileToPipelineInstance(100L, 10L);
+    verify(pipelineRuns).bindFileToPipelineInstance("t1", 100L, 10L);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"dispatchChannelCode", "targetChannelCode"})
+  @DisplayName("调度支持的渠道字段在 Worker 准备阶段解析为同一目标")
+  void shouldPrepareDispatch_whenScheduleChannelAliasIsUsed(String channelField) {
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(fileDispatchRepository.loadChannel("t1", "CH1"))
+        .thenReturn(Map.of("channel_type", "LOCAL", "channel_code", "CH1"));
+    DispatchJobContext context =
+        buildContext("{\"fileId\":\"10\",\"" + channelField + "\":\"CH1\"}");
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    DispatchPayload payload =
+        (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+    assertThat(payload.channelCode()).isEqualTo("CH1");
+    verify(fileDispatchRepository).loadChannel("t1", "CH1");
+  }
+
+  @Test
+  @DisplayName("整 Workflow 重放使用冻结渠道配置并确认通道仍启用,不读取当前配置")
+  void shouldUseFrozenChannel_whenExecutingWorkflowReplay() {
+    String payload = """
+        {"operationType":"WORKFLOW_RUN","fileId":"10","channelCode":"CH1"}
+        """;
+    Map<String, Object> frozenRow = new LinkedHashMap<>();
+    frozenRow.put("id", 3L);
+    frozenRow.put("tenant_id", "t1");
+    frozenRow.put("channel_code", "CH1");
+    frozenRow.put("channel_type", "LOCAL");
+    frozenRow.put("target_endpoint", "/snapshot/out");
+    frozenRow.put("auth_type", "NONE");
+    frozenRow.put("config_json", Map.of());
+    frozenRow.put("receipt_policy", "NONE");
+    frozenRow.put("timeout_seconds", 0);
+    frozenRow.put("enabled", true);
+    frozenRow.put("is_deleted", false);
+    when(fileDispatchRepository.loadFile("t1", 10L)).thenReturn(Map.of("id", 10L));
+    when(frozenDispatchChannelResolver.resolve("t1", "CH1", payload))
+        .thenReturn(Optional.of(frozenRow));
+    when(fileDispatchRepository.isChannelActive("t1", "CH1")).thenReturn(true);
+
+    DispatchJobContext context = buildContext(payload);
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(PipelineRuntimeKeys.CHANNEL_CONFIG, frozenRow);
+    verify(fileDispatchRepository, never()).loadChannel("t1", "CH1");
+  }
+
+  @Test
+  @DisplayName("文件束分区使用自己的冻结渠道及密钥版本")
+  void shouldUseBundlePartitionFrozenChannelAndPinnedSecret() {
+    SecretPayloadProtector protector = mock(SecretPayloadProtector.class);
+    DispatchSecretVersionMapper secretVersions = mock(DispatchSecretVersionMapper.class);
+    Map<String, Object> frozenRow = Map.of(
+        "id",
+        3L,
+        "tenant_id",
+        "t1",
+        "channel_code",
+        "CH2",
+        "channel_type",
+        "SFTP",
+        "config_json",
+        Map.of("secret_ref", "dispatch/key-two"),
+        "enabled",
+        true,
+        "is_deleted",
+        false);
+    when(protector.revealEncrypted("channel-two"))
+        .thenReturn(JsonUtils.toJson(FrozenDispatchChannelSnapshot.capture(frozenRow)));
+    when(protector.reveal("secret-two")).thenReturn("{\"sftp_password\":\"runtime-secret\"}");
+    when(secretVersions.selectPayloadForDispatch("t1", 51L)).thenReturn("secret-two");
+    when(fileDispatchRepository.loadFile("t1", 20L)).thenReturn(Map.of("id", 20L));
+    when(fileDispatchRepository.isChannelActive("t1", "CH2")).thenReturn(true);
+    PrepareDispatchStep bundleStep = new PrepareDispatchStep(
+        new ObjectMapper(),
+        fileDispatchRepository,
+        pipelineRuns,
+        new FrozenDispatchChannelResolver(protector));
+    String payload = """
+        {"fileId":"10","channelCode":"CH1","bundleSourceFileId":20,"bundleTargetRef":"CH2",
+         "_frozenDispatchChannelsProtected":{"CH2":"channel-two"},
+         "_dispatchSecretBindings":{"CH2":{"secretRef":"dispatch/key-two","secretVersionId":51,"versionNo":4}}}
+        """;
+    DispatchJobContext context = buildContext(payload);
+
+    assertThat(bundleStep.execute(context).success()).isTrue();
+    DispatchPayload prepared =
+        (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
+    assertThat(prepared.fileId()).isEqualTo("20");
+    assertThat(prepared.channelCode()).isEqualTo("CH2");
+    ObjectMapper mapper = new ObjectMapper();
+    Map<String, Object> channel = mapper.convertValue(
+        context.getAttributes().get(PipelineRuntimeKeys.CHANNEL_CONFIG), new TypeReference<>() {});
+    Map<String, Object> bindings = Map.of(
+        DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
+        context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS));
+    new DispatchSecretResolver(secretVersions, protector, mapper)
+        .resolveInto("t1", "CH2", bindings, channel);
+    assertThat(channel).containsEntry("sftp_password", "runtime-secret");
+    verify(secretVersions).selectPayloadForDispatch("t1", 51L);
+    verify(fileDispatchRepository, never()).loadChannel("t1", "CH2");
   }
 
   @Test
@@ -263,6 +414,21 @@ class PrepareDispatchStepTest {
     DispatchStageResult result = step.execute(context);
     assertThat(result.success()).isFalse();
     assertThat(result.code()).isEqualTo("DISPATCH_PREPARE_PARSE_FAILED");
+  }
+
+  @Test
+  @DisplayName("准备阶段异常结果不保存下游异常中的凭据")
+  void execute_masksCredentialInFailureResult() {
+    when(fileDispatchRepository.loadFile("t1", 10L))
+        .thenThrow(new IllegalStateException("load token=probe-secret failed"));
+    DispatchJobContext context = buildContext("{\"fileId\":\"10\",\"channelCode\":\"CH1\"}");
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("DISPATCH_PREPARE_PARSE_FAILED");
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(result.errorArgs()).doesNotContain("probe-secret");
   }
 
   private DispatchJobContext buildContext(String rawPayload) {

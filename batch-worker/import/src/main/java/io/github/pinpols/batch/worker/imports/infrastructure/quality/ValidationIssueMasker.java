@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.infrastructure.quality;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import java.util.ArrayList;
@@ -26,10 +27,12 @@ public class ValidationIssueMasker {
   public ValidationOutcome maskOutcome(ValidationSession session) {
     boolean logMask = logMaskingEnabled(session) && !batchSecurityProperties.isBypassMode();
     String ruleSet = maskingRuleSet(session);
-    return new ValidationOutcome(
-        maskRecordIssues(session.recordIssues(), logMask, ruleSet),
-        maskDatasetIssues(session.datasetIssues(), logMask, ruleSet),
-        List.copyOf(session.appliedChecks()));
+    Map<Long, ValidationIssue> maskedRecordIssues =
+        maskRecordIssues(session.recordIssues(), logMask, ruleSet);
+    List<ValidationIssue> maskedDatasetIssues =
+        maskDatasetIssues(session.datasetIssues(), logMask, ruleSet);
+    List<String> appliedChecks = List.copyOf(session.appliedChecks());
+    return new ValidationOutcome(maskedRecordIssues, maskedDatasetIssues, appliedChecks);
   }
 
   private boolean logMaskingEnabled(ValidationSession session) {
@@ -40,7 +43,11 @@ public class ValidationIssueMasker {
       return false;
     }
     Object flag = map.get("log_masking_enabled");
-    return Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
+    if (Boolean.TRUE.equals(flag)) {
+      return true;
+    }
+    String flagText = String.valueOf(flag);
+    return "true".equalsIgnoreCase(flagText);
   }
 
   private String maskingRuleSet(ValidationSession session) {
@@ -56,7 +63,8 @@ public class ValidationIssueMasker {
 
   private Map<Long, ValidationIssue> maskRecordIssues(
       Map<Long, ValidationIssue> issues, boolean mask, String ruleSet) {
-    if (!mask || issues == null || issues.isEmpty()) {
+    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
+    if (issueMaskingIsNotApplicable) {
       return new LinkedHashMap<>(issues == null ? Map.of() : issues);
     }
     return issues.entrySet().stream()
@@ -69,18 +77,19 @@ public class ValidationIssueMasker {
 
   private List<ValidationIssue> maskDatasetIssues(
       List<ValidationIssue> issues, boolean mask, String ruleSet) {
-    if (!mask || issues == null || issues.isEmpty()) {
+    boolean issueMaskingIsNotApplicable = !mask || EmptyChecks.isEmpty(issues);
+    if (issueMaskingIsNotApplicable) {
       return new ArrayList<>(issues == null ? List.of() : issues);
     }
     return issues.stream().map(issue -> maskedIssue(issue, ruleSet)).toList();
   }
 
   private ValidationIssue maskedIssue(ValidationIssue issue, String ruleSet) {
-    return new ValidationIssue(
-        issue.recordNo(),
-        issue.errorCode(),
-        ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet),
-        maskIssueRaw(issue.rawRecord(), ruleSet));
+    Long recordNo = issue.recordNo();
+    String errorCode = issue.errorCode();
+    String maskedErrorMessage = ContentMaskingUtils.maskPlainText(issue.errorMessage(), ruleSet);
+    Object maskedRawRecord = maskIssueRaw(issue.rawRecord(), ruleSet);
+    return new ValidationIssue(recordNo, errorCode, maskedErrorMessage, maskedRawRecord);
   }
 
   private Object maskIssueRaw(Object raw, String ruleSet) {
@@ -90,6 +99,11 @@ public class ValidationIssueMasker {
     if (raw instanceof String text) {
       return ContentMaskingUtils.maskPlainText(text, ruleSet);
     }
-    return ContentMaskingUtils.maskPlainText(JsonUtils.toJson(raw), ruleSet);
+    String serializedRawRecord = JsonUtils.toJson(raw);
+    String masked = ContentMaskingUtils.maskPlainText(serializedRawRecord, ruleSet);
+    if (serializedRawRecord.startsWith("{") || serializedRawRecord.startsWith("[")) {
+      return JsonUtils.fromJson(masked, Object.class);
+    }
+    return masked;
   }
 }

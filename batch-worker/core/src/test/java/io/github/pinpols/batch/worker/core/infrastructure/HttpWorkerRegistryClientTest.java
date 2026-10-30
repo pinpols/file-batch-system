@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatResponse;
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.util.List;
@@ -111,6 +112,8 @@ class HttpWorkerRegistryClientTest {
       registration.setWorkerId("worker-1");
       registration.setTaskCapabilities(List.of(
           new WorkerTaskCapabilityDto("FILE_CHECKSUM", List.of("FILE"), true, true, 30_000)));
+      registration.setReplayCapabilities(
+          List.of(ReplayCapabilityDeclaration.unknown("file_checksum")));
 
       httpClient.register(registration);
       httpClient.heartbeat(registration);
@@ -121,11 +124,15 @@ class HttpWorkerRegistryClientTest {
       assertThat(registerRequest.getUrl().encodedPath()).isEqualTo("/internal/workers/register");
       assertThat(registerRequest.getBody().utf8())
           .contains("\"taskCapabilities\"")
+          .contains("\"replayCapabilities\"")
+          .contains("file_checksum")
           .contains("\"taskType\":\"FILE_CHECKSUM\"");
       assertThat(heartbeatRequest).isNotNull();
       assertThat(heartbeatRequest.getUrl().encodedPath())
           .isEqualTo("/internal/workers/worker-1/heartbeat");
-      assertThat(heartbeatRequest.getBody().utf8()).contains("\"taskCapabilities\":null");
+      assertThat(heartbeatRequest.getBody().utf8())
+          .contains("\"taskCapabilities\":null")
+          .contains("\"replayCapabilities\":null");
     }
   }
 
@@ -161,7 +168,7 @@ class HttpWorkerRegistryClientTest {
   }
 
   private static ObjectProvider<RestClient.Builder> restClientBuilderProvider() {
-    return new org.springframework.beans.factory.ObjectProvider<>() {
+    return new ObjectProvider<>() {
       @Override
       public RestClient.Builder getObject(Object... args) {
         return jsonRestClientBuilder();

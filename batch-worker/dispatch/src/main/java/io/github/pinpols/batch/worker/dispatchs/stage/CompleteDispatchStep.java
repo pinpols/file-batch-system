@@ -44,8 +44,9 @@ public class CompleteDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
+    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = EmptyChecks.isNull(context)
@@ -62,8 +63,9 @@ public class CompleteDispatchStep implements DispatchStageStep {
     }
     Map<String, Object> attrs = context.getAttributes();
     Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    String receiptStatus = String.valueOf(
-        attrs.getOrDefault(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.NONE.code()));
+    Object receiptStatusValue =
+        attrs.getOrDefault(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.NONE.code());
+    String receiptStatus = String.valueOf(receiptStatusValue);
     if (FileReceiptStatus.SUCCESS.code().equalsIgnoreCase(receiptStatus)) {
       Map<String, Object> fileMetadata = new LinkedHashMap<>();
       fileMetadata.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
@@ -82,18 +84,21 @@ public class CompleteDispatchStep implements DispatchStageStep {
     detailSummary.put(
         DispatchRuntimeKeys.RECEIPT_CODE, attrs.get(DispatchRuntimeKeys.RECEIPT_CODE));
     detailSummary.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptStatus);
-    fileAudits.appendAudit(FileAuditParam.builder()
+    FileAuditParam.FileAuditParamBuilder audit = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType(FileAuditOperationType.DISPATCH_COMPLETE.code())
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId())
-        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-        .evidenceRef(
-            String.valueOf(attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "")))
-        .detailSummary(detailSummary)
-        .build());
+        .operatorId(context.getWorkerId());
+    Object traceIdValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+    String traceId = String.valueOf(traceIdValue);
+    audit.traceId(traceId);
+    Object externalRequestIdValue = attrs.getOrDefault(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, "");
+    String evidenceReference = String.valueOf(externalRequestIdValue);
+    audit.evidenceRef(evidenceReference);
+    audit.detailSummary(detailSummary);
+    fileAudits.appendAudit(audit.build());
     return DispatchStageResult.success(stage());
   }
 }

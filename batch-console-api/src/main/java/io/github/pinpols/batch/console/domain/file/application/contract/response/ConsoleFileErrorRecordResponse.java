@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.file.application.contract.response;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleFileErrorRecordResponse(
     Long id,
     String tenantId,

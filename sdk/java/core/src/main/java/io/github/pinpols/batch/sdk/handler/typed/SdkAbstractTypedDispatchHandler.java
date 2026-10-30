@@ -7,6 +7,7 @@ import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -76,7 +77,10 @@ public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstra
           log.warn("typed dispatch item failed: {}", ExceptionLogSummary.of(itemEx));
         }
       }
-      return result(input, counts, "dispatched " + counts.success() + "/" + counts.total());
+      long successfulCount = counts.success();
+      long totalCount = counts.total();
+      String defaultMessage = "dispatched " + successfulCount + "/" + totalCount;
+      return result(input, counts, defaultMessage);
     } catch (Exception e) {
       return SdkTaskResult.fail(e);
     }
@@ -87,6 +91,7 @@ public abstract class SdkAbstractTypedDispatchHandler<I, O, R> extends SdkAbstra
     if (output == null) {
       return SdkTaskResult.ok(defaultMessage, counts.toOutput());
     }
-    return SdkTaskResult.ok(defaultMessage, params.toOutputMap(output));
+    Map<String, Object> outputMap = params.toOutputMap(output);
+    return SdkTaskResult.ok(defaultMessage, outputMap);
   }
 }

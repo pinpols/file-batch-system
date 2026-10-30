@@ -55,7 +55,8 @@ final class ValidationCoercions {
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
@@ -73,12 +74,14 @@ final class ValidationCoercions {
     if (value instanceof Number number) {
       // 经 number.toString() 而非 doubleValue():Long/BigInteger 超过 double 53 位精度时
       // doubleValue() 会静默丢精度,导致 range 校验(min/max 边界)对高精度金额/大整数误判。
-      return new BigDecimal(number.toString());
+      String numericText = number.toString();
+      return new BigDecimal(numericText);
     }
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
@@ -103,10 +106,8 @@ final class ValidationCoercions {
     if (!Texts.hasText(text)) {
       return List.of();
     }
-    return Arrays.stream(text.split(","))
-        .filter(Texts::hasText)
-        .map(String::trim)
-        .toList();
+    String[] values = text.split(",");
+    return Arrays.stream(values).filter(Texts::hasText).map(String::trim).toList();
   }
 
   static boolean containsIgnoreCase(List<String> candidates, String value) {
@@ -146,9 +147,10 @@ final class ValidationCoercions {
 
   static String digest(String algorithm, String content) {
     try {
-      MessageDigest messageDigest =
-          MessageDigest.getInstance(defaultText(algorithm, CryptoAlgorithms.SHA_256));
-      byte[] hash = messageDigest.digest(content.getBytes(StandardCharsets.UTF_8));
+      String resolvedAlgorithm = defaultText(algorithm, CryptoAlgorithms.SHA_256);
+      MessageDigest messageDigest = MessageDigest.getInstance(resolvedAlgorithm);
+      byte[] encodedContent = content.getBytes(StandardCharsets.UTF_8);
+      byte[] hash = messageDigest.digest(encodedContent);
       StringBuilder builder = new StringBuilder();
       for (byte item : hash) {
         builder.append(String.format("%02x", item));

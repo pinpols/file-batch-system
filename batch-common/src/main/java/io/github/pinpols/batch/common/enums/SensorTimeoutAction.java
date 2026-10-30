@@ -9,7 +9,7 @@ import lombok.experimental.Accessors;
  *
  * <ul>
  *   <li>FAIL — 推进节点到 FAILED，整条 workflow 走失败分支
- *   <li>SKIP_DOWNSTREAM — 推进到 SKIPPED，下游节点不执行但 workflow 继续往后走（用于"可选信号"场景）
+ *   <li>SKIP_DOWNSTREAM — 推进到 SKIPPED，并级联跳过因此不可达的下游节点；其它可达分支仍按 DAG/JOIN 规则运行，Workflow 无失败时可成功收口
  * </ul>
  */
 @RequiredArgsConstructor

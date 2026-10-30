@@ -2,26 +2,101 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
+import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineDefinitionMapper;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("配置包 Excel 校验器:模板取值、跨表引用与字段规则校验")
 class ConfigPackageExcelValidatorTest {
+
+  @Test
+  @DisplayName("配置包作业编码遵循普通创建接口的字符和长度约束")
+  void shouldValidateJobCodeAgainstResourceCodeContract() {
+    for (String code : List.of("A:B", "1JOB", "A".repeat(129))) {
+      List<String> issues = new ArrayList<>();
+      Map<String, String> row = Map.of(
+          "job_code", code, "job_name", "test", "job_type", "IMPORT", "schedule_type", "MANUAL");
+      ConfigPackageExcelRowValidators.validateJobRow("t1", row, new HashSet<>(), issues);
+      assertThat(issues).as("非法作业编码 %s", code).anyMatch(issue -> issue.contains("job_code"));
+    }
+    for (String code : List.of("A-b_9", "A".repeat(128))) {
+      List<String> issues = new ArrayList<>();
+      Map<String, String> row = Map.of(
+          "job_code", code, "job_name", "test", "job_type", "IMPORT", "schedule_type", "MANUAL");
+      ConfigPackageExcelRowValidators.validateJobRow("t1", row, new HashSet<>(), issues);
+      assertThat(issues).as("合法作业编码 %s", code).isEmpty();
+    }
+  }
+
+  @Test
+  @DisplayName("配置包校验将非法作业编码排除在可应用行之外")
+  void shouldExcludeInvalidJobCodeFromApplicableRows() {
+    Map<String, String> invalid = Map.of(
+        "tenant_id",
+        "t1",
+        "job_code",
+        "A:B",
+        "job_name",
+        "invalid",
+        "job_type",
+        "IMPORT",
+        "schedule_type",
+        "MANUAL");
+    Map<String, String> valid = Map.of(
+        "tenant_id",
+        "t1",
+        "job_code",
+        "A_B",
+        "job_name",
+        "valid",
+        "job_type",
+        "IMPORT",
+        "schedule_type",
+        "MANUAL");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(invalid, valid),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of());
+
+    var result = validator().validate(session);
+
+    assertThat(result.jobs().invalid()).isEqualTo(1);
+    assertThat(result.validJobs()).extracting(row -> row.get("job_code")).containsExactly("A_B");
+  }
 
   @Test
   @DisplayName("PROCESS 流水线:允许准备、计算、校验、提交、反馈五类阶段")
@@ -33,33 +108,102 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
-  @DisplayName("流水线步骤必须完整有序且全部启用,违规时在预览交叉校验阶段拦截")
-  void shouldRejectPipelineStepsWithWrongOrderOrDisabledStage() {
-    List<Map<String, String>> orderedSteps = pipelineStepRows();
-    List<Map<String, String>> reorderedSteps = new ArrayList<>(pipelineStepRows());
-    String firstStage = reorderedSteps.get(0).get("stage_code");
-    reorderedSteps.get(0).put("stage_code", reorderedSteps.get(1).get("stage_code"));
-    reorderedSteps.get(1).put("stage_code", firstStage);
-    List<Map<String, String>> incorrectOrder = pipelineStepRows();
-    incorrectOrder.get(1).put("step_order", "0");
-    List<Map<String, String>> disabledStage = pipelineStepRows();
-    disabledStage.get(1).put("enabled", "false");
+  @DisplayName("配置包 Pipeline 与步骤 sheet 已退役且不能转换为 Job 参数")
+  void shouldRejectRetiredPipelineSheetsWithoutConvertingJobParameters() {
+    Map<String, String> job = new LinkedHashMap<>();
+    job.put("tenant_id", "t1");
+    job.put("job_code", "JOB_IMPORT");
+    job.put("job_name", "导入任务");
+    job.put("job_type", "IMPORT");
+    job.put("schedule_type", "MANUAL");
+    job.put("default_params", "{\"existing\":\"value\"}");
+    Map<String, String> pipeline = new LinkedHashMap<>();
+    pipeline.put("tenant_id", "t1");
+    pipeline.put("job_code", "JOB_IMPORT");
+    pipeline.put("pipeline_name", "旧导入流水线");
+    pipeline.put("pipeline_type", "IMPORT");
+    pipeline.put("version", "1");
+    Map<String, String> step = new LinkedHashMap<>();
+    step.put("job_code", "JOB_IMPORT");
+    step.put("version", "1");
+    step.put("step_code", "RECEIVE");
+    step.put("step_name", "接收");
+    step.put("stage_code", "RECEIVE");
+    step.put("step_order", "1");
+    step.put("impl_code", "IMPORT_RECEIVE");
+    step.put("step_params", "{\"secret\":\"should-not-import\"}");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(job),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(pipeline),
+        List.of(step),
+        List.of(),
+        List.of(),
+        List.of());
 
-    for (List<Map<String, String>> steps :
-        List.of(reorderedSteps, incorrectOrder, disabledStage, orderedSteps)) {
-      PackageExcelSession session = sessionWithPipelines(List.of(pipelineRow()), steps);
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
 
-      ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+    assertThat(result.pipelines().invalid()).isEqualTo(1);
+    assertThat(result.steps().invalid()).isEqualTo(1);
+    assertThat(result.allIssues()).anySatisfy(issue -> {
+      assertThat(issue.message()).contains("retired");
+    });
+    assertThat(result.validJobs())
+        .singleElement()
+        .satisfies(validJob ->
+            assertThat(validJob.get("default_params")).isEqualTo("{\"existing\":\"value\"}"));
+  }
 
-      if (steps == orderedSteps) {
-        assertThat(result.crossRefIssues()).isEmpty();
-      } else {
-        assertThat(result.crossRefIssues()).anySatisfy(issue -> {
-          assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.PIPELINE_SHEET);
-          assertThat(issue.message()).contains("complete fixed stage order");
-        });
-      }
-    }
+  @Test
+  @DisplayName("Workflow 日历引用:连字符规范化后仍必须引用配置包或租户中的有效日历")
+  void shouldRejectWorkflowWithUnknownCalendar() {
+    Map<String, String> workflow = new LinkedHashMap<>();
+    workflow.put("tenant_id", "t1");
+    workflow.put("workflow_code", "WF_SCHEDULED");
+    workflow.put("workflow_name", "Scheduled workflow");
+    workflow.put("workflow_type", "DAG");
+    workflow.put("version", "1");
+    workflow.put("enabled", "true");
+    workflow.put("schedule_enabled", "true");
+    workflow.put("schedule_type", "CRON");
+    workflow.put("schedule_expr", "0 0 8 * * ?");
+    workflow.put("timezone", "Asia/Shanghai");
+    workflow.put("trigger_mode", "SCHEDULED");
+    workflow.put("calendar_code", "missing-calendar");
+    PackageExcelSession session = new PackageExcelSession(
+        "package.xlsx",
+        "t1",
+        Instant.EPOCH,
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(workflow),
+        List.of(),
+        List.of(),
+        null,
+        Set.of());
+
+    ConfigPackageExcelValidator.PackageValidationResult result = validator().validate(session);
+
+    assertThat(result.allIssues()).anySatisfy(issue -> {
+      assertThat(issue.sheetName()).isEqualTo(ConfigPackageExcelValidator.WF_DEF_SHEET);
+      assertThat(issue.columnName()).isEqualTo("calendar_code");
+      assertThat(issue.message()).contains("missing_calendar");
+    });
   }
 
   @Test
@@ -200,6 +344,71 @@ class ConfigPackageExcelValidatorTest {
   }
 
   @Test
+  @DisplayName("多上游作业依赖:配置包校验拒绝环并允许逗号分隔的多个上游")
+  void shouldRejectCyclesInMultiJobDependencies() {
+    Map<String, String> first = new LinkedHashMap<>(jobRow("", "", ""));
+    first.put("job_code", "JOB_FIRST");
+    first.put("job_name", "作业一");
+    first.put("depends_on_job_codes", "JOB_SECOND, JOB_THIRD");
+    Map<String, String> second = new LinkedHashMap<>(jobRow("", "", ""));
+    second.put("job_code", "JOB_SECOND");
+    second.put("job_name", "作业二");
+    second.put("depends_on_job_codes", "JOB_FIRST");
+    Map<String, String> third = new LinkedHashMap<>(jobRow("", "", ""));
+    third.put("job_code", "JOB_THIRD");
+    third.put("job_name", "作业三");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(first, second, third)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(
+            issue -> assertThat(issue.message()).contains("dependency graph contains a cycle"));
+  }
+
+  @Test
+  @DisplayName("逐边业务日对齐规则数量必须与上游作业编码一致")
+  void shouldRejectMisalignedJobDependencyDateAlignments() {
+    Map<String, String> downstream = new LinkedHashMap<>(jobRow("", "", ""));
+    downstream.put("job_code", "JOB_DOWNSTREAM");
+    downstream.put("job_name", "下游作业");
+    downstream.put("depends_on_job_codes", "JOB_UPSTREAM_A,JOB_UPSTREAM_B");
+    downstream.put("depends_on_biz_date_alignments", "PREVIOUS_BIZ_DAY");
+    Map<String, String> upstreamA = new LinkedHashMap<>(jobRow("", "", ""));
+    upstreamA.put("job_code", "JOB_UPSTREAM_A");
+    upstreamA.put("job_name", "上游作业 A");
+    Map<String, String> upstreamB = new LinkedHashMap<>(jobRow("", "", ""));
+    upstreamB.put("job_code", "JOB_UPSTREAM_B");
+    upstreamB.put("job_name", "上游作业 B");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(downstream, upstreamA, upstreamB)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.columnName())
+            .isEqualTo(ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS));
+  }
+
+  @Test
+  @DisplayName("多上游作业依赖:数量上限与 Console 契约保持一致")
+  void shouldRejectMoreThanThirtyTwoJobDependencies() {
+    Map<String, String> downstream = new LinkedHashMap<>(jobRow("", "", ""));
+    downstream.put("job_code", "JOB_DOWNSTREAM");
+    downstream.put("job_name", "下游作业");
+    downstream.put(
+        "depends_on_job_codes",
+        IntStream.range(0, 33)
+            .mapToObj(index -> "UPSTREAM_" + index)
+            .collect(Collectors.joining(",")));
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(), List.of(downstream)));
+
+    assertThat(result.allIssues())
+        .anySatisfy(issue -> assertThat(issue.message()).contains("at most 32 upstream jobs"));
+  }
+
+  @Test
   @DisplayName("依赖 sheet 与跨表引用:队列、日历、窗口均可解析时校验通过")
   void shouldAcceptDependencySheets_whenCrossReferencesResolve() {
     ConfigPackageExcelValidator validator = validator();
@@ -330,6 +539,20 @@ class ConfigPackageExcelValidatorTest {
     assertThat(result.allIssues()).isEmpty();
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"12", "true"})
+  @DisplayName("固定宽度导入映射:目标字段必须是字符串")
+  void shouldRejectNonTextFixedWidthTarget(String target) {
+    Map<String, String> row = new LinkedHashMap<>(fileTemplateRow("TPL", "1"));
+    row.put("file_format_type", "FIXED_WIDTH");
+    row.put("field_mappings", "[{\"start\":0,\"length\":12,\"target\":" + target + "}]");
+
+    ConfigPackageExcelValidator.PackageValidationResult result =
+        validator().validate(session(List.of(row), List.of()));
+
+    assertThat(result.fileTemplates().invalid()).isEqualTo(1);
+  }
+
   @Test
   @DisplayName("固定宽度导入映射:缺少 Worker 必需字段时被标记为问题")
   void shouldFlagInvalidFixedWidthMapping_whenTargetOrBoundsAreMissing() {
@@ -448,13 +671,74 @@ class ConfigPackageExcelValidatorTest {
     }
   }
 
-  private static ConfigPackageExcelValidator validator() {
-    var stepRegistry = mock(StepRegistryQueryMapper.class);
-    when(stepRegistry.selectImplCodesByModule("IMPORT")).thenReturn(List.of());
+  @Test
+  @DisplayName("省略跨日列的普通合法窗口不增加已有窗口查询")
+  void shouldAvoidWindowLookup_whenOmittedCrossDayAlreadyValid() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    ConfigPackageExcelValidator validator = validatorWithWindows(windows);
+    PackageExcelSession session = sessionWithDependencies(
+        List.of(), List.of(), List.of(windowRow("ordinary_window")), List.of());
+    assertThat(validator.validate(session).batchWindows().invalid()).isZero();
+    verifyNoInteractions(windows);
+  }
+
+  @Test
+  @DisplayName("省略跨日列的反向窗口仅回查同租户同编码，并允许目标已有true")
+  void shouldUseExistingCrossDay_onlyForAmbiguousOmittedFlag() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    when(windows.selectByUniqueKey("t1", "overnight_window"))
+        .thenReturn(new BatchWindowRow(
+            1L,
+            "t1",
+            "overnight_window",
+            "跨日窗口",
+            "UTC",
+            "22:00:00",
+            "02:00:00",
+            "FINISH_RUNNING",
+            "WAIT",
+            true,
+            true,
+            null,
+            null,
+            null));
+    Map<String, String> row = windowRow("overnight_window");
+    row.put("start_time", "22:00");
+    row.put("end_time", "02:00");
+    PackageExcelSession session =
+        sessionWithDependencies(List.of(), List.of(), List.of(row), List.of());
+    assertThat(validatorWithWindows(windows).validate(session).batchWindows().invalid())
+        .isZero();
+    verify(windows).selectByUniqueKey("t1", "overnight_window");
+  }
+
+  @Test
+  @DisplayName("显式false的反向窗口直接拒绝，不查询旧策略来覆盖请求")
+  void shouldRejectExplicitFalse_withoutLookingUpExistingPolicy() {
+    BatchWindowMapper windows = mock(BatchWindowMapper.class);
+    Map<String, String> row = windowRow("overnight_window");
+    row.put("start_time", "22:00");
+    row.put("end_time", "02:00");
+    row.put("allow_cross_day", "false");
+    PackageExcelSession session =
+        sessionWithDependencies(List.of(), List.of(), List.of(row), List.of());
+    assertThat(validatorWithWindows(windows).validate(session).batchWindows().invalid())
+        .isEqualTo(1);
+    verifyNoInteractions(windows);
+  }
+
+  private static ConfigPackageExcelValidator validatorWithWindows(BatchWindowMapper windows) {
     return new ConfigPackageExcelValidator(
         mock(JobDefinitionMapper.class),
-        mock(PipelineDefinitionMapper.class),
-        stepRegistry,
+        mock(FileTemplateConfigMapper.class),
+        mock(ResourceQueueMapper.class),
+        mock(BusinessCalendarMapper.class),
+        windows);
+  }
+
+  private static ConfigPackageExcelValidator validator() {
+    return new ConfigPackageExcelValidator(
+        mock(JobDefinitionMapper.class),
         mock(FileTemplateConfigMapper.class),
         mock(ResourceQueueMapper.class),
         mock(BusinessCalendarMapper.class),
@@ -504,57 +788,6 @@ class ConfigPackageExcelValidatorTest {
         List.of(),
         List.of(),
         List.of());
-  }
-
-  private static PackageExcelSession sessionWithPipelines(
-      List<Map<String, String>> pipelineRows, List<Map<String, String>> stepRows) {
-    return new PackageExcelSession(
-        "package.xlsx",
-        "t1",
-        Instant.EPOCH,
-        List.of(),
-        List.of(),
-        List.of(),
-        List.of(jobRow("", "", "")),
-        List.of(),
-        List.of(),
-        List.of(),
-        pipelineRows,
-        stepRows,
-        List.of(),
-        List.of(),
-        List.of());
-  }
-
-  private static Map<String, String> pipelineRow() {
-    return new LinkedHashMap<>(Map.of(
-        "job_code", "JOB_IMPORT_CUSTOMER",
-        "pipeline_name", "Import pipeline",
-        "pipeline_type", "IMPORT",
-        "version", "1"));
-  }
-
-  private static List<Map<String, String>> pipelineStepRows() {
-    List<Map<String, String>> rows = new ArrayList<>();
-    List<String> stages = io.github.pinpols.batch.common.enums.PipelineType.stages("IMPORT");
-    for (int index = 0; index < stages.size(); index++) {
-      String stage = stages.get(index);
-      Map<String, String> row = new LinkedHashMap<>();
-      row.put("job_code", "JOB_IMPORT_CUSTOMER");
-      row.put("version", "1");
-      row.put("step_code", stage);
-      row.put("step_name", stage);
-      row.put("stage_code", stage);
-      row.put("step_order", String.valueOf(index));
-      row.put("impl_code", "impl_" + stage);
-      row.put("step_params", "{}");
-      row.put("timeout_seconds", "0");
-      row.put("retry_policy", "NONE");
-      row.put("retry_max_count", "0");
-      row.put("enabled", "true");
-      rows.add(row);
-    }
-    return rows;
   }
 
   private static Map<String, String> fileTemplateRow(String templateCode, String version) {

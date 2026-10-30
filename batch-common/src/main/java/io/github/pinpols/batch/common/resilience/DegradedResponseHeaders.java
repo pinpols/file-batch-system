@@ -51,7 +51,8 @@ public final class DegradedResponseHeaders {
     if (EmptyChecks.isBlank(value)) {
       return null;
     }
-    String normalized = value.trim().replaceAll("[^A-Za-z0-9._-]", "_");
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.replaceAll("[^A-Za-z0-9._-]", "_");
     return EmptyChecks.isBlank(normalized) ? null : normalized;
   }
 }

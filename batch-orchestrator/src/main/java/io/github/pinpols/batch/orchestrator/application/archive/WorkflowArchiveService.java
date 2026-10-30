@@ -28,7 +28,7 @@ public class WorkflowArchiveService {
   private final WorkflowArchiveProperties properties;
 
   /**
-   * 执行一次归档。返回（候选数, 删除的 workflow_run 数, 删除的 workflow_node_run 数）。 候选 = 删除（候选不会比删除多——除非有并发；事务内不会丢删）。
+   * 执行一次归档，返回候选与热根/节点删除数。复制完成且冷热整行一致后才删除；复制或核对失败时回滚本批事务。
    */
   @Transactional
   public ArchiveBatchResult archiveOnce() {
@@ -47,6 +47,10 @@ public class WorkflowArchiveService {
     // archive 表永远为空,与"archive"语义名实不符。
     int nodeRunsArchived = workflowRunMapper.archiveWorkflowNodeRunsByWorkflowRunIds(ids);
     int runsArchived = workflowRunMapper.archiveWorkflowRunsByIds(ids);
+    if (workflowRunMapper.countArchiveCopyMismatches(ids) > 0) {
+      throw new IllegalStateException(
+          "Workflow archive copy verification failed; hot data retained");
+    }
     int nodeRunsDeleted = workflowRunMapper.deleteNodeRunsByWorkflowRunIds(ids);
     int runsDeleted = workflowRunMapper.deleteByIds(ids);
     log.info(

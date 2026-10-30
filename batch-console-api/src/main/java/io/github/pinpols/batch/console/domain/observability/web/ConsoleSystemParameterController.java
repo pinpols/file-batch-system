@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleSystemParameterValueResponse;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.SystemParameterResponse;
+import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -38,18 +40,20 @@ public class ConsoleSystemParameterController {
   @GetMapping
   public CommonResponse<List<SystemParameterResponse>> list(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(parameterService.list(tenantId).stream()
-        .map(SystemParameterResponse::from)
-        .toList());
+    List<SystemParameterEntity> parameters = parameterService.list(tenantId);
+    List<SystemParameterResponse> responses =
+        parameters.stream().map(SystemParameterResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   @GetMapping("/value")
   public CommonResponse<ConsoleSystemParameterValueResponse> getValue(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
-    return responseFactory.success(parameterService
-        .getValue(tenantId, key)
+    Optional<String> parameterValue = parameterService.getValue(tenantId, key);
+    ConsoleSystemParameterValueResponse responseValue = parameterValue
         .map(v -> ConsoleSystemParameterValueResponse.of(key, v))
-        .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null)));
+        .orElseGet(() -> ConsoleSystemParameterValueResponse.of(key, null));
+    return responseFactory.success(responseValue);
   }
 
   @PutMapping

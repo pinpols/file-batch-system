@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.context.RunModeSupport;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 
 /**
  * Worker 侧 pipeline 执行的共享运行时属性键。
@@ -22,7 +23,8 @@ public final class PipelineRuntimeKeys {
   /** 为兼容旧版 worker 上下文保留的历史别名。 */
   public static final String PIPELINE_CODE = JOB_CODE;
 
-  public static final String PIPELINE_DEFINITION_ID = "pipelineDefinitionId";
+  public static final String SYSTEM_PIPELINE_CODE = SystemPipelineTaskKeys.CODE;
+  public static final String SYSTEM_PIPELINE_VERSION = SystemPipelineTaskKeys.VERSION;
   public static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
   public static final String PIPELINE_STEP_RUN_ID = "pipelineStepRunId";
   public static final String PIPELINE_STEP_DEFINITIONS = "pipelineStepDefinitions";
@@ -34,6 +36,9 @@ public final class PipelineRuntimeKeys {
   public static final String PIPELINE_NEXT_STEP_CODE = "pipelineNextStepCode";
   public static final String PIPELINE_NEXT_STAGE_CODE = "pipelineNextStageCode";
   public static final String JOB_INSTANCE_ID = "jobInstanceId";
+  public static final String JOB_PARTITION_ID = "jobPartitionId";
+  /** 持久化根运行前，先验证所选 Job 快照中的具体 bundle 文件 ID。 */
+  public static final String PARTITION_INVOCATION_ID = "partitionInvocationId";
 
   /**
    * task 原始 payload(JSON 字符串)。{@code DefaultTaskExecutionWrapper#buildExecutionContext} 从 PulledTask
@@ -114,6 +119,9 @@ public final class PipelineRuntimeKeys {
    * 读出后填进 TaskExecutionReport, orchestrator 在成功路径回写 {@code job_instance.high_water_mark_out}。
    */
   public static final String HIGH_WATER_MARK_OUT = "highWaterMarkOut";
+
+  /** 分区创建也会验证文件归属，但此时根运行已经提交。 */
+  public static final String DEPENDENCY_RESULT_SNAPSHOT = "dependencyResultSnapshot";
 
   /**
    * V94: data_interval 半开区间起点 (Airflow 风格 {@code Instant}). 触发侧已计算 (CRON 取本次 fireAt, FIXED_RATE 同)

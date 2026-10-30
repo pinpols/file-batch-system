@@ -191,7 +191,7 @@ EOF
 | `NodeDiskWillFillIn4Hours` | 近 1h 斜率外推 4h 写满 | 争取处置窗口,定位无界增长源 |
 
 **应急腾空间**(critical 时按风险从低到高):
-1. DROP 过期 `process_staging` 日分区(DDL 瞬间还盘给 OS;DELETE 不缩文件):见 `ProcessStagingOrphanCleaner` / `pg-table-partitioning.md`。
+1. `process_staging` 当前不自动 DROP 日分区；按 tenant/generation 清理旧代且在一轮次限额内回收。排查 `ProcessStagingOrphanCleaner` 的启动审计、清理日志和 `pg-table-partitioning.md`。
 2. 手动跑归档调度补归档 + 清 outbox `PUBLISHED` 旧数据(走 console → orchestrator `/internal/outbox/*`,**禁直接 DELETE**)。
 3. WAL 归档目录积压(slot inactive 导致):见 `PostgresReplicationSlotInactive` 告警 + failover playbook。
 4. 扩盘 / 迁移卷。
@@ -207,19 +207,19 @@ EOF
 1. **归档/清理调度是否在跑**:查看 Prometheus `ArchiveSchedulerNeverSucceeded` / `ArchiveSchedulerStale`，再结合日志和 ShedLock 定位：
    - `OutboxArchiveScheduler`(outbox_event PUBLISHED → 归档,默认 03:30,ShedLock `outbox_archive`)
    - `WorkflowArchiveScheduler` / job_instance 归档(04:x)
-   - `ProcessStagingOrphanCleaner`(process_staging 分区 DROP + 孤儿行清理)
+   - `ProcessStagingOrphanCleaner`(旧且非当前 generation 的有界回收；仅预建分区，不 DROP 整分区)
    - `FileGovernanceScheduler`(file_record / upload session TTL 清理)
    排查:对应 `shedlock` 行 `lock_until` 是否卡在过去(持锁进程死了没释放)、scheduler 日志有无异常堆栈。
 2. **保留策略是否符合预期**:`batch.outbox.archive.*` / run 表归档保留天数配置。
-3. **分区是否漏建/漏 DROP**:`process_staging` 是否按天分区、retentionDays 是否生效。
+3. **分区是否漏建/错误增长**:`process_staging` 是否按天分区、generation 回收是否积压；整分区 DROP 当前关闭且无应用入口。
 
-> `ArchiveSchedulerHealthMetrics` 暴露 `batch_archive_scheduler_last_success_timestamp_seconds{scheduler=...}`。首次正常返回前告警为 `ArchiveSchedulerNeverSucceeded`；超出运行周期后由 `ArchiveSchedulerStale` 告警。当前阈值按默认周期设置：文件治理 5 分钟、每日归档 26 小时、每周实例归档 8 天；若调整调度周期，应同步调整规则。该指标表示调度调用正常返回，不表示每条归档记录均成功；文件逐条失败仍以审计记录和存储治理指标为准。`ProcessStagingOrphanCleaner` 已有独立的孤儿行计数和最老数据年龄指标。仅创建指标和告警不能证明归档数据完整，仍需核对归档结果与目标环境阈值。
+> `ArchiveSchedulerHealthMetrics` 暴露 `batch_archive_scheduler_last_success_timestamp_seconds{scheduler=...}`。首次正常返回前告警为 `ArchiveSchedulerNeverSucceeded`；超出运行周期后由 `ArchiveSchedulerStale` 告警。当前阈值按默认周期设置：文件治理 5 分钟、每日归档 26 小时、每周实例归档 8 天；若调整调度周期，应同步调整规则。该指标表示调度调用正常返回，不表示每条归档记录均成功；文件逐条失败仍以审计记录和存储治理指标为准。`ProcessStagingOrphanCleaner` 的启动审计按租户及 generation 统计已由平台围栏证明过期的 staging 行；多库实际数据完整性仍需按目标环境核对。
 
 ---
 
 ## 关联
 
 - `playbooks/pg-primary-failover.md` — 主库故障切主(HA;本 runbook 补它 §方案C 的 PITR TODO)
-- `pg-table-partitioning.md` — process_staging 分区 DROP 回收空间
+- `pg-table-partitioning.md` — process_staging 分区定义、预建和生命周期边界（当前不自动 DROP）
 - `read-replica.md` — 读写分离 / standby 语义(为何 standby 不是备份)
-- `docs/archive/analysis/2026-06-10-full-audit.md` — 本 runbook 的来源(P1-7 / P2-7)
+- `docs/archive/audit/full-audit-2026-06-10.md` — 本 runbook 的来源(P1-7 / P2-7)

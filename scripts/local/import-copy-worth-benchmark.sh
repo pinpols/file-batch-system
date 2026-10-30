@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：判断 IMPORT LOAD 是否值得上 PG COPY 的本地微基准。
+# 用法：在仓库根目录执行 bash scripts/local/import-copy-worth-benchmark.sh；参数与前置环境见下方说明及所属 README。
 # 判断 IMPORT LOAD 是否值得上 PG COPY 的本地微基准。
 #
 # 对比对象:

@@ -91,7 +91,9 @@ public final class BatchFileConstants {
     int dot = name.lastIndexOf('.');
     int slash = name.lastIndexOf('/');
     if (dot > slash) {
-      return name.substring(0, dot) + tag + name.substring(dot);
+      String fileName = name.substring(0, dot);
+      String extension = name.substring(dot);
+      return fileName + tag + extension;
     }
     return name + tag;
   }

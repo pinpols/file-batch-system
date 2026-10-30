@@ -7,6 +7,7 @@
         <result column="source_type" property="sourceType"/>
         <result column="source_id" property="sourceId"/>
         <result column="dead_letter_reason" property="deadLetterReason"/>
+        <result column="error_class" property="errorClass"/>
         <result column="payload_ref" property="payloadRef"/>
         <result column="replay_status" property="replayStatus"/>
         <result column="replay_count" property="replayCount"/>

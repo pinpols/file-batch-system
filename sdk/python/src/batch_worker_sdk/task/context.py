@@ -166,7 +166,8 @@ class SdkTaskContext(BaseModel):
             fail_count=fail_count,
             completed=completed,
         )
-        self.checkpoint().save(self.task_id, state)
+        checkpoint = self.checkpoint()
+        checkpoint.save(self.task_id, state)
 
         self._commit_counter += 1
         if (

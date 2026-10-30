@@ -1,0 +1,3 @@
+interface:
+  display_name: "日志指标与告警治理"
+  short_description: "审查日志指标追踪、采集背压、告警持续与恢复语义及实际通知送达"

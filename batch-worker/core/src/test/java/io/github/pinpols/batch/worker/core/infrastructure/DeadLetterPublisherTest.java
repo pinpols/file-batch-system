@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.mq.MqMessage;
 import io.github.pinpols.batch.common.mq.MqMessagePublisher;
@@ -39,7 +40,8 @@ class DeadLetterPublisherTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<MeterRegistry> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(registry);
-    publisher = new DeadLetterPublisher(mqMessagePublisher, provider);
+    publisher =
+        new DeadLetterPublisher(mqMessagePublisher, provider, new BatchKafkaTopicNamespace(""));
   }
 
   @Test
@@ -67,6 +69,25 @@ class DeadLetterPublisherTest {
             .counter("worker.dlq.publish.success.total", "topic", BatchTopics.TASK_DEAD_LETTER)
             .count())
         .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("死信失败摘要不得携带原始凭据")
+  void publish_masksCredentialsInErrorMessage() {
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.completedFuture(MqPublishResult.acknowledged()));
+
+    publisher.publish(
+        "payload",
+        "batch.task.dispatch.import",
+        "IMPORT",
+        "connect password=probe-secret token=query-secret");
+
+    ArgumentCaptor<MqMessage> messageCaptor = ArgumentCaptor.forClass(MqMessage.class);
+    verify(mqMessagePublisher).publish(messageCaptor.capture());
+    assertThat(messageCaptor.getValue().payload())
+        .contains("\"originalPayload\":\"payload\"")
+        .doesNotContain("probe-secret", "query-secret");
   }
 
   @Test

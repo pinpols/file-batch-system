@@ -1,6 +1,10 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryClaimIfCurrentParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryFailRejectedLaunchesParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryResetStaleUnboundParam;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryRetryParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayAssetPartitionImpactView;
 import io.github.pinpols.batch.orchestrator.mapper.view.BatchDayReplayDispatchImpactView;
@@ -18,6 +22,26 @@ public interface BatchDayReplayEntryMapper {
   }
 
   int insert(BatchDayReplayEntryEntity entity);
+
+  /** 由已持久化的补跑根请求和最新节点尝试确定的当前执行记录。 */
+  BatchDayReplayEntryEntity selectByCurrentExecution(
+      @Param("tenantId") String tenantId,
+      @Param("sessionId") Long sessionId,
+      @Param("jobCode") String jobCode,
+      @Param("jobInstanceId") Long jobInstanceId);
+
+  BatchDayReplayEntryEntity selectByIdForUpdate(
+      @Param("tenantId") String tenantId, @Param("sessionId") Long sessionId, @Param("id") Long id);
+
+  /** 仅重试从未绑定过子执行的失败明细。 */
+  default int retryFailedUnbound(String tenantId, Long sessionId, Long id, Instant now) {
+    String targetStatus = ReplayEntryStatus.PENDING.name();
+    BatchDayReplayEntryRetryParam param =
+        new BatchDayReplayEntryRetryParam(tenantId, sessionId, id, now, targetStatus);
+    return retryFailedUnboundWithStatus(param);
+  }
+
+  int retryFailedUnboundWithStatus(BatchDayReplayEntryRetryParam param);
 
   /** 批量插入；MyBatis foreach 拼 INSERT 多 VALUES。 */
   int insertBatch(@Param("records") List<BatchDayReplayEntryEntity> records);
@@ -39,49 +63,41 @@ public interface BatchDayReplayEntryMapper {
 
   /** PENDING → RUNNING 原子抢占；返回 1 才允许创建实例。 */
   default int claimPending(Long id, String tenantId, Long sessionId, Instant now) {
-    return claimIfCurrent(
-        id,
-        tenantId,
-        sessionId,
-        now,
-        ReplayEntryStatus.PENDING.name(),
-        ReplayEntryStatus.RUNNING.name());
+    BatchDayReplayEntryClaimIfCurrentParam batchDayReplayEntryClaimIfCurrentParam =
+        BatchDayReplayEntryClaimIfCurrentParam.builder()
+            .id(id)
+            .tenantId(tenantId)
+            .sessionId(sessionId)
+            .now(now)
+            .expectedStatus(ReplayEntryStatus.PENDING.name())
+            .targetStatus(ReplayEntryStatus.RUNNING.name())
+            .build();
+    return claimIfCurrent(batchDayReplayEntryClaimIfCurrentParam);
   }
 
-  int claimIfCurrent(
-      @Param("id") Long id,
-      @Param("tenantId") String tenantId,
-      @Param("sessionId") Long sessionId,
-      @Param("now") Instant now,
-      @Param("expectedStatus") String expectedStatus,
-      @Param("targetStatus") String targetStatus);
+  int claimIfCurrent(BatchDayReplayEntryClaimIfCurrentParam parameters);
 
   /** 回收启动前崩溃留下的 RUNNING entry；已绑定 rerun instance 的行绝不回收。 */
   default int resetStaleUnboundRunning(Long sessionId, Instant cutoff, Instant now) {
-    return resetStaleUnbound(
-        sessionId, cutoff, now, ReplayEntryStatus.RUNNING.name(), ReplayEntryStatus.PENDING.name());
+    BatchDayReplayEntryResetStaleUnboundParam batchDayReplayEntryResetStaleUnboundParam =
+        BatchDayReplayEntryResetStaleUnboundParam.builder()
+            .sessionId(sessionId)
+            .cutoff(cutoff)
+            .now(now)
+            .expectedStatus(ReplayEntryStatus.RUNNING.name())
+            .targetStatus(ReplayEntryStatus.PENDING.name())
+            .build();
+    return resetStaleUnbound(batchDayReplayEntryResetStaleUnboundParam);
   }
 
-  int resetStaleUnbound(
-      @Param("sessionId") Long sessionId,
-      @Param("cutoff") Instant cutoff,
-      @Param("now") Instant now,
-      @Param("expectedStatus") String expectedStatus,
-      @Param("targetStatus") String targetStatus);
+  int resetStaleUnbound(BatchDayReplayEntryResetStaleUnboundParam parameters);
 
-  /** 根据 rerun_instance_id 反查（terminal 回填用）。 */
-  BatchDayReplayEntryEntity selectByRerunInstanceId(
-      @Param("tenantId") String tenantId, @Param("rerunInstanceId") Long rerunInstanceId);
-
-  /**
-   * 根据 (sessionId, sourceInstanceId) 精确反查 entry。终态回填首选路径(P0-2 修复)。 SCOPE_ALL 同 jobCode 多
-   * sourceInstance 时,按 jobCode 线性扫会回填到第一条 entry,真正的 entry 永远 PENDING。 改按 sourceInstanceId 精确匹配后,只有
-   * sourceInstanceId 为 null(运维清理)才降级到 jobCode 回退。
-   */
-  BatchDayReplayEntryEntity selectBySessionAndSourceInstanceId(
-      @Param("sessionId") Long sessionId,
+  int bindCurrentExecutions(
       @Param("tenantId") String tenantId,
-      @Param("sourceInstanceId") Long sourceInstanceId);
+      @Param("sessionId") Long sessionId,
+      @Param("now") Instant now);
+
+  int failRejectedLaunches(BatchDayReplayEntryFailRejectedLaunchesParam parameters);
 
   /** 推进 status + 关联字段。 */
   int updateStatus(UpdateBatchDayReplayEntryStatusParam param);

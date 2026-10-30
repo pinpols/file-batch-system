@@ -1,6 +1,8 @@
 # 批量日、时区与冬夏令时优化设计
 
-> 本文包含 2026-05 的实施状态与验收快照，以及后续补充的设计说明。第 4、4.1、13、14.3 节的状态只代表各自标注的历史核查时点，不是当前能力矩阵或待办；当前后端实现以对应 ADR/源码为准，当前事项以 [`../analysis/todo-master.md`](../analysis/todo-master.md) 为准。后续更新状态时必须标注核查日期与证据层级。
+> **当前顶层日程来源**：`workflow_definition.schedule_type / schedule_expr / timezone / calendar_code`。接纳时冻结原计划、业务日与数据区间，子 JOB 继承；历史章节的实施时间和验收计数不定义当前状态，当前状态见整合方案/验收矩阵。Job 保留的历史调度列不得作为新顶层计划的第二来源。
+
+> 本文包含 2026-05 的实施状态与验收快照，以及后续补充的设计说明。第 4、4.1、13、14.3 节的状态只代表各自标注的历史核查时点，不是当前能力矩阵或待办；当前后端实现以对应 ADR/源码为准，当前事项以 [`TODO Master`](../plans/todo-master.md) 为准。后续更新状态时必须标注核查日期与证据层级。
 
 ## 1. 设计定位
 
@@ -148,7 +150,7 @@ timezone_snapshot
 | 能力 | 当前状态 | 当前依据 | 主要缺口 |
 |---|---|---|---|
 | Quartz 调度初始化 | 已具备 | `QRTZ_TRIGGERS.NEXT_FIRE_TIME` + `TriggerReconciler` | 无 |
-| 触发后创建 `job_instance / workflow_run / partition / task` | 已具备 | `DefaultLaunchService` 主链路 | 无 |
+| 触发接纳 WorkflowRun；到达 JOB 节点后再创建 JobInstance / partition / task | 已具备 | `DefaultLaunchService` 主链路 | 无 |
 | `bizDate` 按 `timezone + cutoff_time` 计算 | 已具备 | `CalendarBizDateResolver`、`business_calendar.timezone/cutoff_time`；DST 策略由 V102 + `BatchDayTimePolicyResolver` 显式化 | 无 |
 | `batch_day_instance` 建模 | 已具备 | V32 / V62 / V101 / V102 / V107，含 `timezone_snapshot`、`dst_policy_snapshot`、治理字段、`SETTLING` 中间态、`version` | 无 |
 | launch 时 upsert 批量日 | 已具备 | `LaunchBatchDayService` | 无（已与日切主动打开形成双入口） |
@@ -757,12 +759,12 @@ cutoff 是批量日边界，不是作业触发点，因此不建议支持 `RUN_T
 cron 解释顺序：
 
 ```text
-job_definition.timezone
+workflow_definition.timezone
   -> business_calendar.timezone
   -> batch.timezone.default-zone
 ```
 
-当前系统已有 `job_definition.timezone`，可以继续作为 schedule timezone 使用；文档中提到的 `schedule_timezone` 不必马上新增字段，除非未来要明确区分“作业展示/业务时区”和“调度时区”。
+当前顶层日程使用 `workflow_definition.timezone`；文档中提到的 `schedule_timezone` 不必马上新增字段，除非未来要明确区分“作业展示/业务时区”和“调度时区”。
 
 cron 下次触发计算必须通过 DST-aware 的库或适配器完成，禁止手写：
 
@@ -1144,7 +1146,7 @@ trigger 本地计划审计 / 独立审计表 / SAME_JOB_GROUP / rerun policy 显
 | [026](../architecture/adr/ADR-026-dry-run-mode.md) | dry_run 一等字段 + DryRunGuard + DRY_RUN result_version + SUCCESS_DRY_RUN 终态 | 大版本 / 灾备演练触发 | ~17 人天 |
 | [027](../architecture/adr/ADR-027-resource-affinity.md) | worker label / taint / job affinity_json（K8s 风格） | 多机房 / 异构硬件 / 合规隔离触发 | ~18 人天 |
 
-**建议优先级**（2026-05-07 update — priority-scope 三阶段已固化，详见 `docs/analysis/adr-012-021-027-priority-scope-2026-05-06.md`）：
+**建议优先级**（2026-05-07 update — 三阶段范围纪律见 `docs/architecture/system-scope-boundary.md`）：
 - **第 1 阶段必做（已落）**：ADR-012 失败分类（V111）、ADR-025 Workflow 静态校验（15 条规则全员到齐）、ADR-023 多日历联动（V112-V114）；
 - **第 2 阶段已落 backend**：ADR-021 数据对账 v1.0（V118 + DataQualityCheckExecutor + EFFECTIVE gate）、ADR-022 Forensic v0.1（V116 + 同步 bundle + SHA-256）、ADR-026 dry-run（V115/V117 + DryRunGuard SPI + L1/L2/L3 service + SUCCESS_DRY_RUN/FAILED_DRY_RUN 终态，**全链路落地**）；
 - **第 3 阶段暂缓**：ADR-024 archive 分层（数据量到 5 亿行触发）、ADR-027 资源亲和（多机房 / 异构硬件触发，priority-scope §5 最高越界风险）；

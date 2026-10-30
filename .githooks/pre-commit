@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：在提交前执行本仓库暂存变更的轻量质量门禁。
+# 用法：先执行 git config core.hooksPath .githooks，由 Git 的 pre-commit 阶段调用。
 # 启用：git config core.hooksPath .githooks（每人 clone 后跑一次）
 set -euo pipefail
 

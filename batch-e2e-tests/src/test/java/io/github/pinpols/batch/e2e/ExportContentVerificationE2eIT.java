@@ -12,7 +12,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.e2e.support.verifier.ExportFileVerifier;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -35,14 +35,12 @@ import org.springframework.test.context.jdbc.Sql;
  * <p>本用例在 {@link ExportPipelineE2eIT} 的基础上增强断言：
  *
  * <ul>
- *   <li>导出文件在 MinIO 上可读取且非空（best-effort：如果存储后端不是 MinIO，则退化为 storage_path 非空）
+ *   <li>本次作业关联的导出文件在测试存储后端可读取且非空
  *   <li>导出内容包含关键业务字段（如 settlement_no）
  *   <li>业务批次记录仍可查询，导出不会破坏结算批次主数据
  * </ul>
  *
- * <p>说明：MinIO 读取使用 {@link AbstractIntegrationTest#s3Endpoint()} / {@link
- * AbstractIntegrationTest#s3Bucket()}。 若未来导出存储路径或桶策略变更，测试允许退化为“平台表记录了
- * storage_path”这一弱内容信号，避免把环境差异当成业务失败。
+ * <p>存储读取失败或找不到本次作业的产物时，内容校验必须失败。
  */
 @E2eSpringBootTest(
     classes = E2eExportApplication.class,
@@ -60,7 +58,7 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
   private static final String BATCH_NO = "E2E-CONTENT-VERIFY-1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -80,31 +78,41 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
    *   <li>Run export pipeline to SUCCESS
    *   <li>Assert the settlement batch row remains queryable after export
    *   <li>Assert file_record has a storage_path set (file was produced)
-   *   <li>Attempt to download the file from MinIO and assert it is non-empty with lines > 0
+   *   <li>Read the output and assert it is non-empty with lines > 0
    * </ol>
    */
   @Test
   @DisplayName("导出任务终态成功后做内容级复核:文件记录有存储路径,产物达到最小非空行数且包含两条结算明细编号,结算批次汇总金额非空且主数据仍可查询")
   void shouldProduceNonEmptyExportFileAndKeepSettlementData_whenExportSucceeds() throws Exception {
-    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-
-    Long batchId = businessJdbc.queryForObject("""
+    final String insertSettlementBatchSql = """
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
             ) values (?, ?, date '2026-01-15', '202601', 'READY', 2, 0, 'CNY')
             returning id
-            """, Long.class, TENANT, BATCH_NO);
-    assertThat(batchId).isNotNull();
-
-    businessJdbc.update("""
+            """;
+    final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
         ) values
             (?, ?, 'E2E-CV-001', 'C-CV-1', date '2026-01-15', '202601', 100.00, 5.00, 95.00, 'CNY', 'READY'),
             (?, ?, 'E2E-CV-002', 'C-CV-2', date '2026-01-15', '202601', 200.00, 10.00, 190.00, 'CNY', 'READY')
-        """, TENANT, batchId, TENANT, batchId);
+        """;
+
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+
+    Long batchId =
+        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    assertThat(batchId).isNotNull();
+
+    businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, TENANT, batchId);
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
@@ -118,7 +126,7 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -127,16 +135,13 @@ class ExportContentVerificationE2eIT extends AbstractIntegrationTest {
 
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-    // Wait for task SUCCESS
+    // 等待任务进入 SUCCESS 状态。
     await()
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("SUCCESS");
         });
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：后台周期 jcmd heap dump + 健康检查 + 退出条件评估。
+# 用法：在仓库根目录执行 bash load-tests/scripts/monitor-soak.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # monitor-soak.sh — 后台周期 jcmd heap dump + 健康检查 + 退出条件评估
 #

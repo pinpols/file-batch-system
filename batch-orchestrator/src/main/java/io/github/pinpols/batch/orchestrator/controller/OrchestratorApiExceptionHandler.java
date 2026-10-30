@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
@@ -33,12 +34,18 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
     return "orchestrator";
   }
 
+  @Override
+  protected boolean logBizExceptionAtInfo(BizException exception) {
+    return "error.task.claim_not_available".equals(exception.getMessageKey());
+  }
+
   /** 死信指向的分区 / 作业实例已不存在（常见于历史数据清理）。 */
   @ExceptionHandler(DeadLetterOrphanSourceException.class)
   public ResponseEntity<CommonResponse<Void>> handleDeadLetterOrphanSource(
       DeadLetterOrphanSourceException exception) {
-    return ResponseEntity.status(HttpStatus.CONFLICT)
-        .body(CommonResponse.failure(ResultCode.CONFLICT, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.CONFLICT, ResultCode.CONFLICT.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.CONFLICT, message);
+    return ResponseEntity.status(HttpStatus.CONFLICT).body(failureBody);
   }
 
   /**
@@ -48,10 +55,11 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<CommonResponse<Void>> handleMessageNotReadable(
       HttpMessageNotReadableException exception) {
-    return ResponseEntity.badRequest()
-        .body(CommonResponse.failure(
-            ResultCode.INVALID_ARGUMENT,
-            resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label())));
+    ResponseEntity.BodyBuilder response = ResponseEntity.badRequest();
+    String message =
+        resolveCommonCode(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.INVALID_ARGUMENT, message);
+    return response.body(failureBody);
   }
 
   /**
@@ -66,11 +74,12 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
     log.warn(
         "transient DB concurrency failure (retryable, mapped to 503): {}",
         SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
-        .body(CommonResponse.failure(
-            ResultCode.SERVICE_UNAVAILABLE,
-            resolveCommonCode(
-                ResultCode.SERVICE_UNAVAILABLE, ResultCode.SERVICE_UNAVAILABLE.label())));
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE);
+    String message =
+        resolveCommonCode(ResultCode.SERVICE_UNAVAILABLE, ResultCode.SERVICE_UNAVAILABLE.label());
+    CommonResponse<Void> failureBody =
+        CommonResponse.failure(ResultCode.SERVICE_UNAVAILABLE, message);
+    return response.body(failureBody);
   }
 
   /** orchestrator 特有：把 Spring 的 ResponseStatusException 映射回 CommonResponse。 */
@@ -87,8 +96,9 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
           case 429 -> ResultCode.RATE_LIMITED;
           default -> ResultCode.SYSTEM_ERROR;
         };
-    String message = exception.getReason() != null ? exception.getReason() : code.defaultMessage();
-    return ResponseEntity.status(exception.getStatusCode())
-        .body(CommonResponse.failure(code, message));
+    String message = resolveCommonCode(code, code.label());
+    ResponseEntity.BodyBuilder response = ResponseEntity.status(exception.getStatusCode());
+    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+    return response.body(failureBody);
   }
 }

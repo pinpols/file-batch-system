@@ -53,7 +53,8 @@ class ResumableTemplateMixin:
         返回上次断点的 ``break_position``(首次运行 / 已完成 → 空 dict)。租户据此
         给查询加 ``WHERE id > :last`` 之类续读条件;不调则从头读(靠业务自身幂等回退)。
         """
-        state = ctx.checkpoint().load(ctx.task_id)
+        checkpoint = ctx.checkpoint()
+        state = checkpoint.load(ctx.task_id)
         if state is None or state.completed:
             return {}
         return dict(state.break_position)
@@ -73,7 +74,8 @@ class ResumableTemplateMixin:
 
     def _resume(self, ctx: SdkTaskContext) -> _ResumeOutcome:
         """读断点;恢复计数;返回续跑起点或「已完成」标记。"""
-        state = ctx.checkpoint().load(ctx.task_id)
+        checkpoint = ctx.checkpoint()
+        state = checkpoint.load(ctx.task_id)
         counts = SdkRowResult()
         if state is None:
             return _ResumeOutcome(already_completed=False, break_position={}, counts=counts)
@@ -84,9 +86,10 @@ class ResumableTemplateMixin:
         # 续跑:恢复计数,不归零(对齐 ADR-037 决策一)。
         counts.add_success(state.succeed_count)
         counts.failed_count = state.fail_count
+        break_position = dict(state.break_position)
         return _ResumeOutcome(
             already_completed=False,
-            break_position=dict(state.break_position),
+            break_position=break_position,
             counts=counts,
         )
 

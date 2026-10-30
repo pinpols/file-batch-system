@@ -34,16 +34,18 @@ public record HeartbeatDirective(
       return new HeartbeatDirective(STATUS_NORMAL, null, false, List.of(), null);
     }
     Object paused = response.get("pausedTaskTypes");
+    Object platformStatusForDefaultCheck = response.get("platformStatus");
+    String platformStatus = EmptyChecks.isNull(platformStatusForDefaultCheck)
+        ? STATUS_NORMAL
+        : response.get("platformStatus").toString();
+    Integer desiredMaxConcurrent = integerValue(response.get("desiredMaxConcurrent"));
+    boolean shouldDrain = Boolean.TRUE.equals(response.get("shouldDrain"));
+    List<String> pausedTaskTypes = paused instanceof List<?> values
+        ? values.stream().map(String::valueOf).toList()
+        : List.of();
+    Integer nextHeartbeatHint = integerValue(response.get("nextHeartbeatHint"));
     return new HeartbeatDirective(
-        response.get("platformStatus") == null
-            ? STATUS_NORMAL
-            : response.get("platformStatus").toString(),
-        integerValue(response.get("desiredMaxConcurrent")),
-        Boolean.TRUE.equals(response.get("shouldDrain")),
-        paused instanceof List<?> values
-            ? values.stream().map(String::valueOf).toList()
-            : List.of(),
-        integerValue(response.get("nextHeartbeatHint")));
+        platformStatus, desiredMaxConcurrent, shouldDrain, pausedTaskTypes, nextHeartbeatHint);
   }
 
   private static Integer integerValue(Object value) {

@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.runtime;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerConcurrencyProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
@@ -9,6 +11,7 @@ import io.github.pinpols.batch.worker.core.support.AbstractWorkerLoop;
 import io.github.pinpols.batch.worker.core.support.HeartbeatService;
 import io.github.pinpols.batch.worker.core.support.WorkerLifecycleManager;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchWorkerConfiguration;
+import java.util.List;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class DispatchWorkerLoop extends AbstractWorkerLoop {
 
   private final DispatchWorkerConfiguration configuration;
+  private final BatchTaskExecutorRegistry taskExecutorRegistry;
 
   public DispatchWorkerLoop(
       WorkerLifecycleManager workerLifecycleManager,
@@ -25,7 +29,8 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
       DispatchWorkerConfiguration configuration,
       WorkerIdentityProperties identityProperties,
       WorkerRegistryStartupProperties workerRegistryStartupProperties,
-      WorkerConcurrencyProperties concurrencyProperties) {
+      WorkerConcurrencyProperties concurrencyProperties,
+      BatchTaskExecutorRegistry taskExecutorRegistry) {
     super(
         workerLifecycleManager,
         heartbeatService,
@@ -34,6 +39,7 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
         identityProperties,
         workerRegistryStartupProperties);
     this.configuration = configuration;
+    this.taskExecutorRegistry = taskExecutorRegistry;
   }
 
   @Override
@@ -44,6 +50,11 @@ public class DispatchWorkerLoop extends AbstractWorkerLoop {
   @Override
   protected String workerGroup() {
     return "dispatch";
+  }
+
+  @Override
+  protected List<ReplayCapabilityDeclaration> replayCapabilities() {
+    return taskExecutorRegistry.replayCapabilityCatalog();
   }
 
   @Scheduled(fixedDelayString = "${batch.worker.dispatch.heartbeat-interval-millis:15000}")

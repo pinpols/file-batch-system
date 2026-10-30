@@ -1,10 +1,12 @@
+> 历史原始记录：本轮恢复保留，正文中的结论、参数、状态和操作步骤仅适用于原日期/基线。提炼方法不替代原始证据；当前事实须按[文档治理](../../standards/document-governance.md)重新核实。本轮未执行原测试或扫描。
+
 # Release Process — 2026-05-22 (ARCHIVED)
 
 > **🛑 全文废弃(2026-06-03)**:本文档所描述的 `build-image.yml` 与 `promote-staging.yml` workflow 在当前仓库**均不存在**,所述链路无法执行。
 >
 > **当前发布流程以 [`releasing.md`](../../runbook/releasing.md) 为唯一权威源**;本文件仅作为未来恢复 GitOps 时的历史蓝图保留,**不要按此执行**。
 >
-> 前置环境搭建见 [gitops-onboarding-2026-05-22.md](../../runbook/gitops-onboarding-2026-05-22.md)。
+> 前置环境搭建见 [gitops-onboarding.md](../../runbook/gitops-onboarding.md)。
 
 ---
 
@@ -157,6 +159,6 @@ helm rollback batch-platform <revision> -n batch-prod
 
 ## 7. 相关文档
 
-- [gitops-onboarding-2026-05-22.md](../../runbook/gitops-onboarding-2026-05-22.md)(环境搭建)
+- [gitops-onboarding.md](../../runbook/gitops-onboarding.md)(环境搭建)
 - [ci-cd-followup-2026-05-22.md](../../runbook/ci-cd-followup-2026-05-22.md)(CI/CD 跟进)
 - [incident-response.md](../../runbook/incident-response.md)(事故响应)

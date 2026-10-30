@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：按进程归属停止当前工作树的本地 Java 服务。
+# 用法：在仓库根目录执行 bash scripts/local/stop-all.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # stop-all.sh - 停止本地 batch 平台 Java 进程
 # 说明：
-# 1) 停止顺序：三个 worker -> trigger / console -> orchestrator（与 start-all 对称）。
+# 1) 停止顺序：五类 worker -> trigger / console -> orchestrator（与 start-all 对称）。
 # 2) 每阶段 SIGTERM 后等待，再对本阶段残留 kill -9，然后进入下一阶段；默认等待 30s，允许 STOP_WAIT_SEC 覆盖。
 # 3) PID 文件：TAB 三列或旧版空格两列；读入内存后按阶段消费。
 # 4) 再用 ps+awk 按 jar 路径子串匹配（避免 pgrep 正则问题）。
@@ -11,6 +13,11 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-$ROOT/.env.local}"
+# shellcheck source=../lib/env-common.sh
+source "$ROOT/scripts/lib/env-common.sh"
+batch_load_default_env
+batch_configure_local_jvm_port_env true
 # shellcheck source=../lib/local-lifecycle-lock.sh
 source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
 batch_local_lifecycle_lock_acquire "$ROOT"
@@ -21,7 +28,6 @@ source "$ROOT/scripts/lib/logging.sh"
 source "$ROOT/scripts/lib/process.sh"
 PID_FILE="$(log_pid_file "$ROOT" start-all.pids)"
 RUNTIME_JAR_DIR="$ROOT/build/runtime-jars"
-COMPOSE_ENV_FILE="${COMPOSE_ENV_FILE:-.env.local}"
 DEFAULT_STOP_WAIT_SEC=30
 
 # 全量扫描顺序（回退轮询）；分阶段停止时按 PHASE 使用子集
@@ -80,17 +86,16 @@ _pid_cmdline() {
 }
 
 _should_kill_pid_file_entry() {
-  local name="$1" pid="$2" jarpath="${3:-}"
+  local name="$1"
+  local pid="$2"
+  local jarpath="${3:-}"
+  local expected_jar="${RUNTIME_JAR_DIR}/${name}.jar"
   [[ "$pid" =~ ^[0-9]+$ ]] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
-  local cmd
-  cmd="$(_pid_cmdline "$pid")"
-  [[ -n "$cmd" ]] || return 0
-  if [[ -n "$jarpath" ]]; then
-    [[ "$cmd" == *"$jarpath"* ]] && return 0
+  if [[ "$jarpath" == "$expected_jar" ]] && process_pid_uses_jar "$pid" "$expected_jar"; then
+    return 0
   fi
-  [[ "$cmd" == *"build/runtime-jars/${name}.jar"* ]] && return 0
-  [[ "$cmd" == *"/${name}.jar"* && "$cmd" == *"runtime-jars"* ]] && return 0
+  process_pid_uses_jar "$pid" "$expected_jar" && return 0
   echo "  跳过 ${name} pid=${pid}（命令行与预期 jar 不符，避免误杀）" >&2
   return 1
 }
@@ -144,51 +149,44 @@ _kill_from_pid_lines_for_names() {
 }
 
 _scan_runtime_and_legacy_for_names() {
-  local n pid mod abs_jar
+  local n pid mod abs_jar legacy_target_dir
   for n in "$@"; do
+    abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      process_pid_uses_jar "$pid" "$abs_jar" || continue
       kill_pid "$n" "$pid"
-    done < <(_pids_cmd_contains "build/runtime-jars/${n}.jar")
-    abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
-    if [[ -f "$abs_jar" ]]; then
-      while read -r pid; do
-        [[ -z "$pid" ]] && continue
-        kill_pid "$n(abs)" "$pid"
-      done < <(_pids_cmd_contains "$abs_jar")
-    fi
+    done < <(_pids_cmd_contains "$abs_jar")
     mod="$(_legacy_module_for_runtime "$n")"
     [[ -n "$mod" ]] || continue
+    legacy_target_dir="${ROOT}/${mod}/target/"
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      process_pid_command_contains_path "$pid" "$legacy_target_dir" || continue
       kill_pid "$mod" "$pid"
-    done < <(_pids_cmd_contains "/${mod}/target/")
+    done < <(_pids_cmd_contains "$legacy_target_dir")
   done
 }
 
 _force_kill_names() {
-  local n pid mod abs_jar
+  local n pid mod abs_jar legacy_target_dir
   for n in "$@"; do
+    abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      process_pid_uses_jar "$pid" "$abs_jar" || continue
       echo "  force terminate pid=$pid ($n)"
       kill -9 "$pid" 2>/dev/null || true
-    done < <(_pids_cmd_contains "build/runtime-jars/${n}.jar")
-    abs_jar="${RUNTIME_JAR_DIR}/${n}.jar"
-    if [[ -f "$abs_jar" ]]; then
-      while read -r pid; do
-        [[ -z "$pid" ]] && continue
-        echo "  force terminate pid=$pid ($n abs)"
-        kill -9 "$pid" 2>/dev/null || true
-      done < <(_pids_cmd_contains "$abs_jar")
-    fi
+    done < <(_pids_cmd_contains "$abs_jar")
     mod="$(_legacy_module_for_runtime "$n")"
     [[ -n "$mod" ]] || continue
+    legacy_target_dir="${ROOT}/${mod}/target/"
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      process_pid_command_contains_path "$pid" "$legacy_target_dir" || continue
       echo "  force terminate pid=$pid ($mod target)"
       kill -9 "$pid" 2>/dev/null || true
-    done < <(_pids_cmd_contains "/${mod}/target/")
+    done < <(_pids_cmd_contains "$legacy_target_dir")
   done
 }
 
@@ -208,14 +206,16 @@ stop_phase() {
 }
 
 _residual_force_all() {
-  local left=0 name pid
+  local left=0 name pid expected_jar
   for name in "${RUNTIME_JAVA_NAMES[@]}"; do
+    expected_jar="${RUNTIME_JAR_DIR}/${name}.jar"
     while read -r pid; do
       [[ -z "$pid" ]] && continue
+      process_pid_uses_jar "$pid" "$expected_jar" || continue
       echo "  残留进程 kill -9 pid=$pid ($name)"
       kill -9 "$pid" 2>/dev/null || true
       ((left += 1)) || true
-    done < <(_pids_cmd_contains "build/runtime-jars/${name}.jar")
+    done < <(_pids_cmd_contains "$expected_jar")
   done
   if ((left > 0)); then
     echo "  已清理 ${left} 个残留 Java 进程。"
@@ -259,14 +259,14 @@ _check_port_residual() {
     "worker-atomic"
   )
   local ports=(
-    "${BATCH_ORCHESTRATOR_PORT:-18082}"
-    "${BATCH_TRIGGER_PORT:-18081}"
-    "${BATCH_CONSOLE_PORT:-18080}"
-    "${BATCH_WORKER_IMPORT_PORT:-18083}"
-    "${BATCH_WORKER_EXPORT_PORT:-18084}"
-    "${BATCH_WORKER_PROCESS_PORT:-18086}"
-    "${BATCH_WORKER_DISPATCH_PORT:-18085}"
-    "${BATCH_WORKER_ATOMIC_PORT:-18087}"
+    "${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
+    "${BATCH_TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}"
+    "${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}"
+    "${BATCH_WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}"
+    "${BATCH_WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}"
+    "${BATCH_WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}"
+    "${BATCH_WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}"
+    "${BATCH_WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}"
   )
   local residuals=()
   local i

@@ -64,7 +64,8 @@ public class QuartzMetricsConfiguration {
     try {
       return scheduler.getJobKeys(GroupMatcher.<JobKey>anyGroup()).size();
     } catch (SchedulerException e) {
-      log.warn("count active triggers failed: {}", SwallowedExceptionLogger.summary(e));
+      String causeSummary = SwallowedExceptionLogger.summary(e);
+      log.warn("count active triggers failed: {}", causeSummary);
       return -1d;
     }
   }

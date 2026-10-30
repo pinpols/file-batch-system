@@ -1,12 +1,14 @@
 # 批量类型分类法与系统缺口分析
 
+> **当前模型裁定**：顶层统一 WorkflowRun，Job 是节点执行配置，系统 Pipeline 按类型固定阶段。不同层状态机各自保留语义，不为减少枚举数量强行合成一个状态或类型。下方 §3–§5 的旧枚举、合并建议与阶段状态是历史评估，不自动转成当前整改；当前类型、恢复与验收以核心模型、ADR-048/049 和矩阵为准。
+
 > 评估日期：2026-10-14（触发与依赖分类复核；其余章节仍以原评估日期为准）。
 >
 > 本文目的：把批量业务和执行方式分类，并进一步拆清调度、触发入口、实例来源、事件来源和依赖关系；映射系统现状，识别**模型层缺口（已经在用但没有一等公民化）**、**能力层缺口（业务上需要但还没做）**、**暗债（多个并行枚举 / 固化阶段 / 配置注入分裂）**，并给出"做 / 不做 / 待评估"三档建议。
 >
 > 与 [`capability-assessment.md`](./capability-assessment.md) 的分工：能力评估是"现在能做什么"；本文是"模型上还应该长什么"。
 >
-> 与 [`api-gap-analysis.md`](./api-gap-analysis.md) 的分工：API 缺口分析是接口层；本文是领域模型层。
+> 与 [console-api-protocol.md](../api/console-api-protocol.md) 的分工：Console API 协议维护接口契约；本文维护领域模型边界。
 
 ## 1. 分类法与启动关系
 
@@ -141,13 +143,15 @@
 
 **建议**：抽 `BatchLifecycleStatus` 作为公共状态码（CREATED / WAITING / READY / RUNNING / SUCCESS / FAILED / CANCELLED / TERMINATED），每个具体枚举做"投影"：声明每个子状态映射到哪个公共码。不破坏现有 DB 状态值，只新增方法。
 
-### 3.2 `JobType` 与 `PipelineType` 重复定义
+### 3.2 历史类型合并建议（当前不照此实施）
 
 `JobType { GENERAL, IMPORT, EXPORT, DISPATCH, WORKFLOW }` 在 console-api 用；`PipelineType { IMPORT, EXPORT, DISPATCH }` 在 worker-core 用。两份定义并存，要加 PROCESS / SYNC 得改两处。
 
 **建议**：合并成统一的 `BatchType`（IMPORT / EXPORT / PROCESS / DISPATCH / SYNC，外加 GENERAL / WORKFLOW 等内部 carryover），`PipelineType` 改为 `BatchType` 的别名或子集投影。
 
-### 3.3 Worker pipeline 阶段固化
+### 3.3 Worker Pipeline 阶段固化（当前系统模板的有意边界）
+
+> **当前更正（2026-10-24）**：系统目录有 IMPORT 6、EXPORT 5、PROCESS 5、DISPATCH 6 个阶段；四类文件 Worker 共用阶段模板，ATOMIC 无文件 Pipeline。下列列表和 2026-04-28 决策保留当时评估口径，其中 DISPATCH 的“5 阶段”和 PROCESS 的“DB 定义驱动”已过时；当前业务参数来自 Job 冻结配置，不读旧定义表。
 
 `AbstractStageExecutor` 是模板方法，但每种 worker 的 stage **数量和名字都是 enum 固化**：
 - IMPORT：6 阶段固定
@@ -364,6 +368,7 @@ WAP+bookends 五段语义:
 - **plugin 解析在 PREPARE 前一次性完成**:`DefaultProcessStageExecutor` 扫一遍 step 找 COMPUTE step 的 `impl_code`,resolve plugin 缓存到 `ProcessJobContext.resolvedPlugin`
 - **`ProcessRuntimeKeys`**:`PROCESS_COMPUTE_STEP_PARAMS / PROCESS_PARSED_SPEC / PROCESS_STAGED_COUNT / PROCESS_PUBLISHED_COUNT` 让 5 个 lifecycle 方法在不同 stage step 之间传递状态
 - **VALIDATE 校验 SQL 跳过 schema allowlist**:用户的 checkSql 必须能读 `batch.process_staging`,但目标 SQL allowlist 只包含业务 schema;新加 `validateUserCheckSelect()` 走 AST + 禁 SELECT * 但不强制 schema 名单
+- **跨 attempt 重放安全（2026-10-21）**：`ProcessComputePlugin.idempotencyCapability()` 默认 `UNKNOWN`；COMPUTE/COMMIT/FEEDBACK 前，未知或非幂等插件须先由 Orchestrator 确认持久执行围栏；持久任务身份缺失或标记未确认时，该阶段不运行。标记通过独立 HTTP 事务在 PROCESS 阶段事务和插件副作用之前提交。`PREPARE`、`VALIDATE` 必须保持只读；dry-run 跳过业务写阶段时不设置该围栏。内置 `sqlTransformCompute` 声明完整生命周期由插件逻辑保证幂等；自定义插件只有在确实满足同一 task/business identity 下全生命周期可重放时才能作此声明。未知结果仍需人工核对/补偿，本契约不提供自动推断。
 
 E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 1. `wap_sqlTransform_publishesTargetAndCleansStaging`:完整 happy path —— staging 临时持有 → COMMIT 后目标表正确写入 → FEEDBACK 后 staging 清空,`pipeline_step_run` 5 条带 stagedCount/publishedCount/水位
@@ -377,7 +382,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 - 当前 staging 没有 retention 清理 scheduler;运维对孤儿行(任务异常退出没走到 FEEDBACK)需靠 `staged_at` 索引手动清,下一轮可加自动清理。
 - 跨 workflow 依赖仍不随 PROCESS 一起做,继续由 §4.6 的触发模型单独评估。
 
-> ⚠️ **2026-04-28 深度评估发现的洞**：详细列表见 [`process-worker-known-issues.md`](./process-worker-known-issues.md)。简版：**2 个 P0**（WAP COMMIT/FEEDBACK 非原子 → 孤儿 staging；staging 缺 tenant_id 强过滤 → 防御纵深缺失）、**5 个 P1**（重跑 staging 永久泄漏 / attributes 污染 SQL 命名参数 / COMPUTE 二次跑 sourceSql / writeMode=INSERT 重跑必 UK 冲突 / staging 无写入上限）、**9 个 P2**。按该文档 §5 sprint 切片推进，先修 P0+P1-6。
+> ⚠️ **2026-04-28 深度评估发现的洞**：详细列表见 [`process-worker-known-issues-2026-04-28.md`](../archive/audit/process-worker-known-issues-2026-04-28.md)。简版：**2 个 P0**（WAP COMMIT/FEEDBACK 非原子 → 孤儿 staging；staging 缺 tenant_id 强过滤 → 防御纵深缺失）、**5 个 P1**（重跑 staging 永久泄漏 / attributes 污染 SQL 命名参数 / COMPUTE 二次跑 sourceSql / writeMode=INSERT 重跑必 UK 冲突 / staging 无写入上限）、**9 个 P2**。按该文档 §5 sprint 切片推进，先修 P0+P1-6。
 
 ### 4.6 P2：`TriggerType.DEPENDENCY` 评估 已闭环，暂缓实现
 
@@ -418,7 +423,7 @@ E2E 三个用例(`ProcessPipelineE2eIT`)覆盖:
 | 主题 | 本文 | 现有文档 |
 |---|---|---|
 | 完整能力评估 | — | [`capability-assessment.md`](./capability-assessment.md) |
-| 接口缺口 | — | [`api-gap-analysis.md`](./api-gap-analysis.md) |
+| 接口契约 | — | [console-api-protocol.md](../api/console-api-protocol.md) |
 | 数据模型 DDL | §4.1 给出 V63 草案 | [`data-model-ddl.md`](./data-model-ddl.md) |
 | 触发模型 | §1.3 / §2.3 | [`../architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) §1 |
 | 文件链路 | IMPORT/EXPORT/DISPATCH 工程实现 | [`file-pipeline-design.md`](./file-pipeline-design.md) |

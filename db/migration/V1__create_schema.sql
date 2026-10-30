@@ -8,5 +8,5 @@
 CREATE SCHEMA IF NOT EXISTS batch;
 CREATE SCHEMA IF NOT EXISTS quartz;
 
-COMMENT ON SCHEMA batch IS 'Batch scheduling platform business schema.';
-COMMENT ON SCHEMA quartz IS 'Quartz JDBC JobStore schema.';
+COMMENT ON SCHEMA batch IS '批处理调度平台的业务模式。';
+COMMENT ON SCHEMA quartz IS 'Quartz JDBC JobStore 使用的模式。';

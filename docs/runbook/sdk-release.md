@@ -15,11 +15,15 @@
 
 ## 1. 工作流阶段
 
-```
-conformance-gate (5 lang, fail-fast)  ─┐
-breaking-change-gate (oasdiff vs prev)─┴─► package + smoke (TS/Py/Java/Go/Rust)
-                                              └─► supply-chain (SBOM + changelog, best-effort)
-                                                    └─► publish-* (严格门禁,默认不跑)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  CONFORMANCE["conformance-gate<br/>五语言协议一致性"] --> PACKAGE["package + smoke<br/>TS / Python / Java / Go / Rust"]
+  BREAKING["breaking-change-gate<br/>与上一版本比较"] --> PACKAGE
+  PACKAGE --> SUPPLY["supply-chain<br/>SBOM / changelog，best effort"]
+  SUPPLY --> RELEASE{"正式 release 条件<br/>与环境审批满足？"}
+  RELEASE -->|"是"| PUBLISH["publish-*<br/>严格发布门禁"]
+  RELEASE -->|"否 / 手动验证"| STOP["保留验证制品"]
 ```
 
 1. **conformance-gate**:复跑 5 语言 contract job(Java/Python/TS/Go/Rust),任一红即拒。

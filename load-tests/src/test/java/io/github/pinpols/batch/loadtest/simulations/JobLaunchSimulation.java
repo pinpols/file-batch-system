@@ -14,7 +14,7 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Measures the throughput and latency of the job-launch path:
+ * 测量作业发起链路的吞吐量和延迟：
  *   POST /api/triggers/launch  (batch-trigger:8081)
  *
  * <p>Load profile: ramp from 1 to {@code users.peak} over {@code ramp.seconds},
@@ -29,7 +29,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=JobLaunchSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1 \
+ *       -DworkflowDefinitionId=123 -DtenantId=t1 \
  *       -Dusers.peak=50 -Dduration.seconds=180
  * </pre>
  */
@@ -43,7 +43,7 @@ public class JobLaunchSimulation extends Simulation {
             .contentTypeHeader("application/json")
             .shareConnections();
 
-    // ── Feeder: generates a unique idempotency key per request ─────────────────
+    // ── Feeder：为每个请求生成唯一幂等键 ─────────────────
 
     private final Iterator<Map<String, Object>> feeder = Stream.generate(() ->
             Map.<String, Object>of(
@@ -58,13 +58,13 @@ public class JobLaunchSimulation extends Simulation {
     private final String requestBody = """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": {}
             }
             """
-                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.requiredWorkflowDefinitionId(), GatlingConfig.BIZ_DATE);
 
     // ── Scenario ───────────────────────────────────────────────────────────────
 

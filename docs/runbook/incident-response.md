@@ -42,12 +42,16 @@
 
 | 告警类型 | 排查重点 | 处置边界 |
 |---|---|---|
-| `JOB_RUNNING_TOO_LONG` | 对比告警阈值、实例 `startedAt`、Worker task 状态和执行日志；区分执行变慢与下游阻塞 | 软阈值只告警，不会终止实例；需要停止时走现有取消/超时治理流程 |
-| `JOB_NOT_STARTED_BY_DEADLINE` | 核对 `scheduledAt`、实例状态、队列等待、Kafka lag、可用 Worker 与路由能力 | 告警不会拒绝或重放实例；先恢复派发链路，再按批量日规则判断补跑 |
+| `JOB_RUNNING_TOO_LONG` | 对比 `executionStartedAt`、完成/当前时间和阈值；`startedAt` 是派发时间，不计入纯执行耗时 | 软阈值只告警，不会终止实例；缺少入口确认时不从派发或认领倒推，需检查 Worker/SDK 开始确认链路 |
+| `JOB_NOT_STARTED_BY_DEADLINE` | 核对计划或节点激活、捕获依赖的生效时刻、实际入口与队列等待；新子 Job 不能套用根计划时间 | 告警不会拒绝或重放实例；已迟启动也可补报。`executionTimingSource=UNOBSERVED` 表示未观察到入口，不代表业务一定已开始 |
 | `JOB_NOT_COMPLETED_BY_DEADLINE` | 比较告警中的 deadline、当前/完成时间和作业配置；确认定时实例是否仍在运行，或扫描是否晚于实际完成 | 只通知，不自动重跑或更改业务结果；按业务窗口和对账要求决定是否补数 |
 | `JOB_FINAL_PARTITION_FAILURE` | 查实例最终 `failed_partition_count`，再下钻具体 FAILED 分区、重试次数、错误码和对应 Worker 日志 | 仅近期非 dry-run 的 FAILED/PARTIAL_FAILED 实例且失败分区数大于零触发；不代表重试中的分区失败 |
 
+启动、运行和完成规则各有独立生效时间。阈值变更只重置对应规则，严重级别编辑不重置；扫描恢复后可补报生效窗口内已发生的违约。旧数据没有实际入口时保持未知，不补造开始时间。MANUAL 定义可预先配置 Workflow 规则，独立手工运行缺少真实资格时不按创建时间判定迟到。
+
 ## 依赖与通知可用性告警
+
+Alertmanager 的 `/internal/am-notify/{receiver}` 接收端只有在渠道实际投递成功后才返回成功；渠道发送失败或尚未配置时返回 HTTP 503，交由 Alertmanager 重试。排查时同时核对 receiver 对应的租户渠道与 `notification_delivery_log`，不要将接收请求等同于最终送达。关闭告警按该实体的 fingerprint 发送 resolved，同组其它实体仍活跃不会阻止单条解除。
 
 | 告警 | 排查重点 | 恢复边界 |
 |---|---|---|

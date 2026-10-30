@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -102,10 +103,10 @@ public class TencentSmsProvider implements SmsProvider {
       signName = textOrNull(config, "signName");
       templateId = textOrNull(config, "templateId");
     } catch (Exception ex) {
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
-          "tencent sms config parse failed channel={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          ex.getClass().getSimpleName());
+          "tencent sms config parse failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "invalid sms config");
     }
 
@@ -131,10 +132,9 @@ public class TencentSmsProvider implements SmsProvider {
     try {
       authorization = buildAuthorization(payload, timestamp, endpoint);
     } catch (Exception ex) {
-      log.warn(
-          "tencent sms sign failed channel={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          ex.getClass().getSimpleName());
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      String reasonForLog = ex.getClass().getSimpleName();
+      log.warn("tencent sms sign failed channel={} reason={}", channelCodeForLog, reasonForLog);
       return WebhookDeliveryResult.failure(null, "sms sign failed");
     }
 
@@ -148,6 +148,16 @@ public class TencentSmsProvider implements SmsProvider {
         "X-TC-Region", properties.getTencentRegion(),
         "Authorization", authorization);
 
+    return deliverSignedRequest(phoneNumbers, message, url, headers, payload);
+  }
+
+  /** 签名完成后统一处理发送结果，保留中断标记及原有脱敏错误分类。 */
+  private WebhookDeliveryResult deliverSignedRequest(
+      List<String> phoneNumbers,
+      NotificationMessage message,
+      String url,
+      Map<String, String> headers,
+      String payload) {
     try {
       String response = postJson(url, headers, payload);
       JsonNode root = objectMapper.readTree(response);
@@ -157,51 +167,63 @@ public class TencentSmsProvider implements SmsProvider {
       JsonNode error = resp.path("Error");
       if (error.has("Code")) {
         String errCode = error.path("Code").asText("");
+        String channelCodeForLog = LogSanitizer.value(message.channelCode());
+        int recipientCountForLog = phoneNumbers.size();
         log.warn(
             "tencent sms api error channel={} recipients={} code={}",
-            LogSanitizer.value(message.channelCode()),
-            phoneNumbers.size(),
+            channelCodeForLog,
+            recipientCountForLog,
             errCode);
         return WebhookDeliveryResult.failure(200, "sms error=" + errCode);
       }
 
       JsonNode statusSet = resp.path("SendStatusSet");
       if (!statusSet.isArray() || statusSet.isEmpty()) {
+        String channelCodeForLog = LogSanitizer.value(message.channelCode());
+        int recipientCountForLog = phoneNumbers.size();
         log.warn(
             "tencent sms empty status channel={} recipients={}",
-            LogSanitizer.value(message.channelCode()),
-            phoneNumbers.size());
+            channelCodeForLog,
+            recipientCountForLog);
         return WebhookDeliveryResult.failure(200, "sms empty status");
       }
       for (JsonNode status : statusSet) {
         String code = status.path("Code").asText("");
         if (!"Ok".equals(code)) {
           // 不打 Message(可能含被风控的内容),只打首个非 Ok code。
+          String channelCodeForLog = LogSanitizer.value(message.channelCode());
+          int recipientCountForLog = phoneNumbers.size();
           log.warn(
               "tencent sms rejected channel={} recipients={} code={}",
-              LogSanitizer.value(message.channelCode()),
-              phoneNumbers.size(),
+              channelCodeForLog,
+              recipientCountForLog,
               code);
           return WebhookDeliveryResult.failure(200, "sms code=" + code);
         }
       }
       return WebhookDeliveryResult.ok();
     } catch (HttpStatusException ex) {
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      int recipientCountForLog = phoneNumbers.size();
+      int statusForLog = ex.status();
       log.warn(
           "tencent sms http failed channel={} recipients={} status={}",
-          LogSanitizer.value(message.channelCode()),
-          phoneNumbers.size(),
-          ex.status());
+          channelCodeForLog,
+          recipientCountForLog,
+          statusForLog);
       return WebhookDeliveryResult.failure(ex.status(), "sms http status=" + ex.status());
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
+      String channelCodeForLog = LogSanitizer.value(message.channelCode());
+      int recipientCountForLog = phoneNumbers.size();
+      String reasonForLog = ex.getClass().getSimpleName();
       log.warn(
           "tencent sms delivery failed channel={} recipients={} reason={}",
-          LogSanitizer.value(message.channelCode()),
-          phoneNumbers.size(),
-          ex.getClass().getSimpleName());
+          channelCodeForLog,
+          recipientCountForLog,
+          reasonForLog);
       return WebhookDeliveryResult.failure(null, ex.getClass().getSimpleName());
     }
   }
@@ -225,7 +247,8 @@ public class TencentSmsProvider implements SmsProvider {
     root.put("SignName", signName);
     root.put("TemplateId", templateId);
     ArrayNode params = root.putArray("TemplateParamSet");
-    params.add(templateParam(message));
+    String templateParameter = templateParam(message);
+    params.add(templateParameter);
     return root.toString();
   }
 
@@ -264,13 +287,15 @@ public class TencentSmsProvider implements SmsProvider {
         + '\n'
         + hashedPayload;
 
-    String date = UTC_DATE_FORMAT.format(Instant.ofEpochSecond(timestamp));
+    Instant requestTime = Instant.ofEpochSecond(timestamp);
+    String date = UTC_DATE_FORMAT.format(requestTime);
     String credentialScope = date + "/" + SERVICE + "/tc3_request";
     String stringToSign =
         ALGORITHM + '\n' + timestamp + '\n' + credentialScope + '\n' + sha256Hex(canonicalRequest);
 
-    byte[] secretDate = hmacSha256(
-        ("TC3" + properties.getTencentSecretKey()).getBytes(StandardCharsets.UTF_8), date);
+    String secretSeed = "TC3" + properties.getTencentSecretKey();
+    byte[] secretSeedBytes = secretSeed.getBytes(StandardCharsets.UTF_8);
+    byte[] secretDate = hmacSha256(secretSeedBytes, date);
     byte[] secretService = hmacSha256(secretDate, SERVICE);
     byte[] secretSigning = hmacSha256(secretService, "tc3_request");
     String signature = toHex(hmacSha256(secretSigning, stringToSign));
@@ -289,7 +314,9 @@ public class TencentSmsProvider implements SmsProvider {
   private static String sha256Hex(String input) {
     try {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      return toHex(digest.digest(input.getBytes(StandardCharsets.UTF_8)));
+      byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
+      byte[] hash = digest.digest(encodedInput);
+      return toHex(hash);
     } catch (Exception ex) {
       throw new IllegalStateException("sha256 unavailable", ex);
     }
@@ -297,8 +324,10 @@ public class TencentSmsProvider implements SmsProvider {
 
   private static byte[] hmacSha256(byte[] key, String data) throws GeneralSecurityException {
     Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
-    mac.init(new SecretKeySpec(key, CryptoAlgorithms.HMAC_SHA256));
-    return mac.doFinal(data.getBytes(StandardCharsets.UTF_8));
+    SecretKeySpec signingKey = new SecretKeySpec(key, CryptoAlgorithms.HMAC_SHA256);
+    mac.init(signingKey);
+    byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
+    return mac.doFinal(signingData);
   }
 
   private static String toHex(byte[] bytes) {
@@ -317,14 +346,15 @@ public class TencentSmsProvider implements SmsProvider {
   /** 同步 POST（JSON body，签名头随请求发出），返回响应体；非 2xx 抛 {@link HttpStatusException}。抽出便于单测注入预置响应。 */
   protected String postJson(String url, Map<String, String> headers, String body)
       throws IOException, InterruptedException, HttpStatusException {
-    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent = new OutboundHttpContent(body, CONTENT_TYPE);
+    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         url,
         headers,
-        body,
-        CONTENT_TYPE,
+        httpContent,
         Duration.ofSeconds(5),
         REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = httpTransport.execute(httpRequest);
     if (!response.isSuccessful()) {
       throw new HttpStatusException(response.statusCode());
     }

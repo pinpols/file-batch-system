@@ -50,6 +50,12 @@ impl FakePlatform {
         self
     }
 
+    /// Queue an exact Orchestrator CLAIM response body for contract tests.
+    pub fn given_claim_response(&self, status: i64, body: &str) -> &Self {
+        self.transport.queue_claim(HttpResponse::new(status, body));
+        self
+    }
+
     /// Queue a report response (default 200).
     pub fn given_report(&self, status: i64) -> &Self {
         self.transport.queue_report(HttpResponse::new(status, "{}"));
@@ -83,9 +89,33 @@ impl FakePlatform {
                 // before running the handler. The claim body carries the
                 // partitionInvocationId threaded from the dispatch record.
                 let claim_body = record.partition_invocation_id.clone().unwrap_or_default();
-                let _ = self.transport.claim(&record.task_id, &claim_body);
-                let ctx = TaskContext::new(&record.task_id, &record.tenant_id, &record.task_type)
-                    .with_partition_invocation_id(record.partition_invocation_id.clone());
+                let response = self.transport.claim(&record.task_id, &claim_body);
+                if !(200..300).contains(&response.status) {
+                    return None;
+                }
+                #[allow(unused_mut)]
+                let mut ctx =
+                    TaskContext::new(&record.task_id, &record.tenant_id, &record.task_type)
+                        .with_partition_invocation_id(record.partition_invocation_id.clone());
+                #[cfg(feature = "serde")]
+                {
+                    let claim = match crate::client::transport::decode_claim_response(&response) {
+                        Ok(claim) => claim,
+                        Err(error) => {
+                            let result = TaskResult::failure("EXECUTION_FAILED", &error);
+                            let _ = self.transport.report(&record.task_id, &result.error_code);
+                            return Some(result);
+                        }
+                    };
+                    ctx = match ctx.with_claim_response(&claim) {
+                        Ok(ctx) => ctx,
+                        Err(error) => {
+                            let result = TaskResult::failure("EXECUTION_FAILED", &error);
+                            let _ = self.transport.report(&record.task_id, &result.error_code);
+                            return Some(result);
+                        }
+                    };
+                }
                 let result = handler.execute(&ctx);
                 // Report terminal status to the platform.
                 let _ = self.transport.report(&record.task_id, &result.error_code);
@@ -106,16 +136,36 @@ impl FakePlatform {
     pub fn run_stoppable_task<H: StoppableTaskHandler>(
         &self,
         handler: &H,
-        ctx: &TaskContext,
+        ctx: &mut TaskContext,
         record: &TaskRecord,
         in_flight: i64,
     ) -> Option<TaskResult> {
         match self.consume(record, in_flight) {
             MessageOutcome::Accept { .. } => {
                 let claim_body = record.partition_invocation_id.clone().unwrap_or_default();
-                let _ = self.transport.claim(&record.task_id, &claim_body);
+                let response = self.transport.claim(&record.task_id, &claim_body);
+                if !(200..300).contains(&response.status) {
+                    return None;
+                }
+                #[cfg(feature = "serde")]
+                {
+                    let claim = match crate::client::transport::decode_claim_response(&response) {
+                        Ok(claim) => claim,
+                        Err(error) => {
+                            let result = TaskResult::failure("EXECUTION_FAILED", &error);
+                            let _ = self.transport.report(&record.task_id, &result.error_code);
+                            return Some(result);
+                        }
+                    };
+                    if let Err(error) = ctx.apply_claim_response(&claim) {
+                        let result = TaskResult::failure("EXECUTION_FAILED", &error);
+                        let _ = self.transport.report(&record.task_id, &result.error_code);
+                        return Some(result);
+                    }
+                }
                 // ADR-037 决策三: SdkTaskStopped → cancelled terminal (not failure).
-                let result = map_stopped_result(handler.execute(ctx));
+                let execution_result = handler.execute(ctx);
+                let result = map_stopped_result(execution_result);
                 let _ = self.transport.report(&record.task_id, &result.error_code);
                 Some(result)
             }
@@ -188,6 +238,37 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "serde")]
+    #[test]
+    fn fake_platform_passes_claim_payload_to_handler() {
+        struct ParametersHandler;
+        impl TaskHandler for ParametersHandler {
+            fn task_type(&self) -> &str {
+                "echo"
+            }
+            fn execute(&self, ctx: &TaskContext) -> TaskResult {
+                let Some(crate::client::checkpoint::JsonValue::Obj(_)) =
+                    ctx.parameters.get("crossDay")
+                else {
+                    return TaskResult::failure("EXECUTION_FAILED", "missing CLAIM parameters");
+                };
+                TaskResult::success("claim parameters received")
+            }
+        }
+
+        let platform = FakePlatform::new("tenant-a", 4);
+        platform.given_claim_response(
+            200,
+            r#"{"payload":"{\"batchSize\":20,\"crossDay\":{\"prior\":{\"resultVersionId\":8}}}","traceId":"trace-1"}"#,
+        );
+        platform.given_report(200);
+        let record = TaskRecord::new("t1", "tenant-a", "echo", Some("v1"));
+        let result = platform
+            .run_task(&ParametersHandler, &record, 0)
+            .expect("accepted task runs");
+        assert_eq!(result.result_summary, "claim parameters received");
+    }
+
     /// ADR-037 决策三: a stoppable handler that commits then gets cancelled
     /// propagates SdkTaskStopped, which the run path maps to a CANCELLED report.
     struct StopOnCancelHandler;
@@ -218,12 +299,12 @@ mod tests {
         platform.given_claim(200);
         platform.given_report(200);
 
-        let ctx = TaskContext::new("t1", "tenant-a", "import").with_report_interval(1000);
+        let mut ctx = TaskContext::new("t1", "tenant-a", "import").with_report_interval(1000);
         // Pre-cancel so the very first commit stops at the safe-point.
         ctx.cancellation.cancel();
 
         let result = platform
-            .run_stoppable_task(&StopOnCancelHandler, &ctx, &record, 0)
+            .run_stoppable_task(&StopOnCancelHandler, &mut ctx, &record, 0)
             .expect("ran");
         assert_eq!(result.error_code, "CANCELLED");
         // claim -> report (terminal=CANCELLED), no failure path.

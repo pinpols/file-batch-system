@@ -26,9 +26,11 @@ public final class SecretComparator {
     }
     try {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] expectedHash = digest.digest(expected.getBytes(StandardCharsets.UTF_8));
+      byte[] expectedBytes = expected.getBytes(StandardCharsets.UTF_8);
+      byte[] expectedHash = digest.digest(expectedBytes);
       MessageDigest digest2 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      byte[] providedHash = digest2.digest(provided.getBytes(StandardCharsets.UTF_8));
+      byte[] providedBytes = provided.getBytes(StandardCharsets.UTF_8);
+      byte[] providedHash = digest2.digest(providedBytes);
       return MessageDigest.isEqual(expectedHash, providedHash);
     } catch (NoSuchAlgorithmException ex) {
       // SHA-256 是 JDK 必备算法,不可能缺失;真缺失则保守判否。

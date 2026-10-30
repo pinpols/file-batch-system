@@ -1,8 +1,8 @@
 -- =========================================================
--- V16 - Ensure only one running compensation per target
+-- V17：确保每个目标最多只有一条运行中的补偿命令。
 -- 说明：
 -- 1) 防止同一目标被重复发起人工补偿。
--- 2) Apply the uniqueness rule only when target_id is present and status is RUNNING.
+-- 2) 仅当 target_id 非空且 status 为 RUNNING 时应用此唯一性规则。
 -- =========================================================
 
 CREATE UNIQUE INDEX IF NOT EXISTS uk_compensation_command_running_target

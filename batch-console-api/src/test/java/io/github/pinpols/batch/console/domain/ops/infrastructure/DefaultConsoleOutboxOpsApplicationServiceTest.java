@@ -13,14 +13,15 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.response.
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxRepublishResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleOutboxStatsResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleOutboxEventReadMapper;
+import io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.List;
-import java.util.Map;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("Outbox 运维编排:统计, 清理与重投递委托下游, 响应回填租户与计数")
 class DefaultConsoleOutboxOpsApplicationServiceTest {
@@ -47,8 +48,7 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
 
   private static ConsoleQueryCacheService passThroughCache() {
     ConsoleQueryCacheService cache = mock(ConsoleQueryCacheService.class);
-    when(cache.<Object>getOrLoad(
-            anyString(), any(), org.mockito.ArgumentMatchers.<Class<Object>>any(), any()))
+    when(cache.<Object>getOrLoad(anyString(), any(), ArgumentMatchers.<Class<Object>>any(), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(3)).get());
     return cache;
   }
@@ -57,8 +57,9 @@ class DefaultConsoleOutboxOpsApplicationServiceTest {
   @DisplayName("统计查询:按状态分组的明细原样返回, 并回填请求租户")
   void shouldReturnStats() {
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
-    List<Map<String, Object>> breakdown =
-        List.of(Map.of("status", "NEW", "count", 10), Map.of("status", "PUBLISHED", "count", 50));
+    List<OutboxEventStatusStat> breakdown = List.of(
+        new OutboxEventStatusStat("NEW", 10, null, null),
+        new OutboxEventStatusStat("PUBLISHED", 50, null, null));
     when(consoleOutboxEventReadMapper.statsByStatus("tenant-a")).thenReturn(breakdown);
 
     ConsoleOutboxStatsResponse response = service.stats("tenant-a");

@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
-import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.PipelineDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -15,7 +14,7 @@ import java.util.Set;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
-/** Resolves job-level config dependencies from explicit JSON references. */
+/** 根据显式 JSON 引用解析作业级配置依赖。 */
 @Component
 public class TenantConfigReferenceResolver {
 
@@ -86,43 +85,26 @@ public class TenantConfigReferenceResolver {
     return value;
   }
 
-  public References resolve(
-      JobDefinitionSpec job,
-      List<PipelineDefinitionSpec> pipelines,
-      List<WorkflowDefinitionSpec> workflows) {
-    Set<String> pipelineJobCodes = new LinkedHashSet<>();
+  public References resolve(JobDefinitionSpec job, List<WorkflowDefinitionSpec> workflows) {
     Set<String> workflowCodes = new LinkedHashSet<>();
     Set<String> templateCodes = new LinkedHashSet<>();
     Set<String> channelCodes = new LinkedHashSet<>();
     Set<String> windowCodes = new LinkedHashSet<>();
+    Set<String> calendarCodes = new LinkedHashSet<>();
 
     scanJson(job.getDefaultParams(), templateCodes, channelCodes);
     scanJson(job.getParamSchema(), templateCodes, channelCodes);
     addIfText(windowCodes, job.getWindowCode());
-
-    for (PipelineDefinitionSpec pipeline : nullSafe(pipelines)) {
-      if (!job.getJobCode().equals(pipeline.getJobCode())) {
-        continue;
-      }
-      addIfText(pipelineJobCodes, pipeline.getJobCode());
-      for (PipelineDefinitionSpec.StepSpec step : nullSafe(pipeline.getSteps())) {
-        scanJson(step.getStepParams(), templateCodes, channelCodes);
-      }
-    }
+    addIfText(calendarCodes, job.getCalendarCode());
 
     for (WorkflowDefinitionSpec workflow : nullSafe(workflows)) {
+      addIfText(calendarCodes, workflow.getCalendarCode());
       boolean matched = false;
       for (WorkflowDefinitionSpec.NodeSpec node : nullSafe(workflow.getNodes())) {
         if (job.getJobCode().equals(node.getRelatedJobCode())) {
           matched = true;
         }
         addIfText(windowCodes, node.getWindowCode());
-        if (StringUtils.hasText(node.getRelatedPipelineCode())) {
-          addIfText(pipelineJobCodes, node.getRelatedPipelineCode());
-          if (job.getJobCode().equals(node.getRelatedPipelineCode())) {
-            matched = true;
-          }
-        }
         scanJson(node.getNodeParams(), templateCodes, channelCodes);
       }
       if (matched) {
@@ -131,11 +113,11 @@ public class TenantConfigReferenceResolver {
     }
 
     return new References(
-        List.copyOf(pipelineJobCodes),
         List.copyOf(workflowCodes),
         List.copyOf(templateCodes),
         List.copyOf(channelCodes),
-        List.copyOf(windowCodes));
+        List.copyOf(windowCodes),
+        List.copyOf(calendarCodes));
   }
 
   private void scanJson(String raw, Set<String> templateCodes, Set<String> channelCodes) {
@@ -146,7 +128,7 @@ public class TenantConfigReferenceResolver {
       Object parsed = JsonUtils.fromJson(raw, Object.class);
       scanValue(parsed, templateCodes, channelCodes);
     } catch (IllegalArgumentException ignored) {
-      // Legacy free-text expressions are not config references.
+      // 旧版自由文本表达式不属于配置引用。
     }
   }
 
@@ -187,9 +169,9 @@ public class TenantConfigReferenceResolver {
   }
 
   public record References(
-      List<String> pipelineJobCodes,
       List<String> workflowCodes,
       List<String> templateCodes,
       List<String> channelCodes,
-      List<String> windowCodes) {}
+      List<String> windowCodes,
+      List<String> calendarCodes) {}
 }

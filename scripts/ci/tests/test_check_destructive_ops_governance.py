@@ -1,3 +1,5 @@
+# 用途：回归验证高风险操作清单。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_destructive_ops_governance.py。
 import json
 import os
 import subprocess

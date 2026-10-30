@@ -1,3 +1,5 @@
+# 用途：验证预推送检查的模块名解析与去重。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_pre_push_module_selection.py。
 from pathlib import Path
 import os
 import re

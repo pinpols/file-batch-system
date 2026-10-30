@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：业务库初始化公共入口。只能被 source，不要直接执行。
+# 用法：由调用脚本 source scripts/lib/business-db-bootstrap.sh 后使用公共变量或函数。
 # 业务库初始化公共入口。只能被 source，不要直接执行。
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -25,7 +27,7 @@ batch_bootstrap_business_database() {
   local attempt
   for attempt in $(seq 1 60); do
     # PostgreSQL 官方镜像执行 initdb 脚本时会先启动只监听 Unix socket 的临时服务。
-    # 必须等待最终 TCP 服务，避免在 batch_business 尚未创建时提前灌入 DDL。
+    # 必须等待最终 TCP 服务，避免在 batch_business 尚未创建时提前执行 DDL。
     if docker exec "$pg_container" pg_isready -h 127.0.0.1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" >/dev/null 2>&1; then
       break
     fi
@@ -35,6 +37,16 @@ batch_bootstrap_business_database() {
     fi
     sleep 2
   done
+
+  echo "==> 确认业务数据库存在（${BUSINESS_DB}）..."
+  if ! docker exec -i "$pg_container" psql -X -U "$PGUSER" -d "$POSTGRES_DB" \
+      -v ON_ERROR_STOP=1 \
+      -v database_name="$BUSINESS_DB" \
+      -v database_owner="$POSTGRES_USER" \
+      -f /dev/stdin < "$root/scripts/local/sql/ensure-business-database.sql" >/dev/null; then
+    echo "ERROR: 业务数据库创建失败（${BUSINESS_DB}）" >&2
+    return 1
+  fi
 
   echo "==> 应用业务库 DDL（biz.* + batch.process_staging）..."
   if ! docker exec -i "$pg_container" psql -U "$PGUSER" -d "$BUSINESS_DB" -v ON_ERROR_STOP=1 \

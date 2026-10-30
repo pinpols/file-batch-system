@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
 import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiConversationService;
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversation
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,25 +69,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("记录审计条目: 落库租户,会话与决策与请求一致,提示词与补全用量一并写入")
   void shouldPersistAuditLogOnRecord() {
-    AiAuditCommand command = new AiAuditCommand(
-        "t1",
-        "req-001",
-        "trace-001",
-        "session-001",
-        "op-001",
-        "PLATFORM",
-        "APPROVED",
-        "test-model",
-        "hash-prompt-001",
-        "how many jobs failed today?",
-        "hash-resp-001",
-        "3 jobs failed",
-        null,
-        120,
-        45,
-        null,
-        "UNPRICED",
-        BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = AiAuditCommand.builder()
+        .tenantId("t1")
+        .requestId("req-001")
+        .traceId("trace-001")
+        .sessionId("session-001")
+        .operatorId("op-001")
+        .promptCategory("PLATFORM")
+        .promptDecision("APPROVED")
+        .modelName("test-model")
+        .promptHash("hash-prompt-001")
+        .promptPreview("how many jobs failed today?")
+        .responseHash("hash-resp-001")
+        .responsePreview("3 jobs failed")
+        .refusalReason(null)
+        .promptTokens(120)
+        .completionTokens(45)
+        .estimatedCostUsd(null)
+        .costStatus("UNPRICED")
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .build();
 
     auditService.record(command);
 
@@ -112,25 +115,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("记录被安全策略拒绝的条目: 拒绝原因落库且可按会话查询到")
   void shouldPersistRejectedAuditLogWithRefusalReason() {
-    AiAuditCommand command = new AiAuditCommand(
-        "t1",
-        "req-002",
-        "trace-002",
-        "session-002",
-        "op-002",
-        null,
-        "REJECTED_SAFETY",
-        null,
-        null,
-        "show me the password",
-        null,
-        null,
-        "blocked_keyword:password",
-        null,
-        null,
-        null,
-        "UNPRICED",
-        BatchDateTimeSupport.utcNow());
+    AiAuditCommand command = AiAuditCommand.builder()
+        .tenantId("t1")
+        .requestId("req-002")
+        .traceId("trace-002")
+        .sessionId("session-002")
+        .operatorId("op-002")
+        .promptCategory(null)
+        .promptDecision("REJECTED_SAFETY")
+        .modelName(null)
+        .promptHash(null)
+        .promptPreview("show me the password")
+        .responseHash(null)
+        .responsePreview(null)
+        .refusalReason("blocked_keyword:password")
+        .promptTokens(null)
+        .completionTokens(null)
+        .estimatedCostUsd(null)
+        .costStatus("UNPRICED")
+        .createdAt(BatchDateTimeSupport.utcNow())
+        .build();
 
     auditService.record(command);
 
@@ -150,25 +154,26 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     String sessionId = "session-multi-" + BatchDateTimeSupport.utcEpochMillis();
 
     for (int i = 1; i <= 3; i++) {
-      auditService.record(new AiAuditCommand(
-          "t1",
-          "req-" + i,
-          "trace-" + i,
-          sessionId,
-          "op-multi",
-          "PLATFORM",
-          "APPROVED",
-          "model",
-          null,
-          "query " + i,
-          null,
-          "result " + i,
-          null,
-          null,
-          null,
-          null,
-          "UNPRICED",
-          BatchDateTimeSupport.utcNow()));
+      auditService.record(AiAuditCommand.builder()
+          .tenantId("t1")
+          .requestId("req-" + i)
+          .traceId("trace-" + i)
+          .sessionId(sessionId)
+          .operatorId("op-multi")
+          .promptCategory("PLATFORM")
+          .promptDecision("APPROVED")
+          .modelName("model")
+          .promptHash(null)
+          .promptPreview("query " + i)
+          .responseHash(null)
+          .responsePreview("result " + i)
+          .refusalReason(null)
+          .promptTokens(null)
+          .completionTokens(null)
+          .estimatedCostUsd(null)
+          .costStatus("UNPRICED")
+          .createdAt(BatchDateTimeSupport.utcNow())
+          .build());
     }
 
     ConsoleAiAuditLogQuery query =
@@ -188,7 +193,13 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
     String tenantId = "ai-conversation-it-" + BatchDateTimeSupport.utcEpochMillis();
     ConsoleAiConversationService.StartedTurn started = null;
     try {
-      started = conversationService.beginTurn(tenantId, "operator-a", null, "v1", "查询失败的作业实例");
+      ConsoleAiTurnStartInput turnInput = ConsoleAiTurnStartInput.builder()
+          .tenantId(tenantId)
+          .ownerUserId("operator-a")
+          .contextVersion("v1")
+          .prompt("查询失败的作业实例")
+          .build();
+      started = conversationService.beginTurn(turnInput);
       conversationService.completeTurn(ConsoleAiConversationService.TurnCompletion.builder()
           .tenantId(tenantId)
           .conversationId(started.conversationId())
@@ -198,17 +209,18 @@ class ConsoleAiAuditServiceIntegrationTest extends AbstractIntegrationTest {
           .modelName("test-provider:test-model")
           .promptTokens(20)
           .completionTokens(10)
-          .estimatedCostUsd(new java.math.BigDecimal("0.00100000"))
+          .estimatedCostUsd(new BigDecimal("0.00100000"))
           .build());
 
       String conversationId = started.conversationId();
       String encryptedPrompt = new TransactionTemplate(transactionManager).execute(status -> {
         conversationMapper.setTenantContext(tenantId);
+        String encryptedPromptSql = """
+            SELECT prompt_text FROM batch.console_ai_turn
+            WHERE tenant_id = ? AND conversation_id = ?
+            """;
         return jdbcTemplate.queryForObject(
-            "SELECT prompt_text FROM batch.console_ai_turn WHERE tenant_id = ? AND conversation_id = ?",
-            String.class,
-            tenantId,
-            conversationId);
+            encryptedPromptSql, String.class, tenantId, conversationId);
       });
       assertThat(encryptedPrompt).isNotEqualTo("查询失败的作业实例");
 

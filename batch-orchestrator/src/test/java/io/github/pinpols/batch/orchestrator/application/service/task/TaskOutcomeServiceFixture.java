@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
+import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
@@ -9,10 +11,15 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
+import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetricsRecorder;
 import io.github.pinpols.batch.orchestrator.service.failure.FailureClassifier;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 
@@ -36,7 +43,8 @@ public final class TaskOutcomeServiceFixture {
       FailureClassifier failureClassifier,
       JobLifecycleMetricsRecorder jobLifecycleMetricsRecorder,
       CountContinuityOutboxService countContinuityOutboxService,
-      ApplicationEventPublisher applicationEventPublisher) {}
+      ApplicationEventPublisher applicationEventPublisher,
+      SecretPayloadProtector secretPayloadProtector) {}
 
   public static DefaultTaskOutcomeService create(
       OrchestratorJobMappers jobMappers,
@@ -48,17 +56,21 @@ public final class TaskOutcomeServiceFixture {
         dependencies.meterRegistry(),
         dependencies.jobInstanceTerminalChildStateReconciler(),
         dependencies.resultVersionWriter(),
-        dependencies.batchDayReplayTerminalReconciler());
+        dependencies.batchDayReplayTerminalReconciler(),
+        Mockito.mock(JobTerminalOutboxService.class));
     TaskOutcomeDagProgressor dag = new TaskOutcomeDagProgressor(
         workflowMappers,
         dependencies.workflowDagService(),
         dependencies.workflowNodeDispatchServiceProvider(),
         recorder,
-        dependencies.countContinuityOutboxService());
+        dependencies.countContinuityOutboxService(),
+        dependencies.secretPayloadProtector());
     TaskOutcomeWorkflowFinalizer workflow = new TaskOutcomeWorkflowFinalizer(
         workflowMappers,
         dependencies.lifecycleEventMapper(),
-        dependencies.workflowTerminalOutboxService());
+        dependencies.workflowTerminalOutboxService(),
+        new WorkflowNodeTerminalFinalizer(
+            workflowMappers, dependencies.workflowTerminalOutboxService()));
     TaskOutcomeInstanceProgressor progressor = new TaskOutcomeInstanceProgressor(
         jobMappers,
         workflowMappers,
@@ -66,7 +78,6 @@ public final class TaskOutcomeServiceFixture {
         dependencies.failureClassifier(),
         finalizer,
         dag,
-        new TaskOutcomeParentTaskSignaler(),
         workflow);
     DefaultTaskOutcomeService service = new DefaultTaskOutcomeService(
         jobMappers,
@@ -78,7 +89,11 @@ public final class TaskOutcomeServiceFixture {
         dependencies.workflowNodeDispatchServiceProvider(),
         dependencies.meterRegistry(),
         recorder,
-        progressor);
+        progressor,
+        new WorkflowRunReportLock(
+            workflowMappers,
+            Mockito.mock(WorkflowDefinitionMapper.class),
+            Mockito.mock(BatchDayInstanceMapper.class)));
     service.initialize();
     return service;
   }

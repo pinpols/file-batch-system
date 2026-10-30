@@ -34,14 +34,16 @@ public class ShardingConfiguration {
     if (outboxProperties.getShardingMode() == OutboxProperties.ShardingMode.DYNAMIC) {
       validateDynamicSharding(outboxProperties.getSharding());
       String memberId = resolveMemberId(outboxProperties);
-      Duration memberTtl = Duration.ofMillis(outboxProperties.getSharding().getMemberTtlMs());
+      long memberTtlMs = outboxProperties.getSharding().getMemberTtlMs();
+      Duration memberTtl = Duration.ofMillis(memberTtlMs);
+      String membersKey = outboxProperties.getSharding().getMembersKey();
+      long memberTtlSeconds = memberTtl.toSeconds();
       log.info(
           "Outbox sharding mode=DYNAMIC, memberId={}, membersKey={}, memberTtl={}s",
           memberId,
-          outboxProperties.getSharding().getMembersKey(),
-          memberTtl.toSeconds());
-      return new RedisShardAssignmentProvider(
-          stringRedisTemplate, memberId, outboxProperties.getSharding().getMembersKey(), memberTtl);
+          membersKey,
+          memberTtlSeconds);
+      return new RedisShardAssignmentProvider(stringRedisTemplate, memberId, membersKey, memberTtl);
     }
     log.info(
         "Outbox sharding mode=STATIC, shardTotal={}, shardIndex={}",
@@ -77,7 +79,8 @@ public class ShardingConfiguration {
       return pod;
     }
     try {
-      return InetAddress.getLocalHost().getHostName();
+      InetAddress localHost = InetAddress.getLocalHost();
+      return localHost.getHostName();
     } catch (UnknownHostException e) {
       SwallowedExceptionLogger.info(ShardingConfiguration.class, "catch:UnknownHostException", e);
 

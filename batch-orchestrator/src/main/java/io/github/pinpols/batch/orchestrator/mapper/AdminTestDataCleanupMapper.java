@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -7,6 +8,22 @@ import org.apache.ibatis.annotations.Param;
 public interface AdminTestDataCleanupMapper {
 
   enum CleanupTarget {
+    EVENT_DELIVERY_LOG,
+    EVENT_OUTBOX_RETRY,
+    OUTBOX_EVENT,
+    OUTBOX_EVENT_DEDUP_KEY,
+    SCHEDULED_OCCURRENCE_CATCH_UP_AUDIT,
+    SCHEDULED_OCCURRENCE,
+    SCHEDULED_OCCURRENCE_COVERAGE,
+    EXPECTED_WORK_OCCURRENCE,
+    WORKFLOW_LAUNCH_WAIT,
+    JOB_DEPENDENCY_WAITING_LAUNCH,
+    BATCH_DAY_WAITING_LAUNCH,
+    TRIGGER_MISFIRE_PENDING,
+    TRIGGER_OUTBOX_EVENT,
+    TRIGGER_REQUEST,
+    FILE_GROUP_EXPECTATION_DEFINITION,
+    EXTERNAL_EVENT_EXPECTATION_DEFINITION,
     WORKFLOW_NODE_RUN,
     WORKFLOW_RUN,
     COMPENSATION_COMMAND,
@@ -26,8 +43,6 @@ public interface AdminTestDataCleanupMapper {
     WORKFLOW_NODE,
     WORKFLOW_EDGE,
     WORKFLOW_DEFINITION,
-    PIPELINE_STEP_DEFINITION,
-    PIPELINE_DEFINITION,
     JOB_DEFINITION,
     FILE_CHANNEL_CONFIG,
     FILE_TEMPLATE_CONFIG,
@@ -39,14 +54,37 @@ public interface AdminTestDataCleanupMapper {
     TENANT
   }
 
-  default int cleanupByPrefix(CleanupTarget target, String prefixLike, String operatorPrefixLike) {
-    return cleanupByPrefixTarget(target.name(), prefixLike, operatorPrefixLike);
+  /** 删除前冻结来源身份，父记录删除后仍能准确定位请求与 Outbox 子记录。 */
+  record PrefixCleanupScope(
+      String prefixLike,
+      String operatorPrefixLike,
+      List<Long> workflowRunIds,
+      List<Long> triggerRequestIds,
+      List<OutboxEventIdentity> outboxEvents) {
+    public PrefixCleanupScope {
+      workflowRunIds = List.copyOf(workflowRunIds);
+      triggerRequestIds = List.copyOf(triggerRequestIds);
+      outboxEvents = List.copyOf(outboxEvents);
+    }
+  }
+
+  /** 普通 Outbox 使用完整分区身份；幂等台账在事件删除后仍按原事件键清理。 */
+  record OutboxEventIdentity(String tenantId, Long id, OffsetDateTime createdAt, String eventKey) {}
+
+  List<Long> findWorkflowRunIdsByPrefix(@Param("scope") PrefixCleanupScope scope);
+
+  List<Long> findTriggerRequestIdsByPrefix(@Param("scope") PrefixCleanupScope scope);
+
+  List<OutboxEventIdentity> findOutboxEventsByPrefix(@Param("scope") PrefixCleanupScope scope);
+
+  boolean hasAmbiguousJobInstanceIds(@Param("scope") PrefixCleanupScope scope);
+
+  default int cleanupByPrefix(CleanupTarget target, PrefixCleanupScope scope) {
+    return cleanupByPrefixTarget(target.name(), scope);
   }
 
   int cleanupByPrefixTarget(
-      @Param("target") String target,
-      @Param("prefixLike") String prefixLike,
-      @Param("operatorPrefixLike") String operatorPrefixLike);
+      @Param("target") String target, @Param("scope") PrefixCleanupScope scope);
 
   default int cleanupByTenantIds(CleanupTarget target, List<String> tenantIds) {
     return cleanupByTenantIdsTarget(target.name(), tenantIds);

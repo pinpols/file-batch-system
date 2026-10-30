@@ -75,17 +75,12 @@ class TenantConfigPackageExcelApplyAuthorizationTest {
   }
 
   @Test
-  @DisplayName("租户管理员不能通过配置包设置 Pipeline 或 Workflow 节点的 Worker 分组")
+  @DisplayName("租户管理员不能通过配置包设置 Workflow 节点的 Worker 分组")
   void shouldRejectWorkerRouting_whenTenantAdminAppliesPackage() {
     authenticate(ConsoleRoles.TENANT_ADMIN);
 
     assertThatThrownBy(() -> authorization.assertAllowed(
-            resultWithRoutingRows(List.of(Map.of(COL_WORKER_GROUP, "IMPORT")), List.of())))
-        .isInstanceOf(BizException.class)
-        .hasMessageContaining("platform_fields_forbidden");
-
-    assertThatThrownBy(() -> authorization.assertAllowed(
-            resultWithRoutingRows(List.of(), List.of(Map.of(COL_WORKER_GROUP, "IMPORT")))))
+            resultWithWorkflowNodeRows(List.of(Map.of(COL_WORKER_GROUP, "IMPORT")))))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("platform_fields_forbidden");
   }
@@ -121,19 +116,18 @@ class TenantConfigPackageExcelApplyAuthorizationTest {
       List<Map<String, String>> queues,
       List<Map<String, String>> jobs,
       List<Map<String, String>> monitoringPolicies) {
-    return resultWithRoutingRows(queues, jobs, monitoringPolicies, List.of(), List.of());
+    return resultWithWorkflowNodeRows(queues, jobs, monitoringPolicies, List.of());
   }
 
-  private static PackageValidationResult resultWithRoutingRows(
-      List<Map<String, String>> pipelines, List<Map<String, String>> workflowNodes) {
-    return resultWithRoutingRows(List.of(), List.of(), List.of(), pipelines, workflowNodes);
+  private static PackageValidationResult resultWithWorkflowNodeRows(
+      List<Map<String, String>> workflowNodes) {
+    return resultWithWorkflowNodeRows(List.of(), List.of(), List.of(), workflowNodes);
   }
 
-  private static PackageValidationResult resultWithRoutingRows(
+  private static PackageValidationResult resultWithWorkflowNodeRows(
       List<Map<String, String>> queues,
       List<Map<String, String>> jobs,
       List<Map<String, String>> monitoringPolicies,
-      List<Map<String, String>> pipelineRows,
       List<Map<String, String>> workflowNodeRows) {
     SheetResult resourceQueues = sheet("resource_queue", queues);
     SheetResult businessCalendars = sheet("business_calendar", List.of());
@@ -142,7 +136,7 @@ class TenantConfigPackageExcelApplyAuthorizationTest {
     SheetResult policies = sheet("job_monitoring_policy", monitoringPolicies);
     SheetResult channels = sheet("file_channel_config", List.of());
     SheetResult templates = sheet("file_template_config", List.of());
-    SheetResult pipelines = sheet("pipeline_definition", pipelineRows);
+    SheetResult pipelines = sheet("pipeline_definition", List.of());
     SheetResult steps = sheet("pipeline_step_definition", List.of());
     SheetResult workflows = sheet("workflow_definition", List.of());
     SheetResult nodes = sheet("workflow_node", workflowNodeRows);

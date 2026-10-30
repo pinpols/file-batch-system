@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.readiness;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionSnapshot;
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
 /**
  * 上游就绪查询结果(ADR-043 依赖感知 fire)。
@@ -20,6 +21,7 @@ import java.time.LocalDate;
  * @param payloadStorage 结果载荷存储类型
  * @param payloadRef 外部载荷引用
  */
+@Builder
 public record ReadinessResult(
     boolean ready,
     String reason,
@@ -43,19 +45,19 @@ public record ReadinessResult(
     if (partition == null) {
       return ofReady();
     }
-    return new ReadinessResult(
-        true,
-        null,
-        partition.assetCode(),
-        partition.bizDate(),
-        partition.partitionKey(),
-        partition.businessKey(),
-        partition.freshnessStatus(),
-        partition.versionNo(),
-        partition.jobInstanceId(),
-        partition.effectiveAt(),
-        partition.payloadStorage(),
-        partition.payloadRef());
+    return ReadinessResult.builder()
+        .ready(true)
+        .assetCode(partition.assetCode())
+        .bizDate(partition.bizDate())
+        .partitionKey(partition.partitionKey())
+        .businessKey(partition.businessKey())
+        .freshnessStatus(partition.freshnessStatus())
+        .versionNo(partition.versionNo())
+        .jobInstanceId(partition.jobInstanceId())
+        .readyAt(partition.effectiveAt())
+        .payloadStorage(partition.payloadStorage())
+        .payloadRef(partition.payloadRef())
+        .build();
   }
 
   public static ReadinessResult ofNotReady(String reason) {

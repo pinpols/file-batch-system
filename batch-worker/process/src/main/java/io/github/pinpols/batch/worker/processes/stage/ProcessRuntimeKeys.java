@@ -37,5 +37,12 @@ public final class ProcessRuntimeKeys {
    */
   public static final String PROCESS_PLUGIN_NOT_FOUND = "processPluginNotFound";
 
+  /**
+   * 单次尝试记忆：持久化 Orchestrator 重放围栏在插件写入阶段前
+   * 已获确认。
+   */
+  public static final String PROCESS_NON_IDEMPOTENT_FENCE_CONFIRMED =
+      "processNonIdempotentFenceConfirmed";
+
   private ProcessRuntimeKeys() {}
 }

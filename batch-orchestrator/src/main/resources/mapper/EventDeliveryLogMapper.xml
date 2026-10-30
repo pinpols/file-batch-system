@@ -5,6 +5,7 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="outbox_event_id" property="outboxEventId"/>
+        <result column="outbox_event_created_at" property="outboxEventCreatedAt"/>
         <result column="event_type" property="eventType"/>
         <result column="event_key" property="eventKey"/>
         <result column="target_topic" property="targetTopic"/>
@@ -25,6 +26,7 @@
         insert into batch.event_delivery_log (
             tenant_id,
             outbox_event_id,
+            outbox_event_created_at,
             event_type,
             event_key,
             target_topic,
@@ -36,9 +38,11 @@
             error_key,
             error_args,
             trace_id
-        ) values (
+        )
+        select
             #{tenantId},
             #{outboxEventId},
+            #{outboxEventCreatedAt},
             #{eventType},
             #{eventKey},
             #{targetTopic},
@@ -50,7 +54,29 @@
             #{errorKey},
             #{errorArgs,jdbcType=VARCHAR}::jsonb,
             #{traceId}
+        from batch.outbox_event parent
+        where parent.tenant_id = #{tenantId}
+          and parent.id = #{outboxEventId}
+          and parent.created_at = #{outboxEventCreatedAt}
+        for key share
+    </insert>
+
+    <insert id="insertIntoArchive" parameterType="io.github.pinpols.batch.orchestrator.domain.entity.EventDeliveryLogEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        insert into archive.event_delivery_log_archive (
+            tenant_id, outbox_event_id, outbox_event_created_at, event_type, event_key, target_topic, target_worker_id,
+            delivery_status, delivery_attempt, delivery_summary, error_message, error_key,
+            error_args, trace_id
         )
+        select
+            #{tenantId}, #{outboxEventId}, #{outboxEventCreatedAt}, #{eventType}, #{eventKey}, #{targetTopic},
+            #{targetWorkerId}, #{deliveryStatus}, #{deliveryAttempt},
+            #{deliverySummary,jdbcType=VARCHAR}::jsonb, #{errorMessage}, #{errorKey},
+            #{errorArgs,jdbcType=VARCHAR}::jsonb, #{traceId}
+        from archive.outbox_event_archive parent
+        where parent.tenant_id = #{tenantId}
+          and parent.id = #{outboxEventId}
+          and parent.created_at = #{outboxEventCreatedAt}
     </insert>
 
     <select id="selectByQuery" resultMap="EventDeliveryLogResultMap">

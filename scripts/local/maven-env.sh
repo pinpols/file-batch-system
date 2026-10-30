@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地脚本共用的 Maven 命令解析逻辑。
+# 用法：由调用脚本 source scripts/local/maven-env.sh 后使用公共变量或函数。
 # 本地脚本共用的 Maven 命令解析逻辑。
 #
 # 命令选择顺序：

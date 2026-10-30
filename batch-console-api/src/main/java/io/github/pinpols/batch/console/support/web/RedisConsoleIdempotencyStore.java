@@ -40,13 +40,18 @@ public class RedisConsoleIdempotencyStore implements ConsoleIdempotencyStore {
 
   @Override
   public boolean compareAndSet(String key, String expected, String value, Duration ttl) {
-    return Long.valueOf(1)
-        .equals(redisTemplate.execute(
-            REPLACE, List.of(key), expected, value, Long.toString(ttl.toMillis())));
+    Long successResult = Long.valueOf(1);
+    List<String> redisKeys = List.of(key);
+    long ttlMillis = ttl.toMillis();
+    String ttlMillisArgument = Long.toString(ttlMillis);
+    Long result = redisTemplate.execute(REPLACE, redisKeys, expected, value, ttlMillisArgument);
+    return successResult.equals(result);
   }
 
   @Override
   public boolean deleteIfValue(String key, String expected) {
-    return Long.valueOf(1).equals(redisTemplate.execute(DELETE, List.of(key), expected));
+    Long successResult = Long.valueOf(1);
+    Long result = redisTemplate.execute(DELETE, List.of(key), expected);
+    return successResult.equals(result);
   }
 }

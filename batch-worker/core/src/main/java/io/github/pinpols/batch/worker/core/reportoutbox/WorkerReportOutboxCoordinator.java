@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.core.reportoutbox;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.TaskExecutionReport;
 import io.github.pinpols.batch.worker.core.infrastructure.OrchestratorReportHttpSubmitter;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerTaskLeaseRenewer;
@@ -93,22 +94,31 @@ public class WorkerReportOutboxCoordinator {
         report = repository.deserializePayload(row.payloadJson());
       } catch (RuntimeException ex) {
         log.error("worker report outbox corrupt payload: id={}", row.id(), ex);
-        repository.markGiveUp(row.id(), "CORRUPT_PAYLOAD");
-        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-        if (registry != null) {
-          registry.counter("batch.worker.report.outbox.give_up.total").increment();
+        boolean giveUpApplied = repository.markGiveUp(row, "CORRUPT_PAYLOAD");
+        if (giveUpApplied) {
+          recordGiveUpMetric();
         }
         continue;
       }
       try {
         httpSubmitter.submitReportOverHttp(report);
-        repository.delete(row.id());
+        repository.delete(row);
       } catch (RuntimeException ex) {
         SwallowedExceptionLogger.warn(
             WorkerReportOutboxCoordinator.class, "catch:RuntimeException", ex);
 
-        repository.recordFailure(row.id(), now, ex);
+        boolean giveUpApplied = repository.recordFailure(row, now, ex);
+        if (giveUpApplied) {
+          recordGiveUpMetric();
+        }
       }
+    }
+  }
+
+  private void recordGiveUpMetric() {
+    MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+    if (EmptyChecks.isNotNull(registry)) {
+      registry.counter("batch.worker.report.outbox.give_up.total").increment();
     }
   }
 

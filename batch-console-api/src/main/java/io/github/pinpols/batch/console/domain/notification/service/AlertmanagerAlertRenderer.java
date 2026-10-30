@@ -45,7 +45,8 @@ public class AlertmanagerAlertRenderer {
         + ")";
 
     StringBuilder body = new StringBuilder(title).append('\n');
-    int shown = Math.min(alerts.size(), Math.max(0, maxAlerts));
+    int nonNegativeAlertLimit = Math.max(0, maxAlerts);
+    int shown = Math.min(alerts.size(), nonNegativeAlertLimit);
     // 只遍历前 shown 条:超大批量告警(未认证 sink 可灌任意条数)全量循环会让 body / alertnames 无界膨胀耗尽内存。
     // alertCount / title / "... and N more" 仍用原始 alerts.size(),保留总量可见性。
     List<String> alertnames = new ArrayList<>();
@@ -53,9 +54,10 @@ public class AlertmanagerAlertRenderer {
       AlertmanagerAlert alert = alerts.get(i);
       String name = orPlaceholder(alert.label(LABEL_ALERTNAME));
       alertnames.add(name);
+      String alertStatus = upper(orPlaceholder(alert.status()));
       body.append('\n')
           .append("- [")
-          .append(upper(orPlaceholder(alert.status())))
+          .append(alertStatus)
           .append("] ")
           .append(name)
           .append(" severity=")
@@ -82,9 +84,11 @@ public class AlertmanagerAlertRenderer {
     structured.put("truncatedAlerts", payload.truncatedAlerts());
     structured.put(LABEL_SEVERITY, severity);
     structured.put("alertnames", alertnames);
-    structured.put("text", body.toString());
+    structured.put("alerts", List.copyOf(alerts.subList(0, shown)));
+    String renderedBody = body.toString();
+    structured.put("text", renderedBody);
 
-    return new RenderedAlertNotification(title, body.toString(), structured);
+    return new RenderedAlertNotification(title, renderedBody, structured);
   }
 
   private static String commonAlertname(AlertmanagerWebhookPayload payload) {

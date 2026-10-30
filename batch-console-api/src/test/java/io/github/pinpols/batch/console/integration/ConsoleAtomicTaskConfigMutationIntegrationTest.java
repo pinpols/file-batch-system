@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -53,18 +54,68 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, task_type, name, parameters::text AS parameters"
-            + " FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?",
-        TENANT,
-        name);
+    String atomicTaskConfigSnapshotSql = """
+        select tenant_id, task_type, name, parameters::text as parameters
+        from batch.atomic_task_config where tenant_id = ? and name = ?
+        """;
+    var row = jdbcTemplate.queryForMap(atomicTaskConfigSnapshotSql, TENANT, name);
     assertThat(row).containsEntry("tenant_id", TENANT);
     assertThat(row).containsEntry("task_type", "sql");
     assertThat(row).containsEntry("name", name);
     assertThat((String) row.get("parameters")).contains("select 1");
 
-    jdbcTemplate.update(
-        "DELETE FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?", TENANT, name);
+    String deleteAtomicTaskConfigSql = """
+        delete from batch.atomic_task_config where tenant_id = ? and name = ?
+    """;
+    jdbcTemplate.update(deleteAtomicTaskConfigSql, TENANT, name);
+  }
+
+  @Test
+  @DisplayName("无效任务超时经 HTTP 拒绝且不入库，合法整数配置仍能保存")
+  void shouldRejectInvalidTimeoutWithoutPersisting() {
+    String prefix = "it_timeout_" + Long.toUnsignedString(System.nanoTime());
+    List<String> types = List.of("sql", "stored_proc", "shell", "http");
+    List<String> parameters = List.of(
+        "{\"sql\":\"select 1\",\"statementTimeoutSeconds\":1.5}",
+        "{\"procedureName\":\"batch.p\",\"statementTimeoutSeconds\":0}",
+        "{\"command\":\"echo\",\"timeoutSeconds\":-1}",
+        "{\"url\":\"https://example.com\",\"timeoutSeconds\":18446744073709551617}");
+    String countSql =
+        "select count(*) from batch.atomic_task_config where tenant_id = ? and name = ?";
+    String deleteSql = "delete from batch.atomic_task_config where tenant_id = ? and name = ?";
+    for (int i = 0; i < types.size(); i++) {
+      String name = prefix + "_invalid_" + i;
+      try {
+        client
+            .post()
+            .uri("/api/console/ops/atomic-task-configs")
+            .contentType(MediaType.APPLICATION_JSON)
+            .bodyValue(body(types.get(i), name, parameters.get(i)))
+            .exchange()
+            .expectStatus()
+            .isBadRequest();
+        Long count = jdbcTemplate.queryForObject(countSql, Long.class, TENANT, name);
+        assertThat(count).as(name).isZero();
+      } finally {
+        jdbcTemplate.update(deleteSql, TENANT, name);
+      }
+    }
+
+    String validName = prefix + "_valid";
+    try {
+      client
+          .post()
+          .uri("/api/console/ops/atomic-task-configs")
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue(body("sql", validName, "{\"sql\":\"select 1\",\"statementTimeoutSeconds\":1}"))
+          .exchange()
+          .expectStatus()
+          .isOk();
+      Long count = jdbcTemplate.queryForObject(countSql, Long.class, TENANT, validName);
+      assertThat(count).isEqualTo(1);
+    } finally {
+      jdbcTemplate.update(deleteSql, TENANT, validName);
+    }
   }
 
   @Test
@@ -93,8 +144,10 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .expectBody(String.class)
         .value(b -> assertThat(b).contains(name));
 
-    jdbcTemplate.update(
-        "DELETE FROM batch.atomic_task_config WHERE tenant_id = ? AND name = ?", TENANT, name);
+    String deleteAtomicTaskConfigSql = """
+        delete from batch.atomic_task_config where tenant_id = ? and name = ?
+    """;
+    jdbcTemplate.update(deleteAtomicTaskConfigSql, TENANT, name);
   }
 
   @Test
@@ -114,8 +167,10 @@ class ConsoleAtomicTaskConfigMutationIntegrationTest extends AbstractMutationInt
         .isBadRequest();
 
     // 不应有写入数据库
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.atomic_task_config WHERE tenant_id = ?", Long.class, TENANT);
+    String atomicTaskConfigCountSql = """
+        select count(*) from batch.atomic_task_config where tenant_id = ?
+        """;
+    Long cnt = jdbcTemplate.queryForObject(atomicTaskConfigCountSql, Long.class, TENANT);
     // 可能有其它用例残留,但本次 sensitive name 不应入库
     assertThat(cnt).isNotNull();
   }

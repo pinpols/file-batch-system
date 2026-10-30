@@ -52,13 +52,13 @@ public class DefaultHeartbeatService implements HeartbeatService {
       return;
     }
     activeRegistration.setCurrentLoad(collectCurrentLoad());
-    activeRegistration = workerRegistryService.renew(activeRegistration);
-    workerRuntimeState.put(activeRegistration);
-    applyPlatformDirective(activeRegistration);
-    log.debug(
-        "worker heartbeat: workerId={} currentLoad={}",
-        workerId,
-        activeRegistration.getCurrentLoad());
+    WorkerRegistration renewed = workerRegistryService.renew(activeRegistration);
+    if (!workerRuntimeState.replaceIfCurrent(workerId, activeRegistration, renewed)) {
+      log.debug("ignore heartbeat for removed or replaced registration: workerId={}", workerId);
+      return;
+    }
+    applyPlatformDirective(renewed);
+    log.debug("worker heartbeat: workerId={} currentLoad={}", workerId, renewed.getCurrentLoad());
   }
 
   private void applyPlatformDirective(WorkerRegistration registration) {
@@ -68,11 +68,13 @@ public class DefaultHeartbeatService implements HeartbeatService {
       try {
         control.setPlatformDraining(draining);
       } catch (RuntimeException ex) {
+        String workerId = registration.getWorkerId();
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "failed to apply worker platform directive: workerId={}, draining={}, error={}",
-            registration.getWorkerId(),
+            workerId,
             draining,
-            SwallowedExceptionLogger.summary(ex));
+            causeSummary);
       }
     });
   }

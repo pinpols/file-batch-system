@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PIPELINE_SHEET;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.STEP_SHEET;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWorkbookWriter.JOB_MONITORING_POLICY_COLUMNS;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -13,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -21,7 +24,6 @@ import java.io.ByteArrayOutputStream;
 import java.nio.file.Path;
 import java.time.Instant;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.MessageSource;
 import org.springframework.mock.web.MockMultipartFile;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,11 +50,13 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
   @Mock
   private BatchDateTimeSupport dateTimeSupport;
 
+  @Mock
+  private MessageSource messageSource;
+
   @InjectMocks
   private DefaultTenantConfigPackageExcelService service;
 
-  @BeforeEach
-  void setUp() {
+  private void stubUploadContext() {
     when(tenantGuard.resolveTenant(anyString())).thenReturn("ta");
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata("req", "trace", "ta", "operator", "idem", null));
@@ -60,6 +65,7 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
   @Test
   @DisplayName("上传成功后从临时文件解析并删除文件")
   void shouldDeleteTemporaryFile_whenUploadSucceeds() throws Exception {
+    stubUploadContext();
     MockMultipartFile file = spy(new MockMultipartFile(
         "file",
         "package.xlsx",
@@ -81,6 +87,7 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
   @Test
   @DisplayName("工作簿解析失败后仍删除临时文件")
   void shouldDeleteTemporaryFile_whenWorkbookParsingFails() throws Exception {
+    stubUploadContext();
     byte[] invalidWorkbook = {'P', 'K', 3, 4, 0, 0, 0, 0};
     MockMultipartFile file = spy(new MockMultipartFile(
         "file",
@@ -95,6 +102,19 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
     assertThat(temporaryFile.getValue().getParent().getFileName())
         .hasToString("file-batch-private");
     assertThat(temporaryFile.getValue()).doesNotExist();
+  }
+
+  @Test
+  @DisplayName("配置字段指南不公开已退役的租户 Pipeline 工作表")
+  void shouldExcludeRetiredPipelineSheetsFromGuide() {
+    var sheetNames = service.guide().sheets().stream()
+        .map(TenantConfigPackageExcelGuideResponse.SheetGuide::sheetName)
+        .toList();
+
+    assertThat(sheetNames)
+        .doesNotContain(PIPELINE_SHEET, STEP_SHEET)
+        .contains("workflow_monitoring_policy")
+        .hasSize(11);
   }
 
   private static byte[] minimalWorkbook() throws Exception {

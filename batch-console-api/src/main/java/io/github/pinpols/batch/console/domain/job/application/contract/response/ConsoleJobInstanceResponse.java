@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
+@Builder
 public record ConsoleJobInstanceResponse(
     Long id,
     String tenantId,

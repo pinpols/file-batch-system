@@ -20,22 +20,26 @@
 -- =====================================================================
 
 -- partition / task 染色
+
 ALTER TABLE batch.job_partition
     ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE batch.job_task
     ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT false;
 
 -- archive 镜像同步（archive schema drift check 强制 1:1 镜像）
+
 ALTER TABLE archive.job_partition_archive
     ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE archive.job_task_archive
     ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT false;
 
 -- trigger_request 入口染色
+
 ALTER TABLE batch.trigger_request
     ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT false;
 
 -- 终态扩展：job_instance
+
 ALTER TABLE batch.job_instance DROP CONSTRAINT IF EXISTS ck_job_instance_status;
 ALTER TABLE batch.job_instance ADD CONSTRAINT ck_job_instance_status
     CHECK (instance_status IN (
@@ -45,6 +49,7 @@ ALTER TABLE batch.job_instance ADD CONSTRAINT ck_job_instance_status
     ));
 
 -- 终态扩展：workflow_run
+
 ALTER TABLE batch.workflow_run DROP CONSTRAINT IF EXISTS ck_workflow_run_status;
 ALTER TABLE batch.workflow_run ADD CONSTRAINT ck_workflow_run_status
     CHECK (run_status IN (

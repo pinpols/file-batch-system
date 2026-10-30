@@ -11,7 +11,7 @@
 - [Java 可读性路线图](./java-readability-refactoring-roadmap-2026-08-12.md)记录已有阶段交付。本方案是后续质量改进，不撤销其历史完成结论，也不据历史状态宣称当前验收已通过。
 - [固定契约与协议值治理计划](./typed-contract-enum-constant-governance-plan-2026-10-07.md)继续负责 DTO、枚举、常量与 JCON 门禁。本方案只补充嵌套固定载荷和 SDK 传输组装的已确认候选，不另建一套规则。
 - [编码规约](../coding-conventions.md)继续是权威规范。本方案是实施清单，不创建第二份编码标准。
-- [TODO Master](../analysis/todo-master.md)只登记本方案入口；逐项状态在本文更新，避免复制多个进度表。
+- [TODO Master](todo-master.md)只登记本方案入口；逐项状态在本文更新，避免复制多个进度表。
 
 ## 2. 设计原则与不变边界
 

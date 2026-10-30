@@ -5,7 +5,7 @@ import javax.sql.DataSource;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.stereotype.Component;
 
-/** Spring adapter for the atomic executor DataSource port. */
+/** 原子执行器 DataSource 端口的 Spring 适配器。 */
 @Component
 public class SpringDataSourceResolver implements DataSourceResolver {
 

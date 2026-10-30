@@ -1,0 +1,3 @@
+interface:
+  display_name: "灾备与恢复验证"
+  short_description: "评估备份、PITR、RPO/RTO 和恢复后业务一致性，区分演练与真实证据"

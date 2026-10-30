@@ -7,8 +7,8 @@ import java.util.Map;
  *
  * <p>这是 Worker 侧执行上下文，非 Orchestrator 侧工作流上下文。
  *
- * <p>三个 Worker 域（import / export / dispatch）均包含相同的基础字段。 实现此接口可让 {@link AbstractStageExecutor}
- * 无需反射即可访问这些字段， 保证泛型阶段循环在三条 pipeline 上都是编译期安全的。
+ * <p>四个文件 Worker 域（import / export / process / dispatch）均包含相同的基础字段。 实现此接口可让 {@link AbstractStageExecutor}
+ * 无需反射即可访问这些字段， 保证泛型阶段循环在四类文件 Pipeline 上都是编译期安全的。
  */
 public interface ExecutionContext {
 

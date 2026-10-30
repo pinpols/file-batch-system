@@ -13,11 +13,11 @@
 | tenantId | string | 是 | — | `TENANT_ID` | 缺失 → 构造抛错;跨租户消息 → drop 不提交 offset |
 | workerCode | string | 是 | — | `WORKER_CODE` | 缺失 → 构造抛错;同租户内需唯一 |
 | kafkaBootstrap | string | 是(消费派单) | null | `KAFKA_BOOTSTRAP` | 缺失 → 不建消费者(仅 HTTP);错值 → 消费启动失败 |
-| kafkaTopicPattern | regex | 否 | node-direct 派生 | `KAFKA_TOPIC_PATTERN` | 默认 `batch\.task\.dispatch\..+\.node\.<workerCode>`;写成 tenant-first `<tenant>.*` → **静默收不到任务**(平台从不发布) |
-| kafkaGroupId | string | 否 | `g-sdk-<tenant>-<workerCode>` | `KAFKA_GROUP_ID` | 同 group 跨进程自动分片 |
+| kafkaTopicPattern | regex | Java fromEnv 必填 | 语言/样例各自定义 | `KAFKA_TOPIC_PATTERN` | Java 直接订阅给定正则，不自动派生；其它语言/样例的默认匹配按其配置工厂核对。写成 tenant-first `<tenant>.*` → **静默收不到任务**(平台从不发布) |
+| kafkaGroupId | string | Java fromEnv 必填 | 语言/样例各自定义 | `KAFKA_GROUP_ID` | 同 group 跨进程自动分片 |
 | buildId | string | 否 | null | `BUILD_ID` | 运行指纹(建议 CI 注入 git SHA);**禁放敏感信息**(入库对运维可见) |
 | maxConcurrentTasks | int | 否 | **4** | `MAX_CONCURRENT_TASKS` | 范围 1..64；注册时上报为 `maxConcurrent` 校准平台路由容量，进程内超限走 capacity-aware pause |
-| heartbeatInterval | 时长 | 否 | **30s** | `HEARTBEAT_INTERVAL_SECONDS` | 服务器 `nextHeartbeatHintMs` 钳制覆盖;< 1s → strict 时 fail-fast |
+| heartbeatInterval | 时长 | 否 | **30s** | `HEARTBEAT_INTERVAL_SECONDS` | 响应 `nextHeartbeatHint` 建议调整周期;< 1s → strict 时 fail-fast |
 | httpTimeout | 时长 | 否 | **10s** | `HTTP_TIMEOUT_SECONDS` | connect + read 合一;> heartbeat/2 → strict 时 fail-fast |
 | leaseRenewInterval | 时长 | 否 | 60s | `LEASE_RENEW_INTERVAL_SECONDS` | 应 < orchestrator lease TTL 的 1/2;> heartbeat×3 → strict 时 fail-fast |
 | kafkaSecurityProtocol | string | prod 必填 | null | `KAFKA_SECURITY_PROTOCOL` | 如 `SASL_SSL`;缺失走 `PLAINTEXT` |

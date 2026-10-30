@@ -28,11 +28,14 @@ public class BatchClockConfig {
     if (EmptyChecks.isBlank(rawOffset)) {
       return systemClock;
     }
-    return Clock.offset(systemClock, parseTestingOffset(rawOffset));
+    Duration testingOffset = parseTestingOffset(rawOffset);
+    return Clock.offset(systemClock, testingOffset);
   }
 
   private static Duration parseTestingOffset(String rawOffset) {
-    Matcher matcher = TESTING_OFFSET_PATTERN.matcher(rawOffset.trim().toLowerCase(Locale.ROOT));
+    String trimmedOffset = rawOffset.trim();
+    String normalizedOffset = trimmedOffset.toLowerCase(Locale.ROOT);
+    Matcher matcher = TESTING_OFFSET_PATTERN.matcher(normalizedOffset);
     if (!matcher.matches()) {
       throw new IllegalArgumentException("Invalid " + TESTING_CLOCK_OFFSET_PROPERTY
           + ": expected [+|-]<number><s|m|h|d>, got " + rawOffset);

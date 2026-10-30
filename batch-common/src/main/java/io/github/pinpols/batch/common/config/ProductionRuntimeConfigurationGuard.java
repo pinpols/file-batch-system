@@ -11,7 +11,11 @@ import org.springframework.core.env.Environment;
 
 /** 阻止生产环境静默使用本地开发地址或不可发现的管理端口。 */
 @AutoConfiguration
-@EnableConfigurationProperties({StorageBackendProperties.class, ConsoleReadReplicaProperties.class})
+@EnableConfigurationProperties({
+  StorageBackendProperties.class,
+  ConsoleReadReplicaProperties.class,
+  KafkaNamespaceProperties.class
+})
 public class ProductionRuntimeConfigurationGuard implements SmartInitializingSingleton {
 
   private static final Pattern LOOPBACK_ENDPOINT =
@@ -30,14 +34,17 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
   private final Environment environment;
   private final StorageBackendProperties storageProperties;
   private final ConsoleReadReplicaProperties readReplicaProperties;
+  private final KafkaNamespaceProperties kafkaNamespaceProperties;
 
   public ProductionRuntimeConfigurationGuard(
       Environment environment,
       StorageBackendProperties storageProperties,
-      ConsoleReadReplicaProperties readReplicaProperties) {
+      ConsoleReadReplicaProperties readReplicaProperties,
+      KafkaNamespaceProperties kafkaNamespaceProperties) {
     this.environment = environment;
     this.storageProperties = storageProperties;
     this.readReplicaProperties = readReplicaProperties;
+    this.kafkaNamespaceProperties = kafkaNamespaceProperties;
   }
 
   @Override
@@ -47,6 +54,12 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     }
 
     REQUIRED_ENDPOINTS.forEach(this::requireRemoteEndpoint);
+
+    if (EmptyChecks.isBlank(kafkaNamespaceProperties.getNamespace())) {
+      throw new IllegalStateException(
+          "FATAL: production Kafka topic namespace must be explicitly configured: batch.kafka.namespace");
+    }
+
     OPTIONAL_ENDPOINTS.stream()
         .filter(environment::containsProperty)
         .forEach(this::requireRemoteEndpoint);
@@ -54,7 +67,8 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     if ("s3".equalsIgnoreCase(storageProperties.getBackend())) {
       requireRemoteEndpoint("batch.storage.s3.endpoint");
     }
-    if (ApplicationNameProvider.resolve(environment, "").startsWith("batch-worker-")) {
+    String applicationName = ApplicationNameProvider.resolve(environment, "");
+    if (applicationName.startsWith("batch-worker-")) {
       requireRemoteEndpoint("batch.datasource.business.url");
     }
     if (readReplicaProperties.isEnabled()) {
@@ -77,7 +91,8 @@ public class ProductionRuntimeConfigurationGuard implements SmartInitializingSin
     if (value == null || EmptyChecks.isBlank(value)) {
       throw new IllegalStateException("FATAL: production endpoint is not configured: " + key);
     }
-    String normalized = value.trim().toLowerCase(Locale.ROOT);
+    String trimmedValue = value.trim();
+    String normalized = trimmedValue.toLowerCase(Locale.ROOT);
     if (LOOPBACK_ENDPOINT.matcher(normalized).find()) {
       throw new IllegalStateException(
           "FATAL: production endpoint still uses a loopback development address: " + key);

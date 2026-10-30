@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.sql.Connection;
@@ -125,51 +126,72 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
 
   /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内的 `;`。简化版,不处理 dollar-quote。 */
   static List<String> splitStatements(String sql) {
-    List<String> out = new ArrayList<>();
-    StringBuilder buf = new StringBuilder();
-    boolean inSingle = false;
-    boolean inDouble = false;
-    boolean inLineComment = false;
-    boolean inBlockComment = false;
-    char prev = 0;
+    StatementSplitState state = new StatementSplitState();
     for (int i = 0; i < sql.length(); i++) {
-      char c = sql.charAt(i);
-      if (inLineComment) {
-        if (c == '\n') inLineComment = false;
-        buf.append(c);
-      } else if (inBlockComment) {
-        if (prev == '*' && c == '/') inBlockComment = false;
-        buf.append(c);
-      } else if (inSingle) {
-        if (c == '\'') inSingle = false;
-        buf.append(c);
-      } else if (inDouble) {
-        if (c == '"') inDouble = false;
-        buf.append(c);
-      } else if (prev == '-' && c == '-') {
-        inLineComment = true;
-        buf.append(c);
-      } else if (prev == '/' && c == '*') {
-        inBlockComment = true;
-        buf.append(c);
-      } else if (c == '\'') {
-        inSingle = true;
-        buf.append(c);
-      } else if (c == '"') {
-        inDouble = true;
-        buf.append(c);
-      } else if (c == ';') {
-        String stmt = buf.toString().trim();
-        if (!stmt.isEmpty()) out.add(stmt);
-        buf.setLength(0);
-      } else {
-        buf.append(c);
-      }
-      prev = c;
+      state.append(sql.charAt(i));
     }
-    String tail = buf.toString().trim();
-    if (!tail.isEmpty()) out.add(tail);
-    return out;
+    return state.complete();
+  }
+
+  /** 引号、注释与前一个字符属于同一词法状态，不能在语句边界单独重置其中一项。 */
+  private static final class StatementSplitState {
+    private final List<String> statements = new ArrayList<>();
+    private final StringBuilder buffer = new StringBuilder();
+    private boolean inSingle;
+    private boolean inDouble;
+    private boolean inLineComment;
+    private boolean inBlockComment;
+    private char previous;
+
+    private void append(char current) {
+      if (inLineComment) {
+        if (current == '\n') inLineComment = false;
+        buffer.append(current);
+      } else if (inBlockComment) {
+        if (previous == '*' && current == '/') inBlockComment = false;
+        buffer.append(current);
+      } else if (inSingle) {
+        if (current == '\'') inSingle = false;
+        buffer.append(current);
+      } else if (inDouble) {
+        if (current == '"') inDouble = false;
+        buffer.append(current);
+      } else {
+        appendSqlCharacter(current);
+      }
+      previous = current;
+    }
+
+    /** 只有普通 SQL 区域的分号可以结束语句；注释起始字符仍原样保留在缓冲区。 */
+    private void appendSqlCharacter(char current) {
+      if (previous == '-' && current == '-') {
+        inLineComment = true;
+        buffer.append(current);
+      } else if (previous == '/' && current == '*') {
+        inBlockComment = true;
+        buffer.append(current);
+      } else if (current == '\'') {
+        inSingle = true;
+        buffer.append(current);
+      } else if (current == '"') {
+        inDouble = true;
+        buffer.append(current);
+      } else if (current == ';') {
+        String rawStatement = buffer.toString();
+        String statement = rawStatement.trim();
+        if (!EmptyChecks.isEmpty(statement)) statements.add(statement);
+        buffer.setLength(0);
+      } else {
+        buffer.append(current);
+      }
+    }
+
+    private List<String> complete() {
+      String rawTail = buffer.toString();
+      String tail = rawTail.trim();
+      if (!EmptyChecks.isEmpty(tail)) statements.add(tail);
+      return statements;
+    }
   }
 
   @Override

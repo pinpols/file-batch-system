@@ -78,14 +78,16 @@ public class DefaultWorkerSelector implements WorkerSelector {
     WorkerRouteModel route = new WorkerRouteModel();
     route.setWorkerType(EmptyChecks.isNull(request) ? null : request.getWorkerType());
     route.setPriority(priority);
-    route.setResourceProfile(resolveResourceProfile(request, queue));
+    String routeResourceProfile = resolveResourceProfile(request, queue);
+    route.setResourceProfile(routeResourceProfile);
     if (EmptyChecks.isNull(request) || !Texts.hasText(request.getTenantId())) {
       route.setAvailable(false);
       return route;
     }
     // 历史数据可能存在 IMPORT / import 大小写不一致；入口统一按大写比较回退，
     // 长期由 V64__normalize_code_conventions.sql 把 DB 存量归一，之后这里 toUpper 就是纯防御性动作。
-    String workerGroup = CodeNormalizer.toUpperOrNull(resolveWorkerGroup(request, queue));
+    String requestedWorkerGroup = resolveWorkerGroup(request, queue);
+    String workerGroup = CodeNormalizer.toUpperOrNull(requestedWorkerGroup);
     List<WorkerRegistryEntity> candidates = findCandidates(request.getTenantId(), workerGroup);
     String resourceProfile = resolveResourceProfile(request, queue);
     WorkerRegistryEntity selected =
@@ -95,9 +97,10 @@ public class DefaultWorkerSelector implements WorkerSelector {
     // 按 batch.resource-scheduler.shared-tenant-fallback 配置的租户再查一次。
     // 生产 profile 不应设置此配置，以保留 docs/agent-baseline.md §多租户隔离 的原严格语义。
     String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
-    if (EmptyChecks.isNull(selected)
+    boolean fallbackTenantSelectionIsNeeded = EmptyChecks.isNull(selected)
         && Texts.hasText(fallbackTenant)
-        && !fallbackTenant.equals(request.getTenantId())) {
+        && !fallbackTenant.equals(request.getTenantId());
+    if (fallbackTenantSelectionIsNeeded) {
       List<WorkerRegistryEntity> fallbackCandidates = findCandidates(fallbackTenant, workerGroup);
       WorkerRegistryEntity fallbackSelected =
           pickBest(fallbackCandidates, request.getRequiredCapability(), resourceProfile);
@@ -161,6 +164,10 @@ public class DefaultWorkerSelector implements WorkerSelector {
 
   private WorkerRegistryEntity pickBest(
       List<WorkerRegistryEntity> candidates, String requiredCapability, String resourceProfile) {
+    Comparator<WorkerRegistryEntity> workerPriority = Comparator.comparingInt(
+            DefaultWorkerSelector::currentLoadOrZero)
+        .thenComparing(
+            WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder()));
     return candidates.stream()
         .filter(candidate -> !Texts.hasText(requiredCapability)
             || capabilityTagsContain(candidate.capabilityTags(), requiredCapability))
@@ -168,11 +175,12 @@ public class DefaultWorkerSelector implements WorkerSelector {
         // V87 反压闸门: current_load >= max_concurrent 的 worker 满载, skip
         // (默认 max_concurrent=10; 全 group 满则 partition 退化 WAITING)
         .filter(DefaultWorkerSelector::hasCapacity)
-        .min(Comparator.comparingInt(
-                (WorkerRegistryEntity r) -> Optional.ofNullable(r.currentLoad()).orElse(0))
-            .thenComparing(
-                WorkerRegistryEntity::heartbeatAt, Comparator.nullsLast(Comparator.reverseOrder())))
+        .min(workerPriority)
         .orElse(null);
+  }
+
+  private static int currentLoadOrZero(WorkerRegistryEntity worker) {
+    return Optional.ofNullable(worker.currentLoad()).orElse(0);
   }
 
   /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据回退) 视为无上限通过. */
@@ -181,7 +189,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
     if (EmptyChecks.isNull(max) || max <= 0) {
       return true; // 没配置 = 无上限 (向后兼容)
     }
-    int current = Optional.ofNullable(r.currentLoad()).orElse(0);
+    int current = currentLoadOrZero(r);
     return current < max;
   }
 

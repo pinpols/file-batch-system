@@ -373,7 +373,8 @@ func (c *Consumer) Poll() ([]client.Record, bool) {
 			_ = oldReader.Close()
 		}
 
-		fetchCtx, cancel := context.WithTimeout(c.ctx, c.fetchTimeout())
+		fetchTimeout := c.fetchTimeout()
+		fetchCtx, cancel := context.WithTimeout(c.ctx, fetchTimeout)
 		msg, err := reader.FetchMessage(fetchCtx)
 		cancel()
 		if err != nil {

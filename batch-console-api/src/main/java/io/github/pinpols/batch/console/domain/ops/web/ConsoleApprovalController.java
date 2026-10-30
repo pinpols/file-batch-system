@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.ApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.BatchApprovalActionRequest;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpres
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -60,10 +62,10 @@ public class ConsoleApprovalController {
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String result = approvalApplicationService.approve(
-        tenantId, approvalNo, request.getOperatorId(), request.getReason());
-    auditApprovalAction(
-        "approve", tenantId, approvalNo, request.getOperatorId(), request.getReason());
+    String operatorId = authenticatedUsername();
+    String result =
+        approvalApplicationService.approve(tenantId, approvalNo, operatorId, request.getReason());
+    auditApprovalAction("approve", tenantId, approvalNo, operatorId, request.getReason());
     return responseFactory.success(result);
   }
 
@@ -75,10 +77,10 @@ public class ConsoleApprovalController {
       @PathVariable String approvalNo,
       @Valid @RequestBody ApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    String result = approvalApplicationService.reject(
-        tenantId, approvalNo, request.getOperatorId(), request.getReason());
-    auditApprovalAction(
-        "reject", tenantId, approvalNo, request.getOperatorId(), request.getReason());
+    String operatorId = authenticatedUsername();
+    String result =
+        approvalApplicationService.reject(tenantId, approvalNo, operatorId, request.getReason());
+    auditApprovalAction("reject", tenantId, approvalNo, operatorId, request.getReason());
     return responseFactory.success(result);
   }
 
@@ -89,13 +91,14 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.tenantId());
+    String operatorId = authenticatedUsername();
     List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchApprove(
-        tenantId, request.approvalNos(), request.operatorId(), request.reason());
+        tenantId, request.approvalNos(), operatorId, request.reason());
     auditApprovalAction(
         "batch-approve",
         tenantId,
         String.valueOf(request.approvalNos()),
-        request.operatorId(),
+        operatorId,
         request.reason());
     return responseFactory.success(result);
   }
@@ -107,13 +110,14 @@ public class ConsoleApprovalController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody BatchApprovalActionRequest request) {
     String tenantId = tenantGuard.resolveTenant(request.tenantId());
+    String operatorId = authenticatedUsername();
     List<ConsoleBatchApprovalResultResponse> result = approvalApplicationService.batchReject(
-        tenantId, request.approvalNos(), request.operatorId(), request.reason());
+        tenantId, request.approvalNos(), operatorId, request.reason());
     auditApprovalAction(
         "batch-reject",
         tenantId,
         String.valueOf(request.approvalNos()),
-        request.operatorId(),
+        operatorId,
         request.reason());
     return responseFactory.success(result);
   }
@@ -125,7 +129,7 @@ public class ConsoleApprovalController {
   private void auditApprovalAction(
       String action, String tenantId, String target, String operatorId, String reason) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-    String actor = auth == null ? "anonymous" : String.valueOf(auth.getName());
+    String actor = EmptyChecks.isNull(auth) ? "anonymous" : authenticatedUsername(auth);
     int reasonLen = reason == null ? 0 : reason.length();
     AUDIT.info(
         "action={} actor={} tenant={} target={} operatorId={} reasonLength={}",
@@ -135,5 +139,20 @@ public class ConsoleApprovalController {
         LogSanitizer.value(target),
         LogSanitizer.value(operatorId),
         reasonLen);
+  }
+
+  private static String authenticatedUsername() {
+    Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+    return authenticatedUsername(authentication);
+  }
+
+  private static String authenticatedUsername(Authentication authentication) {
+    if (EmptyChecks.isNull(authentication)) {
+      return "anonymous";
+    }
+    if (authentication.getPrincipal() instanceof ConsolePrincipal principal) {
+      return principal.username();
+    }
+    return authentication.getName();
   }
 }

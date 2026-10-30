@@ -1,3 +1,5 @@
+# 用途：回归验证使用 JaCoCo XML 校验本次变更新增/修改的可执行 Java 行覆盖率。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_diff_coverage.py。
 import importlib.util
 import tempfile
 import unittest

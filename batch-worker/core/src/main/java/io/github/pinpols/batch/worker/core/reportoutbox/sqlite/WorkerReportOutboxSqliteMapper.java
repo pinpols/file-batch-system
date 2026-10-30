@@ -2,6 +2,10 @@ package io.github.pinpols.batch.worker.core.reportoutbox.sqlite;
 
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxRow;
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxUpsertParam;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteClaimParam;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteGiveUpParam;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteGiveUpRowParam;
+import io.github.pinpols.batch.worker.core.reportoutbox.sqlite.param.WorkerReportOutboxSqliteUpdateRetryParam;
 import org.apache.ibatis.annotations.Param;
 
 /**
@@ -15,28 +19,18 @@ public interface WorkerReportOutboxSqliteMapper {
   Long pickNextNewId(
       @Param("nowEpochMillis") long nowEpochMillis, @Param("statusNew") String statusNew);
 
-  WorkerReportOutboxRow updateClaimReturning(
+  WorkerReportOutboxRow updateClaimReturning(WorkerReportOutboxSqliteClaimParam parameters);
+
+  Integer selectAttemptCount(
       @Param("id") long id,
-      @Param("statusPublishing") String statusPublishing,
-      @Param("now") long now,
-      @Param("statusNew") String statusNew);
+      @Param("claimToken") String claimToken,
+      @Param("statusPublishing") String statusPublishing);
 
-  Integer selectAttemptCount(@Param("id") long id);
+  int updateGiveUp(WorkerReportOutboxSqliteGiveUpParam parameters);
 
-  int updateGiveUp(
-      @Param("id") long id,
-      @Param("publishStatus") String publishStatus,
-      @Param("attemptCount") int attemptCount,
-      @Param("updatedAt") long updatedAt);
+  int updateRetry(WorkerReportOutboxSqliteUpdateRetryParam parameters);
 
-  int updateRetry(
-      @Param("id") long id,
-      @Param("attemptCount") int attemptCount,
-      @Param("nextAttemptAt") long nextAttemptAt,
-      @Param("updatedAt") long updatedAt,
-      @Param("publishStatus") String publishStatus);
-
-  // CPD-OFF: PostgreSQL and SQLite report-outbox mappers intentionally mirror the same contract.
+  // CPD-OFF: PostgreSQL 与 SQLite 的回报 Outbox Mapper 有意保持相同契约。
   int resetStalePublishing(
       @Param("statusNew") String statusNew,
       @Param("now") long now,
@@ -48,12 +42,11 @@ public interface WorkerReportOutboxSqliteMapper {
   long countStalePublishing(
       @Param("statusPublishing") String statusPublishing, @Param("cutoff") long cutoff);
 
-  int deleteById(@Param("id") long id);
-
-  int giveUpRow(
+  int deleteById(
       @Param("id") long id,
-      @Param("publishStatus") String publishStatus,
-      @Param("now") long now,
-      @Param("maxAttempts") int maxAttempts);
+      @Param("claimToken") String claimToken,
+      @Param("statusPublishing") String statusPublishing);
+
+  int giveUpRow(WorkerReportOutboxSqliteGiveUpRowParam parameters);
   // CPD-ON
 }

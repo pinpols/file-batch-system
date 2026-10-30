@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import io.github.pinpols.batch.console.application.contract.query.PageQueryRequest;
 import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.Set;
 import lombok.Data;
@@ -47,7 +48,7 @@ public class JobDefinitionQueryRequest extends PageQueryRequest {
 
   private Boolean hasUpstreamDependency;
 
-  @jakarta.validation.constraints.Pattern(
+  @Pattern(
       regexp = "^(SCHEDULED|DEPENDENCY|RUNTIME_ONLY)?$",
       message = "monitoringCategory must be SCHEDULED, DEPENDENCY, or RUNTIME_ONLY")
   private String monitoringCategory;

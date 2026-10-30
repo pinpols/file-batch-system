@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -25,6 +24,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleClusterDiagnosticS
 import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.command.AiAuditCommand;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
@@ -35,6 +35,7 @@ import io.github.pinpols.batch.console.domain.audit.support.ConsoleAiAuditServic
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -49,6 +50,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
@@ -772,7 +774,13 @@ class DefaultConsoleAiApplicationServiceTest {
     ConsoleAiConversationService.StartedTurn turn =
         new ConsoleAiConversationService.StartedTurn("conversation-1", 1L, List.of());
     when(conversationService.beginTurn(
-            anyString(), anyString(), any(), anyString(), anyString(), isNull(), isNull()))
+            ArgumentMatchers.argThat((ConsoleAiTurnStartInput input) -> input != null
+                && input.tenantId() != null
+                && input.ownerUserId() != null
+                && input.contextVersion() != null
+                && input.prompt() != null
+                && input.clientTurnId() == null
+                && input.attachmentIds() == null)))
         .thenReturn(turn);
     BizException budgetDenied =
         BizException.of(ResultCode.RATE_LIMITED, "error.common.rate_limited_detail");
@@ -809,13 +817,13 @@ class DefaultConsoleAiApplicationServiceTest {
   }
 
   private double tokenCount(String type) {
-    io.micrometer.core.instrument.Counter counter =
+    Counter counter =
         meterRegistry.find("batch.console.ai.tokens.total").tag("type", type).counter();
     return counter == null ? 0.0 : counter.count();
   }
 
   private double decisionCount(String decision) {
-    io.micrometer.core.instrument.Counter counter = meterRegistry
+    Counter counter = meterRegistry
         .find("batch.console.ai.requests.total")
         .tag("decision", decision)
         .counter();

@@ -50,11 +50,14 @@ public class CutoffScheduleResolver {
     try {
       schedule = JsonUtils.fromJson(cutoffSchedule, MAP_TYPE);
     } catch (Exception parseFailure) {
+      LocalDate failedBizDate = bizDate;
+      String failedSchedule = cutoffSchedule;
+      String causeSummary = SwallowedExceptionLogger.summary(parseFailure);
       log.warn(
           "cutoff_schedule parse failed: bizDate={}, schedule={}, msg={}",
-          bizDate,
-          cutoffSchedule,
-          SwallowedExceptionLogger.summary(parseFailure));
+          failedBizDate,
+          failedSchedule,
+          causeSummary);
       return defaultCutoffTime;
     }
     if (schedule == null) {
@@ -67,7 +70,8 @@ public class CutoffScheduleResolver {
     }
     Object dft = schedule.get("default");
     if (dft != null) {
-      LocalTime parsed = parseLocalTime(dft.toString());
+      String defaultTimeText = dft.toString();
+      LocalTime parsed = parseLocalTime(defaultTimeText);
       if (parsed != null) {
         return parsed;
       }
@@ -86,12 +90,14 @@ public class CutoffScheduleResolver {
       if (!(item instanceof Map<?, ?> map)) continue;
       Object cutoffValue = map.get("cutoff");
       if (cutoffValue == null) continue;
-      LocalTime cutoffTime = parseLocalTime(cutoffValue.toString());
+      String cutoffTimeText = cutoffValue.toString();
+      LocalTime cutoffTime = parseLocalTime(cutoffTimeText);
       if (cutoffTime == null) continue;
 
       Object dateValue = map.get("date");
       if (dateValue != null) {
-        LocalDate date = parseLocalDate(dateValue.toString());
+        String overrideDateText = dateValue.toString();
+        LocalDate date = parseLocalDate(overrideDateText);
         if (date != null && date.equals(bizDate)) {
           // 精确日期匹配优先；记录后继续扫（多个精确同一天 → 取最后一条；行为可接受）
           exactMatch = cutoffTime;
@@ -100,10 +106,13 @@ public class CutoffScheduleResolver {
       }
       Object weekdayValue = map.get("weekdayPattern");
       if (weekdayValue == null) continue;
-      DayOfWeek weekday = parseDayOfWeek(weekdayValue.toString());
+      String weekdayText = weekdayValue.toString();
+      DayOfWeek weekday = parseDayOfWeek(weekdayText);
       if (weekday == null || !weekday.equals(bizDate.getDayOfWeek())) continue;
-      LocalDate from = parseLocalDate(stringValue(map.get("from")));
-      LocalDate to = parseLocalDate(stringValue(map.get("to")));
+      String fromDateText = stringValue(map.get("from"));
+      LocalDate from = parseLocalDate(fromDateText);
+      String toDateText = stringValue(map.get("to"));
+      LocalDate to = parseLocalDate(toDateText);
       if (from != null && bizDate.isBefore(from)) continue;
       if (to != null && bizDate.isAfter(to)) continue;
       weekdayMatch = cutoffTime;
@@ -114,7 +123,8 @@ public class CutoffScheduleResolver {
   private LocalTime parseLocalTime(String text) {
     if (text == null || text.isBlank()) return null;
     try {
-      return LocalTime.parse(text.trim());
+      String trimmedTime = text.trim();
+      return LocalTime.parse(trimmedTime);
     } catch (Exception failure) {
       log.warn("cutoff_schedule invalid time: {}", text);
       return null;
@@ -124,7 +134,8 @@ public class CutoffScheduleResolver {
   private LocalDate parseLocalDate(String text) {
     if (text == null || text.isBlank()) return null;
     try {
-      return LocalDate.parse(text.trim());
+      String trimmedDate = text.trim();
+      return LocalDate.parse(trimmedDate);
     } catch (Exception failure) {
       log.warn("cutoff_schedule invalid date: {}", text);
       return null;
@@ -134,7 +145,9 @@ public class CutoffScheduleResolver {
   private DayOfWeek parseDayOfWeek(String text) {
     if (text == null || text.isBlank()) return null;
     try {
-      return DayOfWeek.valueOf(text.trim().toUpperCase(Locale.ROOT));
+      String trimmedWeekday = text.trim();
+      String normalizedWeekday = trimmedWeekday.toUpperCase(Locale.ROOT);
+      return DayOfWeek.valueOf(normalizedWeekday);
     } catch (Exception failure) {
       log.warn("cutoff_schedule invalid weekday: {}", text);
       return null;

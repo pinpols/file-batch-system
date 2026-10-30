@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：演练 MinIO 与目标 S3 兼容存储之间的数据迁移。
+# 用法：bash scripts/local/s3-compatible-minio-migration.sh <endpoint> <access-key> <secret-key>；仅在明确的隔离目标执行。
 set -Eeuo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"

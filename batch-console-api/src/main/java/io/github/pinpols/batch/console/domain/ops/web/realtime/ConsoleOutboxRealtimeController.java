@@ -34,8 +34,9 @@ public class ConsoleOutboxRealtimeController {
       @RequestParam(value = "eventType", required = false) String eventType,
       @RequestParam(value = "cursor", required = false) String cursor,
       @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return realtimeEventHub.subscribe(
-        tenantGuard.resolveTenant(tenantId), "outbox-retries", eventType, cursor, heartbeatMillis);
+        resolvedTenantId, "outbox-retries", eventType, cursor, heartbeatMillis);
   }
 
   @GetMapping(path = "/outbox-deliveries/events", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -44,11 +45,8 @@ public class ConsoleOutboxRealtimeController {
       @RequestParam(value = "eventType", required = false) String eventType,
       @RequestParam(value = "cursor", required = false) String cursor,
       @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return realtimeEventHub.subscribe(
-        tenantGuard.resolveTenant(tenantId),
-        "outbox-deliveries",
-        eventType,
-        cursor,
-        heartbeatMillis);
+        resolvedTenantId, "outbox-deliveries", eventType, cursor, heartbeatMillis);
   }
 }

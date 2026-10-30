@@ -4,7 +4,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Confi
 import java.util.List;
 import java.util.Map;
 
-/** Read-only diff result for base-package and tenant-overlay operations. */
+/** 基础配置包和租户覆盖操作的只读差异结果。 */
 public record TenantConfigDiffPreviewResponse(
     String sourceTenantId,
     List<String> targetTenantIds,

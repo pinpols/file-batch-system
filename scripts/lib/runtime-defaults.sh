@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：宿主机脚本与精简 /bin/sh 初始化容器共用的运行时默认值。
+# 用法：由调用脚本 source scripts/lib/runtime-defaults.sh 后使用公共变量或函数。
 # 宿主机脚本与精简 /bin/sh 初始化容器共用的运行时默认值。
 # 本文件仅定义常量，由调用方决定参数是否必需。
 # 常量供显式加载本文件的脚本使用。
@@ -18,6 +20,36 @@ BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP=kafka:29092
 BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR=/opt/kafka/bin
 BATCH_DEFAULT_KAFKA_CONTAINER=batch-kafka
 BATCH_DEFAULT_KAFKA_SERVICE_HOST=kafka
+BATCH_DEFAULT_MOCKSERVER_HOST_PORT=11080
+
+batch_validate_kafka_namespace() {
+  namespace_value="$1"
+  [ -n "$namespace_value" ] || return 0
+  case "$namespace_value" in
+    [a-z0-9]*) ;;
+    *) echo "BATCH_KAFKA_NAMESPACE must start with a lowercase letter or digit" >&2; return 2 ;;
+  esac
+  case "$namespace_value" in
+    *[!a-z0-9_-]*) echo "BATCH_KAFKA_NAMESPACE contains unsupported characters" >&2; return 2 ;;
+  esac
+  if [ "${#namespace_value}" -gt 48 ]; then
+    echo "BATCH_KAFKA_NAMESPACE must be at most 48 characters" >&2
+    return 2
+  fi
+}
+
+batch_namespace_kafka_name() {
+  name_value="$1"
+  namespace_value="$2"
+  if [ -z "$namespace_value" ]; then
+    printf '%s\n' "$name_value"
+    return 0
+  fi
+  case "$name_value" in
+    "$namespace_value".*) printf '%s\n' "$name_value" ;;
+    *) printf '%s.%s\n' "$namespace_value" "$name_value" ;;
+  esac
+}
 
 BATCH_DEFAULT_MINIO_API_PORT=19000
 BATCH_DEFAULT_MINIO_CONTAINER_ENDPOINT=http://minio:9000

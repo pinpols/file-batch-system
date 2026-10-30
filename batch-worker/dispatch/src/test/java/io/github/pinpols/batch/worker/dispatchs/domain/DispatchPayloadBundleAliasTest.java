@@ -7,8 +7,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * ADR-046 文件束分发:验证束 partition 派发的通用绑定键(sourceFileId/targetRef)经 {@code @JsonAlias} 映射进 {@link
- * DispatchPayload} 的 fileId/channelCode,使 PrepareDispatchStep 无需改分支即可处理束分发。
+ * 验证文件束绑定键与普通字段映射到 {@link DispatchPayload} 的优先级及兼容读取。
  */
 @DisplayName("文件束分发载荷别名绑定:束前缀键映射到文件号与目标渠道,历史字段与泛化文件号键互不干扰")
 class DispatchPayloadBundleAliasTest {
@@ -37,6 +36,59 @@ class DispatchPayloadBundleAliasTest {
 
     assertThat(payload.fileId()).isEqualTo("99");
     assertThat(payload.channelCode()).isEqualTo("CH_OSS");
+  }
+
+  @Test
+  @DisplayName("普通渠道字段与调度采用一致优先级，束目标仍然优先")
+  void shouldResolveChannelFieldsWithStablePriority() throws Exception {
+    String json = """
+        {"targetChannelCode":"TARGET","dispatchChannelCode":"DISPATCH","channelCode":"PRIMARY"}
+        """;
+    assertThat(objectMapper.readValue(json, DispatchPayload.class).channelCode())
+        .isEqualTo("PRIMARY");
+    String reverse = """
+        {"channelCode":"PRIMARY","dispatchChannelCode":"DISPATCH","targetChannelCode":"TARGET"}
+        """;
+    assertThat(objectMapper.readValue(reverse, DispatchPayload.class).channelCode())
+        .isEqualTo("PRIMARY");
+    String fallback = """
+        {"channelCode":"  ","targetChannelCode":"TARGET","dispatchChannelCode":" DISPATCH "}
+        """;
+    assertThat(objectMapper.readValue(fallback, DispatchPayload.class).channelCode())
+        .isEqualTo("DISPATCH");
+    String bundle = """
+        {"bundleTargetRef":"BUNDLE","channelCode":"PRIMARY","dispatchChannelCode":"DISPATCH"}
+        """;
+    assertThat(objectMapper.readValue(bundle, DispatchPayload.class).channelCode())
+        .isEqualTo("BUNDLE");
+  }
+
+  @Test
+  @DisplayName("文件号和束文件号同时出现时解析不应依赖 JSON 字段顺序")
+  void shouldResolveConsistentFileIdWhenAliasAndCanonicalKeysCoexist() throws Exception {
+    DispatchPayload first = objectMapper.readValue(
+        "{\"fileId\":\"77\",\"bundleSourceFileId\":42,\"channelCode\":\"PRIMARY\",\"bundleTargetRef\":\"OTHER\"}",
+        DispatchPayload.class);
+    DispatchPayload second = objectMapper.readValue(
+        "{\"bundleTargetRef\":\"OTHER\",\"channelCode\":\"PRIMARY\",\"bundleSourceFileId\":42,\"fileId\":\"77\"}",
+        DispatchPayload.class);
+    assertThat(first.fileId()).isEqualTo("42");
+    assertThat(second.fileId()).isEqualTo("42");
+    assertThat(first.channelCode()).isEqualTo("OTHER");
+    assertThat(second.channelCode()).isEqualTo("OTHER");
+  }
+
+  @Test
+  @DisplayName("显式创建器保留 runMode 兼容读取与 run_mode 序列化")
+  void shouldPreserveRunModeWireContract() throws Exception {
+    DispatchPayload payload = objectMapper.readValue(
+        "{\"fileId\":\"77\",\"runMode\":\"RETRY\",\"futureField\":true}", DispatchPayload.class);
+    assertThat(payload.runMode()).isEqualTo("RETRY");
+    assertThat(objectMapper
+            .readTree(objectMapper.writeValueAsString(payload))
+            .get("run_mode")
+            .asText())
+        .isEqualTo("RETRY");
   }
 
   @Test

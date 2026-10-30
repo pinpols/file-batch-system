@@ -30,9 +30,10 @@ class FileMapResponseJacksonTest {
     row.put("storagePath", "uploads/acme/2026-07-11/x-y.csv");
     row.put("fileName", "y.csv");
 
-    Map<String, Object> back = mapper.readValue(
-        mapper.writeValueAsString(ConsoleFilePresignUploadResponse.from(row)),
-        new TypeReference<>() {});
+    var response =
+        mapper.readValue(mapper.writeValueAsString(row), ConsoleFilePresignUploadResponse.class);
+    Map<String, Object> back =
+        mapper.readValue(mapper.writeValueAsString(response), new TypeReference<>() {});
 
     assertThat(back)
         .containsOnlyKeys(

@@ -11,7 +11,7 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -46,7 +46,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -57,8 +57,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("投放引用不存在渠道的派发任务:验证任务终态为失败,且输出文件记录状态不会被写成已派发")
   void shouldMarkTaskFailed_whenChannelConfigMissing() {
-    String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
-    Long fileId = jdbcTemplate.queryForObject("""
+    final String insertFileRecordSql = """
             insert into batch.file_record (
                 tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
                 file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
@@ -68,7 +67,18 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
                 'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
                 ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-fail-trace'
             ) returning id
-            """, Long.class, TENANT, path);
+            """;
+    final String selectTaskStatusSql = """
+                      select t.task_status from batch.job_task t
+                      join batch.job_instance ji on ji.id = t.job_instance_id
+                      where ji.tenant_id = ? and ji.dedup_key = ?
+                      """;
+    final String selectFileStatusSql = """
+        select file_status from batch.file_record where id = ?
+    """;
+
+    String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
+    Long fileId = jdbcTemplate.queryForObject(insertFileRecordSql, Long.class, TENANT, path);
     assertThat(fileId).isNotNull();
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
@@ -76,7 +86,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
-    // No file_channel_config row exists for this channel code
+    // 该渠道代码对应的 file_channel_config 记录不存在。
     params.put("channelCode", "channel_does_not_exist");
     params.put("dispatchTarget", "/tmp");
     params.put("externalRequestId", "e2e-fail-ext-" + System.nanoTime());
@@ -86,7 +96,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
@@ -99,17 +109,13 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject("""
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """, String.class, TENANT, seed.dedupKey());
+          String status = jdbcTemplate.queryForObject(
+              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
           assertThat(status).isEqualTo("FAILED");
         });
 
-    // File record must NOT have been marked DISPATCHED on failure
-    String fileStatus = jdbcTemplate.queryForObject(
-        "select file_status from batch.file_record where id = ?", String.class, fileId);
+    // 失败时文件记录不得标记为 DISPATCHED。
+    String fileStatus = jdbcTemplate.queryForObject(selectFileStatusSql, String.class, fileId);
     assertThat(fileStatus).isNotEqualTo(FileStatus.DISPATCHED.code());
   }
 }

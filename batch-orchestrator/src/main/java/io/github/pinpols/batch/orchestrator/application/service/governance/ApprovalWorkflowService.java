@@ -25,6 +25,8 @@ public interface ApprovalWorkflowService {
 
   ApprovalRecord get(String tenantId, String approvalNo);
 
+  ApprovalRecord getBySourceKey(String tenantId, String sourceIdempotencyKey);
+
   record ApprovalContext(String tenantId) {}
 
   record ApprovalIdentity(ApprovalContext context, String approvalNo) {}
@@ -57,7 +59,8 @@ public interface ApprovalWorkflowService {
 
     public static ApprovalSubmitCommand of(
         String tenantId, ApprovalTarget target, ApprovalSource source) {
-      return new ApprovalSubmitCommand(new ApprovalContext(tenantId), target, source);
+      ApprovalContext context = new ApprovalContext(tenantId);
+      return new ApprovalSubmitCommand(context, target, source);
     }
 
     public static ApprovalSubmitCommand of(
@@ -133,8 +136,9 @@ public interface ApprovalWorkflowService {
         ApprovalTarget target,
         ApprovalOutcome outcome,
         ApprovalSource source) {
-      return new ApprovalRecord(
-          new ApprovalIdentity(new ApprovalContext(tenantId), approvalNo), target, outcome, source);
+      ApprovalContext context = new ApprovalContext(tenantId);
+      ApprovalIdentity identity = new ApprovalIdentity(context, approvalNo);
+      return new ApprovalRecord(identity, target, outcome, source);
     }
 
     public static ApprovalRecord of(
@@ -213,6 +217,11 @@ public interface ApprovalWorkflowService {
     @JsonProperty("sourceIdempotencyKey")
     public String sourceIdempotencyKey() {
       return source.sourceIdempotencyKey();
+    }
+
+    @JsonProperty("sourceApprovalReason")
+    public String sourceApprovalReason() {
+      return source.approvalReason();
     }
   }
 }

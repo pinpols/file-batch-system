@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -58,7 +59,10 @@ public class TaskTimeoutEnforcer {
       }
       int cancelled = 0;
       for (JobTaskEntity task : candidates) {
-        int rows = jobTaskMapper.requestCancel(task.getTenantId(), task.getId());
+        int rows = RlsTenantContextHolder.runWithTenant(
+            task.getTenantId(),
+            () -> jobTaskMapper.requestCancelIfTimedOut(
+                task.getTenantId(), task.getId(), task.getVersion()));
         if (rows > 0) {
           cancelled++;
           log.warn(

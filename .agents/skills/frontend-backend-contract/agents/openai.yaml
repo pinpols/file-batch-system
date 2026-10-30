@@ -1,0 +1,3 @@
+interface:
+  display_name: "前后端契约治理"
+  short_description: "核对 Console API、OpenAPI、生成类型、认证权限和前后端交互兼容性"

@@ -14,6 +14,9 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
  */
 public interface WorkflowNodeDispatchService {
 
+  /** 使用原始节点尝试标识恢复已持久化拒绝的延迟子作业。 */
+  void rejectDeferredChildRequest(String tenantId, String requestId);
+
   int dispatchNode(
       JobInstanceEntity jobInstance,
       WorkflowRunEntity workflowRun,

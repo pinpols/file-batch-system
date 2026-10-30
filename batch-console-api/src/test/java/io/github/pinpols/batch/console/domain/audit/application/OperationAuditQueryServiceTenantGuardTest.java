@@ -2,31 +2,38 @@ package io.github.pinpols.batch.console.domain.audit.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.page.CursorCodec;
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.OperationAuditQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -59,10 +66,8 @@ class OperationAuditQueryServiceTenantGuardTest {
     service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));
-    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-        .thenReturn(0L);
-    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-        .thenReturn(List.of());
+    when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(0L);
+    when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class))).thenReturn(List.of());
   }
 
   @AfterEach
@@ -108,9 +113,12 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("ta"); // 一致即透传
     service.query(req);
-    verify(mapper).count(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any());
     verify(mapper)
-        .query(eq("ta"), any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+        .count(ArgumentMatchers.argThat(
+            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
+    verify(mapper)
+        .query(ArgumentMatchers.argThat(
+            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "ta")));
   }
 
   @Test
@@ -138,7 +146,9 @@ class OperationAuditQueryServiceTenantGuardTest {
     req.setPageSize(10);
     req.setTenantId("tb"); // admin 跨租 OK
     service.query(req);
-    verify(mapper).count(eq("tb"), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper)
+        .count(ArgumentMatchers.argThat(
+            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "tb")));
     assertThat(req.getTenantId()).isEqualTo("tb");
   }
 
@@ -156,21 +166,12 @@ class OperationAuditQueryServiceTenantGuardTest {
 
     service.query(req);
 
-    verify(mapper, never())
-        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
     verify(mapper)
-        .query(
-            eq("ta"),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            eq(100L),
-            eq(new PageRequest(1, 10)));
+        .query(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.cursorId(), 100L)
+            && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
   }
 
   @Test
@@ -187,21 +188,53 @@ class OperationAuditQueryServiceTenantGuardTest {
 
     service.query(req);
 
-    verify(mapper, never())
-        .count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any());
+    verify(mapper, never()).count(ArgumentMatchers.any(OperationAuditCountQuery.class));
     verify(mapper)
-        .query(
-            eq("ta"),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            any(),
-            eq(null),
-            eq(new PageRequest(1, 10)));
+        .query(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "ta")
+            && Objects.equals(parameters.cursorId(), null)
+            && Objects.equals(parameters.pageRequest(), new PageRequest(1, 10))));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"%%%", "e30"})
+  @DisplayName("损坏或缺少 id 的非空游标必须拒绝，不能重新查询第一页")
+  void shouldRejectInvalidNonBlankCursor(String cursor) {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+    OperationAuditQueryRequest req = new OperationAuditQueryRequest();
+    req.setTenantId("ta");
+    req.setPageSize(10);
+    req.setCursor(cursor);
+
+    assertThatThrownBy(() -> service.query(req))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(failure.getMessageKey()).isEqualTo(ResultCode.INVALID_ARGUMENT.detailKey());
+        });
+    verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"1.5", "9223372036854775808"})
+  @DisplayName("非整数或越界游标不得进入操作审计查询")
+  void shouldRejectNumericCursorBeforeAuditQuery(String number) {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("tester", "ta", Set.of("ROLE_TENANT_USER")), "x"));
+    OperationAuditQueryRequest request = new OperationAuditQueryRequest();
+    request.setTenantId("ta");
+    request.setPageSize(10);
+    String json = "{\"id\":" + number + "}";
+    request.setCursor(Base64.getUrlEncoder()
+        .withoutPadding()
+        .encodeToString(json.getBytes(StandardCharsets.UTF_8)));
+    assertThatThrownBy(() -> service.query(request))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
+    verify(mapper, never()).query(ArgumentMatchers.any(OperationAuditQuery.class));
   }
 
   @Test
@@ -210,9 +243,8 @@ class OperationAuditQueryServiceTenantGuardTest {
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
             new ConsolePrincipal("admin", "system", Set.of("ROLE_ADMIN")), "x"));
-    when(mapper.count(any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
-        .thenReturn(1L);
-    when(mapper.query(any(), any(), any(), any(), any(), any(), any(), any(), any(), any(), any()))
+    when(mapper.count(ArgumentMatchers.any(OperationAuditCountQuery.class))).thenReturn(1L);
+    when(mapper.query(ArgumentMatchers.any(OperationAuditQuery.class)))
         .thenReturn(List.of(new AuditRow(
             1L,
             "ta",

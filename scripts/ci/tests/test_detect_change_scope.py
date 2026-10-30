@@ -1,3 +1,5 @@
+# 用途：验证变更范围分类与测试分片路由。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_detect_change_scope.py。
 from __future__ import annotations
 
 import importlib.util
@@ -13,6 +15,27 @@ SPEC.loader.exec_module(MODULE)
 
 
 class DetectChangeScopeTest(unittest.TestCase):
+    def test_quality_rule_xml_triggers_java_static_gate(self) -> None:
+        for path in ("config/quality/pmd-ruleset.xml", "config/quality/spotbugs-npe-filter.xml"):
+            with self.subTest(path=path):
+                result = MODULE.classify_paths([path])
+                self.assertTrue(result["java"])
+                self.assertTrue(result["ci"])
+                self.assertTrue(result["config"])
+                self.assertFalse(result["unknown"])
+                self.assertFalse(result["unit-required"])
+
+    def test_quality_directory_readme_remains_docs_only(self) -> None:
+        result = MODULE.classify_paths(["config/quality/README.md"])
+        self.assertTrue(result["docs-only"])
+        self.assertFalse(result["java"])
+        self.assertFalse(result["ci"])
+
+    def test_shell_entrypoints_outside_scripts_still_run_script_guards(self) -> None:
+        for path in ("deploy/docker/entrypoint.sh", "docs/api/sdk-contract-fixtures/validate.sh", "sdk/python/scripts/run-contract.sh"):
+            with self.subTest(path=path):
+                self.assertTrue(MODULE.classify_paths([path])["scripts"])
+
     def test_contract_policy_is_not_docs_only(self) -> None:
         result = MODULE.classify_paths(["docs/governance/java-contract-governance.json"])
         self.assertTrue(result["ci"])
@@ -138,15 +161,24 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertTrue(result["docs"])
         self.assertTrue(result["api"])
 
-    def test_excel_test_fixture_is_documentation_and_test_scope(self) -> None:
+    def test_excel_test_fixture_is_test_scope(self) -> None:
         result = MODULE.classify_paths(
-            ["docs/test-data/test-full-coverage-import-suite/ta-tenant-config-package-test.xlsx"]
+            ["test-data/tenant-config-packages/ta-tenant-config-package-test.xlsx"]
         )
 
-        self.assertTrue(result["docs"])
+        self.assertFalse(result["docs"])
         self.assertTrue(result["tests"])
         self.assertFalse(result["docs-only"])
         self.assertFalse(result["unit-required"])
+
+    def test_shared_sim_fixtures_are_test_scope(self) -> None:
+        for path in ("test-data/sim/probe.sql", "test-data/sim/probe.json"):
+            with self.subTest(path=path):
+                result = MODULE.classify_paths([path])
+                self.assertTrue(result["tests"])
+                self.assertFalse(result["docs"])
+                self.assertFalse(result["docs-only"])
+                self.assertFalse(result["unknown"])
 
     def test_unknown_files_fail_closed(self) -> None:
         result = MODULE.classify_paths(["some-new-root-format.bin"])

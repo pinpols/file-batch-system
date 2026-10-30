@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskCapability;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -52,11 +54,15 @@ public class DispatchTaskExecutor implements BatchTaskExecutor {
 
   @Override
   public TaskCapability capability() {
-    return new TaskCapability(
-        Set.of(ResourceKind.NET, ResourceKind.DISK),
-        false,
-        true,
-        Duration.ofSeconds(timeoutProperties.getCapabilityTimeoutSeconds()));
+    Set<ResourceKind> resourceKinds = Set.of(ResourceKind.NET, ResourceKind.DISK);
+    long capabilityTimeoutSeconds = timeoutProperties.getCapabilityTimeoutSeconds();
+    Duration capabilityTimeout = Duration.ofSeconds(capabilityTimeoutSeconds);
+    return new TaskCapability(resourceKinds, false, true, capabilityTimeout);
+  }
+
+  @Override
+  public ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+    return DispatchReplayCapability.declaration();
   }
 
   @Override
@@ -65,8 +71,10 @@ public class DispatchTaskExecutor implements BatchTaskExecutor {
         ctx.tenantId(), ctx.jobCode(), taskType(), ctx.workerId(), ctx.runtimeAttributes());
     StepExecutionResponse resp = delegate.execute(req);
     if (resp.success()) {
-      return TaskResult.ok(resp.message() == null ? "ok" : resp.message());
+      String successMessage = EmptyChecks.isNull(resp.message()) ? "ok" : resp.message();
+      return TaskResult.ok(successMessage);
     }
-    return TaskResult.fail(resp.message() == null ? resp.code() : resp.message());
+    String failureMessage = EmptyChecks.isNull(resp.message()) ? resp.code() : resp.message();
+    return TaskResult.fail(failureMessage);
   }
 }

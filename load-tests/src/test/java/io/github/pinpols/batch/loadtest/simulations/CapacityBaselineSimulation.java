@@ -18,7 +18,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * Production-level capacity baseline simulation.
  *
  * <p>Models realistic mixed traffic: 70 % read (console queries) + 30 % write (job launches).
- * Uses a stepped ramp to find the saturation point rather than a fixed user count.
+ * 采用阶梯式升压查找饱和点，而不是使用固定用户数。
  *
  * <p>Stepped ramp profile:
  * <pre>
@@ -30,7 +30,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * </pre>
  *
  * <p>The test passes only when the 100-user step meets all SLOs. Steps above 100 users
- * are used to characterise the degradation curve; failures there do not fail the build.
+ * 用于描绘性能退化曲线；这些阶段出现失败不会导致构建失败。
  *
  * <p>SLO assertions (applied globally across all steps):
  * <ul>
@@ -42,7 +42,7 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  * <p>Run:
  * <pre>
  *   mvn gatling:test -Dsimulation=CapacityBaselineSimulation \
- *       -DjobCode=E2E_IMPORT_LOAD -DtenantId=t1
+ *       -DworkflowDefinitionId=123 -DtenantId=t1
  * </pre>
  */
 public class CapacityBaselineSimulation extends Simulation {
@@ -79,13 +79,13 @@ public class CapacityBaselineSimulation extends Simulation {
     private final String launchBody = """
             {
               "tenantId": "%s",
-              "jobCode": "%s",
+              "workflowDefinitionId": %s,
               "bizDate": "%s",
               "triggerType": "API",
               "params": {}
             }
             """
-                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.JOB_CODE, GatlingConfig.BIZ_DATE);
+                .formatted(GatlingConfig.TENANT_ID, GatlingConfig.requiredWorkflowDefinitionId(), GatlingConfig.BIZ_DATE);
 
     // ── Write scenario (30 %) — job launch ─────────────────────────────────────
 

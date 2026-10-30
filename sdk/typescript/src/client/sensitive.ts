@@ -43,7 +43,9 @@ export class SensitiveDataValidator {
 
   /** @param extraKeywords tenant deny-list extension (§1.8 hook). */
   constructor(extraKeywords: readonly string[] = []) {
-    this.#keywords = new Set([...SENSITIVE_KEYWORDS, ...extraKeywords].map(normalizeKey));
+    const sourceKeywords = [...SENSITIVE_KEYWORDS, ...extraKeywords];
+    const normalizedKeywords = sourceKeywords.map(normalizeKey);
+    this.#keywords = new Set(normalizedKeywords);
   }
 
   /** Extend the deny-list at runtime (returns this for chaining). */

@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+# 用途：5 类 worker handler(batteries)单测 × Java + Python SDK。
+# 用法：在仓库根目录执行 bash scripts/local/sdk-handler-tests.sh；参数与前置环境见下方说明及所属 README。
 # =============================================================================
 # sdk-handler-tests.sh — 5 类 worker handler(batteries)单测 × Java + Python SDK
 #
 # 测的是各 SDK **内建/抽象 handler** 对 5 类 worker 的支持:
-#   import · export · process · dispatch · atomic
+# 覆盖五类处理器：import、export、process、dispatch、atomic。
 # (Java: sdk/java/core 的 handler 包;Python: sdk/python 的 tests/handler。)
 #
 # 这些是「类型相关」的 batteries 单测,与 wire 路径无关(wire 全链路由

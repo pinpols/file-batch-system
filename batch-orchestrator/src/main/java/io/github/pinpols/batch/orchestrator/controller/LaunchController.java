@@ -34,7 +34,8 @@ public class LaunchController {
     }
     // 租户边界守卫(与 Worker/Task 控制器一致):租户 API-Key 路径下,以 filter 解析出的真实租户
     // 为准,与 body 声明对账,不一致即拒。legacy X-Internal-Secret 路径无解析租户时透传 body。
-    return launchApplicationService.launch(withGuardedTenant(request, httpRequest));
+    LaunchRequest guardedRequest = withGuardedTenant(request, httpRequest);
+    return launchApplicationService.launch(guardedRequest);
   }
 
   private static LaunchRequest withGuardedTenant(

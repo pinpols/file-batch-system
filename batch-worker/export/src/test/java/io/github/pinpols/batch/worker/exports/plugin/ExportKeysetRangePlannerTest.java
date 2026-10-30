@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import java.math.BigDecimal;
@@ -8,12 +9,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.postgresql.util.PGobject;
 
-@DisplayName("导出 keyset 区间规划单测:等宽切分边界,开关判定与异常回退到哈希分片")
+@DisplayName("导出分片规划:多分片统一哈希和保留区间计算")
 class ExportKeysetRangePlannerTest {
 
   private final ExportKeysetRangePlanner planner = new ExportKeysetRangePlanner();
@@ -51,8 +51,8 @@ class ExportKeysetRangePlannerTest {
   }
 
   @Test
-  @DisplayName("开启后取边界值只触发一次,重复解析复用同一区间结果")
-  void resolve_active_callsMinMaxOnce_andCaches() {
+  @DisplayName("多分片即使开启区间配置也不探测边界,统一哈希")
+  void shouldUseHashWithoutProbing_whenRangeOptionEnabled() {
     ExportDataContext ctx = context(1, 4, true);
     AtomicInteger calls = new AtomicInteger();
     Supplier<BigDecimal[]> supplier = () -> {
@@ -63,10 +63,29 @@ class ExportKeysetRangePlannerTest {
     ExportKeysetRange first = planner.resolve(ctx, supplier);
     ExportKeysetRange second = planner.resolve(ctx, supplier);
 
-    assertThat(calls.get()).isEqualTo(1);
-    assertThat(first.active()).isTrue();
-    assertThat(first.hiN()).isEqualByComparingTo("25");
-    assertThat(second).isSameAs(first);
+    assertThat(calls.get()).isZero();
+    assertThat(first.active()).isFalse();
+    assertThat(first.partitionCount()).isEqualTo(4);
+    assertThat(first.partitionNo()).isEqualTo(1);
+    assertThat(second).isEqualTo(first);
+  }
+
+  @Test
+  @DisplayName("多分片忽略已存在的区间缓存，避免恢复旧范围策略")
+  void shouldIgnoreCachedRange_whenMultiplePartitions() {
+    ExportDataContext ctx = context(1, 4, true);
+    ctx.exportSnapshot()
+        .put(
+            ExportKeysetRangePlanner.SNAP_KEY,
+            new ExportKeysetRange(true, BigDecimal.ZERO, BigDecimal.TEN, false, 4, 1));
+
+    ExportKeysetRange result = planner.resolve(ctx, () -> {
+      throw new AssertionError("hash partitioning must not probe bounds");
+    });
+
+    assertThat(result.active()).isFalse();
+    assertThat(result.partitionCount()).isEqualTo(4);
+    assertThat(result.partitionNo()).isEqualTo(1);
   }
 
   @Test
@@ -78,27 +97,27 @@ class ExportKeysetRangePlannerTest {
   }
 
   @Test
-  @DisplayName("查询参数模板里显式开启区间切分:按分区序号切出对应区间")
-  void resolve_optedInFromQueryParamSchema_active() {
+  @DisplayName("查询参数模板中开启区间配置仍使用哈希")
+  void shouldUseHash_whenRangeOptionInQuerySchema() {
     Map<String, Object> tc = Map.of("query_param_schema", Map.of("partition_keyset_range", true));
     ExportDataContext ctx =
         new ExportDataContext("t1", "job", "batch", "tpl", tc, new LinkedHashMap<>(), 2, 4);
 
     ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
 
-    assertThat(r.active()).isTrue();
-    assertThat(r.loN()).isEqualByComparingTo("25");
-    assertThat(r.hiN()).isEqualByComparingTo("50");
+    assertThat(r.active()).isFalse();
+    assertThat(r.partitionNo()).isEqualTo(2);
   }
 
   @Test
-  @DisplayName("嵌套在 SQL 模板配置里开启区间切分:同样解析出生效区间")
-  void resolve_optedInFromPostgresJsonbNestedSqlTemplate_active() {
+  @DisplayName("JSONB 内嵌区间配置也统一使用哈希")
+  void shouldUseHash_whenRangeOptionInJsonb() {
     PGobject queryParamSchema = new PGobject();
-    Assertions.assertDoesNotThrow(() -> {
-      queryParamSchema.setType("jsonb");
-      queryParamSchema.setValue("{\"sqlTemplateExport\":{\"partitionKeysetRange\":true}}");
-    });
+    assertThatCode(() -> {
+          queryParamSchema.setType("jsonb");
+          queryParamSchema.setValue("{\"sqlTemplateExport\":{\"partitionKeysetRange\":true}}");
+        })
+        .doesNotThrowAnyException();
     ExportDataContext ctx = new ExportDataContext(
         "t1",
         "job",
@@ -111,9 +130,8 @@ class ExportKeysetRangePlannerTest {
 
     ExportKeysetRange r = planner.resolve(ctx, minMax("0", "100"));
 
-    assertThat(r.active()).isTrue();
-    assertThat(r.loN()).isEqualByComparingTo("50");
-    assertThat(r.hiN()).isEqualByComparingTo("75");
+    assertThat(r.active()).isFalse();
+    assertThat(r.partitionNo()).isEqualTo(3);
   }
 
   @Test

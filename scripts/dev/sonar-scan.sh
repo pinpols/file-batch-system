@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
+# 用途：本地统一 SonarQube 扫描 + 导出报告。
+# 用法：在仓库根目录执行 bash scripts/dev/sonar-scan.sh；参数与前置环境见下方说明及所属 README。
 # =============================================================================
-# sonar-scan.sh — 本地一键 SonarQube 扫描 + 导出报告
+# sonar-scan.sh — 本地统一 SonarQube 扫描 + 导出报告
 #
-# 用法：
+# 调用示例：
 #   ./scripts/dev/sonar-scan.sh --full        # 全量扫描（默认）
 #   ./scripts/dev/sonar-scan.sh --incremental # 只编译不跑测试，按 Git 变更行导出报告
 #   ./scripts/dev/sonar-scan.sh --incremental --with-tests # 增量扫描并刷新覆盖率

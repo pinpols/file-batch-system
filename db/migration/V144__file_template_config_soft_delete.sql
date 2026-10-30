@@ -21,6 +21,7 @@ ALTER TABLE batch.file_template_config
   ADD COLUMN is_deleted boolean NOT NULL DEFAULT false;
 
 -- 用于 partial index 加速「列表只读 active」查询,避免每次全表扫
+
 CREATE INDEX IF NOT EXISTS idx_file_template_config_active
   ON batch.file_template_config (tenant_id, template_code)
   WHERE is_deleted = false;

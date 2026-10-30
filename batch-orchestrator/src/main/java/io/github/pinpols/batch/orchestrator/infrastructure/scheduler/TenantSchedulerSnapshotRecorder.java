@@ -8,6 +8,7 @@ import io.github.pinpols.batch.orchestrator.config.SchedulerSnapshotProperties;
 import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
+import io.github.pinpols.batch.orchestrator.domain.view.TenantWorkerCountView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantQuotaPolicyMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TenantSchedulerSnapshotMapper;
@@ -51,11 +52,9 @@ public class TenantSchedulerSnapshotRecorder {
     }
     // 一次 GROUP BY 查所有租户的 ONLINE worker 数,取代 N 次 countByTenantAndStatus
     Map<String, Long> onlineByTenant = new HashMap<>();
-    for (Map<String, Object> row : workerRegistryMapper.countByTenantsAndStatus(
+    for (TenantWorkerCountView row : workerRegistryMapper.countByTenantsAndStatus(
         tenantIds, WorkerRegistryStatus.ONLINE.code())) {
-      String tid = String.valueOf(row.get("tenant_id"));
-      Object cnt = row.get("cnt");
-      onlineByTenant.put(tid, cnt instanceof Number n ? n.longValue() : 0L);
+      onlineByTenant.put(row.tenantId(), row.cnt());
     }
     List<TenantSchedulerSnapshotEntity> rows = new ArrayList<>(tenantIds.size());
     for (String tenantId : tenantIds) {
@@ -70,22 +69,24 @@ public class TenantSchedulerSnapshotRecorder {
       }
       SchedulerSnapshotResponse.PolicySnapshot p = snap.policies().getFirst();
       long online = onlineByTenant.getOrDefault(tenantId, 0L);
-      TenantSchedulerSnapshotEntity snapshot = new TenantSchedulerSnapshotEntity(
-          null,
-          tenantId,
-          snap.generatedAt(),
-          p.fairShareGroup(),
-          p.policyCode(),
-          (int) Math.min(Integer.MAX_VALUE, p.activeJobs()),
-          (int) Math.min(Integer.MAX_VALUE, p.activePartitions()),
-          p.maxRunningJobsPerTenant(),
-          p.burstLimit(),
-          p.effectiveTenantJobCap(),
-          (int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()),
-          p.groupSharedMaxRunningJobs(),
-          p.quotaResetPolicy(),
-          (int) Math.min(Integer.MAX_VALUE, online),
-          JsonbString.of(JsonUtils.toJson(snap)));
+      String snapshotJson = JsonUtils.toJson(snap);
+      TenantSchedulerSnapshotEntity snapshot = TenantSchedulerSnapshotEntity.builder()
+          .id(null)
+          .tenantId(tenantId)
+          .snapshotAt(snap.generatedAt())
+          .fairShareGroup(p.fairShareGroup())
+          .policyCode(p.policyCode())
+          .activeJobs((int) Math.min(Integer.MAX_VALUE, p.activeJobs()))
+          .activePartitions((int) Math.min(Integer.MAX_VALUE, p.activePartitions()))
+          .maxJobsBase(p.maxRunningJobsPerTenant())
+          .burstLimit(p.burstLimit())
+          .effectiveJobCap(p.effectiveTenantJobCap())
+          .groupActiveJobs((int) Math.min(Integer.MAX_VALUE, p.groupActiveJobs()))
+          .groupMaxJobs(p.groupSharedMaxRunningJobs())
+          .quotaResetPolicy(p.quotaResetPolicy())
+          .onlineWorkers((int) Math.min(Integer.MAX_VALUE, online))
+          .detailJson(JsonbString.of(snapshotJson))
+          .build();
       rows.add(snapshot);
     }
     if (!rows.isEmpty()) {

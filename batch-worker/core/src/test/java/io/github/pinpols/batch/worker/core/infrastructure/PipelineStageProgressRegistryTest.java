@@ -39,6 +39,22 @@ class PipelineStageProgressRegistryTest {
     assertThat(registry.snapshots()).isEmpty();
   }
 
+  @Test
+  @DisplayName("进度携带原始认领身份，旧尝试清理不删除新尝试")
+  void shouldPreserveOriginClaimAndIsolateCleanup() {
+    TestContext old = context(11L, 101L);
+    old.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "old");
+    old.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, 700L);
+    TestContext current = context(11L, 101L);
+    current.getAttributes().put(PipelineRuntimeKeys.PARTITION_INVOCATION_ID, "new");
+    current.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, 701L);
+    registry.publish(old, "LOAD", 99L, 100L);
+    registry.publish(current, "LOAD", 2L, 100L);
+    registry.clear(old, "LOAD");
+    assertThat(registry.snapshots())
+        .containsExactly(new WorkerPipelineProgressDto(11L, 101L, "LOAD", 2L, 100L, "new", 701L));
+  }
+
   private static TestContext context(long taskId, long pipelineInstanceId) {
     TestContext context = new TestContext();
     context.getAttributes().put(PipelineRuntimeKeys.TASK_ID, taskId);

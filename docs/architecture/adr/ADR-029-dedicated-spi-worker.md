@@ -2,7 +2,7 @@
 
 - **Status**: Accepted(2026-05-30)
 - **Date**: 2026-05-30
-- **Related**: Task SPI Phase 1-5(`docs/design/task-spi-design.md`)/ 差距分析(`docs/analysis/competitive-gap-analysis-2026-05-30.md`)
+- **Related**: Task SPI Phase 1-5(`docs/design/task-spi-design.md`)/ 差距分析(`docs/architecture/system-scope-boundary.md`)
 - **Source**: dual-use(RCE 级)executor 部署隔离讨论
 
 ## 背景

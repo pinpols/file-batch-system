@@ -33,3 +33,13 @@ handler := client.WithRetry(
 
 Production idempotency stores implement `SdkIdempotencyStore`; the SDK ships only
 `NoopIdempotencyStore` and `InMemoryIdempotencyStore`.
+
+## 实际执行入口计时
+
+默认 `Worker.dispatch` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true`，使用 CLAIM 返回的当前 invocation。确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。详见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。
+
+### 消费背压与已拉取记录
+
+达到并发上限后, Worker 保留当前已经拉取的记录, 等待原有低水位判定恢复后优先认领它,
+再继续获取后续记录。Pause/Resume 本身不能让已拉取记录自动重读; 提交不能跨过未处理消息。
+停机或取消会退出容量等待, 原记录保持未提交。真实 Kafka 回归位于 `kafka/kafka_consumer_integration_test.go`。

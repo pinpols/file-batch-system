@@ -17,6 +17,7 @@ ALTER TABLE batch.job_instance
     ADD COLUMN IF NOT EXISTS data_interval_end TIMESTAMPTZ;
 
 -- 软约束 (允许双 null, 但不能只一边非 null): start 和 end 必须同时存在或同时不存在
+
 ALTER TABLE batch.job_instance
     DROP CONSTRAINT IF EXISTS ck_job_instance_data_interval_pair;
 

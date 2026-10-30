@@ -27,13 +27,13 @@ BATCH_OBSERVABILITY_KAFKA_BOOTSTRAP_SERVERS=localhost:19092 \
 | `scripts/ops/inspect-db.sh` | Flyway 历史、告警事件、长期停滞作业、Outbox 积压、死信积压、重试积压 | `BATCH_INSPECT_SKIP_DB=true` |
 | `scripts/ops/inspect-workers.sh` | DRAINING 超时、心跳失联、孤儿任务 | `BATCH_INSPECT_SKIP_WORKERS=true` |
 
-## 自愈脚本（发现异常后执行）
+## 自愈与诊断脚本（发现异常后执行）
 
 | 脚本 | 适用场景 | 安全说明 |
 |---|---|---|
 | `scripts/ops/heal-drain-timeout.sh` | inspect-workers 报告 DRAINING 超时 Worker | 默认 dry-run；`BATCH_HEAL_DRY_RUN=false` 才实际执行 |
-| `scripts/ops/heal-dead-letters.sh` | 死信积压 > 阈值，需批量重放 | 默认 dry-run；可按 tenant/source_type 过滤 |
-| `scripts/ops/heal-stuck-outbox.sh` | Outbox 积压长期不消费（Kafka 恢复后 Orchestrator 未重启） | 默认 dry-run；重置 retry_count 触发重发 |
+| `scripts/ops/inspect-dead-letters.sh` | 死信积压 > 阈值，需核对待处理项 | 只读；人工重放经 Console 审批，可按 tenant/source-type 过滤 |
+| `scripts/ops/heal-stuck-outbox.sh` | 只读统计 stale `PUBLISHING` Outbox | 默认只读，也接受 `--dry-run`；禁止直接更新 Outbox。stale 由 Orchestrator 调度器回收，`FAILED`/`GIVE_UP` 通过 Orchestrator 审计接口重投 |
 
 ## 检查项说明
 

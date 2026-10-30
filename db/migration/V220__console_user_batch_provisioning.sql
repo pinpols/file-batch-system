@@ -1,4 +1,5 @@
 -- 登录按 lower(username) 查找，约束必须采用相同口径。历史冲突会使迁移失败，需先人工处置。
+
 CREATE UNIQUE INDEX uk_console_user_account_username_ci
     ON batch.console_user_account (lower(username));
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：CI / staging 统一回归入口。
+# 用法：在仓库根目录执行 bash scripts/ci/run-full-regression.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # run-full-regression.sh - CI / staging 统一回归入口
 # 说明：
@@ -135,7 +137,7 @@ trap on_error ERR
 # docker / kubectl 常见路径(用作 PATH miss 时的 fallback)。完整说明见
 # scripts/local/docker-path.sh 顶部注释。简表:
 #   Linux:   /usr/bin   (apt/dnf 标准) ;  /usr/local/bin  (manual) ;  /snap/bin  (Ubuntu)
-#   macOS:   /usr/local/bin  (Intel HB) ;  /opt/homebrew/bin  (Apple Silicon) ;
+# macOS 的候选路径：/usr/local/bin（Intel Homebrew）与 /opt/homebrew/bin（Apple Silicon）。
 #            /Applications/Docker.app/Contents/Resources/bin  (Docker Desktop)
 #   常见:    ~/.rd/bin       (Rancher Desktop) ;  ~/.docker/bin  (Docker CLI plugin)
 #   WSL2:    见 Linux(host docker.exe 不推荐通过 /mnt/c 调用,慢)
@@ -644,7 +646,7 @@ fi
 if [[ "$RUN_LOAD_SMOKE" == true ]]; then
   run_step \
     "Load Smoke (JobLaunchSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.JobLaunchSimulation -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.JobLaunchSimulation -DworkflowDefinitionId=\${BATCH_LOAD_SMOKE_WORKFLOW_ID:?required} -Dusers.peak=\${BATCH_LOAD_SMOKE_USERS_PEAK:-5} -Dduration.seconds=\${BATCH_LOAD_SMOKE_DURATION_SECONDS:-30} -Dramp.seconds=\${BATCH_LOAD_SMOKE_RAMP_SECONDS:-10}"
 fi
 
 if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
@@ -652,7 +654,7 @@ if [[ "$RUN_LOAD_CAPACITY" == true ]]; then
   # 失败即非零退出，作为容量回归门禁。stepped ramp 25→200 users，约 5-10 分钟。
   run_step \
     "Capacity Baseline (CapacityBaselineSimulation)" \
-    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.CapacityBaselineSimulation -DjobCode=\${BATCH_LOAD_CAPACITY_JOB_CODE:-E2E_IMPORT_LOAD} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
+    bash -lc "cd '$ROOT_DIR/load-tests' && mvn -q gatling:test -Dsimulation=io.github.pinpols.batch.loadtest.simulations.CapacityBaselineSimulation -DworkflowDefinitionId=\${BATCH_LOAD_CAPACITY_WORKFLOW_ID:?required} -DtenantId=\${BATCH_LOAD_CAPACITY_TENANT_ID:-t1}"
 fi
 
 if [[ "$RUN_DEPLOY_SMOKE" == true ]]; then

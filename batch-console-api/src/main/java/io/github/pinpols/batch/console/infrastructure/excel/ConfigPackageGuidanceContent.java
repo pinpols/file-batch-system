@@ -82,9 +82,12 @@ public final class ConfigPackageGuidanceContent {
       throw new IllegalStateException(RESOURCE + " is missing the sheets object");
     }
     Map<String, Sheet> sheets = new LinkedHashMap<>();
-    sheetsNode
-        .properties()
-        .forEach(e -> sheets.put(e.getKey(), parseSheet(e.getKey(), e.getValue(), fragments)));
+    sheetsNode.properties().forEach(entry -> {
+      String sheetName = entry.getKey();
+      JsonNode sheetNode = entry.getValue();
+      Sheet sheet = parseSheet(sheetName, sheetNode, fragments);
+      sheets.put(sheetName, sheet);
+    });
 
     return new ConfigPackageGuidanceContent(fragments, sheets);
   }

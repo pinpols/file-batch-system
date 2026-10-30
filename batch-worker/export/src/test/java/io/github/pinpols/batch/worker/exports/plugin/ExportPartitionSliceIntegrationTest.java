@@ -93,64 +93,64 @@ class ExportPartitionSliceIT extends AbstractIntegrationTest {
       conn.setAutoCommit(false);
 
       // --- sql_template 测试表 ---
-      stmt.execute("""
+      final String createIFSql = """
           CREATE TABLE IF NOT EXISTS biz.slice_demo (
               id        BIGINT PRIMARY KEY,
               tenant_id VARCHAR(64)  NOT NULL,
               batch_no  VARCHAR(128) NOT NULL
           )
-          """);
-      stmt.execute("TRUNCATE TABLE biz.slice_demo");
+          """;
+      stmt.execute(createIFSql);
+      final String truncateBizSliceDemoSql = """
+          TRUNCATE TABLE biz.slice_demo
+      """;
+      stmt.execute(truncateBizSliceDemoSql);
 
-      StringBuilder bulk =
-          new StringBuilder("INSERT INTO biz.slice_demo(id, tenant_id, batch_no) VALUES ");
+      StringBuilder bulk = new StringBuilder("""
+          INSERT INTO biz.slice_demo(id, tenant_id, batch_no) VALUES
+          """);
       for (int i = 1; i <= ROW_COUNT; i++) {
-        bulk.append("(")
-            .append(i)
-            .append(",'")
-            .append(TENANT_ID)
-            .append("','")
-            .append(BATCH_NO)
-            .append("')");
+        bulk.append("(%d,'%s','%s')".formatted(i, TENANT_ID, BATCH_NO));
         if (i < ROW_COUNT) {
           bulk.append(",");
         }
       }
-      stmt.execute(bulk.toString());
+      String insertSliceRowsSql = bulk.toString();
+      stmt.execute(insertSliceRowsSql);
 
       // --- jdbc_mapped 测试：biz.settlement_batch + biz.settlement_detail ---
       // 插入一条 batch（id = BATCH_ID_SEED 确保不与其他 IT 冲突）
-      stmt.execute("""
+      final String insertBizSettlementBatchSql =
+          """
           INSERT INTO biz.settlement_batch
               (id, tenant_id, batch_no, biz_date, accounting_period)
           VALUES
               (%d, '%s', '%s', '2024-01-01', '2024-01')
           ON CONFLICT DO NOTHING
-          """.formatted(BATCH_ID_SEED, TENANT_ID, "JDBC-MAPPED-BATCH"));
+          """.formatted(BATCH_ID_SEED, TENANT_ID, "JDBC-MAPPED-BATCH");
+      stmt.execute(insertBizSettlementBatchSql);
 
       // 清理旧明细（幂等）
-      stmt.execute("DELETE FROM biz.settlement_detail WHERE batch_id = " + BATCH_ID_SEED);
+      final String deleteBizSettlementDetailSql = """
+          DELETE FROM biz.settlement_detail WHERE batch_id = %d
+          """.formatted(BATCH_ID_SEED);
+      stmt.execute(deleteBizSettlementDetailSql);
 
       // 批量插入 1000 条明细
-      StringBuilder detailBulk = new StringBuilder("INSERT INTO biz.settlement_detail"
-          + "(tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,"
-          + " gross_amount, fee_amount, net_amount) VALUES ");
+      StringBuilder detailBulk = new StringBuilder("""
+          INSERT INTO biz.settlement_detail
+              (tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
+               gross_amount, fee_amount, net_amount) VALUES
+          """);
       for (int i = 1; i <= ROW_COUNT; i++) {
-        detailBulk
-            .append("('")
-            .append(TENANT_ID)
-            .append("',")
-            .append(BATCH_ID_SEED)
-            .append(",'SNO-")
-            .append(i)
-            .append("','CUST-")
-            .append(i)
-            .append("','2024-01-01','2024-01',0,0,0)");
+        detailBulk.append("('%s',%d,'SNO-%d','CUST-%d','2024-01-01','2024-01',0,0,0)"
+            .formatted(TENANT_ID, BATCH_ID_SEED, i, i));
         if (i < ROW_COUNT) {
           detailBulk.append(",");
         }
       }
-      stmt.execute(detailBulk.toString());
+      String insertSettlementDetailsSql = detailBulk.toString();
+      stmt.execute(insertSettlementDetailsSql);
 
       conn.commit();
     }

@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
 
 import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import java.time.Instant;
+import lombok.Builder;
 
 /** Worker 注册记录的 Console 只读视图。 */
+@Builder
 public record WorkerRegistryResponse(
     Long id,
     String tenantId,
@@ -19,17 +21,18 @@ public record WorkerRegistryResponse(
     Integer port) {
 
   public static WorkerRegistryResponse from(WorkerRegistryEntity entity) {
-    return new WorkerRegistryResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getWorkerCode(),
-        entity.getWorkerGroup(),
-        entity.getStatus(),
-        entity.getHeartbeatAt(),
-        entity.getCurrentLoad(),
-        entity.getMaxConcurrent(),
-        entity.getDrainStartedAt(),
-        entity.getDrainDeadlineAt(),
-        entity.getPort());
+    return WorkerRegistryResponse.builder()
+        .id(entity.getId())
+        .tenantId(entity.getTenantId())
+        .workerCode(entity.getWorkerCode())
+        .workerGroup(entity.getWorkerGroup())
+        .status(entity.getStatus())
+        .heartbeatAt(entity.getHeartbeatAt())
+        .currentLoad(entity.getCurrentLoad())
+        .maxConcurrent(entity.getMaxConcurrent())
+        .drainStartedAt(entity.getDrainStartedAt())
+        .drainDeadlineAt(entity.getDrainDeadlineAt())
+        .port(entity.getPort())
+        .build();
   }
 }

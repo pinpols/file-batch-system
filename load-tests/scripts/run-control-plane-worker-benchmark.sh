@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：对 Worker 与调度控制面执行联动压力基准。
+# 用法：在仓库根目录执行 bash load-tests/scripts/run-control-plane-worker-benchmark.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -50,14 +52,15 @@ ATOMIC_JOBS_CSV="${ATOMIC_JOBS_CSV:-atomic_sql_demo}"
 KAFKA_LAG_GROUP_REGEX="${KAFKA_LAG_GROUP_REGEX:-batch-worker-(process|dispatch|atomic)|orchestrator-trigger-launch}"
 BATCH_SCRIPT_RUNTIME="${BATCH_SCRIPT_RUNTIME:-auto}"
 PG_SAMPLE_INTERVAL_SECONDS="${PG_SAMPLE_INTERVAL_SECONDS:-5}"
-# 结果业务键基数。1 表示所有请求使用同一 bizDate，专测同键重跑；大于 1 时轮换 bizDate，
-# 用于测量独立业务键下的通用控制面吞吐。
+# 业务日基数。1 使用同一 Workflow/date 检查去重；大于 1 时由混合画像全局分配日期，
+# 避免 Atomic 与 Trigger 引用同一 Workflow 时意外复用已接纳的根运行。
 BIZ_DATE_CARDINALITY="${BIZ_DATE_CARDINALITY:-1}"
 LARGE_LOAD_REQUESTS="${LARGE_LOAD_REQUESTS:-100000}"
 ALLOW_LOW_RELAY_FOR_LARGE_LOAD="${ALLOW_LOW_RELAY_FOR_LARGE_LOAD:-0}"
 
 
 RUN_ID="${RUN_ID:-ctlw-$(date +%Y%m%d%H%M%S)}"
+validate_load_test_run_id "$RUN_ID"
 OUT_DIR="${OUT_DIR:-$LOAD_DIR/target/worker-load-data/$RUN_ID}"
 require_load_test_disk_headroom "control-plane worker benchmark" "${LOAD_TEST_MIN_FREE_GIB:-5}"
 if [[ -z "${DISPATCH_FIXTURE_COUNT:-}" ]]; then
@@ -89,17 +92,42 @@ stop_pg_pressure_sampler() {
 }
 
 on_exit_cleanup() {
-  local rc=$?
+  local rc=$? cleanup_rc=0 operation_rc
+  trap - EXIT
   stop_pg_pressure_sampler
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
     exit "$rc"
   fi
+  if [[ -n "${LOG_DIR:-}" ]]; then
+    if psql_platform -At -v run_id="$RUN_ID" -f "$LOAD_DIR/sql/select-control-plane-root-ids.sql" \
+        > "$LOG_DIR/cleanup-workflow-run-ids.txt"; then
+      :
+    else
+      operation_rc=$?
+      echo "ERROR: cleanup identity inventory failed for RUN_ID=${RUN_ID}, exit=${operation_rc}" >&2
+      [[ "$rc" != 0 ]] || rc="$operation_rc"
+      exit "$rc"
+    fi
+  fi
   echo "Auto-cleanup RUN_ID=${RUN_ID} ..." >&2
-  cleanup_atomic_trigger >&2 || echo "WARN: atomic/trigger cleanup failed for RUN_ID=${RUN_ID}" >&2
+  if cleanup_atomic_trigger >&2; then
+    :
+  else
+    cleanup_rc=$?
+    echo "ERROR: atomic/trigger cleanup failed for RUN_ID=${RUN_ID}, exit=${cleanup_rc}" >&2
+  fi
   # Trigger 入口采用异步处理。先删除持久化请求，再等待并清理删除请求时已进入处理流程的实例。
-  RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2 || \
-    echo "WARN: cleanup-worker-load-data failed for RUN_ID=${RUN_ID}" >&2
+  if RUN_ID="$RUN_ID" "$LOAD_DIR/scripts/cleanup-worker-load-data.sh" >&2; then
+    :
+  else
+    operation_rc=$?
+    echo "ERROR: cleanup-worker-load-data failed for RUN_ID=${RUN_ID}, exit=${operation_rc}" >&2
+    [[ "$cleanup_rc" != 0 ]] || cleanup_rc="$operation_rc"
+  fi
+  if [[ "$rc" == 0 && "$cleanup_rc" != 0 ]]; then
+    rc="$cleanup_rc"
+  fi
   exit "$rc"
 }
 trap on_exit_cleanup EXIT
@@ -428,6 +456,7 @@ run_pipeline_completion() {
   local file_ids_csv="${5:-}"
   local log_file="$LOG_DIR/${label}.log"
   local gatling_rc
+  local workflow_id
   local -a pipeline_status
   local -a extra_args=()
   if [[ -n "$file_ids_csv" ]]; then
@@ -435,6 +464,7 @@ run_pipeline_completion() {
   fi
 
   echo "==> ${label}: job=${job_code}, users=${users}"
+  workflow_id="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$job_code")"
   if (
     cd "$LOAD_DIR"
     mvn gatling:test \
@@ -445,7 +475,7 @@ run_pipeline_completion() {
       -Dinternal.secret="$INTERNAL_SECRET" \
       -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
-      -DjobCode="$job_code" \
+      -DworkflowDefinitionId="$workflow_id" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
       -Dpipeline.completion.users="$users" \
@@ -494,9 +524,11 @@ run_trigger_pressure() {
   local log_file="$LOG_DIR/trigger.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
   local gatling_rc
+  local workflow_id
   local -a pipeline_status
 
   echo "==> trigger: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
+  workflow_id="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$TRIGGER_JOB_CODE")"
   (
     cd "$LOAD_DIR"
     TENANT_ID="$LOAD_TEST_TENANT_ID" \
@@ -517,7 +549,7 @@ run_trigger_pressure() {
       -Dinternal.secret="$INTERNAL_SECRET" \
       -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
-      -DjobCode="$TRIGGER_JOB_CODE" \
+      -DworkflowDefinitionId="$workflow_id" \
       -DbizDate="$BIZ_DATE" \
       -Dlaunch.paramsJsonFile="$params_file" \
       -Dscheduling.launch.rps="$TRIGGER_LAUNCH_RPS" \
@@ -545,7 +577,27 @@ run_mixed_pressure() {
   local log_file="$LOG_DIR/mixed.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
   local gatling_rc
+  local module job_code workflow_id
+  local process_params="$PROCESS_PARAMS"
   local -a pipeline_status
+  local -a workflow_args=()
+
+  for module in process dispatch atomic trigger; do
+    csv_contains "$module" "$MODULES_CSV" || continue
+    case "$module" in
+      process) job_code=lt_process_sql_job ;;
+      dispatch) job_code=lt_dispatch_local_job ;;
+      atomic) job_code=atomic_sql_demo ;;
+      trigger) job_code="$TRIGGER_JOB_CODE" ;;
+    esac
+    workflow_id="$(resolve_single_job_workflow_id "$LOAD_TEST_TENANT_ID" "$job_code")" || return "$?"
+    workflow_args+=("-Dcontrol.${module}.workflowDefinitionId=${workflow_id}")
+  done
+
+  if csv_contains process "$MODULES_CSV"; then
+    process_params="$PARAM_DIR/process-mixed.params.json"
+    jq --arg bizDate '#{bizDate}' '.bizDate = $bizDate' "$PROCESS_PARAMS" > "$process_params" || return "$?"
+  fi
 
   echo "==> mixed: modules=${MODULES_CSV}, duration=${TRIGGER_DURATION_SECONDS}s"
   echo "==> mixed rates: process=${PROCESS_LAUNCH_RPS}/s dispatch=${DISPATCH_LAUNCH_RPS}/s atomic=${ATOMIC_LAUNCH_RPS}/s trigger=${TRIGGER_LAUNCH_RPS}/s scheduler_read=${TRIGGER_READ_RPS}/s"
@@ -573,11 +625,13 @@ run_mixed_pressure() {
       -Dconsole.baseUrl="$CONSOLE_BASE_URL" \
       -Dorchestrator.baseUrl="$ORCHESTRATOR_BASE_URL" \
       -Dinternal.secret="$INTERNAL_SECRET" \
+      -Dload.runId="$RUN_ID" \
       -DtenantId="$LOAD_TEST_TENANT_ID" \
       -DbizDate="$BIZ_DATE" \
       -Dcontrol.bizDate.cardinality="$BIZ_DATE_CARDINALITY" \
       -Dcontrol.modules="$MODULES_CSV" \
-      -Dcontrol.process.paramsJsonFile="$PROCESS_PARAMS" \
+      "${workflow_args[@]}" \
+      -Dcontrol.process.paramsJsonFile="$process_params" \
       -Dcontrol.dispatch.paramsJsonFile="$DISPATCH_PARAMS" \
       -Dcontrol.dispatch.fileIdsCsv="$DISPATCH_FILE_IDS_CSV" \
       -Dcontrol.atomic.paramsJsonFile="$PARAM_DIR/atomic.params.json" \
@@ -617,6 +671,11 @@ assert_run_success() {
   )"
   IFS='|' read -r total terminal success <<< "$counts"
   echo "==> ${label}: terminal ${terminal}/${total}, success ${success}/${total}"
+  if [[ "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" -gt 0 \
+      && "$total" -ne "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS" ]]; then
+    echo "==> ${label}: expected ${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS} JOB nodes, got ${total}" >&2
+    return 1
+  fi
   if [[ "$total" -gt 0 && "$terminal" -eq "$total" && "$success" -eq "$total" ]]; then
     return 0
   fi
@@ -752,7 +811,15 @@ if [[ "$CLEANUP_ONLY" == "1" ]]; then
   exit 0
 fi
 
-"$LOAD_DIR/scripts/prepare-worker-load-data.sh"
+if ! [[ "$BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
+  echo "BIZ_DATE_CARDINALITY must be a positive integer" >&2
+  exit 2
+fi
+if [[ "$CONTROL_PLANE_MODE" == parallel ]]; then
+  PROCESS_BIZ_DATE_CARDINALITY="$BIZ_DATE_CARDINALITY" "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
+else
+  "$LOAD_DIR/scripts/prepare-worker-load-data.sh"
+fi
 # shellcheck disable=SC1090
 source "$OUT_DIR/run.env"
 
@@ -791,10 +858,6 @@ fi
 
 if ! [[ "$PG_SAMPLE_INTERVAL_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
   echo "PG_SAMPLE_INTERVAL_SECONDS must be a positive integer" >&2
-  exit 2
-fi
-if ! [[ "$BIZ_DATE_CARDINALITY" =~ ^[1-9][0-9]*$ ]]; then
-  echo "BIZ_DATE_CARDINALITY must be a positive integer" >&2
   exit 2
 fi
 assert_capacity_shape

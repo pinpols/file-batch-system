@@ -9,6 +9,7 @@ import static io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles.w
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
@@ -35,6 +36,7 @@ import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.beans.BeanInfo;
 import java.beans.Introspector;
 import java.beans.PropertyDescriptor;
+import java.io.OutputStream;
 import java.lang.reflect.RecordComponent;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -72,44 +74,45 @@ public class DefaultConsoleReportExcelApplicationService
   @Override
   public ResponseEntity<StreamingResponseBody> exportConfigReleases(
       ConfigReleaseQueryRequest request) {
+    List<ConsoleConfigReleaseResponse> rows = configApplicationService.configReleases(request);
     return exportRows(
         "config_releases",
         "config-releases",
         "config releases",
-        configApplicationService.configReleases(request),
+        rows,
         ConsoleConfigReleaseResponse.class);
   }
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportSecretVersions(
       SecretVersionQueryRequest request) {
+    List<ConsoleSecretVersionResponse> rows = configApplicationService.secretVersions(request);
     return exportRows(
         "secret_versions",
         "secret-versions",
         "secret versions",
-        configApplicationService.secretVersions(request),
+        rows,
         ConsoleSecretVersionResponse.class);
   }
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportConfigChangeLogs(
       ConfigChangeLogQueryRequest request) {
+    List<ConsoleConfigChangeLogResponse> rows = configApplicationService.configChangeLogs(request);
     return exportRows(
         "config_change_logs",
         "config-change-logs",
         "config change logs",
-        configApplicationService.configChangeLogs(request),
+        rows,
         ConsoleConfigChangeLogResponse.class);
   }
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportAuditLogs(AuditLogQueryRequest request) {
+    PageResponse<ConsoleAuditLogResponse> page = queryApplicationService.auditLogs(request);
+    List<ConsoleAuditLogResponse> rows = page.items();
     return exportRows(
-        "audit_logs",
-        "audit-logs",
-        "audit logs",
-        queryApplicationService.auditLogs(request).items(),
-        ConsoleAuditLogResponse.class);
+        "audit_logs", "audit-logs", "audit logs", rows, ConsoleAuditLogResponse.class);
   }
 
   @Override
@@ -140,33 +143,36 @@ public class DefaultConsoleReportExcelApplicationService
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportWorkers(WorkerRegistryQueryRequest request) {
-    return exportRows(
-        "workers",
-        "workers",
-        "workers",
-        queryApplicationService.workers(request).items(),
-        ConsoleWorkerRegistryResponse.class);
+    PageResponse<ConsoleWorkerRegistryResponse> page = queryApplicationService.workers(request);
+    List<ConsoleWorkerRegistryResponse> rows = page.items();
+    return exportRows("workers", "workers", "workers", rows, ConsoleWorkerRegistryResponse.class);
   }
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportOutboxRetries(
       OutboxRetryLogQueryRequest request) {
+    PageResponse<ConsoleOutboxRetryLogResponse> page =
+        queryApplicationService.outboxRetries(request);
+    List<ConsoleOutboxRetryLogResponse> rows = page.items();
     return exportRows(
         "outbox_retries",
         "outbox-retries",
         "outbox retries",
-        queryApplicationService.outboxRetries(request).items(),
+        rows,
         ConsoleOutboxRetryLogResponse.class);
   }
 
   @Override
   public ResponseEntity<StreamingResponseBody> exportOutboxDeliveries(
       OutboxDeliveryLogQueryRequest request) {
+    PageResponse<ConsoleOutboxDeliveryLogResponse> page =
+        queryApplicationService.outboxDeliveries(request);
+    List<ConsoleOutboxDeliveryLogResponse> rows = page.items();
     return exportRows(
         "outbox_deliveries",
         "outbox-deliveries",
         "outbox deliveries",
-        queryApplicationService.outboxDeliveries(request).items(),
+        rows,
         ConsoleOutboxDeliveryLogResponse.class);
   }
 
@@ -175,10 +181,10 @@ public class DefaultConsoleReportExcelApplicationService
     // R2-P1-9: workbook 直接写到响应流，不缓 byte[]。
     StreamingResponseBody body = out -> writeWorkbookTo(out, sheetName, title, rows, rowType);
     String fileName = filePrefix + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
+    String contentDispositionHeader =
+        ContentDisposition.attachment().filename(fileName).build().toString();
     return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(fileName).build().toString())
+        .header(HttpHeaders.CONTENT_DISPOSITION, contentDispositionHeader)
         .contentType(MediaType.parseMediaType(
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .body(body);
@@ -189,7 +195,7 @@ public class DefaultConsoleReportExcelApplicationService
    * InputStreamResource 二次拷贝。
    */
   private <T> void writeWorkbookTo(
-      java.io.OutputStream out, String sheetName, String title, List<T> rows, Class<T> rowType) {
+      OutputStream out, String sheetName, String title, List<T> rows, Class<T> rowType) {
     try (SXSSFWorkbook workbook = new SXSSFWorkbook(50)) {
       Sheet dataSheet = workbook.createSheet(sheetName);
       dataSheet.createFreezePane(0, 1, 0, 1);
@@ -229,7 +235,9 @@ public class DefaultConsoleReportExcelApplicationService
       return map.keySet().stream().map(String::valueOf).toList();
     }
     try {
-      return Arrays.stream(Introspector.getBeanInfo(rowType, Object.class).getPropertyDescriptors())
+      BeanInfo beanInfo = Introspector.getBeanInfo(rowType, Object.class);
+      PropertyDescriptor[] propertyDescriptors = beanInfo.getPropertyDescriptors();
+      return Arrays.stream(propertyDescriptors)
           .map(PropertyDescriptor::getName)
           .filter(name -> !"class".equals(name))
           .sorted()
@@ -260,10 +268,10 @@ public class DefaultConsoleReportExcelApplicationService
               .filter(item -> item.getName().equals(header))
               .findFirst()
               .orElse(null);
-          values.add(
-              component == null // empty-check: allow - Sonar S2259
-                  ? null
-                  : component.getAccessor().invoke(row));
+          Object componentValue = component == null // empty-check: allow - Sonar S2259
+              ? null
+              : component.getAccessor().invoke(row);
+          values.add(componentValue);
         }
       } catch (Exception exception) {
         throw BizException.of(
@@ -283,10 +291,11 @@ public class DefaultConsoleReportExcelApplicationService
       }
       for (String header : headers) {
         PropertyDescriptor descriptor = descriptors.get(header);
-        values.add(
+        Object propertyValue =
             EmptyChecks.isNull(descriptor) || EmptyChecks.isNull(descriptor.getReadMethod())
                 ? null
-                : descriptor.getReadMethod().invoke(row));
+                : descriptor.getReadMethod().invoke(row);
+        values.add(propertyValue);
       }
     } catch (Exception exception) {
       throw BizException.of(

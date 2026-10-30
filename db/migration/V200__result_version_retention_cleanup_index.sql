@@ -1,5 +1,6 @@
--- V200: result_version retention cleanup support.
+-- V200：支持清理已归档的 result_version 记录。
 -- 仅 ARCHIVED 记录可进入热表清理范围；EFFECTIVE/PENDING 记录不得清理。
+
 CREATE INDEX IF NOT EXISTS idx_result_version_archived_cleanup
     ON batch.result_version (updated_at, id)
     WHERE status = 'ARCHIVED';

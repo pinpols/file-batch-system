@@ -44,14 +44,17 @@ class SdkAbstractAtomicHandler[R](SdkAbstractTaskHandler):
     @final
     async def _do_execute(self, ctx: SdkTaskContext) -> SdkTaskResult:
         try:
+            invocation_result = await self._do_invoke(ctx)
+            output = self.as_output(invocation_result)
             return SdkTaskResult.success_with(
-                output=self.as_output(await self._do_invoke(ctx)),
+                output=output,
                 message="invoked",
             )
         except Exception as ex:
+            failure_message = str(ex) or type(ex).__name__
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
-                str(ex) or type(ex).__name__,
+                failure_message,
                 cause=ex,
             )
 

@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowExecutionMapper">
+  <resultMap id="snapshot" type="io.github.pinpols.batch.console.domain.workflow.view.WorkflowExecutionSnapshotView">
+    <result column="id" property="id" />
+    <result column="tenant_id" property="tenantId" />
+    <result column="workflow_definition_id" property="workflowDefinitionId" />
+    <result column="workflow_version_snapshot" property="workflowVersionSnapshot" />
+    <result column="run_status" property="runStatus" />
+    <result column="biz_date" property="bizDate" />
+    <result column="started_at" property="startedAt" />
+    <result column="finished_at" property="finishedAt" />
+    <result column="execution_snapshot" property="executionSnapshot" />
+  </resultMap>
+  <resultMap id="node" type="io.github.pinpols.batch.console.domain.workflow.view.WorkflowExecutionNodeView">
+    <result column="id" property="id" />
+    <result column="node_code" property="nodeCode" />
+    <result column="node_status" property="nodeStatus" />
+    <result column="run_seq" property="runSeq" />
+    <result column="job_instance_id" property="jobInstanceId" />
+    <result column="job_instance_status" property="jobInstanceStatus" />
+    <result column="error_code" property="errorCode" />
+    <result column="skip_reason_code" property="skipReasonCode" />
+    <result column="started_at" property="startedAt" />
+    <result column="finished_at" property="finishedAt" />
+    <result column="expected_partitions" property="expectedPartitions" />
+    <result column="success_partitions" property="successPartitions" />
+    <result column="failed_partitions" property="failedPartitions" />
+    <result column="cancelled_partitions" property="cancelledPartitions" />
+    <result column="terminated_partitions" property="terminatedPartitions" />
+    <result column="created_tasks" property="createdTasks" />
+    <result column="finished_tasks" property="finishedTasks" />
+    <result column="active_steps" property="activeSteps" />
+  </resultMap>
+  <select id="setTenantContext" resultType="string" flushCache="true">
+    select set_config('app.tenant_id', #{tenantId}, true)
+  </select>
+  <select id="selectSnapshot" resultMap="snapshot">
+    select id, tenant_id, workflow_definition_id, workflow_version_snapshot,
+           run_status, biz_date, started_at, finished_at, execution_snapshot::text
+    from batch.workflow_run where tenant_id = #{tenantId} and id = #{id}
+  </select>
+  <select id="selectLatestNodes" resultMap="node">
+    select latest.*, j.instance_status as job_instance_status,
+           j.expected_partition_count as expected_partitions,
+           j.success_partition_count as success_partitions, j.failed_partition_count as failed_partitions,
+           j.cancelled_partition_count as cancelled_partitions, j.terminated_partition_count as terminated_partitions,
+           task_counts.created_tasks, task_counts.finished_tasks, current_steps.active_steps
+    from (
+      select distinct on (n.node_code) n.id, n.node_code, n.node_status, n.run_seq,
+             n.job_instance_id, n.error_code, n.skip_reason_code, n.started_at, n.finished_at
+      from batch.workflow_node_run n join batch.workflow_run r on r.id = n.workflow_run_id
+      where r.tenant_id = #{tenantId} and r.id = #{id}
+      order by n.node_code, n.run_seq desc, n.id desc
+    ) latest
+    left join batch.job_instance j on j.id = latest.job_instance_id and j.tenant_id = #{tenantId}
+    left join lateral (
+      select count(*) as created_tasks,
+             count(*) filter (where t.task_status in ('SUCCESS','FAILED','CANCELLED','TERMINATED')) as finished_tasks
+      from batch.job_task t where t.tenant_id = #{tenantId} and t.job_instance_id = latest.job_instance_id
+    ) task_counts on true
+    left join lateral (
+      select string_agg(distinct active.code, ',' order by active.code) as active_steps
+      from (
+        select s.stage_code as code
+        from batch.pipeline_instance p
+        join batch.pipeline_step_run s on s.pipeline_instance_id = p.id
+        where p.tenant_id = #{tenantId} and p.related_job_instance_id = latest.job_instance_id
+          and p.run_status = 'RUNNING' and s.step_status in ('RUNNING','RETRYING')
+          and not exists (
+            select 1 from batch.pipeline_step_run newer
+            where newer.pipeline_instance_id = p.id and newer.step_code = s.step_code
+              and (newer.run_seq, newer.id) &gt; (s.run_seq, s.id)
+          )
+        union all
+        select s.step_code as code
+        from batch.job_step_instance s where s.tenant_id = #{tenantId}
+          and s.job_instance_id = latest.job_instance_id and s.step_status in ('RUNNING','WAITING','RETRYING')
+          and not exists (
+            select 1 from batch.pipeline_instance p
+            where p.tenant_id = #{tenantId} and p.related_job_instance_id = latest.job_instance_id
+          )
+      ) active
+    ) current_steps on true
+  </select>
+</mapper>

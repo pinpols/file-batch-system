@@ -116,6 +116,7 @@ public class PipelineVerifierHook {
           .payload(payload)
           .build();
       List<Map<String, Object>> failures = new ArrayList<>();
+      boolean fatalFailure = false;
       String firstFatalCode = null;
       String firstFatalMessage = null;
       for (ContentVerifier verifier : applicable) {
@@ -127,7 +128,8 @@ public class PipelineVerifierHook {
           entry.put("evidence", result.evidence());
           entry.put("fatal", verifier.fatal());
           failures.add(entry);
-          if (verifier.fatal() && firstFatalCode == null) {
+          if (verifier.fatal() && !fatalFailure) {
+            fatalFailure = true;
             firstFatalCode = result.code();
             firstFatalMessage = result.message();
           }
@@ -145,7 +147,7 @@ public class PipelineVerifierHook {
       if (!failures.isEmpty()) {
         attributes.put(PipelineRuntimeKeys.VERIFIER_FAILURES, failures);
       }
-      return firstFatalCode == null
+      return !fatalFailure
           ? VerifierHookResult.NO_FATAL
           : new VerifierHookResult(true, firstFatalCode, firstFatalMessage);
     } catch (RuntimeException ex) {
@@ -159,6 +161,8 @@ public class PipelineVerifierHook {
     if (pipelineType == null || pipelineType.isBlank()) {
       return null;
     }
-    return DictEnum.fromCode(JobType.class, pipelineType.trim().toUpperCase());
+    String trimmedPipelineType = pipelineType.trim();
+    String normalizedPipelineType = trimmedPipelineType.toUpperCase();
+    return DictEnum.fromCode(JobType.class, normalizedPipelineType);
   }
 }

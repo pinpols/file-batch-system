@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.util.Set;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.config.BeanPostProcessor;
@@ -63,6 +64,11 @@ class ConsoleJobDefinitionAuthenticatedJourneyIntegrationTest extends AbstractIn
     this.jdbcTemplate = jdbcTemplate;
   }
 
+  @BeforeEach
+  void ensureTenantCalendarFixture() {
+    TestTenantCalendarFixtures.ensureDefaultCalendar(jdbcTemplate, TENANT_ID);
+  }
+
   @Test
   @DisplayName("ADMIN/TENANT_ADMIN 可创建；AUDITOR/TENANT_USER 被拒且不产生作业定义")
   void shouldEnforceJobDefinitionCreatePermissionsForAuthenticatedRoles() {
@@ -94,10 +100,7 @@ class ConsoleJobDefinitionAuthenticatedJourneyIntegrationTest extends AbstractIn
       assertThat(jobCount(tenantUserJobCode)).isZero();
       assertThat(successfulCreateAuditCount()).isEqualTo(2);
     } finally {
-      jdbcTemplate.update(
-          "delete from batch.job_definition where tenant_id = ? and job_code like ?",
-          TENANT_ID,
-          "auth_journey_%_" + suffix);
+      deleteJobDefinitions("job_code like ?", "auth_journey_%_" + suffix);
     }
   }
 
@@ -156,20 +159,52 @@ class ConsoleJobDefinitionAuthenticatedJourneyIntegrationTest extends AbstractIn
   }
 
   private long jobCount(String jobCode) {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_definition where tenant_id = ? and job_code = ?",
-        Long.class,
-        TENANT_ID,
-        jobCode);
+    String countJobDefinitionsSql = """
+        select count(*) from batch.job_definition where tenant_id = ? and job_code = ?
+    """;
+    return jdbcTemplate.queryForObject(countJobDefinitionsSql, Long.class, TENANT_ID, jobCode);
+  }
+
+  private void deleteJobDefinitions(String jobPredicate, Object... parameters) {
+    String jobIdsSql = """
+        SELECT id FROM batch.job_definition WHERE %s
+        """.formatted(jobPredicate);
+    String workflowIdsSql = """
+        SELECT id FROM batch.workflow_definition
+         WHERE single_job_definition_id IN (%s)
+        """.formatted(jobIdsSql);
+    String deleteWorkflowEdgesSql = """
+        DELETE FROM batch.workflow_edge WHERE workflow_definition_id IN (%s)
+        """.formatted(workflowIdsSql);
+    jdbcTemplate.update(deleteWorkflowEdgesSql, parameters);
+    String deleteWorkflowNodesSql = """
+        DELETE FROM batch.workflow_node WHERE workflow_definition_id IN (%s)
+        """.formatted(workflowIdsSql);
+    jdbcTemplate.update(deleteWorkflowNodesSql, parameters);
+    String deleteWorkflowVersionsSql = """
+        DELETE FROM batch.workflow_definition_version
+         WHERE workflow_definition_id IN (%s)
+        """.formatted(workflowIdsSql);
+    jdbcTemplate.update(deleteWorkflowVersionsSql, parameters);
+    String deleteWorkflowDefinitionsSql = """
+        DELETE FROM batch.workflow_definition WHERE single_job_definition_id IN (%s)
+        """.formatted(jobIdsSql);
+    jdbcTemplate.update(deleteWorkflowDefinitionsSql, parameters);
+    String deleteJobDefinitionsSql = """
+        DELETE FROM batch.job_definition WHERE %s
+        """.formatted(jobPredicate);
+    jdbcTemplate.update(deleteJobDefinitionsSql, parameters);
   }
 
   private long successfulCreateAuditCount() {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.console_operation_audit where tenant_id = ? "
-            + "and aggregate_type = 'job_definition' and action = 'jobDefinition.create' "
-            + "and result = 'SUCCESS'",
-        Long.class,
-        TENANT_ID);
+    String countSuccessfulCreateAuditsSql = """
+        select count(*) from batch.console_operation_audit
+         where tenant_id = ?
+           and aggregate_type = 'job_definition'
+           and action = 'jobDefinition.create'
+           and result = 'SUCCESS'
+        """;
+    return jdbcTemplate.queryForObject(countSuccessfulCreateAuditsSql, Long.class, TENANT_ID);
   }
 
   private static String createBody(String jobCode) {

@@ -1,5 +1,7 @@
 # 时间与日期语义
 
+> **当前日期归属**：Workflow 定义是顶层日程/日历来源。WorkflowRun 冻结原计划时刻、bizDate、时区依据和半开数据区间；JOB 实例继承该快照，跨日依赖显式解析并保存结果。Worker 的本地日期、重试时间、当前 Job 定义均不能改写已接纳运行。
+
 本文说明当前系统中时间戳、业务日期、调度时区、文件接收时间和 Console 展示时区的边界。本文描述运行时口径；时区与夏令时算法细节见[时区与夏令时设计](./timezone-and-dst-design.md)。
 
 ## 核心结论
@@ -9,6 +11,9 @@
 - 日历时区影响批量日归属和日切，不会因为用户切换 Console 展示时区而改变。
 - 文件接收时刻不会自动转换成文件的 `bizDate`。
 - Worker 使用任务上下文中的 `bizDate`，不按所在机器时区重新计算。
+- 非空跨日依赖解析必须有租户和 Workflow 业务日；上下文缺失返回 `CROSS_DAY_DEP_INVALID_CONTEXT`，等待节点恢复时登记失败，不将依赖判为满足。未配置依赖或配置为空数组时无需解析结果。
+- 跨日依赖恢复只能将仍处于 `WAITING_DEPENDENCY` 的节点标为失败；节点已推进时旧扫描不改写状态，也不发送过期失败告警。
+- 带冻结图的 Workflow 运行在跨日依赖恢复时使用该图中的依赖声明和超时；后续修改当前节点定义不改变在途等待的判断。
 
 ## 时间类型对照
 
@@ -24,16 +29,18 @@
 ## 时区职责与优先级
 
 ```mermaid
-flowchart TD
-    A[计划的 cron 与显式计划时区] --> B[计算触发 Instant]
-    B --> C[Orchestrator 读取租户业务日历]
-    C --> D{日历是否配置 timezone}
-    D -- 是 --> E[使用 business_calendar.timezone]
-    D -- 否 --> F[使用 BATCH_TIMEZONE_DEFAULT_ZONE]
-    E --> G[结合 cutoff_time 与日历规则计算 bizDate]
-    F --> G
-    G --> H[保存批量日及 timezone_snapshot]
-    H --> I[将 bizDate / batchDayId 下发给 Worker]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  S[Workflow 日程与计划时区] --> I[计算触发 Instant]
+  I --> C[按 Workflow 业务日历解析业务日]
+  C --> Z{日历已配置时区？}
+  Z -->|是| T[business_calendar.timezone]
+  Z -->|否| D[BATCH_TIMEZONE_DEFAULT_ZONE]
+  T --> B[按 cutoff 与日历规则计算 bizDate]
+  D --> B
+  B --> R[WorkflowRun 冻结业务日与时间快照]
+  R --> J[JOB 实例继承]
+  J --> W[Worker 使用冻结值]
 ```
 
 - `business_calendar.timezone` 配置日历的 IANA 时区；批量日打开、cutoff 和相关业务日期按日历时区处理。
@@ -45,13 +52,14 @@ flowchart TD
 ### 跨时区部署时的时间传递
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    A[上海 Trigger<br/>计划墙上时间 + IANA 时区] -->|计算一次| B[UTC Instant<br/>2026-09-27T15:00:00Z]
-    B --> C[PostgreSQL / Kafka<br/>传递同一时刻]
-    C --> D[东京 Worker<br/>执行上下文含 bizDate]
-    C --> E[纽约 Console 用户<br/>仅格式化显示]
-    D -.不得按节点时区重算.-> F[bizDate / batchDayId]
-    G[租户 business_calendar<br/>timezone + cutoff_time] -->|Orchestrator 计算一次| F
+  S[上海 Trigger：计划时区] --> I[UTC Instant<br/>2026-09-27T15:00:00Z]
+  I --> R[WorkflowRun：冻结 bizDate / batchDayId]
+  C[业务日历：timezone / cutoff] --> R
+  R --> W[东京 Worker：使用冻结值]
+  R --> U[纽约 Console：按展示时区格式化]
+  I -. 同一时刻传递 .-> P[PostgreSQL / Kafka]
 ```
 
 ```text
@@ -66,17 +74,18 @@ flowchart LR
 ## 文件接收与 `bizDate`
 
 ```mermaid
-flowchart LR
-    A[文件进入对象存储] --> B[扫描器发现文件]
-    B --> C[记录 detectedAt / created_at]
-    B --> D{获取 bizDate}
-    D -->|清单提供| E[使用清单 bizDate]
-    D -->|否则| F[按文件名 bizDatePattern 解析]
-    F -->|未解析| G[使用 scanner defaultBizDate]
-    G -->|仍未配置或无效| X[不登记为可处理文件]
-    E --> H[文件记录 bizDate]
-    F --> H
-    G --> H
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  F[扫描器发现文件] --> T[记录 detectedAt / created_at]
+  F --> E{导出清单触发路径？}
+  E -->|是| M{manifest 有合法 bizDate？}
+  E -->|否| N{文件名能解析 bizDate？}
+  M -->|是| R[登记文件业务日]
+  M -->|缺失或无效| N
+  N -->|是| R
+  N -->|否| D{已配置合法 defaultBizDate？}
+  D -->|是| R
+  D -->|否| X[不登记为可处理文件]
 ```
 
 对象存储导入扫描器从文件名或 `defaultBizDate` 取得 `bizDate`；导出清单触发路径优先使用 manifest 的 `bizDate`，缺失时再走扫描器规则。平台发现时刻另记为 `detectedAt`，文件记录写入时刻为 `created_at`。这两个时间不会自动替代 `bizDate`。
@@ -88,12 +97,12 @@ flowchart LR
 ## Console 展示
 
 ```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-    A[API 时间戳 Instant] --> B[Console 展示时区]
-    B --> C[格式化后的日期时间]
-    D[API bizDate LocalDate] --> E[原日期展示]
-    F[用户切换展示时区] --> B
-    F -.不改变.-> D
+  I[API Instant] --> Z[Console 展示时区]
+  Z --> T[格式化日期时间]
+  U[用户切换展示时区] --> Z
+  D[API bizDate：LocalDate] --> B[原日期展示]
 ```
 
 Console 时间戳的展示时区按以下顺序确定：浏览器本地保存的用户选择、前端部署默认 `VITE_DISPLAY_TIMEZONE`、浏览器检测到的时区；无法检测时回退 UTC。用户可从页面顶部切换展示时区，选择保存在当前浏览器。

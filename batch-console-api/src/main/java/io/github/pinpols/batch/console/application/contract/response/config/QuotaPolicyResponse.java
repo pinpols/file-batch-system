@@ -1,15 +1,11 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.booleanValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.stringValue;
-
+import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
 
 /** 租户配额策略响应。 */
+@Builder
 public record QuotaPolicyResponse(
     Long id,
     String tenantId,
@@ -23,21 +19,22 @@ public record QuotaPolicyResponse(
     Instant createdAt,
     Instant updatedAt) {
 
-  public static QuotaPolicyResponse from(Map<String, Object> row) {
+  public static QuotaPolicyResponse from(TenantQuotaPolicyRow row) {
     if (row == null) {
       return null;
     }
-    return new QuotaPolicyResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenantId", "tenant_id"),
-        stringValue(row, "policyCode", "policy_code"),
-        integerValue(row, "maxRunningJobsPerTenant", "max_running_jobs_per_tenant"),
-        integerValue(row, "maxPartitionsPerTenant", "max_partitions_per_tenant"),
-        integerValue(row, "maxQpsPerTenant", "max_qps_per_tenant"),
-        integerValue(row, "fairShareWeight", "fair_share_weight"),
-        booleanValue(row, "enabled"),
-        stringValue(row, "description"),
-        instantValue(row, "createdAt", "created_at"),
-        instantValue(row, "updatedAt", "updated_at"));
+    return QuotaPolicyResponse.builder()
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .policyCode(row.policyCode())
+        .maxRunningJobsPerTenant(row.maxRunningJobsPerTenant())
+        .maxPartitionsPerTenant(row.maxPartitionsPerTenant())
+        .maxQpsPerTenant(row.maxQpsPerTenant())
+        .fairShareWeight(row.fairShareWeight())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .build();
   }
 }

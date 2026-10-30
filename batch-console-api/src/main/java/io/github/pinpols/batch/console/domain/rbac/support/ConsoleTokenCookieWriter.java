@@ -3,7 +3,9 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Component;
 
@@ -17,9 +19,8 @@ public class ConsoleTokenCookieWriter {
 
   private final ConsoleSecurityProperties securityProperties;
 
-  public void write(
-      ConsoleAuthTokenResponse body, jakarta.servlet.http.HttpServletResponse response) {
-    response.addHeader(org.springframework.http.HttpHeaders.SET_COOKIE, build(body));
+  public void write(ConsoleAuthTokenResponse body, HttpServletResponse response) {
+    response.addHeader(HttpHeaders.SET_COOKIE, build(body));
   }
 
   private String build(ConsoleAuthTokenResponse body) {

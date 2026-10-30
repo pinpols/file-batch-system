@@ -65,7 +65,8 @@ public class BatchDateTimeSupport {
    * 返回纳秒精度（9 位），不截断会导致 in-memory Instant 与 DB 读回值不相等（精度不对齐 → 哈希 / 等值断言 / 乐观锁 CAS 误判）。
    */
   public static Instant utcNow() {
-    return Clock.systemUTC().instant().truncatedTo(ChronoUnit.MICROS);
+    Instant sampledInstant = Clock.systemUTC().instant();
+    return sampledInstant.truncatedTo(ChronoUnit.MICROS);
   }
 
   /** 静态 UTC epoch milliseconds 入口，语义同 {@link #currentEpochMillis()}。 */
@@ -95,7 +96,8 @@ public class BatchDateTimeSupport {
    * </ul>
    */
   public Instant nowInstant() {
-    return clock.instant().truncatedTo(ChronoUnit.MICROS);
+    Instant sampledInstant = clock.instant();
+    return sampledInstant.truncatedTo(ChronoUnit.MICROS);
   }
 
   /** 当前 UTC epoch milliseconds。适用于限流窗口、唯一技术 key、缓存过期等技术时间。 */
@@ -117,12 +119,14 @@ public class BatchDateTimeSupport {
    */
   public Instant instantAfter(Duration duration) {
     Objects.requireNonNull(duration, "duration must not be null");
-    return nowInstant().plus(duration);
+    Instant sampledInstant = nowInstant();
+    return sampledInstant.plus(duration);
   }
 
   /** 当前技术时间加秒数。 */
   public Instant instantAfterSeconds(long seconds) {
-    return nowInstant().plusSeconds(seconds);
+    Instant sampledInstant = nowInstant();
+    return sampledInstant.plusSeconds(seconds);
   }
 
   /**
@@ -131,7 +135,8 @@ public class BatchDateTimeSupport {
    * <p>仅用于兼容历史字段仍然是 OffsetDateTime 的场景。新字段优先使用 Instant。
    */
   public OffsetDateTime nowOffsetUtc() {
-    return OffsetDateTime.ofInstant(nowInstant(), ZoneOffset.UTC);
+    Instant capturedAt = nowInstant();
+    return OffsetDateTime.ofInstant(capturedAt, ZoneOffset.UTC);
   }
 
   // ---------------------------------------------------------------------------
@@ -153,7 +158,9 @@ public class BatchDateTimeSupport {
    * <p>不建议用于持久化技术时间；持久化技术时间请使用 {@link #nowInstant()}。
    */
   public ZonedDateTime nowInDefaultBusinessZone() {
-    return nowInstant().atZone(defaultBusinessZone());
+    Instant capturedAt = nowInstant();
+    ZoneId businessZone = defaultBusinessZone();
+    return capturedAt.atZone(businessZone);
   }
 
   /**
@@ -228,7 +235,9 @@ public class BatchDateTimeSupport {
     if (localDateTime == null) {
       return null;
     }
-    return localDateTime.atZone(defaultBusinessZone()).toInstant();
+    ZoneId businessZone = defaultBusinessZone();
+    ZonedDateTime zonedDateTime = localDateTime.atZone(businessZone);
+    return zonedDateTime.toInstant();
   }
 
   /** 将业务日期 + 本地时间按平台默认业务时区解释为 Instant。 */
@@ -242,7 +251,9 @@ public class BatchDateTimeSupport {
       return null;
     }
     ZoneId resolvedZone = zoneId == null ? defaultBusinessZone() : zoneId;
-    return date.atTime(time).atZone(resolvedZone).toInstant();
+    LocalDateTime localDateTime = date.atTime(time);
+    ZonedDateTime zonedDateTime = localDateTime.atZone(resolvedZone);
+    return zonedDateTime.toInstant();
   }
 
   // ---------------------------------------------------------------------------
@@ -281,7 +292,8 @@ public class BatchDateTimeSupport {
       return null;
     }
     ZoneId resolvedZone = zoneId == null ? defaultBusinessZone() : zoneId;
-    return DISPLAY_DATETIME_FORMATTER.withZone(resolvedZone).format(instant);
+    DateTimeFormatter zonedFormatter = DISPLAY_DATETIME_FORMATTER.withZone(resolvedZone);
+    return zonedFormatter.format(instant);
   }
 
   /** 文件名时间戳：yyyyMMddHHmmss。 */
@@ -289,12 +301,15 @@ public class BatchDateTimeSupport {
     if (instant == null) {
       return null;
     }
-    return FILE_TIMESTAMP_FORMATTER.withZone(defaultBusinessZone()).format(instant);
+    ZoneId businessZone = defaultBusinessZone();
+    DateTimeFormatter zonedFormatter = FILE_TIMESTAMP_FORMATTER.withZone(businessZone);
+    return zonedFormatter.format(instant);
   }
 
   /** 当前文件名时间戳：yyyyMMddHHmmss。 */
   public String currentFileTimestamp() {
-    return formatForFileTimestamp(nowInstant());
+    Instant capturedAt = nowInstant();
+    return formatForFileTimestamp(capturedAt);
   }
 
   /** 业务日期文件名片段：yyyyMMdd。 */

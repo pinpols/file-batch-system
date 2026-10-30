@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -37,10 +38,10 @@ public class ValidationRuleSetMerger {
       fieldRules.put("fieldRules", derived);
       merged.putAll(fieldRules);
     }
-    deepMerge(
-        merged,
-        configSupport.toMap(firstNonNull(
-            templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"))));
+    Object rawValidationRuleSet = firstNonNull(
+        templateConfig.get("validation_rule_set"), templateConfig.get("validationRuleSet"));
+    Map<String, Object> validationRuleSet = configSupport.toMap(rawValidationRuleSet);
+    deepMerge(merged, validationRuleSet);
     return merged;
   }
 
@@ -54,18 +55,22 @@ public class ValidationRuleSetMerger {
     if (!(raw instanceof List<?> list)) {
       return Map.of();
     }
-    return list.stream()
-        .map(configSupport::toMap)
-        .filter(EmptyChecks::isNotEmpty)
-        .filter(mapping -> Texts.hasText(stringValue(mapping.get("name"))))
-        .filter(mapping ->
-            booleanValue(firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull")), false))
-        .collect(Collectors.toMap(
-            mapping -> stringValue(mapping.get("name")),
-            mapping -> Map.of(
-                KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
-            (previous, next) -> next,
-            LinkedHashMap::new));
+    Stream<Map<String, Object>> nonEmptyFieldMappings =
+        list.stream().map(configSupport::toMap).filter(EmptyChecks::isNotEmpty);
+    Stream<Map<String, Object>> namedFieldMappings = nonEmptyFieldMappings.filter(mapping -> {
+      String fieldName = stringValue(mapping.get("name"));
+      return Texts.hasText(fieldName);
+    });
+    Stream<Map<String, Object>> requiredFieldMappings = namedFieldMappings.filter(mapping -> {
+      Object rawRequiredValue = firstNonNull(mapping.get(KEY_REQUIRED), mapping.get("notNull"));
+      return booleanValue(rawRequiredValue, false);
+    });
+    return requiredFieldMappings.collect(Collectors.toMap(
+        mapping -> stringValue(mapping.get("name")),
+        mapping ->
+            Map.of(KEY_REQUIRED, true, KEY_ERROR_CODE, ImportValidationErrorCode.REQUIRED.code()),
+        (previous, next) -> next,
+        LinkedHashMap::new));
   }
 
   @SuppressWarnings("unchecked")

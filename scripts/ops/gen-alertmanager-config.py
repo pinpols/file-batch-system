@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Render alertmanager.yml route tree from batch.alert_routing_config (迁移方案 §6.4).。
+# 用法：在仓库根目录执行 python3 scripts/ops/gen-alertmanager-config.py；参数与前置环境见下方说明及所属 README。
 """Render alertmanager.yml route tree from batch.alert_routing_config (迁移方案 §6.4).
 
 alert_routing_config(V43)是 AM route 的关系型镜像(schema 注释即写 "Aligns with
@@ -139,13 +141,13 @@ def render(rows):
         lines.append("            credentials: %s" % BEARER_PLACEHOLDER)
     lines.append("")
 
-    # 抑制关系必须限制在同一租户,避免一个租户的 critical 告警压制另一租户的 warning。
+    # 同租户、同实体才允许抑制，避免一个 Job 的 critical 压住另一个 Job 的 warning。
     lines.append("inhibit_rules:")
     lines.append("  - source_matchers:")
     lines.append('      - severity="critical"')
     lines.append("    target_matchers:")
     lines.append('      - severity="warning"')
-    lines.append("    equal: [alertname, tenant, team, alert_group]")
+    lines.append("    equal: [alertname, tenant, team, alert_group, fingerprint]")
     lines.append("")
     return "\n".join(lines)
 

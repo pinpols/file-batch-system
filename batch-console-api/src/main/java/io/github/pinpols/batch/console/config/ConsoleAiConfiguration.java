@@ -67,12 +67,14 @@ public class ConsoleAiConfiguration {
     String primaryName = providerName(preferredProvider);
     String fallbackName =
         preferredProvider == ConsoleAiProperties.Provider.OPENAI ? "anthropic" : "openai";
-    ConsoleAiClients.ProviderClient primary = new ConsoleAiClients.ProviderClient(
-        primaryName, ChatClient.create(primaryModel), imageInputEnabled);
-    ConsoleAiClients.ProviderClient fallback =
-        failoverEnabled && EmptyChecks.isNotNull(fallbackModel)
-            ? new ConsoleAiClients.ProviderClient(fallbackName, ChatClient.create(fallbackModel))
-            : null;
+    ChatClient primaryChatClient = ChatClient.create(primaryModel);
+    ConsoleAiClients.ProviderClient primary =
+        new ConsoleAiClients.ProviderClient(primaryName, primaryChatClient, imageInputEnabled);
+    ConsoleAiClients.ProviderClient fallback = null;
+    if (failoverEnabled && EmptyChecks.isNotNull(fallbackModel)) {
+      ChatClient fallbackChatClient = ChatClient.create(fallbackModel);
+      fallback = new ConsoleAiClients.ProviderClient(fallbackName, fallbackChatClient);
+    }
     return new ConsoleAiClients(primary, fallback);
   }
 
@@ -86,21 +88,24 @@ public class ConsoleAiConfiguration {
     requireCompatibleText(compatible.getApiKey(), "batch.console.ai.openai-compatible.api-key");
     requireCompatibleText(compatible.getModel(), "batch.console.ai.openai-compatible.model");
 
-    OpenAiChatOptions options = OpenAiChatOptions.builder()
-        .baseUrl(compatible.getBaseUrl().trim())
-        .apiKey(compatible.getApiKey().trim())
-        .model(compatible.getModel().trim())
-        .timeout(compatible.getTimeout())
-        .build();
+    OpenAiChatOptions.Builder optionsBuilder = OpenAiChatOptions.builder();
+    String baseUrl = compatible.getBaseUrl().trim();
+    optionsBuilder.baseUrl(baseUrl);
+    String apiKey = compatible.getApiKey().trim();
+    optionsBuilder.apiKey(apiKey);
+    String modelName = compatible.getModel().trim();
+    optionsBuilder.model(modelName);
+    optionsBuilder.timeout(compatible.getTimeout());
+    OpenAiChatOptions options = optionsBuilder.build();
     OpenAiChatModel model = OpenAiChatModel.builder().options(options).build();
     String providerName = Texts.hasText(compatible.getProviderName())
         ? compatible.getProviderName().trim()
         : providerName(ConsoleAiProperties.Provider.OPENAI_COMPATIBLE);
+    ChatClient compatibleChatClient = ChatClient.create(model);
+    boolean imageInputEnabled =
+        properties.isImageInputEnabled() && compatible.isImageInputEnabled();
     return new ConsoleAiClients(
-        new ConsoleAiClients.ProviderClient(
-            providerName,
-            ChatClient.create(model),
-            properties.isImageInputEnabled() && compatible.isImageInputEnabled()),
+        new ConsoleAiClients.ProviderClient(providerName, compatibleChatClient, imageInputEnabled),
         null);
   }
 

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Testcontainers 复用标签判定。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-testcontainers-reuse-label.py；参数与前置环境见下方说明及所属 README。
 """守护 Testcontainers 复用容器的清理谓词，防止用不存在的标签字面量。
 
 `withReuse(true)` 的容器由 Testcontainers 打上 `org.testcontainers.hash` 标签

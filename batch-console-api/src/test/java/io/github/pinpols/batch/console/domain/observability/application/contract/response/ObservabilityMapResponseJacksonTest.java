@@ -4,8 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaComplianceView;
+import io.github.pinpols.batch.console.domain.observability.view.dashboard.SlaDayView;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,18 +30,14 @@ class ObservabilityMapResponseJacksonTest {
   @Test
   @DisplayName("作业统计保留按状态动态生成的键与嵌套趋势列表, 数值按原样输出")
   void shouldKeepDynamicStatusKeysAndNestedTrend_whenJobStatsRowMapped() throws Exception {
-    Map<String, Object> byStatus = new LinkedHashMap<>();
+    Map<String, Long> byStatus = new LinkedHashMap<>();
     byStatus.put("SUCCESS", 8L);
     byStatus.put("FAILED", 2L);
-    Map<String, Object> row = Map.of(
-        "byStatus",
+    var view = new JobStatsView(
         byStatus,
-        "total",
         10L,
-        "dailyTrend",
-        List.of(Map.of("day", "2026-07-11", "status", "SUCCESS", "count", 8L)));
-
-    Map<String, Object> back = roundTrip(ConsoleJobStatsResponse.from(row));
+        List.of(new DayStatusCountView(LocalDate.parse("2026-07-11"), "SUCCESS", 8L)));
+    Map<String, Object> back = roundTrip(ConsoleJobStatsResponse.from(view));
 
     assertThat(back).containsOnlyKeys("byStatus", "total", "dailyTrend");
     assertThat(
@@ -52,21 +54,20 @@ class ObservabilityMapResponseJacksonTest {
   @Test
   @DisplayName("执行进度显式写入的结束时间为空时仍保留该键, 并还原开始时间")
   void shouldPreserveNullTemporalKeys_whenExecutionProgressRowMapped() throws Exception {
-    // service 用 LinkedHashMap 显式 put startedAt/finishedAt（可为 null）→ 键必须保留（不加 NON_NULL）。
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("id", 9L);
-    row.put("jobCode", "JOB_A");
-    row.put("instanceNo", "INS-9");
-    row.put("instanceStatus", "RUNNING");
-    row.put("expectedPartitions", 4);
-    row.put("successPartitions", 2);
-    row.put("failedPartitions", 0);
-    row.put("completedPartitions", 2);
-    row.put("progressPercent", 50L);
-    row.put("startedAt", Instant.parse("2026-07-11T02:00:00Z"));
-    row.put("finishedAt", null);
-
-    Map<String, Object> back = roundTrip(ConsoleExecutionProgressResponse.from(row));
+    var view = ExecutionProgressView.builder()
+        .id(9L)
+        .jobCode("JOB_A")
+        .instanceNo("INS-9")
+        .instanceStatus("RUNNING")
+        .expectedPartitions(4)
+        .successPartitions(2)
+        .failedPartitions(0)
+        .completedPartitions(2)
+        .progressPercent(50L)
+        .startedAt(Instant.parse("2026-07-11T02:00:00Z"))
+        .build();
+    var response = ConsoleExecutionProgressResponse.from(view);
+    Map<String, Object> back = roundTrip(response);
 
     assertThat(back)
         .containsKeys(
@@ -83,21 +84,15 @@ class ObservabilityMapResponseJacksonTest {
             "finishedAt");
     assertThat(back).containsEntry("progressPercent", 50).containsEntry("finishedAt", null);
     // Instant 归一由 record 承载（JSON 表示由生产 ObjectMapper 决定，此处仅校验键集与转换）。
-    assertThat(ConsoleExecutionProgressResponse.from(row).startedAt())
-        .isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
+    assertThat(response.startedAt()).isEqualTo(Instant.parse("2026-07-11T02:00:00Z"));
   }
 
   @Test
   @DisplayName("超期合规统计中平均时长为空时保留该键, 其余计数按原值输出")
   void shouldKeepNullAvgDurationKey_whenSlaComplianceRowMapped() throws Exception {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("breached", 1L);
-    row.put("onTime", 9L);
-    row.put("totalWithSla", 10L);
-    row.put("avgDurationSeconds", null);
-    row.put("dailyTrend", List.of(Map.of("day", "2026-07-11", "breached", 1L, "onTime", 9L)));
-
-    Map<String, Object> back = roundTrip(ConsoleSlaComplianceResponse.from(row));
+    var view = new SlaComplianceView(
+        1L, 9L, 10L, null, List.of(new SlaDayView(LocalDate.parse("2026-07-11"), 1L, 9L)));
+    Map<String, Object> back = roundTrip(ConsoleSlaComplianceResponse.from(view));
 
     assertThat(back).containsKey("avgDurationSeconds").containsEntry("avgDurationSeconds", null);
     assertThat(back).containsEntry("breached", 1).containsEntry("totalWithSla", 10);
@@ -122,7 +117,8 @@ class ObservabilityMapResponseJacksonTest {
         "LOAD", 100L, null, Instant.parse("2026-07-11T02:00:00Z")));
 
     assertThat(back)
-        .containsOnlyKeys("stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt")
+        .containsOnlyKeys(
+            "stageCode", "rowsProcessed", "totalRowsHint", "heartbeatAt", "stepRunIds")
         .containsEntry("stageCode", "LOAD")
         .containsEntry("totalRowsHint", null)
         .containsEntry("rowsProcessed", 100);

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。
+# 用法：在仓库根目录执行 python3 scripts/ci/daily-validation-change-gate.py；参数与前置环境见下方说明及所属 README。
 """仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。"""
 
 from __future__ import annotations

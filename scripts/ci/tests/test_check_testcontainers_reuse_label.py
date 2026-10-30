@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：check-testcontainers-reuse-label.py 的分类规则回归测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_testcontainers_reuse_label.py。
 """check-testcontainers-reuse-label.py 的分类规则回归测试。"""
 
 from __future__ import annotations

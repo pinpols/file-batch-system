@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionInsertParam;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookSubscriptionUpdateParam;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
@@ -21,23 +23,9 @@ public interface ConsoleWebhookSubscriptionMapper {
 
   List<WebhookSubscriptionEntity> findEnabledByTenant(@Param("tenantId") String tenantId);
 
-  void insert(
-      @Param("tenantId") String tenantId,
-      @Param("name") String name,
-      @Param("callbackUrl") String callbackUrl,
-      @Param("eventTypes") String eventTypes,
-      @Param("secret") String secret,
-      @Param("enabled") boolean enabled,
-      @Param("operator") String operator);
+  void insert(ConsoleWebhookSubscriptionInsertParam parameters);
 
-  void update(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("callbackUrl") String callbackUrl,
-      @Param("eventTypes") String eventTypes,
-      @Param("secret") String secret,
-      @Param("enabled") boolean enabled,
-      @Param("operator") String operator);
+  void update(ConsoleWebhookSubscriptionUpdateParam parameters);
 
   void deleteByTenantAndId(@Param("tenantId") String tenantId, @Param("id") Long id);
 }

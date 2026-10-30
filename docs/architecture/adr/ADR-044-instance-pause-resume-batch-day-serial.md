@@ -1,8 +1,10 @@
 # ADR-044 · 实例 pause/resume + 批次日严格串行
 
+> **当前适用性（2026-10-24）**：暂停/恢复分别校验Workflow根、节点和子Job的真实归属；新模型没有虚拟父Task传播状态。暂停阻止新准入，在途处理及恢复按现行状态机，不把暂停请求当业务取消/成功。 原决策与历史阶段记录保留。
+
 - **Status**: Accepted；`PAUSED` 生命周期状态、实例暂停/恢复服务和调度侧相关约束已落入代码。批次日串行完整场景仍以专项集成/仿真证据为准（复核：2026-10-08）
 - **Date**: 2026-06-20
-- **Related**: `docs/analysis/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源,缺口 #15)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 4.3)、ADR-018(跨日依赖,**边界对照**)、ADR-042(WAITING/有界队列,**状态复用对照**)、ADR-027(范围红线)
+- **Related**: `docs/archive/audit/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源,缺口 #15)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 4.3)、ADR-018(跨日依赖,**边界对照**)、ADR-042(WAITING/有界队列,**状态复用对照**)、ADR-027(范围红线)
 - **Plan**: 本文的原始计划段保留决策背景；状态迁移实现入口见 `InstanceManagementApplicationService` 及对应 mapper/controller。不能仅凭状态枚举存在推断所有 pause/resume 业务场景均已验收。
 
 ## 范围边界(实施 PR 必答)
@@ -35,7 +37,7 @@
 - `JobInstanceStatus` 增 `PAUSED`;`WorkflowRunStatus` 增 `PAUSED`。
 - **可迁移性**:`RUNNING/PARTIAL_FAILED/WAITING/READY → PAUSED`(可暂停);`PAUSED → RUNNING`(resume,回到派发);`PAUSED → CANCELLED/TERMINATED`(暂停后决定弃)。终态(`SUCCESS/FAILED/CANCELLED/TERMINATED`)**不可**进 PAUSED。
 - **语义**:实例进 PAUSED 后,派发器(`WaitingPartitionDispatchScheduler` / workflow 节点 dispatcher)**跳过**该实例的新分区 / 新节点派发;在途分区 / 节点跑完照常 REPORT,但**不推进**到下一波。CLAIM/租约/心跳机制对在途 task 不变。
-- resume:实例回 `RUNNING`,派发器重新纳入,从「已完成 + 待派发」边界继续(天然 checkpoint:已 SUCCESS 的分区 / 节点不重跑,靠既有幂等)。
+- resume:实例回 `RUNNING`,派发器重新纳入,从「已完成 + 待派发」边界继续(天然 checkpoint:已 SUCCESS 的分区 / 节点不重跑,靠既有幂等)。 Workflow 暂停时，其子 Job 中尚未派发的等待分区也暂停释放；恢复后重新纳入候选。释放与暂停按 Workflow 行锁串行，已派发的任务继续自然完成。
 
 ### 2. 批次日严格串行(可选开关,按 job 配)
 

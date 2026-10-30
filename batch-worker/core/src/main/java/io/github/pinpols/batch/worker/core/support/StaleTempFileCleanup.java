@@ -17,8 +17,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * 系统临时文件清理器：在应用启动就绪时执行一次清理，并定期（默认 PT4H）扫描 JVM 临时目录， 删除超过 {@code
- * batch.worker.stale-temp-file-hours}（默认 6h）未修改且以 {@code batch-} 开头的文件。
+ * 系统临时文件清理器：在应用启动就绪时执行一次清理，并定期（默认 PT4H）扫描 JVM 临时目录中的过期 {@code
+ * batch-} 文件，以及私有临时目录中超过 {@code batch.worker.stale-temp-file-hours}（默认 6h）未修改的导入阶段文件和加密导出文件。
  *
  * <p>只清理约定前缀 {@code batch-} 的文件，避免误删系统或其他应用的临时文件。
  */
@@ -45,7 +45,9 @@ public class StaleTempFileCleanup {
 
   void cleanStaleTempFiles() {
     long hours = Math.max(0L, workerTempFileProperties.getStaleTempFileHours());
-    Instant cutoff = BatchDateTimeSupport.utcNow().minus(Duration.ofHours(hours));
+    Instant cleanupTime = BatchDateTimeSupport.utcNow();
+    Duration staleFileAge = Duration.ofHours(hours);
+    Instant cutoff = cleanupTime.minus(staleFileAge);
     Path tempDir = PrivateTempFiles.tempRoot();
     int cleaned = 0;
     try (DirectoryStream<Path> stream = Files.newDirectoryStream(tempDir)) {
@@ -88,6 +90,12 @@ public class StaleTempFileCleanup {
           tempDir,
           SwallowedExceptionLogger.summary(ex));
       return;
+    }
+    try {
+      cleaned +=
+          PrivateTempFiles.deleteStaleUnlockedFiles(BatchFileConstants.IMPORT_STAGE_PREFIX, cutoff);
+    } catch (Exception ex) {
+      log.warn("failed to clean stale import stage files", ex);
     }
     try {
       cleaned += PrivateTempFiles.deleteStaleUnlockedFiles(

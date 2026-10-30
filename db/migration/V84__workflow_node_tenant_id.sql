@@ -30,6 +30,7 @@ ALTER TABLE batch.workflow_node
     UNIQUE (tenant_id, workflow_definition_id, node_code);
 
 -- 租户级节点检索辅助索引(console-api 列表查询常按 tenant_id + node_code 过滤)
+
 CREATE INDEX IF NOT EXISTS idx_workflow_node_tenant_code
     ON batch.workflow_node (tenant_id, node_code);
 

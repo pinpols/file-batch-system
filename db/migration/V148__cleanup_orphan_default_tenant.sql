@@ -10,6 +10,7 @@
 -- 这是「数据修正」非「业务迁移」;不需要 profile guard:
 --   - 命中删除条件 = 用户从没用过,删除安全
 --   - 不命中 = 业务在用,保留
+
 DELETE FROM batch.tenant t
 WHERE t.tenant_id = 'default-tenant'
   AND NOT EXISTS (SELECT 1 FROM batch.console_user_account WHERE tenant_id = t.tenant_id)

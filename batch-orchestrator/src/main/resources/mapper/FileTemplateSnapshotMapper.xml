@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper">
+    <!-- 此处有意保存完整执行配置；JSONB 和日期值会转换为原生 JSON。
+         调用方在持久化或分发此文档前负责加密。 -->
+    <select id="selectLatestConfiguration" resultType="java.lang.String">
+        select to_jsonb(t)::text
+        from batch.file_template_config t
+        where t.tenant_id = #{tenantId}
+          and t.template_code = #{templateCode}
+          and t.template_type = #{templateType}
+          and t.enabled = true
+          and t.is_deleted = false
+        order by t.version desc
+        limit 1
+    </select>
+</mapper>

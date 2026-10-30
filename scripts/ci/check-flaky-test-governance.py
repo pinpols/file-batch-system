@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：flaky 测试隔离治理。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-flaky-test-governance.py；参数与前置环境见下方说明及所属 README。
 """校验 flaky 测试隔离项的责任人、Issue 和到期日。"""
 
 from __future__ import annotations

@@ -4,125 +4,329 @@
 
     <sql id="JobInstancesByPrefix">
         select id from batch.job_instance
-         where job_code like #{prefixLike} escape '\'
+         where job_code like #{scope.prefixLike} escape '\'
     </sql>
+
+    <sql id="WorkflowDefinitionsByPrefix">
+        select workflow.id
+          from batch.workflow_definition workflow
+         where workflow.workflow_code like #{scope.prefixLike} escape '\'
+            or workflow.single_job_definition_id in (
+                select job.id from batch.job_definition job
+                 where job.job_code like #{scope.prefixLike} escape '\'
+            )
+    </sql>
+
+    <resultMap id="OutboxEventIdentityMap"
+               type="io.github.pinpols.batch.orchestrator.mapper.AdminTestDataCleanupMapper$OutboxEventIdentity">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="id" javaType="java.lang.Long"/>
+            <arg column="created_at" javaType="java.time.OffsetDateTime"/>
+            <arg column="event_key" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="OwnedWorkflowRunIds">
+        <choose>
+            <when test="!scope.workflowRunIds.isEmpty()">
+                <foreach collection="scope.workflowRunIds" item="id" separator=",">#{id}</foreach>
+            </when>
+            <otherwise>null</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="OwnedTriggerRequestIds">
+        <choose>
+            <when test="!scope.triggerRequestIds.isEmpty()">
+                <foreach collection="scope.triggerRequestIds" item="id" separator=",">#{id}</foreach>
+            </when>
+            <otherwise>null</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="OwnedRequestKeys">
+        select tenant_id, request_id from batch.trigger_request
+         where id in (<include refid="OwnedTriggerRequestIds"/>)
+    </sql>
+
+    <sql id="OwnedInstancePredicate">
+        (instance.job_code like #{scope.prefixLike} escape '\'
+         or instance.trigger_request_id in (<include refid="OwnedTriggerRequestIds"/>))
+    </sql>
+
+    <sql id="OwnedJobInstancesByPrefix">
+        select instance.id from batch.job_instance instance
+         where <include refid="OwnedInstancePredicate"/>
+    </sql>
+
+    <sql id="OwnedOutboxReferences">
+        <choose>
+            <when test="!scope.outboxEvents.isEmpty()">
+                <foreach collection="scope.outboxEvents" item="event" separator=",">
+                    (#{event.tenantId}, #{event.id}, #{event.createdAt})
+                </foreach>
+            </when>
+            <otherwise>(null::varchar, null::bigint, null::timestamptz)</otherwise>
+        </choose>
+    </sql>
+
+    <select id="findWorkflowRunIdsByPrefix" resultType="java.lang.Long">
+        select id from batch.workflow_run
+         where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+            or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+    </select>
+
+    <select id="findTriggerRequestIdsByPrefix" resultType="java.lang.Long">
+        select id from batch.trigger_request
+         where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+            or parent_workflow_run_id in (<include refid="OwnedWorkflowRunIds"/>)
+            or job_code like #{scope.prefixLike} escape '\'
+            or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+            or id in (
+                select trigger_request_id from batch.job_instance
+                 where job_code like #{scope.prefixLike} escape '\'
+            )
+    </select>
+
+    <select id="findOutboxEventsByPrefix" resultMap="OutboxEventIdentityMap">
+        select event.tenant_id, event.id, event.created_at, event.event_key
+          from batch.outbox_event event
+         where (event.aggregate_type = 'WORKFLOW_RUN' and exists (
+                    select 1 from batch.workflow_run run
+                     where run.tenant_id = event.tenant_id and run.id = event.aggregate_id
+                       and run.id in (<include refid="OwnedWorkflowRunIds"/>)
+               ))
+            or (event.aggregate_type = 'JOB_INSTANCE' and exists (
+                    select 1 from batch.job_instance instance
+                     where instance.tenant_id = event.tenant_id and instance.id = event.aggregate_id
+                       and <include refid="OwnedInstancePredicate"/>
+               ))
+            or (event.aggregate_type = 'TRIGGER_REQUEST' and exists (
+                    select 1 from batch.trigger_request request
+                     where request.tenant_id = event.tenant_id and request.id = event.aggregate_id
+                       and request.id in (<include refid="OwnedTriggerRequestIds"/>)
+               ))
+            or (event.aggregate_type = 'JOB_TASK' and event.event_type != 'verifier.failure.v1' and exists (
+                    select 1 from batch.job_task task
+                      join batch.job_instance instance
+                        on instance.tenant_id = task.tenant_id and instance.id = task.job_instance_id
+                       and instance.biz_date = task.job_instance_biz_date
+                     where task.tenant_id = event.tenant_id and task.id = event.aggregate_id
+                       and <include refid="OwnedInstancePredicate"/>
+               ))
+            or (event.aggregate_type = 'JOB_TASK' and event.event_type = 'verifier.failure.v1' and exists (
+                    select 1 from batch.job_instance instance
+                     where instance.tenant_id = event.tenant_id and instance.id = event.aggregate_id
+                       and <include refid="OwnedInstancePredicate"/>
+               ))
+    </select>
+
+    <select id="hasAmbiguousJobInstanceIds" resultType="boolean">
+        select exists (
+            select 1 from batch.job_instance instance
+             where instance.id in (<include refid="OwnedJobInstancesByPrefix"/>)
+               and <include refid="OwnedInstancePredicate"/> is not true
+        ) or exists (
+            select 1 from archive.job_instance_archive cold
+             where cold.id in (<include refid="OwnedJobInstancesByPrefix"/>)
+               and not exists (
+                    select 1 from batch.job_instance instance
+                     where instance.tenant_id = cold.tenant_id and instance.id = cold.id
+                       and instance.biz_date = cold.biz_date
+                       and <include refid="OwnedInstancePredicate"/>
+               )
+        )
+    </select>
 
     <delete id="cleanupByPrefixTarget">
         <choose>
+            <when test="target == 'EVENT_DELIVERY_LOG'">
+                delete from batch.event_delivery_log
+                 where (tenant_id, outbox_event_id, outbox_event_created_at) in (
+                    <include refid="OwnedOutboxReferences"/>
+                 )
+            </when>
+            <when test="target == 'EVENT_OUTBOX_RETRY'">
+                delete from batch.event_outbox_retry
+                 where (tenant_id, outbox_event_id, outbox_event_created_at) in (
+                    <include refid="OwnedOutboxReferences"/>
+                 )
+            </when>
+            <when test="target == 'OUTBOX_EVENT'">
+                delete from batch.outbox_event
+                 where (tenant_id, id, created_at) in (<include refid="OwnedOutboxReferences"/>)
+            </when>
+            <when test="target == 'OUTBOX_EVENT_DEDUP_KEY'">
+                delete from batch.outbox_event_dedup_key
+                 where (tenant_id, event_key) in (
+                    <choose>
+                        <when test="!scope.outboxEvents.isEmpty()">
+                            <foreach collection="scope.outboxEvents" item="event" separator=",">
+                                (#{event.tenantId}, #{event.eventKey})
+                            </foreach>
+                        </when>
+                        <otherwise>(null::varchar, null::varchar)</otherwise>
+                    </choose>
+                 )
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE_CATCH_UP_AUDIT'">
+                delete from batch.scheduled_occurrence_catch_up_audit
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+                    or (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE'">
+                delete from batch.scheduled_occurrence
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+                    or (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE_COVERAGE'">
+                delete from batch.scheduled_occurrence_coverage
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+            </when>
+            <when test="target == 'EXPECTED_WORK_OCCURRENCE'">
+                delete from batch.expected_work_occurrence
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+                    or (tenant_id, trigger_request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'WORKFLOW_LAUNCH_WAIT'">
+                delete from batch.workflow_launch_wait
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+                    or (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'JOB_DEPENDENCY_WAITING_LAUNCH'">
+                delete from batch.job_dependency_waiting_launch
+                 where (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'BATCH_DAY_WAITING_LAUNCH'">
+                delete from batch.batch_day_waiting_launch
+                 where (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'TRIGGER_MISFIRE_PENDING'">
+                delete from batch.trigger_misfire_pending
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+                    or catch_up_request_id in (<include refid="OwnedTriggerRequestIds"/>)
+            </when>
+            <when test="target == 'TRIGGER_OUTBOX_EVENT'">
+                delete from batch.trigger_outbox_event
+                 where (tenant_id, request_id) in (<include refid="OwnedRequestKeys"/>)
+            </when>
+            <when test="target == 'TRIGGER_REQUEST'">
+                delete from batch.trigger_request
+                 where id in (<include refid="OwnedTriggerRequestIds"/>)
+            </when>
+            <when test="target == 'FILE_GROUP_EXPECTATION_DEFINITION'">
+                delete from batch.file_group_expectation_definition
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+            </when>
+            <when test="target == 'EXTERNAL_EVENT_EXPECTATION_DEFINITION'">
+                delete from batch.external_event_expectation_definition
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
+            </when>
             <when test="target == 'WORKFLOW_NODE_RUN'">
                 delete from batch.workflow_node_run
-                 where workflow_run_id in (
-                    select id from batch.workflow_run
-                     where workflow_definition_id in (
-                        select id from batch.workflow_definition
-                         where workflow_code like #{prefixLike} escape '\'
-                     )
-                        or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
-                 )
+                 where workflow_run_id in (<include refid="OwnedWorkflowRunIds"/>)
             </when>
             <when test="target == 'WORKFLOW_RUN'">
                 delete from batch.workflow_run
-                 where workflow_definition_id in (
-                    select id from batch.workflow_definition
-                     where workflow_code like #{prefixLike} escape '\'
-                 )
-                    or related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where id in (<include refid="OwnedWorkflowRunIds"/>)
             </when>
             <when test="target == 'COMPENSATION_COMMAND'">
                 delete from batch.compensation_command
-                 where related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where related_job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'APPROVAL_COMMAND'">
                 delete from batch.approval_command
                  where target_type = 'JOB_INSTANCE'
-                   and target_id like #{prefixLike} escape '\'
+                   and target_id like #{scope.prefixLike} escape '\'
+            </when>
+            <when test="target == 'PIPELINE_STEP_RUN'">
+                delete from batch.pipeline_step_run
+                 where pipeline_instance_id in (
+                    select id from batch.pipeline_instance
+                     where related_job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
+                 )
             </when>
             <when test="target == 'PIPELINE_INSTANCE'">
                 delete from batch.pipeline_instance
-                 where related_job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where related_job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_EXECUTION_LOG'">
                 delete from batch.job_execution_log
-                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_STEP_INSTANCE'">
                 delete from batch.job_step_instance
-                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_TASK'">
                 delete from batch.job_task
-                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_PARTITION'">
                 delete from batch.job_partition
-                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'CLEAR_JOB_INSTANCE_PARENT'">
                 update batch.job_instance set parent_instance_id = null
-                 where parent_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where parent_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_MONITORING_ALERT_CLAIM'">
                 delete from batch.job_monitoring_alert_claim
-                 where job_instance_id in (<include refid="JobInstancesByPrefix"/>)
+                 where job_instance_id in (<include refid="OwnedJobInstancesByPrefix"/>)
             </when>
             <when test="target == 'JOB_INSTANCE'">
-                delete from batch.job_instance
-                 where job_code like #{prefixLike} escape '\'
+                delete from batch.job_instance instance
+                 where <include refid="OwnedInstancePredicate"/>
             </when>
             <when test="target == 'WORKFLOW_NODE'">
                 delete from batch.workflow_node
-                 where workflow_definition_id in (
-                    select id from batch.workflow_definition
-                     where workflow_code like #{prefixLike} escape '\'
-                 )
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
             </when>
             <when test="target == 'WORKFLOW_EDGE'">
                 delete from batch.workflow_edge
-                 where workflow_definition_id in (
-                    select id from batch.workflow_definition
-                     where workflow_code like #{prefixLike} escape '\'
-                 )
+                 where workflow_definition_id in (<include refid="WorkflowDefinitionsByPrefix"/>)
             </when>
             <when test="target == 'WORKFLOW_DEFINITION'">
                 delete from batch.workflow_definition
-                 where workflow_code like #{prefixLike} escape '\'
+                 where id in (<include refid="WorkflowDefinitionsByPrefix"/>)
             </when>
             <when test="target == 'JOB_DEFINITION'">
                 delete from batch.job_definition
-                 where job_code like #{prefixLike} escape '\'
+                 where job_code like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'FILE_CHANNEL_CONFIG'">
                 delete from batch.file_channel_config
-                 where channel_code like #{prefixLike} escape '\'
+                 where channel_code like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'FILE_TEMPLATE_CONFIG'">
                 delete from batch.file_template_config
-                 where template_code like #{prefixLike} escape '\'
+                 where template_code like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'API_KEY'">
                 delete from batch.api_key
-                 where key_name like #{prefixLike} escape '\'
+                 where key_name like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'ALERT_ROUTING_CONFIG'">
                 delete from batch.alert_routing_config
-                 where route_code like #{prefixLike} escape '\'
+                 where route_code like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'TENANT_QUOTA_POLICY'">
                 delete from batch.tenant_quota_policy
-                 where policy_code like #{prefixLike} escape '\'
+                 where policy_code like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'CONSOLE_USER_ACCOUNT'">
                 delete from batch.console_user_account
-                 where username like #{prefixLike} escape '\'
-                    or username like #{operatorPrefixLike} escape '\'
+                 where username like #{scope.prefixLike} escape '\'
+                    or username like #{scope.operatorPrefixLike} escape '\'
             </when>
             <when test="target == 'ARCHIVE_POLICY'">
                 delete from batch.archive_policy
-                 where tenant_id like #{prefixLike} escape '\'
+                 where tenant_id like #{scope.prefixLike} escape '\'
             </when>
             <when test="target == 'TENANT'">
                 delete from batch.tenant
-                 where tenant_id like #{prefixLike} escape '\'
+                 where tenant_id like #{scope.prefixLike} escape '\'
             </when>
             <otherwise>select 1 where false</otherwise>
         </choose>
@@ -130,6 +334,91 @@
 
     <delete id="cleanupByTenantIdsTarget">
         <choose>
+            <when test="target == 'EVENT_DELIVERY_LOG'">
+                delete from batch.event_delivery_log where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'EVENT_OUTBOX_RETRY'">
+                delete from batch.event_outbox_retry where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'OUTBOX_EVENT'">
+                delete from batch.outbox_event where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'OUTBOX_EVENT_DEDUP_KEY'">
+                delete from batch.outbox_event_dedup_key where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE_CATCH_UP_AUDIT'">
+                delete from batch.scheduled_occurrence_catch_up_audit where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE'">
+                delete from batch.scheduled_occurrence where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'SCHEDULED_OCCURRENCE_COVERAGE'">
+                delete from batch.scheduled_occurrence_coverage where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'EXPECTED_WORK_OCCURRENCE'">
+                delete from batch.expected_work_occurrence where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'WORKFLOW_LAUNCH_WAIT'">
+                delete from batch.workflow_launch_wait where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_DEPENDENCY_WAITING_LAUNCH'">
+                delete from batch.job_dependency_waiting_launch where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'BATCH_DAY_WAITING_LAUNCH'">
+                delete from batch.batch_day_waiting_launch where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'TRIGGER_MISFIRE_PENDING'">
+                delete from batch.trigger_misfire_pending where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'COMPENSATION_COMMAND'">
+                delete from batch.compensation_command where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'JOB_EXECUTION_LOG'">
+                delete from batch.job_execution_log where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'TRIGGER_OUTBOX_EVENT'">
+                delete from batch.trigger_outbox_event where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'TRIGGER_REQUEST'">
+                delete from batch.trigger_request where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'FILE_GROUP_EXPECTATION_DEFINITION'">
+                delete from batch.file_group_expectation_definition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'EXTERNAL_EVENT_EXPECTATION_DEFINITION'">
+                delete from batch.external_event_expectation_definition where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'API_KEY'">
+                delete from batch.api_key where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'ALERT_ROUTING_CONFIG'">
+                delete from batch.alert_routing_config where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+            <when test="target == 'TENANT_QUOTA_POLICY'">
+                delete from batch.tenant_quota_policy where tenant_id in
+                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+            </when>
+
             <when test="target == 'WORKFLOW_NODE_RUN'">
                 delete from batch.workflow_node_run
                  where workflow_run_id in (
@@ -166,7 +455,9 @@
             </when>
             <when test="target == 'CLEAR_JOB_INSTANCE_PARENT'">
                 update batch.job_instance set parent_instance_id = null
-                 where parent_instance_id in (
+                 where tenant_id in
+                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+                   and parent_instance_id in (
                     select id from batch.job_instance where tenant_id in
                     <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
                  )
@@ -211,17 +502,6 @@
             </when>
             <when test="target == 'WORKFLOW_DEFINITION'">
                 delete from batch.workflow_definition where tenant_id in
-                <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-            </when>
-            <when test="target == 'PIPELINE_STEP_DEFINITION'">
-                delete from batch.pipeline_step_definition
-                 where pipeline_definition_id in (
-                    select id from batch.pipeline_definition where tenant_id in
-                    <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
-                 )
-            </when>
-            <when test="target == 'PIPELINE_DEFINITION'">
-                delete from batch.pipeline_definition where tenant_id in
                 <foreach collection="tenantIds" item="id" open="(" separator="," close=")">#{id}</foreach>
             </when>
             <when test="target == 'JOB_DEFINITION'">

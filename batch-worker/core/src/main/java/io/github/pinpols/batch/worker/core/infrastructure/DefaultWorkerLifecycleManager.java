@@ -89,13 +89,14 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
         return;
       } catch (Exception ex) {
         lastError = ex;
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "worker shutdown status sync attempt {}/3 failed: workerId={}, targetStatus={},"
                 + " cause={}",
             attempt,
             workerId,
             targetStatus,
-            SwallowedExceptionLogger.summary(ex));
+            causeSummary);
         if (attempt < 3) {
           try {
             Thread.sleep(200L * attempt); // 200ms / 400ms 退避

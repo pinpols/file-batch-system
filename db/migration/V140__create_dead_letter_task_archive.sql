@@ -38,6 +38,7 @@ CREATE INDEX IF NOT EXISTS idx_dead_letter_task_archive_replay_status_created
     ON archive.dead_letter_task_archive (replay_status, created_at);
 
 -- 加入 archive_policy 白名单(累积上一次 V139 的列表)
+
 ALTER TABLE batch.archive_policy
     DROP CONSTRAINT ck_archive_policy_table;
 
@@ -51,6 +52,7 @@ ALTER TABLE batch.archive_policy
     ));
 
 -- 默认种子: 90 天归档(GIVE_UP 行长期事故复盘价值高,先保留再清)。
+
 INSERT INTO batch.archive_policy (
     tenant_id, target_table, retention_days,
     archive_enabled, cleanup_enabled, batch_size,

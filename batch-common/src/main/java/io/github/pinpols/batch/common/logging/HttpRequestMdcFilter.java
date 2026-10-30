@@ -27,11 +27,12 @@ public class HttpRequestMdcFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
-    String requestId = CorrelationIds.normalize(
-        request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER),
-        IdGenerator.newBusinessNo("req"));
-    String traceId = CorrelationIds.normalize(
-        request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER), IdGenerator.newTraceId());
+    String requestIdHeader = request.getHeader(CommonConstants.DEFAULT_REQUEST_ID_HEADER);
+    String generatedRequestId = IdGenerator.newBusinessNo("req");
+    String requestId = CorrelationIds.normalize(requestIdHeader, generatedRequestId);
+    String traceIdHeader = request.getHeader(CommonConstants.DEFAULT_TRACE_ID_HEADER);
+    String generatedTraceId = IdGenerator.newTraceId();
+    String traceId = CorrelationIds.normalize(traceIdHeader, generatedTraceId);
     String requestedTenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     Map<String, String> previousContext = BatchMdc.snapshot();
     try {

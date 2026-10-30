@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="controlMap" type="io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="paused" javaType="java.lang.Boolean"/>
+            <arg column="paused_at" javaType="java.time.Instant"/>
+            <arg column="paused_by" javaType="java.lang.String"/>
+            <arg column="pause_reason" javaType="java.lang.String"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectForUpdate" resultMap="controlMap">
+        select tenant_id, calendar_code, paused, paused_at, paused_by, pause_reason, updated_at
+          from batch.batch_day_catchup_control
+         where tenant_id = #{tenantId} and calendar_code = #{calendarCode}
+         for update
+    </select>
+
+    <select id="selectCurrent" resultMap="controlMap">
+        select tenant_id, calendar_code, paused, paused_at, paused_by, pause_reason, updated_at
+          from batch.batch_day_catchup_control
+         where tenant_id = #{tenantId} and calendar_code = #{calendarCode}
+    </select>
+
+    <insert id="insertIfMissing">
+        insert into batch.batch_day_catchup_control (tenant_id, calendar_code)
+        values (#{tenantId}, #{calendarCode})
+        on conflict (tenant_id, calendar_code) do nothing
+    </insert>
+
+    <update id="updatePauseState">
+        update batch.batch_day_catchup_control
+           set paused = #{paused},
+               paused_at = #{pausedAt},
+               paused_by = #{pausedBy},
+               pause_reason = #{pauseReason},
+               updated_at = #{updatedAt}
+         where tenant_id = #{tenantId} and calendar_code = #{calendarCode}
+    </update>
+
+    <insert id="insertEvent">
+        insert into batch.batch_day_catchup_control_event
+            (tenant_id, calendar_code, action, operator_id, reason, occurred_at)
+        values (#{tenantId}, #{calendarCode}, #{action}, #{operatorId}, #{reason}, #{occurredAt})
+    </insert>
+</mapper>

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import java.util.Map;
 
-/** Shared channel delivery and synthetic webhook mapping used by notification entry points. */
+/** 通知入口共用的渠道投递和模拟 Webhook 映射逻辑。 */
 @SuppressWarnings("java:S2583")
 public final class WebhookDeliverySupport {
 
@@ -48,8 +48,11 @@ public final class WebhookDeliverySupport {
       return WebhookDeliveryResult.failure(
           null, "no sender registered for channel type: " + channelType);
     }
-    return sender.send(new NotificationMessage(
-        tenantId, channelCode, channelType, configJson, context.payload(), context.payloadJson()));
+    WebhookEventPayload payload = context.payload();
+    String payloadJson = context.payloadJson();
+    NotificationMessage message = new NotificationMessage(
+        tenantId, channelCode, channelType, configJson, payload, payloadJson);
+    return sender.send(message);
   }
 
   private static WebhookSubscriptionEntity syntheticSubscription(
@@ -88,6 +91,7 @@ public final class WebhookDeliverySupport {
   }
 
   public static String configText(String configJson, String key, Class<?> logOwner) {
-    return text(parseConfig(configJson, logOwner), key);
+    Map<String, Object> config = parseConfig(configJson, logOwner);
+    return text(config, key);
   }
 }

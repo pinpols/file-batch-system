@@ -3,8 +3,9 @@ package io.github.pinpols.batch.orchestrator.domain.statemachine;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import java.util.Set;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-/** Shared lifecycle status catalog used by state transitions and outcome policies. */
+/** 状态迁移和结果策略共用的生命周期状态目录。 */
 public final class LifecycleStatusCatalog {
 
   public static final Set<String> JOB_INSTANCE_TERMINAL_STATES = JobInstanceStatus.terminalCodes();
@@ -15,10 +16,9 @@ public final class LifecycleStatusCatalog {
     return status != null && JOB_INSTANCE_TERMINAL_STATES.contains(status);
   }
 
-  /** The generic state machine also protects the workflow-level SKIPPED terminal state. */
+  /** 通用状态机也会保护 Workflow 层的 SKIPPED 终态。 */
   public static Set<String> allTerminalStates() {
-    return java.util.stream.Stream.concat(
-            JOB_INSTANCE_TERMINAL_STATES.stream(), Set.of("SKIPPED").stream())
+    return Stream.concat(JOB_INSTANCE_TERMINAL_STATES.stream(), Set.of("SKIPPED").stream())
         .collect(Collectors.toUnmodifiableSet());
   }
 }

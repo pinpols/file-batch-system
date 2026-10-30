@@ -45,28 +45,32 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("迁移执行完成后批处理域结构存在且仅有一个")
   void shouldCreateBatchSchema_whenMigrationRuns() {
-    Long cnt = jdbcTemplate.queryForObject(
-        "select count(*) from information_schema.schemata where schema_name = 'batch'", Long.class);
-    assertThat(cnt).isEqualTo(1L);
+    String batchSchemaCountSql = """
+        select count(*) from information_schema.schemata where schema_name = 'batch'
+        """;
+    Long batchSchemaCount = jdbcTemplate.queryForObject(batchSchemaCountSql, Long.class);
+    assertThat(batchSchemaCount).isEqualTo(1L);
   }
 
   @Test
   @DisplayName("迁移执行完成后定时调度域结构存在且仅有一个")
   void shouldCreateSchedulerSchema_whenMigrationRuns() {
-    Long cnt = jdbcTemplate.queryForObject(
-        "select count(*) from information_schema.schemata where schema_name = 'quartz'",
-        Long.class);
-    assertThat(cnt).isEqualTo(1L);
+    String schedulerSchemaCountSql = """
+        select count(*) from information_schema.schemata where schema_name = 'quartz'
+        """;
+    Long schedulerSchemaCount = jdbcTemplate.queryForObject(schedulerSchemaCountSql, Long.class);
+    assertThat(schedulerSchemaCount).isEqualTo(1L);
   }
 
   @Test
   @DisplayName("迁移执行完成后批次日实例表存在且仅有一个")
   void shouldCreateBatchDayInstanceTable_whenMigrationRuns() {
-    Long cnt = jdbcTemplate.queryForObject("""
-            select count(*) from information_schema.tables
-            where table_schema = 'batch' and table_name = 'batch_day_instance'
-            """, Long.class);
-    assertThat(cnt).isEqualTo(1L);
+    String batchDayTableCountSql = """
+        select count(*) from information_schema.tables
+        where table_schema = 'batch' and table_name = 'batch_day_instance'
+        """;
+    Long batchDayTableCount = jdbcTemplate.queryForObject(batchDayTableCountSql, Long.class);
+    assertThat(batchDayTableCount).isEqualTo(1L);
   }
 
   @Test
@@ -74,13 +78,17 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
   void shouldAddCalendarTimingColumns_whenMigrationRuns() {
     for (String column :
         new String[] {"cutoff_time", "late_arrival_tolerance_min", "sla_offset_min"}) {
-      Long cnt = jdbcTemplate.queryForObject("""
-              select count(*) from information_schema.columns
-              where table_schema = 'batch'
-                and table_name = 'business_calendar'
-                and column_name = ?
-              """, Long.class, column);
-      assertThat(cnt).as("column business_calendar.%s should exist", column).isEqualTo(1L);
+      final String calendarColumnCountSql = """
+    select count(*) from information_schema.columns
+    where table_schema = 'batch'
+    and table_name = 'business_calendar'
+    and column_name = ?
+    """;
+      Long calendarColumnCount =
+          jdbcTemplate.queryForObject(calendarColumnCountSql, Long.class, column);
+      assertThat(calendarColumnCount)
+          .as("column business_calendar.%s should exist", column)
+          .isEqualTo(1L);
     }
   }
 
@@ -93,11 +101,13 @@ class StartupSelfCheckIntegrationTest extends AbstractIntegrationTest {
       "qrtz_calendars", "qrtz_paused_trigger_grps", "qrtz_fired_triggers",
       "qrtz_scheduler_state", "qrtz_locks"
     }) {
-      Long cnt = jdbcTemplate.queryForObject("""
-              select count(*) from information_schema.tables
-              where table_schema = 'quartz' and table_name = ?
-              """, Long.class, table);
-      assertThat(cnt).as("quartz table %s should exist", table).isEqualTo(1L);
+      String schedulerTableCountSql = """
+          select count(*) from information_schema.tables
+          where table_schema = 'quartz' and table_name = ?
+          """;
+      Long schedulerTableCount =
+          jdbcTemplate.queryForObject(schedulerTableCountSql, Long.class, table);
+      assertThat(schedulerTableCount).as("quartz table %s should exist", table).isEqualTo(1L);
     }
   }
 }

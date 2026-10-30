@@ -1,5 +1,5 @@
 server:
-  port: 18087
+  port: ${BATCH_WORKER_ATOMIC_PORT:18087}
 
 spring:
   main:
@@ -19,7 +19,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,atomicruntime
 
 batch:
   shedlock:
@@ -49,23 +49,36 @@ batch:
     executors:
       sql:
         enabled: true
+        # 本地 SQL 只允许平台 DataSource；新增独立低权限 bean 后再按需显式加入白名单。
+        allowed-data-source-beans:
+        - dataSource
         forbid-os-capable-role: false  # 本地角色可能高权限;生产默认 true 回退
       shell:
         enabled: true
+        # 当前本地 SIM 的 Shell 场景只使用这两个无害命令。
+        command-whitelist:
+        - /bin/echo
+        - /bin/sleep
       stored-proc:
         enabled: true
         # 本地放行 batch schema 下的过程(生产应精确到过程白名单)
         allowed-schemas:
         - batch
+        allowed-data-source-beans:
+        - dataSource
         # 本地 dev:关 OS 角色闸(本地角色可能高权限);生产用最小权限角色,默认 true 回退
         forbid-os-capable-role: false
       http:
         enabled: true
+        enforce-allowlist: true
+        allowed-host-patterns:
+        - localhost
+        - 127.0.0.1
         max-request-body-bytes: ${BATCH_WORKER_ATOMIC_HTTP_MAX_REQUEST_BODY_BYTES:1048576}
         # 仅本地:dev 机器上没有云 metadata 威胁、目标就是 localhost 自身服务,清空 SSRF 黑名单。
         # 生产保留默认黑名单(localhost/127.*/169.254.169.254/metadata.*),见 HttpExecutorProperties。
         blocked-host-patterns: []
-        allowed-host-patterns: []
+        block-private-ips: false
   datasource:
     business:
       url: ${BATCH_BUSINESS_DB_URL:jdbc:postgresql://localhost:15432/batch_business}

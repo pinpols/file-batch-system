@@ -3,7 +3,7 @@
 - **Status**: Accepted（实施前置：见 §"实施触发条件"，未触发期间不开工）
 - **Date**: 2026-05-06（Accepted: 2026-05-06）
 - **Supersedes**: —
-- **Related**: §14.3.2（设计层缺口）/ `docs/runbook/quota-runbook.md` / `docs/runbook/rate-limit-runbook.md` / `docs/architecture/scalability-assessment.md`
+- **Related**: §14.3.2（设计层缺口）/ `docs/runbook/quota-runbook.md` / `docs/runbook/rate-limit-runbook.md` / `docs/runbook/production-capacity-governance.md`
 
 ## 背景
 
@@ -75,23 +75,17 @@ ALTER TABLE batch.job_definition
 
 quota 决策按"最严格者优先" pipeline：
 
-```
-launch request
-  │
-  ▼
-TenantQuota.check     ──── 不通过 → REJECT/QUEUE
-  │
-  ▼
-QueueQuota.check      ──── 不通过 → REJECT/QUEUE
-  │
-  ▼
-DomainQuota.check     ──── 不通过 → REJECT/QUEUE        ← 新增
-  │
-  ▼
-JobQuota.check        ──── 不通过 → REJECT/QUEUE
-  │
-  ▼
-ResourceQuota.check   ──── 通过 → DISPATCH
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  L["launch request"] --> T["TenantQuota"] --> Q["QueueQuota"] --> D["DomainQuota"] --> J["JobQuota"] --> R["ResourceQuota"]
+  R -->|"全部通过"| OK["DISPATCH"]
+  T -->|"不通过"| NO["REJECT / QUEUE"]
+  Q -->|"不通过"| NO
+  D -->|"不通过"| NO
+  J -->|"不通过"| NO
+  R -->|"不通过"| NO
 ```
 
 `DomainQuota.check` 命中条件：

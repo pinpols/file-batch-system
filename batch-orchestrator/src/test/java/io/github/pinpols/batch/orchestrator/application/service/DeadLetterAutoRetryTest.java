@@ -1,14 +1,17 @@
 package io.github.pinpols.batch.orchestrator.application.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultRetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryRequeueCoordinator;
@@ -22,10 +25,12 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -72,7 +77,8 @@ class DeadLetterAutoRetryTest {
         jobPartitionMapper,
         jobInstanceMapper,
         jobStepInstanceMapper,
-        taskDispatchOutboxService);
+        taskDispatchOutboxService,
+        mock(WorkflowRunMapper.class));
 
     service = new DefaultRetryGovernanceService(
         retryScheduleMapper,
@@ -138,8 +144,33 @@ class DeadLetterAutoRetryTest {
 
     verify(deadLetterTaskMapper, never()).markGiveUp(anyString(), anyLong());
     verify(deadLetterTaskMapper, never())
-        .markReplayFailure(
-            anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
+  }
+
+  @Test
+  @DisplayName("自动死信重放事务和耗尽预算处置均在死信租户上下文中")
+  void shouldProcessReplayAndGiveUpUnderDeadLetterTenantContext() {
+    DeadLetterTaskEntity exhausted = entity(10L, "tA", 3, 3);
+    DeadLetterTaskEntity retry = entity(11L, "tB", 2, 3);
+    when(deadLetterTaskMapper.selectDueAutoRetries(anyInt())).thenReturn(List.of(exhausted, retry));
+    doAnswer(invocation -> {
+          String tenantId = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+          return 1;
+        })
+        .when(deadLetterTaskMapper)
+        .markGiveUp(anyString(), anyLong());
+    when(deadLetterTaskMapper.selectById("tB", 11L)).thenAnswer(invocation -> {
+      assertThat(RlsTenantContextHolder.get()).isEqualTo("tB");
+      return null;
+    });
+
+    service.autoRetryDueDeadLetters();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   // ── helpers ────────────────────────────────────────────────────────────────

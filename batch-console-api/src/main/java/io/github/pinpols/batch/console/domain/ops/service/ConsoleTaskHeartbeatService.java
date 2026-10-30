@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
 import io.github.pinpols.batch.console.domain.ops.entity.JobTaskHeartbeatEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,12 +32,18 @@ public class ConsoleTaskHeartbeatService {
     if (entity == null) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
     }
+    Long heartbeatTaskId = entity.getId();
+    String taskStatus = entity.getTaskStatus();
+    String heartbeatDetailsJson = entity.getHeartbeatDetails();
+    Object parsedHeartbeatDetails = parseDetails(heartbeatDetailsJson, taskId);
+    Instant heartbeatAt = entity.getHeartbeatAt();
+    Boolean cancelRequested = entity.getCancelRequested();
     return new TaskHeartbeatDetailsResponse(
-        entity.getId(),
-        entity.getTaskStatus(),
-        parseDetails(entity.getHeartbeatDetails(), taskId),
-        entity.getHeartbeatAt(),
-        Boolean.TRUE.equals(entity.getCancelRequested()));
+        heartbeatTaskId,
+        taskStatus,
+        parsedHeartbeatDetails,
+        heartbeatAt,
+        Boolean.TRUE.equals(cancelRequested));
   }
 
   /** JSONB 文本解析成 JSON 结构;空 = null;解析异常降级为 null(不让坏数据 500),并 WARN 带 taskId。 */

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：在 Gatling 运行期间采样 scheduler / dispatch / worker 的积压情况。
+# 用法：在仓库根目录执行 bash load-tests/scripts/sample-scheduler-backlog.sh；参数与前置环境见下方说明及所属 README。
 # 在 Gatling 运行期间采样 scheduler / dispatch / worker 的积压情况。
 #
 # 输出的 CSV 列特意做成扁平结构，便于直接粘贴进报告或快速绘图。

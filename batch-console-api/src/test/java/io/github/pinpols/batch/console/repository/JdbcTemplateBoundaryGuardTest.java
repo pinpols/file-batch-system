@@ -89,9 +89,10 @@ class JdbcTemplateBoundaryGuardTest {
         .toAbsolutePath()
         .normalize();
     while (candidate != null) {
-      if (Files.isRegularFile(candidate.resolve("pom.xml"))
+      boolean candidateIsBackendRepositoryRoot = Files.isRegularFile(candidate.resolve("pom.xml"))
           && Files.isDirectory(candidate.resolve("batch-common"))
-          && Files.isDirectory(candidate.resolve("batch-worker"))) {
+          && Files.isDirectory(candidate.resolve("batch-worker"));
+      if (candidateIsBackendRepositoryRoot) {
         return candidate;
       }
       candidate = candidate.getParent();

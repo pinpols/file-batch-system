@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Lane P(漂移守护):用 fixture-schema.json 校验每个 fixture JSON。
+# 用法：在仓库根目录执行 bash docs/api/sdk-contract-fixtures/validate.sh；参数与前置环境见下方说明及所属 README。
 # Lane P(漂移守护):用 fixture-schema.json 校验每个 fixture JSON。
 # 由 CI sdk-contract-parity.yml 调用,推送前也在本地跑。
 #

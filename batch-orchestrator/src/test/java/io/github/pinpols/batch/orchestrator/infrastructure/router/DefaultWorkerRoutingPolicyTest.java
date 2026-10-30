@@ -68,7 +68,7 @@ class DefaultWorkerRoutingPolicyTest {
     WorkerRouteModel second = route("w2", 10, false);
 
     WorkerRouteModel selected = policy.select(List.of(first, second));
-    // all unavailable → falls back to first element
+    // 所有候选项均不可用时，回退到第一个元素。
     assertThat(selected.getWorkerId()).isEqualTo("w1");
   }
 

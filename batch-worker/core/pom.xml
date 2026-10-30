@@ -95,6 +95,11 @@
         <!-- PG JDBC 驱动:mapper IT 直连 Testcontainers PG 跑真 XML SQL(worker-core 库模块无 runtime 驱动依赖);含 checkpoint 位点 SQL 与 P0 deleteByInstance -->
 
         <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>test</scope>
@@ -110,4 +115,20 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+    <build>
+        <!-- 复用权威迁移,使用独立资源前缀避免自动发现不完整的Flyway目录。 -->
+        <testResources>
+            <testResource>
+                <directory>src/test/resources</directory>
+            </testResource>
+            <testResource>
+                <directory>${project.basedir}/../../db/migration</directory>
+                <targetPath>db/worker-report-outbox-fixture</targetPath>
+                <includes>
+                    <include>V96__worker_report_outbox.sql</include>
+                    <include>V360__worker_report_outbox_delivery_identity.sql</include>
+                </includes>
+            </testResource>
+        </testResources>
+    </build>
 </project>

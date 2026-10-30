@@ -1,3 +1,5 @@
+# 用途：验证Console 探活响应的有效性与失败传播。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_console_api_readiness.py。
 import json
 import shlex
 import subprocess

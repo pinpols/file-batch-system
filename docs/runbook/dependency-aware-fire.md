@@ -4,10 +4,10 @@
 
 ## 机制
 
-`job_definition.depends_on_job_code`(可空)声明本触发器 fire 前需就绪的上游 job。scheduled fire 路径(`DefaultTriggerService.launchScheduled`)在 bizDate 解析后、persist 前插一道闸:
+`job_dependency` 声明下游 fire 前需就绪的上游作业；旧 `job_definition.depends_on_job_code` 保留为首个上游的兼容投影。scheduled fire 路径(`DefaultTriggerService.launchScheduled`)在 bizDate 解析后、persist 前插一道闸:
 
-- `depends_on_job_code` 为空(绝大多数存量触发器)→ 直接放行,**行为完全不变**。
-- 非空 → 经 orchestrator 只读 API `GET /internal/readiness/job` 查上游同 bizDate 是否已有 **EFFECTIVE asset partition**(`UpstreamReadinessChecker` → `ReadinessService`):
+- 未声明上游(绝大多数存量触发器)→ 直接放行,**行为完全不变**。
+- 声明一个或多个上游 → 通过 orchestrator 只读 API `GET /internal/readiness/job` 逐个检查同 bizDate 是否已有 **EFFECTIVE asset partition**(`UpstreamReadinessChecker` → `ReadinessService`)，全部满足才放行(AND):
   - 就绪 → 正常 fire。
   - 未就绪 → `launchScheduled` 抛 `UpstreamNotReadyException`，Quartz 创建一次性 retry trigger 执行 **readiness defer**，**不丢批**。
 
@@ -15,7 +15,21 @@
 >
 > 2026-07-01 起,orchestrator 读取物化 `asset_partition` 时还会校验它指向的是同 `businessKey` 的最新 EFFECTIVE 版本,写入物化行时也按 `version_no` 单调更新。这个守卫用于防止重跑产生更高版本后,旧 EFFECTIVE 物化行继续让下游误判 ready。
 
+### 上游重跑与结果版本
+
+依赖按“指定上游作业 + 对齐业务日”的**最新版本**判 ready，不固定绑定某个历史 `version_no`。上游重跑提交更高版本后，在该版本进入 EFFECTIVE 前，即使较旧版本仍标记 EFFECTIVE，也会暂时阻断尚未启动/仍在等待的下游；新版本 EFFECTIVE 后等待请求再恢复。该语义避免消费旧快照掩盖正在审核或失败的修订。
+
+下游一旦已启动，不会因上游随后产生新版本而自动级联重跑。需要让下游消费修订结果时，运维应显式提交相应业务日的 replay，并按 replay 预览核对影响范围；这可以避免一次上游修订意外扩散成大规模自动重跑。现有机制没有把消费时的上游版本快照写入普通 `job_instance`，需要版本级 lineage 时应查对应结果/审计证据，不能把“latest at readiness time”误称为完整的消费版本审计。
+
 > trigger **不直连** orchestrator 状态表(读写分离 + 模块边界),就绪判定一律经 orchestrator 暴露的只读 internal API(携 `X-Internal-Secret`)。orchestrator 仍是唯一状态主机。
+
+## Orchestrator 全入口等待恢复
+
+Trigger 的 Quartz readiness defer 是调度侧的快速门闸；作业实例创建前，`DefaultLaunchService` 还会使用 Orchestrator 自身的 EFFECTIVE asset partition 再检查一次。该统一检查覆盖文件组、Workflow 子作业、Catch-up、RERUN、API 和人工等进入 LaunchService 的请求。若有任一上游未就绪，Orchestrator 将完整 `LaunchRequest`、依赖规则快照和原始 `bizDate` 保存到 `job_dependency_waiting_launch`，把 `trigger_request` 标记为 `WAITING`，不创建实例；后台 reconciler 在全部上游同业务日 EFFECTIVE 后重放同一请求。重复唤醒仍由 `requestId` 和实例去重键收敛。
+
+配置在等待期间发生变化不会改写已保存请求的依赖条件；新配置只影响之后首次进入等待的请求。等待超过 `BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS`（默认 86400 秒）时，系统通过 CAS 发出一次 `BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT` 告警；设为 0 可关闭告警。告警不会取消等待、自动跳过依赖或启动下游，全部上游同业务日结果生效后仍会自动恢复。该等待告警阈值与作业执行完成 SLA 分开配置。
+
+Console 作业定义页的「依赖等待」只读列表可按租户查询等待中的下游、业务日、上游快照、最后阻塞原因、重检次数、等待时间和超时告警时间。读取结果不包含保存的完整 `LaunchRequest` 参数。等待仅会在所有上游同业务日结果生效后自动恢复；目前没有人工绕过入口，也不要通过 SQL 更新等待记录或 `trigger_request`。
 
 ## readiness defer(未就绪不丢批,ADR-043 §6.4)
 
@@ -46,9 +60,10 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 
 | 键 | 默认 | 说明 |
 |---|---|---|
-| `job_definition.depends_on_job_code` | NULL | 上游 job code;非空才启用本触发器的依赖闸 |
+| `job_dependency` | 空关系集 | 多上游关系；全部同 bizDate 的 EFFECTIVE asset partition 就绪才放行 scheduled fire |
+| `job_definition.depends_on_job_code` | NULL | 首个上游的旧字段投影；用于兼容旧配置读取 |
 | `batch.trigger.readiness-gate.enabled` | `true` | 全局 emergency switch;设 `false` 时一律放行(等价关闭依赖感知,应急用) |
-| `batch.trigger.runtime.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口；超窗后停止 retry 并记录 ERROR |
+| `batch.trigger.runtime.readiness-window-seconds` | `7200`(2h) | 等上游就绪的最长容忍窗口；首次等待时固定截止时间，配置变更仅作用于新等待，超窗后停止 retry 并记录 ERROR |
 | `batch.trigger.runtime.readiness-recheck-interval-seconds` | `30` | Quartz one-shot retry 的重检间隔 |
 | `batch.asset-freshness.enabled` | `true` | asset freshness SLA 扫描开关 |
 | `batch.asset-freshness.scan-interval-millis` | `60000` | freshness policy 扫描间隔 |
@@ -56,8 +71,8 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 
 ## 边界 / 后续(v1 范围)
 
-- **v1 只支持单个上游 JOB + SAME_DAY 对齐**。多依赖、`PREV_DAY` 对齐、FILE_GROUP(文件组 TRIGGERED)就绪——均为 ADR-043 描述的后续增强项,本期未做。
+- 已支持多个上游 JOB + `SAME_DAY` / `PREVIOUS_BIZ_DAY` 对齐，所有上游均需满足对齐业务日最新版本的 EFFECTIVE_RESULT。配置下游作业业务日历后，`PREVIOUS_BIZ_DAY` 会跳过该日历及所属组的 `HOLIDAY`，并接受 `WORKDAY_OVERRIDE`；首次等待时把解析出的上游日期写入依赖快照，之后恢复不随日历变更漂移。未配置日历的旧作业继续按周一至周五推算。FILE_GROUP(文件组 TRIGGERED)作为作业依赖规则仍未实现；文件到达组已有独立触发与 Workflow sensor 路径。
 - 超窗 give-up 目前是“停止 retry + ERROR 日志 + 人工 replay”，未自动落 `trigger_misfire_pending` 走 misfire 策略。
-- 只 gate `launchScheduled`(正常调度 fire);catch-up / 手动 fire 不走此闸。
+- Trigger Quartz defer 仍只覆盖正常 scheduled fire；其他 Trigger 路径由 Orchestrator 持久化等待器兜底。人工依赖 override 未开放；不要通过人工操作或 SQL 绕过依赖门闩。
 - 不裁定上游业务对错(ADR-021 红线),只问"上游这个 job 这个批次日跑成功了没"。
 - 不做通用 deadline/window-aware 优化调度器。后续最多补 late/at-risk/missed-window 标记和告警,不得把 trigger 扩成 Airflow/Temporal 类通用编排器。

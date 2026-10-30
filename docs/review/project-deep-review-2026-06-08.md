@@ -118,7 +118,9 @@
 - 模板加载或运行期超过上限直接拒绝。
 - 后续把 CSV 构造改成 streaming Reader，减少复制和大字符串驻留。
 
-### P1-4 Import checkpoint/续跑依赖幂等，但 strict idempotency 默认关闭
+### P1-4 Import checkpoint/续跑依赖幂等，但旧配置可绕过校验
+
+> **状态更新（2026-10-21）**：本节结论基于 2026-06-08 基线。当前实现已将 `BATCH_UPSERT.conflictColumns` 改为不可关闭的模板不变量，删除 Java/YAML/env 与运行参数目录中的 `strict-idempotency` 开关，并由 V333 清理该目录项。真实 PostgreSQL 写入前拒绝及邻近回归证据见[整合执行记录](../plans/workflow-daily-integration-execution-log-2026-10-14.md#2026-10-21-b3-r25-import-upsert-幂等默认与回归)。这不表示目标环境已部署或 R25 已关闭。
 
 证据：
 
@@ -136,8 +138,8 @@
 
 建议：
 
-- prod profile 显式打开 `batch.worker.import.jdbc-mapped.strict-idempotency=true`。
-- 对 checkpoint/partition replace/copy 路径强制模板声明 conflict columns 或唯一约束。
+- 对 `BATCH_UPSERT` 在所有环境强制模板声明冲突列，并依赖数据库唯一约束执行 `ON CONFLICT`。
+- 分区替换/复制路径继续按各自的事务与 checkpoint 语义限制执行。
 - 在模板预检报告中把幂等状态作为阻断项，而不是仅日志告警。
 
 ### P1-5 运行参数基线漂移：YAML / 文档 / DB seed 不一致
@@ -284,7 +286,7 @@
 1. 修 SDK Kafka offset commit 契约，并补 consumer/dispatcher 集成测试。
 2. 补 Console CSRF double-submit，前端现有 axios xsrf 配置直接复用。
 3. 统一 Import/Export chunk-size 参数基线，补 CI 一致性检查。
-4. prod 打开 import strict idempotency，并把 checkpoint/partition load mode 纳入模板准入。
+4. 已由 2026-10-21 状态更新收口 Import BATCH_UPSERT 的冲突键强制校验；继续按各自语义把 checkpoint/partition load mode 纳入模板准入。
 5. 给 Import chunk-size 加上限，COPY 路径逐步改 streaming。
 6. worker execution pool 配置 fail-fast。
 7. 确认 GitHub ruleset / merge queue / full-ci required check。

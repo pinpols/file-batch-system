@@ -12,11 +12,13 @@ public enum ImportLoadStrategy {
     if (raw == null) {
       return BATCH_UPSERT;
     }
-    String text = String.valueOf(raw).trim();
+    String rawText = String.valueOf(raw);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return BATCH_UPSERT;
     }
-    String normalized = text.replace('-', '_').toUpperCase();
+    String underscoreNormalized = text.replace('-', '_');
+    String normalized = underscoreNormalized.toUpperCase();
     for (ImportLoadStrategy strategy : values()) {
       if (strategy.name().equals(normalized)) {
         return strategy;

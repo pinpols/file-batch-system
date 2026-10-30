@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：基础依赖只读巡检：PostgreSQL、Kafka、Valkey、MinIO。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-dependencies.sh；参数与前置环境见下方说明及所属 README。
 # 基础依赖只读巡检：PostgreSQL、Kafka、Valkey、MinIO。
 # 只做连通性、关键只读状态和可选 lag/桶检查，不执行重启、清理、重放、failover 或 heal。
 set -uo pipefail

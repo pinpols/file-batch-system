@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.redis;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchWindowEntity;
@@ -44,6 +45,7 @@ public class OrchestratorConfigCacheService {
   private final Cache<String, Boolean> negativeCache;
   private final Cache<String, JobDefinitionEntity> jobDefinitionLocalCache;
   private final Cache<String, WorkflowDefinitionEntity> workflowDefinitionLocalCache;
+  private final Cache<String, WorkflowDefinitionEntity> singleJobWorkflowLocalCache;
   private final Cache<String, TenantQuotaPolicyEntity> quotaPolicyLocalCache;
 
   private final OrchestratorRedisSupport redis;
@@ -81,6 +83,11 @@ public class OrchestratorConfigCacheService {
         .recordStats()
         .build();
     this.workflowDefinitionLocalCache = Caffeine.newBuilder()
+        .expireAfterWrite(localPositiveTtl)
+        .maximumSize(properties.getLocalPositiveMaximumSize())
+        .recordStats()
+        .build();
+    this.singleJobWorkflowLocalCache = Caffeine.newBuilder()
         .expireAfterWrite(localPositiveTtl)
         .maximumSize(properties.getLocalPositiveMaximumSize())
         .recordStats()
@@ -170,6 +177,30 @@ public class OrchestratorConfigCacheService {
     return loaded;
   }
 
+  /**
+   * 按显式关系键解析 Job 关联的受管单作业 Workflow。此查询只使用
+   * 有界、短时的本地缓存，使关系变更沿用现有事务提交后
+   * Workflow 缓存失效路径，而不引入另一套 Redis 键生命周期。
+   */
+  public WorkflowDefinitionEntity findEnabledSingleJobWorkflowDefinition(
+      String tenantId, Long jobDefinitionId) {
+    if (!Texts.hasText(tenantId) || EmptyChecks.isNull(jobDefinitionId)) {
+      return null;
+    }
+    String key = tenantId + ":" + jobDefinitionId;
+    WorkflowDefinitionEntity cached = singleJobWorkflowLocalCache.getIfPresent(key);
+    if (EmptyChecks.isNotNull(cached)) {
+      return cached;
+    }
+    WorkflowDefinitionEntity loaded = configMappers
+        .workflowDefinition()
+        .selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(tenantId, jobDefinitionId, true);
+    if (EmptyChecks.isNotNull(loaded)) {
+      singleJobWorkflowLocalCache.put(key, loaded);
+    }
+    return loaded;
+  }
+
   public BusinessCalendarEntity findEnabledBusinessCalendar(String tenantId, String calendarCode) {
     if (!Texts.hasText(tenantId) || !Texts.hasText(calendarCode)) {
       return null;
@@ -250,6 +281,7 @@ public class OrchestratorConfigCacheService {
 
   public void evictWorkflowDefinition(String tenantId, String workflowCode) {
     evictConfig(tenantId, WORKFLOW_DEFINITION_CACHE_TYPE, workflowCode);
+    singleJobWorkflowLocalCache.invalidateAll();
   }
 
   public void evictBusinessCalendar(String tenantId, String calendarCode) {
@@ -283,6 +315,7 @@ public class OrchestratorConfigCacheService {
   public void evictAllLocal() {
     jobDefinitionLocalCache.invalidateAll();
     workflowDefinitionLocalCache.invalidateAll();
+    singleJobWorkflowLocalCache.invalidateAll();
     quotaPolicyLocalCache.invalidateAll();
     negativeCache.invalidateAll();
   }
@@ -301,6 +334,7 @@ public class OrchestratorConfigCacheService {
       jobDefinitionLocalCache.invalidateAll();
     } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidateAll();
+      singleJobWorkflowLocalCache.invalidateAll();
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidateAll();
     }
@@ -312,6 +346,7 @@ public class OrchestratorConfigCacheService {
       jobDefinitionLocalCache.invalidate(key);
     } else if (WORKFLOW_DEFINITION_CACHE_TYPE.equals(type)) {
       workflowDefinitionLocalCache.invalidate(key);
+      singleJobWorkflowLocalCache.invalidateAll();
     } else if ("tenant-quota-policy".equals(type)) {
       quotaPolicyLocalCache.invalidate(key);
     }

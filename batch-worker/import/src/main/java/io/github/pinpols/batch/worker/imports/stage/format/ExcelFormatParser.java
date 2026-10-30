@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.imports.stage.format;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
@@ -272,7 +273,8 @@ public class ExcelFormatParser implements FormatParser {
     if (Texts.hasText(byName)) {
       return SheetSelector.byName(byName.trim());
     }
-    return SheetSelector.byIndex(resolveExcelSheetIndex(templateConfigObject));
+    int sheetIndex = resolveExcelSheetIndex(templateConfigObject);
+    return SheetSelector.byIndex(sheetIndex);
   }
 
   private static String stringHint(Object v) {
@@ -285,8 +287,12 @@ public class ExcelFormatParser implements FormatParser {
     if (v instanceof Number number) {
       return Math.max(0, number.intValue());
     }
-    if (v != null && Texts.hasText(String.valueOf(v))) {
-      return Math.max(0, Integer.parseInt(String.valueOf(v).trim()));
+    String presenceText = EmptyChecks.isNull(v) ? null : String.valueOf(v);
+    if (EmptyChecks.isNotNull(v) && Texts.hasText(presenceText)) {
+      String rawSheetIndex = String.valueOf(v);
+      String sheetIndexText = rawSheetIndex.trim();
+      int parsedSheetIndex = Integer.parseInt(sheetIndexText);
+      return Math.max(0, parsedSheetIndex);
     }
     if (templateConfigObject instanceof Map<?, ?> map) {
       Object direct = map.get("excel_sheet_index");
@@ -307,7 +313,10 @@ public class ExcelFormatParser implements FormatParser {
         Object source = map.get("source");
         Object target = map.get("target");
         if (source != null && target != null) {
-          bindings.add(new ColumnBinding(String.valueOf(source), String.valueOf(target)));
+          String sourceField = String.valueOf(source);
+          String targetField = String.valueOf(target);
+          ColumnBinding binding = new ColumnBinding(sourceField, targetField);
+          bindings.add(binding);
         }
       }
     }
@@ -452,13 +461,12 @@ public class ExcelFormatParser implements FormatParser {
         throw biz;
       } catch (Exception ex) {
         SwallowedExceptionLogger.warn(ExcelFormatParser.class, "catch:Exception", ex);
+        String errorMessage = ex.getMessage();
+        long physicalRow = currentPhysicalRow;
+        String errorColumn = resolveErrorColumn();
+        SourceLocator sourceLocator = new SourceLocator(physicalRow, errorColumn);
         support.recordParseError(
-            context,
-            recordNo,
-            ERROR_CODE_EXCEL_INVALID,
-            ex.getMessage(),
-            cells,
-            new SourceLocator((long) currentPhysicalRow, resolveErrorColumn()));
+            context, recordNo, ERROR_CODE_EXCEL_INVALID, errorMessage, cells, sourceLocator);
       }
       // Item 3：preview 抽样到上限,早停,不全量解析剩余行。
       if (previewRows > 0 && recordNo >= previewRows) {

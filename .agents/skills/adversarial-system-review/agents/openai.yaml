@@ -1,0 +1,3 @@
+interface:
+  display_name: "对抗式安全与故障审查"
+  short_description: "针对明确攻击路径和故障组合验证安全与韧性边界，复用代码Bug确认标准"

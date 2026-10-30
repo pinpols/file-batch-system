@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -26,10 +27,14 @@ import java.time.Instant;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -96,6 +101,35 @@ class ImportIngressScannerTest {
         .hasMessageContaining("failed to scan objectStore ingress objects");
 
     verifyNoInteractions(runtimeRepository);
+  }
+
+  @ParameterizedTest
+  @MethodSource("disabledBatchManifests")
+  @DisplayName("批次清单功能关闭后仍保留协议文件归属，重复扫描不误登记为数据文件")
+  void shouldExcludeProtocolObjectFromDataIngress_whenBatchManifestIsDisabled(
+      String suffix, String defaultBizDate) throws Exception {
+    scannerProperties.setBatchManifestEnabled(false);
+    scannerProperties.setBatchManifestSuffix(suffix);
+    scannerProperties.setDefaultBizDate(defaultBizDate);
+    ObjectSummary manifest =
+        new ObjectSummary("ingress/t1/bundle" + suffix, 100L, Instant.now(), "manifest-version");
+    when(objectStore.list(any(), any(), any(), anyInt()))
+        .thenReturn(new ObjectListing(List.of(manifest), null));
+
+    for (int scan = 0; scan < 3; scan++) {
+      scanner.scan();
+    }
+
+    verifyNoInteractions(runtimeRepository, fileAudits);
+    verify(objectStore, never()).get(anyString(), anyString());
+  }
+
+  static Stream<Arguments> disabledBatchManifests() {
+    return Stream.of(
+        Arguments.of(".batch.json", null),
+        Arguments.of(".batch.json", "2026-10-16"),
+        Arguments.of(".group.json", null),
+        Arguments.of(".group.json", "2026-10-16"));
   }
 
   @Test

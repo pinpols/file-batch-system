@@ -11,7 +11,7 @@
 | 功能完整 | 648 单测 + 114 IT + 27 e2e(`*E2eIT`)+ sim 25 阶段(import/export/process/dispatch/trigger/atomic)+ sim-4day | ✅ full-ci-gate 门禁 |
 | **数据一致(关键约束)** | `ConcurrentTaskClaimIntegrationTest`(防双 claim)/ `ConcurrentTaskFinishIntegrationTest`(CAS 防双 finish)/ `OutboxEventToKafkaDispatch`·`OutboxPublish`(outbox 精确一次)/ `SqlConsistencyIntegrationTest` / `JobRetryFlowIntegrationTest` | ✅ IT 覆盖 |
 | 多租隔离 | batch.*:`MultiTenantIsolationIntegrationTest` + `MapperXmlTenantGuardArchTest`(静态扫 mapper);biz.* RLS:`RlsTenantIsolationIntegrationTest`·`RlsStrictModePreflight`·`RlsTenantSession`·`RlsPhaseAMigrationCoverage`;路由:`BusinessMultiShardRouting*` | ✅ IT 覆盖(batch 列 + biz RLS + 分片路由) |
-| 韧性 | `WorkerHeartbeatTimeoutScheduler`·`PartitionLeaseReclaim`·`StaleCompensationCommandReconciler`(lease/超时回收)、sim **stage25 checkpoint-crash 续跑**、3×`*ToxicIT`(混沌注入)、`DeadLetterController`(DLQ) | ✅ 逻辑层覆盖(端到端全 worker 组崩溃见 §2-C) |
+| 韧性 | `WorkerHeartbeatTimeoutScheduler`·`PartitionLeaseReclaim`·`StaleCompensationCommandReconciler`(lease/超时回收)、sim **stage25 checkpoint-crash 续跑**、3×`*ToxicIT`(混沌注入)、Console 审批 DLQ 重放 | ✅ 逻辑层覆盖(端到端全 worker 组崩溃见 §2-C) |
 | 容量 | load-tests 10 Gatling 场景(JobLaunch / CapacityBaseline / ControlPlaneMixedPressure / WorkerTaskLifecycle / SchedulingBacklog…)+ SLO 旋钮 `slo.write.p95ms` / `slo.read.p99ms` / `slo.maxErrorPct` / `users.peak` | ✅ 工具就绪(需跑到靶点,见 §2-B) |
 | 迁移 | Flyway(platform)+ `ArchiveSchemaDriftCheck`(热表↔archive 镜像 fail-fast)+ 月分区 V172/V173 | ✅ 启动期门禁 |
 

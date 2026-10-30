@@ -1,0 +1,3 @@
+interface:
+  display_name: "代码Bug与变更审查"
+  short_description: "按指定代码范围定位真实Bug并审查变更，分别记录缺陷、规约与验证结果"

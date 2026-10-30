@@ -48,18 +48,22 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
     TriggerLaunchRequest request = command.request();
     // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
-    return LaunchRequest.builder()
-        .tenantId(request.getTenantId())
-        .jobCode(request.getJobCode())
-        .bizDate(request.getBizDate())
-        .triggerType(resolveTriggerType(command))
-        .requestId(command.requestId())
-        .traceId(command.traceId())
-        .params(request.getParams())
-        .dataIntervalStart(request.getDataIntervalStart())
-        .dataIntervalEnd(request.getDataIntervalEnd())
-        .dryRun(Boolean.TRUE.equals(request.getDryRun()))
-        .build();
+    LaunchRequest.LaunchRequestBuilder launchRequestBuilder = LaunchRequest.builder();
+    launchRequestBuilder.tenantId(request.getTenantId());
+    launchRequestBuilder.bizDate(request.getBizDate());
+    TriggerType triggerType = resolveTriggerType(command);
+    launchRequestBuilder.triggerType(triggerType);
+    launchRequestBuilder.requestId(command.requestId());
+    launchRequestBuilder.traceId(command.traceId());
+    launchRequestBuilder.params(request.getParams());
+    launchRequestBuilder.dataIntervalStart(request.getDataIntervalStart());
+    launchRequestBuilder.dataIntervalEnd(request.getDataIntervalEnd());
+    launchRequestBuilder.dryRun(Boolean.TRUE.equals(request.getDryRun()));
+    launchRequestBuilder.workflowDefinitionId(request.getWorkflowDefinitionId());
+    launchRequestBuilder.externalEventCode(request.getExternalEventCode());
+    launchRequestBuilder.externalEventSource(request.getExternalEventSource());
+    launchRequestBuilder.externalEventId(request.getExternalEventId());
+    return launchRequestBuilder.build();
   }
 
   @Override
@@ -71,6 +75,19 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     ZoneId zoneId = timezoneProvider.resolveOrDefault(descriptor.getTimezone());
     // bizDate=null 表示日历判断为节假日且 rollRule=SKIP，调用方据此跳过本次调度
     LocalDate bizDate = calendarBizDateResolver.resolve(command.fireTime(), zoneId, calendar);
+    return buildScheduledRequest(command, bizDate, zoneId);
+  }
+
+  @Override
+  public LaunchRequest fromObservedScheduledTrigger(
+      ScheduledTriggerCommand command, LocalDate bizDate) {
+    ZoneId zoneId = timezoneProvider.resolveOrDefault(command.descriptor().getTimezone());
+    return buildScheduledRequest(command, bizDate, zoneId);
+  }
+
+  private LaunchRequest buildScheduledRequest(
+      ScheduledTriggerCommand command, LocalDate bizDate, ZoneId zoneId) {
+    TriggerDescriptor descriptor = command.descriptor();
     // triggerType 为 null 时说明来自普通 Quartz 触发，catchUp 触发会被显式设置为 CATCH_UP
     TriggerType triggerType =
         EmptyChecks.isNull(command.triggerType()) ? TriggerType.SCHEDULED : command.triggerType();
@@ -81,11 +98,20 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     params.put("calendarCode", descriptor.getCalendarCode());
     params.put("catchUpPolicy", descriptor.getCatchUpPolicy());
     params.put("scheduledAt", command.fireTime().toString());
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+      params.put("workflowDefinitionId", descriptor.getWorkflowDefinitionId());
+    }
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
+      params.put("workflowCode", descriptor.getWorkflowCode());
+    }
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
+      params.put("workflowVersion", descriptor.getWorkflowVersion());
+    }
     // catchUp / catchUpApprovalRequired 写入 params 供 Orchestrator 决策 catch-up 审批流程
     params.put("catchUp", TriggerType.CATCH_UP == triggerType);
-    params.put(
-        "catchUpApprovalRequired",
-        CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy()));
+    boolean catchUpApprovalRequired =
+        CatchUpPolicyType.MANUAL_APPROVAL.code().equalsIgnoreCase(descriptor.getCatchUpPolicy());
+    params.put("catchUpApprovalRequired", catchUpApprovalRequired);
     // V94: 计算 [thisFireAt, nextFireAt) 半开区间, 业务可拼 SQL WHERE update_time >= :start AND update_time <
     // :end
     Instant nextFireAt = resolveNextFireAt(
@@ -95,7 +121,7 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
         command.fireTime());
     return LaunchRequest.builder()
         .tenantId(descriptor.getTenantId())
-        .jobCode(descriptor.getJobCode())
+        .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
         .bizDate(bizDate)
         .triggerType(triggerType)
         .requestId(command.requestId())
@@ -115,7 +141,8 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
     if (EmptyChecks.isNull(scheduleType) || EmptyChecks.isBlank(scheduleExpression)) {
       return null;
     }
-    String type = scheduleType.trim().toUpperCase(Locale.ROOT);
+    String trimmedScheduleType = scheduleType.trim();
+    String type = trimmedScheduleType.toUpperCase(Locale.ROOT);
     try {
       NextFireCalculator calculator = nextFireCalculators().get(type);
       return EmptyChecks.isNull(calculator)
@@ -154,13 +181,15 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
       return null;
     }
     // 纯数字 → 秒
-    if (trimmed.chars().allMatch(Character::isDigit)) {
+    boolean containsOnlyDigits = trimmed.chars().allMatch(Character::isDigit);
+    if (containsOnlyDigits) {
       long seconds = Long.parseLong(trimmed);
       return seconds <= 0 ? null : Duration.ofSeconds(seconds);
     }
     // ISO-8601 (PT5M / PT1H / PT30S 等)
     try {
-      return Duration.parse(trimmed.toUpperCase(Locale.ROOT));
+      String normalizedDuration = trimmed.toUpperCase(Locale.ROOT);
+      return Duration.parse(normalizedDuration);
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
           DefaultLaunchAdapterService.class, "catch:RuntimeException", ignored);

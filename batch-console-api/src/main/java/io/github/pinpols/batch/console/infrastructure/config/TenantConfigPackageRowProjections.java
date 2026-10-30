@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_CONFIG_JSON;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.COL_DEPENDS_ON_JOB_CODES;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.FileChannel.COL_TARGET_ENDPOINT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_BIZ_TYPE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CALENDAR_CODE;
@@ -28,7 +30,6 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_PARAM_SCHEMA;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_QUEUE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_JOB_CODE;
-import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RELATED_PIPELINE_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_MAX_COUNT;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_RETRY_POLICY;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_SCHEDULE_EXPR;
@@ -49,17 +50,19 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_WORKFLOW_VERSION;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -78,9 +81,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TenantConfigPackageRowProjections {
 
-  private static final String KEY_ID = "id";
-
-  private final PipelineStepDefinitionMapper pipelineStepDefinitionMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
@@ -99,6 +99,12 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
           m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
           m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
+          m.put(
+              COL_DEPENDS_ON_JOB_CODES,
+              EmptyChecks.isNull(e.getDependsOnJobCodesCsv())
+                  ? e.getDependsOnJobCode()
+                  : e.getDependsOnJobCodesCsv().replace('\u001f', ','));
+          m.put(COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS, dependencyBizDateAlignments(e));
           m.put(COL_CALENDAR_CODE, e.getCalendarCode());
           m.put(COL_WINDOW_CODE, e.getWindowCode());
           m.put(COL_RETRY_POLICY, e.getRetryPolicy());
@@ -109,12 +115,24 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_WATERMARK_FIELD, e.getWatermarkField());
           m.put(COL_EXECUTION_HANDLER, e.getExecutionHandler());
           m.put(COL_PARAM_SCHEMA, e.getParamSchema());
-          m.put(COL_DEFAULT_PARAMS, SecretMasking.maskSensitiveJson(e.getDefaultParams()));
+          String maskedDefaultParams = SecretMasking.maskSensitiveJson(e.getDefaultParams());
+          m.put(COL_DEFAULT_PARAMS, maskedDefaultParams);
           m.put(COL_ENABLED, e.getEnabled());
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
         .collect(Collectors.toList());
+  }
+
+  private String dependencyBizDateAlignments(JobDefinitionEntity entity) {
+    boolean dependencyRulesAreMissing = EmptyChecks.isNull(entity.getJobDependencyRules())
+        || EmptyChecks.isEmpty(entity.getJobDependencyRules());
+    if (dependencyRulesAreMissing) {
+      return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
+    }
+    return entity.getJobDependencyRules().stream()
+        .map(rule -> rule.bizDateAlignment())
+        .collect(Collectors.joining(","));
   }
 
   List<Map<String, Object>> toJobMonitoringPolicyRows(
@@ -157,42 +175,87 @@ public class TenantConfigPackageRowProjections {
         .toList();
   }
 
-  List<Map<String, Object>> toExportableChannelRows(List<Map<String, Object>> channels) {
+  List<Map<String, Object>> toExportableChannelRows(List<FileChannelConfigQueryView> channels) {
     return channels.stream()
         .map(channel -> {
-          Map<String, Object> row = new LinkedHashMap<>(channel);
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("id", channel.id());
+          row.put("tenant_id", channel.tenantId());
+          row.put("channel_code", channel.channelCode());
+          row.put("channel_name", channel.channelName());
+          row.put("channel_type", channel.channelType());
           row.put(COL_TARGET_ENDPOINT, "");
+          row.put("auth_type", channel.authType());
           row.put(COL_CONFIG_JSON, "");
+          row.put("receipt_policy", channel.receiptPolicy());
+          row.put("timeout_seconds", channel.timeoutSeconds());
+          row.put("enabled", channel.enabled());
+          row.put("created_at", channel.createdAt());
+          row.put("updated_at", channel.updatedAt());
           return row;
         })
         .toList();
   }
 
-  List<Map<String, Object>> collectPipelineSteps(List<Map<String, Object>> pipelines) {
-    List<Map<String, Object>> allSteps = new ArrayList<>();
-    for (Map<String, Object> pipeline : pipelines) {
-      Long pipelineId = ((Number) pipeline.get(KEY_ID)).longValue();
-      String jobCode = String.valueOf(pipeline.get(COL_JOB_CODE));
-      String version = String.valueOf(pipeline.get(COL_VERSION));
-      for (Map<String, Object> step :
-          pipelineStepDefinitionMapper.selectByPipelineDefinitionId(pipelineId)) {
-        Map<String, Object> enriched = new LinkedHashMap<>(step);
-        Object stepParams = step.get("step_params");
-        if (EmptyChecks.isNotNull(stepParams)) {
-          String json = stepParams instanceof Map<?, ?> || stepParams instanceof List<?>
-              ? JsonUtils.toJson(stepParams)
-              : stepParams.toString();
-          enriched.put("step_params", SecretMasking.maskSensitiveJson(json));
-        }
-        enriched.put(COL_JOB_CODE, jobCode);
-        enriched.put(COL_VERSION, version);
-        allSteps.add(enriched);
-      }
-    }
-    return allSteps;
+  List<Map<String, Object>> toExcelFileTemplateRows(List<FileTemplateConfigQueryView> templates) {
+    return templates.stream()
+        .map(template -> {
+          Map<String, Object> row = new LinkedHashMap<>();
+          row.put("id", template.id());
+          row.put("tenant_id", template.tenantId());
+          row.put("template_code", template.templateCode());
+          row.put("template_name", template.templateName());
+          row.put("template_type", template.templateType());
+          row.put("biz_type", template.bizType());
+          row.put("file_format_type", template.fileFormatType());
+          row.put("charset", template.charset());
+          row.put("target_charset", template.targetCharset());
+          row.put("with_bom", template.withBom());
+          row.put("line_separator", template.lineSeparator());
+          row.put("delimiter", template.delimiter());
+          row.put("quote_char", template.quoteChar());
+          row.put("escape_char", template.escapeChar());
+          row.put("record_length", template.recordLength());
+          row.put("header_rows", template.headerRows());
+          row.put("footer_rows", template.footerRows());
+          row.put("header_template", template.headerTemplate());
+          row.put("trailer_template", template.trailerTemplate());
+          row.put("checksum_type", template.checksumType());
+          row.put("compress_type", template.compressType());
+          row.put("encrypt_type", template.encryptType());
+          row.put("naming_rule", template.namingRule());
+          row.put("field_mappings", template.fieldMappings());
+          row.put("validation_rule_set", template.validationRuleSet());
+          row.put("default_query_code", template.defaultQueryCode());
+          row.put("default_query_sql", template.defaultQuerySql());
+          row.put("query_param_schema", template.queryParamSchema());
+          row.put("streaming_enabled", template.streamingEnabled());
+          row.put("page_size", template.pageSize());
+          row.put("fetch_size", template.fetchSize());
+          row.put("chunk_size", template.chunkSize());
+          row.put("preview_masking_enabled", template.previewMaskingEnabled());
+          row.put("error_line_masking_enabled", template.errorLineMaskingEnabled());
+          row.put("log_masking_enabled", template.logMaskingEnabled());
+          row.put("content_encryption_enabled", template.contentEncryptionEnabled());
+          row.put("encryption_key_ref", template.encryptionKeyRef());
+          row.put("download_requires_approval", template.downloadRequiresApproval());
+          row.put("masking_rule_set", template.maskingRuleSet());
+          row.put("load_target_ref", template.loadTargetRef());
+          row.put("export_data_ref", template.exportDataRef());
+          row.put("enabled", template.enabled());
+          row.put("version", template.version());
+          row.put("description", template.description());
+          row.put("created_by", template.createdBy());
+          row.put("updated_by", template.updatedBy());
+          row.put("created_at", template.createdAt());
+          row.put("updated_at", template.updatedAt());
+          return row;
+        })
+        .toList();
   }
 
-  List<Map<String, Object>> toWfDefRows(List<WorkflowDefinitionEntity> entities) {
+  List<Map<String, Object>> toWfDefRows(
+      List<WorkflowDefinitionEntity> entities, Map<Long, String> jobCodeById) {
     return entities.stream()
         .map(e -> {
           Map<String, Object> m = new LinkedHashMap<>();
@@ -201,7 +264,17 @@ public class TenantConfigPackageRowProjections {
           m.put("workflow_name", e.getWorkflowName());
           m.put("workflow_type", e.getWorkflowType());
           m.put(COL_VERSION, e.getVersion());
+          m.put(
+              ConfigPackageExcelSchema.COL_SINGLE_JOB_CODE,
+              jobCodeById.get(e.getSingleJobDefinitionId()));
           m.put(COL_ENABLED, e.getEnabled());
+          m.put(ConfigPackageExcelSchema.COL_SCHEDULE_ENABLED, e.getScheduleEnabled());
+          m.put(COL_SCHEDULE_TYPE, e.getScheduleType());
+          m.put(COL_SCHEDULE_EXPR, e.getScheduleExpr());
+          m.put(ConfigPackageExcelSchema.COL_TIMEZONE, e.getTimezone());
+          m.put(ConfigPackageExcelSchema.COL_TRIGGER_MODE, e.getTriggerMode());
+          m.put(COL_CALENDAR_CODE, e.getCalendarCode());
+          m.put(COL_DEPENDS_ON_JOB_CODE, e.getDependsOnJobCode());
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
@@ -227,14 +300,14 @@ public class TenantConfigPackageRowProjections {
         m.put(COL_NODE_NAME, node.getNodeName());
         m.put(COL_NODE_TYPE, node.getNodeType());
         m.put(COL_RELATED_JOB_CODE, node.getRelatedJobCode());
-        m.put(COL_RELATED_PIPELINE_CODE, node.getRelatedPipelineCode());
         m.put(COL_WORKER_GROUP, node.getWorkerGroup());
         m.put(COL_WINDOW_CODE, node.getWindowCode());
         m.put(COL_NODE_ORDER, node.getNodeOrder());
         m.put(COL_RETRY_POLICY, node.getRetryPolicy());
         m.put(COL_RETRY_MAX_COUNT, node.getRetryMaxCount());
         m.put(COL_TIMEOUT_SECONDS, node.getTimeoutSeconds());
-        m.put(COL_NODE_PARAMS, SecretMasking.maskSensitiveJson(node.getNodeParams()));
+        String maskedNodeParams = SecretMasking.maskSensitiveJson(node.getNodeParams());
+        m.put(COL_NODE_PARAMS, maskedNodeParams);
         m.put(COL_ENABLED, node.getEnabled());
         result.add(m);
       }

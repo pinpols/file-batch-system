@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -18,6 +17,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper;
@@ -30,12 +30,14 @@ import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Objects;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("取证导出服务: 打包产物, 请求参数校验与失败标记口径")
 class ForensicExportServiceTest {
@@ -75,7 +77,10 @@ class ForensicExportServiceTest {
     instance.setJobCode("DAILY_PNL");
     instance.setBizDate(LocalDate.of(2026, Month.MARCH, 15));
     instance.setInstanceStatus("SUCCESS");
-    when(jobInstanceMapper.selectForensicByBizDateRange(eq("t1"), any(), any(), isNull(), anyInt()))
+    when(jobInstanceMapper.selectForensicByBizDateRange(
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && Objects.equals(parameters.tenantId(), "t1")
+                && parameters.jobCodes() == null)))
         .thenReturn(List.of(instance));
     when(auditMapper.selectByCalendarBizDate(eq("t1"), isNull(), any(), anyInt()))
         .thenReturn(List.of());
@@ -105,18 +110,23 @@ class ForensicExportServiceTest {
       assertThat(zip.getEntry("manifest.json")).isNotNull();
       assertThat(zip.getEntry("job-instances.json")).isNotNull();
       assertThat(zip.getEntry("batch-day-operation-audits.json")).isNotNull();
+      try (var input = zip.getInputStream(zip.getEntry("job-instances.json"))) {
+        byte[] snapshotBytes = input.readAllBytes();
+        var snapshotMapper = JsonUtils.newDefaultMapper();
+        var snapshots = snapshotMapper.readTree(snapshotBytes);
+        String exportedBizDate = snapshots.get(0).path("bizDate").asText();
+        assertThat(exportedBizDate).isEqualTo("2026-03-15");
+      }
     }
 
     verify(logMapper, atLeastOnce()).insert(any());
     verify(logMapper)
-        .markCompleted(
-            eq("t1"),
-            anyString(),
-            eq(zipPath.toString()),
-            anyLong(),
-            eq(response.sha256()),
-            anyString(),
-            any());
+        .markCompleted(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "t1")
+            && parameters.exportId() != null
+            && Objects.equals(parameters.storagePath(), zipPath.toString())
+            && Objects.equals(parameters.sha256(), response.sha256())
+            && parameters.rowCountsJson() != null));
   }
 
   @Test
@@ -190,7 +200,10 @@ class ForensicExportServiceTest {
   @Test
   @DisplayName("查询过程抛异常时导出标记为失败, 并记录失败日志")
   void shouldMarkFailedWhenMapperBlowsUp() {
-    when(jobInstanceMapper.selectForensicByBizDateRange(eq("t1"), any(), any(), isNull(), anyInt()))
+    when(jobInstanceMapper.selectForensicByBizDateRange(
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && Objects.equals(parameters.tenantId(), "t1")
+                && parameters.jobCodes() == null)))
         .thenThrow(new RuntimeException("boom"));
 
     assertThatThrownBy(() -> service.export(ForensicExportRequest.builder()
@@ -209,7 +222,9 @@ class ForensicExportServiceTest {
   @DisplayName("指定任务清单时导出清单只包含该过滤条件")
   void shouldHonourJobCodesFilter() {
     when(jobInstanceMapper.selectForensicByBizDateRange(
-            eq("t1"), any(), any(), eq(List.of("DAILY_PNL")), anyInt()))
+            ArgumentMatchers.argThat(parameters -> parameters != null
+                && Objects.equals(parameters.tenantId(), "t1")
+                && Objects.equals(parameters.jobCodes(), List.of("DAILY_PNL")))))
         .thenReturn(List.of());
     when(auditMapper.selectByCalendarBizDate(eq("t1"), isNull(), any(), anyInt()))
         .thenReturn(List.of());

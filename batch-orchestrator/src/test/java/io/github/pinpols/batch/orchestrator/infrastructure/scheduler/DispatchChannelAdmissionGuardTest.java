@@ -1,21 +1,27 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceCheck;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.mapper.DownstreamAdmissionMapper;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("投递通道准入校验 - 校验调度准入按下游通道健康状态延迟或放行")
+@ExtendWith(MockitoExtension.class)
 class DispatchChannelAdmissionGuardTest {
 
-  private final DownstreamAdmissionMapper mapper = mock(DownstreamAdmissionMapper.class);
-  private final DispatchChannelAdmissionGuard guard = new DispatchChannelAdmissionGuard(mapper);
+  @Mock
+  private DownstreamAdmissionMapper mapper;
+
+  private DispatchChannelAdmissionGuard guard;
 
   @Test
   @DisplayName("投递任务命中的下游通道被阻断时判定不予放行并给出通道不可用原因")
@@ -58,5 +64,10 @@ class DispatchChannelAdmissionGuardTest {
     request.setWorkerType("DISPATCH");
     request.setDownstreamChannelCode(channelCode);
     return request;
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    guard = new DispatchChannelAdmissionGuard(mapper);
   }
 }

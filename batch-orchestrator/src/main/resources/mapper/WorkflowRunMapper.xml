@@ -5,6 +5,8 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="trigger_request_id" property="triggerRequestId"/>
+        <result column="single_job_definition_id" property="singleJobDefinitionId"/>
         <result column="related_job_instance_id" property="relatedJobInstanceId"/>
         <result column="biz_date" property="bizDate"/>
         <result column="run_status" property="runStatus"/>
@@ -15,22 +17,33 @@
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
         <result column="dry_run" property="dryRun"/>
+        <result column="workflow_version_snapshot" property="workflowVersionSnapshot"/>
+        <result column="data_interval_start" property="dataIntervalStart"/>
+        <result column="data_interval_end" property="dataIntervalEnd"/>
+        <result column="execution_snapshot" property="executionSnapshot"/>
     </resultMap>
 
-    <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <sql id="insertWorkflowRun">
         insert into batch.workflow_run (
             tenant_id,
             workflow_definition_id,
+            trigger_request_id,
+            single_job_definition_id,
             related_job_instance_id,
             biz_date,
             run_status,
             current_node_code,
             trace_id,
-            dry_run
+            dry_run,
+            workflow_version_snapshot,
+            data_interval_start,
+            data_interval_end,
+            execution_snapshot
         ) values (
             #{tenantId},
             #{workflowDefinitionId},
+            #{triggerRequestId},
+            #{singleJobDefinitionId},
             #{relatedJobInstanceId},
             #{bizDate},
             #{runStatus},
@@ -39,8 +52,25 @@
             <choose>
                 <when test="dryRun != null">#{dryRun}</when>
                 <otherwise>false</otherwise>
-            </choose>
+            </choose>,
+            #{workflowVersionSnapshot},
+            #{dataIntervalStart},
+            #{dataIntervalEnd},
+            CAST(#{executionSnapshot} AS jsonb)
         )
+    </sql>
+
+    <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        <include refid="insertWorkflowRun"/>
+    </insert>
+
+    <insert id="insertIfActiveSlotFree" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
+            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+        <include refid="insertWorkflowRun"/>
+        on conflict (tenant_id, workflow_definition_id, biz_date, dry_run)
+            where run_status in ('CREATED', 'RUNNING')
+        do nothing
     </insert>
 
     <select id="selectById" resultMap="WorkflowRunResultMap">
@@ -48,6 +78,39 @@
         from batch.workflow_run
         where tenant_id = #{tenantId}
           and id = #{id}
+    </select>
+
+    <select id="selectByTenantAndIdForUpdate" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where tenant_id = #{tenantId}
+          and id = #{id}
+        for update
+    </select>
+
+    <select id="selectByTenantAndTriggerRequestId" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where tenant_id = #{tenantId}
+          and trigger_request_id = #{triggerRequestId}
+    </select>
+
+    <select id="selectActiveByTenantWorkflowBizDate" resultMap="WorkflowRunResultMap">
+        select *
+        from batch.workflow_run
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and biz_date = #{bizDate}
+          and dry_run = <choose>
+              <when test="dryRun != null">#{dryRun}</when>
+              <otherwise>false</otherwise>
+          </choose>
+          and run_status in
+          <foreach collection="activeStatuses" item="status" open="(" separator="," close=")">
+              #{status}
+          </foreach>
+        order by id
+        limit 1
     </select>
 
     <select id="selectByIdAnyTenant" resultMap="WorkflowRunResultMap">
@@ -62,6 +125,35 @@
         where tenant_id = #{tenantId}
           and related_job_instance_id = #{relatedJobInstanceId}
         order by id desc
+        limit 1
+    </select>
+
+    <select id="selectByNodeJobInstanceId" resultMap="WorkflowRunResultMap">
+        select workflow_run.*
+        from batch.workflow_run workflow_run
+        join batch.workflow_node_run node_run
+          on node_run.workflow_run_id = workflow_run.id
+         and node_run.job_instance_id = #{jobInstanceId}
+        where workflow_run.tenant_id = #{tenantId}
+          and workflow_run.related_job_instance_id is null
+        order by workflow_run.id desc
+        limit 1
+    </select>
+
+    <select id="selectLatestJobDefinitionSnapshot" resultMap="WorkflowRunResultMap">
+        select workflow_run.*
+        from batch.workflow_run workflow_run
+        where workflow_run.tenant_id = #{tenantId}
+          and workflow_run.execution_snapshot is not null
+          and exists (
+              select 1
+              from jsonb_each(coalesce(workflow_run.execution_snapshot -> 'jobDefinitions', '{}'::jsonb))
+                   as job_snapshot(node_code, identity)
+              where job_snapshot.identity -> 'executionDefinition' ->> 'id' = cast(#{jobDefinitionId} as text)
+                and job_snapshot.identity -> 'executionDefinition' ->> 'jobCode' = #{jobCode}
+                and job_snapshot.identity -> 'executionDefinition' ->> 'version' = cast(#{jobDefinitionVersion} as text)
+          )
+        order by workflow_run.created_at desc, workflow_run.id desc
         limit 1
     </select>
 
@@ -109,8 +201,8 @@
           and run_status in ('CREATED','RUNNING')
     </update>
 
-    <!-- stuck recovery: 选 RUNNING 且 updated_at 早于 stuckBefore 的实例，由 reconciler 判定是否所有
-         node 终态后回退 finalize（参考 WorkflowRunStuckReconciler）。 -->
+    <!-- stuck recovery: 选 RUNNING 且 updated_at 早于 stuckBefore 的实例；reconciler 先从持久成功节点恢复缺失的
+         DAG 推进，再判定是否所有 node 终态后回退 finalize（参考 WorkflowRunStuckReconciler）。 -->
     <select id="selectStuckRunningCandidates" resultMap="WorkflowRunResultMap">
         select *
         from batch.workflow_run
@@ -153,14 +245,16 @@
     -->
     <insert id="archiveWorkflowRunsByIds">
         insert into archive.workflow_run_archive (
-            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date,
+            id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id, biz_date,
             run_status, current_node_code, trace_id, started_at, finished_at,
-            created_at, updated_at, dry_run
+            created_at, updated_at, dry_run, trigger_request_id, workflow_version_snapshot,
+            data_interval_start, data_interval_end, execution_snapshot
         )
         select
-            id, tenant_id, workflow_definition_id, related_job_instance_id, biz_date,
+            id, tenant_id, workflow_definition_id, single_job_definition_id, related_job_instance_id, biz_date,
             run_status, current_node_code, trace_id, started_at, finished_at,
-            created_at, updated_at, dry_run
+            created_at, updated_at, dry_run, trigger_request_id, workflow_version_snapshot,
+            data_interval_start, data_interval_end, execution_snapshot
         from batch.workflow_run
         where id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -169,19 +263,37 @@
 
     <insert id="archiveWorkflowNodeRunsByWorkflowRunIds">
         insert into archive.workflow_node_run_archive (
-            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            id, workflow_run_id, job_instance_id, node_code, node_type, run_seq, node_status, retry_count,
             error_code, error_message, started_at, finished_at, duration_ms, output,
-            error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
-            sensor_probe_count, sensor_error_count
+            error_key, error_args, skip_reason_code, skip_reason, sensor_next_probe_at, sensor_last_probe_at,
+            sensor_probe_count, sensor_error_count, source_payload_protected
         )
         select
-            id, workflow_run_id, node_code, node_type, run_seq, node_status, retry_count,
+            id, workflow_run_id, job_instance_id, node_code, node_type, run_seq, node_status, retry_count,
             error_code, error_message, started_at, finished_at, duration_ms, output,
-            error_key, error_args, sensor_next_probe_at, sensor_last_probe_at,
-            sensor_probe_count, sensor_error_count
+            error_key, error_args, skip_reason_code, skip_reason, sensor_next_probe_at, sensor_last_probe_at,
+            sensor_probe_count, sensor_error_count, source_payload_protected
         from batch.workflow_node_run
         where workflow_run_id in
         <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
         on conflict (id) do nothing
     </insert>
+
+    <!-- 冷行冲突只能在内容一致时视作幂等；逐字段核对后才能删除热根及节点。 -->
+    <select id="countArchiveCopyMismatches" resultType="long">
+        select
+            (select count(*)
+             from batch.workflow_run hot
+             left join archive.workflow_run_archive cold on cold.id = hot.id
+             where hot.id in
+             <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+               and to_jsonb(hot) is distinct from to_jsonb(cold))
+            +
+            (select count(*)
+             from batch.workflow_node_run hot
+             left join archive.workflow_node_run_archive cold on cold.id = hot.id
+             where hot.workflow_run_id in
+             <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+               and to_jsonb(hot) is distinct from to_jsonb(cold))
+    </select>
 </mapper>

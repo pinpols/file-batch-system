@@ -15,13 +15,16 @@ public final class PathSanitizer {
     if (rawPath.contains("..")) {
       throw new SecurityException("path contains traversal sequence '..': " + rawPath);
     }
-    return Path.of(rawPath).toAbsolutePath().normalize();
+    Path raw = Path.of(rawPath);
+    Path absolute = raw.toAbsolutePath();
+    return absolute.normalize();
   }
 
   /** 校验并规范化路径，同时确保路径在 baseDir 沙箱目录内。 */
   public static Path sanitize(String rawPath, Path baseDir) {
     Path normalized = sanitize(rawPath);
-    Path normalizedBase = baseDir.toAbsolutePath().normalize();
+    Path absoluteBase = baseDir.toAbsolutePath();
+    Path normalizedBase = absoluteBase.normalize();
     if (!normalized.startsWith(normalizedBase)) {
       throw new SecurityException("path escapes allowed base directory: path="
           + normalized

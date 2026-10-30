@@ -8,6 +8,7 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.http.client.ClientHttpRequestFactoryBuilder;
 import org.springframework.boot.http.client.HttpClientSettings;
 import org.springframework.core.env.Environment;
+import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.function.SingletonSupplier;
 import org.springframework.web.client.RestClient;
@@ -51,13 +52,17 @@ public class AtomicWorkerInternalRestClient {
       Environment environment) {
     String baseUrl = ConsoleInternalBaseUrlResolver.resolve(
         environment, properties.getBaseUrl(), "batch.console.atomic-worker.base-url");
-    return restClientBuilderProvider
-        .getObject()
-        .baseUrl(baseUrl)
-        .requestFactory(ClientHttpRequestFactoryBuilder.detect()
-            .build(HttpClientSettings.defaults()
-                .withConnectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-                .withReadTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))))
-        .build();
+    RestClient.Builder restClientBuilder = restClientBuilderProvider.getObject().baseUrl(baseUrl);
+    ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder =
+        ClientHttpRequestFactoryBuilder.detect();
+    HttpClientSettings clientSettings = HttpClientSettings.defaults();
+    long connectTimeoutMillis = properties.getConnectTimeoutMillis();
+    Duration connectTimeout = Duration.ofMillis(connectTimeoutMillis);
+    clientSettings = clientSettings.withConnectTimeout(connectTimeout);
+    long readTimeoutMillis = properties.getReadTimeoutMillis();
+    Duration readTimeout = Duration.ofMillis(readTimeoutMillis);
+    clientSettings = clientSettings.withReadTimeout(readTimeout);
+    ClientHttpRequestFactory requestFactory = requestFactoryBuilder.build(clientSettings);
+    return restClientBuilder.requestFactory(requestFactory).build();
   }
 }

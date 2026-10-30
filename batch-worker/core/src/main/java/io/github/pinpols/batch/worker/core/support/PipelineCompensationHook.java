@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
@@ -80,7 +81,9 @@ public class PipelineCompensationHook {
       Long pipelineInstanceId,
       Map<String, Object> attributes) {
     try {
-      if (attributes == null || !compensateEnabled(attributes)) {
+      boolean compensationIsNotConfiguredOrDisabled =
+          EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);
+      if (compensationIsNotConfiguredOrDisabled) {
         // 默认 off:行为逐字节不变,不触碰任何 compensator。
         return false;
       }
@@ -174,18 +177,28 @@ public class PipelineCompensationHook {
     if (value instanceof Boolean b) {
       return b;
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String rawValue = String.valueOf(value);
+    String normalizedValue = rawValue.trim();
+    return "true".equalsIgnoreCase(normalizedValue);
   }
 
   private PipelineCompensator resolveCompensator(String pipelineType) {
     if (pipelineType == null || pipelineType.isBlank()) {
       return null;
     }
-    String wanted = pipelineType.trim().toUpperCase(Locale.ROOT);
+    String trimmedPipelineType = pipelineType.trim();
+    String wanted = trimmedPipelineType.toUpperCase(Locale.ROOT);
     for (PipelineCompensator candidate : compensatorProvider) {
-      if (candidate.pipelineType() != null
-          && wanted.equals(candidate.pipelineType().trim().toUpperCase(Locale.ROOT))) {
-        return candidate;
+      if (EmptyChecks.isNotNull(candidate.pipelineType())) {
+        String candidateType = candidate.pipelineType();
+        String trimmedCandidateType = candidateType.trim();
+        String normalizedCandidateType = trimmedCandidateType.toUpperCase(Locale.ROOT);
+        if (wanted.equals(normalizedCandidateType)) {
+          return candidate;
+        }
       }
     }
     return null;
@@ -223,7 +236,7 @@ public class PipelineCompensationHook {
     detail.put("reversedCount", result.reversedCount());
     detail.put("detail", result.detail());
     try {
-      fileAudits.appendAudit(FileAuditParam.builder()
+      FileAuditParam auditParam = FileAuditParam.builder()
           .tenantId(tenantId)
           .fileId(fileId)
           .operationType(AUDIT_OPERATION_TYPE)
@@ -231,7 +244,8 @@ public class PipelineCompensationHook {
           .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
           .traceId(traceId)
           .detailSummary(detail)
-          .build());
+          .build();
+      fileAudits.appendAudit(auditParam);
     } catch (RuntimeException ex) {
       // 审计写入数据库失败不影响 pipeline 落终态;info 日志已是补充审计。
       log.warn(

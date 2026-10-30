@@ -4,9 +4,13 @@ import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * ADR-046 文件束:从 launch params 解析「这束有哪些绑定项」。
@@ -39,7 +43,9 @@ public final class BundlePlanParams {
   @SuppressWarnings("unchecked")
   public static List<BundleFile> extract(Map<String, Object> params, JobType bundleType) {
     List<BundleFile> result = new ArrayList<>();
-    if (EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle()) {
+    boolean bundleParametersAreUnavailable =
+        EmptyChecks.isNull(params) || EmptyChecks.isNull(bundleType) || !bundleType.isBundle();
+    if (bundleParametersAreUnavailable) {
       return result;
     }
     Object raw = params.get(PARAM_BUNDLE_FILES);
@@ -76,6 +82,15 @@ public final class BundlePlanParams {
     }
   }
 
+  /** 与分区展开共享同一份文件束解析结果，避免业务参数中的同名字段被识别为渠道。 */
+  public static Set<String> dispatchChannelCodes(Map<String, Object> params) {
+    Set<String> channels = new LinkedHashSet<>();
+    for (BundleFile file : extract(params, JobType.BUNDLE_DISPATCH)) {
+      channels.add(file.targetRef());
+    }
+    return channels;
+  }
+
   public static BizException invalidBundle(String reason) {
     return BizException.of(
         ResultCode.BUSINESS_ERROR,
@@ -96,14 +111,24 @@ public final class BundlePlanParams {
   }
 
   private static Long toLong(Object value) {
+    // JSON 浮点数可能在反序列化时已舍入成整数，不能再作为精确文件身份。
+    if (value instanceof Double || value instanceof Float) {
+      return null;
+    }
     if (value instanceof Number n) {
-      return n.longValue();
+      try {
+        return new BigDecimal(n.toString()).longValueExact();
+      } catch (ArithmeticException | NumberFormatException invalidNumber) {
+        return null;
+      }
     }
     if (EmptyChecks.isNull(value)) {
       return null;
     }
     try {
-      return Long.parseLong(String.valueOf(value).trim());
+      String rawValue = String.valueOf(value);
+      String normalizedValue = rawValue.trim();
+      return Long.parseLong(normalizedValue);
     } catch (NumberFormatException ignored) {
       return null;
     }
@@ -113,7 +138,8 @@ public final class BundlePlanParams {
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    String s = String.valueOf(value).trim();
-    return s.isEmpty() ? null : s;
+    String rawValue = String.valueOf(value);
+    String trimmedValue = rawValue.trim();
+    return EmptyChecks.isEmpty(Objects.requireNonNull(trimmedValue)) ? null : trimmedValue;
   }
 }

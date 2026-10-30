@@ -141,10 +141,9 @@ public class TriggerGracefulShutdown
     try {
       AvailabilityChangeEvent.publish(eventPublisher, this, state);
     } catch (RuntimeException ex) {
-      log.warn(
-          "failed to publish trigger readiness state {}: {}",
-          state,
-          SwallowedExceptionLogger.summary(ex));
+      ReadinessState failedState = state;
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("failed to publish trigger readiness state {}: {}", failedState, causeSummary);
     }
   }
 

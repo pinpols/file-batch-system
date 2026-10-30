@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：重置明确指定的本地平台数据库 Flyway 历史记录。
+# 用法：在仓库根目录执行 bash scripts/db/reset_platform_flyway_history.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 # 清空 batch.flyway_schema_history，重启 batch-orchestrator 或 batch-trigger 后会重新执行迁移并回填历史。

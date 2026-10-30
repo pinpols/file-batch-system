@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Enforce incremental Java constructor-injection and logger conventions."""
+# 用途：Java Lombok 与依赖注入规约。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-lombok-injection.py；参数与前置环境见下方说明及所属 README。
+"""增量检查 Java 构造器注入与日志声明规约。"""
 
 from __future__ import annotations
 
@@ -47,7 +49,7 @@ def production_java(path: str) -> bool:
 
 
 def strip_comments(source: str) -> str:
-    """Remove comments while retaining string literals and line positions."""
+    """移除注释，同时保留字符串字面量及原始行位置。"""
     token = re.compile(r'("(?:\\.|[^"\\])*"|\'(?:\\.|[^\'\\])*\'|//[^\n]*|/\*[\s\S]*?\*/)')
 
     def replace(match: re.Match[str]) -> str:

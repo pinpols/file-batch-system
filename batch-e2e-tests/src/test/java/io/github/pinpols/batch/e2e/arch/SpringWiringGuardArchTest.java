@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.e2e.arch;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
@@ -10,7 +12,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.ComponentScan;
@@ -79,12 +80,11 @@ class SpringWiringGuardArchTest {
         .filter(p -> !p.startsWith("io.github.pinpols.batch.console.e2e"))
         .collect(Collectors.toCollection(TreeSet::new));
 
-    Assertions.assertTrue(
-        uncovered.isEmpty(),
-        "console 下存在含 Spring bean 但未被 E2eConsoleImportApplication @ComponentScan 覆盖的包(会"
-            + " NoSuchBean 启动失败,见 2026-07-09 main-red):"
-            + uncovered
-            + " → 在 E2eConsoleImportApplication.basePackages 里补齐,或移动 bean 到已扫描包。");
+    assertThat(uncovered.isEmpty())
+        .as("console 下存在含 Spring bean 但未被 E2eConsoleImportApplication @ComponentScan 覆盖的包(会"
+            + " NoSuchBean 启动失败,见 2026-07-09 main-red):" + uncovered
+            + " → 在 E2eConsoleImportApplication.basePackages 里补齐,或移动 bean 到已扫描包。")
+        .isTrue();
   }
 
   @Test
@@ -92,10 +92,10 @@ class SpringWiringGuardArchTest {
   void shouldImportSharedSecretPayloadProtector_whenE2eConsoleAppDeclaresImports() {
     Import imports = E2eConsoleImportApplication.class.getAnnotation(Import.class);
 
-    Assertions.assertNotNull(imports, "E2eConsoleImportApplication must declare @Import");
-    Assertions.assertTrue(
-        List.of(imports.value()).contains(SecretPayloadProtector.class),
-        "E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
-            + "ComponentScan does not include batch-common services");
+    assertThat(imports).as("E2eConsoleImportApplication must declare @Import").isNotNull();
+    assertThat(List.of(imports.value()).contains(SecretPayloadProtector.class))
+        .as("E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
+            + "ComponentScan does not include batch-common services")
+        .isTrue();
   }
 }

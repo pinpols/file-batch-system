@@ -5,6 +5,7 @@ import com.univocity.parsers.csv.CsvParserSettings;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
@@ -19,7 +20,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Parses delimited text (CSV, TSV, pipe-separated, etc.) into NDJSON records.
+ * 将分隔文本（CSV、TSV、管道符分隔等）解析为 NDJSON 记录。
  *
  * <p>Backed by Univocity Parsers (RFC 4180 严格解析：正确处理嵌入引号、跨行字段、转义、 BOM、CR/LF 混合换行符)。替换了原手写
  * tokenizer，免费获得边界 case 覆盖。
@@ -35,7 +36,7 @@ public class DelimitedFormatParser implements FormatParser {
     this.support = support;
   }
 
-  // CPD-OFF: Delimited and fixed-width parsers intentionally share the format-parser lifecycle.
+  // CPD-OFF: 分隔文本解析器和定长文本解析器有意共用格式解析器生命周期。
   @Override
   public long parse(ImportJobContext context, FormatParseRequest request, BufferedWriter writer)
       throws Exception {
@@ -60,7 +61,8 @@ public class DelimitedFormatParser implements FormatParser {
         : headerRows > 0;
     String delimiter = resolveDelimiter(importPayload, templateConfig);
 
-    CsvParser parser = new CsvParser(buildSettings(delimiter));
+    CsvParserSettings parserSettings = buildSettings(delimiter);
+    CsvParser parser = new CsvParser(parserSettings);
     // 无表头时按位置绑定:列名取模板 field_mappings 的 name 顺序(模板缺省才回退硬编码示例 schema);
     // 有表头时此初值会被文件首行覆盖(见下方 withHeader 分支)。
     List<String> headers = support.positionalHeaders(templateConfig);
@@ -73,7 +75,9 @@ public class DelimitedFormatParser implements FormatParser {
       int nonBlankLineNo = 0;
       while ((row = parser.parseNext()) != null) {
         nonBlankLineNo++;
-        if ((withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1)) {
+        boolean lineBelongsToHeader =
+            (withHeader || headerRows > 0) && nonBlankLineNo <= Math.max(headerRows, 1);
+        if (lineBelongsToHeader) {
           if (nonBlankLineNo == 1) {
             headers = toHeaders(row);
             // 与 Excel 对齐:配了 field_mappings 时,required 列必须在文件表头里找到——
@@ -174,9 +178,11 @@ public class DelimitedFormatParser implements FormatParser {
       if (src == null || !Texts.hasText(String.valueOf(src))) {
         continue;
       }
-      String source = String.valueOf(src).trim();
+      String rawSource = String.valueOf(src);
+      String source = rawSource.trim();
       // 大小写/下划线容错:与 LOAD 的 from↔表头匹配一致
-      if (!headerKeys.contains(ParseSupport.matchKey(source))) {
+      String sourceMatchKey = ParseSupport.matchKey(source);
+      if (!headerKeys.contains(sourceMatchKey)) {
         missing.add(source);
       }
     }
@@ -193,7 +199,12 @@ public class DelimitedFormatParser implements FormatParser {
     if (value instanceof Boolean b) {
       return b;
     }
-    return value != null && "true".equalsIgnoreCase(String.valueOf(value).trim());
+    if (EmptyChecks.isNull(value)) {
+      return false;
+    }
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
+    return "true".equalsIgnoreCase(text);
   }
 
   private static boolean isAllBlank(String[] row) {

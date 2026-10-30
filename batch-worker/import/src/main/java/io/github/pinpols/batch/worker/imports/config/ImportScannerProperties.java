@@ -30,7 +30,7 @@ public class ImportScannerProperties {
   /** 批次清单(ADR-040)开关:true 时 scanner 识别批次清单对象,按其 requiredFiles 动态注入 required_file_set。 */
   private boolean batchManifestEnabled = false;
 
-  /** 批次清单对象后缀(含点),默认 .batch.json。 */
+  /** 批次清单对象后缀(含点),默认 .batch.json；即使处理开关关闭也保留协议文件归属，不作普通数据登记。 */
   private String batchManifestSuffix = ".batch.json";
 
   private long stabilityWindowSeconds = 30L;

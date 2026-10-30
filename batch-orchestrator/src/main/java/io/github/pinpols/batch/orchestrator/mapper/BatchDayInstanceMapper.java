@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.BatchDayInstanceAdvanceOpenCursorParam;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -23,6 +25,11 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BatchDayInstanceMapper {
 
+  long acquireSettlementFence(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
   /**
    * 首次插入。{@code ON CONFLICT (uk_batch_day_instance) DO NOTHING}：并发竞争时只一行成功，无需特殊处理 UV。
    *
@@ -43,7 +50,50 @@ public interface BatchDayInstanceMapper {
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);
 
+  /** 最近一个不晚于当前日期的批量日，用于按日期顺序恢复调度器停机期间的缺口。 */
+  LocalDate selectLatestBizDateAtOrBefore(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  List<LocalDate> selectBizDatesInRange(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("fromDate") LocalDate fromDate,
+      @Param("throughDate") LocalDate throughDate);
+
+  int initializeOpenCursor(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("lastScannedBizDate") LocalDate lastScannedBizDate);
+
+  LocalDate selectOpenCursorForUpdate(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+
+  LocalDate selectOpenCursorDate(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
+
+  int advanceOpenCursor(BatchDayInstanceAdvanceOpenCursorParam parameters);
+
   /** 扫描指定状态集合的批次日实例（用于 cutoff / settle 调度器候选过滤）。 */
   List<BatchDayInstanceEntity> selectByDayStatusIn(
       @Param("dayStatuses") Collection<String> dayStatuses);
+
+  /** 配置了补扫、但请求尚未接受或仍可重试的失败业务日。 */
+  List<BatchDayInstanceEntity> selectFailedDaysNeedingCatchUp(@Param("limit") int limit);
+
+  /** 允许空日结算前，统计尚未入账的 Quartz 定时触发记录。 */
+  int countBlockingScheduledOccurrences(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  int countUncoveredScheduledDefinitions(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("cutoffAt") Instant cutoffAt);
+
+  /** 事件型/混合触发 Workflow 没有逐日预期工作账本，因此自动化必须拒绝放行。 */
+  int countUntrackedTriggerDefinitions(
+      @Param("tenantId") String tenantId, @Param("calendarCode") String calendarCode);
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：forensic replay 5 维度 diff harness。
+# 用法：在仓库根目录执行 bash scripts/local/analyze-replay.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # analyze-replay.sh — forensic replay 5 维度 diff harness
 #
@@ -108,8 +110,18 @@ def error_of(r):
     # 不少情况下错误信息塞在 result_summary;允许 fallback
     if not code and not msg:
         rs = r.get('resultSummary') or r.get('result_summary')
-        if rs and isinstance(rs, str) and ('error' in rs.lower() or 'fail' in rs.lower()):
-            return ('', rs[:200])
+        if isinstance(rs, str):
+            try:
+                structured = json.loads(rs)
+            except (ValueError, TypeError):
+                structured = None
+            if isinstance(structured, dict):
+                rs = structured
+            elif 'error' in rs.lower() or 'fail' in rs.lower():
+                return ('', rs[:200])
+        if isinstance(rs, dict):
+            code = rs.get('lastErrorCode') or rs.get('errorCode') or rs.get('error_code')
+            msg = rs.get('lastErrorMessage') or rs.get('errorMessage') or rs.get('error_message')
     return (code or '', msg or '')
 
 def payload_of(r):
@@ -194,12 +206,12 @@ for k, prow in prod_idx.items():
         details.append(item)
         continue
 
-    # 1. status
+    # 比较终态。
     sd = item['prodStatus'] != item['replayStatus']
     item['statusDiff'] = sd
     if sd: summary['statusChanged'] += 1
 
-    # 2. count drift
+    # 比较业务记录数量的偏差。
     pc = item['prodCount'] or 0
     rc = item['replayCount'] or 0
     if pc == 0 and rc == 0:
@@ -211,7 +223,7 @@ for k, prow in prod_idx.items():
     if abs(item['countDriftPct']) > count_tol:
         summary['countDrift'] += 1
 
-    # 3. time drift
+    # 比较执行耗时的偏差。
     pd_ = item['prodDurationSec']
     rd  = item['replayDurationSec']
     if pd_ and rd is not None and pd_ > 0:
@@ -221,13 +233,13 @@ for k, prow in prod_idx.items():
     else:
         item['timeDriftPct'] = None
 
-    # 4. error code/message
+    # 比较错误码与错误消息。
     ped = error_of(prow); red = error_of(rrow)
     ed = ped != red
     item['errorDiff'] = ed
     if ed: summary['errorChanged'] += 1
 
-    # 5. payload structural
+    # 比较 payload 的结构差异。
     pp = payload_of(prow); rp = payload_of(rrow)
     paths = []
     if pp is None and rp is None:

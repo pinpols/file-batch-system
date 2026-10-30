@@ -69,11 +69,14 @@ public final class S3BucketSupport {
       long previous = lastLoggedAt.get();
       if (now - previous >= FAILURE_LOG_COOLDOWN_MILLIS
           && lastLoggedAt.compareAndSet(previous, now)) {
+        String loggedComponentName = componentName;
+        String loggedBucket = bucket;
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "{} s3 bucket ensure failed: bucket={}, cause={}",
-            componentName,
-            bucket,
-            SwallowedExceptionLogger.summary(ex));
+            loggedComponentName,
+            loggedBucket,
+            causeSummary);
       }
       return false;
     }

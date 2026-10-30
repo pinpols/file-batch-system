@@ -2,7 +2,6 @@ package io.github.pinpols.batch.orchestrator.application.service.lineage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,18 +19,28 @@ import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
+import java.util.stream.LongStream;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 @DisplayName("血缘证据服务: 热表与归档表回退, 覆盖缺口与生效版本查询口径")
+@ExtendWith(MockitoExtension.class)
 class LineageEvidenceServiceTest {
 
-  private final ResultVersionMapper resultVersionMapper = mock(ResultVersionMapper.class);
-  private final ResultVersionQueryService resultVersionQueryService =
-      mock(ResultVersionQueryService.class);
-  private final LineageEvidenceMapper lineageEvidenceMapper = mock(LineageEvidenceMapper.class);
-  private final LineageEvidenceService service = new LineageEvidenceService(
-      resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
+  @Mock
+  private ResultVersionMapper resultVersionMapper;
+
+  @Mock
+  private ResultVersionQueryService resultVersionQueryService;
+
+  @Mock
+  private LineageEvidenceMapper lineageEvidenceMapper;
+
+  private LineageEvidenceService service;
 
   @Test
   @DisplayName("按结果版本收集时装配作业实例, 流水线, 文件与派发记录, 且无覆盖缺口")
@@ -44,6 +53,8 @@ class LineageEvidenceServiceTest {
         .thenReturn(List.of(PipelineInstance.builder().id(21L).fileId(11L).build()));
     when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
         .thenReturn(List.of(FileRecord.builder().id(11L).fileName("out.csv").build()));
+    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("old.csv").build()));
     when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of(11L)))
         .thenReturn(List.of(DispatchRecord.builder()
             .id(31L)
@@ -54,12 +65,34 @@ class LineageEvidenceServiceTest {
 
     assertThat(evidence.resultVersion().id()).isEqualTo(7L);
     assertThat(evidence.fileRecords()).hasSize(1);
+    assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("out.csv");
+    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("HOT");
     assertThat(evidence.dispatchRecords()).hasSize(1);
     LineageEvidenceResponse.LineageCoverage coverage = evidence.coverage();
     assertThat(coverage.payloadFileId()).isEqualTo(11L);
     assertThat(coverage.payloadFileResolved()).isTrue();
     assertThat(coverage.dispatchRecordCount()).isEqualTo(1);
     assertThat(coverage.knownGaps()).isEmpty();
+  }
+
+  @Test
+  @DisplayName("已归档作业的冷热同一文件优先保留归档快照")
+  void shouldPreferArchivedFileSnapshotForArchivedJob() {
+    ResultVersionEntity version = version(13L, "FILE_RECORD", "file_record:11");
+    when(resultVersionMapper.selectById("ta", 13L)).thenReturn(version);
+    when(lineageEvidenceMapper.selectArchivedJobInstance("ta", 101L))
+        .thenReturn(JobInstance.builder().id(101L).build());
+    when(lineageEvidenceMapper.selectFileRecords("ta", 101L, 11L))
+        .thenReturn(List.of(FileRecord.builder().id(11L).fileName("new.csv").build()));
+    when(lineageEvidenceMapper.selectArchivedFileRecords("ta", 101L, 11L))
+        .thenReturn(
+            List.of(FileRecord.builder().id(11L).fileName("archived.csv").build()));
+
+    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 13L);
+
+    assertThat(evidence.fileRecords()).hasSize(1);
+    assertThat(evidence.fileRecords().get(0).fileName()).isEqualTo("archived.csv");
+    assertThat(evidence.coverage().sources().fileRecords()).isEqualTo("ARCHIVE");
   }
 
   @Test
@@ -168,6 +201,30 @@ class LineageEvidenceServiceTest {
   }
 
   @Test
+  @DisplayName("冷热投递合并后按 ID 降序去重并保留最近 100 条")
+  void shouldLimitMergedDispatchesAfterDeduplication() {
+    ResultVersionEntity version = version(12L, "INLINE_JSON", null);
+    when(resultVersionMapper.selectById("ta", 12L)).thenReturn(version);
+    List<DispatchRecord> hot = LongStream.rangeClosed(51, 150)
+        .mapToObj(id -> DispatchRecord.builder().id(id).channelCode("hot").build())
+        .toList();
+    List<DispatchRecord> archived = LongStream.rangeClosed(1, 100)
+        .mapToObj(id -> DispatchRecord.builder().id(id).channelCode("archive").build())
+        .toList();
+    when(lineageEvidenceMapper.selectDispatchRecords("ta", 101L, List.of())).thenReturn(hot);
+    when(lineageEvidenceMapper.selectArchivedDispatchRecords("ta", 101L, List.of()))
+        .thenReturn(archived);
+
+    LineageEvidenceResponse evidence = service.evidenceForResultVersion("ta", 12L);
+
+    assertThat(evidence.dispatchRecords()).hasSize(100);
+    assertThat(evidence.dispatchRecords().get(0).id()).isEqualTo(150L);
+    assertThat(evidence.dispatchRecords().get(99).id()).isEqualTo(51L);
+    assertThat(evidence.dispatchRecords()).allMatch(row -> "hot".equals(row.channelCode()));
+    assertThat(evidence.coverage().sources().dispatchRecords()).isEqualTo("HOT");
+  }
+
+  @Test
   @DisplayName("结果版本不存在时抛出未找到异常")
   void shouldRaiseNotFound_whenResultVersionMissing() {
     when(resultVersionMapper.selectById("ta", 404L)).thenReturn(null);
@@ -194,5 +251,11 @@ class LineageEvidenceServiceTest {
         .createdAt(now)
         .updatedAt(now)
         .build();
+  }
+
+  @BeforeEach
+  void initializeSubject() {
+    service = new LineageEvidenceService(
+        resultVersionMapper, resultVersionQueryService, lineageEvidenceMapper);
   }
 }

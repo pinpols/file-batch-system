@@ -11,6 +11,18 @@ import org.junit.jupiter.api.Test;
 class ConfigCodeNormalizationTest {
 
   @Test
+  @DisplayName("日历配置行应标记无法解析的时区")
+  void shouldReportInvalidCalendarTimezone() {
+    var issues = new ArrayList<String>();
+    BusinessCalendarExcelRowParser.parseRow(
+        "ta",
+        1,
+        Map.of("calendar_code", "c1", "calendar_name", "calendar", "timezone", "Mars/Phobos"),
+        issues);
+    assertThat(issues).anyMatch(issue -> issue.contains("timezone"));
+  }
+
+  @Test
   @DisplayName("四类配置解析器:大写与连字符编码均被规范化为小写下划线")
   void shouldNormalizeConfigCodes_whenParsingRows() {
     assertThat(BusinessCalendarExcelRowParser.parseRow(

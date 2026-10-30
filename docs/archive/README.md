@@ -1,56 +1,18 @@
-# 归档目录（archive/）— 历史快照，不再维护
+# 历史原始记录索引
 
-> **不要**改这里的文件。当前权威版本在 `docs/{analysis,architecture,design,runbook,testing}/` 主干目录。
+历史资料保留排障过程、失败尝试、原始测量和方案取舍；旧结论不自动成为当前规则或当前通过。现行规范维护原文，可复用方法进入对应技能，二者均不替代原始证据。
 
-## 命名约定
-
-| 形态 | 用途 | 例 |
-|---|---|---|
-| `<topic>-YYYY-MM-DD.md` | 单点快照（按 git 首次提交日期） | `system-deep-analysis-2026-04-09.md` |
-| `<topic>-YYYY-MM-DD-DD.md` | 跨天合并快照（起讫日） | `historical-test-reports-2026-04-09-10.md` |
-| `<topic>-vN.md` | 多版本归档（v 表征版本，不加日期） | `deep-issue-analysis-v1.md` ~ `-v3.md` |
-
-## 子目录分类
-
-| 目录 | 收纳 |
+| 分类 | 用途 |
 |---|---|
-| `analysis/` | 分析报告 / bug 路线图 / engineering backlog / 深度分析多版本 |
-| `architecture/` | 架构 audit / 命名重构候选 / 历史 scalability 评估 / design gap |
-| `backlog/` | 已实现 / 已替代 / 已裁定暂不继续滚动维护的 backlog 与施工方案 |
-| `design/` | mega 设计文档历史快照 |
-| `review/` | 历史代码审查快照 |
-| `runbook/` | 已废弃或已被新 SOP 替代的运维流程 |
-| `testing/` | 历史测试报告 + 测试 plan 旧版 + 跑测产物 |
+| [architecture](architecture/README.md) | 历史架构事实与决定背景 |
+| [design](design/README.md) | 历史方案比较、实施前提和弃选理由 |
+| [standards](standards/README.md) | 能力范围与优先级的原判断 |
+| [audit](audit/README.md) | 原始审计、扫描和缺陷线索 |
+| [plans](plans/README.md) | 实施过程、假设、变更和阶段结果 |
+| [review](review/README.md) | 原始代码审查和复现记录 |
+| [runbook](runbook/README.md) | 原运维方案、故障/恢复与测量过程；不作为当前操作入口 |
+| [stats](stats/README.md) | 原基线与口径下的规模快照 |
+| [testing](testing/README.md) | 原测试方法、覆盖盘点及验证假设 |
+| [verifications](verifications/README.md) | 实际执行、失败与修复记录 |
 
-## 当前权威 vs 归档对照
-
-| 主题 | 当前权威 | 归档历史 |
-|---|---|---|
-| 系统流程 | `architecture/system-flow-overview.md` | — |
-| 设计说明 | `design/` 14 个章节文件 + `design/README.md` 索引 | `archive/design/system-design-2026-03-21.md`（**存根**：20 章+95 子节标题供锚点兼容，正文移到主干 / git 历史）+ [`archive/design/mega-chapter-map.md`](design/mega-chapter-map.md)（mega 20 章 → 当前位置导航） |
-| 扩展性评估 | `architecture/scalability-assessment.md`（2026-04-25）| `archive/architecture/scalability-ha-assessment-2026-03-26.md`（初版 + 6 项改造完成快照）|
-| 深度分析 | `analysis/deep-issue-analysis.md`（2026-04-23 最新）| `archive/analysis/deep-issue-analysis-v1.md`/`-v2`/`-v3`（4-15 / 4-17 / 4-20）|
-| 修复报告 | `analysis/fix-report.md`（2026-04-22 最新）| `archive/analysis/fix-report-v1`/`-v2`/`-v3` |
-| 项目评估 | `analysis/project-assessment.md`（2026-04-30，已去日期）| `archive/analysis/project-assessment-2026-04-29.md`（v1 历史基线）|
-| ADR 12/21..27 范围决策 | docs/agent-baseline.md "ADR 实施范围纪律" 章（权威）| `archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md`（原 fold 来源）|
-| PG schema 多租隔离决策 | docs/agent-baseline.md "多租隔离" 章（权威）+ V82-V85 落地 | `archive/analysis/pg-schema-audit-2026-05-03.md` |
-| 越界审计 | `analysis/system-scope-boundary.md`（架构基准）| `archive/analysis/system-scope-boundary-audit-2026-05-06.md`（一次性代码审计快照）|
-| 时区一致性 | docs/agent-baseline.md "时区策略" 章（权威）| `archive/analysis/batch-system-timezone-consistency-check-2026-05-05.md` |
-| 业界对标 benchmark | `architecture/scalability-assessment.md` 等吸收结论 | `archive/analysis/{orchestrator,worker,file-io,batch-day-instantiation}-vs-industry-2026-05-03.md` |
-| Sonar 清理 | git commit history（2026-05-02 已闭环）| `archive/analysis/sonar-cleanup-2026-05-02.md` |
-| 持久层与测试架构 | ADR-001 + `design/` 持久层章节 | `archive/analysis/persistence-and-test-architecture-2026-05-02.md` |
-| Worker ADR backlog 优先级 | docs/agent-baseline.md "ADR 实施范围纪律" + `architecture/adr/` 各 ADR 文档 | `archive/analysis/worker-adr-backlog-priority-2026-05-03.md`（时效性 priority 表）|
-| 测试计划 | `testing/full-project-test-plan.md` | `archive/testing/test-plan-2026-03-28.md` |
-| 测试报告 | `testing/load-test-report.md` | `archive/testing/historical-test-reports-2026-04-09-10.md` |
-| E2E 覆盖矩阵 | `testing/coverage-gap-analysis.md`（注明核查日期） | `archive/testing/e2e-coverage-2026-05-03.md`（历史场景快照） |
-| 发布流程 | `runbook/releasing.md` | `archive/runbook/release-process-2026-05-22.md`（已废弃 GitOps 蓝图） |
-| Trigger 异步 launch 灰度 | `runbook/trigger-operations.md` | `archive/runbook/trigger-async-launch-rollout-2026-05-02.md`（旧开关和同步路径已删除） |
-| 代码审查 | `review/` 当前保留近期仍有参考价值的快照 | `archive/review/` 历史快照 |
-
-## 2026-08-21 归档批次
-
-本批只移动以下三类文件，不修改原文内容：
-
-1. `analysis/` 下已 fold 到滚动文档或只保留历史证据的一次性 audit / review / 升级评估。
-2. `backlog/` 下已实现、已替代，或由当前容量/验证文档接管的施工方案。
-3. `runbook/` 下文件名和正文均已标明废弃的历史发布流程。
+[分类复核](../audit/document-classification-and-naming-review-2026-10-24.md)记录恢复纠偏和实际验证边界；[经验提炼映射](../audit/archive-experience-skill-extraction-2026-10-25.csv)对应原文、来源哈希、方法和现行技能。查当前行为应按[文档路由](../standards/document-routing-guide.md)返回权威文档与代码。

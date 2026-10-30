@@ -3,18 +3,24 @@ package io.github.pinpols.batch.worker.exports.stage;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.support.FileTemplateConfigRequest;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
 import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.domain.ExportStage;
 import io.github.pinpols.batch.worker.exports.domain.ExportStageResult;
 import io.github.pinpols.batch.worker.exports.domain.ExportWorkerType;
 import io.github.pinpols.batch.worker.exports.region.ExportRegionResolver;
+import java.io.IOException;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -31,12 +37,11 @@ public class PrepareStep implements ExportStageStep {
   private static final String KEY_SOURCE_PARTITIONS = "sourcePartitions";
 
   private final ObjectMapper objectMapper;
-  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private final FrozenFileTemplateResolver templateResolver;
 
-  public PrepareStep(
-      ObjectMapper objectMapper, PlatformPipelineDefinitionRepository pipelineDefinitions) {
+  public PrepareStep(ObjectMapper objectMapper, FrozenFileTemplateResolver templateResolver) {
     this.objectMapper = objectMapper;
-    this.pipelineDefinitions = pipelineDefinitions;
+    this.templateResolver = templateResolver;
   }
 
   @Override
@@ -64,19 +69,12 @@ public class PrepareStep implements ExportStageStep {
               ? exportPayload
               : objectMapper.readValue(context.getRawPayload(), ExportPayload.class);
       attrs.put(ExportRuntimeKeys.EXPORT_PAYLOAD, payload);
-      Map<String, Object> templateConfig = Map.of();
-      // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 回退加载导出模板;
-      // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
-      // 约定不命中(如 *_TPL2)则 loadLatestTemplateConfig 返回空,回退原行为(清晰失败),无副作用。
-      String effectiveTemplateCode = Texts.hasText(payload.templateCode())
-          ? payload.templateCode()
-          : context.getJobCode() + "_TPL";
-      if (Texts.hasText(effectiveTemplateCode)) {
-        templateConfig = pipelineDefinitions.loadLatestTemplateConfig(
-            context.getTenantId(), effectiveTemplateCode, ExportWorkerType.EXPORT);
-        if (!templateConfig.isEmpty()) {
-          attrs.put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
-        }
+      Map<String, Object> templateConfig;
+      try {
+        templateConfig = resolveTemplateConfig(context, payload);
+      } catch (BizException invalidTemplate) {
+        return ExportStageResult.failure(
+            stage(), TaskErrorCodes.FROZEN_FILE_TEMPLATE_INVALID, invalidTemplate, objectMapper);
       }
       String bizDate = resolveBizDate(context, payload);
       if (!Texts.hasText(bizDate)) {
@@ -95,14 +93,17 @@ public class PrepareStep implements ExportStageStep {
       String region = ExportRegionResolver.resolve(templateConfig, payload.metadata());
       int partitionNo = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_NO), 1);
       int partitionCount = intOrDefault(attrs.get(PipelineRuntimeKeys.PARTITION_COUNT), 1);
-      String fileName = BatchFileConstants.insertPartitionTag(
-          resolveFileName(context, payload, templateConfig, fileFormatType, region),
-          partitionNo,
-          partitionCount);
+      String resolvedFileName =
+          resolveFileName(context, payload, templateConfig, fileFormatType, region);
+      String fileName =
+          BatchFileConstants.insertPartitionTag(resolvedFileName, partitionNo, partitionCount);
       String finalObjectName =
           resolveObjectName(context, payload, fileName, partitionNo, partitionCount);
+      Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
+      String temporaryFileName =
+          EmptyChecks.isNull(jobInstanceId) ? fileName : "job-" + jobInstanceId + "-" + fileName;
       String tempObjectName =
-          BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, fileName);
+          BatchFileConstants.tempObjectName(context.getTenantId(), bizDate, temporaryFileName);
       Map<String, Object> exportSnapshot = buildExportSnapshot(payload, templateConfig);
       if (Texts.hasText(region)) {
         exportSnapshot.put("region", region);
@@ -115,15 +116,56 @@ public class PrepareStep implements ExportStageStep {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareStep.class, "catch:Exception", ex);
 
+      ExportStage failureStage = stage();
+      String localizedMessageArgument = ex.getMessage();
+      String fallbackMessage = ex.getMessage();
       return ExportStageResult.failure(
-          stage(),
+          failureStage,
           "EXPORT_PREPARE_PARSE_FAILED",
           "error.export.prepare.parse_failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           objectMapper);
     }
     return ExportStageResult.success(stage());
+  }
+
+  Map<String, Object> resolveTemplateConfig(ExportJobContext context) {
+    Map<String, Object> attrs = context.getAttributes();
+    Object payloadValue = attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD);
+    ExportPayload payload =
+        payloadValue instanceof ExportPayload typed ? typed : readPayload(context.getRawPayload());
+    attrs.put(ExportRuntimeKeys.EXPORT_PAYLOAD, payload);
+    return resolveTemplateConfig(context, payload);
+  }
+
+  private Map<String, Object> resolveTemplateConfig(
+      ExportJobContext context, ExportPayload payload) {
+    // 派发未带 templateCode 时,按 seed 命名约定 <jobCode>_TPL 回退加载导出模板;
+    // 否则 TEMPLATE_CONFIG 为空 → GenerateStep 报「export_data_ref is required」、导出永久失败转死信。
+    // 约定不命中(如 *_TPL2)则 loadLatestTemplateConfig 返回空,回退原行为(清晰失败),无副作用。
+    String effectiveTemplateCode = Texts.hasText(payload.templateCode())
+        ? payload.templateCode()
+        : context.getJobCode() + "_TPL";
+    FileTemplateConfigRequest templateRequest = new FileTemplateConfigRequest(
+        context.getTenantId(),
+        effectiveTemplateCode,
+        ExportWorkerType.EXPORT,
+        context.getRawPayload(),
+        context.getAttributes());
+    Map<String, Object> templateConfig = templateResolver.resolve(templateRequest);
+    if (EmptyChecks.isNotEmpty(templateConfig)) {
+      context.getAttributes().put(PipelineRuntimeKeys.TEMPLATE_CONFIG, templateConfig);
+    }
+    return templateConfig;
+  }
+
+  private ExportPayload readPayload(String rawPayload) {
+    try {
+      return objectMapper.readValue(rawPayload, ExportPayload.class);
+    } catch (IOException exception) {
+      throw new IllegalArgumentException("invalid EXPORT replay payload", exception);
+    }
   }
 
   private String resolveFileName(
@@ -140,7 +182,7 @@ public class PrepareStep implements ExportStageStep {
         : String.valueOf(templateConfig.get("naming_rule"));
     String bizDate = resolveBizDate(context, payload);
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
-    return ExportFileNameResolver.resolve(ExportFileNameResolver.Input.builder()
+    ExportFileNameResolver.Input input = ExportFileNameResolver.Input.builder()
         .namingRule(namingRule)
         .fileFormatType(fileFormatType)
         .bizType(bizType)
@@ -149,7 +191,8 @@ public class PrepareStep implements ExportStageStep {
         .batchNo(payload.batchNo())
         .region(region)
         .version("v1")
-        .build());
+        .build();
+    return ExportFileNameResolver.resolve(input);
   }
 
   private String resolveObjectName(
@@ -164,8 +207,11 @@ public class PrepareStep implements ExportStageStep {
     }
     String bizType = Texts.hasText(payload.bizType()) ? payload.bizType() : context.getJobCode();
     String bizDate = resolveBizDate(context, payload);
+    String batchNo = defaultText(payload.batchNo(), "batch");
+    Long jobInstanceId = ExportArtifactIdentity.jobInstanceId(context);
+    String artifactVersion = EmptyChecks.isNull(jobInstanceId) ? "v1" : "job-" + jobInstanceId;
     return BatchFileConstants.outboundObjectName(
-        bizType, bizDate, defaultText(payload.batchNo(), "batch"), "v1", fileName);
+        bizType, bizDate, batchNo, artifactVersion, fileName);
   }
 
   private String resolveBizDate(ExportJobContext context, ExportPayload payload) {
@@ -196,7 +242,9 @@ public class PrepareStep implements ExportStageStep {
       return def;
     }
     try {
-      return Integer.parseInt(String.valueOf(value).trim());
+      String valueText = String.valueOf(value);
+      String trimmedValue = valueText.trim();
+      return Integer.parseInt(trimmedValue);
     } catch (NumberFormatException ignored) {
       return def;
     }
@@ -212,21 +260,23 @@ public class PrepareStep implements ExportStageStep {
     Map<String, Object> meta =
         payload != null && payload.metadata() != null ? payload.metadata() : Map.of();
     Map<String, Object> snap = new LinkedHashMap<>();
-    snap.put(
-        KEY_SNAPSHOT_MODE,
-        firstNonBlank(
-            stringHint(hints, KEY_SNAPSHOT_MODE),
-            stringMeta(meta, KEY_SNAPSHOT_MODE),
-            "AS_OF_BATCH"));
-    snap.put(
-        KEY_SNAPSHOT_TS,
-        firstNonBlank(
-            stringHint(hints, KEY_SNAPSHOT_TS),
-            stringMeta(meta, KEY_SNAPSHOT_TS),
-            BatchDateTimeSupport.utcNow().toString()));
-    snap.put(
-        KEY_SOURCE_PARTITIONS,
-        mergePartitions(hints.get(KEY_SOURCE_PARTITIONS), meta.get(KEY_SOURCE_PARTITIONS)));
+    String templateSnapshotMode = stringHint(hints, KEY_SNAPSHOT_MODE);
+    String metadataSnapshotMode = stringMeta(meta, KEY_SNAPSHOT_MODE);
+    String snapshotMode = firstNonBlank(templateSnapshotMode, metadataSnapshotMode, "AS_OF_BATCH");
+    snap.put(KEY_SNAPSHOT_MODE, snapshotMode);
+
+    String templateSnapshotTimestamp = stringHint(hints, KEY_SNAPSHOT_TS);
+    String metadataSnapshotTimestamp = stringMeta(meta, KEY_SNAPSHOT_TS);
+    Instant defaultSnapshotInstant = BatchDateTimeSupport.utcNow();
+    String defaultSnapshotTimestamp = defaultSnapshotInstant.toString();
+    String snapshotTimestamp = firstNonBlank(
+        templateSnapshotTimestamp, metadataSnapshotTimestamp, defaultSnapshotTimestamp);
+    snap.put(KEY_SNAPSHOT_TS, snapshotTimestamp);
+    Object templateSourcePartitions = hints.get(KEY_SOURCE_PARTITIONS);
+    Object metadataSourcePartitions = meta.get(KEY_SOURCE_PARTITIONS);
+    List<Object> mergedSourcePartitions =
+        mergePartitions(templateSourcePartitions, metadataSourcePartitions);
+    snap.put(KEY_SOURCE_PARTITIONS, mergedSourcePartitions);
     return snap;
   }
 
@@ -251,8 +301,13 @@ public class PrepareStep implements ExportStageStep {
   }
 
   private void putIfHasText(Map<String, Object> out, String key, Object value) {
-    if (value != null && Texts.hasText(String.valueOf(value))) {
-      out.put(key, String.valueOf(value).trim());
+    if (EmptyChecks.isNotNull(value)) {
+      String presenceText = String.valueOf(value);
+      if (Texts.hasText(presenceText)) {
+        String rawText = String.valueOf(value);
+        String text = rawText.trim();
+        out.put(key, text);
+      }
     }
   }
 

@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.flywaydb.core.api.FlywayException;
 import org.flywaydb.core.api.MigrationInfo;
+import org.flywaydb.core.api.MigrationVersion;
 import org.flywaydb.core.api.callback.Callback;
 import org.flywaydb.core.api.callback.Context;
 import org.flywaydb.core.api.callback.Event;
@@ -87,7 +88,8 @@ public class SecretPayloadFlywayCallback implements Callback {
       }
       int migratedInBatch = updateCandidates(connection, candidates);
       if (migratedInBatch == 0) {
-        if (EmptyChecks.isEmpty(selectCandidates(connection))) {
+        List<LegacySecretPayload> remainingCandidates = selectCandidates(connection);
+        if (EmptyChecks.isEmpty(remainingCandidates)) {
           return migrated;
         }
         throw new FlywayException("legacy secret payload encryption made no progress");
@@ -118,7 +120,8 @@ public class SecretPayloadFlywayCallback implements Callback {
     int migrated = 0;
     try (PreparedStatement statement = connection.prepareStatement(UPDATE_PAYLOAD_SQL)) {
       for (LegacySecretPayload candidate : candidates) {
-        statement.setString(1, secretPayloadProtector.protect(candidate.payload()));
+        String protectedPayload = secretPayloadProtector.protect(candidate.payload());
+        statement.setString(1, protectedPayload);
         statement.setLong(2, candidate.id());
         statement.setString(3, candidate.tenantId());
         statement.setString(4, SecretPayloadProtector.FORMAT);
@@ -129,9 +132,12 @@ public class SecretPayloadFlywayCallback implements Callback {
   }
 
   private boolean isTargetMigration(MigrationInfo migrationInfo) {
-    return !EmptyChecks.isNull(migrationInfo)
-        && !EmptyChecks.isNull(migrationInfo.getVersion())
-        && TARGET_VERSIONS.contains(migrationInfo.getVersion().toString());
+    if (EmptyChecks.isNull(migrationInfo)) {
+      return false;
+    }
+    MigrationVersion migrationVersion = migrationInfo.getVersion();
+    return !EmptyChecks.isNull(migrationVersion)
+        && TARGET_VERSIONS.contains(migrationVersion.toString());
   }
 
   private record LegacySecretPayload(long id, String tenantId, String payload) {}

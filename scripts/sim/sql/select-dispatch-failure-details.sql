@@ -2,6 +2,7 @@ SELECT instance.instance_status,
        partition.partition_status,
        task.task_status,
        task.error_code,
+       task.error_message,
        dispatch.dispatch_status,
        dispatch.error_code AS dispatch_error
 FROM batch.job_instance instance

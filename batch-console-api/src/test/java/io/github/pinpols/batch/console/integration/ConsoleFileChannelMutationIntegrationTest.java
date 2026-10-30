@@ -63,15 +63,20 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, channel_code, channel_type, target_endpoint"
-            + " FROM batch.file_channel_config WHERE channel_code = ?",
-        code);
+    String selectCreatedChannelSql = """
+        SELECT tenant_id, channel_code, channel_type, target_endpoint
+        FROM batch.file_channel_config
+        WHERE channel_code = ?
+        """;
+    var row = jdbcTemplate.queryForMap(selectCreatedChannelSql, code);
     assertThat(row).containsEntry("tenant_id", "int-fc-ta");
     assertThat(row).containsEntry("channel_code", code);
     assertThat(row).containsEntry("channel_type", "SFTP");
 
-    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+    String deleteCreatedChannelSql = """
+        DELETE FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    jdbcTemplate.update(deleteCreatedChannelSql, code);
   }
 
   @Test
@@ -93,8 +98,10 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isBadRequest();
 
-    Long count = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+    String invalidJsonChannelCountSql = """
+        SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    Long count = jdbcTemplate.queryForObject(invalidJsonChannelCountSql, Long.class, code);
     assertThat(count).isZero();
   }
 
@@ -113,11 +120,11 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?",
-        Long.class,
-        "q q q");
-    assertThat(cnt).isZero();
+    String spaceCodeChannelCountSql = """
+        SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    Long channelCount = jdbcTemplate.queryForObject(spaceCodeChannelCountSql, Long.class, "q q q");
+    assertThat(channelCount).isZero();
   }
 
   @Test
@@ -151,9 +158,12 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
-    assertThat(cnt).isZero();
+    String unsupportedTypeChannelCountSql = """
+        SELECT COUNT(*) FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    Long channelCount =
+        jdbcTemplate.queryForObject(unsupportedTypeChannelCountSql, Long.class, code);
+    assertThat(channelCount).isZero();
   }
 
   @Test
@@ -172,10 +182,12 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isOk();
 
-    Long id = jdbcTemplate.queryForObject(
-        "SELECT id FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+    String findChannelIdSql = """
+        SELECT id FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    Long id = jdbcTemplate.queryForObject(findChannelIdSql, Long.class, code);
 
-    // act: PUT changing channelType to an unknown value → must reject
+    // 执行：PUT 请求将 channelType 改为未知值，服务必须拒绝。
     String updateBody =
         "{" + "\"tenantId\":\"int-fc-ta\"," + "\"channelType\":\"WEBHOOK_RAW\"" + "}";
     client
@@ -190,11 +202,16 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .value(b -> assertThat(b).contains("INVALID_ARGUMENT"));
 
     // assert: stored channel_type unchanged
-    String channelType = jdbcTemplate.queryForObject(
-        "SELECT channel_type FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    String findChannelTypeSql = """
+        SELECT channel_type FROM batch.file_channel_config WHERE id = ?
+        """;
+    String channelType = jdbcTemplate.queryForObject(findChannelTypeSql, String.class, id);
     assertThat(channelType).isEqualTo("SFTP");
 
-    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+    String deleteChannelSql = """
+        DELETE FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    jdbcTemplate.update(deleteChannelSql, code);
   }
 
   @Test
@@ -221,7 +238,10 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE channel_code = ?", code);
+    String deleteDuplicateChannelSql = """
+        DELETE FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    jdbcTemplate.update(deleteDuplicateChannelSql, code);
   }
 
   @Test
@@ -254,8 +274,10 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
         .contains("****")
         .doesNotContain("secret-pass", "secret-key", "user:pass", "endpoint-token");
 
-    Long id = jdbcTemplate.queryForObject(
-        "SELECT id FROM batch.file_channel_config WHERE channel_code = ?", Long.class, code);
+    String findSecretChannelIdSql = """
+        SELECT id FROM batch.file_channel_config WHERE channel_code = ?
+        """;
+    Long id = jdbcTemplate.queryForObject(findSecretChannelIdSql, Long.class, code);
     String maskedConfig =
         "{\"endpoint\":\"new.example\",\"auth\":{" + "\"password\":\"****\",\"apiKey\":\"****\"}}";
     String updateBody = JsonUtils.toJson(Map.of(
@@ -281,16 +303,23 @@ class ConsoleFileChannelMutationIntegrationTest extends AbstractMutationIntegrat
             .contains("new.example", "****")
             .doesNotContain("secret-pass", "secret-key"));
 
-    String storedConfig = jdbcTemplate.queryForObject(
-        "SELECT config_json::text FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    String storedConfigSql = """
+        SELECT config_json::text FROM batch.file_channel_config WHERE id = ?
+        """;
+    String storedConfig = jdbcTemplate.queryForObject(storedConfigSql, String.class, id);
     assertThat(storedConfig)
         .contains("secret-pass", "secret-key", "new.example")
         .doesNotContain("****");
-    String storedEndpoint = jdbcTemplate.queryForObject(
-        "SELECT target_endpoint FROM batch.file_channel_config WHERE id = ?", String.class, id);
+    String storedEndpointSql = """
+        SELECT target_endpoint FROM batch.file_channel_config WHERE id = ?
+        """;
+    String storedEndpoint = jdbcTemplate.queryForObject(storedEndpointSql, String.class, id);
     assertThat(storedEndpoint)
         .isEqualTo("sftp://user:pass@sftp.example:22/inbox?token=endpoint-token");
 
-    jdbcTemplate.update("DELETE FROM batch.file_channel_config WHERE id = ?", id);
+    String deleteSecretChannelSql = """
+        DELETE FROM batch.file_channel_config WHERE id = ?
+        """;
+    jdbcTemplate.update(deleteSecretChannelSql, id);
   }
 }

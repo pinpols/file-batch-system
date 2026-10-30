@@ -1,0 +1,3 @@
+interface:
+  display_name: "验收验证"
+  short_description: "规划并执行与变更风险匹配的验证，区分本地门禁、真实依赖和目标环境验收证据"

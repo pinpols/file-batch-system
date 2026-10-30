@@ -1,3 +1,5 @@
+# 用途：验证nightly 的 SIM 失败处理与镜像构建前置条件。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_daily_validation_workflow.py。
 from pathlib import Path
 import unittest
 

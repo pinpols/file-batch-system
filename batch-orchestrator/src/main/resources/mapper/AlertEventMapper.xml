@@ -2,6 +2,30 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper">
 
+    <resultMap id="AlertEventResultMap" type="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="service_name" property="serviceName"/>
+        <result column="alert_type" property="alertType"/>
+        <result column="severity" property="severity"/>
+        <result column="title" property="title"/>
+        <result column="detail_json" property="detailJson"/>
+        <result column="dedup_fingerprint" property="dedupFingerprint"/>
+        <result column="occurrence_count" property="occurrenceCount"/>
+        <result column="first_seen_at" property="firstSeenAt"/>
+        <result column="last_seen_at" property="lastSeenAt"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="status" property="status"/>
+        <result column="escalation_tier" property="escalationTier"/>
+        <result column="escalated_at" property="escalatedAt"/>
+        <result column="escalation_notified_tier" property="escalationNotifiedTier"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+        <result column="closed_at" property="closedAt"/>
+        <result column="close_reason" property="closeReason"/>
+        <result column="am_last_reemit_at" property="amLastReemitAt"/>
+    </resultMap>
+
     <insert id="upsert">
         insert into batch.alert_event (
             tenant_id,
@@ -33,7 +57,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <select id="selectByQuery" resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+    <select id="selectByQuery" resultMap="AlertEventResultMap">
         select *
         from batch.alert_event
         where tenant_id = #{tenantId}
@@ -51,7 +75,7 @@
     </select>
 
     <select id="selectOverdueByStatus"
-            resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+            resultMap="AlertEventResultMap">
         select *
         from batch.alert_event
         where status = #{status}
@@ -63,12 +87,344 @@
     </select>
 
     <select id="selectByStatusForReemit"
-            resultType="io.github.pinpols.batch.common.persistence.entity.AlertEventEntity">
+            resultMap="AlertEventResultMap">
         select *
         from batch.alert_event
         where status = #{status}
         order by last_seen_at desc
         limit #{limit}
+    </select>
+
+    <select id="bindReemitTenant" resultType="string">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <select id="selectByFingerprint" resultMap="AlertEventResultMap">
+        SELECT * FROM batch.alert_event
+        WHERE tenant_id = #{tenantId} AND dedup_fingerprint = #{fingerprint}
+    </select>
+
+    <select id="selectActiveForReemit" resultMap="AlertEventResultMap">
+        SELECT * FROM batch.alert_event
+        WHERE tenant_id = #{tenantId} AND status IN ('OPEN', 'ACKED', 'SUPPRESSED')
+        ORDER BY am_last_reemit_at ASC NULLS FIRST, first_seen_at ASC, id ASC
+        LIMIT #{limit}
+    </select>
+
+    <select id="selectClosedPendingNotify" resultMap="AlertEventResultMap">
+        SELECT alert.* FROM batch.alert_event alert
+        WHERE alert.tenant_id = #{tenantId} AND alert.status = 'CLOSED' AND alert.closed_at IS NOT NULL
+          AND (
+            NOT EXISTS (
+                SELECT 1 FROM batch.alert_notification_receipt receipt
+                WHERE receipt.tenant_id = alert.tenant_id
+                  AND receipt.dedup_fingerprint = alert.dedup_fingerprint
+                  AND receipt.resolved_delivered_at &gt;= alert.closed_at
+            )
+            OR EXISTS (
+                SELECT 1 FROM batch.alert_notification_receipt receipt
+                WHERE receipt.tenant_id = alert.tenant_id
+                  AND receipt.dedup_fingerprint = alert.dedup_fingerprint
+                  AND receipt.firing_delivered_at IS NOT NULL
+                  AND (receipt.resolved_delivered_at IS NULL
+                       OR receipt.resolved_delivered_at &lt; alert.closed_at
+                       OR receipt.updated_at &gt; receipt.resolved_delivered_at)
+            )
+          )
+        ORDER BY alert.am_last_reemit_at ASC NULLS FIRST, alert.closed_at ASC, alert.id ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="markReemitAttempt">
+        UPDATE batch.alert_event SET am_last_reemit_at = current_timestamp
+        WHERE tenant_id = #{tenantId} AND id = #{id} AND status = #{status}
+          AND closed_at IS NOT DISTINCT FROM #{closedAt}
+    </update>
+
+    <!-- 只解除来源已证实结束的软时限事件；自然恢复须先有最终渠道发生回执，策略撤销单独记因。 -->
+    <select id="closeEligibleMonitoringAlert" resultMap="AlertEventResultMap"
+            affectData="true" flushCache="true" timeout="5">
+        WITH target AS MATERIALIZED (
+            SELECT alert.*,
+                   CASE WHEN pg_input_is_valid(alert.detail_json -&gt;&gt; 'jobInstanceId', 'bigint')
+                        THEN (alert.detail_json -&gt;&gt; 'jobInstanceId')::bigint END AS job_instance_id,
+                   CASE WHEN pg_input_is_valid(alert.detail_json -&gt;&gt; 'workflowDefinitionId', 'bigint')
+                        THEN (alert.detail_json -&gt;&gt; 'workflowDefinitionId')::bigint END AS definition_id,
+                   split_part(alert.detail_json -&gt;&gt; 'monitoringResourceKey', ':', 1) AS resource_kind,
+                   CASE WHEN pg_input_is_valid(split_part(
+                            alert.detail_json -&gt;&gt; 'monitoringResourceKey', ':', 2), 'bigint')
+                        THEN split_part(alert.detail_json -&gt;&gt; 'monitoringResourceKey', ':', 2)::bigint END AS resource_id
+            FROM batch.alert_event alert
+            WHERE alert.tenant_id = #{entity.tenantId} AND alert.id = #{entity.id} AND alert.status = #{entity.status}
+              AND alert.status IN ('OPEN', 'ACKED', 'SUPPRESSED') AND alert.closed_at IS NULL
+              AND alert.updated_at IS NOT DISTINCT FROM #{entity.updatedAt}
+              AND alert.service_name = 'batch-orchestrator'
+              AND alert.alert_type IN (
+                  'JOB_SLA_VIOLATION', 'JOB_SLA_VIOLATION_ESCALATED',
+                  'JOB_NOT_STARTED_BY_DEADLINE', 'JOB_NOT_COMPLETED_BY_DEADLINE', 'JOB_RUNNING_TOO_LONG',
+                  'WORKFLOW_NOT_STARTED_BY_DEADLINE', 'WORKFLOW_NOT_COMPLETED_BY_DEADLINE', 'WORKFLOW_RUNNING_TOO_LONG')
+        ), job_state AS (
+            SELECT target.id AS alert_id,
+                   CASE target.alert_type
+                       WHEN 'JOB_SLA_VIOLATION' THEN true
+                       WHEN 'JOB_SLA_VIOLATION_ESCALATED' THEN true
+                       WHEN 'JOB_NOT_STARTED_BY_DEADLINE' THEN COALESCE(policy.start_grace_seconds &gt; 0, false)
+                       WHEN 'JOB_NOT_COMPLETED_BY_DEADLINE' THEN COALESCE(
+                           policy.completion_deadline_local_time IS NOT NULL
+                           OR policy.dependency_completion_window_seconds &gt; 0, false)
+                       WHEN 'JOB_RUNNING_TOO_LONG' THEN COALESCE(policy.soft_runtime_seconds &gt; 0, false)
+                   END AS policy_enabled,
+                   CASE WHEN target.alert_type = 'JOB_NOT_STARTED_BY_DEADLINE'
+                        THEN COALESCE(source.execution_started_at, completed.finished_at)
+                        ELSE completed.finished_at END AS recovered_at,
+                   'RECOVERED'::text AS recovery_reason
+            FROM target
+            JOIN LATERAL (
+                SELECT job.job_definition_id, job.execution_started_at, job.finished_at,
+                       job.instance_status, job.dry_run, job.expected_duration_seconds, job.deadline_at
+                FROM batch.job_instance job
+                WHERE job.tenant_id = target.tenant_id AND job.id = target.job_instance_id
+                UNION ALL
+                SELECT job.job_definition_id, job.execution_started_at, job.finished_at,
+                       job.instance_status, job.dry_run, job.expected_duration_seconds, job.deadline_at
+                FROM archive.job_instance_archive job
+                WHERE job.tenant_id = target.tenant_id AND job.id = target.job_instance_id
+                  AND NOT EXISTS (SELECT 1 FROM batch.job_instance hot
+                                  WHERE hot.tenant_id = target.tenant_id AND hot.id = target.job_instance_id)
+            ) source ON target.alert_type IN (
+                'JOB_SLA_VIOLATION', 'JOB_SLA_VIOLATION_ESCALATED',
+                'JOB_NOT_STARTED_BY_DEADLINE', 'JOB_NOT_COMPLETED_BY_DEADLINE', 'JOB_RUNNING_TOO_LONG')
+            LEFT JOIN LATERAL (
+                SELECT stored.* FROM batch.job_monitoring_policy stored
+                WHERE stored.tenant_id = target.tenant_id AND stored.job_definition_id = source.job_definition_id
+                FOR SHARE
+            ) policy ON true
+            CROSS JOIN LATERAL (
+                SELECT CASE WHEN source.instance_status IN (
+                    'PARTIAL_FAILED', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED', 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+                    THEN source.finished_at END AS finished_at
+            ) completed
+            WHERE source.dry_run = false
+              AND COALESCE(target.detail_json -&gt;&gt; 'monitoringResourceKey', '')
+                  NOT LIKE 'workflow_job_request:%'
+              AND (
+                  target.alert_type NOT IN ('JOB_SLA_VIOLATION', 'JOB_SLA_VIOLATION_ESCALATED')
+                  OR (
+                      target.detail_json -&gt;&gt; 'violationReason' = 'DEADLINE_EXCEEDED'
+                      AND source.deadline_at IS NOT NULL
+                  )
+                  OR (
+                      target.detail_json -&gt;&gt; 'violationReason' = 'EXPECTED_DURATION_EXCEEDED'
+                      AND source.expected_duration_seconds &gt; 0
+                      AND source.execution_started_at IS NOT NULL
+                  )
+              )
+        ), job_request_state AS (
+            SELECT target.id AS alert_id,
+                   CASE target.alert_type
+                       WHEN 'JOB_NOT_STARTED_BY_DEADLINE' THEN COALESCE(policy.start_grace_seconds &gt; 0, false)
+                       WHEN 'JOB_NOT_COMPLETED_BY_DEADLINE' THEN COALESCE(
+                           policy.completion_deadline_local_time IS NOT NULL
+                           OR policy.dependency_completion_window_seconds &gt; 0, false)
+                   END AS policy_enabled,
+                   CASE WHEN target.alert_type = 'JOB_NOT_STARTED_BY_DEADLINE'
+                        THEN COALESCE(child_job.execution_started_at,
+                            CASE WHEN closed.opportunity_closed_at IS NOT NULL
+                                 AND child_job.execution_started_at IS NULL
+                                 THEN closed.opportunity_closed_at END)
+                        ELSE COALESCE(completed.finished_at, closed.opportunity_closed_at) END AS recovered_at,
+                   CASE WHEN target.alert_type = 'JOB_NOT_STARTED_BY_DEADLINE'
+                                  AND child_job.execution_started_at IS NULL
+                                  AND closed.opportunity_closed_at IS NOT NULL
+                             OR target.alert_type = 'JOB_NOT_COMPLETED_BY_DEADLINE'
+                                  AND completed.finished_at IS NULL
+                                  AND closed.opportunity_closed_at IS NOT NULL
+                        THEN 'OPPORTUNITY_CLOSED' ELSE 'RECOVERED' END AS recovery_reason
+            FROM target
+            JOIN batch.trigger_request request
+              ON request.tenant_id = target.tenant_id
+             AND request.id = target.resource_id
+             AND request.parent_workflow_run_id IS NOT NULL
+            JOIN batch.job_definition definition
+              ON definition.tenant_id = request.tenant_id AND definition.job_code = request.job_code
+            LEFT JOIN LATERAL (
+                SELECT stored.* FROM batch.job_monitoring_policy stored
+                WHERE stored.tenant_id = definition.tenant_id
+                  AND stored.job_definition_id = definition.id
+                FOR SHARE
+            ) policy ON true
+            LEFT JOIN LATERAL (
+                SELECT source.*
+                FROM (
+                    SELECT job.id, job.execution_started_at, job.finished_at,
+                           job.instance_status, job.dry_run
+                    FROM batch.job_instance job
+                    WHERE job.tenant_id = request.tenant_id
+                      AND (job.trigger_request_id = request.id
+                           OR job.id = request.related_job_instance_id)
+                    UNION ALL
+                    SELECT job.id, job.execution_started_at, job.finished_at,
+                           job.instance_status, job.dry_run
+                    FROM archive.job_instance_archive job
+                    WHERE job.tenant_id = request.tenant_id
+                      AND (job.trigger_request_id = request.id
+                           OR job.id = request.related_job_instance_id)
+                      AND NOT EXISTS (
+                          SELECT 1 FROM batch.job_instance hot
+                          WHERE hot.tenant_id = request.tenant_id AND hot.id = job.id)
+                ) source
+                ORDER BY source.execution_started_at DESC NULLS LAST,
+                         source.finished_at DESC NULLS LAST
+                LIMIT 1
+            ) child_job ON true
+            LEFT JOIN LATERAL (
+                SELECT source.*
+                FROM (
+                    SELECT run.id, run.run_status, run.finished_at, run.updated_at, run.dry_run
+                    FROM batch.workflow_run run
+                    WHERE run.tenant_id = request.tenant_id
+                      AND run.id = request.parent_workflow_run_id
+                    UNION ALL
+                    SELECT run.id, run.run_status, run.finished_at, run.updated_at, run.dry_run
+                    FROM archive.workflow_run_archive run
+                    WHERE run.tenant_id = request.tenant_id
+                      AND run.id = request.parent_workflow_run_id
+                      AND NOT EXISTS (
+                          SELECT 1 FROM batch.workflow_run hot
+                          WHERE hot.tenant_id = request.tenant_id AND hot.id = run.id)
+                ) source
+                LIMIT 1
+            ) parent ON true
+            LEFT JOIN batch.batch_day_waiting_launch batch_day_wait
+              ON batch_day_wait.tenant_id = request.tenant_id
+             AND batch_day_wait.request_id = request.request_id
+            LEFT JOIN batch.job_dependency_waiting_launch dependency_wait
+              ON dependency_wait.tenant_id = request.tenant_id
+             AND dependency_wait.request_id = request.request_id
+            CROSS JOIN LATERAL (
+                SELECT CASE WHEN child_job.instance_status IN (
+                    'PARTIAL_FAILED', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED',
+                    'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+                    THEN child_job.finished_at END AS finished_at
+            ) completed
+            CROSS JOIN LATERAL (
+                SELECT CASE
+                    WHEN request.request_status IN ('REJECTED', 'DUPLICATE', 'GIVE_UP')
+                        THEN request.updated_at
+                    WHEN batch_day_wait.wait_status IN ('REJECTED', 'CANCELLED')
+                        THEN batch_day_wait.updated_at
+                    WHEN dependency_wait.wait_status = 'CANCELLED'
+                        THEN dependency_wait.updated_at
+                    WHEN parent.run_status IN ('SUCCESS', 'FAILED', 'TERMINATED')
+                        THEN COALESCE(parent.finished_at, parent.updated_at)
+                    WHEN child_job.instance_status IN (
+                        'PARTIAL_FAILED', 'SUCCESS', 'FAILED', 'CANCELLED', 'TERMINATED',
+                        'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+                         AND child_job.execution_started_at IS NULL
+                        THEN child_job.finished_at
+                    ELSE NULL
+                END AS opportunity_closed_at
+            ) closed
+            WHERE target.alert_type IN ('JOB_NOT_STARTED_BY_DEADLINE', 'JOB_NOT_COMPLETED_BY_DEADLINE')
+              AND target.resource_kind = 'workflow_job_request'
+              AND target.detail_json -&gt;&gt; 'monitoringResourceKey'
+                    = 'workflow_job_request:' || target.resource_id
+              AND request.dry_run = false
+              AND parent.id IS NOT NULL
+              AND parent.dry_run = false
+              AND (child_job.id IS NULL OR child_job.dry_run = false)
+        ), workflow_identity AS (
+            SELECT target.id AS alert_id, target.tenant_id, target.alert_type, target.definition_id,
+                   target.resource_id AS run_id, NULL::text AS request_id, NULL::timestamptz AS opportunity_closed_at
+            FROM target
+            WHERE target.alert_type = 'WORKFLOW_RUNNING_TOO_LONG' AND target.resource_kind = 'workflow_run'
+              AND target.detail_json -&gt;&gt; 'monitoringResourceKey' = 'workflow_run:' || target.resource_id
+            UNION ALL
+            SELECT target.id, target.tenant_id, target.alert_type, occurrence.workflow_definition_id,
+                   NULL::bigint, occurrence.request_id,
+                   CASE WHEN occurrence.occurrence_status IN (
+                       'SKIPPED_CALENDAR', 'MISFIRE_SKIPPED', 'READINESS_TIMEOUT', 'CLOSED_DAY_REJECTED', 'SUPERSEDED')
+                        THEN occurrence.updated_at END
+            FROM target JOIN batch.scheduled_occurrence occurrence
+              ON occurrence.tenant_id = target.tenant_id AND occurrence.id = target.resource_id
+             AND occurrence.workflow_definition_id = target.definition_id
+            WHERE target.alert_type IN ('WORKFLOW_NOT_STARTED_BY_DEADLINE', 'WORKFLOW_NOT_COMPLETED_BY_DEADLINE')
+              AND target.detail_json -&gt;&gt; 'monitoringResourceKey' = 'scheduled_occurrence:' || occurrence.id
+            UNION ALL
+            SELECT target.id, target.tenant_id, target.alert_type, occurrence.workflow_definition_id,
+                   NULL::bigint, occurrence.trigger_request_id,
+                   CASE WHEN occurrence.occurrence_status IN ('CANCELLED', 'EXPIRED') THEN occurrence.updated_at END
+            FROM target JOIN batch.expected_work_occurrence occurrence
+              ON occurrence.tenant_id = target.tenant_id AND occurrence.id = target.resource_id
+             AND occurrence.workflow_definition_id = target.definition_id
+            WHERE target.alert_type IN ('WORKFLOW_NOT_STARTED_BY_DEADLINE', 'WORKFLOW_NOT_COMPLETED_BY_DEADLINE')
+              AND target.detail_json -&gt;&gt; 'monitoringResourceKey' = 'expected_work_occurrence:' || occurrence.id
+        ), workflow_state AS (
+            SELECT identity.alert_id,
+                   CASE identity.alert_type
+                       WHEN 'WORKFLOW_NOT_STARTED_BY_DEADLINE' THEN COALESCE(policy.start_grace_seconds &gt; 0, false)
+                       WHEN 'WORKFLOW_NOT_COMPLETED_BY_DEADLINE' THEN policy.completion_deadline_local_time IS NOT NULL
+                       WHEN 'WORKFLOW_RUNNING_TOO_LONG' THEN COALESCE(policy.soft_runtime_seconds &gt; 0, false)
+                   END AS policy_enabled,
+                   CASE WHEN identity.alert_type = 'WORKFLOW_NOT_STARTED_BY_DEADLINE'
+                        THEN COALESCE(source.started_at, completed.finished_at,
+                            CASE WHEN source.id IS NULL THEN identity.opportunity_closed_at END)
+                        ELSE COALESCE(completed.finished_at,
+                            CASE WHEN source.id IS NULL THEN identity.opportunity_closed_at END) END AS recovered_at,
+                   CASE WHEN source.id IS NULL THEN 'OPPORTUNITY_CLOSED' ELSE 'RECOVERED' END AS recovery_reason
+            FROM workflow_identity identity
+            LEFT JOIN batch.trigger_request request
+              ON request.tenant_id = identity.tenant_id AND request.request_id = identity.request_id
+             AND request.workflow_definition_id = identity.definition_id AND request.parent_workflow_run_id IS NULL
+            LEFT JOIN LATERAL (
+                SELECT run.id, run.started_at, run.finished_at, run.run_status, run.dry_run
+                FROM batch.workflow_run run
+                WHERE run.tenant_id = identity.tenant_id AND run.workflow_definition_id = identity.definition_id
+                  AND (run.id = identity.run_id OR (identity.run_id IS NULL AND run.trigger_request_id = request.id))
+                UNION ALL
+                SELECT run.id, run.started_at, run.finished_at, run.run_status, run.dry_run
+                FROM archive.workflow_run_archive run
+                WHERE run.tenant_id = identity.tenant_id AND run.workflow_definition_id = identity.definition_id
+                  AND (run.id = identity.run_id OR (identity.run_id IS NULL AND run.trigger_request_id = request.id))
+                  AND NOT EXISTS (SELECT 1 FROM batch.workflow_run hot
+                                  WHERE hot.tenant_id = identity.tenant_id AND hot.id = run.id)
+            ) source ON true
+            LEFT JOIN LATERAL (
+                SELECT stored.* FROM batch.workflow_monitoring_policy stored
+                WHERE stored.tenant_id = identity.tenant_id AND stored.workflow_definition_id = identity.definition_id
+                FOR SHARE
+            ) policy ON true
+            CROSS JOIN LATERAL (
+                SELECT CASE WHEN source.run_status IN ('SUCCESS', 'FAILED', 'TERMINATED', 'SUCCESS_DRY_RUN', 'FAILED_DRY_RUN')
+                            THEN source.finished_at END AS finished_at
+            ) completed
+            WHERE (identity.run_id IS NULL OR source.id IS NOT NULL)
+              AND COALESCE(source.dry_run, false) = false AND COALESCE(request.dry_run, false) = false
+        ), states AS (
+            SELECT * FROM job_state
+            UNION ALL SELECT * FROM job_request_state
+            UNION ALL SELECT * FROM workflow_state
+        ), resolution AS (
+            SELECT states.alert_id, states.recovered_at,
+                   CASE WHEN states.policy_enabled THEN states.recovery_reason ELSE 'POLICY_DISABLED' END AS reason
+            FROM states JOIN target ON target.id = states.alert_id
+            WHERE NOT states.policy_enabled
+               OR (states.recovered_at &lt;= CURRENT_TIMESTAMP AND EXISTS (
+                   SELECT 1 FROM batch.alert_notification_receipt receipt
+                   WHERE receipt.tenant_id = target.tenant_id AND receipt.dedup_fingerprint = target.dedup_fingerprint
+                     AND receipt.firing_delivered_at &gt;= target.first_seen_at))
+        )
+        UPDATE batch.alert_event alert
+        SET status = #{closedStatus}, closed_at = CURRENT_TIMESTAMP, close_reason = resolution.reason,
+            updated_at = CURRENT_TIMESTAMP,
+            detail_json = COALESCE(alert.detail_json, '{}'::jsonb) || jsonb_build_object(
+                'monitoringRecoveredAt', CASE WHEN resolution.reason = 'POLICY_DISABLED' THEN NULL ELSE resolution.recovered_at END,
+                'monitoringResolutionReason', resolution.reason,
+                'monitoringResolutionObservedAt', CURRENT_TIMESTAMP)
+        FROM target JOIN resolution ON resolution.alert_id = target.id
+        WHERE alert.id = target.id AND alert.tenant_id = target.tenant_id AND alert.status = #{entity.status}
+          AND alert.closed_at IS NULL AND alert.updated_at IS NOT DISTINCT FROM #{entity.updatedAt}
+        RETURNING alert.*
     </select>
 
     <update id="incrementEscalationTier">

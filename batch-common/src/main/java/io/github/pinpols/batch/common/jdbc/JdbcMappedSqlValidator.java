@@ -15,7 +15,8 @@ public final class JdbcMappedSqlValidator {
     if (name == null || name.isBlank()) {
       throw new IllegalArgumentException(role + " is required");
     }
-    String v = name.trim().toLowerCase(Locale.ROOT);
+    String trimmedName = name.trim();
+    String v = trimmedName.toLowerCase(Locale.ROOT);
     if (!IDENT.matcher(v).matches()) {
       throw new IllegalArgumentException(role + " has invalid characters: " + name);
     }

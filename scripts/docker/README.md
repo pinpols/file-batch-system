@@ -78,8 +78,26 @@ bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --re
 # 压测后清理观测栈命名卷（会清空 Prometheus/Loki/Tempo/Grafana 历史）：
 bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-observability-volumes
 
-# 清理应用归档日志（只处理 `logs/archive/app`，默认保留最近 7 天）：
+# 清理应用归档日志（只处理 `logs/archive/app-<component>`，默认保留最近 7 天）：
 bash scripts/local/cleanup-disk.sh --apply --confirm-root file-batch-system --include-app-logs
 ```
 
 观测卷、历史日志和 Maven `target` 目录也必须通过独立参数显式启用。不要使用全局镜像清理或带卷的系统级清理命令；它们无法可靠区分应用/基础环境镜像与可丢弃资源，也无法区分测试卷和业务数据卷。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [build-apps.sh](build-apps.sh) | 统一构建本地应用镜像（默认启用 BuildKit）。 |
+| [down-apps.sh](down-apps.sh) | 停止本地应用容器，保留依赖服务与数据卷。 |
+| [down-observability.sh](down-observability.sh) | 统一停止本地观测栈。 |
+| [reset-dev.sh](reset-dev.sh) | 清空本地 Docker 开发环境。 |
+| [up-apps.sh](up-apps.sh) | 启动本地 Compose 应用服务并检查启动结果。 |
+| [up-observability.sh](up-observability.sh) | 统一启动本地观测栈。 |
+| [valkey-sentinel-entrypoint.sh](valkey-sentinel-entrypoint.sh) | 准备可写 Sentinel 配置并启动 Valkey Sentinel。 |
+
+- [observability 目录](observability/README.md)：观测容器生命周期入口与使用说明。
+
+- [容器启动资源](../../deploy/docker/README.md)：镜像 entrypoint 与数据库容器初始化资源。

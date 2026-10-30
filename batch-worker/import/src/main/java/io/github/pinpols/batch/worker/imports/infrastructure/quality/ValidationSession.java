@@ -5,7 +5,9 @@ import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 
+@Builder
 public record ValidationSession(
     ImportJobContext context,
     Map<String, Object> ruleSet,

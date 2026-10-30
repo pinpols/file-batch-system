@@ -60,17 +60,21 @@ public class FeedbackStep implements ImportStageStep {
     detailSummary.put(
         PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
         attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    fileAudits.appendAudit(FileAuditParam.builder()
+    FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType(FileAuditOperationType.IMPORT_FEEDBACK.code())
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId())
-        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .operatorId(context.getWorkerId());
+    Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+    String traceIdText = String.valueOf(traceId);
+    FileAuditParam audit = auditParam
+        .traceId(traceIdText)
         .evidenceRef(null)
         .detailSummary(detailSummary)
-        .build());
+        .build();
+    fileAudits.appendAudit(audit);
     return ImportStageResult.success(stage());
   }
 }

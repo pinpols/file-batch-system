@@ -28,7 +28,13 @@ public class QuartzCronPreviewService implements CronPreviewService {
 
   @Override
   public CronPreviewResponse preview(String expression, Integer count) {
-    int n = EmptyChecks.isNull(count) ? DEFAULT_COUNT : Math.max(1, Math.min(count, MAX_COUNT));
+    int previewCount;
+    if (EmptyChecks.isNull(count)) {
+      previewCount = DEFAULT_COUNT;
+    } else {
+      int countAtMaximum = Math.min(count, MAX_COUNT);
+      previewCount = Math.max(1, countAtMaximum);
+    }
     String trimmed = EmptyChecks.isNull(expression) ? "" : expression.trim();
     if (EmptyChecks.isEmpty(trimmed)) {
       throw BizException.of(
@@ -42,12 +48,12 @@ public class QuartzCronPreviewService implements CronPreviewService {
     }
     cron.setTimeZone(TimeZone.getTimeZone(timezoneProvider.defaultZone()));
 
-    List<String> next = new ArrayList<>(n);
+    List<String> next = new ArrayList<>(previewCount);
     // 当前时刻走统一入口 BatchDateTimeSupport.nowInstant()(coding-conventions §20.1 禁止业务代码直接用
     // Instant.now());Quartz 的 CronExpression 只接受 java.util.Date,故在边界用 Date.from 桥接,
     // 循环内统一按 Instant 计算,结果也是 ISO-8601 Instant 字符串。
     Date cursor = Date.from(dateTimeSupport.nowInstant());
-    for (int i = 0; i < n; i++) {
+    for (int i = 0; i < previewCount; i++) {
       Date fireTime = cron.getNextValidTimeAfter(cursor);
       if (EmptyChecks.isNull(fireTime)) break;
       next.add(fireTime.toInstant().toString());

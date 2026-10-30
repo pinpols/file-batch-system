@@ -1,5 +1,5 @@
 -- =========================================================
--- V100: batch day previous-day gate policies
+-- V100：批量日的前一日闸门策略。
 -- =========================================================
 
 ALTER TABLE batch.business_calendar
@@ -11,7 +11,7 @@ ALTER TABLE batch.business_calendar
     CHECK (day_rollover_policy IN ('ALLOW_OVERLAP', 'WAIT_PREVIOUS_DAY', 'REJECT_IF_PREVIOUS_OPEN'));
 
 COMMENT ON COLUMN batch.business_calendar.day_rollover_policy IS
-    'Calendar-level previous batch day policy: ALLOW_OVERLAP / WAIT_PREVIOUS_DAY / REJECT_IF_PREVIOUS_OPEN.';
+    '日历级前一批量日策略：ALLOW_OVERLAP、WAIT_PREVIOUS_DAY 或 REJECT_IF_PREVIOUS_OPEN。';
 
 ALTER TABLE batch.job_definition
     ADD COLUMN IF NOT EXISTS previous_day_dependency_scope VARCHAR(32) NOT NULL DEFAULT 'INHERIT';
@@ -22,7 +22,7 @@ ALTER TABLE batch.job_definition
     CHECK (previous_day_dependency_scope IN ('INHERIT', 'NONE', 'SAME_JOB', 'SAME_JOB_GROUP', 'SAME_CALENDAR', 'CUSTOM_CHAIN'));
 
 COMMENT ON COLUMN batch.job_definition.previous_day_dependency_scope IS
-    'Job-level previous batch day dependency scope. INHERIT uses business_calendar.day_rollover_policy.';
+    'Job 级前一批量日依赖范围；INHERIT 表示采用 business_calendar.day_rollover_policy。';
 
 ALTER TABLE batch.trigger_request DROP CONSTRAINT IF EXISTS ck_trigger_request_status;
 ALTER TABLE batch.trigger_request
@@ -53,4 +53,4 @@ CREATE INDEX IF NOT EXISTS idx_batch_day_waiting_launch_status
     ON batch.batch_day_waiting_launch (wait_status, tenant_id, calendar_code, biz_date);
 
 COMMENT ON TABLE batch.batch_day_waiting_launch IS
-    'Launch intents blocked by previous batch day gates. They are not job_instance rows until released.';
+    '被前一批量日闸门阻塞的启动意图；释放前不会创建 job_instance。';

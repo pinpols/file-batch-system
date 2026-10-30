@@ -37,6 +37,8 @@ public class ApprovalCommandEntity {
 
   private String approvalReason;
 
+  private String sourceApprovalReason;
+
   private String sourceTraceId;
 
   private String sourceIdempotencyKey;

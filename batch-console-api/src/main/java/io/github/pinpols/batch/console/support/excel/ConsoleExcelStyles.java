@@ -59,22 +59,26 @@ public final class ConsoleExcelStyles {
   public static ResponseEntity<InputStreamResource> excelResponse(
       byte[] workbookBytes, String fileNamePrefix, String tenantId, String timestamp) {
     String fileName = fileNamePrefix + "-" + tenantId + "-" + timestamp + ".xlsx";
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(fileName).build().toString())
-        .contentType(XLSX_MEDIA_TYPE)
-        .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+    String contentDisposition =
+        ContentDisposition.attachment().filename(fileName).build().toString();
+    responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
+    responseBuilder.contentType(XLSX_MEDIA_TYPE);
+    ByteArrayInputStream workbookInputStream = new ByteArrayInputStream(workbookBytes);
+    InputStreamResource workbookResource = new InputStreamResource(workbookInputStream);
+    return responseBuilder.body(workbookResource);
   }
 
   public static ResponseEntity<InputStreamResource> templateResponse(
       byte[] workbookBytes, String templateFileName) {
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(templateFileName).build().toString())
-        .contentType(XLSX_MEDIA_TYPE)
-        .body(new InputStreamResource(new ByteArrayInputStream(workbookBytes)));
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+    String contentDisposition =
+        ContentDisposition.attachment().filename(templateFileName).build().toString();
+    responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDisposition);
+    responseBuilder.contentType(XLSX_MEDIA_TYPE);
+    ByteArrayInputStream workbookInputStream = new ByteArrayInputStream(workbookBytes);
+    InputStreamResource workbookResource = new InputStreamResource(workbookInputStream);
+    return responseBuilder.body(workbookResource);
   }
 
   public record ColumnGuide(
@@ -261,7 +265,9 @@ public final class ConsoleExcelStyles {
     } else if (value instanceof Boolean bool) {
       cell.setCellValue(bool);
     } else {
-      cell.setCellValue(escapeFormula(String.valueOf(value)));
+      String cellText = String.valueOf(value);
+      String safeCellText = escapeFormula(cellText);
+      cell.setCellValue(safeCellText);
     }
     if (style != null) {
       cell.setCellStyle(style);
@@ -278,7 +284,8 @@ public final class ConsoleExcelStyles {
       return value;
     }
     char first = value.charAt(0);
-    if (first == '=' || first == '+' || first == '-' || first == '@') {
+    boolean startsWithFormulaMarker = first == '=' || first == '+' || first == '-' || first == '@';
+    if (startsWithFormulaMarker) {
       return "'" + value;
     }
     return value;
@@ -286,7 +293,9 @@ public final class ConsoleExcelStyles {
 
   public static void setWidths(Sheet sheet, List<String> columns) {
     for (int i = 0; i < columns.size(); i++) {
-      sheet.setColumnWidth(i, Math.min(12000, Math.max(18, columns.get(i).length() + 4) * 256));
+      int measuredWidth = Math.max(18, columns.get(i).length() + 4) * 256;
+      int columnWidth = Math.min(12000, measuredWidth);
+      sheet.setColumnWidth(i, columnWidth);
     }
   }
 
@@ -324,25 +333,6 @@ public final class ConsoleExcelStyles {
     addDropdownValidation(sheet, columnIndex, spec);
   }
 
-  public static void addDropdownValidation(
-      Sheet sheet,
-      int columnIndex,
-      String[] values,
-      String promptTitle,
-      String promptText,
-      MessageSource messageSource,
-      Locale locale) {
-    DropdownValidationSpec spec = DropdownValidationSpec.builder()
-        .values(values)
-        .promptTitle(promptTitle)
-        .promptText(promptText)
-        .maxRow(DEFAULT_DROPDOWN_MAX_ROW)
-        .messageSource(messageSource)
-        .locale(locale)
-        .build();
-    addDropdownValidation(sheet, columnIndex, spec);
-  }
-
   /**
    * 加下拉数据校验,作用范围 = 第 2 行 ~ 第 {@code maxRow} 行(包含)。
    *
@@ -370,8 +360,9 @@ public final class ConsoleExcelStyles {
       Sheet sheet, int columnIndex, DropdownValidationSpec spec) {
     DataValidationHelper helper = sheet.getDataValidationHelper();
     DataValidationConstraint constraint = helper.createExplicitListConstraint(spec.values());
+    int lastValidationRow = Math.max(1, spec.maxRow());
     CellRangeAddressList addressList =
-        new CellRangeAddressList(1, Math.max(1, spec.maxRow()), columnIndex, columnIndex);
+        new CellRangeAddressList(1, lastValidationRow, columnIndex, columnIndex);
     DataValidation validation = helper.createValidation(constraint, addressList);
     // POI 5.x 的 setSuppressDropDownArrow 实现与方法名相反:传 false 会输出
     // showDropDown="true"(OOXML spec 该值 = 隐藏下拉箭头) → Excel 不显示下拉。
@@ -481,7 +472,8 @@ public final class ConsoleExcelStyles {
     for (int i = 0; i < widths.length; i++) {
       sheet.setColumnWidth(i, widths[i] * 256);
     }
-    sheet.setAutoFilter(new CellRangeAddress(0, Math.max(0, rowIndex - 1), 0, headers.size() - 1));
+    int lastFilterRow = Math.max(0, rowIndex - 1);
+    sheet.setAutoFilter(new CellRangeAddress(0, lastFilterRow, 0, headers.size() - 1));
   }
 
   private static CellStyle resolveTemplateHeaderStyle(
@@ -554,8 +546,10 @@ public final class ConsoleExcelStyles {
           + guide.formatHint().trim());
     }
     if (!guide.allowedValues().isEmpty()) {
-      lines.add(localize(messageSource, locale, "excel.guide.allowed_prefix", "下拉值：")
-          + String.join(" / ", guide.allowedValues()));
+      String allowedValuesPrefix =
+          localize(messageSource, locale, "excel.guide.allowed_prefix", "下拉值：");
+      String allowedValues = String.join(" / ", guide.allowedValues());
+      lines.add(allowedValuesPrefix + allowedValues);
     }
     if (hasText(guide.example())) {
       lines.add(localize(messageSource, locale, "excel.guide.example_prefix", "示例：")
@@ -596,13 +590,11 @@ public final class ConsoleExcelStyles {
     List<String> resolvedAllowed = guide.allowedValues().stream()
         .map(v -> localizeIfKey(messageSource, locale, v))
         .toList();
+    String description = localizeIfKey(messageSource, locale, guide.description());
+    String formatHint = localizeIfKey(messageSource, locale, guide.formatHint());
+    String example = localizeIfKey(messageSource, locale, guide.example());
     return new ColumnGuide(
-        guide.required(),
-        guide.readOnly(),
-        localizeIfKey(messageSource, locale, guide.description()),
-        localizeIfKey(messageSource, locale, guide.formatHint()),
-        localizeIfKey(messageSource, locale, guide.example()),
-        resolvedAllowed);
+        guide.required(), guide.readOnly(), description, formatHint, example, resolvedAllowed);
   }
 
   private static boolean hasText(String value) {

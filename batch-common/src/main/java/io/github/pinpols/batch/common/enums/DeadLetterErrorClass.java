@@ -8,8 +8,7 @@ import lombok.experimental.Accessors;
  * dead_letter_task.error_class 字典 (V90)。
  *
  * <ul>
- *   <li>{@link #BUSINESS} — 硬错，自动重放不会自愈（如文件缺失、渠道未配），仅人工 {@code /internal/dead-letters/{id}/replay}
- *       重放
+ *   <li>{@link #BUSINESS} — 硬错，自动重放不会自愈（如文件缺失、渠道未配），仅经 Console 审批后人工恢复
  *   <li>{@link #SYSTEM} — 软错（瞬态/可恢复），由 {@code DeadLetterAutoRetryScheduler} 按指数退避自动重放， 超过
  *       max_replay_count 后转 GIVE_UP
  * </ul>

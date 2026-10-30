@@ -1,3 +1,5 @@
+-- 创建控制台用户账户表及其租户、角色和认证信息约束。
+
 CREATE TABLE IF NOT EXISTS batch.console_user_account (
     id              BIGSERIAL PRIMARY KEY,
     tenant_id       VARCHAR(64)  NOT NULL,

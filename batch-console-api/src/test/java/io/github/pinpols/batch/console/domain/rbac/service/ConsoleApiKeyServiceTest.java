@@ -2,8 +2,6 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15,10 +13,12 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleApiKeyMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 @DisplayName("访问密钥服务: 列表、详情、创建与吊销的租户隔离与冲突校验")
 class ConsoleApiKeyServiceTest {
@@ -91,16 +91,16 @@ class ConsoleApiKeyServiceTest {
     assertThat(result.rawKey()).startsWith("bk_");
     assertThat(result.entity().getKeyName()).isEqualTo("new-key");
     verify(repository)
-        .insert(
-            eq("t1"),
-            eq("new-key"),
-            anyString(),
-            anyString(),
-            anyString(),
-            eq("pbkdf2"),
-            eq("read"),
-            eq(expiresAt),
-            eq("admin"));
+        .insert(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.keyName(), "new-key")
+            && parameters.keyPrefix() != null
+            && parameters.keyHash() != null
+            && parameters.salt() != null
+            && Objects.equals(parameters.keyHashAlgo(), "pbkdf2")
+            && Objects.equals(parameters.scopes(), "read")
+            && Objects.equals(parameters.expiresAt(), expiresAt)
+            && Objects.equals(parameters.operator(), "admin")));
   }
 
   @Test

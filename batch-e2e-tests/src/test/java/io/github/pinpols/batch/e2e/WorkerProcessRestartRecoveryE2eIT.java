@@ -10,13 +10,13 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -56,7 +57,7 @@ import org.springframework.test.annotation.DirtiesContext;
  * 等待任务成功。
  */
 @E2eSpringBootTest(
-    classes = io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication.class,
+    classes = E2eOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.sla.enabled=false",
@@ -91,7 +92,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -117,6 +118,13 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("派发 worker 进程重启后继续消费:新进程重新注册上线,派发任务成功且目标目录产出文件")
   void shouldContinueDispatching_whenWorkerProcessRestarted() throws Exception {
+    final String selectTaskStatusSql = """
+                                select t.task_status
+                        from batch.job_task t
+                        join batch.job_instance ji on ji.id = t.job_instance_id
+                        where ji.tenant_id = ? and ji.dedup_key = ?
+                        """;
+
     String suffix = Long.toUnsignedString(System.nanoTime());
     String tenantId = "t-restart-" + suffix;
     String workerCode = "restart-dispatch-" + suffix;
@@ -157,7 +165,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
       launchService.launch(new LaunchRequest(
           tenantId,
-          seed.jobCode(),
+          seed.workflowDefinitionId(),
           BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
@@ -178,13 +186,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
           .atMost(Duration.ofSeconds(480))
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
-            String status =
-                jdbcTemplate.queryForObject("""
-                                select t.task_status
-                        from batch.job_task t
-                        join batch.job_instance ji on ji.id = t.job_instance_id
-                        where ji.tenant_id = ? and ji.dedup_key = ?
-                        """, String.class, tenantId, seed.dedupKey());
+            String status = jdbcTemplate.queryForObject(
+                selectTaskStatusSql, String.class, tenantId, seed.dedupKey());
             assertThat(status).isEqualTo("SUCCESS");
           });
 
@@ -225,12 +228,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private void seedDispatchChannel(String tenantId, String channelCode, Path targetDir) {
-    jdbcTemplate.update(
-        "delete from batch.file_channel_config where tenant_id = ? and channel_code = ?",
-        tenantId,
-        channelCode);
-    jdbcTemplate.update(
-        """
+    final String deleteFileChannelConfigSql = """
+        delete from batch.file_channel_config where tenant_id = ? and channel_code = ?
+    """;
+    final String insertFileChannelConfigSql = """
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
             config_json, receipt_policy, timeout_seconds, enabled
@@ -244,7 +245,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             ),
             'NONE', 10, true
         )
-        """,
+        """;
+
+    jdbcTemplate.update(deleteFileChannelConfigSql, tenantId, channelCode);
+    jdbcTemplate.update(
+        insertFileChannelConfigSql,
         tenantId,
         channelCode,
         "Restart local dispatch " + channelCode,
@@ -254,8 +259,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private Long seedDispatchFile(String tenantId, Path sourceFile, String suffix) {
-    return jdbcTemplate.queryForObject(
-        """
+    final String insertFileRecordSql = """
         insert into batch.file_record (
             tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
             file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
@@ -265,7 +269,10 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
             'DELIMITED', 'UTF-8', 'text/plain', ?, 'NONE', 'LOCAL',
             ?, 'SYSTEM', 'GENERATED', ?, ?
         ) returning id
-        """,
+        """;
+
+    return jdbcTemplate.queryForObject(
+        insertFileRecordSql,
         Long.class,
         tenantId,
         "dispatch-file-" + suffix,
@@ -279,23 +286,16 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
   private LaunchSeed seedDispatchJob(
       String tenantId, String workerGroup, TriggerType triggerType, String suffix) {
-    String jobCode = "RESTART_DISPATCH_" + suffix;
-    String requestId = "restart-req-" + suffix;
-    String dedupKey = "restart-dedup-" + suffix;
-
-    jdbcTemplate.update(
-        "delete from batch.trigger_request where tenant_id = ? and request_id = ?",
-        tenantId,
-        requestId);
-    jdbcTemplate.update(
-        "delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?",
-        tenantId,
-        jobCode);
-    jdbcTemplate.update(
-        "delete from batch.job_definition where tenant_id = ? and job_code = ?", tenantId, jobCode);
-
-    jdbcTemplate.update(
-        """
+    final String deleteTriggerRequestSql = """
+            delete from batch.trigger_request where tenant_id = ? and request_id = ?
+        """;
+    final String deleteWorkflowDefinitionSql = """
+            delete from batch.workflow_definition where tenant_id = ? and workflow_code = ?
+        """;
+    final String deleteJobDefinitionSql = """
+            delete from batch.job_definition where tenant_id = ? and job_code = ?
+        """;
+    final String insertJobDefinitionSql = """
         insert into batch.job_definition (
             tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
             priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -303,34 +303,85 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         ) values (?, ?, ?, 'DISPATCH', 'FILE', 'MANUAL', 'UTC',
             5, 'q-restart', ?, 'API', false, 'NONE',
             'NONE', 0, 0, true, 1)
-        """,
+        returning id
+        """;
+    final String insertBusinessCalendarSql = """
+        insert into batch.business_calendar (
+            tenant_id, calendar_code, calendar_name, timezone, enabled
+        ) values (?, 'E2E_CALENDAR', 'E2E business calendar', 'UTC', true)
+        on conflict (tenant_id, calendar_code) do nothing
+        """;
+    final String insertWorkflowDefinitionSql = """
+        insert into batch.workflow_definition (
+            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+            calendar_code, single_job_definition_id
+        ) values (?, ?, 'restart wf', 'DAG', 1, true, 'E2E_CALENDAR', ?)
+        returning id
+        """;
+    final String insertWorkflowNodeSql = """
+        insert into batch.workflow_node (
+            tenant_id, workflow_definition_id, node_code, node_name, node_type,
+            related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
+        ) values
+            (?, ?, 'START', 'Start', 'START', null, 0, 'NONE', 0, 0, true),
+            (?, ?, 'JOB', 'Job', 'JOB', ?, 1, 'NONE', 0, 0, true),
+            (?, ?, 'END', 'End', 'END', null, 2, 'NONE', 0, 0, true)
+        """;
+    final String insertWorkflowEdgeSql = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'START', 'JOB', 'ALWAYS', true),
+                 (?, ?, 'JOB', 'END', 'SUCCESS', true)
+        """;
+    final String insertTriggerRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
+            dedup_key, request_status, trace_id
+        ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', ?)
+        """;
+
+    String jobCode = "RESTART_DISPATCH_" + suffix;
+    String requestId = "restart-req-" + suffix;
+    String dedupKey = "restart-dedup-" + suffix;
+
+    jdbcTemplate.update(deleteTriggerRequestSql, tenantId, requestId);
+    jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, jobCode);
+    jdbcTemplate.update(deleteJobDefinitionSql, tenantId, jobCode);
+
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        insertJobDefinitionSql,
+        Long.class,
         tenantId,
         jobCode,
         "restart dispatch " + jobCode,
         CodeNormalizer.toUpperOrNull(workerGroup));
 
-    jdbcTemplate.update("""
-        insert into batch.workflow_definition (
-            tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
-        ) values (?, ?, 'restart wf', 'DAG', 1, true)
-        """, tenantId, jobCode);
-    E2eScenarioFixture.provisionPipelineDefinition(jdbcTemplate, tenantId, jobCode, workerGroup);
+    jdbcTemplate.update(insertBusinessCalendarSql, tenantId);
+    Long workflowDefinitionId = jdbcTemplate.queryForObject(
+        insertWorkflowDefinitionSql, Long.class, tenantId, jobCode, jobDefinitionId);
+    jdbcTemplate.update(
+        insertWorkflowNodeSql,
+        tenantId,
+        workflowDefinitionId,
+        tenantId,
+        workflowDefinitionId,
+        jobCode,
+        tenantId,
+        workflowDefinitionId);
+    jdbcTemplate.update(
+        insertWorkflowEdgeSql, tenantId, workflowDefinitionId, tenantId, workflowDefinitionId);
 
     jdbcTemplate.update(
-        """
-        insert into batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
-        ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', ?)
-        """,
+        insertTriggerRequestSql,
         tenantId,
         requestId,
         triggerType.code(),
-        jobCode,
+        workflowDefinitionId,
         BIZ_DATE,
         dedupKey,
         "restart-trace-" + suffix);
 
-    return new LaunchSeed(jobCode, requestId, dedupKey);
+    return new LaunchSeed(jobCode, workflowDefinitionId, requestId, dedupKey);
   }
 
   private void publishPendingOutbox(String tenantId) {
@@ -447,14 +498,18 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private void awaitWorkerOnlineInRegistry(String tenantId, String workerCode) {
+    final String selectCountSql = """
+                      select count(1)::int from batch.worker_registry
+                      where tenant_id = ? and worker_code = ? and status = 'ONLINE'\s\
+                      and worker_group = 'DISPATCH'
+                      """;
+
     await()
         .atMost(Duration.ofSeconds(30))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          Integer count = jdbcTemplate.queryForObject("""
-                      select count(1)::int from batch.worker_registry
-                      where tenant_id = ? and worker_code = ? and status = 'ONLINE' and worker_group = 'DISPATCH'
-                      """, Integer.class, tenantId, workerCode);
+          Integer count =
+              jdbcTemplate.queryForObject(selectCountSql, Integer.class, tenantId, workerCode);
           assertThat(count).isEqualTo(1);
         });
   }
@@ -519,9 +574,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private Path projectRoot() {
     Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath().normalize();
     while (current != null) {
-      if (Files.isRegularFile(current.resolve("pom.xml"))
-          && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
-          && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"))) {
+      boolean currentDirectoryIsBackendRepositoryRoot =
+          Files.isRegularFile(current.resolve("pom.xml"))
+              && Files.isRegularFile(current.resolve("batch-orchestrator/pom.xml"))
+              && Files.isRegularFile(current.resolve("batch-worker/dispatch/pom.xml"));
+      if (currentDirectoryIsBackendRepositoryRoot) {
         return current;
       }
       current = current.getParent();
@@ -542,7 +599,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     handle.destroyForcibly();
     try {
       handle.onExit().get(10, TimeUnit.SECONDS);
-    } catch (java.util.concurrent.TimeoutException timeoutException) {
+    } catch (TimeoutException timeoutException) {
       // 子进程可能在父进程退出竞争窗口中重新出现，再做一次不可恢复终止，避免 Surefire 残留。
       handle.descendants().forEach(ProcessHandle::destroyForcibly);
       handle.destroyForcibly();
@@ -561,5 +618,6 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     }
   }
 
-  private record LaunchSeed(String jobCode, String requestId, String dedupKey) {}
+  private record LaunchSeed(
+      String jobCode, Long workflowDefinitionId, String requestId, String dedupKey) {}
 }

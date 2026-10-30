@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Require explicit, time-bounded approval for governance baseline growth."""
+# 用途：治理基线扩张审批。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-governance-baseline-expansion.py；参数与前置环境见下方说明及所属 README。
+"""治理基线增长必须有明确且有期限的审批记录。"""
 
 from __future__ import annotations
 

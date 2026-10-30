@@ -137,7 +137,7 @@ ENV BATCH_TIMEZONE_DEFAULT_ZONE="Asia/Shanghai" \
 # hadolint ignore=DL3008
 RUN sed -i 's|http://archive.ubuntu.com|http://mirrors.aliyun.com|g; s|http://security.ubuntu.com|http://mirrors.aliyun.com|g' /etc/apt/sources.list \
     && apt-get update -o Acquire::Retries=3 \
-    && apt-get install -y --no-install-recommends curl \
+    && apt-get install -y --no-install-recommends curl openssl libssl3 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

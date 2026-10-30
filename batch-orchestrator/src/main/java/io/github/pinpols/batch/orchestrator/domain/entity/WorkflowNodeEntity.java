@@ -14,9 +14,6 @@ public class WorkflowNodeEntity {
   private String nodeType;
   private String relatedJobCode;
 
-  /** 节点级编排中工作流与 Pipeline 的关联码，勿与 Pipeline 定义及运行时上下文使用的标准 Job Code 混淆。 */
-  private String relatedPipelineCode;
-
   private String workerGroup;
   private String windowCode;
   private Integer nodeOrder;

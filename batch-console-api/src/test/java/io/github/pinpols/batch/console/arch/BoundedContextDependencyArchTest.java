@@ -7,6 +7,8 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -52,14 +54,14 @@ class BoundedContextDependencyArchTest {
   @Test
   @DisplayName("不同限界上下文之间不得直接依赖, 扫描到的跨域违例计数必须为 0")
   void shouldForbidCrossContextDependency_whenScanningDomainClasses() {
-    int total = countCrossContextViolations(CLASSES);
-    assertThat(total)
+    List<String> violations = crossContextViolations(CLASSES);
+    assertThat(violations)
         .as("bounded-context cross dependencies must be eliminated")
-        .isZero();
+        .isEmpty();
   }
 
-  static int countCrossContextViolations(JavaClasses classes) {
-    int total = 0;
+  static List<String> crossContextViolations(JavaClasses classes) {
+    List<String> violations = new ArrayList<>();
     for (JavaClass src : classes) {
       String srcCtx = boundedContextOf(src.getPackageName());
       if (srcCtx == null || hasBoundedContextSuppression(src)) {
@@ -68,11 +70,12 @@ class BoundedContextDependencyArchTest {
       for (Dependency dep : src.getDirectDependenciesFromSelf()) {
         String depCtx = boundedContextOf(dep.getTargetClass().getPackageName());
         if (depCtx != null && !depCtx.equals(srcCtx)) {
-          total++;
+          violations.add(dep.getDescription());
         }
       }
     }
-    return total;
+    violations.sort(String::compareTo);
+    return violations;
   }
 
   static boolean hasBoundedContextSuppression(JavaClass javaClass) {

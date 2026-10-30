@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.domain.file.mapper;
 
 import io.github.pinpols.batch.console.domain.file.query.FilePipelineQuery;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineQueryView;
 import java.util.List;
-import java.util.Map;
 import org.apache.ibatis.annotations.Param;
 
 public interface FilePipelineMapper {
 
-  List<Map<String, Object>> selectByQuery(@Param("q") FilePipelineQuery q);
+  List<FilePipelineQueryView> selectByQuery(@Param("q") FilePipelineQuery q);
 
   long countByQuery(@Param("q") FilePipelineQuery q);
 

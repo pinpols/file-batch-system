@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：process-stage4.sh:Process 业务分支系统级验证。
+# 用法：在仓库根目录执行 bash scripts/sim/10-process-stage4.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 10-process-stage4.sh:Process 业务分支系统级验证
 #
@@ -26,7 +28,7 @@ batch_require_python
 echo "==> seed process business tables"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f /dev/stdin < docs/test-data/sim-stage4-process-business-fixtures.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4-process-business-fixtures.sql >/dev/null
 
 # Stage fixture 会动态创建带 tenant_id 的业务表。建表后立即补齐 RLS，确保本阶段
 # 执行期间或后续阶段重启 worker 时不会触发 closed-world fail-fast。
@@ -39,7 +41,30 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
 echo "==> seed process platform jobs"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v biz_date="$BIZ_DATE" \
-  -f /dev/stdin < docs/test-data/sim-stage4-process-platform-fixtures.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage4-process-platform-fixtures.sql >/dev/null
+
+echo "==> refresh PROCESS Job definition snapshots"
+for job_code in \
+  TA_PROCESS_STAGE4_JSONB \
+  TA_PROCESS_STAGE4_DIRECT \
+  TA_PROCESS_STAGE4_VALIDATE_FAIL \
+  TA_PROCESS_STAGE4_EMPTY_SUCCESS; do
+  response="$(curl -sS -f -X POST --get \
+    "$CONSOLE_BASE/api/console/ops/cache/evict-job-definition" \
+    --data-urlencode 'tenantId=ta' \
+    --data-urlencode "jobCode=$job_code")"
+  "$PYTHON_BIN" - "$job_code" "$response" <<'PY'
+import json
+import sys
+
+job_code, response = sys.argv[1:]
+body = json.loads(response)
+expected = f"job-definition:ta:{job_code}"
+if body.get("code") != "SUCCESS" or body.get("data", {}).get("evicted") != expected:
+    raise SystemExit(f"Job definition cache eviction failed for {job_code}: {response}")
+print(f"  [cache] {job_code} refreshed", flush=True)
+PY
+done
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -tA -f /dev/stdin < "$SIM_SQL_DIR/select-current-timestamp.sql")"
@@ -50,6 +75,7 @@ import json
 import os
 import subprocess
 import time
+from scripts.sim.launch_contract import workflow_id_for_fixture
 import urllib.request
 from pathlib import Path
 
@@ -85,7 +111,7 @@ def launch(label, job_code, batch_key):
     rid = f"sim-stage4-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": job_code,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job_code),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,

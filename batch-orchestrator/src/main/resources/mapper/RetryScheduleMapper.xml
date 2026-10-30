@@ -78,6 +78,48 @@
         </if>
     </select>
 
+    <select id="selectDueNotPaused" resultMap="RetryScheduleResultMap">
+        select retry.*
+        from batch.retry_schedule retry
+        where retry.retry_status = #{retryStatus}
+          and retry.next_retry_at &lt;= #{dueBefore}
+        <if test="tenantId != null and tenantId != ''">
+          and retry.tenant_id = #{tenantId}
+        </if>
+          and not exists (
+              select 1
+              from batch.job_partition partition
+              join batch.job_instance instance
+                on instance.tenant_id = partition.tenant_id
+               and instance.id = partition.job_instance_id
+              left join lateral (
+                  select workflow_run.id, workflow_run.run_status
+                  from batch.workflow_run workflow_run
+                  join batch.workflow_node_run node_run
+                    on node_run.workflow_run_id = workflow_run.id
+                   and node_run.job_instance_id = instance.id
+                  where workflow_run.tenant_id = retry.tenant_id
+                    and workflow_run.related_job_instance_id is null
+                  order by workflow_run.id desc
+                  limit 1
+              ) latest_workflow on true
+              where retry.related_type = 'JOB_PARTITION'
+                and partition.tenant_id = retry.tenant_id
+                and partition.id = retry.related_id
+                and (latest_workflow.id is null
+                     or latest_workflow.run_status in ('CREATED', 'RUNNING', 'PAUSED'))
+                and (
+                    instance.instance_status = 'PAUSED'
+                    or (instance.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING')
+                        and latest_workflow.run_status = 'PAUSED')
+                )
+          )
+        order by retry.next_retry_at asc, retry.id asc
+        <if test="batchSize != null and batchSize &gt; 0">
+          limit #{batchSize}
+        </if>
+    </select>
+
     <update id="markRunning">
         update batch.retry_schedule
         set retry_status = #{runningStatus},

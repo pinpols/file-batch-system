@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地灾备演练(备份 → 模拟灾难 → 恢复 → 校验 → 量 RTO)。
+# 用法：在仓库根目录执行 bash scripts/db/backup/dr-drill.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # dr-drill.sh — 本地灾备演练(备份 → 模拟灾难 → 恢复 → 校验 → 量 RTO)
 #
@@ -89,6 +91,27 @@ adm_file() {
   docker exec -e PGPASSWORD="$PG_PASSWORD" -e PGOPTIONS='-c batch.destructive_ops=dr-drill' -i "$PG_CONTAINER" \
     psql -U "$PG_USER" -d postgres -v ON_ERROR_STOP=1 -tA "$@" -f /dev/stdin \
     < "$DR_SQL_DIR/$sql_file"
+}
+
+restore_business_rls() {
+  if [[ ! -f "$RLS_SQL" ]]; then
+    echo "  ${RED}✗ 未找到 ${RLS_SQL}，业务库 RLS 无法验证${RESET}" >&2
+    return 1
+  fi
+  local output status
+  if output="$(docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
+      psql -U "$PG_USER" -d "$TGT_BUSINESS" -v ON_ERROR_STOP=1 \
+      -v writer_password="${BIZ_WRITER_PASSWORD:-$PG_PASSWORD}" \
+      -v admin_password="${BIZ_ADMIN_PASSWORD:-$PG_PASSWORD}" \
+      < "$RLS_SQL" 2>&1)"; then
+    echo "  ✓ 已重跑 rls-phase-a.sql"
+    return 0
+  else
+    status=$?
+    echo "  ${RED}✗ 业务库 RLS 重建失败（退出码 ${status}），保留恢复库供诊断${RESET}" >&2
+    printf '%s\n' "$output" | tail -20 >&2
+    return "$status"
+  fi
 }
 
 check() { # $1=名称 $2=期望 $3=实际
@@ -187,16 +210,10 @@ restore_db "$TGT_PLATFORM" "$INDB_DIR/$PLATFORM_DB.dump"
 if [[ "$HAS_BUSINESS" == "1" ]]; then
   restore_db "$TGT_BUSINESS" "$INDB_DIR/$BUSINESS_DB.dump"
   # §2.1 step4:business 恢复后重跑 RLS(逻辑 dump 不保证 role/policy 完整)
-  if [[ -f "$RLS_SQL" ]]; then
-    # rls-phase-a.sql 不再含默认密码,须显式注入(角色若已存在则跳过创建,仅重建 grants/policy)。
-    docker exec -e PGPASSWORD="$PG_PASSWORD" -i "$PG_CONTAINER" \
-      psql -U "$PG_USER" -d "$TGT_BUSINESS" -v ON_ERROR_STOP=0 \
-      -v writer_password="${BIZ_WRITER_PASSWORD:-$PG_PASSWORD}" \
-      -v admin_password="${BIZ_ADMIN_PASSWORD:-$PG_PASSWORD}" \
-      < "$RLS_SQL" >/dev/null 2>&1 || true
-    echo "  ✓ 已重跑 rls-phase-a.sql"
-  else
-    echo "  ${YELLOW}⚠ 未找到 $RLS_SQL,跳过 RLS 重建${RESET}"
+  if ! restore_business_rls; then
+    fails=$((fails+1))
+    KEEP=1
+    checks+=("  ${RED}✗${RESET} 业务库 RLS 重建失败，恢复库保留供诊断")
   fi
 fi
 RTO=$(( $(date +%s) - T0 ))

@@ -64,7 +64,6 @@ public final class WorkflowExcelColumnMetadata {
       "node_name",
       COL_NODE_TYPE,
       "related_job_code",
-      "related_pipeline_code",
       "worker_group",
       "window_code",
       "node_order",
@@ -148,23 +147,16 @@ public final class WorkflowExcelColumnMetadata {
               requiredColumn(
                   "excel.workflow.node.node_type.desc",
                   "excel.guide.format.enum",
-                  "TASK",
-                  "TASK",
+                  "JOB",
                   "GATEWAY",
-                  "FILE_STEP",
                   "START",
                   "END",
-                  "JOB")),
+                  "JOB",
+                  "WAIT")),
           Map.entry(
               "related_job_code",
               optionalColumn(
                   "excel.workflow.node.related_job_code.desc", FMT_STRING_KEY, "JOB_IMPORT_001")),
-          Map.entry(
-              "related_pipeline_code",
-              optionalColumn(
-                  "excel.workflow.node.related_pipeline_code.desc",
-                  FMT_STRING_KEY,
-                  "PIPE_IMPORT_001")),
           Map.entry(
               "worker_group",
               optionalColumn(

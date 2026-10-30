@@ -2,8 +2,10 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 
+import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -11,6 +13,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepo
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchRecordSnapshot;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
@@ -24,6 +27,7 @@ import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchR
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
@@ -32,10 +36,10 @@ import org.springframework.stereotype.Component;
 /**
  * Dispatch pipeline 的 DISPATCH 阶段：通过 {@link DispatchChannelGateway} 执行实际文件投递。
  *
- * <p><b>幂等写入</b>：若 {@code file_dispatch_record} 尚不存在则插入，已存在则递增投递次数， 防止重复任务创建重复记录。
+ * <p><b>恢复安全</b>：持久化的 {@code CREATED} 代表一次外发已开始，恢复时按结果未知阻止自动重发；
+ * 已持久化的 {@code SENT}/{@code ACKED} 则继续后续阶段，不再次访问外部渠道。
  *
- * <p><b>结果处理</b>：投递成功时调用 {@code markSent}，回执状态取决于渠道是否即时确认（ACKED/PENDING/NONE）； 投递失败时调用 {@code
- * markFailed}，将下一步跳转强制设为 {@code RETRY} 阶段并返回失败。 文件状态同步推进为 {@code DISPATCHING}。
+ * <p><b>结果处理</b>：投递结果确定时按原有单次重试策略处理；外部结果不确定或成功结果无法持久化时，停止自动重试与补偿，交由人工核对。
  */
 @Slf4j
 @Component
@@ -136,32 +140,10 @@ public class DeliverDispatchStep implements DispatchStageStep {
       Long fileId,
       Map<String, Object> fileRecord,
       Map<String, Object> channelConfig) {
-    boolean dispatchRecordExists = fileDispatchRepository.existsLatestDispatchRecord(
-        context.getTenantId(), fileId, dispatchPayload.channelCode());
-    if (!dispatchRecordExists) {
-      FileDispatchRepository.InsertDispatchParam insertParam =
-          new FileDispatchRepository.InsertDispatchParam(
-              context.getTenantId(),
-              fileId,
-              PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-              dispatchPayload.channelCode(),
-              dispatchPayload.dispatchTarget(),
-              dispatchPayload.receiptCode(),
-              FileReceiptStatus.NONE.code(),
-              dispatchPayload.externalRequestId());
-      int inserted = fileDispatchRepository.insertDispatchRecord(insertParam);
-      if (inserted <= 0) {
-        return DispatchStageResult.failure(
-            stage(),
-            "DISPATCH_INSERT_FAILED",
-            "error.dispatch.deliver.insert_failed",
-            new Object[0],
-            "failed to create dispatch record",
-            ERROR_OBJECT_MAPPER);
-      }
-    } else {
-      fileDispatchRepository.incrementAttempt(
-          context.getTenantId(), fileId, dispatchPayload.channelCode());
+    DispatchStageResult admissionFailure =
+        prepareDeliveryAttempt(context, dispatchPayload, attrs, fileId);
+    if (EmptyChecks.isNotNull(admissionFailure)) {
+      return admissionFailure;
     }
     DispatchResult dispatchResult = DispatchInvocationSupport.invokeAndRecordIdentifiers(
         dispatchChannelGateway, context, fileRecord, channelConfig, dispatchPayload);
@@ -176,32 +158,48 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     fileRecords.updateFileStatus(fileId, FileStatus.DISPATCHING.code(), fileMetadata);
     if (!dispatchResult.success()) {
-      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
-      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
-      fileDispatchRepository.markFailed(
+      String errorCode = dispatchResult.externalOutcomeUnknown()
+          ? TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN
+          : "DISPATCH_DELIVERY_FAILED";
+      int markedFailed = fileDispatchRepository.markAttemptFailed(
           context.getTenantId(),
           fileId,
           dispatchPayload.channelCode(),
-          "DISPATCH_DELIVERY_FAILED",
+          errorCode,
           dispatchResult.message());
+      if (markedFailed <= 0) {
+        return externalOutcomeUnknown(
+            context,
+            fileId,
+            dispatchPayload,
+            "dispatch result could not be committed after the external call",
+            false);
+      }
+      if (dispatchResult.externalOutcomeUnknown()) {
+        return externalOutcomeUnknown(
+            context, fileId, dispatchPayload, dispatchResult.message(), false);
+      }
+      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE);
+      attrs.put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.RETRY.name());
+      String messageForArguments = dispatchResult.message();
+      String fallbackMessage = dispatchResult.message();
       return DispatchStageResult.failure(
           stage(),
           ERROR_CODE_SEND_FAILED,
           "error.dispatch.deliver.send_failed",
-          new Object[] {dispatchResult.message()},
-          dispatchResult.message(),
+          new Object[] {messageForArguments},
+          fallbackMessage,
           ERROR_OBJECT_MAPPER);
     }
     int updated = DispatchInvocationSupport.markSent(
         fileDispatchRepository, context, fileId, dispatchPayload, dispatchResult);
     if (updated <= 0) {
-      return DispatchStageResult.failure(
-          stage(),
-          ERROR_CODE_SEND_FAILED,
-          "error.dispatch.deliver.send_failed",
-          new Object[] {"failed to mark sent"},
-          "failed to mark sent",
-          ERROR_OBJECT_MAPPER);
+      return externalOutcomeUnknown(
+          context,
+          fileId,
+          dispatchPayload,
+          "external delivery succeeded but the SENT state could not be committed",
+          true);
     }
     // ADR-041 Phase1.5:opt-in 投递后回读校验(readback_verify_enabled),抓传输损坏 / 半写。
     DispatchStageResult readbackFailure =
@@ -211,6 +209,167 @@ public class DeliverDispatchStep implements DispatchStageStep {
     }
     attrs.put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
     return DispatchStageResult.success(stage());
+  }
+
+  /** 已持久化结果先恢复，只有创建或取得下一次尝试授权后才允许进入外部渠道。 */
+  private DispatchStageResult prepareDeliveryAttempt(
+      DispatchJobContext context,
+      DispatchPayload dispatchPayload,
+      Map<String, Object> attrs,
+      Long fileId) {
+    Optional<DispatchRecordSnapshot> latestRecord = fileDispatchRepository.latestDispatchRecord(
+        context.getTenantId(), fileId, dispatchPayload.channelCode());
+    boolean newAttempt = !latestRecord.isPresent();
+    if (newAttempt) {
+      String tenantId = context.getTenantId();
+      Long pipelineInstanceId =
+          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+      FileDispatchRepository.InsertDispatchParam insertParam =
+          new FileDispatchRepository.InsertDispatchParam(
+              tenantId,
+              fileId,
+              pipelineInstanceId,
+              dispatchPayload.channelCode(),
+              dispatchPayload.dispatchTarget(),
+              dispatchPayload.receiptCode(),
+              FileReceiptStatus.NONE.code(),
+              dispatchPayload.externalRequestId());
+      int inserted = fileDispatchRepository.insertDispatchRecord(insertParam);
+      if (inserted <= 0) {
+        latestRecord = fileDispatchRepository.latestDispatchRecord(
+            context.getTenantId(), fileId, dispatchPayload.channelCode());
+        if (!latestRecord.isPresent()) {
+          return DispatchStageResult.failure(
+              stage(),
+              "DISPATCH_INSERT_FAILED",
+              "error.dispatch.deliver.insert_failed",
+              new Object[0],
+              "failed to create dispatch record",
+              ERROR_OBJECT_MAPPER);
+        }
+        newAttempt = false;
+      }
+    }
+    if (!newAttempt) {
+      DispatchRecordSnapshot snapshot = latestRecord.orElseThrow();
+      if (TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN.equals(snapshot.errorCode())) {
+        Long jobInstanceId =
+            PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.JOB_INSTANCE_ID));
+        Long pipelineInstanceId =
+            PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+        int authorizedAttempt = fileDispatchRepository.beginVerifiedExternalOutcomeAttempt(
+            context.getTenantId(),
+            fileId,
+            dispatchPayload.channelCode(),
+            jobInstanceId,
+            pipelineInstanceId);
+        if (authorizedAttempt <= 0) {
+          return externalOutcomeUnknown(
+              context, fileId, dispatchPayload, snapshot.errorMessage(), false);
+        }
+        newAttempt = true;
+      } else if (FileDispatchStatus.CREATED.name().equals(snapshot.dispatchStatus())) {
+        int markedUnknown = fileDispatchRepository.markAttemptFailed(
+            context.getTenantId(),
+            fileId,
+            dispatchPayload.channelCode(),
+            TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+            "A prior worker left the dispatch record in CREATED; external delivery may have occurred.");
+        if (markedUnknown <= 0) {
+          Optional<DispatchRecordSnapshot> refreshed = fileDispatchRepository.latestDispatchRecord(
+              context.getTenantId(), fileId, dispatchPayload.channelCode());
+          if (refreshed.isPresent()) {
+            DispatchStageResult recovered =
+                resumePersistedDelivery(context, dispatchPayload, refreshed.get());
+            if (EmptyChecks.isNotNull(recovered)) {
+              return recovered;
+            }
+          }
+        }
+        return externalOutcomeUnknown(
+            context,
+            fileId,
+            dispatchPayload,
+            "A prior worker left the dispatch record in CREATED; external delivery may have occurred.",
+            false);
+      } else {
+        DispatchStageResult recovered = resumePersistedDelivery(context, dispatchPayload, snapshot);
+        if (EmptyChecks.isNotNull(recovered)) {
+          return recovered;
+        }
+        if (fileDispatchRepository.beginAttempt(
+                context.getTenantId(), fileId, dispatchPayload.channelCode())
+            <= 0) {
+          attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+          attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+          return DispatchStageResult.failure(
+              stage(),
+              "DISPATCH_ATTEMPT_STATE_CONFLICT",
+              "error.dispatch.deliver.send_failed",
+              new Object[] {"dispatch attempt state changed before delivery"},
+              "dispatch attempt state changed before delivery",
+              ERROR_OBJECT_MAPPER);
+        }
+      }
+    }
+    return null;
+  }
+
+  private DispatchStageResult resumePersistedDelivery(
+      DispatchJobContext context,
+      DispatchPayload dispatchPayload,
+      DispatchRecordSnapshot snapshot) {
+    boolean alreadyAcked = FileDispatchStatus.ACKED.name().equals(snapshot.dispatchStatus());
+    if (!alreadyAcked && !FileDispatchStatus.SENT.name().equals(snapshot.dispatchStatus())) {
+      return null;
+    }
+    boolean acknowledged =
+        alreadyAcked || FileReceiptStatus.SUCCESS.code().equals(snapshot.receiptStatus());
+    boolean pending = FileReceiptStatus.PENDING.code().equals(snapshot.receiptStatus());
+    DispatchResult persistedResult = new DispatchResult(
+        true,
+        snapshot.externalRequestId(),
+        snapshot.receiptCode(),
+        acknowledged,
+        pending,
+        "recovered from persisted dispatch state",
+        null);
+    DispatchInvocationSupport.propagateIdentifiers(context, persistedResult);
+    if (alreadyAcked) {
+      context
+          .getAttributes()
+          .put(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.SUCCESS.code());
+      context
+          .getAttributes()
+          .put(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE, DispatchStage.COMPLETE.name());
+    }
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RECORD, dispatchPayload);
+    return DispatchStageResult.success(stage());
+  }
+
+  private DispatchStageResult externalOutcomeUnknown(
+      DispatchJobContext context,
+      Long fileId,
+      DispatchPayload dispatchPayload,
+      String message,
+      boolean persistIfStillCreated) {
+    if (persistIfStillCreated) {
+      fileDispatchRepository.markAttemptFailed(
+          context.getTenantId(),
+          fileId,
+          dispatchPayload.channelCode(),
+          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+          message);
+    }
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+    context.getAttributes().remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+    return DispatchStageResult.failure(
+        stage(),
+        TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+        "error.dispatch.deliver.send_failed",
+        new Object[] {message},
+        message,
+        ERROR_OBJECT_MAPPER);
   }
 
   private Map<String, Object> readRawPayload(DispatchJobContext context) {

@@ -24,6 +24,9 @@ public interface ConsoleAssetFreshnessPolicyMapper {
   Optional<AssetFreshnessPolicyEntity> findById(
       @Param("tenantId") String tenantId, @Param("id") Long id);
 
+  Long lockJobDefinitionForPolicyWrite(
+      @Param("tenantId") String tenantId, @Param("jobCode") String jobCode);
+
   void upsert(@Param("p") AssetFreshnessPolicyUpsertParam param);
 
   int updateById(@Param("p") AssetFreshnessPolicyUpsertParam param);

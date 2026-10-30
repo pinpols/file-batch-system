@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.CheckpointPartitionGuard;
@@ -19,7 +18,7 @@ import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Pipeline 阶段执行器的模板方法基类，三条链路（import / export / dispatch）共用的 while 循环骨架封装于此。
+ * Pipeline阶段执行器的模板方法基类，四类文件Worker（import / export / process / dispatch）共用阶段循环骨架。
  *
  * @param <C> pipeline 上下文类型（须实现 {@link ExecutionContext}）
  * @param <R> 阶段结果类型（须实现 {@link StageExecutionResult}）
@@ -36,13 +35,9 @@ public abstract class AbstractStageExecutor<
    */
   public static final ObjectMapper ERROR_OBJECT_MAPPER = JsonUtils.newDefaultMapper();
 
-  protected final PlatformPipelineDefinitionRepository pipelineDefinitions;
   protected final PlatformPipelineRunRepository pipelineRuns;
 
-  protected AbstractStageExecutor(
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
-      PlatformPipelineRunRepository pipelineRuns) {
-    this.pipelineDefinitions = pipelineDefinitions;
+  protected AbstractStageExecutor(PlatformPipelineRunRepository pipelineRuns) {
     this.pipelineRuns = pipelineRuns;
   }
 
@@ -113,11 +108,9 @@ public abstract class AbstractStageExecutor<
       pipelineRuns.updatePipelineStage(
           pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
       injectCurrentStepAttributes(context, currentStep);
+      Map<String, Object> inputSummary = buildInputSummary(context, currentStep);
       Long stepRunId = pipelineRuns.startStepRun(
-          pipelineInstanceId,
-          currentStep.stepCode(),
-          currentStep.stageCode(),
-          buildInputSummary(context, currentStep));
+          pipelineInstanceId, currentStep.stepCode(), currentStep.stageCode(), inputSummary);
       context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID, stepRunId);
 
       R result = executeOneStep(context, currentStep);
@@ -127,15 +120,17 @@ public abstract class AbstractStageExecutor<
         context
             .getAttributes()
             .put(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE, currentStep.stageCode());
-        pipelineRuns.finishStepRunSuccess(stepRunId, buildOutputSummary(context, result));
+        Map<String, Object> outputSummary = buildOutputSummary(context, result);
+        pipelineRuns.finishStepRunSuccess(stepRunId, outputSummary);
       } else {
+        Map<String, Object> outputSummary = buildOutputSummary(context, result);
         pipelineRuns.finishStepRunFailure(
             stepRunId,
             result.code(),
             result.message(),
             result.errorKey(),
             result.errorArgs(),
-            buildOutputSummary(context, result));
+            outputSummary);
       }
       currentStep = PipelineStepFlowSupport.resolveNextStep(
           currentStep, result.success(), configuredSteps, context.getAttributes());
@@ -217,9 +212,7 @@ public abstract class AbstractStageExecutor<
   /**
    * 加载本次 pipeline 运行的有序步骤定义列表。
    *
-   * <p>默认两级解析：优先使用 task 下发时内联在 attributes 中的 {@link
-   * PipelineRuntimeKeys#PIPELINE_STEP_DEFINITIONS}（运行时按任务级别覆盖），否则降级到按 {@link
-   * PipelineRuntimeKeys#PIPELINE_DEFINITION_ID} 从 DB 加载（Job 级别默认配置）。
+   * <p>只使用系统目录内联到attributes的步骤定义；缺失时返回步骤缺失失败，不回查租户配置。
    *
    * <p>特殊场景需要其它解析逻辑（例如基于 stage code 反查）时子类可覆盖。
    */
@@ -236,9 +229,7 @@ public abstract class AbstractStageExecutor<
         return List.copyOf(resolved);
       }
     }
-    Long pipelineDefinitionId = PlatformRuntimeValues.toLong(
-        context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_DEFINITION_ID));
-    return pipelineDefinitions.loadPipelineSteps(pipelineDefinitionId);
+    return List.of();
   }
 
   /**
@@ -279,9 +270,7 @@ public abstract class AbstractStageExecutor<
   /**
    * 根据有序的步骤元数据构建默认 {@link PipelineStepTemplate} 列表。
    *
-   * <p>import / export / dispatch 三条链路的 {@code buildDefaultStepDefinitions()} 历史上都是 "按枚举顺序遍历 → 校验
-   * bean 存在 → builder 装配 template" 的同构骨架；下沉到基类后子类只需把 已按 stage 顺序排好的 step 元数据传入即可，避免每个链路抄一遍同样的 30 行
-   * builder 装配。
+   * <p>四类文件 Worker 共享模板装配方法；各模块先按自己的阶段契约排序并校验实现，再传入步骤元数据，避免重复装配代码。
    *
    * <p>调用方负责确保列表已按业务期望顺序排列；本方法只做 stepOrder 自增（1-based）与不可变包装。
    *

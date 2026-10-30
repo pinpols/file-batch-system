@@ -5,14 +5,18 @@
 
 ## 1. 标准拓扑
 
-```text
-Spring Boot 应用
-  ├─ /actuator/prometheus ───────────────→ Prometheus ─→ Grafana / Alertmanager
-  ├─ structured stdout ─────────────────→ 容器运行时轮转（故障兜底）
-  ├─ Logback → OTel appender ─┐
-  └─ Micrometer/OTel traces ──┴─ OTLP → Collector
-                                      ├─ logs   → Loki
-                                      └─ traces → Tempo + Jaeger
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+  APP["应用"] -->|"/actuator/prometheus"| PROM["Prometheus"]
+  PROM --> GRAFANA["Grafana"]
+  PROM --> ALERT["Alertmanager"]
+  APP -->|"OTLP 日志与链路"| OTEL["OTel Collector"]
+  OTEL -->|"日志"| LOKI["Loki"]
+  OTEL -->|"链路"| TRACES["Tempo / Jaeger"]
+  LOKI --> GRAFANA
+  TRACES --> GRAFANA
+  APP -. "应急排障" .-> STDOUT["stdout / 容器轮转日志"]
 ```
 
 应用侧由 `spring-boot-starter-opentelemetry` 创建 SDK、Trace/Log provider 和 exporter；
@@ -100,6 +104,12 @@ docker compose -f docker-compose.yml -f deploy/docker/compose/app.yml \
 `http://localhost:16686`、Tempo API `http://localhost:13200`、Loki API
 `http://localhost:13100`。
 
+### 告警通知实体回执
+
+Console 按 `batch.console.alertmanager.max-alerts`（默认 50）分批发送回调中的全部实体，而不是仅发送前 50 条明细。每批最终渠道明确成功后，在 `batch.alert_notification_receipt` 保存各平台告警的发生/恢复成功回执；仅有 Alertmanager 接收成功或 HTTP 回调到达不算最终送达。查回执时同时限定租户、平台 `dedup_fingerprint` 和 `receiver_code`，不要使用 Alertmanager 自身的 `fingerprint` 替代平台身份。
+
+渠道失败、无渠道或成功回执写入失败均返回 HTTP 503，交由 Alertmanager 沿原请求重试。外部发送可能重复；Alertmanager 告警的稳定 `cursor` 会编码为 `Idempotency-Key`，同一批同阶段重试保持相同键，发生与恢复通知的键不同；实际投递日志与实体回执分别核对。混合租户的回调分组会被拒绝，模板的 `group_by` 必须保留 `tenant`。V357 已为新关闭意图记录关闭时刻和原因，后台按租户补发缺少最终恢复回执的 CLOSED；OPEN、ACKED、SUPPRESSED 继续维持发生状态。按尝试水位公平轮询，未成功不会被水位跳过；历史 CLOSED 不回填新意图。旧恢复回执、多个已发生渠道中仍未恢复的渠道、以及恢复后晚到的发生成功回执，都会保留补发资格。恢复发送保持原标签、首次时间与持久关闭时间，避免重试改变身份。自动解除已按 Job/Workflow 来源事实接入轮询，关闭原因区分业务恢复、机会结束与策略撤销；自然恢复要求首次发生通知已有最终收件回执。Console 接入到本地 HTTP 收件端的发生失败重试、恢复通知和 PostgreSQL 回执已有定向集成证据；真实 Alertmanager/Orchestrator 联合发送、未建 Job 机会的目标环境验证及 Docker/Helm 验收仍按 [专项计划](../plans/job-workflow-sla-completion-plan-2026-10-25.md)推进，不能把定向用例通过当作整体闭环。
+
 ## 4. 生产配置
 
 生产 values 必须启用以下观测能力；采集地址由站点私有 values 提供：
@@ -121,7 +131,9 @@ prometheusRule:
 
 ## 5. 验收
 
-Docker Prometheus 会抓取同网络内 `alertmanager:9093`，按 `job=alertmanager` 产生可用性与通知失败信号。Helm 部署使用集群外 Prometheus/Alertmanager 时，需要由集群监控配置把 Alertmanager metrics target 规范为同一 `job` 标签；不能仅凭本 chart 中存在 PrometheusRule 就认为 Alertmanager 已纳入监控。Prometheus 或 Alertmanager 整体不可用时，必须由集群外的独立监控通道告警。
+Docker Prometheus 会抓取自身 `localhost:9090` 和同网络内 `alertmanager:9093`，分别按 `job=prometheus`、`job=alertmanager` 监控目标可达性；规则还检查 Prometheus 配置重载、规则评估失败及 Alertmanager 通知失败。Alertmanager 目标从服务发现中消失也会触发告警。Helm 部署使用集群外 Prometheus/Alertmanager 时，外部 Prometheus 必须抓取自身 metrics 与 Alertmanager metrics，并分别赋予同名稳定 `job` 标签；否则对应 `PrometheusRule` 会把缺失序列判为目标不可用。不能仅凭本 chart 中存在 PrometheusRule 就认为两个目标已纳入监控。Prometheus 或 Alertmanager 整体不可用时，同一套规则无法可靠送达，必须由集群外的独立监控通道告警。
+
+依赖告警分开判断采集目标和服务本身：`BatchDependencyExporterDown` 检查 exporter/MinIO 指标端点；`BatchPostgresUnavailable`、`BatchRedisUnavailable` 和 `BatchKafkaUnavailable` 检查数据库探测、Redis 连接及 Kafka 可用 Broker 数；`BatchMinioNodesOffline` 监控离线节点或磁盘。Kafka 规则只识别零 Broker，不表达目标集群的期望数量。Helm chart 不部署这些依赖 exporter，平台团队须维护实际启用目标清单及缺失目标告警；目标不存在时没有 `up` 序列，不能靠 exporter-down 规则发现。
 
 ### 5.1 静态与配置验证
 
@@ -175,7 +187,7 @@ Collector 配置应使用对应版本官方镜像执行 `validate`；Prometheus 
    ```
 2. 清理前先确认业务日志与告警指标已归档（如需要保留审计排障时长）。
 3. 清理后重新检查 `docker system df` 与 Prometheus/Loki 就绪状况。
-4. `--include-app-logs` 只清理 `logs/archive/app`，不会触碰 `logs/current/app` 活跃日志。
+4. `--include-app-logs` 只清理 `logs/archive/app-<component>`，不会触碰 `logs/current/app` 活跃日志。
 
 ### Tempo 无链路
 
@@ -237,3 +249,7 @@ lease circuit、SSE 订阅和回放失败。
 - `helm/batch-platform/templates/otel-collector.yaml`
 - `helm/values-prod.yaml`
 - `docs/design/logging-architecture.md`
+
+## 维护窗口与通知抑制
+
+维护控制信号、部署范围标签、固定截止时间与预期 HTTP 503 排除统一见[维护 SOP](maintenance-mode.md#10-维护期通知抑制2026-10-26)。启用前必须在 Console 和 Prometheus 使用相同唯一范围并加载更新后的 Alertmanager 模板；`batch_console_maintenance_alert_suppression_available` 只表示最近控制信号发布结果，不证明最终通知送达或全部副本已收敛。监控自身与维护窗口超时告警始终保留。

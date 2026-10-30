@@ -40,7 +40,9 @@ public class DefaultConfigReleaseApplyService implements ConfigReleaseApplyServi
         release.getConfigPayload());
     TenantConfigBatchInitResponse result =
         tenantConfigInitService.batchInit(request, operatorId, operationId);
-    if (result.failureTenants() != 0 || result.successTenants() != 1) {
+    boolean tenantApplyDidNotSucceedExactlyOnce =
+        result.failureTenants() != 0 || result.successTenants() != 1;
+    if (tenantApplyDidNotSucceedExactlyOnce) {
       String detail = EmptyChecks.isEmpty(result.results())
           ? "configuration apply returned no tenant result"
           : result.results().getFirst().errorMessage();

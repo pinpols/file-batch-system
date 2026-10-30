@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
+# 用途：— 把 .env.example 的 KAFKA_TOPICS 同步到本地 gitignored 的 .env.prod / .env.local。
+# 用法：在仓库根目录执行 bash scripts/local/sync-env-topics.sh；参数与前置环境见下方说明及所属 README。
 # sync-env-topics.sh —— 把 .env.example 的 KAFKA_TOPICS 同步到本地 gitignored 的 .env.prod / .env.local。
 #
 # 背景:.env.prod / .env.local 是 gitignored 的本地文件,跨分支共享;而 .env.example(committed)
 # 跟着分支走。切到加了新 topic 的分支后,本地两文件会 drift,导致 validate-kafka-topics.sh 报
-# "三文件不一致 / topic 缺失"。本脚本一键把它们对齐到当前分支的 .env.example。
+# "三文件不一致 / topic 缺失"。本脚本统一把它们对齐到当前分支的 .env.example。
 #
 # 用法:切分支后跑一次
 #   bash scripts/local/sync-env-topics.sh

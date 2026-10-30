@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.function.UnaryOperator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -84,5 +87,47 @@ class BatchPlatformClientConfigEnvTest {
     assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", env::get))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("baseUrl");
+  }
+
+  @Test
+  @DisplayName("执行配置非法时先失败，不提前读取重试与安全覆盖值")
+  void shouldRejectExecutionOverride_whenExecutionAndLaterOverridesAreInvalid() {
+    Map<String, String> env = minimalEnv();
+    env.put("BATCH_SDK_MAX_CONCURRENT_TASKS", "invalid-concurrency");
+    env.put("BATCH_SDK_RETRY_MAX_ATTEMPTS", "0");
+    List<String> lookedUpKeys = new ArrayList<>();
+    UnaryOperator<String> lookup = key -> {
+      lookedUpKeys.add(key);
+      return env.get(key);
+    };
+
+    assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", lookup))
+        .isInstanceOf(NumberFormatException.class)
+        .hasMessageContaining("invalid-concurrency");
+
+    assertThat(lookedUpKeys)
+        .doesNotContain(
+            "BATCH_SDK_RETRY_MAX_ATTEMPTS",
+            "BATCH_SDK_REQUEST_SIGNING_ENABLED",
+            "BATCH_SDK_STRICT_TIMING");
+  }
+
+  @Test
+  @DisplayName("重试次数非法时在读取安全覆盖值之前失败，保留原错误契约")
+  void shouldRejectRetryOverride_whenRetryAndSecurityOverridesAreInvalid() {
+    Map<String, String> env = minimalEnv();
+    env.put("BATCH_SDK_RETRY_MAX_ATTEMPTS", "0");
+    List<String> lookedUpKeys = new ArrayList<>();
+    UnaryOperator<String> lookup = key -> {
+      lookedUpKeys.add(key);
+      return env.get(key);
+    };
+
+    assertThatThrownBy(() -> BatchPlatformClientConfig.fromEnv("BATCH_SDK_", lookup))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessage("BATCH_SDK_RETRY_MAX_ATTEMPTS must be >= 1");
+
+    assertThat(lookedUpKeys)
+        .doesNotContain("BATCH_SDK_REQUEST_SIGNING_ENABLED", "BATCH_SDK_STRICT_TIMING");
   }
 }

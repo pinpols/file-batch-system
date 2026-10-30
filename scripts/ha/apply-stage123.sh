@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# ③ 一键 apply 阶段 1-3 CR + 等就绪。前置:install-operators.sh + bootstrap-secrets.sh 已跑,
+# 用途：且 deploy/ha/*.yaml 的占位符(STORAGE_CLASS 等)已改。幂等:kubectl apply。
+# 用法：在仓库根目录执行 bash scripts/ha/apply-stage123.sh；参数与前置环境见下方说明及所属 README。
+# ③ 统一 apply 阶段 1-3 CR + 等就绪。前置:install-operators.sh + bootstrap-secrets.sh 已跑,
 # 且 deploy/ha/*.yaml 的占位符(STORAGE_CLASS 等)已改。幂等:kubectl apply。
 set -euo pipefail
 HA_DIR=${HA_DIR:-deploy/ha}

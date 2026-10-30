@@ -1,9 +1,16 @@
 #!/bin/sh
-# Generate local file discovery targets, then start Prometheus.
+# 用途：生成本地服务发现目标并启动 Prometheus。
+# 用法：由对应容器的 entrypoint/init 配置调用；环境参数见容器配置与下方说明。
+# 生成本地文件发现目标后启动 Prometheus。
 set -eu
 
 generate_targets() {
 mode=${BATCH_DEPLOY_MODE:-container}
+# 同一部署的目标与维护信号必须使用相同范围；空值保持告警，不扩大抑制。
+maintenance_scope=${BATCH_MAINTENANCE_ALERT_SCOPE:-}
+case "$maintenance_scope" in
+  *[!A-Za-z0-9_.:-]*) echo "Invalid BATCH_MAINTENANCE_ALERT_SCOPE" >&2; exit 2 ;;
+esac
 target_dir=/prometheus/targets
 mkdir -p "$target_dir"
 
@@ -73,8 +80,8 @@ while [ "$#" -gt 0 ]; do
   else
     printf ',\n' >> "$tmp_file"
   fi
-  printf '  {"targets":["%s:%s"],"labels":{"job":"%s","__metrics_path__":"/actuator/prometheus"}}' \
-    "$host" "$port" "$job" >> "$tmp_file"
+  printf '  {"targets":["%s:%s"],"labels":{"job":"%s","maintenance_scope":"%s","__metrics_path__":"/actuator/prometheus"}}' \
+    "$host" "$port" "$job" "$maintenance_scope" >> "$tmp_file"
 done
 printf '\n]\n' >> "$tmp_file"
 mv "$tmp_file" "$target_dir/app-targets.json"

@@ -18,13 +18,18 @@ public final class NodeOutputKeys {
   /**
    * ADR-041 归一化 count 信封的入端计数（import=文件原始行数，process=处理数，export=导出行数，dispatch=文件数）。
    *
-   * <p>orchestrator 在 {@code CountContinuityOutboxService} 里按 {@code 上一跳.outputCount == 本跳.inputCount}
-   * 核跨阶段连续性。
+   * <p>跨节点比较须由冻结图显式启用，并有相同范围和单位的实际产出证据；计数本身不证明数据完整。
    */
   public static final String INPUT_COUNT = "inputCount";
 
   /** ADR-041 归一化 count 信封的出端计数（import=入库行数，process=发布行数，export=导出行数）。 */
   public static final String OUTPUT_COUNT = "outputCount";
+
+  /** 当前节点输入计数的实际范围证据：scopeId 为不可变数据版本身份，unit 为计数单位。 */
+  public static final String INPUT_COUNT_CONTEXT = "inputCountContext";
+
+  /** 当前节点输出计数的实际范围证据；与下游输入证据一致时才允许比较。 */
+  public static final String OUTPUT_COUNT_CONTEXT = "outputCountContext";
 
   /** PROCESS 批次键（{@code ProcessJobContext#getBatchKey}）：staging / 发布范围的业务标识。 */
   public static final String BATCH_KEY = "batchKey";

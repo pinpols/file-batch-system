@@ -29,7 +29,8 @@ public class ConsoleAlertRealtimeController {
       @RequestParam(value = "eventType", required = false) String eventType,
       @RequestParam(value = "cursor", required = false) String cursor,
       @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return realtimeEventHub.subscribe(
-        tenantGuard.resolveTenant(tenantId), "alerts", eventType, cursor, heartbeatMillis);
+        resolvedTenantId, "alerts", eventType, cursor, heartbeatMillis);
   }
 }

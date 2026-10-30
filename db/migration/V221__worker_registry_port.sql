@@ -4,6 +4,7 @@
 -- 可空不设默认：老 worker / 老 SDK / 非 web 上下文不上报，保持 NULL，不破坏既有注册链路
 -- （register 与 heartbeat 都走 WorkerHeartbeatDto，缺失即 null，UPDATE 走 coalesce 不会抹掉已有值）。
 -- worker_registry 是运行态注册表，不在 ArchiveSchemaDriftCheck.ARCHIVED_TABLES 清单内，无 archive 镜像。
+
 ALTER TABLE batch.worker_registry
     ADD COLUMN IF NOT EXISTS port INTEGER;
 

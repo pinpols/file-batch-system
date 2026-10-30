@@ -50,7 +50,8 @@ public final class EncodingUtils {
     }
     String normalized = raw.trim();
     try {
-      return Charset.forName(normalized).name();
+      Charset charset = Charset.forName(normalized);
+      return charset.name();
     } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
       throw new IllegalArgumentException("unsupported charset: " + raw, e);
     }
@@ -75,7 +76,10 @@ public final class EncodingUtils {
       return true;
     }
     try {
-      return UTF_8.equals(Charset.forName(raw.trim()).name());
+      String trimmedName = raw.trim();
+      Charset charset = Charset.forName(trimmedName);
+      String canonicalCharsetName = charset.name();
+      return UTF_8.equals(canonicalCharsetName);
     } catch (IllegalCharsetNameException | UnsupportedCharsetException e) {
       return false;
     }

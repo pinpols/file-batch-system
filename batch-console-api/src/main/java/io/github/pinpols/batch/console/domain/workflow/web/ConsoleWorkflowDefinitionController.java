@@ -1,19 +1,26 @@
 package io.github.pinpols.batch.console.domain.workflow.web;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.ScheduledOccurrenceCatchUpRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowTriggerRequest;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionVersionSummaryResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDesignLockResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowMermaidResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowTriggerStatusResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.support.WorkflowMermaidRenderer;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
@@ -34,6 +41,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -48,12 +56,46 @@ public class ConsoleWorkflowDefinitionController {
   private final WorkflowDefinitionService workflowDefinitionService;
   private final ConsoleResponseFactory responseFactory;
   private final WorkflowDesignLockService designLockService;
+  private final ConsoleWorkflowTriggerService triggerService;
 
   @GetMapping("/{id}")
   @PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
   public CommonResponse<WorkflowDefinitionDetailResponse> getById(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     return responseFactory.success(workflowDefinitionService.getById(id, tenantId));
+  }
+
+  /** 将完整 Workflow 作为一个顶层运行触发。 */
+  @PostMapping("/{id}/trigger")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+  public CommonResponse<String> trigger(
+      @PathVariable Long id,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody WorkflowTriggerRequest request) {
+    return responseFactory.success(triggerService.trigger(id, request, idempotencyKey));
+  }
+
+  /** 超时后只核对原请求，沿用正式发起的角色和租户边界。 */
+  @GetMapping("/{id}/trigger-status")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_TENANT_USER)
+  public CommonResponse<WorkflowTriggerStatusResponse> triggerStatus(
+      @PathVariable Long id,
+      @RequestParam String tenantId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
+    WorkflowTriggerStatusResponse receipt =
+        triggerService.triggerStatus(id, tenantId, idempotencyKey);
+    return responseFactory.success(receipt);
+  }
+
+  @PostMapping("/{id}/scheduled-occurrences/catch-up")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  public CommonResponse<ScheduledOccurrenceCatchUpResponse> catchUpRejectedOccurrence(
+      @PathVariable Long id,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
+    ScheduledOccurrenceCatchUpResponse catchUpResponse =
+        triggerService.catchUpRejectedOccurrence(id, request, currentUsername(), idempotencyKey);
+    return responseFactory.success(catchUpResponse);
   }
 
   @PostMapping
@@ -63,13 +105,6 @@ public class ConsoleWorkflowDefinitionController {
     return responseFactory.success(workflowDefinitionService.create(request));
   }
 
-  @PutMapping("/{id}")
-  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
-  public CommonResponse<WorkflowDefinitionDetailResponse> update(
-      @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionSaveRequest request) {
-    return responseFactory.success(workflowDefinitionService.update(id, request));
-  }
-
   /** 启用/禁用工作流定义。 */
   @PatchMapping("/{id}")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
@@ -77,6 +112,27 @@ public class ConsoleWorkflowDefinitionController {
       @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
     workflowDefinitionService.toggleEnabled(id, request.getTenantId(), request.getEnabled());
     return responseFactory.success(null);
+  }
+
+  /** 暂停或恢复定时触发，但不影响人工/API 启动 Workflow。 */
+  @PatchMapping("/{id}/schedule-enabled")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  public CommonResponse<Void> patchScheduleEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    workflowDefinitionService.toggleScheduleEnabled(
+        id, request.getTenantId(), request.getEnabled());
+    return responseFactory.success(null);
+  }
+
+  /** 更新调度字段时不替换 Workflow 图；通过定义版本进行 CAS 并发保护。 */
+  @PutMapping("/{id}/schedule")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
+  public CommonResponse<WorkflowDefinitionDetailResponse> updateSchedule(
+      @PathVariable Long id, @Valid @RequestBody WorkflowScheduleUpdateRequest request) {
+    String operator = currentUsername();
+    WorkflowDefinitionDetailResponse updated =
+        workflowDefinitionService.updateSchedule(id, request, operator);
+    return responseFactory.success(updated);
   }
 
   @PostMapping("/{id}/validate")
@@ -95,8 +151,9 @@ public class ConsoleWorkflowDefinitionController {
   public CommonResponse<WorkflowMermaidResponse> mermaid(
       @PathVariable Long id, @RequestParam("tenantId") String tenantId) {
     WorkflowDefinitionDetailResponse detail = workflowDefinitionService.getById(id, tenantId);
-    return responseFactory.success(
-        new WorkflowMermaidResponse(WorkflowMermaidRenderer.render(detail)));
+    String mermaid = WorkflowMermaidRenderer.render(detail);
+    WorkflowMermaidResponse response = new WorkflowMermaidResponse(mermaid);
+    return responseFactory.success(response);
   }
 
   // ─── Polish: 版本列表 / 版本详情(workflow-dag-designer diff 页面真实接入)───────────
@@ -141,8 +198,10 @@ public class ConsoleWorkflowDefinitionController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<WorkflowDefinitionDetailResponse> fullUpdate(
       @PathVariable Long id, @Valid @RequestBody WorkflowDefinitionFullUpdateRequest request) {
-    return responseFactory.success(
-        workflowDefinitionService.fullUpdate(id, request, currentUsername()));
+    String username = currentUsername();
+    WorkflowDefinitionDetailResponse updatedDefinition =
+        workflowDefinitionService.fullUpdate(id, request, username);
+    return responseFactory.success(updatedDefinition);
   }
 
   /** 申请编辑锁(5min TTL)。别人持锁 → 409 CONFLICT 带 lockedBy。 */

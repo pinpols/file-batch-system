@@ -57,21 +57,26 @@ COMMENT ON COLUMN batch.pipeline_progress.completed       IS
     'true 表示该 stage 在本 pipeline 实例已整体完成(幂等跳过)';
 
 -- 启动续跑主路径:按 (tenant_id, pipeline_instance_id) 加载所有 stage 位点
+
 CREATE INDEX IF NOT EXISTS idx_pipeline_progress_tenant_instance
     ON batch.pipeline_progress (tenant_id, pipeline_instance_id);
 
 -- 已完成位点的清理 / 归档查询(可选,T+N 归档时按 completed_at 范围筛)
+
 CREATE INDEX IF NOT EXISTS idx_pipeline_progress_completed_at
     ON batch.pipeline_progress (completed_at)
     WHERE completed = TRUE;
 
 -- ---------------------------------------------------------
 -- archive 镜像(docs/agent-baseline.md 红线;LIKE INCLUDING ALL 与 V159 一致)
+
 -- ---------------------------------------------------------
+
 CREATE TABLE IF NOT EXISTS archive.pipeline_progress_archive
     (LIKE batch.pipeline_progress INCLUDING DEFAULTS INCLUDING GENERATED INCLUDING IDENTITY INCLUDING CONSTRAINTS);
 
 -- LIKE INCLUDING CONSTRAINTS 不复制 PRIMARY KEY(归档 UPSERT ON CONFLICT(id) 依赖,见 V140 / V159 同款补 PK)
+
 DO $$
 BEGIN
     IF NOT EXISTS (
@@ -89,4 +94,4 @@ BEGIN
 END $$;
 
 COMMENT ON TABLE archive.pipeline_progress_archive IS
-    'V164 archive mirror of batch.pipeline_progress';
+    'V164 新增的 batch.pipeline_progress 归档镜像。';

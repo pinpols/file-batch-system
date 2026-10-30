@@ -1,3 +1,5 @@
+# 用途：验证数据库对象注释覆盖检查。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_db_comment_coverage.py。
 import shutil
 import subprocess
 import tempfile

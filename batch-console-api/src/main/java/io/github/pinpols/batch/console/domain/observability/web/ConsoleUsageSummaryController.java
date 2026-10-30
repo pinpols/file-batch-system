@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
+import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageSummaryService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -33,8 +34,10 @@ public class ConsoleUsageSummaryController {
       @RequestParam("to") LocalDate to,
       @RequestParam(value = "metricCode", required = false) String metricCode,
       @RequestParam(value = "pageCode", required = false) String pageCode) {
-    return responseFactory.success(service.query(tenantId, from, to, metricCode, pageCode).stream()
-        .map(ConsoleUsageSummaryResponse::from)
-        .toList());
+    List<ConsoleUsageDailyMapper.DailyUsageRow> summaries =
+        service.query(tenantId, from, to, metricCode, pageCode);
+    List<ConsoleUsageSummaryResponse> responses =
+        summaries.stream().map(ConsoleUsageSummaryResponse::from).toList();
+    return responseFactory.success(responses);
   }
 }

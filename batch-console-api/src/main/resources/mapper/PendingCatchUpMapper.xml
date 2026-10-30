@@ -5,7 +5,7 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="request_id" property="requestId"/>
-        <result column="job_code" property="jobCode"/>
+        <result column="workflow_code" property="workflowCode"/>
         <result column="biz_date" property="bizDate"/>
         <result column="request_status" property="requestStatus"/>
         <result column="trace_id" property="traceId"/>
@@ -18,34 +18,33 @@
     <!--
         catch-up 待审列表:trigger_request 是调度请求源 + approval_command 是审批单存储。
         LEFT JOIN 暴露 approval_no/approval_status,前端拿 approval_no 调统一审批接口
-        /api/console/approvals/{approvalNo}/approve|reject;未走统一审批的旧记录 approval_no=null。
+        /api/console/approvals/{approvalNo}/approve|reject;尚未创建审批命令的请求 approval_no=null。
         关联键:tenant_id 相同 + approval_command.target_id=trigger_request.request_id + approval_type='CATCH_UP'。
+        同一请求可能多次提交审批，按审批 id 降序选择最新的一条，保证每个请求最多一行。
     -->
     <select id="selectByQuery" resultMap="PendingCatchUpResultMap">
+        select page.*, ac.approval_no, ac.approval_status
+        from (
         select tr.id,
                tr.tenant_id,
                tr.request_id,
-               tr.job_code,
+               wd.workflow_code,
                tr.biz_date,
                tr.request_status,
                tr.trace_id,
                tr.created_at,
-               tr.updated_at,
-               ac.approval_no,
-               ac.approval_status
+               tr.updated_at
         from batch.trigger_request tr
-        left join batch.approval_command ac
-               on ac.tenant_id   = tr.tenant_id
-              and ac.target_id   = tr.request_id
-              and ac.approval_type = 'CATCH_UP'
+        join batch.workflow_definition wd
+          on wd.tenant_id = tr.tenant_id and wd.id = tr.workflow_definition_id
         where tr.tenant_id = #{tenantId}
           and tr.trigger_type = 'CATCH_UP'
           and tr.request_status = 'ACCEPTED'
         <if test="cursorId != null">
             and tr.id &lt; #{cursorId}
         </if>
-        <if test="jobCode != null and jobCode != ''">
-            and tr.job_code = #{jobCode}
+        <if test="workflowCode != null and workflowCode != ''">
+            and wd.workflow_code = #{workflowCode}
         </if>
         <if test="requestId != null and requestId != ''">
             and tr.request_id = #{requestId}
@@ -55,7 +54,7 @@
         </if>
         <if test="keyword != null and keyword != ''">
             and (tr.request_id ilike '%' || #{keyword} || '%'
-                 or tr.job_code ilike '%' || #{keyword} || '%'
+                 or wd.workflow_code ilike '%' || #{keyword} || '%'
                  or tr.trace_id ilike '%' || #{keyword} || '%')
         </if>
         order by tr.id desc
@@ -67,27 +66,40 @@
                 <include refid="io.github.pinpols.batch.common.mapper.CommonFragments.offsetPageClause"/>
             </otherwise>
         </choose>
+        ) page
+        left join lateral (
+            select approval_no, approval_status
+            from batch.approval_command
+            where tenant_id = page.tenant_id
+              and target_id = page.request_id
+              and approval_type = 'CATCH_UP'
+            order by id desc
+            limit 1
+        ) ac on true
+        order by page.id desc
     </select>
 
     <select id="countByQuery" resultType="long">
         select count(1)
-        from batch.trigger_request
-        where tenant_id = #{tenantId}
-          and trigger_type = 'CATCH_UP'
-          and request_status = 'ACCEPTED'
-        <if test="jobCode != null and jobCode != ''">
-            and job_code = #{jobCode}
+        from batch.trigger_request tr
+        join batch.workflow_definition wd
+          on wd.tenant_id = tr.tenant_id and wd.id = tr.workflow_definition_id
+        where tr.tenant_id = #{tenantId}
+          and tr.trigger_type = 'CATCH_UP'
+          and tr.request_status = 'ACCEPTED'
+        <if test="workflowCode != null and workflowCode != ''">
+            and wd.workflow_code = #{workflowCode}
         </if>
         <if test="requestId != null and requestId != ''">
-            and request_id = #{requestId}
+            and tr.request_id = #{requestId}
         </if>
         <if test="bizDate != null and bizDate != ''">
-            and biz_date = cast(#{bizDate} as date)
+            and tr.biz_date = cast(#{bizDate} as date)
         </if>
         <if test="keyword != null and keyword != ''">
-            and (request_id ilike '%' || #{keyword} || '%'
-                 or job_code ilike '%' || #{keyword} || '%'
-                 or trace_id ilike '%' || #{keyword} || '%')
+            and (tr.request_id ilike '%' || #{keyword} || '%'
+                 or wd.workflow_code ilike '%' || #{keyword} || '%'
+                 or tr.trace_id ilike '%' || #{keyword} || '%')
         </if>
     </select>
 </mapper>

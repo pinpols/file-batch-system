@@ -12,18 +12,22 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
+import io.github.pinpols.batch.console.domain.notification.param.ConsoleWebhookDeliveryLogMarkRetryFailureParam;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
@@ -53,15 +57,16 @@ class WebhookDeliveryRelayTest {
         .executeWithLock(any(Runnable.class), any());
     // 用户在 e1de09db 等 refactor 把 WebhookDeliveryRelay 的 @Value 配置抽到 WebhookRelayProperties,
     // 测试需要同步更新构造器调用以反映新签名
-    io.github.pinpols.batch.console.config.WebhookRelayProperties props =
-        new io.github.pinpols.batch.console.config.WebhookRelayProperties();
+    WebhookRelayProperties props = new WebhookRelayProperties();
     relay = new WebhookDeliveryRelay(
         deliveryLogRepository,
         subscriptionRepository,
         dispatcher,
         lockExecutor,
         meterRegistry,
-        props);
+        props,
+        mock(TerminalNotificationDeliveryService.class),
+        mock(TerminalNotificationArchiveService.class));
   }
 
   @Test
@@ -126,7 +131,8 @@ class WebhookDeliveryRelayTest {
     // attempt 应为原 row.attempt(3) + 1 = 4
     verify(deliveryLogRepository).markRetrySuccess(101L, 4, null);
     verify(deliveryLogRepository, never())
-        .markRetryFailure(anyLong(), anyInt(), any(), any(), any());
+        .markRetryFailure(
+            ArgumentMatchers.any(ConsoleWebhookDeliveryLogMarkRetryFailureParam.class));
     verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
   }
 
@@ -144,7 +150,12 @@ class WebhookDeliveryRelayTest {
     relay.poll();
 
     verify(deliveryLogRepository)
-        .markRetryFailure(eq(102L), eq(4), eq(503), eq("service unavailable"), any(Instant.class));
+        .markRetryFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.id(), 102L)
+            && Objects.equals(parameters.attempt(), 4)
+            && Objects.equals(parameters.httpStatus(), 503)
+            && Objects.equals(parameters.responseBody(), "service unavailable")
+            && parameters.nextRetryAt() != null));
     verify(deliveryLogRepository, never()).markRetrySuccess(anyLong(), anyInt(), any());
     verify(deliveryLogRepository, never()).markGiveUp(anyLong(), anyInt(), any(), anyString());
     assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
@@ -232,10 +243,7 @@ class WebhookDeliveryRelayTest {
 
     verify(deliveryLogRepository)
         .markGiveUp(
-            eq(107L),
-            eq(3),
-            any(),
-            org.mockito.ArgumentMatchers.contains("payload deserialization failed"));
+            eq(107L), eq(3), any(), ArgumentMatchers.contains("payload deserialization failed"));
     verify(dispatcher, never()).attemptDelivery(any(), any(), anyString());
     assertThat(meterRegistry.counter("batch_webhook_delivery_give_up_total").count())
         .isEqualTo(1.0);

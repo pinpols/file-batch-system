@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import io.github.pinpols.batch.sdk.wire.RegisterRequest;
 import io.github.pinpols.batch.sdk.wire.RenewRequest;
 import io.github.pinpols.batch.sdk.wire.ReportRequest;
@@ -36,8 +37,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  */
 class JsonFixtureRequestSideContractTest {
 
-  private static final ObjectMapper JSON =
-      new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+  private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
   private static Path repoRoot() {
     for (Path p = Paths.get("").toAbsolutePath(); p != null; p = p.getParent()) {
@@ -52,7 +52,7 @@ class JsonFixtureRequestSideContractTest {
     return repoRoot().resolve("docs/api/sdk-contract-fixtures");
   }
 
-  /** Only fixtures whose then.expect carries a body-side request assertion. */
+  /** 仅处理 then.expect 中包含请求体断言的 fixture。 */
   static Stream<Arguments> requestSideFixtures() throws IOException {
     Path dir = fixturesDir();
     assertThat(dir).as("fixtures dir must exist").isDirectory();
@@ -64,8 +64,9 @@ class JsonFixtureRequestSideContractTest {
           .sorted()
           .forEach(p -> {
             JsonNode expect = readExpect(p);
-            if (expect != null
-                && (expect.has("requestBodyIncludes") || expect.has("requestBodyExcludes"))) {
+            boolean scenarioHasRequestBodyExpectations = expect != null
+                && (expect.has("requestBodyIncludes") || expect.has("requestBodyExcludes"));
+            if (scenarioHasRequestBodyExpectations) {
               out.add(Arguments.of(p.getFileName().toString(), p));
             }
           });
@@ -111,7 +112,7 @@ class JsonFixtureRequestSideContractTest {
     }
   }
 
-  /** Build the outgoing body via the real wire DTO, mirroring the other runners. */
+  /** 使用实际线协议 DTO 构造请求体，与其他执行器保持一致。 */
   private static Object buildBody(JsonNode spec, JsonNode config) {
     String tenantId = config.path("tenantId").asText(null);
     String workerCode = config.path("workerCode").asText(null);
@@ -167,7 +168,7 @@ class JsonFixtureRequestSideContractTest {
     }
   }
 
-  /** Deep-subset assertion: every key/value in `subset` present and equal in `actual`. */
+  /** 深度子集断言：`subset` 中的每个键值都必须存在于 `actual` 中且值相等。 */
   private static void assertDeepIncludes(String name, JsonNode actual, JsonNode subset) {
     Iterator<Map.Entry<String, JsonNode>> it = subset.properties().iterator();
     while (it.hasNext()) {
@@ -183,8 +184,8 @@ class JsonFixtureRequestSideContractTest {
   }
 
   /**
-   * Value equality tolerant of numeric node type (IntNode vs LongNode) — the wire DTO's {@code
-   * taskId} is a Long while the fixture literal parses as int.
+   * 值比较不区分数值节点类型（IntNode 与 LongNode）；线协议 DTO 中的 {@code
+   * taskId} 为 Long，而 fixture 字面量会被解析为 int。
    */
   private static boolean jsonValueEquals(JsonNode a, JsonNode b) {
     if (a.isNumber() && b.isNumber()) {

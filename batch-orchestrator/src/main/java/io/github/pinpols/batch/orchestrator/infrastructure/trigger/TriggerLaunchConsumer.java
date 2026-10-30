@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
@@ -44,7 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
  * <p>失败处理:
  *
  * <ul>
- *   <li>空消息、反序列化失败和不可重试业务拒绝 → 记录指标后明确 ack，避免毒消息阻塞 partition
+ *   <li>空消息、反序列化失败、旧协议版本和不可重试业务拒绝 → 记录指标后明确 ack，避免毒消息阻塞 partition
  *   <li>幂等冲突(409) → 视为已处理并 ack
  *   <li>容量反压(429) → 显式 nack 当前 offset 并暂停 partition，不进入有限次数 recoverer
  *   <li>其他 unchecked → 交给容器有限重试；耗尽后按当前 LOG_ONLY 策略记录错误并提交 offset
@@ -55,6 +56,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Component
 @Slf4j
 public class TriggerLaunchConsumer {
+  private static final String REASON_KEY = "reason";
 
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
   private static final String METRIC_DEDUPED = "batch.trigger.launch.deduped.total";
@@ -84,6 +86,8 @@ public class TriggerLaunchConsumer {
   private final LaunchApplicationService launchApplicationService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
+  private final TriggerConsumerProperties consumerProperties;
+  private final BatchKafkaTopicNamespace topicNamespace;
   private final Timer consumeTimer;
   private final Timer kafkaQueueAgeTimer;
   private final Cache<MetricKey, Counter> counterCache;
@@ -93,14 +97,18 @@ public class TriggerLaunchConsumer {
       LaunchApplicationService launchApplicationService,
       OrchestratorGracefulShutdown gracefulShutdown,
       MeterRegistry meterRegistry,
-      TriggerConsumerProperties consumerProperties) {
+      TriggerConsumerProperties consumerProperties,
+      BatchKafkaTopicNamespace topicNamespace) {
     this.launchApplicationService = launchApplicationService;
     this.gracefulShutdown = gracefulShutdown;
     this.meterRegistry = meterRegistry;
+    this.consumerProperties = consumerProperties;
+    this.topicNamespace = topicNamespace;
     this.consumeTimer = Timer.builder(METRIC_CONSUME_DURATION).register(meterRegistry);
     this.kafkaQueueAgeTimer = Timer.builder(METRIC_KAFKA_QUEUE_AGE).register(meterRegistry);
-    this.rateLimitBackoff =
-        Duration.ofMillis(Math.max(1L, consumerProperties.getErrorHandler().getRetryBackoffMs()));
+    long configuredRetryBackoffMillis = consumerProperties.getErrorHandler().getRetryBackoffMs();
+    long minimumRetryBackoffMillis = Math.max(1L, configuredRetryBackoffMillis);
+    this.rateLimitBackoff = Duration.ofMillis(minimumRetryBackoffMillis);
     this.counterCache = Caffeine.newBuilder()
         .maximumSize(MAX_COUNTER_CACHE_SIZE)
         .expireAfterAccess(Duration.ofHours(1))
@@ -109,8 +117,8 @@ public class TriggerLaunchConsumer {
 
   @KafkaListener(
       id = OrchestratorKafkaConsumerConfiguration.TRIGGER_LAUNCH_LISTENER_ID,
-      topics = BatchTopics.TRIGGER_LAUNCH_V1,
-      groupId = "${batch.trigger.consumer.group-id:orchestrator-trigger-launch}",
+      topics = "#{__listener.topicName()}",
+      groupId = "#{__listener.consumerGroupId()}",
       containerFactory = OrchestratorKafkaConsumerConfiguration.TRIGGER_LISTENER_FACTORY)
   public void consume(ConsumerRecord<String, String> consumerRecord, Acknowledgment ack) {
     recordKafkaQueueAge(consumerRecord);
@@ -119,31 +127,10 @@ public class TriggerLaunchConsumer {
       ack.nack(rateLimitBackoff);
       return;
     }
-    LaunchEnvelope envelope;
-    try {
-      envelope = JsonUtils.fromJson(consumerRecord.value(), LaunchEnvelope.class);
-    } catch (RuntimeException ex) {
-      // payload 反序列化失败 = 数据问题/协议演进未兼容;记 metric + ack 跳过,避免无限重试堆积
-      log.error(
-          "TriggerLaunchConsumer failed to deserialize the message; skipping: topic={} partition={} offset={} key={}",
-          consumerRecord.topic(),
-          consumerRecord.partition(),
-          consumerRecord.offset(),
-          consumerRecord.key(),
-          ex);
-      counter(METRIC_FAILED, "reason", "deserialize").increment();
-      ack.acknowledge();
+    LaunchRequest request = readRequestOrAcknowledgeInvalidEnvelope(consumerRecord, ack);
+    if (EmptyChecks.isNull(request)) {
       return;
     }
-    if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
-      log.warn(
-          "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
-          consumerRecord.offset());
-      counter(METRIC_FAILED, "reason", "empty_envelope").increment();
-      ack.acknowledge();
-      return;
-    }
-    LaunchRequest request = envelope.launchRequest();
     String tenantId = EmptyChecks.isNull(request.tenantId()) ? "unknown" : request.tenantId();
     String tenantTag = normalizeTenantTag(tenantId);
     // R3-P1-2：Kafka listener 入口注入 MDC，让 launch 失败的 ERROR 日志可按 tenant/trace 过滤。
@@ -187,7 +174,7 @@ public class TriggerLaunchConsumer {
             tenantId,
             request.requestId(),
             rateLimitBackoff.toMillis());
-        counter(METRIC_FAILED, "tenant", tenantTag, "reason", "rate_limited").increment();
+        counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "rate_limited").increment();
         // 429 是容量反压，不是有限次数后可以丢弃的失败。显式 nack 会回退当前 offset 并暂停该
         // partition；正常返回可绕开 DefaultErrorHandler 的重试耗尽 recoverer。
         ack.nack(rateLimitBackoff);
@@ -197,7 +184,7 @@ public class TriggerLaunchConsumer {
               METRIC_FAILED,
               "tenant",
               tenantTag,
-              "reason",
+              REASON_KEY,
               "http_" + ex.getStatusCode().value())
           .increment();
       throw ex;
@@ -210,7 +197,7 @@ public class TriggerLaunchConsumer {
           request.requestId(),
           ex.getCode(),
           SwallowedExceptionLogger.summary(ex));
-      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "business").increment();
+      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "business").increment();
       ack.acknowledge();
     } catch (RuntimeException ex) {
       log.error(
@@ -218,7 +205,7 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           ex);
-      counter(METRIC_FAILED, "tenant", tenantTag, "reason", "runtime").increment();
+      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "runtime").increment();
       throw ex;
     } finally {
       consumeSample.stop(consumeTimer);
@@ -227,8 +214,58 @@ public class TriggerLaunchConsumer {
     }
   }
 
+  private LaunchRequest readRequestOrAcknowledgeInvalidEnvelope(
+      ConsumerRecord<String, String> consumerRecord, Acknowledgment ack) {
+    LaunchEnvelope envelope;
+    try {
+      envelope = JsonUtils.fromJson(consumerRecord.value(), LaunchEnvelope.class);
+    } catch (RuntimeException ex) {
+      // payload 反序列化失败 = 数据问题/协议演进未兼容;记 metric + ack 跳过,避免无限重试堆积
+      log.error(
+          "TriggerLaunchConsumer failed to deserialize the message; skipping: topic={} partition={} offset={} key={}",
+          consumerRecord.topic(),
+          consumerRecord.partition(),
+          consumerRecord.offset(),
+          consumerRecord.key(),
+          ex);
+      counter(METRIC_FAILED, REASON_KEY, "deserialize").increment();
+      ack.acknowledge();
+      return null;
+    }
+    if (EmptyChecks.isNull(envelope) || EmptyChecks.isNull(envelope.launchRequest())) {
+      log.warn(
+          "TriggerLaunchConsumer envelope/launchRequest is null; skipping: offset={}",
+          consumerRecord.offset());
+      counter(METRIC_FAILED, REASON_KEY, "empty_envelope").increment();
+      ack.acknowledge();
+      return null;
+    }
+    if (envelope.envelopeVersion() != LaunchEnvelope.CURRENT_VERSION) {
+      log.warn(
+          "TriggerLaunchConsumer rejected an unsupported envelope version; skipping: topic={} partition={} offset={} version={}",
+          consumerRecord.topic(),
+          consumerRecord.partition(),
+          consumerRecord.offset(),
+          envelope.envelopeVersion());
+      counter(METRIC_FAILED, REASON_KEY, "unsupported_version").increment();
+      ack.acknowledge();
+      return null;
+    }
+    return envelope.launchRequest();
+  }
+
+  public String topicName() {
+    return topicNamespace.topic(BatchTopics.TRIGGER_LAUNCH_V1);
+  }
+
+  public String consumerGroupId() {
+    return topicNamespace.consumerGroup(consumerProperties.getGroupId());
+  }
+
   private Counter counter(String name, String... tagPairs) {
-    MetricKey key = new MetricKey(name, List.copyOf(Arrays.asList(tagPairs.clone())));
+    String[] copiedTagPairs = tagPairs.clone();
+    List<String> immutableTagPairs = List.copyOf(Arrays.asList(copiedTagPairs));
+    MetricKey key = new MetricKey(name, immutableTagPairs);
     return counterCache.get(
         key, ignored -> Counter.builder(name).tags(Tags.of(tagPairs)).register(meterRegistry));
   }

@@ -1,3 +1,3 @@
 interface:
-  display_name: "前后端周期治理审查"
-  short_description: "按固定矩阵复核两仓规范退化与代码腐化"
+  display_name: "前后端治理总控"
+  short_description: "统筹前后端二十个治理领域、跨仓责任、专项结论与整改闭环证据"

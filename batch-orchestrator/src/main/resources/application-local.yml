@@ -1,8 +1,8 @@
 # 本地联调：仓库根目录先执行 `mvn package/install`；IDEA 直接运行主类时读取 `db/migration`。
-# 本地联调默认要求“干净库 + 从 V1 开始完整迁移”。
+# 本地联调默认要求干净库：空 schema 执行 V1；预置 schema 含对象时以 V1 基线后从 V2 迁移。
 # 如果旧数据卷里已经残留了 `flyway_schema_history`，请先 `docker compose down -v` 再启动。
 server:
-  port: 18082
+  port: ${BATCH_ORCHESTRATOR_PORT:18082}
 
 spring:
   main:

@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
+# 用途：在推送前执行本仓库的分域构建与质量检查。
+# 用法：先执行 git config core.hooksPath .githooks，由 Git 的 pre-push 阶段调用。
 # 启用：git config core.hooksPath .githooks（每人 clone 后跑一次）
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
+
+# Git 钩子继承当前仓库变量；后续会切换 worktree 并创建临时仓库，必须先清除。
+while IFS= read -r git_var; do
+  unset "$git_var"
+done < <(git rev-parse --local-env-vars)
+cd "$ROOT"
 
 # 禁止绕过 PR 直接推送受保护主分支。stdin 每行格式由 Git 定义：
 # <local-ref> <local-sha> <remote-ref> <remote-sha>。

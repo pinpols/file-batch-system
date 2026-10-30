@@ -109,19 +109,27 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     boolean originalAutoCommit = conn.getAutoCommit();
     try {
       conn.setAutoCommit(autoCommit);
-      try (CallableStatement cs = conn.prepareCall(buildCall(procName, total))) {
+      String callSql = buildCall(procName, total);
+      try (CallableStatement cs = conn.prepareCall(callSql)) {
         cs.setQueryTimeout(config.statementTimeoutSeconds());
         for (int i = 0; i < inParams.size(); i++) {
           cs.setObject(i + 1, inParams.get(i));
         }
         for (int i = 0; i < outTypes.size(); i++) {
-          cs.registerOutParameter(inParams.size() + i + 1, toSqlType(outTypes.get(i)));
+          int parameterIndex = inParams.size() + i + 1;
+          String outputType = outTypes.get(i);
+          int sqlType = toSqlType(outputType);
+          cs.registerOutParameter(parameterIndex, sqlType);
         }
         cs.execute();
 
         Map<String, Object> outValues = new LinkedHashMap<>();
         for (int i = 0; i < outTypes.size(); i++) {
-          outValues.put("p" + (i + 1), truncateOut(cs.getObject(inParams.size() + i + 1)));
+          String parameterName = "p" + (i + 1);
+          int parameterIndex = inParams.size() + i + 1;
+          Object rawOutputValue = cs.getObject(parameterIndex);
+          Object truncatedOutputValue = truncateOut(rawOutputValue);
+          outValues.put(parameterName, truncatedOutputValue);
         }
         if (!autoCommit) conn.commit();
 
@@ -219,7 +227,10 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
       if (o == null) {
         throw new IllegalArgumentException("parameters.outParams contains null");
       }
-      out.add(String.valueOf(o).trim().toUpperCase(Locale.ROOT));
+      String rawType = String.valueOf(o);
+      String trimmedType = rawType.trim();
+      String normalizedType = trimmedType.toUpperCase(Locale.ROOT);
+      out.add(normalizedType);
     }
     return out;
   }

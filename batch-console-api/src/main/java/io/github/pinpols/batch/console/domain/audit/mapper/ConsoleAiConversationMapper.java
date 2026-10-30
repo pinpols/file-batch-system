@@ -2,7 +2,9 @@ package io.github.pinpols.batch.console.domain.audit.mapper;
 
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
-import java.time.Instant;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -30,12 +32,7 @@ public interface ConsoleAiConversationMapper {
 
   int insertConversation(ConsoleAiConversationEntity conversation);
 
-  Long allocateTurnNo(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("expiresAt") OffsetDateTime expiresAt,
-      @Param("contextVersion") String contextVersion);
+  Long allocateTurnNo(ConsoleAiConversationAllocateTurnNoParam parameters);
 
   default List<ConsoleAiTurnEntity> selectRecentCompleteTurns(
       String tenantId, String conversationId, int limit) {
@@ -74,18 +71,9 @@ public interface ConsoleAiConversationMapper {
       @Param("limit") int limit);
 
   List<ConsoleAiConversationEntity> selectPageByOwner(
-      @Param("tenantId") String tenantId,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("beforeUpdatedAt") Instant beforeUpdatedAt,
-      @Param("beforeId") String beforeId,
-      @Param("limit") int limit);
+      ConsoleAiConversationPageByOwnerQuery parameters);
 
-  List<ConsoleAiTurnEntity> selectTurns(
-      @Param("tenantId") String tenantId,
-      @Param("conversationId") String conversationId,
-      @Param("ownerUserId") String ownerUserId,
-      @Param("beforeTurnNo") Long beforeTurnNo,
-      @Param("limit") int limit);
+  List<ConsoleAiTurnEntity> selectTurns(ConsoleAiConversationTurnsQuery parameters);
 
   int deleteConversation(
       @Param("tenantId") String tenantId,

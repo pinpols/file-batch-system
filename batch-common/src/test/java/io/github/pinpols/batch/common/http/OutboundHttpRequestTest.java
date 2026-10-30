@@ -13,16 +13,24 @@ import org.junit.jupiter.api.Test;
 class OutboundHttpRequestTest {
 
   @Test
+  @DisplayName("载荷描述的诊断字符串不暴露请求正文")
+  void shouldHideBodyWhenRenderingHttpContent() {
+    OutboundHttpContent content = new OutboundHttpContent("secret-token", "application/json");
+
+    assertThat(content.toString()).contains("bodyLength=12").doesNotContain("secret-token");
+  }
+
+  @Test
   @DisplayName("构造请求时拷贝请求头快照,外部后续修改不影响已建请求")
   void shouldCopyHeadersDefensively_whenBuildingTypedRequest() {
     Map<String, String> headers = new HashMap<>();
     headers.put("X-Test", "one");
 
+    OutboundHttpContent httpContent = new OutboundHttpContent("{}", "application/json");
     OutboundHttpRequest request = OutboundHttpRequest.post(
         "https://example.test/hook",
         headers,
-        "{}",
-        "application/json",
+        httpContent,
         Duration.ofSeconds(1),
         Duration.ofSeconds(2),
         OutboundAddressPolicy.GUARDED);
@@ -88,11 +96,11 @@ class OutboundHttpRequestTest {
         .hasMessageContaining("timeouts");
 
     Duration connectTimeout = Duration.ofSeconds(1);
+    OutboundHttpContent httpContent = new OutboundHttpContent("{}", null);
     assertThatThrownBy(() -> OutboundHttpRequest.post(
             "https://example.test",
             headers,
-            "{}",
-            null,
+            httpContent,
             connectTimeout,
             requestTimeout,
             OutboundAddressPolicy.TRUSTED))

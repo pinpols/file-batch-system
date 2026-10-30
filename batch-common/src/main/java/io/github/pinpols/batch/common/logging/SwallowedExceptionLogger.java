@@ -48,8 +48,8 @@ public final class SwallowedExceptionLogger {
   /**
    * 返回可安全写入单行日志的异常摘要。
    *
-   * <p>摘要统一移除换行和控制字符、遮蔽常见凭据并限制长度。需要完整堆栈的未预期故障不应调用本方法，
-   * 而应将 {@link Throwable} 作为 SLF4J 最后一个参数传入。
+   * <p>摘要统一移除换行和控制字符、遮蔽常见凭据并限制长度。异常可能包含外部输入时，不得把原始
+   * {@link Throwable} 作为日志末参数输出完整堆栈。
    */
   public static String summary(Throwable t) {
     if (EmptyChecks.isNull(t)) {
@@ -62,6 +62,37 @@ public final class SwallowedExceptionLogger {
       return value;
     }
     return value.substring(0, MAX_SUMMARY_LENGTH - 3) + "...";
+  }
+
+  /** 净化无异常对象的失败消息，保留普通业务文本并限制长度；null 保持为 null。 */
+  public static String safeMessage(String message) {
+    return safeMessage(message, MAX_SUMMARY_LENGTH);
+  }
+
+  /** 按调用方的字段长度上限净化失败消息；先遮蔽凭据，再截断文本。 */
+  public static String safeMessage(String message, int maxLength) {
+    if (EmptyChecks.isNull(message)) {
+      return null;
+    }
+    if (maxLength < 4) {
+      throw new IllegalArgumentException("maxLength must be at least 4");
+    }
+    String value = sanitize(message);
+    if (value.length() <= maxLength) {
+      return value;
+    }
+    return value.substring(0, maxLength - 3) + "...";
+  }
+
+  /** 判断文本是否含有本类已识别的凭据赋值、Bearer 令牌或 URI userinfo 语法。 */
+  public static boolean containsCredentialSyntax(String message) {
+    if (EmptyChecks.isBlank(message)) {
+      return false;
+    }
+    return QUOTED_SENSITIVE_ASSIGNMENT.matcher(message).find()
+        || SENSITIVE_ASSIGNMENT.matcher(message).find()
+        || BEARER_TOKEN.matcher(message).find()
+        || URI_USER_INFO.matcher(message).find();
   }
 
   private static String sanitize(String message) {

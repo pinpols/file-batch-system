@@ -43,6 +43,16 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
   @Test
   @DisplayName("创建日历: 返回成功,落库的租户,编码与时区与请求一致")
   void shouldCreateCalendarWithValidCode() {
+    final String selectTenantIdSql = """
+        SELECT tenant_id, calendar_code, timezone FROM batch.business_calendar WHERE calendar_code = ?\
+        """;
+    final String deleteBatchDayCatchupControlSql = """
+        DELETE FROM batch.batch_day_catchup_control WHERE calendar_code = ?
+    """;
+    final String deleteBusinessCalendarSql = """
+        DELETE FROM batch.business_calendar WHERE calendar_code = ?
+    """;
+
     String code = "int_cal_create_" + System.currentTimeMillis();
 
     client
@@ -55,20 +65,83 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, calendar_code, timezone FROM batch.business_calendar"
-            + " WHERE calendar_code = ?",
-        code);
+    var row = jdbcTemplate.queryForMap(selectTenantIdSql, code);
     assertThat(row).containsEntry("tenant_id", "int-cal-ta");
     assertThat(row).containsEntry("calendar_code", code);
     assertThat(row).containsEntry("timezone", "Asia/Shanghai");
 
-    jdbcTemplate.update("DELETE FROM batch.business_calendar WHERE calendar_code = ?", code);
+    jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
+    jdbcTemplate.update(deleteBusinessCalendarSql, code);
+  }
+
+  @Test
+  @DisplayName("Console节假日导入按当前租户和日历身份写入")
+  void shouldImportHolidayForCalendarInResolvedTenant() {
+    final String selectIdSql = """
+        SELECT id FROM batch.business_calendar WHERE tenant_id = ? AND calendar_code = ?
+    """;
+    final String selectTenantIdSql = """
+        SELECT tenant_id FROM batch.calendar_holiday WHERE calendar_id = ? AND biz_date = DATE '2026-12-25'\
+        """;
+    final String deleteCalendarHolidaySql = """
+        DELETE FROM batch.calendar_holiday WHERE tenant_id = ? AND calendar_id = ?
+    """;
+    final String deleteBatchDayCatchupControlSql = """
+        DELETE FROM batch.batch_day_catchup_control WHERE tenant_id = ?\s\
+        AND calendar_code = (SELECT calendar_code FROM batch.business_calendar WHERE id = ?)\
+        """;
+    final String deleteBusinessCalendarSql = """
+        DELETE FROM batch.business_calendar WHERE tenant_id = ? AND id = ?
+    """;
+
+    String code = "int_cal_holiday_" + System.currentTimeMillis();
+    client
+        .post()
+        .uri("/api/console/calendars")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-cal-holiday-" + code)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(body(code))
+        .exchange()
+        .expectStatus()
+        .isOk();
+
+    Long calendarId = jdbcTemplate.queryForObject(selectIdSql, Long.class, "int-cal-ta", code);
+    try {
+      client
+          .post()
+          .uri("/api/console/calendars/{id}/holidays", calendarId)
+          .contentType(MediaType.APPLICATION_JSON)
+          .bodyValue("""
+              {
+                "tenantId": "int-cal-ta",
+                "items": [{
+                  "bizDate": "2026-12-25",
+                  "dayType": "HOLIDAY",
+                  "holidayName": "test holiday"
+                }]
+              }
+              """)
+          .exchange()
+          .expectStatus()
+          .isOk();
+
+      String selectedTenantId =
+          jdbcTemplate.queryForObject(selectTenantIdSql, String.class, calendarId);
+      assertThat(selectedTenantId).isEqualTo("int-cal-ta");
+    } finally {
+      jdbcTemplate.update(deleteCalendarHolidaySql, "int-cal-ta", calendarId);
+      jdbcTemplate.update(deleteBatchDayCatchupControlSql, "int-cal-ta", calendarId);
+      jdbcTemplate.update(deleteBusinessCalendarSql, "int-cal-ta", calendarId);
+    }
   }
 
   @Test
   @DisplayName("编码含空格: 返回校验错误且不落库")
   void shouldRejectInvalidCalendarCodeWithSpaces() {
+    final String selectCountSql = """
+        SELECT COUNT(*) FROM batch.business_calendar WHERE calendar_code = ?
+    """;
+
     client
         .post()
         .uri("/api/console/calendars")
@@ -81,10 +154,7 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.business_calendar WHERE calendar_code = ?",
-        Long.class,
-        "q q q");
+    Long cnt = jdbcTemplate.queryForObject(selectCountSql, Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -105,6 +175,13 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
   @Test
   @DisplayName("编码重复: 第二次写入失败,不产生重复日历")
   void shouldRejectDuplicateCalendarCode() {
+    final String deleteBatchDayCatchupControlSql = """
+        DELETE FROM batch.batch_day_catchup_control WHERE calendar_code = ?
+    """;
+    final String deleteBusinessCalendarSql = """
+        DELETE FROM batch.business_calendar WHERE calendar_code = ?
+    """;
+
     String code = "int_cal_dup_" + System.currentTimeMillis();
     client
         .post()
@@ -126,6 +203,7 @@ class ConsoleCalendarMutationIntegrationTest extends AbstractMutationIntegration
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.business_calendar WHERE calendar_code = ?", code);
+    jdbcTemplate.update(deleteBatchDayCatchupControlSql, code);
+    jdbcTemplate.update(deleteBusinessCalendarSql, code);
   }
 }

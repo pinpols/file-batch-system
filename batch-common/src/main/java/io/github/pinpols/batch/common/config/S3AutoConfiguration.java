@@ -40,10 +40,14 @@ public class S3AutoConfiguration {
     Apache5HttpClient.Builder http = Apache5HttpClient.builder()
         .connectionTimeout(Duration.ofMillis(p.getConnectTimeoutMs()))
         .socketTimeout(Duration.ofMillis(p.getReadTimeoutMs()));
-    S3ClientBuilder b = S3Client.builder()
-        .endpointOverride(URI.create(p.getEndpoint()))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
+    S3ClientBuilder b = S3Client.builder();
+    URI endpoint = URI.create(p.getEndpoint());
+    AwsBasicCredentials basicCredentials =
+        AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
+    StaticCredentialsProvider credentialsProvider =
+        StaticCredentialsProvider.create(basicCredentials);
+    b.endpointOverride(endpoint)
+        .credentialsProvider(credentialsProvider)
         .forcePathStyle(p.isPathStyleEnabled())
         // 默认关掉 AWS SDK v2 >=2.30 的 WHEN_SUPPORTED 请求校验和(CRC32 + aws-chunked trailer):
         // 多数 S3 兼容后端不识别该 trailer,会回 501/签名错误；确需 AWS 原生行为时通过配置打开。
@@ -79,13 +83,17 @@ public class S3AutoConfiguration {
   @Bean
   @ConditionalOnMissingBean
   public S3Presigner s3Presigner(S3StorageProperties p) {
-    return S3Presigner.builder()
-        .endpointOverride(URI.create(p.getEndpoint()))
-        .credentialsProvider(StaticCredentialsProvider.create(
-            AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey())))
-        .serviceConfiguration(S3Configuration.builder()
-            .pathStyleAccessEnabled(p.isPathStyleEnabled())
-            .build())
+    URI endpoint = URI.create(p.getEndpoint());
+    AwsBasicCredentials basicCredentials =
+        AwsBasicCredentials.create(p.getAccessKey(), p.getSecretKey());
+    StaticCredentialsProvider credentialsProvider =
+        StaticCredentialsProvider.create(basicCredentials);
+    S3Presigner.Builder presignerBuilder =
+        S3Presigner.builder().endpointOverride(endpoint).credentialsProvider(credentialsProvider);
+    S3Configuration serviceConfiguration =
+        S3Configuration.builder().pathStyleAccessEnabled(p.isPathStyleEnabled()).build();
+    return presignerBuilder
+        .serviceConfiguration(serviceConfiguration)
         .region(Texts.hasText(p.getRegion()) ? Region.of(p.getRegion()) : Region.US_EAST_1)
         .build();
   }
@@ -103,9 +111,10 @@ public class S3AutoConfiguration {
       throw new IllegalStateException(
           "FATAL: production object-storage credentials are not configured; inject them through BATCH_S3_ACCESS_KEY / BATCH_S3_SECRET_KEY");
     }
-    if ("minioadmin".equals(accessKey)
+    boolean usesDefaultStorageCredentials = "minioadmin".equals(accessKey)
         || "minioadmin".equals(secretKey)
-        || "minioadmin123".equals(secretKey)) {
+        || "minioadmin123".equals(secretKey);
+    if (usesDefaultStorageCredentials) {
       throw new IllegalStateException(
           "FATAL: production object storage still uses known MinIO default credentials; inject real credentials");
     }

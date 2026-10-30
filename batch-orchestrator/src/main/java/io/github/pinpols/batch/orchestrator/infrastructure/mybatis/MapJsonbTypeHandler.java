@@ -29,7 +29,8 @@ public class MapJsonbTypeHandler extends BaseTypeHandler<Map<String, Object>> {
   public void setNonNullParameter(
       PreparedStatement ps, int i, Map<String, Object> parameter, JdbcType jdbcType)
       throws SQLException {
-    ps.setString(i, JsonUtils.toJson(parameter));
+    String json = JsonUtils.toJson(parameter);
+    ps.setString(i, json);
   }
 
   @Override

@@ -65,12 +65,13 @@ final class DryRunEndpointProbe {
       // Probe 本身必须保持 fail-closed；transport 侧会在真正建连时再次校验同一规则，
       // 避免测试替身或未来其他实现意外绕过 dry-run 的 SSRF 结论。
       DnsResolveGuard.resolveAllAndValidate(host);
-      OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.head(
+      OutboundHttpRequest probeRequest = OutboundHttpRequest.head(
           probeUri.toString(),
           Map.of(),
           HTTP_PROBE_TIMEOUT,
           HTTP_PROBE_TIMEOUT,
-          OutboundAddressPolicy.GUARDED));
+          OutboundAddressPolicy.GUARDED);
+      OutboundHttpResponse response = httpTransport.execute(probeRequest);
       int status = response.statusCode();
       if (status >= 200 && status < 500) {
         findings.add(DryRunFinding.pass(

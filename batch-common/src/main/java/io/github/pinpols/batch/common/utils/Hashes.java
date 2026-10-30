@@ -34,8 +34,9 @@ public final class Hashes {
       return null;
     }
     try {
-      byte[] full = MessageDigest.getInstance(CryptoAlgorithms.SHA_256)
-          .digest(raw.getBytes(StandardCharsets.UTF_8));
+      MessageDigest sha256 = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
+      byte[] rawBytes = raw.getBytes(StandardCharsets.UTF_8);
+      byte[] full = sha256.digest(rawBytes);
       byte[] head = new byte[8];
       System.arraycopy(full, 0, head, 0, 8);
       return HexFormat.of().formatHex(head);

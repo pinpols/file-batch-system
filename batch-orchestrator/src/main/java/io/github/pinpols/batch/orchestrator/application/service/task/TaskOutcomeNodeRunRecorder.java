@@ -51,9 +51,11 @@ final class TaskOutcomeNodeRunRecorder {
           command.workflowRunId(), command.nodeCode(), command.nodeType(), command.startedAt());
     }
     long duration = resolveDuration(command.startedAt(), command.finishedAt());
-    workflowMappers.workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
-        .id(current.getId())
-        .nodeStatus(resolveStatus(command))
+    UpdateNodeRunStatusParam.UpdateNodeRunStatusParamBuilder updateStatusBuilder =
+        UpdateNodeRunStatusParam.builder().id(current.getId());
+    String nodeStatus = resolveStatus(command);
+    UpdateNodeRunStatusParam updateStatusParam = updateStatusBuilder
+        .nodeStatus(nodeStatus)
         .errorCode(command.errorCode())
         .errorMessage(command.errorMessage())
         .errorKey(command.errorKey())
@@ -62,7 +64,8 @@ final class TaskOutcomeNodeRunRecorder {
         .finishedAt(command.finishedAt())
         // 成功节点保存 worker 产出，失败节点不保留可能不完整的 output。
         .output(command.success() ? command.outputJson() : null)
-        .build());
+        .build();
+    workflowMappers.workflowNodeRunMapper.updateStatus(updateStatusParam);
     return workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
         command.workflowRunId(), command.nodeCode());
   }
@@ -121,8 +124,11 @@ final class TaskOutcomeNodeRunRecorder {
   }
 
   private long resolveDuration(Instant startedAt, Instant finishedAt) {
-    return EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)
-        ? 0L
-        : Duration.between(startedAt, finishedAt).toMillis();
+    if (EmptyChecks.isNull(startedAt) || EmptyChecks.isNull(finishedAt)) {
+      return 0L;
+    }
+    Duration elapsed = Duration.between(startedAt, finishedAt);
+    long elapsedMillis = elapsed.toMillis();
+    return elapsedMillis;
   }
 }

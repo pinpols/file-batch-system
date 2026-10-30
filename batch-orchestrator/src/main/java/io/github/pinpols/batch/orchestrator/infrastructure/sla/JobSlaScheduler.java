@@ -1,10 +1,8 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
@@ -12,7 +10,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,7 +34,6 @@ public class JobSlaScheduler {
   private final JobMonitoringMapper jobMonitoringMapper;
   private final BatchOrchestratorGovernanceProperties governance;
   private final MeterRegistry meterRegistry;
-  private final AlertEventService alertEventService;
   private final JobSlaViolationProcessor violationProcessor;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final AtomicLong violationCount = new AtomicLong();
@@ -67,7 +63,8 @@ public class JobSlaScheduler {
         continue;
       }
       try {
-        violationProcessor.process(candidate, now);
+        RlsTenantContextHolder.runWithTenant(
+            candidate.getTenantId(), () -> violationProcessor.process(candidate, now));
       } catch (RuntimeException e) {
         log.error(
             "failed to persist job SLA violation; candidate will be retried: tenantId={}, jobInstanceId={}",
@@ -103,19 +100,18 @@ public class JobSlaScheduler {
       if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
         continue;
       }
-      Map<String, Object> extra =
-          violationProcessor.buildEscalationExtra(candidate, now, delaySeconds);
-      AlertEmitRequest emitRequest = AlertEmitRequest.builder()
-          .tenantId(candidate.getTenantId())
-          .serviceName("batch-orchestrator")
-          .alertType("JOB_SLA_VIOLATION_ESCALATED")
-          .severity(resolvedSeverity)
-          .title("job SLA still violating after escalation window")
-          .detailJson(JsonUtils.toJson(extra))
-          .resourceKey(String.valueOf(candidate.getId()))
-          .traceId(candidate.getTraceId())
-          .build();
-      alertEventService.emit(emitRequest);
+      try {
+        RlsTenantContextHolder.runWithTenant(
+            candidate.getTenantId(),
+            () -> violationProcessor.processEscalation(
+                candidate, now, delaySeconds, resolvedSeverity));
+      } catch (RuntimeException failure) {
+        log.error(
+            "failed to persist job SLA escalation; candidate will be retried: tenantId={}, jobInstanceId={}",
+            candidate.getTenantId(),
+            candidate.getId(),
+            failure);
+      }
     }
   }
 }

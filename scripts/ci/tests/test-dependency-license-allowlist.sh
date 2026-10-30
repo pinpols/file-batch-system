@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：验证依赖许可证白名单对允许与禁止许可证的判定。
+# 用法：在仓库根目录执行 bash scripts/ci/tests/test-dependency-license-allowlist.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"

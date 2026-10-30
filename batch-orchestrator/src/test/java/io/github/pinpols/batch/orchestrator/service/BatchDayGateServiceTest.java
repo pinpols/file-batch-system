@@ -1,22 +1,28 @@
 package io.github.pinpols.batch.orchestrator.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
+import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -47,6 +53,7 @@ class BatchDayGateServiceTest {
   private TriggerRequestMapper triggerRequestMapper;
   private JobExecutionLogMapper jobExecutionLogMapper;
   private JobInstanceMapper jobInstanceMapper;
+  private AlertEventService alertEventService;
   private BatchDayGateService service;
 
   @BeforeEach
@@ -57,6 +64,7 @@ class BatchDayGateServiceTest {
     triggerRequestMapper = mock(TriggerRequestMapper.class);
     jobExecutionLogMapper = mock(JobExecutionLogMapper.class);
     jobInstanceMapper = mock(JobInstanceMapper.class);
+    alertEventService = mock(AlertEventService.class);
     service = new BatchDayGateService(
         configCacheService,
         batchDayInstanceMapper,
@@ -66,7 +74,43 @@ class BatchDayGateServiceTest {
         jobInstanceMapper,
         new BatchDateTimeSupport(
             Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties())),
-        mock(AlertEventService.class));
+        alertEventService);
+  }
+
+  @Test
+  @DisplayName("请求为空时沿既有放行分支返回，不读取配置或修改运行数据")
+  void shouldAllowNullRequestWithoutPersistence() {
+    LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
+    BatchDayGateService.GateDecision decision =
+        service.evaluateAndApply(null, loaded, Map.of(), "trace-null-request");
+
+    assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.ALLOW);
+    verifyNoInteractions(
+        configCacheService,
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        triggerRequestMapper,
+        jobExecutionLogMapper,
+        jobInstanceMapper,
+        alertEventService);
+  }
+
+  @Test
+  @DisplayName("加载结果为空时沿既有放行分支返回，不读取配置或修改运行数据")
+  void shouldAllowNullLoadResultWithoutPersistence() {
+    LaunchRequest request = request();
+    BatchDayGateService.GateDecision decision =
+        service.evaluateAndApply(request, null, Map.of(), "trace-null-loaded");
+
+    assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.ALLOW);
+    verifyNoInteractions(
+        configCacheService,
+        batchDayInstanceMapper,
+        waitingLaunchMapper,
+        triggerRequestMapper,
+        jobExecutionLogMapper,
+        jobInstanceMapper,
+        alertEventService);
   }
 
   @Test
@@ -161,6 +205,64 @@ class BatchDayGateServiceTest {
   }
 
   @Test
+  @DisplayName("Workflow 子请求被前一日闸门拒绝时告警保留所属运行和节点身份")
+  void shouldIncludeWorkflowContextInBatchDayGateAlert() {
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB")
+        .bizDate(LocalDate.of(2026, Month.MAY, 5))
+        .triggerType(TriggerType.SCHEDULED)
+        .requestId("req-1")
+        .traceId("trace-1")
+        .params(Map.of())
+        .build();
+    TriggerRequestEntity triggerRequest = loaded("INHERIT").triggerRequest();
+    triggerRequest.setParentWorkflowRunId(84L);
+    triggerRequest.setParentNodeCode("IMPORT_NODE");
+    LaunchValidationService.LaunchLoadResult loaded =
+        new LaunchValidationService.LaunchLoadResult(triggerRequest, job("INHERIT"), null, null);
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
+        .thenReturn(calendar("REJECT_IF_PREVIOUS_OPEN"));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn(previous("IN_FLIGHT"));
+
+    BatchDayGateService.GateDecision decision =
+        service.evaluateAndApply(request, loaded, Map.of(), "trace-1");
+
+    assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.REJECT);
+    ArgumentCaptor<AlertEmitRequest> alert = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    verify(alertEventService).emit(alert.capture());
+    Map<String, Object> detail =
+        JsonUtils.fromJson(alert.getValue().detailJson(), new TypeReference<>() {});
+    assertThat(detail)
+        .containsEntry("workflowRunId", "84")
+        .containsEntry("nodeCode", "IMPORT_NODE")
+        .containsEntry("jobCode", "JOB")
+        .containsEntry("bizDate", "2026-05-05")
+        .containsEntry("requestId", "req-1");
+  }
+
+  @Test
+  @DisplayName("批量日等待项必须使用已加载的同租户原请求身份")
+  void shouldRejectWaitingLaunchWhenLoadedRequestIdentityDiffers() {
+    LaunchRequest request = request();
+    LaunchValidationService.LaunchLoadResult loaded = loaded("INHERIT");
+    loaded.triggerRequest().setTenantId("other-tenant");
+    when(configCacheService.findEnabledBusinessCalendar("t1", "CAL"))
+        .thenReturn(calendar("WAIT_PREVIOUS_DAY"));
+    when(batchDayInstanceMapper.selectByTenantCalendarBizDate(
+            "t1", "CAL", LocalDate.of(2026, Month.MAY, 4)))
+        .thenReturn(previous("IN_FLIGHT"));
+
+    assertThatThrownBy(() -> service.evaluateAndApply(request, loaded, Map.of(), "trace-1"))
+        .isInstanceOf(BizException.class);
+
+    verify(waitingLaunchMapper, never()).insert(any());
+    verify(triggerRequestMapper, never()).updateAcceptance(any(), any(), any(), any());
+  }
+
+  @Test
   @DisplayName("日历要求前日关闭而前一日已失败时拒绝受理,且不写入等待记录")
   void shouldRejectWhenCalendarRejectsOpenPreviousDay() {
     LaunchRequest request = request();
@@ -213,13 +315,17 @@ class BatchDayGateServiceTest {
 
   private LaunchValidationService.LaunchLoadResult loaded(String scope) {
     TriggerRequestEntity trigger = new TriggerRequestEntity();
+    trigger.setTenantId("t1");
     trigger.setRequestId("req-1");
+    trigger.setJobCode("JOB");
+    trigger.setBizDate(LocalDate.of(2026, Month.MAY, 5));
+    trigger.setTriggerType(TriggerType.SCHEDULED.code());
+    trigger.setRequestStatus(TriggerRequestStatus.ACCEPTED.code());
     return new LaunchValidationService.LaunchLoadResult(trigger, job(scope), null, null);
   }
 
   private LaunchValidationService.LaunchLoadResult loadedWithGroup(String scope, String groupCode) {
-    TriggerRequestEntity trigger = new TriggerRequestEntity();
-    trigger.setRequestId("req-1");
+    TriggerRequestEntity trigger = loaded(scope).triggerRequest();
     return new LaunchValidationService.LaunchLoadResult(
         trigger, jobWithGroup(scope, groupCode), null, null);
   }

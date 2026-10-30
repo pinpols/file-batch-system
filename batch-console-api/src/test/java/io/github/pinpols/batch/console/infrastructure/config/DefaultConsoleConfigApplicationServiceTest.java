@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -30,6 +30,10 @@ import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleDashbo
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ConfigDependentView;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRevokeRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.SecretVersionRotateRequest;
+import io.github.pinpols.batch.console.domain.param.ConfigChangeLogInsertParam;
+import io.github.pinpols.batch.console.domain.param.ConfigReleaseInsertParam;
+import io.github.pinpols.batch.console.domain.param.ConfigReleaseStatusUpdateParam;
+import io.github.pinpols.batch.console.domain.param.SecretVersionInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.entity.SecretVersionEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.SecretVersionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -46,6 +50,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -97,8 +102,13 @@ class DefaultConsoleConfigApplicationServiceTest {
     lenient()
         .when(configReleaseApplyService.canonicalType(any()))
         .thenAnswer(invocation -> invocation.getArgument(0));
-    lenient().when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(1);
-    lenient().when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(1);
+    lenient()
+        .when(configReleaseMapper.updateConfigReleaseStatus(
+            any(ConfigReleaseStatusUpdateParam.class)))
+        .thenReturn(1);
+    lenient()
+        .when(configReleaseMapper.selectLatestVersionNo(any(), any(), any()))
+        .thenReturn(1);
   }
 
   // ── 配置发布单查询 ─────────────────────────────────────────────────────
@@ -145,22 +155,23 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("创建配置发布单时,版本号递增并同步写入变更日志")
   void shouldCreateConfigRelease_andIncrementVersion() {
-    when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
+    when(configReleaseMapper.selectLatestVersionNo(any(), any(), any())).thenReturn(2);
     ConfigReleaseUpsertRequest req = upsertRequest();
 
     Long versionNo = service.createConfigRelease(req);
 
     assertThat(versionNo).isEqualTo(3L);
-    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
+    ArgumentCaptor<ConfigReleaseInsertParam> captor =
+        ArgumentCaptor.forClass(ConfigReleaseInsertParam.class);
     verify(configReleaseMapper).insertConfigRelease(captor.capture());
-    assertThat(captor.getValue()).containsEntry("grayScopeJson", null);
-    verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
+    assertThat(captor.getValue().grayScopeJson()).isNull();
+    verify(configChangeLogMapper).insertConfigChangeLog(any(ConfigChangeLogInsertParam.class));
   }
 
   @Test
   @DisplayName("此前没有历史版本时,新建发布单版本号从 1 开始")
   void shouldCreateConfigRelease_withVersionOne_whenNoPrior() {
-    when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(null);
+    when(configReleaseMapper.selectLatestVersionNo(any(), any(), any())).thenReturn(null);
     ConfigReleaseUpsertRequest req = upsertRequest();
 
     Long versionNo = service.createConfigRelease(req);
@@ -203,7 +214,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("回滚时找不到目标发布单,抛出业务异常")
   void shouldThrow_whenLoadReleaseNotFound() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(null);
 
     ConfigReleaseActionRequest req = actionRequest();
     assertThatThrownBy(() -> service.rollbackConfigRelease(99L, req))
@@ -214,7 +225,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @DisplayName("对草稿状态的发布单执行回滚时,按状态冲突拒绝")
   void shouldReject_whenRollbackDraftRelease() {
     // 回归:rollback 只能作用于已上线发布,DRAFT 无可回滚内容。release() 默认 DRAFT。
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(release(10L, "JOB", "k", 1));
 
     assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
@@ -228,19 +239,21 @@ class DefaultConsoleConfigApplicationServiceTest {
     // rollback 只能作用于已上线发布(状态机守卫),用 PUBLISHED release。
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(published);
     ConfigReleaseEntity previous = release(9L, "JOB", "k", 0);
     previous.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectPreviousEffective(anyMap())).thenReturn(previous);
+    when(configReleaseMapper.selectPreviousEffective(any(), any(), any(), any()))
+        .thenReturn(previous);
 
     ConfigReleaseActionRequest req = actionRequest();
     String status = service.rollbackConfigRelease(10L, req);
 
     assertThat(status).isEqualTo(ConfigLifecycleStatus.ROLLED_BACK.code());
-    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
+    ArgumentCaptor<ConfigReleaseStatusUpdateParam> captor =
+        ArgumentCaptor.forClass(ConfigReleaseStatusUpdateParam.class);
     verify(configReleaseMapper).updateConfigReleaseStatus(captor.capture());
-    assertThat(captor.getValue().get("rolledBackAt")).isNotNull();
-    assertThat(captor.getValue().get("publishedAt")).isNull();
+    assertThat(captor.getValue().rolledBackAt()).isNotNull();
+    assertThat(captor.getValue().publishedAt()).isNull();
     verify(configReleaseApplyService).apply(eq(previous), eq("admin"), eq("config-rollback-10"));
   }
 
@@ -249,29 +262,31 @@ class DefaultConsoleConfigApplicationServiceTest {
   void shouldReject_whenExpectedVersionIsStale() {
     ConfigReleaseEntity published = release(10L, "JOB", "k", 2);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(published);
 
     assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
-    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
+    verify(configReleaseMapper, never())
+        .updateConfigReleaseStatus(any(ConfigReleaseStatusUpdateParam.class));
   }
 
   @Test
   @DisplayName("目标发布单不是最新版本时,拒绝回滚且不更新状态")
   void shouldReject_whenReleaseIsNotLatestVersion() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
-    when(configReleaseMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(release(10L, "JOB", "k", 1));
+    when(configReleaseMapper.selectLatestVersionNo(any(), any(), any())).thenReturn(2);
 
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(published);
     assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.STATE_CONFLICT);
-    verify(configReleaseMapper, never()).updateConfigReleaseStatus(anyMap());
+    verify(configReleaseMapper, never())
+        .updateConfigReleaseStatus(any(ConfigReleaseStatusUpdateParam.class));
   }
 
   @Test
@@ -279,11 +294,13 @@ class DefaultConsoleConfigApplicationServiceTest {
   void shouldReject_whenStatusCasLosesRace() {
     ConfigReleaseEntity published = release(10L, "JOB", "k", 1);
     published.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(published);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(published);
     ConfigReleaseEntity previous = release(9L, "JOB", "k", 0);
     previous.setConfigStatus(ConfigLifecycleStatus.PUBLISHED.code());
-    when(configReleaseMapper.selectPreviousEffective(anyMap())).thenReturn(previous);
-    when(configReleaseMapper.updateConfigReleaseStatus(anyMap())).thenReturn(0);
+    when(configReleaseMapper.selectPreviousEffective(any(), any(), any(), any()))
+        .thenReturn(previous);
+    when(configReleaseMapper.updateConfigReleaseStatus(any(ConfigReleaseStatusUpdateParam.class)))
+        .thenReturn(0);
 
     assertThatThrownBy(() -> service.rollbackConfigRelease(10L, actionRequest()))
         .isInstanceOf(BizException.class)
@@ -313,7 +330,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("轮换密钥时,版本号递增且状态去除空白并转为大写")
   void shouldRotateSecret_andIncrementVersion() {
-    when(secretVersionMapper.selectLatestVersionNo(anyMap())).thenReturn(2);
+    when(secretVersionMapper.selectLatestVersionNo(any(), any())).thenReturn(2);
 
     SecretVersionRotateRequest req = rotateRequest();
     req.setSecretStatus(" published "); // exercises trim+upper branch
@@ -321,12 +338,42 @@ class DefaultConsoleConfigApplicationServiceTest {
     Long versionNo = service.rotateSecretVersion(req);
 
     assertThat(versionNo).isEqualTo(3L);
-    verify(secretVersionMapper).deactivateCurrentVersion(anyMap());
-    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
+    verify(secretVersionMapper).deactivateCurrentVersion(any(), any());
+    ArgumentCaptor<SecretVersionInsertParam> captor =
+        ArgumentCaptor.forClass(SecretVersionInsertParam.class);
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue()).containsEntry("secretStatus", "PUBLISHED");
-    assertThat(captor.getValue()).containsEntry("currentVersion", true);
-    verify(configChangeLogMapper).insertConfigChangeLog(anyMap());
+    assertThat(captor.getValue().secretStatus()).isEqualTo("PUBLISHED");
+    assertThat(captor.getValue().currentVersion()).isTrue();
+    verify(configChangeLogMapper).insertConfigChangeLog(any(ConfigChangeLogInsertParam.class));
+  }
+
+  @Test
+  @DisplayName("引用只清洗一次并用于锁、查号、降级、写入与审计，原请求保持不变")
+  void shouldUseCanonicalReference_forWholeRotationTransaction() {
+    SecretVersionRotateRequest req = rotateRequest();
+    String suppliedRef = " ｔｏｋｅｎ－ｒｅｆ ";
+    req.setSecretRef(suppliedRef);
+    when(secretVersionMapper.selectLatestVersionNo(TENANT, "token-ref")).thenReturn(2);
+
+    assertThat(service.rotateSecretVersion(req)).isEqualTo(3L);
+
+    InOrder order = inOrder(secretVersionMapper, configChangeLogMapper);
+    order.verify(secretVersionMapper).acquireVersionLock(TENANT, "token-ref");
+    order.verify(secretVersionMapper).selectLatestVersionNo(TENANT, "token-ref");
+    order.verify(secretVersionMapper).deactivateCurrentVersion(TENANT, "token-ref");
+    ArgumentCaptor<SecretVersionInsertParam> insert =
+        ArgumentCaptor.forClass(SecretVersionInsertParam.class);
+    order.verify(secretVersionMapper).insertSecretVersion(insert.capture());
+    assertThat(insert.getValue().tenantId()).isEqualTo(TENANT);
+    assertThat(insert.getValue().secretRef()).isEqualTo("token-ref");
+    assertThat(insert.getValue().versionNo()).isEqualTo(3);
+    ArgumentCaptor<ConfigChangeLogInsertParam> audit =
+        ArgumentCaptor.forClass(ConfigChangeLogInsertParam.class);
+    order.verify(configChangeLogMapper).insertConfigChangeLog(audit.capture());
+    assertThat(audit.getValue().tenantId()).isEqualTo(TENANT);
+    assertThat(audit.getValue().configKey()).isEqualTo("token-ref");
+    assertThat(audit.getValue().versionNo()).isEqualTo(3);
+    assertThat(req.getSecretRef()).isEqualTo(suppliedRef);
   }
 
   @Test
@@ -341,7 +388,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("未指定密钥版本状态时,默认按已发布状态落库")
   void shouldRotateSecret_withDefaultStatus_whenBlank() {
-    when(secretVersionMapper.selectLatestVersionNo(anyMap())).thenReturn(null);
+    when(secretVersionMapper.selectLatestVersionNo(any(), any())).thenReturn(null);
 
     SecretVersionRotateRequest req = rotateRequest();
     req.setSecretStatus(null);
@@ -349,10 +396,10 @@ class DefaultConsoleConfigApplicationServiceTest {
     Long versionNo = service.rotateSecretVersion(req);
 
     assertThat(versionNo).isEqualTo(1L);
-    ArgumentCaptor<Map<String, Object>> captor = mapCaptor();
+    ArgumentCaptor<SecretVersionInsertParam> captor =
+        ArgumentCaptor.forClass(SecretVersionInsertParam.class);
     verify(secretVersionMapper).insertSecretVersion(captor.capture());
-    assertThat(captor.getValue())
-        .containsEntry("secretStatus", ConfigLifecycleStatus.PUBLISHED.code());
+    assertThat(captor.getValue().secretStatus()).isEqualTo(ConfigLifecycleStatus.PUBLISHED.code());
   }
 
   // ── 配置变更日志 ───────────────────────────────────────────────────────
@@ -394,7 +441,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("按主键查询配置发布单详情时,返回对应记录")
   void shouldReturnConfigReleaseDetail() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(release(10L, "JOB", "k", 1));
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(release(10L, "JOB", "k", 1));
     ConsoleConfigReleaseResponse resp = service.configReleaseDetail(TENANT, 10L);
     assertThat(resp.id()).isEqualTo(10L);
   }
@@ -402,7 +449,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("查询配置发布单详情时记录不存在,抛出业务异常")
   void shouldThrow_whenConfigReleaseDetailNotFound() {
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(null);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(null);
     assertThatThrownBy(() -> service.configReleaseDetail(TENANT, 99L))
         .isInstanceOf(BizException.class);
   }
@@ -422,7 +469,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("查询密钥版本详情时,返回脱敏后的载荷")
   void shouldReturnSecretVersionDetail() {
-    when(secretVersionMapper.selectById(anyMap())).thenReturn(secret(7L, "ref"));
+    when(secretVersionMapper.selectById(any(), any())).thenReturn(secret(7L, "ref"));
     ConsoleSecretVersionResponse resp = service.secretVersionDetail(TENANT, 7L);
     assertThat(resp.id()).isEqualTo(7L);
     assertThat(resp.secretPayloadJson()).isEqualTo("{\"redacted\":true}");
@@ -431,24 +478,20 @@ class DefaultConsoleConfigApplicationServiceTest {
   @Test
   @DisplayName("撤销已发布密钥版本时记录操作者和原因,并写入审计日志")
   void shouldRevokeSecretVersionAndAudit() {
-    when(secretVersionMapper.selectById(anyMap())).thenReturn(secret(7L, "ref"));
-    when(secretVersionMapper.revokeSecretVersion(anyMap())).thenReturn(1);
+    when(secretVersionMapper.selectById(any(), any())).thenReturn(secret(7L, "ref"));
+    when(secretVersionMapper.revokeSecretVersion(any(), any(), any(), any())).thenReturn(1);
     SecretVersionRevokeRequest request = new SecretVersionRevokeRequest();
     request.setTenantId(TENANT);
     request.setReason("credential exposed");
 
     service.revokeSecretVersion(7L, request);
 
-    ArgumentCaptor<Map<String, Object>> params = mapCaptor();
-    verify(secretVersionMapper).revokeSecretVersion(params.capture());
-    assertThat(params.getValue())
-        .containsEntry("tenantId", TENANT)
-        .containsEntry("secretVersionId", 7L)
-        .containsEntry("revokedBy", "admin")
-        .containsEntry("revokeReason", "credential exposed");
-    ArgumentCaptor<Map<String, Object>> audit = mapCaptor();
+    verify(secretVersionMapper).revokeSecretVersion(TENANT, 7L, "admin", "credential exposed");
+    ArgumentCaptor<ConfigChangeLogInsertParam> audit =
+        ArgumentCaptor.forClass(ConfigChangeLogInsertParam.class);
     verify(configChangeLogMapper).insertConfigChangeLog(audit.capture());
-    assertThat(audit.getValue()).containsEntry("changeAction", "REVOKE");
+    ConfigChangeLogInsertParam auditParam = audit.getValue();
+    assertThat(auditParam.changeAction()).isEqualTo("REVOKE");
   }
 
   @Test
@@ -456,21 +499,22 @@ class DefaultConsoleConfigApplicationServiceTest {
   void shouldKeepSecretRevocationIdempotent() {
     SecretVersionEntity revoked = secret(7L, "ref");
     revoked.setRevokedAt(Instant.parse("2026-10-01T00:00:00Z"));
-    when(secretVersionMapper.selectById(anyMap())).thenReturn(revoked);
+    when(secretVersionMapper.selectById(any(), any())).thenReturn(revoked);
     SecretVersionRevokeRequest request = new SecretVersionRevokeRequest();
     request.setTenantId(TENANT);
     request.setReason("repeat request");
 
     service.revokeSecretVersion(7L, request);
 
-    verify(secretVersionMapper, never()).revokeSecretVersion(anyMap());
-    verify(configChangeLogMapper, never()).insertConfigChangeLog(anyMap());
+    verify(secretVersionMapper, never()).revokeSecretVersion(any(), any(), any(), any());
+    verify(configChangeLogMapper, never())
+        .insertConfigChangeLog(any(ConfigChangeLogInsertParam.class));
   }
 
   @Test
   @DisplayName("查询密钥版本详情时记录不存在,抛出业务异常")
   void shouldThrow_whenSecretVersionDetailNotFound() {
-    when(secretVersionMapper.selectById(anyMap())).thenReturn(null);
+    when(secretVersionMapper.selectById(any(), any())).thenReturn(null);
     assertThatThrownBy(() -> service.secretVersionDetail(TENANT, 99L))
         .isInstanceOf(BizException.class);
   }
@@ -533,7 +577,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     b.setConfigPayload("{\"a\":2}");
     b.setGrayScope("{\"x\":2}");
     b.setConfigStatus("ROLLED_BACK");
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(a, b);
 
     ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
@@ -555,7 +599,7 @@ class DefaultConsoleConfigApplicationServiceTest {
     ConfigReleaseEntity b = release(2L, "JOB", "k", 2);
     b.setConfigPayload("{\"a\":2}");
     b.setGrayScope("[broken");
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(a, b);
 
     ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
@@ -568,7 +612,7 @@ class DefaultConsoleConfigApplicationServiceTest {
   void shouldDiffConfigReleases_whenPayloadSame() {
     ConfigReleaseEntity a = release(1L, "JOB", "k", 1);
     ConfigReleaseEntity b = release(2L, "JOB", "k", 2);
-    when(configReleaseMapper.selectById(anyMap())).thenReturn(a, b);
+    when(configReleaseMapper.selectById(any(), any())).thenReturn(a, b);
 
     ConfigReleaseDiffResponse result = service.diffConfigReleases(TENANT, 1L, 2L);
 
@@ -638,11 +682,6 @@ class DefaultConsoleConfigApplicationServiceTest {
     req.setEffectiveToAt("2026-12-31T23:59:59Z");
     req.setReason("rotate");
     return req;
-  }
-
-  @SuppressWarnings("unchecked")
-  private static ArgumentCaptor<Map<String, Object>> mapCaptor() {
-    return ArgumentCaptor.forClass(Map.class);
   }
 
   // 避免优化器裁剪调用后产生 eq / never 未使用导入告警。

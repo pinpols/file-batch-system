@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-/** 租户配置包 Excel 应用响应：各类型 inserted / updated 数量。 */
+import lombok.Builder;
+
+/** 租户配置包 Excel 应用响应：各类型新增与更新数量。 */
+@Builder
 public record TenantConfigPackageExcelApplyResponse(
     String uploadToken,
     String tenantId,
@@ -16,7 +19,5 @@ public record TenantConfigPackageExcelApplyResponse(
     int channelUpdated,
     int fileTemplateInserted,
     int fileTemplateUpdated,
-    int pipelineInserted,
-    int pipelineUpdated,
     int workflowInserted,
     int workflowUpdated) {}

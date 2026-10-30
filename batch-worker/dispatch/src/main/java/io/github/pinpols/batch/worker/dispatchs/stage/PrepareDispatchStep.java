@@ -18,8 +18,10 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
@@ -35,14 +37,17 @@ public class PrepareDispatchStep implements DispatchStageStep {
   private final ObjectMapper objectMapper;
   private final FileDispatchRepository fileDispatchRepository;
   private final PlatformPipelineRunRepository pipelineRuns;
+  private final FrozenDispatchChannelResolver frozenDispatchChannelResolver;
 
   public PrepareDispatchStep(
       ObjectMapper objectMapper,
       FileDispatchRepository fileDispatchRepository,
-      PlatformPipelineRunRepository pipelineRuns) {
+      PlatformPipelineRunRepository pipelineRuns,
+      FrozenDispatchChannelResolver frozenDispatchChannelResolver) {
     this.objectMapper = objectMapper;
     this.fileDispatchRepository = fileDispatchRepository;
     this.pipelineRuns = pipelineRuns;
+    this.frozenDispatchChannelResolver = frozenDispatchChannelResolver;
   }
 
   @Override
@@ -76,10 +81,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
       if (rawPayload != null) { // empty-check: allow - Sonar S2259
         JsonNode secretBindings = rawPayload.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
         if (EmptyChecks.isNotNull(secretBindings) && secretBindings.isObject()) {
-          attrs.put(
-              DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS,
-              objectMapper.convertValue(
-                  secretBindings, new TypeReference<Map<String, Object>>() {}));
+          Map<String, Object> secretBindingValues = objectMapper.convertValue(
+              secretBindings, new TypeReference<Map<String, Object>>() {});
+          attrs.put(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, secretBindingValues);
         }
       }
       payload = withStableExternalRequestId(context, payload);
@@ -107,8 +111,33 @@ public class PrepareDispatchStep implements DispatchStageStep {
             "file record not found",
             objectMapper);
       }
-      Map<String, Object> channelRow =
-          fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
+      if (!Texts.hasText(payload.channelCode())) {
+        return DispatchStageResult.failure(
+            stage(),
+            "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+            "error.dispatch.prepare.channel_not_found",
+            new Object[0],
+            "channel code missing",
+            objectMapper);
+      }
+      Optional<Map<String, Object>> frozenChannelConfig = frozenDispatchChannelResolver.resolve(
+          context.getTenantId(), payload.channelCode(), context.getRawPayload());
+      Map<String, Object> channelRow;
+      if (frozenChannelConfig.isPresent()) {
+        if (!fileDispatchRepository.isChannelActive(context.getTenantId(), payload.channelCode())) {
+          return DispatchStageResult.failure(
+              stage(),
+              "DISPATCH_PREPARE_CHANNEL_NOT_FOUND",
+              "error.dispatch.prepare.channel_not_found",
+              new Object[0],
+              "channel config is no longer active",
+              objectMapper);
+        }
+        channelRow = frozenChannelConfig.orElseThrow();
+      } else {
+        channelRow =
+            fileDispatchRepository.loadChannel(context.getTenantId(), payload.channelCode());
+      }
       if (channelRow.isEmpty()) {
         return DispatchStageResult.failure(
             stage(),
@@ -123,21 +152,22 @@ public class PrepareDispatchStep implements DispatchStageStep {
       attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
       attrs.put(PipelineRuntimeKeys.CHANNEL_CONFIG, channelConfig);
       attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.TRUE.equals(payload.forceRetry()));
-      attrs.put(
-          DispatchRuntimeKeys.RECEIPT_STATUS,
-          channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.NONE.code()));
-      pipelineRuns.bindFileToPipelineInstance(
-          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-          fileId);
+      Object receiptPolicy =
+          channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.NONE.code());
+      attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptPolicy);
+      Long pipelineInstanceId =
+          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+      pipelineRuns.bindFileToPipelineInstance(context.getTenantId(), pipelineInstanceId, fileId);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
+      String failureSummary = SwallowedExceptionLogger.summary(ex);
 
       return DispatchStageResult.failure(
           stage(),
           "DISPATCH_PREPARE_PARSE_FAILED",
           "error.dispatch.prepare.parse_failed",
-          new Object[] {ex.getMessage()},
-          ex.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           objectMapper);
     }
     return DispatchStageResult.success(stage());
@@ -173,8 +203,9 @@ public class PrepareDispatchStep implements DispatchStageStep {
         String.valueOf(pipelineInstanceId),
         payload.fileId(),
         payload.channelCode());
-    String externalRequestId =
-        UUID.nameUUIDFromBytes(requestIdentity.getBytes(StandardCharsets.UTF_8)).toString();
+    byte[] requestIdentityBytes = requestIdentity.getBytes(StandardCharsets.UTF_8);
+    UUID deterministicId = UUID.nameUUIDFromBytes(requestIdentityBytes);
+    String externalRequestId = deterministicId.toString();
     return new DispatchPayload(
         payload.fileId(),
         payload.fileCode(),

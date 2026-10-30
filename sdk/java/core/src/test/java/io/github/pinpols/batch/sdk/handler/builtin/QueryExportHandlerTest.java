@@ -30,6 +30,7 @@ class QueryExportHandlerTest {
   @Test
   @DisplayName("两行结果带表头导出:含分隔符的字段加引号转义,行数计数为 2 且设置抓取批量")
   void shouldExportWithHeaderAndQuoting() throws Exception {
+    final String selectFixtureRowsSql = "select id, name from t";
     Path out = tempDir.resolve("out.csv");
 
     DataSource ds = mock(DataSource.class);
@@ -39,7 +40,7 @@ class QueryExportHandlerTest {
     ResultSetMetaData meta = mock(ResultSetMetaData.class);
     when(ds.getConnection()).thenReturn(conn);
     when(conn.createStatement()).thenReturn(st);
-    when(st.executeQuery("select id, name from t")).thenReturn(rs);
+    when(st.executeQuery(selectFixtureRowsSql)).thenReturn(rs);
     when(rs.getMetaData()).thenReturn(meta);
     when(meta.getColumnCount()).thenReturn(2);
     when(meta.getColumnLabel(1)).thenReturn("id");

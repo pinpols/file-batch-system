@@ -44,8 +44,8 @@ class JobDefinitionMonitoringCategoryMapperXmlTest {
   }
 
   @Test
-  @DisplayName("前置作业过滤同时应用于列表和总数查询")
-  void shouldFilterDirectDependents_whenBuildingRowsAndCountQueries() throws Exception {
+  @DisplayName("上游作业过滤通过依赖关系同时应用于列表和总数查询")
+  void shouldFilterByUpstreamDependency_whenBuildingRowsAndCountQueries() throws Exception {
     Configuration configuration = new Configuration();
     parseMapper(configuration, "mapper/CommonFragments.xml");
     parseMapper(configuration, "mapper/JobDefinitionMapper.xml");
@@ -65,9 +65,11 @@ class JobDefinitionMonitoringCategoryMapperXmlTest {
         .getBoundSql(query)
         .getSql();
 
-    assertThat(selectSql).contains("jd.depends_on_job_code = ?");
+    assertThat(selectSql).contains("exists (select 1 from batch.job_dependency jdep");
+    assertThat(selectSql).contains("jdep.upstream_job_code = ?");
     assertThat(selectSql).contains("jd.job_code = ?");
-    assertThat(countSql).contains("depends_on_job_code = ?");
+    assertThat(countSql).contains("exists (select 1 from batch.job_dependency jdep");
+    assertThat(countSql).contains("jdep.upstream_job_code = ?");
     assertThat(countSql).contains("job_code = ?");
   }
 
@@ -102,7 +104,7 @@ class JobDefinitionMonitoringCategoryMapperXmlTest {
 
   private static String categoryPredicate(String category) {
     return switch (category) {
-      case "DEPENDENCY" -> "nullif(btrim(jd.depends_on_job_code), '') is not null";
+      case "DEPENDENCY" -> "exists (select 1 from batch.job_dependency jdep";
       case "SCHEDULED" -> "jd.schedule_type = 'CRON'";
       case "RUNTIME_ONLY" -> "jd.schedule_type != 'CRON'";
       default -> throw new IllegalArgumentException("Unsupported category: " + category);

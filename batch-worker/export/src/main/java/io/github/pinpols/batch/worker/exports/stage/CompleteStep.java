@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.service.DryRunGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -46,8 +47,10 @@ public class CompleteStep implements ExportStageStep {
   @Override
   public ExportStageResult execute(ExportJobContext context) {
     // ADR-026: 演练模式不更新 file_record 状态 / 不写 audit。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
+    boolean dryRun = DryRunGuard.fromAttributes(dryRunAttributes).isDryRun();
+    if (dryRun) {
       return ExportStageResult.success(stage());
     }
     if (context == null || context.getAttributes().get(KEY_OBJECT_NAME) == null) {
@@ -64,7 +67,8 @@ public class CompleteStep implements ExportStageStep {
         attrs.get(ExportRuntimeKeys.EXPORT_PAYLOAD) instanceof ExportPayload payload
             ? payload
             : null;
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
+    Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
+    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
     String nextStatus = exportPayload != null && Boolean.TRUE.equals(exportPayload.autoDispatch())
         ? FileStatus.DISPATCHING.code()
         : FileStatus.GENERATED.code();
@@ -81,6 +85,10 @@ public class CompleteStep implements ExportStageStep {
     detailSummary.put(
         PipelineRuntimeKeys.FILE_SIZE_BYTES, attrs.get(PipelineRuntimeKeys.FILE_SIZE_BYTES));
     detailSummary.put(KEY_OBJECT_NAME, attrs.get(KEY_OBJECT_NAME));
+    Object traceIdValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+    String traceId = String.valueOf(traceIdValue);
+    Object objectNameValue = attrs.get(KEY_OBJECT_NAME);
+    String evidenceRef = String.valueOf(objectNameValue);
     fileAudits.appendAudit(FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
@@ -88,8 +96,8 @@ public class CompleteStep implements ExportStageStep {
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId())
-        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
-        .evidenceRef(String.valueOf(attrs.get(KEY_OBJECT_NAME)))
+        .traceId(traceId)
+        .evidenceRef(evidenceRef)
         .detailSummary(detailSummary)
         .build());
     return ExportStageResult.success(stage());

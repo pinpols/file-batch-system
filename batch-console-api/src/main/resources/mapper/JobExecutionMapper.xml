@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.JobExecutionMapper">
+  <resultMap id="job" type="io.github.pinpols.batch.console.domain.job.view.JobExecutionView">
+    <id column="id" property="id"/>
+    <result column="started_at" property="startedAt"/><result column="finished_at" property="finishedAt"/>
+    <result column="tenant_id" property="tenantId"/>
+    <result column="job_code" property="jobCode"/>
+    <result column="instance_status" property="instanceStatus"/>
+    <result column="expected_partitions" property="expectedPartitions"/>
+    <result column="workflow_run_id" property="workflowRunId"/>
+    <result column="node_code" property="nodeCode"/>
+    <result column="pipeline_instance_id" property="pipelineInstanceId"/>
+    <result column="pipeline_status" property="pipelineStatus"/>
+    <result column="current_stage" property="currentStage"/>
+    <result column="system_pipeline_code" property="systemPipelineCode"/>
+    <result column="system_pipeline_version" property="systemPipelineVersion"/>
+  </resultMap>
+  <resultMap id="count" type="io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse$StatusCount">
+    <constructor><arg column="scope" javaType="java.lang.String"/><arg column="status" javaType="java.lang.String"/><arg column="count" javaType="java.lang.Long"/></constructor>
+  </resultMap>
+  <resultMap id="stage" type="io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse$Stage">
+    <constructor>
+      <arg column="stage_code" javaType="java.lang.String"/><arg column="stage_status" javaType="java.lang.String"/>
+      <arg column="step_run_id" javaType="java.lang.Long"/><arg column="run_seq" javaType="java.lang.Integer"/>
+      <arg column="rows_processed" javaType="java.lang.Long"/><arg column="last_heartbeat_at" javaType="java.time.Instant"/>
+      <arg column="error_code" javaType="java.lang.String"/>
+    </constructor>
+  </resultMap>
+  <select id="setTenantContext" resultType="string">select set_config('app.tenant_id', #{tenantId}, true)</select>
+  <select id="selectJob" resultMap="job">
+    select j.id, j.tenant_id, j.job_code, j.instance_status, j.started_at, j.finished_at,
+      j.expected_partition_count as expected_partitions, frozen.workflow_run_id, frozen.node_code,
+      p.id as pipeline_instance_id, p.run_status as pipeline_status, p.current_stage,
+      coalesce(p.system_pipeline_code, frozen.pipeline_code) as system_pipeline_code,
+      coalesce(p.system_pipeline_version, frozen.pipeline_version) as system_pipeline_version
+    from batch.job_instance j
+    left join batch.pipeline_instance p on p.related_job_instance_id=j.id and p.tenant_id=j.tenant_id
+    left join lateral (
+      select n.workflow_run_id, n.node_code,
+        r.execution_snapshot->'jobDefinitions'->n.node_code->>'systemPipelineCode' as pipeline_code,
+        (r.execution_snapshot->'jobDefinitions'->n.node_code->>'systemPipelineVersion')::integer as pipeline_version
+      from batch.workflow_node_run n join batch.workflow_run r on r.id=n.workflow_run_id
+      where n.job_instance_id=j.id and r.tenant_id=j.tenant_id
+        and r.execution_snapshot->>'schemaVersion'='2'
+      order by n.id desc limit 1
+    ) frozen on true
+    where j.tenant_id=#{tenantId} and j.id=#{id}
+  </select>
+  <select id="selectCounts" resultMap="count">
+    select 'PARTITION' as scope, partition_status as status, count(*) as count
+    from batch.job_partition where tenant_id=#{tenantId} and job_instance_id=#{id}
+    group by partition_status
+    union all
+    select 'TASK', task_status, count(*) from batch.job_task
+    where tenant_id=#{tenantId} and job_instance_id=#{id} group by task_status
+    order by scope, status
+  </select>
+  <select id="selectStages" resultMap="stage">
+    select distinct on (s.stage_code) s.stage_code, s.step_status as stage_status, s.id as step_run_id,
+      s.run_seq,
+      <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessedRows"/>,
+      pr.updated_at as last_heartbeat_at, s.error_code
+    from batch.pipeline_step_run s
+    join batch.pipeline_instance p on p.id=s.pipeline_instance_id
+    <include refid="io.github.pinpols.batch.console.shared.progress.PipelineProgressFragments.ProcessStageCountJoin"/>
+    left join batch.pipeline_progress pr on pr.tenant_id=#{tenantId}
+      and pr.pipeline_instance_id=#{pipelineId} and pr.stage=s.stage_code
+    where p.tenant_id=#{tenantId} and p.id=#{pipelineId}
+    order by s.stage_code,s.run_seq desc,s.id desc
+  </select>
+</mapper>

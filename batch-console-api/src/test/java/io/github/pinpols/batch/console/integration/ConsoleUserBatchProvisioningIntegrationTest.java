@@ -64,23 +64,33 @@ class ConsoleUserBatchProvisioningIntegrationTest extends AbstractIntegrationTes
     String suffix = Long.toUnsignedString(System.nanoTime(), 36);
     tenantId = "bulk-it-" + suffix;
     usernamePrefix = "bulk-it-user-" + suffix;
-    jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status, created_by) values (?, ?, 'ACTIVE', 'test')",
-        tenantId,
-        tenantId);
+    String insertTenantSql = """
+        insert into batch.tenant (tenant_id, tenant_name, status, created_by)
+        values (?, ?, 'ACTIVE', 'test')
+        """;
+    jdbcTemplate.update(insertTenantSql, tenantId, tenantId);
     authenticateTenantAdmin();
   }
 
   @AfterEach
   void cleanUp() {
     SecurityContextHolder.clearContext();
-    jdbcTemplate.execute(
-        "alter table batch.console_user_account drop constraint if exists " + ROLLBACK_CONSTRAINT);
-    jdbcTemplate.update(
-        "delete from batch.console_user_batch_operation where tenant_ids = ?", tenantId);
-    jdbcTemplate.update(
-        "delete from batch.console_user_account where username like ?", usernamePrefix + "%");
-    jdbcTemplate.update("delete from batch.tenant where tenant_id = ?", tenantId);
+    String dropRollbackConstraintSql = """
+        alter table batch.console_user_account drop constraint if exists %s
+        """.formatted(ROLLBACK_CONSTRAINT);
+    jdbcTemplate.execute(dropRollbackConstraintSql);
+    String deleteUserBatchOperationSql = """
+        delete from batch.console_user_batch_operation where tenant_ids = ?
+        """;
+    jdbcTemplate.update(deleteUserBatchOperationSql, tenantId);
+    String deleteUserAccountsSql = """
+        delete from batch.console_user_account where username like ?
+        """;
+    jdbcTemplate.update(deleteUserAccountsSql, usernamePrefix + "%");
+    String deleteTenantSql = """
+        delete from batch.tenant where tenant_id = ?
+        """;
+    jdbcTemplate.update(deleteTenantSql, tenantId);
     previewTokens.forEach(token -> redisTemplate.delete(PREVIEW_PREFIX + token));
   }
 
@@ -94,16 +104,19 @@ class ConsoleUserBatchProvisioningIntegrationTest extends AbstractIntegrationTes
     var result = service.apply(preview.previewToken(), preview.version(), requestId);
 
     assertThat(result.accountCount()).isEqualTo(1);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_account where username = ? and must_change_password",
-            Integer.class,
-            username))
-        .isEqualTo(1);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_batch_operation where request_id = ?",
-            Integer.class,
-            requestId))
-        .isEqualTo(1);
+    String provisionedAccountCountSql = """
+        select count(*) from batch.console_user_account
+        where username = ? and must_change_password
+        """;
+    Integer provisionedAccountCount =
+        jdbcTemplate.queryForObject(provisionedAccountCountSql, Integer.class, username);
+    assertThat(provisionedAccountCount).isEqualTo(1);
+    String operationCountSql = """
+        select count(*) from batch.console_user_batch_operation where request_id = ?
+        """;
+    Integer operationCount =
+        jdbcTemplate.queryForObject(operationCountSql, Integer.class, requestId);
+    assertThat(operationCount).isEqualTo(1);
     assertThat(redisTemplate.hasKey(PREVIEW_PREFIX + preview.previewToken())).isFalse();
   }
 
@@ -113,24 +126,28 @@ class ConsoleUserBatchProvisioningIntegrationTest extends AbstractIntegrationTes
     String first = usernamePrefix + "-first";
     String rejected = usernamePrefix + "-rejected";
     var preview = preview(workbook(first, rejected));
-    jdbcTemplate.execute("alter table batch.console_user_account add constraint "
-        + ROLLBACK_CONSTRAINT + " check (username <> '" + rejected + "')");
+    String addRollbackConstraintSql = """
+        alter table batch.console_user_account add constraint %s
+        check (username <> '%s')
+        """.formatted(ROLLBACK_CONSTRAINT, rejected);
+    jdbcTemplate.execute(addRollbackConstraintSql);
     UUID requestId = UUID.randomUUID();
 
     assertThatThrownBy(() -> service.apply(preview.previewToken(), preview.version(), requestId))
         .isInstanceOf(RuntimeException.class);
 
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_account where username in (?, ?)",
-            Integer.class,
-            first,
-            rejected))
-        .isZero();
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_batch_operation where tenant_ids = ?",
-            Integer.class,
-            tenantId))
-        .isZero();
+    String rolledBackAccountCountSql = """
+        select count(*) from batch.console_user_account where username in (?, ?)
+        """;
+    Integer rolledBackAccountCount =
+        jdbcTemplate.queryForObject(rolledBackAccountCountSql, Integer.class, first, rejected);
+    assertThat(rolledBackAccountCount).isZero();
+    String rolledBackOperationCountSql = """
+        select count(*) from batch.console_user_batch_operation where tenant_ids = ?
+        """;
+    Integer rolledBackOperationCount =
+        jdbcTemplate.queryForObject(rolledBackOperationCountSql, Integer.class, tenantId);
+    assertThat(rolledBackOperationCount).isZero();
     var edited = new AccountRow(2, tenantId, first, "Retry", ConsoleRoles.TENANT_USER);
     assertThat(service.patch(preview.previewToken(), preview.version(), edited).version())
         .isEqualTo(preview.version() + 1);
@@ -158,16 +175,18 @@ class ConsoleUserBatchProvisioningIntegrationTest extends AbstractIntegrationTes
       Future<Boolean> second = executor.submit(apply);
       assertThat(List.of(first.get(), second.get())).containsExactlyInAnyOrder(true, false);
     }
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_account where username = ?",
-            Integer.class,
-            username))
-        .isEqualTo(1);
-    assertThat(jdbcTemplate.queryForObject(
-            "select count(*) from batch.console_user_batch_operation where tenant_ids = ?",
-            Integer.class,
-            tenantId))
-        .isEqualTo(1);
+    String concurrentAccountCountSql = """
+        select count(*) from batch.console_user_account where username = ?
+        """;
+    Integer concurrentAccountCount =
+        jdbcTemplate.queryForObject(concurrentAccountCountSql, Integer.class, username);
+    assertThat(concurrentAccountCount).isEqualTo(1);
+    String concurrentOperationCountSql = """
+        select count(*) from batch.console_user_batch_operation where tenant_ids = ?
+        """;
+    Integer concurrentOperationCount =
+        jdbcTemplate.queryForObject(concurrentOperationCountSql, Integer.class, tenantId);
+    assertThat(concurrentOperationCount).isEqualTo(1);
   }
 
   private ConsoleUserBatchProvisioningService.Preview preview(MockMultipartFile workbook)

@@ -2,6 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper">
 
+    <resultMap id="tenantWorkerCountView" type="io.github.pinpols.batch.orchestrator.domain.view.TenantWorkerCountView">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="cnt" javaType="java.lang.Long"/>
+        </constructor>
+    </resultMap>
+
     <!--
       heartbeat_at 由 DB 服务器时间（current_timestamp）驱动，<b>不再接受 worker / orchestrator 提供的 wall clock</b>。
       原因：worker NTP 漂移会让 heartbeat_at 异常（早 N 秒 → 提前判定 OFFLINE / 晚 N 秒 → 误延寿），
@@ -130,6 +137,18 @@
            and status = #{status}
     </select>
 
+    <select id="selectReplayCapabilitiesByTenantAndWorkerGroup" resultType="java.lang.String">
+        select coalesce(replay_capabilities, '[]'::jsonb)::text
+          from batch.worker_registry
+         where tenant_id = #{tenantId}
+           and lower(worker_group) = lower(#{workerGroup})
+           and status in
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">
+            #{status}
+        </foreach>
+         order by worker_code
+    </select>
+
     <select id="selectByStatus" resultMap="workerRegistryMap">
         select <include refid="workerRegistrySelectColumns"/>
           from batch.worker_registry
@@ -148,7 +167,7 @@
            and status &lt;&gt; 'DECOMMISSIONED'
     </select>
 
-    <select id="countByTenantsAndStatus" resultType="java.util.Map">
+    <select id="countByTenantsAndStatus" resultMap="tenantWorkerCountView">
         select tenant_id, count(1) as cnt
           from batch.worker_registry
          where status = #{status}
@@ -240,6 +259,14 @@
          where tenant_id = #{tenantId}
            and worker_code = #{workerCode}
            and is_self_hosted = false
+    </update>
+
+    <update id="updateReplayCapabilities">
+        update batch.worker_registry
+           set replay_capabilities = cast(#{replayCapabilitiesJson} as jsonb),
+               updated_at = current_timestamp
+         where tenant_id = #{tenantId}
+           and worker_code = #{workerCode}
     </update>
 
     <!-- 重注册允许沿用既有转移语义，但必须以读取到的状态为 CAS 前态，不能覆盖并发排空或下线。 -->

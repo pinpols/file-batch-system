@@ -68,6 +68,7 @@
                updated_at         = current_timestamp,
                version            = version + 1
          where id = #{id}
+           and tenant_id = #{tenantId}
            and version = #{version}
     </update>
 

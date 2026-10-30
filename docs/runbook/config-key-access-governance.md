@@ -26,6 +26,7 @@ System.getProperty("batch.xxx")
 
 - `src/main/java` 生产代码中的 `Environment#getProperty(...)`、`Environment#getRequiredProperty(...)`、`System#getProperty(...)`；
 - `src/main/java` 生产代码中的项目自定义 `@Value("${batch.*}")`；
+- 根目录 `logs/` 下的验证快照不作为生产或测试源码扫描；项目内未跟踪源码仍纳入。
 - 读取项目自定义配置的字符串 key，尤其是 `batch.*`；
 - 读取敏感配置、生产守护配置、功能开关、容量阈值、调度间隔、批大小和后端类型选择。
 
@@ -82,6 +83,7 @@ System.getProperty("batch.xxx")
 | P1 | `batch-console-api/.../ReplicaLagMonitor.java` | `batch.console.replica.*` | 2 个同功能 `@Value` 提取为 properties 类 | ✅ `ReplicaLagMonitorProperties` |
 | P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.storage.backend` | 注入 storage backend properties | ✅ `StorageBackendProperties` |
 | P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.console.read-replica.enabled` | 注入 read-replica properties 或专用只读配置对象 | ✅ `ConsoleReadReplicaProperties` |
+| P1 | `batch-common/.../ProductionRuntimeConfigurationGuard.java` | `batch.kafka.namespace` | 注入部署实际使用的命名空间配置，生产仍拒绝空值 | ✅ `KafkaNamespaceProperties` |
 | P1 | `batch-common/.../BatchSecurityProperties.java` | `batch.console.read-replica.primary.password` / `replica.password` | 通过 read-replica secret/properties 统一读取 | ✅ `ReadReplicaCredentialGuard` + `ConsoleReadReplicaProperties` |
 | P2 | `batch-orchestrator/.../StaleCompensationCommandReconciler.java` | `batch.compensation.stale-running-reconciler.*` | 2 个同前缀 `@Value` 提取为 properties 类 | ✅ `StaleCompensationReconcilerProperties` |
 | P2 | `batch-orchestrator/.../StaleCreatedLaunchRecoveryScheduler.java` | `batch.trigger.launch.created-recovery.*` | 2 个同前缀 `@Value` 提取为 properties 类 | ✅ `StaleCreatedLaunchRecoveryProperties` |
@@ -120,8 +122,9 @@ Spring 生命周期收口：Worker consumer 的多个 `spring.kafka.*` 注入已
 batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中一份。不跨模块抽公共常量——
 为字符串复用新增制品耦合，收益低于成本（与本节开头对 `batch-worker-sdk` 的取舍同理）。
 
-- `RuntimeInfrastructureInspector` 只读 `spring.datasource.url` / `spring.data.redis.*` 的生效值，供
-  `QuotaRuntimeBackendGuard`、`WorkerReportOutboxBackendGuard` 计算后端身份。它**不**把 `spring.*`
+- `RuntimeInfrastructureInspector` 从环境读取平台库地址，Redis定位使用客户端同一份
+  `DataRedisConnectionDetails`，供`QuotaRuntimeBackendGuard`、`WorkerReportOutboxBackendGuard`计算身份。
+  URL优先级、节点列表和连接信息覆盖由框架解析，探针不再复制host/port默认值。它**不**把 `spring.*`
   复制成 `@ConfigurationProperties`，也不作为业务规则来源（§5.3 / §7）。
 - `ApplicationNameProvider` 只读 `spring.application.name`，默认值仍由各调用方按自身语义传入，避免出现
   第二份事实来源。
@@ -266,7 +269,7 @@ batch-trigger 集中一份，`local.server.port` 只在 batch-console-api 集中
 | 键 | 写方 | 已确认的按名读取方 |
 |---|---|---|
 | `badRecordCount` | `LoadStep`(2) / `ParseStep` / `ValidateStep` / `ImportRecordGovernanceService` | `scripts/sim/sql/select-stage2d-file-records.sql` 等运维 SQL |
-| `preprocessed` / `preprocessFormat` / `errorOutputPath` / `qualityChecks` / `validatedRecordsPath` / `loadTargetRef` / `scanner` / `detectedAt` / `bundleJobCode` / `manifestSchemaVersion` 等 | 各 import / export stage 与 `ImportIngressScanner` | 目前只有测试按名断言与少量运维 SQL（生产 Java 侧未见按名读取） |
+| `preprocessed` / `preprocessFormat` / `errorOutputPath` / `qualityChecks` / `validatedRecordsPath` / `loadTargetRef` / `scanner` / `detectedAt` / `bundleWorkflowCode` / `manifestSchemaVersion` 等 | 各 import / export stage 与 `ImportIngressScanner` | 目前只有测试按名断言与少量运维 SQL（生产 Java 侧未见按名读取） |
 
 这些键跨 worker 模块、写方分散，且 `badRecordCount` 被非 Java 制品（`scripts/sim/sql/**`）按名读取，符合 §3「缺归属类先
 登记」口径。补齐需要新建 `FileRecordMetadataKeys` 之类的**跨模块**归属类（batch-common 或 batch-worker/core），并同步

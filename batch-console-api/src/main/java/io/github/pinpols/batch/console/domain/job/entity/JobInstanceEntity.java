@@ -38,6 +38,9 @@ public class JobInstanceEntity {
   private Integer expectedDurationSeconds;
   private Instant slaAlertedAt;
   private Instant startedAt;
+  /** 首次实际执行入口；与原有派发时间分开展示和计时。 */
+  private Instant executionStartedAt;
+
   private Instant finishedAt;
 
   /** ADR-026 dry-run 演练标记。 */

@@ -87,12 +87,11 @@ batch:
     executors:
       sql:
         enabled: true
-        allowed-statement-types:
-          - SELECT
+        # SQL 权限由数据库角色控制；此隔离测试库角色允许读写。
         forbid-os-capable-role: false  # e2e 平台库是 superuser;角色闸在测试 profile 关
       shell:
         enabled: true
-        # command-whitelist 留空 = 信任环境允许全部(e2e 只跑 /bin/echo)
+        # command-whitelist 留空 = 信任环境允许全部(e2e 使用 /bin/echo 等受控测试命令)
       stored-proc:
         enabled: true
         allowed-schemas:

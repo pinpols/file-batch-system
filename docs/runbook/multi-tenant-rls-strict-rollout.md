@@ -1,5 +1,7 @@
 # Runbook · Phase A · 翻 strict 模式 操作手册
 
+> 2026-10-18已确认边界缺口：当前业务库叶子分区有普通writer直接访问权限却未启用RLS，直接命名叶子时父策略不适用；现有闭世界检查也遗漏叶子。详见[分区专项 PART-01](../plans/database-partition-lifecycle-remediation-2026-10-18.md#part-01p1叶子直接访问绕过父表租户策略)。下文strict/fail-closed说明不能作为叶子直接访问已隔离的验收结论；需收敛有效授权或补叶子策略，并用普通角色验证。
+
 > Phase A 收尾 — 当前默认已经是 strict 模式（未设 SET 强制拦截）。本文保留安装、验证和应急回滚步骤。
 >
 > 配套:`docs/runbook/multi-tenant-rls.md` §3 是设计依据,本文档是**翻转操作手册**(给 on-call 用)。
@@ -36,7 +38,7 @@
 - [x] **A. 接线完成**(PR #155/#158/#160)
   - 验证:`mvn test -pl batch-common -Dtest='Rls*'` → 全过(含 `RlsStrictModePreflightIntegrationTest`)
 - [ ] **B. sim 全链路验证**
-  - 跑 `bash scripts/sim/01-init-biz.sh && bash scripts/sim/05-load.sh && bash scripts/sim/06-verify.sh`
+  - 先在同一 shell 设 `export BATCH_NO="sim-rls-$(date +%Y%m%d%H%M%S)"`，再跑 `bash scripts/sim/01-init-biz.sh && bash scripts/sim/05-load.sh && bash scripts/sim/06-verify.sh`
   - 查 worker 日志:`grep "RLS SET LOCAL failed" logs/be-acceptance/*.log` → 必须 0 行
 - [ ] **C. prod-shadow 跑 ≥ 1 周**
   - 生产环境镜像跑当前代码(transition + 接线齐),持续观察 1 周
@@ -106,6 +108,8 @@ tail -f logs/current/app/console.log | grep -E "row-level security|RLS SET LOCAL
 - 业务 KPI(import 成功率 / export 成功率 / job_instance 终态分布)无异常
 
 ## 4. 翻转后的代码变更
+
+2026-10-18 新库整改补充：安装、strict 与事故transition脚本均启用 ON_ERROR_STOP，并将全部父/叶策略纳入同一事务；安装中的角色与grant也一起提交。已有可绕过RLS的writer拒绝安装，不静默改权限。`RlsClosedWorldChecker` 接受项目标准租户等值表达式，并拒绝额外PERMISSIVE或OR true等未知宽松形式；额外RESTRICTIVE可保留。执行失败必须保持未接流量，调用方不得吞掉退出码。真实psql定向证据见[整合验证矩阵](../plans/workflow-daily-integration-execution-log-2026-10-14.md)文末，不能作为生产变更签字。
 
 本 PR 同时更新:
 

@@ -29,7 +29,8 @@ public class ConsoleWorkflowRunRealtimeController {
       @RequestParam(value = "eventType", required = false) String eventType,
       @RequestParam(value = "cursor", required = false) String cursor,
       @RequestParam(value = "heartbeatMillis", required = false) Long heartbeatMillis) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     return realtimeEventHub.subscribe(
-        tenantGuard.resolveTenant(tenantId), "workflow-runs", eventType, cursor, heartbeatMillis);
+        resolvedTenantId, "workflow-runs", eventType, cursor, heartbeatMillis);
   }
 }

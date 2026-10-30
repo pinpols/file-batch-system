@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.domain.entity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.value.JsonbString;
 import java.time.Instant;
+import lombok.Builder;
 
 /**
  * worker_registry 表的不可变快照（MyBatis 通过 {@code resultMap+constructor} 映射）。
@@ -16,6 +17,7 @@ import java.time.Instant;
  * <p>V87 (2026-05-03): 加 {@code maxConcurrent} 反压字段，{@code DefaultWorkerSelector} 在 {@code
  * current_load >= max_concurrent} 时 skip 该 worker。
  */
+@Builder(toBuilder = true)
 public record WorkerRegistryEntity(
     Long id,
     String tenantId,
@@ -179,27 +181,7 @@ public record WorkerRegistryEntity(
 
   /** 注册请求可在不改变实例主键的情况下刷新稳定路由池代码。 */
   public WorkerRegistryEntity withWorkerPoolCode(String newWorkerPoolCode) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        newWorkerPoolCode,
-        taskCapabilities);
+    return toBuilder().workerPoolCode(newWorkerPoolCode).build();
   }
 
   /** 注册/重注册更新：状态、心跳时间、负载、能力标签和 worker 自报并发上限。 */
@@ -209,103 +191,39 @@ public record WorkerRegistryEntity(
       Integer currentLoad,
       JsonbString capabilityTags,
       Integer maxConcurrent) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        taskCapabilities);
+    return toBuilder()
+        .status(status)
+        .heartbeatAt(heartbeatAt)
+        .currentLoad(currentLoad)
+        .capabilityTags(capabilityTags)
+        .maxConcurrent(maxConcurrent)
+        .build();
   }
 
   /** 仅更新状态（如 OFFLINE）。 */
   public WorkerRegistryEntity withStatus(String status, Instant heartbeatAt) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        taskCapabilities);
+    return toBuilder().status(status).heartbeatAt(heartbeatAt).build();
   }
 
   /** 开始排空：设置 DRAINING 状态和排空窗口。 */
   public WorkerRegistryEntity withDrain(
       String status, Instant drainStartedAt, Instant drainDeadlineAt, Instant heartbeatAt) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        taskCapabilities);
+    return toBuilder()
+        .status(status)
+        .heartbeatAt(heartbeatAt)
+        .drainStartedAt(drainStartedAt)
+        .drainDeadlineAt(drainDeadlineAt)
+        .build();
   }
 
   /** 标记已下线：清除排空时间戳。 */
   public WorkerRegistryEntity withDecommissioned(Instant heartbeatAt) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        "DECOMMISSIONED",
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        null,
-        null,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        taskCapabilities);
+    return toBuilder()
+        .status("DECOMMISSIONED")
+        .heartbeatAt(heartbeatAt)
+        .drainStartedAt(null)
+        .drainDeadlineAt(null)
+        .build();
   }
 
   /** SDK-P5-3：刷新运行指纹（register 路径，worker 重启可能换 host / 换监听端口 / 升 SDK 版本）。 */
@@ -316,50 +234,17 @@ public record WorkerRegistryEntity(
       Integer port,
       String buildId,
       String sdkVersion) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        taskCapabilities);
+    return toBuilder()
+        .hostName(hostName)
+        .hostIp(hostIp)
+        .processId(processId)
+        .port(port)
+        .buildId(buildId)
+        .sdkVersion(sdkVersion)
+        .build();
   }
 
   public WorkerRegistryEntity withTaskCapabilities(JsonbString newTaskCapabilities) {
-    return new WorkerRegistryEntity(
-        id,
-        tenantId,
-        workerCode,
-        workerGroup,
-        capabilityTags,
-        resourceTag,
-        status,
-        heartbeatAt,
-        currentLoad,
-        maxConcurrent,
-        drainStartedAt,
-        drainDeadlineAt,
-        hostName,
-        hostIp,
-        processId,
-        port,
-        buildId,
-        sdkVersion,
-        workerPoolCode,
-        newTaskCapabilities);
+    return toBuilder().taskCapabilities(newTaskCapabilities).build();
   }
 }

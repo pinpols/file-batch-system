@@ -16,11 +16,12 @@
 --      解析层先 CALENDAR 命中再 fallback 到同 group 的 GROUP 行。
 --
 -- 后续阶段（不在 V112 范围）:
---   Stage 3: calendar_dependency 串联（需另一 migration）
---   Stage 4: disaster_day_override（需另一 migration）
+--   阶段 3：通过另一迁移串联 calendar_dependency。
+--   阶段 4：通过另一迁移增加 disaster_day_override。
 -- =====================================================================
 
--- ── Stage 1: calendar_group + holiday.scope/group_code ─────────────────
+-- ── 阶段 1：calendar_group + holiday.scope/group_code ─────────────────
+
 CREATE TABLE IF NOT EXISTS batch.calendar_group (
     id          BIGSERIAL PRIMARY KEY,
     tenant_id   VARCHAR(64)  NOT NULL,
@@ -61,7 +62,8 @@ COMMENT ON COLUMN batch.calendar_holiday.scope IS
 COMMENT ON COLUMN batch.calendar_holiday.group_code IS
     'ADR-023 scope=GROUP 时所属 calendar_group.group_code；scope=CALENDAR 时 NULL';
 
--- ── Stage 2: cutoff_schedule JSONB ────────────────────────────────────
+-- ── 阶段 2：cutoff_schedule JSONB ────────────────────────────────────
+
 ALTER TABLE batch.business_calendar
     ADD COLUMN IF NOT EXISTS cutoff_schedule JSONB;
 

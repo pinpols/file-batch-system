@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.rbac.support.captcha;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
+import io.github.pinpols.batch.common.http.OutboundHttpContent;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
@@ -79,8 +80,10 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       if (result.path("VerifyResult").asBoolean(false)) {
         return CaptchaResult.ok();
       }
-      return CaptchaResult.fail(
-          "aliyun rejected: " + root.path("Body").path("Code").asText(""));
+      JsonNode responseBody = root.path("Body");
+      JsonNode rejectionCode = responseBody.path("Code");
+      String rejectionCodeText = rejectionCode.asText("");
+      return CaptchaResult.fail("aliyun rejected: " + rejectionCodeText);
     } catch (Exception ex) {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
@@ -108,9 +111,6 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
     canonicalHeaders.put("x-acs-version", VERSION);
 
     String authorization = buildAuthorization(
-        "POST",
-        "/",
-        "",
         canonicalHeaders,
         hashedPayload,
         properties.getAliyunAccessKeyId(),
@@ -132,14 +132,16 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
         requestHeaders.put(k, v);
       }
     });
-    OutboundHttpResponse response = httpTransport.execute(OutboundHttpRequest.post(
+    OutboundHttpContent httpContent =
+        new OutboundHttpContent(body, "application/json; charset=utf-8");
+    OutboundHttpRequest httpRequest = OutboundHttpRequest.post(
         url,
         requestHeaders,
-        body,
-        "application/json; charset=utf-8",
+        httpContent,
         CONNECT_TIMEOUT,
         REQUEST_TIMEOUT,
-        OutboundAddressPolicy.GUARDED));
+        OutboundAddressPolicy.GUARDED);
+    OutboundHttpResponse response = httpTransport.execute(httpRequest);
     return response.body();
   }
 
@@ -150,7 +152,9 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
 
   /** x-acs-signature-nonce(每请求唯一)。protected 以便测试覆盖为固定值保证签名确定性。 */
   protected String nonce() {
-    return UUID.randomUUID().toString().replace("-", "");
+    UUID nonceUuid = UUID.randomUUID();
+    String nonceUuidText = nonceUuid.toString();
+    return nonceUuidText.replace("-", "");
   }
 
   @Override
@@ -163,16 +167,13 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
   // 端到端签名(被阿里网关接受)需联调真 API 验;本仓无官方 golden 向量,单测仅断言结构/确定性。
 
   /**
-   * 构造 Authorization 头(包级可见、静态,纯函数,便于单测断言 canonicalRequest / stringToSign 结构 + 确定性)。
+   * 构造验证码 POST 根路径的 Authorization 头(包级可见、静态,纯函数,便于单测断言 canonicalRequest / stringToSign 结构 + 确定性)。
    *
    * <p>canonicalRequest = method\nURI\nquery\ncanonicalHeaders\n\nsignedHeaders\nhashedPayload;
    * stringToSign = "ACS3-HMAC-SHA256\n" + hex(sha256(canonicalRequest));signature =
    * hex(HMAC_SHA256(secret, stringToSign))。
    */
   static String buildAuthorization(
-      String httpMethod,
-      String canonicalUri,
-      String canonicalQuery,
       TreeMap<String, String> canonicalHeaders,
       String hashedPayload,
       String accessKeyId,
@@ -184,17 +185,8 @@ public class AliyunCaptchaVerifier implements CaptchaVerifier {
       headerLines.append(e.getKey()).append(':').append(e.getValue().trim()).append('\n');
     }
 
-    String canonicalRequest = httpMethod
-        + '\n'
-        + canonicalUri
-        + '\n'
-        + canonicalQuery
-        + '\n'
-        + headerLines
-        + '\n'
-        + signedHeaders
-        + '\n'
-        + hashedPayload;
+    String canonicalRequest =
+        "POST\n/\n\n" + headerLines + '\n' + signedHeaders + '\n' + hashedPayload;
 
     String stringToSign = ALGORITHM + '\n' + CaptchaCrypto.sha256Hex(canonicalRequest);
     String signature = CaptchaCrypto.hmacSha256Hex(accessKeySecret, stringToSign);

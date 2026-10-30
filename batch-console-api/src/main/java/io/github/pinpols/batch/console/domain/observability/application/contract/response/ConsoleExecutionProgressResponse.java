@@ -1,13 +1,8 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.stringValue;
-
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.ExecutionProgressView;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
 
 /**
  * dashboard execution-progress 单行响应（列表元素）。
@@ -15,6 +10,7 @@ import java.util.Map;
  * <p>所有字段恒定输出（service 用 LinkedHashMap 显式 put，含 startedAt/finishedAt 的显式 null）→ 不加 {@code
  * NON_NULL}，保留历史 wire 的 null 键。{@code progressPercent} 为四舍五入的整数百分比。
  */
+@Builder
 public record ConsoleExecutionProgressResponse(
     Long id,
     String jobCode,
@@ -32,35 +28,18 @@ public record ConsoleExecutionProgressResponse(
     if (row == null) {
       return null;
     }
-    return new ConsoleExecutionProgressResponse(
-        row.id(),
-        row.jobCode(),
-        row.instanceNo(),
-        row.instanceStatus(),
-        row.expectedPartitions(),
-        row.successPartitions(),
-        row.failedPartitions(),
-        row.completedPartitions(),
-        row.progressPercent(),
-        row.startedAt(),
-        row.finishedAt());
-  }
-
-  public static ConsoleExecutionProgressResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleExecutionProgressResponse(
-        longValue(row, "id"),
-        stringValue(row, "jobCode"),
-        stringValue(row, "instanceNo"),
-        stringValue(row, "instanceStatus"),
-        integerValue(row, "expectedPartitions"),
-        integerValue(row, "successPartitions"),
-        integerValue(row, "failedPartitions"),
-        integerValue(row, "completedPartitions"),
-        longValue(row, "progressPercent"),
-        instantValue(row, "startedAt"),
-        instantValue(row, "finishedAt"));
+    return ConsoleExecutionProgressResponse.builder()
+        .id(row.id())
+        .jobCode(row.jobCode())
+        .instanceNo(row.instanceNo())
+        .instanceStatus(row.instanceStatus())
+        .expectedPartitions(row.expectedPartitions())
+        .successPartitions(row.successPartitions())
+        .failedPartitions(row.failedPartitions())
+        .completedPartitions(row.completedPartitions())
+        .progressPercent(row.progressPercent())
+        .startedAt(row.startedAt())
+        .finishedAt(row.finishedAt())
+        .build();
   }
 }

@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
-"""Guard cross-cutting configuration for the five built-in worker types.
-
-Pipeline stages intentionally cover only import/export/process/dispatch. Atomic is a
-single-task executor and must still appear in routing, tenant ACLs, observability,
-runtime recovery and job configuration surfaces.
-"""
+# 用途：五类 Worker 配置一致性。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-five-worker-parity.py；参数与前置环境见下方说明及所属 README。
+"""核对五类内建 Worker 的横向配置。
+Pipeline 阶段仅覆盖 import/export/process/dispatch；Atomic 是单任务执行器，
+仍须出现在路由、租户 ACL、可观测性、运行恢复与作业配置中。"""
 
 from __future__ import annotations
 

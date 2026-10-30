@@ -1,8 +1,11 @@
 package io.github.pinpols.batch.worker.processes.stage;
 
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
+import java.util.Map;
 
 /**
  * PROCESS 业务加工插件契约。
@@ -25,6 +28,28 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 public interface ProcessComputePlugin {
 
   String implCode();
+
+  /**
+   * 声明整个 PROCESS 生命周期在 Worker 租约丢失后是否可安全重跑。
+   *
+   * <p>默认拒绝。只有 COMPUTE、COMMIT
+   * 和 FEEDBACK 对相同任务及业务身份的跨尝试执行均安全，才可声明重放安全。PREPARE 和
+   * VALIDATE 必须保持只读。含外部副作用的插件必须保留 UNKNOWN 或
+   * NONE，除非外部系统提供持久化幂等合同。
+   */
+  default IdempotencyCapability idempotencyCapability() {
+    return IdempotencyCapability.UNKNOWN;
+  }
+
+  /** 解析冻结 PROCESS 配置的全部副作用；声明不完整时拒绝执行。 */
+  default ReplayCapabilityDeclaration replayCapability(Map<String, Object> processConfig) {
+    return replayCapabilityDeclaration();
+  }
+
+  /** 注册目录采用保守声明，必须适用于该插件的所有配置。 */
+  default ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+    return ReplayCapabilityDeclaration.unknown(implCode());
+  }
 
   /** PREPARE:解析 step_params、校验合法性、检查 target 可达;失败抛 {@link RuntimeException} 即可早停。 */
   default void prepare(ProcessJobContext context) {

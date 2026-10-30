@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -27,7 +26,10 @@ import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -35,11 +37,14 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
  * P2: ConsoleDryRunPlanController 关键守护:类型化请求委托给应用端口，响应 envelope 不重复包装。
  */
 @DisplayName("试运行计划控制器: 类型化请求委托与响应信封不重复包装")
+@ExtendWith(MockitoExtension.class)
 class ConsoleDryRunPlanControllerTest {
 
-  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
 
   private MockMvc mockMvc;
 
@@ -51,10 +56,6 @@ class ConsoleDryRunPlanControllerTest {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
-    when(orchestratorProxy.dryRunPlan(any(DryRunPlanRequest.class)))
-        .thenReturn(
-            CommonResponse.success(new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of())));
-
     mockMvc = MockMvcBuilders.standaloneSetup(
             new ConsoleDryRunPlanController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
@@ -64,6 +65,9 @@ class ConsoleDryRunPlanControllerTest {
   @Test
   @DisplayName("计划请求报文绑定为类型化对象后委托下游, 各字段取值与报文一致")
   void shouldDeserializeTypedBodyAndDelegate_whenPlanRequestComplete() throws Exception {
+    when(orchestratorProxy.dryRunPlan(any(DryRunPlanRequest.class)))
+        .thenReturn(
+            CommonResponse.success(new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of())));
     mockMvc
         .perform(post("/api/console/ops/dry-run/plan")
             .contentType(APPLICATION_JSON)
@@ -136,6 +140,9 @@ class ConsoleDryRunPlanControllerTest {
   @Test
   @DisplayName("报文未携带租户时仍委托下游, 返回成功")
   void shouldDelegateRequest_whenTenantAbsent() throws Exception {
+    when(orchestratorProxy.dryRunPlan(any(DryRunPlanRequest.class)))
+        .thenReturn(
+            CommonResponse.success(new ConsoleDryRunPlanResponse("L1", true, List.of(), Map.of())));
     mockMvc
         .perform(post("/api/console/ops/dry-run/plan")
             .contentType(APPLICATION_JSON)

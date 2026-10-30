@@ -12,11 +12,9 @@ import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
 import net.sf.jsqlparser.statement.Statements;
 import net.sf.jsqlparser.statement.select.Select;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
-/** L3 SQL 计划探测，负责单语句白名单和只读 EXPLAIN 防护。 */
+/** L3 SQL 静态检查；数据库计划探测停用以避免规划阶段的副作用。 */
 @Component
 public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
 
@@ -28,20 +26,8 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
   private static final Pattern SELECT_OR_WITH_PREFIX =
       Pattern.compile("^\\s*(SELECT|WITH)\\b", Pattern.CASE_INSENSITIVE);
 
-  private final ObjectProvider<JdbcTemplate> jdbcTemplateProvider;
-
-  public JdbcDryRunSqlProbe(ObjectProvider<JdbcTemplate> jdbcTemplateProvider) {
-    this.jdbcTemplateProvider = jdbcTemplateProvider;
-  }
-
   @Override
-  // S2259 无法识别 EmptyChecks.isNull(jdbcTemplate) 在后续调用前已返回。
-  @SuppressWarnings("java:S2259")
   public int probe(Map<String, Object> params, List<DryRunFinding> findings) {
-    JdbcTemplate jdbcTemplate = jdbcTemplateProvider.getIfAvailable();
-    if (EmptyChecks.isNull(jdbcTemplate)) {
-      return 0;
-    }
     int probed = 0;
     for (String key : SQL_PARAM_KEYS) {
       Object raw = params.get(key);
@@ -49,21 +35,17 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
         continue;
       }
       probed++;
-      probeSingleSql(key, sql.trim(), jdbcTemplate, findings);
+      probeSingleSql(key, sql.trim(), findings);
     }
     return probed;
   }
 
-  @SuppressWarnings("java:S2077")
-  private void probeSingleSql(
-      String key, String sql, JdbcTemplate jdbcTemplate, List<DryRunFinding> findings) {
-    // The dry-run probe rejects unparsable, multi-statement, EXPLAIN-prefixed, and non-SELECT
-    // payloads before prefixing EXPLAIN; this path never executes data-changing SQL.
+  private void probeSingleSql(String key, String sql, List<DryRunFinding> findings) {
     if (EXPLAIN_PREFIX.matcher(sql).find()) {
       findings.add(DryRunFinding.error(
           "EXEC_SQL_EXPLAIN_REJECTED",
           SCOPE_EXECUTION,
-          "payload starts with EXPLAIN — refusing to nest a second EXPLAIN; submit raw SELECT",
+          "EXPLAIN input is not accepted; submit a raw SELECT for static validation",
           key));
       return;
     }
@@ -71,8 +53,7 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
       findings.add(DryRunFinding.error(
           "EXEC_SQL_NON_SELECT_REJECTED",
           SCOPE_EXECUTION,
-          "dry-run SQL probe only accepts SELECT / WITH statements; refusing to EXPLAIN a"
-              + " DML/DDL payload",
+          "dry-run SQL static validation only accepts SELECT / WITH statements; DML/DDL rejected",
           key));
       return;
     }
@@ -81,9 +62,8 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
       findings.add(DryRunFinding.error(
           "EXEC_SQL_UNPARSEABLE_REJECTED",
           SCOPE_EXECUTION,
-          "dry-run SQL probe could not be parsed to verify single-statement safety; refusing"
-              + " to EXPLAIN via simple-query (may be valid PG-specific syntax jsqlparser"
-              + " cannot parse — submit a parseable single SELECT/WITH)",
+          "dry-run SQL could not be parsed for static validation; submit a parseable single"
+              + " SELECT/WITH (some valid PostgreSQL syntax may not be supported)",
           key));
       return;
     }
@@ -91,22 +71,18 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
       findings.add(DryRunFinding.error(
           "EXEC_SQL_MULTISTATEMENT_REJECTED",
           SCOPE_EXECUTION,
-          "dry-run SQL probe must be exactly one SELECT/WITH statement; refusing to EXPLAIN a"
-              + " multi-statement / stacked-query payload",
+          "dry-run SQL static validation requires exactly one SELECT/WITH statement;"
+              + " multi-statement or non-SELECT input rejected",
           key));
       return;
     }
-    try {
-      jdbcTemplate.execute("EXPLAIN (ANALYZE FALSE, COSTS FALSE) " + sql);
-      findings.add(
-          DryRunFinding.pass("EXEC_SQL_EXPLAIN_OK", SCOPE_EXECUTION, "EXPLAIN passed for " + key));
-    } catch (RuntimeException ex) {
-      findings.add(DryRunFinding.error(
-          "EXEC_SQL_EXPLAIN_FAILED",
-          SCOPE_EXECUTION,
-          "EXPLAIN failed for " + key + ": " + ex.getMessage(),
-          key));
-    }
+    // PostgreSQL 可在 EXPLAIN 规划阶段执行函数，不能保证无副作用。
+    findings.add(DryRunFinding.error(
+        "EXEC_SQL_PLAN_UNAVAILABLE",
+        SCOPE_EXECUTION,
+        "SQL syntax checked; database execution plan unavailable because EXPLAIN is disabled"
+            + " to prevent planning-time side effects",
+        key));
   }
 
   private static SingleSelectCheck classifySingleSelect(String sql) {
@@ -117,7 +93,9 @@ public final class JdbcDryRunSqlProbe implements DryRunSqlProbe {
       return SingleSelectCheck.UNPARSEABLE;
     }
     List<Statement> list = statements;
-    if (EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select) {
+    boolean containsExactlyOneSelect =
+        EmptyChecks.isNotNull(list) && list.size() == 1 && list.get(0) instanceof Select;
+    if (containsExactlyOneSelect) {
       return SingleSelectCheck.SINGLE_SELECT;
     }
     return SingleSelectCheck.MULTI_OR_NON_SELECT;

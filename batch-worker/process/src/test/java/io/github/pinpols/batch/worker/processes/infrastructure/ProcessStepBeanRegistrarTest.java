@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.core.mapper.StepRegistryMapper;
+import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationContext;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
 
@@ -37,8 +39,7 @@ class ProcessStepBeanRegistrarTest {
       }
 
       @Override
-      public ProcessStageResult execute(
-          io.github.pinpols.batch.worker.processes.domain.ProcessJobContext context) {
+      public ProcessStageResult execute(ProcessJobContext context) {
         return ProcessStageResult.success(ProcessStage.COMPUTE);
       }
     };
@@ -49,8 +50,7 @@ class ProcessStepBeanRegistrarTest {
       }
 
       @Override
-      public ProcessStageResult compute(
-          io.github.pinpols.batch.worker.processes.domain.ProcessJobContext context) {
+      public ProcessStageResult compute(ProcessJobContext context) {
         return ProcessStageResult.success(ProcessStage.COMPUTE);
       }
     };
@@ -62,19 +62,18 @@ class ProcessStepBeanRegistrarTest {
 
     PlatformTransactionManager txManager = new PlatformTransactionManager() {
       @Override
-      public TransactionStatus getTransaction(
-          org.springframework.transaction.TransactionDefinition definition) {
+      public TransactionStatus getTransaction(TransactionDefinition definition) {
         return new SimpleTransactionStatus();
       }
 
       @Override
       public void commit(TransactionStatus status) {
-        // no-op: registrar tests do not need real transaction completion.
+        // 无需执行实际操作：注册器测试不需要真实完成事务。
       }
 
       @Override
       public void rollback(TransactionStatus status) {
-        // no-op: registrar tests do not need real rollback behavior.
+        // 无需执行实际操作：注册器测试不需要真实回滚事务。
       }
     };
 

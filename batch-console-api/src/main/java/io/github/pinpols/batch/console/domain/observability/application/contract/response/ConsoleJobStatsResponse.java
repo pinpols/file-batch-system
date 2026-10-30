@@ -1,10 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.application.contract.response;
 
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longMap;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.mapList;
-import static io.github.pinpols.batch.console.domain.observability.application.contract.response.ObservabilityResponseFieldReader.stringValue;
-
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.DayStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.JobStatsView;
 import java.util.List;
@@ -21,10 +16,6 @@ public record ConsoleJobStatsResponse(
 
   /** 单日按状态计数（{@code day} 为 LocalDate 或占位符 UNKNOWN，统一以字符串透传，与历史 wire 一致）。 */
   public record DailyTrendEntry(String day, String status, Long count) {
-    static DailyTrendEntry from(Map<String, Object> row) {
-      return new DailyTrendEntry(
-          stringValue(row, "day"), stringValue(row, "status"), longValue(row, "count"));
-    }
 
     static DailyTrendEntry from(DayStatusCountView row) {
       return new DailyTrendEntry(
@@ -38,19 +29,10 @@ public record ConsoleJobStatsResponse(
     if (view == null) {
       return null;
     }
-    return new ConsoleJobStatsResponse(
-        view.byStatus(),
-        view.total(),
-        view.dailyTrend().stream().map(DailyTrendEntry::from).toList());
-  }
-
-  public static ConsoleJobStatsResponse from(Map<String, Object> row) {
-    if (row == null) {
-      return null;
-    }
-    return new ConsoleJobStatsResponse(
-        longMap(row, "byStatus"),
-        longValue(row, "total"),
-        mapList(row, "dailyTrend").stream().map(DailyTrendEntry::from).toList());
+    Map<String, Long> statusCounts = view.byStatus();
+    Long total = view.total();
+    List<DailyTrendEntry> dailyTrendEntries =
+        view.dailyTrend().stream().map(DailyTrendEntry::from).toList();
+    return new ConsoleJobStatsResponse(statusCounts, total, dailyTrendEntries);
   }
 }

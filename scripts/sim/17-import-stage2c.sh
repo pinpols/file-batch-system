@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
+# 用途：import-stage2c.sh:Import BATCH_UPSERT/REPLACE 小矩阵验证。
+# 用法：在仓库根目录执行 bash scripts/sim/17-import-stage2c.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# 17-import-stage2c.sh:Import APPEND/UPSERT/REPLACE 小矩阵验证
+# 17-import-stage2c.sh:Import BATCH_UPSERT/REPLACE 小矩阵验证
 #
 # 覆盖:
-#   - APPEND/no-conflict:同内容同 batchNo 跑两次产生 2 行
+#   - BATCH_UPSERT:同一批次内两条不同业务键重复导入仍为 2 行
 #   - BATCH_UPSERT:同业务键跑两次只保留 1 行且字段更新
 #   - PARTITION_REPLACE_COPY:同 tenant_id + source_batch_no 先清 stale 再 COPY 新数据
 #
-# SQL fixture 位于 docs/test-data,脚本只负责编排、API 触发和断言。
+# SQL fixture 位于 test-data/sim,脚本只负责编排、API 触发和断言。
 #
 # 注意:PARTITION_REPLACE_COPY 与 line-based checkpoint 语义互斥。checkpoint 默认开启后,
 # 本阶段作为 load mode 正向矩阵,会临时以 batch.worker.checkpoint.enabled=false 重启
@@ -58,10 +60,10 @@ fi
 
 echo "==> apply bootstrap + stage2c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-business.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2c-import-matrix-business.sql >/dev/null
 # import_stage2c_customer 是运行期创建的租户表；必须在恢复/重启 import worker 前
 # 纳入 RLS closed-world，避免测试残留使下一次启动失败。
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
@@ -70,13 +72,14 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v admin_password="$POSTGRES_PASSWORD" \
   -f /dev/stdin < scripts/db/business/rls-phase-a.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-fixtures.sql >/dev/null
+  -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-stage2c-import-matrix-fixtures.sql >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$BUSINESS_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO-replace" \
-  -f /dev/stdin < docs/test-data/sim-stage2c-import-matrix-stale.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage2c-import-matrix-stale.sql >/dev/null
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2c.log"
 import json, os, subprocess, sys, time, urllib.request
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
@@ -120,7 +123,7 @@ def launch(label, job, template, content, batch_no):
     request_ids.append(rid)
     body = {
         "tenantId": "ta",
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job),
         "triggerType": "API",
         "bizDate": BIZ,
         "requestId": rid,
@@ -172,14 +175,24 @@ def wait_for(job, rid, expected="SUCCESS"):
         time.sleep(3)
     raise TimeoutError(f"timeout waiting {job}/{rid}")
 
-append_xml = xml_payload([{
-    "no": "S2CAPP000001",
-    "name": "Stage2c Append",
-    "cert": "S2CAPP000001CERT",
-    "mobile": "13900009201",
-    "email": "s2c-append@x.io",
-    "status": "ACTIVE",
-}])
+append_xml = xml_payload([
+    {
+        "no": "S2CAPP000001",
+        "name": "Stage2c Batch Upsert A",
+        "cert": "S2CAPP000001CERT",
+        "mobile": "13900009201",
+        "email": "s2c-append@x.io",
+        "status": "ACTIVE",
+    },
+    {
+        "no": "S2CAPP000002",
+        "name": "Stage2c Batch Upsert B",
+        "cert": "S2CAPP000002CERT",
+        "mobile": "13900009206",
+        "email": "s2c-append-2@x.io",
+        "status": "ACTIVE",
+    },
+])
 upsert_first = xml_payload([{
     "no": "S2CUPS000001",
     "name": "Stage2c Upsert Original",
@@ -215,7 +228,7 @@ replace_xml = xml_payload([
     },
 ])
 
-print("==> APPEND twice", flush=True)
+print("==> BATCH_UPSERT with two business keys, replay same batch", flush=True)
 for label in ("append_first", "append_second"):
     rid = launch(label, "TA_IMPORT_STAGE2C_APPEND", "TA_IMPORT_STAGE2C_APPEND_TPL", append_xml, BATCH + "-append")
     wait_for("TA_IMPORT_STAGE2C_APPEND", rid)

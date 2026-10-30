@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Loopback fault proxy for SDK control-directive E2E; never bind beyond localhost."""
+# 用途：提供仅监听本机的 SDK 控制指令故障代理。
+# 用法：先设置 SDK_CONTROL_UPSTREAM，再执行 python3 scripts/local/sdk-control-fault-proxy.py；由 SDK 控制 E2E 管理生命周期。
+"""为 SDK 控制指令 E2E 提供故障代理，仅监听本机地址。"""
 
 from __future__ import annotations
 

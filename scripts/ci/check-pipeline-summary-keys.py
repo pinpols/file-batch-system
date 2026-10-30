@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-# scripts/ci/check-pipeline-summary-keys.py
+# 用途：Pipeline 摘要键契约。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-pipeline-summary-keys.py；参数与前置环境见下方说明及所属 README。
+# pom.xml 中 maven-compiler-plugin 的 compilerArgs/enablePreview。
 #
 # Pipeline stage 摘要键(step_run.output_summary)与节点产出键(nodeOutputs)的契约守护。
 #
@@ -20,7 +22,7 @@
 #
 # 三类断链的共性是「编译通过、CI 全绿、运行时静默」,因此本守护按可判定性覆盖:
 #
-#   R1 CARRY_FORWARD_NOT_IN_SUMMARY
+# Dockerfile 中的 ENTRYPOINT 与 JAVA_OPTS 环境变量。
 #      AbstractStageExecutor 子类的 skippedStageCarryForwardKeys() 必须是 buildOutputSummary()
 #      写入键集的子集。二者靠「拼写一致」协作且跨两个独立书写点:一旦漂移,回灌取不到值 →
 #      水位/计数静默丢失 → report 保留旧水位 → 下周期 INCREMENTAL 重读重发(见
@@ -55,6 +57,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -76,9 +79,15 @@ CONST_DECL = re.compile(
 )
 # 限定形引用:SomeRuntimeKeys.CONSTANT / NodeOutputKeys.INPUT_COUNT
 QUALIFIED_CONST_REF = re.compile(r"\b([A-Z][A-Za-z0-9_]*)\s*\.\s*([A-Z][A-Z0-9_]*)\b")
-# 裸引用(静态导入):只对常量表里登记过的名字生效,避免把任意大写标识符当 key。
+# 裸引用还须确认静态导入或所属键类；同名枚举、状态字符串不能作为键引用。
 BARE_CONST_REF = re.compile(r"(?<![\w.$])([A-Z][A-Z0-9_]{2,})\b")
 STRING_LITERAL = re.compile(r'"((?:[^"\\]|\\.)*)"')
+JAVA_LITERAL = re.compile(
+    r'"""(?:\\[\s\S]|(?!""")[^\\])*"""'
+    r'|"(?:\\[\s\S]|[^"\\])*"'
+    r"|'(?:\\[\s\S]|[^'\\])*'"
+)
+STATIC_IMPORT = re.compile(r"\bimport\s+static\s+([\w.]+)\.(\*|\w+)\s*;")
 PUT_CALL = re.compile(r"\b(?:put|putIfPresent)\s*\(")
 # 常量声明右侧的字面量是**声明本身**,不是「另写一份字面量」——`static final String X = "x";`
 # 必须放行,否则每个自定义键类(如 QuartzLaunchJob 的 JobDataMap 键)都会被误判。
@@ -160,15 +169,34 @@ class KeyTable:
         return found
 
     def iter_references(self, text: str):
-        for match in QUALIFIED_CONST_REF.finditer(text):
+        # 等长屏蔽字面量和导入声明，保留有效引用的原始行号。
+        def blank(match: re.Match[str]) -> str:
+            return re.sub(r"[^\n]", " ", match.group())
+
+        code = JAVA_LITERAL.sub(blank, strip_comments(text))
+        bare_values: dict[str, set[str]] = {}
+        for match in STATIC_IMPORT.finditer(code):
+            owner, member = match.group(1).rsplit(".", 1)[-1], match.group(2)
+            for reference, value in self.by_reference.items():
+                key_owner, key_member = reference.split(".", 1)
+                if key_owner == owner and (member == "*" or member == key_member):
+                    bare_values.setdefault(key_member, set()).add(value)
+        for match in re.finditer(r"\b(?:class|interface)\s+(\w+)", code):
+            owner = match.group(1)
+            for reference, value in self.by_reference.items():
+                key_owner, key_member = reference.split(".", 1)
+                if key_owner == owner:
+                    bare_values.setdefault(key_member, set()).add(value)
+        code = STATIC_IMPORT.sub(blank, code)
+        for match in QUALIFIED_CONST_REF.finditer(code):
             value = self.by_reference.get(f"{match.group(1)}.{match.group(2)}")
             if value is not None:
                 yield match, value
         # 裸引用:排除「NAME =」声明/赋值形态,避免把同名常量声明本身当引用。
-        for match in BARE_CONST_REF.finditer(text):
-            if re.match(r"\s*=", text[match.end() : match.end() + 3]):
+        for match in BARE_CONST_REF.finditer(code):
+            if re.match(r"\s*=", code[match.end() : match.end() + 3]):
                 continue
-            values = self.by_name.get(match.group(1), set())
+            values = bare_values.get(match.group(1), set())
             if len(values) == 1:
                 yield match, next(iter(values))
 
@@ -486,8 +514,17 @@ def parse_frontend_keys(text: str) -> set[str] | None:
 
 def java_sources() -> list[Path]:
     files: list[Path] = []
-    for path in ROOT.glob(SOURCE_GLOB):
-        posix = path.as_posix()
+    # 只取当前可版本化的源码；rglob 会把被忽略的历史快照误计为额外执行器。
+    output = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.java"],
+        cwd=ROOT,
+        text=True,
+    )
+    for name in sorted(set(output.split("\0"))):
+        path = ROOT / name
+        posix = f"/{name}"
+        if not path.is_file() or "/src/main/java/" not in posix:
+            continue
         if any(part in posix for part in EXCLUDED_PARTS):
             continue
         files.append(path)

@@ -19,11 +19,13 @@ public final class AuditLogConstants {
   public static final String DETAIL_REF_DEAD_LETTER_TASK = "dead_letter_task";
   public static final String DETAIL_REF_OUTBOX_EVENT = "outbox_event";
   public static final String DETAIL_REF_WORKFLOW_NODE_RUN = "workflow_node_run";
+  public static final String DETAIL_REF_BATCH_DAY_REPLAY_ENTRY = "batch_day_replay_entry";
 
   public static final String AUDIT_OP_DEAD_LETTER_REPLAY = "DEAD_LETTER_REPLAY";
   public static final String AUDIT_OP_OUTBOX_CLEANUP = "OUTBOX_CLEANUP";
   public static final String AUDIT_OP_OUTBOX_REPUBLISH = "OUTBOX_REPUBLISH";
   public static final String AUDIT_OP_WORKFLOW_NODE_SKIP = "WORKFLOW_NODE_SKIP";
+  public static final String AUDIT_OP_BATCH_DAY_REPLAY_RETRY = "BATCH_DAY_REPLAY_RETRY";
 
   public static final String OPERATOR_ID_SYSTEM = "SYSTEM";
   public static final String OPERATOR_TYPE_SYSTEM = "SYSTEM";

@@ -24,17 +24,21 @@
 
 -- 1) job_instance 活跃实例 partial — scheduler hot path
 --    (scheduler / WaitingPromoteScheduler / cleanup-orphan 都按 active status 过滤)
+
 CREATE INDEX IF NOT EXISTS idx_job_instance_active_tenant_created
     ON batch.job_instance (tenant_id, created_at)
     WHERE instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING');
 
 -- 2) job_instance 按业务日期降序 — cleanup-success-instances.sql / Console biz_date 筛选
 --    与 V8 的 idx_job_instance_biz_date 不同:本索引带 DESC 与 ORDER BY biz_date DESC 对齐,
+
 --    Postgres 走 backward scan 时 V8 索引同样可用,故并非完全冗余, 留作 DROP 候选。
+
 CREATE INDEX IF NOT EXISTS idx_job_instance_tenant_bizdate_status
     ON batch.job_instance (tenant_id, biz_date DESC, instance_status);
 
 -- 3) file_record 未删除 partial — DataGovernance / ArrivalGroup 列表
+
 CREATE INDEX IF NOT EXISTS idx_file_record_active_tenant_bizdate
     ON batch.file_record (tenant_id, biz_date)
     WHERE file_status NOT IN ('DELETED', 'ARCHIVED');

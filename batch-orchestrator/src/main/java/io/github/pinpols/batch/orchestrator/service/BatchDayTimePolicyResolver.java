@@ -54,12 +54,9 @@ public class BatchDayTimePolicyResolver {
     LocalTime cutoffTime =
         cutoffScheduleResolver.resolveCutoffTime(calendar.cutoffSchedule(), bizDate, baseCutoff);
     String overlapPolicy = effectiveCutoffOverlapPolicy(calendar);
-    return resolveLocalBoundary(
-        bizDate.plusDays(1),
-        cutoffTime,
-        zoneId,
-        normalize(calendar.dstGapPolicy(), DEFAULT_GAP_POLICY),
-        overlapPolicy);
+    LocalDate cutoffBoundaryDate = bizDate.plusDays(1);
+    String gapPolicy = normalize(calendar.dstGapPolicy(), DEFAULT_GAP_POLICY);
+    return resolveLocalBoundary(cutoffBoundaryDate, cutoffTime, zoneId, gapPolicy, overlapPolicy);
   }
 
   public String snapshot(BusinessCalendarEntity calendar) {
@@ -93,19 +90,26 @@ public class BatchDayTimePolicyResolver {
     ZoneRules rules = zoneId.getRules();
     List<ZoneOffset> offsets = rules.getValidOffsets(localDateTime);
     if (offsets.size() == 1) {
-      return ZonedDateTime.ofLocal(localDateTime, zoneId, offsets.getFirst()).toInstant();
+      ZonedDateTime zonedBoundary =
+          ZonedDateTime.ofLocal(localDateTime, zoneId, offsets.getFirst());
+      Instant boundaryInstant = zonedBoundary.toInstant();
+      return boundaryInstant;
     }
     if (offsets.size() == 2) {
       ZoneOffset selected =
           DEFAULT_OVERLAP_POLICY.equals(overlapPolicy) ? offsets.getLast() : offsets.getFirst();
-      return ZonedDateTime.ofLocal(localDateTime, zoneId, selected).toInstant();
+      ZonedDateTime zonedBoundary = ZonedDateTime.ofLocal(localDateTime, zoneId, selected);
+      Instant boundaryInstant = zonedBoundary.toInstant();
+      return boundaryInstant;
     }
     ZoneOffsetTransition transition = rules.getTransition(localDateTime);
     if ("SKIP".equals(gapPolicy) || "FAIL_FAST".equals(gapPolicy)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day.dst_gap");
     }
     if (transition == null) {
-      return localDateTime.atZone(zoneId).toInstant();
+      ZonedDateTime zonedFallbackBoundary = localDateTime.atZone(zoneId);
+      Instant fallbackBoundaryInstant = zonedFallbackBoundary.toInstant();
+      return fallbackBoundaryInstant;
     }
     // S2-2 / R4-P2-7：spring-forward gap 时 ZoneOffsetTransition.getInstant() 按 JDK 契约
     // ("the first instant after the discontinuity, when the new offset applies") 返回 gap 之后
@@ -116,6 +120,10 @@ public class BatchDayTimePolicyResolver {
 
   @SuppressWarnings("java:S2259")
   private String normalize(String value, String defaultValue) {
-    return Texts.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : defaultValue;
+    if (!Texts.hasText(value)) {
+      return defaultValue;
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toUpperCase(Locale.ROOT);
   }
 }

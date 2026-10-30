@@ -8,7 +8,7 @@ import java.util.Map;
  * 文件治理延迟指标的固定输出契约。
  *
  * <p>Redis 缓存内部仍允许使用 Map，因为缓存数据需要兼容历史字段和 JSON 样本；但 Controller 和
- * 调度器只接收这个固定视图，避免把稳定字段名散落到业务代码中。样本行本身来自动态 SQL 诊断结果，继续保留 Map。
+ * 调度器只接收这个固定视图，避免把稳定字段名散落到业务代码中。样本行来自固定的 Mapper 投影，当前在缓存和响应边界使用 Map 保留既有字段形状。
  */
 public record FileGovernanceLatencyMetrics(
     String tenantId,
@@ -23,14 +23,22 @@ public record FileGovernanceLatencyMetrics(
     if (EmptyChecks.isEmpty(values)) {
       return empty(null);
     }
+    String tenantId = text(values.get("tenantId"));
+    long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
+    long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
+    long processingDelayViolations = number(values.get("processingDelayViolations"));
+    long maxProcessingDelaySeconds = number(values.get("maxProcessingDelaySeconds"));
+    List<Map<String, Object>> arrivalDelaySamples = samples(values.get("arrivalDelaySamples"));
+    List<Map<String, Object>> processingDelaySamples =
+        samples(values.get("processingDelaySamples"));
     return new FileGovernanceLatencyMetrics(
-        text(values.get("tenantId")),
-        number(values.get("arrivalDelayViolations")),
-        number(values.get("maxArrivalDelaySeconds")),
-        number(values.get("processingDelayViolations")),
-        number(values.get("maxProcessingDelaySeconds")),
-        samples(values.get("arrivalDelaySamples")),
-        samples(values.get("processingDelaySamples")));
+        tenantId,
+        arrivalDelayViolations,
+        maxArrivalDelaySeconds,
+        processingDelayViolations,
+        maxProcessingDelaySeconds,
+        arrivalDelaySamples,
+        processingDelaySamples);
   }
 
   public static FileGovernanceLatencyMetrics empty(String tenantId) {
@@ -41,7 +49,11 @@ public record FileGovernanceLatencyMetrics(
     if (value instanceof Number number) {
       return number.longValue();
     }
-    return value == null ? 0L : Long.parseLong(String.valueOf(value));
+    if (EmptyChecks.isNull(value)) {
+      return 0L;
+    }
+    String numericText = String.valueOf(value);
+    return Long.parseLong(numericText);
   }
 
   @SuppressWarnings("unchecked")

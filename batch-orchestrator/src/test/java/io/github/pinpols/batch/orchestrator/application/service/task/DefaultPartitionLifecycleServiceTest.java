@@ -1,34 +1,48 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ClaimPartitionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.JobPartitionPromoteStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkPartitionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 /**
  * 守护分片生命周期的关键状态转换:
@@ -43,6 +57,7 @@ import org.mockito.MockitoAnnotations;
  * 事务行为,留给集成测覆盖。
  */
 @DisplayName("分区生命周期服务: 认领, 续租, 过期回收与派发放行口径")
+@ExtendWith(MockitoExtension.class)
 class DefaultPartitionLifecycleServiceTest {
 
   @Mock
@@ -51,15 +66,117 @@ class DefaultPartitionLifecycleServiceTest {
   @Mock
   private JobTaskMapper jobTaskMapper;
 
+  @Mock
+  private RelatedFileReferenceValidator relatedFileReferenceValidator;
+
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
   private DefaultPartitionLifecycleService service;
 
   @BeforeEach
   void setUp() {
-    MockitoAnnotations.openMocks(this);
-    service = new DefaultPartitionLifecycleService(jobPartitionMapper, jobTaskMapper);
+    service = new DefaultPartitionLifecycleService(
+        jobPartitionMapper, jobTaskMapper, jobInstanceMapper, relatedFileReferenceValidator);
   }
 
   // ===== claimPartition =====
+
+  @Test
+  @DisplayName("createPartitions: 缺失同租户父实例时在批量写入前失败")
+  void shouldRejectMissingParentInstanceBeforeBatchInsert() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("tenant-a");
+    plan.setPartitions(List.of(new SchedulePlan.PartitionPlan()));
+    when(jobInstanceMapper.selectById("tenant-a", 100L)).thenReturn(null);
+
+    assertThatThrownBy(() -> service.createPartitions(plan, 100L, PartitionStatus.CREATED.code()))
+        .isInstanceOf(BizException.class);
+    verify(jobPartitionMapper, never()).insertBatch(any());
+    verify(jobPartitionMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("createPartitions: 父实例并发变更的精确外键拒绝映射为稳定冲突")
+  void shouldMapConcurrentParentReferenceViolationToConflict() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("tenant-a");
+    SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
+    partition.setPartitionNo(1);
+    plan.setPartitions(List.of(partition));
+    SQLException sqlFailure =
+        new SQLException("violates constraint fk_job_partition_instance_tenant_date", "23503");
+    doThrow(new DataIntegrityViolationException("foreign key conflict", sqlFailure))
+        .when(jobPartitionMapper)
+        .insertBatch(any());
+
+    assertThatThrownBy(() -> service.createPartitions(plan, 100L, PartitionStatus.CREATED.code()))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.CONFLICT));
+  }
+
+  @Test
+  @DisplayName("createPartitions: 源文件并发删除的精确外键拒绝映射为文件不存在")
+  void shouldMapConcurrentSourceFileReferenceViolationToNotFound() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("tenant-a");
+    SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
+    partition.setPartitionNo(1);
+    partition.setSourceFileId(99L);
+    plan.setPartitions(List.of(partition));
+    SQLException sqlFailure =
+        new SQLException("violates constraint fk_job_partition_source_file_tenant", "23503");
+    doThrow(new DataIntegrityViolationException("foreign key conflict", sqlFailure))
+        .when(jobPartitionMapper)
+        .insertBatch(any());
+
+    assertThatThrownBy(() -> service.createPartitions(plan, 100L, PartitionStatus.CREATED.code()))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.NOT_FOUND));
+  }
+
+  @Test
+  @DisplayName("createPartitions: 其他数据库约束错误不伪装成父实例冲突")
+  void shouldPreserveUnrelatedDatabaseConstraintFailure() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("tenant-a");
+    SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
+    partition.setPartitionNo(1);
+    plan.setPartitions(List.of(partition));
+    DataIntegrityViolationException failure =
+        new DataIntegrityViolationException("unrelated database constraint");
+    doThrow(failure).when(jobPartitionMapper).insertBatch(any());
+
+    assertThatThrownBy(() -> service.createPartitions(plan, 100L, PartitionStatus.CREATED.code()))
+        .isSameAs(failure);
+  }
+
+  @Test
+  @DisplayName("createPartitions: 外租户源文件使整批分区在写入前失败")
+  void shouldRejectForeignTenantSourceFileBeforeBatchInsert() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
+    SchedulePlan plan = new SchedulePlan();
+    plan.setTenantId("tenant-a");
+    SchedulePlan.PartitionPlan partition = new SchedulePlan.PartitionPlan();
+    partition.setPartitionNo(1);
+    partition.setSourceFileId(99L);
+    plan.setPartitions(List.of(partition));
+    doThrow(BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found"))
+        .when(relatedFileReferenceValidator)
+        .validate("tenant-a", 99L);
+
+    Assertions.assertThatThrownBy(
+            () -> service.createPartitions(plan, 100L, PartitionStatus.CREATED.code()))
+        .isInstanceOf(BizException.class);
+    verify(jobPartitionMapper, never()).insertBatch(any());
+    verify(jobPartitionMapper, never()).insert(any());
+  }
 
   @Test
   @DisplayName("claimPartition: 分片不存在 → 返 null,不写表")
@@ -196,9 +313,15 @@ class DefaultPartitionLifecycleServiceTest {
     assertThat(service.releaseForDispatch(partition(1L, 0L), null, "x", "y")).isFalse();
     assertThat(service.releaseForDispatch(null, task(1L, 0L), "x", "y")).isFalse();
     verify(jobPartitionMapper, never())
-        .promoteStatus(anyString(), anyLong(), anyString(), anyString(), anyLong());
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
     verify(jobTaskMapper, never())
-        .promoteStatus(anyString(), anyLong(), anyString(), anyString(), anyLong());
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
   }
 
   @Test
@@ -207,15 +330,23 @@ class DefaultPartitionLifecycleServiceTest {
     JobPartitionEntity p = partition(1L, 0L);
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
-    when(jobPartitionMapper.promoteStatus(
-            "ta", 1L, PartitionStatus.WAITING.code(), PartitionStatus.READY.code(), 0L))
+    when(jobPartitionMapper.promoteStatus(JobPartitionPromoteStatusParam.builder()
+            .tenantId("ta")
+            .id(1L)
+            .fromStatus(PartitionStatus.WAITING.code())
+            .toStatus(PartitionStatus.READY.code())
+            .expectedVersion(0L)
+            .build()))
         .thenReturn(0);
 
     boolean ok =
         service.releaseForDispatch(p, t, PartitionStatus.WAITING.code(), TaskStatus.CREATED.code());
     assertThat(ok).isFalse();
     verify(jobTaskMapper, never())
-        .promoteStatus(anyString(), anyLong(), anyString(), anyString(), anyLong());
+        .promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null));
   }
 
   @Test
@@ -225,10 +356,15 @@ class DefaultPartitionLifecycleServiceTest {
     p.setTenantId("ta");
     JobTaskEntity t = task(1L, 0L);
     t.setTenantId("ta");
-    when(jobPartitionMapper.promoteStatus(
-            anyString(), anyLong(), anyString(), anyString(), anyLong()))
+    when(jobPartitionMapper.promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null)))
         .thenReturn(1);
-    when(jobTaskMapper.promoteStatus(anyString(), anyLong(), anyString(), anyString(), anyLong()))
+    when(jobTaskMapper.promoteStatus(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.fromStatus() != null
+            && parameters.toStatus() != null)))
         .thenReturn(1);
 
     boolean ok =
@@ -244,6 +380,7 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("createPartitions: input_snapshot 固化 partition plan contract")
   @SuppressWarnings("unchecked")
   void shouldPersistPartitionPlanContract_whenCreatingPartitions() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("JOB_A");
@@ -271,6 +408,8 @@ class DefaultPartitionLifecycleServiceTest {
     verify(jobPartitionMapper).insertBatch(cap.capture());
     verify(jobPartitionMapper, never()).insert(any());
     assertThat(cap.getValue()).hasSize(1);
+    assertThat(cap.getValue().getFirst().getJobInstanceBizDate())
+        .isEqualTo(LocalDate.of(2026, 10, 19));
     Map<String, Object> snapshot = (Map<String, Object>)
         JsonUtils.fromJson(cap.getValue().get(0).getInputSnapshot(), Object.class);
     assertThat(snapshot).containsEntry("partitionPlanVersion", 1);
@@ -287,6 +426,7 @@ class DefaultPartitionLifecycleServiceTest {
   @DisplayName("createPartitions: 分发束按分区固化各自的下游渠道")
   @SuppressWarnings("unchecked")
   void shouldPersistPartitionChannel_whenCreatingDispatchBundle() {
+    when(jobInstanceMapper.selectById(anyString(), anyLong())).thenReturn(parentInstance());
     SchedulePlan plan = new SchedulePlan();
     plan.setTenantId("ta");
     plan.setJobCode("DISPATCH_BUNDLE");
@@ -322,5 +462,11 @@ class DefaultPartitionLifecycleServiceTest {
     t.setId(id);
     t.setVersion(version);
     return t;
+  }
+
+  private JobInstanceEntity parentInstance() {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setBizDate(LocalDate.of(2026, 10, 19));
+    return instance;
   }
 }

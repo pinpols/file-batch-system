@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.atomic;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractAtomicHandler;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.internal.ExceptionLogSummary;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import java.net.InetAddress;
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.regex.PatternSyntaxException;
 import lombok.extern.slf4j.Slf4j;
 
@@ -43,19 +45,39 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
 
+  private static final Set<String> IDEMPOTENT_METHODS = Set.of("GET", "HEAD", "PUT", "DELETE");
+
   private final HttpAtomicConfig config;
   private final HttpClient httpClient;
 
   public HttpAtomicHandler(HttpAtomicConfig config) {
     this.config = Objects.requireNonNull(config, "config");
-    this.httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(config.timeoutSeconds()))
-        .build();
+    HttpClient.Builder httpClientBuilder = HttpClient.newBuilder();
+    Duration connectTimeout = Duration.ofSeconds(config.timeoutSeconds());
+    this.httpClient = httpClientBuilder.connectTimeout(connectTimeout).build();
   }
 
   @Override
   public String taskType() {
     return config.taskType();
+  }
+
+  @Override
+  public boolean isSafeToReplay(SdkTaskContext ctx) {
+    Map<String, Object> parameters = ctx.parameters();
+    String configuredMethod = asString(parameters.get("method"));
+    String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
+    if (IDEMPOTENT_METHODS.contains(method)) {
+      return true;
+    }
+    Object rawHeaders = parameters.get("headers");
+    if (!(rawHeaders instanceof Map<?, ?> headers)) {
+      return false;
+    }
+    return headers.entrySet().stream()
+        .anyMatch(entry -> "Idempotency-Key".equalsIgnoreCase(String.valueOf(entry.getKey()))
+            && entry.getValue() instanceof String value
+            && EmptyChecks.isNotBlank(value));
   }
 
   @Override
@@ -66,8 +88,9 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     if (url == null || url.isBlank()) {
       throw new IllegalArgumentException("missing required parameter: url");
     }
-    String method =
-        Objects.requireNonNullElse(asString(params.get("method")), "GET").toUpperCase(Locale.ROOT);
+    Object methodValue = params.get("method");
+    String configuredMethod = asString(methodValue);
+    String method = Objects.requireNonNullElse(configuredMethod, "GET").toUpperCase(Locale.ROOT);
     Map<String, String> headers = (Map<String, String>) params.get("headers");
     String body = asString(params.get("body"));
 
@@ -86,8 +109,10 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
     checkSsrf(host);
 
     // 构造请求
-    HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri)
-        .timeout(Duration.ofSeconds(config.timeoutSeconds()))
+    HttpRequest.Builder reqBuilder = HttpRequest.newBuilder(uri);
+    Duration requestTimeout = Duration.ofSeconds(config.timeoutSeconds());
+    reqBuilder
+        .timeout(requestTimeout)
         .method(
             method,
             body == null
@@ -114,10 +139,11 @@ public class HttpAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Obje
   private void checkSsrf(String host) throws UnknownHostException {
     if (config.blockPrivateIps()) {
       InetAddress addr = InetAddress.getByName(host);
-      if (addr.isLoopbackAddress()
+      boolean resolvedAddressIsPrivate = addr.isLoopbackAddress()
           || addr.isAnyLocalAddress()
           || addr.isLinkLocalAddress()
-          || addr.isSiteLocalAddress()) {
+          || addr.isSiteLocalAddress();
+      if (resolvedAddressIsPrivate) {
         throw new SecurityException("SSRF blocked: private/loopback IP for host " + host);
       }
     }

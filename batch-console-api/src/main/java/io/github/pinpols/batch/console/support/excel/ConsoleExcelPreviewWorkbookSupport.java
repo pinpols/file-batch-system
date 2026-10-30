@@ -100,7 +100,8 @@ public final class ConsoleExcelPreviewWorkbookSupport {
       if (cell == null) {
         cell = row.createCell(columnIndex);
       }
-      String commentText = String.join("\n", new LinkedHashSet<>(entry.getValue()));
+      LinkedHashSet<String> uniqueMessages = new LinkedHashSet<>(entry.getValue());
+      String commentText = String.join("\n", uniqueMessages);
       ConsoleExcelStyles.attachStandardComment(cell, commentText, creationHelper, drawing);
     }
   }

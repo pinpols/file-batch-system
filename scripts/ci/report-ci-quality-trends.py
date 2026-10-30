@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：生成测试质量快照和 Full Gate 历史趋势报告。
+# 用法：python3 scripts/ci/report-ci-quality-trends.py --reports-root <报告目录> --json <JSON 输出> --markdown <Markdown 输出>。
 """生成测试质量快照和 Full Gate 历史趋势报告。"""
 
 from __future__ import annotations
@@ -35,6 +37,7 @@ def parse_reports(root: Path) -> dict[str, object]:
     totals = Counter()
     categories = Counter()
     e2e = Counter()
+    e2e_shards: dict[str, Counter] = {}
     files = sorted(root.glob("**/TEST-*.xml"))
     for path in files:
         suite = ET.parse(path).getroot()
@@ -46,7 +49,22 @@ def parse_reports(root: Path) -> dict[str, object]:
         totals["durationSeconds"] += float(suite.attrib.get("time", "0"))
         is_e2e = "E2eIT" in path.name or "E2eIT" in suite.attrib.get("name", "")
         if is_e2e:
-            e2e.update(suites=1, failedSuites=int(failures + errors > 0), tests=tests)
+            failed = failures + errors > 0
+            all_skipped = tests == 0 or skipped >= tests
+            e2e.update(
+                suites=1,
+                failedSuites=int(failed),
+                skippedSuites=int(not failed and all_skipped),
+                successfulSuites=int(not failed and not all_skipped),
+                tests=tests,
+            )
+            for component in path.relative_to(root).parts:
+                match = re.fullmatch(r"full-ci-e2e-shard-(\d+)-reports", component)
+                if match:
+                    shard = e2e_shards.setdefault(match.group(1), Counter())
+                    shard.update(suites=1, tests=tests, skipped=skipped)
+                    shard["durationSeconds"] += float(suite.attrib.get("time", "0"))
+                    break
         for case in suite.findall("testcase"):
             flaky = case.findall("flakyFailure") + case.findall("flakyError")
             totals["flakyFirstFailures"] += len(flaky)
@@ -64,6 +82,10 @@ def parse_reports(root: Path) -> dict[str, object]:
         if totals["tests"]
         else 0,
         "e2e": dict(e2e),
+        "e2eShards": {
+            key: {**value, "durationSeconds": round(value["durationSeconds"], 3)}
+            for key, value in sorted(e2e_shards.items(), key=lambda item: int(item[0]))
+        },
         "failureCategories": dict(categories),
     }
 
@@ -75,6 +97,8 @@ def parse_workflow_runs(path: Path | None) -> dict[str, object]:
     conclusions = Counter(run.get("conclusion") or "in_progress" for run in runs)
     durations: list[float] = []
     for run in runs:
+        if run.get("status") != "completed" or not run.get("conclusion"):
+            continue
         try:
             start = dt.datetime.fromisoformat(run["created_at"].replace("Z", "+00:00"))
             end = dt.datetime.fromisoformat(run["updated_at"].replace("Z", "+00:00"))
@@ -98,7 +122,7 @@ def source_counts(root: Path = ROOT) -> dict[str, int]:
         disabled += len(re.findall(r"@Disabled(?:\s*\(|\b)", source))
         flaky_quarantines += len(re.findall(r"@FlakyTest\s*\(", source))
     registry = json.loads((root / "docs/governance/soft-gates.json").read_text(encoding="utf-8"))
-    suppression_baseline = root / "scripts/ci/java-suppression-baseline.tsv"
+    suppression_baseline = root / "scripts/ci/baselines/java-suppression-baseline.tsv"
     suppression_exceptions = sum(
         1
         for line in suppression_baseline.read_text(encoding="utf-8").splitlines()
@@ -128,17 +152,26 @@ def markdown(report: dict[str, object]) -> str:
             "|---|---:|",
             f"| 当前测试数 | {tests['tests']} |",
             f"| 失败 / 错误 / 跳过 | {tests['failures']} / {tests['errors']} / {tests['skipped']} |",
-            f"| 测试累计耗时 | {tests['durationSeconds']} 秒 |",
+            f"| 测试累计耗时（非作业墙钟） | {tests['durationSeconds']} 秒 |",
             f"| 首次失败重跑 | {tests['flakyFirstFailures']} |",
-            f"| E2E 套件成功 | {e2e.get('suites', 0) - e2e.get('failedSuites', 0)}/{e2e.get('suites', 0)} |",
+            f"| E2E 套件成功 / 失败 / 全部跳过 | {e2e.get('successfulSuites', 0)} / {e2e.get('failedSuites', 0)} / {e2e.get('skippedSuites', 0)} |",
             f"| 禁用测试 | {report['source']['disabledTests']} |",
             f"| flaky 隔离 | {report['source']['flakyQuarantines']} |",
             f"| Java suppression 例外 | {report['source']['suppressionExceptions']} |",
             f"| 软门禁 | {report['source']['softGates']} |",
             f"| 最近 Full Gate 成功率 | {success_text}（{workflow['runs']} 次） |",
-            f"| 最近 Full Gate 平均耗时 | {duration_text} |",
+            f"| 最近已完成 Full Gate 平均耗时 | {duration_text} |",
             "",
             f"失败类型：`{json.dumps(tests['failureCategories'], ensure_ascii=False, sort_keys=True)}`",
+            "",
+            "### E2E 分片测试累计耗时（非作业墙钟）",
+            "",
+            "| 分片 | 报告数 | 测试数 / 跳过 | 累计秒数 |",
+            "|---|---:|---:|---:|",
+            *(
+                f"| {shard} | {values['suites']} | {values['tests']} / {values['skipped']} | {values['durationSeconds']} |"
+                for shard, values in tests.get("e2eShards", {}).items()
+            ),
             "",
         )
     )

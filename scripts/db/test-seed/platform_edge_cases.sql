@@ -36,25 +36,30 @@ INSERT INTO batch.job_definition (
     retry_max_count, timeout_seconds, execution_handler, param_schema, default_params, version, enabled, description,
     created_by, updated_by, created_at, updated_at
 ) VALUES
-    (2004, 'default-tenant', 'general_fixed_rate_job', 'General Fixed Rate Job', 'GENERAL', 'HOUSEKEEPING', 'FIXED_RATE', '300', 'Asia/Shanghai', 2, 'dispatch_queue', 'dispatch', 'prev-workday-calendar', 'business_hours', 'SCHEDULED', FALSE, 'NONE', 'NONE', 0, 1800, 'com.example.GeneralFixedRateJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'fixedRate'), 1, TRUE, 'Covers GENERAL + FIXED_RATE + NONE shard_strategy; runs every 300s', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2005, 'default-tenant', 'dispatch_event_job', 'Dispatch Event Job', 'DISPATCH', 'DELIVERY', 'EVENT', 'dispatch.completed', 'Asia/Shanghai', 6, 'dispatch_queue', 'dispatch', 'prev-workday-calendar', 'night_continue', 'EVENT', TRUE, 'AUTO', 'FIXED', 1, 1200, 'com.example.DispatchEventJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'event'), 1, TRUE, 'Covers DISPATCH + EVENT schedule', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2006, 'default-tenant', 'manual_backfill_job', 'Manual Backfill Job', 'GENERAL', 'MAINTENANCE', 'MANUAL', NULL, 'Asia/Shanghai', 1, 'import_queue', 'import', 'prev-workday-calendar', 'business_hours', 'MANUAL', FALSE, 'NONE', 'NONE', 0, 900, 'com.example.ManualBackfillJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'manual'), 1, TRUE, 'Covers MANUAL trigger mode', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2007, 'default-tenant', 'event_backfill_job', 'Event Backfill Job', 'WORKFLOW', 'MAINTENANCE', 'ONE_TIME', NULL, 'Asia/Shanghai', 3, 'import_queue', 'import', 'prev-workday-calendar', 'business_hours', 'EVENT', TRUE, 'AUTO', 'EXPONENTIAL', 2, 2700, 'com.example.EventBackfillWorkflowHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'oneTime'), 1, TRUE, 'Covers ONE_TIME schedule and EVENT trigger mode', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
+    (2014, 'default-tenant', 'general_fixed_rate_job', 'General Fixed Rate Job', 'GENERAL', 'HOUSEKEEPING', 'FIXED_RATE', '300', 'Asia/Shanghai', 2, 'dispatch_queue', 'DISPATCH', 'prev-workday-calendar', 'business_hours', 'SCHEDULED', FALSE, 'NONE', 'NONE', 0, 1800, 'com.example.GeneralFixedRateJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'fixedRate'), 1, TRUE, 'Covers GENERAL + FIXED_RATE + NONE shard_strategy; runs every 300s', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2015, 'default-tenant', 'dispatch_event_job', 'Dispatch Event Job', 'DISPATCH', 'DELIVERY', 'EVENT', 'dispatch.completed', 'Asia/Shanghai', 6, 'dispatch_queue', 'DISPATCH', 'prev-workday-calendar', 'night_continue', 'EVENT', TRUE, 'AUTO', 'FIXED', 1, 1200, 'com.example.DispatchEventJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'event'), 1, TRUE, 'Covers DISPATCH + EVENT schedule', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2016, 'default-tenant', 'manual_backfill_job', 'Manual Backfill Job', 'GENERAL', 'MAINTENANCE', 'MANUAL', NULL, 'Asia/Shanghai', 1, 'import_queue', 'IMPORT', 'prev-workday-calendar', 'business_hours', 'MANUAL', FALSE, 'NONE', 'NONE', 0, 900, 'com.example.ManualBackfillJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'manual'), 1, TRUE, 'Covers MANUAL trigger mode', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2017, 'default-tenant', 'event_backfill_job', 'Event Backfill Job', 'GENERAL', 'MAINTENANCE', 'ONE_TIME', NULL, 'Asia/Shanghai', 3, 'import_queue', 'IMPORT', 'prev-workday-calendar', 'business_hours', 'EVENT', TRUE, 'AUTO', 'EXPONENTIAL', 2, 2700, 'com.example.EventBackfillJobHandler', jsonb_build_object('type', 'object'), jsonb_build_object('kind', 'oneTime'), 1, TRUE, 'Covers ONE_TIME schedule and EVENT trigger mode', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_definition (
-    id, tenant_id, workflow_code, workflow_name, workflow_type, version, enabled, description, created_by, updated_by, created_at, updated_at
+    id, tenant_id, workflow_code, workflow_name, workflow_type, single_job_definition_id, calendar_code,
+    version, enabled, description, created_by, updated_by, created_at, updated_at
 ) VALUES
-    (2102, 'default-tenant', 'import_pipeline_flow', 'Import Pipeline Flow', 'PIPELINE', 1, TRUE, 'Pipeline workflow coverage', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2103, 'default-tenant', 'mixed_orchestration_flow', 'Mixed Orchestration Flow', 'MIXED', 1, TRUE, 'Mixed workflow coverage', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
+    (2102, 'default-tenant', 'import_pipeline_flow', 'Import Pipeline Flow', 'PIPELINE', NULL, 'default_calendar', 1, TRUE, 'Pipeline workflow coverage', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2103, 'default-tenant', 'mixed_orchestration_flow', 'Mixed Orchestration Flow', 'MIXED', NULL, 'default_calendar', 1, TRUE, 'Mixed workflow coverage', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2112, 'default-tenant', 'fixed_rate_job_workflow', 'Fixed Rate Job Workflow', 'DAG', 2014, 'prev-workday-calendar', 1, TRUE, 'Managed single-Job Workflow for fixed-rate test', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2113, 'default-tenant', 'dispatch_event_job_workflow', 'Dispatch Event Job Workflow', 'DAG', 2015, 'prev-workday-calendar', 1, TRUE, 'Managed single-Job Workflow for dispatch event test', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2114, 'default-tenant', 'manual_backfill_job_workflow', 'Manual Backfill Job Workflow', 'DAG', 2016, 'prev-workday-calendar', 1, TRUE, 'Managed single-Job Workflow for manual backfill test', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2115, 'default-tenant', 'event_backfill_job_workflow', 'Event Backfill Job Workflow', 'DAG', 2017, 'prev-workday-calendar', 1, TRUE, 'Managed single-Job Workflow for event backfill test', 'system', 'system', TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_node (
-    id, tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, related_pipeline_code, worker_group,
+    id, tenant_id, workflow_definition_id, node_code, node_name, node_type, related_job_code, worker_group,
     window_code, node_order, retry_policy, retry_max_count, timeout_seconds, node_params, enabled, created_at, updated_at
 ) VALUES
-    (2205, 'default-tenant', 2103, 'GATEWAY_SPLIT', 'Gateway Split', 'GATEWAY', NULL, NULL, NULL, NULL, 1, 'NONE', 0, 0, jsonb_build_object('branch', 'split'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
-    (2206, 'default-tenant', 2103, 'PIPELINE_TASK', 'Pipeline Task', 'TASK', 'dispatch_event_job', 'dispatch_settlement_pipeline', 'dispatch', 'night_continue', 2, 'FIXED', 1, 900, jsonb_build_object('branch', 'task'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
+    (2205, 'default-tenant', 2103, 'GATEWAY_SPLIT', 'Gateway Split', 'GATEWAY', NULL, NULL, NULL, 1, 'NONE', 0, 0, jsonb_build_object('branch', 'split'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08'),
+    (2206, 'default-tenant', 2103, 'PIPELINE_TASK', 'Pipeline Task', 'JOB', 'dispatch_event_job', 'dispatch', 'night_continue', 2, 'FIXED', 1, 900, jsonb_build_object('branch', 'task'), TRUE, TIMESTAMPTZ '2026-03-22 09:00:00+08', TIMESTAMPTZ '2026-03-22 09:00:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.workflow_edge (
@@ -64,13 +69,13 @@ INSERT INTO batch.workflow_edge (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.trigger_request (
-    id, tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_payload_hash,
+    id, tenant_id, request_id, trigger_type, workflow_definition_id, job_code, biz_date, dedup_key, request_payload_hash,
     request_status, related_job_instance_id, trace_id, created_at, updated_at
 ) VALUES
-    (3005, 'default-tenant', 'req-event-001', 'EVENT', 'dispatch_event_job', DATE '2026-03-22', 'default-tenant:req-event-001', 'hash-event-001', 'LAUNCHED', NULL, 'trace-event-001', TIMESTAMPTZ '2026-03-22 09:00:05+08', TIMESTAMPTZ '2026-03-22 09:00:05+08'),
-    (3006, 'default-tenant', 'req-scheduled-001', 'SCHEDULED', 'general_fixed_rate_job', DATE '2026-03-22', 'default-tenant:req-scheduled-001', 'hash-scheduled-001', 'LAUNCHED', NULL, 'trace-scheduled-001', TIMESTAMPTZ '2026-03-22 09:00:06+08', TIMESTAMPTZ '2026-03-22 09:00:06+08'),
-    (3007, 'default-tenant', 'req-event-002', 'EVENT', 'event_backfill_job', DATE '2026-03-22', 'default-tenant:req-event-002', 'hash-event-002', 'LAUNCHED', NULL, 'trace-event-002', TIMESTAMPTZ '2026-03-22 09:00:07+08', TIMESTAMPTZ '2026-03-22 09:00:07+08'),
-    (3008, 'default-tenant', 'req-scheduled-002', 'SCHEDULED', 'general_fixed_rate_job', DATE '2026-03-22', 'default-tenant:req-scheduled-002', 'hash-scheduled-002', 'LAUNCHED', NULL, 'trace-scheduled-002', TIMESTAMPTZ '2026-03-22 09:00:08+08', TIMESTAMPTZ '2026-03-22 09:00:08+08')
+    (3005, 'default-tenant', 'req-event-001', 'EVENT', 2113, NULL, DATE '2026-03-22', 'default-tenant:req-event-001', 'hash-event-001', 'LAUNCHED', NULL, 'trace-event-001', TIMESTAMPTZ '2026-03-22 09:00:05+08', TIMESTAMPTZ '2026-03-22 09:00:05+08'),
+    (3006, 'default-tenant', 'req-scheduled-001', 'SCHEDULED', 2112, NULL, DATE '2026-03-22', 'default-tenant:req-scheduled-001', 'hash-scheduled-001', 'LAUNCHED', NULL, 'trace-scheduled-001', TIMESTAMPTZ '2026-03-22 09:00:06+08', TIMESTAMPTZ '2026-03-22 09:00:06+08'),
+    (3007, 'default-tenant', 'req-event-002', 'EVENT', 2115, NULL, DATE '2026-03-22', 'default-tenant:req-event-002', 'hash-event-002', 'LAUNCHED', NULL, 'trace-event-002', TIMESTAMPTZ '2026-03-22 09:00:07+08', TIMESTAMPTZ '2026-03-22 09:00:07+08'),
+    (3008, 'default-tenant', 'req-scheduled-002', 'SCHEDULED', 2112, NULL, DATE '2026-03-22', 'default-tenant:req-scheduled-002', 'hash-scheduled-002', 'LAUNCHED', NULL, 'trace-scheduled-002', TIMESTAMPTZ '2026-03-22 09:00:08+08', TIMESTAMPTZ '2026-03-22 09:00:08+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.file_record (
@@ -95,32 +100,32 @@ INSERT INTO batch.job_instance (
     started_at, finished_at, batch_no, operator_id, rerun_flag, retry_flag, rerun_reason, related_file_id,
     parent_instance_id, result_summary, created_at, updated_at
 ) VALUES
-    (4005, 'default-tenant', 2004, 3006, 'general_fixed_rate_job', 'GEN-20260322-001', DATE '2026-03-22', 'SCHEDULED', 'CREATED', 'dispatch_queue', 'dispatch', 2, 'default-tenant:GEN-20260322-001', 0, 0, 0, 0, 'trace-gen-001', jsonb_build_object('mode', 'created'), NULL, NULL, 'BATCH-GEN-20260322-001', 'system', FALSE, FALSE, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (4006, 'default-tenant', 2005, 3005, 'dispatch_event_job', 'DIS-20260322-001', DATE '2026-03-22', 'EVENT', 'PARTIAL_FAILED', 'dispatch_queue', 'dispatch', 6, 'default-tenant:DIS-20260322-001', 1, 2, 1, 0, 'trace-dis-001', jsonb_build_object('mode', 'partial_failed'), TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, 'BATCH-DIS-20260322-001', 'ops-user', FALSE, TRUE, 'event retry', NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
-    (4007, 'default-tenant', 2006, NULL, 'manual_backfill_job', 'GEN-20260322-002', DATE '2026-03-22', 'MANUAL', 'FAILED', 'import_queue', 'import', 1, 'default-tenant:GEN-20260322-002', 0, 0, 0, 0, 'trace-gen-002', jsonb_build_object('mode', 'failed'), TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:02:12+08', 'BATCH-GEN-20260322-002', 'ops-user', FALSE, FALSE, NULL, NULL, NULL, jsonb_build_object('reason', 'validation'), TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:02:12+08'),
-    (4008, 'default-tenant', 2007, 3007, 'event_backfill_job', 'GEN-20260322-003', DATE '2026-03-22', 'EVENT', 'CANCELLED', 'import_queue', 'import', 3, 'default-tenant:GEN-20260322-003', 0, 0, 0, 0, 'trace-gen-003', jsonb_build_object('mode', 'cancelled'), TIMESTAMPTZ '2026-03-22 09:00:13+08', NULL, 'BATCH-GEN-20260322-003', 'ops-user', FALSE, FALSE, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:13+08', TIMESTAMPTZ '2026-03-22 09:00:13+08'),
-    (4009, 'default-tenant', 2004, 3008, 'general_fixed_rate_job', 'GEN-20260322-004', DATE '2026-03-22', 'SCHEDULED', 'TERMINATED', 'dispatch_queue', 'dispatch', 2, 'default-tenant:GEN-20260322-004', 0, 0, 0, 0, 'trace-gen-004', jsonb_build_object('mode', 'terminated'), NULL, TIMESTAMPTZ '2026-03-22 09:03:00+08', 'BATCH-GEN-20260322-004', 'system', FALSE, FALSE, NULL, NULL, NULL, jsonb_build_object('reason', 'manual stop'), TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
+    (4005, 'default-tenant', 2014, 3006, 'general_fixed_rate_job', 'GEN-20260322-001', DATE '2026-03-22', 'SCHEDULED', 'CREATED', 'dispatch_queue', 'dispatch', 2, 'default-tenant:GEN-20260322-001', 0, 0, 0, 0, 'trace-gen-001', jsonb_build_object('mode', 'created'), NULL, NULL, 'BATCH-GEN-20260322-001', 'system', FALSE, FALSE, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (4006, 'default-tenant', 2015, 3005, 'dispatch_event_job', 'DIS-20260322-001', DATE '2026-03-22', 'EVENT', 'PARTIAL_FAILED', 'dispatch_queue', 'dispatch', 6, 'default-tenant:DIS-20260322-001', 1, 2, 1, 0, 'trace-dis-001', jsonb_build_object('mode', 'partial_failed'), TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, 'BATCH-DIS-20260322-001', 'ops-user', FALSE, TRUE, 'event retry', NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
+    (4007, 'default-tenant', 2016, NULL, 'manual_backfill_job', 'GEN-20260322-002', DATE '2026-03-22', 'MANUAL', 'FAILED', 'import_queue', 'import', 1, 'default-tenant:GEN-20260322-002', 0, 0, 0, 0, 'trace-gen-002', jsonb_build_object('mode', 'failed'), TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:02:12+08', 'BATCH-GEN-20260322-002', 'ops-user', FALSE, FALSE, NULL, NULL, NULL, jsonb_build_object('reason', 'validation'), TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:02:12+08'),
+    (4008, 'default-tenant', 2017, 3007, 'event_backfill_job', 'GEN-20260322-003', DATE '2026-03-22', 'EVENT', 'CANCELLED', 'import_queue', 'import', 3, 'default-tenant:GEN-20260322-003', 0, 0, 0, 0, 'trace-gen-003', jsonb_build_object('mode', 'cancelled'), TIMESTAMPTZ '2026-03-22 09:00:13+08', NULL, 'BATCH-GEN-20260322-003', 'ops-user', FALSE, FALSE, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:13+08', TIMESTAMPTZ '2026-03-22 09:00:13+08'),
+    (4009, 'default-tenant', 2014, 3008, 'general_fixed_rate_job', 'GEN-20260322-004', DATE '2026-03-22', 'SCHEDULED', 'TERMINATED', 'dispatch_queue', 'dispatch', 2, 'default-tenant:GEN-20260322-004', 0, 0, 0, 0, 'trace-gen-004', jsonb_build_object('mode', 'terminated'), NULL, TIMESTAMPTZ '2026-03-22 09:03:00+08', 'BATCH-GEN-20260322-004', 'system', FALSE, FALSE, NULL, NULL, NULL, jsonb_build_object('reason', 'manual stop'), TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.job_partition (
-    id, tenant_id, job_instance_id, partition_no, partition_key, partition_status, worker_group, worker_code,
+    id, tenant_id, job_instance_id, job_instance_biz_date, partition_no, partition_key, partition_status, worker_group, worker_code,
     lease_expire_at, retry_count, business_key, idempotency_key, input_snapshot, output_summary,
     started_at, finished_at, created_at, updated_at
 ) VALUES
-    (4111, 'default-tenant', 4005, 1, 'created', 'CREATED', 'dispatch', NULL, NULL, 0, 'GEN-20260322-001:1', 'default-tenant:GEN-20260322-001:1', jsonb_build_object('state', 'created'), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (4112, 'default-tenant', 4006, 1, 'retrying', 'RETRYING', 'dispatch', 'dispatch-node-1', TIMESTAMPTZ '2026-03-22 09:20:00+08', 2, 'DIS-20260322-001:1', 'default-tenant:DIS-20260322-001:1', jsonb_build_object('state', 'retrying'), NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
-    (4113, 'default-tenant', 4007, 1, 'cancelled', 'CANCELLED', 'import', NULL, NULL, 0, 'GEN-20260322-002:1', 'default-tenant:GEN-20260322-002:1', jsonb_build_object('state', 'cancelled'), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:00:12+08'),
-    (4114, 'default-tenant', 4009, 1, 'terminated', 'TERMINATED', 'dispatch', 'dispatch-node-1', TIMESTAMPTZ '2026-03-22 09:03:00+08', 1, 'GEN-20260322-004:1', 'default-tenant:GEN-20260322-004:1', jsonb_build_object('state', 'terminated'), NULL, TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
+    (4111, 'default-tenant', 4005, DATE '2026-03-22', 1, 'created', 'CREATED', 'dispatch', NULL, NULL, 0, 'GEN-20260322-001:1', 'default-tenant:GEN-20260322-001:1', jsonb_build_object('state', 'created'), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (4112, 'default-tenant', 4006, DATE '2026-03-22', 1, 'retrying', 'RETRYING', 'dispatch', 'dispatch-node-1', TIMESTAMPTZ '2026-03-22 09:20:00+08', 2, 'DIS-20260322-001:1', 'default-tenant:DIS-20260322-001:1', jsonb_build_object('state', 'retrying'), NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
+    (4113, 'default-tenant', 4007, DATE '2026-03-22', 1, 'cancelled', 'CANCELLED', 'import', NULL, NULL, 0, 'GEN-20260322-002:1', 'default-tenant:GEN-20260322-002:1', jsonb_build_object('state', 'cancelled'), NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:00:12+08'),
+    (4114, 'default-tenant', 4009, DATE '2026-03-22', 1, 'terminated', 'TERMINATED', 'dispatch', 'dispatch-node-1', TIMESTAMPTZ '2026-03-22 09:03:00+08', 1, 'GEN-20260322-004:1', 'default-tenant:GEN-20260322-004:1', jsonb_build_object('state', 'terminated'), NULL, TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.job_task (
-    id, tenant_id, job_instance_id, job_partition_id, task_type, task_seq, task_status, assigned_worker_code,
+    id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id, task_type, task_seq, task_status, assigned_worker_code,
     task_payload, result_summary, error_code, error_message, started_at, finished_at, created_at, updated_at
 ) VALUES
-    (4210, 'default-tenant', 4005, 4111, 'EXECUTION', 1, 'CREATED', NULL, jsonb_build_object('stage', 'created'), NULL, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (4211, 'default-tenant', 4006, 4112, 'EXECUTION', 1, 'CANCELLED', 'dispatch-node-1', jsonb_build_object('stage', 'cancelled'), NULL, NULL, 'Cancelled by operator', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08'),
-    (4212, 'default-tenant', 4009, 4114, 'REPLAY', 1, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08'),
-    (4213, 'default-tenant', 4009, 4114, 'EXECUTION', 2, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
+    (4210, 'default-tenant', 4005, DATE '2026-03-22', 4111, 'EXECUTION', 1, 'CREATED', NULL, jsonb_build_object('stage', 'created'), NULL, NULL, NULL, NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (4211, 'default-tenant', 4006, DATE '2026-03-22', 4112, 'EXECUTION', 1, 'CANCELLED', 'dispatch-node-1', jsonb_build_object('stage', 'cancelled'), NULL, NULL, 'Cancelled by operator', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:01:11+08'),
+    (4212, 'default-tenant', 4007, DATE '2026-03-22', 4113, 'EXECUTION', 1, 'CANCELLED', 'import-node-1', jsonb_build_object('stage', 'cancelled'), NULL, NULL, 'Cancelled by operator', TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08', TIMESTAMPTZ '2026-03-22 09:00:12+08', TIMESTAMPTZ '2026-03-22 09:01:12+08'),
+    (4213, 'default-tenant', 4009, DATE '2026-03-22', 4114, 'EXECUTION', 2, 'TERMINATED', 'dispatch-node-1', jsonb_build_object('stage', 'terminated'), jsonb_build_object('result', 'terminated'), 'JOB_TERMINATED', 'Job terminated before completion', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.job_step_instance (
@@ -153,12 +158,13 @@ INSERT INTO batch.workflow_node_run (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.pipeline_instance (
-    id, tenant_id, pipeline_definition_id, job_code, pipeline_type, file_id, related_job_instance_id,
+    id, tenant_id, system_pipeline_code, system_pipeline_version, job_code,
+    pipeline_type, file_id, related_job_instance_id,
     current_stage, last_success_stage, run_status, trace_id, started_at, finished_at, created_at, updated_at
 ) VALUES
-    (5304, 'default-tenant', 4601, 'import_customer_pipeline', 'IMPORT', 5207, 4005, 'RECEIVE', NULL, 'CREATED', 'trace-gen-001', NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (5305, 'default-tenant', 4602, 'export_settlement_pipeline', 'EXPORT', 5209, 4006, 'STORE', 'GENERATE', 'COMPENSATING', 'trace-dis-001', TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
-    (5306, 'default-tenant', 4603, 'dispatch_settlement_pipeline', 'DISPATCH', 5210, 4009, 'DISPATCH', 'DISPATCH', 'TERMINATED', 'trace-gen-004', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08')
+    (5304, 'default-tenant', 'IMPORT', 1, 'IMPORT', 'IMPORT', 5207, 4005, 'RECEIVE', NULL, 'CREATED', 'trace-gen-001', NULL, NULL, TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (5305, 'default-tenant', 'EXPORT', 1, 'EXPORT', 'EXPORT', 5209, 4006, 'STORE', 'GENERATE', 'COMPENSATING', 'trace-dis-001', TIMESTAMPTZ '2026-03-22 09:00:11+08', NULL, TIMESTAMPTZ '2026-03-22 09:00:11+08', TIMESTAMPTZ '2026-03-22 09:00:11+08'),
+    (5306, 'default-tenant', 'DISPATCH', 1, 'DISPATCH', 'DISPATCH', 5210, 4009, 'DISPATCH', 'DISPATCH', 'TERMINATED', 'trace-gen-004', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:03:00+08', TIMESTAMPTZ '2026-03-22 09:00:14+08', TIMESTAMPTZ '2026-03-22 09:00:14+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.pipeline_step_run (
@@ -227,21 +233,21 @@ INSERT INTO batch.outbox_event (
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.event_outbox_retry (
-    id, tenant_id, outbox_event_id, event_key, retry_attempt, retry_status, retry_reason, next_retry_at, trace_id,
+    id, tenant_id, outbox_event_id, outbox_event_created_at, event_key, retry_attempt, retry_status, retry_reason, next_retry_at, trace_id,
     created_at, updated_at
 ) VALUES
-    (6105, 'default-tenant', 6005, 'default-tenant:job:4005', 1, 'WAITING', 'broker unavailable', TIMESTAMPTZ '2026-03-22 09:05:00+08', 'trace-gen-001', TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (6106, 'default-tenant', 6002, 'default-tenant:task:4203', 1, 'RUNNING', NULL, TIMESTAMPTZ '2026-03-22 09:10:00+08', 'trace-export-001', TIMESTAMPTZ '2026-03-22 09:00:23+08', TIMESTAMPTZ '2026-03-22 09:00:23+08'),
-    (6107, 'default-tenant', 6003, 'tenant-finance:pipeline:5303', 2, 'SUCCESS', NULL, NULL, 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 09:15:00+08', TIMESTAMPTZ '2026-03-22 09:15:00+08')
+    (6105, 'default-tenant', 6005, TIMESTAMPTZ '2026-03-22 09:00:10+08', 'default-tenant:job:4005', 1, 'WAITING', 'broker unavailable', TIMESTAMPTZ '2026-03-22 09:05:00+08', 'trace-gen-001', TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (6106, 'default-tenant', 6002, TIMESTAMPTZ '2026-03-22 08:00:23+08', 'default-tenant:task:4203', 1, 'RUNNING', NULL, TIMESTAMPTZ '2026-03-22 09:10:00+08', 'trace-export-001', TIMESTAMPTZ '2026-03-22 09:00:23+08', TIMESTAMPTZ '2026-03-22 09:00:23+08'),
+    (6107, 'tenant-finance', 6003, TIMESTAMPTZ '2026-03-22 08:15:01+08', 'tenant-finance:pipeline:5303', 2, 'SUCCESS', NULL, NULL, 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 09:15:00+08', TIMESTAMPTZ '2026-03-22 09:15:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.event_delivery_log (
-    id, tenant_id, outbox_event_id, event_type, event_key, target_topic, target_worker_id, delivery_status,
+    id, tenant_id, outbox_event_id, outbox_event_created_at, event_type, event_key, target_topic, target_worker_id, delivery_status,
     delivery_attempt, delivery_summary, error_message, trace_id, created_at, updated_at
 ) VALUES
-    (6205, 'default-tenant', 6005, 'JOB_CREATED', 'default-tenant:job:4005', 'batch.job.created', 'orchestrator-1', 'PUBLISHED', 1, jsonb_build_object('published', true), NULL, 'trace-gen-001', TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
-    (6206, 'default-tenant', 6003, 'PIPELINE_RETRY', 'tenant-finance:pipeline:5303', 'batch.pipeline.retry', 'orchestrator-1', 'FAILED', 2, jsonb_build_object('published', false), 'Downstream unavailable', 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 09:15:00+08', TIMESTAMPTZ '2026-03-22 09:15:00+08'),
-    (6207, 'default-tenant', 6004, 'FILE_DISPATCH_RETRY', 'default-tenant:file-dispatch:5504', 'batch.file.dispatch', 'dispatch-worker-1', 'GIVE_UP', 3, jsonb_build_object('published', false), 'Retry exhausted', 'trace-dispatch-001', TIMESTAMPTZ '2026-03-22 09:16:00+08', TIMESTAMPTZ '2026-03-22 09:16:00+08')
+    (6205, 'default-tenant', 6005, TIMESTAMPTZ '2026-03-22 09:00:10+08', 'JOB_CREATED', 'default-tenant:job:4005', 'batch.job.created', 'orchestrator-1', 'PUBLISHED', 1, jsonb_build_object('published', true), NULL, 'trace-gen-001', TIMESTAMPTZ '2026-03-22 09:00:10+08', TIMESTAMPTZ '2026-03-22 09:00:10+08'),
+    (6206, 'tenant-finance', 6003, TIMESTAMPTZ '2026-03-22 08:15:01+08', 'PIPELINE_RETRY', 'tenant-finance:pipeline:5303', 'batch.pipeline.retry', 'orchestrator-1', 'FAILED', 2, jsonb_build_object('published', false), 'Downstream unavailable', 'trace-workflow-001', TIMESTAMPTZ '2026-03-22 09:15:00+08', TIMESTAMPTZ '2026-03-22 09:15:00+08'),
+    (6207, 'default-tenant', 6004, TIMESTAMPTZ '2026-03-22 08:10:35+08', 'FILE_DISPATCH_RETRY', 'default-tenant:file-dispatch:5504', 'batch.file.dispatch', 'dispatch-worker-1', 'GIVE_UP', 3, jsonb_build_object('published', false), 'Retry exhausted', 'trace-dispatch-001', TIMESTAMPTZ '2026-03-22 09:16:00+08', TIMESTAMPTZ '2026-03-22 09:16:00+08')
 ON CONFLICT DO NOTHING;
 
 INSERT INTO batch.file_error_record (

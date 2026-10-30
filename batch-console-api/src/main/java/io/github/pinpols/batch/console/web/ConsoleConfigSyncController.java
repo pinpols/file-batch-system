@@ -11,14 +11,18 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -56,6 +60,24 @@ public class ConsoleConfigSyncController {
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody ConfigSyncImportRequest request) {
     return responseFactory.success(applicationService.importBundle(request));
+  }
+
+  /** 按原幂等键读取同步审计，不重新执行导入。 */
+  @GetMapping("/requests/status")
+  public CommonResponse<ConfigSyncRequestStatusResponse> requestStatus(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) @NotBlank String requestKey,
+      @RequestParam("tenantId") @NotBlank String tenantId) {
+    ConfigSyncRequestStatusResponse result = applicationService.requestStatus(tenantId, requestKey);
+    return responseFactory.success(result);
+  }
+
+  @PostMapping("/logs/{logId}/reconcile")
+  public CommonResponse<ConfigSyncLogResponse> reconcile(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @RequestParam("tenantId") @NotBlank String tenantId,
+      @PathVariable("logId") @Positive Long logId) {
+    ConfigSyncLogResponse result = applicationService.reconcile(tenantId, logId);
+    return responseFactory.success(result);
   }
 
   @GetMapping("/logs")

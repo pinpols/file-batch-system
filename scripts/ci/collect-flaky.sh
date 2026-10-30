@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：surefire/failsafe flaky 汇总薄封装。
+# 用法：在仓库根目录执行 bash scripts/ci/collect-flaky.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # collect-flaky.sh - surefire/failsafe flaky 汇总薄封装
 #
@@ -8,8 +10,8 @@
 # 永远以 0 退出 — flaky 用例本来就允许 pass,不阻断 CI,治理走
 # `docs/runbook/ci.md` 「flaky 治理」。
 #
-# 用法：
-#   bash scripts/ci/collect-flaky.sh [-- <extra args passed to collect-flaky.py>]
+# 调用示例：
+# 调用示例：bash scripts/ci/collect-flaky.sh [-- <传给 collect-flaky.py 的参数>]
 #
 # 常用透传:
 #   --json <path>            写机读 JSON

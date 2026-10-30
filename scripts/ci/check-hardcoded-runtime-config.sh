@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：运行时配置集中管理。
+# 用法：在仓库根目录执行 bash scripts/ci/check-hardcoded-runtime-config.sh；参数与前置环境见下方说明及所属 README。
 # 防止本机路径、旧端口和镜像内部路径重新散落到运行配置。
 set -euo pipefail
 
@@ -115,7 +117,7 @@ assert_no_matches \
 assert_no_matches \
   '观测脚本必须从公共环境配置读取 Console/Orchestrator 地址' \
   'localhost:(18080|18082)([^0-9]|$)' \
-  'scripts/observability/*.sh'
+  'scripts/ops/capture-runtime-evidence.sh'
 
 while IFS= read -r test_file; do
   if grep -q '@SpringBootTest' "$test_file" && ! grep -q 'extends AbstractIntegrationTest' "$test_file"; then

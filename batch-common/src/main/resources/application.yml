@@ -5,3 +5,5 @@ spring:
 batch:
   module:
     code: batch-common
+  kafka:
+    namespace: ${BATCH_KAFKA_NAMESPACE:}

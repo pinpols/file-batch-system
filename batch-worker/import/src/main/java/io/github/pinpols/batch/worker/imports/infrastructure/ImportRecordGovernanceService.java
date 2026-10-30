@@ -8,11 +8,15 @@ import io.github.pinpols.batch.common.enums.OperationResult;
 import io.github.pinpols.batch.common.enums.SkipAction;
 import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.ContentMaskingUtils;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam.FileAuditParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileErrorRecordParam.FileErrorRecordParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -88,41 +92,21 @@ public class ImportRecordGovernanceService {
     return resolveSkipAction() == SkipAction.MANUAL_REVIEW;
   }
 
-  public void recordSkippedRecord(
-      ImportJobContext context,
-      ImportStage stage,
-      Long recordNo,
-      String errorCode,
-      String errorMessage,
-      Object rawRecord) {
-    recordSkippedRecord(
-        context, BadRecordCommand.of(stage, recordNo, errorCode, errorMessage, rawRecord, null));
-  }
-
   /** 带 Excel 物理定位({@link SourceLocator})的跳过记录;locator 为空时退化为不带定位的行为。 */
   public void recordSkippedRecord(ImportJobContext context, BadRecordCommand command) {
-    recordBadRecord(toBadRecordContext(context, command, true));
-  }
-
-  public void recordFailedRecord(
-      ImportJobContext context,
-      ImportStage stage,
-      Long recordNo,
-      String errorCode,
-      String errorMessage,
-      Object rawRecord) {
-    recordFailedRecord(
-        context, BadRecordCommand.of(stage, recordNo, errorCode, errorMessage, rawRecord, null));
+    BadRecordContext badRecordContext = toBadRecordContext(context, command, true);
+    recordBadRecord(badRecordContext);
   }
 
   /** 带 Excel 物理定位({@link SourceLocator})的失败记录;locator 为空时退化为不带定位的行为。 */
   public void recordFailedRecord(ImportJobContext context, BadRecordCommand command) {
-    recordBadRecord(toBadRecordContext(context, command, false));
+    BadRecordContext badRecordContext = toBadRecordContext(context, command, false);
+    recordBadRecord(badRecordContext);
   }
 
   private BadRecordContext toBadRecordContext(
       ImportJobContext context, BadRecordCommand command, boolean skipped) {
-    return BadRecordContext.builder()
+    BadRecordContext badRecordContext = BadRecordContext.builder()
         .context(context)
         .stage(command.stage())
         .recordNo(command.recordNo())
@@ -132,26 +116,18 @@ public class ImportRecordGovernanceService {
         .skipped(skipped)
         .locator(command.locator())
         .build();
+    return badRecordContext;
   }
 
-  /** 坏行登记命令(把 ≥7 参的坏行入参封装成参数对象,满足参数 ≤6 约束)。 {@code locator} 为 Excel 物理定位(可空)。 */
+  /** 单条坏行登记输入；Excel物理定位只由能够提供该信息的格式填写。 */
+  @Builder
   public record BadRecordCommand(
       ImportStage stage,
       Long recordNo,
       String errorCode,
       String errorMessage,
       Object rawRecord,
-      SourceLocator locator) {
-    public static BadRecordCommand of(
-        ImportStage stage,
-        Long recordNo,
-        String errorCode,
-        String errorMessage,
-        Object rawRecord,
-        SourceLocator locator) {
-      return new BadRecordCommand(stage, recordNo, errorCode, errorMessage, rawRecord, locator);
-    }
-  }
+      SourceLocator locator) {}
 
   /**
    * Excel 物理定位:{@code rowNum} 为 1-based 物理行号(SAX 的 0-based rowNum +1), {@code column}
@@ -181,9 +157,11 @@ public class ImportRecordGovernanceService {
     SkipThresholdMode mode = resolveThresholdMode();
     if (mode == SkipThresholdMode.PERCENTAGE) {
       double rate = totalCount <= 0 ? 0D : (double) skippedCount / (double) totalCount;
-      return rate <= Math.max(0D, skipProperties.maxSkipRate());
+      double effectiveMaxSkipRate = Math.max(0D, skipProperties.maxSkipRate());
+      return rate <= effectiveMaxSkipRate;
     }
-    return skippedCount <= Math.max(0, skipProperties.maxSkipCount());
+    int effectiveMaxSkipCount = Math.max(0, skipProperties.maxSkipCount());
+    return skippedCount <= effectiveMaxSkipCount;
   }
 
   public void markThresholdExceeded(ImportJobContext context) {
@@ -193,55 +171,74 @@ public class ImportRecordGovernanceService {
   }
 
   public void finalizeErrorOutput(ImportJobContext context) {
+    if (EmptyChecks.isNotNull(context)
+        && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
+      return;
+    }
     List<ImportBadRecordEntity> badRecords = badRecords(context);
     if (badRecords.isEmpty()) {
       return;
     }
     Map<String, Object> attrs = context.getAttributes();
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    if (fileId == null || !Texts.hasText(context.getTenantId())) {
+    Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
+    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
+    boolean hasRequiredFileContext =
+        EmptyChecks.isNotNull(fileId) && Texts.hasText(context.getTenantId());
+    if (!hasRequiredFileContext) {
       return;
     }
     String errorOutputPath = null;
     ErrorSinkType sinkType = resolveErrorSinkType();
     if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
+      ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+      List<ImportBadRecordEntity> outputRecords = masking.enabled()
+          ? badRecords.stream()
+              .map(record -> maskBadRecord(record, masking.ruleSet()))
+              .toList()
+          : badRecords;
       errorOutputPath = errorOutputStorage.writeErrorOutput(
-          context.getTenantId(), String.valueOf(fileId), badRecords);
+          context.getTenantId(), String.valueOf(fileId), outputRecords);
     }
     Map<String, Object> metadata = new LinkedHashMap<>();
     metadata.put("badRecordCount", badRecords.size());
-    metadata.put(
-        ImportRuntimeKeys.SUCCESS_COUNT, numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT)));
-    metadata.put(KEY_SKIPPED_COUNT, numberValue(attrs.get(KEY_SKIPPED_COUNT)));
-    metadata.put(
-        ImportRuntimeKeys.FAILED_COUNT, numberValue(attrs.get(ImportRuntimeKeys.FAILED_COUNT)));
-    metadata.put(
-        PipelineRuntimeKeys.IMPORT_TOTAL_COUNT,
-        numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT)));
+    long successCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+    metadata.put(ImportRuntimeKeys.SUCCESS_COUNT, successCount);
+    long skippedCount = numberValue(attrs.get(KEY_SKIPPED_COUNT));
+    metadata.put(KEY_SKIPPED_COUNT, skippedCount);
+    long failedCount = numberValue(attrs.get(ImportRuntimeKeys.FAILED_COUNT));
+    metadata.put(ImportRuntimeKeys.FAILED_COUNT, failedCount);
+    long totalCount = numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+    metadata.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
     // C-2.15：把 parse / validate 两阶段的细分计数一并登记，便于问题定位
-    metadata.put(KEY_PARSE_SKIPPED_COUNT, numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT)));
-    metadata.put(KEY_VALIDATE_SKIPPED_COUNT, numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT)));
-    metadata.put(KEY_PARSE_FAILED_COUNT, numberValue(attrs.get(KEY_PARSE_FAILED_COUNT)));
-    metadata.put(KEY_VALIDATE_FAILED_COUNT, numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT)));
+    long parseSkippedCount = numberValue(attrs.get(KEY_PARSE_SKIPPED_COUNT));
+    metadata.put(KEY_PARSE_SKIPPED_COUNT, parseSkippedCount);
+    long validateSkippedCount = numberValue(attrs.get(KEY_VALIDATE_SKIPPED_COUNT));
+    metadata.put(KEY_VALIDATE_SKIPPED_COUNT, validateSkippedCount);
+    long parseFailedCount = numberValue(attrs.get(KEY_PARSE_FAILED_COUNT));
+    metadata.put(KEY_PARSE_FAILED_COUNT, parseFailedCount);
+    long validateFailedCount = numberValue(attrs.get(KEY_VALIDATE_FAILED_COUNT));
+    metadata.put(KEY_VALIDATE_FAILED_COUNT, validateFailedCount);
     metadata.put(
         PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED,
         Boolean.TRUE.equals(attrs.get(PipelineRuntimeKeys.IMPORT_SKIP_THRESHOLD_EXCEEDED)));
-    metadata.put(
-        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+    boolean manualReviewRequired =
         Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED))
-            || shouldManualReview());
+            || shouldManualReview();
+    metadata.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, manualReviewRequired);
     if (Texts.hasText(errorOutputPath)) {
       metadata.put("errorOutputPath", errorOutputPath);
     }
     fileRecords.updateFileMetadata(fileId, metadata);
-    FileAuditParam audit = FileAuditParam.builder()
+    FileAuditParamBuilder auditBuilder = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType(FileAuditOperationType.BAD_RECORD_GOVERNANCE.code())
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId())
-        .traceId(stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .operatorId(context.getWorkerId());
+    String auditTraceId = stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID));
+    FileAuditParam audit = auditBuilder
+        .traceId(auditTraceId)
         .evidenceRef("import-error-output")
         .detailSummary(metadata)
         .build();
@@ -288,18 +285,21 @@ public class ImportRecordGovernanceService {
     Long sourceRowNum = locator == null ? null : locator.rowNum();
     String sourceColumn = locator == null ? null : locator.column();
     Map<String, Object> attrs = context.getAttributes();
+    String badRecordStage = EmptyChecks.isNull(stage) ? null : stage.name();
+    String badRecordSkipActionCode = resolveSkipAction().code();
     ImportBadRecordEntity badRecord = new ImportBadRecordEntity(
         recordNo,
-        stage == null ? null : stage.name(),
+        badRecordStage,
         errorCode,
         errorMessage,
         rawRecord,
         skipped,
-        resolveSkipAction().code(),
+        badRecordSkipActionCode,
         null,
         sourceRowNum,
         sourceColumn);
-    badRecords(context).add(badRecord);
+    List<ImportBadRecordEntity> recordedBadRecords = badRecords(context);
+    recordedBadRecords.add(badRecord);
 
     if (skipped) {
       increment(context, KEY_SKIPPED_COUNT);
@@ -316,47 +316,12 @@ public class ImportRecordGovernanceService {
       }
     }
 
-    Long fileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    Long pipelineInstanceId =
-        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    Long pipelineStepRunId =
-        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
-    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    boolean errorLineMask = false;
-    String maskingRuleSet = null;
-    if (templateConfig instanceof Map<?, ?> templateMap) {
-      Object flag = templateMap.get("error_line_masking_enabled");
-      errorLineMask = Boolean.TRUE.equals(flag) || "true".equalsIgnoreCase(String.valueOf(flag));
-      Object rule = templateMap.get("masking_rule_set");
-      maskingRuleSet = rule == null ? null : String.valueOf(rule);
+    if (!DryRunGuard.fromAttributes(attrs).isDryRun()) {
+      persistBadRecordAudit(brc, badRecord);
     }
-    if (batchSecurityProperties.isBypassMode()) {
-      errorLineMask = false;
-    }
-    String safeMessage = errorLineMask
-        ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
-        : errorMessage;
-    Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
-    Object safePayload =
-        errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
-    FileErrorRecordParam errorRecord = FileErrorRecordParam.builder()
-        .tenantId(context.getTenantId())
-        .fileId(fileId)
-        .pipelineInstanceId(pipelineInstanceId)
-        .pipelineStepRunId(pipelineStepRunId)
-        .recordNo(recordNo)
-        .errorCode(errorCode)
-        .errorMessage(safeMessage)
-        .errorStage(stage == null ? null : stage.name())
-        .skipped(skipped)
-        .skipAction(resolveSkipAction().code())
-        .rawRecord(safePayload)
-        .sourceRowNum(sourceRowNum)
-        .sourceColumn(sourceColumn)
-        .build();
-    fileAudits.insertFileErrorRecord(errorRecord);
 
-    if (skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW) {
+    boolean requiresManualReview = skipped && resolveSkipAction() == SkipAction.MANUAL_REVIEW;
+    if (requiresManualReview) {
       attrs.put(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED, true);
     }
     if (!skipped) {
@@ -365,6 +330,90 @@ public class ImportRecordGovernanceService {
     attrs.put(ImportRuntimeKeys.LAST_PROCESSED_RECORD_NO, recordNo);
     attrs.put(ImportRuntimeKeys.LAST_ERROR_CODE, errorCode);
     attrs.put(ImportRuntimeKeys.LAST_ERROR_MESSAGE, errorMessage);
+  }
+
+  /** 内存计数先保留，持久审计按原安全开关脱敏；写失败仍阻止后续完成元数据。 */
+  private void persistBadRecordAudit(BadRecordContext brc, ImportBadRecordEntity badRecord) {
+    ImportJobContext context = brc.context();
+    ImportStage stage = brc.stage();
+    Long recordNo = brc.recordNo();
+    String errorCode = brc.errorCode();
+    String errorMessage = brc.errorMessage();
+    Object rawRecord = brc.rawRecord();
+    boolean skipped = brc.skipped();
+    SourceLocator locator = brc.locator();
+    Long sourceRowNum = EmptyChecks.isNull(locator) ? null : locator.rowNum();
+    String sourceColumn = EmptyChecks.isNull(locator) ? null : locator.column();
+    Map<String, Object> attrs = context.getAttributes();
+    Object fileIdValue = attrs.get(PipelineRuntimeKeys.FILE_ID);
+    Long fileId = PlatformRuntimeValues.toLong(fileIdValue);
+    Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
+    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
+    Object pipelineStepRunIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID);
+    Long pipelineStepRunId = PlatformRuntimeValues.toLong(pipelineStepRunIdValue);
+    ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
+    String maskingRuleSet = masking.ruleSet();
+    boolean errorLineMask = masking.enabled();
+    String safeMessage = errorLineMask
+        ? ContentMaskingUtils.maskPlainText(errorMessage, maskingRuleSet)
+        : errorMessage;
+    Object payloadForStore = rawRecord == null ? JsonUtils.toJson(badRecord) : rawRecord;
+    Object safePayload =
+        errorLineMask ? maskErrorPayload(payloadForStore, maskingRuleSet) : payloadForStore;
+    FileErrorRecordParamBuilder errorRecordBuilder = FileErrorRecordParam.builder()
+        .tenantId(context.getTenantId())
+        .fileId(fileId)
+        .pipelineInstanceId(pipelineInstanceId)
+        .pipelineStepRunId(pipelineStepRunId)
+        .recordNo(recordNo)
+        .errorCode(errorCode)
+        .errorMessage(safeMessage)
+        .errorStage(stage == null ? null : stage.name())
+        .skipped(skipped);
+    String errorRecordSkipActionCode = resolveSkipAction().code();
+    FileErrorRecordParam errorRecord = errorRecordBuilder
+        .skipAction(errorRecordSkipActionCode)
+        .rawRecord(safePayload)
+        .sourceRowNum(sourceRowNum)
+        .sourceColumn(sourceColumn)
+        .build();
+    fileAudits.insertFileErrorRecord(errorRecord);
+  }
+
+  private record ErrorMaskingPolicy(boolean enabled, String ruleSet) {}
+
+  private ErrorMaskingPolicy errorMaskingPolicy(Map<String, Object> attrs) {
+    Object templateConfig = attrs.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
+    boolean errorLineMask = false;
+    String maskingRuleSet = null;
+    if (templateConfig instanceof Map<?, ?> templateMap) {
+      Object flag = templateMap.get("error_line_masking_enabled");
+      boolean booleanFlagEnabled = Boolean.TRUE.equals(flag);
+      boolean textFlagEnabled =
+          !booleanFlagEnabled && "true".equalsIgnoreCase(String.valueOf(flag));
+      errorLineMask = booleanFlagEnabled || textFlagEnabled;
+      Object rule = templateMap.get("masking_rule_set");
+      maskingRuleSet = EmptyChecks.isNull(rule) ? null : String.valueOf(rule);
+    }
+    if (batchSecurityProperties.isBypassMode()) {
+      errorLineMask = false;
+    }
+    return new ErrorMaskingPolicy(errorLineMask, maskingRuleSet);
+  }
+
+  private ImportBadRecordEntity maskBadRecord(ImportBadRecordEntity record, String ruleSet) {
+    return ImportBadRecordEntity.builder()
+        .recordNo(record.recordNo())
+        .stageCode(record.stageCode())
+        .errorCode(record.errorCode())
+        .errorMessage(ContentMaskingUtils.maskPlainText(record.errorMessage(), ruleSet))
+        .rawRecord(maskErrorPayload(record.rawRecord(), ruleSet))
+        .skipped(record.skipped())
+        .skipAction(record.skipAction())
+        .createdAt(record.createdAt())
+        .sourceRowNum(record.sourceRowNum())
+        .sourceColumn(record.sourceColumn())
+        .build();
   }
 
   @SuppressWarnings("unchecked")
@@ -397,7 +446,12 @@ public class ImportRecordGovernanceService {
     if (payload instanceof String text) {
       return ContentMaskingUtils.maskPlainText(text, maskingRuleSet);
     }
-    return ContentMaskingUtils.maskPlainText(JsonUtils.toJson(payload), maskingRuleSet);
+    String serializedPayload = JsonUtils.toJson(payload);
+    String masked = ContentMaskingUtils.maskPlainText(serializedPayload, maskingRuleSet);
+    if (serializedPayload.startsWith("{") || serializedPayload.startsWith("[")) {
+      return JsonUtils.fromJson(masked, Object.class);
+    }
+    return masked;
   }
 
   private long increment(ImportJobContext context, String key) {

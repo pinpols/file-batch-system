@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.List;
@@ -27,7 +28,14 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
 
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
-    Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
+    Long batchIdLong;
+    if (EmptyChecks.isNull(ctx.batchId())) {
+      batchIdLong = null;
+    } else {
+      Object rawBatchId = ctx.batchId();
+      String batchIdText = String.valueOf(rawBatchId);
+      batchIdLong = Long.valueOf(batchIdText);
+    }
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =
@@ -51,11 +59,14 @@ public class FixedWidthExportFormat extends AbstractExportFormat {
           ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
             StringBuilder line = new StringBuilder();
             for (ColumnLayout column : columns) {
-              line.append(
-                  fixedWidth(resolveDelimitedValue(batch, detail, column.source()), column));
+              Object sourceValue = resolveDelimitedValue(batch, detail, column.source());
+              String formattedValue = fixedWidth(sourceValue, column);
+              line.append(formattedValue);
             }
             if (recordLength > 0) {
-              line = new StringBuilder(padRight(line.toString(), recordLength));
+              String lineText = line.toString();
+              String paddedLine = padRight(lineText, recordLength);
+              line = new StringBuilder(paddedLine);
             }
             writeText(writer, line.toString(), "data-row-" + (rowIndex + 1), null, ctx);
             writeNewLine(writer, ctx);

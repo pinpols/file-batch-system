@@ -48,10 +48,11 @@ public class ConsoleGovernanceController {
   public CommonResponse<Map<String, String>> list(@RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, String> result = new LinkedHashMap<>();
-    governancePolicy
-        .defaultValues()
-        .forEach((key, defaultValue) ->
-            result.put(key, parameterService.getValue(resolved, key).orElse(defaultValue)));
+    Map<String, String> defaultValues = governancePolicy.defaultValues();
+    defaultValues.forEach((key, defaultValue) -> {
+      String effectiveValue = parameterService.getValue(resolved, key).orElse(defaultValue);
+      result.put(key, effectiveValue);
+    });
     return responseFactory.success(result);
   }
 

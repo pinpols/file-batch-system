@@ -21,13 +21,16 @@ public class LineageEvidenceController {
   @GetMapping("/result-versions/{id}")
   public CommonResponse<LineageEvidenceResponse> byResultVersion(
       @PathVariable("id") Long id, @RequestParam("tenantId") String tenantId) {
-    return CommonResponse.success(lineageEvidenceService.evidenceForResultVersion(tenantId, id));
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForResultVersion(tenantId, id);
+    return CommonResponse.success(evidence);
   }
 
   @GetMapping("/effective")
   public CommonResponse<LineageEvidenceResponse> byEffectiveBusinessKey(
       @RequestParam("tenantId") String tenantId, @RequestParam("businessKey") String businessKey) {
-    return CommonResponse.success(
-        lineageEvidenceService.evidenceForEffective(tenantId, businessKey));
+    LineageEvidenceResponse evidence =
+        lineageEvidenceService.evidenceForEffective(tenantId, businessKey);
+    return CommonResponse.success(evidence);
   }
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：可复用的 SDK × 真 orchestrator 端到端测试函数库。
+# 用法：由调用脚本 source scripts/lib/sdk-e2e-common.sh 后使用公共变量或函数。
 # =============================================================================
 # sdk-e2e-common.sh — 可复用的 SDK × 真 orchestrator 端到端测试函数库
 #
@@ -41,6 +43,7 @@ if [[ -z "${GOROOT_HINT:-}" ]]; then
   fi
 fi
 : "${SDK_E2E_JOB_CODE:=sdk_echo_e2e_$$}"
+: "${SDK_E2E_WORKFLOW_ID:=}"
 : "${SDK_E2E_QUEUE_CODE:=sdk_e2e_queue}"
 : "${SDK_E2E_REGISTER_WAIT_SECONDS:=120}"
 : "${SDK_E2E_INSTANCE_WAIT_SECONDS:=120}"
@@ -173,6 +176,12 @@ sdk_e2e_ensure_echo_job() {
   [[ "$(sdk_e2e_q_file count-echo-job.sql \
     -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" \
     -v queue_code="$SDK_E2E_QUEUE_CODE")" == "2" ]]
+  sdk_e2e_q_file provision-sdk-e2e-workflow.sql \
+    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE" \
+    -v fixture_tag="sdk-e2e-$$" >/dev/null || return 1
+  SDK_E2E_WORKFLOW_ID="$(sdk_e2e_q_file select-sdk-e2e-workflow-id.sql \
+    -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")"
+  [[ "$SDK_E2E_WORKFLOW_ID" =~ ^[0-9]+$ ]]
 }
 
 # pre-create worker 的 node-direct 派单 topic(SDK 消费 *.node.<workerCode>)。
@@ -247,7 +256,7 @@ sdk_e2e_start_worker() {
            java -jar target/sample-tenant-worker-1.0.0-SNAPSHOT.jar ) >>"$logf" 2>&1 & echo $! ;;
     rust)
       # cargo 通常位于 ~/.cargo/bin（未必已加入 PATH）；构建 rdkafka 还需要 PATH 中有 cmake。
-      # 先 build(冷编 rdkafka 经 cmake 较慢,避免吃掉 register 超时),再跑编好的二进制。
+      # 先 build(冷编 rdkafka 经 cmake 较慢,避免占用 register 的超时预算),再跑编好的二进制。
       # Rust 样例环境变量:KAFKA_BOOTSTRAP(同 Go/TS)。
       local cargo_path="$HOME/.cargo/bin"
       local rdir="$root/examples/self-hosted-sdk/sample-tenant-worker-rust"
@@ -281,13 +290,15 @@ sdk_e2e_run_chain() {
   STAGE_DISPATCH=0 STAGE_EXECUTE=0 STAGE_REPORT=0 STAGE_TERMINAL=0
   SDK_E2E_IDEMPOTENCY_KEY="sdk-e2e-$$-$(date +%s 2>/dev/null || echo 0)"
   curl -fsS -X POST "${TRIGGER_URL}/api/triggers/launch" \
-    -H "X-Internal-Secret: ${BATCH_INTERNAL_SECRET}" -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" -H 'Content-Type: application/json' \
-    -d "{\"tenantId\":\"${TENANT}\",\"jobCode\":\"${SDK_E2E_JOB_CODE}\",\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null \
+    -H "X-Internal-Secret: ${BATCH_INTERNAL_SECRET}" \
+    -H "Idempotency-Key: ${SDK_E2E_IDEMPOTENCY_KEY}" \
+    -H "X-Request-Id: ${SDK_E2E_IDEMPOTENCY_KEY}" -H 'Content-Type: application/json' \
+    -d "{\"tenantId\":\"${TENANT}\",\"workflowDefinitionId\":${SDK_E2E_WORKFLOW_ID},\"bizDate\":\"$(date +%F)\",\"triggerType\":\"API\"}" >/dev/null \
     || { sdk_e2e_fail "launch call failed"; return 1; }
   deadline=$((SECONDS + SDK_E2E_INSTANCE_WAIT_SECONDS))
   while (( SECONDS < deadline )); do
-    inst="$(sdk_e2e_q_file select-latest-job-instance-id.sql \
-      -v tenant_id="$TENANT" -v job_code="$SDK_E2E_JOB_CODE")"
+    inst="$(sdk_e2e_q_file select-launched-job-instance-id.sql \
+      -v tenant_id="$TENANT" -v request_id="$SDK_E2E_IDEMPOTENCY_KEY")"
     [[ -n "$inst" ]] && break; sleep 1
   done
   [[ -n "$inst" ]] || { sdk_e2e_fail "no job_instance created"; return 1; }

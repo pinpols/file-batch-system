@@ -1,22 +1,27 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
 import io.github.pinpols.batch.common.context.RunModeSupport;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.kafka.SchedulingContext;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.OtelTracePropagation;
+import io.github.pinpols.batch.common.observability.W3cTraceContext;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.engine.command.TaskDispatchEventCommand;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.BizDateArithmetic;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -71,13 +76,14 @@ public class TaskDispatchOutboxService {
    * 据此区分"首次执行"与"补偿/重放"行为；传 null 保留 payload 原状。
    */
   @Transactional(propagation = Propagation.MANDATORY)
-  public void writeDispatchEvent(
-      JobInstanceEntity jobInstance,
-      JobTaskEntity task,
-      JobPartitionEntity partition,
-      String traceId,
-      String eventKey,
-      RunMode runModeOverride) {
+  public void writeDispatchEvent(TaskDispatchEventCommand command) {
+    JobInstanceEntity jobInstance = command.jobInstance();
+    JobTaskEntity task = command.task();
+    JobPartitionEntity partition = command.partition();
+    String traceId = command.traceId();
+    String eventKey = command.eventKey();
+    RunMode runModeOverride = command.runModeOverride();
+
     writeDispatchEventInternal(jobInstance, task, partition, traceId, eventKey, runModeOverride);
   }
 
@@ -97,25 +103,42 @@ public class TaskDispatchOutboxService {
     // 时由 EffectiveTaskConfig 返回;此处只保留 task key + 路由元数据。
     // runModeOverride 在 v1 时通过 payload 注入,v2 后改由 worker CLAIM 读 job_task.task_payload —
     // retry/reclaim 路径需要把 run_mode 持久化到 task_payload 而非写入 message 临时透传。
-    persistRunModeOverride(task, runModeOverride);
+    persistRunModeOverride(jobInstance, task, runModeOverride);
+    String messageVersion = "v2";
+    String messageTenantId = task.getTenantId();
+    Long messageJobInstanceId = jobInstance.getId();
+    Long messagePartitionId = jobPartitionId;
+    Long messageTaskId = task.getId();
+    String messageInstanceNo = jobInstance.getInstanceNo();
+    String messageJobCode = jobInstance.getJobCode();
+    String messageTaskType = task.getTaskType();
+    String messageWorkerCode = task.getAssignedWorkerCode();
+    String priorityBand = resolvePriorityBand(jobInstance.getPriority());
+    String messageTraceId = traceId;
+    String messageIdempotencyKey = idempotencyKey;
+    Instant messageCreatedAt = BatchDateTimeSupport.utcNow();
+    SchedulingContext schedulingContext = buildSchedulingContext(jobInstance);
+    Integer messagePartitionNo = EmptyChecks.isNull(partition) ? null : partition.getPartitionNo();
+    Integer partitionCount = resolvePartitionCount(jobInstance);
+    W3cTraceContext traceContext = OtelTracePropagation.captureCurrent();
     TaskDispatchMessage message = new TaskDispatchMessage(
-        "v2",
-        task.getTenantId(),
-        jobInstance.getId(),
-        jobPartitionId,
-        task.getId(),
-        jobInstance.getInstanceNo(),
-        jobInstance.getJobCode(),
-        task.getTaskType(),
-        task.getAssignedWorkerCode(),
-        resolvePriorityBand(jobInstance.getPriority()),
-        traceId,
-        idempotencyKey,
-        BatchDateTimeSupport.utcNow(),
-        buildSchedulingContext(jobInstance),
-        EmptyChecks.isNull(partition) ? null : partition.getPartitionNo(),
-        resolvePartitionCount(jobInstance),
-        OtelTracePropagation.captureCurrent());
+        messageVersion,
+        messageTenantId,
+        messageJobInstanceId,
+        messagePartitionId,
+        messageTaskId,
+        messageInstanceNo,
+        messageJobCode,
+        messageTaskType,
+        messageWorkerCode,
+        priorityBand,
+        messageTraceId,
+        messageIdempotencyKey,
+        messageCreatedAt,
+        schedulingContext,
+        messagePartitionNo,
+        partitionCount,
+        traceContext);
 
     // V88: priority 拷到 outbox_event,OutboxPollScheduler 按 priority desc 排序优先派发。
     // 优先级源:task.priority (V88 加列,DefaultPartitionDispatchService.buildTask 设置);
@@ -124,14 +147,18 @@ public class TaskDispatchOutboxService {
         EmptyChecks.isNotNull(task.getPriority()) ? task.getPriority() : jobInstance.getPriority();
     String resolvedKey =
         EmptyChecks.isBlank(eventKey) ? task.getTenantId() + ":" + task.getId() : eventKey;
-    domainEventPublisher.publish(DomainEvent.builder(task.getTenantId())
-        .aggregate("JOB_TASK", task.getId())
-        .type(task.getTaskType())
-        .key(resolvedKey)
-        .payload(JsonUtils.toMap(message))
-        .traceId(traceId)
-        .priority(priority)
-        .build());
+    DomainEvent.Builder eventBuilder = DomainEvent.builder(task.getTenantId());
+    Long eventAggregateId = task.getId();
+    eventBuilder.aggregate("JOB_TASK", eventAggregateId);
+    String eventType = task.getTaskType();
+    eventBuilder.type(eventType);
+    eventBuilder.key(resolvedKey);
+    Map<String, Object> messagePayload = JsonUtils.toMap(message);
+    eventBuilder.payload(messagePayload);
+    eventBuilder.traceId(traceId);
+    eventBuilder.priority(priority);
+    DomainEvent dispatchEvent = eventBuilder.build();
+    domainEventPublisher.publish(dispatchEvent);
   }
 
   /**
@@ -152,15 +179,14 @@ public class TaskDispatchOutboxService {
     LocalDate nextBizDate = bizDateArithmetic.nextBusinessDay(bizDate);
     Boolean isHoliday =
         EmptyChecks.isNotNull(bizDate) ? bizDateArithmetic.isWeekend(bizDate) : null;
-    return new SchedulingContext(
-        bizDate,
-        prevBizDate,
-        nextBizDate,
-        isHoliday,
-        jobInstance.getRunAttempt(),
-        jobInstance.getTriggerType(),
-        null,
-        null);
+    return SchedulingContext.builder()
+        .bizDate(bizDate)
+        .prevBizDate(prevBizDate)
+        .nextBizDate(nextBizDate)
+        .isHoliday(isHoliday)
+        .attemptNo(jobInstance.getRunAttempt())
+        .triggerType(jobInstance.getTriggerType())
+        .build();
   }
 
   private Integer resolvePartitionCount(JobInstanceEntity jobInstance) {
@@ -225,7 +251,8 @@ public class TaskDispatchOutboxService {
     }
     if (value instanceof String text && EmptyChecks.isNotBlank(text)) {
       try {
-        int parsed = Integer.parseInt(text.trim());
+        String trimmedText = text.trim();
+        int parsed = Integer.parseInt(trimmedText);
         return parsed > 0 ? parsed : null;
       } catch (NumberFormatException ignored) {
         return null;
@@ -238,18 +265,52 @@ public class TaskDispatchOutboxService {
    * P1-2.2:把 RunMode 持久化到 job_task.task_payload。worker CLAIM 时 EffectiveTaskConfig 从
    * task_payload 读取 run_mode,看到该值即可区分"首次执行"与"补偿/重放"。仅 retry/reclaim 等再派发场景调用(runModeOverride 非 null)。
    */
-  private void persistRunModeOverride(JobTaskEntity task, RunMode runModeOverride) {
+  private void persistRunModeOverride(
+      JobInstanceEntity jobInstance, JobTaskEntity task, RunMode runModeOverride) {
     if (EmptyChecks.isNull(runModeOverride)
         || EmptyChecks.isNull(task)
         || EmptyChecks.isNull(task.getId())) {
       return;
     }
-    Map<String, Object> payload = parsePayloadMap(task.getTaskPayload());
+    if (EmptyChecks.isNotNull(jobInstance.getDryRun())
+        && EmptyChecks.isNotNull(task.getDryRun())
+        && !jobInstance.getDryRun().equals(task.getDryRun())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Map<String, Object> payload = requireRetryPayload(task);
     RunModeSupport.putCanonical(payload, runModeOverride);
     String merged = JsonUtils.toJson(payload);
-    jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged);
+    if (jobTaskMapper.updatePayload(task.getTenantId(), task.getId(), merged) != 1) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, ResultCode.STATE_CONFLICT.detailKey());
+    }
     // 同步内存对象,避免后续逻辑读到陈旧 payload
     task.setTaskPayload(merged);
+  }
+
+  private Map<String, Object> requireRetryPayload(JobTaskEntity task) {
+    Object value;
+    try {
+      value = JsonUtils.fromJson(task.getTaskPayload(), Object.class);
+    } catch (IllegalArgumentException exception) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    if (!(value instanceof Map<?, ?> payload)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Object dryRun = payload.get("dryRun");
+    boolean payloadDryRun =
+        EmptyChecks.isNotNull(dryRun) && "true".equalsIgnoreCase(dryRun.toString());
+    if (EmptyChecks.isNotNull(task.getDryRun()) && task.getDryRun() != payloadDryRun) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    for (Map.Entry<?, ?> entry : payload.entrySet()) {
+      if (!(entry.getKey() instanceof String key)) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.retry_payload_unsafe");
+      }
+      result.put(key, entry.getValue());
+    }
+    return result;
   }
 
   @SuppressWarnings("unchecked")
@@ -266,7 +327,7 @@ public class TaskDispatchOutboxService {
       SwallowedExceptionLogger.warn(
           TaskDispatchOutboxService.class, "catch:RuntimeException", ignored);
 
-      // 载荷 JSON 异常时忽略并退回空 Map，仍可为消息打上 run_mode。
+      // 参数快照不可解析时保留既有空映射回退，不影响任务载荷校验。
     }
     return new LinkedHashMap<>();
   }

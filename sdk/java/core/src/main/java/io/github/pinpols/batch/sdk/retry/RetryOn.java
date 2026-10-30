@@ -12,6 +12,8 @@ import java.lang.annotation.Target;
  *
  * <p><b>语义层级</b>:这是 handler **内**的整体执行重试(SDK 进程内),与平台 lease 超时重新派单是**两层**—— 平台重试针对整个 task 重新
  * CLAIM,本注解针对一次执行内的瞬时失败(如外部 HTTP/DB 抖动)就地重试,不回平台。
+ * 只有 handler 对当前冻结调用的 {@code isSafeToReplay(ctx)} 返回 true 才会再次尝试；
+ * 无法证明外部动作安全时只执行首次，避免响应未知导致 SDK 内重复副作用。
  *
  * <p><b>织入方式</b>:与 {@link io.github.pinpols.batch.sdk.idempotent.Idempotent} 一致,用显式装饰器 {@link
  * SdkRetryableHandler#wrap}(SDK core 禁 Spring,不走 AOP),复用 {@link SdkRetryPolicy} 退避逻辑。

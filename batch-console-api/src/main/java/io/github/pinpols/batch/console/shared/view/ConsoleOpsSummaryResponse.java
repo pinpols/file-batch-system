@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.shared.view;
 
+import lombok.Builder;
+
+@Builder
 public record ConsoleOpsSummaryResponse(
     String tenantId,
     long pendingApprovals,

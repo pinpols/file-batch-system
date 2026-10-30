@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -15,27 +14,46 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("审批接口:缺少幂等键与请求体非法时拒绝, 成功时透传操作人与原因并返回业务结果")
+@ExtendWith(MockitoExtension.class)
 class ConsoleApprovalControllerTest {
 
-  private final ConsoleApprovalApplicationService approvalApplicationService =
-      mock(ConsoleApprovalApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleApprovalApplicationService approvalApplicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
 
   @BeforeEach
   void setUp() {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            new ConsolePrincipal("authenticated-user", "t1", Set.of("ROLE_ADMIN")), "", List.of()));
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
@@ -48,15 +66,17 @@ class ConsoleApprovalControllerTest {
 
     // R4-P0-2：Controller 现在依赖 ConsoleTenantGuard 强校验请求体 tenantId。
     // 测试用 mock guard，resolveTenant 简单返回入参（与原 body 直传等价）。
-    io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard =
-        mock(io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard.class);
-    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
 
     mockMvc = MockMvcBuilders.standaloneSetup(
             new ConsoleApprovalController(approvalApplicationService, responseFactory, tenantGuard))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
+  }
+
+  @AfterEach
+  void clearSecurityContext() {
+    SecurityContextHolder.clearContext();
   }
 
   @Test
@@ -75,8 +95,9 @@ class ConsoleApprovalControllerTest {
   }
 
   @Test
-  @DisplayName("审批成功:通过后返回成功响应, 并以租户与审批人参数调用服务")
+  @DisplayName("审批成功:操作人取认证主体用户名而不信任请求体")
   void shouldApproveAndReturnCommonResponseOnSuccess() throws Exception {
+    when(tenantGuard.resolveTenant(any())).thenAnswer(inv -> inv.getArgument(0));
     when(approvalApplicationService.approve(anyString(), anyString(), anyString(), anyString()))
         .thenReturn("OK");
 
@@ -91,7 +112,7 @@ class ConsoleApprovalControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"))
         .andExpect(jsonPath("$.data").value("OK"));
 
-    verify(approvalApplicationService).approve("t1", "appr-001", "u1", "ok");
+    verify(approvalApplicationService).approve("t1", "appr-001", "authenticated-user", "ok");
   }
 
   @Test

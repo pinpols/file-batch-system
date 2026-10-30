@@ -1,4 +1,7 @@
 -- =========================================================
+
+\set ON_ERROR_STOP on
+BEGIN;
 -- Phase A · 业务库多租 RLS(Row-Level Security)
 --
 -- 见 docs/plans/multi-tenant-isolation-plan-2026-05-31.md §Phase A
@@ -35,7 +38,7 @@
   \else
     SELECT NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'batch_business_writer') AS _mk_writer \gset
     \if :_mk_writer
-      CREATE ROLE batch_business_writer LOGIN PASSWORD :'writer_password';
+      CREATE ROLE batch_business_writer LOGIN NOSUPERUSER NOBYPASSRLS PASSWORD :'writer_password';
       COMMENT ON ROLE batch_business_writer IS 'biz.* R/W with RLS enforced. Phase A.';
     \endif
   \endif
@@ -59,6 +62,19 @@
 \else
   DO $$ BEGIN RAISE EXCEPTION 'admin_password 未注入 — 拒绝用默认密码创建 BYPASSRLS 角色 batch_business_admin(psql -v admin_password=...)'; END $$;
 \endif
+
+-- 复用已有角色时拒绝绕过RLS的账号；不静默修改集群中已有角色的权限。
+DO $writer_role_guard$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_roles
+    WHERE rolname = 'batch_business_writer' AND (rolsuper OR rolbypassrls)
+  ) THEN
+    RAISE EXCEPTION 'batch_business_writer must be NOSUPERUSER NOBYPASSRLS'
+      USING ERRCODE = '42501';
+  END IF;
+END
+$writer_role_guard$;
 
 GRANT USAGE ON SCHEMA biz TO batch_business_writer, batch_business_admin;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA biz
@@ -92,6 +108,7 @@ BEGIN
   END IF;
 END $$;
 
+
 -- ---------------------------------------------------------
 -- 2. 启用 RLS + 加 strict policy(动态发现 biz 租户表 + batch.process_staging)
 --
@@ -108,7 +125,7 @@ DO $$
 DECLARE
   t TEXT;
 BEGIN
-  -- 只处理非分区子表的普通表/分区父表;分区子表继承父表 RLS。
+  -- 同时处理普通表、分区父表和分区子表,防止直接访问叶子时缺少策略。
   FOR t IN
     SELECT format('%I.%I', n.nspname, c.relname)
     FROM pg_class c
@@ -119,7 +136,6 @@ BEGIN
      AND col.column_name = 'tenant_id'
     WHERE n.nspname = 'biz'
       AND c.relkind IN ('r', 'p')
-      AND c.relispartition = false
     ORDER BY c.relname
   LOOP
     -- 存在性守护:缺表只跳过并告警,不让整个 DO 块回滚(否则一张不存在的表会使
@@ -148,7 +164,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- batch.process_staging 也带 tenant_id,同步加 RLS
+-- batch.process_staging 父表也带 tenant_id,同步加 RLS
 DO $$
 BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables
@@ -163,10 +179,65 @@ BEGIN
       TO PUBLIC
       USING (
         tenant_id = current_setting('app.tenant_id', true)
+        AND staging_generation_id::text = current_setting('app.process_staging_generation_id', true)
       )
       WITH CHECK (
         tenant_id = current_setting('app.tenant_id', true)
+        AND staging_generation_id::text = current_setting('app.process_staging_generation_id', true)
       );
+  END IF;
+END $$;
+
+-- PROCESS 日分区在服务运行期间创建,创建成功后立即启用 strict 策略,不留下直接访问窗口。
+DO $$
+DECLARE
+  child_table TEXT;
+BEGIN
+  FOR child_table IN
+    SELECT format('%I.%I', child_ns.nspname, child.relname)
+    FROM pg_inherits i
+    JOIN pg_class parent ON parent.oid = i.inhparent
+    JOIN pg_namespace parent_ns ON parent_ns.oid = parent.relnamespace
+    JOIN pg_class child ON child.oid = i.inhrelid
+    JOIN pg_namespace child_ns ON child_ns.oid = child.relnamespace
+    JOIN information_schema.columns col
+      ON col.table_schema = child_ns.nspname
+     AND col.table_name = child.relname
+     AND col.column_name = 'tenant_id'
+    WHERE parent_ns.nspname = 'batch'
+      AND parent.relname = 'process_staging'
+      AND child.relispartition
+    ORDER BY child.relname
+  LOOP
+    EXECUTE format('ALTER TABLE %s ENABLE ROW LEVEL SECURITY', child_table);
+    EXECUTE format('ALTER TABLE %s FORCE ROW LEVEL SECURITY', child_table);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_transition ON %s', child_table);
+    EXECUTE format('DROP POLICY IF EXISTS tenant_isolation_strict ON %s', child_table);
+    EXECUTE format($p$
+      CREATE POLICY tenant_isolation_strict ON %s
+        AS PERMISSIVE FOR ALL TO PUBLIC
+        USING (tenant_id = current_setting('app.tenant_id', true)
+          AND staging_generation_id::text = current_setting('app.process_staging_generation_id', true))
+        WITH CHECK (tenant_id = current_setting('app.tenant_id', true)
+          AND staging_generation_id::text = current_setting('app.process_staging_generation_id', true))
+    $p$, child_table);
+  END LOOP;
+END $$;
+
+-- 在插入生成的负载测试文件记录前先对齐序列。
+-- PROCESS 代次账本按租户隔离；staging 表各自的代次设置
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables
+             WHERE table_schema='batch' AND table_name='process_staging_generation') THEN
+    ALTER TABLE batch.process_staging_generation ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE batch.process_staging_generation FORCE ROW LEVEL SECURITY;
+    DROP POLICY IF EXISTS tenant_isolation_transition ON batch.process_staging_generation;
+    DROP POLICY IF EXISTS tenant_isolation_strict ON batch.process_staging_generation;
+    CREATE POLICY tenant_isolation_strict ON batch.process_staging_generation
+      AS PERMISSIVE FOR ALL TO PUBLIC
+      USING (tenant_id = current_setting('app.tenant_id', true))
+      WITH CHECK (tenant_id = current_setting('app.tenant_id', true));
   END IF;
 END $$;
 
@@ -177,3 +248,6 @@ END $$;
 --   FROM pg_policies WHERE schemaname IN ('biz', 'batch') ORDER BY schemaname, tablename;
 --
 -- 期望:每张表 1 行,policyname='tenant_isolation_strict',permissive='PERMISSIVE',cmd='ALL'
+
+-- 角色、授权及全部父/叶策略一起提交；任何步骤失败由 ON_ERROR_STOP 终止并回滚。
+COMMIT;

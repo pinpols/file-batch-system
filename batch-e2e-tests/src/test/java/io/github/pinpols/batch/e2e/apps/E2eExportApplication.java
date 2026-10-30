@@ -3,6 +3,7 @@ package io.github.pinpols.batch.e2e.apps;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.config.BatchJsonAutoConfiguration;
 import io.github.pinpols.batch.common.config.BatchObjectCryptoAutoConfiguration;
+import io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eExportWorkerDataSourceConfiguration;
 import io.github.pinpols.batch.e2e.config.E2ePlatformDataSourceConfiguration;
@@ -16,11 +17,23 @@ import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 import java.util.concurrent.Executor;
 import org.mybatis.spring.annotation.MapperScan;
+import org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration;
+import org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.actuate.web.servlet.ManagementWebSecurityAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.web.servlet.ServletWebSecurityAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
@@ -33,23 +46,19 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 @Configuration
 @EnableAutoConfiguration(
     exclude = {
-      io.github.pinpols.batch.common.logging.HttpRequestMdcAutoConfiguration.class,
-      org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration
-          .class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration.class,
-      org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.SecurityAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.web.servlet.SecurityFilterAutoConfiguration
-          .class,
-      org.springframework.boot.security.autoconfigure.web.servlet
-          .ServletWebSecurityAutoConfiguration.class,
-      org.springframework.boot.security.autoconfigure.actuate.web.servlet
-          .ManagementWebSecurityAutoConfiguration.class,
+      HttpRequestMdcAutoConfiguration.class,
+      AnthropicChatAutoConfiguration.class,
+      OpenAiChatAutoConfiguration.class,
+      OpenAiAudioSpeechAutoConfiguration.class,
+      OpenAiAudioTranscriptionAutoConfiguration.class,
+      OpenAiEmbeddingAutoConfiguration.class,
+      OpenAiImageAutoConfiguration.class,
+      OpenAiModerationAutoConfiguration.class,
+      SecurityAutoConfiguration.class,
+      UserDetailsServiceAutoConfiguration.class,
+      SecurityFilterAutoConfiguration.class,
+      ServletWebSecurityAutoConfiguration.class,
+      ManagementWebSecurityAutoConfiguration.class,
     })
 @EnableKafka
 @Import({

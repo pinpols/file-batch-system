@@ -27,7 +27,8 @@ public class DefaultConsoleAiAuditService implements ConsoleAiAuditService {
     entity.setTraceId(command.traceId());
     entity.setSessionId(command.sessionId());
     entity.setOperatorId(command.operatorId());
-    entity.setPromptCategory(resolvePromptCategory(command.promptCategory()));
+    String promptCategory = resolvePromptCategory(command.promptCategory());
+    entity.setPromptCategory(promptCategory);
     entity.setPromptDecision(command.promptDecision());
     entity.setModelName(command.modelName());
     entity.setPromptHash(command.promptHash());

@@ -3,18 +3,26 @@ package io.github.pinpols.batch.console.domain.notification.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationChannelMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerNotifyService.AmNotifyOutcome;
+import io.github.pinpols.batch.console.domain.notification.view.NotificationChannelRow;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("告警通知投递服务: 渠道解析, 租户反查与投递日志落库")
@@ -44,12 +53,16 @@ class AlertmanagerNotifyServiceTest {
   @Mock
   private NotificationSender sender;
 
+  @Mock
+  private AlertNotificationReceiptService receiptService;
+
+  private AlertmanagerNotifyProperties properties;
   private AlertmanagerNotifyService service;
   private MeterRegistry meterRegistry;
 
   @BeforeEach
   void setUp() {
-    AlertmanagerNotifyProperties properties = new AlertmanagerNotifyProperties();
+    properties = new AlertmanagerNotifyProperties();
     properties.setTenantId("system");
     properties.setMaxAlerts(50);
     meterRegistry = new SimpleMeterRegistry();
@@ -60,7 +73,150 @@ class AlertmanagerNotifyServiceTest {
         senderRegistry,
         webhookDispatcher,
         new AlertmanagerAlertRenderer(),
-        meterRegistry);
+        meterRegistry,
+        receiptService);
+  }
+
+  @Test
+  @DisplayName("禁用渠道不调用发送器或回调, 不写成功回执")
+  void shouldSkipDelivery_whenChannelDisabled() {
+    NotificationChannelRow disabled = new NotificationChannelRow(
+        1L, "system", "batch-sla", "停用渠道", "WEBHOOK", "{}", false, null, null, null, null);
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(disabled);
+
+    AmNotifyOutcome outcome = service.deliver("batch-sla", payload("batch-sla"));
+
+    assertThat(outcome.delivered()).isFalse();
+    assertThat(outcome.status()).isEqualTo("DISABLED");
+    verify(webhookDispatcher, never()).attemptDelivery(any(), any(), anyString());
+    verify(senderRegistry, never()).resolve(anyString());
+    verify(receiptService, never()).recordDelivered(anyString(), anyString(), any());
+    verify(deliveryLogMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("分组超出正文上限时分批完整投递，每批成功后记录实际列表回执")
+  void shouldDeliverEveryAlertInBoundedBatches() {
+    properties.setMaxAlerts(2);
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+    AlertmanagerWebhookPayload payload = monitoredPayload("firing", 5);
+
+    AmNotifyOutcome result = service.deliver("batch-sla", payload);
+    assertThat(result.delivered()).isTrue();
+
+    ArgumentCaptor<NotificationMessage> messages =
+        ArgumentCaptor.forClass(NotificationMessage.class);
+    verify(sender, times(3)).send(messages.capture());
+    assertThat(messages.getAllValues())
+        .extracting(message -> message.payload().data().toString())
+        .anySatisfy(text -> assertThat(text).contains("实例-4"));
+    verify(receiptService, times(3)).recordDelivered(anyString(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("最终渠道成功但回执持久化失败时仍返回可重试失败")
+  void shouldRequireDurableReceiptBeforeAcknowledgingSuccess() {
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+    doThrow(new IllegalStateException("injected receipt persistence failure"))
+        .when(receiptService)
+        .recordDelivered(anyString(), anyString(), any());
+
+    AmNotifyOutcome result = service.deliver("batch-sla", monitoredPayload("firing", 1));
+
+    assertThat(result.delivered()).isFalse();
+    assertThat(result.status()).isEqualTo("FAILED");
+  }
+
+  @Test
+  @DisplayName("同一批重试沿用通知身份，发生与恢复通知身份不同")
+  void shouldKeepRetryIdentityAndSeparateResolvedNotification() {
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+
+    service.deliver("batch-sla", monitoredPayload("firing", 1));
+    service.deliver("batch-sla", monitoredPayload("firing", 1));
+    service.deliver("batch-sla", monitoredPayload("resolved", 1));
+
+    ArgumentCaptor<NotificationMessage> messages =
+        ArgumentCaptor.forClass(NotificationMessage.class);
+    verify(sender, times(3)).send(messages.capture());
+    List<String> cursors = messages.getAllValues().stream()
+        .map(message -> message.payload().cursor())
+        .toList();
+    assertThat(cursors.get(0)).isEqualTo(cursors.get(1)).isNotEqualTo(cursors.get(2));
+  }
+
+  @Test
+  @DisplayName("混合租户分组在查询渠道前拒绝，不向其他租户发送通知")
+  void shouldRejectMixedTenantGroupBeforeChannelLookup() {
+    Map<String, String> labels = Map.of("tenant", "another-tenant", "alertname", "X");
+    AlertmanagerAlert foreign =
+        new AlertmanagerAlert("firing", labels, Map.of(), null, null, null, "fp");
+    AlertmanagerWebhookPayload mixed = new AlertmanagerWebhookPayload(
+        "4",
+        "mixed",
+        0,
+        "firing",
+        "batch-sla",
+        Map.of(),
+        Map.of("tenant", "system"),
+        Map.of(),
+        null,
+        List.of(foreign));
+
+    AmNotifyOutcome outcome = service.deliver("batch-sla", mixed);
+
+    assertThat(outcome.status()).isEqualTo("FAILED");
+    verify(channelMapper, never()).selectByCode(anyString(), anyString());
+    verify(receiptService, never()).recordDelivered(anyString(), anyString(), any());
+  }
+
+  private static AlertmanagerWebhookPayload monitoredPayload(String status, int count) {
+    List<AlertmanagerAlert> alerts = new ArrayList<>();
+    for (int i = 0; i < count; i++) {
+      Map<String, String> labels = Map.of(
+          "tenant",
+          "system",
+          "fingerprint",
+          "persisted-fingerprint-" + i,
+          "alertname",
+          "JOB_NOT_STARTED_BY_DEADLINE");
+      Map<String, String> annotations = Map.of("summary", "实例-" + i);
+      AlertmanagerAlert alert = new AlertmanagerAlert(
+          status, labels, annotations, "2026-10-25T00:00:00Z", null, null, "am-fingerprint-" + i);
+      alerts.add(alert);
+    }
+    return new AlertmanagerWebhookPayload(
+        "4",
+        "same-am-group",
+        0,
+        status,
+        "batch-sla",
+        Map.of(),
+        Map.of("tenant", "system"),
+        Map.of(),
+        null,
+        alerts);
+  }
+
+  private static NotificationChannelRow channelRow(String channelType, String configJson) {
+    return new NotificationChannelRow(
+        1L,
+        "system",
+        "batch-dispatch",
+        "batch-dispatch",
+        channelType,
+        configJson,
+        true,
+        "op",
+        "op",
+        null,
+        null);
   }
 
   private AlertmanagerWebhookPayload payload(String receiver) {
@@ -82,7 +238,7 @@ class AlertmanagerNotifyServiceTest {
   @DisplayName("解析到渠道发送器后投递成功, 并按成功状态写入投递日志")
   void shouldDeliverAndLogSuccess_whenChannelResolved() {
     when(channelMapper.selectByCode("system", "batch-dispatch"))
-        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{\"url\":\"https://x\"}"));
+        .thenReturn(channelRow("WECOM", "{\"url\":\"https://x\"}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
 
@@ -97,18 +253,18 @@ class AlertmanagerNotifyServiceTest {
     assertThat(msg.getValue().payload().eventType()).isEqualTo("ALERTMANAGER");
     assertThat(msg.getValue().payload().data().toString()).contains("[FIRING] batch-dispatch · X");
 
-    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationDeliveryLogInsertParam> log = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(log.capture());
-    assertThat(log.getValue()).containsEntry("deliveryStatus", "SUCCESS");
-    assertThat(log.getValue()).containsEntry("channelCode", "batch-dispatch");
-    assertThat(log.getValue()).containsEntry("eventType", "ALERTMANAGER");
+    assertThat(log.getValue().deliveryStatus()).isEqualTo("SUCCESS");
+    assertThat(log.getValue().channelCode()).isEqualTo("batch-dispatch");
+    assertThat(log.getValue().eventType()).isEqualTo("ALERTMANAGER");
   }
 
   @Test
   @DisplayName("发送器返回失败时结论为失败, 日志记录失败原因")
   void shouldLogFailed_whenSenderReturnsFailure() {
     when(channelMapper.selectByCode("system", "batch-sla"))
-        .thenReturn(Map.of("channel_type", "DINGTALK", "config_json", "{}"));
+        .thenReturn(channelRow("DINGTALK", "{}"));
     when(senderRegistry.resolve("DINGTALK")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.failure(500, "boom"));
 
@@ -117,13 +273,106 @@ class AlertmanagerNotifyServiceTest {
     assertThat(outcome.delivered()).isFalse();
     assertThat(outcome.status()).isEqualTo("FAILED");
     assertThat(outcome.detail()).isEqualTo("boom");
-    ArgumentCaptor<Map<String, Object>> log = ArgumentCaptor.captor();
+    ArgumentCaptor<NotificationDeliveryLogInsertParam> log = ArgumentCaptor.captor();
     verify(deliveryLogMapper).insert(log.capture());
-    assertThat(log.getValue()).containsEntry("deliveryStatus", "FAILED");
-    assertThat(log.getValue()).containsEntry("errorMessage", "boom");
+    assertThat(log.getValue().deliveryStatus()).isEqualTo("FAILED");
+    assertThat(log.getValue().errorMessage()).isEqualTo("boom");
+    verify(receiptService, never()).recordDelivered(anyString(), anyString(), any());
     assertThat(
             meterRegistry.counter("am.notify.failed", "receiver", "batch-sla").count())
         .isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("发送器失败摘要的凭据不进入告警日志、审计行或投递结果")
+  void shouldMaskSenderFailureInLogAuditAndOutcome() {
+    when(channelMapper.selectByCode("system", "batch-sla"))
+        .thenReturn(channelRow("DINGTALK", "{}"));
+    when(senderRegistry.resolve("DINGTALK")).thenReturn(sender);
+    when(sender.send(any()))
+        .thenReturn(WebhookDeliveryResult.failure(
+            500, "password=stored-secret; ｔｏｋｅｎ=unicode-secret; retry later"));
+    Logger logger = (Logger) LoggerFactory.getLogger(AlertmanagerNotifyService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      AmNotifyOutcome outcome = service.deliver("batch-sla", payload("batch-sla"));
+      ArgumentCaptor<NotificationDeliveryLogInsertParam> row = ArgumentCaptor.captor();
+      verify(deliveryLogMapper).insert(row.capture());
+
+      assertThat(outcome.status()).isEqualTo("FAILED");
+      assertThat(outcome.detail())
+          .contains("password=****", "token=****", "retry later")
+          .doesNotContain("stored-secret", "unicode-secret");
+      assertThat(row.getValue().errorMessage())
+          .contains("password=****", "token=****")
+          .doesNotContain("stored-secret", "unicode-secret");
+      assertThat(appender.list).isNotEmpty();
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(
+              message -> assertThat(message).doesNotContain("stored-secret", "unicode-secret"));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test
+  @DisplayName("回执持久化异常不把原始堆栈和凭据写入告警日志")
+  void shouldMaskReceiptPersistenceFailureInLog() {
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+    doThrow(new IllegalStateException("token=receipt-secret"))
+        .when(receiptService)
+        .recordDelivered(anyString(), anyString(), any());
+    Logger logger = (Logger) LoggerFactory.getLogger(AlertmanagerNotifyService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      AmNotifyOutcome outcome = service.deliver("batch-sla", payload("batch-sla"));
+
+      assertThat(outcome.status()).isEqualTo("FAILED");
+      assertThat(appender.list).hasSize(1);
+      ILoggingEvent event = appender.list.getFirst();
+      assertThat(event.getFormattedMessage()).doesNotContain("receipt-secret");
+      assertThat(event.getThrowableProxy()).isNull();
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test
+  @DisplayName("投递审计写入异常不把原始堆栈和凭据写入告警日志")
+  void shouldMaskDeliveryAuditFailureInLog() {
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
+    when(senderRegistry.resolve("WECOM")).thenReturn(sender);
+    when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
+    when(deliveryLogMapper.insert(any()))
+        .thenThrow(new IllegalStateException("token=audit-secret"));
+    Logger logger = (Logger) LoggerFactory.getLogger(AlertmanagerNotifyService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      AmNotifyOutcome outcome = service.deliver("batch-sla", payload("batch-sla"));
+
+      assertThat(outcome.status()).isEqualTo("SUCCESS");
+      assertThat(appender.list)
+          .anySatisfy(event ->
+              assertThat(event.getFormattedMessage()).contains("delivery log persist failed"))
+          .allSatisfy(event -> {
+            assertThat(event.getFormattedMessage()).doesNotContain("audit-secret");
+            assertThat(event.getThrowableProxy()).isNull();
+          });
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   @Test
@@ -148,7 +397,7 @@ class AlertmanagerNotifyServiceTest {
   @DisplayName("告警名含换行注入时, 事件类型仍是稳定常量且不含换行")
   void shouldKeepStableEventType_whenAlertnameHasLineBreak() {
     when(channelMapper.selectByCode("system", "batch-dispatch"))
-        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+        .thenReturn(channelRow("WECOM", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
     AlertmanagerWebhookPayload evil = new AlertmanagerWebhookPayload(
@@ -195,8 +444,7 @@ class AlertmanagerNotifyServiceTest {
         null,
         List.of(new AlertmanagerAlert(
             "firing", Map.of("alertname", "X", "tenant", "ta"), Map.of(), null, null, null, "fp")));
-    when(channelMapper.selectByCode("ta", "batch-sla"))
-        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+    when(channelMapper.selectByCode("ta", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
 
@@ -210,8 +458,7 @@ class AlertmanagerNotifyServiceTest {
   @Test
   @DisplayName("公共标签无租户时, 回退到配置的默认租户查询渠道")
   void shouldFallBackToConfiguredTenant_whenLabelAbsent() {
-    when(channelMapper.selectByCode("system", "batch-sla"))
-        .thenReturn(Map.of("channel_type", "WECOM", "config_json", "{}"));
+    when(channelMapper.selectByCode("system", "batch-sla")).thenReturn(channelRow("WECOM", "{}"));
     when(senderRegistry.resolve("WECOM")).thenReturn(sender);
     when(sender.send(any())).thenReturn(WebhookDeliveryResult.ok());
 
@@ -225,7 +472,7 @@ class AlertmanagerNotifyServiceTest {
   @DisplayName("渠道为回调类型时走分发器投递, 不解析普通发送器")
   void shouldRouteToDispatcher_whenChannelIsCallback() {
     when(channelMapper.selectByCode("system", "batch-default"))
-        .thenReturn(Map.of("channel_type", "WEBHOOK", "config_json", "{\"url\":\"https://hook\"}"));
+        .thenReturn(channelRow("WEBHOOK", "{\"url\":\"https://hook\"}"));
     when(webhookDispatcher.attemptDelivery(any(), any(), anyString()))
         .thenReturn(WebhookDeliveryResult.ok());
 

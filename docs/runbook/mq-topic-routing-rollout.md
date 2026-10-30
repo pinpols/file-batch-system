@@ -213,7 +213,6 @@ docker exec batch-kafka kafka-topics --bootstrap-server localhost:9092 \
 ## 8. 相关文档
 
 - `docs/runbook/feature-switches.md` §3.3 — 开关速查
-- `docs/architecture/rework-classification.md` Phase 2 第 3 项
-- `docs/architecture/scalability-assessment.md` §6 路线图
+- `docs/runbook/production-capacity-governance.md` — 变更前后的容量预算、负载和恢复验证
 - `docs/architecture/heavy-workload-guarantees.md` — 专用资源画像池和 `DIRECT_ONLY` 隔离契约
 - `docs/runbook/heavy-workload-operations.md` — 专用池部署、扩缩容和回滚步骤

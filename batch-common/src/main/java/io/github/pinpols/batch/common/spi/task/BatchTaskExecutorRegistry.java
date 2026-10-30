@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.common.spi.task;
 
 import io.github.pinpols.batch.common.dto.WorkerTaskCapabilityDto;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -99,10 +101,11 @@ public class BatchTaskExecutorRegistry {
       BatchTaskExecutor exec,
       String source) {
     String type = exec.taskType();
-    if (type != null
+    boolean taskTypeIsExcludedByEnabledFilter = EmptyChecks.isNotNull(type)
         && !type.isBlank()
         && !enabledFilter.isEmpty()
-        && !enabledFilter.contains(type)) {
+        && !enabledFilter.contains(type);
+    if (taskTypeIsExcludedByEnabledFilter) {
       filteredOut.add(type);
       return;
     }
@@ -145,6 +148,23 @@ public class BatchTaskExecutorRegistry {
     return byType.get(taskType);
   }
 
+  /** 使用运行期实际选定的执行器实例解析元数据。 */
+  public ReplayCapabilityDeclaration replayCapability(
+      String taskType, Map<String, Object> frozenConfig) {
+    BatchTaskExecutor executor = find(taskType);
+    if (EmptyChecks.isNull(executor)) {
+      throw new IllegalStateException("no BatchTaskExecutor registered for taskType: " + taskType);
+    }
+    return executor.replayCapability(frozenConfig);
+  }
+
+  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+    return byType.values().stream()
+        .sorted(Comparator.comparing(BatchTaskExecutor::taskType))
+        .map(BatchTaskExecutor::replayCapabilityDeclaration)
+        .toList();
+  }
+
   /** 当前所有已注册的 taskType(给 console-api 拉下拉框用)。 */
   public Set<String> registeredTypes() {
     return byType.keySet();
@@ -155,12 +175,14 @@ public class BatchTaskExecutorRegistry {
     return byType.values().stream()
         .map(executor -> {
           TaskCapability capability = executor.capability();
+          String taskType = executor.taskType();
+          List<String> resourceKinds =
+              capability.resourceKinds().stream().map(Enum::name).sorted().toList();
+          boolean idempotent = capability.idempotent();
+          boolean cancellable = capability.cancellable();
+          long recommendedTimeoutMillis = capability.recommendedTimeout().toMillis();
           return new WorkerTaskCapabilityDto(
-              executor.taskType(),
-              capability.resourceKinds().stream().map(Enum::name).sorted().toList(),
-              capability.idempotent(),
-              capability.cancellable(),
-              capability.recommendedTimeout().toMillis());
+              taskType, resourceKinds, idempotent, cancellable, recommendedTimeoutMillis);
         })
         .sorted(Comparator.comparing(WorkerTaskCapabilityDto::taskType))
         .toList();

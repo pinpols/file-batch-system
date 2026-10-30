@@ -2,6 +2,7 @@
 -- 口径见 docs/audit/database-and-class-comment-audit-2026-08-21.md。
 
 -- P0：调度主链、触发与工作流。
+
 COMMENT ON TABLE batch.job_definition IS '作业定义权威配置；Console 写入，Orchestrator 在 launch 时读取并生成 job_instance。';
 COMMENT ON TABLE batch.job_instance IS '一次作业运行实例；状态机和批量日执行的权威运行态。';
 COMMENT ON TABLE batch.job_partition IS 'job_instance 的可并行分片；资源调度和 worker 领取的最小工作单元。';
@@ -120,6 +121,7 @@ COMMENT ON COLUMN batch.workflow_node.retry_max_count IS '节点最大重试次�
 COMMENT ON COLUMN batch.workflow_node.timeout_seconds IS '节点执行超时秒数。';
 
 -- P1：文件、流水线、资源与批量日。
+
 COMMENT ON TABLE batch.file_record IS '文件接收、完整性校验、存储与生命周期的权威记录。';
 COMMENT ON TABLE batch.file_template_config IS '文件格式、校验、脱敏、加密和处理目标的租户模板配置。';
 COMMENT ON TABLE batch.file_channel_config IS '文件接收或分发通道配置；端点和凭据仅通过受控引用保存。';
@@ -223,6 +225,7 @@ COMMENT ON COLUMN batch.process_staging.target_schema IS '业务库目标 schema
 COMMENT ON COLUMN batch.process_staging.target_table IS '业务库目标表。';
 
 -- P2：配置、安全、通知、审计、补偿与历史镜像。
+
 COMMENT ON TABLE batch.alert_event IS '告警事件权威记录；去重、升级、路由和通知均以此为输入。';
 COMMENT ON TABLE batch.alert_routing_config IS '告警路由和聚合配置；决定接收者、静默与重复通知。';
 COMMENT ON TABLE batch.api_key IS '内部或外部 API Key 元数据；仅保存哈希、盐和作用域。';
@@ -346,6 +349,7 @@ COMMENT ON COLUMN batch.worker_report_outbox.payload_json IS '待回报 Orchestr
 COMMENT ON COLUMN batch.worker_report_outbox.publish_status IS '回报投递状态。';
 
 -- 补齐剩余业务根表的关键字段。归档镜像字段按源表语义继承，不重复维护字段注释。
+
 COMMENT ON COLUMN batch.alert_event.detail_json IS '告警详情 JSON。';
 COMMENT ON COLUMN batch.approval_command.action_type IS '待审批操作类型。';
 COMMENT ON COLUMN batch.approval_command.approval_type IS '审批流程类型。';

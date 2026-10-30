@@ -2,7 +2,7 @@
 
 - **Status**: Accepted(Phase 1.1–1.5 已落地,见下「实施状态」)
 - **Date**: 2026-06-20(实施收口 2026-06-23)
-- **Related**: `docs/analysis/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 1)、ADR-021(数据质量对账,**边界对照**)、ADR-038(checkpoint)、`DispatchManifestSupport`(出站 sidecar)
+- **Related**: `docs/archive/audit/system-wide-capability-gap-analysis-2026-06-20.md`(全系统缺口分析,本 ADR 的源)、`docs/plans/settlement-gap-remediation-roadmap-2026-06-20.md`(Phase 1)、ADR-021(数据质量对账,**边界对照**)、ADR-038(checkpoint)、`DispatchManifestSupport`(出站 sidecar)
 - **Plan**: 见 §实施分阶段(= roadmap Phase 1.1–1.5)。
 
 ## 实施状态(2026-06-23)
@@ -78,6 +78,24 @@ REPORT 信封(`TaskExecutionReport`)增可选 `controlCounts`:`{ inputCount, out
 ### 3. 投递后回读校验（P1.5）
 
 dispatch 投递成功后,对支持回读的渠道(NAS/OSS/SFTP)**readback 目的端 size**(+ 可选 checksum)与 `DispatchManifestSupport` 写的 manifest 比对;不符 → 投递判失败、触发重投(复用 `RetryDispatchStep`)。HTTP 渠道无回读,保持 ACK 语义。
+
+### 2026-10-16 跨节点计数核对修正
+
+原跨节点实现未落实本 ADR 的显式启用边界，且无条件比较控制边两端的计数，不能据此认定丢行。
+本次整合以[实施契约](../../plans/workflow-daily-integration-plan-2026-10-14.md#012-count-continuity-scope-的实施契约)收敛：
+
+- 在冻结的下游 `nodeParams` 中声明 `countContinuity`，例如
+  `{ "enabled": true, "upstreamNodeCode": "IMPORT", "expectedDelta": 0 }`；未声明不核对。
+- 从本次冻结图确定数据关系，从数据库的成功节点执行读取产出和执行 ID，不用实时定义替代。
+  `inputCountContext` / `outputCountContext` 的 `scopeId` 和 `unit` 必须相同；
+  `scopeId` 由实际读取/产出方报告不可变的数据版本范围，同一业务日或相同节点类型不能充当该证据。
+- 非零 `expectedDelta` 要有声明原因，并与 Worker 的 `inputCountContext.excludedCount` 精确相等，
+  同时保留 `exclusionEvidenceRef`。缺记账、缺引用、范围或单位不同、非法数值均为 `UNVERIFIED`，不能作为核对通过。
+- 可比差异继续发布 `workflow.node.count.continuity.v1`；`MATCHED` / `UNVERIFIED` 发布
+  `workflow.node.count.continuity.checked.v1`，走既有通用 Outbox 审计投递。
+  事件身份包含双方节点执行 ID；节点产出、核对事件和去重键同事务，WARN 在提交后记录。
+- 此阶段保持核对审计语义，不翻转执行状态。`MATCHED` 只说明报告的范围、单位、计数及排除记账相符；
+  实际消费版本、取证引用的内容/保留及业务合法性须由相应链路另行验真。内置 Worker 没有范围证据的链路不能称为端到端完整性已验收。
 
 ### 4. 与 ADR-021 的边界
 

@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
+import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import java.time.Instant;
 import java.util.List;
@@ -23,14 +23,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PipelineProgressInternalController {
 
-  private final PipelineStageProgressCache cache;
+  private final PipelineProgressReadService progress;
 
   /** 按 pipeline 实例查询，并聚合同一 stage 的并发分片。 */
   @GetMapping("/by-pipeline")
   public List<PipelineProgressItem> queryByPipeline(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
-    return cache.snapshotByPipeline(tenantId, pipelineInstanceId).stream()
+    List<PipelineSnapshot> snapshots = progress.snapshot(tenantId, pipelineInstanceId);
+    return snapshots.stream()
         .map(PipelineProgressInternalController::toPipelineProgressItem)
         .toList();
   }
@@ -40,9 +41,14 @@ public class PipelineProgressInternalController {
         snapshot.stageCode(),
         snapshot.rowsProcessed(),
         snapshot.totalRowsHint(),
-        snapshot.heartbeatAt());
+        snapshot.heartbeatAt(),
+        snapshot.stepRunIds());
   }
 
   public record PipelineProgressItem(
-      String stageCode, Long rowsProcessed, Long totalRowsHint, Instant heartbeatAt) {}
+      String stageCode,
+      Long rowsProcessed,
+      Long totalRowsHint,
+      Instant heartbeatAt,
+      List<Long> stepRunIds) {}
 }

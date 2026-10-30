@@ -2,10 +2,11 @@ package io.github.pinpols.batch.console.infrastructure.excel;
 
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelSchema.*;
 
-import io.github.pinpols.batch.common.enums.PipelineType;
+import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -15,7 +16,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-/** 生成 12-Sheet 配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
+/** 生成当前配置包的场景化示例数据。示例值只用于模板引导，不代表生产默认配置。 */
 public final class ConfigPackageSampleDataFactory {
 
   private static final String TENANT = "";
@@ -32,7 +33,7 @@ public final class ConfigPackageSampleDataFactory {
   private static final String SCENARIO_ATOMIC = "ATOMIC";
   private static final String SCENARIO_WORKFLOW = "WORKFLOW";
   private static final String SCENARIO_SCHEDULE = "SCHEDULE";
-  private static final int SHEET_COUNT = 12;
+  private static final int SHEET_COUNT = 11;
 
   private ConfigPackageSampleDataFactory() {}
 
@@ -118,7 +119,9 @@ public final class ConfigPackageSampleDataFactory {
     if (EmptyChecks.isBlank(rawScenario)) {
       return SCENARIO_ALL;
     }
-    return switch (rawScenario.trim().toUpperCase(Locale.ROOT)) {
+    String trimmedScenario = rawScenario.trim();
+    String normalizedScenario = trimmedScenario.toUpperCase(Locale.ROOT);
+    return switch (normalizedScenario) {
       case SCENARIO_ALL -> SCENARIO_ALL;
       case SCENARIO_IMPORT,
           SCENARIO_EXPORT,
@@ -126,13 +129,14 @@ public final class ConfigPackageSampleDataFactory {
           SCENARIO_DISPATCH,
           SCENARIO_ATOMIC,
           SCENARIO_WORKFLOW,
-          SCENARIO_SCHEDULE -> rawScenario.trim().toUpperCase(Locale.ROOT);
+          SCENARIO_SCHEDULE -> normalizedScenario;
       default -> normalizeFileScenario(rawScenario);
     };
   }
 
   private static String normalizeFileScenario(String rawScenario) {
-    String normalized = rawScenario.trim().toUpperCase(Locale.ROOT);
+    String trimmedScenario = rawScenario.trim();
+    String normalized = trimmedScenario.toUpperCase(Locale.ROOT);
     if (ConfigPackageFileScenario.fromCode(normalized).isPresent()) {
       return normalized;
     }
@@ -244,8 +248,7 @@ public final class ConfigPackageSampleDataFactory {
     String tpl = "TPL_IMPORT_CUSTOMER" + suffix;
     sheets.get(6).add(fileTemplate(tpl, "客户导入模板", SCENARIO_IMPORT, null, fileFormat));
     sheets.get(3).add(job(job, "客户导入", SCENARIO_IMPORT, "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(7).add(pipeline(job, "客户导入流水线", SCENARIO_IMPORT));
-    addFixedStages(sheets, job, "IMPORT", "LOAD", "{\"templateCode\":\"" + tpl + "\"}");
+    addSystemStageParams(sheets, job, "LOAD", "{\"templateCode\":\"" + tpl + "\"}");
   }
 
   private static void putExport(List<List<Map<String, Object>>> sheets) {
@@ -261,18 +264,15 @@ public final class ConfigPackageSampleDataFactory {
         .get(6)
         .add(fileTemplate(tpl, "客户导出模板", SCENARIO_EXPORT, "customer_${batchDate}", fileFormat));
     sheets.get(3).add(job(job, "客户导出", SCENARIO_EXPORT, "{\"templateCode\":\"" + tpl + "\"}"));
-    sheets.get(7).add(pipeline(job, "客户导出流水线", SCENARIO_EXPORT));
-    addFixedStages(sheets, job, "EXPORT", "GENERATE", "{\"templateCode\":\"" + tpl + "\"}");
+    addSystemStageParams(sheets, job, "GENERATE", "{\"templateCode\":\"" + tpl + "\"}");
   }
 
   private static void putProcess(List<List<Map<String, Object>>> sheets) {
     String job = "JOB_PROCESS_CUSTOMER";
     sheets.get(3).add(job(job, "客户汇总加工", SCENARIO_PROCESS, "{}"));
-    sheets.get(7).add(pipeline(job, "客户汇总加工流水线", SCENARIO_PROCESS));
-    addFixedStages(
+    addSystemStageParams(
         sheets,
         job,
-        "PROCESS",
         "COMPUTE",
         "{\"targetSchema\":\"biz\",\"targetTable\":\"customer_summary\",\"sql\":\"SELECT customer_no, count(*) AS cnt FROM biz.customer_account WHERE tenant_id = :tenantId GROUP BY customer_no\"}");
   }
@@ -303,25 +303,28 @@ public final class ConfigPackageSampleDataFactory {
             COL_ENABLED,
             true));
     sheets.get(3).add(job(job, "客户文件派发", SCENARIO_DISPATCH, "{}"));
-    sheets.get(7).add(pipeline(job, "客户文件派发流水线", SCENARIO_DISPATCH));
-    addFixedStages(sheets, job, "DISPATCH", "DISPATCH", "{\"channelCode\":\"" + CHANNEL + "\"}");
+    addSystemStageParams(sheets, job, "DISPATCH", "{\"channelCode\":\"" + CHANNEL + "\"}");
   }
 
-  private static void addFixedStages(
+  private static void addSystemStageParams(
       List<List<Map<String, Object>>> sheets,
       String job,
-      String pipelineType,
       String configuredStage,
       String configuredParams) {
-    List<String> stages = PipelineType.stages(pipelineType);
-    for (int index = 0; index < stages.size(); index++) {
-      String stage = stages.get(index);
-      String params = stage.equals(configuredStage) ? configuredParams : "{}";
-      sheets.get(8).add(step(job, stage, stage, stage, index, pipelineType + "_" + stage, params));
+    for (Map<String, Object> row : sheets.get(3)) {
+      if (!job.equals(row.get(COL_JOB_CODE))) {
+        continue;
+      }
+      Map<String, Object> params = JsonUtils.fromJson(
+          String.valueOf(row.get(COL_DEFAULT_PARAMS)), new TypeReference<Map<String, Object>>() {});
+      Map<String, Object> stageParams =
+          JsonUtils.fromJson(configuredParams, new TypeReference<Map<String, Object>>() {});
+      params.put("systemPipelineStepParams", Map.of(configuredStage, stageParams));
+      row.put(COL_DEFAULT_PARAMS, JsonUtils.toJson(params));
     }
   }
 
-  /** Atomic 是单任务执行器，不创建 pipeline_definition / pipeline_step_definition。 */
+  /** Atomic按Job配置独立执行。 */
   private static void putAtomic(List<List<Map<String, Object>>> sheets) {
     sheets
         .get(3)
@@ -334,7 +337,7 @@ public final class ConfigPackageSampleDataFactory {
 
   private static void putWorkflow(List<List<Map<String, Object>>> sheets) {
     sheets
-        .get(9)
+        .get(7)
         .add(row(
             COL_TENANT_ID, TENANT,
             COL_WORKFLOW_CODE, "WF_CUSTOMER_EOD",
@@ -343,13 +346,13 @@ public final class ConfigPackageSampleDataFactory {
             COL_VERSION, VERSION,
             COL_ENABLED, true,
             COL_DESCRIPTION, "先导入后导出的示例 DAG"));
-    sheets.get(10).add(workflowNode("START", "开始", "START", null, null, 1));
-    sheets.get(10).add(workflowNode("NODE_IMPORT", "客户导入", "JOB", "JOB_IMPORT_CUSTOMER", null, 2));
-    sheets.get(10).add(workflowNode("NODE_EXPORT", "客户导出", "JOB", "JOB_EXPORT_CUSTOMER", null, 3));
-    sheets.get(10).add(workflowNode("END", "结束", "END", null, null, 4));
-    sheets.get(11).add(workflowEdge("START", "NODE_IMPORT"));
-    sheets.get(11).add(workflowEdge("NODE_IMPORT", "NODE_EXPORT"));
-    sheets.get(11).add(workflowEdge("NODE_EXPORT", "END"));
+    sheets.get(8).add(workflowNode("START", "开始", "START", null, 1));
+    sheets.get(8).add(workflowNode("NODE_IMPORT", "客户导入", "JOB", "JOB_IMPORT_CUSTOMER", 2));
+    sheets.get(8).add(workflowNode("NODE_EXPORT", "客户导出", "JOB", "JOB_EXPORT_CUSTOMER", 3));
+    sheets.get(8).add(workflowNode("END", "结束", "END", null, 4));
+    sheets.get(9).add(workflowEdge("START", "NODE_IMPORT"));
+    sheets.get(9).add(workflowEdge("NODE_IMPORT", "NODE_EXPORT"));
+    sheets.get(9).add(workflowEdge("NODE_EXPORT", "END"));
   }
 
   private static Map<String, Object> job(
@@ -454,55 +457,8 @@ public final class ConfigPackageSampleDataFactory {
         "示例文件模板，请按真实文件格式修改");
   }
 
-  private static Map<String, Object> pipeline(String job, String name, String type) {
-    return row(
-        COL_TENANT_ID, TENANT,
-        COL_JOB_CODE, job,
-        COL_PIPELINE_NAME, name,
-        COL_PIPELINE_TYPE, type,
-        COL_BIZ_TYPE, "CUSTOMER",
-        COL_WORKER_GROUP, type.toLowerCase(Locale.ROOT),
-        COL_VERSION, VERSION,
-        COL_ENABLED, true,
-        COL_DESCRIPTION, "示例流水线");
-  }
-
-  private static Map<String, Object> step(
-      String job, String code, String name, String stage, int order, String impl, String params) {
-    return row(
-        COL_JOB_CODE,
-        job,
-        COL_VERSION,
-        VERSION,
-        COL_STEP_CODE,
-        code,
-        COL_STEP_NAME,
-        name,
-        COL_STAGE_CODE,
-        stage,
-        ConfigPackageExcelSchema.PipelineStep.COL_STEP_ORDER,
-        order,
-        ConfigPackageExcelSchema.PipelineStep.COL_IMPL_CODE,
-        impl,
-        ConfigPackageExcelSchema.PipelineStep.COL_STEP_PARAMS,
-        params,
-        COL_TIMEOUT_SECONDS,
-        600,
-        COL_RETRY_POLICY,
-        "NONE",
-        COL_RETRY_MAX_COUNT,
-        0,
-        COL_ENABLED,
-        true);
-  }
-
   private static Map<String, Object> workflowNode(
-      String nodeCode,
-      String nodeName,
-      String nodeType,
-      String relatedJobCode,
-      String relatedPipelineCode,
-      int order) {
+      String nodeCode, String nodeName, String nodeType, String relatedJobCode, int order) {
     return row(
         COL_TENANT_ID,
         TENANT,
@@ -518,8 +474,6 @@ public final class ConfigPackageSampleDataFactory {
         nodeType,
         COL_RELATED_JOB_CODE,
         EmptyChecks.isNull(relatedJobCode) ? "" : relatedJobCode,
-        COL_RELATED_PIPELINE_CODE,
-        EmptyChecks.isNull(relatedPipelineCode) ? "" : relatedPipelineCode,
         COL_WORKER_GROUP,
         "workflow",
         COL_WINDOW_CODE,

@@ -39,9 +39,9 @@ class TriggerProxyJsonContractTest {
         .expect(requestTo("http://trigger.test/api/triggers/management/list?tenantId=ta"))
         .andRespond(withSuccess("""
             {"code":"SUCCESS","data":[
-              {"tenantId":"ta","jobCode":"JOB_A","status":"NORMAL","nextFireTime":"2026-10-07T00:00:00Z"},
-              {"tenantId":"tb","jobCode":"JOB_B","status":"NORMAL"},
-              {"jobCode":"UNKNOWN","status":"NORMAL"}
+              {"tenantId":"ta","workflowCode":"WF_A","status":"NORMAL","nextFireTime":"2026-10-07T00:00:00Z"},
+              {"tenantId":"tb","workflowCode":"WF_B","status":"NORMAL"},
+              {"workflowCode":"UNKNOWN","status":"NORMAL"}
             ]}
             """, MediaType.APPLICATION_JSON));
     TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
@@ -54,8 +54,30 @@ class TriggerProxyJsonContractTest {
     List<ConsoleTriggerStatusResponse> rows =
         new DefaultConsoleTriggerProxyService(factory, guard, fallback).triggerList();
     assertThat(rows).hasSize(1);
-    assertThat(rows.get(0).jobCode()).isEqualTo("JOB_A");
+    assertThat(rows.get(0).workflowCode()).isEqualTo("WF_A");
     assertThat(rows.get(0).nextFireTime()).isEqualTo(Instant.parse("2026-10-07T00:00:00Z"));
+    server.verify();
+  }
+
+  @Test
+  @DisplayName("Workflow 运维动作代理到 Workflow 管理路由并返回 Workflow 编码")
+  void shouldProxyWorkflowAction_whenWorkflowCodeProvided() {
+    RestClient.Builder builder = RestClient.builder().baseUrl("http://trigger.test");
+    MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+    server
+        .expect(
+            requestTo(
+                "http://trigger.test/api/triggers/management/workflow/pause?tenantId=ta&workflowCode=WF_A"))
+        .andRespond(withSuccess(
+            "{\"code\":\"SUCCESS\",\"data\":{\"tenantId\":\"ta\",\"workflowCode\":\"WF_A\",\"status\":\"PAUSED\"}}",
+            MediaType.APPLICATION_JSON));
+    ConsoleTenantGuard guard = mock(ConsoleTenantGuard.class);
+    when(guard.resolveTenant("ta")).thenReturn("ta");
+
+    ConsoleTriggerActionResponse response =
+        writeService(builder, guard).triggerAction("ta", "WF_A", "pause");
+
+    assertThat(response).isEqualTo(new ConsoleTriggerActionResponse("ta", "WF_A", "PAUSED"));
     server.verify();
   }
 
@@ -114,11 +136,16 @@ class TriggerProxyJsonContractTest {
   }
 
   private static DefaultConsoleTriggerProxyService writeService(RestClient.Builder builder) {
+    return writeService(builder, mock(ConsoleTenantGuard.class));
+  }
+
+  private static DefaultConsoleTriggerProxyService writeService(
+      RestClient.Builder builder, ConsoleTenantGuard guard) {
     TriggerInternalRestClient factory = mock(TriggerInternalRestClient.class);
     when(factory.client()).thenReturn(builder.build());
     DownstreamFallback fallback = mock(DownstreamFallback.class);
     when(fallback.callOrThrow(eq("trigger"), any(String.class), any()))
         .thenAnswer(inv -> ((Supplier<?>) inv.getArgument(2)).get());
-    return new DefaultConsoleTriggerProxyService(factory, mock(ConsoleTenantGuard.class), fallback);
+    return new DefaultConsoleTriggerProxyService(factory, guard, fallback);
   }
 }

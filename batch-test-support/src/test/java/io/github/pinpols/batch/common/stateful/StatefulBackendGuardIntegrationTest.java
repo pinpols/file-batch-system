@@ -5,17 +5,27 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
+import io.github.pinpols.batch.common.config.RuntimeInfrastructureInspector;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
+import org.springframework.boot.test.context.FilteredClassLoader;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @DisplayName("真实 PostgreSQL 上的有状态后端身份守卫集成测试: 验证首次部署记录基线, 后端或位置变更需一次性切换凭证, 切换代次与切换历史持久化")
 class StatefulBackendGuardIntegrationTest {
+
+  private static final String FEATURE_KEY = "quota-runtime-state";
 
   private static PostgreSQLContainer postgres;
   private static HikariDataSource dataSource;
@@ -25,17 +35,10 @@ class StatefulBackendGuardIntegrationTest {
   @SuppressWarnings("resource")
   @BeforeAll
   static void startPostgres() {
-    postgres = TestPostgresContainers.platform();
-    postgres.start();
-    HikariConfig config = new HikariConfig();
-    config.setJdbcUrl(postgres.getJdbcUrl());
-    config.setUsername(postgres.getUsername());
-    config.setPassword(postgres.getPassword());
-    config.setMaximumPoolSize(3);
-    dataSource = new HikariDataSource(config);
-    jdbc = new JdbcTemplate(dataSource);
-    jdbc.execute("CREATE SCHEMA batch");
-    jdbc.execute("""
+    final String createSchemaSql = """
+        CREATE SCHEMA batch
+    """;
+    final String createStatefulBackendBindingSql = """
         CREATE TABLE batch.stateful_backend_binding (
           feature_key VARCHAR(160) PRIMARY KEY,
           backend VARCHAR(64) NOT NULL,
@@ -45,8 +48,8 @@ class StatefulBackendGuardIntegrationTest {
           updated_by VARCHAR(160) NOT NULL,
           updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
-        """);
-    jdbc.execute("""
+        """;
+    final String createStatefulBackendCutoverHistorySql = """
         CREATE TABLE batch.stateful_backend_cutover_history (
           id BIGSERIAL PRIMARY KEY,
           feature_key VARCHAR(160) NOT NULL,
@@ -60,12 +63,26 @@ class StatefulBackendGuardIntegrationTest {
           changed_by VARCHAR(160) NOT NULL,
           changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         )
-        """);
-    jdbc.execute("""
+        """;
+    final String createUniqueSql = """
         CREATE UNIQUE INDEX uk_stateful_backend_cutover_token
           ON batch.stateful_backend_cutover_history(feature_key, cutover_id)
           WHERE cutover_id IS NOT NULL
-        """);
+        """;
+
+    postgres = TestPostgresContainers.platform();
+    postgres.start();
+    HikariConfig config = new HikariConfig();
+    config.setJdbcUrl(postgres.getJdbcUrl());
+    config.setUsername(postgres.getUsername());
+    config.setPassword(postgres.getPassword());
+    config.setMaximumPoolSize(3);
+    dataSource = new HikariDataSource(config);
+    jdbc = new JdbcTemplate(dataSource);
+    jdbc.execute(createSchemaSql);
+    jdbc.execute(createStatefulBackendBindingSql);
+    jdbc.execute(createStatefulBackendCutoverHistorySql);
+    jdbc.execute(createUniqueSql);
   }
 
   @AfterAll
@@ -80,22 +97,30 @@ class StatefulBackendGuardIntegrationTest {
 
   @BeforeEach
   void reset() {
-    jdbc.execute("TRUNCATE batch.stateful_backend_cutover_history, batch.stateful_backend_binding");
+    final String truncateStatefulBackendCutoverHistorySql = """
+        TRUNCATE batch.stateful_backend_cutover_history, batch.stateful_backend_binding
+    """;
+
+    jdbc.execute(truncateStatefulBackendCutoverHistorySql);
     guard = new StatefulBackendGuard(dataSource);
   }
 
   @Test
   @DisplayName("首次校验记录后端身份基线, 同一后端再次校验返回已验证, 且切换历史仅落一条基线记录")
   void recordsBaseline_thenVerifiesSameBackend() {
+    final String selectCountSql = """
+        SELECT count(*) FROM batch.stateful_backend_cutover_history
+    """;
+
     StatefulBackendGuard.DesiredBackend redis =
         desired("redis", "host=valkey|port=6379|db=0", null);
 
     assertThat(guard.verify(redis).action())
         .isEqualTo(StatefulBackendGuard.GuardAction.BASELINE_RECORDED);
     assertThat(guard.verify(redis).action()).isEqualTo(StatefulBackendGuard.GuardAction.VERIFIED);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM batch.stateful_backend_cutover_history", Long.class))
-        .isEqualTo(1L);
+    Long selectedStatefulBackendCutoverHistoryCount =
+        jdbc.queryForObject(selectCountSql, Long.class);
+    assertThat(selectedStatefulBackendCutoverHistoryCount).isEqualTo(1L);
   }
 
   @Test
@@ -167,9 +192,105 @@ class StatefulBackendGuardIntegrationTest {
         .isEqualTo(StatefulBackendGuard.GuardAction.CUTOVER_RECORDED);
   }
 
+  @ParameterizedTest
+  @ValueSource(strings = {"database", "redis", "filesystem", "s3"})
+  @DisplayName("仅资源名大小写改变也必须拒绝无凭据切换，原登记和审计保持不变")
+  void shouldRejectUnmarkedResourceCaseChange_whenIdentityIsPersisted(String backend) {
+    String originalIdentity = caseSensitiveIdentity(backend, "Orders");
+    String otherIdentity = caseSensitiveIdentity(backend, "orders");
+    guard.verify(desired(backend, originalIdentity, null));
+
+    assertThatThrownBy(() -> guard.verify(desired(backend, otherIdentity, null)))
+        .isInstanceOf(StatefulBackendSwitchRejectedException.class);
+
+    String bindingSql = """
+        SELECT backend_identity FROM batch.stateful_backend_binding
+        WHERE feature_key = ?
+        """;
+    String registeredIdentity = jdbc.queryForObject(bindingSql, String.class, FEATURE_KEY);
+    assertThat(registeredIdentity).isEqualTo(originalIdentity);
+    String historySql = """
+        SELECT count(*) FROM batch.stateful_backend_cutover_history
+        WHERE feature_key = ?
+        """;
+    Long historyCount = jdbc.queryForObject(historySql, Long.class, FEATURE_KEY);
+    assertThat(historyCount).isEqualTo(1L);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "url",
+        "sentinel-indexed",
+        "cluster-indexed",
+        "masterreplica-indexed",
+        "connection-details"
+      })
+  @DisplayName("生效Redis节点改变必须触发持久守卫拒绝，URL和列表配置不能绕过")
+  void shouldRejectEffectiveRedisLocationChange_whenBindingIsPersisted(String scenario) {
+    redisRunner(scenario, "redis-a").run(first -> {
+      String original = first.getBean(RuntimeInfrastructureInspector.class).redisBackendIdentity();
+      guard.verify(desired("redis", original, null));
+      redisRunner(scenario, "redis-b").run(second -> {
+        String target = second.getBean(RuntimeInfrastructureInspector.class).redisBackendIdentity();
+        assertThatThrownBy(() -> guard.verify(desired("redis", target, null)))
+            .isInstanceOf(StatefulBackendSwitchRejectedException.class);
+      });
+      String bindingSql = """
+        SELECT backend_identity FROM batch.stateful_backend_binding
+        WHERE feature_key = ?
+        """;
+      String registeredIdentity = jdbc.queryForObject(bindingSql, String.class, FEATURE_KEY);
+      assertThat(registeredIdentity).isEqualTo(original).doesNotContain("alice", "secret");
+      String historySql = """
+        SELECT count(*) FROM batch.stateful_backend_cutover_history
+        WHERE feature_key = ?
+        """;
+      Long historyCount = jdbc.queryForObject(historySql, Long.class, FEATURE_KEY);
+      assertThat(historyCount).isEqualTo(1L);
+    });
+  }
+
+  private static ApplicationContextRunner redisRunner(String scenario, String node) {
+    ApplicationContextRunner runner = new ApplicationContextRunner()
+        .withClassLoader(new FilteredClassLoader("io.lettuce", "redis.clients.jedis"))
+        .withConfiguration(AutoConfigurations.of(DataRedisAutoConfiguration.class))
+        .withUserConfiguration(RuntimeInfrastructureInspector.class);
+    return switch (scenario) {
+      case "url" ->
+        runner.withPropertyValues("spring.data.redis.url=redis://alice:secret@" + node + ":6379/1");
+      case "sentinel-indexed" ->
+        runner.withPropertyValues(
+            "spring.data.redis.sentinel.master=orders",
+            "spring.data.redis.sentinel.nodes[0]=" + node + ":26379");
+      case "cluster-indexed" ->
+        runner.withPropertyValues("spring.data.redis.cluster.nodes[0]=" + node + ":6379");
+      case "masterreplica-indexed" ->
+        runner.withPropertyValues("spring.data.redis.masterreplica.nodes[0]=" + node + ":6379");
+      case "connection-details" ->
+        runner.withBean(DataRedisConnectionDetails.class, () -> new DataRedisConnectionDetails() {
+          @Override
+          public Standalone getStandalone() {
+            return Standalone.of(node, 6379, 0);
+          }
+        });
+      default -> throw new IllegalArgumentException(scenario);
+    };
+  }
+
+  private static String caseSensitiveIdentity(String backend, String resource) {
+    return switch (backend) {
+      case "database" -> StatefulBackendIdentity.database("jdbc:postgresql://db/" + resource);
+      case "redis" -> StatefulBackendIdentity.redis("ignored", 6379, 0, resource, "redis:26379");
+      case "filesystem" -> StatefulBackendIdentity.filesystem("./target/store", resource);
+      case "s3" -> StatefulBackendIdentity.s3("https://store/" + resource, "us-east-1", "batch");
+      default -> throw new IllegalArgumentException(backend);
+    };
+  }
+
   private StatefulBackendGuard.DesiredBackend desired(
       String backend, String identity, String cutoverId) {
     return new StatefulBackendGuard.DesiredBackend(
-        "quota-runtime-state", backend, identity, cutoverId, "integration-test");
+        FEATURE_KEY, backend, identity, cutoverId, "integration-test");
   }
 }

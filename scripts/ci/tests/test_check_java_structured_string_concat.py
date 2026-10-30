@@ -1,3 +1,5 @@
+# 用途：Java 结构化多行字符串门禁测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_java_structured_string_concat.py。
 import importlib.util
 import sys
 import unittest
@@ -12,6 +14,15 @@ SPEC.loader.exec_module(MODULE)
 
 
 class StructuredStringConcatTest(unittest.TestCase):
+    def test_ignores_redacted_diagnostic_description(self):
+        source = '''class Example {
+  String description = "Source[id=" + id
+      + ", definitionId=" + definitionId
+      + ", version=" + version
+      + ", rootParams=<redacted>]";
+}'''
+        self.assertEqual([], MODULE.scan_source(source))
+
     def test_detects_multiline_json_fixture(self):
         source = r'''class Example {
   String body = "{" +

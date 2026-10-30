@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.dataquality;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome.GateStatus;
@@ -68,10 +69,11 @@ public class DataQualityCheckExecutor {
     if (properties.getMode() == DataQualityProperties.Mode.OFF) {
       return DataQualityGateOutcome.noRules();
     }
-    if (instance == null
+    boolean dataQualityInputIsIncomplete = EmptyChecks.isNull(instance)
         || instance.getId() == null
         || !Texts.hasText(instance.getTenantId())
-        || !Texts.hasText(businessKey)) {
+        || !Texts.hasText(businessKey);
+    if (dataQualityInputIsIncomplete) {
       return DataQualityGateOutcome.noRules();
     }
     List<DataQualityRuleEntity> rules =
@@ -174,11 +176,13 @@ public class DataQualityCheckExecutor {
       threshold = JsonUtils.fromJson(thresholdJson, Map.class);
     } catch (Exception ex) {
       // thresholdJson 配置坏了不能静默翻转判定语义:留痕后仍走原 fallback(actual > 0)。
+      String thresholdJsonForLog =
+          thresholdJson.length() <= 200 ? thresholdJson : thresholdJson.substring(0, 200) + "...";
       log.warn(
           "DQ thresholdJson parse failed, falling back to 'actual > 0': ruleCode={},"
               + " thresholdJson={}, cause={}",
           ruleCode,
-          thresholdJson.length() <= 200 ? thresholdJson : thresholdJson.substring(0, 200) + "...",
+          thresholdJsonForLog,
           SwallowedExceptionLogger.summary(ex));
       return actual > 0;
     }
@@ -201,18 +205,8 @@ public class DataQualityCheckExecutor {
       String severity,
       String status,
       Instant now) {
-    writeCheck(instance, rule, severity, status, null, null, now);
-  }
-
-  private void writeCheck(
-      JobInstanceEntity instance,
-      DataQualityRuleEntity rule,
-      String severity,
-      String status,
-      String metricsJson,
-      String failureSample,
-      Instant now) {
-    Map<String, Object> metrics = metricsJson == null ? new LinkedHashMap<>() : Map.of();
+    Map<String, Object> metrics = new LinkedHashMap<>();
+    String metricsJson = JsonUtils.toJson(metrics);
     DataQualityCheckEntity check = DataQualityCheckEntity.builder()
         .tenantId(instance.getTenantId())
         .jobInstanceId(instance.getId())
@@ -221,8 +215,8 @@ public class DataQualityCheckExecutor {
         .ruleType(rule.getRuleType())
         .severity(severity)
         .status(status)
-        .metricsJson(metricsJson != null ? metricsJson : JsonUtils.toJson(metrics))
-        .failureSample(failureSample)
+        .metricsJson(metricsJson)
+        .failureSample(null)
         .checkedAt(now)
         .build();
     checkMapper.insert(check);

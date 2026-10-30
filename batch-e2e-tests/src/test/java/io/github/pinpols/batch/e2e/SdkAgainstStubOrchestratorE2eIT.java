@@ -22,6 +22,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -121,12 +122,19 @@ class SdkAgainstStubOrchestratorE2eIT {
       }
 
       @Override
+      public boolean isSafeToReplay(SdkTaskContext ctx) {
+        return true;
+      }
+
+      @Override
       public SdkTaskResult execute(SdkTaskContext ctx) {
         Object payload = ctx.parameters().get("payload");
         return SdkTaskResult.ok("echoed:" + payload, Map.of("echoed", payload));
       }
     };
 
+    String frozenEchoPayload = "{\"payload\":\"hello-r3-6\"}";
+    stub.setClaimPayload(424242L, frozenEchoPayload);
     BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
         .baseUrl(stub.baseUrl())
         .tenantId(TENANT)
@@ -140,12 +148,8 @@ class SdkAgainstStubOrchestratorE2eIT {
         .build();
 
     BatchPlatformClient client = BatchPlatformClient.builder(cfg).register(echo).build();
-    client.start();
     try {
-      // 等 consumer 订阅生效 — 真 broker rebalance 比 EmbeddedKafka 慢一点,给 3s 缓冲
-      // 再发派单,否则 auto.offset.reset=latest 会让消息被 skip
-      Thread.sleep(3_000);
-
+      // 待执行消息可能先于 SDK 上线；没有提交位点时必须消费保留的义务。
       // 执行 — 真 Kafka 发派单消息
       var msg = TaskDispatchMessageBuilder.dispatch("r3_6_echo")
           .tenantId(TENANT)
@@ -156,6 +160,7 @@ class SdkAgainstStubOrchestratorE2eIT {
       producer
           .send(new ProducerRecord<>(TOPIC, String.valueOf(msg.taskId()), body))
           .get();
+      client.start();
 
       // 断言 — REPORT 在 30s 内到达 stub,内容正确
       RecordedReport report = stub.awaitReport(424242L, Duration.ofSeconds(30));
@@ -166,6 +171,98 @@ class SdkAgainstStubOrchestratorE2eIT {
       // SDK 经过了 register + claim,证明 wire 协议端到端通
       assertThat(stub.registrations()).isNotEmpty();
       assertThat(stub.claims()).contains(424242L);
+      assertThat(report.raw().get("partitionInvocationId")).isEqualTo(stub.invocation(424242L));
+      assertThat(stub.nonIdempotentStarts()).doesNotContainKey(424242L);
+    } finally {
+      client.stop();
+    }
+  }
+
+  @Test
+  @DisplayName("真实 Kafka SDK handler 读取 CLAIM 固定的跨日版本，不读派单中的冲突值")
+  void shouldConsumePinnedVersion_whenClaimIncludesCrossDayDependency() throws Exception {
+    long taskId = 424243L;
+    String pinnedPayload = """
+        {"crossDay":{"prior_day":{"resultVersionId":701,"versionNo":1,
+          "businessKey":"job:DAILY_PNL:2026-10-16","jobInstanceId":601,
+          "payloadStorage":"INLINE_JSON","output":{"recordCount":17,
+          "sourceBatch":"selected-v1"}}}}
+        """;
+    stub.setClaimPayload(taskId, pinnedPayload);
+    SdkTaskHandler consumer = new SdkTaskHandler() {
+      @Override
+      public String taskType() {
+        return "r17_cross_day_consumer";
+      }
+
+      @Override
+      public boolean isSafeToReplay(SdkTaskContext ctx) {
+        return true;
+      }
+
+      @Override
+      public SdkTaskResult execute(SdkTaskContext ctx) {
+        var selected = ctx.crossDayResults("prior_day").getFirst();
+        return SdkTaskResult.ok(
+            "consumed result version " + selected.resultVersionId(),
+            Map.of(
+                "resultVersionId", selected.resultVersionId(),
+                "recordCount", selected.output().get("recordCount"),
+                "sourceBatch", selected.output().get("sourceBatch")));
+      }
+    };
+    BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
+        .baseUrl(stub.baseUrl())
+        .tenantId(TENANT)
+        .workerCode("r17-worker")
+        .kafkaBootstrap(KAFKA.getBootstrapServers())
+        .kafkaTopicPattern(TOPIC_PATTERN)
+        .kafkaGroupId("r17-pinned-cross-day-group")
+        .heartbeatInterval(Duration.ofSeconds(30))
+        .leaseRenewInterval(Duration.ofSeconds(30))
+        .kafkaPollInterval(Duration.ofMillis(100))
+        .build();
+
+    BatchPlatformClient client =
+        BatchPlatformClient.builder(cfg).register(consumer).build();
+    client.start();
+    try {
+      Thread.sleep(3_000);
+      var msg = TaskDispatchMessageBuilder.dispatch("r17_cross_day_consumer")
+          .tenantId(TENANT)
+          .taskId(taskId)
+          .param(
+              "crossDay",
+              Map.of(
+                  "prior_day",
+                  Map.of(
+                      "resultVersionId",
+                      702L,
+                      "versionNo",
+                      2,
+                      "businessKey",
+                      "job:DAILY_PNL:2026-10-16",
+                      "jobInstanceId",
+                      602L,
+                      "payloadStorage",
+                      "INLINE_JSON",
+                      "output",
+                      Map.of("recordCount", 99, "sourceBatch", "newer-v2"))))
+          .build();
+      producer
+          .send(new ProducerRecord<>(
+              TOPIC, String.valueOf(taskId), new ObjectMapper().writeValueAsBytes(msg)))
+          .get();
+
+      RecordedReport report = stub.awaitReport(taskId, Duration.ofSeconds(30));
+      assertThat(report.success()).isTrue();
+      assertThat(report.message()).isEqualTo("consumed result version 701");
+      assertThat(report.outputs())
+          .containsEntry("resultVersionId", 701)
+          .containsEntry("recordCount", 17)
+          .containsEntry("sourceBatch", "selected-v1");
+      assertThat(report.raw().get("partitionInvocationId")).isEqualTo(stub.invocation(taskId));
+      assertThat(stub.nonIdempotentStarts()).doesNotContainKey(taskId);
     } finally {
       client.stop();
     }
@@ -174,9 +271,9 @@ class SdkAgainstStubOrchestratorE2eIT {
   // ─── 嵌入 HTTP stub orchestrator(testkit FakeBatchPlatform 的最小子集,只走 HTTP 端,不带 EmbeddedKafka) ───
 
   /**
-   * 最小化 orchestrator HTTP stub —— 录 register / claim / report 体,全部 200,够 SDK 跑完一轮。
+   * 最小化 orchestrator HTTP stub：录 register/claim/report，并以平台生成的当前身份校验任务操作。
    *
-   * <p>本 stub 不做协议字段强校验(那是 SDK 单测的事),只验"SDK 真发了 HTTP + 体能被反序列化 + 路径正确"。
+   * <p>它仍不模拟数据库恢复；身份与冻结载荷需要符合真实 SDK 执行的最低协议。
    */
   private static final class StubOrchestrator implements AutoCloseable {
 
@@ -185,6 +282,12 @@ class SdkAgainstStubOrchestratorE2eIT {
     private final String baseUrl;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<Long, RecordedReport> reports = new ConcurrentHashMap<>();
+    private final Map<Long, String> claimPayloads = new ConcurrentHashMap<>();
+
+    private record ClaimedExecution(String tenantId, String workerId, String invocationId) {}
+
+    private final Map<Long, ClaimedExecution> claimedExecutions = new ConcurrentHashMap<>();
+    private final Map<Long, String> nonIdempotentStarts = new ConcurrentHashMap<>();
     private final List<Map<String, Object>> registrations = new CopyOnWriteArrayList<>();
     private final List<Long> claims = new CopyOnWriteArrayList<>();
 
@@ -215,6 +318,19 @@ class SdkAgainstStubOrchestratorE2eIT {
       return List.copyOf(claims);
     }
 
+    void setClaimPayload(long taskId, String payload) {
+      claimPayloads.put(taskId, payload);
+    }
+
+    String invocation(long taskId) {
+      ClaimedExecution current = claimedExecutions.get(taskId);
+      return current == null ? null : current.invocationId();
+    }
+
+    Map<Long, String> nonIdempotentStarts() {
+      return Map.copyOf(nonIdempotentStarts);
+    }
+
     RecordedReport awaitReport(long taskId, Duration timeout) {
       long deadline = System.nanoTime() + timeout.toNanos();
       while (System.nanoTime() < deadline) {
@@ -240,6 +356,10 @@ class SdkAgainstStubOrchestratorE2eIT {
         if (path.endsWith("/register")) {
           registrations.add(body);
         } else if (path.endsWith("/report")) {
+          if (!hasCurrentClaimOwner(path, body)) {
+            respond(exchange, 409);
+            return;
+          }
           Long taskId = asLong(body.get("taskId"));
           if (taskId != null) {
             reports.put(
@@ -256,15 +376,59 @@ class SdkAgainstStubOrchestratorE2eIT {
           }
         } else if (path.endsWith("/claim")) {
           Long taskId = parseTaskIdFromPath(path);
-          if (taskId != null) {
-            claims.add(taskId);
+          String workerId = body.get("workerId") instanceof String value ? value : null;
+          if (taskId == null
+              || !claimPayloads.containsKey(taskId)
+              || !TENANT.equals(body.get("tenantId"))
+              || workerId == null
+              || workerId.isBlank()) {
+            respond(exchange, 409);
+            return;
           }
+          ClaimedExecution candidate =
+              new ClaimedExecution(TENANT, workerId, UUID.randomUUID().toString());
+          ClaimedExecution existing = claimedExecutions.putIfAbsent(taskId, candidate);
+          ClaimedExecution current = existing == null ? candidate : existing;
+          if (!current.tenantId().equals(body.get("tenantId"))
+              || !current.workerId().equals(workerId)) {
+            respond(exchange, 409);
+            return;
+          }
+          claims.add(taskId);
+          Map<String, Object> response = Map.of(
+              "partitionInvocationId", current.invocationId(),
+              "payload", claimPayloads.get(taskId),
+              "dependencyResultSnapshot", List.of());
+          byte[] responseBody = mapper.writeValueAsBytes(response);
+          respond(exchange, 200, responseBody);
+          return;
+        } else if (path.endsWith("/non-idempotent-started")) {
+          if (!"POST".equals(exchange.getRequestMethod()) || !hasCurrentClaimOwner(path, body)) {
+            respond(exchange, 409);
+            return;
+          }
+          Long taskId = parseTaskIdFromPath(path);
+          nonIdempotentStarts.put(taskId, claimedExecutions.get(taskId).invocationId());
+        } else if (path.endsWith("/renew") && !hasCurrentClaimOwner(path, body)) {
+          respond(exchange, 409);
+          return;
         }
-        // heartbeat / deactivate / renew / 其他 → 直接 200
+        // 非任务生命周期请求保留原有轻量录制行为。
         respond(exchange, 200);
       } catch (RuntimeException e) {
         respond(exchange, 500);
       }
+    }
+
+    private boolean hasCurrentClaimOwner(String path, Map<String, Object> body) {
+      Long taskId = parseTaskIdFromPath(path);
+      ClaimedExecution current = taskId == null ? null : claimedExecutions.get(taskId);
+      Long reportedTaskId = asLong(body.get("taskId"));
+      return current != null
+          && (reportedTaskId == null || taskId.equals(reportedTaskId))
+          && current.tenantId().equals(body.get("tenantId"))
+          && current.workerId().equals(body.get("workerId"))
+          && current.invocationId().equals(body.get("partitionInvocationId"));
     }
 
     @SuppressWarnings("unchecked")
@@ -297,10 +461,14 @@ class SdkAgainstStubOrchestratorE2eIT {
     }
 
     private static void respond(HttpExchange exchange, int status) throws IOException {
+      respond(exchange, status, OK);
+    }
+
+    private static void respond(HttpExchange exchange, int status, byte[] body) throws IOException {
       exchange.getResponseHeaders().add("Content-Type", "application/json");
-      exchange.sendResponseHeaders(status, OK.length);
+      exchange.sendResponseHeaders(status, body.length);
       try (OutputStream os = exchange.getResponseBody()) {
-        os.write(OK);
+        os.write(body);
       }
     }
 

@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS batch.compensation_checkpoint (
     id              BIGSERIAL PRIMARY KEY,
     tenant_id       VARCHAR(64)  NOT NULL,
     compensation_id VARCHAR(128) NOT NULL,
-    handler_code    VARCHAR(64)  NOT NULL,  -- JOB / STEP / PARTITION / ...
+    -- JOB / STEP / PARTITION / ...
+    handler_code    VARCHAR(64)  NOT NULL,
     step_order      INTEGER      NOT NULL,
     step_name       VARCHAR(128) NOT NULL,
     status          VARCHAR(32)  NOT NULL DEFAULT 'PENDING',

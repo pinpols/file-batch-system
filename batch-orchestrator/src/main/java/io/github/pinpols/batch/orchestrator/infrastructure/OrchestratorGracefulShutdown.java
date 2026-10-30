@@ -60,9 +60,10 @@ public class OrchestratorGracefulShutdown
       startDraining("context-closed");
     } catch (RuntimeException ex) {
       // 上下文正在关闭时，即使 listener 尚未注册或 pause 失败，也不能阻止 Spring 继续关闭容器。
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.error(
           "failed to pause trigger launch listener during shutdown; Spring will close it with the context: {}",
-          SwallowedExceptionLogger.summary(ex),
+          causeSummary,
           ex);
       beginDrainState("context-closed");
       publishReadiness(ReadinessState.REFUSING_TRAFFIC);
@@ -121,10 +122,9 @@ public class OrchestratorGracefulShutdown
     try {
       AvailabilityChangeEvent.publish(eventPublisher, this, state);
     } catch (RuntimeException ex) {
-      log.warn(
-          "publish readiness state {} failed (non-fatal): {}",
-          state,
-          SwallowedExceptionLogger.summary(ex));
+      ReadinessState failedState = state;
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("publish readiness state {} failed (non-fatal): {}", failedState, causeSummary);
     }
   }
 

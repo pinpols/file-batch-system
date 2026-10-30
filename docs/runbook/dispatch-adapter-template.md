@@ -47,6 +47,12 @@ final class XxxDispatchChannelAdapter implements DispatchChannelAdapter {
 - `READBACK`: 若声明支持回读验证，必须实现实际读取和 checksum/size 校验。
 - `SIZE_LIMIT`: 邮件、HTTP body、对象分片必须有大小上限。
 
+## SFTP 运维要求
+
+SFTP 严格主机密钥验证按渠道配置的原始主机名匹配 `known_hosts`；默认 22 端口使用 `hostname`，非默认端口使用 `[hostname]:port`。部署前将服务端可信公钥写入配置的 `sftp_known_hosts_path`。同名文件替换依赖服务端安全 rename；服务端不支持时发布失败并保留旧目标，不自动删除目标降级重试。
+
+重命名已发送但连接异常时，远端可能已经完成发布；此类结果标为 `EXTERNAL_OUTCOME_UNKNOWN`，应先核对远端目标和校验信息，再按结果不明处置流程操作。
+
 ## 明确不做
 
 - 不开放任意第三方 adapter 通过 `supports()` 动态接入新类型。

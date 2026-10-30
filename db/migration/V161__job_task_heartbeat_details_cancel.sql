@@ -27,6 +27,7 @@ ALTER TABLE batch.job_task
     ADD COLUMN IF NOT EXISTS cancel_requested BOOLEAN NOT NULL DEFAULT false;
 
 -- archive 镜像同步（archive schema drift check 强制 1:1 镜像）
+
 ALTER TABLE archive.job_task_archive
     ADD COLUMN IF NOT EXISTS heartbeat_details JSONB,
     ADD COLUMN IF NOT EXISTS heartbeat_at TIMESTAMPTZ,

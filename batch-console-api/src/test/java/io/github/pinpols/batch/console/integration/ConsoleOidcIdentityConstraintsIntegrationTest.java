@@ -50,9 +50,14 @@ class ConsoleOidcIdentityConstraintsIntegrationTest extends AbstractIntegrationT
 
   @AfterEach
   void cleanUp() {
-    jdbcTemplate.update("delete from batch.console_user_account where username = ?", username);
-    jdbcTemplate.update(
-        "delete from batch.tenant where tenant_id in (?, ?)", tenantId, otherTenantId);
+    String deleteConsoleUserAccountSql = """
+        delete from batch.console_user_account where username = ?
+    """;
+    jdbcTemplate.update(deleteConsoleUserAccountSql, username);
+    String deleteTenantsSql = """
+        delete from batch.tenant where tenant_id in (?, ?)
+    """;
+    jdbcTemplate.update(deleteTenantsSql, tenantId, otherTenantId);
   }
 
   @Test
@@ -89,47 +94,47 @@ class ConsoleOidcIdentityConstraintsIntegrationTest extends AbstractIntegrationT
     assertThat(mapped.getTenantId()).isEqualTo(tenantId);
     assertThat(mapped.getAuthoritiesCsv()).isEqualTo("ROLE_TENANT_USER");
 
-    jdbcTemplate.update(
-        "update batch.console_user_account set enabled = false where id = ?", accountId);
+    String disableConsoleUserAccountSql = """
+        update batch.console_user_account set enabled = false where id = ?
+    """;
+    jdbcTemplate.update(disableConsoleUserAccountSql, accountId);
     assertThat(identityMapper.findEnabledAccount(
             tenantId, "https://idp.example.test", "subject-exact"))
         .isEmpty();
   }
 
   private void insertTenant(String id) {
-    jdbcTemplate.update(
-        "insert into batch.tenant (tenant_id, tenant_name, status, created_by) "
-            + "values (?, ?, 'ACTIVE', 'oidc-it')",
-        id,
-        id);
+    String insertTenantSql = """
+        insert into batch.tenant (tenant_id, tenant_name, status, created_by)
+        values (?, ?, 'ACTIVE', 'oidc-it')
+        """;
+    jdbcTemplate.update(insertTenantSql, id, id);
   }
 
   private long insertAccount(String tenant, String accountUsername) {
+    String insertConsoleUserAccountSql = """
+        insert into batch.console_user_account
+            (tenant_id, username, display_name, password_hash, authorities_csv, enabled)
+        values (?, ?, 'OIDC IT', 'test-only-not-a-password', 'ROLE_TENANT_USER', true)
+        returning id
+        """;
     return jdbcTemplate.queryForObject(
-        "insert into batch.console_user_account "
-            + "(tenant_id, username, display_name, password_hash, authorities_csv, enabled) "
-            + "values (?, ?, 'OIDC IT', 'test-only-not-a-password', 'ROLE_TENANT_USER', true) "
-            + "returning id",
-        Long.class,
-        tenant,
-        accountUsername);
+        insertConsoleUserAccountSql, Long.class, tenant, accountUsername);
   }
 
   private void insertIdentity(String tenant, long account, String subject) {
-    jdbcTemplate.update(
-        "insert into batch.console_external_identity "
-            + "(tenant_id, account_id, issuer, subject, linked_by) "
-            + "values (?, ?, 'https://idp.example.test', ?, 'oidc-it-admin')",
-        tenant,
-        account,
-        subject);
+    String insertExternalIdentitySql = """
+        insert into batch.console_external_identity
+            (tenant_id, account_id, issuer, subject, linked_by)
+        values (?, ?, 'https://idp.example.test', ?, 'oidc-it-admin')
+        """;
+    jdbcTemplate.update(insertExternalIdentitySql, tenant, account, subject);
   }
 
   private int identityCount() {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.console_external_identity where tenant_id in (?, ?)",
-        Integer.class,
-        tenantId,
-        otherTenantId);
+    String identityCountSql = """
+        select count(*) from batch.console_external_identity where tenant_id in (?, ?)
+        """;
+    return jdbcTemplate.queryForObject(identityCountSql, Integer.class, tenantId, otherTenantId);
   }
 }

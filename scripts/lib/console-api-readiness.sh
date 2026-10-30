@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：仅判断 Console API 是否已响应 Actuator JSON；依赖 DOWN 时聚合健康端点可返回 HTTP 503。
+# 用法：由调用脚本 source scripts/lib/console-api-readiness.sh 后使用公共变量或函数。
 
 # 仅判断 Console API 是否已响应 Actuator JSON；依赖 DOWN 时聚合健康端点可返回 HTTP 503。
 console_api_is_ready() {

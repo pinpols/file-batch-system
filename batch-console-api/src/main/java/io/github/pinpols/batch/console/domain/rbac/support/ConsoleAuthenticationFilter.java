@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -42,7 +43,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * </ol>
  *
  * <p>历史：第 3 条 Legacy X-Console-Token 共享密钥路径已于 2026-04-30 物理删除（S5-d）。详见
- * docs/archive/analysis/project-assessment-2026-04-29.md §8 S5-d 修订记录。
+ * docs/architecture/security-model.md 的认证边界。
  *
  * <p>{@code finally clearContext()} 回退：不论哪条认证链执行或抛异常，都清理 {@code SecurityContextHolder}， 防止容器线程池复用时
  * ThreadLocal 污染下一个请求。
@@ -152,7 +153,7 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
             return;
           }
 
-          // P1-2 fix(2026-06-03,docs/archive/analysis/2026-06-03-deep-scan-be-security.md):
+          // P1-2 fix(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
           // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
           // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
           // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
@@ -172,12 +173,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
           String username = resolveUsername(request);
           String tenantId = resolveTenant(request);
           Set<SimpleGrantedAuthority> authorities = resolveAuthorities(request);
-          ConsolePrincipal principal = new ConsolePrincipal(
-              username,
-              tenantId,
-              authorities.stream()
-                  .map(SimpleGrantedAuthority::getAuthority)
-                  .collect(Collectors.toCollection(LinkedHashSet::new)));
+          Set<String> principalAuthorities = authorities.stream()
+              .map(SimpleGrantedAuthority::getAuthority)
+              .collect(Collectors.toCollection(LinkedHashSet::new));
+          ConsolePrincipal principal =
+              new ConsolePrincipal(username, tenantId, principalAuthorities);
           setAuthentication(principal, "bypass-mode");
         } catch (IllegalArgumentException exception) {
           SwallowedExceptionLogger.info(
@@ -199,12 +199,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private void setAuthentication(ConsolePrincipal principal, String credentials) {
-    UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-        principal,
-        credentials,
-        principal.authorities().stream()
-            .map(SimpleGrantedAuthority::new)
-            .collect(Collectors.toCollection(LinkedHashSet::new)));
+    Set<SimpleGrantedAuthority> grantedAuthorities = principal.authorities().stream()
+        .map(SimpleGrantedAuthority::new)
+        .collect(Collectors.toCollection(LinkedHashSet::new));
+    UsernamePasswordAuthenticationToken authentication =
+        new UsernamePasswordAuthenticationToken(principal, credentials, grantedAuthorities);
     SecurityContextHolder.getContext().setAuthentication(authentication);
   }
 
@@ -226,11 +225,11 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
   }
 
   private String resolveCookieToken(HttpServletRequest request) {
-    jakarta.servlet.http.Cookie[] cookies = request.getCookies();
+    Cookie[] cookies = request.getCookies();
     if (cookies == null) {
       return null;
     }
-    for (jakarta.servlet.http.Cookie cookie : cookies) {
+    for (Cookie cookie : cookies) {
       if (CONSOLE_TOKEN_COOKIE.equals(cookie.getName())) {
         String value = cookie.getValue();
         if (Texts.hasText(value)) {

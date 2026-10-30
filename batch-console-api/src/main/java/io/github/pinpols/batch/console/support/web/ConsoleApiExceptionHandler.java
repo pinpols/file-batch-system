@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.support.web;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.constants.CommonConstants;
-import io.github.pinpols.batch.common.constants.CommonErrorMessages;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -13,8 +12,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.persistence.PostgresConstraintViolation;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
+import java.util.Objects;
 import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -90,21 +91,42 @@ public class ConsoleApiExceptionHandler {
 
   @ExceptionHandler(BizException.class)
   public ResponseEntity<CommonResponse<Object>> handleBizException(BizException exception) {
-    log.warn(
-        "console biz exception: code={} message={}",
-        exception.getCode(),
-        SwallowedExceptionLogger.summary(exception));
-    String message =
-        bizMessageResolver == null ? exception.getMessage() : bizMessageResolver.resolve(exception);
-    return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(responseFactory.failure(exception.getCode(), message));
+    if (isExpectedUnavailableTaskClaim(exception)) {
+      log.info(
+          "console task claim not accepted: code={} key={}",
+          exception.getCode(),
+          exception.getMessageKey());
+    } else {
+      log.warn(
+          "console biz exception: code={} message={}",
+          exception.getCode(),
+          SwallowedExceptionLogger.summary(exception));
+    }
+    String message = EmptyChecks.isNull(bizMessageResolver)
+        ? (EmptyChecks.isNull(exception.getMessageKey())
+            ? exception.getMessage()
+            : exception.getCode().label())
+        : bizMessageResolver.resolve(exception);
+    ResponseEntity.BodyBuilder response =
+        ResponseEntity.status(exception.getCode().httpStatus());
+    ResultCode code = exception.getCode();
+    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+    return response.body(failureBody);
+  }
+
+  private static boolean isExpectedUnavailableTaskClaim(BizException exception) {
+    return ResultCode.NOT_FOUND.equals(exception.getCode())
+        && "error.task.claim_not_available".equals(exception.getMessageKey());
   }
 
   @ExceptionHandler(SystemException.class)
   public ResponseEntity<CommonResponse<Object>> handleSystemException(SystemException exception) {
     log.error("console system exception", exception);
-    return ResponseEntity.status(exception.getCode().httpStatus())
-        .body(responseFactory.failure(exception.getCode(), exception.getMessage()));
+    ResultCode code = exception.getCode();
+    int status = code.httpStatus();
+    String message = resolveCommonCode(code);
+    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+    return ResponseEntity.status(status).body(failureBody);
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -114,10 +136,12 @@ public class ConsoleApiExceptionHandler {
     String message = exception.getBindingResult().getFieldErrors().stream()
         .map(FieldError::getDefaultMessage)
         .collect(Collectors.joining("; "));
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(
-            ResultCode.VALIDATION_ERROR,
-            message.isBlank() ? CommonErrorMessages.VALIDATION_FAILED : message));
+    if (EmptyChecks.isBlank(Objects.requireNonNull(message))) {
+      message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
+    }
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(ConstraintViolationException.class)
@@ -125,8 +149,13 @@ public class ConsoleApiExceptionHandler {
       ConstraintViolationException exception) {
     log.warn(
         "console constraint violation exception: {}", SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.VALIDATION_ERROR, exception.getMessage()));
+    String message = exception.getMessage();
+    if (EmptyChecks.isBlank(message)) {
+      message = resolveCommonCode(ResultCode.VALIDATION_ERROR);
+    }
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.VALIDATION_ERROR, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(MissingRequestHeaderException.class)
@@ -137,13 +166,9 @@ public class ConsoleApiExceptionHandler {
         CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(exception.getHeaderName())
             ? ResultCode.MISSING_IDEMPOTENCY_KEY
             : ResultCode.INVALID_ARGUMENT;
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(
-            code,
-            CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER.equalsIgnoreCase(
-                    exception.getHeaderName())
-                ? CommonErrorMessages.MISSING_IDEMPOTENCY_KEY
-                : CommonErrorMessages.INVALID_ARGUMENT));
+    String message = resolveCommonCode(code);
+    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
@@ -151,26 +176,32 @@ public class ConsoleApiExceptionHandler {
       HttpRequestMethodNotSupportedException exception, HttpServletRequest request) {
     // 405 是客户端调用方法错误，**非 server bug**。打印请求行 + 支持的方法即可，
     // 不打 stack trace（避免 console.log 噪音 + 让运维一眼看出问题）。
+    String safeRequestMethod = LogSanitizer.value(request.getMethod());
+    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
     log.warn(
         "console method not supported: {} {} (supported: {})",
-        LogSanitizer.value(request.getMethod()),
-        LogSanitizer.value(request.getRequestURI()),
+        safeRequestMethod,
+        safeRequestUri,
         exception.getSupportedHttpMethods());
-    return ResponseEntity.status(405)
-        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.status(405).body(failureBody);
   }
 
   @ExceptionHandler({AuthorizationDeniedException.class, AccessDeniedException.class})
   public ResponseEntity<CommonResponse<Object>> handleAccessDenied(
       Exception exception, HttpServletRequest request) {
     // 403 同样是 client / config 问题非 server bug，打印请求行 + 异常 message。
+    String safeRequestMethod = LogSanitizer.value(request.getMethod());
+    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+    String exceptionSummary = SwallowedExceptionLogger.summary(exception);
     log.warn(
-        "console access denied: {} {} - {}",
-        LogSanitizer.value(request.getMethod()),
-        LogSanitizer.value(request.getRequestURI()),
-        SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.status(ResultCode.FORBIDDEN.httpStatus())
-        .body(responseFactory.failure(ResultCode.FORBIDDEN, CommonErrorMessages.ACCESS_DENIED));
+        "console access denied: {} {} - {}", safeRequestMethod, safeRequestUri, exceptionSummary);
+    int status = ResultCode.FORBIDDEN.httpStatus();
+    String message = resolveCommonCode(ResultCode.FORBIDDEN);
+    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.FORBIDDEN, message);
+    return ResponseEntity.status(status).body(failureBody);
   }
 
   /**
@@ -193,10 +224,12 @@ public class ConsoleApiExceptionHandler {
         ResultCode code = downstream.code();
         String message = downstream.message();
         if (code.httpStatus() >= 500 || EmptyChecks.isBlank(message)) {
-          message = code.defaultMessage();
+          message = resolveCommonCode(code);
         }
-        return ResponseEntity.status(downstream.code().httpStatus())
-            .body(responseFactory.failure(code, message));
+        int responseStatus = downstream.code().httpStatus();
+        ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.status(responseStatus);
+        CommonResponse<Object> failureResponse = responseFactory.failure(code, message);
+        return responseBuilder.body(failureResponse);
       }
     } catch (RuntimeException ignored) {
       SwallowedExceptionLogger.warn(
@@ -207,8 +240,10 @@ public class ConsoleApiExceptionHandler {
     // 无法解析下游 body 时，至少保留真实 HTTP status（例如 409/404），并按 status 反查对应业务 code，
     // 避免 4xx（下游入参错误 / 资源冲突）被一律降级成 SYSTEM_ERROR 误导前端。
     ResultCode code = mapStatusToResultCode(exception.getStatusCode());
-    return ResponseEntity.status(exception.getStatusCode())
-        .body(responseFactory.failure(code, code.defaultMessage()));
+    HttpStatusCode downstreamStatus = exception.getStatusCode();
+    String message = resolveCommonCode(code);
+    CommonResponse<Object> failureBody = responseFactory.failure(code, message);
+    return ResponseEntity.status(downstreamStatus).body(failureBody);
   }
 
   /**
@@ -231,45 +266,59 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class})
   public ResponseEntity<CommonResponse<Object>> handleNoResourceFound(Exception exception) {
     log.warn("console resource not found: {}", SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.status(404)
-        .body(responseFactory.failure(ResultCode.NOT_FOUND, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.NOT_FOUND);
+    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.NOT_FOUND, message);
+    return ResponseEntity.status(404).body(failureBody);
   }
 
   @ExceptionHandler(MissingServletRequestParameterException.class)
   public ResponseEntity<CommonResponse<Object>> handleMissingParam(
       MissingServletRequestParameterException exception, HttpServletRequest request) {
     // 带上请求 URI + method 让排查能定位前端调用点(原日志只有 param name 排查不了)
+    String safeRequestMethod = LogSanitizer.value(request.getMethod());
+    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+    String exceptionSummary = SwallowedExceptionLogger.summary(exception);
     log.warn(
         "console missing request param: {} {} — {}",
-        LogSanitizer.value(request.getMethod()),
-        LogSanitizer.value(request.getRequestURI()),
-        SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+        safeRequestMethod,
+        safeRequestUri,
+        exceptionSummary);
+    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(MethodArgumentTypeMismatchException.class)
   public ResponseEntity<CommonResponse<Object>> handleTypeMismatch(
       MethodArgumentTypeMismatchException exception, HttpServletRequest request) {
+    String safeRequestMethod = LogSanitizer.value(request.getMethod());
+    String safeRequestUri = LogSanitizer.value(request.getRequestURI());
+    String safeParameterName = LogSanitizer.value(exception.getName());
+    String safeParameterValue = LogSanitizer.value(exception.getValue());
     log.warn(
         "console request param type mismatch: {} {} param={} value={} requiredType={}",
-        LogSanitizer.value(request.getMethod()),
-        LogSanitizer.value(request.getRequestURI()),
-        LogSanitizer.value(exception.getName()),
-        LogSanitizer.value(exception.getValue()),
+        safeRequestMethod,
+        safeRequestUri,
+        safeParameterName,
+        safeParameterValue,
         exception.getRequiredType() == null
             ? "<unknown>"
             : exception.getRequiredType().getSimpleName());
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<CommonResponse<Object>> handleMessageNotReadable(
       HttpMessageNotReadableException exception) {
     log.warn("console message not readable: {}", SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   // Multipart upload 缺 part / 错 content-type 应 400 而非 500。
@@ -285,8 +334,10 @@ public class ConsoleApiExceptionHandler {
   })
   public ResponseEntity<CommonResponse<Object>> handleMultipart(Exception exception) {
     log.warn("console multipart/media-type error: {}", SwallowedExceptionLogger.summary(exception));
-    return ResponseEntity.badRequest()
-        .body(responseFactory.failure(ResultCode.INVALID_ARGUMENT, exception.getMessage()));
+    String message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    CommonResponse<Object> failureBody =
+        responseFactory.failure(ResultCode.INVALID_ARGUMENT, message);
+    return ResponseEntity.badRequest().body(failureBody);
   }
 
   /**
@@ -320,72 +371,48 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(DataIntegrityViolationException.class)
   public ResponseEntity<CommonResponse<Object>> handleDataIntegrityViolation(
       DataIntegrityViolationException exception) {
-    log.warn(
-        "console data integrity violation: {}",
-        SwallowedExceptionLogger.summary(exception.getMostSpecificCause()));
+    Throwable rootForLog = exception.getMostSpecificCause();
+    String rootSummary = SwallowedExceptionLogger.summary(rootForLog);
+    log.warn("console data integrity violation: {}", rootSummary);
     Throwable root = exception.getMostSpecificCause();
     String rawMsg = root == null ? null : root.getMessage();
-    PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg);
-    return ResponseEntity.status(kind.resultCode().httpStatus())
-        .body(responseFactory.failure(kind.resultCode(), kind.render(rawMsg)));
+    PostgresConstraintViolation violation =
+        PostgresConstraintViolation.from(root).orElse(null);
+    PgConstraintViolation kind = PgConstraintViolation.classify(rawMsg, violation);
+    String message;
+    if (kind == PgConstraintViolation.JOB_DEPENDENCY_CYCLE) {
+      message = resolveCommonCode(ResultCode.INVALID_ARGUMENT);
+    } else if (kind == PgConstraintViolation.WORKFLOW_CALENDAR_EXPECTATION) {
+      BizException conflict =
+          BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.calendar_has_expectations");
+      message = EmptyChecks.isNull(bizMessageResolver)
+          ? conflict.getCode().label()
+          : bizMessageResolver.resolve(conflict);
+    } else {
+      message = resolveCommonCode(kind.resultCode());
+    }
+    int responseStatus = kind.resultCode().httpStatus();
+    CommonResponse<Object> failureBody = responseFactory.failure(kind.resultCode(), message);
+    return ResponseEntity.status(responseStatus).body(failureBody);
+  }
+
+  private String resolveCommonCode(ResultCode code) {
+    return EmptyChecks.isNull(bizMessageResolver) ? code.label() : bizMessageResolver.resolve(code);
   }
 
   /**
-   * PG DataIntegrityViolation 子串路由表（docs/agent-baseline.md §分支消除规则 row 1）。 每个分支按 substring 命中,携带目标 {@link
-   * ResultCode}（决定 HTTP status）并产出客户端可读的中文 message。
+   * 优先使用 PostgreSQL 的 SQLSTATE 分类；依赖环还必须匹配 Schema、表及约束身份。
+   * 无驱动结构化字段时保留普通约束的文本兜底，但不得仅凭错误文案识别业务依赖环。
    */
   private enum PgConstraintViolation {
-    CHECK("violates check constraint", ResultCode.VALIDATION_ERROR) {
-      @Override
-      String render(String msg) {
-        if (msg == null) {
-          return DEFAULT_MESSAGE;
-        }
-        int idx = msg.indexOf("\"", msg.indexOf("constraint"));
-        if (idx > 0) {
-          int end = msg.indexOf("\"", idx + 1);
-          if (end > idx) {
-            return "字段值不合法,违反约束: " + msg.substring(idx + 1, end);
-          }
-        }
-        return DEFAULT_MESSAGE;
-      }
-    },
-    UNIQUE("violates unique constraint", ResultCode.CONFLICT) {
-      @Override
-      String render(String msg) {
-        return "记录已存在(唯一键冲突)";
-      }
-    },
-    FOREIGN_KEY("violates foreign key constraint", ResultCode.CONFLICT) {
-      @Override
-      String render(String msg) {
-        return "关联数据缺失或无法删除(外键约束)";
-      }
-    },
-    NOT_NULL("violates not-null constraint", ResultCode.VALIDATION_ERROR) {
-      @Override
-      String render(String msg) {
-        if (msg == null) {
-          return "必填字段缺失";
-        }
-        int colStart = msg.indexOf("\"");
-        int colEnd = msg.indexOf("\"", colStart + 1);
-        if (colStart >= 0 && colEnd > colStart) {
-          return "必填字段缺失: " + msg.substring(colStart + 1, colEnd);
-        }
-        return "必填字段缺失";
-      }
-    },
+    JOB_DEPENDENCY_CYCLE("ck_job_dependency_acyclic", ResultCode.INVALID_ARGUMENT),
+    WORKFLOW_CALENDAR_EXPECTATION("expectation_workflow_calendar", ResultCode.STATE_CONFLICT),
+    CHECK("violates check constraint", ResultCode.VALIDATION_ERROR),
+    UNIQUE("violates unique constraint", ResultCode.CONFLICT),
+    FOREIGN_KEY("violates foreign key constraint", ResultCode.CONFLICT),
+    NOT_NULL("violates not-null constraint", ResultCode.VALIDATION_ERROR),
     // 未识别约束类型回退：保守按 400（与历史行为一致，避免误把系统错误抬成 409）。
-    UNKNOWN("", ResultCode.VALIDATION_ERROR) {
-      @Override
-      String render(String msg) {
-        return DEFAULT_MESSAGE;
-      }
-    };
-
-    private static final String DEFAULT_MESSAGE = "数据约束错误";
+    UNKNOWN("", ResultCode.VALIDATION_ERROR);
 
     private final String marker;
     private final ResultCode resultCode;
@@ -395,18 +422,46 @@ public class ConsoleApiExceptionHandler {
       this.resultCode = resultCode;
     }
 
-    abstract String render(String msg);
-
     ResultCode resultCode() {
       return resultCode;
     }
 
-    static PgConstraintViolation classify(String rawMsg) {
+    static PgConstraintViolation classify(String rawMsg, PostgresConstraintViolation violation) {
+      if (EmptyChecks.isNotNull(violation)) {
+        if (violation.matches("23514", "batch", "job_dependency", "ck_job_dependency_acyclic")) {
+          return JOB_DEPENDENCY_CYCLE;
+        }
+        if (violation.matches(
+                "23503",
+                "batch",
+                "external_event_expectation_definition",
+                "fk_external_event_expectation_workflow_calendar")
+            || violation.matches(
+                "23503",
+                "batch",
+                "file_group_expectation_definition",
+                "fk_file_group_expectation_workflow_calendar")) {
+          return WORKFLOW_CALENDAR_EXPECTATION;
+        }
+        PgConstraintViolation structuredKind =
+            switch (violation.sqlState()) {
+              case "23514" -> CHECK;
+              case "23505" -> UNIQUE;
+              case "23503" -> FOREIGN_KEY;
+              case "23502" -> NOT_NULL;
+              default -> UNKNOWN;
+            };
+        if (structuredKind != UNKNOWN) {
+          return structuredKind;
+        }
+      }
       if (rawMsg == null) {
         return UNKNOWN;
       }
       for (PgConstraintViolation kind : values()) {
-        if (kind != UNKNOWN && rawMsg.contains(kind.marker)) {
+        boolean messageMatchesKnownConflictKind =
+            kind != UNKNOWN && kind != JOB_DEPENDENCY_CYCLE && rawMsg.contains(kind.marker);
+        if (messageMatchesKnownConflictKind) {
           return kind;
         }
       }
@@ -417,7 +472,8 @@ public class ConsoleApiExceptionHandler {
   @ExceptionHandler(Exception.class)
   public ResponseEntity<CommonResponse<Object>> handleException(Exception exception) {
     log.error("console unexpected exception", exception);
-    return ResponseEntity.internalServerError()
-        .body(responseFactory.failure(ResultCode.SYSTEM_ERROR, CommonErrorMessages.SYSTEM_ERROR));
+    String message = resolveCommonCode(ResultCode.SYSTEM_ERROR);
+    CommonResponse<Object> failureBody = responseFactory.failure(ResultCode.SYSTEM_ERROR, message);
+    return ResponseEntity.internalServerError().body(failureBody);
   }
 }

@@ -14,82 +14,38 @@
 ## 总览图
 
 ```mermaid
-flowchart LR
-  C["batch-console-api"]
-  T["batch-trigger"]
-  O["batch-orchestrator"]
-  K["Kafka topics<br/>batch.task.dispatch.*"]
-  WD["batch-worker-dispatch"]
-  WI["batch-worker-import"]
-  WE["batch-worker-export"]
-  WP["batch-worker-process"]
-  WSPI["batch-worker-atomic"]
-  M["MinIO bucket<br/>batch-dev"]
-
-  P["batch_platform<br/>trigger_request<br/>trigger_outbox_event (V80, ADR-010)<br/>job_definition<br/>job_instance<br/>job_partition<br/>job_task<br/>workflow_run<br/>workflow_node_run (output JSONB, ADR-009)<br/>worker_registry<br/>retry_schedule<br/>dead_letter_task<br/>outbox_event<br/>file_record<br/>file_channel_config<br/>file_dispatch_record<br/>file_audit_log<br/>..."]
-  KT["Kafka topic<br/>batch.trigger.launch.v1<br/>(ADR-010 异步路径)"]
-
-  B["batch_business<br/>biz.customer_account<br/>biz.settlement_batch<br/>biz.settlement_detail<br/>(可选: BusinessRoutingDataSource 租户→分片, 默认关)"]
-
-  Q["Quartz tables<br/>quartz.QRTZ_*"]
-
-  C -->|"HTTP -> trigger<br/>launch / compensate / rerun"| T
-  C -->|"HTTP -> orchestrator<br/>dead-letter replay"| O
-  C -->|"JDBC query -> batch_platform<br/>job_definition / job_instance / file_record / file_audit_log / worker_registry"| P
-
-  T -->|"JDBC -> batch_platform<br/>trigger_request + trigger_outbox_event<br/>(同事务 INSERT)"| P
-  T -->|"JDBC -> Quartz<br/>quartz.QRTZ_*"| Q
-  T ==>|"Kafka publish ->batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka)<br/>TriggerOutboxRelay 周期发"| KT
-  KT ==>|"Kafka consume ->TriggerLaunchConsumer<br/>调 LaunchApplicationService.launch"| O
-
-  O -->|"JDBC -> batch_platform<br/>launch / task-state / retry / replay / worker-lifecycle"| P
-  O -->|"Kafka -> batch.task.dispatch.*<br/>dispatch publish"| K
-
-  K -->|"Kafka consume"| WD
-  K -->|"Kafka consume"| WI
-  K -->|"Kafka consume"| WE
-  K -->|"Kafka consume"| WP
-  K -->|"Kafka consume"| WSPI
-
-  WD -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
-  WI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
-  WE -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
-  WSPI -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
-  WP -->|"HTTP -> orchestrator<br/>register / heartbeat / status / claim / renew / report"| O
-
-  WD -->|"JDBC -> batch_platform<br/>file_record / file_channel_config / file_dispatch_record"| P
-  WI -->|"JDBC -> batch_business<br/>customer_account"| B
-  WE -->|"JDBC -> batch_business<br/>settlement_batch / settlement_detail"| B
-  WE -->|"S3 API -> MinIO<br/>export object write"| M
-  WP -->|"JDBC -> batch_business<br/>batch.process_staging (WAP write/audit/publish; 经 processBusinessDataSource, 见 process-worker-known-issues.md P0-1)"| B
-  WP -->|"JDBC -> batch_business<br/>SQL transform source/target tables"| B
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  C["Console API"] -->|"运行发起"| T["Trigger"]
+  C -->|"审批 / 补偿 / 重放"| O["Orchestrator"]
+  C -->|"配置 / 查询"| DB[("平台 PostgreSQL")]
+  T -->|"请求 + Outbox"| DB
+  T --> Q[("Quartz 表")]
+  DB -->|"读取待发事件"| TR["Trigger Relay"] --> KL["Kafka · launch"] --> O
+  O -->|"运行状态 + Outbox"| DB
+  DB -->|"读取待发事件"| OR["Task Outbox Relay"] --> KT["Kafka · task dispatch"]
+  KT --> W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]
+  W -->|"HTTP CLAIM / REPORT / 续租"| O
+  W --> B[("业务数据源")]
+  W --> S["对象存储 / 外部通道"]
+  W -->|"受限文件元数据"| FM[("平台文件元数据")]
+  FM --- DB
 ```
 
 ## Orchestrator 写表细化图
 
 ```mermaid
-flowchart LR
-  T["batch-trigger"]
-  W["workers<br/>dispatch / import / export"]
-  C["batch-console-api"]
-  O["batch-orchestrator"]
-  P["batch_platform"]
-
-  T -->|"Kafka batch.trigger.launch.v1<br/>(ADR-010 outbox→Kafka→TriggerLaunchConsumer)"| O
-  W -->|"HTTP /internal/workers/*<br/>register / heartbeat / status"| O
-  W -->|"HTTP /internal/tasks/*<br/>claim / renew"| O
-  W -->|"HTTP /internal/tasks/*<br/>report"| O
-  C -->|"HTTP /internal/dead-letters/:id/replay"| O
-
-  O -->|"launch path -><br/>read/update trigger_request +<br/>insert/update job_instance +<br/>insert/update workflow_run +<br/>insert workflow_node_run +<br/>insert job_task +<br/>insert outbox_event"| P
-
-  O -->|"worker lifecycle path -><br/>upsert worker_registry"| P
-
-  O -->|"claim / renew path -><br/>update job_task +<br/>update job_partition"| P
-
-  O -->|"report path -><br/>update job_task +<br/>update job_partition +<br/>update job_instance +<br/>update workflow_run +<br/>insert/update workflow_node_run"| P
-
-  O -->|"retry / dead-letter / replay path -><br/>insert retry_schedule or dead_letter_task +<br/>update dead_letter_task replay status +<br/>reset job_partition + reset job_task +<br/>insert outbox_event"| P
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  T["Trigger · launch 消息"] --> O["Orchestrator · 唯一运行状态主机"]
+  W["五类 Worker · HTTP"] -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| O
+  C["Console · 审批运维请求"] --> O
+  O --> L[("WorkflowRun / NodeRun / Job / Partition / Task")]
+  O --> R[("worker_registry")]
+  O --> E[("retry_schedule / dead_letter_task")]
+  O --> TX[("outbox_event")]
+  E -. "新尝试保留来源，旧终态不复活" .-> L
+  L -. "同事务" .-> TX
 ```
 
 ### 内部 Task HTTP 协议要点（联调用）
@@ -102,7 +58,7 @@ flowchart LR
   - **节点产出**（ADR-009 Stage 1.2）：`outputs: Map<String, Object>` 字段，worker SUCCESS 时上报 fileId / recordCount / receiptCode 等关键字段，orchestrator 序列化写 `workflow_node_run.output` JSONB 列，供下游 workflow 节点 `$.nodes.<X>.output.<key>` DSL 引用
 
 ### 其它内部 HTTP 端点（2026-06-20 新增）
-- **`GET /internal/readiness/job`**(orchestrator,#592 / ADR-043 Phase A):trigger 在 fire 前查上游就绪。trigger **严禁直连 orchestrator 状态表**(读写分离仅 console-api),故就绪判定由 orchestrator 暴露只读 internal API,trigger 携 `X-Internal-Secret` 调用。入参 tenantId/jobCode/bizDate,返回 `ReadinessResult{ready, reason}`(该批次日 SUCCESS 实例数 >0 即就绪)。v1 仅 JOB 就绪。
+- **`GET /internal/readiness/job`**(orchestrator,#592 / ADR-043 Phase A):trigger 在 fire 前查上游就绪。trigger **严禁直连 orchestrator 状态表**(读写分离仅 console-api),故就绪判定由 orchestrator 暴露只读 internal API,trigger 携 `X-Internal-Secret` 调用。入参 tenantId/jobCode/bizDate,返回 `ReadinessResult{ready, reason}`(按result_version EFFECTIVE及asset_partition投影判定，不仅检查实例成功)。v1 仅 JOB 就绪。
 - **`POST /internal/import/events/object-arrival`**(worker-import,#589 / 路线图 4.1,**默认关**):对象存储到达事件通知 → 即时触发一次 ingress 扫描(替代纯轮询)。body `ObjectArrivalNotification{tenantId,bucket,objectKey}`;`batch.worker.import.scanner.event-arrival.enabled=false` 默认;扫描在途则合并本次通知(防事件风暴)。日志侧对通知字段做白名单过滤防 log injection。
 
 ### biz 数据源可选租户分片路由（#473，默认关）
@@ -117,7 +73,7 @@ flowchart LR
 - **Value**：`LaunchEnvelope` JSON：
   ```json
   {
-    "launchRequest": { "tenantId": "...", "jobCode": "...", "bizDate": "2026-04-30", "triggerType": "MANUAL", "requestId": "...", "traceId": "...", "params": {} },
+    "launchRequest": { "tenantId": "...", "workflowDefinitionId": 101, "bizDate": "2026-04-30", "triggerType": "MANUAL", "requestId": "...", "traceId": "...", "params": {} },
     "dedupKey": "tenant:dedup-hash",
     "sourceFireTime": "2026-04-30T07:00:00Z",
     "envelopeVersion": 1
@@ -126,7 +82,7 @@ flowchart LR
 - **Headers**：`X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`（便于 Kafka 端日志聚合）
 - **Producer**：`KafkaTriggerEventPublisher`（acks=all + idempotence；Stage 1 同事务写 `trigger_outbox_event` NEW；Stage 2 `TriggerOutboxRelay` 每 200ms 扫描，以批量 CAS 抢占后并发等待 Kafka ACK、set-based 回写 PUBLISHED；ShedLock 互斥 + FOR UPDATE SKIP LOCKED；失败指数退避 max 60s）
 - **Consumer**：`TriggerLaunchConsumer`（MANUAL_IMMEDIATE ack；409 dedup → ack 跳过；429 限流 → ack 跳过让 outbox 重发；runtime → 抛出 listener 重试）
-- **幂等保证**：consumer 重复消费同 requestId 由 `uk_job_instance_tenant_dedup` 回退，不会真正双跑
+- **幂等保证**：consumer 重复消费同 requestId 由 `请求幂等身份、WorkflowRun唯一接纳与节点/作业归属` 回退，不会真正双跑
 
 ## 读图要点
 
@@ -143,9 +99,13 @@ flowchart LR
 - worker 注册、心跳、状态更新：`batch-worker-core` 的 `HttpWorkerRegistryClient`
 - worker 任务认领、续租、回报：`batch-worker-core` 的 `HttpTaskExecutionClient`
 - trigger → orchestrator（ADR-010 固化路径）：`batch-trigger` 的 `KafkaTriggerEventPublisher` + `TriggerOutboxRelay` 发到 `batch.trigger.launch.v1`；orchestrator 端 `TriggerLaunchConsumer` 消费；同步 HTTP 桥已于 2026-05-02 删除
-- launch 初始化运行态：`batch-orchestrator` 的 `DefaultLaunchService`
+- launch 初始化运行态：`batch-orchestrator` 的 `DefaultWorkflowRunLaunchService`（顶层）与 `DefaultLaunchService`（节点Job）
 - task report / claim / renew：`batch-orchestrator` 的 `DefaultTaskExecutionService`
 - retry / dead-letter / replay：`batch-orchestrator` 的 `DefaultRetryGovernanceService`
 - orchestrator 出 Kafka：`TaskDispatchOutboxService` + `KafkaOutboxPublisher`
 - export 写对象存储：`batch-worker-export` 的 `S3ExportStorage` → `batch-common` 的 `BatchObjectStore`
 - console 查询平台表：`batch-console-api/src/main/resources/mapper/*.xml`
+
+## Workflow根与治理支线
+
+顶层WorkflowRoot不预建空Job。开日及expected-work/计划覆盖属于治理支线；请求接纳、JOB节点创建和Worker任务投递是实际执行链。终态通知回执与Replay Operation保存各自状态，不能把通知成功或输入ARRIVED当作Workflow业务成功。批量claim/report/renew保留逐项身份和结果，不新增批量运行聚合。

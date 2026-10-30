@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：从 Sonar 全量分析结果中导出 Git 变更行级增量报告。
+# 用法：python3 scripts/dev/sonar-incremental-report.py --help；实际扫描由 sonar-scan.sh 准备路径与认证参数。
 """从 Sonar 全量分析结果中导出 Git 变更行级增量报告。"""
 
 from __future__ import annotations

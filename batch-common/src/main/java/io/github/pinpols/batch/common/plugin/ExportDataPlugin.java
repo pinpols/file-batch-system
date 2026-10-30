@@ -41,4 +41,25 @@ public interface ExportDataPlugin {
   /** 由 {@code RegisterStep} 在文件记录成功持久化后回调，插件可借此标记自身业务数据已导出（如更新状态列），默认为空实现。 */
   default void onRegistered(
       ExportDataContext context, Long batchId, int exportVersion, String traceId) {}
+
+  /**
+   * {@link #onRegistered} 回调的重复执行安全性。插件执行非幂等副作用时应声明 {@link
+   * IdempotencyCapability#NONE}；未声明时按 UNKNOWN 处理，并在调用前设置执行围栏。
+   */
+  default IdempotencyCapability registrationCallbackIdempotencyCapability() {
+    return IdempotencyCapability.UNKNOWN;
+  }
+
+  /** 注册目录采用保守声明，必须适用于该插件的所有配置。 */
+  default ReplayCapabilityDeclaration replayCapabilityDeclaration() {
+    return ReplayCapabilityDeclaration.unknown(id());
+  }
+
+  /**
+   * 解析冻结导出配置的全部外部副作用，包括登记
+   * 回调；无法证明完整副作用边界时必须返回 UNKNOWN。
+   */
+  default ReplayCapabilityDeclaration replayCapability(Map<String, Object> exportConfig) {
+    return replayCapabilityDeclaration();
+  }
 }

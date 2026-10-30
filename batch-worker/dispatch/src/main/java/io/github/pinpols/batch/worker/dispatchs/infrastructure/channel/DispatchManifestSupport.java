@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.DigestInputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Instant;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -30,37 +31,52 @@ final class DispatchManifestSupport {
 
   static boolean enabled(Map<String, Object> channelConfig) {
     Object raw = channelConfig == null ? null : channelConfig.get("dispatch_manifest_enabled");
-    return raw == null || !"false".equalsIgnoreCase(String.valueOf(raw).trim());
+    if (EmptyChecks.isNull(raw)) {
+      return true;
+    }
+    String rawValue = String.valueOf(raw);
+    String normalizedValue = rawValue.trim();
+    return !"false".equalsIgnoreCase(normalizedValue);
   }
 
   static String suffix(Map<String, Object> channelConfig) {
     Object raw = channelConfig == null ? null : channelConfig.get("dispatch_manifest_suffix");
-    String value = raw == null ? null : String.valueOf(raw).trim();
+    String value = null;
+    if (EmptyChecks.isNotNull(raw)) {
+      String rawValue = String.valueOf(raw);
+      value = rawValue.trim();
+    }
     return Texts.hasText(value) ? value : DEFAULT_SUFFIX;
   }
 
   static DigestingInputStream digesting(InputStream in) {
-    return new DigestingInputStream(in, digest());
+    MessageDigest messageDigest = digest();
+    return new DigestingInputStream(in, messageDigest);
   }
 
   static PayloadDigest digest(byte[] payload) {
     MessageDigest digest = digest();
     digest.update(payload);
-    return new PayloadDigest(payload.length, HEX.formatHex(digest.digest()));
+    byte[] digestBytes = digest.digest();
+    String digestHex = HEX.formatHex(digestBytes);
+    return new PayloadDigest(payload.length, digestHex);
   }
 
   static ManifestPayload manifestPayload(
       DispatchCommand command,
-      String targetRef,
-      String fileName,
+      ManifestTarget target,
       String externalRequestId,
       String receiptCode,
-      PayloadDigest payloadDigest,
-      String manifestRef) {
+      PayloadDigest payloadDigest) {
+    String targetRef = target.targetRef();
+    String fileName = target.fileName();
+    String manifestRef = target.manifestRef();
     Map<String, Object> fileRecord = command.fileRecord() == null ? Map.of() : command.fileRecord();
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("schemaVersion", "dispatch-sidecar-manifest-v1");
-    body.put("generatedAt", BatchDateTimeSupport.utcNow().toString());
+    Instant generatedAt = BatchDateTimeSupport.utcNow();
+    String generatedAtText = generatedAt.toString();
+    body.put("generatedAt", generatedAtText);
     body.put("tenantId", command.tenantId());
     body.put(PipelineRuntimeKeys.TRACE_ID, command.traceId());
     body.put(PipelineRuntimeKeys.FILE_ID, fileRecord.get("id"));
@@ -69,16 +85,22 @@ final class DispatchManifestSupport {
     body.put("sizeBytes", payloadDigest.sizeBytes());
     body.put(PipelineRuntimeKeys.CHECKSUM_TYPE, CHECKSUM_TYPE);
     body.put(PipelineRuntimeKeys.CHECKSUM_VALUE, payloadDigest.sha256());
-    body.put("sourceChecksumType", text(fileRecord.get("checksum_type")));
-    body.put("sourceChecksumValue", text(fileRecord.get("checksum_value")));
+    Object sourceChecksumTypeValue = fileRecord.get("checksum_type");
+    String sourceChecksumType = text(sourceChecksumTypeValue);
+    body.put("sourceChecksumType", sourceChecksumType);
+    Object sourceChecksumValue = fileRecord.get("checksum_value");
+    String sourceChecksum = text(sourceChecksumValue);
+    body.put("sourceChecksumValue", sourceChecksum);
     body.put(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID, externalRequestId);
     body.put(DispatchRuntimeKeys.RECEIPT_CODE, receiptCode);
-    body.put(PipelineRuntimeKeys.BIZ_DATE, fileRecord.get("biz_date"));
+    Object bizDate = fileRecord.get("biz_date");
+    body.put(PipelineRuntimeKeys.BIZ_DATE, text(bizDate));
     body.put(
         DispatchRuntimeKeys.CHANNEL_CODE,
         EmptyChecks.isNull(command.payload()) ? null : command.payload().channelCode());
     body.put("manifestRef", manifestRef);
-    byte[] bytes = JsonUtils.toJson(body).getBytes(StandardCharsets.UTF_8);
+    String serializedBody = JsonUtils.toJson(body);
+    byte[] bytes = serializedBody.getBytes(StandardCharsets.UTF_8);
     PayloadDigest manifestDigest = digest(bytes);
     return new ManifestPayload(
         manifestRef, manifestDigest.sha256(), manifestDigest.sizeBytes(), bytes);
@@ -96,9 +118,13 @@ final class DispatchManifestSupport {
     if (value == null) {
       return null;
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     return text.isEmpty() ? null : text;
   }
+
+  /** 只聚合本次产物与其旁挂清单的位置，不负责重新推导回执或生成时刻。 */
+  record ManifestTarget(String targetRef, String fileName, String manifestRef) {}
 
   record PayloadDigest(long sizeBytes, String sha256) {}
 
@@ -137,7 +163,9 @@ final class DispatchManifestSupport {
     }
 
     PayloadDigest finish() {
-      return new PayloadDigest(count, HEX.formatHex(delegate.getMessageDigest().digest()));
+      byte[] digestBytes = delegate.getMessageDigest().digest();
+      String digestHex = HEX.formatHex(digestBytes);
+      return new PayloadDigest(count, digestHex);
     }
   }
 }

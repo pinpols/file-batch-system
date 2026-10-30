@@ -3,7 +3,7 @@ SELECT
   count(*)::text AS value
 FROM biz.process_event_copy
 WHERE tenant_id = :'tenant_id'
-  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%'
+  AND account_id LIKE left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-%'
 UNION ALL
 SELECT
   'process_staging_rows',
@@ -17,4 +17,4 @@ SELECT
   count(*)::text
 FROM biz.process_order_event
 WHERE tenant_id = :'tenant_id'
-  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
+  AND account_id LIKE left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-%';

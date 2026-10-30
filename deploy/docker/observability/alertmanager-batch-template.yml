@@ -8,6 +8,10 @@ route:
   group_interval: 5m
   repeat_interval: 2h
   routes:
+    # 维护信号仅作为抑制源，不进入业务通知渠道。
+    - matchers:
+        - alertname="BatchPlannedMaintenance"
+      receiver: batch-maintenance-control
     - matchers:
         - severity="critical"
       receiver: batch-pager
@@ -65,9 +69,22 @@ receivers:
         send_resolved: true
         http_config: *am_notify_http
 
+  - name: batch-maintenance-control
+
 inhibit_rules:
   - source_matchers:
       - severity="critical"
     target_matchers:
       - severity="warning"
-    equal: [alertname, tenant, team, alert_group]
+    equal: [alertname, tenant, team, alert_group, fingerprint]
+
+  # 仅压制同一部署、同一服务的计划停机可用性通知；不抑制规则计算或业务告警。
+  - source_matchers:
+      - alertname="BatchPlannedMaintenance"
+      - maintenance_scope=~".+"
+    target_matchers:
+      - alertname=~"BatchServiceDown|BatchCoreServiceTargetMissing"
+      - maintenance_scope=~".+"
+      - team="batch-platform"
+      - alert_group="platform"
+    equal: [maintenance_scope, job]

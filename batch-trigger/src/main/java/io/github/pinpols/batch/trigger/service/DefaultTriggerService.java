@@ -1,493 +1,155 @@
 package io.github.pinpols.batch.trigger.service;
 
-import io.github.pinpols.batch.common.dto.LaunchEnvelope;
+import static io.github.pinpols.batch.trigger.service.TriggerAdmissionRules.CLOSED_BATCH_DAY_SQL_STATE;
+import static io.github.pinpols.batch.trigger.service.TriggerAdmissionRules.REQUEST_BODY_REQUIRED;
+
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
-import io.github.pinpols.batch.common.enums.MisfirePendingStatus;
+import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.LogSanitizer;
-import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
-import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.common.utils.CodeNormalizer;
+import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.trigger.application.UpstreamReadinessPort;
-import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
+import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
+import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
+import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
-import io.github.pinpols.batch.trigger.event.TriggerOutboxDomainEventPublisher;
-import io.github.pinpols.batch.trigger.mapper.BusinessCalendarMapper;
-import io.github.pinpols.batch.trigger.mapper.TenantStatusMapper;
-import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
-import io.github.pinpols.batch.trigger.support.CalendarHolidayRule;
-import io.github.pinpols.batch.trigger.support.TriggerCalendarConfig;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.PlatformTransactionManager;
-import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * 触发层核心服务，负责校验 → 持久化 trigger_request → 转发给 Orchestrator，提供 4 条入口：
+ * TriggerService 的统一门面，保留 API 手工启动校验并委托独立用例协作者。
  *
- * <ul>
- *   <li>{@link #launch} — API 手工触发，校验 idempotencyKey + bizDate + triggerType 后调用 {@link
- *       #persistAndForward}。
- *   <li>{@link #launchScheduled} — Quartz 定时触发，先解析业务日历得到 bizDate；若 bizDate=null
- *       表示日历标记为节假日+SKIP，直接跳过不产生 trigger_request。
- *   <li>{@link #createPendingCatchUp} — CatchUpPolicy=MANUAL_APPROVAL 路径，把请求以 {@code ACCEPTED}
- *       状态写入数据库等待人工审批，不立即转给 Orchestrator。
- *   <li>{@link #approvePendingCatchUp} — 人工审批通过后补跑：CAS 将 {@code ACCEPTED →
- *       PROCESSING}（防并发双审批），再在事务外 HTTP 转发， 成功后更新为 {@code LAUNCHED}。
- * </ul>
- *
- * <p><b>持久化与转发模式（{@link #persistAndForward}）</b>：在一个 {@code PROPAGATION_REQUIRES_NEW}
- * 事务内完成去重查询、以 ACCEPTED 写入 trigger_request、写入 trigger_outbox_event；提交后
- * relay 周期发 Kafka，orchestrator 端 consumer 异步执行 launch。
- * 最终去重由 orchestrator 侧 {@code uk_job_instance_tenant_dedup} 保证，trigger 层只做尽力去重。
+ * <p>普通请求经 TriggerRequestPersistence 的原子 request/Outbox 事务；事件接纳保持多目标同事务；
+ * 定时补跑保留原 fire、CAS 和冻结快照。待审批创建的声明式事务仍从本门面入口开始。
  */
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class DefaultTriggerService implements TriggerService {
 
   private final LaunchAdapterService launchAdapterService;
   private final TriggerRequestMapper triggerRequestMapper;
-  private final TriggerMisfirePendingMapper triggerMisfirePendingMapper;
-  private final TriggerOutboxDomainEventPublisher triggerOutboxPublisher;
-  private final BusinessCalendarMapper businessCalendarMapper;
-  private final TenantStatusMapper tenantStatusMapper;
-  private final PlatformTransactionManager transactionManager;
-  private final UpstreamReadinessPort upstreamReadiness;
-  private final TriggerRuntimeProperties triggerRuntimeProperties;
-
-  private record PendingApprovalTarget(
-      TriggerRequestEntity request, Long pendingId, boolean approvePending) {}
+  private final TriggerAdmissionRules admissionRules;
+  private final TriggerRequestPersistence requestPersistence;
+  private final TriggerExternalEventService externalEventService;
+  private final TriggerScheduledRecoveryService scheduledRecoveryService;
+  private final TriggerLaunchQueryService launchQueryService;
 
   @Override
   public LaunchResponse launch(TriggerLaunchCommand command) {
     validateRequest(command);
-    assertTenantActive(command.request().getTenantId());
+    admissionRules.assertTenantActive(command.request().getTenantId());
     LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
-    return persistAndForward(launchRequest, command.idempotencyKey());
+    try {
+      return requestPersistence.persistAndForward(launchRequest, command.idempotencyKey());
+    } catch (RuntimeException failure) {
+      if (!JdbcExceptionSupport.hasSqlState(failure, CLOSED_BATCH_DAY_SQL_STATE)) {
+        throw failure;
+      }
+      // 按租户恢复名额等待，不暂停 Kafka 分区，也不更改原业务日期。
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.trigger.batch_day_closed", launchRequest.bizDate());
+    }
+  }
+
+  @Override
+  public LaunchResponse verifyCatchUpSubmission(TriggerLaunchCommand command) {
+    if (EmptyChecks.isNull(command)
+        || EmptyChecks.isNull(command.request())
+        || EmptyChecks.isBlank(command.idempotencyKey())
+        || EmptyChecks.isBlank(command.request().getTenantId())
+        || EmptyChecks.isNull(command.request().getWorkflowDefinitionId())
+        || command.request().getWorkflowDefinitionId() <= 0
+        || EmptyChecks.isNull(command.request().getBizDate())
+        || command.request().getTriggerType() != TriggerType.CATCH_UP) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    }
+    return launchQueryService.verifyCatchUpSubmission(
+        launchAdapterService.fromApiRequest(command), command.idempotencyKey());
+  }
+
+  @Override
+  public ExternalEventLaunchResponse launchExternalEvent(ExternalEventLaunchCommand command) {
+    return externalEventService.launchExternalEvent(command);
+  }
+
+  @Override
+  public ExternalEventLaunchStatus findExternalEventStatus(
+      String tenantId, String eventSource, String idempotencyKey) {
+    return launchQueryService.findExternalEventStatus(tenantId, eventSource, idempotencyKey);
   }
 
   @Override
   public TriggerLaunchStatus findLaunchStatus(String tenantId, String idempotencyKey) {
-    if (EmptyChecks.isBlank(tenantId)) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
-    }
-    if (EmptyChecks.isBlank(idempotencyKey)) {
-      throw BizException.of(
-          ResultCode.MISSING_IDEMPOTENCY_KEY,
-          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
-          ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
-    }
-    TriggerLaunchStatus status = triggerRequestMapper.selectLaunchStatus(tenantId, idempotencyKey);
-    return Guard.requireFound(status, "launch request not found");
+    return launchQueryService.findLaunchStatus(tenantId, idempotencyKey);
+  }
+
+  @Override
+  public TriggerLaunchStatus findLaunchStatus(
+      String tenantId, String idempotencyKey, String externalEventSource) {
+    return launchQueryService.findLaunchStatus(tenantId, idempotencyKey, externalEventSource);
   }
 
   @Override
   public LaunchResponse launchScheduled(ScheduledTriggerCommand command) {
-    assertTenantActive(command.descriptor().getTenantId());
-    LaunchRequest launchRequest =
-        launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
-    if (EmptyChecks.isNull(launchRequest.bizDate())) {
-      return skipScheduled(command);
-    }
-    Optional<Instant> dependencyReadyAt = upstreamReadyAt(command, launchRequest);
-    if (dependencyReadyAt.isEmpty() // empty-check: allow - Optional 通过其专属 API 表达无值。
-        && Texts.hasText(command.descriptor().getDependsOnJobCode())) {
-      // ADR-043:依赖未就绪不返回 skipped，QuartzLaunchJob 会用 one-shot trigger 延迟重检。
-      throw new UpstreamNotReadyException(
-          launchRequest.tenantId(),
-          command.descriptor().getJobCode(),
-          command.descriptor().getDependsOnJobCode(),
-          launchRequest.bizDate());
-    }
-    if (dependencyReadyAt.isPresent()) {
-      Map<String, Object> params = new LinkedHashMap<>(launchRequest.params());
-      params.put("dependencyReadyAt", dependencyReadyAt.get().toString());
-      launchRequest = launchRequest.toBuilder().params(params).build();
-    }
-    String dedupKey = buildScheduledDedupKey(command);
-    return persistAndForward(launchRequest, dedupKey);
-  }
-
-  /**
-   * ADR-043 依赖感知 fire 闸:声明了 dependsOnJobCode 的触发器,fire 前查上游就绪。
-   *
-   * <p>无声明(绝大多数存量触发器)→ 直接放行,行为不变。
-   */
-  private Optional<Instant> upstreamReadyAt(
-      ScheduledTriggerCommand command, LaunchRequest launchRequest) {
-    String dependsOn = command.descriptor().getDependsOnJobCode();
-    if (!Texts.hasText(dependsOn)) {
-      return Optional.empty();
-    }
-    return upstreamReadiness.readyAt(launchRequest.tenantId(), dependsOn, launchRequest.bizDate());
+    return scheduledRecoveryService.launchScheduled(command);
   }
 
   @Override
   @Transactional
   public LaunchResponse createPendingCatchUp(ScheduledTriggerCommand command) {
-    assertTenantActive(command.descriptor().getTenantId());
-    LaunchRequest launchRequest =
-        launchAdapterService.fromScheduledTrigger(command, loadCalendarDefinition(command));
-    if (EmptyChecks.isNull(launchRequest.bizDate())) {
-      return skipScheduled(command);
-    }
-    String dedupKey = buildScheduledDedupKey(command);
-    return persistPending(launchRequest, dedupKey, command);
+    return scheduledRecoveryService.createPendingCatchUp(command);
   }
 
   @Override
   public LaunchResponse approvePendingCatchUp(PendingCatchUpApprovalCommand command) {
-    validatePendingApproval(command);
-    assertTenantActive(command.getTenantId());
-
-    PendingApprovalTarget pendingTarget = resolveRequestFromPending(command);
-    TriggerRequestEntity requestFromPending =
-        EmptyChecks.isNull(pendingTarget) ? null : pendingTarget.request();
-
-    // 5.6:幂等 —— 若已有相同 key 的请求被 launch 过,则提前返回
-    if (EmptyChecks.isNull(requestFromPending)
-        && EmptyChecks.isNotBlank(command.getIdempotencyKey())) {
-      TriggerRequestEntity existing = triggerRequestMapper.selectByTenantAndDedupKey(
-          command.getTenantId(), command.getIdempotencyKey());
-      if (EmptyChecks.isNotNull(existing)
-          && TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(existing.getRequestStatus())) {
-        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-      }
-    }
-
-    // ADR-010：审批通过后通过 outbox 异步转发，绝不走同步 HTTP。CAS → INSERT outbox → 标 LAUNCHED
-    // 三步在同事务内完成，orchestrator 宕机或网络故障不会让 trigger_request 卡在 PROCESSING。
-    // relay 周期把 trigger_outbox_event 推到 Kafka topic batch.trigger.launch.v1，
-    // orchestrator 端消费触发实际 launch；最终一致性由 outbox + (tenant,request_id) 唯一约束保证。
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    return tx.execute(ignored -> {
-      TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
-          ? triggerRequestMapper.selectById(requestFromPending.getId())
-          : triggerRequestMapper.selectByTenantAndRequestId(
-              command.getTenantId(), command.getRequestId());
-      Guard.requireFound(pendingRequest, "pending catch-up request not found");
-      if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
-      }
-      if (TriggerRequestStatus.REJECTED
-          .code()
-          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
-      }
-      if (TriggerRequestStatus.LAUNCHED
-          .code()
-          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-      }
-      // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
-      int claimed = triggerRequestMapper.updateRequestStatusConditional(
-          command.getTenantId(),
-          command.getRequestId(),
-          TriggerRequestStatus.PROCESSING.code(),
-          TriggerRequestStatus.ACCEPTED.code());
-      if (claimed <= 0) {
-        // 另一实例正在处理；返回当前状态，重试方需重新查询
-        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-      }
-      if (EmptyChecks.isNotNull(pendingTarget) && pendingTarget.approvePending()) {
-        triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
-      }
-      LaunchRequest launchRequest = new LaunchRequest(
-          pendingRequest.getTenantId(),
-          pendingRequest.getJobCode(),
-          pendingRequest.getBizDate(),
-          TriggerType.CATCH_UP,
-          pendingRequest.getRequestId(),
-          pendingRequest.getTraceId(),
-          Map.of(
-              "operationType",
-              "CATCH_UP_APPROVAL",
-              "approvalMode",
-              "MANUAL_APPROVAL",
-              "catchUpApproved",
-              true,
-              "reason",
-              EmptyChecks.isNull(command.getReason()) ? "" : command.getReason()));
-      String dedupKey = Texts.hasText(pendingRequest.getDedupKey())
-          ? pendingRequest.getDedupKey()
-          : pendingRequest.getRequestId();
-      publishLaunchOutbox(launchRequest, dedupKey);
-      // 同事务推进到 LAUNCHED — outbox 保证 at-least-once 投递；
-      // 若 relay 多轮失败 → outbox 走 GIVE_UP 路径并触发告警，trigger_request 不再长期停滞。
-      // CAS 守卫:前态必须仍是本次刚 CAS 进入的 PROCESSING,防止并发场景下把已被其它路径推进的行覆盖。
-      int launched = triggerRequestMapper.updateRequestStatusConditional(
-          command.getTenantId(),
-          command.getRequestId(),
-          TriggerRequestStatus.LAUNCHED.code(),
-          TriggerRequestStatus.PROCESSING.code());
-      if (launched <= 0) {
-        log.warn(
-            "updateRequestStatusConditional(LAUNCHED) affected 0 rows; the row is no longer PROCESSING:"
-                + " tenantId={} requestId={}",
-            LogSanitizer.value(command.getTenantId()),
-            LogSanitizer.value(command.getRequestId()));
-      }
-      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-    });
+    return scheduledRecoveryService.approvePendingCatchUp(command);
   }
 
-  private LaunchResponse persistAndForward(LaunchRequest launchRequest, String dedupKey) {
-    TransactionTemplate tx = new TransactionTemplate(transactionManager);
-    tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    return tx.execute(ignored -> {
-      TriggerRequestEntity existing =
-          triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-      if (EmptyChecks.isNotNull(existing)) {
-        return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-      }
-      // 新请求在同一事务内完成 request + outbox 写入，中间状态对外不可见，直接落 ACCEPTED。
-      triggerRequestMapper.insert(buildAcceptedEntity(launchRequest, dedupKey));
-      publishLaunchOutbox(launchRequest, dedupKey);
-      return new LaunchResponse(launchRequest.requestId(), launchRequest.traceId());
-    });
-  }
-
-  /**
-   * 收敛到 {@link TriggerOutboxDomainEventPublisher} 的唯一 trigger_outbox_event 写入入口。
-   *
-   * <p>之前主路径直接 mapper.insert(buildOutboxEntity),抽象未真正收敛字段语义会持续漂移。现在统一走 publisher.publishLaunch
-   * 路径，由 Outbox 写入边界一次性补齐传输层链路上下文。
-   */
-  private void publishLaunchOutbox(LaunchRequest r, String dedupKey) {
-    LaunchEnvelope envelope = LaunchEnvelope.of(r, dedupKey, BatchDateTimeSupport.utcNow());
-    triggerOutboxPublisher.publishLaunch(r.tenantId(), r.requestId(), r.traceId(), envelope);
-  }
-
-  private TriggerRequestEntity buildAcceptedEntity(LaunchRequest r, String dedupKey) {
-    TriggerRequestEntity entity = new TriggerRequestEntity();
-    entity.setTenantId(r.tenantId());
-    entity.setRequestId(r.requestId());
-    entity.setTriggerType(r.triggerType().code());
-    entity.setJobCode(r.jobCode());
-    entity.setBizDate(r.bizDate());
-    entity.setDedupKey(dedupKey);
-    entity.setRequestStatus("ACCEPTED");
-    entity.setTraceId(r.traceId());
-    entity.setDryRun(r.dryRun());
-    return entity;
-  }
-
-  /** MANUAL_APPROVAL 场景先把 catch-up 请求登记为待审批，不立即转给 orchestrator。 */
-  private LaunchResponse persistPending(
-      LaunchRequest launchRequest, String dedupKey, ScheduledTriggerCommand command) {
-    TriggerRequestEntity existing =
-        triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
-    if (EmptyChecks.isNotNull(existing)) {
-      linkMisfirePending(command, existing);
-      return new LaunchResponse(existing.getRequestId(), existing.getTraceId());
-    }
-    TriggerRequestEntity entity = new TriggerRequestEntity();
-    entity.setTenantId(launchRequest.tenantId());
-    entity.setRequestId(launchRequest.requestId());
-    entity.setTriggerType(TriggerType.CATCH_UP.code());
-    entity.setJobCode(launchRequest.jobCode());
-    entity.setBizDate(launchRequest.bizDate());
-    entity.setDedupKey(dedupKey);
-    entity.setRequestStatus("ACCEPTED");
-    entity.setTraceId(launchRequest.traceId());
-    entity.setDryRun(launchRequest.dryRun());
-    triggerRequestMapper.insert(entity);
-    linkMisfirePending(command, entity);
-    return new LaunchResponse(entity.getRequestId(), entity.getTraceId());
-  }
-
-  private void linkMisfirePending(ScheduledTriggerCommand command, TriggerRequestEntity request) {
-    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(request)) {
-      return;
-    }
-    TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
-    pending.setTenantId(command.descriptor().getTenantId());
-    pending.setJobCode(command.descriptor().getJobCode());
-    pending.setScheduledFireTime(command.fireTime());
-    pending.setExpiresAt(BatchDateTimeSupport.utcNow()
-        .plus(Duration.ofDays(triggerRuntimeProperties.getMisfirePendingRetentionDays())));
-    try {
-      triggerMisfirePendingMapper.insertPending(pending);
-    } catch (DuplicateKeyException dup) {
-      pending = triggerMisfirePendingMapper.selectBySchedule(
-          command.descriptor().getTenantId(),
-          command.descriptor().getJobCode(),
-          command.fireTime());
-    }
-    boolean canAssociateCatchUpRequest = EmptyChecks.isNotNull(pending)
-        && EmptyChecks.isNotNull(pending.getId())
-        && EmptyChecks.isNotNull(request.getId());
-    if (canAssociateCatchUpRequest) {
-      triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), request.getId());
-    }
-  }
-
-  private PendingApprovalTarget resolveRequestFromPending(PendingCatchUpApprovalCommand command) {
-    if (EmptyChecks.isNull(command.getPendingId())) {
-      return null;
-    }
-    TriggerMisfirePendingEntity pending = Guard.requireFound(
-        triggerMisfirePendingMapper.selectById(command.getPendingId()),
-        "misfire pending not found");
-    if (!command.getTenantId().equals(pending.getTenantId())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
-    }
-    if (MisfirePendingStatus.REJECTED.code().equalsIgnoreCase(pending.getStatus())
-        || MisfirePendingStatus.EXPIRED.code().equalsIgnoreCase(pending.getStatus())) {
-      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
-    }
-    Long requestId = pending.getCatchUpRequestId();
-    if (EmptyChecks.isNull(requestId)) {
-      throw BizException.of(
-          ResultCode.BUSINESS_ERROR,
-          ResultCode.BUSINESS_ERROR.detailKey(),
-          "misfire pending is not linked to catch-up request");
-    }
-    TriggerRequestEntity request = Guard.requireFound(
-        triggerRequestMapper.selectById(requestId), "catch-up request not found");
-    command.setRequestId(request.getRequestId());
-    return new PendingApprovalTarget(
-        request,
-        pending.getId(),
-        MisfirePendingStatus.PENDING.code().equalsIgnoreCase(pending.getStatus()));
-  }
-
-  private String buildScheduledDedupKey(ScheduledTriggerCommand command) {
-    // R-arch-audit-2026-05-23 P2: 用 Instant.toEpochMilli() 替代 Instant.toString()。
-    // Instant.toString() 输出会按精度自动调整（如 "...:00Z" vs "...:00.000Z"），不同 JVM /
-    // 序列化路径可能产生不同字符串，导致同一 fireTime 算出不同 dedupKey，去重失效。
-    // toEpochMilli() 是稳定的 long → String，跨 JVM 一致。
-    return command.descriptor().getTenantId()
-        + ":"
-        + command.descriptor().getJobCode()
-        + ":"
-        + command.fireTime().toEpochMilli();
-  }
-
-  private LaunchResponse skipScheduled(ScheduledTriggerCommand command) {
-    log.info(
-        "scheduled trigger skipped by business calendar: tenantId={}, jobCode={},"
-            + " calendarCode={}, fireTime={}",
-        LogSanitizer.value(command.descriptor().getTenantId()),
-        LogSanitizer.value(command.descriptor().getJobCode()),
-        LogSanitizer.value(command.descriptor().getCalendarCode()),
-        command.fireTime());
-    return LaunchResponse.skipped(command.traceId());
-  }
-
-  private CalendarBizDateDefinition loadCalendarDefinition(ScheduledTriggerCommand command) {
-    if (EmptyChecks.isNull(command) || EmptyChecks.isNull(command.descriptor())) {
-      return null;
-    }
-    // 归一化到「配置码」形式（小写 + `-`→`_`，与 V64 migration 对 DB 存量归一一致），
-    // 否则 Quartz JobDataMap 里老存下来的 `strict-calendar` 在 DB 是 `strict_calendar` 时查不到。
-    String calendarCode = CodeNormalizer.toConfigFormOrNull(command.descriptor().getCalendarCode());
-    if (!Texts.hasText(calendarCode)) {
-      return null;
-    }
-    TriggerCalendarConfig calendar = businessCalendarMapper.selectActiveByTenantAndCalendarCode(
-        command.descriptor().getTenantId(), calendarCode);
-    if (EmptyChecks.isNull(calendar) || EmptyChecks.isNull(calendar.getId())) {
-      // M-14: 配置了日历码但数据库中未找到——告警使错误配置在日志中可见
-      log.warn(
-          "calendar definition not found: tenantId={}, calendarCode={} — scheduled"
-              + " trigger will proceed without calendar filtering",
-          LogSanitizer.value(command.descriptor().getTenantId()),
-          LogSanitizer.value(calendarCode));
-      return null;
-    }
-    List<CalendarHolidayRule> rules =
-        businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
-    if (EmptyChecks.isNull(rules)) {
-      rules = List.of();
-    }
-    // R-arch-audit-2026-05-23 P1: 用 toUnmodifiableSet 替代 toSet，防止下游意外修改 holidays /
-    // workdayOverrides。CalendarBizDateDefinition 是 record，字段引用不可变但 Set 本身可写，
-    // toUnmodifiableSet 明确回退，符合 docs/agent-baseline.md §集合 "返回不可变集合" 约定。
-    Set<LocalDate> holidays = rules.stream()
-        .filter(rule -> isDayType(rule, "HOLIDAY"))
-        .map(CalendarHolidayRule::getBizDate)
-        .collect(Collectors.toUnmodifiableSet());
-    Set<LocalDate> workdayOverrides = rules.stream()
-        .filter(rule -> isDayType(rule, "WORKDAY_OVERRIDE"))
-        .map(CalendarHolidayRule::getBizDate)
-        .collect(Collectors.toUnmodifiableSet());
-    return new CalendarBizDateDefinition(
-        calendar.getTimezone(),
-        calendar.getCutoffTime(),
-        calendar.getHolidayRollRule(),
-        holidays,
-        workdayOverrides);
-  }
-
-  private boolean isDayType(CalendarHolidayRule rule, String expectedType) {
-    return EmptyChecks.isNotNull(rule)
-        && EmptyChecks.isNotNull(rule.getBizDate())
-        && expectedType.equalsIgnoreCase(normalize(rule.getDayType()));
-  }
-
-  private String normalize(String value) {
-    return EmptyChecks.isNull(value) ? "" : value.trim().toUpperCase(Locale.ROOT);
-  }
-
-  private void assertTenantActive(String tenantId) {
-    String status = tenantStatusMapper.selectStatus(tenantId);
-    if ("SUSPENDED".equals(status)) {
-      // R-arch-audit-2026-05-23 P1: 用 ResultCode.TENANT_SUSPENDED 替代 BUSINESS_ERROR + 字符串后缀，
-      // 让 QuartzLaunchJob 能通过 getCode() 枚举比较识别租户暂停语义，
-      // 不再依赖脆弱的 e.getMessage().contains("tenant is suspended")。
-      throw BizException.of(
-          ResultCode.TENANT_SUSPENDED,
-          ResultCode.TENANT_SUSPENDED.detailKey(),
-          "tenant is suspended, triggers are not allowed: " + tenantId);
-    }
+  @Override
+  public ScheduledOccurrenceCatchUpResponse catchUpRejectedOccurrence(
+      ScheduledOccurrenceCatchUpCommand command) {
+    return scheduledRecoveryService.catchUpRejectedOccurrence(command);
   }
 
   private void validateRequest(TriggerLaunchCommand command) {
     Guard.require(EmptyChecks.isNotNull(command), "launch command is required");
     if (EmptyChecks.isBlank(command.idempotencyKey())) {
       throw BizException.of(
-          ResultCode.MISSING_IDEMPOTENCY_KEY,
-          ResultCode.MISSING_IDEMPOTENCY_KEY.detailKey(),
-          ResultCode.MISSING_IDEMPOTENCY_KEY.defaultMessage());
+          ResultCode.MISSING_IDEMPOTENCY_KEY, "error.common.missing_idempotency_key");
     }
     if (EmptyChecks.isNull(command.request())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     if (EmptyChecks.isBlank(command.request().getTenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    if (EmptyChecks.isBlank(command.request().getJobCode())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.job.code_required");
+    Map<String, Object> params = command.request().getParams();
+    boolean containsForbiddenParentWorkflowContext = EmptyChecks.isNotNull(params)
+        && (params.containsKey("_parentWorkflowRunId") || params.containsKey("_parentNodeCode"));
+    if (containsForbiddenParentWorkflowContext) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.parent_context_forbidden");
+    }
+    boolean hasWorkflowTarget = EmptyChecks.isNotNull(command.request().getWorkflowDefinitionId());
+    if (!hasWorkflowTarget) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.workflow_target_required");
+    }
+    if (hasWorkflowTarget && command.request().getWorkflowDefinitionId() <= 0) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    }
+    if (!triggerRequestMapper.existsEnabledWorkflowDefinition(
+        command.request().getTenantId(), command.request().getWorkflowDefinitionId())) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
     }
     if (EmptyChecks.isNull(command.request().getBizDate())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
@@ -495,15 +157,32 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isNull(command.request().getTriggerType())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
     }
-  }
-
-  private void validatePendingApproval(PendingCatchUpApprovalCommand command) {
-    Guard.require(EmptyChecks.isNotNull(command), "approval command is required");
-    if (EmptyChecks.isBlank(command.getTenantId())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
+    String externalEventCode = command.request().getExternalEventCode();
+    boolean externalEventCodeIsInvalidForTrigger = EmptyChecks.isNotNull(externalEventCode)
+        && (!Texts.hasText(externalEventCode)
+            || externalEventCode.trim().length() > 128
+            || command.request().getTriggerType() != TriggerType.EVENT);
+    if (externalEventCodeIsInvalidForTrigger) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_code_invalid");
     }
-    if (EmptyChecks.isNull(command.getPendingId()) && EmptyChecks.isBlank(command.getRequestId())) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_id_required");
+    String eventSource = command.request().getExternalEventSource();
+    String eventId = command.request().getExternalEventId();
+    boolean externalEventIdentityWasProvided = EmptyChecks.isNotNull(externalEventCode)
+        || EmptyChecks.isNotNull(eventSource)
+        || EmptyChecks.isNotNull(eventId);
+    boolean providedExternalEventIdentityIsInvalid = externalEventIdentityWasProvided
+        && (!Texts.hasText(eventSource)
+            || eventSource.trim().length() > 128
+            || !eventSource.equals(eventSource.trim())
+            || !Texts.hasText(eventId)
+            || eventId.trim().length() > 256
+            || !eventId.equals(eventId.trim())
+            || command.request().getTriggerType() != TriggerType.EVENT
+            || !Texts.hasText(externalEventCode));
+    if (providedExternalEventIdentityIsInvalid) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }
   }
 }

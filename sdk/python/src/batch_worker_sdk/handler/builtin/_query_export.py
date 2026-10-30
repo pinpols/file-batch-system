@@ -124,9 +124,11 @@ class QueryExportHandler:
             )
         output = counts.to_output()
         output["filePath"] = str(path)
+        successful_count = counts.success()
+        summary_message = f"exported {successful_count} rows"
         return SdkTaskResult.success_with(
             output=output,
-            message=f"exported {counts.success()} rows",
+            message=summary_message,
         )
 
     # -- 租户可覆盖钩子(对齐 Java SdkAbstractExportHandler) --------------------

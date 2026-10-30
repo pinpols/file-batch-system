@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地维护/仿真脚本的破坏性操作边界。生产运维命令不应调用此 helper 绕过自身审批流程。
+# 用法：由调用脚本 source scripts/lib/destructive-ops.sh 后使用公共变量或函数。
 # 本地维护/仿真脚本的破坏性操作边界。生产运维命令不应调用此 helper 绕过自身审批流程。
 
 # shellcheck source=runtime-defaults.sh

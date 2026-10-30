@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportValidationErrorCode;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportDataQualityService;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
+import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ControlTotalEvaluator;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.DatasetRuleEvaluator;
 import io.github.pinpols.batch.worker.imports.infrastructure.quality.ValidationIssue;
@@ -86,7 +87,8 @@ public class ValidateStep implements ImportStageStep {
           "parsed records path missing",
           objectMapper);
     }
-    return executeStreaming(context, Path.of(parsedRecordsPath));
+    Path parsedRecordsFile = Path.of(parsedRecordsPath);
+    return executeStreaming(context, parsedRecordsFile);
   }
 
   private ImportStageResult executeStreaming(ImportJobContext context, Path parsedRecordsPath) {
@@ -155,12 +157,16 @@ public class ValidateStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
           SwallowedExceptionLogger.summary(exception),
           exception);
+      ImportStage failureStage = stage();
+      String failureCode = ImportValidationErrorCode.FAILED.code();
+      String localizedMessageArgument = exception.getMessage();
+      String fallbackMessage = exception.getMessage();
       return ImportStageResult.failure(
-          stage(),
-          ImportValidationErrorCode.FAILED.code(),
+          failureStage,
+          failureCode,
           "error.import.validate.failed",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {localizedMessageArgument},
+          fallbackMessage,
           objectMapper);
     }
   }
@@ -190,13 +196,16 @@ public class ValidateStep implements ImportStageStep {
       return;
     }
     try {
-      Map<String, Object> fileRecord =
-          fileRecords.loadFileRecord(context.getTenantId(), Long.valueOf(fileIdRaw.trim()));
+      String tenantId = context.getTenantId();
+      String normalizedFileId = fileIdRaw.trim();
+      Long fileId = Long.valueOf(normalizedFileId);
+      Map<String, Object> fileRecord = fileRecords.loadFileRecord(tenantId, fileId);
       Object metadataJson = fileRecord == null ? null : fileRecord.get("metadata_json");
       if (metadataJson == null) {
         return;
       }
-      Map<String, Object> metadata = objectMapper.readValue(String.valueOf(metadataJson), MAP_TYPE);
+      String metadataText = String.valueOf(metadataJson);
+      Map<String, Object> metadata = objectMapper.readValue(metadataText, MAP_TYPE);
       Object expected = metadata.get(DatasetRuleEvaluator.ATTR_EXPECTED_RECORD_COUNT);
       if (expected != null) {
         context.getAttributes().put(DatasetRuleEvaluator.ATTR_EXPECTED_RECORD_COUNT, expected);
@@ -308,24 +317,22 @@ public class ValidateStep implements ImportStageStep {
               exception.getMessage(),
               line);
           if (outcome.stop()) {
+            ImportStageResult failureResult = ImportStageResult.failure(
+                stage(),
+                outcome.errorCode(),
+                "error.import.validate.row_invalid",
+                new Object[] {outcome.errorMessage()},
+                outcome.errorMessage(),
+                objectMapper);
             return new StreamingValidationResult(
-                validatedCount,
-                loadedCandidateCount,
-                ImportStageResult.failure(
-                    stage(),
-                    outcome.errorCode(),
-                    "error.import.validate.row_invalid",
-                    new Object[] {outcome.errorMessage()},
-                    outcome.errorMessage(),
-                    objectMapper));
+                validatedCount, loadedCandidateCount, failureResult);
           }
           if (!recordGovernanceService.withinThreshold(context)) {
             recordGovernanceService.markThresholdExceeded(context);
+            ImportStageResult failureResult = ImportStageResult.failure(
+                stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
             return new StreamingValidationResult(
-                validatedCount,
-                loadedCandidateCount,
-                ImportStageResult.failure(
-                    stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED));
+                validatedCount, loadedCandidateCount, failureResult);
           }
           continue;
         }
@@ -339,16 +346,15 @@ public class ValidateStep implements ImportStageStep {
           validatedCount += result.validCount();
           loadedCandidateCount += result.validCount();
           if (!result.success()) {
+            ImportStageResult failureResult = ImportStageResult.failure(
+                stage(),
+                result.errorCode(),
+                "error.import.validate.row_invalid",
+                new Object[] {result.errorMessage()},
+                result.errorMessage(),
+                objectMapper);
             return new StreamingValidationResult(
-                validatedCount,
-                loadedCandidateCount,
-                ImportStageResult.failure(
-                    stage(),
-                    result.errorCode(),
-                    "error.import.validate.row_invalid",
-                    new Object[] {result.errorMessage()},
-                    result.errorMessage(),
-                    objectMapper));
+                validatedCount, loadedCandidateCount, failureResult);
           }
           chunk.clear();
         }
@@ -359,16 +365,14 @@ public class ValidateStep implements ImportStageStep {
         validatedCount += result.validCount();
         loadedCandidateCount += result.validCount();
         if (!result.success()) {
-          return new StreamingValidationResult(
-              validatedCount,
-              loadedCandidateCount,
-              ImportStageResult.failure(
-                  stage(),
-                  result.errorCode(),
-                  "error.import.validate.row_invalid",
-                  new Object[] {result.errorMessage()},
-                  result.errorMessage(),
-                  objectMapper));
+          ImportStageResult failureResult = ImportStageResult.failure(
+              stage(),
+              result.errorCode(),
+              "error.import.validate.row_invalid",
+              new Object[] {result.errorMessage()},
+              result.errorMessage(),
+              objectMapper);
+          return new StreamingValidationResult(validatedCount, loadedCandidateCount, failureResult);
         }
       }
     }
@@ -389,24 +393,27 @@ public class ValidateStep implements ImportStageStep {
     context
         .getAttributes()
         .put(PipelineRuntimeKeys.IMPORT_CUSTOMER_PAYLOAD_COUNT, loadedCandidateCount);
+    String validatedStatus = FileStatus.VALIDATED.code();
+    long skippedCount =
+        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+    long badRecordCount = badRecordCount(context);
+    boolean manualReviewRequired =
+        Boolean.TRUE.equals(context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
+    Map<String, Object> validationMetadata = Map.of(
+        PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
+        validatedCount,
+        PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
+        skippedCount,
+        "badRecordCount",
+        badRecordCount,
+        ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
+        manualReviewRequired,
+        "qualityChecks",
+        session.appliedChecks(),
+        PipelineRuntimeKeys.VALIDATED_RECORDS_PATH,
+        validatedRecordsPath.toString());
     ImportStageSupport.updateFileStatusRecoverAware(
-        fileRecords,
-        context,
-        FileStatus.VALIDATED.code(),
-        Map.of(
-            PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT,
-            validatedCount,
-            PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT,
-            numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)),
-            "badRecordCount",
-            badRecordCount(context),
-            ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED,
-            Boolean.TRUE.equals(
-                context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED)),
-            "qualityChecks",
-            session.appliedChecks(),
-            PipelineRuntimeKeys.VALIDATED_RECORDS_PATH,
-            validatedRecordsPath.toString()));
+        fileRecords, context, validatedStatus, validationMetadata);
   }
 
   private record StreamingValidationResult(
@@ -442,7 +449,9 @@ public class ValidateStep implements ImportStageStep {
         }
         continue;
       }
-      writer.write(objectMapper.writeValueAsString(chunk.get(index)));
+      Map<String, Object> validRecord = chunk.get(index);
+      String serializedRecord = objectMapper.writeValueAsString(validRecord);
+      writer.write(serializedRecord);
       writer.newLine();
       validCount++;
     }
@@ -462,13 +471,27 @@ public class ValidateStep implements ImportStageStep {
       String errorCode,
       String errorMessage,
       Object rawRecord) {
-    if (isReconciliationGate(errorCode) || !recordGovernanceService.isSkippable(errorCode)) {
-      recordGovernanceService.recordFailedRecord(
-          context, stage(), recordNo, errorCode, errorMessage, rawRecord);
+    boolean validationErrorMustBeRecordedAsFailure =
+        isReconciliationGate(errorCode) || !recordGovernanceService.isSkippable(errorCode);
+    if (validationErrorMustBeRecordedAsFailure) {
+      BadRecordCommand command = BadRecordCommand.builder()
+          .stage(stage())
+          .recordNo(recordNo)
+          .errorCode(errorCode)
+          .errorMessage(errorMessage)
+          .rawRecord(rawRecord)
+          .build();
+      recordGovernanceService.recordFailedRecord(context, command);
       return ValidationErrorOutcome.stop(errorCode, errorMessage);
     }
-    recordGovernanceService.recordSkippedRecord(
-        context, stage(), recordNo, errorCode, errorMessage, rawRecord);
+    BadRecordCommand command = BadRecordCommand.builder()
+        .stage(stage())
+        .recordNo(recordNo)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .rawRecord(rawRecord)
+        .build();
+    recordGovernanceService.recordSkippedRecord(context, command);
     if (recordGovernanceService.shouldFailOnSkip(errorCode)) {
       return ValidationErrorOutcome.stop(errorCode, "skip action FAIL_BATCH");
     }

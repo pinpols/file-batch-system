@@ -66,14 +66,11 @@ final class TaskOutcomePayloadSupport {
   }
 
   static Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number number) {
-      long value = number.longValue();
-      return value > 0 ? value : null;
-    }
     if (EmptyChecks.isNull(candidate)) {
       return null;
     }
-    String text = String.valueOf(candidate).trim();
+    String rawText = String.valueOf(candidate);
+    String text = rawText.trim();
     if (EmptyChecks.isEmpty(text)) {
       return null;
     }
@@ -99,18 +96,31 @@ final class TaskOutcomePayloadSupport {
 
   /** task.payload + command.resultSummary 三源 fallback 找文件 id;给 success outcome 用。 */
   static Long resolveRelatedFileId(JobTaskEntity task, TaskOutcomeCommand command) {
-    return firstPositiveLong(
-        resolveRelatedFileId(task),
-        payloadLongValue(
-            EmptyChecks.isNull(command) ? null : command.resultSummary(), "relatedFileId"),
-        payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "fileId"));
+    Long taskFileId = resolveRelatedFileId(task);
+    Long resultRelatedFileId = payloadLongValue(
+        EmptyChecks.isNull(command) ? null : command.resultSummary(), "relatedFileId");
+    Long resultFileId =
+        payloadLongValue(EmptyChecks.isNull(command) ? null : command.resultSummary(), "fileId");
+    return firstPositiveLong(taskFileId, resultRelatedFileId, resultFileId);
   }
 
-  /** 仅 task.payload 三键 fallback;给 partition/job 推进时用(无 outcome 上下文)。 */
+  /** 按任务类型解析 payload 中的文件关联，供 partition/job 推进使用。 */
   static Long resolveRelatedFileId(JobTaskEntity task) {
-    return firstPositiveLong(
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId"),
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId"),
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId"));
+    if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+      String payload = task.getTaskPayload();
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+        return payloadLongValue(payload, "bundleSourceFileId");
+      }
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+        return payloadLongValue(payload, "fileId");
+      }
+    }
+    Long relatedFileId =
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId");
+    Long fileId =
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId");
+    Long sourceFileId =
+        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId");
+    return firstPositiveLong(relatedFileId, fileId, sourceFileId);
   }
 }

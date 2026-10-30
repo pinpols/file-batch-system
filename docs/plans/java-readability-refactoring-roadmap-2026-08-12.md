@@ -76,7 +76,7 @@
 
 **验收**：同一 commit 上重复扫描结果稳定；候选均能映射到模块、责任人和验证命令。
 
-**实施总账**：[阶段 0 分类总账](../analysis/java-readability-phase-0-classification-2026-08-12.md)；机器快照见 [Java 可读性治理扫描快照](../analysis/java-readability-inventory-2026-08-12.md)。
+**实施总账**：[阶段 0 分类总账](../audit/java-readability-phase-0-classification-2026-08-12.md)；机器快照见 [Java 可读性治理扫描快照](../stats/java-readability-inventory.md)。
 
 ### 阶段 1：低风险表达一致性（1～2 天）
 

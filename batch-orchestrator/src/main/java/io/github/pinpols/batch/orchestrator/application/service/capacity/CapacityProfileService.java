@@ -52,15 +52,12 @@ public class CapacityProfileService {
         selectRows(tenantId, resolvedFrom, resolvedTo, resolvedGroupBy, resolvedLimit).stream()
             .map(CapacityProfileRow::withRates)
             .toList();
+    Instant capturedAt = Instant.now();
+    CapacityProfileWindow window = new CapacityProfileWindow(resolvedFrom, resolvedTo);
+    CapacityProfileTotals totals = totals(rows);
+    CapacityProfileCoverage coverage = coverage();
     return new CapacityProfileReport(
-        Instant.now(),
-        tenantId,
-        new CapacityProfileWindow(resolvedFrom, resolvedTo),
-        resolvedGroupBy,
-        SCOPE,
-        rows,
-        totals(rows),
-        coverage());
+        capturedAt, tenantId, window, resolvedGroupBy, SCOPE, rows, totals, coverage);
   }
 
   private List<CapacityProfileRow> selectRows(
@@ -76,18 +73,32 @@ public class CapacityProfileService {
     if (limit == null) {
       return DEFAULT_LIMIT;
     }
-    return Math.min(Math.max(limit, 1), MAX_LIMIT);
+    int minimumLimit = Math.max(limit, 1);
+    return Math.min(minimumLimit, MAX_LIMIT);
   }
 
   private CapacityProfileTotals totals(List<CapacityProfileRow> rows) {
+    long instanceCount =
+        rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum();
+    long taskCount = rows.stream().mapToLong(CapacityProfileRow::taskCount).sum();
+    long successCount =
+        rows.stream().mapToLong(CapacityProfileRow::successCount).sum();
+    long failureCount =
+        rows.stream().mapToLong(CapacityProfileRow::failureCount).sum();
+    long totalDurationMs =
+        rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum();
+    long totalFileBytes =
+        rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum();
+    long processedRecords =
+        rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum();
     return new CapacityProfileTotals(
-        rows.stream().mapToLong(CapacityProfileRow::instanceCount).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::taskCount).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::successCount).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::failureCount).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::totalDurationMs).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::totalFileBytes).sum(),
-        rows.stream().mapToLong(CapacityProfileRow::processedRecords).sum());
+        instanceCount,
+        taskCount,
+        successCount,
+        failureCount,
+        totalDurationMs,
+        totalFileBytes,
+        processedRecords);
   }
 
   private CapacityProfileCoverage coverage() {

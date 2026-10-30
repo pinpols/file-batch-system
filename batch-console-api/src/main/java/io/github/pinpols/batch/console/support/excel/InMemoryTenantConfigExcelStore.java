@@ -27,7 +27,9 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
 
   @Override
   public String save(PackageExcelSession session) {
-    String token = UUID.randomUUID().toString().replace("-", "");
+    UUID tokenUuid = UUID.randomUUID();
+    String tokenUuidText = tokenUuid.toString();
+    String token = tokenUuidText.replace("-", "");
     sessions.put(token, session);
     return token;
   }
@@ -47,7 +49,9 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       if (sessions.getIfPresent(uploadToken) != session || applying.contains(uploadToken)) {
         return null;
       }
-      String previewToken = UUID.randomUUID().toString().replace("-", "");
+      UUID previewTokenUuid = UUID.randomUUID();
+      String previewTokenUuidText = previewTokenUuid.toString();
+      String previewToken = previewTokenUuidText.replace("-", "");
       previewTokens.put(uploadToken, previewToken);
       previewRevisions.put(uploadToken, configurationRevision);
       return new PreviewSnapshot(session, previewToken, configurationRevision);
@@ -101,9 +105,10 @@ public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelI
       return false;
     }
     synchronized (current) {
-      if (sessions.getIfPresent(uploadToken) != current
+      boolean previewReplacementIsNoLongerAllowed = sessions.getIfPresent(uploadToken) != current
           || applying.contains(uploadToken)
-          || !expectedPreviewToken.equals(previewTokens.getIfPresent(uploadToken))) {
+          || !expectedPreviewToken.equals(previewTokens.getIfPresent(uploadToken));
+      if (previewReplacementIsNoLongerAllowed) {
         return false;
       }
       sessions.put(uploadToken, session);

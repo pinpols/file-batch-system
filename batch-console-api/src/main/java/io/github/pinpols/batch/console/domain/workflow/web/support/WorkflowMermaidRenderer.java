@@ -12,7 +12,7 @@ import java.util.Map;
 /**
  * 把 workflow 定义渲染为 mermaid flowchart 文本。可贴入 GitHub README / PR / 文档站,平台无关。
  *
- * <p>节点形状按 nodeType 选择(START/END=stadium 椭圆,GATEWAY=菱形,FILE_STEP=圆柱,WAIT=子流程, JOB/TASK=矩形);边按
+ * <p>节点形状按 nodeType 选择(START/END=stadium 椭圆,GATEWAY=菱形,WAIT=子流程, JOB/TASK=矩形);边按
  * edgeType 渲染样式(CONDITION 带表达式 label,FAILURE 虚线)。
  */
 public final class WorkflowMermaidRenderer {
@@ -45,8 +45,12 @@ public final class WorkflowMermaidRenderer {
     List<ConsoleWorkflowEdgeResponse> edges = detail.edges() == null ? List.of() : detail.edges();
     for (ConsoleWorkflowEdgeResponse e : edges) {
       if (!Texts.hasText(e.fromNodeCode()) || !Texts.hasText(e.toNodeCode())) continue;
-      String from = nodeIds.getOrDefault(e.fromNodeCode(), sanitizeId(e.fromNodeCode()));
-      String to = nodeIds.getOrDefault(e.toNodeCode(), sanitizeId(e.toNodeCode()));
+      String fromNodeCode = e.fromNodeCode();
+      String fallbackFromNodeId = sanitizeId(e.fromNodeCode());
+      String from = nodeIds.getOrDefault(fromNodeCode, fallbackFromNodeId);
+      String toNodeCode = e.toNodeCode();
+      String fallbackToNodeId = sanitizeId(e.toNodeCode());
+      String to = nodeIds.getOrDefault(toNodeCode, fallbackToNodeId);
       sb.append("  ").append(from).append(arrowFor(e)).append(to).append("\n");
     }
     return sb.toString();
@@ -58,7 +62,6 @@ public final class WorkflowMermaidRenderer {
     return switch (type) {
       case "START", "END" -> "([" + label + "])";
       case "GATEWAY" -> "{" + label + "}";
-      case "FILE_STEP" -> "[(" + label + ")]";
       case "WAIT" -> "[[" + label + "]]";
       default -> "[" + label + "]";
     };
@@ -73,11 +76,13 @@ public final class WorkflowMermaidRenderer {
 
   private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
     String type = e.edgeType() == null ? "" : e.edgeType().toUpperCase(Locale.ROOT);
+    if ("CONDITION".equals(type)) {
+      String conditionExpr = e.conditionExpr();
+      String conditionLabel = Texts.hasText(conditionExpr) ? conditionExpr : "?";
+      String escapedConditionLabel = escapeLabel(conditionLabel);
+      return " -- \"" + escapedConditionLabel + "\" --> ";
+    }
     return switch (type) {
-      case "CONDITION" ->
-        " -- \""
-            + escapeLabel(Texts.hasText(e.conditionExpr()) ? e.conditionExpr() : "?")
-            + "\" --> ";
       case "FAILURE" -> " -. failure .-> ";
       case "SUCCESS" -> " -- success --> ";
       case "ALWAYS" -> " --> ";
@@ -109,6 +114,8 @@ public final class WorkflowMermaidRenderer {
   /** Mermaid label 里不允许裸 " / 换行 / 反引号。 */
   static String escapeLabel(String raw) {
     if (raw == null) return "";
-    return raw.replace("\"", "&quot;").replace("\n", " ").replace("`", "'");
+    String escapedQuotes = raw.replace("\"", "&quot;");
+    String escapedNewlines = escapedQuotes.replace("\n", " ");
+    return escapedNewlines.replace("`", "'");
   }
 }

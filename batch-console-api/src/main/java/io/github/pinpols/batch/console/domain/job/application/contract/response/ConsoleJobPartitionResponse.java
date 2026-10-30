@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.job.application.contract.response;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleJobPartitionResponse(
     Long id,
     String tenantId,

@@ -1,11 +1,15 @@
 package io.github.pinpols.batch.orchestrator.application.engine;
 
+import io.github.pinpols.batch.common.enums.ReplayOperationStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkflowTerminalOutboxService {
 
   private final DomainEventPublisher domainEventPublisher;
+  private final ReplayOperationMapper replayOperationMapper;
 
   /** workflow_run 终态枚举集合（白名单），调用方先行判断后再触发本写入。 */
   public static boolean isTerminal(String runStatus) {
@@ -45,6 +50,7 @@ public class WorkflowTerminalOutboxService {
     if (EmptyChecks.isNull(workflowRun) || !isTerminal(terminalStatus)) {
       return;
     }
+    updateReplayOperationOutcome(workflowRun, terminalStatus, finishedAt);
     Map<String, Object> payload = new LinkedHashMap<>();
     payload.put("schemaVersion", "v2");
     payload.put("tenantId", workflowRun.getTenantId());
@@ -52,25 +58,51 @@ public class WorkflowTerminalOutboxService {
     payload.put("workflowDefinitionId", workflowRun.getWorkflowDefinitionId());
     payload.put("relatedJobInstanceId", workflowRun.getRelatedJobInstanceId());
     payload.put("runStatus", terminalStatus);
-    payload.put(
-        "bizDate",
-        EmptyChecks.isNull(workflowRun.getBizDate())
-            ? null
-            : workflowRun.getBizDate().toString());
-    payload.put(
-        "startedAt",
-        EmptyChecks.isNull(workflowRun.getStartedAt())
-            ? null
-            : workflowRun.getStartedAt().toString());
-    payload.put("finishedAt", EmptyChecks.isNull(finishedAt) ? null : finishedAt.toString());
+    LocalDate businessDate = workflowRun.getBizDate();
+    String businessDateText = EmptyChecks.isNull(businessDate) ? null : businessDate.toString();
+    payload.put("bizDate", businessDateText);
+    Instant startedAt = workflowRun.getStartedAt();
+    String startedAtText = EmptyChecks.isNull(startedAt) ? null : startedAt.toString();
+    payload.put("startedAt", startedAtText);
+    String finishedAtText = EmptyChecks.isNull(finishedAt) ? null : finishedAt.toString();
+    payload.put("finishedAt", finishedAtText);
     payload.put("traceId", workflowRun.getTraceId());
 
-    domainEventPublisher.publish(DomainEvent.builder(workflowRun.getTenantId())
-        .aggregate("WORKFLOW_RUN", workflowRun.getId())
-        .type("WORKFLOW_TERMINAL")
-        .key(workflowRun.getTenantId() + ":workflow:" + workflowRun.getId() + ":terminal")
-        .payload(payload)
-        .traceId(workflowRun.getTraceId())
-        .build());
+    String eventTenantId = workflowRun.getTenantId();
+    DomainEvent.Builder eventBuilder = DomainEvent.builder(eventTenantId);
+    Long aggregateId = workflowRun.getId();
+    eventBuilder.aggregate("WORKFLOW_RUN", aggregateId);
+    eventBuilder.type("WORKFLOW_TERMINAL");
+    String eventKeyTenantId = workflowRun.getTenantId();
+    Long eventKeyWorkflowRunId = workflowRun.getId();
+    String eventKey = eventKeyTenantId + ":workflow:" + eventKeyWorkflowRunId + ":terminal";
+    eventBuilder.key(eventKey);
+    eventBuilder.payload(payload);
+    String eventTraceId = workflowRun.getTraceId();
+    eventBuilder.traceId(eventTraceId);
+    DomainEvent terminalEvent = eventBuilder.build();
+    domainEventPublisher.publish(terminalEvent);
+  }
+
+  private void updateReplayOperationOutcome(
+      WorkflowRunEntity workflowRun, String terminalStatus, Instant finishedAt) {
+    replayOperationMapper.setTenantContext(workflowRun.getTenantId());
+    boolean succeeded = WorkflowRunStatus.SUCCESS.code().equals(terminalStatus)
+        || WorkflowRunStatus.SUCCESS_DRY_RUN.code().equals(terminalStatus);
+    String operationStatus = succeeded
+        ? ReplayOperationStatus.SUCCEEDED.code()
+        : WorkflowRunStatus.TERMINATED.code().equals(terminalStatus)
+            ? ReplayOperationStatus.CANCELLED.code()
+            : ReplayOperationStatus.FAILED.code();
+    ReplayOperationWorkflowOutcomeParam outcome = ReplayOperationWorkflowOutcomeParam.builder()
+        .tenantId(workflowRun.getTenantId())
+        .workflowRunId(workflowRun.getId())
+        .status(operationStatus)
+        .succeededCount(succeeded ? 1 : 0)
+        .failedCount(succeeded ? 0 : 1)
+        .inFlightCount(0)
+        .now(finishedAt)
+        .build();
+    replayOperationMapper.updateWorkflowTargetOutcome(outcome);
   }
 }

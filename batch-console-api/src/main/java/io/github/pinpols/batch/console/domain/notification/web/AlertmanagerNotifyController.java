@@ -54,6 +54,11 @@ public class AlertmanagerNotifyController {
     }
     authenticate(authorization);
     AmNotifyOutcome outcome = notifyService.deliver(receiver, payload);
+    if (!outcome.delivered() && !outcome.intentionallyDisabled()) {
+      // AM 仅对失败 HTTP 回执重试；渠道失败或配置缺失不能被确认为已经投递。
+      throw BizException.of(
+          ResultCode.SERVICE_UNAVAILABLE, "error.alert.notification_delivery_pending");
+    }
     return CommonResponse.success(outcome);
   }
 

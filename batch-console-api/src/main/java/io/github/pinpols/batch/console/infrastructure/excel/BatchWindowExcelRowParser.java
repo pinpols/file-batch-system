@@ -19,7 +19,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import lombok.Builder;
 
-/** Shared parser/upsert helper for batch_window Excel rows. */
+/** batch_window Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BatchWindowExcelRowParser {
 
   public static final String SHEET_NAME = "batch_window";
@@ -33,23 +33,33 @@ public final class BatchWindowExcelRowParser {
   public static WindowRow parseRow(
       String tenantId, int rowNo, Map<String, String> values, List<String> issues) {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
-    return WindowRow.builder()
-        .rowNo(rowNo)
-        .tenantId(effectiveTenant)
-        .windowCode(
-            CodeNormalizer.toConfigFormOrNull(requireText(values, "window_code", 128, issues)))
-        .windowName(requireText(values, "window_name", 256, issues))
-        .timezone(requireText(values, "timezone", 64, issues))
-        .startTime(requireTime(values, "start_time", issues))
-        .endTime(requireTime(values, "end_time", issues))
-        .endStrategy(
-            optionalEnum(values, "end_strategy", END_STRATEGIES, 32, "FINISH_RUNNING", issues))
-        .outOfWindowAction(
-            optionalEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, "WAIT", issues))
-        .allowCrossDay(optionalBoolean(values, "allow_cross_day", false, issues))
-        .enabled(optionalBoolean(values, "enabled", true, issues))
-        .description(optionalText(values, "description", 512, issues))
-        .build();
+    WindowRow.WindowRowBuilder rowBuilder =
+        WindowRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
+    String windowCodeText = requireText(values, "window_code", 128, issues);
+    String windowCode = CodeNormalizer.toConfigFormOrNull(windowCodeText);
+    rowBuilder.windowCode(windowCode);
+
+    String windowName = requireText(values, "window_name", 256, issues);
+    rowBuilder.windowName(windowName);
+    String timezone = requireText(values, "timezone", 64, issues);
+    rowBuilder.timezone(timezone);
+    String startTime = requireTime(values, "start_time", issues);
+    rowBuilder.startTime(startTime);
+    String endTime = requireTime(values, "end_time", issues);
+    rowBuilder.endTime(endTime);
+    String endStrategy =
+        optionalEnum(values, "end_strategy", END_STRATEGIES, 32, "FINISH_RUNNING", issues);
+    rowBuilder.endStrategy(endStrategy);
+    String outOfWindowAction =
+        optionalEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, "WAIT", issues);
+    rowBuilder.outOfWindowAction(outOfWindowAction);
+    Boolean allowCrossDay = optionalBoolean(values, "allow_cross_day", false, issues);
+    rowBuilder.allowCrossDay(allowCrossDay);
+    Boolean enabled = optionalBoolean(values, "enabled", true, issues);
+    rowBuilder.enabled(enabled);
+    String description = optionalText(values, "description", 512, issues);
+    rowBuilder.description(description);
+    return rowBuilder.build();
   }
 
   public static BatchWindowUpsertParam toUpsertParam(WindowRow row) {

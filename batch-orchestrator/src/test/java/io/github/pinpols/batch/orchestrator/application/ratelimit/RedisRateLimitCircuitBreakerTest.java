@@ -22,6 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentMatchers;
 
 /**
  * Redis 短路熔断行为测试（用 mock {@link LettuceBasedProxyManager} 确定性驱动状态机，不依赖真 Redis）。
@@ -60,7 +61,7 @@ class RedisRateLimitCircuitBreakerTest {
   }
 
   private static Supplier<BucketConfiguration> anyConfigurationSupplier() {
-    return org.mockito.ArgumentMatchers.any();
+    return ArgumentMatchers.any();
   }
 
   @Test

@@ -59,12 +59,13 @@ public class LocalizedErrorRenderer {
       // 当 error_args JSONB 损坏导致 parseArgs 返回空数组、message 模板含 {N} 占位符时，
       // Spring 内部 MessageFormat 会抛 IllegalArgumentException；旧版仅 catch NoSuchMessageException
       // 让异常透传到 5xx，影响 console 列表查询。改为 fallback + warn 让历史异常数据不影响读路径。
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "localized error render failed; falling back to raw message: errorKey={}, locale={},"
               + " cause={}",
           errorKey,
           locale,
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
       return fallback;
     }
   }

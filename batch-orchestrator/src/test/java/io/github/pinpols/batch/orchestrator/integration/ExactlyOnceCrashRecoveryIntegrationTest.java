@@ -3,14 +3,19 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.TaskStatus;
+import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FinishTaskParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,6 +47,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 20);
 
   @Autowired
   private JobTaskMapper jobTaskMapper;
@@ -101,6 +107,13 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("不重复出账,重投的同一 outbox 事件第二次 insert 被 (tenant_id, event_key) 幂等空转")
   void duplicateOutboxEvent_dedupedByEventKey_noDoubleEmit() {
+    final String selectCountSql = """
+        SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?
+    """;
+    final String deleteOutboxEventSql = """
+        DELETE FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?
+    """;
+
     String eventKey = "EVT_" + System.nanoTime();
     try {
       // act:同一事件(同 event_key)投递两次,模拟重投/重放
@@ -110,15 +123,10 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
       // assert:第二次空转;DB 中该 (tenant_id,event_key) 只有一行 → 下游不会重复出账
       assertThat(first).as("首次 outbox 写入应成功").isEqualTo(1);
       assertThat(second).as("重投的同 event_key 第二次 insert 必须空转").isZero();
-      Integer rows = jdbcTemplate.queryForObject(
-          "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?",
-          Integer.class,
-          TENANT,
-          eventKey);
+      Integer rows = jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, eventKey);
       assertThat(rows).as("同一事件键全局只一行").isEqualTo(1);
     } finally {
-      jdbcTemplate.update(
-          "DELETE FROM batch.outbox_event WHERE tenant_id = ? AND event_key = ?", TENANT, eventKey);
+      jdbcTemplate.update(deleteOutboxEventSql, TENANT, eventKey);
     }
   }
 
@@ -153,63 +161,94 @@ class ExactlyOnceCrashRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   /** 用裸 JDBC 造一条 RUNNING、version=0 的 job_task(连带最小依赖行),返回 taskId。 */
   private long insertRunningTask(String suffix) {
-    String jobCode = "JOB_" + suffix;
-    Long jobDefinitionId = jdbcTemplate.queryForObject("""
-            INSERT INTO batch.job_definition (
-                tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
-            ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
-            RETURNING id
-            """, Long.class, TENANT, jobCode, jobCode);
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        """
-            INSERT INTO batch.trigger_request (
-                tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
-            ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
-            RETURNING id
-            """, Long.class, TENANT, "REQ_" + suffix, jobCode, "TR_DEDUP_" + suffix);
+    final String insertJobInstanceSql = """
+              INSERT INTO batch.job_instance (
+                  tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
+                  trigger_type, instance_status, dedup_key, biz_date
+              ) VALUES (?, ?, ?, ?, ?, 'EVENT', 'RUNNING', ?, ?)
+              RETURNING id
+              """;
+    final String selectIdSql = """
+        select id from batch.job_definition where tenant_id = ? and job_code = ?
+    """;
+    final String insertJobTaskSql = """
+              INSERT INTO batch.job_task (
+                  tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq, task_status, version
+              ) VALUES (?, ?, (SELECT biz_date FROM batch.job_instance WHERE tenant_id = ?\s\
+              AND id = ?), 'EXECUTION', 1, 'RUNNING', 0)
+              RETURNING id
+              """;
+
+    WorkflowLaunchSeed workflow = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "GENERAL", "DEFAULT", TriggerType.MANUAL, BIZ_DATE);
+    WorkflowChildTriggerSeed child = LaunchIntegrationFixture.prepareWorkflowChildTriggerRequest(
+        jdbcTemplate, TENANT, workflow, BIZ_DATE, TriggerType.MANUAL);
     Long jobInstanceId = jdbcTemplate.queryForObject(
-        """
-            INSERT INTO batch.job_instance (
-                tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
-                trigger_type, instance_status, dedup_key, biz_date
-            ) VALUES (?, ?, ?, ?, ?, 'API', 'RUNNING', ?, CURRENT_DATE)
-            RETURNING id
-            """,
+        insertJobInstanceSql,
         Long.class,
         TENANT,
-        jobDefinitionId,
-        triggerRequestId,
-        jobCode,
+        jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, workflow.jobCode()),
+        child.triggerRequestId(),
+        workflow.jobCode(),
         "INST_" + suffix,
-        "DEDUP_" + suffix);
-    return jdbcTemplate.queryForObject("""
-            INSERT INTO batch.job_task (
-                tenant_id, job_instance_id, task_type, task_seq, task_status, version
-            ) VALUES (?, ?, 'EXECUTION', 1, 'RUNNING', 0)
-            RETURNING id
-            """, Long.class, TENANT, jobInstanceId);
+        "DEDUP_" + suffix,
+        BIZ_DATE);
+    return jdbcTemplate.queryForObject(
+        insertJobTaskSql, Long.class, TENANT, jobInstanceId, TENANT, jobInstanceId);
   }
 
   private String taskStatus(long taskId) {
-    return jdbcTemplate.queryForObject(
-        "SELECT task_status FROM batch.job_task WHERE id = ?", String.class, taskId);
+    final String selectTaskStatusSql = """
+        SELECT task_status FROM batch.job_task WHERE id = ?
+    """;
+
+    return jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, taskId);
   }
 
   private long taskVersion(long taskId) {
-    return jdbcTemplate.queryForObject(
-        "SELECT version FROM batch.job_task WHERE id = ?", Long.class, taskId);
+    final String selectVersionSql = """
+        SELECT version FROM batch.job_task WHERE id = ?
+    """;
+
+    return jdbcTemplate.queryForObject(selectVersionSql, Long.class, taskId);
   }
 
   private void cleanupTask(long taskId) {
-    Long instanceId = jdbcTemplate.queryForObject(
-        "SELECT job_instance_id FROM batch.job_task WHERE id = ?", Long.class, taskId);
-    jdbcTemplate.update("DELETE FROM batch.job_task WHERE id = ?", taskId);
-    Long defId = jdbcTemplate.queryForObject(
-        "SELECT job_definition_id FROM batch.job_instance WHERE id = ?", Long.class, instanceId);
-    Long trId = jdbcTemplate.queryForObject(
-        "SELECT trigger_request_id FROM batch.job_instance WHERE id = ?", Long.class, instanceId);
-    jdbcTemplate.update("DELETE FROM batch.job_instance WHERE id = ?", instanceId);
-    jdbcTemplate.update("DELETE FROM batch.trigger_request WHERE id = ?", trId);
-    jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", defId);
+    final String selectJobInstanceIdSql = """
+        SELECT job_instance_id FROM batch.job_task WHERE id = ?
+    """;
+    final String deleteJobTaskSql = """
+      DELETE FROM batch.job_task WHERE id = ?
+  """;
+    final String selectTriggerRequestIdSql = """
+      SELECT trigger_request_id FROM batch.job_instance WHERE id = ?
+  """;
+    final String selectParentWorkflowRunIdSql = """
+      SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
+  """;
+    final String selectTriggerRequestIdSql2 = """
+      SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
+  """;
+    final String deleteJobInstanceSql = """
+        DELETE FROM batch.job_instance WHERE id = ?
+    """;
+    final String deleteTriggerRequestSql = """
+        DELETE FROM batch.trigger_request WHERE id = ?
+    """;
+    final String deleteWorkflowRunSql = """
+        DELETE FROM batch.workflow_run WHERE id = ?
+    """;
+
+    Long instanceId = jdbcTemplate.queryForObject(selectJobInstanceIdSql, Long.class, taskId);
+    jdbcTemplate.update(deleteJobTaskSql, taskId);
+    Long trId = jdbcTemplate.queryForObject(selectTriggerRequestIdSql, Long.class, instanceId);
+    Long workflowRunId =
+        jdbcTemplate.queryForObject(selectParentWorkflowRunIdSql, Long.class, trId);
+    Long rootTriggerRequestId =
+        jdbcTemplate.queryForObject(selectTriggerRequestIdSql2, Long.class, workflowRunId);
+    jdbcTemplate.update(deleteJobInstanceSql, instanceId);
+    jdbcTemplate.update(deleteTriggerRequestSql, trId);
+    jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);
+    jdbcTemplate.update(deleteTriggerRequestSql, rootTriggerRequestId);
   }
 }

@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.S3BucketSupport;
 import java.io.InputStream;
+import java.net.URL;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -18,10 +19,12 @@ import software.amazon.awssdk.services.s3.model.CompletedPart;
 import software.amazon.awssdk.services.s3.model.CopyObjectRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadRequest;
 import software.amazon.awssdk.services.s3.model.CreateMultipartUploadResponse;
+import software.amazon.awssdk.services.s3.model.Delete;
 import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.DeleteObjectsRequest;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.HeadObjectRequest;
+import software.amazon.awssdk.services.s3.model.HeadObjectResponse;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Request;
 import software.amazon.awssdk.services.s3.model.ListObjectsV2Response;
 import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
@@ -33,6 +36,8 @@ import software.amazon.awssdk.services.s3.model.UploadPartRequest;
 import software.amazon.awssdk.services.s3.model.UploadPartResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
 /**
@@ -115,16 +120,18 @@ public class S3ObjectStore implements BatchObjectStore {
     List<String> deduped =
         keys.stream().filter(k -> k != null && !k.isBlank()).distinct().toList();
     for (int i = 0; i < deduped.size(); i += MAX_BATCH_DELETE) {
-      List<String> chunk = deduped.subList(i, Math.min(i + MAX_BATCH_DELETE, deduped.size()));
+      int batchEndExclusive = Math.min(i + MAX_BATCH_DELETE, deduped.size());
+      List<String> chunk = deduped.subList(i, batchEndExclusive);
       try {
-        s3Client.deleteObjects(DeleteObjectsRequest.builder()
-            .bucket(bucket)
-            .delete(delete -> delete
-                .objects(chunk.stream()
-                    .map(k -> ObjectIdentifier.builder().key(k).build())
-                    .toList())
-                .quiet(true))
-            .build());
+        DeleteObjectsRequest.Builder requestBuilder =
+            DeleteObjectsRequest.builder().bucket(bucket);
+        Delete.Builder deleteBuilder = Delete.builder();
+        List<ObjectIdentifier> objectIdentifiers = chunk.stream()
+            .map(key -> ObjectIdentifier.builder().key(key).build())
+            .toList();
+        deleteBuilder.objects(objectIdentifiers).quiet(true);
+        requestBuilder.delete(deleteBuilder.build());
+        s3Client.deleteObjects(requestBuilder.build());
       } catch (S3Exception ex) {
         // 部分 S3 兼容后端(个别 SeaweedFS/RustFS 版本)不实现 DeleteObjects(501/NotImplemented):
         // 退化为逐个删,保证可移植。其它错误(权限等)仍按映射抛出。
@@ -150,8 +157,9 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream get(String bucket, String key) {
     try {
-      return s3Client.getObject(
-          GetObjectRequest.builder().bucket(bucket).key(key).build());
+      GetObjectRequest request =
+          GetObjectRequest.builder().bucket(bucket).key(key).build();
+      return s3Client.getObject(request);
     } catch (Exception ex) {
       throw mapException("get", bucket, key, ex);
     }
@@ -160,11 +168,12 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public InputStream getFrom(String bucket, String key, long offset) {
     try {
-      return s3Client.getObject(GetObjectRequest.builder()
+      GetObjectRequest request = GetObjectRequest.builder()
           .bucket(bucket)
           .key(key)
           .range("bytes=" + offset + "-")
-          .build());
+          .build();
+      return s3Client.getObject(request);
     } catch (Exception ex) {
       throw mapException("getFrom", bucket, key, ex);
     }
@@ -173,9 +182,10 @@ public class S3ObjectStore implements BatchObjectStore {
   @Override
   public long statSize(String bucket, String key) {
     try {
-      return s3Client
-          .headObject(HeadObjectRequest.builder().bucket(bucket).key(key).build())
-          .contentLength();
+      HeadObjectRequest request =
+          HeadObjectRequest.builder().bucket(bucket).key(key).build();
+      HeadObjectResponse response = s3Client.headObject(request);
+      return response.contentLength();
     } catch (Exception ex) {
       throw mapException("statSize", bucket, key, ex);
     }
@@ -230,7 +240,9 @@ public class S3ObjectStore implements BatchObjectStore {
           .signatureDuration(ttl)
           .getObjectRequest(get -> get.bucket(bucket).key(key))
           .build();
-      return presigner.presignGetObject(req).url().toString();
+      PresignedGetObjectRequest presignedResponse = presigner.presignGetObject(req);
+      URL presignedUrl = presignedResponse.url();
+      return presignedUrl.toString();
     } catch (Exception ex) {
       throw mapException("presign", bucket, key, ex);
     }
@@ -253,7 +265,9 @@ public class S3ObjectStore implements BatchObjectStore {
             }
           })
           .build();
-      return presigner.presignPutObject(req).url().toString();
+      PresignedPutObjectRequest presignedResponse = presigner.presignPutObject(req);
+      URL presignedUrl = presignedResponse.url();
+      return presignedUrl.toString();
     } catch (Exception ex) {
       throw mapException("presignPut", bucket, key, ex);
     }
@@ -265,9 +279,16 @@ public class S3ObjectStore implements BatchObjectStore {
   }
 
   private boolean shouldMultipart(long size) {
-    return properties.isMultipartEnabled()
-        && size >= Math.max(properties.getMultipartThresholdBytes(), minPartSize())
-        && properties.getMultipartPartSizeBytes() >= minPartSize();
+    if (!properties.isMultipartEnabled()) {
+      return false;
+    }
+    long multipartThresholdBytes = properties.getMultipartThresholdBytes();
+    long minimumPartSize = minPartSize();
+    long effectiveMultipartThreshold = Math.max(multipartThresholdBytes, minimumPartSize);
+    if (size < effectiveMultipartThreshold) {
+      return false;
+    }
+    return properties.getMultipartPartSizeBytes() >= minPartSize();
   }
 
   private void putMultipart(
@@ -287,15 +308,16 @@ public class S3ObjectStore implements BatchObjectStore {
       while (remaining > 0) {
         int len = (int) Math.min(partSize, remaining);
         byte[] bytes = in.readNBytes(len);
-        UploadPartResponse uploaded = s3Client.uploadPart(
-            UploadPartRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .uploadId(uploadId)
-                .partNumber(partNumber)
-                .contentLength((long) bytes.length)
-                .build(),
-            RequestBody.fromBytes(bytes));
+        long contentLength = (long) bytes.length;
+        UploadPartRequest request = UploadPartRequest.builder()
+            .bucket(bucket)
+            .key(key)
+            .uploadId(uploadId)
+            .partNumber(partNumber)
+            .contentLength(contentLength)
+            .build();
+        RequestBody requestBody = RequestBody.fromBytes(bytes);
+        UploadPartResponse uploaded = s3Client.uploadPart(request, requestBody);
         completedParts.add(
             CompletedPart.builder().partNumber(partNumber).eTag(uploaded.eTag()).build());
         remaining -= bytes.length;
@@ -355,7 +377,8 @@ public class S3ObjectStore implements BatchObjectStore {
         default -> new ObjectStoreException(message, ex);
       };
     }
-    return new ObjectStoreException(message(operation, bucket, key), ex);
+    String operationMessage = message(operation, bucket, key);
+    return new ObjectStoreException(operationMessage, ex);
   }
 
   private static String message(String operation, String bucket, String key) {

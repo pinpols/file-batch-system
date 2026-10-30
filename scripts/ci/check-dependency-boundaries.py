@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：模块依赖边界。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-dependency-boundaries.py；参数与前置环境见下方说明及所属 README。
 from __future__ import annotations
 
 import sys

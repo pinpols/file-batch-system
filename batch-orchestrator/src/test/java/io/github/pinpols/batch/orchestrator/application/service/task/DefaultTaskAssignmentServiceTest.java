@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -10,6 +11,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import io.github.pinpols.batch.common.dto.DependencyResultReference;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
@@ -21,6 +26,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -31,6 +37,7 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -39,6 +46,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 
 /**
  * 守护 worker 认领 / 续租关键路径:
@@ -100,7 +108,7 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("assignWorker: task 不存在 → null,不读 worker / 不调 CAS")
   void shouldReturnNull_whenTaskMissing() {
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(null);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(null);
 
     assertThat(service.assignWorker("ta", 100L, "w1")).isNull();
     verify(workerRegistryMapper, never()).selectByTenantAndWorkerCode(anyString(), anyString());
@@ -111,7 +119,7 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: workerCode 为空 → 返 current,不读 worker")
   void shouldReturnCurrent_whenWorkerCodeBlank() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
 
     JobTaskEntity result = service.assignWorker("ta", 100L, "  ");
     assertThat(result).isSameAs(task);
@@ -122,7 +130,7 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: worker 不在线 → 返 current,不 CAS")
   void shouldReturnCurrent_whenWorkerOffline() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));
 
@@ -135,7 +143,7 @@ class DefaultTaskAssignmentServiceTest {
   @DisplayName("assignWorker: worker DRAINING → 返 current,不 CAS")
   void shouldReturnCurrent_whenWorkerDraining() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.DRAINING.code(), "default"));
 
@@ -150,7 +158,7 @@ class DefaultTaskAssignmentServiceTest {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity claimed = task(100L, 2L, TaskStatus.RUNNING.code());
     claimed.setAssignedWorkerCode("w1");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.DECOMMISSIONED.code(), "PROCESS"));
     when(workerRegistryMapper.selectByTenantAndWorkerCode("default-tenant", "w1"))
@@ -170,7 +178,7 @@ class DefaultTaskAssignmentServiceTest {
   void shouldReturnCurrent_whenWorkerGroupMismatch() {
     JobTaskEntity task = task(100L, 1L, TaskStatus.READY.code());
     task.setJobPartitionId(50L);
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(task);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(task);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), "wrong-group"));
     JobPartitionEntity p = new JobPartitionEntity();
@@ -187,7 +195,7 @@ class DefaultTaskAssignmentServiceTest {
   void shouldReturnRefreshedTask_whenAssignCasConflict() {
     JobTaskEntity initial = task(100L, 1L, TaskStatus.READY.code());
     JobTaskEntity refreshed = task(100L, 2L, TaskStatus.RUNNING.code());
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial, refreshed);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial, refreshed);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.ONLINE.code(), null));
     when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(null);
@@ -203,7 +211,7 @@ class DefaultTaskAssignmentServiceTest {
     initial.setAssignedWorkerCode("import-memory");
     JobTaskEntity claimed = task(100L, 4L, TaskStatus.RUNNING.code());
     claimed.setAssignedWorkerCode("import-memory-pod-a");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-memory-pod-a"))
         .thenReturn(workerWithPool("import-memory-pod-a", "import-memory"));
     when(jobTaskMapper.assignWorker(any(AssignWorkerParam.class))).thenReturn(claimed);
@@ -222,7 +230,7 @@ class DefaultTaskAssignmentServiceTest {
   void shouldRejectWorker_whenInstanceBelongsToOtherPool() {
     JobTaskEntity initial = task(100L, 3L, TaskStatus.READY.code());
     initial.setAssignedWorkerCode("import-memory");
-    when(jobTaskMapper.selectById("ta", 100L)).thenReturn(initial);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 100L)).thenReturn(initial);
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "import-cpu-pod-a"))
         .thenReturn(workerWithPool("import-cpu-pod-a", "import-cpu"));
 
@@ -426,12 +434,55 @@ class DefaultTaskAssignmentServiceTest {
   }
 
   @Test
+  @DisplayName("损坏分片快照回退时不把原始异常及凭据写入日志")
+  void shouldNotLogRawMalformedPartitionSnapshot_whenLoadingEffectiveConfig() {
+    JobTaskEntity task = task(103L, 1L, TaskStatus.RUNNING.code());
+    task.setJobInstanceId(13L);
+    task.setJobPartitionId(50L);
+    when(jobTaskMapper.selectById("ta", 103L)).thenReturn(task);
+
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(13L);
+    instance.setJobDefinitionId(20L);
+    when(jobInstanceMapper.selectById("ta", 13L)).thenReturn(instance);
+
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setId(50L);
+    partition.setInputSnapshot("{\"password\":\"probe-secret\",");
+    when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
+
+    Logger logger = (Logger) LoggerFactory.getLogger(DefaultTaskAssignmentService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      EffectiveTaskConfig config = service.loadEffectiveConfig("ta", 103L);
+
+      assertThat(config.partitionPlanVersion()).isNull();
+      assertThat(appender.list).anySatisfy(event -> {
+        assertThat(event.getFormattedMessage())
+            .contains("partitionId=50")
+            .doesNotContain("probe-secret");
+        assertThat(event.getThrowableProxy()).isNull();
+      });
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test
   @DisplayName("loadEffectiveConfig: 新实例使用创建时冻结的执行策略而非当前作业定义")
   void shouldPreferInstanceExecutionPolicySnapshot_whenLoadingEffectiveConfig() {
     JobTaskEntity task = task(101L, 1L, TaskStatus.RUNNING.code());
     task.setJobInstanceId(11L);
     task.setTaskType("IMPORT");
-    task.setTaskPayload("{}");
+    String pinnedCrossDayPayload = """
+        {"crossDay":{"prior_day":{"resultVersionId":9876,"versionNo":3,
+        "businessKey":"job:JOB_A:2026-10-13","payloadStorage":"INLINE_JSON",
+        "output":{"total":42}}}}
+        """;
+    task.setTaskPayload(pinnedCrossDayPayload);
     when(jobTaskMapper.selectById("ta", 101L)).thenReturn(task);
 
     JobInstanceEntity instance = new JobInstanceEntity();
@@ -442,7 +493,12 @@ class DefaultTaskAssignmentServiceTest {
     instance.setJobCode("JOB_A");
     instance.setParamsSnapshot("""
         {"executionPolicy":{"executionMode":"INCREMENTAL","watermarkField":"updated_at",
-         "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900}}
+         "retryPolicy":"FIXED","retryMaxCount":2,"timeoutSeconds":900},
+         "dependencyResultSnapshot":[{"upstreamJobCode":"UPSTREAM_JOB",
+         "bizDateAlignment":"PREVIOUS_BIZ_DAY","upstreamBizDate":"2026-04-30",
+         "businessKey":"job:UPSTREAM_JOB:2026-04-30","versionNo":4,
+         "resultVersionId":9001,"sourceJobInstanceId":8001,
+         "effectiveAt":"2026-05-01T00:00:00Z"}]}
         """);
     when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
     when(jobDefinitionMapper.selectById(20L))
@@ -462,6 +518,36 @@ class DefaultTaskAssignmentServiceTest {
     assertThat(config.retryPolicy()).isEqualTo("FIXED");
     assertThat(config.retryMaxCount()).isEqualTo(2);
     assertThat(config.timeoutSeconds()).isEqualTo(900);
+    assertThat(config.payload()).isEqualTo(pinnedCrossDayPayload);
+    assertThat(config.dependencyResultSnapshot())
+        .containsExactly(new DependencyResultReference(
+            "UPSTREAM_JOB",
+            "PREVIOUS_BIZ_DAY",
+            LocalDate.parse("2026-04-30"),
+            "job:UPSTREAM_JOB:2026-04-30",
+            4,
+            9001L,
+            8001L,
+            Instant.parse("2026-05-01T00:00:00Z")));
+  }
+
+  @Test
+  @DisplayName("loadEffectiveConfig: 非法依赖结果快照拒绝 Worker CLAIM 配置")
+  void shouldFailClosedWhenDependencyResultSnapshotIsMalformed() {
+    JobTaskEntity task = task(102L, 1L, TaskStatus.RUNNING.code());
+    task.setJobInstanceId(12L);
+    when(jobTaskMapper.selectById("ta", 102L)).thenReturn(task);
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(12L);
+    instance.setTenantId("ta");
+    instance.setJobDefinitionId(20L);
+    instance.setParamsSnapshot(
+        "{\"dependencyResultSnapshot\":[{\"upstreamBizDate\":\"bad-date\"}]}");
+    when(jobInstanceMapper.selectById("ta", 12L)).thenReturn(instance);
+
+    assertThatThrownBy(() -> service.loadEffectiveConfig("ta", 102L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("refusing worker claim");
   }
 
   // ===== renewLeaseBatch (PERF 5.3) =====
@@ -469,11 +555,11 @@ class DefaultTaskAssignmentServiceTest {
   @Test
   @DisplayName("renewLeaseBatch: 一条 set-based SQL;结果与入参逐位对齐,缺席行=false")
   void shouldMapRowsBackToItems_whenRenewingLeaseBatch() {
-    var row1 = new io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow();
+    var row1 = new RenewLeaseBatchRow();
     row1.setTenantId("ta");
     row1.setTaskId(1L);
     row1.setCancelRequested(false);
-    var row3 = new io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow();
+    var row3 = new RenewLeaseBatchRow();
     row3.setTenantId("ta");
     row3.setTaskId(3L);
     row3.setCancelRequested(true);
@@ -524,8 +610,8 @@ class DefaultTaskAssignmentServiceTest {
   void shouldLookUpWorkerOnce_whenAssigningWithMemo() {
     JobTaskEntity t1 = task(101L, 1L, TaskStatus.READY.code());
     JobTaskEntity t2 = task(102L, 1L, TaskStatus.READY.code());
-    when(jobTaskMapper.selectById("ta", 101L)).thenReturn(t1);
-    when(jobTaskMapper.selectById("ta", 102L)).thenReturn(t2);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 101L)).thenReturn(t1);
+    when(jobTaskMapper.selectForWorkerClaim("ta", 102L)).thenReturn(t2);
     // worker 离线:两次 claim 都判不可认领,但 worker_registry 只应查一次
     when(workerRegistryMapper.selectByTenantAndWorkerCode("ta", "w1"))
         .thenReturn(worker(WorkerRegistryStatus.OFFLINE.code(), "default"));

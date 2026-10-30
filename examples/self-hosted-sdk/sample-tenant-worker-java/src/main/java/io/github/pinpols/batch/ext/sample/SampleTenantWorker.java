@@ -30,21 +30,21 @@ public final class SampleTenantWorker {
   private static final Logger log = LoggerFactory.getLogger(SampleTenantWorker.class);
 
   public static void main(String[] args) {
-    BatchPlatformClientConfig config =
-        BatchPlatformClientConfig.builder()
+    var configBuilder = BatchPlatformClientConfig.builder()
             .baseUrl(requireEnv("BATCH_BASE_URL"))
             .apiKey(System.getenv("BATCH_API_KEY")) // P2 启用,P1 阶段可空
             .tenantId(requireEnv("BATCH_TENANT_ID"))
             .workerCode(requireEnv("BATCH_WORKER_CODE"))
-            .kafkaBootstrap(requireEnv("BATCH_KAFKA"))
-            // node-direct topic pattern,对齐内建 worker AbstractTaskConsumer.topicPattern():
-            // batch.task.dispatch.<workerType>.node.<workerCode>(base-first)。旧的 tenant-first
-            // batch.task.dispatch.<tenant>.* 平台从不发布(#2),会收不到任何任务。
-            .kafkaTopicPattern(
-                System.getenv().getOrDefault(
-                    "BATCH_TOPIC_PATTERN",
-                    "batch\\.task\\.dispatch\\..+\\.node\\."
-                        + Pattern.quote(requireEnv("BATCH_WORKER_CODE"))))
+            .kafkaBootstrap(requireEnv("BATCH_KAFKA"));
+    var environment = System.getenv();
+    String defaultTopicPattern = "batch\\.task\\.dispatch\\..+\\.node\\."
+        + Pattern.quote(requireEnv("BATCH_WORKER_CODE"));
+    String topicPattern = environment.getOrDefault("BATCH_TOPIC_PATTERN", defaultTopicPattern);
+    // node-direct topic pattern,对齐内建 worker AbstractTaskConsumer.topicPattern():
+    // batch.task.dispatch.<workerType>.node.<workerCode>(base-first)。旧的 tenant-first
+    // batch.task.dispatch.<tenant>.* 平台从不发布(#2),会收不到任何任务。
+    BatchPlatformClientConfig config = configBuilder
+            .kafkaTopicPattern(topicPattern)
             .kafkaGroupId(
                 System.getenv().getOrDefault(
                     "BATCH_KAFKA_GROUP", requireEnv("BATCH_TENANT_ID") + "-sample-workers"))
@@ -122,6 +122,12 @@ public final class SampleTenantWorker {
   // ─── 示范 handler ────────────────────────────────────────────────────────────
 
   static final class EchoHandler implements SdkTaskHandler {
+    /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "echo";
@@ -130,7 +136,9 @@ public final class SampleTenantWorker {
     @Override
     public SdkTaskResult execute(SdkTaskContext ctx) {
       log.info("echo handler taskId={} parameterCount={}", ctx.taskId(), ctx.parameters().size());
-      return SdkTaskResult.ok("echoed", Map.copyOf(ctx.parameters()));
+      Map<String, Object> parameters = ctx.parameters();
+      Map<String, Object> parameterSnapshot = Map.copyOf(parameters);
+      return SdkTaskResult.ok("echoed", parameterSnapshot);
     }
   }
 
@@ -141,6 +149,12 @@ public final class SampleTenantWorker {
    * dispatch topic + 路由;sim 06 dispatch-execute 腿据 "ATOMIC base handler taskId=" 日志断言真链路执行。
    */
   static final class AtomicBaseEchoHandler implements SdkTaskHandler {
+    /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "ATOMIC";
@@ -166,11 +180,19 @@ public final class SampleTenantWorker {
           }
         }
       }
-      return SdkTaskResult.ok("atomic-echoed", Map.copyOf(ctx.parameters()));
+      Map<String, Object> parameters = ctx.parameters();
+      Map<String, Object> parameterSnapshot = Map.copyOf(parameters);
+      return SdkTaskResult.ok("atomic-echoed", parameterSnapshot);
     }
   }
 
   static final class SleepHandler implements SdkTaskHandler {
+    /** 示例仅计算、等待或记录日志；接入真实写入或推送后必须重新评估此声明。 */
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "sleep";

@@ -60,10 +60,11 @@ public class OrchestratorSecretPreflightCheck {
               + " keep failing with 401 until fixed",
           authErr.getStatusCode());
     } catch (RuntimeException connErr) {
+      String causeSummary = SwallowedExceptionLogger.summary(connErr);
       log.warn(
           "orchestrator preflight failed (non-auth): cause={} — orchestrator may still be"
               + " warming up; will not block trigger startup",
-          SwallowedExceptionLogger.summary(connErr));
+          causeSummary);
     }
   }
 }

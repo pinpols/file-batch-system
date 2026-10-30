@@ -78,7 +78,9 @@ public class ConsoleTelemetryController {
       if (depth(props, 1) > MAX_PROPS_DEPTH) {
         throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_deep");
       }
-      int bytes = JsonUtils.toJson(props).getBytes(StandardCharsets.UTF_8).length;
+      String serializedProps = JsonUtils.toJson(props);
+      byte[] serializedPropsBytes = serializedProps.getBytes(StandardCharsets.UTF_8);
+      int bytes = serializedPropsBytes.length;
       if (bytes > MAX_PROPS_BYTES_PER_EVENT) {
         throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.telemetry.props_too_large");
       }

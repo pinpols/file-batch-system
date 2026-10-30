@@ -15,8 +15,8 @@ import org.apache.ibatis.annotations.Param;
  *   <li>{@link #insert(QuotaRuntimeStateEntity)} 用 {@code ON CONFLICT (tenant_id, quota_scope,
  *       owner_code) DO NOTHING}：并发首次创建只允许一行写入数据库，第二个并发请求 insert affected=0， 不抛 UV，调用方下一轮
  *       loadOrCreate 会通过 {@link #selectByTenantQuotaScopeOwner} 拿到已有行。
- *   <li>{@link #updateWithCas(QuotaRuntimeStateEntity)} 走 {@code WHERE id=? AND version=?} CAS：返回值
- *       0 视为乐观锁冲突，调用方应抛 {@code OptimisticLockingFailureException} 保留 SDJ 时代行为。
+ *   <li>{@link #updateWithCas(QuotaRuntimeStateEntity)} 走 {@code WHERE id=? AND tenant_id=? AND version=?}
+ *       CAS：返回值 0 视为乐观锁或租户归属冲突，调用方应抛 {@code OptimisticLockingFailureException}。
  *   <li>id 不回填到 record（record 不可变；调用方下次 loadOrCreate 自然读到 id）。
  * </ul>
  */
@@ -32,7 +32,7 @@ public interface QuotaRuntimeStateMapper {
   /**
    * CAS 更新：必须 id + version 都匹配才生效。{@code SET version = version + 1}。
    *
-   * @return 影响行数；0 表示 version 冲突 → 调用方抛 {@code OptimisticLockingFailureException}
+   * @return 影响行数；0 表示版本或租户归属冲突 → 调用方抛 {@code OptimisticLockingFailureException}
    */
   int updateWithCas(QuotaRuntimeStateEntity entity);
 

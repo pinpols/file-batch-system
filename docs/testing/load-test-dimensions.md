@@ -75,4 +75,4 @@
 | 文档 | 关系 |
 |------|------|
 | [`load-tests/README.md`](../../load-tests/README.md) | 命令行与 profile |
-| [`load-test-report.md`](./load-test-report.md) | 历史单次实验数据示例 |
+| [`load-test-report-2026-04-25.md`](../verifications/load-test-report-2026-04-25.md) | 历史单次实验数据示例 |

@@ -1,8 +1,13 @@
+# 用途：回归验证检查新增的纯英文说明性注释。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_check_comment_language.py。
 from __future__ import annotations
 
 import importlib.util
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-comment-language.py"
@@ -33,6 +38,38 @@ class CommentLanguageTest(unittest.TestCase):
 
     def test_allows_machine_directive(self) -> None:
         self.assertIsNone(MODULE.prose_comment("# shellcheck disable=SC1090", ".sh"))
+        self.assertIsNone(MODULE.prose_comment("-- squawk-ignore ban-drop-not-null", ".sql"))
+
+    def test_detects_english_postgres_object_comment(self) -> None:
+        self.assertEqual(
+            MODULE.sql_object_comment_prose(
+                "COMMENT ON COLUMN batch.job_task.task_status IS "
+                "'The task state is used to track each execution attempt.';"
+            ),
+            [(1, "The task state is used to track each execution attempt.")],
+        )
+
+    def test_detects_english_function_and_trigger_comments(self) -> None:
+        source = """COMMENT ON FUNCTION batch.sample_guard(timestamp with time zone)
+            IS 'The guard serializes each writer.';
+            COMMENT ON TRIGGER sample_guard_trigger ON batch.sample
+            IS 'The trigger protects each update.';"""
+        self.assertEqual(
+            MODULE.sql_object_comment_prose(source),
+            [
+                (1, "The guard serializes each writer."),
+                (3, "The trigger protects each update."),
+            ],
+        )
+
+    def test_allows_chinese_postgres_object_comment(self) -> None:
+        self.assertEqual(
+            MODULE.sql_object_comment_prose(
+                "COMMENT ON COLUMN batch.job_task.task_status IS "
+                "'任务状态用于跟踪每次执行尝试。';"
+            ),
+            [],
+        )
 
     def test_allows_sql_example(self) -> None:
         self.assertIsNone(MODULE.prose_comment("-- SELECT id FROM batch.job_instance;", ".sql"))
@@ -47,6 +84,25 @@ class CommentLanguageTest(unittest.TestCase):
 
     def test_allows_command_examples(self) -> None:
         self.assertIsNone(MODULE.prose_comment("-- psql -d batch_business -f scripts/db/setup.sql", ".sql"))
+
+    def test_allows_java_code_and_schema_examples(self) -> None:
+        self.assertIsNone(MODULE.prose_comment(" * if (ctx.isCancelled()) {", ".java"))
+        self.assertIsNone(MODULE.prose_comment(' * .defaults(Map.of("batchSize", 1000))', ".java"))
+        self.assertIsNone(MODULE.prose_comment(' * gauge("batch_sdk_inflight", meter.count());', ".java"))
+        self.assertIsNone(MODULE.prose_comment(" * break_position JSONB NOT NULL,", ".java"))
+        self.assertIsNone(MODULE.prose_comment(" * ALL / ALL_FAILED / OUTPUTS_ONLY。", ".java"))
+        self.assertIsNone(
+            MODULE.prose_comment(
+                " * updateAndBumpVersion / delete* / upsert* / toggleEnabled / batchToggleEnabled /",
+                ".java",
+            )
+        )
+        self.assertIsNone(
+            MODULE.prose_comment(
+                " * io.github.pinpols.batch.orchestrator.service.BatchDayReplayService#execute()}",
+                ".java",
+            )
+        )
 
     def test_does_not_treat_shell_options_as_sql_comments(self) -> None:
         self.assertIsNone(MODULE.prose_comment("--if-not-exists \\", ".sh"))
@@ -66,6 +122,29 @@ class CommentLanguageTest(unittest.TestCase):
             MODULE.parse_diff(diff),
             [("scripts/example.sh", 2, "Retry the request after a transient failure.")],
         )
+
+    def test_path_scan_includes_untracked_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            migration = root / "db/migration/V999__untracked.sql"
+            migration.parent.mkdir(parents=True)
+            migration.write_text(
+                "COMMENT ON TABLE batch.sample IS 'The sample table stores task state.';\n",
+                encoding="utf-8",
+            )
+            git_result = subprocess.CompletedProcess(
+                args=[], returncode=0, stdout=b"db/migration/V999__untracked.sql\0"
+            )
+            with patch.object(MODULE, "ROOT", root), patch.object(
+                MODULE.subprocess, "run", return_value=git_result
+            ) as run:
+                findings = MODULE.scan_paths(["db/migration"])
+
+            self.assertEqual(
+                findings,
+                [("db/migration/V999__untracked.sql", 1, "The sample table stores task state.")],
+            )
+            self.assertIn("--others", run.call_args.args[0])
 
 
 if __name__ == "__main__":

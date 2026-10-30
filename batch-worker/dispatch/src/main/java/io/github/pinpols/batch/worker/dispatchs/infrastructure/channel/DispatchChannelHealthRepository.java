@@ -1,13 +1,17 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthView;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthBackoffParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthFailureParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthProbeClaimParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthSuccessParam;
+import io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthUpsertParam;
 import java.sql.Timestamp;
 import java.time.Instant;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 
@@ -16,18 +20,9 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class DispatchChannelHealthRepository {
 
-  // PMD AvoidDuplicateLiterals 触发：mapper 参数 map key 在多个方法里重复，提常量统一管理
-  private static final String P_TENANT_ID = "tenantId";
-  private static final String P_CHANNEL_CODE = "channelCode";
-  private static final String P_CHANNEL_TYPE = "channelType";
-  private static final String P_NOW = "now";
-  private static final String P_NEXT_PROBE_AT = "nextProbeAt";
-  private static final String P_PROBE_MESSAGE = "probeMessage";
-  private static final String P_PROBE_EVIDENCE = "probeEvidence";
-
   private final DispatchChannelHealthMapper mapper;
 
-  public List<Map<String, Object>> findEnabledProbeChannels(List<String> types, int limit) {
+  public List<DispatchChannelConfigView> findEnabledProbeChannels(List<String> types, int limit) {
     if (types == null || types.isEmpty()) {
       return List.of();
     }
@@ -35,7 +30,7 @@ public class DispatchChannelHealthRepository {
   }
 
   public DispatchChannelHealthSnapshot findHealth(String tenantId, String channelCode) {
-    Map<String, Object> row = mapper.findHealth(tenantId, channelCode);
+    DispatchChannelHealthView row = mapper.findHealth(tenantId, channelCode);
     return row == null ? null : toSnapshot(row);
   }
 
@@ -47,11 +42,10 @@ public class DispatchChannelHealthRepository {
    */
   public boolean tryClaimHalfOpenProbe(
       String tenantId, String channelCode, Instant now, Instant newNextProbeAt) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(P_TENANT_ID, tenantId);
-    params.put(P_CHANNEL_CODE, channelCode);
-    params.put(P_NOW, toTimestamp(now));
-    params.put("newNextProbeAt", toTimestamp(newNextProbeAt));
+    Timestamp probeTime = toTimestamp(now);
+    Timestamp nextProbeTime = toTimestamp(newNextProbeAt);
+    DispatchChannelHealthProbeClaimParam params =
+        new DispatchChannelHealthProbeClaimParam(tenantId, channelCode, probeTime, nextProbeTime);
     return mapper.tryClaimHalfOpenProbe(params) > 0;
   }
 
@@ -59,14 +53,17 @@ public class DispatchChannelHealthRepository {
    * P2：原子写入"成功"结果，等价于旧 upsertHealth(HEALTHY, failures=0, ...) 但 SQL 侧一次 完成，无 find-then-upsert 竞态。
    */
   public void upsertSuccess(DispatchHealthUpsertCommand cmd) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(P_TENANT_ID, cmd.tenantId());
-    params.put(P_CHANNEL_CODE, cmd.channelCode());
-    params.put(P_CHANNEL_TYPE, cmd.channelType());
-    params.put(P_NOW, toTimestamp(cmd.now()));
-    params.put(P_NEXT_PROBE_AT, toTimestamp(cmd.nextProbeAt()));
-    params.put(P_PROBE_MESSAGE, cmd.probeMessage());
-    params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
+    Timestamp probeTime = toTimestamp(cmd.now());
+    Timestamp nextProbeTime = toTimestamp(cmd.nextProbeAt());
+    DispatchChannelHealthSuccessParam params = DispatchChannelHealthSuccessParam.builder()
+        .tenantId(cmd.tenantId())
+        .channelCode(cmd.channelCode())
+        .channelType(cmd.channelType())
+        .now(probeTime)
+        .nextProbeAt(nextProbeTime)
+        .probeMessage(cmd.probeMessage())
+        .probeEvidence(cmd.probeEvidence())
+        .build();
     mapper.upsertSuccess(params);
   }
 
@@ -78,27 +75,29 @@ public class DispatchChannelHealthRepository {
    * 回退时间"（{@code firstFailureBackoffAt}），mapper XML 字段名保持不变。
    */
   public int upsertFailureAndBump(DispatchHealthUpsertCommand cmd) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(P_TENANT_ID, cmd.tenantId());
-    params.put(P_CHANNEL_CODE, cmd.channelCode());
-    params.put(P_CHANNEL_TYPE, cmd.channelType());
-    params.put(P_NOW, toTimestamp(cmd.now()));
-    params.put("firstFailureBackoffAt", toTimestamp(cmd.nextProbeAt()));
-    params.put("failureThreshold", Math.max(1, cmd.failureThreshold()));
-    params.put(P_PROBE_MESSAGE, cmd.probeMessage());
-    params.put(P_PROBE_EVIDENCE, cmd.probeEvidence());
+    Timestamp probeTime = toTimestamp(cmd.now());
+    Timestamp firstFailureBackoffAt = toTimestamp(cmd.nextProbeAt());
+    int minimumFailureThreshold = Math.max(1, cmd.failureThreshold());
+    DispatchChannelHealthFailureParam params = DispatchChannelHealthFailureParam.builder()
+        .tenantId(cmd.tenantId())
+        .channelCode(cmd.channelCode())
+        .channelType(cmd.channelType())
+        .now(probeTime)
+        .firstFailureBackoffAt(firstFailureBackoffAt)
+        .failureThreshold(minimumFailureThreshold)
+        .probeMessage(cmd.probeMessage())
+        .probeEvidence(cmd.probeEvidence())
+        .build();
     return mapper.upsertFailureAndBump(params);
   }
 
   public boolean recalcBackoff(DispatchHealthUpsertCommand cmd, int expectedFailures) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(P_TENANT_ID, cmd.tenantId());
-    params.put(P_CHANNEL_CODE, cmd.channelCode());
-    params.put(P_NOW, toTimestamp(cmd.now()));
+    Timestamp probeTime = toTimestamp(cmd.now());
     // Citus:next_probe_at 由调用方(Java)按新 count 算好指数退避后传入,不再在 SQL 里
     // 用 power(2, consecutive_failures) 这类带列引用的函数(分布式 UPDATE 不允许)。
-    params.put("newNextProbeAt", toTimestamp(cmd.nextProbeAt()));
-    params.put("expectedFailures", expectedFailures);
+    Timestamp nextProbeTime = toTimestamp(cmd.nextProbeAt());
+    DispatchChannelHealthBackoffParam params = new DispatchChannelHealthBackoffParam(
+        cmd.tenantId(), cmd.channelCode(), probeTime, nextProbeTime, expectedFailures);
     return mapper.recalcBackoff(params) > 0;
   }
 
@@ -107,74 +106,49 @@ public class DispatchChannelHealthRepository {
   }
 
   public long countProbeOverdue(Instant now) {
-    return mapper.countProbeOverdue(toTimestamp(now));
+    Timestamp probeTime = toTimestamp(now);
+    return mapper.countProbeOverdue(probeTime);
   }
 
   public void upsertHealth(DispatchChannelHealthSnapshot s) {
-    Map<String, Object> params = new HashMap<>();
-    params.put(P_TENANT_ID, s.tenantId());
-    params.put(P_CHANNEL_CODE, s.channelCode());
-    params.put(P_CHANNEL_TYPE, s.channelType());
-    params.put("healthStatus", s.healthStatus());
-    params.put("consecutiveFailures", s.consecutiveFailures());
-    params.put("lastProbeAt", toTimestamp(s.lastProbeAt()));
-    params.put("lastSuccessAt", toTimestamp(s.lastSuccessAt()));
-    params.put("lastFailureAt", toTimestamp(s.lastFailureAt()));
-    params.put(P_NEXT_PROBE_AT, toTimestamp(s.nextProbeAt()));
-    params.put(P_PROBE_MESSAGE, s.probeMessage());
-    params.put(P_PROBE_EVIDENCE, s.probeEvidence());
+    Timestamp lastProbeAt = toTimestamp(s.lastProbeAt());
+    Timestamp lastSuccessAt = toTimestamp(s.lastSuccessAt());
+    Timestamp lastFailureAt = toTimestamp(s.lastFailureAt());
+    Timestamp nextProbeAt = toTimestamp(s.nextProbeAt());
+    DispatchChannelHealthUpsertParam params = DispatchChannelHealthUpsertParam.builder()
+        .tenantId(s.tenantId())
+        .channelCode(s.channelCode())
+        .channelType(s.channelType())
+        .healthStatus(s.healthStatus())
+        .consecutiveFailures(s.consecutiveFailures())
+        .lastProbeAt(lastProbeAt)
+        .lastSuccessAt(lastSuccessAt)
+        .lastFailureAt(lastFailureAt)
+        .nextProbeAt(nextProbeAt)
+        .probeMessage(s.probeMessage())
+        .probeEvidence(s.probeEvidence())
+        .build();
     mapper.upsertHealth(params);
   }
 
-  private DispatchChannelHealthSnapshot toSnapshot(Map<String, Object> row) {
+  private DispatchChannelHealthSnapshot toSnapshot(DispatchChannelHealthView row) {
+    int consecutiveFailures =
+        EmptyChecks.isNull(row.consecutiveFailures()) ? 0 : row.consecutiveFailures();
     return new DispatchChannelHealthSnapshot(
-        stringValue(row.get("tenant_id")),
-        stringValue(row.get("channel_code")),
-        stringValue(row.get("channel_type")),
-        stringValue(row.get("health_status")),
-        intValue(row.get("consecutive_failures")),
-        instantValue(row.get("last_probe_at")),
-        instantValue(row.get("last_success_at")),
-        instantValue(row.get("last_failure_at")),
-        instantValue(row.get("next_probe_at")),
-        stringValue(row.get("probe_message")),
-        stringValue(row.get("probe_evidence")));
+        row.tenantId(),
+        row.channelCode(),
+        row.channelType(),
+        row.healthStatus(),
+        consecutiveFailures,
+        row.lastProbeAt(),
+        row.lastSuccessAt(),
+        row.lastFailureAt(),
+        row.nextProbeAt(),
+        row.probeMessage(),
+        row.probeEvidence());
   }
 
   private Timestamp toTimestamp(Instant instant) {
     return instant == null ? null : Timestamp.from(instant);
-  }
-
-  private String stringValue(Object value) {
-    if (value == null) {
-      return null;
-    }
-    String text = String.valueOf(value);
-    return Texts.hasText(text) && !"null".equalsIgnoreCase(text) ? text : null;
-  }
-
-  private int intValue(Object value) {
-    if (value instanceof Number number) {
-      return number.intValue();
-    }
-    if (value == null) {
-      return 0;
-    }
-    String text = String.valueOf(value).trim();
-    return text.isEmpty() ? 0 : Integer.parseInt(text);
-  }
-
-  private Instant instantValue(Object value) {
-    if (value instanceof Timestamp ts) {
-      return ts.toInstant();
-    }
-    if (value instanceof Date date) {
-      return date.toInstant();
-    }
-    if (value == null) {
-      return null;
-    }
-    String text = String.valueOf(value).trim();
-    return text.isEmpty() ? null : Instant.parse(text);
   }
 }

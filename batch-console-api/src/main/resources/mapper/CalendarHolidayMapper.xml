@@ -2,44 +2,46 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper">
 
-    <select id="selectByCalendarId" resultType="map">
-        select
-            id, calendar_id as "calendarId", biz_date as "bizDate",
-            day_type as "dayType", holiday_name as "holidayName",
-            description, created_at as "createdAt", updated_at as "updatedAt"
+    <!--
+      ConsoleJobConfigViews.CalendarHolidayRow 是 java record（不可变），用 <constructor> 显式映射构造器参数。
+      参数顺序必须与 record canonical constructor 完全一致；列使用 camelCase 别名。
+      biz_date 为 DATE 列映射 LocalDate；created_at/updated_at 为 TIMESTAMPTZ 映射 Instant。
+    -->
+    <resultMap id="calendarHolidayRowMap"
+               type="io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews$CalendarHolidayRow">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="calendarId" javaType="java.lang.Long"/>
+            <arg column="bizDate" javaType="java.time.LocalDate"/>
+            <arg column="dayType" javaType="java.lang.String"/>
+            <arg column="holidayName" javaType="java.lang.String"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="createdAt" javaType="java.time.Instant"/>
+            <arg column="updatedAt" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <sql id="rowColumns">
+        id, calendar_id as "calendarId", biz_date as "bizDate",
+        day_type as "dayType", holiday_name as "holidayName",
+        description, created_at as "createdAt", updated_at as "updatedAt"
+    </sql>
+
+    <select id="selectByCalendarId" resultMap="calendarHolidayRowMap">
+        select <include refid="rowColumns"/>
         from batch.calendar_holiday
         where calendar_id = #{calendarId}
         order by biz_date
     </select>
 
-    <select id="selectById" resultType="map">
-        select
-            id, calendar_id as "calendarId", biz_date as "bizDate",
-            day_type as "dayType", holiday_name as "holidayName",
-            description, created_at as "createdAt", updated_at as "updatedAt"
-        from batch.calendar_holiday
-        where id = #{id}
-    </select>
-
-    <select id="selectByCalendarIdAndId" resultType="map">
-        select
-            id, calendar_id as "calendarId", biz_date as "bizDate",
-            day_type as "dayType", holiday_name as "holidayName",
-            description, created_at as "createdAt", updated_at as "updatedAt"
+    <select id="selectByCalendarIdAndId" resultMap="calendarHolidayRowMap">
+        select <include refid="rowColumns"/>
         from batch.calendar_holiday
         where calendar_id = #{calendarId}
           and id = #{id}
     </select>
 
-    <!-- bizDate 入参 String,PG date 列要求显式 cast::date,否则 "column biz_date is of type date" -->
-    <insert id="insert" parameterType="map" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
-        insert into batch.calendar_holiday (
-            calendar_id, biz_date, day_type, holiday_name, description
-        ) values (
-            #{calendarId}, #{bizDate}::date, #{dayType}, #{holidayName}, #{description}
-        )
-    </insert>
-
+    <!-- HTTP/JSON日期为String，Excel日期为LocalDate；保留显式date转换与各入口原有类型。 -->
     <insert id="batchInsert">
         insert into batch.calendar_holiday (
             tenant_id, calendar_id, biz_date, day_type, holiday_name, description
@@ -63,7 +65,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <update id="update" parameterType="map">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.job.param.CalendarHolidayUpdateParam">
         update batch.calendar_holiday
         set biz_date = #{bizDate}::date,
             day_type = #{dayType},
@@ -77,10 +79,6 @@
     <delete id="deleteByCalendarId">
         delete from batch.calendar_holiday
         where calendar_id = #{calendarId}
-    </delete>
-
-    <delete id="deleteById">
-        delete from batch.calendar_holiday where id = #{id}
     </delete>
 
     <delete id="deleteByCalendarIdAndId">

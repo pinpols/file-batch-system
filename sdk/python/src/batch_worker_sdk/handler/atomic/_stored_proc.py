@@ -266,7 +266,10 @@ def _parse_out_types(raw: Any) -> list[str]:
     for o in raw:
         if o is None:
             raise ValueError("parameters.outParams contains null")
-        out.append(str(o).strip().upper())
+        raw_type_name = str(o)
+        trimmed_type_name = raw_type_name.strip()
+        normalized_type_name = trimmed_type_name.upper()
+        out.append(normalized_type_name)
     return out
 
 

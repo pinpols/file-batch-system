@@ -17,6 +17,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -57,10 +58,17 @@ public class ConsoleTenantSelfServiceController {
       @RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     // 历史 wire：系统参数缺失时对应键不出现（record 用 @JsonInclude(NON_NULL) 省略 null 保持一致）。
-    return responseFactory.success(new ConsoleTenantUsageSummaryResponse(
-        parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null),
-        parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null),
-        parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null)));
+    Optional<String> runningJobsValue =
+        parameterService.getValue(resolved, "tenant.usage.running-jobs");
+    String runningJobs = runningJobsValue.orElse(null);
+    Optional<String> dailyTriggersValue =
+        parameterService.getValue(resolved, "tenant.usage.daily-triggers");
+    String dailyTriggers = dailyTriggersValue.orElse(null);
+    Optional<String> fileCountValue =
+        parameterService.getValue(resolved, "tenant.usage.file-count");
+    String fileCount = fileCountValue.orElse(null);
+    return responseFactory.success(
+        new ConsoleTenantUsageSummaryResponse(runningJobs, dailyTriggers, fileCount));
   }
 
   /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */

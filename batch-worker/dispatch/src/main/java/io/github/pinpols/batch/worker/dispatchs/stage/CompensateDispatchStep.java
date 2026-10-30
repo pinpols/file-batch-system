@@ -49,8 +49,9 @@ public class CompensateDispatchStep implements DispatchStageStep {
   @Override
   public DispatchStageResult execute(DispatchJobContext context) {
     // ADR-026: 演练模式不发外部补偿（也没真投递过），跳过即可。
-    if (DryRunGuard.fromAttributes(context == null ? null : context.getAttributes())
-        .isDryRun()) {
+    Map<String, Object> dryRunAttributes =
+        EmptyChecks.isNull(context) ? null : context.getAttributes();
+    if (DryRunGuard.fromAttributes(dryRunAttributes).isDryRun()) {
       return DispatchStageResult.success(stage());
     }
     Object payload = EmptyChecks.isNull(context)
@@ -82,29 +83,30 @@ public class CompensateDispatchStep implements DispatchStageStep {
           "failed to mark compensated",
           ERROR_OBJECT_MAPPER);
     }
+    String channelCode = Objects.requireNonNullElse(dispatchPayload.channelCode(), "");
     fileRecords.updateFileStatus(
-        fileId,
-        FileStatus.FAILED.code(),
-        Map.of(
-            DispatchRuntimeKeys.CHANNEL_CODE,
-            Objects.requireNonNullElse(dispatchPayload.channelCode(), "")));
+        fileId, FileStatus.FAILED.code(), Map.of(DispatchRuntimeKeys.CHANNEL_CODE, channelCode));
     Map<String, Object> detailSummary = new LinkedHashMap<>();
     detailSummary.put(DispatchRuntimeKeys.CHANNEL_CODE, dispatchPayload.channelCode());
     detailSummary.put(DispatchRuntimeKeys.DISPATCH_TARGET, dispatchPayload.dispatchTarget());
     detailSummary.put(
         DispatchRuntimeKeys.EXTERNAL_REQUEST_ID,
         attrs.get(DispatchRuntimeKeys.EXTERNAL_REQUEST_ID));
-    fileAudits.appendAudit(FileAuditParam.builder()
+    FileAuditParam.FileAuditParamBuilder auditParam = FileAuditParam.builder()
         .fileId(fileId)
         .tenantId(context.getTenantId())
         .operationType(FileAuditOperationType.DISPATCH_COMPENSATE.code())
         .operationResult(OperationResult.FAILED.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
-        .operatorId(context.getWorkerId())
-        .traceId(String.valueOf(attrs.get(PipelineRuntimeKeys.TRACE_ID)))
+        .operatorId(context.getWorkerId());
+    Object traceId = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+    String traceIdText = String.valueOf(traceId);
+    FileAuditParam audit = auditParam
+        .traceId(traceIdText)
         .evidenceRef(null)
         .detailSummary(detailSummary)
-        .build());
+        .build();
+    fileAudits.appendAudit(audit);
     return DispatchStageResult.success(stage());
   }
 }

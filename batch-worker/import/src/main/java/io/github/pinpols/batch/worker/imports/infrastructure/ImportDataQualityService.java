@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -69,13 +70,15 @@ public class ImportDataQualityService {
     String normalizedPayload = context == null
         ? null
         : asString(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD));
+    List<String> schemaFieldSnapshot =
+        EmptyChecks.isNull(schemaFields) ? List.of() : List.copyOf(schemaFields);
     return new ValidationSession(
         context,
         ruleSet,
         totalCount,
         normalizedPayload,
         importPayload,
-        schemaFields == null ? List.of() : List.copyOf(schemaFields),
+        schemaFieldSnapshot,
         new LinkedHashMap<>(),
         new ArrayList<>(),
         new LinkedHashMap<>(),
@@ -96,7 +99,8 @@ public class ImportDataQualityService {
     }
     List<Map<String, Object>> rows = new ArrayList<>(payloads.size());
     for (CustomerImportPayload payload : payloads) {
-      rows.add(configSupport.payloadToMap(payload));
+      Map<String, Object> row = configSupport.payloadToMap(payload);
+      rows.add(row);
     }
     return validateChunkRows(session, rows, recordBase);
   }
@@ -122,7 +126,13 @@ public class ImportDataQualityService {
         : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS);
     if (value instanceof List<?> list) {
       return list.stream()
-          .filter(item -> EmptyChecks.isNotNull(item) && !String.valueOf(item).isBlank())
+          .filter(item -> {
+            if (EmptyChecks.isNull(item)) {
+              return false;
+            }
+            String itemText = String.valueOf(item);
+            return !EmptyChecks.isBlank(Objects.requireNonNull(itemText));
+          })
           .map(String::valueOf)
           .toList();
     }

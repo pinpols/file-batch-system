@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -35,18 +36,32 @@ final class TaskConsumerRoutingPolicy {
   private TaskConsumerRoutingPolicy() {}
 
   static String[] topics(WorkerConfiguration configuration) {
+    return topics(configuration, new BatchKafkaTopicNamespace(""));
+  }
+
+  static String[] topics(
+      WorkerConfiguration configuration, BatchKafkaTopicNamespace topicNamespace) {
     String configuredWorkerCode = configuration.workerCode();
-    String baseTopic = resolveBaseTopic(configuration);
+    String configuredBaseTopic = resolveBaseTopic(configuration);
+    String baseTopic = topicNamespace.topic(configuredBaseTopic);
     if (EmptyChecks.isBlank(configuredWorkerCode)) {
       return new String[] {baseTopic};
     }
-    return new String[] {baseTopic, BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode)
-    };
+    String directDispatchTopic = BatchTopics.directDispatchTopic(baseTopic, configuredWorkerCode);
+    return new String[] {baseTopic, directDispatchTopic};
   }
 
   static String topicPattern(
       WorkerConfiguration configuration, WorkerKafkaSubscribeProperties properties) {
-    String baseTopic = resolveBaseTopic(configuration);
+    return topicPattern(configuration, properties, new BatchKafkaTopicNamespace(""));
+  }
+
+  static String topicPattern(
+      WorkerConfiguration configuration,
+      WorkerKafkaSubscribeProperties properties,
+      BatchKafkaTopicNamespace topicNamespace) {
+    String configuredBaseTopic = resolveBaseTopic(configuration);
+    String baseTopic = topicNamespace.topic(configuredBaseTopic);
     String safeBase = baseTopic.replace(".", "\\.");
     String configuredWorkerCode = configuration.workerCode();
     String nodeDirect = resolveNodeDirectSuffix(baseTopic, configuredWorkerCode);
@@ -93,20 +108,24 @@ final class TaskConsumerRoutingPolicy {
       WorkerRegistration registration,
       WorkerConfiguration configuration,
       BiPredicate<WorkerConfiguration, TaskDispatchMessage> tenantScope) {
-    if (EmptyChecks.isNull(message)
+    boolean dispatchMessageIdentityIsIncomplete = EmptyChecks.isNull(message)
         || EmptyChecks.isNull(message.taskId())
         || EmptyChecks.isNull(message.tenantId())
-        || EmptyChecks.isNull(message.workerType())) {
+        || EmptyChecks.isNull(message.workerType());
+    if (dispatchMessageIdentityIsIncomplete) {
       return false;
     }
-    if (EmptyChecks.isNull(configuration.workerType())
-        || !configuration.workerType().equalsIgnoreCase(message.workerType())) {
+    boolean configuredWorkerTypeDoesNotMatchMessage = EmptyChecks.isNull(configuration.workerType())
+        || !configuration.workerType().equalsIgnoreCase(message.workerType());
+    if (configuredWorkerTypeDoesNotMatchMessage) {
       return false;
     }
-    if (EmptyChecks.isNotNull(message.selectedWorkerId())
-        && (EmptyChecks.isNull(registration)
-            || (!message.selectedWorkerId().equals(registration.getWorkerCode())
-                && !message.selectedWorkerId().equals(registration.getWorkerId())))) {
+    boolean selectedWorkerDoesNotMatchRegistration =
+        EmptyChecks.isNotNull(message.selectedWorkerId())
+            && (EmptyChecks.isNull(registration)
+                || (!message.selectedWorkerId().equals(registration.getWorkerCode())
+                    && !message.selectedWorkerId().equals(registration.getWorkerId())));
+    if (selectedWorkerDoesNotMatchRegistration) {
       return false;
     }
     return tenantScope.test(configuration, message);
@@ -125,9 +144,11 @@ final class TaskConsumerRoutingPolicy {
   }
 
   private static String resolveTopicByWorkerType(String workerType) {
-    return EmptyChecks.isBlank(workerType)
-        ? null
-        : WORKER_TYPE_TOPIC.get(workerType.toUpperCase(Locale.ROOT));
+    if (EmptyChecks.isBlank(workerType)) {
+      return null;
+    }
+    String normalizedWorkerType = workerType.toUpperCase(Locale.ROOT);
+    return WORKER_TYPE_TOPIC.get(normalizedWorkerType);
   }
 
   private static String resolveTopicByWorkerCode(String workerCode) {
@@ -164,7 +185,8 @@ final class TaskConsumerRoutingPolicy {
       return null;
     }
     String directTopic = BatchTopics.directDispatchTopic(baseTopic, workerCode);
-    return escapeRegex(directTopic.substring(baseTopic.length()));
+    String directSuffix = directTopic.substring(baseTopic.length());
+    return escapeRegex(directSuffix);
   }
 
   private static String escapeRegex(String value) {

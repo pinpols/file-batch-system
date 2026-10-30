@@ -91,6 +91,14 @@ Runtime.getRuntime().addShutdownHook(new Thread(() -> client.stop(Duration.ofSec
 | `SdkRetryableHandler` | 用 `@RetryOn` 声明重试策略 |
 | `SdkIdempotentHandler` | 用 `@Idempotent` 声明幂等键 + `SdkIdempotencyStore` 接管落地 |
 
+### 执行安全与恢复
+
+`SdkTaskHandler.isSafeToReplay(ctx)` 判断当前冻结调用的业务动作是否可以安全重复，默认 `false`。只有动作本身幂等，或外部协议使用本次冻结的稳定幂等键，才应显式声明安全。`@Idempotent` 的成功结果缓存无法使外部提交与缓存写入原子化，不能据此声明安全。
+
+普通任务只使用 CLAIM 响应的当前 `partitionInvocationId` 执行、续租和回报；缺失时停止派发，消息携带的旧身份不能替代。非安全调用在实际 handler 前，通过既有 `/internal/tasks/{taskId}/non-idempotent-started` 确认开始；拒绝或响应未确认时不执行动作，也不伪造业务失败回报。平台依据持久标记处理随后丢回报或未知结果。
+
+装饰顺序为缓存查询 → 开始确认 → 业务执行。缓存命中直接返回既有结果；未能证明安全的调用只执行一次，`@RetryOn` 不自动重做可能已经产生副作用的动作。安全调用仍沿用注解重试策略。内置 HTTP 的 GET、HEAD、PUT、DELETE，以及冻结请求头含非空 `Idempotency-Key` 的调用，与平台 HTTP 执行器使用相同安全边界；自定义 handler 须依据实际外部协议声明，不能只按类名或 SQL 类型猜测。
+
 ### 客户端 / 调度
 
 | 类 | 用途 |

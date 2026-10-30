@@ -1,4 +1,5 @@
 -- 作业级监控策略及异步告警的幂等 claim 记录。
+
 CREATE TABLE batch.job_monitoring_policy (
     id                              BIGSERIAL PRIMARY KEY,
     tenant_id                       VARCHAR(64) NOT NULL,

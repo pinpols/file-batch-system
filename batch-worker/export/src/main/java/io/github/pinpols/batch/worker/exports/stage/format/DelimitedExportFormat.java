@@ -3,11 +3,13 @@ package io.github.pinpols.batch.worker.exports.stage.format;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,7 +31,14 @@ public class DelimitedExportFormat extends AbstractExportFormat {
 
   @Override
   public long generate(ExportFormatContext ctx) throws Exception {
-    Long batchIdLong = ctx.batchId() == null ? null : Long.valueOf(String.valueOf(ctx.batchId()));
+    Long batchIdLong;
+    if (EmptyChecks.isNull(ctx.batchId())) {
+      batchIdLong = null;
+    } else {
+      Object rawBatchId = ctx.batchId();
+      String batchIdText = String.valueOf(rawBatchId);
+      batchIdLong = Long.valueOf(batchIdText);
+    }
     ExportDataPlugin.DetailPage firstPage =
         ctx.dataPlugin().loadDetailPage(ctx.dataCtx(), batchIdLong, ctx.pageSize(), null);
     List<ColumnLayout> columns =
@@ -41,14 +50,19 @@ public class DelimitedExportFormat extends AbstractExportFormat {
         resolveDelimitedFormatConfig(ctx.dataCtx().templateConfig());
 
     // ADR-041 Phase1.4:出站内嵌 trailer 控制记录(默认关闭,trailer_template.present=true 才启用)。
-    Map<String, Object> trailerTemplate = toMap(firstNonNull(
-        templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate")));
+    Object trailerTemplateValue =
+        firstNonNull(templateValue(ctx, "trailer_template"), templateValue(ctx, "trailerTemplate"));
+    Map<String, Object> trailerTemplate = toMap(trailerTemplateValue);
     boolean trailerEnabled = OutboundTrailerRecord.enabled(trailerTemplate);
     boolean resuming = isResuming(ctx);
     String amountField = trailerEnabled ? OutboundTrailerRecord.amountField(trailerTemplate) : null;
     BigDecimal resumeControlTotal =
         trailerEnabled && resuming && amountField != null ? batchControlTotal(ctx) : null;
-    if (trailerEnabled && resuming && amountField != null && resumeControlTotal == null) {
+    boolean missingResumeControlTotal = trailerEnabled
+        && resuming
+        && EmptyChecks.isNotNull(amountField)
+        && EmptyChecks.isNull(resumeControlTotal);
+    if (missingResumeControlTotal) {
       throw new IllegalStateException(
           "DELIMITED trailer control total cannot resume without batch total_amount/totalAmount");
     }
@@ -66,10 +80,10 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       if (!resuming) {
         writeDelimitedHeaderRows(writer, columns, formatConfig, ctx);
       }
+      DelimitedOutput output = new DelimitedOutput(writer, columns, formatConfig, ctx);
       long recordCount = ExportPageGenerationCoordinator.generatePaged(
           ctx, firstPage, file::flushAndSync, (batch, detail, rowIndex) -> {
-            writeDelimitedFields(
-                writer, columns, batch, detail, formatConfig, "data-row-" + (rowIndex + 1), ctx);
+            writeDelimitedFields(output, batch, detail, "data-row-" + (rowIndex + 1));
             writeNewLine(writer, ctx);
             if (accumulationField != null) {
               BigDecimal value = decimalValue(detail.get(accumulationField));
@@ -103,7 +117,9 @@ public class DelimitedExportFormat extends AbstractExportFormat {
       if (i > 0) {
         writer.write(formatConfig.delimiter());
       }
-      writeText(writer, csv(values.get(i), formatConfig), "trailer", "trailer-" + (i + 1), ctx);
+      String trailerValue = values.get(i);
+      String encodedTrailerValue = csv(trailerValue, formatConfig);
+      writeText(writer, encodedTrailerValue, "trailer", "trailer-" + (i + 1), ctx);
     }
     writeNewLine(writer, ctx);
   }
@@ -118,11 +134,12 @@ public class DelimitedExportFormat extends AbstractExportFormat {
     if (batch == null || batch.isEmpty()) {
       return null;
     }
-    return decimalValue(firstNonNull(
+    Object configuredControlTotal = firstNonNull(
         batch.get("total_amount"),
         batch.get("totalAmount"),
         batch.get("control_total"),
-        batch.get("controlTotal")));
+        batch.get("controlTotal"));
+    return decimalValue(configuredControlTotal);
   }
 
   private void writeDelimitedHeaderRows(
@@ -139,27 +156,44 @@ public class DelimitedExportFormat extends AbstractExportFormat {
           writer.write(formatConfig.delimiter());
         }
         ColumnLayout column = columns.get(j);
-        writeText(writer, csv(column.header(), formatConfig), rowLabel, column.source(), ctx);
+        String encodedHeader = csv(column.header(), formatConfig);
+        writeText(writer, encodedHeader, rowLabel, column.source(), ctx);
       }
       writeNewLine(writer, ctx);
     }
   }
 
-  private void writeDelimitedFields(
+  /** 同一输出文件的列布局与编码策略固定，逐行回调不重新装配资源。 */
+  private record DelimitedOutput(
       BufferedWriter writer,
       List<ColumnLayout> columns,
+      DelimitedFormatConfig formatConfig,
+      ExportFormatContext context) {
+    private DelimitedOutput {
+      Objects.requireNonNull(writer, "writer");
+      Objects.requireNonNull(columns, "columns");
+      Objects.requireNonNull(formatConfig, "formatConfig");
+      Objects.requireNonNull(context, "context");
+    }
+  }
+
+  private void writeDelimitedFields(
+      DelimitedOutput output,
       Map<String, Object> batch,
       Map<String, Object> detail,
-      DelimitedFormatConfig formatConfig,
-      String rowLabel,
-      ExportFormatContext ctx)
+      String rowLabel)
       throws IOException {
+    BufferedWriter writer = output.writer();
+    List<ColumnLayout> columns = output.columns();
+    DelimitedFormatConfig formatConfig = output.formatConfig();
+    ExportFormatContext ctx = output.context();
     for (int i = 0; i < columns.size(); i++) {
       if (i > 0) {
         writer.write(formatConfig.delimiter());
       }
       ColumnLayout column = columns.get(i);
-      String value = csv(resolveDelimitedValue(batch, detail, column.source()), formatConfig);
+      Object resolvedValue = resolveDelimitedValue(batch, detail, column.source());
+      String value = csv(resolvedValue, formatConfig);
       writeText(writer, value, rowLabel, column.source(), ctx);
     }
   }

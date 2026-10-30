@@ -28,7 +28,8 @@ public class RecoveryController {
     String tenantId = request == null ? null : request.tenantId();
     String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "task", taskId);
     retryGovernanceService.retryTask(tenantId, taskId, eventKey);
-    return new RecoveryResponse(IdGenerator.newBusinessNo("rpl"));
+    String operationNo = IdGenerator.newBusinessNo("rpl");
+    return new RecoveryResponse(operationNo);
   }
 
   /**
@@ -42,7 +43,8 @@ public class RecoveryController {
     String tenantId = request == null ? null : request.tenantId();
     String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "partition", partitionId);
     retryGovernanceService.retryPartition(tenantId, partitionId, eventKey);
-    return new RecoveryResponse(IdGenerator.newBusinessNo("rpl"));
+    String operationNo = IdGenerator.newBusinessNo("rpl");
+    return new RecoveryResponse(operationNo);
   }
 
   public record RecoveryResponse(String operationNo) {}

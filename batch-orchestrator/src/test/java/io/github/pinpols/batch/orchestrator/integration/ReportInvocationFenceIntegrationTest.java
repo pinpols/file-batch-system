@@ -10,22 +10,25 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -63,7 +66,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskExecutionService taskExecutionService;
@@ -77,8 +80,15 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JobTaskMapper jobTaskMapper;
 
+  private final PartitionReclaimUnit partitionReclaimUnit;
+
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  ReportInvocationFenceIntegrationTest(PartitionReclaimUnit partitionReclaimUnit) {
+    this.partitionReclaimUnit = partitionReclaimUnit;
+  }
 
   @BeforeEach
   void refreshWorkersForClaim() {
@@ -88,22 +98,23 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("reclaim 重派后旧 invocation(及缺失)的迟到 report 被 fence 拒,I2 真实结果不丢")
   void staleReportAfterReclaim_isRejectedByInvocationFence_andI2ResultWins() {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-fence-" + seed.requestId())
         .params(Map.of())
         .build();
-    launchService.launch(launchRequest);
+    var response = workflowRunLaunchService.launch(launchRequest);
 
-    JobInstanceEntity jobInstance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    Long jobInstanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity jobInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     assertThat(jobInstance).isNotNull();
 
     JobTaskEntity task = jobTaskMapper
@@ -117,20 +128,47 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
-    String invocationI1 =
-        jobPartitionMapper.selectById(TENANT, partition.getId()).getCurrentInvocationId();
+    JobPartitionEntity claimedPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
+    String invocationI1 = claimedPartition.getCurrentInvocationId();
     assertThat(invocationI1).isNotBlank();
 
-    // 2) 模拟 reclaim 重派:同一 task/partition 被重新以 I2 领取(task 保持 RUNNING = double-executor 窗口)。
-    //    直接改写 current_invocation_id 复现"新 invocation 已就位、旧 worker 仍在跑"的竞态,无需真起第二个 worker。
-    String invocationI2 = "inv-reclaim-" + System.nanoTime();
-    int moved = jdbcTemplate.update(
-        "update batch.job_partition set current_invocation_id = ? where tenant_id = ? and id ="
-            + " ?",
-        invocationI2,
-        TENANT,
-        partition.getId());
-    assertThat(moved).isEqualTo(1);
+    // 2) 真 PG reclaim:将租约置为过期后运行生产 reclaim 单元,复位 task/partition/step 并写入重派 outbox。
+    String expirePartitionLeaseSql = """
+        update batch.job_partition
+        set lease_expire_at = current_timestamp - interval '1 minute'
+        where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(expirePartitionLeaseSql, TENANT, partition.getId());
+    JobPartitionEntity expired = jobPartitionMapper.selectById(TENANT, partition.getId());
+    partitionReclaimUnit.reclaim(expired);
+    assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
+        .isEqualTo(TaskStatus.READY.code());
+    assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getPartitionStatus())
+        .isEqualTo(PartitionStatus.READY.code());
+    String reclaimedOutboxSelectedWorkerSql = """
+        select payload_json ->> 'selectedWorkerId' from batch.outbox_event
+        where tenant_id = ? and event_key = ?
+        """;
+    String reclaimedOutboxEventKey =
+        TENANT + ":reclaim:" + partition.getId() + ":v" + expired.getVersion();
+    String reclaimedOutboxSelectedWorker = jdbcTemplate.queryForObject(
+        reclaimedOutboxSelectedWorkerSql, String.class, TENANT, reclaimedOutboxEventKey);
+    assertThat(reclaimedOutboxSelectedWorker)
+        .as("reclaim dispatch must not keep the previous attempt's worker instance target")
+        .isNull();
+
+    // 第二次认领产生新 invocation I2;旧 I1 的批量续租必须被真实数据库围栏拒绝。
+    JobTaskEntity reclaimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
+    assertThat(reclaimed).isNotNull();
+    assertThat(reclaimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    String invocationI2 =
+        jobPartitionMapper.selectById(TENANT, partition.getId()).getCurrentInvocationId();
+    assertThat(invocationI2).isNotBlank().isNotEqualTo(invocationI1);
+    List<TaskAssignmentService.TaskHeartbeatResult> oldRenewal =
+        taskExecutionService.renewLeaseBatch(List.of(new TaskAssignmentService.LeaseRenewCommand(
+            TENANT, task.getId(), seed.workerCode(), invocationI1)));
+    assertThat(oldRenewal).hasSize(1);
+    assertThat(oldRenewal.get(0).leaseRenewed()).isFalse();
 
     // 3) worker#1 的迟到 report 带旧 I1 → 必须被 fence 拒,且不写任何状态。
     TaskOutcomeCommand staleWithOldInvocation = TaskOutcomeCommand.builder()
@@ -180,6 +218,98 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         .isEqualTo(TaskStatus.SUCCESS.code());
     assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getPartitionStatus())
         .isEqualTo(PartitionStatus.SUCCESS.code());
+
+    // 6) I2 已成功后，旧 I1 再以冲突失败结果乱序到达：终态回报幂等忽略，不能覆盖 I2。
+    TaskOutcomeCommand lateConflictingI1Report = TaskOutcomeCommand.builder()
+        .tenantId(TENANT)
+        .taskId(task.getId())
+        .success(false)
+        .errorCode("STALE_I1_FAILURE")
+        .errorMessage("late I1 failure must not replace the committed I2 success")
+        .resultSummary("{\"invocation\":\"I1 stale failure\"}")
+        .partitionInvocationId(invocationI1)
+        .build();
+    assertThat(taskExecutionService.applyTaskOutcome(lateConflictingI1Report).getTaskStatus())
+        .isEqualTo(TaskStatus.SUCCESS.code());
+    String taskResultInvocationSql = """
+        select result_summary ->> 'invocation' from batch.job_task
+        where tenant_id = ? and id = ?
+        """;
+    String persistedResultInvocation =
+        jdbcTemplate.queryForObject(taskResultInvocationSql, String.class, TENANT, task.getId());
+    assertThat(persistedResultInvocation).isEqualTo("I2 real result");
+    String taskErrorCodeSql = """
+        select error_code from batch.job_task where tenant_id = ? and id = ?
+    """;
+    String persistedErrorCode =
+        jdbcTemplate.queryForObject(taskErrorCodeSql, String.class, TENANT, task.getId());
+    assertThat(persistedErrorCode).isNull();
+    assertThat(jobPartitionMapper.selectById(TENANT, partition.getId()).getPartitionStatus())
+        .isEqualTo(PartitionStatus.SUCCESS.code());
+  }
+
+  @Test
+  @DisplayName("回收租约时载荷异常必须回滚任务分区步骤并保留过期租约")
+  void shouldRollbackLeaseReclaimWhenTaskPayloadIsInvalid() {
+    final String clearPayloadSql =
+        "update batch.job_task set task_payload = null where tenant_id = ? and id = ?";
+    final String expireLeaseSql =
+        "update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute' where tenant_id = ? and id = ?";
+    final String selectStepSql =
+        "select step_status, version from batch.job_step_instance where tenant_id = ? and job_task_id = ?";
+    final String selectEventCountSql =
+        "select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?";
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    var response = workflowRunLaunchService.launch(LaunchRequest.builder()
+        .tenantId(TENANT)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("invalid-reclaim-" + seed.requestId())
+        .params(Map.of())
+        .build());
+    Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobTaskEntity task = jobTaskMapper
+        .selectByQuery(JobTaskQuery.ofJobInstance(TENANT, instanceId))
+        .getFirst();
+    JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
+    assertThat(claimed).isNotNull();
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    jdbcTemplate.update(clearPayloadSql, TENANT, task.getId());
+    jdbcTemplate.update(expireLeaseSql, TENANT, task.getJobPartitionId());
+    JobTaskEntity beforeTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobPartitionEntity beforePartition =
+        jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
+    Map<String, Object> beforeStep = jdbcTemplate.queryForMap(selectStepSql, TENANT, task.getId());
+    String reclaimKey =
+        TENANT + ":reclaim:" + beforePartition.getId() + ":v" + beforePartition.getVersion();
+
+    assertThatThrownBy(() -> partitionReclaimUnit.reclaim(beforePartition))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageKey())
+            .isEqualTo("error.task.retry_payload_unsafe"));
+
+    JobTaskEntity afterTask = jobTaskMapper.selectById(TENANT, task.getId());
+    JobPartitionEntity afterPartition =
+        jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
+    assertThat(afterTask.getTaskStatus())
+        .isEqualTo(beforeTask.getTaskStatus())
+        .isEqualTo("RUNNING");
+    assertThat(afterTask.getVersion()).isEqualTo(beforeTask.getVersion());
+    assertThat(afterTask.getTaskPayload()).isNull();
+    assertThat(afterPartition.getPartitionStatus())
+        .isEqualTo(beforePartition.getPartitionStatus())
+        .isEqualTo("RUNNING");
+    assertThat(afterPartition.getVersion()).isEqualTo(beforePartition.getVersion());
+    assertThat(afterPartition.getCurrentInvocationId())
+        .isEqualTo(beforePartition.getCurrentInvocationId());
+    assertThat(afterPartition.getLeaseExpireAt()).isEqualTo(beforePartition.getLeaseExpireAt());
+    assertThat(jdbcTemplate.queryForMap(selectStepSql, TENANT, task.getId())).isEqualTo(beforeStep);
+    assertThat(jdbcTemplate.queryForObject(selectEventCountSql, Long.class, TENANT, reclaimKey))
+        .isZero();
   }
 
   /** 复刻 lifecycle 测试的 CAS 抖动重试:延长重试 + 每拍刷新 worker 可见性,直至 task RUNNING。 */

@@ -51,7 +51,9 @@ func (m *TaskDispatchMessage) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &aux); err != nil {
 		return err
 	}
-	m.TaskID = strings.Trim(strings.TrimSpace(string(aux.TaskID)), `"`)
+	taskIDText := string(aux.TaskID)
+	trimmedTaskID := strings.TrimSpace(taskIDText)
+	m.TaskID = strings.Trim(trimmedTaskID, `"`)
 	if m.WorkerType == "" && aux.TaskType != "" {
 		m.WorkerType = aux.TaskType
 	}
@@ -165,7 +167,10 @@ func (p *MessagePipeline) OnMessage(rec Record) (TaskDispatchMessage, MessageDis
 	// On the receive path in-flight is at/above max (we just got a new message),
 	// so this only ever yields pause; the hysteresis resume path runs as a slot
 	// frees (see lifecycle.go), where the decision core gates resume on max/2.
-	d := protocol.DecideBackpressure(p.inFlight(), p.maxConcurrent, p.fsm.Paused())
+	inFlight := p.inFlight()
+	maxConcurrent := p.maxConcurrent
+	paused := p.fsm.Paused()
+	d := protocol.DecideBackpressure(inFlight, maxConcurrent, paused)
 	if d.Action == "backpressure" {
 		p.fsm.ApplyKafkaDirective(d.Kafka) // sets paused=true
 		p.logger.Printf("INFO backpressure: inFlight=%d max=%d paused partition taskId=%s",

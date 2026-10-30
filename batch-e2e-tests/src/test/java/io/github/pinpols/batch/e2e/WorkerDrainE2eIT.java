@@ -13,7 +13,7 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.infrastructure.WorkerRuntimeState;
@@ -63,7 +63,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   private static final String WORKER_CODE = "e2e-import-drain-1";
   private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
-  private final LaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
   private final WorkerDrainGovernanceService workerDrainGovernanceService;
   private final HeartbeatService heartbeatService;
@@ -73,7 +73,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   WorkerDrainE2eIT(
-      LaunchService launchService,
+      WorkflowRunLaunchService launchService,
       JdbcTemplate jdbcTemplate,
       WorkerDrainGovernanceService workerDrainGovernanceService,
       HeartbeatService heartbeatService,
@@ -91,26 +91,28 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   @BeforeEach
   void restoreWorkerOnline() {
-    await()
-        .atMost(Duration.ofSeconds(10))
-        .untilAsserted(() -> assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from batch.worker_registry where tenant_id = ? and worker_code = ?",
-                Integer.class,
-                TENANT,
-                WORKER_CODE))
-            .isEqualTo(1));
-    WorkerRegistration registration = workerRuntimeState.get(WORKER_CODE);
-    if (registration != null) {
-      registration.setStatus(WorkerRegistryStatus.ONLINE.code());
-    }
-    jdbcTemplate.update("""
+    final String selectCountSql = """
+        select count(*) from batch.worker_registry where tenant_id = ? and worker_code = ?
+    """;
+    final String updateWorkerRegistrySql = """
         update batch.worker_registry
         set status = 'ONLINE',
             drain_started_at = null,
             drain_deadline_at = null,
             updated_at = current_timestamp
         where tenant_id = ? and worker_code = ?
-        """, TENANT, WORKER_CODE);
+        """;
+
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      Integer selectedWorkerRegistryCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, WORKER_CODE);
+      assertThat(selectedWorkerRegistryCount).isEqualTo(1);
+    });
+    WorkerRegistration registration = workerRuntimeState.get(WORKER_CODE);
+    if (registration != null) {
+      registration.setStatus(WorkerRegistryStatus.ONLINE.code());
+    }
+    jdbcTemplate.update(updateWorkerRegistrySql, TENANT, WORKER_CODE);
     heartbeatService.beat(WORKER_CODE);
     await()
         .atMost(Duration.ofSeconds(5))
@@ -123,28 +125,31 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("排空超时后接管:worker 在排空态后转为已下线并清空排空时间戳,运行中任务退回就绪且解除占用")
   void shouldReclaimRunningTaskAndDecommissionWorker_whenDrainTimeoutExpires() throws Exception {
+    final String selectStatusSql = """
+                      select status, drain_started_at, drain_deadline_at
+                      from batch.worker_registry
+                      where tenant_id = ? and worker_code = ?
+                      """;
+    final String updateWorkerRegistrySql = """
+        update batch.worker_registry
+        set drain_deadline_at = current_timestamp - interval '1 second',
+            updated_at = current_timestamp
+        where tenant_id = ? and worker_code = ?
+        """;
+
     Long taskId = seedClaimedTask("timeout");
 
     HttpResponse<String> drainResponse = sendDrainRequest(1);
     assertThat(drainResponse.statusCode()).isBetween(200, 299);
 
     await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-      Map<String, Object> worker = jdbcTemplate.queryForMap("""
-                      select status, drain_started_at, drain_deadline_at
-                      from batch.worker_registry
-                      where tenant_id = ? and worker_code = ?
-                      """, TENANT, WORKER_CODE);
+      Map<String, Object> worker = jdbcTemplate.queryForMap(selectStatusSql, TENANT, WORKER_CODE);
       assertThat(worker.get("status")).isEqualTo("DRAINING");
       assertThat(worker.get("drain_started_at")).isNotNull();
       assertThat(worker.get("drain_deadline_at")).isNotNull();
     });
 
-    jdbcTemplate.update("""
-        update batch.worker_registry
-        set drain_deadline_at = current_timestamp - interval '1 second',
-            updated_at = current_timestamp
-        where tenant_id = ? and worker_code = ?
-        """, TENANT, WORKER_CODE);
+    jdbcTemplate.update(updateWorkerRegistrySql, TENANT, WORKER_CODE);
     workerDrainGovernanceService.takeoverAfterDrainTimeout(TENANT, WORKER_CODE);
 
     assertWorkerAndTaskReclaimed(taskId);
@@ -203,6 +208,24 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   }
 
   private Long seedClaimedTask(String scenario) {
+    final String selectIdSql = """
+            select t.id
+            from batch.job_task t
+                     join batch.job_instance ji on ji.id = t.job_instance_id
+            where ji.tenant_id = ?
+              and ji.dedup_key = ?
+            order by t.id asc
+            limit 1
+            """;
+    final String updateJobTaskSql = """
+        update batch.job_task
+        set task_status = 'RUNNING',
+            assigned_worker_code = ?,
+            started_at = ?,
+            updated_at = current_timestamp
+        where tenant_id = ? and id = ?
+        """;
+
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
 
@@ -224,33 +247,18 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-worker-drain",
         params));
 
-    Long taskId = jdbcTemplate.queryForObject("""
-            select t.id
-            from batch.job_task t
-                     join batch.job_instance ji on ji.id = t.job_instance_id
-            where ji.tenant_id = ?
-              and ji.dedup_key = ?
-            order by t.id asc
-            limit 1
-            """, Long.class, TENANT, seed.dedupKey());
+    Long taskId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
     assertThat(taskId).isNotNull();
 
     jdbcTemplate.update(
-        """
-        update batch.job_task
-        set task_status = 'RUNNING',
-            assigned_worker_code = ?,
-            started_at = ?,
-            updated_at = current_timestamp
-        where tenant_id = ? and id = ?
-        """,
+        updateJobTaskSql,
         WORKER_CODE,
         Timestamp.from(BatchDateTimeSupport.utcNow().minusSeconds(600)),
         TENANT,
@@ -270,23 +278,27 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
   }
 
   private void assertWorkerAndTaskReclaimed(Long taskId) {
-    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-      Map<String, Object> workerAfterTimeout = jdbcTemplate.queryForMap("""
+    final String selectStatusSql = """
                       select status, drain_started_at, drain_deadline_at
                       from batch.worker_registry
                       where tenant_id = ? and worker_code = ?
-                      """, TENANT, WORKER_CODE);
+                      """;
+    final String selectTaskStatusSql = """
+                      select task_status, assigned_worker_code
+                      from batch.job_task
+                      where id = ?
+                      """;
+
+    await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+      Map<String, Object> workerAfterTimeout =
+          jdbcTemplate.queryForMap(selectStatusSql, TENANT, WORKER_CODE);
       assertThat(workerAfterTimeout.get("status")).isEqualTo("DECOMMISSIONED");
       assertThat(workerAfterTimeout.get("drain_started_at")).isNull();
       assertThat(workerAfterTimeout.get("drain_deadline_at")).isNull();
     });
 
     await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-      Map<String, Object> taskAfterTimeout = jdbcTemplate.queryForMap("""
-                      select task_status, assigned_worker_code
-                      from batch.job_task
-                      where id = ?
-                      """, taskId);
+      Map<String, Object> taskAfterTimeout = jdbcTemplate.queryForMap(selectTaskStatusSql, taskId);
       assertThat(taskAfterTimeout.get("task_status")).isEqualTo("READY");
       assertThat(taskAfterTimeout.get("assigned_worker_code")).isNull();
     });

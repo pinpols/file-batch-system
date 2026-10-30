@@ -17,6 +17,7 @@ ALTER TABLE batch.trigger_request
     ADD COLUMN IF NOT EXISTS trigger_runtime_state_id BIGINT;
 
 -- 软外键(不强制,因为 runtime_state CASCADE 删除时 trigger_request 历史记录应保留)
+
 COMMENT ON COLUMN batch.trigger_request.scheduled_fire_time IS
     '时间轮 fire 时设置的预定 fire 时刻;非时间轮路径(API/MANUAL/EVENT)为 NULL';
 COMMENT ON COLUMN batch.trigger_request.trigger_runtime_state_id IS
@@ -25,6 +26,7 @@ COMMENT ON COLUMN batch.trigger_request.trigger_runtime_state_id IS
 -- 关键唯一约束(partial index):同一 runtime_state + 同一 scheduled_fire_time 全局唯一
 -- 用 partial index 是因为只对时间轮 fire 出来的记录生效,
 -- 历史 API/MANUAL/EVENT trigger_request(两列都为 NULL)不受影响
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_trigger_request_fire_dedup
     ON batch.trigger_request (trigger_runtime_state_id, scheduled_fire_time)
     WHERE trigger_runtime_state_id IS NOT NULL
@@ -38,6 +40,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uk_trigger_request_fire_dedup
 -- 本 migration 不强制改老数据,只是给新路径用新 key 格式
 
 -- 索引:运维侧"查某 trigger_runtime_state 的所有历史 fire"
+
 CREATE INDEX IF NOT EXISTS idx_trigger_request_runtime_state
     ON batch.trigger_request (trigger_runtime_state_id, scheduled_fire_time DESC)
     WHERE trigger_runtime_state_id IS NOT NULL;

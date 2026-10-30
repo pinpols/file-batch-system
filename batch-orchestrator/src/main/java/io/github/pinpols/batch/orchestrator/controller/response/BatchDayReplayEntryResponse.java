@@ -2,8 +2,10 @@ package io.github.pinpols.batch.orchestrator.controller.response;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import java.time.Instant;
+import lombok.Builder;
 
 /** 单条重放明细的 HTTP 契约。 */
+@Builder
 public record BatchDayReplayEntryResponse(
     Long id,
     Long sessionId,
@@ -21,20 +23,21 @@ public record BatchDayReplayEntryResponse(
     Instant updatedAt) {
 
   public static BatchDayReplayEntryResponse from(BatchDayReplayEntryEntity entity) {
-    return new BatchDayReplayEntryResponse(
-        entity.id(),
-        entity.sessionId(),
-        entity.tenantId(),
-        entity.jobCode(),
-        entity.sourceInstanceId(),
-        entity.rerunInstanceId(),
-        entity.status(),
-        entity.failureReason(),
-        entity.startedAt(),
-        entity.finishedAt(),
-        entity.resultVersionId(),
-        entity.planSnapshot(),
-        entity.createdAt(),
-        entity.updatedAt());
+    return BatchDayReplayEntryResponse.builder()
+        .id(entity.id())
+        .sessionId(entity.sessionId())
+        .tenantId(entity.tenantId())
+        .jobCode(entity.jobCode())
+        .sourceInstanceId(entity.sourceInstanceId())
+        .rerunInstanceId(entity.rerunInstanceId())
+        .status(entity.status())
+        .failureReason(entity.failureReason())
+        .startedAt(entity.startedAt())
+        .finishedAt(entity.finishedAt())
+        .resultVersionId(entity.resultVersionId())
+        .planSnapshot(entity.planSnapshot())
+        .createdAt(entity.createdAt())
+        .updatedAt(entity.updatedAt())
+        .build();
   }
 }

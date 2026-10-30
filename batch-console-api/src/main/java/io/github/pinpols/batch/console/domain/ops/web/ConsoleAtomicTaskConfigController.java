@@ -45,9 +45,10 @@ public class ConsoleAtomicTaskConfigController {
       @RequestParam("taskType") String taskType,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return responseFactory.success(configService.listByTaskType(resolved, taskType).stream()
-        .map(AtomicTaskConfigResponse::from)
-        .toList());
+    List<AtomicTaskConfigEntity> taskConfigs = configService.listByTaskType(resolved, taskType);
+    List<AtomicTaskConfigResponse> responses =
+        taskConfigs.stream().map(AtomicTaskConfigResponse::from).toList();
+    return responseFactory.success(responses);
   }
 
   /**

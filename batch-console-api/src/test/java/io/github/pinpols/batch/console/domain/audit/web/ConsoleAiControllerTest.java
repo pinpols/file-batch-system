@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.audit.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -33,6 +34,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -41,12 +45,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("AI 助手控制器: 请求校验、流式应答与取消的归属校验")
+@ExtendWith(MockitoExtension.class)
 class ConsoleAiControllerTest {
 
-  private final ConsoleAiApplicationService applicationService =
-      mock(ConsoleAiApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleAiApplicationService applicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -54,9 +61,6 @@ class ConsoleAiControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -77,6 +81,8 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("缺少幂等键请求头时返回 400 且不进入业务处理")
   void shouldReturn400WhenIdempotencyHeaderMissing() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(
             post("/api/console/ai/chat/stream").contentType(APPLICATION_JSON).content("""
@@ -91,6 +97,8 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("提示词为空白时返回 400 校验错误")
   void shouldReturn400WhenPromptIsBlank() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(post("/api/console/ai/chat/stream")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-001")
@@ -107,6 +115,8 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("旧版对话端点不再暴露并返回 404")
   void shouldNotExposeLegacyJsonChatEndpoint() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(post("/api/console/ai/chat")
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-old")
@@ -150,15 +160,17 @@ class ConsoleAiControllerTest {
         .andReturn()
         .getResponse()
         .getContentAsString();
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:started"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:delta"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("event:completed"));
-    org.junit.jupiter.api.Assertions.assertTrue(stream.contains("hello world"));
+    assertThat(stream.contains("event:started")).isTrue();
+    assertThat(stream.contains("event:delta")).isTrue();
+    assertThat(stream.contains("event:completed")).isTrue();
+    assertThat(stream.contains("hello world")).isTrue();
   }
 
   @Test
   @DisplayName("非会话归属人取消他人流式请求时返回 404")
   void shouldRejectCrossOperatorCancellation() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
@@ -178,7 +190,7 @@ class ConsoleAiControllerTest {
                 """))
         .andExpect(request().asyncStarted())
         .andReturn();
-    org.junit.jupiter.api.Assertions.assertTrue(entered.await(2, TimeUnit.SECONDS));
+    assertThat(entered.await(2, TimeUnit.SECONDS)).isTrue();
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-cancel", "trace-cancel", "t1", "other", null, null));
@@ -196,6 +208,8 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("会话分页按当前租户与操作人范围返回")
   void shouldReturnOwnerScopedConversationPage() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator-a", null, null));

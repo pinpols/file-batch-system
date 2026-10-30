@@ -56,6 +56,7 @@ import io.github.pinpols.batch.common.enums.RetryPolicyType;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.ScheduleType;
+import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.common.enums.SchedulingPriorityBand;
 import io.github.pinpols.batch.common.enums.SensorTimeoutAction;
 import io.github.pinpols.batch.common.enums.SensorType;
@@ -63,6 +64,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.SkipAction;
 import io.github.pinpols.batch.common.enums.SkipThresholdMode;
 import io.github.pinpols.batch.common.enums.StepInstanceStatus;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TenantConfigInitAction;
 import io.github.pinpols.batch.common.enums.TenantStatus;
@@ -123,30 +125,33 @@ public class ConsoleMetaQueryService {
     this.stepRegistryQueryMapper = stepRegistryQueryMapper;
   }
 
-  /** 固定阶段序列由公共 PipelineType 枚举维护，供元数据展示与定义校验共用。 */
-  private static final Map<String, List<String>> PIPELINE_STAGES = Arrays.stream(
-          PipelineType.values())
-      .collect(Collectors.toUnmodifiableMap(PipelineType::code, PipelineType::stages));
-
+  /**
+   * Pipeline 固定 9 stages 按 jobType 分组（与 {@code ConfigPackageExcelValidator.STAGES_BY_TYPE} 保持一致；该
+   * Map 是导入校验白名单的事实源）。
+   */
   public Map<String, List<String>> pipelineStages() {
-    return PIPELINE_STAGES;
+    Map<String, List<String>> stages = new LinkedHashMap<>();
+    SystemPipelineCatalog.definitions()
+        .forEach(definition -> stages.put(definition.code(), definition.stages()));
+    return Map.copyOf(stages);
   }
 
   public List<String> stepImpls(String module) {
     if (module == null || module.isBlank()) {
       return stepRegistryQueryMapper.selectAllImplCodes();
     }
-    return stepRegistryQueryMapper.selectImplCodesByModule(module.toUpperCase(Locale.ROOT));
+    String normalizedModule = module.toUpperCase(Locale.ROOT);
+    return stepRegistryQueryMapper.selectImplCodesByModule(normalizedModule);
   }
 
   @SuppressWarnings("unchecked")
   public Map<String, List<ConsoleMetaEnumItem>> enums() {
     Locale locale = LocaleContextHolder.getLocale();
+    String localeTag = locale.toLanguageTag();
+    String localeKeySegment = ConsoleQueryCacheService.keySegment(localeTag);
+    String cacheKey = "meta:enums:" + localeKeySegment;
     return cacheService.getOrLoad(
-        "meta:enums:" + ConsoleQueryCacheService.keySegment(locale.toLanguageTag()),
-        ConsoleQueryCacheService.META_ENUM_TTL,
-        Map.class,
-        () -> buildEnums(locale));
+        cacheKey, ConsoleQueryCacheService.META_ENUM_TTL, Map.class, () -> buildEnums(locale));
   }
 
   private Map<String, List<ConsoleMetaEnumItem>> buildEnums(Locale locale) {
@@ -173,8 +178,9 @@ public class ConsoleMetaQueryService {
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> queues(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":queues";
     return cacheService.getOrLoad(
-        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":queues",
+        cacheKey,
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.queueOptions(resolved)));
@@ -183,8 +189,9 @@ public class ConsoleMetaQueryService {
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> calendars(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":calendars";
     return cacheService.getOrLoad(
-        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":calendars",
+        cacheKey,
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.calendarOptions(resolved)));
@@ -193,8 +200,9 @@ public class ConsoleMetaQueryService {
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> windows(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":windows";
     return cacheService.getOrLoad(
-        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":windows",
+        cacheKey,
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.windowOptions(resolved)));
@@ -203,8 +211,9 @@ public class ConsoleMetaQueryService {
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> workerGroups(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":workerGroups";
     return cacheService.getOrLoad(
-        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":workerGroups",
+        cacheKey,
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.workerGroupOptions(resolved)));
@@ -213,8 +222,9 @@ public class ConsoleMetaQueryService {
   @SuppressWarnings("unchecked")
   public List<ConsoleMetaOption> bizTypes(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    String cacheKey = "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":bizTypes";
     return cacheService.getOrLoad(
-        "meta:" + ConsoleQueryCacheService.keySegment(resolved) + ":bizTypes",
+        cacheKey,
         ConsoleQueryCacheService.META_OPTION_TTL,
         List.class,
         () -> toOptions(repository.bizTypeOptions(resolved)));
@@ -235,7 +245,11 @@ public class ConsoleMetaQueryService {
 
     List<ConsoleMetaEnumItem> toItems(MessageSource messageSource, Locale locale) {
       return Arrays.stream(enumClass.getEnumConstants())
-          .map(e -> new ConsoleMetaEnumItem(e.code(), localizedLabel(e, messageSource, locale)))
+          .map(e -> {
+            String code = e.code();
+            String label = localizedLabel(e, messageSource, locale);
+            return new ConsoleMetaEnumItem(code, label);
+          })
           .toList();
     }
   }
@@ -287,6 +301,7 @@ public class ConsoleMetaQueryService {
     list.add(new EnumReg<>("configVersionPolicy", ConfigVersionPolicy.class));
     list.add(new EnumReg<>("triggerRequestStatus", TriggerRequestStatus.class));
     list.add(new EnumReg<>("misfirePendingStatus", MisfirePendingStatus.class));
+    list.add(new EnumReg<>("scheduledOccurrenceStatus", ScheduledOccurrenceStatus.class));
     list.add(new EnumReg<>("workerStatus", WorkerRegistryStatus.class));
     list.add(new EnumReg<>("outboxPublishStatus", OutboxPublishStatus.class));
     list.add(new EnumReg<>("aiPromptCategory", AiPromptCategory.class));

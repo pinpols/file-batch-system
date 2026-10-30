@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.observability.application.ConsoleR
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.time.Duration;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -74,8 +75,7 @@ class ConsoleRateLimitHttpIntegrationTest extends AbstractIntegrationTest {
         .expectStatus()
         .isEqualTo(429)
         .expectBody(String.class)
-        .value(response ->
-            org.assertj.core.api.Assertions.assertThat(response).contains("RATE_LIMITED"));
+        .value(response -> Assertions.assertThat(response).contains("RATE_LIMITED"));
   }
 
   @Test
@@ -91,8 +91,7 @@ class ConsoleRateLimitHttpIntegrationTest extends AbstractIntegrationTest {
         .expectStatus()
         .isEqualTo(429)
         .expectBody(String.class)
-        .value(response ->
-            org.assertj.core.api.Assertions.assertThat(response).contains("RATE_LIMITED"));
+        .value(response -> Assertions.assertThat(response).contains("RATE_LIMITED"));
   }
 
   private WebTestClient.ResponseSpec exchangeReport(String username) {

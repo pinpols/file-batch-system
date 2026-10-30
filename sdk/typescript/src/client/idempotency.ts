@@ -37,7 +37,8 @@ export function withIdempotency(
       try {
         key = await keyResolver(ctx);
       } catch (error) {
-        return taskFailure(ErrorCode.CONFIG_INVALID, `idempotency key failed: ${messageOf(error)}`);
+        const errorMessage = messageOf(error);
+        return taskFailure(ErrorCode.CONFIG_INVALID, `idempotency key failed: ${errorMessage}`);
       }
       if (!key) {
         return taskFailure(ErrorCode.CONFIG_INVALID, "idempotency key is empty");
@@ -47,9 +48,10 @@ export function withIdempotency(
       try {
         acquired = await store.tryAcquire(key, options.ttlMs);
       } catch (error) {
+        const errorMessage = messageOf(error);
         return taskFailure(
           ErrorCode.EXECUTION_FAILED,
-          `idempotency acquire failed: ${messageOf(error)}`,
+          `idempotency acquire failed: ${errorMessage}`,
         );
       }
 
@@ -59,9 +61,10 @@ export function withIdempotency(
           if (cached) return cached.result;
           return taskFailure(IDEMPOTENT_IN_FLIGHT, "idempotent execution is already in flight");
         } catch (error) {
+          const errorMessage = messageOf(error);
           return taskFailure(
             ErrorCode.EXECUTION_FAILED,
-            `idempotency lookup failed: ${messageOf(error)}`,
+            `idempotency lookup failed: ${errorMessage}`,
           );
         }
       }
@@ -75,9 +78,10 @@ export function withIdempotency(
         try {
           await store.record(key, { result }, options.ttlMs);
         } catch (error) {
+          const errorMessage = messageOf(error);
           return taskFailure(
             ErrorCode.EXECUTION_FAILED,
-            `idempotency record failed: ${messageOf(error)}`,
+            `idempotency record failed: ${errorMessage}`,
           );
         }
         return result;
@@ -113,7 +117,8 @@ export class InMemoryIdempotencyStore implements SdkIdempotencyStore {
   async tryAcquire(key: string, ttlMs?: number): Promise<boolean> {
     this.#deleteIfExpired(key);
     if (this.#entries.has(key)) return false;
-    this.#entries.set(key, { expiresAt: expiresAt(ttlMs) });
+    const entryExpiresAt = expiresAt(ttlMs);
+    this.#entries.set(key, { expiresAt: entryExpiresAt });
     return true;
   }
 
@@ -123,7 +128,8 @@ export class InMemoryIdempotencyStore implements SdkIdempotencyStore {
   }
 
   async record(key: string, entity: SdkIdempotencyEntity, ttlMs?: number): Promise<void> {
-    this.#entries.set(key, { entity, expiresAt: expiresAt(ttlMs) });
+    const entryExpiresAt = expiresAt(ttlMs);
+    this.#entries.set(key, { entity, expiresAt: entryExpiresAt });
   }
 
   async release(key: string): Promise<void> {

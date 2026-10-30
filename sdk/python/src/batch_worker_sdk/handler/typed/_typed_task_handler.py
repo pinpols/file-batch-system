@@ -97,7 +97,8 @@ class SdkTypedTaskHandler[InputT: BaseModel, OutputT: BaseModel]:
             )
         result = await self._do_typed_execute(ctx, params)  # type: ignore[arg-type]
         output_map = SdkTypedParameters.serialize(result)
-        return SdkTaskResult.success_with(output=output_map, message=self._success_message(result))
+        success_message = self._success_message(result)
+        return SdkTaskResult.success_with(output=output_map, message=success_message)
 
     async def _do_typed_execute(self, ctx: SdkTaskContext, params: InputT) -> OutputT | None:
         """租户覆写点 —— 强类型业务逻辑。"""

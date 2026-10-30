@@ -29,4 +29,12 @@ MINIO_LIFECYCLE_PROD_ACK=I_UNDERSTAND_PRODUCTION_LIFECYCLE \
 ```
 
 完整策略说明见
-[`docs/runbook/minio-lifecycle-policy.md`](../../docs/runbook/minio-lifecycle-policy.md)。
+[`docs/runbook/object-storage-lifecycle-policy.md`](../../docs/runbook/object-storage-lifecycle-policy.md)。
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [apply-lifecycle.sh](apply-lifecycle.sh) | 对象存储 lifecycle 下发脚本。默认只预览；生产 apply 必须显式确认。 |

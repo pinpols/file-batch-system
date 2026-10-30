@@ -63,14 +63,14 @@ class CutoffScheduleResolverTest {
     String spec = "{\"default\":\"06:00\",\"overrides\":["
         + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\","
         + "\"from\":\"2026-06-01\",\"to\":\"2026-08-31\"}]}";
-    // 2026-06-12 is Friday in window
+    // 2026-06-12 是窗口内的星期五。
     assertThat(resolver.resolveCutoffTime(spec, LocalDate.of(2026, Month.JUNE, 12), baseDefault))
         .isEqualTo(LocalTime.of(5, 30));
-    // 2026-09-04 Friday but outside to
+    // 2026-09-04 是星期五，但超出 to 边界。
     assertThat(
             resolver.resolveCutoffTime(spec, LocalDate.of(2026, Month.SEPTEMBER, 4), baseDefault))
         .isEqualTo(LocalTime.of(6, 0));
-    // 2026-06-12 if treated as Saturday no match — actually 2026-06-12 is Friday, kept
+    // 若将 2026-06-12 视为星期六则不应匹配；该日期实际为星期五，应保留匹配。
   }
 
   @Test
@@ -79,7 +79,7 @@ class CutoffScheduleResolverTest {
     String spec = "{\"default\":\"06:00\",\"overrides\":["
         + "{\"weekdayPattern\":\"FRIDAY\",\"cutoff\":\"05:30\"},"
         + "{\"date\":\"2026-12-25\",\"cutoff\":\"13:00\"}]}";
-    // 2026-12-25 is Friday — exact wins
+    // 2026-12-25 是星期五；精确日期规则优先。
     assertThat(
             resolver.resolveCutoffTime(spec, LocalDate.of(2026, Month.DECEMBER, 25), baseDefault))
         .isEqualTo(LocalTime.of(13, 0));

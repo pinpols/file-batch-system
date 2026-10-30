@@ -3,21 +3,24 @@ package io.github.pinpols.batch.console.domain.file.infrastructure.query;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
+import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineProgressResponse;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineExecutionView;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineInfoView;
+import io.github.pinpols.batch.console.domain.file.view.FilePipelineProgressStepView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.view.ConsolePipelineProgressItemResponse;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -26,10 +29,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
- * 缺口1/2 单测:pipelineProgress 服务端桥接实时行数 + pipeline 级文件名透出。
+ * 验证流水线进度查询对实时行数的补充及流水线级文件名的返回。
  *
- * <p>桥接逻辑(缺口1)mock orchestratorProxy 验证——运行中 step 的持久 rows_processed 为 null 时才解析 worker 查 cache
- * 补上;持久有值则完全不触发下游调用。文件名(缺口2)从 selectFileInfoByPipelineInstance 取,放响应顶层。
+ * <p>运行中步骤的持久处理行数为空时，服务应查询编排器缓存并补充实时值；持久值已存在时不应调用下游服务。文件名从
+ * {@code selectFileInfoByPipelineInstance} 查询，并放在响应顶层。
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("文件流水线进度桥接: 实时行数补齐与终态隔离")
@@ -61,52 +64,59 @@ class ConsoleFilePipelineProgressBridgeTest {
         mappers,
         new BatchSecurityProperties(),
         localizedErrorRenderer,
-        orchestratorProxy);
+        orchestratorProxy,
+        mock(BatchDateTimeSupport.class));
   }
 
   private void stubTenant() {
     when(stepRunMapper.selectTenantIdByPipelineInstanceId(PIPELINE_ID)).thenReturn(TENANT);
   }
 
-  private Map<String, Object> step(String status, Long rowsProcessed) {
+  @Test
+  @DisplayName("跨服务读取遇到不同阶段尝试时不把新计数写入旧步骤快照")
+  void shouldWithholdLiveCountsWhenAttemptIdentityMissingOrDifferent() {
+    stubTenant();
+    when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(step("RUNNING", null)));
+    when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(
+            new ConsolePipelineProgressItemResponse("LOAD", 999L, 1000L, null, List.of(2L))));
+    stubFileInfo(5L, "retry.csv");
+    var response = service.pipelineProgress(PIPELINE_ID);
+    assertThat(response.steps().getFirst().rowsProcessed()).isNull();
+    assertThat(response.steps().getFirst().totalRowsHint()).isNull();
+  }
+
+  private FilePipelineProgressStepView step(String status, Long rowsProcessed) {
     return step("LOAD", status, rowsProcessed);
   }
 
-  private Map<String, Object> step(String stageCode, String status, Long rowsProcessed) {
-    Map<String, Object> row = new LinkedHashMap<>();
-    row.put("step_id", 1L);
-    row.put("pipeline_instance_id", PIPELINE_ID);
-    row.put("step_code", stageCode);
-    row.put("stage_code", stageCode);
-    row.put("step_status", status);
-    row.put("rows_processed", rowsProcessed);
-    row.put("total_rows_hint", null);
-    row.put("last_heartbeat_at", null);
-    return row;
+  private FilePipelineProgressStepView step(String stageCode, String status, Long rowsProcessed) {
+    return new FilePipelineProgressStepView(
+        1L, PIPELINE_ID, stageCode, stageCode, status, rowsProcessed, null, null, 1, null);
   }
 
   private void stubFileInfo(Long fileId, String fileName) {
-    Map<String, Object> info = new LinkedHashMap<>();
-    info.put("file_id", fileId);
-    info.put("file_name", fileName);
-    when(stepRunMapper.selectFileInfoByPipelineInstance(TENANT, PIPELINE_ID)).thenReturn(info);
+    when(stepRunMapper.selectFileInfoByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(new FilePipelineInfoView(fileId, fileName));
   }
 
   @Test
   @DisplayName("运行中 step 持久行数为空时,按当前 worker 从 cache 桥接实时行数")
   void shouldBridgeLiveRowsForRunningStepWhenPersistedNull() {
-    // arrange
+    // 准备依赖
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
     when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
-        .thenReturn(List.of(new ConsolePipelineProgressItemResponse("LOAD", 4200L, 5000L, null)));
+        .thenReturn(List.of(
+            new ConsolePipelineProgressItemResponse("LOAD", 4200L, 5000L, null, List.of(1L))));
     stubFileInfo(555L, "customers.csv");
 
-    // act
+    // 执行查询
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(PIPELINE_ID);
 
-    // assert
+    // 校验结果
     assertThat(resp.fileId()).isEqualTo(555L);
     assertThat(resp.fileName()).isEqualTo("customers.csv");
     assertThat(resp.steps()).hasSize(1);
@@ -117,16 +127,16 @@ class ConsoleFilePipelineProgressBridgeTest {
   @Test
   @DisplayName("持久行数已有值时不触发桥接,cache 不被查询")
   void shouldNotBridgeWhenPersistedRowsPresent() {
-    // arrange
+    // 准备依赖
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", 100L)));
     stubFileInfo(1L, "orders.csv");
 
-    // act
+    // 执行查询
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(PIPELINE_ID);
 
-    // assert
+    // 校验结果
     assertThat(resp.steps().get(0).rowsProcessed()).isEqualTo(100L);
     verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
   }
@@ -134,17 +144,17 @@ class ConsoleFilePipelineProgressBridgeTest {
   @Test
   @DisplayName("orchestrator 无实时进度时,运行中 step 行数保持 null")
   void shouldKeepNullWhenNoLiveProgressExists() {
-    // arrange
+    // 准备依赖
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("RUNNING", null)));
     when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID)).thenReturn(List.of());
     stubFileInfo(2L, "trades.csv");
 
-    // act
+    // 执行查询
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(PIPELINE_ID);
 
-    // assert
+    // 校验结果
     assertThat(resp.steps().get(0).rowsProcessed()).isNull();
     verify(orchestratorProxy).pipelineProgressByInstance(TENANT, PIPELINE_ID);
   }
@@ -152,16 +162,16 @@ class ConsoleFilePipelineProgressBridgeTest {
   @Test
   @DisplayName("非运行中 step(持久空)不触发桥接")
   void shouldNotBridgeForNonRunningStep() {
-    // arrange
+    // 准备依赖
     stubTenant();
     when(stepRunMapper.selectProgressByPipelineInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(step("SUCCESS", null)));
     stubFileInfo(3L, "done.csv");
 
-    // act
+    // 执行查询
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(PIPELINE_ID);
 
-    // assert
+    // 校验结果
     assertThat(resp.steps().get(0).rowsProcessed()).isNull();
     verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
   }
@@ -174,8 +184,8 @@ class ConsoleFilePipelineProgressBridgeTest {
         .thenReturn(List.of(step("LOAD", "RUNNING", null), step("VALIDATE", "SUCCESS", null)));
     when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
         .thenReturn(List.of(
-            new ConsolePipelineProgressItemResponse("LOAD", 42L, 100L, null),
-            new ConsolePipelineProgressItemResponse("VALIDATE", 90L, 90L, null)));
+            new ConsolePipelineProgressItemResponse("LOAD", 42L, 100L, null, List.of(1L)),
+            new ConsolePipelineProgressItemResponse("VALIDATE", 90L, 90L, null, List.of(1L))));
     stubFileInfo(4L, "mixed.csv");
 
     ConsoleFilePipelineProgressResponse response = service.pipelineProgress(PIPELINE_ID);
@@ -189,15 +199,73 @@ class ConsoleFilePipelineProgressBridgeTest {
   @Test
   @DisplayName("未知 pipelineInstanceId(无租户)返回空 steps 且 fileId/fileName 为 null")
   void shouldReturnEmptyWhenTenantUnresolved() {
-    // arrange
+    // 准备依赖
     when(stepRunMapper.selectTenantIdByPipelineInstanceId(999L)).thenReturn(null);
 
-    // act
+    // 执行查询
     ConsoleFilePipelineProgressResponse resp = service.pipelineProgress(999L);
 
-    // assert
+    // 校验结果
     assertThat(resp.steps()).isEmpty();
     assertThat(resp.fileId()).isNull();
     assertThat(resp.fileName()).isNull();
+  }
+
+  @Test
+  @DisplayName("为已授权后台读取构建带版本的最新快照")
+  void shouldBuildVersionedLatestSnapshotForAuthorizedBackground() {
+    var execution = new FilePipelineExecutionView();
+    execution.setPipelineInstanceId(PIPELINE_ID);
+    execution.setRunStatus("RUNNING");
+    execution.setCurrentStage("LOAD");
+    execution.setSystemPipelineCode("IMPORT");
+    execution.setSystemPipelineVersion(1);
+    when(stepRunMapper.selectExecution(TENANT, PIPELINE_ID)).thenReturn(execution);
+    when(stepRunMapper.selectLatestProgressByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(step("RUNNING", null)));
+    when(orchestratorProxy.pipelineProgressByInstance(TENANT, PIPELINE_ID))
+        .thenReturn(
+            List.of(new ConsolePipelineProgressItemResponse("LOAD", 88L, null, null, List.of(1L))));
+    var result = service.pipelineSnapshotAuthorized(TENANT, PIPELINE_ID);
+    assertThat(result.stageGraphAvailable()).isTrue();
+    assertThat(result.stageCodes())
+        .containsExactly("RECEIVE", "PREPROCESS", "PARSE", "VALIDATE", "LOAD", "FEEDBACK");
+    assertThat(result.steps().getFirst().rowsProcessed()).isEqualTo(88L);
+    assertThat(result.steps().getFirst().stepStatus()).isEqualTo("RUNNING");
+    verify(tenantGuard, never()).assertTenantAllowed(anyString());
+  }
+
+  @Test
+  @DisplayName("运行版本未知时不推测阶段")
+  void shouldNotInventStagesForUnknownRuntimeVersion() {
+    var execution = new FilePipelineExecutionView();
+    execution.setPipelineInstanceId(PIPELINE_ID);
+    execution.setRunStatus("SUCCESS");
+    execution.setSystemPipelineCode("IMPORT");
+    execution.setSystemPipelineVersion(99);
+    when(stepRunMapper.selectExecution(TENANT, PIPELINE_ID)).thenReturn(execution);
+    when(stepRunMapper.selectLatestProgressByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(step("SUCCESS", 15L)));
+    var result = service.pipelineSnapshotAuthorized(TENANT, PIPELINE_ID);
+    assertThat(result.stageGraphAvailable()).isFalse();
+    assertThat(result.stageCodes()).isEmpty();
+    assertThat(result.steps()).hasSize(1);
+    verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
+  }
+
+  @Test
+  @DisplayName("Pipeline 终止后不再合并实时进度")
+  void shouldNotBridgeAfterPipelineTerminates() {
+    var execution = new FilePipelineExecutionView();
+    execution.setPipelineInstanceId(PIPELINE_ID);
+    execution.setRunStatus("TERMINATED");
+    execution.setSystemPipelineCode("IMPORT");
+    execution.setSystemPipelineVersion(1);
+    when(stepRunMapper.selectExecution(TENANT, PIPELINE_ID)).thenReturn(execution);
+    when(stepRunMapper.selectLatestProgressByPipelineInstance(TENANT, PIPELINE_ID))
+        .thenReturn(List.of(step("RUNNING", null)));
+    var result = service.pipelineSnapshotAuthorized(TENANT, PIPELINE_ID);
+    assertThat(result.steps().getFirst().rowsProcessed()).isNull();
+    verify(orchestratorProxy, never()).pipelineProgressByInstance(anyString(), any());
   }
 }

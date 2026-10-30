@@ -41,6 +41,15 @@ class BusinessMultiShardRoutingIntegrationTest {
 
   @BeforeAll
   static void startAndSeed() throws Exception {
+    final String createSchemaSql = """
+        CREATE SCHEMA IF NOT EXISTS batch
+    """;
+    final String createIfSql = """
+        CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64) PRIMARY KEY,\s\
+        placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL DEFAULT now(), updated_by\s\
+        varchar(128))\
+        """;
+
     SHARD0.start();
     SHARD1.start();
     ds0 = hikari(SHARD0);
@@ -50,10 +59,8 @@ class BusinessMultiShardRoutingIntegrationTest {
     // placement 表放 shard-0 容器(本测当它作 platform 存储),TABLE 模式从这里读
     try (Connection c = ds0.getConnection();
         Statement st = c.createStatement()) {
-      st.execute("CREATE SCHEMA IF NOT EXISTS batch");
-      st.execute("CREATE TABLE IF NOT EXISTS batch.business_tenant_placement (tenant_id varchar(64)"
-          + " PRIMARY KEY, placement_key varchar(64) NOT NULL, updated_at timestamptz NOT NULL"
-          + " DEFAULT now(), updated_by varchar(128))");
+      st.execute(createSchemaSql);
+      st.execute(createIfSql);
     }
   }
 
@@ -93,14 +100,11 @@ class BusinessMultiShardRoutingIntegrationTest {
     String tableKey = "shard-0".equals(hash.resolve(tenant)) ? "shard-1" : "shard-0"; // 反片
     try (Connection c = ds0.getConnection();
         Statement st = c.createStatement()) {
-      st.execute(
-          "INSERT INTO batch.business_tenant_placement(tenant_id,placement_key,updated_by) VALUES"
-              + " ('"
-              + tenant
-              + "','"
-              + tableKey
-              + "','it') ON CONFLICT (tenant_id) DO UPDATE SET"
-              + " placement_key=EXCLUDED.placement_key");
+      final String insertBusinessTenantPlacementSql = """
+              INSERT INTO batch.business_tenant_placement(tenant_id,placement_key,updated_by)\s\
+              VALUES ('%s','%s','it') ON CONFLICT (tenant_id) DO UPDATE SET placement_key=EXCLUDED.placement_key\
+              """.formatted(tenant, tableKey);
+      st.execute(insertBusinessTenantPlacementSql);
     }
     DbTablePlacementResolver resolver =
         new DbTablePlacementResolver(placementRepo(), hash, 0L, System::currentTimeMillis);
@@ -125,12 +129,15 @@ class BusinessMultiShardRoutingIntegrationTest {
 
   /** 直读 placement 表的 repository(IT 桩;生产走 MyBatisTenantPlacementRepository)。 */
   private static TenantPlacementRepository placementRepo() {
+    final String selectTenantIdSql = """
+        SELECT tenant_id, placement_key FROM batch.business_tenant_placement
+    """;
+
     return () -> {
       Map<String, String> map = new LinkedHashMap<>();
       try (Connection c = ds0.getConnection();
           Statement st = c.createStatement();
-          ResultSet rs = st.executeQuery(
-              "SELECT tenant_id, placement_key FROM batch.business_tenant_placement")) {
+          ResultSet rs = st.executeQuery(selectTenantIdSql)) {
         while (rs.next()) {
           map.put(rs.getString(1), rs.getString(2));
         }
@@ -151,22 +158,34 @@ class BusinessMultiShardRoutingIntegrationTest {
   }
 
   private static void seedShard(DataSource ds, String key) throws Exception {
+    final String createSchemaSql = """
+        CREATE SCHEMA IF NOT EXISTS biz
+    """;
+    final String createIfSql = """
+        CREATE TABLE IF NOT EXISTS biz.__shard_identity (only_one boolean PRIMARY KEY DEFAULT true, shard_key\s\
+        text NOT NULL)\
+        """;
+
     try (Connection c = ds.getConnection();
         Statement st = c.createStatement()) {
-      st.execute("CREATE SCHEMA IF NOT EXISTS biz");
-      st.execute(
-          "CREATE TABLE IF NOT EXISTS biz.__shard_identity (only_one boolean PRIMARY KEY DEFAULT"
-              + " true, shard_key text NOT NULL)");
-      st.execute("INSERT INTO biz.__shard_identity(only_one,shard_key) VALUES (true,'"
-          + key
-          + "') ON CONFLICT (only_one) DO UPDATE SET shard_key=EXCLUDED.shard_key");
+      st.execute(createSchemaSql);
+      st.execute(createIfSql);
+      final String insertShardIdentitySql = """
+              INSERT INTO biz.__shard_identity(only_one,shard_key) VALUES (true,'%s')\s\
+              ON CONFLICT (only_one) DO UPDATE SET shard_key=EXCLUDED.shard_key\
+              """.formatted(key);
+      st.execute(insertShardIdentitySql);
     }
   }
 
   private static String readIdentity(DataSource routing) throws Exception {
+    final String selectShardKeySql = """
+        SELECT shard_key FROM biz.__shard_identity
+    """;
+
     try (Connection c = routing.getConnection();
         Statement st = c.createStatement();
-        ResultSet rs = st.executeQuery("SELECT shard_key FROM biz.__shard_identity")) {
+        ResultSet rs = st.executeQuery(selectShardKeySql)) {
       assertThat(rs.next()).isTrue();
       return rs.getString(1);
     }

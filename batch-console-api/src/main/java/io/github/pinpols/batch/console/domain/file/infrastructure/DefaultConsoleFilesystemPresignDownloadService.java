@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.storage.FilesystemPresignTokens;
 import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFilesystemPresignDownloadService;
+import java.io.InputStream;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -27,15 +28,17 @@ public class DefaultConsoleFilesystemPresignDownloadService
     if (key.contains("..") || key.startsWith("/")) {
       throw BizException.of(ResultCode.BUSINESS_ERROR, "error.file.fs_presign_key_invalid");
     }
-    String secret = Texts.hasText(filesystemProperties.getPresignSecret())
-        ? filesystemProperties.getPresignSecret()
+    String configuredPresignSecret = filesystemProperties.getPresignSecret();
+    String secret = Texts.hasText(configuredPresignSecret)
+        ? configuredPresignSecret
         : securityProperties.getInternalSecret();
     if (!FilesystemPresignTokens.verify(bucket, key, expEpochSec, signature, secret)) {
       throw BizException.of(ResultCode.UNAUTHORIZED, "error.file.fs_presign_invalid");
     }
     try {
-      return new PresignedDownload(
-          key.substring(key.lastIndexOf('/') + 1), objectStore.get(bucket, key));
+      String fileName = key.substring(key.lastIndexOf('/') + 1);
+      InputStream content = objectStore.get(bucket, key);
+      return new PresignedDownload(fileName, content);
     } catch (ObjectNotFoundException exception) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.content_not_found");
     }

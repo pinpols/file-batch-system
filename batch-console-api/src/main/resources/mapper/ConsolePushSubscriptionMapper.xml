@@ -1,6 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper">
+    <select id="findByTenantAndId" resultMap="pushSubMap">
+        select <include refid="selectColumns"/> from batch.console_push_subscription
+        where tenant_id=#{tenantId} and id=#{id}
+    </select>
 
     <resultMap id="pushSubMap" type="io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity">
         <id     column="id"              property="id"/>
@@ -51,16 +55,24 @@
            and endpoint = #{endpoint}
     </delete>
 
-    <delete id="deleteAllByEndpoint">
-        delete from batch.console_push_subscription
-         where endpoint = #{endpoint}
-    </delete>
+    <sql id="unchangedDevice">
+        id = #{row.id}
+        and username = #{row.username}
+        and endpoint = #{row.endpoint}
+        and p256dh_key = #{row.p256dhKey}
+        and auth_secret = #{row.authSecret}
+    </sql>
 
-    <update id="touchLastPushedAt">
+    <update id="touchIfUnchanged">
         update batch.console_push_subscription
            set last_pushed_at = #{ts}
-         where id = #{id}
+         where tenant_id = #{row.tenantId} and <include refid="unchangedDevice"/>
     </update>
+
+    <delete id="deleteIfUnchanged">
+        delete from batch.console_push_subscription
+         where tenant_id = #{row.tenantId} and <include refid="unchangedDevice"/>
+    </delete>
 
     <delete id="deleteIfStaleSince">
         delete from batch.console_push_subscription

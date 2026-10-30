@@ -263,12 +263,12 @@ class SdkIdempotentHandlerTest {
 
     @Override
     public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
-      // no-op: this fake store only exercises acquire failure handling.
+      // 无需执行实际操作：该伪存储仅覆盖 acquire 失败处理。
     }
 
     @Override
     public void release(String key) {
-      // no-op: no placeholder is recorded when acquire fails.
+      // 无需执行实际操作：acquire 失败时不会记录占位项。
     }
   }
 

@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 class SensitiveDataValidatorTest {
 
   @ParameterizedTest
-  @DisplayName("命中任一敏感关键字时抛出参数非法错误,并带上作用域与命中键")
+  @DisplayName("命中任一敏感关键字时抛出参数非法错误,且不回显命中键")
   @ValueSource(
       strings = {
         "password",
@@ -45,7 +46,22 @@ class SensitiveDataValidatorTest {
           BizException biz = (BizException) ex;
           assertThat(biz.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
           assertThat(biz.getMessageKey()).isEqualTo("error.security.sensitive_in_payload");
-          assertThat(biz.getMessageArgs()).containsExactly("ctx.scope", key);
+          assertThat(biz.getMessageArgs()).containsExactly("ctx.scope", "sensitiveField");
+        });
+  }
+
+  @Test
+  @DisplayName("敏感字段名自身带有凭据时，拒绝信息只返回固定标记")
+  void shouldNotExposeCredentialEmbeddedInSensitiveKey() {
+    String suppliedKey = "token=probe-secret";
+
+    assertThatThrownBy(() -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(
+            Map.of(suppliedKey, "value"), "ctx.scope"))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> {
+          BizException biz = (BizException) error;
+          assertThat(biz.getMessageArgs()).containsExactly("ctx.scope", "sensitiveField");
+          assertThat(biz.getMessageArgs()).doesNotContain(suppliedKey);
         });
   }
 
@@ -85,7 +101,8 @@ class SensitiveDataValidatorTest {
     assertThatThrownBy(
             () -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(nested, "atomic.http"))
         .isInstanceOf(BizException.class)
-        .satisfies(ex -> assertThat(((BizException) ex).getMessageArgs()[1]).isEqualTo("password"));
+        .satisfies(
+            ex -> assertThat(((BizException) ex).getMessageArgs()[1]).isEqualTo("sensitiveField"));
   }
 
   @Test
@@ -95,6 +112,31 @@ class SensitiveDataValidatorTest {
 
     assertThatThrownBy(() -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(data, "ctx"))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("多层列表中的映射敏感键也必须拒入")
+  void shouldRecurseNestedLists() {
+    Map<String, Object> data = Map.of("args", List.of(List.of(Map.of("token", "probe-secret"))));
+
+    assertThat(SensitiveDataValidator.containsSensitiveKey(data)).isTrue();
+    assertThatThrownBy(() -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(data, "ctx"))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageArgs())
+            .containsExactly("ctx", "sensitiveField"));
+  }
+
+  @Test
+  @DisplayName("自引用列表不触发无限递归")
+  void shouldHandleSelfReferencingList() {
+    List<Object> cyclic = new ArrayList<>();
+    cyclic.add(cyclic);
+
+    assertThat(SensitiveDataValidator.containsSensitiveKey(Map.of("args", cyclic)))
+        .isFalse();
+    assertThatCode(() ->
+            SensitiveDataValidator.rejectIfContainsSensitiveKeys(Map.of("args", cyclic), "ctx"))
+        .doesNotThrowAnyException();
   }
 
   @Test
@@ -140,6 +182,39 @@ class SensitiveDataValidatorTest {
     b.put("a", a); // 自指引
 
     assertThatCode(() -> SensitiveDataValidator.rejectIfContainsSensitiveKeys(a, "ctx"))
+        .doesNotThrowAnyException();
+  }
+
+  @ParameterizedTest
+  @DisplayName("命令行参数的凭据选项和带凭据 URI 均被拒入且异常不含原值")
+  @ValueSource(
+      strings = {
+        "--token=probe-secret",
+        "--token",
+        "--api-key probe-secret",
+        "https://user:probe-secret@example.com/path",
+        "s3a://batch-out/result?token=probe-secret"
+      })
+  void shouldRejectCredentialSyntaxInArgument(String argument) {
+    assertThatThrownBy(() ->
+            SensitiveDataValidator.rejectIfContainsInlineCredential(argument, "atomic.shell.args"))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.security.sensitive_in_payload")
+        .hasMessageNotContaining("probe-secret");
+  }
+
+  @Test
+  @DisplayName("普通参数及空列表放行，不把空白格式误判为凭据")
+  void shouldAllowOrdinaryArguments() {
+    assertThatCode(() -> SensitiveDataValidator.rejectIfContainsInlineCredentials(
+            List.of(
+                "--mode=summary",
+                "  report  ",
+                "s3a://batch-out/result?mode=summary",
+                "file:///tmp/r25-warehouse"),
+            "atomic.spark.argv"))
+        .doesNotThrowAnyException();
+    assertThatCode(() -> SensitiveDataValidator.rejectIfContainsInlineCredentials(null, "ctx"))
         .doesNotThrowAnyException();
   }
 }

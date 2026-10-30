@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：装载系统测试数据。
+# 用法：在仓库根目录执行 bash scripts/data/load-system-test-data.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # load-system-test-data.sh - 装载系统测试数据
 # 说明：

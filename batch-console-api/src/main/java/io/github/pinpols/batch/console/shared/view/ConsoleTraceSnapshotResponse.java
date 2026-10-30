@@ -10,7 +10,9 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeRunResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowRunResponse;
 import java.util.List;
+import lombok.Builder;
 
+@Builder
 public record ConsoleTraceSnapshotResponse(
     String traceId,
     List<ConsoleJobInstanceResponse> jobInstances,

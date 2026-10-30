@@ -101,15 +101,22 @@ class DeadLetterQueryIntegrationTest extends AbstractIntegrationTest {
 
   private void insertDeadLetter(
       String tenantId, String sourceType, Long sourceId, String replayStatus, String traceId) {
+    final String insertDeadLetterSql = """
+    INSERT INTO batch.dead_letter_task
+    (tenant_id, source_type, source_id, dead_letter_reason,
+    payload_ref, replay_status, replay_count, trace_id,
+    created_at, updated_at)
+    VALUES (?, ?, ?, 'ERROR: parse failed',
+    ?, ?, 0, ?,
+    now(), now())
+    """;
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.dead_letter_task
-          (tenant_id, source_type, source_id, dead_letter_reason,
-           payload_ref, replay_status, replay_count, trace_id,
-           created_at, updated_at)
-        VALUES (?, ?, ?, 'ERROR: parse failed',
-                ?, ?, 0, ?,
-                now(), now())
-        """, tenantId, sourceType, sourceId, tenantId + ":" + sourceId, replayStatus, traceId);
+        insertDeadLetterSql,
+        tenantId,
+        sourceType,
+        sourceId,
+        tenantId + ":" + sourceId,
+        replayStatus,
+        traceId);
   }
 }

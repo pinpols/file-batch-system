@@ -10,6 +10,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorCon
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
 import java.util.Map;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -160,7 +162,7 @@ class DefaultSchedulePlanBuilderTest {
         .thenReturn(jobDef("STATIC", 5, null));
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
-    // requested 300 but max is 256
+    // 请求值为 300，但最大值为 256。
     Map<String, Object> params = Map.of("partitionCount", 300);
     SchedulePlan plan = builder.build(command(params));
 
@@ -352,10 +354,9 @@ class DefaultSchedulePlanBuilderTest {
             Map.of("sourceFileId", 101, "templateCode", "TPL_A"),
             Map.of("sourceFileId", 102, "templateCode", "TPL_B")));
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
-        .satisfies(error -> assertThat(
-                ((io.github.pinpols.batch.common.exception.BizException) error).getMessageArgs()[1])
+    Assertions.assertThatThrownBy(() -> builder.build(command(params)))
+        .isInstanceOf(BizException.class)
+        .satisfies(error -> assertThat(((BizException) error).getMessageArgs()[1])
             .asString()
             .contains("bundle partition count mismatch"));
   }
@@ -369,8 +370,8 @@ class DefaultSchedulePlanBuilderTest {
 
     Map<String, Object> params = Map.of("bundleFiles", List.of(Map.of("sourceFileId", 101)));
 
-    org.assertj.core.api.Assertions.assertThatThrownBy(() -> builder.build(command(params)))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class)
+    Assertions.assertThatThrownBy(() -> builder.build(command(params)))
+        .isInstanceOf(BizException.class)
         .hasMessage("error.partition.dispatch_business_error");
   }
 

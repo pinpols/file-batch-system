@@ -5,7 +5,13 @@
 # R7-A4-P1: 容器内端口统一 18080–18086，与 Helm values.yaml 对齐；之前是 8080–8086 → 18080–18086 host-only 重映射，
 # 排障/管理脚本在 compose vs K8s 行为分叉。统一后 actuator / logs / SSH 进容器排查所有指向 1808X。
 # 库地址、Kafka、MinIO 使用 Docker 网络名（postgres-primary:5432、kafka:29092、minio:9000）；15432 仅宿主机映射。
+# 应用容器共用停机宽限，为 Worker 排空和后续 Spring 关闭阶段预留时间。
+# 仅影响 Compose；延长应用内部超时时应同步提高此值。
+x-app-stop-grace-period: &app-stop-grace-period ${BATCH_APP_STOP_GRACE_PERIOD:-300s}
 x-app-runtime-env: &app-runtime-env
+  BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS: ${BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS:-86400}
+  BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS: ${BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS:-86400}
+  BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN: ${BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN:-14}
   BATCH_TIMEZONE_DEFAULT_ZONE: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   TZ: ${BATCH_TIMEZONE_DEFAULT_ZONE:-Asia/Shanghai}
   BATCH_LOCALE: ${BATCH_LOCALE:-C.UTF-8}
@@ -18,9 +24,8 @@ x-app-runtime-env: &app-runtime-env
   OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
   OTEL_SAMPLING_PROBABILITY: ${OTEL_SAMPLING_PROBABILITY:-1.0}
   BATCH_LOG_FORMAT: ${BATCH_LOG_FORMAT:-}
-  # `local` profile is also used by the local container stack, but its
-  # datasource/Redis values target host-mapped ports for bare-JVM runs.
-  # These environment overrides keep container traffic on the Compose network.
+  # 本地容器栈也使用 local profile，其数据源和 Redis 默认值面向裸 JVM 的宿主映射端口。
+  # 下方环境覆盖使容器间通信仍走 Compose 网络。
   SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres-primary:5432/batch_platform?reWriteBatchedInserts=true}
   SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-batch_user}
   SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-${BATCH_PLATFORM_DB_PASSWORD}}
@@ -28,21 +33,26 @@ x-app-runtime-env: &app-runtime-env
   SPRING_DATA_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
   SPRING_DATA_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
   SPRING_KAFKA_BOOTSTRAP_SERVERS: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:-kafka:29092}
+  BATCH_KAFKA_NAMESPACE: ${BATCH_KAFKA_NAMESPACE:-}
   BATCH_DATASOURCE_BUSINESS_URL: ${BATCH_DATASOURCE_BUSINESS_URL:-jdbc:postgresql://postgres-primary:5432/batch_business?stringtype=unspecified&reWriteBatchedInserts=true}
   BATCH_DATASOURCE_BUSINESS_USERNAME: ${BATCH_DATASOURCE_BUSINESS_USERNAME:-${BATCH_BUSINESS_DB_USERNAME:-batch_business_writer}}
   BATCH_DATASOURCE_BUSINESS_PASSWORD: ${BATCH_DATASOURCE_BUSINESS_PASSWORD:-${BATCH_BUSINESS_DB_PASSWORD}}
   BATCH_WORKER_TASK_CLIENT_BASE_URL: ${BATCH_WORKER_TASK_CLIENT_BASE_URL:-http://orchestrator:18082}
   BATCH_WORKER_TASK_CLIENT_BASE_URLS: ${BATCH_WORKER_TASK_CLIENT_BASE_URLS:-}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED: ${BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED:-false}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS: ${BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS:-5}
+  BATCH_WORKER_BATCH_CLAIM_ENABLED: ${BATCH_WORKER_BATCH_CLAIM_ENABLED:-false}
+  BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE: ${BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE:-32}
   BATCH_CONSOLE_TRIGGER_BASE_URL: ${BATCH_CONSOLE_TRIGGER_BASE_URL:-http://trigger:18081}
+  BATCH_TRIGGER_BASE_URL: ${BATCH_TRIGGER_BASE_URL:-http://trigger:18081}
   BATCH_CONSOLE_ORCHESTRATOR_BASE_URL: ${BATCH_CONSOLE_ORCHESTRATOR_BASE_URL:-http://orchestrator:18082}
   # /internal/** 服务间共享密钥;强制要求 .env.local 显式设置,防止落回默认 internal-secret(15 字符弱密钥)。
   BATCH_INTERNAL_SECRET: ${BATCH_INTERNAL_SECRET:?BATCH_INTERNAL_SECRET is required}
   BATCH_REDIS_HOST: ${COMPOSE_REDIS_HOST:-valkey}
   BATCH_REDIS_PORT: ${COMPOSE_REDIS_PORT:-6379}
   BATCH_SHEDLOCK_PROVIDER: ${BATCH_SHEDLOCK_PROVIDER:-redis}
-  # Documented runtime feature switches must be forwarded explicitly. Keeping
-  # them in the shared anchor makes `.env.local` behave the same for bare JVM
-  # and Compose runs; service-specific consumers ignore unrelated variables.
+  # 已登记的运行开关须显式透传；共用此锚点使 .env.local 在裸 JVM 与 Compose 下行为一致。
+  # 各服务只消费自身配置，其余变量不参与该服务运行。
   BATCH_SCHEDULER_WORKER_CACHE_ENABLED: ${BATCH_SCHEDULER_WORKER_CACHE_ENABLED:-true}
   BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED: ${BATCH_ORCHESTRATOR_PERSISTENCE_GRANULARITY_ENABLED:-false}
   BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS: ${BATCH_ORCHESTRATOR_PERSISTENCE_COMPACT_MAX_ITEMS:-100000}
@@ -228,8 +238,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-console-api
-    container_name: batch-console-api
+    container_name: ${CONSOLE_API_CONTAINER:-batch-console-api}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     # Docker Desktop 默认不会把 VM 总内存作为单个应用的容器配额。显式限制后，
     # JAVA_OPTS 中的 MaxRAMPercentage/InitialRAMPercentage 才会按本服务预算计算，
     # 避免多个 JVM 同时按整台 VM 预留堆而触发宿主 swap。
@@ -241,6 +252,9 @@ services:
       SPRING_FLYWAY_ENABLED: "false"
       BATCH_CONSOLE_INSTANCE_ID: ${BATCH_CONSOLE_INSTANCE_ID:-batch-console-api-local}
       BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN: ${BATCH_CONSOLE_ALERTMANAGER_BEARER_TOKEN:-}
+      BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED: ${BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED:-true}
+      BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL: ${BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL:-}
+      BATCH_MAINTENANCE_ALERT_SCOPE: ${BATCH_MAINTENANCE_ALERT_SCOPE:-}
       # OIDC pilot 配置仅注入 Console API；client secret 不放入共享 runtime anchor。
       BATCH_CONSOLE_SSO_OIDC_ENABLED: ${BATCH_CONSOLE_SSO_OIDC_ENABLED:-false}
       BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID: ${BATCH_CONSOLE_SSO_OIDC_REGISTRATION_ID:-}
@@ -319,8 +333,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-trigger
-    container_name: batch-trigger
+    container_name: ${TRIGGER_CONTAINER:-batch-trigger}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     # trigger 同时承载 HTTP 准入、Quartz 与 outbox relay，保留高于普通 worker 的预算。
     mem_limit: ${BATCH_TRIGGER_MEMORY_LIMIT:-768m}
     environment:
@@ -375,8 +390,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-orchestrator
-    container_name: batch-orchestrator
+    container_name: ${ORCHESTRATOR_CONTAINER:-batch-orchestrator}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     # 控制面拥有 Kafka consumer、调度与状态机事务，独立给出较高且有上界的本地预算。
     mem_limit: ${BATCH_ORCHESTRATOR_MEMORY_LIMIT:-1024m}
     environment:
@@ -437,8 +453,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-import
-    container_name: batch-worker-import
+    container_name: ${WORKER_IMPORT_CONTAINER:-batch-worker-import}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     mem_limit: ${BATCH_WORKER_IMPORT_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env
@@ -496,8 +513,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-export
-    container_name: batch-worker-export
+    container_name: ${WORKER_EXPORT_CONTAINER:-batch-worker-export}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     mem_limit: ${BATCH_WORKER_EXPORT_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env
@@ -555,8 +573,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-process
-    container_name: batch-worker-process
+    container_name: ${WORKER_PROCESS_CONTAINER:-batch-worker-process}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     mem_limit: ${BATCH_WORKER_PROCESS_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env
@@ -614,8 +633,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-dispatch
-    container_name: batch-worker-dispatch
+    container_name: ${WORKER_DISPATCH_CONTAINER:-batch-worker-dispatch}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     mem_limit: ${BATCH_WORKER_DISPATCH_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env
@@ -680,8 +700,9 @@ services:
       dockerfile: deploy/docker/Dockerfile.app
       args:
         MODULE: batch-worker-atomic
-    container_name: batch-worker-atomic
+    container_name: ${WORKER_ATOMIC_CONTAINER:-batch-worker-atomic}
     restart: unless-stopped
+    stop_grace_period: *app-stop-grace-period
     mem_limit: ${BATCH_WORKER_ATOMIC_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env

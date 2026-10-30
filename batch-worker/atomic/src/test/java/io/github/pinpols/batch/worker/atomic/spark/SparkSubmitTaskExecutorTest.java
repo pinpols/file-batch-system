@@ -1,23 +1,62 @@
 package io.github.pinpols.batch.worker.atomic.spark;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * {@link SparkSubmitTaskExecutor} 骨架单测:只验 parse / 校验 / dry-run(**不 fork 真进程**)。 真正提交 spark-submit
  * 的端到端验证需有 Spark 环境,留给集成/手测。
  */
 @DisplayName("外部计算提交执行器: 参数解析, 白名单校验与 dry-run 计划")
+@ExtendWith(OutputCaptureExtension.class)
 class SparkSubmitTaskExecutorTest {
+
+  @Test
+  @DisplayName("本地资源路径不能通过父目录绕过允许目录")
+  void shouldRejectLocalResourceOutsideAllowedDirectory(@TempDir Path tempDir) throws Exception {
+    Path allowed = Files.createDirectory(tempDir.resolve("allowed"));
+    Path unapproved = Files.writeString(tempDir.resolve("outside.py"), "unapproved resource");
+    Path marker = tempDir.resolve("executed.txt");
+    Path submit = tempDir.resolve("spark-submit");
+    Files.writeString(submit, "#!/bin/sh\n/bin/cat \"$5\" > '" + marker + "'\n");
+    assertThat(submit.toFile().setExecutable(true)).isTrue();
+    SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
+    props.setEnabled(true);
+    props.setDefaultMaster("local[*]");
+    props.setSparkSubmitBin(submit.toString());
+    props.setAppResourceAllowlist(List.of(allowed + "/"));
+    SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
+    String escapedResource =
+        allowed.resolve("..").resolve(unapproved.getFileName()).toString();
+    String approvedResource = allowed.resolve("approved.py").toString();
+
+    TaskResult approved = restricted.execute(
+        ctx(Map.of("appResource", approvedResource, PipelineRuntimeKeys.DRY_RUN, true)));
+    assertThat(approved.success()).isTrue();
+
+    TaskResult result = restricted.execute(ctx(Map.of("appResource", escapedResource)));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "CONFIG_INVALID");
+    assertThat(marker).doesNotExist();
+  }
 
   private SparkSubmitTaskExecutor executor;
 
@@ -31,6 +70,22 @@ class SparkSubmitTaskExecutorTest {
 
   private static TaskContext ctx(Map<String, Object> params) {
     return new TaskContext("t1", "SPARK_JOB", "task-1", "worker-1", params, Map.of());
+  }
+
+  @Test
+  @DisplayName("执行器意外异常日志不得输出原始凭据")
+  void shouldMaskUnexpectedErrorInLog(CapturedOutput output) {
+    TaskContext context = mock(TaskContext.class);
+    when(context.tenantId()).thenReturn("t1");
+    when(context.jobCode()).thenReturn("SPARK_JOB");
+    when(context.parameters()).thenThrow(new RuntimeException("context token=probe-secret"));
+
+    TaskResult result = executor.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   @Test
@@ -73,6 +128,46 @@ class SparkSubmitTaskExecutorTest {
   }
 
   @Test
+  @DisplayName("启动参数和输出地址含内联令牌时即使 dry-run 也拒绝")
+  void dryRun_rejectsCredentialInPlan(CapturedOutput output) {
+    TaskResult result = executor.execute(ctx(Map.of(
+        "appResource",
+        "s3a://jobs/etl.jar",
+        "appArgs",
+        List.of("--token=probe-secret", "--mode=summary"),
+        "outputPath",
+        "s3a://batch-out/result?token=probe-secret&mode=summary",
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
+  @DisplayName("应用资源的凭据 URI 先拒入，不由资源白名单回显原值")
+  void shouldRejectCredentialBeforeResourceAllowlist(CapturedOutput output) {
+    SparkSubmitExecutorProperties props = new SparkSubmitExecutorProperties();
+    props.setEnabled(true);
+    props.setDefaultMaster("local[*]");
+    props.setAppResourceAllowlist(List.of("s3a://approved/"));
+    SparkSubmitTaskExecutor restricted = new SparkSubmitTaskExecutor(props);
+
+    TaskResult result = restricted.execute(ctx(Map.of(
+        "appResource",
+        "s3a://jobs/etl.jar?token=probe-secret",
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "SECURITY_REJECTED");
+    assertThat(result.message()).doesNotContain("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
+  }
+
+  @Test
   @DisplayName("缺少应用资源时应判失败, 并返回配置无效错误码")
   void missingAppResource_failsConfigInvalid() {
     TaskResult r = executor.execute(ctx(Map.of(PipelineRuntimeKeys.DRY_RUN, true)));
@@ -98,6 +193,41 @@ class SparkSubmitTaskExecutorTest {
     assertThat(argv)
         .containsSubsequence(
             "--conf", "spark.batch.outputPath=s3a://batch-out/t1/SPARK_JOB/2026-06-15/");
+  }
+
+  @Test
+  @DisplayName("本地 Spark 运行配置不应被凭据拒入闸门误判")
+  void shouldAcceptLocalSparkRuntimeConfigurationInDryRun() {
+    Map<String, String> sparkConf = Map.of(
+        "spark.ui.enabled", "false",
+        "spark.driver.host", "127.0.0.1",
+        "spark.driver.bindAddress", "127.0.0.1",
+        "spark.pyspark.python", "/tmp/spark/python/bin/python",
+        "spark.pyspark.driver.python", "/tmp/spark/python/bin/python",
+        "spark.local.dir", "/tmp/r25-spark-local",
+        "spark.sql.warehouse.dir", "file:///tmp/r25-warehouse");
+    TaskResult result = executor.execute(ctx(Map.of(
+        "taskType",
+        "spark_submit",
+        "appResource",
+        "/tmp/r25-atomic-spark_submit-effect-123/side_effect.py",
+        "master",
+        "local[1]",
+        "deployMode",
+        "client",
+        "outputPath",
+        "/tmp/r25-atomic-spark_submit-effect-123/spark-output",
+        "timeoutSeconds",
+        120,
+        "sparkConf",
+        sparkConf,
+        PipelineRuntimeKeys.DRY_RUN,
+        true)));
+
+    assertThat(result.success())
+        .as("valid local Spark configuration: %s", result)
+        .isTrue();
+    assertThat(result.output()).containsEntry("plannedAction", "spark-submit");
   }
 
   @Test

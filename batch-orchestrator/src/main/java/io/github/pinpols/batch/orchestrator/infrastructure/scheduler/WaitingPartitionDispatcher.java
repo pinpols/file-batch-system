@@ -2,8 +2,10 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -11,15 +13,18 @@ import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGen
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
-import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
+import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
+import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -44,8 +49,7 @@ class WaitingPartitionDispatcher {
   private final PartitionLifecycleService partitionLifecycleService;
   private final TenantActionRateLimiter tenantActionRateLimiter;
   private final OrchestratorConfigCacheService configCacheService;
-  private final GlobalJobAdmission globalJobAdmission;
-  private final FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+  private final ResourceScheduler resourceScheduler;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public void executeDispatch(
@@ -53,6 +57,20 @@ class WaitingPartitionDispatcher {
       JobTaskEntity task,
       JobInstanceEntity jobInstance,
       ResourceSchedulingDecision decision) {
+    jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
+        jobInstance.getTenantId(), jobInstance.getId());
+    WorkflowRunEntity parentRun = workflowMappers.workflowRunMapper.selectByNodeJobInstanceId(
+        jobInstance.getTenantId(), jobInstance.getId());
+    if (EmptyChecks.isNotNull(parentRun)) {
+      // 与任务回报保持实例锁在前、Workflow 行锁在后的顺序，并与暂停提交串行化。
+      WorkflowRunEntity lockedRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
+          jobInstance.getTenantId(), parentRun.getId());
+      if (EmptyChecks.isNull(lockedRun)
+          || !(WorkflowRunStatus.CREATED.code().equals(lockedRun.getRunStatus())
+              || WorkflowRunStatus.RUNNING.code().equals(lockedRun.getRunStatus()))) {
+        return;
+      }
+    }
     JobInstanceEntity currentInstance =
         jobMappers.jobInstanceMapper.selectById(jobInstance.getTenantId(), jobInstance.getId());
     if (!isDispatchableParent(currentInstance)) {
@@ -62,14 +80,13 @@ class WaitingPartitionDispatcher {
         currentInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE)) {
       return;
     }
-    if (JobInstanceStatus.WAITING.code().equals(currentInstance.getInstanceStatus())
-        && !globalJobAdmission.hasCapacity()) {
-      return;
-    }
-    // 候选排序时的 schedule() 发生在事务外，只能作为快速筛选。共享组硬上限必须在本
-    // REQUIRES_NEW 事务里再次判定，并把 advisory lock 持有到 WAITING -> RUNNING 提交完成。
-    if (!fairShareGroupAdmissionGuard.hasCapacity(
-        configCacheService.findEnabledQuotaPolicy(currentInstance.getTenantId()))) {
+    JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+        currentInstance.getTenantId(), currentInstance.getJobCode());
+    ResourceSchedulingRequest request = WaitingPartitionDispatchScheduler.buildRequest(
+        currentInstance, partition, task, jobDefinition);
+    // 使用事务内的最新父状态，只为尚未活跃的 Job 占 Job 槽位；准入锁持有到本次写入提交。
+    ResourceSchedulingDecision admission = resourceScheduler.schedule(request);
+    if (!admission.isDispatchable()) {
       return;
     }
     if (!partitionLifecycleService.releaseForDispatch(
@@ -119,10 +136,11 @@ class WaitingPartitionDispatcher {
         .startedAt(BatchDateTimeSupport.utcNow())
         .expectedVersion(jobInstance.getVersion())
         .build());
-    if (updated > 0) {
-      jobInstance.setVersion(
-          (jobInstance.getVersion() == null ? 0L : jobInstance.getVersion()) + 1);
+    if (updated <= 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_launch_conflict");
     }
+    jobInstance.setVersion(
+        (EmptyChecks.isNull(jobInstance.getVersion()) ? 0L : jobInstance.getVersion()) + 1);
   }
 
   private void advanceWorkflowRun(JobInstanceEntity jobInstance) {
@@ -132,11 +150,13 @@ class WaitingPartitionDispatcher {
         || !WorkflowRunStatus.CREATED.code().equals(workflowRun.getRunStatus())) {
       return;
     }
-    workflowMappers.workflowRunMapper.markRunning(
-        workflowRun.getTenantId(),
-        workflowRun.getId(),
-        WorkflowRunStatus.RUNNING.code(),
-        workflowRun.getCurrentNodeCode(),
-        BatchDateTimeSupport.utcNow());
+    WorkflowRunMarkRunningParam workflowRunMarkRunningParam = WorkflowRunMarkRunningParam.builder()
+        .tenantId(workflowRun.getTenantId())
+        .id(workflowRun.getId())
+        .runStatus(WorkflowRunStatus.RUNNING.code())
+        .currentNodeCode(workflowRun.getCurrentNodeCode())
+        .startedAt(BatchDateTimeSupport.utcNow())
+        .build();
+    workflowMappers.workflowRunMapper.markRunning(workflowRunMarkRunningParam);
   }
 }

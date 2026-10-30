@@ -1,11 +1,12 @@
 package io.github.pinpols.batch.worker.core.domain;
 
 import java.util.Map;
+import lombok.Builder;
 
 /** 流水线步骤定义参数对象。 封装 PipelineStepDefinition 的构造参数，遵循编码规范（参数 ≥ 7 必须封装）。 */
+@Builder
 public record PipelineStepDefinitionParam(
     Long id,
-    Long pipelineDefinitionId,
     String stepCode,
     String stepName,
     String stageCode,
@@ -20,7 +21,6 @@ public record PipelineStepDefinitionParam(
   public PipelineStepDefinition toDefinition() {
     return new PipelineStepDefinition(
         id,
-        pipelineDefinitionId,
         stepCode,
         stepName,
         stageCode,
@@ -37,7 +37,6 @@ public record PipelineStepDefinitionParam(
   public static PipelineStepDefinitionParam fromDefinition(PipelineStepDefinition definition) {
     return new PipelineStepDefinitionParam(
         definition.id(),
-        definition.pipelineDefinitionId(),
         definition.stepCode(),
         definition.stepName(),
         definition.stageCode(),

@@ -39,6 +39,46 @@ class ApprovalControllerTest {
   }
 
   @Test
+  @DisplayName("按原请求键查询审批时缺少请求键应拒绝")
+  void shouldRejectApprovalLookupWithoutSourceKey() throws Exception {
+    mockMvc
+        .perform(get("/internal/approvals/by-source-key").param("tenantId", "t1"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  @DisplayName("按原请求键查询不存在的审批时返回未找到")
+  void shouldReturnNotFoundWhenApprovalSourceKeyIsUnknown() throws Exception {
+    when(approvalWorkflowService.getBySourceKey("t1", "source-1"))
+        .thenThrow(BizException.of(ResultCode.NOT_FOUND, "error.approval.not_found"));
+    mockMvc
+        .perform(get("/internal/approvals/by-source-key")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "source-1"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  @DisplayName("按原请求键查询返回审批身份和原始业务载荷")
+  void shouldReturnApprovalWhenSourceKeyMatches() throws Exception {
+    var record = ApprovalWorkflowService.ApprovalRecord.of(
+        "t1",
+        "apr-1",
+        new ApprovalWorkflowService.ApprovalTarget("CATCH_UP", "APPROVE", "JOB", "job-1", "{}"),
+        new ApprovalWorkflowService.ApprovalOutcome("PENDING", null, null, null),
+        new ApprovalWorkflowService.ApprovalSource("operator", null, "source-1", null));
+    when(approvalWorkflowService.getBySourceKey("t1", "source-1")).thenReturn(record);
+    mockMvc
+        .perform(get("/internal/approvals/by-source-key")
+            .param("tenantId", "t1")
+            .header("Idempotency-Key", "source-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.record.approvalNo").value("apr-1"))
+        .andExpect(jsonPath("$.record.targetId").value("job-1"))
+        .andExpect(jsonPath("$.record.payloadJson").value("{}"));
+  }
+
+  @Test
   @DisplayName("提交审批请求成功时返回受理结果中的审批单号")
   void shouldSubmitAndReturnApprovalNo() throws Exception {
     when(approvalWorkflowService.submit(any())).thenReturn("appr-001");

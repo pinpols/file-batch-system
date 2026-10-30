@@ -175,7 +175,7 @@ class ConsoleRateLimitFilterTest {
     verify(rateLimiter, never()).tryAcquire(contains("203.0.113.5"), anyInt());
   }
 
-  // ── non-login requests not limited ───────────────────────────────────────
+  // ── 非登录请求不受此限制 ───────────────────────────────────────
 
   @Test
   @DisplayName("查询方法的登录路径不参与限流, 请求直接放行且不触达限流器")

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：配置默认值同步。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-config-defaults-sync.py；参数与前置环境见下方说明及所属 README。
 """
 检测 application.yml 和 docker-compose*.yml 里同一环境变量的 default 是否同步。
 
@@ -39,7 +41,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 # Spring Boot ${VAR:default} —— 冒号后非花括号、非 ?
 SPRING_PLACEHOLDER = re.compile(r'\$\{([A-Z][A-Z0-9_]*):([^${}?][^${}]*)\}')
 
-# Compose ${VAR:-default} or ${VAR:?msg}
+# Compose 变量支持 ${VAR:-default} 默认值与 ${VAR:?msg} 必填校验。
 COMPOSE_PLACEHOLDER = re.compile(r'\$\{([A-Z][A-Z0-9_]*):-([^${}][^${}]*)\}')
 ENV_REFERENCE = re.compile(r'\$\{([A-Z][A-Z0-9_]*)')
 

@@ -174,7 +174,7 @@ public class ConsoleAiProperties {
 
   @PostConstruct
   void validateGovernanceSettings() {
-    if (image.getMaxFileBytes() < 1
+    boolean imageLimitsAreInvalid = image.getMaxFileBytes() < 1
         || image.getMaxFileBytes() > 20 * 1024 * 1024
         || image.getMaxImages() < 1
         || image.getMaxImages() > 8
@@ -191,22 +191,26 @@ public class ConsoleAiProperties {
         || image.getMaxDraftsPerUser() < image.getMaxImages()
         || image.getMaxDraftBytesPerUser() < image.getMaxTotalBytes()
         || image.getMaxRetainedBytesPerUser() < image.getMaxDraftBytesPerUser()
-        || image.getMaxRetainedBytesPerTenant() < image.getMaxRetainedBytesPerUser()) {
+        || image.getMaxRetainedBytesPerTenant() < image.getMaxRetainedBytesPerUser();
+    if (imageLimitsAreInvalid) {
       throw new IllegalStateException("AI image limits are outside supported bounds");
     }
-    if (persistence.isEnabled()
-        && (persistence.getRetentionDays() < 1 || persistence.getRetentionDays() > 3650)) {
+    boolean enabledConversationRetentionIsInvalid = persistence.isEnabled()
+        && (persistence.getRetentionDays() < 1 || persistence.getRetentionDays() > 3650);
+    if (enabledConversationRetentionIsInvalid) {
       throw new IllegalStateException("AI conversation retention must be between 1 and 3650 days");
     }
-    if (persistence.getMaxHistoryTurns() < 1
+    boolean conversationHistoryLimitsAreInvalid = persistence.getMaxHistoryTurns() < 1
         || persistence.getMaxHistoryChars() < 1
-        || persistence.getConversationPageSize() < 1) {
+        || persistence.getConversationPageSize() < 1;
+    if (conversationHistoryLimitsAreInvalid) {
       throw new IllegalStateException("AI conversation history and page limits must be positive");
     }
-    if (EmptyChecks.isNull(cost.getMonthlyBudgetUsd())
+    boolean costSettingsAreInvalid = EmptyChecks.isNull(cost.getMonthlyBudgetUsd())
         || cost.getMonthlyBudgetUsd().signum() < 0
         || EmptyChecks.isNull(cost.getReservationMargin())
-        || cost.getReservationMargin().compareTo(BigDecimal.ONE) < 0) {
+        || cost.getReservationMargin().compareTo(BigDecimal.ONE) < 0;
+    if (costSettingsAreInvalid) {
       throw new IllegalStateException(
           "AI cost budget must be nonnegative and reservation margin at least one");
     }
@@ -220,13 +224,14 @@ public class ConsoleAiProperties {
       throw new IllegalStateException("AI monthly budget requires at least one provider rate");
     }
     cost.getProviderRates().forEach((providerName, rate) -> {
-      if (EmptyChecks.isNull(providerName)
+      boolean providerRateIsInvalid = EmptyChecks.isNull(providerName)
           || EmptyChecks.isBlank(providerName)
           || EmptyChecks.isNull(rate)
           || EmptyChecks.isNull(rate.getInputUsdPerMillionTokens())
           || EmptyChecks.isNull(rate.getOutputUsdPerMillionTokens())
           || rate.getInputUsdPerMillionTokens().signum() < 0
-          || rate.getOutputUsdPerMillionTokens().signum() < 0) {
+          || rate.getOutputUsdPerMillionTokens().signum() < 0;
+      if (providerRateIsInvalid) {
         throw new IllegalStateException(
             "AI provider rates require names and nonnegative input/output prices");
       }

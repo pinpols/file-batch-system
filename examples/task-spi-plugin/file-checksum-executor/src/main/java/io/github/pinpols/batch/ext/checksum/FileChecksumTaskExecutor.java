@@ -47,17 +47,18 @@ public final class FileChecksumTaskExecutor implements BatchTaskExecutor {
       }
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       long bytes = 0;
-      try (InputStream input = new DigestInputStream(
-          Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS), digest)) {
+      try (InputStream input =
+          new DigestInputStream(Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS), digest)) {
         byte[] buffer = new byte[8192];
         int read;
         while ((read = input.read(buffer)) != -1) {
           bytes += read;
         }
       }
-      return TaskResult.ok(
-          "SHA-256 calculated",
-          Map.of("sha256", HexFormat.of().formatHex(digest.digest()), "bytesRead", bytes));
+      byte[] checksum = digest.digest();
+      String checksumHex = HexFormat.of().formatHex(checksum);
+      Map<String, Object> outputs = Map.of("sha256", checksumHex, "bytesRead", bytes);
+      return TaskResult.ok("SHA-256 calculated", outputs);
     } catch (Exception exception) {
       return TaskResult.fail(exception);
     }

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -44,11 +45,14 @@ public class WorkflowConditionEvaluator {
         payload = Collections.emptyMap();
       }
     }
-    return evaluateExpression(stripOuterParentheses(conditionExpr.trim()), payload);
+    String trimmedExpression = conditionExpr.trim();
+    String normalizedExpression = stripOuterParentheses(trimmedExpression);
+    return evaluateExpression(normalizedExpression, payload);
   }
 
   private boolean evaluateExpression(String expression, Map<String, Object> payload) {
-    String normalized = stripOuterParentheses(expression.trim());
+    String trimmedExpression = expression.trim();
+    String normalized = stripOuterParentheses(trimmedExpression);
     if (normalized.isBlank()) {
       return true;
     }
@@ -61,7 +65,8 @@ public class WorkflowConditionEvaluator {
       return andParts.stream().allMatch(part -> evaluateExpression(part, payload));
     }
     if (normalized.startsWith("!")) {
-      return !evaluateExpression(normalized.substring(1), payload);
+      String negatedExpression = normalized.substring(1);
+      return !evaluateExpression(negatedExpression, payload);
     }
     return evaluateAtomicExpression(normalized, payload);
   }
@@ -72,24 +77,55 @@ public class WorkflowConditionEvaluator {
       Object value = resolveLeftOperand(expression, payload);
       return isTruthy(value);
     }
-    String leftToken = expression.substring(0, operator.index()).trim();
-    String rightToken =
-        expression.substring(operator.index() + operator.symbol().length()).trim();
+    String leftOperandText = expression.substring(0, operator.index());
+    String leftToken = leftOperandText.trim();
+    String rightOperandText =
+        expression.substring(operator.index() + operator.symbol().length());
+    String rightToken = rightOperandText.trim();
     Object leftValue = resolveLeftOperand(leftToken, payload);
     return switch (operator.type()) {
-      case EQ -> compareEquals(leftValue, resolveRightOperand(rightToken, payload));
-      case NE -> !compareEquals(leftValue, resolveRightOperand(rightToken, payload));
-      case GT -> compareComparable(leftValue, resolveRightOperand(rightToken, payload)) > 0;
-      case GE -> compareComparable(leftValue, resolveRightOperand(rightToken, payload)) >= 0;
-      case LT -> compareComparable(leftValue, resolveRightOperand(rightToken, payload)) < 0;
-      case LE -> compareComparable(leftValue, resolveRightOperand(rightToken, payload)) <= 0;
+      case EQ -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield compareEquals(leftValue, rightValue);
+      }
+      case NE -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield !compareEquals(leftValue, rightValue);
+      }
+      case GT -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield compareComparable(leftValue, rightValue) > 0;
+      }
+      case GE -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield compareComparable(leftValue, rightValue) >= 0;
+      }
+      case LT -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield compareComparable(leftValue, rightValue) < 0;
+      }
+      case LE -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield compareComparable(leftValue, rightValue) <= 0;
+      }
       case IN -> evaluateIn(leftValue, rightToken, payload, false);
       case NOT_IN -> evaluateIn(leftValue, rightToken, payload, true);
-      case CONTAINS -> evaluateContains(leftValue, resolveRightOperand(rightToken, payload));
-      case STARTS_WITH ->
-        stringify(leftValue).startsWith(stringify(resolveRightOperand(rightToken, payload)));
-      case ENDS_WITH ->
-        stringify(leftValue).endsWith(stringify(resolveRightOperand(rightToken, payload)));
+      case CONTAINS -> {
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        yield evaluateContains(leftValue, rightValue);
+      }
+      case STARTS_WITH -> {
+        String leftText = stringify(leftValue);
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        String rightText = stringify(rightValue);
+        yield leftText.startsWith(rightText);
+      }
+      case ENDS_WITH -> {
+        String leftText = stringify(leftValue);
+        Object rightValue = resolveRightOperand(rightToken, payload);
+        String rightText = stringify(rightValue);
+        yield leftText.endsWith(rightText);
+      }
     };
   }
 
@@ -103,7 +139,8 @@ public class WorkflowConditionEvaluator {
 
   private boolean evaluateContains(Object leftValue, Object rightValue) {
     if (leftValue instanceof String leftString) {
-      return leftString.contains(stringify(rightValue));
+      String rightText = stringify(rightValue);
+      return leftString.contains(rightText);
     }
     if (leftValue instanceof Collection<?> collection) {
       return collection.stream().anyMatch(item -> compareEquals(item, rightValue));
@@ -117,7 +154,9 @@ public class WorkflowConditionEvaluator {
     if (leftNumber != null && rightNumber != null) {
       return leftNumber.compareTo(rightNumber);
     }
-    return stringify(leftValue).compareTo(stringify(rightValue));
+    String leftText = stringify(leftValue);
+    String rightText = stringify(rightValue);
+    return leftText.compareTo(rightText);
   }
 
   private boolean compareEquals(Object leftValue, Object rightValue) {
@@ -126,7 +165,9 @@ public class WorkflowConditionEvaluator {
     if (leftNumber != null && rightNumber != null) {
       return leftNumber.compareTo(rightNumber) == 0;
     }
-    return Objects.equals(normalizeValue(leftValue), normalizeValue(rightValue));
+    Object normalizedLeftValue = normalizeValue(leftValue);
+    Object normalizedRightValue = normalizeValue(rightValue);
+    return Objects.equals(normalizedLeftValue, normalizedRightValue);
   }
 
   private Object resolveLeftOperand(String token, Map<String, Object> payload) {
@@ -134,7 +175,9 @@ public class WorkflowConditionEvaluator {
     if (literal != UNRESOLVED) {
       return literal;
     }
-    return readPath(payload, stripOuterParentheses(token.trim()));
+    String trimmedPath = token.trim();
+    String normalizedPath = stripOuterParentheses(trimmedPath);
+    return readPath(payload, normalizedPath);
   }
 
   private Object resolveRightOperand(String token, Map<String, Object> payload) {
@@ -142,13 +185,15 @@ public class WorkflowConditionEvaluator {
     if (literalValue != UNRESOLVED) {
       return literalValue;
     }
-    String value = stripOuterParentheses(token.trim());
+    String trimmedToken = token.trim();
+    String value = stripOuterParentheses(trimmedToken);
     Object payloadValue = readPath(payload, value);
     return payloadValue == null ? value : payloadValue;
   }
 
   private Object resolveLiteralOperand(String token, Map<String, Object> payload) {
-    String value = stripOuterParentheses(token.trim());
+    String trimmedToken = token.trim();
+    String value = stripOuterParentheses(trimmedToken);
     if (value.isBlank()) {
       return null;
     }
@@ -181,7 +226,8 @@ public class WorkflowConditionEvaluator {
     List<String> items = splitListItems(value);
     List<Object> result = new ArrayList<>(items.size());
     for (String item : items) {
-      result.add(resolveRightOperand(item, payload));
+      Object resolvedItem = resolveRightOperand(item, payload);
+      result.add(resolvedItem);
     }
     return result;
   }
@@ -204,7 +250,9 @@ public class WorkflowConditionEvaluator {
         } else if (ch == ']' || ch == ')') {
           depth--;
         } else if (ch == ',' && depth == 0) {
-          items.add(current.toString().trim());
+          String rawItem = current.toString();
+          String item = rawItem.trim();
+          items.add(item);
           current.setLength(0);
           continue;
         }
@@ -212,7 +260,9 @@ public class WorkflowConditionEvaluator {
       current.append(ch);
     }
     if (!current.isEmpty()) {
-      items.add(current.toString().trim());
+      String rawItem = current.toString();
+      String item = rawItem.trim();
+      items.add(item);
     }
     return items;
   }
@@ -239,7 +289,9 @@ public class WorkflowConditionEvaluator {
         if (depth == 0) {
           String matchedOperator = matchOperator(expression, index, operators);
           if (matchedOperator != null) {
-            parts.add(current.toString().trim());
+            String rawPart = current.toString();
+            String part = rawPart.trim();
+            parts.add(part);
             current.setLength(0);
             index += matchedOperator.length() - 1;
             continue;
@@ -249,7 +301,9 @@ public class WorkflowConditionEvaluator {
       current.append(ch);
     }
     if (!current.isEmpty()) {
-      parts.add(current.toString().trim());
+      String rawPart = current.toString();
+      String part = rawPart.trim();
+      parts.add(part);
     }
     return parts;
   }
@@ -284,7 +338,12 @@ public class WorkflowConditionEvaluator {
     if (value instanceof Collection<?> collection) {
       return !collection.isEmpty();
     }
-    return !value.toString().isBlank() && !"false".equalsIgnoreCase(value.toString());
+    String truthinessText = value.toString();
+    if (EmptyChecks.isBlank(Objects.requireNonNull(truthinessText))) {
+      return false;
+    }
+    String falseCheckText = value.toString();
+    return !"false".equalsIgnoreCase(falseCheckText);
   }
 
   private Object normalizeValue(Object value) {
@@ -303,7 +362,8 @@ public class WorkflowConditionEvaluator {
       return null;
     }
     if (value instanceof Number n) {
-      return new BigDecimal(n.toString());
+      String numericText = n.toString();
+      return new BigDecimal(numericText);
     }
     String text = String.valueOf(value);
     // fast-path:非数字格式直接返 null,避免 NumberFormatException 噪音日志
@@ -332,7 +392,8 @@ public class WorkflowConditionEvaluator {
   private String stripOuterParentheses(String expression) {
     String value = expression;
     while (value.startsWith("(") && value.endsWith(")") && isWrappedBySinglePair(value)) {
-      value = value.substring(1, value.length() - 1).trim();
+      String innerExpression = value.substring(1, value.length() - 1);
+      value = innerExpression.trim();
     }
     return value;
   }
@@ -380,8 +441,9 @@ public class WorkflowConditionEvaluator {
 
   private String normalizeLiteral(String literal) {
     String value = literal;
-    if ((value.startsWith("\"") && value.endsWith("\""))
-        || (value.startsWith("'") && value.endsWith("'"))) {
+    boolean isQuotedLiteral = (value.startsWith("\"") && value.endsWith("\""))
+        || (value.startsWith("'") && value.endsWith("'"));
+    if (isQuotedLiteral) {
       value = value.substring(1, value.length() - 1);
     }
     return value;
@@ -420,7 +482,8 @@ public class WorkflowConditionEvaluator {
       for (String operator : orderedOperators) {
         int index = indexOfTopLevel(expression, operator);
         if (index >= 0) {
-          return new AtomicOperator(resolveType(operator), operator, index);
+          OperatorType operatorType = resolveType(operator);
+          return new AtomicOperator(operatorType, operator, index);
         }
       }
       return null;

@@ -7,4 +7,7 @@ public record ConsoleFilePipelineStepProgressResponse(
     String stageCode,
     Long rowsProcessed,
     Long totalRowsHint,
-    Long lastHeartbeatAt) {}
+    Long lastHeartbeatAt,
+    String stepStatus,
+    Integer runSeq,
+    String errorCode) {}

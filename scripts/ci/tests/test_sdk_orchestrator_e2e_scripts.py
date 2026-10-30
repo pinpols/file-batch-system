@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：SDK 真栈 E2E 启动脚本回归测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py。
 """SDK 真栈 E2E 启动脚本的竞态与失败传播回归测试。"""
 
 from __future__ import annotations
@@ -115,8 +117,11 @@ class SdkOrchestratorE2eScriptsTest(unittest.TestCase):
             fixture_root = temp / "fixture-root"
             sql_dir = fixture_root / "scripts/db/business"
             sql_dir.mkdir(parents=True)
+            local_sql_dir = fixture_root / "scripts/local/sql"
+            local_sql_dir.mkdir(parents=True)
             (sql_dir / "create_biz_tables.sql").write_text("SELECT 1;\n", encoding="utf-8")
             (sql_dir / "rls-phase-a.sql").write_text("SELECT 1;\n", encoding="utf-8")
+            (local_sql_dir / "ensure-business-database.sql").write_text("SELECT 1;\n", encoding="utf-8")
             (fixture_root / ".env").write_text("", encoding="utf-8")
 
             env = os.environ.copy()
@@ -147,8 +152,23 @@ class SdkOrchestratorE2eScriptsTest(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("pg_isready -h 127.0.0.1", calls.read_text(encoding="utf-8"))
+            recorded_calls = calls.read_text(encoding="utf-8")
+            self.assertIn("pg_isready -h 127.0.0.1", recorded_calls)
             self.assertGreaterEqual(int(readiness_count.read_text(encoding="utf-8")), 2)
+            commands = recorded_calls.splitlines()
+            create_business_db_index = next(
+                index
+                for index, command in enumerate(commands)
+                if "psql" in command
+                and "-d batch_platform" in command
+                and "database_name=batch_business" in command
+            )
+            apply_business_ddl_index = next(
+                index
+                for index, command in enumerate(commands)
+                if "psql" in command and "-d batch_business" in command
+            )
+            self.assertLess(create_business_db_index, apply_business_ddl_index)
 
     def test_typescript_dependency_failure_is_logged_and_propagated(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

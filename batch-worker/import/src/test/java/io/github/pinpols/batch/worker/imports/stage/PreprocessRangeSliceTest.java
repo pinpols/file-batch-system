@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
+import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
@@ -66,7 +66,7 @@ class PreprocessRangeSliceTest {
     when(source.streamObjectRangeToSpool(any(), any(), any(), any(), any())).thenReturn(success);
     PreprocessStep step = new PreprocessStep(
         mock(PlatformFileRecordRepository.class),
-        mock(PlatformPipelineDefinitionRepository.class),
+        mock(PlatformFileTemplateRepository.class),
         new BatchSecurityProperties(),
         mock(BatchObjectCryptoService.class),
         properties,

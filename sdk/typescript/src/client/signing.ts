@@ -27,9 +27,10 @@ export const SIGNATURE_HEADERS = {
 
 /** hex(sha256(body)) — empty body still hashes (sha256 of zero bytes). */
 export function bodySha256Hex(body: string | Uint8Array): string {
-  return createHash("sha256")
-    .update(body ?? "")
-    .digest("hex");
+  const hash = createHash("sha256");
+  const hashInput = body ?? "";
+  hash.update(hashInput);
+  return hash.digest("hex");
 }
 
 /** The canonical string the HMAC is computed over. */
@@ -62,9 +63,9 @@ export function sign(
   nonce: string,
   body: string | Uint8Array,
 ): string {
-  return createHmac("sha256", apiKey ?? "")
-    .update(canonicalString(method, path, timestamp, nonce, body))
-    .digest("hex");
+  const hmac = createHmac("sha256", apiKey ?? "");
+  const canonical = canonicalString(method, path, timestamp, nonce, body);
+  return hmac.update(canonical).digest("hex");
 }
 
 /**
@@ -80,7 +81,8 @@ export function signatureHeaders(
   now: () => number = Date.now,
   nonceGen: () => string = randomUUID,
 ): Record<string, string> {
-  const timestamp = String(now());
+  const sampledTime = now();
+  const timestamp = String(sampledTime);
   const nonce = nonceGen();
   return {
     [SIGNATURE_HEADERS.timestamp]: timestamp,

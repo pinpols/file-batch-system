@@ -262,7 +262,10 @@ pub fn parse_iso8601_duration_ms(iso: &str) -> Result<i64, String> {
     let h = hours.unwrap_or(0.0);
     let m = minutes.unwrap_or(0.0);
     let s = seconds.unwrap_or(0.0);
-    Ok(((h * 3600.0 + m * 60.0 + s) * 1000.0).round() as i64)
+    let total_seconds = h * 3600.0 + m * 60.0 + s;
+    let total_millis = total_seconds * 1000.0;
+    let rounded_millis = total_millis.round();
+    Ok(rounded_millis as i64)
 }
 
 /// Normalize a `nextHeartbeatHint` (ISO duration string or raw seconds) to ms,

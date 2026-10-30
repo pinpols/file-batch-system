@@ -1,9 +1,11 @@
 # ADR-025 · Workflow 静态校验
 
+> **当前适用性（2026-10-24）**：静态图校验继续适用；新图执行节点只引用 JOB，控制节点含 WAIT；不支持嵌套 Workflow，旧 TASK/FILE_STEP 不能作为新图执行方案。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted（**第 1 阶段必做 / P0**，~5 人天，便宜高收益，建议第一个落地）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-009（workflow DSL）/ ADR-018（跨日依赖）/ §14.3.2 / [系统职责范围](../system-scope-boundary.md)
 
 ## 范围边界（Scope Discipline）
 
@@ -46,8 +48,8 @@
 | V6 | 跨日依赖 offset 解析失败（业务日历不识别） | ERROR |
 | V7 | 跨日依赖 range 跨度 > 90 天（接 ADR-018 上限） | ERROR |
 | V8 | 跨日依赖 OPTIONAL 节点的 output 被下一日 REQUIRED 引用（传染性退化） | ERROR |
-| V9 | GATEWAY join_mode = ALL 但 incoming edges < 2 | ERROR |
-| V10 | GATEWAY join_mode = N_OF 但 N > M 或 M ≠ incoming count | ERROR |
+| V9 | 多入边 GATEWAY 缺少 joinMode，或有入边的节点显式配置不支持的 joinMode | ERROR |
+| V10 | 多入边节点显式 N_OF 阈值不是 1 至入边数的整数，或旧 N_OF_M 的 M 与入边数不一致 | ERROR |
 | V11 | edge type 与节点 type 矛盾（如 START 节点有 incoming） | ERROR |
 | V12 | param_schema 类型与上游 outputs 契约类型不匹配 | WARN（contract 不全的 worker 仍能跑） |
 | V13 | 同 (workflow_code, node_code) 重复 | ERROR |
@@ -58,18 +60,15 @@ ERROR ⇒ 拒绝启用；WARN ⇒ 启用但展示警告。
 
 ### 触发时机
 
-```
-console: PUT /workflow-definitions/{id}/enable
-    │
-    ▼
-WorkflowGraphValidator.validate(workflowDefinition)
-    │
-    ├── ERRORS empty?  yes → enabled=true
-    │                 no  → BizException(error.workflow.validation_failed) + 错误列表
-    │
-WorkflowDefinitionImport（批量配置导入）
-    │
-    └── 同样跑 validator，所有 workflow 校验后再批量提交（all-or-nothing）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  E["启用 Workflow"] --> V["WorkflowGraphValidator"]
+  I["批量导入 Workflow"] --> V
+  V --> Q{"有校验错误？"}
+  Q -->|"无"| C["启用 / 全量提交"]
+  Q -->|"有"| R["拒绝并返回错误列表"]
 ```
 
 定期对账：

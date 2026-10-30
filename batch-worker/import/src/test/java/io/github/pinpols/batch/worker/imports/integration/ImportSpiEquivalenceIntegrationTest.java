@@ -2,6 +2,8 @@ package io.github.pinpols.batch.worker.imports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -9,13 +11,14 @@ import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.imports.BatchWorkerImportApplication;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportStepExecutionAdapter;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportTaskExecutor;
+import io.github.pinpols.batch.worker.imports.plugin.ImportLoadPluginRegistry;
 import java.lang.reflect.Field;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.TestConstructor;
 
 /**
  * P0 Phase 3 等价性 IT — SPI 路径 ≡ @Primary 路径(import)。
@@ -36,6 +39,7 @@ import org.springframework.test.context.DynamicPropertySource;
     classes = BatchWorkerImportApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @DisplayName("导入 SPI 等价性集成测试:注册类型,执行器装配与委托实例同一性")
+@TestConstructor(autowireMode = TestConstructor.AutowireMode.ALL)
 class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
 
   @DynamicPropertySource
@@ -43,11 +47,20 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired
-  ImportStepExecutionAdapter primaryAdapter;
+  private final ImportStepExecutionAdapter primaryAdapter;
 
-  @Autowired
-  BatchTaskExecutorRegistry registry;
+  private final BatchTaskExecutorRegistry registry;
+
+  private final ImportLoadPluginRegistry importLoadPluginRegistry;
+
+  ImportSpiEquivalenceIT(
+      ImportStepExecutionAdapter primaryAdapter,
+      BatchTaskExecutorRegistry registry,
+      ImportLoadPluginRegistry importLoadPluginRegistry) {
+    this.primaryAdapter = primaryAdapter;
+    this.registry = registry;
+    this.importLoadPluginRegistry = importLoadPluginRegistry;
+  }
 
   @Test
   @DisplayName("上下文加载后,任务执行器注册表包含导入类型")
@@ -73,5 +86,13 @@ class ImportSpiEquivalenceIT extends AbstractIntegrationTest {
         .as("ImportTaskExecutor.delegate 必须是 Spring @Primary 注入的 ImportStepExecutionAdapter,"
             + "证明 SPI 路径跟老路径真共用一份业务代码(不是各自实现)")
         .isSameAs(primaryAdapter);
+  }
+
+  @Test
+  @DisplayName("Worker 注册目录保留通用 JDBC 导入的 UNKNOWN 静态能力")
+  void shouldPublishUnknownReplayCapability_whenImportConfigurationIsVariable() {
+    assertThat(importLoadPluginRegistry.replayCapabilityCatalog())
+        .containsExactly(
+            ReplayCapabilityDeclaration.unknown(WorkerPluginIds.IMPORT_LOAD_JDBC_MAPPED));
   }
 }

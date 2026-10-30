@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.arch;
 
 import io.github.pinpols.batch.common.arch.BaseMapperXmlTenantGuardArchTest;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -29,6 +30,14 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
         "BatchDayWaitingLaunchMapper",
         // 跨租文件治理聚合
         "FileGovernanceMapper");
+  }
+
+  @Override
+  protected Set<String> tenantExemptTables() {
+    Set<String> tables = new HashSet<>(super.tenantExemptTables());
+    // V363 全局扫描单例仅保存分片水位和版本，不含租户业务数据，也没有 tenant_id。
+    tables.add("waiting_partition_scan_cursor");
+    return Set.copyOf(tables);
   }
 
   /**

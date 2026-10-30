@@ -6,7 +6,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 /**
- * 单测 {@link ApiKeyHasher} —— P1-1(docs/archive/analysis/2026-06-03-deep-scan-be-security.md)。
+ * 单测 {@link ApiKeyHasher} —— P1-1(docs/archive/audit/deep-scan-be-security-2026-06-03.md)。
  *
  * <p>覆盖:
  *
@@ -78,7 +78,7 @@ class ApiKeyHasherTest {
   void newSalt_isBase64_andNonEmpty() {
     String salt = ApiKeyHasher.newSalt();
     assertThat(salt).isNotBlank();
-    // base64 of 16B is 24 chars w/ padding
+    // 16 字节内容编码为 Base64 后，带填充时长度为 24 个字符。
     assertThat(salt).hasSize(24);
   }
 }

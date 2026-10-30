@@ -12,6 +12,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessJobContext;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.metrics.ProcessMetrics;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,24 +34,24 @@ class FeedbackStepTest {
   }
 
   private static ProcessMetrics realMetrics(SimpleMeterRegistry registry) {
-    ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider = new ObjectProvider<>() {
+    ObjectProvider<MeterRegistry> provider = new ObjectProvider<>() {
       @Override
-      public io.micrometer.core.instrument.MeterRegistry getObject(Object... args) {
+      public MeterRegistry getObject(Object... args) {
         return registry;
       }
 
       @Override
-      public io.micrometer.core.instrument.MeterRegistry getObject() {
+      public MeterRegistry getObject() {
         return registry;
       }
 
       @Override
-      public io.micrometer.core.instrument.MeterRegistry getIfAvailable() {
+      public MeterRegistry getIfAvailable() {
         return registry;
       }
 
       @Override
-      public io.micrometer.core.instrument.MeterRegistry getIfUnique() {
+      public MeterRegistry getIfUnique() {
         return registry;
       }
     };

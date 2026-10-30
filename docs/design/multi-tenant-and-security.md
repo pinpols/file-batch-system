@@ -16,7 +16,7 @@
 ### 1.2 隔离对象
 
 - **任务**：`job_definition` / `job_instance` / `job_partition` / `job_task` 全部带 `tenant_id`
-- **配置**：`file_channel_config` / `workflow_definition` / `pipeline_definition` / `tenant_quota_policy` 全部带 `tenant_id`
+- **配置**：`file_channel_config` / `workflow_definition` / `job_definition` / `tenant_quota_policy` 全部带 `tenant_id`
 - **资源**：worker_group / 配额 / 限流 / 通知渠道按租户独立
 
 ### 1.3 当前实现
@@ -75,7 +75,7 @@
 - 重要文件支持服务端二次鉴权 + 水印审计
 - 文件删除**优先软删除**，再异步清理对象
 
-> 桶生命周期与清理：[`../runbook/minio-lifecycle-policy.md`](../runbook/minio-lifecycle-policy.md)。
+> 桶生命周期与清理：[`object-storage-lifecycle-policy.md`](../runbook/object-storage-lifecycle-policy.md)。
 
 ## 5. 密钥与凭证轮换
 
@@ -194,7 +194,9 @@
 3. 即使业务模板未开内容脱敏，**日志基线**仍不得直接打印完整文件明文 / 完整错误行明文 / 完整导出结果明文
 4. 预览脱敏与下载控制**独立配置**，允许"可脱敏预览、不可直接下载"
 5. 内容加密启用后，**同步管理密钥版本号、轮换窗口、兼容期**
-6. Console 文件错误记录响应中的 `rawRecord` 按 `preview_masking_enabled` 脱敏；`error_line_masking_enabled` 独立控制错误消息和原始行，两项可分别启用。
+6. Console 文件错误记录响应中的 `rawRecord` 按 `preview_masking_enabled` 脱敏；`error_line_masking_enabled` 独立控制本地化后的错误消息和原始行，两项可分别启用。未指定文件 ID 的列表按各记录所属文件查询模板策略；同一页中相同文件复用一次策略查询。该策略依赖文件元数据中的模板编码和可用的启用模板；安全旁路模式或找不到模板策略时保留既有行为。
+7. 内容为有效 JSON 对象、数组或包含 JSON 的字符串时按结构递归脱敏；`STRICT`、`PCI`、`GDPR` 规则集遮蔽 `name`、`address`、`phone` 字段，并保留合法 JSON 结构。嵌套达到 64 层时遮蔽超深子树；长数字和邮箱按既有基线规则处理。不保证识别其他字段名、任意损坏 JSON 或无标记的敏感内容。
+8. Import 开启错误行脱敏时，数据库错误记录和错误输出文件均按模板规则处理；结构化原始行保留 JSON 对象或数组形态。安全旁路模式沿用不执行内容脱敏的行为。
 
 ## 10. 日志排查与安全平衡
 
@@ -253,7 +255,7 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 
 > ✅ **已实现**：`batch.config_release` + `batch.config_change_log` 表（V22 migration）
 
-定义态配置（`job_definition` / `workflow_definition` / `pipeline_definition` / `file_template_config`）**不应**在控制台直接修改后立即影响生产。须纳入发布治理。
+定义态配置（`job_definition` / `workflow_definition` / `file_template_config`）**不应**在控制台直接修改后立即影响生产。须纳入发布治理。
 
 ### 12.1 配置生命周期
 
@@ -283,7 +285,7 @@ AI 仅作为 Console 控制面辅助能力，遵循「**先鉴权 → 再裁剪 
 
 - [`../architecture/architecture-truth.md`](../architecture/architecture-truth.md) — 架构基线
 - [`../architecture/adr/ADR-007-dual-datasource.md`](../architecture/adr/ADR-007-dual-datasource.md) — 单 PG 双 schema 隔离
-- [`../runbook/minio-lifecycle-policy.md`](../runbook/minio-lifecycle-policy.md) — MinIO 桶生命周期
+- [`object-storage-lifecycle-policy.md`](../runbook/object-storage-lifecycle-policy.md) — MinIO 桶生命周期
 - [`../runbook/security-scan.md`](../runbook/security-scan.md) — 安全扫描 SOP
 - [`../runbook/feature-switches.md`](../runbook/feature-switches.md) — 安全旁路 / 限流 / 配额相关开关
 - [`../coding-conventions.md`](../coding-conventions.md) §21 — `batch.security.bypass-mode` 规范

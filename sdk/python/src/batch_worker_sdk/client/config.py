@@ -246,7 +246,9 @@ class BatchPlatformClientConfig(BaseModel):
         for field, env_key in opt_int.items():
             v = getter(prefix + env_key)
             if v is not None and v.strip():
-                kwargs[field] = int(v.strip())
+                value_text = v.strip()
+                value = int(value_text)
+                kwargs[field] = value
 
         opt_seconds = {
             "http_timeout": "HTTP_TIMEOUT_SECONDS",
@@ -256,17 +258,23 @@ class BatchPlatformClientConfig(BaseModel):
         for field, env_key in opt_seconds.items():
             v = getter(prefix + env_key)
             if v is not None and v.strip():
-                kwargs[field] = timedelta(seconds=int(v.strip()))
+                seconds_text = v.strip()
+                seconds = int(seconds_text)
+                kwargs[field] = timedelta(seconds=seconds)
 
         v_ms = getter(prefix + "RETRY_BASE_DELAY_MS")
         if v_ms is not None and v_ms.strip():
-            kwargs["retry_base_delay"] = timedelta(milliseconds=int(v_ms.strip()))
+            milliseconds_text = v_ms.strip()
+            milliseconds = int(milliseconds_text)
+            kwargs["retry_base_delay"] = timedelta(milliseconds=milliseconds)
 
         # 请求签名开关(opt-in)。显式 ``true / 1 / yes / on``(忽略大小写)→ True;
         # 其余(含未设置)保持默认 False。对齐 Java BATCH_SDK_REQUEST_SIGNING_ENABLED。
         v_sign = getter(prefix + "REQUEST_SIGNING_ENABLED")
         if v_sign is not None and v_sign.strip():
-            kwargs["request_signing_enabled"] = v_sign.strip().lower() in (
+            signing_value = v_sign.strip()
+            normalized_signing_value = signing_value.lower()
+            kwargs["request_signing_enabled"] = normalized_signing_value in (
                 "true",
                 "1",
                 "yes",
@@ -275,7 +283,9 @@ class BatchPlatformClientConfig(BaseModel):
 
         v_strict = getter(prefix + "STRICT_TIMING")
         if v_strict is not None and v_strict.strip():
-            kwargs["strict_timing_validation"] = v_strict.strip().lower() not in (
+            strict_timing_value = v_strict.strip()
+            normalized_strict_timing_value = strict_timing_value.lower()
+            kwargs["strict_timing_validation"] = normalized_strict_timing_value not in (
                 "false",
                 "0",
                 "no",
@@ -287,4 +297,6 @@ class BatchPlatformClientConfig(BaseModel):
 
 def _ms(td: timedelta) -> int:
     """``timedelta`` → 整数毫秒(对齐 Java ``Duration.toMillis()``)。"""
-    return int(td.total_seconds() * 1000)
+    total_seconds = td.total_seconds()
+    milliseconds = total_seconds * 1000
+    return int(milliseconds)

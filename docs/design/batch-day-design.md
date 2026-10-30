@@ -2,8 +2,8 @@
 
 ## 核心原则
 
-> **批量日（business_date）在触发时确定，一旦写入 job_instance 就永不改变。**
-> 即使执行跨到第二天，biz_date 仍然是触发时的业务日期。
+> **业务日先在顶层 Workflow 接纳时固定，后续 JOB 实例继承；延期、重试、恢复和跨自然日执行不得按当前时间重算。**
+> 开日创建 BatchDay 与输入预期义务，不预生成当天所有 JobInstance。START/END 不占 Worker 任务；JOB 节点实际到达后才创建执行实例。
 
 所有计算、文件命名、存储路径、对账，全部使用 `business_date`，不使用 `system_time`。
 
@@ -27,7 +27,7 @@
 
 本方案的术语与数据库边界统一以 [`docs/architecture/core-model.md`](../architecture/core-model.md) 为准，补充约束如下：
 
-- 本文统一使用 `jobCode`，不再引入 `pipelineCode` / `flowCode` 作为新的主口径。
+- 顶层目标使用 `workflowDefinitionId`；`jobCode` 仅标识图内可复用执行配置，不能代替 Workflow 的计划、日历或接纳身份。
 - `batch_day_instance` 是批量日生命周期实体，但 `attempt` 仍不是主运行态一等实体；本方案只新增 `late_count`、`catchup_count` 这类计数字段，不新增通用 attempt 表。
 - catch-up、late arrival、审批等动作不要求把 `run_mode` 落进 `job_instance` 或 `batch_day_instance`；运行时意图继续由触发类型、命令载荷和 worker context 承接。
 - 如果未来真的需要按 `run_mode` 做筛选、统计、报表或审计检索，优先落到命令表或审计表，不优先改主状态表。
@@ -67,6 +67,8 @@ late_arrival_tolerance_min = 60
 
 ### 变更 2：新增 batch_day_instance 表
 
+以下保留建模示例，不能用于独立初始化；当前列、约束与状态以 Flyway 为准。状态约束已包含 V101/V107 的管理态与 `SETTLING`。
+
 批量日的运行态主体。每个 `(tenant_id, calendar_code, biz_date)` 对应一行。
 
 ```sql
@@ -85,27 +87,28 @@ CREATE TABLE IF NOT EXISTS batch.batch_day_instance (
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_batch_day_instance UNIQUE (tenant_id, calendar_code, biz_date),
-    CONSTRAINT ck_batch_day_status   CHECK (day_status IN ('OPEN','CUTOFF','IN_FLIGHT','SETTLED','FAILED'))
+    CONSTRAINT ck_batch_day_status CHECK (day_status IN (
+        'OPEN','CUTOFF','IN_FLIGHT','SETTLING','SETTLED','FAILED','SKIPPED','MANUAL_RELEASED'
+    ))
 );
 ```
 
 **day_status 状态机：**
 
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  O[OPEN] -->|到达 cutoff| C[CUTOFF]
+  C -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I[IN_FLIGHT]
+  C -->|满足结算前置条件，CAS 占位| S[SETTLING]
+  I -->|满足结算前置条件，CAS 占位| S
+  S -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I
+  S -->|无根运行，继续等待| C
+  S -->|根运行 FAILED / TERMINATED| F[FAILED]
+  S -->|根运行已结束且无失败，义务已收敛| D[SETTLED]
 ```
-OPEN ──── cutoff_time 到达 ──────────────────→ CUTOFF
-            │
-            ▼
-         CUTOFF ── 存在 IN_FLIGHT 实例 ──→ IN_FLIGHT
-            │
-            ├── 所有实例终态 SUCCESS/PARTIAL ──→ SETTLED
-            │
-            └── 存在 FAILED 且无覆盖 ────────→ FAILED
 
-IN_FLIGHT ── 所有实例终态 SUCCESS/PARTIAL ──→ SETTLED
-IN_FLIGHT ── 存在 FAILED 且无覆盖 ──────────→ FAILED
-```
-
-`batch_day_instance` 由定时任务（`BatchDayCutoffScheduler`）维护状态推进，不依赖 job 执行链路，避免耦合。
+当前实现由 Orchestrator 的 `BatchDayOpenScheduler` 按租户日历主动打开业务日；`BatchDayCutoffScheduler` 推进 cutoff，`BatchDaySettleScheduler` 汇总作业终态。作业实例仍由定时、事件、API 或 Workflow 按需创建；首次作业创建路径保留 upsert 作为回退。业务日状态推进与 Worker 执行链路解耦。
 
 ### 变更 3：Flyway 版本号
 
@@ -176,33 +179,48 @@ if (bizDate == null) {
 
 ## 批量日生命周期管理
 
-### BatchDayCutoffScheduler（新增，batch-trigger 模块）
+### BatchDayCutoffScheduler（batch-orchestrator 模块）
 
 每分钟轮询一次，检查是否有 `batch_day_instance` 需要推进状态：
 
 ```
-1. 查询 day_status = OPEN 且 cutoff_at IS NULL 的记录
-2. 对每条记录：判断 now(timezone) >= cutoff_time
-3. 若是：UPDATE day_status = CUTOFF, cutoff_at = now()
-         同时触发：late_arrival 容忍窗口开始计时
+1. 查询 day_status = OPEN 的记录
+2. 跳过冻结或身份字段不完整的记录；优先使用已持久化 cutoff_at，为空时按业务日的次日日切边界与日历时区、cutoff schedule、DST 策略计算
+3. 若 now >= cutoff instant：在所属租户上下文内，以版本 CAS 推进 day_status = CUTOFF；版本递增与审计写入同一短事务
+4. CAS 冲突本轮跳过；未来或冻结记录保持原状，重复扫描不重复审计
 ```
 
-### BatchDaySettleScheduler（新增，batch-orchestrator 模块）
+Trigger 只负责触发调度，不注册批量日生命周期定时器、不直接写 `batch_day_instance`。Orchestrator 是该状态机的唯一所有者；部署时需要更新 Trigger 和 Orchestrator 的对应构建，旧进程中的重复定时器不会因源码删除而自行退出。
+
+### BatchDaySettleScheduler（batch-orchestrator 模块）
 
 每分钟轮询，检查 CUTOFF / IN_FLIGHT 状态的批量日是否已可结算：
 
 ```
-1. 查询 day_status IN (CUTOFF, IN_FLIGHT) 的记录
-2. 对每条：查询关联 job_instance（biz_date + calendar_code 关联）
-3. 若所有实例均终态：
-   - 全部 SUCCESS/PARTIAL → SETTLED
-   - 存在 FAILED 无 catch-up 覆盖 → FAILED
+1. 扫描 CUTOFF / IN_FLIGHT / SETTLING 的批量日，按 WorkflowRun 根统计并检查子 JOB 活跃态与预期义务
+2. 符合条件时，用独立事务 CAS 占位为 SETTLING；已有 SETTLING 可重入
+3. 结算事务重新核验：
+   - 仍有活跃根运行 / 子 JOB 或未收敛义务 → IN_FLIGHT
+   - 无关联根运行 → CUTOFF，等待后续处理
+   - 根运行存在 FAILED / TERMINATED → FAILED
+   - 根运行已结束、无失败且义务已收敛 → SETTLED
 ```
+
+无作业实例时当前不会自动结算普通工作日，避免把漏触发误判成功；按日历 `SKIP` 的节假日会显式落 `SKIPPED` 终态。正常空日策略需要作业计划清单作为预期输入后再定义。
 
 ### batch_day_instance 创建时机
 
-第一个归属该 `(tenant_id, calendar_code, biz_date)` 的 `job_instance` 创建时，
-`DefaultLaunchService` 顺带 upsert `batch_day_instance`（OPEN 状态），同时写入 `sla_deadline_at`。
+`BatchDayOpenScheduler` 使用 `batch_day_open_cursor` 持久化每个租户日历最后评估的原始日期，并在同一事务内推进游标与批量日/等待结果；holiday-roll 目标即使提前落在未来，也不会使原始日期扫描卡住。单轮最多处理 `BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN`（默认 14）个日期，长停机留下的剩余缺口由后续周期继续推进。部署前游标不存在时，以当前日期之前最近已落库日作为锚点；部署前已存在的更早历史缺口不回溯。新日固化 cutoff、SLA、timezone 与 DST 策略快照；`DefaultLaunchService` 的 upsert 路径保留为兜底。节假日按 `SKIP` / `NEXT_WORKDAY` / `PREV_WORKDAY` 处理。跨 calendar 依赖未满足时，写入 `calendar_dependency_wait` 固定原 `biz_date`、时间策略和首次依赖规则快照，由同一周期调度器以 `FOR UPDATE SKIP LOCKED` 恢复检查；上游迟于后续 cutoff 完成时仍恢复原日期。等待超过 `BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS`（默认 86400 秒）后发一次去重告警但继续等待；重检使用当前已启用依赖配置，修复配置或使用既有灾难日 SKIP 可释放等待。
+
+Catch-up 暴露 `batch.batch_day.open.catchup.remaining_days`（所有启用日历中的最大原始日期积压）和 `batch.batch_day.open.catchup.calendars_behind`（仍有积压的日历数）两个无租户/日历标签的低基数 gauge。指标只在完整扫描成功后更新；失败扫描保留上次完整快照，并增加 `batch.batch_day.open.catchup.scan.failures`。这些指标用于判断停机恢复是否仍有积压，不代表缺失日期清单，也不发现游标初始化锚点之前的历史缺口。
+
+#### 零作业实例日的结算
+
+批量日已到 `CUTOFF` 且当前没有任何 `job_instance` 时，自动 settle 不把“零实例”直接当作成功：它可能表示该日确实无预期作业，也可能表示定时触发丢失或配置遗漏。Orchestrator 因此继续保留 `CUTOFF`，直到收到明确治理动作。管理员可通过 `SETTLE_EMPTY` 确认该业务日没有预期作业；服务端在事务中重读汇总，只有状态仍为 `CUTOFF`、实例总数为零、没有该日待处理的跨日历/作业依赖启动请求且原因非空时才 CAS 到 `SETTLED`。仍在等待的启动请求必须先由依赖 reconciler 或人工操作收敛，不能先结算空日再由后续扫描启动作业。动作使用认证上下文操作者并写双份操作审计；已有作业实例、依赖等待或尚未 cutoff 的日期仍不能按空日结算。该操作表示人工确认，不会自动推断或生成预期作业清单。
+
+管理员可按租户/日历暂停自动 catch-up 并填写原因。暂停期间调度器不初始化或推进该日历游标，仍报告游标至当前业务日的剩余积压；正常当前日开启和跨日历依赖等待重检继续运行。恢复从持久化原始日期游标继续，暂停/恢复事件与操作者、原因在同一事务追加到 RLS 隔离的审计表。暂停不是“冻结整个日历”，也不等同于对历史缺口的审批回填。
+
+管理员也可在 Console「批量日」页面查看当前日历的待处理依赖等待并请求 `RELEASE` 或 `SKIP`。请求只写入等待记录中的人工动作、操作者、原因和请求时间；下一个调度周期由 Orchestrator 执行。`RELEASE` 按原业务日快照创建批量日，`SKIP` 创建 `SKIPPED` 终态，均写批量日操作审计。已打开或已终结的等待不可操作；不要直接更新 `calendar_dependency_wait` 或 `batch_day_instance`。
 
 ---
 
@@ -326,9 +344,19 @@ Response: ConsoleBatchDayWindowResponse
 POST /api/console/jobs/batch-days/{bizDate}/catchup
     Body: { tenantId, calendarCode, jobCodes?: [] }
 
-→ 对指定 bizDate 的 FAILED job（或指定 jobCodes）触发 catch-up
+→ 未指定 jobCodes 时选择指定 bizDate 的正式 FAILED / PARTIAL_FAILED job，排除 dry-run；也可显式指定 jobCodes
 → 受 catch_up_policy 约束（AUTO 直接跑，MANUAL_APPROVAL 走审批）
 ```
+
+日历策略为 `NONE` 时，批量日补跑入口返回状态冲突，不创建审批或触发请求。
+
+批量日汇总、失败补跑及实例来源重放按作业实例冻结的 `calendar_code` 和业务日归属，后续修改作业定义日历不会改变历史归属。默认候选和自动恢复只使用正式实例，排除演练实例；显式传入作业编码仍按入口自身约束处理。
+
+自动补跑先解析整批作业的受管 Workflow，任一目标无效时不提交本批任何触发请求。后续逐项远程提交并非分布式事务，出现调用失败或结果不明时需以原幂等键对账，不能据此推断整批未提交。
+
+人工审批按请求键和作业编码派生每项审批键；拼接结果超过审批表长度限制时使用稳定摘要，相同请求重试沿用同一身份。批量日请求没有指定调度时间，因此审批载荷不添加每次变化的当前时间，避免同一身份的重试产生载荷冲突。已存在的旧审批载荷仍以原记录为准。
+
+作业汇总的 `catchupCount` 统计批日补跑快照中能明确归属本日历和作业的已受理或已启动正式请求：Console 自动及批日人工审批执行快照使用 `jobCode`，自动恢复请求使用批日补跑去重键。批日人工审批将日历保存在审批载荷中，并在批准执行时传给触发快照；没有批日历身份的通用补跑审批不计入该字段。
 
 ---
 
@@ -346,7 +374,7 @@ Phase 2：biz_date 算法修复（影响 SCHEDULED 触发路径）
   └─ 单测：5 个场景验收
 
 Phase 3：批量日生命周期（新能力，不改现有链路）
-  └─ BatchDayCutoffScheduler（batch-trigger）
+  └─ BatchDayCutoffScheduler（batch-orchestrator）
   └─ BatchDaySettleScheduler（batch-orchestrator）
   └─ DefaultLaunchService upsert batch_day_instance
 

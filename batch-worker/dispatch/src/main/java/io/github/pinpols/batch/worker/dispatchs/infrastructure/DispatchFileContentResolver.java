@@ -36,8 +36,9 @@ public class DispatchFileContentResolver {
 
   /** 打开文件内容流（调用方负责关闭）；大文件建议使用 {@link #streamToConsumer}。 */
   public InputStream openInputStream(Map<String, Object> fileRecord) throws IOException {
-    String storageType =
-        String.valueOf(fileRecord.getOrDefault("storage_type", "")).toUpperCase(Locale.ROOT);
+    Object storageTypeValue = fileRecord.getOrDefault("storage_type", "");
+    String rawStorageType = String.valueOf(storageTypeValue);
+    String storageType = rawStorageType.toUpperCase(Locale.ROOT);
     String storagePath = String.valueOf(fileRecord.getOrDefault("storage_path", ""));
     if (!Texts.hasText(storagePath)) {
       throw new IllegalStateException("storage_path missing");
@@ -46,7 +47,9 @@ public class DispatchFileContentResolver {
     if (storagePath.contains("..")) {
       throw new SecurityException("storage_path contains path traversal sequence: " + storagePath);
     }
-    Path local = Path.of(storagePath).toAbsolutePath().normalize();
+    Path rawLocalPath = Path.of(storagePath);
+    Path absoluteLocalPath = rawLocalPath.toAbsolutePath();
+    Path local = absoluteLocalPath.normalize();
     if ("LOCAL".equals(storageType) || Files.isRegularFile(local)) {
       return Files.newInputStream(local);
     }
@@ -54,8 +57,9 @@ public class DispatchFileContentResolver {
       // 走项目存储异常体系,上层可区分「存储未配置」与其他技术错误(而非被通用 500 捕获并抑制)。
       throw new ObjectStoreException("object store not configured for remote storage");
     }
-    String bucket =
-        String.valueOf(fileRecord.getOrDefault("storage_bucket", s3Properties.getBucket()));
+    String defaultBucket = s3Properties.getBucket();
+    Object storageBucketValue = fileRecord.getOrDefault("storage_bucket", defaultBucket);
+    String bucket = String.valueOf(storageBucketValue);
     if (!Texts.hasText(bucket)) {
       bucket = s3Properties.getBucket();
     }

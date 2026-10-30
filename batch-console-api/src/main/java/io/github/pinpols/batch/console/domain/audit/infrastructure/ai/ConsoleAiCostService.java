@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -41,7 +42,9 @@ public class ConsoleAiCostService {
       }
       return;
     }
-    if (providerNames.stream().anyMatch(provider -> EmptyChecks.isNull(rateFor(provider)))) {
+    boolean hasProviderWithoutUsableRate =
+        providerNames.stream().anyMatch(provider -> EmptyChecks.isNull(rateFor(provider)));
+    if (hasProviderWithoutUsableRate) {
       throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
     }
   }
@@ -65,8 +68,9 @@ public class ConsoleAiCostService {
     BigDecimal monthlyBudget = config.getMonthlyBudgetUsd();
     LocalDate billingMonth = YearMonth.now(ZoneOffset.UTC).atDay(1);
     mapper.setTenantContext(tenantId);
-    mapper.releaseStaleReservations(
-        tenantId, billingMonth, OffsetDateTime.now(ZoneOffset.UTC).minusHours(2));
+    OffsetDateTime reservationCheckTime = OffsetDateTime.now(ZoneOffset.UTC);
+    OffsetDateTime staleReservationCutoff = reservationCheckTime.minusHours(2);
+    mapper.releaseStaleReservations(tenantId, billingMonth, staleReservationCutoff);
     if (monthlyBudget.signum() > 0) {
       Boolean reserved = mapper.reserve(tenantId, billingMonth, cap, monthlyBudget);
       if (!Boolean.TRUE.equals(reserved)) {
@@ -81,7 +85,9 @@ public class ConsoleAiCostService {
   @Transactional
   public CostResult settleMeasured(Reservation reservation, MeasuredUsage usage) {
     Objects.requireNonNull(usage, "usage");
-    if (EmptyChecks.isNull(reservation) || !reservation.priced()) {
+    boolean reservationIsMissingOrUnpriced =
+        EmptyChecks.isNull(reservation) || !reservation.priced();
+    if (reservationIsMissingOrUnpriced) {
       return new CostResult(null, "UNPRICED");
     }
     BigDecimal amount = calculate(usage.provider(), usage.promptTokens(), usage.completionTokens());
@@ -92,7 +98,9 @@ public class ConsoleAiCostService {
   /** 模型调用未返回可靠用量时，按已预留金额保守结算。 */
   @Transactional
   public CostResult settleReserved(Reservation reservation) {
-    if (EmptyChecks.isNull(reservation) || !reservation.priced()) {
+    boolean reservationIsMissingOrUnpriced =
+        EmptyChecks.isNull(reservation) || !reservation.priced();
+    if (reservationIsMissingOrUnpriced) {
       return new CostResult(null, "UNPRICED");
     }
     return settlePricedReservation(reservation, reservation.reservedAmount(), 0L, 0L, "RESERVED");
@@ -106,13 +114,16 @@ public class ConsoleAiCostService {
       String status) {
     if (reservation.budgetReserved()) {
       mapper.setTenantContext(reservation.tenantId());
-      mapper.settle(
-          reservation.tenantId(),
-          reservation.billingMonth(),
-          reservation.reservedAmount(),
-          amount,
-          promptTokens,
-          completionTokens);
+      ConsoleAiMonthlyUsageSettleParam consoleAiMonthlyUsageSettleParam =
+          ConsoleAiMonthlyUsageSettleParam.builder()
+              .tenantId(reservation.tenantId())
+              .billingMonth(reservation.billingMonth())
+              .reservedAmount(reservation.reservedAmount())
+              .actualAmount(amount)
+              .promptTokens(promptTokens)
+              .completionTokens(completionTokens)
+              .build();
+      mapper.settle(consoleAiMonthlyUsageSettleParam);
     }
     return new CostResult(amount, status);
   }
@@ -147,20 +158,24 @@ public class ConsoleAiCostService {
 
   private BigDecimal maximumCost(String promptPayload, String systemPrompt, int imageCount) {
     long bytes = bytes(promptPayload) + bytes(systemPrompt);
-    BigDecimal estimatedInputTokens = BigDecimal.valueOf(bytes)
-        .multiply(BYTES_TO_TOKEN_UPPER_BOUND)
-        .add(BigDecimal.valueOf(
-            (long) Math.max(0, imageCount) * properties.getImage().getReservationTokensPerImage()))
-        .setScale(0, RoundingMode.CEILING);
-    BigDecimal maxOutputTokens =
-        BigDecimal.valueOf(Math.max(1, properties.getMaxCompletionTokens()));
+    BigDecimal payloadTokenUpperBound =
+        BigDecimal.valueOf(bytes).multiply(BYTES_TO_TOKEN_UPPER_BOUND);
+    int nonNegativeImageCount = Math.max(0, imageCount);
+    int reservationTokensPerImage = properties.getImage().getReservationTokensPerImage();
+    long imageTokenReservation = (long) nonNegativeImageCount * reservationTokensPerImage;
+    BigDecimal imageTokenUpperBound = BigDecimal.valueOf(imageTokenReservation);
+    BigDecimal estimatedInputTokens =
+        payloadTokenUpperBound.add(imageTokenUpperBound).setScale(0, RoundingMode.CEILING);
+    int configuredMaxCompletionTokens = properties.getMaxCompletionTokens();
+    int positiveMaxCompletionTokens = Math.max(1, configuredMaxCompletionTokens);
+    BigDecimal maxOutputTokens = BigDecimal.valueOf(positiveMaxCompletionTokens);
     BigDecimal maxRateCost = usableRates().stream()
         .map(rate -> rateCost(rate, estimatedInputTokens, maxOutputTokens))
         .max(BigDecimal::compareTo)
         .orElseThrow();
-    return maxRateCost
-        .multiply(properties.getCost().getReservationMargin())
-        .setScale(8, RoundingMode.CEILING);
+    BigDecimal reservationMargin = properties.getCost().getReservationMargin();
+    BigDecimal unroundedReservationCost = maxRateCost.multiply(reservationMargin);
+    return unroundedReservationCost.setScale(8, RoundingMode.CEILING);
   }
 
   private BigDecimal calculate(String provider, int promptTokens, int completionTokens) {
@@ -168,10 +183,11 @@ public class ConsoleAiCostService {
     if (EmptyChecks.isNull(rate)) {
       throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, AI_NOT_CONFIGURED_ERROR);
     }
-    return rateCost(
-        rate,
-        BigDecimal.valueOf(Math.max(0, promptTokens)),
-        BigDecimal.valueOf(Math.max(0, completionTokens)));
+    int nonNegativePromptTokens = Math.max(0, promptTokens);
+    BigDecimal promptTokensForBilling = BigDecimal.valueOf(nonNegativePromptTokens);
+    int nonNegativeCompletionTokens = Math.max(0, completionTokens);
+    BigDecimal completionTokensForBilling = BigDecimal.valueOf(nonNegativeCompletionTokens);
+    return rateCost(rate, promptTokensForBilling, completionTokensForBilling);
   }
 
   private ConsoleAiProperties.ProviderRate rateFor(String provider) {
@@ -182,7 +198,9 @@ public class ConsoleAiCostService {
         return isUsable(entry.getValue()) ? entry.getValue() : null;
       }
     }
-    if (normalized.equals(normalize(properties.getOpenaiCompatible().getProviderName()))) {
+    String compatibleProviderName = properties.getOpenaiCompatible().getProviderName();
+    String normalizedCompatibleProviderName = normalize(compatibleProviderName);
+    if (normalized.equals(normalizedCompatibleProviderName)) {
       return properties.getCost().getProviderRates().entrySet().stream()
           .filter(entry -> normalize(entry.getKey()).equals("openai-compatible"))
           .map(Map.Entry::getValue)
@@ -211,10 +229,10 @@ public class ConsoleAiCostService {
   private BigDecimal rateCost(
       ConsoleAiProperties.ProviderRate rate, BigDecimal inputTokens, BigDecimal outputTokens) {
     Objects.requireNonNull(rate);
-    return rate.getInputUsdPerMillionTokens()
-        .multiply(inputTokens)
-        .add(rate.getOutputUsdPerMillionTokens().multiply(outputTokens))
-        .divide(TOKENS_PER_MILLION, 8, RoundingMode.HALF_UP);
+    BigDecimal inputCost = rate.getInputUsdPerMillionTokens().multiply(inputTokens);
+    BigDecimal outputCost = rate.getOutputUsdPerMillionTokens().multiply(outputTokens);
+    BigDecimal combinedCost = inputCost.add(outputCost);
+    return combinedCost.divide(TOKENS_PER_MILLION, 8, RoundingMode.HALF_UP);
   }
 
   private static long bytes(String value) {
@@ -222,7 +240,11 @@ public class ConsoleAiCostService {
   }
 
   private static String normalize(String value) {
-    return EmptyChecks.isNull(value) ? "" : value.trim().toLowerCase(Locale.ROOT);
+    if (EmptyChecks.isNull(value)) {
+      return "";
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toLowerCase(Locale.ROOT);
   }
 
   public record Reservation(

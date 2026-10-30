@@ -6,6 +6,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.infrastructure.archive.ArchiveSchemaDriftCheck;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.lang.reflect.Field;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,9 +36,15 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   @AfterEach
   void cleanup() {
     // 把测试加的临时列删干净,防污染其他 IT
-    jdbcTemplate.execute("alter table batch.outbox_event drop column if exists drift_test_col");
+    String dropDriftTestColumnSql = """
+        alter table batch.outbox_event drop column if exists drift_test_col
+    """;
+    jdbcTemplate.execute(dropDriftTestColumnSql);
     // 列级类型漂移用例 — 把 tenant_id 类型还原回 varchar(64)
-    jdbcTemplate.execute("alter table batch.outbox_event alter column tenant_id type varchar(64)");
+    String restoreTenantIdColumnTypeSql = """
+        alter table batch.outbox_event alter column tenant_id type varchar(64)
+    """;
+    jdbcTemplate.execute(restoreTenantIdColumnTypeSql);
   }
 
   @Test
@@ -48,7 +58,10 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("热表新增列而归档表未同步时校验失败,并提示通过迁移补齐归档表结构")
   void shouldDetectDrift_whenHotTableHasExtraColumn() {
     // 模拟:运维给 batch.outbox_event 加了 column,但忘了同步 archive.outbox_event_archive
-    jdbcTemplate.execute("alter table batch.outbox_event add column drift_test_col varchar(64)");
+    String addDriftTestColumnSql = """
+        alter table batch.outbox_event add column drift_test_col varchar(64)
+    """;
+    jdbcTemplate.execute(addDriftTestColumnSql);
 
     assertThatThrownBy(() -> check.checkOnStartup())
         .isInstanceOf(IllegalStateException.class)
@@ -73,7 +86,7 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // checkOnStartup 内部仅 driftCount 总数,本 case 显式 per-table 比对,失败时
     // 一眼看出哪张表漂移 + 哪些列对不上。V139/V140 新加 trigger_outbox_event /
     // dead_letter_task 后是首次显式守护。
-    java.util.List<String> mismatches = new java.util.ArrayList<>();
+    List<String> mismatches = new ArrayList<>();
     for (String hot : archivedTables()) {
       var hotCols = check.columnsOf("batch", hot);
       var coldCols = check.columnsOf("archive", hot + "_archive");
@@ -81,9 +94,9 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
         // 表本身不存在 — skip(与 checkOnStartup 行为一致)
         continue;
       }
-      var missingInCold = new java.util.TreeSet<>(hotCols);
+      var missingInCold = new TreeSet<>(hotCols);
       missingInCold.removeAll(coldCols);
-      var missingInHot = new java.util.TreeSet<>(coldCols);
+      var missingInHot = new TreeSet<>(coldCols);
       missingInHot.removeAll(hotCols);
       if (!missingInCold.isEmpty() || !missingInHot.isEmpty()) {
         mismatches.add(hot + " | hot extra=" + missingInCold + " | cold extra=" + missingInHot);
@@ -100,7 +113,13 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // V71 DO $$ 块在每张 archive.*_archive 上加 pk_*_archive 约束,本 case 验证
     // 后续 migration 加新归档表(V139 trigger_outbox_event_archive / V140 dead_letter_task_archive)
     // 时是否也按同款式补了 PK。无 PK 会破坏归档 UPSERT 幂等(ON CONFLICT (id) DO NOTHING 找不到 target)。
-    java.util.List<String> missingPk = new java.util.ArrayList<>();
+    List<String> missingPk = new ArrayList<>();
+    String archivePrimaryKeyCountSql = """
+        SELECT count(*) FROM pg_constraint c
+        JOIN pg_class t ON t.oid = c.conrelid
+        JOIN pg_namespace n ON n.oid = t.relnamespace
+        WHERE n.nspname = 'archive' AND t.relname = ? AND c.contype = 'p'
+        """;
     for (String hot : archivedTables()) {
       String archiveTable = hot + "_archive";
       // 表不存在时跳过(与 columnsOf 行为一致)
@@ -108,13 +127,8 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
       if (coldCols.isEmpty()) {
         continue;
       }
-      Integer pkCount = jdbcTemplate.queryForObject(
-          "SELECT count(*) FROM pg_constraint c "
-              + "JOIN pg_class t ON t.oid = c.conrelid "
-              + "JOIN pg_namespace n ON n.oid = t.relnamespace "
-              + "WHERE n.nspname = 'archive' AND t.relname = ? AND c.contype = 'p'",
-          Integer.class,
-          archiveTable);
+      Integer pkCount =
+          jdbcTemplate.queryForObject(archivePrimaryKeyCountSql, Integer.class, archiveTable);
       if (pkCount == null || pkCount == 0) {
         missingPk.add(archiveTable);
       }
@@ -130,7 +144,10 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
     // 模拟:运维 ALTER batch.outbox_event ALTER COLUMN tenant_id TYPE varchar(128),
     // 但 archive.outbox_event_archive.tenant_id 仍是 varchar(64) — 列名集合相等,
     // 但 archive INSERT 在 tenantId 超过 64 字符时会截断 / 失败,checkOnStartup() 看不到。
-    jdbcTemplate.execute("alter table batch.outbox_event alter column tenant_id type varchar(128)");
+    String widenTenantIdColumnTypeSql = """
+        alter table batch.outbox_event alter column tenant_id type varchar(128)
+    """;
+    jdbcTemplate.execute(widenTenantIdColumnTypeSql);
 
     assertThatThrownBy(() -> check.checkColumnTypesOnStartup())
         .isInstanceOf(IllegalStateException.class)
@@ -142,11 +159,11 @@ class ArchiveSchemaDriftCheckIntegrationTest extends AbstractIntegrationTest {
    * 也能枚举全表。失败说明字段名/可见性变了,本测试应同步更新。
    */
   @SuppressWarnings("unchecked")
-  private static java.util.List<String> archivedTables() {
+  private static List<String> archivedTables() {
     try {
-      java.lang.reflect.Field f = ArchiveSchemaDriftCheck.class.getDeclaredField("ARCHIVED_TABLES");
+      Field f = ArchiveSchemaDriftCheck.class.getDeclaredField("ARCHIVED_TABLES");
       f.setAccessible(true);
-      return (java.util.List<String>) f.get(null);
+      return (List<String>) f.get(null);
     } catch (ReflectiveOperationException e) {
       throw new IllegalStateException("无法访问 ArchiveSchemaDriftCheck.ARCHIVED_TABLES", e);
     }

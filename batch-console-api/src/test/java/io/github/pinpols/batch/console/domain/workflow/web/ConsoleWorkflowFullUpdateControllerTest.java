@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.web;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,6 +15,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.workflow.application.ConsoleWorkflowTriggerService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
@@ -43,7 +45,7 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * <p>覆盖 3 case:成功、锁不归属(service 抛 CONFLICT)、嵌套 @Valid 校验失败。
  */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("ConsoleWorkflowFullUpdate Controller")
+@DisplayName("Workflow 全量更新接口的节点与边契约")
 class ConsoleWorkflowFullUpdateControllerTest {
 
   @Mock
@@ -71,8 +73,8 @@ class ConsoleWorkflowFullUpdateControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new ConsoleWorkflowDefinitionController(service, responseFactory, lockService))
+    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleWorkflowDefinitionController(
+            service, responseFactory, lockService, mock(ConsoleWorkflowTriggerService.class)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
@@ -138,15 +140,11 @@ class ConsoleWorkflowFullUpdateControllerTest {
   }
 
   @Test
-  @DisplayName(
-      "FILE_STEP pipelineCode 不存在:service 抛 VALIDATION_ERROR → 400 file_step_pipeline_not_found")
-  void shouldReturnBadRequest_whenFileStepPipelineNotFound() throws Exception {
+  @DisplayName("FILE_STEP 新写入已退役:service 抛 VALIDATION_ERROR → 400 file_step_retired")
+  void shouldReturnBadRequest_whenFileStepIsRetired() throws Exception {
     when(service.fullUpdate(eq(42L), any(), eq(USER_ALICE)))
         .thenThrow(BizException.of(
-            ResultCode.VALIDATION_ERROR,
-            "error.workflow.dag.file_step_pipeline_not_found",
-            "fs",
-            "ghost_pipeline"));
+            ResultCode.VALIDATION_ERROR, "error.workflow.dag.file_step_retired", "fs"));
 
     mockMvc
         .perform(put("/api/console/workflow-definitions/42/full")
@@ -166,12 +164,29 @@ class ConsoleWorkflowFullUpdateControllerTest {
             "workflowCode": "wf_ok",
             "workflowName": "wf",
             "workflowType": "DAG",
-            "nodes": [{"nodeCode": "bad code", "nodeType": "TASK"}],
+            "nodes": [{"nodeCode": "bad code", "nodeName": "name", "nodeType": "TASK"}],
             "edges": []
           },
           "expectedVersion": 1
         }
         """.stripTrailing();
+    mockMvc
+        .perform(put("/api/console/workflow-definitions/42/full")
+            .contentType(APPLICATION_JSON)
+            .content(body))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+    verify(service, never()).fullUpdate(any(Long.class), any(), any());
+  }
+
+  @Test
+  @DisplayName("全量保存缺少节点名称时拒绝且不调用服务")
+  void shouldRejectMissingNodeName_whenUpdatingWorkflow() throws Exception {
+    String body = """
+        {"definition":{"tenantId":"ta","workflowCode":"wf_ok","workflowName":"wf",
+         "workflowType":"DAG","nodes":[{"nodeCode":"start","nodeType":"START"}]},
+         "expectedVersion":1}
+        """;
     mockMvc
         .perform(put("/api/console/workflow-definitions/42/full")
             .contentType(APPLICATION_JSON)
@@ -190,8 +205,8 @@ class ConsoleWorkflowFullUpdateControllerTest {
             "workflowName": "wf",
             "workflowType": "DAG",
             "nodes": [
-              {"nodeCode": "start", "nodeType": "START"},
-              {"nodeCode": "end", "nodeType": "END"}
+              {"nodeCode": "start", "nodeName": "start", "nodeType": "START"},
+              {"nodeCode": "end", "nodeName": "end", "nodeType": "END"}
             ],
             "edges": [{"fromNodeCode": "start", "toNodeCode": "end"}]
           },

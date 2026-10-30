@@ -13,6 +13,7 @@ public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implemen
 
   private Long id;
   private Long workflowRunId;
+  private Long jobInstanceId;
   private String nodeCode;
   private String nodeType;
 
@@ -30,6 +31,9 @@ public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implemen
 
   private String errorCode;
 
+  private String skipReasonCode;
+  private String skipReason;
+
   private Instant startedAt;
   private Instant finishedAt;
   private Long durationMs;
@@ -39,6 +43,9 @@ public class WorkflowNodeRunEntity extends AbstractLocalizedErrorEntity implemen
    * 引用)。读取时反序列化为 Map。
    */
   private String output;
+
+  /** 仅在可恢复的跨日依赖等待期间保留的加密启动上下文。 */
+  private String sourcePayloadProtected;
 
   // ── ADR-028 Sensor WAIT 节点探测状态（V121） ────────────────────────────────────
   private Instant sensorNextProbeAt;

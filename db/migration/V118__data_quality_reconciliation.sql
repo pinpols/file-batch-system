@@ -10,16 +10,22 @@
 -- =====================================================================
 
 -- ── data_quality_rule（DQ 规则定义） ──────────────────────────────────
+
 CREATE TABLE IF NOT EXISTS batch.data_quality_rule (
     id                  BIGSERIAL PRIMARY KEY,
     tenant_id           VARCHAR(64)  NOT NULL,
     rule_code           VARCHAR(128) NOT NULL,
     rule_name           VARCHAR(256) NOT NULL,
-    rule_type           VARCHAR(32)  NOT NULL,     -- ROW_LEVEL / TABLE_LEVEL / CROSS_TABLE / CROSS_DAY
-    scope_business_key  VARCHAR(256) NOT NULL,     -- 关联 result_version.business_key（如 job:DAILY_PNL:）
-    expression          TEXT         NOT NULL,     -- 规则表达式（SQL / JSONLogic / SPI ref）
-    threshold_json      JSONB,                     -- {maxFailRows, failRatio, deltaTolerance...}
-    severity            VARCHAR(16)  NOT NULL DEFAULT 'WARN',  -- BLOCKER / WARN / INFO
+    -- ROW_LEVEL / TABLE_LEVEL / CROSS_TABLE / CROSS_DAY
+    rule_type           VARCHAR(32)  NOT NULL,
+    -- 关联 result_version.business_key（如 job:DAILY_PNL:）
+    scope_business_key  VARCHAR(256) NOT NULL,
+    -- 规则表达式（SQL / JSONLogic / SPI ref）
+    expression          TEXT         NOT NULL,
+    -- {maxFailRows, failRatio, deltaTolerance...}
+    threshold_json      JSONB,
+    -- BLOCKER / WARN / INFO
+    severity            VARCHAR(16)  NOT NULL DEFAULT 'WARN',
     enabled             BOOLEAN      NOT NULL DEFAULT TRUE,
     description         VARCHAR(512),
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -40,18 +46,25 @@ COMMENT ON COLUMN batch.data_quality_rule.severity IS
     'BLOCKER 失败阻塞 EFFECTIVE 链路（强制 MANUAL_APPROVAL）；WARN 仅记录；INFO 仅观测';
 
 -- ── data_quality_check（一次 job 的 DQ 检查实例） ────────────────────
+
 CREATE TABLE IF NOT EXISTS batch.data_quality_check (
     id                  BIGSERIAL PRIMARY KEY,
     tenant_id           VARCHAR(64)  NOT NULL,
     job_instance_id     BIGINT       NOT NULL,
-    rule_id             BIGINT,                     -- NULL = SPI sink 写入，无规则 id 关联
-    rule_code           VARCHAR(128) NOT NULL,      -- 冗余 rule_code 让 audit 可读
+    -- NULL = SPI sink 写入，无规则 id 关联
+    rule_id             BIGINT,
+    -- 冗余 rule_code 让 audit 可读
+    rule_code           VARCHAR(128) NOT NULL,
     rule_type           VARCHAR(32)  NOT NULL,
     severity            VARCHAR(16)  NOT NULL,
-    status              VARCHAR(16)  NOT NULL,      -- PASS / WARN / FAIL / SKIPPED / ERROR
-    metrics_json        JSONB,                      -- 命中数 / 比例 / 偏差等
-    failure_sample      JSONB,                      -- 前 N 条失败样本（限 50 条 / 64KB）
-    error_message       VARCHAR(2048),              -- 规则执行失败时的错误信息
+    -- PASS / WARN / FAIL / SKIPPED / ERROR
+    status              VARCHAR(16)  NOT NULL,
+    -- 命中数 / 比例 / 偏差等
+    metrics_json        JSONB,
+    -- 前 N 条失败样本（限 50 条 / 64KB）
+    failure_sample      JSONB,
+    -- 规则执行失败时的错误信息
+    error_message       VARCHAR(2048),
     checked_at          TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT ck_dq_check_status
@@ -67,6 +80,7 @@ COMMENT ON TABLE batch.data_quality_check IS
     'ADR-021 单次 job_instance 的对账检查结果；多条 rule 并行写多行';
 
 -- ── archive 镜像（V71 14 张归档对照表 + 本次新增 2 张，archive drift check 自动覆盖） ──
+
 CREATE TABLE IF NOT EXISTS archive.data_quality_rule_archive (
     LIKE batch.data_quality_rule INCLUDING DEFAULTS INCLUDING CONSTRAINTS
 );
@@ -75,6 +89,7 @@ CREATE TABLE IF NOT EXISTS archive.data_quality_check_archive (
 );
 
 -- ── result_version 加 dq_gate_status 列：标记 EFFECTIVE 推进时 DQ 是否过关 ──
+
 ALTER TABLE batch.result_version
     ADD COLUMN IF NOT EXISTS dq_gate_status VARCHAR(16);
 

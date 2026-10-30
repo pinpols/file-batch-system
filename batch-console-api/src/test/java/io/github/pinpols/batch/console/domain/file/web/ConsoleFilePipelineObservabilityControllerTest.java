@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.file.web;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -22,17 +21,23 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 
 @DisplayName("文件流水线可观测控制器: 列表与详情查询接口")
+@ExtendWith(MockitoExtension.class)
 class ConsoleFilePipelineObservabilityControllerTest {
 
-  private final ConsoleQueryApplicationService queryApplicationService =
-      mock(ConsoleQueryApplicationService.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleQueryApplicationService queryApplicationService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
 
   @BeforeEach
@@ -65,7 +70,6 @@ class ConsoleFilePipelineObservabilityControllerTest {
             List.of(new ConsoleFilePipelineResponse(
                 1L,
                 "t1",
-                1001L,
                 "file-001",
                 "IMPORT",
                 2001L,
@@ -94,7 +98,6 @@ class ConsoleFilePipelineObservabilityControllerTest {
         .thenReturn(new ConsoleFilePipelineResponse(
             1L,
             "t1",
-            1001L,
             "file-001",
             "IMPORT",
             2001L,

@@ -2,15 +2,18 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.NotificationDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.SubscriptionRuleMapper;
+import io.github.pinpols.batch.console.domain.notification.param.NotificationDeliveryLogInsertParam;
+import io.github.pinpols.batch.console.domain.notification.view.EnabledSubscriptionRuleRow;
 import io.github.pinpols.batch.console.support.ratelimit.SlidingWindowRateLimiter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PreDestroy;
 import java.time.Instant;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -22,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.HtmlUtils;
 
 /**
  * P1-2(2026-06-15):把前端配置的「通知中心」规则({@code subscription_rule} + {@code notification_channel})接进事件投递链。
@@ -133,37 +137,34 @@ public class SubscriptionRuleWebhookDispatcher {
       Object data,
       Instant emittedAt) {
     String normalizedEventType = dispatchPolicy.normalizeEventType(eventType);
-    List<Map<String, Object>> rules =
+    List<EnabledSubscriptionRuleRow> rules =
         subscriptionRuleMapper.selectEnabledByEventType(tenantId, normalizedEventType);
     if (rules == null || rules.isEmpty()) {
       return;
     }
     Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);
+    Instant effectiveEmittedAt =
+        EmptyChecks.isNull(emittedAt) ? BatchDateTimeSupport.utcNow() : emittedAt;
     WebhookEventPayload payload = new WebhookEventPayload(
-        tenantId,
-        normalizedEventType,
-        stream,
-        cursor,
-        emittedAt == null ? BatchDateTimeSupport.utcNow() : emittedAt,
-        data);
+        tenantId, normalizedEventType, stream, cursor, effectiveEmittedAt, data);
     String payloadJson = JsonUtils.toJson(payload);
 
-    for (Map<String, Object> rule : rules) {
+    for (EnabledSubscriptionRuleRow rule : rules) {
       dispatchRule(tenantId, rule, normalizedEventType, dataMap, payload, payloadJson);
     }
   }
 
   private void dispatchRule(
       String tenantId,
-      Map<String, Object> rule,
+      EnabledSubscriptionRuleRow rule,
       String eventType,
       Map<String, Object> dataMap,
       WebhookEventPayload payload,
       String payloadJson) {
-    String channelCode = str(rule, "channel_code");
-    String channelType = str(rule, "channel_type");
+    String channelCode = rule.channelCode();
+    String channelType = rule.channelType();
 
-    // selectEnabledByEventType 用 LIKE '%type%' 粗筛,这里做精确的「逗号分隔成员」复核,避免 JOB 命中 JOB_FAILED 之类子串误配。
+    // SQL 仅保守预筛选；这里统一匹配事件、级别与作业过滤条件。
     if (!dispatchPolicy.matches(rule, eventType, dataMap)) {
       return;
     }
@@ -199,12 +200,7 @@ public class SubscriptionRuleWebhookDispatcher {
         return;
       }
       NotificationMessage message = new NotificationMessage(
-          str(rule, "tenant_id"),
-          channelCode,
-          channelType,
-          str(rule, "config_json"),
-          payload,
-          payloadJson);
+          rule.tenantId(), channelCode, channelType, rule.configJson(), payload, payloadJson);
       try {
         executor.submit(
             () -> deliverViaSenderWithBurstRetry(sender, message, eventType, logContext));
@@ -243,8 +239,8 @@ public class SubscriptionRuleWebhookDispatcher {
    * WebhookDispatcher#attemptDelivery},不写入数据库。
    */
   private WebhookSubscriptionEntity toSyntheticSubscription(
-      String channelCode, Map<String, Object> rule) {
-    Map<String, Object> config = dispatchPolicy.parseConfig(str(rule, "config_json"));
+      String channelCode, EnabledSubscriptionRuleRow rule) {
+    Map<String, Object> config = dispatchPolicy.parseConfig(rule.configJson());
     String url = str(config, CONFIG_KEY_URL);
     if (url == null || url.isBlank()) {
       log.warn(
@@ -253,7 +249,7 @@ public class SubscriptionRuleWebhookDispatcher {
       return null;
     }
     WebhookSubscriptionEntity entity = new WebhookSubscriptionEntity();
-    entity.setTenantId(str(rule, "tenant_id"));
+    entity.setTenantId(rule.tenantId());
     entity.setName(channelCode);
     entity.setCallbackUrl(url);
     entity.setSecret(str(config, CONFIG_KEY_SECRET));
@@ -296,7 +292,7 @@ public class SubscriptionRuleWebhookDispatcher {
             channelCode,
             MAX_ATTEMPTS,
             result.httpStatus(),
-            result.errorSummary());
+            safeDeliveryError(result.errorSummary()));
       }
     }
     persistDeliveryLog(
@@ -337,7 +333,7 @@ public class SubscriptionRuleWebhookDispatcher {
             message.channelCode(),
             MAX_ATTEMPTS,
             result.httpStatus(),
-            result.errorSummary());
+            safeDeliveryError(result.errorSummary()));
       }
     }
     persistDeliveryLog(
@@ -354,16 +350,17 @@ public class SubscriptionRuleWebhookDispatcher {
       return;
     }
     try {
-      Map<String, Object> row = new LinkedHashMap<>();
-      row.put("tenantId", ctx.tenantId());
-      row.put("ruleId", ctx.ruleId());
-      row.put("channelCode", ctx.channelCode());
-      row.put("eventType", ctx.eventType());
-      row.put("alertEventId", ctx.alertEventId());
-      row.put("payloadJson", ctx.payloadJson());
-      row.put("deliveryStatus", deliveryStatus);
-      row.put("errorMessage", truncate(errorMessage));
-      row.put("attempt", attempt);
+      NotificationDeliveryLogInsertParam row = NotificationDeliveryLogInsertParam.builder()
+          .tenantId(ctx.tenantId())
+          .ruleId(ctx.ruleId())
+          .channelCode(ctx.channelCode())
+          .eventType(ctx.eventType())
+          .alertEventId(ctx.alertEventId())
+          .payloadJson(ctx.payloadJson())
+          .deliveryStatus(deliveryStatus)
+          .errorMessage(safeDeliveryError(errorMessage))
+          .attempt(attempt)
+          .build();
       deliveryLogMapper.insert(row);
     } catch (RuntimeException ex) {
       log.warn(
@@ -377,18 +374,16 @@ public class SubscriptionRuleWebhookDispatcher {
   }
 
   private DeliveryLogContext deliveryLogContext(
-      Map<String, Object> rule,
+      EnabledSubscriptionRuleRow rule,
       String channelCode,
       String eventType,
       Map<String, Object> dataMap,
       String payloadJson) {
+    String tenantId = rule.tenantId();
+    Long ruleId = rule.id();
+    Long alertEventId = extractAlertEventId(dataMap);
     return new DeliveryLogContext(
-        str(rule, "tenant_id"),
-        toLong(rule.get("id")),
-        channelCode,
-        eventType,
-        extractAlertEventId(dataMap),
-        payloadJson);
+        tenantId, ruleId, channelCode, eventType, alertEventId, payloadJson);
   }
 
   private static Long extractAlertEventId(Map<String, Object> dataMap) {
@@ -407,7 +402,8 @@ public class SubscriptionRuleWebhookDispatcher {
     }
     if (value instanceof String s && !s.isBlank()) {
       try {
-        return Long.parseLong(s.trim());
+        String trimmedValue = s.trim();
+        return Long.parseLong(trimmedValue);
       } catch (NumberFormatException ex) {
         return null;
       }
@@ -415,12 +411,13 @@ public class SubscriptionRuleWebhookDispatcher {
     return null;
   }
 
-  private static String truncate(String value) {
+  private static String safeDeliveryError(String value) {
     if (value == null) {
       return null;
     }
-    // error_message 列 VARCHAR(1024);保守截断。
-    return value.length() > 1024 ? value.substring(0, 1024) : value;
+    // error_message 列 VARCHAR(1024);先还原实体并遮罩凭据，再截断。
+    String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
+    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
   }
 
   /** 一次真实投递落审计日志所需的最小上下文(投递前从规则/事件抽取,喂给投递线程)。 */

@@ -24,7 +24,7 @@ public class ConfigSyncImportRequest {
 
   @NotEmpty
   @Size(max = 50)
-  private List<@Size(min = 1, max = 64) String> targetTenantIds;
+  private List<@NotBlank @Size(min = 1, max = 64) String> targetTenantIds;
 
   private TenantConfigBatchInitRequest.InitMode mode =
       TenantConfigBatchInitRequest.InitMode.SKIP_EXISTING;

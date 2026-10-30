@@ -3,11 +3,14 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
 import io.github.pinpols.batch.console.domain.audit.infrastructure.ai.ConsoleAiAttachmentService;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiAttachmentMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.util.UUID;
@@ -47,6 +50,17 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("附件绑定: 非属主绑定不生效,属主绑定成功,会话级联删除后对象键仍待清理")
   void shouldBindOwnedDraftAndKeepCleanupKey_whenConversationCascades() {
+    final String insertConsoleAiConversationSql = """
+          INSERT INTO batch.console_ai_conversation
+              (id, tenant_id, owner_user_id, context_version, expires_at)
+          VALUES ('conversation-1', ?, 'owner-a', 'v1', CURRENT_TIMESTAMP + INTERVAL '1 day')
+          """;
+    final String insertConsoleAiTurnSql = """
+          INSERT INTO batch.console_ai_turn
+              (tenant_id, conversation_id, turn_no, context_version, prompt_text)
+          VALUES (?, 'conversation-1', 1, 'v1', 'ciphertext')
+          """;
+
     String tenant = "ai-attachment-" + UUID.randomUUID();
     String otherTenant = "ai-attachment-" + UUID.randomUUID();
     UUID attachmentId = UUID.randomUUID();
@@ -56,16 +70,8 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
 
     tx.executeWithoutResult(status -> {
       attachments.setTenantContext(tenant);
-      jdbc.update("""
-          INSERT INTO batch.console_ai_conversation
-              (id, tenant_id, owner_user_id, context_version, expires_at)
-          VALUES ('conversation-1', ?, 'owner-a', 'v1', CURRENT_TIMESTAMP + INTERVAL '1 day')
-          """, tenant);
-      jdbc.update("""
-          INSERT INTO batch.console_ai_turn
-              (tenant_id, conversation_id, turn_no, context_version, prompt_text)
-          VALUES (?, 'conversation-1', 1, 'v1', 'ciphertext')
-          """, tenant);
+      jdbc.update(insertConsoleAiConversationSql, tenant);
+      jdbc.update(insertConsoleAiTurnSql, tenant);
       ConsoleAiAttachmentEntity row = new ConsoleAiAttachmentEntity();
       row.setTenantId(tenant);
       row.setId(attachmentId);
@@ -81,23 +87,32 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
       assertThat(attachments.retainedBytesForUser(tenant, "owner-a")).isEqualTo(100L);
       assertThat(attachments.retainedBytesForTenant(tenant)).isEqualTo(100L);
       assertThat(attachments.lockUploadQuota(tenant)).isEqualTo(1);
-      assertThat(attachments.markDraft(tenant, attachmentId, "image/png", 100, 16, 16))
+      assertThat(attachments.markDraft(ConsoleAiAttachmentMarkDraftParam.builder()
+              .tenantId(tenant)
+              .id(attachmentId)
+              .mediaType("image/png")
+              .byteSize(100)
+              .width(16)
+              .height(16)
+              .build()))
           .isEqualTo(1);
-      assertThat(attachments.bind(
-              tenant,
-              attachmentId,
-              "owner-b",
-              "conversation-1",
-              1,
-              Instant.now().plusSeconds(3600)))
+      assertThat(attachments.bind(ConsoleAiAttachmentBindParam.builder()
+              .tenantId(tenant)
+              .id(attachmentId)
+              .ownerUserId("owner-b")
+              .conversationId("conversation-1")
+              .turnNo(1)
+              .expiresAt(Instant.now().plusSeconds(3600))
+              .build()))
           .isZero();
-      assertThat(attachments.bind(
-              tenant,
-              attachmentId,
-              "owner-a",
-              "conversation-1",
-              1,
-              Instant.now().plusSeconds(3600)))
+      assertThat(attachments.bind(ConsoleAiAttachmentBindParam.builder()
+              .tenantId(tenant)
+              .id(attachmentId)
+              .ownerUserId("owner-a")
+              .conversationId("conversation-1")
+              .turnNo(1)
+              .expiresAt(Instant.now().plusSeconds(3600))
+              .build()))
           .isEqualTo(1);
       assertThat(attachments.byTurn(tenant, "conversation-1", 1)).hasSize(1);
       assertThat(attachments.byClientId(tenant, "owner-a", clientId).getId())
@@ -136,12 +151,20 @@ class ConsoleAiAttachmentIntegrationTest extends AbstractIntegrationTest {
       row.setByteSize(100L);
       row.setExpiresAt(Instant.now().plusSeconds(3600));
       assertThat(attachments.insert(row)).isEqualTo(1);
-      assertThat(attachments.markDraft(tenant, id, "image/png", 100, 16, 16)).isEqualTo(1);
+      assertThat(attachments.markDraft(ConsoleAiAttachmentMarkDraftParam.builder()
+              .tenantId(tenant)
+              .id(id)
+              .mediaType("image/png")
+              .byteSize(100)
+              .width(16)
+              .height(16)
+              .build()))
+          .isEqualTo(1);
     });
 
     assertThatThrownBy(() -> attachmentService.content(tenant, "owner-a", id))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class);
+        .isInstanceOf(BizException.class);
     assertThatThrownBy(() -> attachmentService.content(tenant, "owner-b", id))
-        .isInstanceOf(io.github.pinpols.batch.common.exception.BizException.class);
+        .isInstanceOf(BizException.class);
   }
 }

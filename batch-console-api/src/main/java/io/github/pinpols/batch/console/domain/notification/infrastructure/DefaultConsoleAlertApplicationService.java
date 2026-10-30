@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -58,8 +57,8 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   private ConsoleAlertActionResponse transition(
       Long alertId, AlertActionRequest request, String nextStatus, String action) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
-    AlertEventEntity entity =
-        Guard.requireFound(alertEventMapper.selectById(tenantId, alertId), "alert event not found");
+    AlertEventEntity entity = alertEventMapper.selectById(tenantId, alertId);
+    Guard.requireFound(entity, "alert event not found");
     String currentStatus = normalizeStatus(entity.getStatus());
     if (nextStatus.equals(currentStatus)) {
       return new ConsoleAlertActionResponse(alertId, tenantId, action, currentStatus);
@@ -99,25 +98,8 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
       // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
       alertmanagerSilenceBridge.silence(entity, null);
     } else if (STATUS_CLOSED.equals(nextStatus)) {
-      resolveAmGroupIfInactive(entity);
-    }
-  }
-
-  private void resolveAmGroupIfInactive(AlertEventEntity entity) {
-    try {
-      long activePeers = alertEventMapper.countActiveAlertsInAmGroup(
-          entity.getTenantId(),
-          entity.getServiceName(),
-          entity.getAlertType(),
-          entity.getSeverity(),
-          entity.getId());
-      if (activePeers == 0) {
-        alertmanagerSilenceBridge.resolve(entity);
-      }
-    } catch (RuntimeException exception) {
-      // 关闭已在事务中提交；解除通知查询失败不得把已成功的运维操作伪装成失败。
-      SwallowedExceptionLogger.warn(
-          DefaultConsoleAlertApplicationService.class, "catch:resolveAlertGroup", exception);
+      // AM 按 fingerprint 区分实体；同组其它告警不应阻止当前实体解除。
+      alertmanagerSilenceBridge.resolve(entity);
     }
   }
 

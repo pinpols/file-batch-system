@@ -61,7 +61,11 @@ public class UpstreamReadinessChecker implements UpstreamReadinessPort {
         return Optional.empty();
       }
       // 与旧 Orchestrator 混合部署时响应可能没有 readyAt；以本次通过门禁的时刻作为兼容基准。
-      return Optional.ofNullable(response.readyAt()).or(() -> Optional.of(Instant.now()));
+      Instant responseReadyAt = response.readyAt();
+      if (EmptyChecks.isNull(responseReadyAt)) {
+        return Optional.of(Instant.now());
+      }
+      return Optional.of(responseReadyAt);
     } catch (RuntimeException e) {
       log.error(
           "upstream readiness check failed, fail-closed (skip fire): tenantId={} upstream={} "

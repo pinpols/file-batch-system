@@ -67,7 +67,10 @@ public final class DelimitedCodec {
           || f.indexOf('\r') >= 0;
       if (needQuote) {
         sb.append(quote);
-        sb.append(f.replace(String.valueOf(quote), "" + quote + quote));
+        String quoteText = String.valueOf(quote);
+        String doubledQuote = quoteText + quote;
+        String escapedField = f.replace(quoteText, doubledQuote);
+        sb.append(escapedField);
         sb.append(quote);
       } else {
         sb.append(f);

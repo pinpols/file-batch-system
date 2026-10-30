@@ -3,16 +3,17 @@ package io.github.pinpols.batch.worker.dispatchs.infrastructure.channel;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchChannelHealthProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchCircuitBreakerProperties;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.ChannelConfigMerge;
+import io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -21,13 +22,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -53,9 +55,8 @@ public class DispatchChannelHealthService {
   // 单次探针查询上限，防止渠道数量过大时探针调度器阻塞 DB 连接池
   private static final int MAX_PROBE_CHANNEL_BATCH = 1000;
 
-  // R-A1-P1：并行探针线程池规模 + 单条探针超时上限。
-  // 串行处理 1000 个渠道时，SFTP connect 30s 阻塞会让 Spring 默认单线程 taskScheduler 积压数百分钟；
-  // 固定 8 线程 + 5s 超时把最坏情况收敛到 ~1000/8*5s ≈ 10 分钟，且单条慢节点不影响其他渠道。
+  // R-A1-P1：固定 8 线程，每批 5s 等待；1000 个探针全部阻塞时，调度等待约 125*5s，另计取消和日志开销。
+  // Future 取消依赖底层 I/O 响应中断，网络客户端仍须设置自身超时。
   private static final int PROBE_PARALLELISM = 8;
   private static final long PROBE_TIMEOUT_SECONDS = 5L;
 
@@ -76,7 +77,7 @@ public class DispatchChannelHealthService {
   private final AtomicLong probeFailureCount = new AtomicLong();
   private ExecutorService probeExecutor;
 
-  // Spring DI compatibility overload; the parameter count is intentional to preserve the old
+  // Spring DI 兼容重载；此处有意保留参数数量，以兼容旧版
   // test/API constructor.
   @SuppressWarnings("PMD.ExcessiveParameterList")
   public DispatchChannelHealthService(
@@ -146,7 +147,9 @@ public class DispatchChannelHealthService {
   }
 
   public boolean allowDispatch(Map<String, Object> channelConfig) {
-    if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
+    boolean channelHealthCheckIsUnavailable =
+        !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+    if (channelHealthCheckIsUnavailable) {
       return true;
     }
     ChannelIdentity channel = ChannelIdentity.from(channelConfig);
@@ -173,7 +176,9 @@ public class DispatchChannelHealthService {
     // A-3.9：半开阶段只让一个线程拿到探针机会——CAS 把 next_probe_at 推到未来，
     // 失败即说明另一线程已抢到通行证。holdMillis 覆盖典型 dispatch 最长耗时，
     // 防止本线程还没 recordDispatchOutcome 就又有新线程通过。
-    Instant hold = now.plusMillis(Math.max(1_000L, properties.getHalfOpenHoldMillis()));
+    long configuredHoldMillis = properties.getHalfOpenHoldMillis();
+    long halfOpenHoldMillis = Math.max(1_000L, configuredHoldMillis);
+    Instant hold = now.plusMillis(halfOpenHoldMillis);
     boolean claimed =
         repository.tryClaimHalfOpenProbe(channel.tenantId(), channel.channelCode(), now, hold);
     if (!claimed && log.isDebugEnabled()) {
@@ -187,7 +192,9 @@ public class DispatchChannelHealthService {
 
   public void recordDispatchOutcome(
       Map<String, Object> channelConfig, boolean success, String message, String evidence) {
-    if (!properties.isEnabled() || channelConfig == null || channelConfig.isEmpty()) {
+    boolean channelFailureTrackingIsUnavailable =
+        !properties.isEnabled() || EmptyChecks.isEmpty(channelConfig);
+    if (channelFailureTrackingIsUnavailable) {
       return;
     }
     ChannelIdentity channel = ChannelIdentity.from(channelConfig);
@@ -197,12 +204,16 @@ public class DispatchChannelHealthService {
     Instant now = BatchDateTimeSupport.utcNow();
     if (success) {
       // P2：成功走原子 upsert——HEALTHY + failures=0 + next_probe=now+probeInterval
-      DispatchHealthUpsertCommand successCmd = DispatchHealthUpsertCommand.builder()
-          .tenantId(channel.tenantId())
-          .channelCode(channel.channelCode())
-          .channelType(channel.channelType())
-          .now(now)
-          .nextProbeAt(now.plusMillis(properties.getProbeIntervalMillis()))
+      DispatchHealthUpsertCommand.DispatchHealthUpsertCommandBuilder successCommand =
+          DispatchHealthUpsertCommand.builder()
+              .tenantId(channel.tenantId())
+              .channelCode(channel.channelCode())
+              .channelType(channel.channelType())
+              .now(now);
+      long probeIntervalMillis = properties.getProbeIntervalMillis();
+      Instant nextProbeAt = now.plusMillis(probeIntervalMillis);
+      DispatchHealthUpsertCommand successCmd = successCommand
+          .nextProbeAt(nextProbeAt)
           .probeMessage(message)
           .probeEvidence(evidence)
           .build();
@@ -214,14 +225,18 @@ public class DispatchChannelHealthService {
     // 首次失败（INSERT 路径）用 base probeInterval 做 placeholder。
     // 第 2 步 recalcBackoff：按 RETURNING 得到的 failures 重算真实 next_probe_at（指数退避），
     // 并以 failures 作为 CAS 前态，防止旧线程覆盖更新后的更长退避或成功状态。
-    Instant firstFailureBackoffAt = now.plusMillis(properties.getProbeIntervalMillis());
-    DispatchHealthUpsertCommand failureCmd = DispatchHealthUpsertCommand.builder()
-        .tenantId(channel.tenantId())
-        .channelCode(channel.channelCode())
-        .channelType(channel.channelType())
-        .now(now)
-        .nextProbeAt(firstFailureBackoffAt)
-        .failureThreshold(Math.max(1, circuitBreakerProperties.getFailureThreshold()))
+    DispatchHealthUpsertCommand.DispatchHealthUpsertCommandBuilder failureCommand =
+        DispatchHealthUpsertCommand.builder()
+            .tenantId(channel.tenantId())
+            .channelCode(channel.channelCode())
+            .channelType(channel.channelType())
+            .now(now);
+    long probeIntervalMillis = properties.getProbeIntervalMillis();
+    Instant firstFailureBackoffAt = now.plusMillis(probeIntervalMillis);
+    failureCommand.nextProbeAt(firstFailureBackoffAt);
+    int failureThreshold = Math.max(1, circuitBreakerProperties.getFailureThreshold());
+    DispatchHealthUpsertCommand failureCmd = failureCommand
+        .failureThreshold(failureThreshold)
         .probeMessage(message)
         .probeEvidence(evidence)
         .build();
@@ -244,7 +259,8 @@ public class DispatchChannelHealthService {
    * {@code least(greatest(...,0),30)} 一致。
    */
   private Instant computeExponentialBackoffNextProbeAt(Instant now, long failures) {
-    long exponent = Math.min(Math.max(failures - 1L, 0L), 30L);
+    long minimumExponent = Math.max(failures - 1L, 0L);
+    long exponent = Math.min(minimumExponent, 30L);
     long backoffMillis = Math.min(properties.getMaxBackoffMillis(), (long)
         (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
     return now.plusMillis(backoffMillis);
@@ -254,83 +270,91 @@ public class DispatchChannelHealthService {
     if (!properties.isEnabled() || stopping.get()) {
       return;
     }
-    List<Map<String, Object>> rows = repository.findEnabledProbeChannels(
-        properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH);
+    List<Map<String, Object>> rows = repository
+        .findEnabledProbeChannels(properties.getProbeChannelTypes(), MAX_PROBE_CHANNEL_BATCH)
+        .stream()
+        .map(DispatchChannelConfigView::toPluginValues)
+        .toList();
     if (rows.isEmpty() || stopping.get()) {
       return;
     }
-    // R-A1-P1：并行提交所有探针任务，单条 5s 超时；调度线程只等总聚合结果，不被任意单条慢节点拖住。
-    // 不用 invokeAll(timeout) 整体超时（早完成的探针会浪费窗口），改为每个 Future 各自 get(5s)。
-    List<Future<?>> futures = new ArrayList<>(rows.size());
-    for (Map<String, Object> row : rows) {
+    // 每批最多占满线程池；同批共享 5s 截止时间，避免逐个 get(5s) 把阻塞时间累加到渠道数。
+    // 每次只提交一批；取消不响应中断的 I/O 仍可能留下未结束的线程，需由客户端超时兜底。
+    for (int start = 0; start < rows.size(); start += PROBE_PARALLELISM) {
       if (stopping.get()) {
         return;
       }
-      futures.add(probeExecutor.submit(() -> probeOneSafely(row)));
-    }
-    for (int i = 0; i < futures.size(); i++) {
-      if (stopping.get()) {
-        futures.forEach(future -> future.cancel(true));
-        return;
+      List<Map<String, Object>> batch =
+          rows.subList(start, Math.min(start + PROBE_PARALLELISM, rows.size()));
+      List<Callable<Void>> tasks = new ArrayList<>(batch.size());
+      for (Map<String, Object> row : batch) {
+        tasks.add(() -> {
+          probeOne(row);
+          return null;
+        });
       }
-      Future<?> future = futures.get(i);
-      Map<String, Object> row = rows.get(i);
+      List<Future<Void>> futures;
       try {
-        future.get(PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
-      } catch (TimeoutException timeout) {
-        future.cancel(true);
-        probeFailureCount.incrementAndGet();
-        log.warn(
-            "dispatch channel probe timed out after {}s: row={}",
-            PROBE_TIMEOUT_SECONDS,
-            SecretMasking.maskSensitiveKeys(row));
-      } catch (ExecutionException executionEx) {
-        probeFailureCount.incrementAndGet();
-        log.warn(
-            "dispatch channel probe exception: error={}, row={}",
-            executionEx.getCause() == null
-                ? SwallowedExceptionLogger.summary(executionEx)
-                : SwallowedExceptionLogger.summary(executionEx.getCause()),
-            SecretMasking.maskSensitiveKeys(row),
-            executionEx.getCause() == null ? executionEx : executionEx.getCause());
+        futures = probeExecutor.invokeAll(tasks, PROBE_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
-        future.cancel(true);
         if (stopping.get()) {
-          log.info(
-              "dispatch channel probe interrupted during shutdown: row={}",
-              SecretMasking.maskSensitiveKeys(row));
+          log.info("dispatch channel probe interrupted during shutdown");
           return;
         }
-        log.warn(
-            "dispatch channel probe interrupted: row={}", SecretMasking.maskSensitiveKeys(row));
+        log.warn("dispatch channel probe interrupted");
         return;
+      }
+      for (int index = 0; index < futures.size(); index++) {
+        if (stopping.get()) {
+          futures.forEach(future -> future.cancel(true));
+          return;
+        }
+        Future<Void> future = futures.get(index);
+        Map<String, Object> row = batch.get(index);
+        if (future.isCancelled()) {
+          recordProbeTimeout(row);
+          continue;
+        }
+        try {
+          future.get();
+        } catch (CancellationException cancelled) {
+          recordProbeTimeout(row);
+        } catch (ExecutionException executionEx) {
+          probeFailureCount.incrementAndGet();
+          Throwable probeCause = executionEx.getCause();
+          Throwable reportedFailure = EmptyChecks.isNull(probeCause) ? executionEx : probeCause;
+          String errorSummary = SwallowedExceptionLogger.summary(reportedFailure);
+          log.warn(
+              "dispatch channel probe exception: error={}, channel={}",
+              errorSummary,
+              probeLogIdentity(row));
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          futures.forEach(pending -> pending.cancel(true));
+          if (stopping.get()) {
+            log.info(
+                "dispatch channel probe interrupted during shutdown: channel={}",
+                probeLogIdentity(row));
+          } else {
+            log.warn("dispatch channel probe interrupted: channel={}", probeLogIdentity(row));
+          }
+          return;
+        }
       }
     }
   }
 
-  private void probeOneSafely(Map<String, Object> row) {
-    if (stopping.get()) {
-      return;
-    }
-    try {
-      probeOne(row);
-    } catch (Exception exception) {
-      if (stopping.get()) {
-        log.info(
-            "dispatch channel probe skipped during shutdown: error={}, row={}",
-            SwallowedExceptionLogger.summary(exception),
-            SecretMasking.maskSensitiveKeys(row));
-        return;
-      }
-      probeFailureCount.incrementAndGet();
-      // R-4.10：row 可能含 password / api_key 等凭证，脱敏后再打日志
-      log.warn(
-          "dispatch channel probe exception: error={}, row={}",
-          SwallowedExceptionLogger.summary(exception),
-          SecretMasking.maskSensitiveKeys(row),
-          exception);
-    }
+  private void recordProbeTimeout(Map<String, Object> row) {
+    probeFailureCount.incrementAndGet();
+    log.warn(
+        "dispatch channel probe timed out after {}s: channel={}",
+        PROBE_TIMEOUT_SECONDS,
+        probeLogIdentity(row));
+  }
+
+  private static String probeLogIdentity(Map<String, Object> row) {
+    return EmptyChecks.isNull(row) ? "(null)" : LogSanitizer.value(ChannelIdentity.from(row));
   }
 
   @PreDestroy
@@ -389,9 +413,10 @@ public class DispatchChannelHealthService {
     }
     DispatchChannelHealthSnapshot snapshot =
         repository.findHealth(channel.tenantId(), channel.channelCode());
-    if (snapshot != null
+    boolean channelProbeIsNotDue = EmptyChecks.isNotNull(snapshot)
         && snapshot.nextProbeAt() != null
-        && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt())) {
+        && BatchDateTimeSupport.utcNow().isBefore(snapshot.nextProbeAt());
+    if (channelProbeIsNotDue) {
       return new DispatchChannelProbeResult(false, "probe deferred until backoff expires", null);
     }
     DispatchChannelProbeResult result = RemoteFilesystemDispatchSupport.probeChannel(
@@ -446,10 +471,10 @@ public class DispatchChannelHealthService {
    */
   private record ChannelIdentity(String tenantId, String channelCode, String channelType) {
     static ChannelIdentity from(Map<String, Object> channelConfig) {
-      return new ChannelIdentity(
-          stringValue(channelConfig.get("tenant_id")),
-          stringValue(channelConfig.get("channel_code")),
-          stringValue(channelConfig.get("channel_type")));
+      String tenantId = stringValue(channelConfig.get("tenant_id"));
+      String channelCode = stringValue(channelConfig.get("channel_code"));
+      String channelType = stringValue(channelConfig.get("channel_type"));
+      return new ChannelIdentity(tenantId, channelCode, channelType);
     }
 
     boolean isTargetable() {
@@ -465,7 +490,9 @@ public class DispatchChannelHealthService {
   private void logProbeFailure(
       String tenantId, String channelCode, String channelType, String message, String evidence) {
     String m = message == null ? "" : message.toLowerCase(Locale.ROOT);
-    if (m.contains("read-only") || m.contains("not writable") || m.contains("permission denied")) {
+    boolean isRemoteWritePermissionFailure =
+        m.contains("read-only") || m.contains("not writable") || m.contains("permission denied");
+    if (isRemoteWritePermissionFailure) {
       log.debug(
           "dispatch channel probe failed (environment): tenantId={}, channelCode={},"
               + " channelType={}, message={}, evidence={}",

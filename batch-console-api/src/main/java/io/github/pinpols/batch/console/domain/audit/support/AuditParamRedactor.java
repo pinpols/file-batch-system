@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.Locale;
 import java.util.Map;
 
-/** Removes credentials from operation-audit parameter snapshots on both write and read paths. */
+/** 在操作审计参数快照的写入和读取路径中移除凭据。 */
 public final class AuditParamRedactor {
 
   static final String REDACTED = "[REDACTED]";
@@ -24,8 +24,8 @@ public final class AuditParamRedactor {
   }
 
   /**
-   * Sanitizes persisted JSON before returning it to clients. Invalid historical payloads fail closed
-   * instead of echoing unparsed text that may contain a credential.
+   * 向客户端返回持久化 JSON 前先执行脱敏。历史载荷无效时按安全失败处理，
+   * 不回传可能包含凭据的未解析文本。
    */
   public static String redactJson(ObjectMapper objectMapper, String json) {
     if (EmptyChecks.isBlank(json)) {

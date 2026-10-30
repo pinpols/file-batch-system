@@ -28,17 +28,24 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** P2: ConsoleSystemController 维护状态查询(读 MaintenanceStateHolder)+ Cron 预览(Quartz 解析 + 时区)。 */
 @DisplayName("系统状态接口:维护状态读取与 Cron 表达式预览")
+@ExtendWith(MockitoExtension.class)
 class ConsoleSystemControllerTest {
 
-  private final BatchTimezoneProvider timezoneProvider = mock(BatchTimezoneProvider.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private BatchTimezoneProvider timezoneProvider;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private ConsoleMaintenanceProperties properties;
   private MaintenanceStateMapper mapper;
   private MaintenanceStateHolder stateHolder;
@@ -49,14 +56,9 @@ class ConsoleSystemControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(requestMetadataResolver.responseMeta())
-        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
 
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
-    when(mapper.selectSingleton()).thenAnswer(invocation -> entityFromProperties());
-    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
     ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
 
@@ -83,6 +85,7 @@ class ConsoleSystemControllerTest {
   @Test
   @DisplayName("维护状态:更新后返回启用、只读、提示文案与受影响服务")
   void shouldReflectHolderState_whenMaintenanceUpdated() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
     stateHolder.update(new MaintenanceState(
         true, true, "DB 灰度中", Instant.parse("2026-05-20T15:00:00Z"), List.of("job-schedule")));
     mockMvc
@@ -98,6 +101,7 @@ class ConsoleSystemControllerTest {
   @Test
   @DisplayName("维护状态:计划开始前返回公告时间且尚未实际生效")
   void shouldReturnInactiveAnnouncement_whenMaintenanceStartsInFuture() throws Exception {
+    when(mapper.updateIfVersion(any())).thenReturn(1);
     Instant startsAt = Instant.parse("2099-05-20T14:00:00Z");
     stateHolder.update(
         new MaintenanceState(true, true, "计划维护", null, startsAt, List.of("job-schedule")));
@@ -113,6 +117,7 @@ class ConsoleSystemControllerTest {
   @Test
   @DisplayName("Cron 预览:合法表达式返回时区与最近三次触发时间")
   void shouldReturnNextFireTimes_whenCronExpressionValid() throws Exception {
+    when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
     mockMvc
         .perform(get("/api/console/system/cron-preview").param("expr", "0 0 12 * * ?"))
         .andExpect(status().isOk())
@@ -136,6 +141,8 @@ class ConsoleSystemControllerTest {
   @Test
   @DisplayName("Cron 预览:表达式为空时返回参数非法")
   void shouldRejectBlankExpr_whenCronPreviewRequested() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
     mockMvc
         .perform(get("/api/console/system/cron-preview").param("expr", "   "))
         .andExpect(status().isBadRequest())
@@ -145,6 +152,7 @@ class ConsoleSystemControllerTest {
   @Test
   @DisplayName("Cron 预览:请求次数超过上限时按最大次数返回")
   void shouldCapCountToMax_whenCountTooLarge() throws Exception {
+    when(timezoneProvider.defaultZone()).thenReturn(ZoneId.of("Asia/Shanghai"));
     mockMvc
         .perform(get("/api/console/system/cron-preview")
             .param("expr", "0 0 12 * * ?")

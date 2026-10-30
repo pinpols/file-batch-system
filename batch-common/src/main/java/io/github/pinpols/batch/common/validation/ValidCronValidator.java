@@ -12,7 +12,8 @@ public class ValidCronValidator implements ConstraintValidator<ValidCron, String
       // 空值不校验,@NotBlank 单独约束必填
       return true;
     }
-    String normalized = normalize(value.trim());
+    String trimmedValue = value.trim();
+    String normalized = normalize(trimmedValue);
     try {
       CronExpression.parse(normalized);
       return true;

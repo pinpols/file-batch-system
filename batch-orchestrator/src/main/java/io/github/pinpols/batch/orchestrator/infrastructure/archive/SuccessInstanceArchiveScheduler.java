@@ -57,10 +57,11 @@ public class SuccessInstanceArchiveScheduler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
+    archiveService.reportIntegrityIssues();
     int totalInstances = 0;
     int batches = 0;
     while (batches < MAX_BATCHES_PER_TICK) {
-      ArchiveBatchResult result = archiveService.archiveOnce();
+      ArchiveBatchResult result = archiveService.archiveNextBatch();
       if (!result.executed()) {
         break;
       }

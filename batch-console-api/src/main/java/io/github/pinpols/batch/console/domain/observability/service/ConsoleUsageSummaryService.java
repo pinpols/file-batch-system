@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
+import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.LocalDate;
 import java.util.List;
@@ -25,14 +26,25 @@ public class ConsoleUsageSummaryService {
 
   public List<DailyUsageRow> query(
       String tenantId, LocalDate from, LocalDate to, String metricCode, String pageCode) {
-    if (EmptyChecks.isNull(from)
-        || EmptyChecks.isNull(to)
-        || from.isAfter(to)
-        || from.plusDays(MAX_DAYS).isBefore(to)) {
+    boolean missingDateBoundary = EmptyChecks.isNull(from) || EmptyChecks.isNull(to);
+    boolean reversedDateRange = !missingDateBoundary && from.isAfter(to);
+    boolean exceedsMaximumRange =
+        !missingDateBoundary && !reversedDateRange && from.plusDays(MAX_DAYS).isBefore(to);
+    boolean usageDateRangeIsInvalid =
+        missingDateBoundary || reversedDateRange || exceedsMaximumRange;
+    if (usageDateRangeIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     String resolvedTenant = tenantIdResolver.resolveTenant(tenantId);
     mapper.setTenantContext(resolvedTenant);
-    return mapper.querySummary(resolvedTenant, from, to, metricCode, pageCode);
+    ConsoleUsageDailySummaryQuery consoleUsageDailySummaryQuery =
+        ConsoleUsageDailySummaryQuery.builder()
+            .tenantId(resolvedTenant)
+            .from(from)
+            .to(to)
+            .metricCode(metricCode)
+            .pageCode(pageCode)
+            .build();
+    return mapper.querySummary(consoleUsageDailySummaryQuery);
   }
 }

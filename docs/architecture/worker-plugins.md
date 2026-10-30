@@ -50,6 +50,7 @@
 
 - **路由**：`DispatchChannelGateway`（熔断 + 健康短路 + Micrometer）按 **`channel_type`**：`API` / `API_PUSH` → HTTP；`LOCAL` → 本地目录；**`NAS`** → 共享目录写入；**`OSS`** → MinIO / S3 兼容对象存储；**`SFTP`** → JSch；**`EMAIL`** → SMTP。
 - **渠道配置**：表字段 + **`config_json`** 合并（**`ChannelConfigMerge`**），密钥与 `sftp_*` / `smtp_*` / `receipt_poll_url` 等放在 **`config_json`**；`channel_type` / `channel_code` 等治理保留键不允许被 JSON 覆盖。
+- **HTTP 自动重试**：`API` / `API_PUSH` 只有在 `config_json.receiver_idempotency_supported=true` 明确声明且接收端按请求 `Idempotency-Key` 去重时，才把发送后的 HTTP/传输失败作为可自动重试的已知失败；缺省或 `false` 时按 `EXTERNAL_OUTCOME_UNKNOWN` 处理并停止自动重试。仅发送幂等键不代表接收端兑现了该契约。
 - **NAS / OSS 配置**：`nas_remote_directory` / `nas_remote_file_name` 用于共享目录落盘；`oss_bucket` / `oss_object_prefix` 用于对象存储落盘，兼容 `batch.storage.s3` 默认连接信息。
 - **异步回执**：**`DispatchReceiptPollScheduler`** GET **`receipt_poll_url?externalRequestId=`**（`SENT`+`PENDING` 行）。
 - **健康治理**：`DispatchChannelHealthService` 维护 `batch.file_channel_health`，对 NAS/OSS 做主动探测和失败退避，网关在 dispatch 前会做健康短路。
@@ -112,3 +113,29 @@
 - **边查边写 / 禁止全量加载**：设计说明书 §9.12 类约束与当前 **Parse / 部分校验 / 部分导出路径** 仍有差距，以 gap 文档为准；**分页导出明细**在 `ExportDataPlugin.loadDetailPage` + `GenerateStep` 循环中已改为 **cursor/keyset** 推进，减少大偏移页扫描，但这仍不等价于全链路已完全达标。
 
 以上摘要的权威对照仍以仓库 [file-pipeline-design.md](../design/file-pipeline-design.md) 与代码原文为准；本文件仅服务 **Worker 插件与路由**说明。
+
+## 批量认领与逐任务执行边界
+
+平台 Worker 已接入批量 CLAIM 与独立开关控制的同步 REPORT 微批；批内仍串行执行，现有并发来自 listener。检查点、租约、业务副作用、幂等和上报结果继续逐任务隔离，HTTP 聚合不增加束生命周期。CLAIM 和续租响应都按任务身份关联，未知批响应回原单条确认；REPORT 已确认项不因邻项失败重报。当前两个开关默认关闭，生产容量未据此验收。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48}}}%%
+flowchart TB
+  subgraph C0["触发与编排"]
+    direction LR
+    T["逐 Workflow · 独立幂等身份"] --> O["根运行 · 业务日 / 配置冻结"] --> K["任务 Outbox → Kafka"]
+  end
+  subgraph W0["Worker"]
+    direction LR
+    C["单条 / 批量 CLAIM · 身份核对"] --> L["登记已领租约"] --> E["批内串行 · 跨 listener 并发"]
+    L -.-> N["排队 / 执行中续租 · 原 CAS"]
+    N -.-> E
+  end
+  subgraph R0["结果交付"]
+    direction LR
+    R["逐项同步报告 · 可选微批"] --> S["逐项事务 · 终态 / 幂等保护"] --> A["确认 / Outbox 交接 · 原确认规则"]
+  end
+  C0 --> W0 --> R0
+```
+
+HTTP与Outbox同时失败时仍保留原丢报告日志、指标和租约恢复路径，不能称为已交付。启用条件、逐项事务及详细恢复流程统一见 [ADR-046 当前批量传输实现](adr/ADR-046-file-bundle-aggregation.md#当前批量传输实现2026-10-25-源码核对)。更新运行包已完成受影响SIM10/10及REPORT开/关定向场景：均4/4分区SUCCESS，claim1次/4项，report分别0次/4次；详见[本地收尾记录](../verifications/wdi-local-closure-2026-10-25.md)。批内串行场景不证明report合批增益，原始告警与其它会话新增范围另记。

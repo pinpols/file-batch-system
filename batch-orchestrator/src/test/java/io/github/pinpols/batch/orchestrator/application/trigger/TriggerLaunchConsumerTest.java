@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.dto.LaunchEnvelope;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -19,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.LaunchAppli
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Duration;
 import java.time.LocalDate;
@@ -70,7 +72,11 @@ class TriggerLaunchConsumerTest {
     properties.getErrorHandler().setRetryBackoffMs(1234L);
     when(gracefulShutdown.isDraining()).thenReturn(false);
     consumer = new TriggerLaunchConsumer(
-        launchApplicationService, gracefulShutdown, meterRegistry, properties);
+        launchApplicationService,
+        gracefulShutdown,
+        meterRegistry,
+        properties,
+        new BatchKafkaTopicNamespace(""));
   }
 
   @Test
@@ -104,6 +110,24 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
+  @DisplayName("旧版 Envelope 即使包含 Workflow 目标也确认并拒绝，不派发运行")
+  void consume_unsupportedEnvelopeVersion_acksAndSkips() {
+    LaunchRequest request = sampleEnvelope("tenant-a", "req-old-envelope").launchRequest();
+    LaunchEnvelope oldEnvelope = new LaunchEnvelope(
+        request,
+        "tenant-a:req-old-envelope",
+        BatchDateTimeSupport.utcNow(),
+        LaunchEnvelope.CURRENT_VERSION - 1,
+        null);
+
+    consumer.consume(consumerRecord(oldEnvelope), ack);
+
+    verify(launchApplicationService, never()).launchFromTrustedQueue(any());
+    verify(ack).acknowledge();
+    assertThat(failed("unsupported_version")).isEqualTo(1.0);
+  }
+
+  @Test
   @DisplayName("报文体为空时不发起启动, 确认消息并累计空报文计数")
   void consume_emptyEnvelope_acksAndSkips() {
     ConsumerRecord<String, String> consumerRecord = consumerRecord(null);
@@ -126,6 +150,21 @@ class TriggerLaunchConsumerTest {
 
     verify(ack).acknowledge();
     assertThat(deduped("tenant-a")).isEqualTo(1.0);
+  }
+
+  @Test
+  @DisplayName("启动暂不可用时交给监听器重试，不确认消息")
+  void consume_serviceUnavailable_propagatesWithoutAcknowledging() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-in-progress");
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
+        .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "retry"));
+
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
+        .isInstanceOf(ResponseStatusException.class)
+        .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
+            .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+    verify(ack, never()).acknowledge();
+    assertThat(failed("http_503")).isEqualTo(1.0);
   }
 
   @Test
@@ -209,7 +248,7 @@ class TriggerLaunchConsumerTest {
         .tag("reason", reason)
         .counters()
         .stream()
-        .mapToDouble(io.micrometer.core.instrument.Counter::count)
+        .mapToDouble(Counter::count)
         .sum();
   }
 }

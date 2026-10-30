@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：验证门禁分组、执行模式与结果控制。
+# 用法：在仓库根目录执行 bash scripts/ci/tests/test-gate-control.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"

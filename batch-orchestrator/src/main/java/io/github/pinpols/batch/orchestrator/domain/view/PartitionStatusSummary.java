@@ -9,17 +9,29 @@ import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
  * DAG 实例仍使用 {@link PartitionStatusRef}，因为节点推进还需要分区 ID 与节点映射。
  */
 public record PartitionStatusSummary(
-    long totalCount, long successCount, long failedCount, long broadFailedCount) {
+    long totalCount,
+    long successCount,
+    long failedCount,
+    long cancelledCount,
+    long terminatedCount,
+    long broadFailedCount) {
 
   /**
    * MyBatis 将 PostgreSQL count(*) 映射为包装类型；保留显式重载避免运行时反射找不到构造器。
    */
   public PartitionStatusSummary(
-      Long totalCount, Long successCount, Long failedCount, Long broadFailedCount) {
+      Long totalCount,
+      Long successCount,
+      Long failedCount,
+      Long cancelledCount,
+      Long terminatedCount,
+      Long broadFailedCount) {
     this(
         nullToZero(totalCount),
         nullToZero(successCount),
         nullToZero(failedCount),
+        nullToZero(cancelledCount),
+        nullToZero(terminatedCount),
         nullToZero(broadFailedCount));
   }
 

@@ -15,8 +15,10 @@ import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.config.OutboxProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.sharding.StaticShardAssignmentProvider;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.util.concurrent.Future;
 import net.javacrumbs.shedlock.core.LockingTaskExecutor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -70,8 +72,7 @@ class OutboxPollSchedulerTest {
         lockingTaskExecutor,
         gracefulShutdown,
         outboxEventMapper,
-        new io.github.pinpols.batch.orchestrator.infrastructure.sharding
-            .StaticShardAssignmentProvider(governance.outbox()),
+        new StaticShardAssignmentProvider(governance.outbox()),
         meterRegistry,
         executor);
     // 不调用 onApplicationReady()，避免后台线程干扰单元测试
@@ -136,8 +137,7 @@ class OutboxPollSchedulerTest {
     scheduler.stopScheduling();
 
     assertThat(executor.getScheduledThreadPoolExecutor().getQueue())
-        .allMatch(
-            task -> task instanceof java.util.concurrent.Future<?> future && future.isCancelled());
+        .allMatch(task -> task instanceof Future<?> future && future.isCancelled());
   }
 
   private void stubLockExecution() throws Throwable {

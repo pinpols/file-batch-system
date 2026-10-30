@@ -2,8 +2,16 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-10-07"
+  x-last-updated: "2026-10-15"
   x-changelog:
+    - date: "2026-10-15"
+      summary: "配置包导出、模板、字段指南同步为 10 个活动 sheet；上传明确拒绝已退役租户 Pipeline sheet。"
+    - date: "2026-10-15"
+      summary: "补偿请求限定 JOB 实例并要求目标实例号；通用响应增加已完成幂等重放标记。"
+    - date: "2026-10-14"
+      summary: "配置包旧 Pipeline sheet 仅返回阻断校验；移除预览 migrationNotes 和 apply Pipeline 写入计数。"
+    - date: "2026-10-14"
+      summary: "租户 Pipeline 定义退出配置复制、ConfigSync、Job Bundle 与公开初始化契约；旧初始化载荷仍在服务端写入前明确拒绝。"
     - date: "2026-10-07"
       summary: "固定响应类型化：trigger 正常实例号与 dry-run 校验对象改为明确 oneOf；Trigger 列表与 lineage 固定投影补齐 schema，字段命名保持不变，文件 metadata 使用动态 JSON 对象。"
     - date: "2026-10-04"
@@ -99,8 +107,6 @@ tags:
     description: Calendar CRUD, toggle, and holiday management.
   - name: QuotaPolicies
     description: Quota policy CRUD and toggle.
-  - name: PipelineDefinitions
-    description: Pipeline definition CRUD, detail with steps, and toggle.
   - name: Dashboard
     description: Dashboard statistics and trend views.
   - name: FileChannels
@@ -539,40 +545,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleSseTicketResponse'
-  /api/console/pipeline-definitions/events:
-    get:
-      tags: [PipelineDefinitions]
-      summary: Subscribe to pipeline definition realtime events
-      operationId: streamPipelineDefinitionEvents
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: eventType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: cursor
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: heartbeatMillis
-          in: query
-          required: false
-          schema:
-            type: integer
-            format: int64
-      responses:
-        '200':
-          description: SSE event stream of pipeline definition realtime changes
-          content:
-            text/event-stream:
-              schema:
-                $ref: '#/components/schemas/ConsoleSseEventResponse'
   /api/console/workflow-definitions/events:
     get:
       tags: [WorkflowDefinitions]
@@ -692,7 +664,7 @@ paths:
           required: true
           schema:
             type: string
-        - name: jobCode
+        - name: workflowCode
           in: query
           required: true
           schema:
@@ -859,7 +831,7 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseObject'
+                $ref: '#/components/schemas/CommonResponseAtomicRuntimeStatus'
   /api/console/ops/kafka-lag:
     get:
       tags: [Ops]
@@ -1140,29 +1112,6 @@ paths:
             text/event-stream:
               schema:
                 $ref: '#/components/schemas/ConsoleSseEventResponse'
-  /api/console/jobs/trigger:
-    post:
-      tags: [Jobs]
-      summary: Trigger a job
-      operationId: triggerJob
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - $ref: '#/components/parameters/RequestIdHeader'
-        - $ref: '#/components/parameters/TraceIdHeader'
-        - $ref: '#/components/parameters/OperatorIdHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/TriggerRequest'
-      responses:
-        '200':
-          description: Trigger result
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseJobTrigger'
   /api/console/jobs/compensations:
     post:
       tags: [Jobs]
@@ -1183,10 +1132,68 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseString'
+  /api/console/jobs/workflow-node/replay-preview:
+    post:
+      tags: [Jobs]
+      summary: Preview an exact failed Workflow JOB node replay before approval
+      operationId: previewFailedWorkflowJobNodeReplay
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowNodeReplayPreviewRequest'
+      responses:
+        '200':
+          description: Frozen source and policy preview with a short-lived one-use token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowNodeReplayPreviewResponse'
+  /api/console/jobs/workflow-run/replay-preview:
+    post:
+      tags: [Jobs]
+      summary: Preview replay of an entire frozen Workflow run before approval
+      operationId: previewWholeWorkflowReplay
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRunReplayRequest'
+      responses:
+        '200':
+          description: Frozen source graph and per-node replay safety preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunReplayPreviewResponse'
+  /api/console/jobs/workflow-run/replay-operations:
+    post:
+      tags: [Jobs]
+      summary: Submit an entire Workflow replay operation for approval
+      operationId: submitWholeWorkflowReplayForApproval
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowRunReplayRequest'
+      responses:
+        '200':
+          description: Durable replay operation and Console approval number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunReplaySubmissionResponse'
   /api/console/jobs/compensate:
     post:
       tags: [Jobs]
-      summary: Compensate a job instance
+      summary: Compensate a job instance or replay an exact failed Workflow JOB node
       operationId: compensateJob
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -1267,6 +1274,7 @@ paths:
     post:
       tags: [Jobs]
       summary: Launch batch-day catch-up
+      description: 日历策略为 NONE 时拒绝补跑，不创建审批或触发请求。
       operationId: batchDayCatchUp
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -1289,6 +1297,132 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchUpResponse'
+  /api/console/jobs/batch-days/catchup/requests/status:
+    get:
+      tags: [Jobs]
+      summary: 按原请求键查询批量日补跑状态
+      description: 仅管理员可用。只读取原批次状态；found=false 表示当前未观察到记录，不能推断未执行或换键重发。IN_FLIGHT 和 UNKNOWN 均为未确定结果。
+      operationId: getBatchDayCatchUpRequestStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 原批次状态或尚未观察到记录
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayCatchUpRequestStatus'
+        '403':
+          description: 管理员权限或租户访问被拒绝
+  /api/console/jobs/batch-days/catchup/requests/abandon:
+    post:
+      tags: [Jobs]
+      summary: 为尚未建档的原批次设置放弃围栏
+      description: 仅管理员可用。若原键尚未冻结，持久记录 ABANDONED 并阻止该键后续建档；若已有批次则返回已有状态，不改变或取消该批次。
+      operationId: abandonUnpreparedBatchDayCatchUp
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: X-Original-Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, bizDate, calendarCode]
+              properties:
+                tenantId: { type: string, minLength: 1, maxLength: 128 }
+                bizDate: { type: string, format: date }
+                calendarCode: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: 围栏结果或已存在的原批次状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayCatchUpRequestStatus'
+        '403':
+          description: 管理员权限或租户访问被拒绝
+  /api/console/jobs/batch-days/catchup/requests/continue:
+    post:
+      tags: [Jobs]
+      summary: 接续原批次中尚未提交的项目
+      description: 仅管理员可用。按首次冻结的目标与载荷接续 PENDING 项；存在 UNKNOWN 或 IN_FLIGHT 时拒绝接续，不重发结果未确定的项目。
+      operationId: continueBatchDayCatchUpRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: X-Original-Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId]
+              properties:
+                tenantId: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: 接续后的原批次状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayCatchUpRequestStatus'
+        '403':
+          description: 管理员权限或租户访问被拒绝
+        '409':
+          description: 状态冲突或仍有未确定项目
+  /api/console/jobs/batch-days/catchup/requests/reconcile:
+    post:
+      tags: [Jobs]
+      summary: 对账原批次中未确定的审批或触发
+      description: 仅管理员可用。按原请求键和作业编码回查并核验 UNKNOWN 或 IN_FLIGHT 项的原审批或触发回执，不重新提交或接续补跑；找不到或不匹配时保留原状态。
+      operationId: reconcileBatchDayCatchUpRequest
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: X-Original-Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 1 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantId, jobCode]
+              properties:
+                tenantId: { type: string, minLength: 1, maxLength: 128 }
+                jobCode: { type: string, minLength: 1, maxLength: 128 }
+      responses:
+        '200':
+          description: 对账后的原请求状态
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayCatchUpRequestStatus'
+        '403':
+          description: 管理员权限或租户访问被拒绝
+        '409':
+          description: 状态冲突或回执未核实
   /api/console/forensic/export:
     post:
       tags: [Forensic]
@@ -1410,6 +1544,155 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayReplayPreview'
+  /api/console/ops/batch-day-replay/operations/date-range/preview:
+    post:
+      tags: [Ops]
+      summary: ADR-049 预览日期区间重放 operation
+      operationId: previewBatchDayReplayRange
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchDayReplayRangeRequest'}
+      responses:
+        '200':
+          description: 按日期展示候选、结果版本和外部派发影响，并签发单次提交凭证
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperationPreview'}
+  /api/console/ops/batch-day-replay/operations/date-range:
+    post:
+      tags: [Ops]
+      summary: ADR-049 原子受理日期区间重放 operation
+      operationId: submitBatchDayReplayRange
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/BatchDayReplayRangeRequest'}
+      responses:
+        '200':
+          description: 返回持久化父 operation；每日 session 为独立执行单元
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /api/console/ops/batch-day-replay/operations/{operationId}:
+    get:
+      tags: [Ops]
+      summary: 查询日期区间 replay operation
+      operationId: getBatchDayReplayOperation
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: operation 状态与聚合进度
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /api/console/ops/batch-day-replay/operations/{operationId}/sessions:
+    get:
+      tags: [Ops]
+      summary: 查询日期区间 replay operation 的每日子 session
+      operationId: listBatchDayReplayOperationSessions
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: 按业务日期排序的子 session 及每日进度
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseBatchDayReplaySessionList'}
+  /api/console/ops/batch-day-replay/operations:
+    get:
+      tags: [Ops]
+      summary: 查询租户最近的日期区间重放操作及聚合进度
+      operationId: listBatchDayReplayOperations
+      parameters:
+        - in: query
+          name: tenantId
+          required: false
+          schema: {type: string}
+        - in: query
+          name: limit
+          required: false
+          schema: {type: integer, format: int32, default: 50, minimum: 1, maximum: 200}
+      responses:
+        '200':
+          description: 最近创建的 Replay Operation
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperationList'}
+  /api/console/ops/batch-day-replay/operations/{operationId}/approve:
+    post:
+      tags: [Ops]
+      summary: 审批日期区间 replay operation 的全部子 session
+      operationId: approveBatchDayReplayOperation
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: false
+          schema: {type: string}
+        - in: query
+          name: approver
+          required: true
+          schema: {type: string}
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: operation 及所有子 session 原子审批
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
+  /api/console/ops/batch-day-replay/operations/{operationId}/cancel:
+    post:
+      tags: [Ops]
+      summary: 取消日期区间 replay operation 尚未终结的子 session
+      operationId: cancelBatchDayReplayOperation
+      parameters:
+        - in: path
+          name: operationId
+          required: true
+          schema: {type: integer, format: int64}
+        - in: query
+          name: tenantId
+          required: false
+          schema: {type: string}
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 返回 operation 聚合状态
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/CommonResponseReplayOperation'}
   /api/console/ops/batch-day-replay/sessions/{sessionId}/approve:
     post:
       tags: [Ops]
@@ -1503,6 +1786,39 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayReplayEntryList'
+  /api/console/ops/batch-day-replay/sessions/{sessionId}/entries/{entryId}/retry-submission:
+    post:
+      tags: [Ops]
+      summary: 对尚未创建子运行的失败重放条目执行一次提交重试
+      operationId: retryBatchDayReplaySubmission
+      parameters:
+        - in: path
+          name: sessionId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: path
+          name: entryId
+          required: true
+          schema: { type: integer, format: int64 }
+        - in: query
+          name: tenantId
+          required: false
+          schema: { type: string }
+        - in: query
+          name: reason
+          required: true
+          schema: { type: string, minLength: 1, maxLength: 1024 }
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 更新后的重放会话
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseBatchDayReplaySession'
   /api/console/result-versions:
     get:
       tags: [Ops]
@@ -1738,7 +2054,8 @@ paths:
       description: |-
         Console BFF 转发到 orchestrator `GET /internal/orchestrator/lineage/result-versions/{id}`。
         返回 `resultVersion/jobInstance/pipelineInstances/fileRecords/dispatchRecords/coverage`。
-        范围限定为 BFS hot tables forensic 查询，不做字段级/记录级 lineage 或外部 catalog。
+        查询 BFS 热表和归档证据，不做字段级/记录级 lineage 或外部 catalog。
+        文件路径、投递目标、错误消息和元数据中的已识别凭据在响应中脱敏。
       operationId: getLineageEvidenceByResultVersion
       parameters:
         - in: path
@@ -1762,7 +2079,8 @@ paths:
       summary: BFS lineage 最小证据链（按当前 EFFECTIVE businessKey）
       description: |-
         Console BFF 转发到 orchestrator `GET /internal/orchestrator/lineage/effective`。
-        先按 `businessKey` 解析当前 EFFECTIVE result_version，再返回 BFS hot-table 证据链。
+        先按 `businessKey` 解析当前 EFFECTIVE result_version，再返回 BFS 热表和归档证据链。
+        文件路径、投递目标、错误消息和元数据中的已识别凭据在响应中脱敏。
       operationId: getLineageEvidenceByEffectiveBusinessKey
       parameters:
         - in: query
@@ -1871,8 +2189,11 @@ paths:
       summary: ADR-026 演练计划（L1 CONFIG_VALIDATE / L2 SCHEDULE_PLAN / L3 EXECUTION_PLAN）
       description: |-
         转发到 orchestrator `POST /internal/orchestrator/dry-run/plan`。
-        L1 解析 cron / DAG / 参数；L2 复用 SchedulePlanBuilder 输出 partition / worker route；
-        L3 在 L2 基础上叠加 SQL EXPLAIN / MinIO bucketExists / HTTP HEAD reachability。
+        目标由 tenantId + jobCode 确定。L1 只校验所选 Job 的启用定义及必需参数，
+        不按 Job 编码推断 Workflow，也不校验 Workflow 日程或 DAG；
+        L1 summary 明确 validationScope=JOB、workflowValidated=false。
+        L2 复用 SchedulePlanBuilder 输出该 Job 的 partition / worker route；
+        L3 在 L2 基础上叠加 SQL 静态检查 / MinIO bucketExists / HTTP HEAD reachability。SQL 计划执行已停用，合法 SQL 返回 EXEC_SQL_PLAN_UNAVAILABLE。
         响应含 findings (PASS/WARN/ERROR) + summary。**不写 instance / 不调外部投递**（priority-scope §ADR-026 §5）。
 
         **2026-06-04 wire 修复**：BFF 此前把 orchestrator 整层 `CommonResponse<T>` envelope
@@ -1893,10 +2214,83 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseDryRunPlan'
+  /api/console/batch-days/catch-up-preview:
+    get:
+      tags: [BatchDays]
+      summary: Preview the next bounded raw-date catch-up scan
+      description: Read-only cursor preview. It never creates batch days or advances the cursor; history before the chosen cursor anchor is not checked.
+      operationId: previewBatchDayCatchup
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: calendarCode
+          required: true
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Next raw-date scan preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchupPreviewResponse'
+  /api/console/batch-days/catch-up-control:
+    post:
+      tags: [BatchDays]
+      summary: Pause or resume automatic batch-day catch-up for one calendar
+      description: Requires ROLE_ADMIN. The action and reason are recorded in an immutable tenant-scoped audit history. Pausing catch-up does not stop current-day opens or dependency-wait reconciliation.
+      operationId: changeBatchDayCatchupControl
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BatchDayCatchupControlRequest'
+      responses:
+        '200':
+          description: Updated catch-up preview and control state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayCatchupPreviewResponse'
+  /api/console/batch-days/historical-gap-candidates:
+    get:
+      tags: [BatchDays]
+      summary: List historical dates without batch-day records
+      description: Read-only, inclusive range limited to 90 days. Missing records are candidates only; historical calendar rules are not reconstructed and no records are created.
+      operationId: listBatchDayHistoricalGapCandidates
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: calendarCode
+          required: true
+          schema: { type: string, maxLength: 128 }
+        - in: query
+          name: fromDate
+          required: true
+          schema: { type: string, format: date }
+        - in: query
+          name: throughDate
+          required: true
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Read-only candidate inventory
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleBatchDayHistoricalGapInventoryResponse'
   /api/console/batch-days/operate:
     post:
       tags: [BatchDays]
-      summary: Operate on a batch_day_instance (FREEZE / RELEASE / SKIP / REOPEN / CLOSE)
+      summary: Operate on a batch_day_instance (FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY)
       description: |-
         转发到 orchestrator 内部接口 `POST /internal/batch-days/operate`，由
         `BatchDayOperationService` 执行状态机推进。同事务双写 `job_execution_log`
@@ -1918,11 +2312,115 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchDayOperate'
-  /api/console/jobs/batch-trigger:
-    post:
+  /api/console/calendar-dependency-waits:
+    get:
+      tags: [BatchDays]
+      summary: List persisted cross-calendar dependency waits
+      operationId: listCalendarDependencyWaits
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: calendarCode
+          required: false
+          schema: { type: string }
+        - in: query
+          name: waitStatus
+          required: false
+          schema: { type: string, enum: [WAITING, OPENED, SKIPPED], default: WAITING }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: Dependency waits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleCalendarDependencyWaitList'
+  /api/console/job-dependency-waits:
+    get:
       tags: [Jobs]
-      summary: Batch trigger up to 50 jobs
-      operationId: batchTriggerJobs
+      summary: List persisted waits for upstream job results
+      operationId: listJobDependencyWaits
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: waitStatus
+          required: false
+          schema: { type: string, enum: [WAITING, RELEASED, CANCELLED], default: WAITING }
+        - in: query
+          name: jobCode
+          required: false
+          schema: { type: string }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 100 }
+      responses:
+        '200':
+          description: Job dependency waits without launch parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleJobDependencyWaitList'
+  /api/console/ops/persistent-waits:
+    get:
+      tags: [Ops]
+      summary: List persisted readiness and Workflow capacity waits
+      operationId: listConsolePersistentWaits
+      description: Returns tenant-scoped safe wait projections. Workflow launch payloads are never included.
+      parameters:
+        - in: query
+          name: tenantId
+          required: true
+          schema: { type: string, maxLength: 64 }
+        - in: query
+          name: waitType
+          required: false
+          schema: { type: string, enum: [READINESS, CAPACITY_ADMISSION] }
+        - in: query
+          name: waitStatus
+          required: false
+          schema: { type: string, enum: [PENDING, RELEASED, TIMED_OUT, CANCELLED, WAITING, RESUMED, REJECTED] }
+        - in: query
+          name: workflowDefinitionId
+          required: false
+          schema: { type: integer, format: int64, minimum: 1 }
+        - in: query
+          name: bizDateFrom
+          required: false
+          schema: { type: string, format: date }
+        - in: query
+          name: bizDateTo
+          required: false
+          schema: { type: string, format: date }
+        - in: query
+          name: pageNo
+          required: false
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: pageSize
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 15 }
+      responses:
+        '200':
+          description: Safe readiness and Workflow capacity wait page
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsolePersistentWaitPage'
+  /api/console/calendar-dependency-waits/manual-action:
+    post:
+      tags: [BatchDays]
+      summary: Request an audited RELEASE or SKIP for a waiting calendar dependency
+      operationId: requestCalendarDependencyWaitAction
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
       requestBody:
@@ -1930,17 +2428,14 @@ paths:
         content:
           application/json:
             schema:
-              type: array
-              items:
-                $ref: '#/components/schemas/TriggerRequest'
-              maxItems: 50
+              $ref: '#/components/schemas/CalendarDependencyWaitManualActionRequest'
       responses:
         '200':
-          description: Batch trigger results
+          description: Decision request recorded; the orchestrator reconciler applies it
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/CommonResponseBatchTriggerList'
+                $ref: '#/components/schemas/CommonResponseConsoleCalendarDependencyWait'
   /api/console/system-parameters:
     get:
       tags: [SystemParameters]
@@ -2930,8 +3425,7 @@ paths:
                   data:
                     type: array
                     items:
-                      type: object
-                      additionalProperties: true
+                      $ref: '#/components/schemas/AtomicTaskConfigResponse'
   /api/console/custom-task-types/count:
     get:
       tags: [Workers]
@@ -3151,8 +3645,7 @@ paths:
                   code: { type: string }
                   message: { type: string }
                   data:
-                    type: object
-                    additionalProperties: true
+                    $ref: '#/components/schemas/AtomicTaskConfigResponse'
         '400':
           description: Validation failure (unknown taskType / unknown key / missing required / sensitive credential key)
   /api/console/tasks/{taskId}/heartbeat-details:
@@ -3270,7 +3763,8 @@ paths:
   /api/console/workers/{workerCode}/claimed-tasks:
     get:
       tags: [Workers]
-      summary: List claimed tasks of a worker
+      summary: List safe summaries of a worker's claimed tasks
+      description: Returns task status metadata only; excludes task payload, execution parameters, heartbeat details, result summary, and error message.
       operationId: listClaimedTasks
       parameters:
         - name: workerCode
@@ -3341,6 +3835,10 @@ paths:
     post:
       tags: [Files]
       summary: Redispatch a file
+      description: |
+        仅失败的关联 DISPATCH 任务可重派；父作业或 Workflow 不可派发、任务状态变化，
+        或外部投递结果未知时返回状态冲突。结果未知须先按既有核对流程处理。
+        DISPATCH 任务须有完整文件关联，并按文件和渠道确定唯一任务；关联缺失、目标不一致或存在多个匹配任务时返回状态冲突。
       operationId: redispatchFile
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -3968,6 +4466,11 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标，应原样回传服务端返回值；传空字符串进入游标首页，按 ID 降序翻页，损坏或 ID 非整数、越界时返回 400。不传游标时按创建时间倒序使用普通分页。
         - name: aggregateType
           in: query
           required: false
@@ -4009,6 +4512,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOperationAuditList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/execution-logs:
     get:
       tags: [Queries]
@@ -4089,6 +4598,9 @@ paths:
                             rowsProcessed: { type: integer, format: int64, nullable: true, description: '实时已处理行数;持久 checkpoint 为空时服务端按当前 worker 从 orchestrator 内存 cache 桥接补上,均无则 null' }
                             totalRowsHint: { type: integer, format: int64, nullable: true }
                             lastHeartbeatAt: { type: integer, format: int64, nullable: true }
+                            stepStatus: { type: string, nullable: true }
+                            runSeq: { type: integer, nullable: true }
+                            errorCode: { type: string, nullable: true }
   /api/console/queries/alerts:
     get:
       tags: [Queries]
@@ -4120,6 +4632,11 @@ paths:
         - $ref: '#/components/parameters/EndDateFilter'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，各页按 ID 降序。省略时使用普通分页及原有排序。
       responses:
         '200':
           description: Alert list
@@ -4127,6 +4644,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseAlertEventList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/approvals:
     get:
       tags: [Queries]
@@ -4195,8 +4718,41 @@ paths:
         - $ref: '#/components/parameters/FileNameFilter'
         - $ref: '#/components/parameters/TraceIdFilter'
         - $ref: '#/components/parameters/FileIdFilter'
-        - $ref: '#/components/parameters/StartDateFilter'
-        - $ref: '#/components/parameters/EndDateFilter'
+        - name: jobCode
+          in: query
+          required: false
+          description: 按作业编码筛选热表中的流水线、作业实例或文件型分区关联文件。
+          schema: { type: string, maxLength: 128 }
+        - name: startDate
+          in: query
+          required: false
+          description: 业务日期起点（含当日）。
+          schema: { type: string, format: date }
+        - name: endDate
+          in: query
+          required: false
+          description: 业务日期终点（含当日）。
+          schema: { type: string, format: date }
+        - name: arrivalToday
+          in: query
+          required: false
+          description: 为 true 时按服务端业务时区的自然日筛选创建时间，并与其他时间条件取交集。
+          schema: { type: boolean }
+        - name: fromTime
+          in: query
+          required: false
+          description: 创建时间起点（含），ISO-8601 Instant。
+          schema: { type: string, format: date-time }
+        - name: toTime
+          in: query
+          required: false
+          description: 创建时间终点（含），ISO-8601 Instant。
+          schema: { type: string, format: date-time }
+        - name: cursor
+          in: query
+          required: false
+          description: 不透明分页游标；空字符串表示游标首页，省略时使用普通分页。
+          schema: { type: string }
       responses:
         '200':
           description: File chain list
@@ -4204,6 +4760,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseFileRecordList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/files/summary:
     get:
       tags: [Queries]
@@ -4306,20 +4868,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseCodeNameOptionList'
-  /api/console/queries/pipeline-definitions/codes:
-    get:
-      tags: [Queries]
-      summary: Active pipeline definition (code, name) options for workflow designer dropdown (FILE_STEP cross-domain ref)
-      operationId: queryPipelineDefinitionCodes
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-      responses:
-        '200':
-          description: Active pipeline (code, name) list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseCodeNameOptionList'
   /api/console/queries/outbox-retries:
     get:
       tags: [Queries]
@@ -4329,6 +4877,11 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，省略时使用普通分页。
         - $ref: '#/components/parameters/EventTypeFilter'
         - $ref: '#/components/parameters/EventKeyFilter'
         - $ref: '#/components/parameters/RetryStatusFilter'
@@ -4339,6 +4892,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOutboxRetryLogList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/outbox-deliveries:
     get:
       tags: [Queries]
@@ -4348,6 +4907,11 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，省略时使用普通分页。
         - $ref: '#/components/parameters/EventTypeFilter'
         - $ref: '#/components/parameters/EventKeyFilter'
         - $ref: '#/components/parameters/DeliveryStatusFilter'
@@ -4363,6 +4927,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleOutboxDeliveryLogList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/file-pipelines:
     get:
       tags: [Queries]
@@ -4385,45 +4955,6 @@ paths:
       tags: [Queries]
       summary: Query file pipeline detail
       operationId: queryFilePipelineDetail
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - $ref: '#/components/parameters/TenantIdQuery'
-      responses:
-        '200':
-          description: File pipeline detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/queries/pipeline-definitions:
-    get:
-      tags: [Queries]
-      summary: Query pipeline definitions compatibility alias
-      description: Compatibility alias that returns the same file pipeline list as `/api/console/queries/file-pipelines`.
-      operationId: queryPipelineDefinitionsCompatibility
-      parameters:
-        - $ref: '#/components/parameters/TenantIdQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/KeywordQuery'
-      responses:
-        '200':
-          description: File pipeline list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseConsoleFilePipelineList'
-  /api/console/queries/pipeline-definitions/{id}:
-    get:
-      tags: [Queries]
-      summary: Query pipeline definition compatibility alias detail
-      description: Compatibility alias that returns the same file pipeline detail as `/api/console/queries/file-pipelines/{id}`.
-      operationId: queryPipelineDefinitionCompatibilityDetail
       parameters:
         - name: id
           in: path
@@ -4507,6 +5038,7 @@ paths:
     get:
       tags: [Queries]
       summary: Query file dispatch records
+      description: 投递目标与错误消息中的已识别凭据在只读响应中脱敏。
       operationId: queryFileDispatches
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -4524,7 +5056,9 @@ paths:
     get:
       tags: [Queries]
       summary: Query channel receipt records
-      description: Receipt-focused alias of file dispatch records. Use the same filter set and response shape as `/api/console/queries/file-dispatches`.
+      description: |
+        Receipt-focused alias of file dispatch records. Use the same filter set and response shape as `/api/console/queries/file-dispatches`.
+        投递目标与错误消息中的已识别凭据在只读响应中脱敏。
       operationId: queryChannelReceipts
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
@@ -4793,12 +5327,17 @@ paths:
     get:
       tags: [Queries]
       summary: Query job partitions by instance
-      description: 按作业实例分页查询分区（`job_partition`）。服务端分页 + `partitionStatus` 过滤；按 `partition_no` 升序返回。
+      description: 按作业实例分页查询分区（`job_partition`）。支持 `partitionStatus` 过滤；普通分页按 `partition_no`、ID 升序，游标分页按 ID 降序。
       operationId: queryJobPartitions
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，各页按 ID 降序。省略时使用普通分页及原有排序。
         - $ref: '#/components/parameters/JobInstanceIdFilter'
         - name: partitionStatus
           in: query
@@ -4813,6 +5352,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseJobPartitionList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/workflow-definitions:
     get:
       tags: [Queries]
@@ -4839,6 +5384,18 @@ paths:
           required: false
           schema:
             type: string
+        - name: relatedJobCode
+          in: query
+          required: false
+          description: Return workflows that contain this tenant-scoped Job Definition.
+          schema:
+            type: string
+        - name: singleJobWorkflow
+          in: query
+          required: false
+          description: Filter managed single-job workflows versus composed workflows.
+          schema:
+            type: boolean
         - name: version
           in: query
           required: false
@@ -4936,11 +5493,17 @@ paths:
     get:
       tags: [Queries]
       summary: Query workflow node runs
+      description: 普通分页按 `run_seq`、ID 降序，游标分页按 ID 降序。
       operationId: queryWorkflowNodeRuns
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，各页按 ID 降序。省略时使用普通分页及原有排序。
         - $ref: '#/components/parameters/WorkflowRunIdFilter'
       responses:
         '200':
@@ -4949,6 +5512,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowNodeRunList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/workflow-node-runs/{id}:
     get:
       tags: [Queries]
@@ -5028,8 +5597,11 @@ paths:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string }
+          description: 不透明分页游标；空字符串表示游标首页，各页按 ID 降序。省略时使用普通分页及原有排序。
       responses:
         '200':
           description: Retry schedule list
@@ -5037,20 +5609,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseRetryScheduleList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/catch-up-approvals:
     get:
       tags: [Queries]
       summary: Query catch-up approvals
+      description: 每个补跑请求返回一行；同一请求有多张审批单时显示按审批 ID 最新创建的一张。
       operationId: queryCatchUpApprovals
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
-        - name: jobCode
+        - name: workflowCode
           in: query
           required: false
           schema:
             type: string
             maxLength: 128
-          description: 可选,按 Job 编码精确过滤。
+          description: 可选,按 Workflow 编码精确过滤。
         - name: requestId
           in: query
           required: false
@@ -5071,13 +5650,13 @@ paths:
           schema:
             type: string
             maxLength: 128
-          description: 可选,大小写不敏感模糊匹配 requestId / jobCode / traceId 任一。
+          description: 可选,大小写不敏感模糊匹配 requestId / workflowCode / traceId 任一。
         - name: cursor
           in: query
           required: false
           schema:
             type: string
-          description: cursor 分页 token(ADR-031),非空时走 cursor 模式。
+          description: 不透明分页游标；空字符串表示游标首页，省略时使用普通分页。
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
       responses:
@@ -5087,6 +5666,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponsePendingCatchUpList'
+        '400':
+          description: Invalid query or cursor
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/queries/batch-days:
     get:
       tags: [Queries]
@@ -5355,11 +5940,8 @@ paths:
       tags: [Jobs]
       summary: Create job bundle
       description: |
-        Creates one job definition and optional related workflow/file/alert/resource config in
-        a single backend transaction. **Strict all-or-nothing**: if any spec fails to apply
-        the whole transaction is rolled back (no partial commits). The shared
-        `TenantConfigBatchInitRequest.strict` flag is forced to true on this path; the
-        unrelated ConfigSync path keeps `strict=false` and tolerates partial success.
+        仅ROLE_ADMIN可用。在单个目标租户事务中创建作业及关联Workflow、文件、告警或资源配置；
+        强制strict=true，任一条目失败均回滚该租户事务，不能将其视为普通单作业创建接口。
       operationId: createJobBundle
       security:
         - bearerAuth: []
@@ -5382,7 +5964,7 @@ paths:
     get:
       tags: [Jobs]
       summary: Export job bundle
-      description: Exports one job definition and directly related config as a reusable bundle payload.
+      description: 仅ROLE_ADMIN可用；导出一个作业及其直接依赖的可移植配置包。
       operationId: exportJobBundle
       security:
         - bearerAuth: []
@@ -5409,11 +5991,8 @@ paths:
       tags: [Jobs]
       summary: Import job bundle
       description: |
-        Imports one job bundle into one or more target tenants. Each target tenant runs in
-        its own backend transaction with **strict all-or-nothing** semantics — any spec
-        failure within a tenant rolls back that tenant's transaction. Other tenants are
-        independent (no cross-tenant rollback). The `TenantConfigBatchInitRequest.strict`
-        flag is forced to true on this path.
+        仅ROLE_ADMIN可用。先校验所有目标身份，再按目标租户独立事务导入配置包；每个目标强制strict=true，
+        任一条目失败回滚该目标，合法目标之间不建立跨租户事务。未知提交结果须另行核对，不得据响应丢失重做整批。
       operationId: importJobBundle
       security:
         - bearerAuth: []
@@ -5483,34 +6062,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
-    put:
-      tags: [WorkflowDefinitions]
-      summary: Update workflow definition
-      description: 租户管理员不能更改工作流节点的物理 Worker 分组；省略该字段时保留现有平台分配。
-      operationId: updateWorkflowDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/WorkflowDefinitionSaveRequest'
-      responses:
-        '200':
-          description: Updated workflow definition detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
     patch:
       tags: [WorkflowDefinitions]
       summary: Enable or disable workflow definition
@@ -5537,6 +6088,197 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/workflow-definitions/{id}/trigger:
+    post:
+      tags: [WorkflowDefinitions]
+      summary: Launch a Workflow as a top-level run
+      operationId: triggerWorkflowDefinition
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowTriggerRequest'
+      responses:
+        '200':
+          description: Workflow run accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseString'
+  /api/console/workflow-definitions/{id}/trigger-status:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: Reconcile a Workflow trigger using its original idempotency key
+      description: Read-only lookup scoped to the authenticated tenant and exact Workflow. A missing receipt does not prove that an in-flight request was never executed. A recorded request is not proof of successful business execution.
+      operationId: workflowTriggerStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Persisted original trigger receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowTriggerStatus'
+        '404':
+          description: No receipt currently visible for this exact identity; keep the client outcome unknown
+  /api/console/workflow-definitions/{id}/scheduled-occurrences/catch-up:
+    post:
+      tags: [WorkflowDefinitions]
+      summary: Request catch-up for one rejected scheduled occurrence
+      description: Requires a reason and follows the calendar catch-up policy. Trigger records the authenticated Console operator.
+      operationId: catchUpRejectedScheduledOccurrence
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduledOccurrenceCatchUpRequest'
+      responses:
+        '200':
+          description: Catch-up accepted or submitted to the configured approval workflow
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseScheduledOccurrenceCatchUpResponse'
+  /api/console/workflow-definitions/{id}/schedule-enabled:
+    patch:
+      tags: [WorkflowDefinitions]
+      summary: Pause or resume scheduled workflow fires
+      description: Changes schedule_enabled only; manual and API launches remain available.
+      operationId: patchWorkflowScheduleEnabled
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EnabledPatchRequest'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
+  /api/console/workflow-definitions/{id}/schedule:
+    put:
+      tags: [WorkflowDefinitions]
+      summary: Update Workflow schedule configuration
+      description: Updates schedule fields only, preserves the workflow graph, and requires the current definition version.
+      operationId: updateWorkflowSchedule
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowScheduleUpdateRequest'
+      responses:
+        '200':
+          description: Updated Workflow schedule and definition detail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowDefinitionDetailResponse'
+
+  /api/console/workflow-definitions/{id}/monitoring-policy:
+    get:
+      tags: [WorkflowDefinitions]
+      summary: 查询 Workflow 根级时限告警策略
+      operationId: getWorkflowMonitoringPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+        - name: tenantId
+          in: query
+          required: true
+          schema: {type: string}
+      responses:
+        '200':
+          description: 根级策略；尚未配置时三类均关闭
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowMonitoringPolicyResponse'
+    put:
+      tags: [WorkflowDefinitions]
+      summary: 保存 Workflow 根级时限告警策略
+      description: 仅管理员或租户管理员可写；完整替换根级软策略，不影响图、调度和子 Job 策略。
+      operationId: saveWorkflowMonitoringPolicy
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: id
+          in: path
+          required: true
+          schema: {type: integer, format: int64}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowMonitoringPolicyRequest'
+      responses:
+        '200':
+          description: 已持久化策略及生效时刻
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseWorkflowMonitoringPolicyResponse'
+
   /api/console/workflow-definitions/{id}/validate:
     post:
       tags: [WorkflowDefinitions]
@@ -5907,16 +6649,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTriggerStatusList'
-  /api/console/ops/triggers/{jobCode}/register:
+  /api/console/ops/triggers/{workflowCode}/register:
     post:
       tags: [Triggers]
-      summary: Register a Quartz trigger for a job
+      summary: Register a Quartz trigger for a Workflow
       operationId: registerTrigger
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: jobCode
+        - name: workflowCode
           in: path
           required: true
           schema:
@@ -5933,16 +6675,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTriggerAction'
-  /api/console/ops/triggers/{jobCode}/unregister:
+  /api/console/ops/triggers/{workflowCode}/unregister:
     post:
       tags: [Triggers]
-      summary: Unregister a Quartz trigger for a job
+      summary: Unregister a Quartz trigger for a Workflow
       operationId: unregisterTrigger
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: jobCode
+        - name: workflowCode
           in: path
           required: true
           schema:
@@ -5959,16 +6701,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTriggerAction'
-  /api/console/ops/triggers/{jobCode}/pause:
+  /api/console/ops/triggers/{workflowCode}/pause:
     post:
       tags: [Triggers]
-      summary: Pause a Quartz trigger for a job
+      summary: Pause a Quartz trigger for a Workflow
       operationId: pauseTrigger
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: jobCode
+        - name: workflowCode
           in: path
           required: true
           schema:
@@ -5985,16 +6727,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseTriggerAction'
-  /api/console/ops/triggers/{jobCode}/resume:
+  /api/console/ops/triggers/{workflowCode}/resume:
     post:
       tags: [Triggers]
-      summary: Resume a paused Quartz trigger for a job
+      summary: Resume a paused Quartz trigger for a Workflow
       operationId: resumeTrigger
       security:
         - bearerAuth: []
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: jobCode
+        - name: workflowCode
           in: path
           required: true
           schema:
@@ -6409,6 +7151,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchWindow'
+        '400':
+          description: VALIDATION_ERROR或INVALID_ARGUMENT；时区、ISO本地时间或非跨日区间不合法。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/batch-windows/{id}:
     put:
       tags: [BatchWindows]
@@ -6437,6 +7185,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseBatchWindow'
+        '400':
+          description: INVALID_ARGUMENT；合并后的时区、时间格式或非跨日区间不合法，原窗口不变。
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseVoid'
   /api/console/batch-windows/{id}/enabled:
     patch:
       tags: [BatchWindows]
@@ -6520,6 +7274,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseCalendar'
+        '400':
+          description: Invalid calendar timezone or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/calendars/{id}:
     put:
       tags: [Calendars]
@@ -6548,6 +7308,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseCalendar'
+        '400':
+          description: Invalid calendar timezone or request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/calendars/{id}/enabled:
     patch:
       tags: [Calendars]
@@ -6804,6 +7570,7 @@ paths:
     get:
       tags: [Queries]
       summary: Get file record detail by id
+      description: 文件存储路径和 JSON 元数据中的已识别凭据在只读响应中脱敏。
       operationId: queryFileDetail
       security:
         - bearerAuth: []
@@ -7064,6 +7831,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConfigSyncImport'
+  /api/console/config/sync/requests/status:
+    get:
+      tags: [Config]
+      summary: 按原请求身份核对配置同步审计
+      description: 仅管理员可用。使用原导入请求的幂等键查找审计，不重新执行导入；found=false 仅表示尚未观察到审计，不能推断未执行或允许换键重做。
+      operationId: getConfigSyncRequestStatus
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: 已找到原审计或仍待确认
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigSyncRequestStatus'
+        '403':
+          description: 管理员权限或租户访问被拒绝
   /api/console/config/sync/logs:
     get:
       tags: [Config]
@@ -7098,6 +7888,35 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConfigSyncLogPage'
+  /api/console/config/sync/logs/{logId}/reconcile:
+    post:
+      tags: [Config]
+      summary: Reconcile an import audit from its persisted target receipts
+      description: Admin only. Reads the original target receipts without importing configuration again. Missing receipts keep the outcome RUNNING; repeated reconciliation is idempotent.
+      operationId: reconcileConfigSyncLog
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: logId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Original import audit with the confirmed outcome or RUNNING if incomplete
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConfigSyncLog'
+        '403':
+          description: Administrator permission or tenant access denied
+        '404':
+          description: Audit log does not exist in the requested tenant
   /api/console/config/releases/{releaseId}:
     get:
       tags: [Config]
@@ -7391,149 +8210,6 @@ paths:
                 $ref: '#/components/schemas/CommonResponseString'
 
   # ─── P2: Pipeline Definitions CRUD ───────────────────────────────────────────
-  /api/console/pipeline-definitions:
-    get:
-      tags: [PipelineDefinitions]
-      summary: List pipeline definitions
-      operationId: listPipelineDefinitions
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-        - name: jobCode
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: pipelineType
-          in: query
-          required: false
-          schema:
-            type: string
-        - name: enabled
-          in: query
-          required: false
-          schema:
-            type: boolean
-        - $ref: '#/components/parameters/PageNoQuery'
-        - $ref: '#/components/parameters/PageSizeQuery'
-      responses:
-        '200':
-          description: Pipeline definition list
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseConsolePipelineDefinitionListPage'
-    post:
-      tags: [PipelineDefinitions]
-      summary: Create pipeline definition
-      description: 租户管理员不能设置物理 Worker 分组；该路由由平台运维管理。
-      operationId: createPipelineDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Created pipeline definition id
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/pipeline-definitions/{id}:
-    get:
-      tags: [PipelineDefinitions]
-      summary: Get pipeline definition detail with steps
-      operationId: getPipelineDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-        - name: tenantId
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Pipeline definition detail
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseObject'
-    put:
-      tags: [PipelineDefinitions]
-      summary: Update pipeline definition
-      description: 租户管理员不能修改平台管理的物理 Worker 分组。
-      operationId: updatePipelineDefinition
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseObject'
-  /api/console/pipeline-definitions/{id}/enabled:
-    patch:
-      tags: [PipelineDefinitions]
-      summary: Set pipeline definition enabled state
-      operationId: setPipelineDefinitionEnabled
-      security:
-        - bearerAuth: []
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-            format: int64
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/EnabledPatchRequest'
-      responses:
-        '200':
-          description: Success
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CommonResponseString'
-
-  # ─── P2: Partition operations ─────────────────────────────────────────────────
   /api/console/instances/{id}/partitions/retry-failed:
     post:
       tags: [Instances]
@@ -7617,6 +8293,139 @@ paths:
                 $ref: '#/components/schemas/CommonResponsePartitionAction'
 
   # ─── P2: Workflow run operations ──────────────────────────────────────────────
+  /api/console/pipeline-progress:
+    get:
+      operationId: queryPipelineProgressSnapshots
+      summary: Read complete tenant-scoped Pipeline execution snapshots
+      tags: [Queries]
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: pipelineInstanceIds
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: Complete selected range; latest stage attempts and immutable runtime version; missing objects fail closed
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CommonResponseBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/PipelineProgressSnapshot' }
+  /api/console/pipeline-progress/events:
+    get:
+      operationId: streamPipelineProgressSnapshots
+      summary: Subscribe to complete tenant-scoped Pipeline execution snapshots
+      tags: [Queries]
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+        - name: pipelineInstanceIds
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            minItems: 1
+            maxItems: 100
+            items: { type: integer, format: int64, minimum: 1 }
+      responses:
+        '200':
+          description: SSE pipeline-progress-snapshot full snapshots; errors use pipeline-progress-snapshot-error
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /api/console/job-instances/{id}/execution-progress:
+    get:
+      operationId: queryJobExecutionProgress
+      summary: Read job execution stages and separate partition/task counts
+      tags: [ConsoleQueries]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Frozen pipeline version with observed execution and unknown totals preserved
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/CommonResponseBase'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/JobExecutionProgress' }
+  /api/console/job-instances/{id}/execution-progress/events:
+    get:
+      operationId: streamJobExecutionProgress
+      summary: Subscribe to complete job execution snapshots
+      tags: [ConsoleQueries]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64, minimum: 1 }
+        - name: tenantId
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: SSE full snapshots; cookie-authenticated one-use ticket; job-execution-progress event
+          content:
+            text/event-stream:
+              schema: { type: string }
+  /api/console/workflow-runs/{id}/execution-progress:
+    get:
+      tags: [WorkflowRuns]
+      summary: Query the immutable run DAG and current execution progress
+      operationId: workflowExecutionProgress
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: Frozen graph with latest node attempts; never mutable current definitions or secret payloads
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseWorkflowExecutionProgress' }
+  /api/console/workflow-runs/{id}/execution-progress/events:
+    get:
+      tags: [WorkflowRuns]
+      summary: Push full execution snapshots when the subscribed run changes
+      description: Initial snapshot and changed snapshots via workflow-execution-progress; reconnect obtains a new stream ticket and a fresh complete snapshot. Shared server sampling is subscription-bound (2 seconds), not one frontend query timer per view. workflow-execution-error indicates stale/unavailable state.
+      operationId: workflowExecutionProgressEvents
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+        - { name: ticket, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Tenant-isolated server-sent events with safe WorkflowExecutionProgress data
+          content:
+            text/event-stream:
+              schema: { type: string }
+
   /api/console/workflow-runs/{id}/cancel:
     post:
       tags: [WorkflowRuns]
@@ -7750,6 +8559,14 @@ paths:
           required: true
           schema:
             type: string
+        - name: reason
+          in: query
+          required: true
+          description: Human reason for skipping this node; the authenticated operator is recorded by the server.
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 1024
       responses:
         '200':
           description: Success
@@ -7759,6 +8576,38 @@ paths:
                 $ref: '#/components/schemas/CommonResponseConsoleWorkflowRunSkipNode'
 
   # ─── P2: Dashboard ────────────────────────────────────────────────────────────
+  /api/console/dashboard/daily-progress:
+    get:
+      tags: [Dashboard]
+      summary: Query tenant business-day planned and actual progress
+      description: Separates scheduled occurrences, root workflow trigger requests, workflow runs, job instances and already created tasks. Excludes dry runs and superseded plans. Plan completeness requires current schedule-version coverage through batch-day cutoff and current configuration revision. A missing cutoff or coverage is incomplete. Counts are not additive across scopes. Uses hot runtime tables, excluding archived history. Scheduled occurrences without a resolved business date are outside a business-date query.
+      operationId: dailyProgress
+      parameters:
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+        - { name: bizDate, in: query, required: true, schema: { type: string, format: date } }
+      responses:
+        '200':
+          description: Tenant-isolated progress snapshot
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseDailyProgress' }
+  /api/console/dashboard/daily-progress/events:
+    get:
+      tags: [Dashboard]
+      summary: Push full business-day progress snapshots
+      description: Separates scheduled occurrences, root workflow trigger requests, workflow runs, job instances and already created tasks. Excludes dry runs and superseded plans. Plan completeness requires current schedule-version coverage through batch-day cutoff and current configuration revision. A missing cutoff or coverage is incomplete. Counts are not additive across scopes. Uses hot runtime tables, excluding archived history. Scheduled occurrences without a resolved business date are outside a business-date query.
+      operationId: dailyProgressEvents
+      parameters:
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+        - { name: bizDate, in: query, required: true, schema: { type: string, format: date } }
+        - { name: ticket, in: query, required: false, schema: { type: string } }
+      responses:
+        '200':
+          description: Tenant-isolated progress snapshot
+          content:
+            text/event-stream:
+              schema: { type: string }
+
   /api/console/dashboard/job-stats:
     get:
       tags: [Dashboard]
@@ -9595,6 +10444,12 @@ paths:
           required: true
           schema:
             type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConsoleFileUploadBindingRequest'
       responses:
         '200':
           description: Upload session info
@@ -9602,6 +10457,24 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleFilePresignUpload'
+  /api/console/files/manual-upload-targets:
+    get:
+      tags: [Files]
+      summary: List enabled file-group Workflow targets for manual upload
+      operationId: listManualUploadTargets
+      parameters:
+        - name: tenantId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Tenant-scoped enabled upload targets
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseConsoleFileUploadTargetList'
   /api/console/files/{fileId}/content:
     put:
       tags: [Files]
@@ -9710,7 +10583,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [tenantId, jobCode, bizDate]
+              required: [tenantId, jobCode, bizDate, compensationType, targetInstanceNo]
               properties:
                 tenantId:
                   type: string
@@ -9721,6 +10594,8 @@ paths:
                   type: string
                 compensationType:
                   type: string
+                  enum: [JOB]
+                  description: This self-service endpoint currently supports job-instance compensation only.
                 targetInstanceNo:
                   type: string
                 reason:
@@ -9737,6 +10612,7 @@ paths:
     get:
       tags: [EventCatalog]
       summary: List subscribable event types
+      description: Business event subscriptions exclude Job SLA alerts, which use the alert centre and its enabled Alertmanager channel.
       operationId: listEventTypes
       responses:
         '200':
@@ -9785,6 +10661,7 @@ paths:
     get:
       tags: [Files]
       summary: Export file error records as CSV
+      description: Fields containing commas, quotes, carriage returns, or line feeds are quoted; embedded quotes are doubled.
       operationId: exportFileErrors
       parameters:
         - name: fileId
@@ -9892,6 +10769,7 @@ paths:
       tags: [Notifications]
       summary: Create notification channel
       operationId: createNotificationChannel
+      description: 编码经NFKC规范化、去除控制字符及首尾空白后用于查重和写入；活动渠道（包括并发创建）冲突返回409，软删除渠道可按原主键恢复。
       security:
         - bearerAuth: []
       parameters:
@@ -9913,6 +10791,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseVoid'
+        '400':
+          description: Invalid input, including a channel code that becomes empty after normalization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
+        '409':
+          description: An active channel already uses the normalized code in this tenant
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/notifications/channels/{channelCode}:
     get:
       tags: [Notifications]
@@ -10000,7 +10890,7 @@ paths:
         真正按渠道类型发一条测试消息(WEBHOOK 走带 SSRF 防护+超时的投递路径,其余渠道走对应
         NotificationSender),如实反映投递结果并落一条 notification_delivery_log。
         data 为无类型 map:{channelCode, channelType, success(boolean), status("OK"|"FAILED"),
-        message, httpStatus(nullable), errorSummary(nullable)};失败时 errorSummary 透传发送器错误。
+        message, httpStatus(nullable), errorSummary(nullable)};失败时 errorSummary 返回经凭据遮蔽的发送器错误摘要。
       operationId: testNotificationChannel
       security:
         - bearerAuth: []
@@ -10067,6 +10957,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseVoid'
+        '400':
+          description: Rule name or event types are blank after normalization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
   /api/console/notifications/rules/{ruleId}:
     get:
       tags: [Notifications]
@@ -10124,6 +11020,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseVoid'
+        '400':
+          description: Rule name or event types are blank after normalization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CommonResponseObject'
     delete:
       tags: [Notifications]
       summary: Delete notification rule
@@ -10177,10 +11079,47 @@ paths:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleNotificationDeliveryLogList'
 
+  /api/console/notifications/terminal-deliveries:
+    get:
+      tags: [Notifications]
+      summary: List tenant Job and Workflow terminal delivery recovery metadata
+      operationId: listTerminalNotificationDeliveries
+      description: Lists original durable recipients only. Any Console role may read its permitted tenant; payloads and channel credentials are excluded.
+      parameters:
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 500, default: 100 } }
+      responses:
+        '200':
+          description: Terminal delivery metadata
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CommonResponseTerminalDeliveryRecoveryList' }
+  /api/console/notifications/terminal-deliveries/{source}/{id}/retry:
+    post:
+      tags: [Notifications]
+      summary: Retry an exhausted terminal delivery after receiver reconciliation
+      operationId: retryTerminalNotificationDelivery
+      description: Requires ROLE_ADMIN or ROLE_TENANT_ADMIN. Only EXHAUSTED records without automatic retry or active claim qualify. Atomically records operator reconciliation and starts one bounded retry cycle against the frozen event and original recipient. Same requestId and evidence is a persistent no-op; changed evidence conflicts. Success means queued, not externally delivered. Cookie authentication requires CSRF.
+      parameters:
+        - { name: tenantId, in: query, required: true, schema: { type: string } }
+        - { name: source, in: path, required: true, schema: { type: string, enum: [WEBHOOK, RULE, PUSH] } }
+        - { name: id, in: path, required: true, schema: { type: integer, format: int64, minimum: 1 } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TerminalDeliveryRetryRequest' }
+      responses:
+        '200': { description: Queued with committed audit, or identical request already accepted }
+        '400': { description: Missing reconciliation or invalid request }
+        '403': { description: Role or tenant scope denied }
+        '404': { description: No terminal delivery in the permitted tenant }
+        '409': { description: Stale attempt, ineligible state or conflicting request identity }
+
   /api/console/config/tenant-package/excel/export:
     get:
       tags: [Config]
-      summary: Export current tenant config package as 12-sheet Excel (importable)
+      summary: Export current tenant config package as 11-sheet Excel (importable)
       operationId: exportTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -10190,7 +11129,7 @@ paths:
             type: string
       responses:
         '200':
-          description: 12-sheet Excel workbook containing all config data for the tenant; job monitoring settings are isolated in job_monitoring_policy
+          description: 11-sheet Excel workbook containing active tenant config data; Job and Workflow monitoring settings are isolated in job_monitoring_policy and workflow_monitoring_policy, and retired tenant Pipeline sheets are excluded
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10199,11 +11138,11 @@ paths:
   /api/console/config/tenant-package/excel/template:
     get:
       tags: [Config]
-      summary: Download blank tenant config package Excel template (12 sheets)
+      summary: Download blank tenant config package Excel template (11 sheets)
       operationId: downloadTenantConfigPackageExcelTemplate
       responses:
         '200':
-          description: Empty Excel template with 12 data sheets
+          description: Empty Excel template with 11 active data sheets
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10257,7 +11196,7 @@ paths:
               enum: [ALL, IMPORT, EXPORT, PROCESS, DISPATCH, ATOMIC, WORKFLOW, SCHEDULE]
       responses:
         '200':
-          description: Scenario sample Excel template with 12 data sheets
+          description: Scenario sample Excel template with 11 active data sheets
           content:
             application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
               schema:
@@ -10266,7 +11205,7 @@ paths:
   /api/console/config/tenant-package/excel/guide:
     get:
       tags: [Config]
-      summary: Return 12-sheet tenant config package field guide
+      summary: Return 11-sheet tenant config package field guide
       operationId: getTenantConfigPackageExcelGuide
       responses:
         '200':
@@ -10278,7 +11217,7 @@ paths:
   /api/console/config/tenant-package/excel/upload:
     post:
       tags: [Config]
-      summary: Upload tenant config package Excel (12 sheets)
+      summary: Upload tenant config package Excel (retired tenant Pipeline sheets are rejected)
       operationId: uploadTenantConfigPackageExcel
       parameters:
         - name: tenantId
@@ -10647,6 +11586,7 @@ components:
       description: Filter by event type (exact match)
       schema:
         type: string
+        maxLength: 64
     EventKeyFilter:
       name: eventKey
       in: query
@@ -10672,9 +11612,10 @@ components:
       name: targetTopic
       in: query
       required: false
-      description: Filter by target topic (partial match)
+      description: Filter by target topic (case-insensitive literal substring match)
       schema:
         type: string
+        maxLength: 256
     WorkflowDefinitionIdFilter:
       name: workflowDefinitionId
       in: query
@@ -10931,9 +11872,41 @@ components:
         message:
           type: string
           description: Human-readable status message.
+        idempotentReplay:
+          type: boolean
+          description: Present and true only when an idempotency key was already completed and the request was rejected as a replay.
         meta:
           $ref: '#/components/schemas/CommonMeta'
       required: [code, message, meta]
+    AtomicTaskConfigResponse:
+      type: object
+      description: Tenant-scoped saved parameters for a built-in atomic task type.
+      required: [id, tenantId, taskType, name, parameters, createdAt, updatedAt]
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        taskType: { type: string, enum: [sql, stored_proc, shell, http] }
+        name: { type: string }
+        parameters:
+          type: string
+          description: Serialized JSON object containing schema-validated parameters.
+        createdBy: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    CommonResponseAtomicTaskConfigList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/AtomicTaskConfigResponse' }
+    CommonResponseAtomicTaskConfig:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/AtomicTaskConfigResponse' }
     CommonResponseVoid:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -11044,31 +12017,11 @@ components:
           type: array
           items: {}
       required: [total, pageNo, pageSize, items]
-    DryRunTriggerResult:
-      type: object
-      required: [dryRun, tenantId, jobCode, bizDate, valid, errors]
-      properties:
-        dryRun: { type: boolean, enum: [true] }
-        tenantId: { type: string }
-        jobCode: { type: string }
-        bizDate: { type: string, format: date }
-        valid: { type: boolean }
-        errors: { type: array, items: { type: string } }
-    CommonResponseJobTrigger:
-      allOf:
-        - $ref: '#/components/schemas/CommonResponseBase'
-        - type: object
-          properties:
-            data:
-              description: 普通触发返回实例号；dryRun 返回校验结果。保留既有 JSON 形态。
-              oneOf:
-                - type: string
-                - $ref: '#/components/schemas/DryRunTriggerResult'
     ConsoleTriggerStatusResponse:
       type: object
       properties:
         tenantId: { type: string, nullable: true }
-        jobCode: { type: string, nullable: true }
+        workflowCode: { type: string, nullable: true }
         scheduleType: { type: string, nullable: true }
         scheduleExpression: { type: string, nullable: true }
         timezone: { type: string, nullable: true }
@@ -11091,6 +12044,20 @@ components:
           properties:
             data:
               type: string
+    CommonResponseWorkflowTriggerStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowTriggerStatusResponse'
+    CommonResponseScheduledOccurrenceCatchUpResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ScheduledOccurrenceCatchUpResponse'
     CommonResponseLong:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -11161,8 +12128,8 @@ components:
           items:
             type: string
           description: |
-            Service codes that are down during this maintenance (empty list = whole site).
-            FE renders a per-service availability badge so users see what's still usable.
+            公告受影响服务标记；识别的固定应用编码同时限定计划停机通知抑制范围。
+            空列表保留整站公告，但通知范围缺省仅为 Console；未知标记不静默，不控制服务启停或业务路由。
         version:
           type: integer
           format: int64
@@ -11215,6 +12182,7 @@ components:
           description: Planned start timestamp; omit for immediate activation
         affectedServices:
           type: array
+          description: 公告标记及固定应用编码的维护通知范围；空列表仅缺省到 Console，未知标记不抑制通知。
           maxItems: 50
           items:
             type: string
@@ -11533,13 +12501,17 @@ components:
               $ref: '#/components/schemas/ConfigReleaseDiffResponse'
     ConfigSyncSummaryResponse:
       type: object
-      required: [jobDefinitions, workflowDefinitions, pipelineDefinitions, fileChannels, fileTemplates]
+      required: [jobDefinitions, workflowDefinitions, fileChannels, fileTemplates, resourceQueues, batchWindows, businessCalendars, quotaPolicies, alertRoutings]
       properties:
         jobDefinitions: { type: integer, format: int32 }
         workflowDefinitions: { type: integer, format: int32 }
-        pipelineDefinitions: { type: integer, format: int32 }
         fileChannels: { type: integer, format: int32 }
         fileTemplates: { type: integer, format: int32 }
+        resourceQueues: { type: integer, format: int32 }
+        batchWindows: { type: integer, format: int32 }
+        businessCalendars: { type: integer, format: int32 }
+        quotaPolicies: { type: integer, format: int32 }
+        alertRoutings: { type: integer, format: int32 }
     ConfigSyncExportResponse:
       type: object
       required: [sourceTenantId, sourceEnv, targetEnv, summary, bundle]
@@ -11601,6 +12573,27 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/ConfigSyncImportResponse' }
+    ConfigSyncRequestStatusResponse:
+      type: object
+      required: [found]
+      properties:
+        found: { type: boolean }
+        audit:
+          allOf:
+            - $ref: '#/components/schemas/ConfigSyncLogResponse'
+          nullable: true
+    CommonResponseConfigSyncRequestStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncRequestStatusResponse' }
+    CommonResponseConfigSyncLog:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/ConfigSyncLogResponse' }
     CommonResponseConfigSyncLogList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -11711,7 +12704,6 @@ components:
       properties:
         id: { type: integer, format: int64, nullable: true }
         tenant_id: { type: string, nullable: true }
-        pipeline_definition_id: { type: integer, format: int64, nullable: true }
         job_code: { type: string, nullable: true }
         pipeline_type: { type: string, nullable: true }
         file_id: { type: integer, format: int64, nullable: true }
@@ -12104,13 +13096,13 @@ components:
     # ─── BE Spike: workflow-dag-designer ─────────────────────────────────────────
     WorkflowDefinitionFullUpdateRequest:
       type: object
-      required: [definition]
+      required: [definition, expectedVersion]
       properties:
         definition:
           $ref: '#/components/schemas/WorkflowDefinitionSaveRequest'
         expectedVersion:
           type: integer
-          description: 客户端最近 GET 拿到的 version,用于乐观锁;不传则跳过版本冲突校验。
+          description: 客户端最近 GET 拿到的 version，必须参与版本比较；缺失时拒绝写入。
         lockToken:
           type: string
           description: 预留 lockToken;Spike 阶段以 SecurityContext.username 为权威。
@@ -12339,6 +13331,157 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    WorkflowTriggerStatusResponse:
+      type: object
+      required: [tenantId, workflowDefinitionId, bizDate, requestId, requestStatus, updatedAt]
+      properties:
+        tenantId: { type: string }
+        workflowDefinitionId: { type: integer, format: int64 }
+        bizDate: { type: string, format: date }
+        requestId: { type: string }
+        traceId: { type: string, nullable: true }
+        requestStatus:
+          type: string
+          enum: [PENDING, PROCESSING, ACCEPTED, WAITING, LAUNCHED, REJECTED, DUPLICATE, FORWARD_FAILED, GIVE_UP]
+        updatedAt: { type: string, format: date-time }
+    WorkflowTriggerRequest:
+      type: object
+      required: [tenantId, bizDate]
+      properties:
+        tenantId:
+          type: string
+        bizDate:
+          type: string
+          format: date
+        triggerType:
+          type: string
+        payload:
+          type: string
+    ScheduledOccurrenceCatchUpRequest:
+      type: object
+      required: [tenantId, scheduledFireTime, bizDate, reason]
+      properties:
+        tenantId:
+          type: string
+        scheduledFireTime:
+          type: string
+          format: date-time
+        bizDate:
+          type: string
+          format: date
+        reason:
+          type: string
+          maxLength: 1024
+    ScheduledOccurrenceCatchUpResponse:
+      type: object
+      required: [requestId, status]
+      properties:
+        requestId:
+          type: string
+        status:
+          type: string
+          enum: [ACCEPTED, PENDING_APPROVAL]
+        approvalId:
+          type: string
+          nullable: true
+          description: Approval ticket when status is PENDING_APPROVAL
+    CommonResponseWorkflowMonitoringPolicyResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/WorkflowMonitoringPolicyResponse'
+    WorkflowMonitoringPolicyRequest:
+      type: object
+      required: [tenantId]
+      properties:
+        tenantId:
+          type: string
+        softRuntimeSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+          description: 根运行开始后的总耗时阈值，包含编排等待；零为关闭，不影响硬超时
+        softRuntimeSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          default: WARN
+        startGraceSeconds:
+          type: integer
+          format: int32
+          minimum: 0
+          default: 0
+          description: 从真实计划或输入预期资格起算的启动宽限；零为关闭
+        startGraceSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          default: WARN
+        completionDeadlineLocalTime:
+          type: string
+          format: time
+          nullable: true
+          description: 按 Workflow 时区解释的完成截止钟点；空为关闭
+        completionDeadlineDayOffset:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 1
+          default: 0
+        completionDeadlineSeverity:
+          type: string
+          enum: [WARN, ERROR, CRITICAL]
+          default: WARN
+    WorkflowMonitoringPolicyResponse:
+      allOf:
+        - $ref: '#/components/schemas/WorkflowMonitoringPolicyRequest'
+        - type: object
+          properties:
+            workflowDefinitionId:
+              type: integer
+              format: int64
+            policyEffectiveAt:
+              type: string
+              format: date-time
+              nullable: true
+            updatedAt:
+              type: string
+              format: date-time
+              nullable: true
+    WorkflowScheduleUpdateRequest:
+      type: object
+      required: [tenantId, expectedVersion, scheduleType]
+      properties:
+        tenantId:
+          type: string
+        expectedVersion:
+          type: integer
+          format: int32
+          minimum: 1
+        scheduleType:
+          type: string
+          enum: [CRON, FIXED_RATE, MANUAL, EVENT]
+        scheduleExpr:
+          type: string
+          nullable: true
+          maxLength: 256
+        timezone:
+          type: string
+          nullable: true
+          maxLength: 64
+        triggerMode:
+          type: string
+          nullable: true
+          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
+        calendarCode:
+          type: string
+          nullable: true
+          maxLength: 128
+        dependsOnJobCode:
+          type: string
+          nullable: true
+          maxLength: 128
     WorkflowDefinitionSaveRequest:
       type: object
       properties:
@@ -12352,6 +13495,26 @@ components:
           type: string
         enabled:
           type: boolean
+        scheduleType:
+          type: string
+          nullable: true
+          enum: [CRON, FIXED_RATE, MANUAL, EVENT, ONE_TIME]
+        scheduleExpr:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        triggerMode:
+          type: string
+          nullable: true
+          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
+        calendarCode:
+          type: string
+          nullable: true
+        dependsOnJobCode:
+          type: string
+          nullable: true
         description:
           type: string
         nodes:
@@ -12373,8 +13536,6 @@ components:
         nodeType:
           type: string
         relatedJobCode:
-          type: string
-        relatedPipelineCode:
           type: string
         workerGroup:
           type: string
@@ -12403,7 +13564,7 @@ components:
           description: ADR-018 跨日依赖等待上限秒数；0 表示永久等待，未传默认 86400。
         enabled:
           type: boolean
-      required: [nodeCode, nodeType]
+      required: [nodeCode, nodeName, nodeType]
     WorkflowDefinitionSaveEdgeItem:
       type: object
       properties:
@@ -12474,6 +13635,27 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleWorkflowNodeRunResponse'
+    CommonResponseConsoleWorkflowNodeReplayPreviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowNodeReplayPreviewResponse'
+    CommonResponseConsoleWorkflowRunReplayPreviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowRunReplayPreviewResponse'
+    CommonResponseConsoleWorkflowRunReplaySubmissionResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleWorkflowRunReplaySubmissionResponse'
     CommonResponseConsoleWorkflowTopologyResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12509,6 +13691,38 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/PageResponse'
+    CommonResponseConsoleCalendarDependencyWaitList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleCalendarDependencyWaitResponse'
+    CommonResponseConsoleJobDependencyWaitList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/ConsoleJobDependencyWaitResponse'
+    CommonResponseConsolePersistentWaitPage:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsolePersistentWaitPageResponse'
+    CommonResponseConsoleCalendarDependencyWait:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleCalendarDependencyWaitResponse'
     CommonResponseConsoleBatchDayWindowResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12516,6 +13730,20 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleBatchDayWindowResponse'
+    CommonResponseConsoleBatchDayCatchupPreviewResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchDayCatchupPreviewResponse'
+    CommonResponseConsoleBatchDayHistoricalGapInventoryResponse:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/ConsoleBatchDayHistoricalGapInventoryResponse'
     CommonResponseConsoleBatchDayCatchUpResponse:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12523,6 +13751,13 @@ components:
           properties:
             data:
               $ref: '#/components/schemas/ConsoleBatchDayCatchUpResponse'
+    CommonResponseBatchDayCatchUpRequestStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/BatchDayCatchUpRequestStatusResponse'
     CommonResponseWorkerRegistryList:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'
@@ -12841,26 +14076,6 @@ components:
             data:
               $ref: '#/components/schemas/PageResponse'
 
-    TriggerRequest:
-      type: object
-      properties:
-        tenantId:
-          type: string
-        jobCode:
-          type: string
-        bizDate:
-          type: string
-          format: date
-        triggerType:
-          type: string
-          enum: [MANUAL, API, SCHEDULE, CATCH_UP]
-        payload:
-          type: string
-        dryRun:
-          type: boolean
-          default: false
-          description: When true, validates the trigger request without executing. Idempotency-Key not required.
-      required: [tenantId, jobCode, bizDate]
     BatchDayQueryRequest:
       type: object
       properties:
@@ -12976,6 +14191,86 @@ components:
         autoApprove:     { type: boolean, description: 'true 直接 RUNNING；false PENDING_APPROVAL（默认）' }
         traceId:         { type: string }
       required: [calendarCode, bizDate, scope, reason, requestedBy]
+    BatchDayReplayRangeRequest:
+      type: object
+      description: ADR-049 closed date interval; operationKey and previewToken are required only on submit.
+      properties:
+        tenantId: {type: string}
+        calendarCode: {type: string, maxLength: 128}
+        fromDate: {type: string, format: date}
+        throughDate: {type: string, format: date}
+        scope: {type: string, enum: [ALL, ALL_FAILED, SUBSET_JOB_CODES, OUTPUTS_ONLY]}
+        jobCodes: {type: array, items: {type: string}}
+        versionIds: {type: array, items: {type: integer, format: int64}}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32}
+        reason: {type: string, maxLength: 512}
+        requestedBy: {type: string, maxLength: 128}
+        autoApprove: {type: boolean, default: false}
+        traceId: {type: string}
+        executionMode: {type: string, enum: [REPLAY, DRY_RUN], default: REPLAY}
+        candidateSource: {type: string, enum: [EXISTING_INSTANCES, SCHEDULE_PLAN], default: EXISTING_INSTANCES}
+        operationKey: {type: string, format: uuid}
+        previewToken: {type: string}
+      required: [calendarCode, fromDate, throughDate, scope, reason, requestedBy]
+    ReplayOperationPreview:
+      type: object
+      properties:
+        tenantId: {type: string}
+        operationKey: {type: string, format: uuid}
+        operationType: {type: string, enum: [BATCH_DAY_RANGE]}
+        calendarCode: {type: string}
+        fromDate: {type: string, format: date}
+        throughDate: {type: string, format: date}
+        scope: {type: string}
+        totalCandidateCount: {type: integer, format: int32}
+        previewToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        days:
+          type: array
+          items:
+            type: object
+            properties:
+              bizDate: {type: string, format: date}
+              disposition: {type: string, enum: [READY, NO_CANDIDATES, CALENDAR_BLOCKED]}
+              candidateCount: {type: integer, format: int32}
+              entries: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayPreviewEntry'}}
+              resultVersionImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayResultVersionImpact'}}
+              assetPartitionImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayAssetPartitionImpact'}}
+              dispatchImpacts: {type: array, items: {$ref: '#/components/schemas/BatchDayReplayDispatchImpact'}}
+              warnings: {type: array, items: {type: string}}
+      required: [tenantId, operationKey, operationType, calendarCode, fromDate, throughDate, scope, totalCandidateCount, previewToken, expiresAt, days]
+    ReplayOperation:
+      type: object
+      properties:
+        id: {type: integer, format: int64}
+        tenantId: {type: string}
+        operationKey: {type: string}
+        operationType: {type: string}
+        status: {type: string}
+        calendarCode: {type: string}
+        fromDate: {type: string, format: date, nullable: true}
+        throughDate: {type: string, format: date, nullable: true}
+        scope: {type: string}
+        executionMode: {type: string}
+        candidateSource: {type: string}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32, nullable: true}
+        reason: {type: string}
+        requestedBy: {type: string}
+        approvedBy: {type: string, nullable: true}
+        totalCount: {type: integer, format: int32}
+        succeededCount: {type: integer, format: int32}
+        failedCount: {type: integer, format: int32}
+        inFlightCount: {type: integer, format: int32}
+        startedAt: {type: string, format: date-time, nullable: true}
+        completedAt: {type: string, format: date-time, nullable: true}
+        traceId: {type: string, nullable: true}
+        createdAt: {type: string, format: date-time}
+        updatedAt: {type: string, format: date-time}
+      required: [id, tenantId, operationKey, operationType, status, totalCount, succeededCount, failedCount, inFlightCount]
     BatchDayReplayPreview:
       type: object
       description: ADR-020 批次日重放影响预览；解析候选并签发短时一次性凭证，不创建 session。
@@ -13026,6 +14321,32 @@ components:
           type: array
           items: { type: string }
       required: [tenantId, calendarCode, bizDate, scope, executionMode, candidateSource, resultPolicy, configVersionPolicy, previewToken, expiresAt, totalCount, entries, resultVersionImpacts, assetPartitionImpacts, dispatchImpacts, warnings]
+    CommonResponseReplayOperationPreview:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/ReplayOperationPreview'}
+      required: [success, code, message, data]
+    CommonResponseReplayOperation:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data: {$ref: '#/components/schemas/ReplayOperation'}
+      required: [success, code, message, data]
+    CommonResponseReplayOperationList:
+      type: object
+      properties:
+        success: {type: boolean}
+        code: {type: string}
+        message: {type: string}
+        data:
+          type: array
+          items: {$ref: '#/components/schemas/ReplayOperation'}
+      required: [success, code, message, data]
     BatchDayReplayPreviewEntry:
       type: object
       properties:
@@ -13096,7 +14417,7 @@ components:
           additionalProperties: true
           description: |
             可选 effectiveParams；L3 EXECUTION_PLAN 中识别以下 key 触发探测：
-            - sql / querySql / sourceQuery / validationSql / selectSql → JdbcTemplate EXPLAIN
+            - sql / querySql / sourceQuery / validationSql / selectSql → SQL 静态检查；不执行数据库计划，返回 EXEC_SQL_PLAN_UNAVAILABLE
             - s3Bucket → S3Client.headBucket（命名 DNS-style 校验）
             - endpointUrl / callbackUrl / channelEndpoint / dispatchTarget → HTTP HEAD（5s timeout）
       required: [jobCode]
@@ -13132,14 +14453,14 @@ components:
       # channelName/channelType 服务端 @NotBlank 必填(缺失 400);不落 spec required,理由同上。
     SubscriptionRuleUpsertRequest:
       type: object
-      description: 订阅规则创建/更新请求（2026-07-09 写路径类型化，字段名与既有 Map 消费键一致）
+      description: 订阅规则创建/更新请求；规则名称和事件类型经 NFKC 规范化、控制字符清洗及首尾空白处理后必须非空，否则返回 400。
       properties:
         ruleName: { type: string, maxLength: 128 }
         channelCode: { type: string, maxLength: 64 }
         eventTypes:
           type: string
           maxLength: 512
-          description: 逗号分隔事件类型，如 JOB_FAILED,JOB_TIMEOUT
+          description: 逗号分隔业务事件类型，如 JOB_FAILED,WORKFLOW_FAILED；SLA 告警使用告警中心通道，JOB_SLA_BREACH、JOB_SLA_VIOLATION 及其 ESCALATED 编码拒绝保存。
         severityFilter: { type: string, maxLength: 128 }
         jobCodeFilter: { type: string, maxLength: 512 }
         enabled: { type: boolean, default: true }
@@ -13157,14 +14478,16 @@ components:
           format: date
         action:
           type: string
-          enum: [FREEZE, RELEASE, SKIP, REOPEN, CLOSE]
-          description: '批量日治理动作；状态机由 BatchDayOperationService 推进'
+          enum: [FREEZE, RELEASE, SKIP, REOPEN, CLOSE, SETTLE_EMPTY]
+          description: 'SKIP、REOPEN、SETTLE_EMPTY 必须填写 reason；SKIP 是人工豁免，不代表成功。REOPEN 保留旧义务终态并重建未履行义务。SETTLE_EMPTY 仅允许 cutoff 后、零作业实例、无跨日历或作业依赖等待时结算；实际操作者从认证上下文读取。'
         operatorId:
           type: string
           maxLength: 128
+          description: '兼容字段；服务端忽略请求值，审计操作者取认证上下文。'
         reason:
           type: string
           maxLength: 1024
+          description: SKIP、REOPEN、SETTLE_EMPTY 操作必填，并写入审计记录。
       required: [calendarCode, bizDate, action]
     CompensationCommandRequest:
       type: object
@@ -13176,7 +14499,7 @@ components:
         targetId:
           type: integer
           format: int64
-        jobCode:
+        workflowCode:
           type: string
         bizDate:
           type: string
@@ -13199,7 +14522,158 @@ components:
           type: string
         traceId:
           type: string
+        sourceWorkflowRunId:
+          type: integer
+          format: int64
+        sourceWorkflowNodeRunId:
+          type: integer
+          format: int64
+        replayOperationId:
+          type: integer
+          format: int64
+        operationKey:
+          type: string
+          format: uuid
+        previewToken:
+          type: string
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
+        configVersion:
+          type: integer
+          format: int32
       required: [tenantId, compensationType]
+    WorkflowNodeReplayPreviewRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        workflowRunId: {type: integer, format: int64}
+        workflowNodeRunId: {type: integer, format: int64}
+        reason: {type: string, maxLength: 512}
+      required: [tenantId, workflowRunId, workflowNodeRunId]
+    ConsoleWorkflowNodeReplayPreviewResponse:
+      type: object
+      properties:
+        tenantId: {type: string}
+        operationKey: {type: string, format: uuid}
+        sourceWorkflowRunId: {type: integer, format: int64}
+        sourceWorkflowNodeRunId: {type: integer, format: int64}
+        sourceNodeCode: {type: string}
+        sourceNodeRunSeq: {type: integer, format: int32}
+        sourceJobInstanceId: {type: integer, format: int64}
+        jobCode: {type: string}
+        bizDate: {type: string, format: date}
+        sourceConfigVersion: {type: integer, format: int32, nullable: true}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32, nullable: true}
+        previewToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        warnings: {type: array, items: {type: string}}
+      required: [tenantId, operationKey, sourceWorkflowRunId, sourceWorkflowNodeRunId, sourceNodeCode, sourceJobInstanceId, jobCode, bizDate, resultPolicy, configVersionPolicy, previewToken, expiresAt, warnings]
+    WorkflowRunReplayRequest:
+      type: object
+      properties:
+        tenantId: {type: string}
+        workflowRunId: {type: integer, format: int64}
+        reason: {type: string, maxLength: 512}
+        resultPolicy:
+          type: string
+          enum: [CREATE_NEW_VERSION, KEEP_BOTH, MANUAL_CONFIRM_EFFECTIVE]
+        configVersionPolicy:
+          type: string
+          enum: [USE_ORIGINAL_CONFIG, USE_LATEST_CONFIG, USE_SPECIFIED_VERSION]
+        configVersion: {type: integer, format: int32}
+        operationKey: {type: string, format: uuid}
+        previewToken: {type: string, maxLength: 128}
+      required: [tenantId, workflowRunId, reason]
+      description: operationKey and previewToken are required when submitting for approval.
+    ConsoleWorkflowReplayCapabilityAssessment:
+      type: object
+      properties:
+        status: {type: string}
+        declaration:
+          allOf:
+            - $ref: '#/components/schemas/ReplayCapabilityDeclaration'
+          nullable: true
+        workerCount: {type: integer, format: int32}
+    ReplayCapabilityDeclaration:
+      type: object
+      properties:
+        pluginId: {type: string}
+        pluginVersion: {type: string}
+        externalEffectCategories:
+          type: array
+          items: {type: string}
+        idempotencyCapability:
+          type: string
+          enum: [IDEMPOTENT_BY_UNIQUE_CONSTRAINT, IDEMPOTENT_BY_PLUGIN_LOGIC, NONE, UNKNOWN]
+        idempotencyKeyScope: {type: string}
+        recoveryProtocolId: {type: string}
+        contractVersion: {type: integer, format: int32}
+      required: [pluginId, pluginVersion, externalEffectCategories, idempotencyCapability, idempotencyKeyScope, contractVersion]
+    ConsoleWorkflowRunReplayPreviewResponse:
+      type: object
+      properties:
+        tenantId: {type: string}
+        sourceWorkflowRunId: {type: integer, format: int64}
+        workflowDefinitionId: {type: integer, format: int64}
+        workflowVersion: {type: integer, format: int32}
+        bizDate: {type: string, format: date}
+        calendarCode: {type: string}
+        dataIntervalStart: {type: string, format: date-time, nullable: true}
+        dataIntervalEnd: {type: string, format: date-time, nullable: true}
+        resultPolicy: {type: string}
+        configVersionPolicy: {type: string}
+        configVersion: {type: integer, format: int32, nullable: true}
+        operationKey: {type: string, format: uuid}
+        previewToken: {type: string}
+        expiresAt: {type: string, format: date-time}
+        nodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowRunReplayNodePreview'
+        edges:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleWorkflowRunReplayEdgePreview'
+      required: [tenantId, sourceWorkflowRunId, workflowDefinitionId, workflowVersion, bizDate, calendarCode, resultPolicy, configVersionPolicy, operationKey, previewToken, expiresAt, nodes, edges]
+    ConsoleWorkflowRunReplayNodePreview:
+      type: object
+      properties:
+        nodeCode: {type: string}
+        nodeType: {type: string}
+        enabled: {type: boolean}
+        jobCode: {type: string, nullable: true}
+        jobDefinitionId: {type: integer, format: int64, nullable: true}
+        jobDefinitionVersion: {type: integer, format: int32, nullable: true}
+        workerGroup: {type: string, nullable: true}
+        pluginId: {type: string, nullable: true}
+        capability:
+          allOf:
+            - $ref: '#/components/schemas/ConsoleWorkflowReplayCapabilityAssessment'
+          nullable: true
+        blockers:
+          type: array
+          items: {type: string}
+      required: [nodeCode, nodeType, blockers]
+    ConsoleWorkflowRunReplayEdgePreview:
+      type: object
+      properties:
+        fromNodeCode: {type: string}
+        toNodeCode: {type: string}
+        edgeType: {type: string}
+        enabled: {type: boolean}
+      required: [fromNodeCode, toNodeCode, edgeType, enabled]
+    ConsoleWorkflowRunReplaySubmissionResponse:
+      type: object
+      properties:
+        replayOperationId: {type: integer, format: int64}
+        approvalNo: {type: string}
+      required: [replayOperationId, approvalNo]
     CompensateRequest:
       type: object
       description: 与 BE Java DTO `CompensateRequest` 对齐。
@@ -13217,6 +14691,7 @@ components:
         targetId:
           type: integer
           format: int64
+          description: For WORKFLOW_NODE, the exact source WorkflowNodeRun ID.
         targetInstanceNo:
           type: string
         batchNo:
@@ -13234,6 +14709,28 @@ components:
           type: string
         strategy:
           type: string
+        resultPolicy:
+          type: string
+          description: Frozen replay result policy from the approved preview.
+        configVersionPolicy:
+          type: string
+          description: Frozen replay configuration policy from the approved preview.
+        configVersion:
+          type: integer
+          format: int32
+          description: Selected configuration version when configVersionPolicy is USE_SPECIFIED_VERSION.
+        sourceWorkflowRunId:
+          type: integer
+          format: int64
+          description: Exact failed Workflow run identity for WORKFLOW_NODE replay.
+        sourceWorkflowNodeRunId:
+          type: integer
+          format: int64
+          description: Exact failed JOB node run identity; must equal targetId for WORKFLOW_NODE replay.
+        replayOperationId:
+          type: integer
+          format: int64
+          description: Frozen ADR-049 replay operation identity attached to the approved node replay.
       required: [tenantId, jobCode, bizDate]
     RerunRequest:
       type: object
@@ -13298,6 +14795,13 @@ components:
         strategy:
           type: string
           maxLength: 32
+        externalActionVerifiedNotExecuted:
+          type: boolean
+          description: 操作员已核实外部动作未执行；仅对 EXTERNAL_OUTCOME_UNKNOWN 的死信有效，且只允许一次。
+        externalOutcomeEvidenceReference:
+          type: string
+          maxLength: 512
+          description: 核实外部动作未执行的证据引用；确认时必填。
       required: [tenantId, deadLetterId]
     ConsoleCatchUpApprovalRequest:
       type: object
@@ -13313,12 +14817,21 @@ components:
           type: string
           maxLength: 128
           description: 用于幂等关联的业务 requestId(必填)
+        workflowDefinitionId:
+          type: integer
+          format: int64
+          minimum: 1
+          description: Workflow catch-up target; present for scheduled occurrence recovery
         jobCode:
           type: string
           maxLength: 128
         bizDate:
           type: string
           format: date
+        batchDayCalendarCode:
+          type: string
+          maxLength: 128
+          description: 批量日发起的补跑审批使用的日历身份，普通补跑可不传；批准后必须保持与审批载荷一致。
         scheduledAt:
           type: string
           maxLength: 64
@@ -14107,7 +15620,7 @@ components:
           maxLength: 512
     BatchWindowCreateRequest:
       type: object
-      description: 创建批次窗口。与 BE Java DTO `BatchWindowCreateRequest` 对齐。
+      description: 创建批次窗口。实际写入前校验合法时区和ISO本地时间；非跨日窗口开始时间必须早于结束时间，不接受数据库动态时间字面量。
       properties:
         tenantId:
           type: string
@@ -14121,8 +15634,10 @@ components:
           maxLength: 64
         startTime:
           type: string
+          description: ISO本地时间，例如01:00或01:00:00；不能使用now等动态时间字面量。
         endTime:
           type: string
+          description: ISO本地时间；非跨日窗口必须晚于开始时间。
         endStrategy:
           type: string
           maxLength: 32
@@ -14138,32 +15653,45 @@ components:
           maxLength: 512
     BatchWindowUpdateRequest:
       type: object
-      description: 更新批次窗口(字段可选)。与 BE Java DTO `BatchWindowUpdateRequest` 对齐。
+      description: 更新批次窗口，可更新配置字段省略或为null时沿用已有值。合并后时区与时间必须合法；非跨日窗口要求开始时间早于结束时间，否则返回400 INVALID_ARGUMENT且不写库。
       properties:
         tenantId:
           type: string
         windowName:
           type: string
+          nullable: true
           maxLength: 256
         timezone:
           type: string
+          nullable: true
           maxLength: 64
+          description: 合法时区ID，例如UTC或Asia/Shanghai；不能更新为空白或未知时区。
         startTime:
           type: string
+          nullable: true
+          description: ISO本地时间，例如01:00或01:00:00；部分更新后仍须满足窗口区间约束。
         endTime:
           type: string
+          nullable: true
+          description: ISO本地时间；非跨日窗口的合并后结束时间必须晚于开始时间。
         endStrategy:
           type: string
+          nullable: true
           maxLength: 32
         outOfWindowAction:
           type: string
+          nullable: true
           maxLength: 32
         allowCrossDay:
           type: boolean
+          nullable: true
+          description: false要求合并后开始时间早于结束时间；true保留跨日及相等时间的全天窗口语义。
         enabled:
           type: boolean
+          nullable: true
         description:
           type: string
+          nullable: true
           maxLength: 512
     CalendarSaveRequest:
       type: object
@@ -14179,6 +15707,7 @@ components:
         timezone:
           type: string
           maxLength: 64
+          description: 必须是 Java ZoneId 可识别的有效时区。
         holidayRollRule:
           type: string
         catchUpPolicy:
@@ -14280,6 +15809,7 @@ components:
           maxLength: 512
         fieldMappingsJson:
           type: string
+          description: "IMPORT FIXED_WIDTH 已启用模板的非空映射须为数组，每项 target 非空、start 为非负 32 位整数、length 为正 32 位整数。空骨架及禁用草稿允许保存。"
         validationRuleSetJson:
           type: string
         defaultQueryCode:
@@ -14394,6 +15924,7 @@ components:
           maxLength: 512
         fieldMappingsJson:
           type: string
+          description: "IMPORT FIXED_WIDTH 已启用模板的非空映射须为数组，每项 target 非空、start 为非负 32 位整数、length 为正 32 位整数。空骨架及禁用草稿允许保存。"
         validationRuleSetJson:
           type: string
         defaultQueryCode:
@@ -14622,7 +16153,7 @@ components:
         jobType:
           type: string
           description: >-
-            作业类型。当前支持 GENERAL、IMPORT、EXPORT、PROCESS、DISPATCH、ATOMIC、WORKFLOW、
+            作业类型。当前支持 GENERAL、IMPORT、EXPORT、PROCESS、DISPATCH、ATOMIC、
             BUNDLE_IMPORT、BUNDLE_EXPORT、BUNDLE_DISPATCH；服务端按公共 JobType 词表校验。
         scheduleType:
           type: string
@@ -14636,7 +16167,17 @@ components:
         dependsOnJobCode:
           type: string
           maxLength: 64
-          description: 单个同租户上游作业编码；scheduled fire 等待同一 bizDate 上游成功就绪，不支持可配置的依赖结果条件。
+          description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
+        dependsOnJobCodes:
+          type: array
+          maxItems: 32
+          items: { type: string, maxLength: 64, pattern: '^[a-zA-Z][a-zA-Z0-9_-]{0,63}$' }
+          description: 兼容字段，多个上游均按 SAME_DAY 检查；逐边对齐请使用 jobDependencyRules。
+        jobDependencyRules:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/JobDependencyRuleRequest' }
+          description: 逐上游指定业务日对齐；提供时优先于仅包含作业编码的兼容字段。
         timezone:
           type: string
         triggerMode:
@@ -14688,33 +16229,33 @@ components:
           type: integer
           format: int32
           minimum: 0
-          description: Cron 独立作业从计划触发时刻、依赖作业从计划触发与上游就绪时刻中的较晚者起算启动宽限秒数；超过宽限期仍未启动时告警，创建时未指定采用平台默认，0 表示关闭
+          description: 实际执行资格后的启动宽限秒数；Workflow 子作业按节点激活与捕获依赖生效的较晚时刻计，旧 Cron/依赖作业保留计划口径。可预先配置，独立手工运行无资格依据时不判断迟到；0 关闭。
         startGraceSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
           description: 启动过晚告警级别；缺省 WARN
         completionDeadlineEnabled:
           type: boolean
-          description: 完成过晚监控是否启用；无依赖 Cron 以 completionDeadlineLocalTime 启用，依赖作业以 dependencyCompletionWindowSeconds 启用
+          description: 完成规则是否已配置；由本地完成钟点或相对窗口启用，实际运行仍需具备真实计划或就绪资格。
         completionDeadlineLocalTime:
           type: string
           format: time
-          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+          description: 绝对完成钟点（HH:mm），按作业时区解释；Cron 使用计划日期，Workflow 子作业使用业务日期。与相对完成窗口互斥，留空关闭。
         completionDeadlineDayOffset:
           type: integer
           format: int32
           minimum: 0
           maximum: 1
-          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+          description: 完成钟点相对计划日期或 Workflow 子作业业务日期的偏移；0 当日，1 次日。
         dependencyCompletionWindowSeconds:
           type: integer
           format: int32
           minimum: 0
-          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+          description: 从真实执行资格起算的相对完成窗口秒数，适用于依赖作业及 Workflow 子作业；与本地完成钟点互斥，0 关闭。
         completionDeadlineSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
-          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
+          description: 完成过晚告警级别，适用于已配置且运行资格明确的完成规则；缺省 WARN。
         executionHandler:
           type: string
         paramSchema:
@@ -14724,6 +16265,8 @@ components:
         priority:
           type: integer
           format: int32
+          minimum: 1
+          maximum: 9
         enabled:
           type: boolean
         description:
@@ -14749,7 +16292,17 @@ components:
         dependsOnJobCode:
           type: string
           maxLength: 64
-          description: 单个同租户上游作业编码；scheduled fire 等待同一 bizDate 上游成功就绪，不支持可配置的依赖结果条件。
+          description: 上游作业编码；填写后 scheduled fire 前等待同 bizDate 上游就绪。
+        dependsOnJobCodes:
+          type: array
+          maxItems: 32
+          items: { type: string, maxLength: 64, pattern: '^[a-zA-Z][a-zA-Z0-9_-]{0,63}$' }
+          description: 替换完整上游集合且按 SAME_DAY 对齐；空数组清除依赖，缺省保持不变。逐边规则请使用 jobDependencyRules。
+        jobDependencyRules:
+          type: array
+          maxItems: 32
+          items: { $ref: '#/components/schemas/JobDependencyRuleRequest' }
+          description: 替换完整依赖边集合及业务日对齐规则；空数组清除依赖，缺省保持不变。
         timezone:
           type: string
         triggerMode:
@@ -14799,33 +16352,33 @@ components:
           type: integer
           format: int32
           minimum: 0
-          description: Cron 独立作业从计划触发时刻、依赖作业从计划触发与上游就绪时刻中的较晚者起算启动宽限秒数；超过宽限期仍未启动时告警，0 表示关闭
+          description: 实际执行资格后的启动宽限秒数；Workflow 子作业按节点激活与捕获依赖生效的较晚时刻计，旧 Cron/依赖作业保留计划口径。可预先配置，独立手工运行无资格依据时不判断迟到；0 关闭。
         startGraceSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
           description: 启动过晚告警级别；缺省 WARN
         completionDeadlineEnabled:
           type: boolean
-          description: 完成过晚监控是否启用；无依赖 Cron 以 completionDeadlineLocalTime 启用，依赖作业以 dependencyCompletionWindowSeconds 启用
+          description: 完成规则是否已配置；由本地完成钟点或相对窗口启用，实际运行仍需具备真实计划或就绪资格。
         completionDeadlineLocalTime:
           type: string
           format: time
-          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+          description: 绝对完成钟点（HH:mm），按作业时区解释；Cron 使用计划日期，Workflow 子作业使用业务日期。与相对完成窗口互斥，留空关闭。
         completionDeadlineDayOffset:
           type: integer
           format: int32
           minimum: 0
           maximum: 1
-          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+          description: 完成钟点相对计划日期或 Workflow 子作业业务日期的偏移；0 当日，1 次日。
         dependencyCompletionWindowSeconds:
           type: integer
           format: int32
           minimum: 0
-          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+          description: 从真实执行资格起算的相对完成窗口秒数，适用于依赖作业及 Workflow 子作业；与本地完成钟点互斥，0 关闭。
         completionDeadlineSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
-          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
+          description: 完成过晚告警级别，适用于已配置且运行资格明确的完成规则；缺省 WARN。
         executionHandler:
           type: string
         paramSchema:
@@ -14835,10 +16388,27 @@ components:
         priority:
           type: integer
           format: int32
+          minimum: 1
+          maximum: 9
         enabled:
           type: boolean
         description:
           type: string
+    JobDependencyRuleRequest:
+      type: object
+      required: [upstreamJobCode, bizDateAlignment]
+      properties:
+        upstreamJobCode:
+          type: string
+          maxLength: 64
+          pattern: '^[a-zA-Z][a-zA-Z0-9_-]{0,63}$'
+        bizDateAlignment:
+          type: string
+          enum: [SAME_DAY, PREVIOUS_BIZ_DAY]
+          description: PREVIOUS_BIZ_DAY 按下游作业绑定的业务日历解析，跳过 HOLIDAY 并接受 WORKDAY_OVERRIDE；未配置业务日历时按周一至周五计算。
+    JobDependencyRuleResponse:
+      allOf:
+        - $ref: '#/components/schemas/JobDependencyRuleRequest'
     ConsoleJobDefinitionResponse:
       type: object
       properties:
@@ -14851,7 +16421,13 @@ components:
           type: string
         dependsOnJobCode:
           type: string
-          description: 单个同租户上游作业编码；scheduled fire 等待同一 bizDate 上游成功就绪，不支持可配置的依赖结果条件。
+          description: 兼容单上游投影；完整数据依赖规则见 jobDependencyRules。
+        dependsOnJobCodes:
+          type: array
+          items: { type: string }
+        jobDependencyRules:
+          type: array
+          items: { $ref: '#/components/schemas/JobDependencyRuleResponse' }
         jobName:
           type: string
         jobType:
@@ -14894,31 +16470,31 @@ components:
         startGraceSeconds:
           type: integer
           format: int32
-          description: Cron 独立作业按计划触发时刻、依赖作业按计划触发与上游就绪时刻中的较晚者起算允许的启动延迟时长（秒）；超过宽限期仍未启动时告警，0 表示关闭
+          description: 实际执行资格后的启动宽限秒数；Workflow 子作业按节点激活与捕获依赖生效的较晚时刻计，旧 Cron/依赖作业保留计划口径。可预先配置，独立手工运行无资格依据时不判断迟到；0 关闭。
         startGraceSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
           description: 启动过晚告警级别；缺省 WARN
         completionDeadlineEnabled:
           type: boolean
-          description: 完成过晚监控是否启用；无依赖 Cron 使用钟点规则，依赖作业使用相对完成窗口
+          description: 完成规则是否已配置；由本地完成钟点或相对窗口启用，实际运行仍需具备真实计划或就绪资格。
         completionDeadlineLocalTime:
           type: string
           format: time
-          description: 仅无依赖 CRON：完成截止钟点（HH:mm），按作业时区解释；到期仍未结束则告警，留空关闭
+          description: 绝对完成钟点（HH:mm），按作业时区解释；Cron 使用计划日期，Workflow 子作业使用业务日期。与相对完成窗口互斥，留空关闭。
         completionDeadlineDayOffset:
           type: integer
           format: int32
-          description: 仅无依赖 CRON：截止日期相对计划触发日的偏移；0 当日，1 次日
+          description: 完成钟点相对计划日期或 Workflow 子作业业务日期的偏移；0 当日，1 次日。
         dependencyCompletionWindowSeconds:
           type: integer
           format: int32
           minimum: 0
-          description: 仅依赖作业：从下游满足执行资格时起算的完成窗口秒数；到期仍未结束则告警，0 关闭
+          description: 从真实执行资格起算的相对完成窗口秒数，适用于依赖作业及 Workflow 子作业；与本地完成钟点互斥，0 关闭。
         completionDeadlineSeverity:
           type: string
           enum: [WARN, ERROR, CRITICAL]
-          description: 完成过晚告警级别；Cron 独立作业或声明上游依赖的作业适用，缺省 WARN
+          description: 完成过晚告警级别，适用于已配置且运行资格明确的完成规则；缺省 WARN。
         shardStrategy:
           type: string
         executionMode:
@@ -14941,6 +16517,10 @@ components:
         updatedAt:
           type: string
           format: date-time
+        defaultWorkflowDefinitionId:
+          type: integer
+          format: int64
+          nullable: true
       required: [id, tenantId, jobCode, dependsOnJobCode, jobName, jobType, queueCode, workerGroup, scheduleType, scheduleExpr, calendarCode, windowCode, triggerMode, retryPolicy, retryMaxCount, timeoutSeconds, shardStrategy, executionMode, executionHandler, paramSchema, defaultParams, enabled, createdAt, updatedAt]
     ConsoleJobInstanceResponse:
       type: object
@@ -15077,6 +16657,12 @@ components:
           type: string
         errorMessage:
           type: string
+        skipReasonCode:
+          type: string
+          description: Stable reason category when the node status is SKIPPED.
+        skipReason:
+          type: string
+          description: Operator-supplied explanation for a manual skip, when present.
         relatedPipelineInstanceId:
           type: integer
           format: int64
@@ -15149,11 +16735,33 @@ components:
           type: string
         workflowType:
           type: string
+        scheduleType:
+          type: string
+          nullable: true
+        scheduleExpr:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        triggerMode:
+          type: string
+          nullable: true
+        calendarCode:
+          type: string
+          nullable: true
+        dependsOnJobCode:
+          type: string
+          nullable: true
         version:
           type: integer
           format: int32
         enabled:
           type: boolean
+        scheduleEnabled:
+          type: boolean
+          nullable: true
+          description: Whether scheduled fires are enabled, independent from workflow enabled state.
         description:
           type: string
         createdAt:
@@ -15162,6 +16770,10 @@ components:
         updatedAt:
           type: string
           format: date-time
+        singleJobDefinitionId:
+          type: integer
+          format: int64
+          nullable: true
       required: [id, tenantId, workflowCode, workflowName, workflowType, version, enabled, description, createdAt, updatedAt]
     ConsoleWorkflowNodeResponse:
       type: object
@@ -15179,8 +16791,6 @@ components:
         nodeType:
           type: string
         relatedJobCode:
-          type: string
-        relatedPipelineCode:
           type: string
         workerGroup:
           type: string
@@ -15214,7 +16824,7 @@ components:
           type: integer
           format: int32
           description: ADR-018 跨日依赖等待 timeout（秒）；用于 UI 显示"已等 X 分钟 / 剩 Y 分钟"。
-      required: [id, workflowDefinitionId, nodeCode, nodeName, nodeType, relatedJobCode, relatedPipelineCode, workerGroup, windowCode, nodeOrder, retryPolicy, retryMaxCount, timeoutSeconds, nodeParams, enabled, createdAt, updatedAt]
+      required: [id, workflowDefinitionId, nodeCode, nodeName, nodeType, relatedJobCode, workerGroup, windowCode, nodeOrder, retryPolicy, retryMaxCount, timeoutSeconds, nodeParams, enabled, createdAt, updatedAt]
     ConsoleWorkflowEdgeResponse:
       type: object
       properties:
@@ -15241,6 +16851,174 @@ components:
           type: string
           format: date-time
       required: [id, workflowDefinitionId, fromNodeCode, toNodeCode, edgeType, conditionExpr, enabled, createdAt, updatedAt]
+    DailyProgress:
+      type: object
+      required: [tenantId, bizDate, generatedAt, counts, coverage]
+      properties:
+        tenantId: { type: string }
+        bizDate: { type: string, format: date }
+        generatedAt: { type: string, format: date-time }
+        counts:
+          type: array
+          items: { $ref: '#/components/schemas/DailyProgressStatusCount' }
+        coverage: { $ref: '#/components/schemas/DailyProgressCoverage' }
+    DailyProgressStatusCount:
+      type: object
+      required: [scope, status, count]
+      properties:
+        scope: { type: string, enum: [SCHEDULED_OCCURRENCE, TRIGGER_REQUEST, WORKFLOW_RUN, JOB_INSTANCE, JOB_TASK] }
+        status: { type: string }
+        count: { type: integer, format: int64, minimum: 0 }
+    DailyProgressCoverage:
+      type: object
+      required: [scheduledDefinitions, uncoveredDefinitions]
+      properties:
+        scheduledDefinitions: { type: integer, format: int64, minimum: 0 }
+        uncoveredDefinitions: { type: integer, format: int64, minimum: 0 }
+    CommonResponseDailyProgress:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/DailyProgress' }
+    PipelineProgressSnapshot:
+      type: object
+      required: [tenantId, generatedAt, pipelines]
+      properties:
+        tenantId: { type: string }
+        generatedAt: { type: string, format: date-time }
+        pipelines:
+          type: array
+          items: { $ref: '#/components/schemas/PipelineExecutionProgress' }
+    PipelineExecutionProgress:
+      type: object
+      required: [pipelineInstanceId, runStatus, stageGraphAvailable, stageCodes, steps]
+      properties:
+        pipelineInstanceId: { type: integer, format: int64 }
+        fileId: { type: integer, format: int64, nullable: true }
+        fileName: { type: string, nullable: true }
+        runStatus: { type: string }
+        currentStage: { type: string, nullable: true }
+        systemPipelineCode: { type: string, nullable: true }
+        systemPipelineVersion: { type: integer, nullable: true }
+        stageGraphAvailable: { type: boolean }
+        stageCodes: { type: array, items: { type: string } }
+        steps:
+          type: array
+          description: Latest attempt per stage; historical attempts stay in the paginated step query.
+          items: { $ref: '#/components/schemas/PipelineExecutionStepProgress' }
+    PipelineExecutionStepProgress:
+      type: object
+      required: [stepId, pipelineInstanceId, stepCode, stageCode, stepStatus]
+      properties:
+        stepId: { type: integer, format: int64 }
+        pipelineInstanceId: { type: integer, format: int64 }
+        stepCode: { type: string }
+        stageCode: { type: string }
+        stepStatus: { type: string }
+        runSeq: { type: integer, nullable: true }
+        errorCode: { type: string, nullable: true }
+        rowsProcessed: { type: integer, format: int64, nullable: true }
+        totalRowsHint: { type: integer, format: int64, nullable: true }
+        lastHeartbeatAt: { type: integer, format: int64, nullable: true }
+    JobExecutionProgress:
+      type: object
+      required: [tenantId, jobInstanceId, jobCode, instanceStatus, generatedAt, stageGraphAvailable, counts, stages]
+      properties:
+        tenantId: { type: string }
+        jobInstanceId: { type: integer, format: int64 }
+        jobCode: { type: string }
+        instanceStatus: { type: string }
+        generatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+        expectedPartitions: { type: integer, nullable: true }
+        workflowRunId: { type: integer, format: int64, nullable: true }
+        nodeCode: { type: string, nullable: true }
+        pipelineInstanceId: { type: integer, format: int64, nullable: true }
+        pipelineStatus: { type: string, nullable: true }
+        currentStage: { type: string, nullable: true }
+        systemPipelineCode: { type: string, nullable: true }
+        systemPipelineVersion: { type: integer, nullable: true }
+        stageGraphAvailable: { type: boolean, description: Stage order known from the persisted or frozen immutable system pipeline version. No mutable job definition lookup. }
+        counts:
+          type: array
+          items:
+            type: object
+            required: [scope, status, count]
+            properties:
+              scope: { type: string, enum: [PARTITION, TASK] }
+              status: { type: string }
+              count: { type: integer, format: int64 }
+        stages:
+          type: array
+          items: { $ref: '#/components/schemas/JobExecutionStage' }
+    JobExecutionStage:
+      type: object
+      required: [stageCode, stageStatus]
+      properties:
+        stageCode: { type: string }
+        stageStatus: { type: string, description: Missing attempts stay PENDING while active, NOT_EXECUTED after job terminal; no record never means success. }
+        stepRunId: { type: integer, format: int64, nullable: true }
+        runSeq: { type: integer, nullable: true }
+        rowsProcessed: { type: integer, format: int64, nullable: true }
+        lastHeartbeatAt: { type: string, format: date-time, nullable: true }
+        errorCode: { type: string, nullable: true }
+    WorkflowExecutionProgress:
+      type: object
+      required: [workflowRunId, tenantId, workflowDefinitionId, runStatus, snapshotAvailable, generatedAt, nodes, edges]
+      properties:
+        workflowRunId: { type: integer, format: int64 }
+        tenantId: { type: string }
+        workflowDefinitionId: { type: integer, format: int64 }
+        workflowVersion: { type: integer, nullable: true }
+        runStatus: { type: string }
+        startedAt: { type: string, format: date-time, nullable: true, description: Persisted root run start time; null if unknown. }
+        finishedAt: { type: string, format: date-time, nullable: true, description: Persisted root run finish time; never inferred from generatedAt or node counters. }
+        bizDate: { type: string, format: date, nullable: true }
+        snapshotAvailable: { type: boolean }
+        generatedAt: { type: string, format: date-time }
+        nodes:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowExecutionNodeProgress' }
+        edges:
+          type: array
+          items: { $ref: '#/components/schemas/WorkflowExecutionEdge' }
+    WorkflowExecutionNodeProgress:
+      type: object
+      required: [nodeCode, nodeType, nodeStatus, activeSteps]
+      properties:
+        nodeCode: { type: string }
+        nodeName: { type: string, nullable: true }
+        nodeType: { type: string }
+        relatedJobCode: { type: string, nullable: true }
+        nodeStatus: { type: string, description: "NOT_EXECUTED is a projection for a terminal root with no persisted node attempt; it is not a successful execution claim. Active roots retain PENDING for nodes without attempts." }
+        nodeRunId: { type: integer, format: int64, nullable: true }
+        runSeq: { type: integer, nullable: true }
+        jobInstanceId: { type: integer, format: int64, nullable: true }
+        jobInstanceStatus: { type: string, nullable: true, description: "Status of the linked Job instance; it can advance while nodeStatus remains READY until the child Job result closes the Workflow node." }
+        expectedPartitions: { type: integer, nullable: true }
+        completedPartitions: { type: integer, nullable: true }
+        createdTasks: { type: integer, format: int64, nullable: true, description: Tasks already created; not a promise of all future tasks }
+        finishedTasks: { type: integer, format: int64, nullable: true }
+        activeSteps: { type: array, items: { type: string } }
+        errorCode: { type: string, nullable: true }
+        skipReasonCode: { type: string, nullable: true }
+        startedAt: { type: string, format: date-time, nullable: true }
+        finishedAt: { type: string, format: date-time, nullable: true }
+    WorkflowExecutionEdge:
+      type: object
+      required: [fromNodeCode, toNodeCode]
+      properties:
+        fromNodeCode: { type: string }
+        toNodeCode: { type: string }
+        edgeType: { type: string, nullable: true }
+    CommonResponseWorkflowExecutionProgress:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/WorkflowExecutionProgress' }
     ConsoleWorkflowRunResponse:
       type: object
       properties:
@@ -15286,6 +17064,9 @@ components:
         workflowRunId:
           type: integer
           format: int64
+        jobInstanceId:
+          type: integer
+          format: int64
         nodeCode:
           type: string
         nodeType:
@@ -15302,6 +17083,14 @@ components:
           type: string
         errorMessage:
           type: string
+        skipReasonCode:
+          type: string
+          nullable: true
+          description: 节点跳过原因码；未跳过或未记录原因时为空。
+        skipReason:
+          type: string
+          nullable: true
+          description: 节点跳过原因说明。
         startedAt:
           type: string
           format: date-time
@@ -15431,6 +17220,28 @@ components:
           type: string
         workflowType:
           type: string
+        singleJobDefinitionId:
+          type: integer
+          format: int64
+          nullable: true
+        scheduleType:
+          type: string
+          nullable: true
+        scheduleExpr:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
+        triggerMode:
+          type: string
+          nullable: true
+        calendarCode:
+          type: string
+          nullable: true
+        dependsOnJobCode:
+          type: string
+          nullable: true
         version:
           type: integer
           format: int32
@@ -15467,6 +17278,8 @@ components:
           type: integer
           format: int64
         deadLetterReason:
+          type: string
+        errorClass:
           type: string
         payloadRef:
           type: string
@@ -15538,7 +17351,7 @@ components:
           type: string
         requestId:
           type: string
-        jobCode:
+        workflowCode:
           type: string
         bizDate:
           type: string
@@ -15556,12 +17369,12 @@ components:
         approvalNo:
           type: string
           nullable: true
-          description: 关联 approval_command.approval_no(LEFT JOIN target_id=request_id + approval_type=CATCH_UP);用于走统一审批接口 /api/console/approvals/{approvalNo}/approve|reject。未走统一审批的旧记录可为 null。
+          description: 关联同租户、同请求的最新 CATCH_UP 审批单号（按审批 ID 降序）；未关联审批单时为 null。
         approvalStatus:
           type: string
           nullable: true
-          description: 关联 approval_command.approval_status(PENDING/APPROVED/REJECTED/EXECUTED)。可空。
-      required: [id, tenantId, requestId, jobCode, bizDate, requestStatus, traceId, createdAt, updatedAt]
+          description: 与 approvalNo 对应的审批状态（PENDING/APPROVED/REJECTED/EXECUTED）；无审批单时为 null。
+      required: [id, tenantId, requestId, workflowCode, bizDate, requestStatus, traceId, createdAt, updatedAt]
     ConsoleFileArrivalGroupResponse:
       type: object
       properties:
@@ -15623,6 +17436,7 @@ components:
           type: string
         errorMessage:
           type: string
+          description: 展示时遮蔽可识别的凭据形式。
         errorStage:
           type: string
         skipped:
@@ -15631,6 +17445,7 @@ components:
           type: string
         rawRecord:
           type: string
+          description: 原始记录按文件模板配置的内容脱敏策略展示。
         createdAt:
           type: string
           format: date-time
@@ -15929,6 +17744,93 @@ components:
           type: integer
           format: int32
       required: [jobCode, totalJobCount, successJobCount, failedJobCount, inFlightJobCount, catchupCount]
+    CalendarDependencyWaitManualActionRequest:
+      type: object
+      properties:
+        tenantId: { type: string, maxLength: 64 }
+        calendarCode: { type: string, maxLength: 128 }
+        bizDate: { type: string, format: date }
+        action: { type: string, enum: [RELEASE, SKIP] }
+        reason: { type: string, maxLength: 1024 }
+      required: [tenantId, calendarCode, bizDate, action, reason]
+    ConsoleCalendarDependencyWaitResponse:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        tenantId: { type: string }
+        calendarCode: { type: string }
+        bizDate: { type: string, format: date }
+        waitStatus: { type: string, enum: [WAITING, OPENED, SKIPPED] }
+        blockedReason: { type: string, nullable: true }
+        firstWaitingAt: { type: string, format: date-time }
+        lastCheckedAt: { type: string, format: date-time }
+        attemptCount: { type: integer, format: int32 }
+        cutoffAt: { type: string, format: date-time, nullable: true }
+        slaDeadlineAt: { type: string, format: date-time, nullable: true }
+        timezoneSnapshot: { type: string }
+        dstPolicySnapshot: { type: string }
+        openedAt: { type: string, format: date-time, nullable: true }
+        timeoutAlertedAt: { type: string, format: date-time, nullable: true }
+        dependencySnapshot: { type: string, nullable: true }
+        manualAction: { type: string, enum: [RELEASE, SKIP], nullable: true }
+        manualOperatorId: { type: string, nullable: true }
+        manualReason: { type: string, nullable: true }
+        manualRequestedAt: { type: string, format: date-time, nullable: true }
+      required: [id, tenantId, calendarCode, bizDate, waitStatus, firstWaitingAt, lastCheckedAt, attemptCount]
+    ConsoleJobDependencyWaitResponse:
+      type: object
+      properties:
+        tenantId: { type: string }
+        requestId: { type: string }
+        jobCode: { type: string }
+        bizDate: { type: string, format: date }
+        dependencySnapshot: { type: string, description: JSON array of upstream job codes }
+        waitStatus: { type: string, enum: [WAITING, RELEASED, CANCELLED] }
+        attemptCount: { type: integer, format: int32 }
+        lastNotReadyReason: { type: string, nullable: true }
+        lastCheckedAt: { type: string, format: date-time, nullable: true }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        timeoutAlertedAt: { type: string, format: date-time, nullable: true }
+      required: [tenantId, requestId, jobCode, bizDate, waitStatus, attemptCount, createdAt, updatedAt]
+    ConsolePersistentWaitPageResponse:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsolePersistentWaitResponse'
+        pageNo: { type: integer, minimum: 1 }
+        pageSize: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, format: int64, minimum: 0 }
+      required: [items, pageNo, pageSize, total]
+    ConsolePersistentWaitResponse:
+      type: object
+      description: Safe projection that excludes workflow_launch_wait.launch_payload.
+      properties:
+        id: { type: integer, format: int64 }
+        waitType: { type: string, enum: [READINESS, CAPACITY_ADMISSION] }
+        tenantId: { type: string }
+        workflowDefinitionId: { type: integer, format: int64 }
+        workflowCode: { type: string }
+        calendarCode: { type: string, nullable: true }
+        bizDate: { type: string, format: date }
+        waitStatus: { type: string, enum: [PENDING, RELEASED, TIMED_OUT, CANCELLED, WAITING, RESUMED, REJECTED] }
+        dependencyJobCodes: { type: string, nullable: true, description: Comma-separated upstream job codes for readiness waits }
+        reasonCode: { type: string, nullable: true }
+        attemptCount: { type: integer, format: int32, nullable: true }
+        nextAttemptAt: { type: string, format: date-time, nullable: true }
+        deadline: { type: string, format: date-time, nullable: true }
+        scheduledFireTime: { type: string, format: date-time, nullable: true }
+        deferredSince: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        requestId: { type: string, nullable: true }
+        traceId: { type: string, nullable: true }
+        lastErrorCode: { type: string, nullable: true }
+        workflowRunId: { type: integer, format: int64, nullable: true }
+        dryRun: { type: boolean, nullable: true }
+      required: [id, waitType, tenantId, workflowDefinitionId, workflowCode, bizDate, waitStatus, deferredSince, createdAt, updatedAt]
     ConsoleBatchDayResponse:
       type: object
       properties:
@@ -15983,6 +17885,10 @@ components:
         bizDate:
           type: string
           format: date
+        frozen:
+          type: boolean
+          nullable: true
+          description: Persisted batch day freeze flag; null when the batch day record does not exist.
         dayStatus:
           type: string
         cutoffAt:
@@ -16008,7 +17914,45 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ConsoleBatchDaySummaryResponse'
-      required: [bizDate, dayStatus, currentSystemTime, jobs]
+        scheduledOccurrences:
+          type: array
+          items:
+            $ref: '#/components/schemas/ConsoleScheduledOccurrenceResponse'
+      required: [bizDate, dayStatus, currentSystemTime, jobs, scheduledOccurrences]
+    ConsoleScheduledOccurrenceResponse:
+      type: object
+      properties:
+        workflowDefinitionId:
+          type: integer
+          format: int64
+        workflowCode:
+          type: string
+        catchUpPolicy:
+          type: string
+        scheduleVersion:
+          type: integer
+        scheduledFireTime:
+          type: string
+          format: date-time
+        bizDate:
+          type: string
+          format: date
+        occurrenceStatus:
+          type: string
+        requestId:
+          type: string
+          nullable: true
+        lastRejectionReason:
+          type: string
+          nullable: true
+      required:
+        - workflowDefinitionId
+        - workflowCode
+        - catchUpPolicy
+        - scheduleVersion
+        - scheduledFireTime
+        - bizDate
+        - occurrenceStatus
     ConsoleBatchDayCatchUpItemResponse:
       type: object
       properties:
@@ -16040,6 +17984,109 @@ components:
           items:
             $ref: '#/components/schemas/ConsoleBatchDayCatchUpItemResponse'
       required: [tenantId, calendarCode, bizDate, catchUpPolicy, items]
+    BatchDayCatchUpRequestStatusItem:
+      type: object
+      required: [jobCode, status]
+      properties:
+        jobCode: { type: string }
+        status: { type: string, enum: [PENDING, IN_FLIGHT, UNKNOWN, ACCEPTED] }
+        referenceNo: { type: string, nullable: true }
+    BatchDayCatchUpRequestStatusResponse:
+      type: object
+      required: [found, tenantId, items]
+      properties:
+        found: { type: boolean }
+        tenantId: { type: string }
+        bizDate: { type: string, format: date, nullable: true }
+        calendarCode: { type: string, nullable: true }
+        catchUpPolicy: { type: string, nullable: true }
+        operationStatus: { type: string, nullable: true, enum: [PREPARED, RUNNING, COMPLETE, UNKNOWN, ABANDONED] }
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BatchDayCatchUpRequestStatusItem'
+    AtomicRuntimeStatus:
+      type: object
+      required: [available]
+      properties:
+        available: {type: boolean}
+        unavailableReason: {type: string, nullable: true}
+        workerCode: {type: string, nullable: true}
+        workerType: {type: string, nullable: true}
+        shell:
+          type: object
+          nullable: true
+          properties:
+            enabled: {type: boolean}
+            commandWhitelistSize: {type: integer, minimum: 0}
+        sql:
+          type: object
+          nullable: true
+          properties:
+            enabled: {type: boolean}
+            dialect: {type: string, nullable: true}
+        http:
+          type: object
+          nullable: true
+          properties:
+            enabled: {type: boolean}
+            enforceAllowlist: {type: boolean}
+            enforceAllowlistSource: {type: string, enum: [explicit, prod-default, dev-default, absent]}
+            allowlistHostsSize: {type: integer, minimum: 0}
+        storedProc:
+          type: object
+          nullable: true
+          properties:
+            enabled: {type: boolean}
+            allowedSchemasSize: {type: integer, minimum: 0}
+    CommonResponseAtomicRuntimeStatus:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data: {$ref: '#/components/schemas/AtomicRuntimeStatus'}
+    ConsoleBatchDayCatchupPreviewResponse:
+      type: object
+      properties:
+        tenantId: { type: string }
+        calendarCode: { type: string }
+        currentBizDate: { type: string, format: date }
+        lastScannedBizDate: { type: string, format: date }
+        cursorSource: { type: string, enum: [PERSISTED_CURSOR, LATEST_BATCH_DAY_BASELINE, CURRENT_DATE_BASELINE] }
+        nextRawBizDate: { type: string, format: date, nullable: true }
+        plannedThroughRawBizDate: { type: string, format: date, nullable: true }
+        remainingRawDateCount: { type: integer, format: int64 }
+        maxDatesPerScan: { type: integer }
+        nextScanRawBizDates:
+          type: array
+          items: { type: string, format: date }
+        historicalGapsBeforeAnchorAreChecked: { type: boolean }
+        catchupPaused: { type: boolean }
+        catchupPausedAt: { type: string, format: date-time, nullable: true }
+        catchupPausedBy: { type: string, nullable: true }
+        catchupPauseReason: { type: string, nullable: true }
+      required: [tenantId, calendarCode, currentBizDate, lastScannedBizDate, cursorSource, remainingRawDateCount, maxDatesPerScan, nextScanRawBizDates, historicalGapsBeforeAnchorAreChecked, catchupPaused]
+    ConsoleBatchDayHistoricalGapInventoryResponse:
+      type: object
+      properties:
+        tenantId: { type: string }
+        calendarCode: { type: string }
+        fromDate: { type: string, format: date }
+        throughDate: { type: string, format: date }
+        inspectedDateCount: { type: integer, minimum: 1, maximum: 90 }
+        missingRecordCandidates:
+          type: array
+          items: { type: string, format: date }
+        interpretation: { type: string }
+      required: [tenantId, calendarCode, fromDate, throughDate, inspectedDateCount, missingRecordCandidates, interpretation]
+    BatchDayCatchupControlRequest:
+      type: object
+      properties:
+        tenantId: { type: string, maxLength: 64 }
+        calendarCode: { type: string, maxLength: 128 }
+        action: { type: string, enum: [PAUSE, RESUME] }
+        reason: { type: string, maxLength: 1024 }
+      required: [tenantId, calendarCode, action, reason]
     ConfigGovernanceItemResponse:
       type: object
       properties:
@@ -16315,8 +18362,6 @@ components:
         id:
           type: integer
           format: int64
-        tenantId:
-          type: string
         jobInstanceId:
           type: integer
           format: int64
@@ -16332,13 +18377,7 @@ components:
           type: string
         assignedWorkerCode:
           type: string
-        taskPayload:
-          type: string
-        resultSummary:
-          type: string
         errorCode:
-          type: string
-        errorMessage:
           type: string
         startedAt:
           type: string
@@ -16352,7 +18391,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, jobInstanceId, jobPartitionId, taskType, taskSeq, taskStatus, assignedWorkerCode, taskPayload, resultSummary, errorCode, errorMessage, startedAt, finishedAt, createdAt, updatedAt]
+      required: [id, jobInstanceId, jobPartitionId, taskType, taskSeq, taskStatus, assignedWorkerCode, errorCode, startedAt, finishedAt, createdAt, updatedAt]
     ConsoleSchedulerSnapshotResponse:
       type: object
       properties:
@@ -16746,12 +18785,15 @@ components:
           type: string
         inputSummary:
           type: string
+          description: JSON 文本；展示时遮蔽可识别的敏感字段和凭据形式。
         outputSummary:
           type: string
+          description: JSON 文本；展示时遮蔽可识别的敏感字段和凭据形式。
         errorCode:
           type: string
         errorMessage:
           type: string
+          description: 展示时遮蔽可识别的凭据形式。
         retryCount:
           type: integer
           format: int32
@@ -16937,7 +18979,7 @@ components:
         updatedAt: { type: string, format: date-time }
     ConsoleFileRecordDetailResponse:
       type: object
-      description: 固定存储投影；metadata_json 为文件处理链路可扩展的原始 JSONB 载荷。
+      description: 固定存储投影；metadata_json 为文件处理链路可扩展的 JSONB 载荷，响应遮蔽已识别凭据。
       properties:
         id: { type: integer, format: int64 }
         tenant_id: { type: string, nullable: true }
@@ -16948,7 +18990,7 @@ components:
         storage_bucket: { type: string, nullable: true }
         metadata_json:
           nullable: true
-          description: 原始 JSONB 扩展元数据。
+          description: JSONB 扩展元数据，响应遮蔽已识别凭据。
     ConsoleExcelRowIssueResponse:
       $ref: '#/components/schemas/ExcelRowIssue'
     ExcelChangeSummary:
@@ -17294,10 +19336,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowDefinitionSpec'
-        pipelineDefinitions:
-          type: array
-          items:
-            $ref: '#/components/schemas/PipelineDefinitionSpec'
         fileChannels:
           type: array
           items:
@@ -17332,7 +19370,8 @@ components:
       required: [sourceTenantId, targetTenantIds]
       description: |
         跨租户配置复制请求。从源租户读取配置，推送到目标租户列表。
-        configTypes 为空表示复制全部 10 类。
+        源租户不得同时出现在目标列表，重合时返回400且不读写配置。
+        configTypes 为空表示复制全部支持的配置类型；集合元素不得为null，租户/作业元素不得为空白。
       properties:
         sourceTenantId:
           type: string
@@ -17350,11 +19389,11 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TenantConfigCopyType'
-          description: 空表示复制全部 10 类
+          description: 空表示复制全部支持的配置类型；元素不得为null。
         jobCodes:
           type: array
           maxItems: 100
-          description: 非空时按 jobCode 构建 dependency-aware 最小配置包，而不是复制整类配置。
+          description: 非空时按作业编码构建最小依赖配置包；省略或空数组表示不按作业筛选，元素不得为null或空白。
           items:
             type: string
             minLength: 1
@@ -17371,8 +19410,8 @@ components:
       type: object
       required: [sourceTenantId, targetTenantIds]
       description: |
-        Read-only config diff request. `jobCodes` narrows the source to dependency-aware job bundles;
-        omitted `configTypes` means all tenant config types.
+        只读配置差异请求；jobCodes非空时按作业依赖缩小范围，configTypes省略或空集合表示全部配置类型。
+        类型集合元素不得为null，租户/作业集合元素不得为null或空白。
       properties:
         sourceTenantId:
           type: string
@@ -17407,6 +19446,7 @@ components:
     TenantConfigMatrixRequest:
       type: object
       required: [tenantIds, jobCodes]
+      description: 作业配置矩阵；tenantIds和jobCodes的元素不得为null或空白。
       properties:
         tenantIds:
           type: array
@@ -17428,6 +19468,7 @@ components:
           type: string
           maxLength: 64
           nullable: true
+          description: 比较基准租户；省略时使用首个 tenantIds，可显式指定展示范围外的基准，响应行仍仅包含 tenantIds。
 
     TenantConfigDiffPreviewResponse:
       type: object
@@ -17563,10 +19604,6 @@ components:
         workerGroup:
           type: string
           nullable: true
-        pipelineJobCodes:
-          type: array
-          items:
-            type: string
         workflowCodes:
           type: array
           items:
@@ -17589,7 +19626,6 @@ components:
       enum:
         - JOB_DEFINITION
         - WORKFLOW_DEFINITION
-        - PIPELINE_DEFINITION
         - FILE_CHANNEL
         - FILE_TEMPLATE
         - RESOURCE_QUEUE
@@ -17600,7 +19636,7 @@ components:
       description: |
         配置类型枚举。后端 @JsonCreator 兼容简写：
         "JOB" → JOB_DEFINITION / "WORKFLOW" → WORKFLOW_DEFINITION /
-        "PIPELINE" → PIPELINE_DEFINITION（仅 *_DEFINITION 三类支持简写）。
+        仅 JOB_DEFINITION 与 WORKFLOW_DEFINITION 支持简写。
         其余类型必须传完整名称。
 
     ConfigSyncBundlePayload:
@@ -17616,10 +19652,6 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/WorkflowDefinitionSpec'
-        pipelineDefinitions:
-          type: array
-          items:
-            $ref: '#/components/schemas/PipelineDefinitionSpec'
         fileChannels:
           type: array
           items:
@@ -17677,6 +19709,7 @@ components:
           maxLength: 64
         targetTenantIds:
           type: array
+          description: 所有目标元素须为非空白身份；整组校验通过后才开始逐租户事务。
           minItems: 1
           maxItems: 50
           items:
@@ -17702,7 +19735,15 @@ components:
         bizType: { type: string }
         scheduleType: { type: string }
         scheduleExpr: { type: string }
-        dependsOnJobCode: { type: string, maxLength: 64 }
+        dependsOnJobCode:
+          type: string
+          maxLength: 64
+          description: 单上游简写；完整依赖及逐边业务日对齐由 dependencyRules 提供。两者同时指定时必须与首条规则一致。
+        dependencyRules:
+          type: array
+          maxItems: 32
+          items:
+            $ref: '#/components/schemas/JobDependencyRuleRequest'
         timezone: { type: string }
         triggerMode: { type: string }
         workerGroup: { type: string }
@@ -17716,7 +19757,12 @@ components:
         timeoutSeconds: { type: integer, nullable: true }
         executionHandler: { type: string }
         paramSchema: { type: string }
-        defaultParams: { type: string }
+        defaultParams:
+          type: string
+          description: >-
+            JSON 默认参数。实际应用时，UPSERT 将敏感字段的 **** 掩码恢复为目标租户同一字段的已有值；
+            新建或无法恢复掩码时，该条目以 error.config.masked_secret_requires_value 失败。
+            更新时省略此字段保留已有参数；dryRun 仍只预判，不执行写入校验。
         priority: { type: integer, nullable: true }
         enabled: { type: boolean, nullable: true }
         description: { type: string }
@@ -17730,6 +19776,14 @@ components:
         workflowName: { type: string, maxLength: 256 }
         workflowType: { type: string }
         enabled: { type: boolean, nullable: true }
+        singleJobCode: { type: string, maxLength: 128, description: "Portable Job code for the managed single-Job Workflow; resolved to the destination tenant's Job id." }
+        scheduleEnabled: { type: boolean, nullable: true }
+        scheduleType: { type: string, description: "Workflow-owned schedule type; defaults to MANUAL for older bundles." }
+        scheduleExpr: { type: string, maxLength: 256, nullable: true }
+        timezone: { type: string, maxLength: 64, description: "Workflow-owned schedule timezone." }
+        triggerMode: { type: string, description: "Workflow-owned trigger mode." }
+        calendarCode: { type: string, maxLength: 128, nullable: true }
+        dependsOnJobCode: { type: string, maxLength: 128, nullable: true, description: "Workflow-owned schedule dependency, resolved within the destination tenant." }
         nodes:
           type: array
           items:
@@ -17746,14 +19800,26 @@ components:
         nodeName: { type: string }
         nodeType: { type: string }
         relatedJobCode: { type: string }
-        relatedPipelineCode: { type: string }
         workerGroup: { type: string }
         windowCode: { type: string }
         nodeOrder: { type: integer, nullable: true }
         retryPolicy: { type: string }
         retryMaxCount: { type: integer, nullable: true }
         timeoutSeconds: { type: integer, nullable: true }
-        nodeParams: { type: string }
+        nodeParams:
+          type: string
+          description: >-
+            JSON 节点参数。实际 UPSERT 替换图时，敏感字段中的 **** 只恢复目标租户同一定义、同一节点和字段的已有值；
+            新节点或新定义无法恢复时，该条目以 error.config.masked_secret_requires_value 失败。
+            节点列表未提交时保留原图；列表中节点省略 nodeParams 时仍按完整图替换语义清空该节点参数。
+            dryRun 只预判，不执行此写入校验。
+        crossDayDependencies:
+          type: string
+          description: ADR-018 跨日依赖 JSON 数组字符串；配置包导出和导入保留节点声明。
+        crossDayDependencyTimeoutSeconds:
+          type: integer
+          nullable: true
+          description: 跨日依赖等待上限秒数；0 表示永久等待，未传取数据库默认 86400。
         enabled: { type: boolean, nullable: true }
 
     WorkflowEdgeSpec:
@@ -17763,35 +19829,6 @@ components:
         toNodeCode: { type: string }
         edgeType: { type: string }
         conditionExpr: { type: string }
-        enabled: { type: boolean, nullable: true }
-
-    PipelineDefinitionSpec:
-      type: object
-      properties:
-        jobCode: { type: string, maxLength: 128 }
-        pipelineName: { type: string, maxLength: 256 }
-        pipelineType: { type: string, maxLength: 32 }
-        bizType: { type: string, maxLength: 64 }
-        workerGroup: { type: string, maxLength: 128 }
-        enabled: { type: boolean, nullable: true }
-        description: { type: string, maxLength: 512 }
-        steps:
-          type: array
-          items:
-            $ref: '#/components/schemas/PipelineStepSpec'
-
-    PipelineStepSpec:
-      type: object
-      properties:
-        stepCode: { type: string }
-        stepName: { type: string }
-        stageCode: { type: string }
-        stepOrder: { type: integer, nullable: true }
-        implCode: { type: string }
-        stepParams: { type: string }
-        timeoutSeconds: { type: integer, nullable: true }
-        retryPolicy: { type: string }
-        retryMaxCount: { type: integer, nullable: true }
         enabled: { type: boolean, nullable: true }
 
     FileChannelSpec:
@@ -17868,6 +19905,7 @@ components:
         description: { type: string, maxLength: 512 }
 
     BatchWindowSpec:
+      description: 窗口实际导入写入前校验时区和HH:mm或HH:mm:ss时间，非跨日开始必须早于结束。时区省略按原初始化默认Asia/Shanghai，跨日标志省略按false；SKIP_EXISTING不执行未使用的输入。
       type: object
       properties:
         windowCode: { type: string, maxLength: 128 }
@@ -17886,7 +19924,7 @@ components:
       properties:
         calendarCode: { type: string, maxLength: 128 }
         calendarName: { type: string, maxLength: 256 }
-        timezone: { type: string, maxLength: 64 }
+        timezone: { type: string, maxLength: 64, description: "省略时使用系统默认时区；提供时必须是 Java ZoneId 可识别的有效时区。" }
         holidayRollRule: { type: string, maxLength: 32 }
         catchUpPolicy: { type: string, maxLength: 32 }
         catchUpMaxDays: { type: integer, nullable: true }
@@ -17953,8 +19991,6 @@ components:
                 $ref: '#/components/schemas/TenantConfigInitItemStats'
               workflowDefinitions:
                 $ref: '#/components/schemas/TenantConfigInitItemStats'
-              pipelineDefinitions:
-                $ref: '#/components/schemas/TenantConfigInitItemStats'
               fileChannels:
                 $ref: '#/components/schemas/TenantConfigInitItemStats'
               fileTemplates:
@@ -17982,6 +20018,8 @@ components:
           type: integer
         failed:
           type: integer
+        migrated:
+          type: integer
         details:
           type: array
           items:
@@ -17992,11 +20030,11 @@ components:
                 nullable: true
               action:
                 type: string
-                enum: [CREATED, UPDATED, SKIPPED, FAILED]
+                enum: [CREATED, UPDATED, SKIPPED, FAILED, MIGRATED]
               errorMessage:
                 type: string
                 nullable: true
-      required: [created, updated, skipped, failed]
+      required: [created, updated, skipped, failed, migrated]
     CommonResponseTenantConfigPackageExcelUpload:
       type: object
       properties:
@@ -18297,22 +20335,17 @@ components:
         fileTemplateUpdated:
           type: integer
           format: int32
-        pipelineInserted:
-          type: integer
-          format: int32
-        pipelineUpdated:
-          type: integer
-          format: int32
         workflowInserted:
           type: integer
           format: int32
         workflowUpdated:
           type: integer
           format: int32
-      required: [uploadToken, tenantId, resourceQueueInserted, resourceQueueUpdated, businessCalendarInserted, businessCalendarUpdated, batchWindowInserted, batchWindowUpdated, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, pipelineInserted, pipelineUpdated, workflowInserted, workflowUpdated]
+      required: [uploadToken, tenantId, resourceQueueInserted, resourceQueueUpdated, businessCalendarInserted, businessCalendarUpdated, batchWindowInserted, batchWindowUpdated, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, workflowInserted, workflowUpdated]
 
     CreateWebhookRequest:
       type: object
+      description: Business event subscription. Job SLA alert type codes are rejected with INVALID_ARGUMENT; use the alert centre channel.
       required: [name, callbackUrl, eventTypes]
       properties:
         name:
@@ -18338,6 +20371,7 @@ components:
           default: true
     UpdateWebhookRequest:
       type: object
+      description: Business event subscription. Job SLA alert type codes are rejected with INVALID_ARGUMENT; use the alert centre channel.
       required: [callbackUrl, eventTypes]
       properties:
         callbackUrl:
@@ -18566,6 +20600,7 @@ components:
       properties:
         id: { type: integer, format: int64 }
         tenantId: { type: string }
+        replayOperationId: { type: integer, format: int64, nullable: true }
         calendarCode: { type: string }
         bizDate: { type: string, format: date }
         scope: { type: string }
@@ -18635,7 +20670,7 @@ components:
               items: { $ref: '#/components/schemas/BatchDayReplayEntry' }
     ResultVersion:
       type: object
-      description: ADR-017 结果版本投影（console 透传 orchestrator 实体）。
+      description: ADR-017 结果版本元数据投影；原始结果载荷和内部存储引用不通过 Console API 暴露。
       required: [id, tenantId, businessKey, versionNo, status]
       properties:
         id: { type: integer, format: int64 }
@@ -18647,8 +20682,6 @@ components:
         effectiveAt: { type: string, format: date-time, nullable: true }
         deactivatedAt: { type: string, format: date-time, nullable: true }
         payloadStorage: { type: string, nullable: true }
-        payloadJson: { type: string, nullable: true }
-        payloadRef: { type: string, nullable: true }
         generatedAt: { type: string, format: date-time, nullable: true }
         generatedBy: { type: string, nullable: true }
         promotionPolicy: { type: string, nullable: true }
@@ -18766,10 +20799,10 @@ components:
               items: { $ref: '#/components/schemas/HolidayResponse' }
     TriggerActionResponse:
       type: object
-      required: [tenantId, jobCode, status]
+      required: [tenantId, workflowCode, status]
       properties:
         tenantId: { type: string }
-        jobCode: { type: string }
+        workflowCode: { type: string }
         status: { type: string }
     CommonResponseTriggerAction:
       allOf:
@@ -18790,11 +20823,10 @@ components:
             data: { $ref: '#/components/schemas/SchedulerCommandResponse' }
     JobBundleSummaryResponse:
       type: object
-      required: [jobDefinitions, workflowDefinitions, pipelineDefinitions, fileChannels, fileTemplates, resourceQueues, batchWindows, businessCalendars, quotaPolicies, alertRoutings]
+      required: [jobDefinitions, workflowDefinitions, fileChannels, fileTemplates, resourceQueues, batchWindows, businessCalendars, quotaPolicies, alertRoutings]
       properties:
         jobDefinitions: { type: integer, format: int32 }
         workflowDefinitions: { type: integer, format: int32 }
-        pipelineDefinitions: { type: integer, format: int32 }
         fileChannels: { type: integer, format: int32 }
         fileTemplates: { type: integer, format: int32 }
         resourceQueues: { type: integer, format: int32 }
@@ -18870,40 +20902,6 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/BatchWindowPageResponse' }
-    DryRunResultResponse:
-      type: object
-      required: [tenantId, jobCode, valid]
-      description: 手工触发 dry-run 校验结果；errors 仅在存在校验错误时出现。
-      properties:
-        tenantId: { type: string }
-        jobCode: { type: string }
-        bizDate: { type: string, nullable: true }
-        valid: { type: boolean }
-        errors:
-          type: array
-          nullable: true
-          items: { type: string }
-    BatchTriggerEntryResponse:
-      type: object
-      required: [index, jobCode, status]
-      description: 批量触发单条结果；dryRun/result/instanceNo/error 依分支存在。
-      properties:
-        index: { type: integer, format: int32 }
-        jobCode: { type: string }
-        bizDate: { type: string, nullable: true }
-        dryRun: { type: boolean, nullable: true }
-        status: { type: string }
-        result: { $ref: '#/components/schemas/DryRunResultResponse' }
-        instanceNo: { type: string, nullable: true }
-        error: { type: string, nullable: true }
-    CommonResponseBatchTriggerList:
-      allOf:
-        - $ref: '#/components/schemas/CommonResponseBase'
-        - type: object
-          properties:
-            data:
-              type: array
-              items: { $ref: '#/components/schemas/BatchTriggerEntryResponse' }
     # ── Map 响应收敛批次 3：observability + ops ──────────────────────────────
     # dashboard job-stats：byStatus 为动态维度键（status→count）→ additionalProperties。
     JobStatsDailyTrendEntry:
@@ -19052,7 +21050,7 @@ components:
             data: { $ref: '#/components/schemas/SlaComplianceResponse' }
     SlaJobReportEntry:
       type: object
-      required: [jobCode, jobName, totalInstances, successCount, failedCount, slaBreached, slaOnTime, totalPartitions]
+      required: [jobCode, jobName, totalInstances, successCount, failedCount, slaBreached, slaOnTime, slaTotalWithSla, totalPartitions]
       properties:
         jobCode: { type: string }
         jobName: { type: string, nullable: true }
@@ -19061,6 +21059,7 @@ components:
         failedCount: { type: integer, format: int64 }
         slaBreached: { type: integer, format: int64 }
         slaOnTime: { type: integer, format: int64 }
+        slaTotalWithSla: { type: integer, format: int64 }
         avgDurationSeconds: { type: number, nullable: true }
         maxDurationSeconds: { type: number, nullable: true }
         totalPartitions: { type: integer, format: int64 }
@@ -19147,7 +21146,10 @@ components:
       required: [totalLocks, activeLocks, locks]
       properties:
         totalLocks: { type: integer, format: int32 }
-        activeLocks: { type: integer, format: int64 }
+        activeLocks:
+          type: integer
+          format: int64
+          description: batch.shedlock 中到期时间晚于数据库查询时刻的租约数；诊断结果可能缓存 10 秒。
         locks:
           type: array
           items: { $ref: '#/components/schemas/ShedLockEntry' }
@@ -19283,7 +21285,7 @@ components:
         outboxStatusCounts:
           type: array
           items: { $ref: '#/components/schemas/DiagnosisOutboxStatusCount' }
-        onlineWorkersForGroup: { type: integer, format: int64 }
+        onlineWorkersForGroup: { type: integer, format: int64, nullable: true, description: "实例未指定工作组时为 null，不能据此推断可调度 Worker 数量。" }
     DiagnosisFinding:
       type: object
       required: [severity, reasonCode, message, suggestedActions, evidence]
@@ -19569,7 +21571,7 @@ components:
               items: { $ref: '#/components/schemas/ConsoleSubscriptionRuleResponse' }
     ConsoleNotificationDeliveryLogResponse:
       type: object
-      description: 通知投递日志行（mapper 显式列，snake_case 键；payload_json/error_args 为 jsonb 原样透传）。
+      description: 通知投递日志行（snake_case 键；payload_json/error_args 按 JSON 值返回并遮罩敏感字段）。
       required: [id]
       properties:
         id: { type: integer, format: int64 }
@@ -19578,11 +21580,11 @@ components:
         channel_code: { type: string, nullable: true }
         event_type: { type: string, nullable: true }
         alert_event_id: { type: integer, format: int64, nullable: true }
-        payload_json: { nullable: true, description: jsonb 投递负载原样透传 }
+        payload_json: { nullable: true, description: JSON 投递负载，敏感字段已遮罩 }
         delivery_status: { type: string, nullable: true }
         error_message: { type: string, nullable: true }
         error_key: { type: string, nullable: true }
-        error_args: { nullable: true, description: jsonb i18n 占位参数原样透传 }
+        error_args: { nullable: true, description: JSON 错误参数，敏感字段已遮罩 }
         attempt: { type: integer, format: int32, nullable: true }
         created_at: { type: string, format: date-time, nullable: true }
     CommonResponseConsoleNotificationDeliveryLogList:
@@ -19593,6 +21595,37 @@ components:
             data:
               type: array
               items: { $ref: '#/components/schemas/ConsoleNotificationDeliveryLogResponse' }
+    TerminalDeliveryRetryRequest:
+      type: object
+      required: [requestId, expectedAttempt, reason, reconciliationReference, confirmedNotDelivered]
+      properties:
+        requestId: { type: string, format: uuid }
+        expectedAttempt: { type: integer, minimum: 1 }
+        reason: { type: string, minLength: 1, maxLength: 500 }
+        reconciliationReference: { type: string, minLength: 1, maxLength: 500 }
+        confirmedNotDelivered: { type: boolean, enum: [true] }
+    TerminalDeliveryRecoveryResponse:
+      type: object
+      required: [source, id, terminalEventKey, eventType, deliveryStatus, attempt, createdAt]
+      properties:
+        source: { type: string, enum: [WEBHOOK, RULE, PUSH] }
+        id: { type: integer, format: int64 }
+        terminalEventKey: { type: string }
+        eventType: { type: string }
+        deliveryStatus: { type: string, description: "PUSH ACCEPTED is provider acceptance only; DECISION rows retain the first intake decision and cannot be retried." }
+        attempt: { type: integer }
+        nextRetryAt: { type: string, format: date-time, nullable: true }
+        claimUntil: { type: string, format: date-time, nullable: true }
+        errorMessage: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+    CommonResponseTerminalDeliveryRecoveryList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/TerminalDeliveryRecoveryResponse' }
     ConsoleNotificationTestResultResponse:
       type: object
       description: 通知渠道测试结果（camelCase；httpStatus/errorSummary 键恒存在，值可空）。
@@ -19717,40 +21750,6 @@ components:
         - type: object
           properties:
             data: { $ref: '#/components/schemas/ConsoleWorkflowRunSkipNodeResponse' }
-    ConsolePipelineDefinitionListItemResponse:
-      type: object
-      description: 流水线定义列表项（mapper 显式列，snake_case 键，全列标量）。
-      required: [id]
-      properties:
-        id: { type: integer, format: int64 }
-        tenant_id: { type: string, nullable: true }
-        job_code: { type: string, nullable: true }
-        pipeline_name: { type: string, nullable: true }
-        pipeline_type: { type: string, nullable: true }
-        biz_type: { type: string, nullable: true }
-        worker_group: { type: string, nullable: true }
-        version: { type: integer, format: int32, nullable: true }
-        enabled: { type: boolean, nullable: true }
-        description: { type: string, nullable: true }
-        created_at: { type: string, format: date-time, nullable: true }
-        updated_at: { type: string, format: date-time, nullable: true }
-    ConsolePipelineDefinitionListPageResponse:
-      type: object
-      required: [total, pageNo, pageSize, items]
-      properties:
-        total: { type: integer, format: int64 }
-        pageNo: { type: integer, format: int32 }
-        pageSize: { type: integer, format: int32 }
-        items:
-          type: array
-          items: { $ref: '#/components/schemas/ConsolePipelineDefinitionListItemResponse' }
-    CommonResponseConsolePipelineDefinitionListPage:
-      allOf:
-        - $ref: '#/components/schemas/CommonResponseBase'
-        - type: object
-          properties:
-            data: { $ref: '#/components/schemas/ConsolePipelineDefinitionListPageResponse' }
-    # file managed-upload session
     ConsoleFilePresignUploadResponse:
       type: object
       description: 托管上传会话（camelCase，9 固定字段均恒存在）。
@@ -19765,6 +21764,38 @@ components:
         storageBucket: { type: string }
         storagePath: { type: string }
         fileName: { type: string }
+    ConsoleFileUploadBindingRequest:
+      type: object
+      required: [calendarCode, workflowDefinitionId, fileGroupCode, bizDate, requiredFileNames, bundleTemplateCode]
+      properties:
+        calendarCode: { type: string, maxLength: 128 }
+        workflowDefinitionId: { type: integer, format: int64, minimum: 1 }
+        fileGroupCode: { type: string, maxLength: 128 }
+        bizDate: { type: string, format: date }
+        requiredFileNames:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { type: string, minLength: 1, maxLength: 255 }
+        bundleTemplateCode: { type: string, maxLength: 128 }
+    ConsoleFileUploadTargetResponse:
+      type: object
+      required: [tenantId, calendarCode, workflowDefinitionId, workflowCode, workflowName, fileGroupCode]
+      properties:
+        tenantId: { type: string }
+        calendarCode: { type: string }
+        workflowDefinitionId: { type: integer, format: int64 }
+        workflowCode: { type: string }
+        workflowName: { type: string }
+        fileGroupCode: { type: string }
+    CommonResponseConsoleFileUploadTargetList:
+      allOf:
+        - $ref: '#/components/schemas/CommonResponseBase'
+        - type: object
+          properties:
+            data:
+              type: array
+              items: { $ref: '#/components/schemas/ConsoleFileUploadTargetResponse' }
     CommonResponseConsoleFilePresignUpload:
       allOf:
         - $ref: '#/components/schemas/CommonResponseBase'

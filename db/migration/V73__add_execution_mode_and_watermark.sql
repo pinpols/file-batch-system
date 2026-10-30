@@ -35,22 +35,24 @@ ALTER TABLE batch.job_definition
   ADD COLUMN IF NOT EXISTS execution_mode VARCHAR(16) NOT NULL DEFAULT 'FULL',
   ADD COLUMN IF NOT EXISTS watermark_field VARCHAR(64);
 
-COMMENT ON COLUMN batch.job_definition.execution_mode IS 'Execution mode: FULL / INCREMENTAL / CDC';
-COMMENT ON COLUMN batch.job_definition.watermark_field IS 'Watermark column name for INCREMENTAL mode (e.g. update_time, id)';
+COMMENT ON COLUMN batch.job_definition.execution_mode IS '执行模式：FULL、INCREMENTAL 或 CDC。';
+COMMENT ON COLUMN batch.job_definition.watermark_field IS 'INCREMENTAL 模式使用的水位列名，例如 update_time 或 id。';
 
 ALTER TABLE batch.job_instance
   ADD COLUMN IF NOT EXISTS high_water_mark_in VARCHAR(64),
   ADD COLUMN IF NOT EXISTS high_water_mark_out VARCHAR(64);
 
-COMMENT ON COLUMN batch.job_instance.high_water_mark_in IS 'Watermark range start carried into this run';
-COMMENT ON COLUMN batch.job_instance.high_water_mark_out IS 'Watermark high-bound reported by worker on completion';
+COMMENT ON COLUMN batch.job_instance.high_water_mark_in IS '本次运行接续使用的水位区间起点。';
+COMMENT ON COLUMN batch.job_instance.high_water_mark_out IS 'Worker 完成时回报的水位区间上界。';
 
 -- 同步归档表(ArchiveSchemaDriftCheck 在启动时校验 batch.* 与 archive.*_archive 列对齐;V71 落地)
+
 ALTER TABLE archive.job_instance_archive
   ADD COLUMN IF NOT EXISTS high_water_mark_in VARCHAR(64),
   ADD COLUMN IF NOT EXISTS high_water_mark_out VARCHAR(64);
 
 -- 加 CHECK 约束限定枚举值
+
 ALTER TABLE batch.job_definition
   DROP CONSTRAINT IF EXISTS chk_job_definition_execution_mode;
 ALTER TABLE batch.job_definition

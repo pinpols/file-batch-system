@@ -17,7 +17,7 @@ import java.util.Map;
  *   <li>{@code errorCode} / {@code resultSummary}(已废 {@code errorClass} / {@code errorMessage})
  * </ul>
  *
- * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)— SDK 协议演进基础。
+ * <p>Phase 0 ({@code docs/plans/sdk-h2-roadmap-2026-05-31.md} §2)— SDK 协议演进基础。
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 @JsonIgnoreProperties(ignoreUnknown = true)

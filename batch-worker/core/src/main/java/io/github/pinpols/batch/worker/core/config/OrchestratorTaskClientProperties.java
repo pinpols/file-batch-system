@@ -36,6 +36,15 @@ public class OrchestratorTaskClientProperties {
   private int reportInitialBackoffMillis = 200;
   private int reportMaxBackoffMillis = 5_000;
 
+  /**
+   * 同步微批 REPORT 开关。默认关闭；开启后仅合并并发调用的 HTTP 传输，逐项确认或移交原单条重试及发件箱后才返回。
+   * 批大小复用 batch.worker.batch-claim.max-batch-size，并须不超过服务端批量上限；生产开启前须验证容量和恢复。
+   */
+  private boolean reportBatchEnabled = false;
+
+  /** REPORT 微批最长攒批等待，毫秒；有效范围 0–100，默认 5。HTTP 超时另由 readTimeoutMillis 控制。 */
+  private long reportBatchWaitMillis = 5;
+
   /** {@code claim} / {@code renew} 在上游瞬态错误（5xx、超时）时的最大尝试次数。 */
   private int claimMaxAttempts = 4;
 

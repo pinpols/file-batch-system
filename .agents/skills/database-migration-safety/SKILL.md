@@ -28,3 +28,11 @@ description: 修改或审查数据库结构、Flyway 迁移、约束、分区、
 - 明确证据来自静态检查、本地集成、生产规模 dry-run 还是 staging 执行。
 
 不涉及结构迁移的独立运维 SQL 或 shell/Python 中的 SQL，改用 `script-sql-governance`。
+
+## 历史经验方法
+
+审查租户/幂等约束、归档结构或旧表/索引恢复边界时，按需读取 [历史经验方法](references/historical-methods.md)。只复用调查与验证方法，当前规则和原始证据分别维护。
+
+## 当前文档与脚本的方法补充
+
+处理既有迁移注释、全新库切换、合并或恢复后幂等边界时，按需读取[Flyway基线与恢复边界](references/flyway-baselines.md)。只加载相关方法，不把文档列出的操作自动加入执行范围。

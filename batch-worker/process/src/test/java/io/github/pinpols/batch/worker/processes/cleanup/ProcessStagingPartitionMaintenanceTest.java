@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.processes.cleanup;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -9,19 +10,19 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
 import io.micrometer.core.instrument.MeterRegistry;
-import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
 
 /** {@link ProcessStagingOrphanCleaner#maintainPartitions()} 分区维护逻辑单测。 */
 @ExtendWith(MockitoExtension.class)
-@DisplayName("处理暂存区分区维护:预建日分区、过期分区删除、保留期关闭与日边界格式")
+@DisplayName("处理暂存区分区维护:只预建分区，删除需单独完成生命周期验证")
 class ProcessStagingPartitionMaintenanceTest {
 
   @Mock
@@ -45,47 +46,31 @@ class ProcessStagingPartitionMaintenanceTest {
   void shouldPreCreateTodayAndFutureDays() {
     // 准备
     properties.setPreCreateDays(2);
-    properties.setRetentionDays(3);
-    when(mapper.listExpiredDailyPartitions(anyString())).thenReturn(List.of());
 
     // 执行
     cleaner.maintainPartitions();
 
     // 断言:今天 + 未来 2 天 = 3 个分区
     verify(mapper, times(3)).createDailyPartition(anyString(), anyString(), anyString());
-    verify(mapper).listExpiredDailyPartitions(anyString());
+    verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
   }
 
   @Test
-  @DisplayName("DROP 所有过期日分区")
-  void shouldDropExpiredPartitions() {
-    // 准备
+  @DisplayName("过期分区不因 deletion-enabled 被直接 DROP")
+  void shouldNeverDropPartitionsFromCalendarAgeAlone() {
     properties.setPreCreateDays(0);
-    properties.setRetentionDays(3);
-    when(mapper.listExpiredDailyPartitions(anyString()))
-        .thenReturn(List.of("process_staging_p20260101", "process_staging_p20260102"));
+    properties.setDeletionEnabled(true);
 
-    // 执行
     cleaner.maintainPartitions();
 
-    // 断言
-    verify(mapper).dropPartition("process_staging_p20260101");
-    verify(mapper).dropPartition("process_staging_p20260102");
+    verify(mapper).createDailyPartition(anyString(), anyString(), anyString());
+    verify(mapper, never()).deleteGenerationRows(ArgumentMatchers.any(), anyInt());
   }
 
   @Test
-  @DisplayName("retentionDays<=0 关闭自动 DROP")
-  void shouldSkipDropWhenRetentionDisabled() {
-    // 准备
-    properties.setPreCreateDays(0);
-    properties.setRetentionDays(0);
-
-    // 执行
-    cleaner.maintainPartitions();
-
-    // 断言:不查、不 DROP 任何分区
-    verify(mapper, never()).listExpiredDailyPartitions(anyString());
-    verify(mapper, never()).dropPartition(anyString());
+  @DisplayName("默认不按年龄删除 staging 行")
+  void shouldKeepRowsUntilDeletionIsEnabled() {
+    assertThat(cleaner.cleanOnce()).isZero();
   }
 
   @Test
@@ -93,7 +78,6 @@ class ProcessStagingPartitionMaintenanceTest {
   void shouldCreatePartitionWithUtcDayBounds() {
     // 准备
     properties.setPreCreateDays(0);
-    properties.setRetentionDays(0);
     ArgumentCaptor<String> name = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> from = ArgumentCaptor.forClass(String.class);
     ArgumentCaptor<String> to = ArgumentCaptor.forClass(String.class);

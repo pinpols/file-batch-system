@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：测试禁用原因检查。
+# 用法：在仓库根目录执行 bash scripts/ci/check-no-silent-disabled-tests.sh；参数与前置环境见下方说明及所属 README。
 # 守护:禁止「静默禁用测试」—— @Disabled 必须带非空 reason(说明原因/ticket/doc)。
 #
 # 背景:裸 @Disabled / @Disabled() 会让测试被悄悄跳过、覆盖率被掏空,且无人追踪何时恢复。

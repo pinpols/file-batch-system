@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：文档结构与内部链接。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-docs-structure.py；参数与前置环境见下方说明及所属 README。
 """校验当前文档目录入口、仓库内链接和禁止提交的本机产物。"""
 
 from __future__ import annotations
@@ -15,7 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DOCS = ROOT / "docs"
 LINK = re.compile(r"!?\[[^\]]*]\(([^)]+)\)")
 SKIP_SCHEMES = ("http://", "https://", "mailto:", "codex:", "#")
-INDEX_EXEMPT_PARTS = {"archive", "test-data"}
+INDEX_EXEMPT_PARTS: set[str] = set()
 HEADING = re.compile(r"^#{1,6}\s+(.+?)\s*$")
 ROOT_README_REQUIRED_REFERENCES = (
     "docs/README.md",
@@ -65,38 +67,41 @@ def markdown_anchors(document: Path) -> set[str]:
     return anchors
 
 
+def index_links(index: Path) -> dict[Path, bool]:
+    """提取索引中的本地跳转目标，并判断同一行是否说明用途。"""
+    targets: dict[Path, bool] = {}
+    for line in index.read_text(encoding="utf-8").splitlines():
+        described = bool(re.search(r"[\w\u4e00-\u9fff]", LINK.sub("", line)))
+        for match in LINK.finditer(line):
+            raw = match.group(1).strip().strip("<>").split(maxsplit=1)[0]
+            if not raw or raw.startswith(SKIP_SCHEMES):
+                continue
+            target = unquote(raw.partition("#")[0])
+            if target:
+                resolved = (index.parent / target).resolve()
+                targets[resolved] = targets.get(resolved, False) or described
+    return targets
+
+
 def check_layered_directory_indexes(errors: list[str], known_paths: set[Path]) -> None:
-    for directory in sorted(path for path in DOCS.rglob("*") if path.is_dir()):
-        relative_parts = directory.relative_to(DOCS).parts
-        if any(part in INDEX_EXEMPT_PARTS for part in relative_parts):
+    directories = [DOCS, *sorted(path for path in DOCS.rglob("*") if path.is_dir())]
+    for directory in directories:
+        if any(part in INDEX_EXEMPT_PARTS for part in directory.relative_to(DOCS).parts):
             continue
         index = directory / "README.md"
         if not index.is_file():
             errors.append(f"missing directory index: {directory.relative_to(ROOT)}/README.md")
-        parent_index = directory.parent / "README.md"
-        if parent_index.is_file():
-            parent_text = parent_index.read_text(encoding="utf-8")
-            directory_token = f"{directory.name}/"
-            readme_token = f"{directory.name}/README.md"
-            if directory_token not in parent_text and readme_token not in parent_text:
-                errors.append(
-                    f"parent README does not mention child directory: {directory.relative_to(ROOT)}/"
-                )
-        elif directory.parent == DOCS:
-            errors.append(f"docs/README.md missing while checking directory: {directory.relative_to(ROOT)}/")
-        index = directory / "README.md"
-        if not index.is_file():
             continue
-        index_text = index.read_text(encoding="utf-8")
+        targets = index_links(index)
+        if directory != DOCS:
+            parent_index = directory.parent / "README.md"
+            if parent_index.is_file() and not index_links(parent_index).get(index.resolve()):
+                errors.append(f"parent README must link child index with purpose: {directory.relative_to(ROOT)}/")
         for document in sorted(directory.glob("*.md")):
-            if (
-                document.name != "README.md"
-                and document.resolve() in known_paths
-                and document.name not in index_text
-            ):
-                errors.append(
-                    f"directory README does not mention same-level document: {document.relative_to(ROOT)}"
-                )
+            if document.name == "README.md" or document.resolve() not in known_paths:
+                continue
+            if not targets.get(document.resolve()):
+                errors.append(f"directory README must link document with purpose: {document.relative_to(ROOT)}")
 
 
 def check_governance_entrypoints(errors: list[str]) -> None:
@@ -119,7 +124,7 @@ def check_internal_links(errors: list[str]) -> None:
         *(path for path in sorted(DOCS.rglob("*.md")) if path.resolve() in known_paths),
     ]
     for document in documents:
-        if "archive" in document.relative_to(ROOT).parts:
+        if "archive" in document.relative_to(ROOT).parts and document.name != "README.md":
             continue
         for line_number, line in enumerate(
             document.read_text(encoding="utf-8", errors="replace").splitlines(), 1

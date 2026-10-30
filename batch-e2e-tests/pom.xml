@@ -40,6 +40,12 @@
         </dependency>
         <dependency>
             <groupId>io.github.pinpols.batch</groupId>
+            <artifactId>batch-worker-core</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.pinpols.batch</groupId>
             <artifactId>batch-worker-import</artifactId>
             <version>${project.version}</version>
             <scope>test</scope>
@@ -113,6 +119,11 @@
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>testcontainers-kafka</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.testcontainers</groupId>
+            <artifactId>testcontainers-toxiproxy</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- ArchUnit:跑 SpringWiringGuardArchTest 守护 ComponentScan 覆盖 + 多 ctor @Autowired。

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -17,13 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
 /** T-1: OutboxPublishCircuitBreaker 测试——验证 CLOSED → OPEN → HALF_OPEN → CLOSED 状态机。 */
 @ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.LENIENT)
 @DisplayName("出站事件投递熔断器:冷却恢复与探测成败下的集群熔断状态流转,缓存不可达时的放行与降级,以及打开态指标计数")
 class OutboxPublishCircuitBreakerTest {
 
@@ -74,22 +73,22 @@ class OutboxPublishCircuitBreakerTest {
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
 
-    // First call reads Redis and caches open state
+    // 首次调用从 Redis 读取并缓存断路器开启状态。
     assertThat(breaker.allowNow()).isFalse();
-    // Second call uses cached value
+    // 第二次调用使用缓存值。
     assertThat(breaker.allowNow()).isFalse();
   }
 
   @Test
   @DisplayName("冷却期已过时放行一次探测请求,推进到半开状态")
   void shouldTransitionToHalfOpenAfterCooldown() {
-    // Simulate: breaker was open but cooldown has passed
+    // 模拟断路器已开启，但冷却时间已经结束。
     long pastMs = BatchDateTimeSupport.utcEpochMillis() - 1000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(pastMs);
 
-    // First call sees expired openUntilMs from Redis → triggers half-open
+    // 首次调用从 Redis 读到已过期的 openUntilMs，触发半开状态。
     boolean firstCall = breaker.allowNow();
-    // After Redis returns pastMs (expired), allowNow should allow (transition to half-open)
+    // Redis 返回已过期的 pastMs 后，allowNow 应放行并将断路器转为半开状态。
     assertThat(firstCall).isTrue();
   }
 
@@ -102,31 +101,26 @@ class OutboxPublishCircuitBreakerTest {
     // Enter half-open
     breaker.allowNow();
 
-    // Successful probe → advance with 0 failures
+    // 探测成功后推进状态，失败计数为 0。
     when(redis.evalLong(any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(0L);
     breaker.onAdvanceResult(0);
 
-    // Now should be closed
-    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(0L);
+    // 成功探测已更新本地关闭缓存，后续放行不需要再读 Redis。
     assertThat(breaker.allowNow()).isTrue();
   }
 
   @Test
-  @DisplayName("读取集群状态返回空值时沿用本地已知打开状态,继续保持拒绝")
-  void shouldUseCachedStateWhenRedisReturnsNull() {
+  @DisplayName("已缓存的打开窗口内直接拒绝,不重复读取集群状态")
+  void shouldKeepOpenState_whenCacheHasNotExpired() {
     // First: simulate Redis open state cached
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(futureMs);
     assertThat(breaker.allowNow()).isFalse();
 
-    // Redis becomes unavailable (returns null) — should NOT force closed,
-    // should reuse cached open state and still deny.
-    when(redis.evalLong(anyString(), anyString(), anyString())).thenReturn(null);
-    // To force slow-path: invalidate closed cache by waiting for openUntilMs to pass is hard;
-    // instead, just call allowNow — cached snapshot openUntilMs is still future so fast-path
-    // denies.
+    // 本地打开缓存仍在有效期内，连续调用应直接拒绝而不再次访问 Redis。
     assertThat(breaker.allowNow()).isFalse();
+    verify(redis, times(1)).evalLong(anyString(), anyString(), anyString());
   }
 
   @Test
@@ -138,13 +132,13 @@ class OutboxPublishCircuitBreakerTest {
     // Enter half-open
     breaker.allowNow();
 
-    // Failed probe → advance with failures
+    // 探测失败后推进状态，并增加失败计数。
     long futureMs = BatchDateTimeSupport.utcEpochMillis() + 60_000;
     when(redis.evalLong(any(), any(), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(futureMs);
     breaker.onAdvanceResult(3);
 
-    // Should be open again
+    // 断路器应再次开启。
     assertThat(breaker.allowNow()).isFalse();
   }
 

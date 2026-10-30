@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.runtime;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -45,9 +46,10 @@ public final class AtomicConnectionManager {
    */
   public static String resolveDataSourceBeanName(
       String configuredBeanName, String paramBeanName, Set<String> allowedBeans) {
-    if (paramBeanName == null
+    boolean usesConfiguredDataSourceBean = EmptyChecks.isNull(paramBeanName)
         || paramBeanName.isBlank()
-        || paramBeanName.equals(configuredBeanName)) {
+        || paramBeanName.equals(configuredBeanName);
+    if (usesConfiguredDataSourceBean) {
       return configuredBeanName;
     }
     Set<String> allow = allowedBeans == null ? Set.of() : allowedBeans;
@@ -74,18 +76,20 @@ public final class AtomicConnectionManager {
    * <p>仅 PostgreSQL 实现;其他方言需要在调用前自行守门或扩展本方法。
    */
   public static void requireNonOsCapableRole(Connection conn) throws SQLException {
+    String roleCapabilitiesSql = "SELECT rolsuper,"
+        + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
+        + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
+        + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
+        + "FROM pg_roles WHERE rolname = current_user";
     try (Statement st = conn.createStatement();
-        ResultSet rs = st.executeQuery("SELECT rolsuper,"
-            + " pg_has_role(current_user, 'pg_execute_server_program', 'MEMBER') AS prog,"
-            + " pg_has_role(current_user, 'pg_read_server_files', 'MEMBER') AS rdf,"
-            + " pg_has_role(current_user, 'pg_write_server_files', 'MEMBER') AS wsf "
-            + "FROM pg_roles WHERE rolname = current_user")) {
+        ResultSet rs = st.executeQuery(roleCapabilitiesSql)) {
       if (rs.next()) {
         boolean superuser = rs.getBoolean("rolsuper");
         boolean prog = rs.getBoolean("prog");
         boolean rdf = rs.getBoolean("rdf");
         boolean wsf = rs.getBoolean("wsf");
-        if (superuser || prog || rdf || wsf) {
+        boolean roleHasOperatingSystemCapabilities = superuser || prog || rdf || wsf;
+        if (roleHasOperatingSystemCapabilities) {
           throw new SecurityException(String.format(
               Locale.ROOT,
               "DB role has OS capability (superuser=%s, exec_server_program=%s,"
@@ -135,7 +139,8 @@ public final class AtomicConnectionManager {
           try {
             conn.rollback();
           } catch (SQLException rb) {
-            log.warn("rollback failed: {}", SwallowedExceptionLogger.summary(rb));
+            String causeSummary = SwallowedExceptionLogger.summary(rb);
+            log.warn("rollback failed: {}", causeSummary);
           }
         }
         throw ex;
@@ -143,13 +148,15 @@ public final class AtomicConnectionManager {
         try {
           conn.setAutoCommit(originalAutoCommit);
         } catch (SQLException restore) {
-          log.warn("restore autoCommit failed: {}", SwallowedExceptionLogger.summary(restore));
+          String causeSummary = SwallowedExceptionLogger.summary(restore);
+          log.warn("restore autoCommit failed: {}", causeSummary);
         }
         if (o.readOnly) {
           try {
             conn.setReadOnly(originalReadOnly);
           } catch (SQLException restore) {
-            log.warn("restore readOnly failed: {}", SwallowedExceptionLogger.summary(restore));
+            String causeSummary = SwallowedExceptionLogger.summary(restore);
+            log.warn("restore readOnly failed: {}", causeSummary);
           }
         }
       }

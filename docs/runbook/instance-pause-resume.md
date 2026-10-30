@@ -10,6 +10,7 @@
 | 暂停 | `RUNNING → PAUSED`:`POST /internal/instances/{id}/pause` |
 | 恢复 | `PAUSED → RUNNING`:`POST /internal/instances/{id}/resume` |
 | 派发跳过 | `WaitingPartitionDispatchScheduler` 的 `selectWaitingPartitionsGlobal` 加 `NOT EXISTS(父 instance PAUSED)`——PAUSED 实例的 WAITING 分区不再被派发 |
+| 到期重试 | 当最新关联 Workflow 不存在或仍活跃时，调度扫描跳过暂停的作业实例及关联的暂停 Workflow；暂停记录保留原到期时间，恢复后可再次参与扫描。若关联 Workflow 已终态，重试进入失败收口，不再因作业暂停而无限等待 |
 | 在途 | 已 dispatch 的分区/task **照常跑完并 REPORT**,只是不再派下一波;暂停≠冻结在途 |
 | 恢复后 | 重新纳入派发;已 SUCCESS 的分区不重跑(靠既有 partition 幂等) |
 

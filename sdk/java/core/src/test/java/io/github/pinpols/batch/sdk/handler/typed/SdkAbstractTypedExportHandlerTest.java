@@ -32,7 +32,7 @@ class SdkAbstractTypedExportHandlerTest {
 
     @Override
     protected String buildQuery(ExportRequest input, SdkTaskContext ctx) {
-      return "SELECT * FROM " + input.table();
+      return "SELECT * FROM %s".formatted(input.table());
     }
 
     @Override

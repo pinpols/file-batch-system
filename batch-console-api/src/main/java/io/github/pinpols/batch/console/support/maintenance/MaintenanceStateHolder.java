@@ -17,8 +17,14 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 运行时维护状态持有者。
@@ -70,6 +76,13 @@ public class MaintenanceStateHolder {
         Instant.now(),
         false);
     state.set(initialState);
+  }
+
+  @Order(Ordered.HIGHEST_PRECEDENCE)
+  @EventListener(ApplicationReadyEvent.class)
+  public void refreshAfterApplicationReady() {
+    // 已解析的顶层 Workflow 启动请求，后续委派给 Trigger 处理。
+    // 避免在 @PostConstruct 阶段数据库迁移尚未完成时查询状态。
     refreshFromStore();
     refreshExecutor.scheduleWithFixedDelay(this::refreshFromStore, 5, 5, TimeUnit.SECONDS);
   }
@@ -87,13 +100,19 @@ public class MaintenanceStateHolder {
   /** Admin 热更新入口,使用当前操作员写入共享状态审计字段。 */
   @Transactional
   public MaintenanceState update(MaintenanceState next, String operator) {
+    boolean enabled = next.enabled();
+    boolean readOnly = next.readOnly();
+    String message = next.message();
+    Instant etaAt = next.etaAt();
+    Instant startsAt = next.startsAt();
+    List<String> affectedServices = normalizeServices(next.affectedServices());
     MaintenanceState normalized = new MaintenanceState(
-        next.enabled(),
-        next.readOnly(),
-        next.message(),
-        next.etaAt(),
-        next.startsAt(),
-        normalizeServices(next.affectedServices()),
+        enabled,
+        readOnly,
+        message,
+        etaAt,
+        startsAt,
+        affectedServices,
         state.get().version(),
         state.get().updatedAt(),
         true);
@@ -124,11 +143,21 @@ public class MaintenanceStateHolder {
         current.version() + 1,
         Instant.now(),
         true);
-    state.set(applied);
+    // 请求拦截和通知同步只能观察已提交状态；事务回滚不能留下虚假的维护窗口。
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          state.set(applied);
+        }
+      });
+    } else {
+      state.set(applied);
+    }
     return applied;
   }
 
-  /** shared state unavailable means writes must fail closed until a replica can confirm it. */
+  /** 共享状态不可确认时保持写保护，直至当前副本重新确认状态。 */
   public boolean sharedStateAvailable() {
     return state.get().sharedStateAvailable();
   }
@@ -146,13 +175,14 @@ public class MaintenanceStateHolder {
       }
       List<String> services = objectMapper.readValue(
           entity.getAffectedServicesJson(), new TypeReference<List<String>>() {});
+      List<String> normalizedServices = normalizeServices(services);
       state.set(new MaintenanceState(
           entity.isEnabled(),
           entity.isReadOnly(),
           entity.getMessage(),
           entity.getEtaAt(),
           entity.getStartsAt(),
-          normalizeServices(services),
+          normalizedServices,
           entity.getVersion(),
           entity.getUpdatedAt(),
           true));
@@ -170,7 +200,8 @@ public class MaintenanceStateHolder {
 
   private String writeServices(List<String> services) {
     try {
-      return objectMapper.writeValueAsString(normalizeServices(services));
+      List<String> normalizedServices = normalizeServices(services);
+      return objectMapper.writeValueAsString(normalizedServices);
     } catch (Exception ex) {
       throw new IllegalArgumentException("invalid maintenance affectedServices", ex);
     }

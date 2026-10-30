@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.cache;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.redis.core.Cursor;
@@ -34,9 +35,12 @@ public final class RedisKeyUtils {
    * @return 成功删除的 key 数;SCAN/DEL 失败返回 0(不抛)
    */
   public static long scanAndDelete(
-      StringRedisTemplate redisTemplate, String pattern, int batchSize) {
+      StringRedisTemplate redisTemplate,
+      String pattern,
+      int batchSize,
+      BatchRedisNamespace namespace) {
     try {
-      return scanAndDeleteOrThrow(redisTemplate, pattern, batchSize);
+      return scanAndDeleteOrThrow(redisTemplate, pattern, batchSize, namespace);
     } catch (RuntimeException ex) {
       // 工具层吞异常,调用方负责日志输出;残余 key 走自然 TTL 回退。
       return 0L;
@@ -45,13 +49,18 @@ public final class RedisKeyUtils {
 
   /** 与 {@link #scanAndDelete} 相同，但 Redis 异常直接抛出，适合需要把失败纳入一致性决策的调用方。 */
   public static long scanAndDeleteOrThrow(
-      StringRedisTemplate redisTemplate, String pattern, int batchSize) {
+      StringRedisTemplate redisTemplate,
+      String pattern,
+      int batchSize,
+      BatchRedisNamespace namespace) {
     if (pattern == null || pattern.isBlank()) {
       return 0L;
     }
     int safeBatch = batchSize <= 0 ? 500 : batchSize;
-    ScanOptions options =
-        ScanOptions.scanOptions().match(pattern).count(safeBatch).build();
+    ScanOptions options = ScanOptions.scanOptions()
+        .match(namespace.scanPattern(pattern))
+        .count(safeBatch)
+        .build();
     try (Cursor<String> cursor = redisTemplate.scan(options)) {
       long deleted = 0L;
       List<String> batch = new ArrayList<>(safeBatch);

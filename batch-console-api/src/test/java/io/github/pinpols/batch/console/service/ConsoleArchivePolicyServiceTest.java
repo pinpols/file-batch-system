@@ -79,6 +79,14 @@ class ConsoleArchivePolicyServiceTest {
   }
 
   @Test
+  @DisplayName("既有人工审计策略可维护且不替换租户已选保留参数")
+  void shouldAcceptExistingOperationAuditPolicy() {
+    ArchivePolicyUpsertParam input = paramOf("console_operation_audit", 500);
+    service.upsert(input);
+    verify(repository).upsert(input);
+  }
+
+  @Test
   @DisplayName("目标表不在允许清单内时, 抛业务异常并提示可选表取值")
   void shouldRejectInvalidTable() {
     ArchivePolicyUpsertParam invalid = paramOf("unknown_table", 500);

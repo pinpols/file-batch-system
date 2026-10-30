@@ -96,6 +96,25 @@ public interface ResultVersionMapper {
   ResultVersionEntity selectEffective(
       @Param("tenantId") String tenantId, @Param("businessKey") String businessKey);
 
+  /** 按租户、业务键和版本号精确查询；指定版本依赖不能受版本列表分页上限影响。 */
+  ResultVersionEntity selectByBusinessKeyAndVersionNo(
+      @Param("tenantId") String tenantId,
+      @Param("businessKey") String businessKey,
+      @Param("versionNo") int versionNo);
+
+  /** 选择不跨越正式/试运行边界的最新依赖版本。 */
+  ResultVersionEntity selectLatestCrossDayDependencyVersion(
+      @Param("tenantId") String tenantId,
+      @Param("businessKey") String businessKey,
+      @Param("dryRun") boolean dryRun);
+
+  /** 仅当指定依赖版本属于请求的执行模式时才选择该版本。 */
+  ResultVersionEntity selectCrossDayDependencyVersion(
+      @Param("tenantId") String tenantId,
+      @Param("businessKey") String businessKey,
+      @Param("versionNo") int versionNo,
+      @Param("dryRun") boolean dryRun);
+
   /** 列出某 business_key 的所有版本（按 version_no 倒序）；用于 console 列表 + ops 排查。 */
   List<ResultVersionEntity> listVersionsByBusinessKey(
       @Param("tenantId") String tenantId,

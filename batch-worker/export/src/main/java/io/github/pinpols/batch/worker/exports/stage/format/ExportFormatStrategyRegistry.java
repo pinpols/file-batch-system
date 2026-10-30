@@ -49,8 +49,12 @@ public class ExportFormatStrategyRegistry {
    * @throws io.github.pinpols.batch.common.exception.BizException 未找到策略时抛出
    */
   public ExportFormatStrategy require(String fileFormatType) {
-    ExportFormatStrategy strategy = strategiesByType.get(
-        EmptyChecks.isNull(fileFormatType) ? "" : fileFormatType.trim().toUpperCase(Locale.ROOT));
+    String normalizedFileFormatType = "";
+    if (EmptyChecks.isNotNull(fileFormatType)) {
+      String trimmedFileFormatType = fileFormatType.trim();
+      normalizedFileFormatType = trimmedFileFormatType.toUpperCase(Locale.ROOT);
+    }
+    ExportFormatStrategy strategy = strategiesByType.get(normalizedFileFormatType);
     if (EmptyChecks.isNull(strategy)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.export.format_not_supported", fileFormatType);

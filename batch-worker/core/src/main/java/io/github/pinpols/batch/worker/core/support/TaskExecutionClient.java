@@ -15,7 +15,7 @@ public interface TaskExecutionClient {
    * orchestrator 不返 body,worker 收到的 Optional 仍 present 但内含字段全为 null,fallback 到 {@code
    * TaskDispatchMessage} 旧字段。
    *
-   * @return Optional.empty() 表示 CLAIM 失败(HTTP 4xx);Optional.of(config) 表示成功
+   * @return Optional.empty() 表示明确不可认领(HTTP 404/409);Optional.of(config) 表示成功；其他HTTP错误向上传播
    */
   Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId);
 
@@ -27,9 +27,13 @@ public interface TaskExecutionClient {
 
   boolean renewLease(String tenantId, Long taskId, String workerId, String partitionInvocationId);
 
+  /** 在非幂等业务副作用开始前登记执行起点；未获确认时不得继续外部动作。 */
+  boolean markNonIdempotentExecutionStarted(
+      String tenantId, Long taskId, String workerId, String partitionInvocationId);
+
   /**
-   * ADR-016:用尽可能少的 orchestrator HTTP 调用续租多个 task。每个 task 的取值与单条 {@link #renewLease}
-   * 一致;批量传输失败时,实现应回退到逐条 {@link #renewLease}。
+   * 批量续租各任务的当前租约，普通续租失败时可回退单条续租。
+   * 携带执行入口标记的项必须保留该标记独立确认，不能降级为普通续租后视为开始确认成功。
    */
   Map<Long, TaskLeaseRenewResult> renewLeasesBatch(List<TaskLeaseRenewItem> items);
 

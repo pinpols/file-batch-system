@@ -12,6 +12,7 @@
   {{- $_ := required "production overlay must set postgresql.platform.url" .Values.postgresql.platform.url -}}
   {{- $_ := required "production overlay must set postgresql.business.url" .Values.postgresql.business.url -}}
   {{- $_ := required "production overlay must set kafka.bootstrapServers" .Values.kafka.bootstrapServers -}}
+  {{- $_ := required "production overlay must set kafka.namespace" .Values.kafka.namespace -}}
   {{- $_ := required "production overlay must set redis.host" .Values.redis.host -}}
   {{- $_ := required "production overlay must set redis.port" .Values.redis.port -}}
   {{- $_ := required "production overlay must set objectStorage.endpoint" .Values.objectStorage.endpoint -}}
@@ -162,6 +163,7 @@ data:
 
   # ── Kafka ──────────────────────────────────────────────────────────────────
   BATCH_KAFKA_BOOTSTRAP_SERVERS: {{ .Values.kafka.bootstrapServers | quote }}
+  BATCH_KAFKA_NAMESPACE: {{ .Values.kafka.namespace | quote }}
 
   # ── Redis（用于 ShedLock / 配置缓存 / 实时 SSE Pub-Sub）─────────────────
   BATCH_REDIS_HOST: {{ .Values.redis.host | quote }}
@@ -203,6 +205,7 @@ data:
   BATCH_CONSOLE_ALERTMANAGER_TENANT_ID: {{ ((.Values.alertmanager).console).tenantId | default "system" | quote }}
   BATCH_CONSOLE_ALERTMANAGER_SILENCE_ENABLED: {{ ((.Values.alertmanager).console).silenceEnabled | default false | quote }}
   BATCH_CONSOLE_ALERTMANAGER_API_BASE_URL: {{ ((.Values.alertmanager).console).apiBaseUrl | default "" | quote }}
+  BATCH_MAINTENANCE_ALERT_SCOPE: {{ ((.Values.alertmanager).console).maintenanceScope | default (printf "%s.%s" .Release.Namespace .Release.Name) | quote }}
   BATCH_STORAGE_BACKEND: {{ (.Values.storage).backend | default "s3" | quote }}
   BATCH_STORAGE_BACKEND_CUTOVER_ID: {{ (.Values.storage).backendCutoverId | default "" | quote }}
   BATCH_STORAGE_FILESYSTEM_ROOT: {{ (.Values.storage).filesystemRoot | default "" | quote }}
@@ -287,6 +290,9 @@ data:
   BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_ITEMS: {{ (.Values.orchestrator.persistenceGranularity).largeTargetItems | default 500000 | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_STANDARD_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).standardTargetBytes | default 536870912 | quote }}
   BATCH_ORCHESTRATOR_PERSISTENCE_LARGE_TARGET_BYTES: {{ (.Values.orchestrator.persistenceGranularity).largeTargetBytes | default 268435456 | quote }}
+  BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS: {{ (.Values.orchestrator.batchDay).dependencyWaitTimeoutSeconds | default 86400 | quote }}
+  BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS: {{ (.Values.orchestrator.jobDependencyWait).timeoutAlertSeconds | default 86400 | quote }}
+  BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN: {{ (.Values.orchestrator.batchDay).catchupDaysPerScan | default 14 | quote }}
   BATCH_MQ_ROUTING_MODE: {{ (.Values.orchestrator.mqRouting).mode | default "TENANT" | quote }}
   BATCH_QUOTA_RUNTIME_STORE: {{ (.Values.orchestrator.quota).runtimeStore | default "redis" | quote }}
   BATCH_QUOTA_REDIS_FAILURE_MODE: {{ (.Values.orchestrator.quota).redisFailureMode | default "FAIL_CLOSED" | quote }}
@@ -301,6 +307,10 @@ data:
   BATCH_REPLAY_DISPATCH_LOCK_AT_LEAST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtLeastFor | default "PT15S" | quote }}
   BATCH_REPLAY_DISPATCH_LOCK_AT_MOST_FOR: {{ (.Values.orchestrator.replayDispatch).lockAtMostFor | default "PT1M" | quote }}
   BATCH_REPLAY_DISPATCH_CLAIM_TIMEOUT_MILLIS: {{ (.Values.orchestrator.replayDispatch).claimTimeoutMillis | default 300000 | quote }}
+  BATCH_WORKER_BATCH_CLAIM_ENABLED: {{ dig "enabled" false (.Values.orchestrator.workerBatchClaim | default dict) | quote }}
+  BATCH_WORKER_BATCH_CLAIM_MAX_BATCH_SIZE: {{ dig "maxBatchSize" 32 (.Values.orchestrator.workerBatchClaim | default dict) | quote }}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_ENABLED: {{ dig "reportBatchEnabled" false (.Values.orchestrator.workerTaskClient | default dict) | quote }}
+  BATCH_WORKER_TASK_CLIENT_REPORT_BATCH_WAIT_MILLIS: {{ dig "reportBatchWaitMillis" 5 (.Values.orchestrator.workerTaskClient | default dict) | quote }}
   BATCH_WORKER_REPORT_OUTBOX_ENABLED: {{ (.Values.orchestrator.workerReportOutbox).enabled | default false | quote }}
   BATCH_WORKER_REPORT_OUTBOX_STORAGE: {{ (.Values.orchestrator.workerReportOutbox).storage | default "PLATFORM_PG" | quote }}
   BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID: {{ (.Values.orchestrator.workerReportOutbox).cutoverId | default "" | quote }}

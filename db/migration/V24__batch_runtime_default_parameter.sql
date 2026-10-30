@@ -1,7 +1,7 @@
 -- =========================================================
--- V23 - Baseline runtime default parameters (design §20.11)
+-- V24：建立运行时默认参数基线（设计 §20.11）。
 -- 说明：
--- 1) Mirror Spring YAML / env defaults as an audited catalog for ops docs.
+-- 1) 将 Spring YAML 和环境变量默认值登记为可审计目录，供运维文档使用。
 -- 2) 确保插入清单与 runtime-default-parameters.md 保持一致。
 -- =========================================================
 
@@ -23,10 +23,11 @@ CREATE TABLE IF NOT EXISTS batch.batch_runtime_default_parameter (
     ))
 );
 
-COMMENT ON TABLE batch.batch_runtime_default_parameter IS 'Catalog of default runtime tuning; keep in sync with docs/architecture/runtime-default-parameters.md';
+COMMENT ON TABLE batch.batch_runtime_default_parameter IS '运行时默认调优参数目录；需与 docs/architecture/runtime-default-parameters.md 保持一致。';
 
 INSERT INTO batch.batch_runtime_default_parameter (module, parameter_key, default_value, value_type, unit, yaml_path, env_var, description) VALUES
--- batch-orchestrator (application.yml)
+-- batch-orchestrator（application.yml）
+
 ('ORCHESTRATOR', 'outbox.batch_size', '100', 'INTEGER', 'events', 'batch.outbox.batch-size', 'BATCH_OUTBOX_BATCH_SIZE', 'Outbox poll batch size'),
 ('ORCHESTRATOR', 'outbox.poll_interval_millis', '5000', 'MILLIS', NULL, 'batch.outbox.poll-interval-millis', 'BATCH_OUTBOX_POLL_INTERVAL_MILLIS', 'Outbox poller interval'),
 ('ORCHESTRATOR', 'outbox.retry_delay_seconds', '60', 'SECONDS', NULL, 'batch.outbox.retry-delay-seconds', 'BATCH_OUTBOX_RETRY_DELAY_SECONDS', 'Delay before retrying failed outbox publish'),
@@ -58,7 +59,8 @@ INSERT INTO batch.batch_runtime_default_parameter (module, parameter_key, defaul
 ('ORCHESTRATOR', 'file_governance.reconcile.poll_interval_millis', '60000', 'MILLIS', NULL, 'batch.file-governance.reconcile.poll-interval-millis', 'BATCH_FILE_GOVERNANCE_RECONCILE_POLL_INTERVAL_MILLIS', 'Object vs record reconcile poll'),
 ('ORCHESTRATOR', 'file_governance.reconcile.batch_size', '200', 'INTEGER', NULL, 'batch.file-governance.reconcile.batch-size', 'BATCH_FILE_GOVERNANCE_RECONCILE_BATCH_SIZE', 'Reconcile batch size'),
 
--- batch-worker-import / export (import-worker.yml, export-worker.yml, application.yml)
+-- batch-worker-import / export（import-worker.yml、export-worker.yml、application.yml）
+
 ('WORKER_IMPORT', 'file_processing.streaming_enabled', 'true', 'BOOLEAN', NULL, 'batch.worker.import.file-processing.streaming-enabled', 'BATCH_WORKER_IMPORT_STREAMING_ENABLED', 'Enable NDJSON/streaming import path'),
 ('WORKER_IMPORT', 'file_processing.page_size', '1000', 'INTEGER', 'rows', 'batch.worker.import.file-processing.page-size', 'BATCH_WORKER_IMPORT_PAGE_SIZE', 'Parse/validate page size'),
 ('WORKER_IMPORT', 'file_processing.fetch_size', '1000', 'INTEGER', 'rows', 'batch.worker.import.file-processing.fetch-size', 'BATCH_WORKER_IMPORT_FETCH_SIZE', 'JDBC fetch size hints'),
@@ -69,11 +71,13 @@ INSERT INTO batch.batch_runtime_default_parameter (module, parameter_key, defaul
 ('WORKER_EXPORT', 'file_processing.chunk_size', '500', 'INTEGER', 'rows', 'batch.worker.export.file-processing.chunk-size', 'BATCH_WORKER_EXPORT_CHUNK_SIZE', 'Flush chunk for delimited/json writers'),
 
 -- batch-worker-dispatch
+
 ('WORKER_DISPATCH', 'circuit_breaker.failure_threshold', '5', 'INTEGER', 'failures', 'batch.worker.dispatch.circuit-breaker.failure-threshold', NULL, 'Failures before channel short-circuit'),
 ('WORKER_DISPATCH', 'circuit_breaker.cooldown_millis', '60000', 'MILLIS', NULL, 'batch.worker.dispatch.circuit-breaker.cooldown-millis', 'BATCH_DISPATCH_CB_COOLDOWN_MS', 'Cooldown while circuit open'),
 ('WORKER_DISPATCH', 'receipt_poll.interval_millis', '60000', 'MILLIS', NULL, 'batch.worker.dispatch.receipt-poll.interval-millis', 'BATCH_DISPATCH_RECEIPT_POLL_MS', 'Async receipt poll interval'),
 ('WORKER_DISPATCH', 'receipt_poll.batch_size', '50', 'INTEGER', 'records', 'batch.worker.dispatch.receipt-poll.batch-size', 'BATCH_DISPATCH_RECEIPT_POLL_BATCH', 'Receipt poll batch'),
 
--- Schema default (Flyway V13)
+-- Schema 默认值（Flyway V13）
+
 ('SCHEMA', 'file_template_config.chunk_size', '500', 'INTEGER', 'rows', 'batch.file_template_config.chunk_size (column default)', NULL, 'DB default when template row has no override; CHECK chunk_size > 0')
 ON CONFLICT (module, parameter_key) DO NOTHING;

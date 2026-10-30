@@ -51,9 +51,9 @@ public final class OutboxEventKeyGenerator {
     return build(tenantId, "wf", String.valueOf(workflowRunId), nodeCode, String.valueOf(taskId));
   }
 
-  /** 文件治理手动重派:{@code <tenant>:file-redispatch:<taskId>}。 */
-  public static String forFileRedispatch(String tenantId, Long taskId) {
-    return build(tenantId, "file-redispatch", String.valueOf(taskId));
+  /** 文件治理重派使用复位前任务版本区分不同的失败尝试。 */
+  public static String forFileRedispatch(String tenantId, Long taskId, Long taskVersion) {
+    return build(tenantId, "file-redispatch", String.valueOf(taskId), String.valueOf(taskVersion));
   }
 
   /**
@@ -95,6 +95,11 @@ public final class OutboxEventKeyGenerator {
    */
   public static String forWorkflowTerminal(String tenantId, Long workflowRunId) {
     return build(tenantId, "workflow", String.valueOf(workflowRunId), "terminal");
+  }
+
+  /** Job 终态事实:同状态重投唯一,失败修正为成功是另一事实。 */
+  public static String forJobTerminal(String tenantId, Long jobInstanceId, String status) {
+    return build(tenantId, "job", String.valueOf(jobInstanceId), "terminal", status);
   }
 
   // ── helpers ──────────────────────────────────────────────────────────

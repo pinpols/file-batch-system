@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：为五语言 SDK 提供真实 loopback socket 的 Happy Eyeballs 故障矩阵。
+# 用法：python3 scripts/ci/sdk-happy-eyeballs-fixture.py --matrix-file <矩阵 JSON> --counts-file <计数 JSON>。
 """为五语言 SDK 提供真实 loopback socket 的 Happy Eyeballs 故障矩阵。"""
 
 from __future__ import annotations

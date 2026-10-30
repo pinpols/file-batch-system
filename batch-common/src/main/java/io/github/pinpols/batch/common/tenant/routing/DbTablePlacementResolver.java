@@ -63,7 +63,9 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
   private Map<String, String> currentMapping() {
     Snapshot current = snapshot.get();
     long now = clockMs.getAsLong();
-    if (current.everLoaded() && now - current.loadedAtMs() < cacheTtlMs) {
+    boolean currentSnapshotIsFresh =
+        current.everLoaded() && now - current.loadedAtMs() < cacheTtlMs;
+    if (currentSnapshotIsFresh) {
       return current.mapping();
     }
     try {
@@ -74,17 +76,20 @@ public final class DbTablePlacementResolver implements BusinessPlacementResolver
     } catch (RuntimeException ex) {
       if (current.everLoaded()) {
         // 有缓存:保留 stale(silo 路由仍正确),bump 时间避免每次都打失败的库
+        int mappingSize = current.mapping().size();
+        String causeSummary = SwallowedExceptionLogger.summary(ex);
         log.warn(
             "placement reload failed, keep stale mapping ({} entries): {}",
-            current.mapping().size(),
-            SwallowedExceptionLogger.summary(ex));
+            mappingSize,
+            causeSummary);
         snapshot.set(new Snapshot(current.mapping(), now, true));
         return current.mapping();
       }
       // 冷启动读失败:表里本无 silo 指派可丢,退 hash;不写 snapshot,下次 resolve 重试
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
       log.warn(
           "initial placement load failed, fall back to hash until table reachable: {}",
-          SwallowedExceptionLogger.summary(ex));
+          causeSummary);
       return Map.of();
     }
   }

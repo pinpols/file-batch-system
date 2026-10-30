@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
+# 用途：Java 治理测试清单。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-governance-test-coverage.py；参数与前置环境见下方说明及所属 README。
 """核对 Java 架构/约定守卫的源码清单与 Surefire 执行报告。"""
 
 from __future__ import annotations
 
 import argparse
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,13 +29,35 @@ class GovernanceTest:
 
 
 def discover(root: Path) -> list[GovernanceTest]:
+    # Git 清单保留已跟踪源码，并补充未忽略的新文件；忽略的验证快照不属于 Maven 源码。
+    inventory = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "*.java"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=False,
+    )
+    if inventory.returncode != 0:
+        detail = inventory.stderr.strip() or "git ls-files 未提供诊断信息"
+        raise ValueError(f"Git 源码枚举失败（退出码 {inventory.returncode}）：{detail}")
+
     tests: list[GovernanceTest] = []
-    for source in sorted(root.glob("**/src/test/java/**/*.java")):
-        if not source.name.endswith(GOVERNANCE_SUFFIXES):
+    for name in sorted(set(inventory.stdout.split("\0"))):
+        relative = Path(name)
+        if not name or not relative.name.endswith(GOVERNANCE_SUFFIXES):
             continue
-        relative = source.relative_to(root)
+        source = root / relative
+        if not source.is_file():
+            # 已跟踪但在当前工作区删除的文件不会参与本次 Maven 测试。
+            continue
         parts = relative.parts
-        source_index = parts.index("src")
+        source_index = next(
+            (index for index in range(len(parts) - 2) if parts[index:index + 3] == ("src", "test", "java")),
+            None,
+        )
+        if source_index is None:
+            continue
         module = root.joinpath(*parts[:source_index])
         content = source.read_text(encoding="utf-8")
         package_match = PACKAGE_PATTERN.search(content)

@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -12,8 +13,11 @@ import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.postgresql.util.PSQLException;
+import org.postgresql.util.ServerErrorMessage;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,16 +34,26 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class DefaultTaskCreationService implements TaskCreationService {
 
+  private static final Set<String> OWNERSHIP_CONSTRAINTS = Set.of(
+      "fk_job_task_instance_tenant_date",
+      "fk_job_task_partition_tenant_instance",
+      "fk_job_step_task_ownership");
+
   private final JobTaskMapper jobTaskMapper;
   private final JobStepInstanceMapper jobStepInstanceMapper;
+  private final RelatedFileReferenceValidator relatedFileReferenceValidator;
 
   @Override
   @Transactional
   public JobTaskEntity createTask(JobTaskEntity task) {
     validateForCreate(task);
-    jobTaskMapper.insert(task);
-    createStepInstance(task);
-    return task;
+    try {
+      jobTaskMapper.insert(task);
+      createStepInstance(task);
+      return task;
+    } catch (RuntimeException failure) {
+      throw translateOwnershipConflict(failure);
+    }
   }
 
   /**
@@ -58,22 +72,48 @@ public class DefaultTaskCreationService implements TaskCreationService {
     for (JobTaskEntity task : tasks) {
       validateForCreate(task);
     }
-    // R2:按固定 chunk 切批,防单条多行 INSERT 的绑定参数越 PG 65535 上限整批回滚。
-    // useGeneratedKeys 通过 subList 视图回填,id 落回原 tasks 对应位置(顺序正确)。
-    BatchInsertChunks.insertInChunks(
-        tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
-    List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
-    for (JobTaskEntity task : tasks) {
-      if (EmptyChecks.isNull(task.getId())) {
-        continue;
-      }
-      stepInstances.add(buildStepInstance(task));
-    }
-    if (EmptyChecks.isNotEmpty(stepInstances)) {
+    try {
+      // R2:按固定 chunk 切批,防单条多行 INSERT 的绑定参数越 PG 65535 上限整批回滚。
+      // useGeneratedKeys 通过 subList 视图回填,id 落回原 tasks 对应位置(顺序正确)。
       BatchInsertChunks.insertInChunks(
-          stepInstances, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobStepInstanceMapper::insertBatch);
+          tasks, BatchInsertChunks.DEFAULT_CHUNK_SIZE, jobTaskMapper::insertBatch);
+      List<JobStepInstanceEntity> stepInstances = new ArrayList<>(tasks.size());
+      for (JobTaskEntity task : tasks) {
+        if (EmptyChecks.isNull(task.getId())) {
+          continue;
+        }
+        stepInstances.add(buildStepInstance(task));
+      }
+      if (EmptyChecks.isNotEmpty(stepInstances)) {
+        BatchInsertChunks.insertInChunks(
+            stepInstances,
+            BatchInsertChunks.DEFAULT_CHUNK_SIZE,
+            jobStepInstanceMapper::insertBatch);
+      }
+      return tasks;
+    } catch (RuntimeException failure) {
+      throw translateOwnershipConflict(failure);
     }
-    return tasks;
+  }
+
+  private static RuntimeException translateOwnershipConflict(RuntimeException failure) {
+    for (Throwable current = failure;
+        EmptyChecks.isNotNull(current);
+        current = current.getCause()) {
+      if (current instanceof PSQLException sql && "23503".equals(sql.getSQLState())) {
+        ServerErrorMessage error = sql.getServerErrorMessage();
+        boolean isTaskOwnershipConstraintViolation = EmptyChecks.isNotNull(error)
+            && EmptyChecks.isNotBlank(error.getConstraint())
+            && OWNERSHIP_CONSTRAINTS.contains(error.getConstraint());
+        if (isTaskOwnershipConstraintViolation) {
+          return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
+        }
+      }
+      if (current == current.getCause()) {
+        break;
+      }
+    }
+    return failure;
   }
 
   private void validateForCreate(JobTaskEntity task) {
@@ -84,11 +124,24 @@ public class DefaultTaskCreationService implements TaskCreationService {
     // dispatch 路径在 targetJobCode 解析不到 jobDefinition 时会传 null，撞 PSQLException
     // 导致 TriggerLaunchConsumer 无限循环。上游 DefaultWorkflowNodeDispatchService 已经
     // fail-fast，这里再加一层回退，把 DB 抛错前置成业务异常，错误信息更可读。
-    if (EmptyChecks.isNotNull(task) && EmptyChecks.isBlank(task.getTaskType())) {
+    boolean taskTypeMissingFromPresentTask =
+        EmptyChecks.isNotNull(task) && EmptyChecks.isBlank(task.getTaskType());
+    if (taskTypeMissingFromPresentTask) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           "error.job_task.task_type_required",
           task.getJobInstanceId());
+    }
+    if (EmptyChecks.isNotNull(task)) {
+      if (EmptyChecks.isNull(task.getJobInstanceBizDate())) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            "error.job_task.instance_biz_date_required",
+            task.getJobInstanceId());
+      }
+      String tenantId = task.getTenantId();
+      Long relatedFileId = resolveRelatedFileId(task);
+      relatedFileReferenceValidator.validate(tenantId, relatedFileId);
     }
   }
 
@@ -110,11 +163,14 @@ public class DefaultTaskCreationService implements TaskCreationService {
     stepInstance.setJobInstanceId(task.getJobInstanceId());
     stepInstance.setJobPartitionId(task.getJobPartitionId());
     stepInstance.setJobTaskId(task.getId());
-    stepInstance.setStepCode(resolveStepCode(task));
-    stepInstance.setStepType(resolveStepType(task));
+    String stepCode = resolveStepCode(task);
+    stepInstance.setStepCode(stepCode);
+    String stepType = resolveStepType(task);
+    stepInstance.setStepType(stepType);
     stepInstance.setStepStatus(task.getTaskStatus());
     stepInstance.setRetryCount(0);
-    stepInstance.setRelatedFileId(resolveRelatedFileId(task));
+    Long relatedFileId = resolveRelatedFileId(task);
+    stepInstance.setRelatedFileId(relatedFileId);
     stepInstance.setVersion(0L);
     return stepInstance;
   }
@@ -142,10 +198,22 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private Long resolveRelatedFileId(JobTaskEntity task) {
-    return firstPositiveLong(
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "relatedFileId"),
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "fileId"),
-        payloadLongValue(EmptyChecks.isNull(task) ? null : task.getTaskPayload(), "sourceFileId"));
+    if (EmptyChecks.isNotNull(task) && "DISPATCH".equalsIgnoreCase(task.getTaskType())) {
+      String payload = task.getTaskPayload();
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "bundleSourceFileId"))) {
+        return payloadLongValue(payload, "bundleSourceFileId");
+      }
+      if (EmptyChecks.isNotNull(payloadStringValue(payload, "fileId"))) {
+        return payloadLongValue(payload, "fileId");
+      }
+    }
+    String relatedFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+    Long relatedFileId = payloadLongValue(relatedFilePayload, "relatedFileId");
+    String filePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+    Long fileId = payloadLongValue(filePayload, "fileId");
+    String sourceFilePayload = EmptyChecks.isNull(task) ? null : task.getTaskPayload();
+    Long sourceFileId = payloadLongValue(sourceFilePayload, "sourceFileId");
+    return firstPositiveLong(relatedFileId, fileId, sourceFileId);
   }
 
   @SuppressWarnings("unchecked")
@@ -189,14 +257,11 @@ public class DefaultTaskCreationService implements TaskCreationService {
   }
 
   private Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number number) {
-      long value = number.longValue();
-      return value > 0 ? value : null;
-    }
     if (EmptyChecks.isNull(candidate)) {
       return null;
     }
-    String text = String.valueOf(candidate).trim();
+    String rawText = String.valueOf(candidate);
+    String text = rawText.trim();
     if (EmptyChecks.isEmpty(text)) {
       return null;
     }

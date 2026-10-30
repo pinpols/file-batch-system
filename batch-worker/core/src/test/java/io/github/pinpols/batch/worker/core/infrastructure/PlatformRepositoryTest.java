@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -9,10 +9,14 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
-import java.util.Map;
+import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 @DisplayName("平台仓储: 聚焦拆分的构造与事务契约, 查询过滤与文件记录写入")
@@ -22,8 +26,7 @@ class PlatformRepositoryTest {
   @DisplayName("仓储拆分后各自保留构造函数, 写入方法使用独立事务与读已提交隔离级别")
   void shouldPreserveConstructorsAndTransactionBoundary_whenRepositoriesAreFocused()
       throws NoSuchMethodException {
-    assertThat(PlatformPipelineDefinitionRepository.class.getConstructor(
-            PlatformFileRuntimeMapper.class))
+    assertThat(PlatformFileTemplateRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
         .isNotNull();
     assertThat(PlatformPipelineRunRepository.class.getConstructor(PlatformFileRuntimeMapper.class))
         .isNotNull();
@@ -37,49 +40,12 @@ class PlatformRepositoryTest {
             .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
             .getAnnotation(Transactional.class))
         .extracting(Transactional::isolation)
-        .isEqualTo(org.springframework.transaction.annotation.Isolation.READ_COMMITTED);
+        .isEqualTo(Isolation.READ_COMMITTED);
     assertThat(PlatformPipelineRunRepository.class
             .getMethod("startStepRun", Long.class, String.class, String.class, Object.class)
             .getAnnotation(Transactional.class))
         .extracting(Transactional::propagation)
-        .isEqualTo(org.springframework.transaction.annotation.Propagation.REQUIRES_NEW);
-  }
-
-  @Test
-  @DisplayName("查询流水线定义时按租户与作业编码过滤, 查询条件不含流水线编码")
-  void shouldFilterByTenantAndJobCode_whenFindingPipelineDefinition() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    when(mapper.selectLatestPipelineDefinition(anyMap()))
-        .thenReturn(Map.of("id", 4601L, "pipeline_type", "IMPORT"));
-
-    PlatformPipelineDefinitionRepository.PipelineDefinitionReference pipelineDefinition =
-        repository.findPipelineDefinition("tenant-a", "job-a");
-
-    assertThat(pipelineDefinition)
-        .isEqualTo(
-            new PlatformPipelineDefinitionRepository.PipelineDefinitionReference(4601L, "IMPORT"));
-    verify(mapper)
-        .selectLatestPipelineDefinition(argThat(params -> "tenant-a".equals(params.get("tenantId"))
-            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
-            && !params.containsKey("pipelineCode")));
-  }
-
-  @Test
-  @DisplayName("缺少租户或作业编码以及查询未命中时不返回流水线定义")
-  void shouldReturnNullWhenPipelineDefinitionIsUnavailable() {
-    PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
-    PlatformPipelineDefinitionRepository repository =
-        new PlatformPipelineDefinitionRepository(mapper);
-
-    assertThat(repository.findPipelineDefinition(" ", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", " ")).isNull();
-    when(mapper.selectLatestPipelineDefinition(anyMap())).thenReturn(Map.of()).thenReturn(null);
-
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-a")).isNull();
-    assertThat(repository.findPipelineDefinition("tenant-a", "job-b")).isNull();
+        .isEqualTo(Propagation.REQUIRES_NEW);
   }
 
   @Test
@@ -88,37 +54,39 @@ class PlatformRepositoryTest {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformPipelineRunRepository repository = new PlatformPipelineRunRepository(mapper);
 
-    when(mapper.insertPipelineInstance(anyMap())).thenAnswer(invocation -> {
-      Map<String, Object> paramMap = invocation.getArgument(0);
-      paramMap.put("id", 5301L);
+    when(mapper.insertPipelineInstance(any())).thenAnswer(invocation -> {
+      PlatformPipelineInsertParam param = invocation.getArgument(0);
+      param.setId(5301L);
       return 1;
     });
 
     Long pipelineInstanceId = repository.createPipelineInstance(new CreatePipelineInstanceParam(
-        "tenant-a", 4601L, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
+        "tenant-a", "IMPORT", 1, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
 
     assertThat(pipelineInstanceId).isEqualTo(5301L);
     verify(mapper)
-        .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.get("tenantId"))
-            && "job-a".equals(params.get(PipelineRuntimeKeys.JOB_CODE))
-            && !params.containsKey("pipelineCode")));
+        .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.getTenantId())
+            && "job-a".equals(params.getJobCode())
+            && "IMPORT".equals(params.getSystemPipelineCode())));
   }
 
   @Test
-  @DisplayName("命中同存储路径的已有记录时返回既有文件标识并标记历史文件, 不重复插入")
+  @DisplayName("命中同存储路径的已有记录时返回既有文件标识, 不改变最新标记或重复插入")
   void shouldPreserveDedupPrecheck_whenCreatingFileRecord() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
-    when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);
-    when(mapper.selectFileRecordByStoragePath(anyMap()))
-        .thenReturn(Map.of("id", 77L, "checksum_value", ""));
+    when(mapper.selectMaxFileGenerationNo(any(), any())).thenReturn(2);
+    when(mapper.selectFileRecordByStoragePath(any(), any(), any()))
+        .thenReturn(new PlatformFileRecordView(
+            77L, null, null, null, null, null, null, null, null, null, null, null, null, "", null,
+            null, null, null, null, null, null, null, null, null, null, null, null, null));
 
     Long fileId = repository.createFileRecord(FileRecordParam.builder()
         .tenantId("tenant-a")
         .fileCode("file-a")
         .fileCategory("INPUT")
         .fileName("orders.csv")
-        .fileFormatType("CSV")
+        .fileFormatType("DELIMITED")
         .storageType("S3")
         .storageBucket("batch")
         .storagePath("incoming/orders.csv")
@@ -127,10 +95,9 @@ class PlatformRepositoryTest {
         .build());
 
     assertThat(fileId).isEqualTo(77L);
-    verify(mapper)
-        .markHistoricalFileNotLatest(argThat(params ->
-            "tenant-a".equals(params.get("tenantId")) && "file-a".equals(params.get("fileCode"))));
-    verify(mapper, never()).insertFileRecord(anyMap());
+    verify(mapper).lockFileGeneration("tenant-a", "file-a");
+    verify(mapper, never()).markHistoricalFileNotLatest(any(), any());
+    verify(mapper, never()).insertFileRecord(any());
   }
 
   @Test
@@ -138,10 +105,10 @@ class PlatformRepositoryTest {
   void shouldPreserveGenerationParameters_whenCreatingFileRecord() {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformFileRecordRepository repository = new PlatformFileRecordRepository(mapper);
-    when(mapper.selectMaxFileGenerationNo(anyMap())).thenReturn(2);
-    when(mapper.insertFileRecord(anyMap())).thenAnswer(invocation -> {
-      Map<String, Object> params = invocation.getArgument(0);
-      params.put("id", 78L);
+    when(mapper.selectMaxFileGenerationNo(any(), any())).thenReturn(2);
+    when(mapper.insertFileRecord(any())).thenAnswer(invocation -> {
+      PlatformFileInsertParam param = invocation.getArgument(0);
+      param.setId(78L);
       return 1;
     });
 
@@ -150,7 +117,7 @@ class PlatformRepositoryTest {
         .fileCode("file-a")
         .fileCategory("INPUT")
         .fileName("orders.csv")
-        .fileFormatType("CSV")
+        .fileFormatType("DELIMITED")
         .checksumValue("sha256-value")
         .storageType("S3")
         .storagePath("incoming/orders.csv")
@@ -159,9 +126,10 @@ class PlatformRepositoryTest {
         .build());
 
     assertThat(fileId).isEqualTo(78L);
+    verify(mapper).lockFileGeneration("tenant-a", "file-a");
+    verify(mapper).markHistoricalFileNotLatest("tenant-a", "file-a");
     verify(mapper)
-        .insertFileRecord(
-            argThat(params -> Integer.valueOf(3).equals(params.get("fileGenerationNo"))
-                && "v3".equals(params.get("fileVersion"))));
+        .insertFileRecord(argThat(params -> Integer.valueOf(3).equals(params.getFileGenerationNo())
+            && "v3".equals(params.getFileVersion())));
   }
 }

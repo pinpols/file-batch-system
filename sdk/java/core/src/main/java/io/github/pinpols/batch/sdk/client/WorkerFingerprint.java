@@ -25,7 +25,8 @@ public final class WorkerFingerprint {
 
   public static String hostName() {
     try {
-      return InetAddress.getLocalHost().getHostName();
+      InetAddress localHost = InetAddress.getLocalHost();
+      return localHost.getHostName();
     } catch (UnknownHostException e) {
       String env = System.getenv("HOSTNAME");
       return env == null || env.isBlank() ? null : env;
@@ -34,14 +35,16 @@ public final class WorkerFingerprint {
 
   public static String hostIp() {
     try {
-      return InetAddress.getLocalHost().getHostAddress();
+      InetAddress localHost = InetAddress.getLocalHost();
+      return localHost.getHostAddress();
     } catch (UnknownHostException e) {
       return null;
     }
   }
 
   public static String processId() {
-    return Long.toString(ProcessHandle.current().pid());
+    long processId = ProcessHandle.current().pid();
+    return Long.toString(processId);
   }
 
   /** 本 SDK 库版本 — 从 jar manifest Implementation-Version 读;非 jar 运行(IDE / 测试)返回 null。 */

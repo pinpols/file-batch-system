@@ -39,3 +39,15 @@ COMPOSE_ENV_FILE=.env.test ./scripts/docker/observability/up.sh
 - 如果业务应用容器已经在跑，观测栈可以直接抓取它们的 `/actuator/prometheus`
 - 系统 CPU / 内存 / 磁盘 / 网络 / 负载指标由 node_exporter 和 cAdvisor 提供
 - 应用指标由 Prometheus 拉取，Collector 只接收 traces 与 logs
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [down.sh](down.sh) | 停止本地观测栈，但不删除容器/网络/卷。 |
+| [inspect.sh](inspect.sh) | 复用本地巡检脚本检查观测栈健康、指标和系统 exporter。 |
+| [logs.sh](logs.sh) | 跟踪本地观测栈日志。 |
+| [status.sh](status.sh) | 查看本地观测栈容器状态。 |
+| [up.sh](up.sh) | 统一启动本地观测栈。 |

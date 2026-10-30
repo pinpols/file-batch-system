@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.application.contract.response;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleAlertEventResponse(
     Long id,
     String tenantId,

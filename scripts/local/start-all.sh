@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
+# 用途：启动当前工作树的本地 Java 服务并管理运行记录。
+# 用法：在仓库根目录执行 bash scripts/local/start-all.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================s s
-# start-all.sh - 一键启动本地联调环境
+# start-all.sh - 统一启动本地联调环境
 # 说明：
 # 1) 启动 PostgreSQL / Kafka / MinIO / Redis 以及 8 个 Java 应用模块。
 # 2) 默认不自动 Maven 打包；如需先构建，请显式传 BUILD=1 或先执行 build-apps.sh。
 # 3) 运行前需要 Docker、Docker Compose、JDK；仅在 BUILD=1 时需要 Maven。
-# 4) PID 写入 logs/pids/start-all.pids（兼容软链 logs/start-all.pids），日志写入 logs/current/app/<module>.log。
+# 4) PID 写入 .local/run/pids/start-all.pids（兼容软链 logs/start-all.pids），日志写入 logs/current/app/<module>.log。
 #    Docker 容器日志通过 docker logs 查看，如需落盘可手动导出到 logs/current/docker（兼容 logs/docker）。
 # 5) 每次启动前会先归档模块旧日志，避免同名文件被覆盖。
 # 6) 可执行 jar 统一从 build/runtime-jars/ 读取，由 build-apps.sh 产出。
@@ -19,6 +21,7 @@ cd "$ROOT"
 # shellcheck source=../lib/local-lifecycle-lock.sh
 source "$ROOT/scripts/lib/local-lifecycle-lock.sh"
 batch_local_lifecycle_lock_acquire "$ROOT"
+trap batch_local_lifecycle_lock_release EXIT
 
 _LOCAL_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=docker-path.sh
@@ -31,6 +34,8 @@ REQUESTED_COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-}"
 COMPOSE_PROJECT_NAME=""
 # shellcheck source=../lib/env-common.sh
 source "$ROOT/scripts/lib/env-common.sh"
+# 裸 JVM 也要读取选定的本地环境文件；Compose --env-file 只作用于容器，不会注入宿主应用进程。
+batch_load_default_env
 # shellcheck source=../lib/business-db-bootstrap.sh
 source "$ROOT/scripts/lib/business-db-bootstrap.sh"
 if [[ -n "$REQUESTED_COMPOSE_PROJECT_NAME" ]]; then
@@ -39,6 +44,8 @@ fi
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-batch-platform}"
 export COMPOSE_PROJECT_NAME
 unset REQUESTED_COMPOSE_PROJECT_NAME
+batch_configure_local_jvm_port_env true
+batch_configure_local_jvm_control_plane_env
 batch_configure_local_jvm_runtime_env
 # shellcheck source=../lib/logging.sh
 source "$ROOT/scripts/lib/logging.sh"
@@ -191,9 +198,12 @@ start_java() {
   local existing_pid
   existing_pid="$(existing_pid_for "$name")"
   if [[ -n "$existing_pid" ]] && kill -0 "$existing_pid" 2>/dev/null; then
-    echo "  跳过 ${name}（pid=${existing_pid} 仍在运行）"
-    printf '%s\t%s\t%s\n' "$name" "$existing_pid" "$RUNTIME_JAR_DIR/${name}.jar" >>"$PID_FILE_NEW"
-    return 0
+    if process_pid_uses_jar "$existing_pid" "$jar"; then
+      echo "  跳过 ${name}（本工作树 pid=${existing_pid} 仍在运行）"
+      printf '%s\t%s\t%s\n' "$name" "$existing_pid" "$jar" >>"$PID_FILE_NEW"
+      return 0
+    fi
+    echo "  忽略 ${name} 的过期 PID 文件项（pid=${existing_pid} 不属于当前运行包）" >&2
   fi
 
   warm_cds "$name" "$jar"
@@ -256,6 +266,7 @@ wait_kafka_topics_ready() {
       local topic
       topic="$(echo "${raw_topic}" | tr -d '[:space:]')"
       [[ -n "$topic" ]] || continue
+      topic="$(batch_namespace_kafka_name "$topic" "${BATCH_KAFKA_NAMESPACE:-}")"
       if ! grep -Fxq "$topic" <<<"$listed"; then
         all_ready=false
         break
@@ -309,9 +320,9 @@ wait_container_running() {
   exit 1
 }
 
-# Orchestrator 就绪后再启动三个 worker（与 stop-all 顺序对称）
+# Orchestrator 就绪后再启动五类 worker（与 stop-all 顺序对称）
 wait_orchestrator_healthy() {
-  local port="${BATCH_ORCHESTRATOR_PORT:-18082}"
+  local port="${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
   local url="http://127.0.0.1:${port}/actuator/health"
   local rounds="${ORCH_HEALTH_WAIT_ROUNDS:-90}"
   local interval="${ORCH_HEALTH_INTERVAL_SEC:-2}"
@@ -400,14 +411,14 @@ _clear_occupied_ports() {
     "worker-atomic"
   )
   local ports=(
-    "${BATCH_ORCHESTRATOR_PORT:-18082}"
-    "${BATCH_TRIGGER_PORT:-18081}"
-    "${BATCH_CONSOLE_PORT:-18080}"
-    "${BATCH_WORKER_IMPORT_PORT:-18083}"
-    "${BATCH_WORKER_EXPORT_PORT:-18084}"
-    "${BATCH_WORKER_PROCESS_PORT:-18086}"
-    "${BATCH_WORKER_DISPATCH_PORT:-18085}"
-    "${BATCH_WORKER_ATOMIC_PORT:-18087}"
+    "${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}"
+    "${BATCH_TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}"
+    "${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}"
+    "${BATCH_WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}"
+    "${BATCH_WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}"
+    "${BATCH_WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}"
+    "${BATCH_WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}"
+    "${BATCH_WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}"
   )
   local found=0
   local i
@@ -417,17 +428,19 @@ _clear_occupied_ports() {
     local pids
     pids="$(process_listen_pids "$port")"
     [[ -z "$pids" ]] && continue
+    local expected_jar="$RUNTIME_JAR_DIR/${name}.jar"
     while IFS= read -r pid; do
       [[ -z "$pid" ]] && continue
       # 跳过 PID_FILE 里登记且仍活着的进程：那是上一次本脚本启动留下的 in-flight 服务,
       # start_java 会基于 PID_FILE 做幂等跳过。盲杀会让"独立顺序起 worker"场景下
       # 已起来的 trigger / console / 其它 worker 被本次清理误伤。
-      if [[ -f "$PID_FILE" ]] && grep -Fq "	${pid}	" "$PID_FILE" 2>/dev/null; then
+      if [[ -f "$PID_FILE" ]] && grep -Fq "	${pid}	" "$PID_FILE" 2>/dev/null \
+          && process_pid_uses_jar "$pid" "$expected_jar"; then
         continue
       fi
       local command_line
       command_line="$(ps -p "$pid" -o command= 2>/dev/null || true)"
-      if [[ "$command_line" != *"build/runtime-jars/${name}.jar"* ]]; then
+      if ! process_pid_uses_jar "$pid" "$expected_jar"; then
         echo "ERROR: 端口 ${port} (${name}) 被未知进程占用，拒绝自动终止。" >&2
         echo "  pid=${pid} command=${command_line:-<unavailable>}" >&2
         echo "  请确认进程归属后手动处理，或使用 scripts/local/stop-all.sh 停止本项目服务。" >&2
@@ -519,9 +532,9 @@ fi
 mv "$PID_FILE_NEW" "$PID_FILE"
 
 echo ""
-echo "全部进程已在后台运行。端口（默认）："
-echo "  console-api 18080 | trigger 18081 | orchestrator 18082 | import 18083 | export 18084 | process 18086 | dispatch 18085 | atomic 18087"
-echo "  Postgres 15432 | Kafka 19092 | Kafka UI 18090 | MinIO 19000/19001 | Redis 16379（宿主机映射）"
+echo "全部进程已在后台运行。端口（本次配置）："
+echo "  console-api $CONSOLE_API_PORT | trigger $TRIGGER_PORT | orchestrator $ORCHESTRATOR_PORT | import $WORKER_IMPORT_PORT | export $WORKER_EXPORT_PORT | process $WORKER_PROCESS_PORT | dispatch $WORKER_DISPATCH_PORT | atomic $WORKER_ATOMIC_PORT"
+echo "  Postgres $POSTGRES_PORT | Kafka $KAFKA_HOST_PORT | Kafka UI $KAFKA_UI_PORT | MinIO $MINIO_API_PORT/$MINIO_CONSOLE_PORT | Redis ${BATCH_REDIS_PORT:-$BATCH_DEFAULT_REDIS_PORT}（宿主机映射）"
 echo "停止请执行: ./scripts/local/stop-all.sh"
 
 # ─────────────────────────────────────────────
@@ -530,14 +543,14 @@ echo "停止请执行: ./scripts/local/stop-all.sh"
 # ─────────────────────────────────────────────
 _port_for_app() {
   case "$1" in
-    orchestrator)   echo "${BATCH_ORCHESTRATOR_PORT:-18082}" ;;
-    trigger)        echo "${BATCH_TRIGGER_PORT:-18081}" ;;
-    console)        echo "${BATCH_CONSOLE_PORT:-18080}" ;;
-    worker-import)  echo "${BATCH_WORKER_IMPORT_PORT:-18083}" ;;
-    worker-export)  echo "${BATCH_WORKER_EXPORT_PORT:-18084}" ;;
-    worker-process) echo "${BATCH_WORKER_PROCESS_PORT:-18086}" ;;
-    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-18085}" ;;
-    worker-atomic) echo "${BATCH_WORKER_ATOMIC_PORT:-18087}" ;;
+    orchestrator)   echo "${BATCH_ORCHESTRATOR_PORT:-$BATCH_DEFAULT_ORCHESTRATOR_PORT}" ;;
+    trigger)        echo "${BATCH_TRIGGER_PORT:-$BATCH_DEFAULT_TRIGGER_PORT}" ;;
+    console)        echo "${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}" ;;
+    worker-import)  echo "${BATCH_WORKER_IMPORT_PORT:-$BATCH_DEFAULT_WORKER_IMPORT_PORT}" ;;
+    worker-export)  echo "${BATCH_WORKER_EXPORT_PORT:-$BATCH_DEFAULT_WORKER_EXPORT_PORT}" ;;
+    worker-process) echo "${BATCH_WORKER_PROCESS_PORT:-$BATCH_DEFAULT_WORKER_PROCESS_PORT}" ;;
+    worker-dispatch) echo "${BATCH_WORKER_DISPATCH_PORT:-$BATCH_DEFAULT_WORKER_DISPATCH_PORT}" ;;
+    worker-atomic) echo "${BATCH_WORKER_ATOMIC_PORT:-$BATCH_DEFAULT_WORKER_ATOMIC_PORT}" ;;
   esac
 }
 

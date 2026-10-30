@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：核对 Kafka topic 字面量与权威常量的对应关系。
+# 用法：在仓库根目录执行 bash scripts/ci/validate-kafka-topics.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # validate-kafka-topics.sh - 校验全仓 topic 字面量与 BatchTopics.java 同步
 #
@@ -79,7 +81,7 @@ code_topics_sorted="$(
     | sort -u
 )"
 
-# diff
+# 对比实际值与权威定义。
 missing_in_env="$(comm -23 <(echo "$code_topics_sorted") <(echo "$configured_topics_sorted"))"
 missing_in_code="$(comm -13 <(echo "$code_topics_sorted") <(echo "$configured_topics_sorted"))"
 

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import java.util.Arrays;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -94,8 +95,7 @@ class BuiltinTaskTypeGuardTest {
   }
 
   private static void setAuthorities(String... authorities) {
-    var grants =
-        java.util.Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList();
+    var grants = Arrays.stream(authorities).map(SimpleGrantedAuthority::new).toList();
     var auth = new UsernamePasswordAuthenticationToken("test-user", "n/a", grants);
     SecurityContextHolder.getContext().setAuthentication(auth);
   }

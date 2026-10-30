@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.trigger;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.query.TriggerRequestLaunchReconcileRow;
@@ -66,9 +67,12 @@ public class TriggerRequestLaunchReconciler {
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    Instant olderThan =
-        BatchDateTimeSupport.utcNow().minusSeconds(Math.max(properties.getMinAgeSeconds(), 0));
-    int batch = Math.max(properties.getBatchSize(), 1);
+    Instant now = BatchDateTimeSupport.utcNow();
+    int configuredMinAgeSeconds = properties.getMinAgeSeconds();
+    int nonnegativeMinAgeSeconds = Math.max(configuredMinAgeSeconds, 0);
+    Instant olderThan = now.minusSeconds(nonnegativeMinAgeSeconds);
+    int configuredBatchSize = properties.getBatchSize();
+    int batch = Math.max(configuredBatchSize, 1);
     List<TriggerRequestLaunchReconcileRow> rows;
     try {
       rows = triggerRequestMapper.selectStaleAcceptedWithJobInstance(olderThan, batch);
@@ -87,8 +91,10 @@ public class TriggerRequestLaunchReconciler {
     int skipped = 0;
     for (TriggerRequestLaunchReconcileRow row : rows) {
       try {
-        int updated = triggerRequestMapper.reconcileLaunched(
-            row.getTenantId(), row.getRequestId(), row.getJobInstanceId());
+        int updated = RlsTenantContextHolder.runWithTenant(
+            row.getTenantId(),
+            () -> triggerRequestMapper.reconcileLaunched(
+                row.getTenantId(), row.getRequestId(), row.getJobInstanceId()));
         if (updated > 0) {
           reconciled++;
           counter(METRIC_RECONCILED, "tenant", row.getTenantId()).increment();

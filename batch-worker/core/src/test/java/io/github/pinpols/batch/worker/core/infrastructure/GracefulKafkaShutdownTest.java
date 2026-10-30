@@ -13,12 +13,14 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerGracefulShutdownProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import io.github.pinpols.batch.worker.core.support.WorkerSelfRegistrationService;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 
@@ -45,8 +47,8 @@ class GracefulKafkaShutdownTest {
     leaseRegistry = new ActiveTaskLeaseRegistry();
     meterRegistry = new SimpleMeterRegistry();
     @SuppressWarnings("unchecked")
-    ObjectProvider<io.micrometer.core.instrument.MeterRegistry> provider =
-        (ObjectProvider<io.micrometer.core.instrument.MeterRegistry>) mock(ObjectProvider.class);
+    ObjectProvider<MeterRegistry> provider =
+        (ObjectProvider<MeterRegistry>) mock(ObjectProvider.class);
     lenient().when(provider.getIfAvailable()).thenReturn(meterRegistry);
     lenient().when(runtimeState.snapshot()).thenReturn(List.of());
 
@@ -137,5 +139,5 @@ class GracefulKafkaShutdownTest {
   }
 
   /** 占位 stub：ContextClosedEvent 需要一个 ApplicationContext source；测试不实际使用。 */
-  private interface ApplicationContextStub extends org.springframework.context.ApplicationContext {}
+  private interface ApplicationContextStub extends ApplicationContext {}
 }

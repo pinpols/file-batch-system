@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -16,19 +15,28 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 @DisplayName("推送订阅安全边界:参数校验拒绝与真实租户守卫")
+@ExtendWith(MockitoExtension.class)
 class ConsolePushSubscriptionServiceTest {
-  private final ConsolePushSubscriptionMapper repository =
-      mock(ConsolePushSubscriptionMapper.class);
+  @Mock
+  private ConsolePushSubscriptionMapper repository;
+
   private ConsolePushSubscriptionService service;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadata;
 
   @BeforeEach
   void setUp() {
@@ -36,8 +44,6 @@ class ConsolePushSubscriptionServiceTest {
     properties.setEnabled(true);
     properties.setPublicKey("public-key");
     properties.setPrivateKey("private-key");
-    var metadata = mock(ConsoleRequestMetadataResolver.class);
-    when(metadata.current()).thenThrow(new IllegalStateException("no request scope"));
     service = new ConsolePushSubscriptionService(
         repository, new ConsoleTenantGuard(metadata), properties);
     SecurityContextHolder.getContext()
@@ -67,6 +73,7 @@ class ConsolePushSubscriptionServiceTest {
   @Test
   @DisplayName("合法请求不能绕过租户守卫写入其他租户")
   void shouldRejectCrossTenant_whenPayloadIsValid() {
+    when(metadata.current()).thenThrow(new IllegalStateException("no request scope"));
     assertThatThrownBy(() -> service.subscribe("tenant-b", "alice", validRequest(), "browser"))
         .isInstanceOf(BizException.class)
         .extracting("code")
@@ -77,13 +84,12 @@ class ConsolePushSubscriptionServiceTest {
   @Test
   @DisplayName("合法同租户请求仍成功写入订阅,字段保持原样")
   void shouldPersistSubscription_whenTenantMatches() {
+    when(metadata.current()).thenThrow(new IllegalStateException("no request scope"));
     service.subscribe("tenant-a", "alice", validRequest(), "browser");
     var captured = ArgumentCaptor.forClass(ConsolePushSubscriptionEntity.class);
     verify(repository).upsert(captured.capture());
-    org.assertj.core.api.Assertions.assertThat(captured.getValue().getTenantId())
-        .isEqualTo("tenant-a");
-    org.assertj.core.api.Assertions.assertThat(captured.getValue().getAuthSecret())
-        .isEqualTo("auth");
+    Assertions.assertThat(captured.getValue().getTenantId()).isEqualTo("tenant-a");
+    Assertions.assertThat(captured.getValue().getAuthSecret()).isEqualTo("auth");
   }
 
   private void assertInvalid(ConsolePushSubscribeRequest request) {

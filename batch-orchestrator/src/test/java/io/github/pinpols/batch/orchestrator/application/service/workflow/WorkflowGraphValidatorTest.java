@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -100,6 +101,44 @@ class WorkflowGraphValidatorTest {
   }
 
   @Test
+  @DisplayName("跨天依赖使用未知消费策略时在启用前判定为配置错误")
+  void shouldReportConfigError_whenCrossDayDependencyStrategyUnknown() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,\"scope\":\"OPTIONAL\","
+            + "\"consumeVersionStrategy\":\"BOGUS\"}]");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
+  @DisplayName("跨天依赖指定版本策略缺少正版本号时在启用前判定为配置错误")
+  void shouldReportConfigError_whenSpecificVersionSelectorIsInvalid() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,"
+            + "\"consumeVersionStrategy\":\"SPECIFIC_VERSION\",\"specificVersionNo\":0}]");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
+  @DisplayName("跨天依赖使用未知 scope 时在启用前判定为配置错误")
+  void shouldReportConfigError_whenCrossDayDependencyScopeUnknown() {
+    var nodes = nodes("START", "A", "END");
+    nodes
+        .get(1)
+        .setCrossDayDependencies("[{\"jobCode\":\"X\",\"bizDateOffset\":-1,\"scope\":\"MAYBE\"}]");
+    seed(nodes, edges(edge("START", "A"), edge("A", "END")));
+    var result = validator.validate(1L);
+    assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V6"));
+  }
+
+  @Test
   @DisplayName("跨天依赖的营业日区间超过允许上限时判定为配置错误")
   void shouldReportConfigError_whenBizDateRangeExceedsLimit() {
     var nodes = nodes("START", "A", "END");
@@ -139,6 +178,83 @@ class WorkflowGraphValidatorTest {
             edge("GW", "END")));
     var result = validator.validate(1L);
     assertThat(result.errors()).anySatisfy(i -> assertThat(i.code()).isEqualTo("V10"));
+  }
+
+  @Test
+  @DisplayName("N_OF 汇聚阈值不合法时图校验必须拒绝")
+  void shouldRejectInvalidNOfJoinThreshold() {
+    for (String threshold : List.of("1.5", "4294967297", "3")) {
+      var nodes = nodes("START", "B", "C", "GW", "END");
+      nodes.get(3).setNodeType("GATEWAY");
+      nodes.get(3).setNodeParams("{\"joinMode\":\"N_OF\",\"joinThreshold\":" + threshold + "}");
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "GW"),
+              edge("C", "GW"),
+              edge("GW", "END")));
+      assertThat(validator.validate(1L).errors())
+          .as(threshold)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V10"));
+    }
+  }
+
+  @Test
+  @DisplayName("多入边网关缺少或使用未知汇聚模式时图校验拒绝")
+  void shouldRejectMissingOrUnknownGatewayJoinMode() {
+    for (String params : List.of("{}", "{\"joinMode\":\"BAD\"}", "{\"joinMode\":\"3_OF_4\"}")) {
+      var nodes = nodes("START", "B", "C", "GW", "END");
+      nodes.get(3).setNodeType("GATEWAY");
+      nodes.get(3).setNodeParams(params);
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "GW"),
+              edge("C", "GW"),
+              edge("GW", "END")));
+      assertThat(validator.validate(1L).errors())
+          .as(params)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V9"));
+    }
+  }
+
+  @Test
+  @DisplayName("单入边分支允许无汇聚模式但拒绝显式未知模式")
+  void shouldAllowBranchWithoutJoinModeButRejectUnknownMode() {
+    var nodes = nodes("START", "GW", "END");
+    nodes.get(1).setNodeType("GATEWAY");
+    nodes.get(1).setNodeParams("{}");
+    seed(nodes, edges(edge("START", "GW"), edge("GW", "END")));
+    assertThat(validator.validate(1L).errors()).noneMatch(issue -> issue.code().equals("V9"));
+    nodes.get(1).setNodeParams("{\"joinMode\":\"BAD\"}");
+    assertThat(validator.validate(1L).errors())
+        .anySatisfy(issue -> assertThat(issue.code()).isEqualTo("V9"));
+  }
+
+  @Test
+  @DisplayName("非网关节点显式无效汇聚配置在启动图验证中拒绝")
+  void shouldRejectInvalidJoinConfigOnTask() {
+    for (String params :
+        List.of("{\"joinMode\":\"BAD\"}", "{\"joinMode\":\"N_OF\",\"joinThreshold\":3}")) {
+      var nodes = nodes("START", "B", "C", "TASK_JOIN", "END");
+      nodes.get(3).setNodeParams(params);
+      seed(
+          nodes,
+          edges(
+              edge("START", "B"),
+              edge("START", "C"),
+              edge("B", "TASK_JOIN"),
+              edge("C", "TASK_JOIN"),
+              edge("TASK_JOIN", "END")));
+      String expected = params.contains("BAD") ? "V9" : "V10";
+      assertThat(validator.validate(1L).errors())
+          .as(params)
+          .anySatisfy(issue -> assertThat(issue.code()).isEqualTo(expected));
+    }
   }
 
   @Test
@@ -366,6 +482,51 @@ class WorkflowGraphValidatorTest {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
+
+  @Test
+  @DisplayName("JOB 节点引用缺失或停用作业时运行准入必须报错")
+  void shouldRejectUnresolvableJobReference() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    job.setTenantId("tenant-a");
+    job.setRelatedJobCode("missing_job");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+
+    assertThat(validator.validate(1L).errors()).anySatisfy(error -> {
+      assertThat(error.code()).isEqualTo("JOB_REF_NOT_FOUND");
+      assertThat(error.nodeCode()).isEqualTo("JOB1");
+    });
+  }
+
+  @Test
+  @DisplayName("JOB 节点缺少作业编码时不能被跳过")
+  void shouldRejectBlankJobReference() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+
+    assertThat(validator.validate(1L).errors())
+        .anySatisfy(error -> assertThat(error.code()).isEqualTo("JOB_REF_MISSING"));
+  }
+
+  @Test
+  @DisplayName("Job 查询故障必须传播，不能吞掉后将图判为可执行")
+  void shouldFailClosedWhenJobLookupFails() {
+    WorkflowNodeEntity job = node("JOB1", "JOB");
+    job.setTenantId("tenant-a");
+    job.setRelatedJobCode("job_a");
+    seed(
+        List.of(node("START", "START"), job, node("END", "END")),
+        edges(edge("START", "JOB1"), edge("JOB1", "END")));
+    when(jobDefMapper.selectFirstByTenantAndCodeAndEnabled("tenant-a", "job_a", true))
+        .thenThrow(new IllegalStateException("fixture lookup unavailable"));
+
+    assertThatThrownBy(() -> validator.validate(1L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("fixture lookup unavailable");
+  }
 
   private void seed(List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
     when(nodeMapper.selectByWorkflowDefinitionId(1L)).thenReturn(nodes);

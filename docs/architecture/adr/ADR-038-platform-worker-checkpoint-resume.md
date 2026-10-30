@@ -1,5 +1,7 @@
 # ADR-038 · 平台 Worker 分片级断点续跑与 chunk 位点补偿式续跑(Import / Export)
 
+> **当前适用性（2026-10-30）**：平台 Worker 的断点续跑继续按执行器能力使用；检查点不代替外部效果确认。新根运行冻结分区与执行参数，未知结果恢复和非幂等开始证据按ADR-049，不能简单重置终态重跑。Import LOAD 位点当前绑定文件 SHA-256，恢复前须核对文件身份；旧纯行号位点不兼容，详见[运行手册](../../runbook/platform-worker-checkpoint-howto.md)。原决策与历史阶段记录保留。
+
 > **措辞校正(2026-07,P0 R-1)**:本 ADR 早期在标题、范围边界和决策二里写「chunk 业务写与位点更新**同事务**」。
 > 实施确认 Import 业务数据落**租户业务库**、位点落**平台库**,**跨库无 1PC**,该措辞失真。真实语义是
 > **业务先 commit → 位点后 advance + 插件幂等** 的**补偿式最终一致**(崩溃窗口重做 ≤1 chunk,由 plugin 幂等约束吸收,
@@ -89,7 +91,7 @@ ProcessingPosition {
   String  taskKey;          // pipeline_instance / file_record 维度键
   String  stage;            // LOAD / GENERATE
   long    processedCount;   // 已成功处理记录数
-  String  positionMarker;   // 续跑位点:Import=行号; Export=序列化 cursor
+  String  positionMarker;   // 续跑位点:Import=行号:SHA-256; Export=序列化 cursor
   boolean completed;        // 该阶段是否已整体完成
 }
 ```
@@ -98,8 +100,8 @@ ProcessingPosition {
 
 ```
 pos = positionStore.load(taskKey, stage)
-if (pos.completed) -> 跳过该阶段(幂等)
-resumeMarker  = pos.positionMarker     // Import: 跳过前 N 行; Export: 从该 cursor 续页
+if (pos.completed) -> 核验阶段所需的文件身份或完整性，通过后跳过该阶段
+resumeMarker  = pos.positionMarker     // Import: 校验文件摘要后跳过前 N 行; Export: 从该 cursor 续页
 processedCount = pos.processedCount     // 计数不归零
 ```
 
@@ -135,8 +137,8 @@ flushChunkWithPosition(plugin, chunk, position):
 
 | | Import LOAD | Export GENERATE |
 |---|---|---|
-| 位点 | 已处理**行号**(staging file 是 append-only,行号稳定可定位) | 序列化的 **cursor**(plugin 的 `nextCursor`) |
-| 续跑 | 重读 staging file,`skip` 到 `行号` 后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
+| 位点 | 已处理物理行号和校验文件 SHA-256 | 序列化的 **cursor**(plugin 的 `nextCursor`) |
+| 续跑 | 先核对 staging 文件摘要，再 `skip` 到行号后继续 | 从存的 cursor 调 `loadDetailPage(cursor)` 续页 |
 | 一致性 | △ 业务写落**租户业务库**、行号位点落**平台库**,跨库无 1PC;业务先 commit → 位点后 advance,崩溃窗口重做 ≤1 chunk,靠插件幂等吸收(见 §决策二) | △ 文件写非事务;按"分片临时文件 + 已确认页位点"补偿,续跑时丢弃未确认的尾部重写 |
 | 幂等前提 | plugin `loadChunk` 需幂等或目标表有唯一键(多租已强制 `UNIQUE(tenant_id, ...)`)防重复 | 续跑重写从 cursor 起,临时文件覆盖,最终 STORE 阶段才落正式文件 |
 
@@ -155,6 +157,16 @@ Import 的幂等天然有多租唯一约束回退;Export 因为只在 STORE 阶�
 | P3 | Export GENERATE cursor/字节位点、truncate 补偿续跑 | ✅ 已完成 |
 | P4 | 阶段级续跑（从未完成 stage 起跑） | ⏸ 冻结；等待真实重复计算成本证据，且须先对齐 ADR-020 |
 | P5 | 单测、Import 真实崩溃重派 sim、运行 howto | ✅ 当前范围已完成；阶段跳过测试随 P4 冻结 |
+
+## 热位点与归档生命周期（2026-10-18，新库模型）
+
+- V292 以 `(tenant_id, pipeline_instance_id)` 外键约束热位点归属，父端使用 `(tenant_id, id)` 唯一索引，删除采用 RESTRICT。FK 在同一 Flyway 事务内 ADD NOT VALID 后立即 VALIDATE，提交时完整生效；冷位点不反向引用会被删除的热父表。
+- Job 运行树归档先按 ID 锁定并固定 Pipeline 集合，再锁定已有位点；复制 Pipeline/位点并核对完整冷副本之后，才删除热位点和父实例。父锁配合 FK 阻止首次位点插入，位点行锁阻止已有标记在复制后改写。复制失败或冷副本不一致时回滚，保留热数据与已有冲突证据。
+- 活跃热 Pipeline 的续跑仍从热位点读取；未完成的 LOAD/GENERATE marker、处理量和 completed 状态随终态父树保留到冷表。冷数据用于历史取证与受控恢复，不自动作为新 Pipeline 的位点回退；新运行不能因旧 completed 标记跳过业务写入。
+- `DefaultProcessingPositionStore.advance/markCompleted` 必须实际影响1行才记成功；0行表示目标父实例不存在或不属于调用租户，拒绝成功并计失败。补偿清理位点仍允许0行幂等，不与写入拒绝语义混用。
+- 两个保留期直接清理脚本没有冷复制能力，遇到带位点候选先失败，转由完整归档服务处理；隔离夹具及显式租户销毁按原目标范围先清位点后清父。该生命周期不改变 Import 跨库幂等补偿和 Export 文件恢复契约。
+
+实现与真实 PostgreSQL 定向证据见[整合验证矩阵](../../plans/workflow-daily-integration-execution-log-2026-10-14.md)；不据此宣称完整 Worker 故障恢复或生产部署验收完成。
 
 ## 数据正确性补丁(2026-07,fix/checkpoint-compensation-and-watermark)
 
@@ -187,7 +199,7 @@ Import 的幂等天然有多租唯一约束回退;Export 因为只在 STORE 阶�
 
 ### 已知边界(YAGNI 后置)
 
-- **幂等预检粒度(P2-1)**:`LoadStep.requireIdempotentPluginIfCheckpointEnabled` 按 plugin 粒度自报幂等能力,真实幂等取决于模板 `conflict_columns`;当前靠 `strictIdempotency=true`(无 conflict_columns 直接拒跑)在 plugin 内兜底,组合已闭合安全窗口。下沉到 spec 级涉及 plugin SPI 扩展,收益有限,只记为已知局限。
+- **幂等预检粒度(P2-1，2026-10-21 已收口)**：checkpoint 前仍按 plugin 能力声明阻止未知插件；generic JDBC mapped plugin 另在模板写入前强制校验 `BATCH_UPSERT.conflictColumns`。原 `strictIdempotency` 运行时开关已删除，不能关闭该安全约束。分区替换仍按本 ADR 的独立 checkpoint 限制处理。
 - **无 fencing 双执行者(P2-2)**:lease + timeout-cancel 缓解崩溃-重派窗口,但无严格 fencing token,理论上旧执行者复活可与新执行者并发。位点续跑 + 插件幂等 + 补偿清位点吸收其数据影响;严格 fencing 属独立设计专项,不在本特性范围。
 
 ## 后果

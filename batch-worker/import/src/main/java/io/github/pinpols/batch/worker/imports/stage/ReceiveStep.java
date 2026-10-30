@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.worker.imports.stage;
 
+import com.fasterxml.jackson.core.JsonParser;
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
@@ -7,22 +9,29 @@ import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.service.DryRunGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam.FileRecordParamBuilder;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
+import io.github.pinpols.batch.worker.core.support.FileTemplateConfigRequest;
+import io.github.pinpols.batch.worker.core.support.FrozenFileTemplateResolver;
 import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
+import jakarta.annotation.PostConstruct;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.util.ArrayDeque;
@@ -61,7 +70,7 @@ public class ReceiveStep implements ImportStageStep {
       "withHeader");
 
   private final PlatformFileRecordRepository fileRecords;
-  private final PlatformPipelineDefinitionRepository pipelineDefinitions;
+  private final FrozenFileTemplateResolver templateResolver;
   private final PlatformPipelineRunRepository pipelineRuns;
   private final BatchSecurityProperties batchSecurityProperties;
   private final ObjectMapper objectMapper;
@@ -71,20 +80,20 @@ public class ReceiveStep implements ImportStageStep {
 
   public ReceiveStep(
       PlatformFileRecordRepository fileRecords,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
+      FrozenFileTemplateResolver templateResolver,
       PlatformPipelineRunRepository pipelineRuns,
       BatchSecurityProperties batchSecurityProperties,
       ObjectMapper objectMapper,
       WorkerImportPayloadProperties payloadProperties) {
     this.fileRecords = fileRecords;
-    this.pipelineDefinitions = pipelineDefinitions;
+    this.templateResolver = templateResolver;
     this.pipelineRuns = pipelineRuns;
     this.batchSecurityProperties = batchSecurityProperties;
     this.objectMapper = objectMapper;
     this.payloadProperties = payloadProperties;
   }
 
-  @jakarta.annotation.PostConstruct
+  @PostConstruct
   void init() {
     int maxPayloadMb = payloadProperties.getMaxPayloadSizeMb();
     double heapRatio = payloadProperties.getPayloadHeapRatio();
@@ -139,60 +148,17 @@ public class ReceiveStep implements ImportStageStep {
     }
     ImportPayload importPayload = resolvePayload(context);
     Map<String, Object> attrs = context.getAttributes();
-    Map<String, Object> templateConfig =
-        resolveTemplateConfig(attrs, context.getTenantId(), importPayload.templateCode());
+    Map<String, Object> templateConfig;
+    try {
+      templateConfig = resolveTemplateConfig(context, importPayload);
+    } catch (BizException invalidTemplate) {
+      return ImportStageResult.failure(
+          stage(), TaskErrorCodes.FROZEN_FILE_TEMPLATE_INVALID, invalidTemplate, objectMapper);
+    }
     Long existingFileId = PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.FILE_ID));
-    if (existingFileId == null) {
-      String traceId =
-          String.valueOf(attrs.getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId()));
-      String executionRef = resolveExecutionRef(attrs, traceId);
-      String fileFormatType =
-          normalizeFileFormat(importPayload.fileFormatType(), context.getRawPayload());
-      String fileName = resolveFileName(importPayload, fileFormatType, traceId);
-      Map<String, Object> metadata = new LinkedHashMap<>();
-      metadata.put("templateCode", importPayload.templateCode());
-      metadata.put("sourceType", defaultText(importPayload.sourceType(), "UPLOAD"));
-      metadata.put("headerRows", importPayload.headerRows());
-      metadata.put("footerRows", importPayload.footerRows());
-      metadata.put(PipelineRuntimeKeys.TASK_ID, attrs.get(PipelineRuntimeKeys.TASK_ID));
-      metadata.put("withHeader", importPayload.withHeader());
-      mergeSecurityMetadata(metadata, resolveTemplateSecurity(templateConfig));
-      mergeUserMetadata(metadata, importPayload.metadata());
-      FileRecordParam fileRecord = FileRecordParam.builder()
-          .tenantId(context.getTenantId())
-          .fileCode(importPayload.fileCode())
-          .bizType(defaultText(importPayload.bizType(), context.getJobCode()))
-          .fileCategory("INPUT")
-          .fileName(fileName)
-          .originalFileName(defaultText(importPayload.originalFileName(), fileName))
-          .fileFormatType(fileFormatType)
-          .charset(defaultText(importPayload.charset(), EncodingUtils.UTF_8))
-          .fileSizeBytes(payloadLength)
-          .checksumType(defaultText(importPayload.checksumType(), "NONE"))
-          .checksumValue(importPayload.checksumValue())
-          .storageType(defaultText(importPayload.storageType(), "LOCAL"))
-          .storagePath(defaultText(
-              importPayload.storagePath(),
-              "ingress/" + context.getTenantId() + "/" + executionRef + "/" + fileName))
-          .storageBucket(importPayload.storageBucket())
-          .fileVersion(null)
-          .bizDate(parseBizDate(context.getBizDate()))
-          .sourceType(defaultText(importPayload.sourceType(), "UPLOAD"))
-          .sourceRef(importPayload.sourceRef())
-          .fileStatus(FileStatus.RECEIVED.code())
-          .traceId(traceId)
-          .metadata(metadata)
-          .build();
-      Long fileId = fileRecords.createFileRecord(fileRecord);
-      attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
-      attrs.put(
-          PipelineRuntimeKeys.FILE_RECORD,
-          fileRecords.loadFileRecord(context.getTenantId(), fileId));
-      pipelineRuns.bindFileToPipelineInstance(
-          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID)),
-          fileId);
-      context.setFileId(String.valueOf(fileId));
-    } else {
+    if (EmptyChecks.isNull(existingFileId) && !DryRunGuard.fromAttributes(attrs).isDryRun()) {
+      createAndBindReceivedFile(context, importPayload, templateConfig, payloadLength, attrs);
+    } else if (EmptyChecks.isNotNull(existingFileId)) {
       // ADR-046 文件束:复用 scanner 预建的 file_record(orchestrator 把 partition.source_file_id
       // 落进 task payload 的 sourceFileId,worker-core 据此设了 FILE_ID,基类已加载 FILE_RECORD)。
       // 束的 task payload 只带 sourceFileId/templateCode,不带存储坐标——从 file_record 回填
@@ -206,6 +172,136 @@ public class ReceiveStep implements ImportStageStep {
     }
     attrs.put(PipelineRuntimeKeys.IMPORT_PAYLOAD, importPayload);
     return ImportStageResult.success(stage());
+  }
+
+  /** 冻结模板通过后才登记新文件；回读、绑定 Pipeline 与发布上下文的先后关系保持一致。 */
+  private void createAndBindReceivedFile(
+      ImportJobContext context,
+      ImportPayload importPayload,
+      Map<String, Object> templateConfig,
+      long payloadLength,
+      Map<String, Object> attrs) {
+    Object traceIdValue = attrs.getOrDefault(PipelineRuntimeKeys.TRACE_ID, context.getWorkerId());
+    String traceId = String.valueOf(traceIdValue);
+    String executionRef = resolveExecutionRef(attrs, traceId);
+    String fileFormatType =
+        normalizeFileFormat(importPayload.fileFormatType(), context.getRawPayload());
+    String fileName = resolveFileName(importPayload, fileFormatType, traceId);
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put("templateCode", importPayload.templateCode());
+    String metadataSourceType = defaultText(importPayload.sourceType(), "UPLOAD");
+    metadata.put("sourceType", metadataSourceType);
+    metadata.put("headerRows", importPayload.headerRows());
+    metadata.put("footerRows", importPayload.footerRows());
+    metadata.put(PipelineRuntimeKeys.TASK_ID, attrs.get(PipelineRuntimeKeys.TASK_ID));
+    metadata.put("withHeader", importPayload.withHeader());
+    Map<String, Object> templateSecurity = resolveTemplateSecurity(templateConfig);
+    mergeSecurityMetadata(metadata, templateSecurity);
+    mergeUserMetadata(metadata, importPayload.metadata());
+    FileRecordParamBuilder fileRecordBuilder = FileRecordParam.builder();
+    fileRecordBuilder.tenantId(context.getTenantId()).fileCode(importPayload.fileCode());
+    String businessType = defaultText(importPayload.bizType(), context.getJobCode());
+    fileRecordBuilder.bizType(businessType).fileCategory("INPUT").fileName(fileName);
+    String originalFileName = defaultText(importPayload.originalFileName(), fileName);
+    fileRecordBuilder.originalFileName(originalFileName).fileFormatType(fileFormatType);
+    String charset = defaultText(importPayload.charset(), EncodingUtils.UTF_8);
+    fileRecordBuilder.charset(charset).fileSizeBytes(payloadLength);
+    String checksumType = defaultText(importPayload.checksumType(), "NONE");
+    fileRecordBuilder.checksumType(checksumType).checksumValue(importPayload.checksumValue());
+    String storageType = defaultText(importPayload.storageType(), "LOCAL");
+    fileRecordBuilder.storageType(storageType);
+    String configuredStoragePath = importPayload.storagePath();
+    String defaultStoragePath =
+        "ingress/" + context.getTenantId() + "/" + executionRef + "/" + fileName;
+    String storagePath = defaultText(configuredStoragePath, defaultStoragePath);
+    FileRecordParamBuilder fileRecordWithStorage = fileRecordBuilder
+        .storagePath(storagePath)
+        .storageBucket(importPayload.storageBucket())
+        .fileVersion(null);
+    String bizDateValue = context.getBizDate();
+    LocalDate bizDate = parseBizDate(bizDateValue);
+    String fileRecordSourceType = defaultText(importPayload.sourceType(), "UPLOAD");
+    FileRecordParam fileRecord = fileRecordWithStorage
+        .bizDate(bizDate)
+        .sourceType(fileRecordSourceType)
+        .sourceRef(importPayload.sourceRef())
+        .fileStatus(FileStatus.RECEIVED.code())
+        .traceId(traceId)
+        .metadata(metadata)
+        .build();
+    Long fileId = fileRecords.createFileRecord(fileRecord);
+    attrs.put(PipelineRuntimeKeys.FILE_ID, fileId);
+    Map<String, Object> persistedFileRecord =
+        fileRecords.loadFileRecord(context.getTenantId(), fileId);
+    attrs.put(PipelineRuntimeKeys.FILE_RECORD, persistedFileRecord);
+    String tenantId = context.getTenantId();
+    Long pipelineInstanceId =
+        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    context.setFileId(String.valueOf(fileId));
+  }
+
+  Map<String, Object> resolveTemplateConfig(ImportJobContext context) {
+    String templateCode = resolveTemplateCode(context);
+    return resolveTemplateConfig(context, templateCode);
+  }
+
+  private Map<String, Object> resolveTemplateConfig(
+      ImportJobContext context, ImportPayload importPayload) {
+    return resolveTemplateConfig(context, importPayload.templateCode());
+  }
+
+  private Map<String, Object> resolveTemplateConfig(ImportJobContext context, String templateCode) {
+    Map<String, Object> attributes = context.getAttributes();
+    FileTemplateConfigRequest templateRequest = new FileTemplateConfigRequest(
+        context.getTenantId(),
+        templateCode,
+        ImportWorkerType.IMPORT,
+        context.getRawPayload(),
+        attributes);
+    return templateResolver.resolve(templateRequest);
+  }
+
+  private String resolveTemplateCode(ImportJobContext context) {
+    Object payloadValue = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
+    if (payloadValue instanceof ImportPayload importPayload) {
+      return importPayload.templateCode();
+    }
+    String rawPayload = context.getRawPayload();
+    if (!Texts.hasText(rawPayload)) {
+      return null;
+    }
+    try (JsonParser parser = objectMapper.getFactory().createParser(rawPayload)) {
+      if (parser.nextToken() != JsonToken.START_OBJECT) {
+        throw new IllegalArgumentException("Import replay payload must be an object");
+      }
+      String templateCode = null;
+      JsonToken token;
+      while ((token = parser.nextToken()) != JsonToken.END_OBJECT) {
+        if (token != JsonToken.FIELD_NAME) {
+          throw new IllegalArgumentException("Import replay payload contains an invalid field");
+        }
+        String fieldName = parser.currentName();
+        JsonToken valueToken = parser.nextToken();
+        if ("templateCode".equals(fieldName)) {
+          if (valueToken == JsonToken.VALUE_NULL) {
+            templateCode = null;
+          } else if (valueToken != JsonToken.START_OBJECT && valueToken != JsonToken.START_ARRAY) {
+            templateCode = parser.getText();
+          } else {
+            throw new IllegalArgumentException("Import templateCode must be a scalar value");
+          }
+        } else {
+          parser.skipChildren();
+        }
+      }
+      if (EmptyChecks.isNotNull(parser.nextToken())) {
+        throw new IllegalArgumentException("Import replay payload contains trailing content");
+      }
+      return templateCode;
+    } catch (IOException invalidPayload) {
+      throw new IllegalArgumentException("Invalid Import replay payload", invalidPayload);
+    }
   }
 
   /**
@@ -243,38 +339,23 @@ public class ReceiveStep implements ImportStageStep {
     }
   }
 
-  private Map<String, Object> resolveTemplateConfig(
-      Map<String, Object> attributes, String tenantId, String templateCode) {
-    Object existing = attributes.get(PipelineRuntimeKeys.TEMPLATE_CONFIG);
-    if (existing instanceof Map<?, ?> snapshot && EmptyChecks.isNotEmpty(snapshot)) {
-      return objectMapper.convertValue(
-          existing,
-          objectMapper
-              .getTypeFactory()
-              .constructMapType(LinkedHashMap.class, String.class, Object.class));
-    }
-    if (!Texts.hasText(tenantId) || !Texts.hasText(templateCode)) {
-      return Map.of();
-    }
-    Map<String, Object> template = pipelineDefinitions.loadLatestTemplateConfig(
-        tenantId, templateCode, ImportWorkerType.IMPORT);
-    return EmptyChecks.isNull(template) ? Map.of() : template;
-  }
-
   private Map<String, Object> resolveTemplateSecurity(Map<String, Object> template) {
     if (EmptyChecks.isEmpty(template)) {
       return Map.of();
     }
     Map<String, Object> security = new LinkedHashMap<>();
-    security.put(
-        "contentEncryptionEnabled",
-        !batchSecurityProperties.isBypassMode()
-            && truthy(template.get("content_encryption_enabled")));
+    boolean contentEncryptionEnabled = !batchSecurityProperties.isBypassMode()
+        && truthy(template.get("content_encryption_enabled"));
+    security.put("contentEncryptionEnabled", contentEncryptionEnabled);
     security.put("encryptionKeyRef", template.get("encryption_key_ref"));
-    security.put("downloadRequiresApproval", truthy(template.get("download_requires_approval")));
-    security.put("previewMaskingEnabled", truthy(template.get("preview_masking_enabled")));
-    security.put("errorLineMaskingEnabled", truthy(template.get("error_line_masking_enabled")));
-    security.put("logMaskingEnabled", truthy(template.get("log_masking_enabled")));
+    boolean downloadRequiresApproval = truthy(template.get("download_requires_approval"));
+    security.put("downloadRequiresApproval", downloadRequiresApproval);
+    boolean previewMaskingEnabled = truthy(template.get("preview_masking_enabled"));
+    security.put("previewMaskingEnabled", previewMaskingEnabled);
+    boolean errorLineMaskingEnabled = truthy(template.get("error_line_masking_enabled"));
+    security.put("errorLineMaskingEnabled", errorLineMaskingEnabled);
+    boolean logMaskingEnabled = truthy(template.get("log_masking_enabled"));
+    security.put("logMaskingEnabled", logMaskingEnabled);
     security.put("maskingRuleSet", template.get("masking_rule_set"));
     return security;
   }

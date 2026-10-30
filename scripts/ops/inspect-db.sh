@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：PostgreSQL 数据库巡检。
+# 用法：在仓库根目录执行 bash scripts/ops/inspect-db.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # inspect-db.sh - PostgreSQL 数据库巡检
 # 说明：

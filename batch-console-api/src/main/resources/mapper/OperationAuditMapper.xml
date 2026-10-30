@@ -3,6 +3,10 @@
         "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper">
 
+    <select id="bindTenant" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
     <resultMap id="AuditRowMap" type="io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper$AuditRow">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
@@ -63,6 +67,14 @@
         </where>
     </sql>
 
+    <sql id="hotAndColdHistory">
+        (select h.* from batch.console_operation_audit h
+         union all
+         select c.* from archive.console_operation_audit_archive c
+          where not exists (select 1 from batch.console_operation_audit h
+                             where h.tenant_id=c.tenant_id and h.id=c.id)) history
+    </sql>
+
     <select id="query" resultMap="AuditRowMap">
         SELECT id, tenant_id, aggregate_type, aggregate_id, action,
                operator_id, operator_role,
@@ -70,10 +82,10 @@
                params::text AS params,
                trace_id, request_id, ip_hash, ua_hash,
                event_version, created_at
-        FROM batch.console_operation_audit
+        FROM <include refid="hotAndColdHistory"/>
         <include refid="queryWhere"/>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 ORDER BY id DESC
                 LIMIT #{pageRequest.pageSize}
             </when>
@@ -86,7 +98,7 @@
     </select>
 
     <select id="count" resultType="long">
-        SELECT COUNT(*) FROM batch.console_operation_audit
+        SELECT COUNT(*) FROM <include refid="hotAndColdHistory"/>
         <include refid="queryWhere"/>
     </select>
 

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
+import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
@@ -17,6 +18,7 @@ import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
 import org.springframework.security.oauth2.client.web.AuthorizationRequestRepository;
@@ -58,7 +60,9 @@ public class RedisOidcAuthorizationRequestRepository
     if (EmptyChecks.isNull(browserBinding)) {
       return null;
     }
-    return read(redis.opsForValue().get(key(state, browserBinding)));
+    String redisKey = key(state, browserBinding);
+    String authorizationRequestJson = redis.opsForValue().get(redisKey);
+    return read(authorizationRequestJson);
   }
 
   @Override
@@ -75,9 +79,11 @@ public class RedisOidcAuthorizationRequestRepository
       throw new IllegalArgumentException("OIDC authorization request state is missing or invalid");
     }
     String browserBinding = newBrowserBinding();
-    redis
-        .opsForValue()
-        .set(key(state, browserBinding), write(StoredRequest.from(authorizationRequest)), TTL);
+    ValueOperations<String, String> valueOperations = redis.opsForValue();
+    String redisKey = key(state, browserBinding);
+    StoredRequest storedRequest = StoredRequest.from(authorizationRequest);
+    String storedRequestJson = write(storedRequest);
+    valueOperations.set(redisKey, storedRequestJson, TTL);
     response.addHeader(
         HttpHeaders.SET_COOKIE, browserCookie(state, browserBinding, TTL).toString());
   }
@@ -93,8 +99,9 @@ public class RedisOidcAuthorizationRequestRepository
     if (EmptyChecks.isNull(browserBinding)) {
       return null;
     }
-    OAuth2AuthorizationRequest authorizationRequest =
-        read(redis.opsForValue().getAndDelete(key(state, browserBinding)));
+    String redisKey = key(state, browserBinding);
+    String authorizationRequestJson = redis.opsForValue().getAndDelete(redisKey);
+    OAuth2AuthorizationRequest authorizationRequest = read(authorizationRequestJson);
     response.addHeader(
         HttpHeaders.SET_COOKIE, browserCookie(state, "", Duration.ZERO).toString());
     return authorizationRequest;
@@ -117,7 +124,9 @@ public class RedisOidcAuthorizationRequestRepository
   private String newBrowserBinding() {
     byte[] bytes = new byte[BROWSER_BINDING_BYTES];
     secureRandom.nextBytes(bytes);
-    return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    Base64.Encoder urlEncoder = Base64.getUrlEncoder().withoutPadding();
+    String encodedBinding = urlEncoder.encodeToString(bytes);
+    return encodedBinding;
   }
 
   private String browserBinding(HttpServletRequest request, String state) {
@@ -125,7 +134,7 @@ public class RedisOidcAuthorizationRequestRepository
     if (EmptyChecks.isNull(request.getCookies())) {
       return null;
     }
-    for (jakarta.servlet.http.Cookie cookie : request.getCookies()) {
+    for (Cookie cookie : request.getCookies()) {
       if (cookieName.equals(cookie.getName()) && validBrowserBinding(cookie.getValue())) {
         return cookie.getValue();
       }
@@ -182,8 +191,9 @@ public class RedisOidcAuthorizationRequestRepository
 
   private static String digest(String value) {
     try {
-      byte[] digest =
-          MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));
+      MessageDigest digestGenerator = MessageDigest.getInstance("SHA-256");
+      byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = digestGenerator.digest(valueBytes);
       return HexFormat.of().formatHex(digest);
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is unavailable", exception);

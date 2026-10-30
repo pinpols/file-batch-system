@@ -1,0 +1,3 @@
+interface:
+  display_name: "开发环境与构建工作流"
+  short_description: "规划并核验本地开发环境、源码构建、开发容器和前后端联调步骤"

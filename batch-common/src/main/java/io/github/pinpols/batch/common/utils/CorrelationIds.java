@@ -3,10 +3,10 @@ package io.github.pinpols.batch.common.utils;
 import javax.annotation.Nullable;
 
 /**
- * HTTP correlation id normalization for requestId / traceId headers.
+ * HTTP requestId / traceId 请求头的关联 ID 规范化处理。
  *
  * <p>Database columns and response headers both expect bounded, header-safe values. External
- * callers may still send arbitrary header bytes, so normalize at ingress and keep downstream MDC /
+ * 调用方仍可能发送任意请求头字节，因此应在入口处完成规范化，并保持下游 MDC /
  * audit / internal REST propagation consistent.
  */
 public final class CorrelationIds {
@@ -28,7 +28,8 @@ public final class CorrelationIds {
     if (value == null || value.isBlank()) {
       return null;
     }
-    StringBuilder out = new StringBuilder(Math.min(value.length(), MAX_HEADER_ID_LENGTH));
+    int initialCapacity = Math.min(value.length(), MAX_HEADER_ID_LENGTH);
+    StringBuilder out = new StringBuilder(initialCapacity);
     String trimmed = value.trim();
     for (int i = 0; i < trimmed.length() && out.length() < MAX_HEADER_ID_LENGTH; i++) {
       char c = trimmed.charAt(i);

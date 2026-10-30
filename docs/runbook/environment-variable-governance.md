@@ -36,6 +36,9 @@
 |---|---|---|
 | 环境身份 | `SPRING_PROFILES_ACTIVE`、`DEPLOYMENT_ENVIRONMENT`、`COMPOSE_PROJECT_NAME` | 决定安全守护和观测标签；生产必须 `prod` / `production` |
 | 时区与编码 | `BATCH_TIMEZONE_DEFAULT_ZONE`、`BATCH_LOCALE`、`TZ`、`LANG`、`LC_ALL` | 全栈唯一源；默认 `Asia/Shanghai` + `C.UTF-8` |
+| 批量日依赖 | `BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS` | 跨日历依赖等待超时告警阈值，默认 86400 秒；设为 0 关闭告警，不会取消等待或自动跳过 |
+| 作业依赖 | `BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS` | 作业上游结果等待超时告警阈值，默认 86400 秒；设为 0 关闭告警；告警不会取消或绕过等待 |
+| 日切恢复 | `BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN` | 单轮最多补建的历史业务日数量，默认 14；超过上限的停机缺口由后续扫描继续按日期推进 |
 | 数据库 | `BATCH_PLATFORM_DB_*`、`BATCH_BUSINESS_DB_*`、`POSTGRES_*` | 平台库和业务库职责分离；业务库应使用受 RLS 约束的 writer 账号 |
 | Redis / ShedLock | `BATCH_REDIS_HOST`、`BATCH_REDIS_PORT`、`BATCH_SHEDLOCK_PROVIDER` | ShedLock provider 是 L0 开关；切换必须全停后统一调整 |
 | Kafka | `SPRING_KAFKA_BOOTSTRAP_SERVERS`、`BATCH_KAFKA_BOOTSTRAP_SERVERS`、`BATCH_MQ_ROUTING_MODE`、`BATCH_WORKER_KAFKA_SUBSCRIBE_MODE` | topic 路由和 worker 订阅必须成对灰度，避免 producer/consumer 不匹配 |
@@ -120,3 +123,7 @@ helm lint helm/batch-platform
 | 把所有 `${BATCH_*}` 都加入 `.env.example` | 运维入口过载，真正关键开关被淹没 | L0/L1 才进入模板，L2/L3 保持 runbook 或代码默认 |
 | 生产用 `.env.prod` 直连真实密钥 | 密钥泄漏、审计困难 | 使用 Secret/ExternalSecret/CI 注入 |
 | 只改 Helm 不改 registry | CI 无法识别这是生产一等入口 | 先登记 registry，再补 Helm |
+
+## 维护通知部署范围
+
+`BATCH_MAINTENANCE_ALERT_SCOPE` 是重启生效的部署标识，不是租户业务配置。同一 Console 与 Prometheus 使用相同唯一值，跨环境/工作树不得共用；Docker 给应用 target 与外部告警附加该标签，Helm 默认派生为 `namespace.release` 并同步 ServiceMonitor、可用性查询和 Console。Alertmanager 地址、启用条件、空范围保留告警及实际加载检查见[维护 SOP](maintenance-mode.md#10-维护期通知抑制2026-10-26)。

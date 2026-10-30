@@ -33,6 +33,8 @@ dependencies = [
     # without uv.lock and test_happy_eyeballs.py guards the relied-on AnyIO behavior.
     "anyio>=4.14.2",
     "httpx>=0.27",
+    # 保持 HTTP 客户端的 CA 信任库安全基线，覆盖不使用锁文件的安装方式。
+    "certifi>=2026.10.19",
     "pydantic>=2.7",
     "aiokafka>=0.11",
 ]
@@ -44,12 +46,12 @@ dev = [
     "pytest-httpx>=0.30",
     "ruff>=0.6",
     "mypy>=1.10",
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.4",
 ]
 # P5 (Lane V) — in-process test fake (FakeBatchPlatform) needs aiohttp.
 # Kept optional so production tenant workers don't pay for the dep.
 testkit = [
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.4",
 ]
 # SQL / stored-proc atomic handlers (handler/atomic/_sql.py,
 # handler/atomic/_stored_proc.py) talk to PostgreSQL via asyncpg.

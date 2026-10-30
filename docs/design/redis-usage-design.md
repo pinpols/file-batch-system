@@ -251,17 +251,8 @@ Redis 本身仍通过 `redis-exporter` 暴露基础指标，Prometheus 重点关
 
 ## 落地顺序
 
-```
-已完成
-  ├── TokenBucketRateLimiter 集群化
-  ├── OutboxPublishCircuitBreaker 共享状态
-  ├── ShedLock 切换 Redis Provider
-  ├── 配置类数据缓存
-  ├── 文件治理指标缓存
-  ├── console realtime replay buffer
-  └── console 单会话 session registry
-
-持续演进
-  ├── Redis 业务指标告警规则
-  └── Redis key 容量 / TTL 巡检自动化
-```
+| 维护状态 | 能力 |
+|---|---|
+| 已完成 | TokenBucketRateLimiter 集群化；OutboxPublishCircuitBreaker 共享状态；ShedLock Redis Provider |
+| 已完成 | 配置类与文件治理指标缓存；Console realtime replay buffer；单会话 session registry |
+| 持续演进 | 业务指标告警规则；Redis key 容量与 TTL 巡检自动化 |

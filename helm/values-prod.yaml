@@ -28,6 +28,7 @@ postgresql:
 
 kafka:
   bootstrapServers: ""
+  namespace: "batch-platform-prod"
   # broker HA 拓扑由 Strimzi operator 落地（deploy/ha/20-kafka-strimzi.yaml），chart 不自建 broker。
   # 这里的 broker.* 是“期望值”声明，必须与 Strimzi Kafka CR 一致；改这里不会改集群，需同步改 CR。
   #   - replicas=3：KafkaNodePool.spec.replicas=3，散在不同 node（podAntiAffinity）。

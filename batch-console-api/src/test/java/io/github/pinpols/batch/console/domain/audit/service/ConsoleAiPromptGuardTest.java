@@ -135,7 +135,7 @@ class ConsoleAiPromptGuardTest {
     assertThat(result.category()).isEqualTo(AiPromptCategory.WORKFLOW);
   }
 
-  // --- out of scope ---
+  // --- 不在本次范围内 ---
 
   @Test
   @DisplayName("未命中任何领域关键词时按超出范围拒绝")

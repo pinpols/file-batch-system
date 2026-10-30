@@ -1,4 +1,5 @@
 -- V99: dead_letter_task.last_replay_result — 容纳完整 SQLException / 堆栈摘要（此前 VARCHAR(32) 会在自动重放失败回写时报错）
+
 ALTER TABLE batch.dead_letter_task
     ALTER COLUMN last_replay_result TYPE VARCHAR(512);
 

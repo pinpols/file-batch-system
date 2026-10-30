@@ -1,7 +1,74 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper">
-    <select id="selectByQuery" resultType="map">
+    <resultMap id="FileTemplateSecurityFlagsViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView">
+        <constructor>
+            <arg column="preview_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="error_line_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="log_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="content_encryption_enabled" javaType="java.lang.Boolean"/>
+            <arg column="encryption_key_ref" javaType="java.lang.String"/>
+            <arg column="download_requires_approval" javaType="java.lang.Boolean"/>
+            <arg column="masking_rule_set" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="FileTemplateConfigQueryViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="template_code" javaType="java.lang.String"/>
+            <arg column="template_name" javaType="java.lang.String"/>
+            <arg column="template_type" javaType="java.lang.String"/>
+            <arg column="biz_type" javaType="java.lang.String"/>
+            <arg column="file_format_type" javaType="java.lang.String"/>
+            <arg column="charset" javaType="java.lang.String"/>
+            <arg column="target_charset" javaType="java.lang.String"/>
+            <arg column="with_bom" javaType="java.lang.Boolean"/>
+            <arg column="line_separator" javaType="java.lang.String"/>
+            <arg column="delimiter" javaType="java.lang.String"/>
+            <arg column="quote_char" javaType="java.lang.String"/>
+            <arg column="escape_char" javaType="java.lang.String"/>
+            <arg column="record_length" javaType="java.lang.Integer"/>
+            <arg column="header_rows" javaType="java.lang.Integer"/>
+            <arg column="footer_rows" javaType="java.lang.Integer"/>
+            <arg column="header_template" javaType="java.lang.Object"/>
+            <arg column="trailer_template" javaType="java.lang.Object"/>
+            <arg column="checksum_type" javaType="java.lang.String"/>
+            <arg column="compress_type" javaType="java.lang.String"/>
+            <arg column="encrypt_type" javaType="java.lang.String"/>
+            <arg column="naming_rule" javaType="java.lang.String"/>
+            <arg column="field_mappings" javaType="java.lang.Object"/>
+            <arg column="validation_rule_set" javaType="java.lang.Object"/>
+            <arg column="default_query_code" javaType="java.lang.String"/>
+            <arg column="default_query_sql" javaType="java.lang.String"/>
+            <arg column="query_param_schema" javaType="java.lang.Object"/>
+            <arg column="streaming_enabled" javaType="java.lang.Boolean"/>
+            <arg column="page_size" javaType="java.lang.Integer"/>
+            <arg column="fetch_size" javaType="java.lang.Integer"/>
+            <arg column="chunk_size" javaType="java.lang.Integer"/>
+            <arg column="preview_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="error_line_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="log_masking_enabled" javaType="java.lang.Boolean"/>
+            <arg column="content_encryption_enabled" javaType="java.lang.Boolean"/>
+            <arg column="encryption_key_ref" javaType="java.lang.String"/>
+            <arg column="download_requires_approval" javaType="java.lang.Boolean"/>
+            <arg column="masking_rule_set" javaType="java.lang.String"/>
+            <arg column="load_target_ref" javaType="java.lang.String"/>
+            <arg column="export_data_ref" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="version" javaType="java.lang.Integer"/>
+            <arg column="description" javaType="java.lang.String"/>
+            <arg column="created_by" javaType="java.lang.String"/>
+            <arg column="updated_by" javaType="java.lang.String"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectByQuery" resultMap="FileTemplateConfigQueryViewResultMap">
         select
             id,
             tenant_id,
@@ -111,7 +178,7 @@
         </if>
     </select>
 
-    <select id="selectSecurityFlagsByTemplateCode" resultType="map">
+    <select id="selectSecurityFlagsByTemplateCode" resultMap="FileTemplateSecurityFlagsViewResultMap">
         select preview_masking_enabled,
                error_line_masking_enabled,
                log_masking_enabled,
@@ -128,8 +195,60 @@
         limit 1
     </select>
 
-    <select id="selectByUniqueKey" resultType="map">
-        select *
+    <sql id="fileTemplateFullColumns">
+        id,
+        tenant_id,
+        template_code,
+        template_name,
+        template_type,
+        biz_type,
+        file_format_type,
+        charset,
+        target_charset,
+        with_bom,
+        line_separator,
+        delimiter,
+        quote_char,
+        escape_char,
+        record_length,
+        header_rows,
+        footer_rows,
+        header_template,
+        trailer_template,
+        checksum_type,
+        compress_type,
+        encrypt_type,
+        naming_rule,
+        field_mappings,
+        validation_rule_set,
+        default_query_code,
+        default_query_sql,
+        query_param_schema,
+        streaming_enabled,
+        page_size,
+        fetch_size,
+        chunk_size,
+        preview_masking_enabled,
+        error_line_masking_enabled,
+        log_masking_enabled,
+        content_encryption_enabled,
+        encryption_key_ref,
+        download_requires_approval,
+        masking_rule_set,
+        load_target_ref,
+        export_data_ref,
+        enabled,
+        version,
+        description,
+        created_by,
+        updated_by,
+        created_at,
+        updated_at
+    </sql>
+
+    <select id="selectByUniqueKey" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
         from batch.file_template_config
         where tenant_id = #{tenantId}
           and template_code = #{templateCode}
@@ -138,8 +257,22 @@
         limit 1
     </select>
 
-    <select id="selectById" resultType="map">
-        select * from batch.file_template_config
+    <select id="selectEnabledByTenantAndCode" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
+        from batch.file_template_config
+        where tenant_id = #{tenantId}
+          and template_code = #{templateCode}
+          and enabled = true
+          and is_deleted = false
+        order by version desc
+        limit 1
+    </select>
+
+    <select id="selectById" resultMap="FileTemplateConfigQueryViewResultMap">
+        select
+        <include refid="fileTemplateFullColumns"/>
+        from batch.file_template_config
         where tenant_id = #{tenantId} and id = #{id}
           and is_deleted = false
         limit 1
@@ -149,6 +282,15 @@
         update batch.file_template_config
         set enabled = #{enabled}, updated_at = current_timestamp
         where tenant_id = #{tenantId} and id = #{id} and is_deleted = false
+    </update>
+
+    <update id="toggleEnabledIfUnchanged">
+        update batch.file_template_config
+        set enabled = true, updated_at = current_timestamp
+        where tenant_id = #{p.tenantId} and id = #{p.id} and is_deleted = false
+          and template_type is not distinct from #{p.templateType,jdbcType=VARCHAR}
+          and file_format_type is not distinct from #{p.fileFormatType,jdbcType=VARCHAR}
+          and field_mappings is not distinct from #{p.fieldMappingsJson,jdbcType=VARCHAR}::jsonb
     </update>
 
     <!--
@@ -233,7 +375,19 @@
     </insert>
 
     <!-- 租户就绪自检:只取完整性判定所需列,未删除模板。 -->
-    <select id="selectReadinessRows" resultType="map">
+    <resultMap id="FileTemplateConfigReadinessViewResultMap"
+               type="io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigReadinessView">
+        <constructor>
+            <arg column="template_code" javaType="java.lang.String"/>
+            <arg column="template_type" javaType="java.lang.String"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="default_query_sql" javaType="java.lang.String"/>
+            <arg column="field_mappings" javaType="java.lang.Object"/>
+            <arg column="naming_rule" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectReadinessRows" resultMap="FileTemplateConfigReadinessViewResultMap">
         select
             template_code,
             template_type,

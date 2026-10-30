@@ -8,7 +8,7 @@ import lombok.Builder;
 
 /**
  * 自定义 taskType 描述符 — 租户 worker 通过 {@link SdkTaskHandler#descriptor()} 声明,register 时随 {@code POST
- * /internal/workers/register} 上报平台(SDK Phase 3 M3.1,见 {@code docs/plans/sdk-roadmap-2026-h2.md}
+ * /internal/workers/register} 上报平台(SDK Phase 3 M3.1,见 {@code docs/plans/sdk-h2-roadmap-2026-05-31.md}
  * §5)。
  *
  * <p>平台 upsert 到 {@code batch.custom_task_type_registry},console 据 {@link #inputSchema()} 渲染表单、 据

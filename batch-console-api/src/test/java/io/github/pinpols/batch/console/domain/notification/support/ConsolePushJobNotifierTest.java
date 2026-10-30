@@ -1,19 +1,13 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
-import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushJobNotificationEntity;
-import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushJobNotificationMapper;
-import io.github.pinpols.batch.console.domain.notification.support.ConsolePushSender.PushPayload;
-import java.time.Instant;
-import java.util.List;
+import io.github.pinpols.batch.console.domain.notification.service.JobPushDeliveryService;
+import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,140 +16,73 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-/** ConsolePushJobNotifier 单测:覆盖跳过/幂等/状态映射/payload 拼装。 */
+@DisplayName("持久推送队列轮询的启动与关闭")
 @ExtendWith(MockitoExtension.class)
-@DisplayName("作业完成推送通知器: 轮询待发记录, 幂等去重与终态文案映射")
 class ConsolePushJobNotifierTest {
+  private final ConsolePushProperties properties = new ConsolePushProperties();
 
   @Mock
-  private ConsolePushJobNotificationMapper notificationMapper;
+  private JobPushDeliveryService deliveries;
 
-  @Mock
-  private ConsolePushSender pushSender;
-
-  private ConsolePushProperties properties;
   private ConsolePushJobNotifier notifier;
 
-  @BeforeEach
-  void setUp() {
-    properties = new ConsolePushProperties();
+  @DisplayName("仅轮询持久设备队列并传递实时关闭状态")
+  @Test
+  void shouldPollDurableQueueWithShutdownState_whenTickRuns() {
+    notifier.pollOnce();
+    var stopping = ArgumentCaptor.forClass(BooleanSupplier.class);
+    verify(deliveries).poll(stopping.capture());
+    assertThat(stopping.getValue().getAsBoolean()).isFalse();
+    notifier.stop();
+    assertThat(stopping.getValue().getAsBoolean()).isTrue();
+  }
+
+  @DisplayName("停止后禁止新轮询")
+  @Test
+  void shouldPreventNewPolls_whenStopped() {
+    notifier.stop();
+    notifier.pollOnce();
+    notifier.pollSafely();
+    verifyNoInteractions(deliveries);
+  }
+
+  @DisplayName("上下文关闭后不再轮询")
+  @Test
+  void shouldStopPolling_whenContextClosed() {
+    notifier.stopOnContextClosed(null);
+    notifier.pollOnce();
+    verifyNoInteractions(deliveries);
+  }
+
+  @DisplayName("临时轮询失败不终止后续调度回调")
+  @Test
+  void shouldKeepSchedulerAlive_whenPollFailsTransiently() {
+    doThrow(new IllegalStateException("database unavailable"))
+        .doNothing()
+        .when(deliveries)
+        .poll(any());
+    assertThatCode(notifier::pollSafely).doesNotThrowAnyException();
+    assertThatCode(notifier::pollSafely).doesNotThrowAnyException();
+    verify(deliveries, times(2)).poll(any());
+  }
+
+  @DisplayName("已启用调度器可在首次回调前停止")
+  @Test
+  void shouldStopBeforeFirstTick_whenSchedulerEnabled() {
     properties.setEnabled(true);
     properties.getJobNotify().setEnabled(true);
-    properties.getJobNotify().setBatchSize(50);
-    properties.getJobNotify().setLookbackMinutes(10);
-    notifier = new ConsolePushJobNotifier(properties, notificationMapper, pushSender);
-  }
-
-  @Test
-  @DisplayName("没有待推送记录时不写去重表也不调用推送")
-  void shouldNoopWhenNoPending() {
-    when(notificationMapper.findPending(10, 50)).thenReturn(List.of());
-
+    properties.getJobNotify().setPollIntervalMillis(600000);
+    try {
+      notifier.start();
+    } finally {
+      notifier.stop();
+    }
     notifier.pollOnce();
-
-    verify(notificationMapper, never()).insertIgnore(any());
-    verifyNoInteractions(pushSender);
+    verifyNoInteractions(deliveries);
   }
 
-  @Test
-  @DisplayName("每条待发记录写一条去重记录并推送一次, 内容含租户与实例编号")
-  void shouldSendOncePerPendingAndInsertDedup() {
-    PendingJobNotification p = pending(101L, "ta", "alice", "ETL_DAILY", "SUCCESS");
-    when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
-    when(notificationMapper.insertIgnore(any())).thenReturn(1);
-
-    notifier.pollOnce();
-
-    ArgumentCaptor<ConsolePushJobNotificationEntity> dedup =
-        ArgumentCaptor.forClass(ConsolePushJobNotificationEntity.class);
-    verify(notificationMapper).insertIgnore(dedup.capture());
-    assertThat(dedup.getValue().getTenantId()).isEqualTo("ta");
-    assertThat(dedup.getValue().getJobInstanceId()).isEqualTo(101L);
-
-    ArgumentCaptor<PushPayload> payload = ArgumentCaptor.forClass(PushPayload.class);
-    verify(pushSender).sendToUser(eq("ta"), eq("alice"), payload.capture());
-    assertThat(payload.getValue().title()).isEqualTo("任务 ETL_DAILY 已成功");
-    assertThat(payload.getValue().body()).isEqualTo("tenant=ta · instance #101");
-    assertThat(payload.getValue().tag()).isEqualTo("job-instance-101");
-    assertThat(payload.getValue().url()).isEqualTo("/m/jobs/101");
-  }
-
-  @Test
-  @DisplayName("去重记录已被其它实例抢占时跳过推送")
-  void shouldSkipPushWhenInsertConflicts() {
-    PendingJobNotification p = pending(202L, "tb", "bob", "EXPORT", "FAILED");
-    when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
-    when(notificationMapper.insertIgnore(any())).thenReturn(0); // 其它 replica 已抢占
-
-    notifier.pollOnce();
-
-    verify(notificationMapper).insertIgnore(any());
-    verifyNoInteractions(pushSender);
-  }
-
-  @Test
-  @DisplayName("多条待发记录中只为去重成功的那几条发送推送")
-  void shouldOnlySendForSuccessfullyInsertedAmongMany() {
-    PendingJobNotification p1 = pending(301L, "ta", "alice", "J1", "SUCCESS");
-    PendingJobNotification p2 = pending(302L, "ta", "alice", "J2", "FAILED");
-    PendingJobNotification p3 = pending(303L, "ta", "alice", "J3", "CANCELLED");
-    when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p1, p2, p3));
-    when(notificationMapper.insertIgnore(any())).thenReturn(1, 0, 1); // p2 冲突
-
-    notifier.pollOnce();
-
-    verify(notificationMapper, times(3)).insertIgnore(any());
-    verify(pushSender, times(2)).sendToUser(any(), any(), any());
-  }
-
-  @Test
-  @DisplayName("轮询遇到运行时异常时不向外抛出, 保证定时间隔任务继续触发")
-  void shouldSwallowRuntimeException_whenPollSafelyRuns() {
-    when(notificationMapper.findPending(10, 50))
-        .thenThrow(new RuntimeException("transient DB error"));
-
-    // 不应抛出 — 否则下次 fixedDelay 不会再触发,poller 永久死掉
-    notifier.pollSafely();
-
-    verifyNoInteractions(pushSender);
-  }
-
-  @Test
-  @DisplayName("各终态分别映射为对应的中文标题后缀")
-  void shouldMapStatusToZhLabel() {
-    assertPayloadTitleForStatus("SUCCESS", "已成功");
-    assertPayloadTitleForStatus("FAILED", "已失败");
-    assertPayloadTitleForStatus("PARTIAL_FAILED", "部分失败");
-    assertPayloadTitleForStatus("CANCELLED", "已取消");
-    assertPayloadTitleForStatus("TERMINATED", "已终止");
-  }
-
-  private void assertPayloadTitleForStatus(String status, String expectedSuffix) {
-    PendingJobNotification p = pending(900L, "ta", "alice", "JC", status);
-    when(notificationMapper.findPending(10, 50)).thenReturn(List.of(p));
-    when(notificationMapper.insertIgnore(any())).thenReturn(1);
-
-    notifier.pollOnce();
-
-    ArgumentCaptor<PushPayload> payload = ArgumentCaptor.forClass(PushPayload.class);
-    verify(pushSender).sendToUser(any(), any(), payload.capture());
-    assertThat(payload.getValue().title()).endsWith(expectedSuffix);
-    org.mockito.Mockito.reset(pushSender, notificationMapper);
-  }
-
-  private static PendingJobNotification pending(
-      Long id, String tenant, String operator, String jobCode, String status) {
-    PendingJobNotification p = new PendingJobNotification();
-    p.setJobInstanceId(id);
-    p.setTenantId(tenant);
-    p.setOperatorId(operator);
-    p.setJobCode(jobCode);
-    p.setInstanceStatus(status);
-    p.setFinishedAt(Instant.now());
-    return p;
-  }
-
-  private static <T> T eq(T value) {
-    return org.mockito.ArgumentMatchers.eq(value);
+  @BeforeEach
+  void initializeSubject() {
+    notifier = new ConsolePushJobNotifier(properties, deliveries);
   }
 }

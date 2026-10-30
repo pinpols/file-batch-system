@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
@@ -77,15 +78,23 @@ public class DispatchReceiptPollScheduler {
 
   @PostConstruct
   void initializeMeters() {
-    this.httpClient = new OkHttpClient.Builder()
-        .connectTimeout(Duration.ofMillis(properties.getConnectTimeoutMillis()))
-        .readTimeout(Duration.ofMillis(properties.getReadTimeoutMillis()))
-        .writeTimeout(Duration.ofMillis(properties.getWriteTimeoutMillis()))
-        .callTimeout(Duration.ofMillis(properties.getCallTimeoutMillis()))
-        .dns(guardedDns())
-        .followRedirects(false)
-        .followSslRedirects(false)
-        .build();
+    OkHttpClient.Builder httpClientBuilder = new OkHttpClient.Builder();
+    long connectTimeoutMillis = properties.getConnectTimeoutMillis();
+    Duration connectTimeout = Duration.ofMillis(connectTimeoutMillis);
+    httpClientBuilder.connectTimeout(connectTimeout);
+    long readTimeoutMillis = properties.getReadTimeoutMillis();
+    Duration readTimeout = Duration.ofMillis(readTimeoutMillis);
+    httpClientBuilder.readTimeout(readTimeout);
+    long writeTimeoutMillis = properties.getWriteTimeoutMillis();
+    Duration writeTimeout = Duration.ofMillis(writeTimeoutMillis);
+    httpClientBuilder.writeTimeout(writeTimeout);
+    long callTimeoutMillis = properties.getCallTimeoutMillis();
+    Duration callTimeout = Duration.ofMillis(callTimeoutMillis);
+    httpClientBuilder.callTimeout(callTimeout);
+    httpClientBuilder.dns(guardedDns());
+    httpClientBuilder.followRedirects(false);
+    httpClientBuilder.followSslRedirects(false);
+    this.httpClient = httpClientBuilder.build();
     meterRegistry.gauge("batch.dispatch.receipt.poll.failures", pollFailures);
     meterRegistry.gauge("batch.dispatch.receipt.poll.successes", pollSuccesses);
   }
@@ -191,9 +200,10 @@ public class DispatchReceiptPollScheduler {
 
   static boolean isTransientConnectivityFailure(Throwable t) {
     for (Throwable cur = t; cur != null; cur = cur.getCause()) {
-      if (cur instanceof ConnectException
+      boolean isTransientReceiptConnectionFailure = cur instanceof ConnectException
           || cur instanceof SocketTimeoutException
-          || cur instanceof UnknownHostException) {
+          || cur instanceof UnknownHostException;
+      if (isTransientReceiptConnectionFailure) {
         return true;
       }
     }
@@ -205,7 +215,10 @@ public class DispatchReceiptPollScheduler {
     Long fileId = row.fileId();
     String channelCode = row.channelCode();
     String externalRequestId = row.externalRequestId();
-    if (fileId == null || !Texts.hasText(channelCode) || !Texts.hasText(externalRequestId)) {
+    boolean receiptPollIdentityIsIncomplete = EmptyChecks.isNull(fileId)
+        || !Texts.hasText(channelCode)
+        || !Texts.hasText(externalRequestId);
+    if (receiptPollIdentityIsIncomplete) {
       return;
     }
     Map<String, Object> channelRow = fileDispatchRepository.loadChannel(tenantId, channelCode);
@@ -213,9 +226,8 @@ public class DispatchReceiptPollScheduler {
       return;
     }
     Map<String, Object> channel = ChannelConfigMerge.merge(channelRow, objectMapper);
-    String pollUrl = channel.get("receipt_poll_url") == null
-        ? null
-        : String.valueOf(channel.get("receipt_poll_url"));
+    Object pollUrlValue = channel.get("receipt_poll_url");
+    String pollUrl = EmptyChecks.isNull(pollUrlValue) ? null : String.valueOf(pollUrlValue);
     if (!Texts.hasText(pollUrl)) {
       return;
     }
@@ -229,7 +241,9 @@ public class DispatchReceiptPollScheduler {
       DnsResolveGuard.resolveAllAndValidate(request.url().host());
     }
     try (Response response = httpClient.newCall(request).execute()) {
-      if (!response.isSuccessful() || response.body() == null) {
+      boolean responseIsUnsuccessfulOrBodyless =
+          !response.isSuccessful() || EmptyChecks.isNull(response.body());
+      if (responseIsUnsuccessfulOrBodyless) {
         // P2:之前静默吞,排障时只能看到 metric 计数无原因。补 warn + 失败计数,
         // 上游 404/5xx 立即能在 dashboard 关联到失败率上扬。
         log.warn(
@@ -253,11 +267,17 @@ public class DispatchReceiptPollScheduler {
         }
         root = objectMapper.readTree(limited);
       }
-      boolean ack = root.path("acknowledged").asBoolean(false)
-          || "ACKED".equalsIgnoreCase(root.path("status").asText())
-          || FileReceiptStatus.SUCCESS
-              .code()
-              .equalsIgnoreCase(root.path("receipt_status").asText());
+      boolean acknowledged = root.path("acknowledged").asBoolean(false);
+      boolean ack = acknowledged;
+      if (!ack) {
+        String responseStatus = root.path("status").asText();
+        ack = "ACKED".equalsIgnoreCase(responseStatus);
+      }
+      if (!ack) {
+        String receiptStatus = root.path("receipt_status").asText();
+        String successReceiptStatus = FileReceiptStatus.SUCCESS.code();
+        ack = successReceiptStatus.equalsIgnoreCase(receiptStatus);
+      }
       if (!ack) {
         return;
       }

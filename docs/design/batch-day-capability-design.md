@@ -1,5 +1,7 @@
 # 批量日与批量运行平台能力设计总结
 
+> **当前模型与阅读边界**：顶层运行、日历和日程以 Workflow 为准。开日创建 `batch_day_instance` 和输入预期，触发接纳后创建 WorkflowRun，JOB 节点到达时才创建 JobInstance；同图不嵌套子 Workflow。本文保留的“推荐/阶段/缺口”是能力设计背景，不是当前待办统计；实现与验收以[总方案](../plans/workflow-daily-integration-plan-2026-10-14.md)和[验收矩阵](../plans/workflow-daily-integration-acceptance-matrix-2026-10-14.md)为准。
+
 ## 1. 背景与当前实现判断
 
 当前系统已经具备“批量日”相关建模，但还不是完整的“日切驱动型批量运行平台”。
@@ -8,7 +10,7 @@
 
 ### 1.1 调度初始化
 
-服务启动后，`trigger reconciler` 会把 `job_definition` 同步成调度运行态。
+服务启动就绪时，`trigger reconciler` 立即把 `job_definition` 同步成调度运行态；之后每 30 秒持续对账，修复缺失、漂移和孤儿 Quartz 调度。
 
 Quartz `TriggerReconciler` 会在启动时和每 30 秒进行一次对账，把启用的定时作业注册到：
 
@@ -34,6 +36,9 @@ quartz.QRTZ_TRIGGERS.NEXT_FIRE_TIME
 
 ```text
 定时触发
+文件到达/完整文件组
+作业依赖就绪
+Workflow 子作业
 API 触发
 手工触发
 ```
@@ -56,7 +61,7 @@ task
   ↓
 计算 bizDate
   ↓
-创建 job_instance / workflow_run / partition / task
+接纳顶层 WorkflowRun；JOB 节点到达后创建 job_instance / partition / task
 ```
 
 ### 1.3 当前批量日能力
@@ -104,6 +109,8 @@ batch_day_instance
 前一天 batch_day_instance 独立 settle
 ```
 
+这不表示批量日仍由第一次作业触发才创建。当前 Orchestrator 日切调度器会主动打开批量日并通过持久化游标补齐停机期间的近期缺口；作业实例仍按各自定时、文件、依赖、Workflow、API 或人工触发创建。两者分别由 `batch_day_instance` 日历生命周期和触发请求/实例幂等负责。历史候选查询只列出缺失记录，历史规则核验与批准式回填仍需单独流程。
+
 如果前一天仍有以下状态实例：
 
 ```text
@@ -149,7 +156,7 @@ IN_FLIGHT
   ↓
 标记该批量日进入 OPEN / IN_FLIGHT
   ↓
-当天作业按调度 / API / 手工触发陆续生成 job_instance
+Workflow 按调度 / API / 手工触发创建运行；到达 JOB 节点后生成 job_instance
   ↓
 所有必要作业完成后 settle
   ↓
@@ -173,7 +180,7 @@ batch_day_instance
 
 ### 2.2 当前模型的问题
 
-当前模型偏向：
+早期实现模型偏向：
 
 ```text
 触发驱动的批量日归属
@@ -190,6 +197,8 @@ batch_day_instance
   ↓
 挂靠或推动 batch_day_instance
 ```
+
+**当前实现已经补为混合模型**：启动/周期 Trigger Reconciler 收敛 Quartz 定义，Orchestrator 日切调度器主动打开 `batch_day_instance`，各事件源在实际触发时再创建 `job_instance`。该能力不预生成当天所有作业实例，也不自动把所有作业串成前一日完成门闩。
 
 这个不是错误，但批量日不够像平台的一等运行对象。
 

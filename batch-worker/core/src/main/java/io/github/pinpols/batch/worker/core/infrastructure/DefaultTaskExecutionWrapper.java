@@ -2,11 +2,15 @@ package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.config.WorkerCoreAsyncConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.domain.PulledTask;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
@@ -17,6 +21,8 @@ import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
+import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewResult;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -45,23 +51,21 @@ import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Service;
 
 /**
- * 单任务执行包装器:将 {@link PulledTask} 转换为 {@link StepExecutionRequest}, 驱动业务 pipeline, 并将执行结果通过 {@link
- * TaskExecutionClient#report} 上报 Orchestrator.
+ * 单任务执行包装器：将 {@link PulledTask} 转换为 {@link StepExecutionRequest}，
+ * 驱动业务流水线，并通过 {@link TaskExecutionClient#report} 上报执行结果。
  *
- * <p><b>P0-1 (2026-05-03)</b>: 业务执行 submit 到 {@link TaskExecutionPool} 独立线程, listener 线程仅 {@code
- * future.get(timeout)} 等结果. 之前 plugin 无限循环 / 长 SQL 卡住 → orchestrator 标 TIMED_OUT, 但 worker 线程仍占 着,
- * Semaphore permit 永不释放 → worker 容量永久缩水. 现在超时即 {@code future.cancel(true)} → 释放 permit + 上报
- * orchestrator 失败 (errorCode=WORKER_EXECUTION_TIMEOUT). 协作式 cancel: 业务线程通过 {@code
- * Thread.isInterrupted()} / 阻塞 IO 自动响应; 不响应中断的线程在 {@link
- * WorkerExecutionTimeoutProperties#getCancelGraceSeconds()} 后被 watchdog 标记泄漏 (metric {@code
- * worker.task.execution.thread.leaked.total}, 不影响 listener 派下个 task).
+ * <p>业务在 {@link TaskExecutionPool} 的独立线程中执行，监听线程限时等待结果。
+ * 超时后请求中断并生成 {@code WORKER_EXECUTION_TIMEOUT} 结果；业务代码需通过中断检查或阻塞 I/O 协作退出。
+ * 超过 {@link WorkerExecutionTimeoutProperties#getCancelGraceSeconds()} 仍未退出的线程记入
+ * {@code worker.task.execution.thread.leaked.total}，不能将取消 Future 等同于业务线程已经结束。
  *
- * <p><b>生命周期</b>:
+ * <p>执行生命周期：
  *
  * <ol>
- *   <li>在 {@link ActiveTaskLeaseRegistry} 注册任务租约 (供 {@link WorkerTaskLeaseRenewer} 定时续租).
- *   <li>调用 {@link StepExecutionAdapter#execute} 执行业务 pipeline (在 pool 线程, 限时阻塞).
- *   <li>无论成功 / 失败 / 超时, finally 块内移除租约并上报结果——不存在 "执行完成但不上报" 的状态.
+ *   <li>登记当前 invocation 的租约，由 {@link WorkerTaskLeaseRenewer} 负责周期续租。
+ *   <li>执行池线程确认执行入口后，调用 {@link StepExecutionAdapter#execute} 执行业务。
+ *   <li>仍持有租约时上报结果；确认失败或租约丢失时停止执行或上报，避免旧所有者覆盖当前状态。
+ *   <li>退出执行包装器时清理本地租约登记；JVM 级故障保留原始异常，不转换为普通业务失败。
  * </ol>
  */
 @Slf4j
@@ -72,6 +76,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   static final String TIMEOUT_ERROR_CODE = "WORKER_EXECUTION_TIMEOUT";
   static final String CANCELLED_ERROR_CODE = "WORKER_EXECUTION_CANCELLED";
+  private static final String OPERATION_TYPE_PAYLOAD_KEY = "operationType";
+  private static final String WORKFLOW_RUN_OPERATION_TYPE = "WORKFLOW_RUN";
   private static final String FAILURE_CLASS_TIMEOUT = "TIMEOUT";
   private static final String FAILURE_CLASS_CONFIG = "CONFIG";
 
@@ -89,7 +95,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       Map.entry("DISPATCH_SECRET_PAYLOAD_INVALID", FAILURE_CLASS_CONFIG),
       Map.entry("SECURITY_REJECTED", FAILURE_CLASS_CONFIG),
       Map.entry("NO_EXECUTOR", FAILURE_CLASS_CONFIG),
+      Map.entry(TaskErrorCodes.REPLAY_CAPABILITY_INVALID, FAILURE_CLASS_CONFIG),
       Map.entry("RESOURCE_EXHAUSTED", "INFRASTRUCTURE"),
+      Map.entry(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN, "UNKNOWN"),
       Map.entry("EXECUTOR_FAILURE", FAILURE_CLASS_CONFIG));
 
   private final StepExecutionAdapter stepExecutionAdapter;
@@ -106,6 +114,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   private final TaskScheduler watchdog;
 
+  private final long leaseRenewalIntervalMillis;
+
   public DefaultTaskExecutionWrapper(
       StepExecutionAdapter stepExecutionAdapter,
       TaskExecutionClient taskExecutionClient,
@@ -113,13 +123,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       TaskExecutionPool executionPool,
       WorkerExecutionTimeoutProperties timeoutProperties,
       ObjectProvider<MeterRegistry> meterRegistryProvider,
-      @Qualifier(WorkerCoreAsyncConfiguration.WATCHDOG_SCHEDULER) TaskScheduler watchdog) {
+      @Qualifier(WorkerCoreAsyncConfiguration.WATCHDOG_SCHEDULER) TaskScheduler watchdog,
+      WorkerLeaseProperties leaseProperties) {
     this.stepExecutionAdapter = stepExecutionAdapter;
     this.taskExecutionClient = taskExecutionClient;
     this.activeTaskLeaseRegistry = activeTaskLeaseRegistry;
     this.executionPool = executionPool;
     this.timeoutProperties = timeoutProperties;
     this.watchdog = watchdog;
+    this.leaseRenewalIntervalMillis = Math.max(1L, leaseProperties.getRenewIntervalMillis());
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     this.meterRegistry = registry;
     if (registry == null) {
@@ -163,33 +175,132 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   @Override
   public Optional<EffectiveTaskConfig> claim(String tenantId, Long taskId, String workerId) {
-    return taskExecutionClient.claim(tenantId, taskId, workerId);
+    long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
+    Optional<EffectiveTaskConfig> claimed = taskExecutionClient.claim(tenantId, taskId, workerId);
+    if (claimed.isPresent()) {
+      EffectiveTaskConfig config = claimed.get();
+      activeTaskLeaseRegistry.registerClaimedAt(
+          EmptyChecks.isNull(taskId) ? null : taskId.toString(),
+          tenantId,
+          workerId,
+          config.partitionInvocationId(),
+          claimStartedAtNanos);
+    }
+    return claimed;
   }
 
   @Override
   public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
-    return taskExecutionClient.claimBatch(items);
+    long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
+    List<TaskClaimResult> results = taskExecutionClient.claimBatch(items);
+    boolean claimBatchHasNoTrackableItems = EmptyChecks.isNull(results)
+        || EmptyChecks.isEmpty(results)
+        || EmptyChecks.isNull(items)
+        || EmptyChecks.isEmpty(items);
+    if (claimBatchHasNoTrackableItems) {
+      return results;
+    }
+    Map<Long, TaskClaimItem> submittedByTaskId = new LinkedHashMap<>();
+    for (TaskClaimItem item : items) {
+      if (EmptyChecks.isNotNull(item) && EmptyChecks.isNotNull(item.taskId())) {
+        submittedByTaskId.putIfAbsent(item.taskId(), item);
+      }
+    }
+    for (TaskClaimResult result : results) {
+      boolean claimedTaskConfigurationIsIncomplete = EmptyChecks.isNull(result)
+          || !result.claimed()
+          || EmptyChecks.isNull(result.taskId())
+          || EmptyChecks.isNull(result.config());
+      if (claimedTaskConfigurationIsIncomplete) {
+        continue;
+      }
+      TaskClaimItem submitted = submittedByTaskId.get(result.taskId());
+      if (EmptyChecks.isNotNull(submitted)) {
+        activeTaskLeaseRegistry.registerClaimedAt(
+            result.taskId().toString(),
+            submitted.tenantId(),
+            submitted.workerId(),
+            result.config().partitionInvocationId(),
+            claimStartedAtNanos);
+      }
+    }
+    return results;
+  }
+
+  @Override
+  public void registerClaimedBatch(List<PulledTask> tasks) {
+    if (EmptyChecks.isNull(tasks) || EmptyChecks.isEmpty(tasks)) {
+      return;
+    }
+    for (PulledTask task : tasks) {
+      if (EmptyChecks.isNotNull(task)) {
+        activeTaskLeaseRegistry.registerClaimed(
+            task.getTaskId(),
+            task.getTenantId(),
+            task.getWorkerId(),
+            task.getPartitionInvocationId());
+      }
+    }
+  }
+
+  @Override
+  public void releaseUnexecutedClaims(List<PulledTask> tasks) {
+    if (EmptyChecks.isNull(tasks)) return;
+    for (PulledTask task : tasks) {
+      if (EmptyChecks.isNotNull(task)) {
+        activeTaskLeaseRegistry.removeQueuedClaim(
+            task.getTaskId(),
+            task.getTenantId(),
+            task.getWorkerId(),
+            task.getPartitionInvocationId());
+      }
+    }
   }
 
   @Override
   @Observed(name = "worker.task.execute", contextualName = "worker.task.execute")
   public WorkerExecutionResult execute(PulledTask task) {
-    Map<String, Object> executionContext = buildExecutionContext(task);
-    StepExecutionRequest request = new StepExecutionRequest(
-        task.getTenantId(),
-        task.getJobCode(),
-        task.getTaskType(),
-        task.getWorkerId(),
-        executionContext);
-    activeTaskLeaseRegistry.register(
-        task.getTaskId(), task.getTenantId(), task.getWorkerId(), task.getPartitionInvocationId());
-    long timeoutSeconds = resolveEffectiveTimeoutSeconds(task);
+    if (EmptyChecks.isNull(task)
+        || !activeTaskLeaseRegistry.beginExecution(
+            task.getTaskId(),
+            task.getTenantId(),
+            task.getWorkerId(),
+            task.getPartitionInvocationId())) {
+      String taskId = EmptyChecks.isNull(task) ? null : task.getTaskId();
+      log.warn(
+          "task execution start rejected: lease already active or owner changed, taskId={}",
+          taskId);
+      return new WorkerExecutionResult(taskId, false, "task lease is not available for execution");
+    }
     long startNanos = System.nanoTime();
     try {
-      StepExecutionResponse response = runWithTimeout(request, task, timeoutSeconds);
-      // P1-2 闸门：若执行过程中 orchestrator 已明确驱逐本 lease（renew DB CAS 返回 false），
-      // 不再 report。markCompletingUnlessLost 与 markLost 共用 registry 写锁，避免“业务刚完成、
-      // 旧 renew 快照随后 rejected”把已完成任务误标 lost。
+      Map<String, Object> executionContext = buildExecutionContext(task);
+      StepExecutionRequest request = new StepExecutionRequest(
+          task.getTenantId(),
+          task.getJobCode(),
+          task.getTaskType(),
+          task.getWorkerId(),
+          executionContext);
+      long timeoutSeconds = resolveEffectiveTimeoutSeconds(task);
+      if (activeTaskLeaseRegistry.isLost(task.getTaskId()) || !confirmLeaseBeforeExecution(task)) {
+        return leaseLostResult(task);
+      }
+      StepExecutionResponse response;
+      if (activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())) {
+        response = new StepExecutionResponse(
+            false,
+            CANCELLED_ERROR_CODE,
+            "task execution cancelled by orchestrator request before execution");
+      } else if (!replayCapabilityAllowsExecution(task, request)) {
+        response = new StepExecutionResponse(
+            false,
+            TaskErrorCodes.REPLAY_CAPABILITY_INVALID,
+            "worker replay capability does not satisfy the frozen replay contract");
+      } else {
+        response = runWithTimeout(request, task, timeoutSeconds);
+      }
+      // 续租 CAS 拒绝后禁止旧所有者回报。完成确认与租约丢失标记共用注册表写锁，
+      // 防止已完成任务被迟到的旧续租结果错误标记为租约丢失。
       if (!activeTaskLeaseRegistry.markCompletingUnlessLost(task.getTaskId())) {
         log.error(
             "task lease lost during execution — aborting report: tenantId={}, taskId={},"
@@ -213,10 +324,143 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     }
   }
 
+  /** 执行前按认领任务的精确配置重新解析重放能力。 */
+  private boolean replayCapabilityAllowsExecution(PulledTask task, StepExecutionRequest request) {
+    ReplayExecutionGuard guard = task.getReplayExecutionGuard();
+    if (EmptyChecks.isNull(guard)) {
+      if (isWorkflowReplayPayload(task.getPayload())) {
+        log.warn(
+            "workflow replay claim is missing capability guard; refusing execution:"
+                + " tenantId={}, taskId={}",
+            task.getTenantId(),
+            task.getTaskId());
+        return false;
+      }
+      return true;
+    }
+    try {
+      ReplayCapabilityDeclaration actual = stepExecutionAdapter.resolveReplayCapability(request);
+      if (guard.declaration().covers(actual)) {
+        return true;
+      }
+      log.warn(
+          "replay capability mismatch; refusing execution: tenantId={}, taskId={},"
+              + " replayOperationId={}, declaredPluginId={}, actualPluginId={}",
+          task.getTenantId(),
+          task.getTaskId(),
+          guard.replayOperationId(),
+          guard.declaration().pluginId(),
+          EmptyChecks.isNull(actual) ? null : actual.pluginId());
+      return false;
+    } catch (RuntimeException ex) {
+      log.warn(
+          "replay capability resolution failed; refusing execution: tenantId={}, taskId={},"
+              + " replayOperationId={}, cause={}",
+          task.getTenantId(),
+          task.getTaskId(),
+          guard.replayOperationId(),
+          SwallowedExceptionLogger.summary(ex));
+      return false;
+    }
+  }
+
+  private boolean isWorkflowReplayPayload(String payload) {
+    if (EmptyChecks.isBlank(payload)) {
+      return false;
+    }
+    try {
+      Object payloadObject = JsonUtils.fromJson(payload, Object.class);
+      if (payloadObject instanceof Map<?, ?> payloadMap) {
+        return WORKFLOW_RUN_OPERATION_TYPE.equals(payloadMap.get(OPERATION_TYPE_PAYLOAD_KEY));
+      }
+    } catch (RuntimeException ignored) {
+      SwallowedExceptionLogger.warn(
+          DefaultTaskExecutionWrapper.class, "catch:RuntimeException", ignored);
+    }
+    return false;
+  }
+
   /**
-   * 把业务 pipeline 跑在 {@link TaskExecutionPool} 上, 主线程 (Kafka listener) 限时等待结果. 超时即 {@code
-   * future.cancel(true)} 释放 listener, 业务线程靠 {@link Thread#isInterrupted()} / 阻塞 IO 协作退出; 不退出的线程
-   * watchdog 记账放任 (worker 不会自动重启, 留给运维).
+   * 已认领任务连续错过续租窗口时，通过 Orchestrator 的 invocation CAS 重新确认租约。
+   * 拒绝或无法确认时停止执行，由租约回收流程重新派发。
+   */
+  private boolean confirmLeaseBeforeExecution(PulledTask task) {
+    if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
+      return false;
+    }
+    long staleAfterMillis = leaseRenewalIntervalMillis > Long.MAX_VALUE / 2L
+        ? Long.MAX_VALUE
+        : leaseRenewalIntervalMillis * 2L;
+    if (!activeTaskLeaseRegistry.isRenewalDue(task.getTaskId(), staleAfterMillis)) {
+      return true;
+    }
+    Long renewalTaskId = Long.valueOf(task.getTaskId());
+    TaskLeaseRenewItem renewalItem = new TaskLeaseRenewItem(
+        task.getTenantId(), renewalTaskId, task.getWorkerId(), task.getPartitionInvocationId());
+    return confirmLease(task, renewalItem);
+  }
+
+  /** 在执行池实际取得线程后确认执行起点，排队等待不计入业务执行耗时。 */
+  private boolean confirmExecutionStart(PulledTask task) {
+    if (activeTaskLeaseRegistry.isLost(task.getTaskId())) {
+      return false;
+    }
+    Long taskId = Long.valueOf(task.getTaskId());
+    TaskLeaseRenewItem startItem = TaskLeaseRenewItem.executionStart(
+        task.getTenantId(), taskId, task.getWorkerId(), task.getPartitionInvocationId());
+    boolean confirmed = confirmLease(task, startItem);
+    if (!confirmed) {
+      // 无法确认执行身份时禁止进入业务，也不能将确认失败上报为业务执行失败。
+      activeTaskLeaseRegistry.markLost(task.getTaskId());
+    }
+    return confirmed;
+  }
+
+  private boolean confirmLease(PulledTask task, TaskLeaseRenewItem renewalItem) {
+    try {
+      Map<Long, TaskLeaseRenewResult> resultByTaskId =
+          taskExecutionClient.renewLeasesBatch(List.of(renewalItem));
+      TaskLeaseRenewResult result;
+      if (EmptyChecks.isNull(resultByTaskId)) {
+        result = null;
+      } else {
+        Long lookupTaskId = Long.valueOf(task.getTaskId());
+        result = resultByTaskId.get(lookupTaskId);
+      }
+      if (EmptyChecks.isNull(result) || !result.renewed()) {
+        activeTaskLeaseRegistry.markLost(task.getTaskId());
+        log.warn(
+            "task lease confirmation rejected before execution: tenantId={}, taskId={}, workerId={}",
+            task.getTenantId(),
+            task.getTaskId(),
+            task.getWorkerId());
+        return false;
+      }
+      activeTaskLeaseRegistry.markRenewed(task.getTaskId());
+      if (result.cancelRequested()) {
+        activeTaskLeaseRegistry.requestCancellation(task.getTaskId());
+      }
+      return true;
+    } catch (RuntimeException ex) {
+      log.warn(
+          "task lease could not be confirmed before execution: tenantId={}, taskId={}, error={}",
+          task.getTenantId(),
+          task.getTaskId(),
+          SwallowedExceptionLogger.summary(ex));
+      return false;
+    }
+  }
+
+  private static WorkerExecutionResult leaseLostResult(PulledTask task) {
+    return new WorkerExecutionResult(
+        task.getTaskId(),
+        false,
+        "lease lost or could not be confirmed; execution and report skipped");
+  }
+
+  /**
+   * 业务流程在 {@link TaskExecutionPool} 中执行，Kafka 监听线程限时等待结果。超时后调用 {@code
+   * future.cancel(true)}，业务线程通过中断或阻塞 I/O 协作退出；未退出线程由看门狗记录并交由运维处理。
    */
   private StepExecutionResponse runWithTimeout(
       StepExecutionRequest request, PulledTask task, long timeoutSeconds) {
@@ -226,6 +470,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       future = executionPool.submit(() -> {
         executing.set(true);
         try {
+          if (!confirmExecutionStart(task)) {
+            return new StepExecutionResponse(
+                false, "LEASE_LOST", "execution start was not confirmed");
+          }
+          if (activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
+              || Thread.currentThread().isInterrupted()) {
+            return new StepExecutionResponse(
+                false, CANCELLED_ERROR_CODE, "task cancelled before adapter entry");
+          }
           return stepExecutionAdapter.execute(request);
         } finally {
           executing.set(false);
@@ -233,11 +486,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       });
     } catch (RejectedExecutionException rejected) {
       return new StepExecutionResponse(
-          false,
-          "RESOURCE_EXHAUSTED",
-          "worker execution pool is saturated or shutting down",
-          null,
-          null);
+          false, "RESOURCE_EXHAUSTED", "worker execution pool is saturated or shutting down");
     }
     activeTaskLeaseRegistry.registerCancellationCallback(task.getTaskId(), () -> {
       boolean cancelled = future.cancel(true);
@@ -264,18 +513,15 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       return new StepExecutionResponse(
           false,
           TIMEOUT_ERROR_CODE,
-          "task execution exceeded " + timeoutSeconds + "s and was cancelled by worker",
-          null,
-          null);
+          "task execution exceeded " + timeoutSeconds + "s and was cancelled by worker");
     } catch (CancellationException ex) {
       scheduleThreadLeakWatchdog(task, executing);
       String message = activeTaskLeaseRegistry.isCancellationRequested(task.getTaskId())
           ? "task execution cancelled by orchestrator request"
           : "task execution cancelled";
-      return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message, null, null);
+      return new StepExecutionResponse(false, CANCELLED_ERROR_CODE, message);
     } catch (ExecutionException ex) {
-      // 业务异常已在 stepExecutionAdapter 里被包成 StepExecutionResponse.failure 返回, 这里到达说明 adapter 自己抛了
-      // RuntimeException (典型: 解析 payload 失败 / 框架 bug). 也按失败上报.
+      // 处理适配器未转换的执行异常；JVM 级故障继续抛出，其余异常转换为执行错误结果。
       Throwable cause = EmptyChecks.isNull(ex.getCause()) ? ex : ex.getCause();
       rethrowFatal(cause);
       log.error(
@@ -283,14 +529,10 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
           task.getTenantId(),
           task.getTaskId(),
           cause);
-      return new StepExecutionResponse(
-          false,
-          "WORKER_EXECUTION_ERROR",
-          EmptyChecks.isNull(cause.getMessage())
-              ? cause.getClass().getSimpleName()
-              : cause.getMessage(),
-          null,
-          null);
+      String executionErrorMessage = EmptyChecks.isNull(cause.getMessage())
+          ? cause.getClass().getSimpleName()
+          : cause.getMessage();
+      return new StepExecutionResponse(false, "WORKER_EXECUTION_ERROR", executionErrorMessage);
     } catch (InterruptedException ex) {
       future.cancel(true);
       scheduleThreadLeakWatchdog(task, executing);
@@ -307,29 +549,31 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   }
 
   /**
-   * 派发独立 watchdog: 宽限期后检查实际调用是否退出，而非已被 cancel 标为完成的 Future。不会强杀线程
-   * (Java 没有安全的强杀); 留给运维通过 metric 告警 + 重启 worker 回退.
+   * 宽限期后检查业务调用是否实际退出，不能仅依据 Future 的取消状态判断线程已结束。
+   * 未退出的线程通过指标告警交由运维处置，避免使用不安全的强制终止操作。
    */
   private void scheduleThreadLeakWatchdog(PulledTask task, AtomicBoolean executing) {
     long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());
     if (EmptyChecks.isNull(watchdog)) {
       return;
     }
-    watchdog.schedule(
-        () -> {
-          if (executing.get()) {
-            if (EmptyChecks.isNotNull(threadLeakedCounter)) {
-              threadLeakedCounter.increment();
-            }
-            log.error(
-                "task execution thread did NOT exit within cancel grace ({}s): tenantId={},"
-                    + " taskId={} — pool thread leaked, consider worker restart",
-                graceSeconds,
-                task.getTenantId(),
-                task.getTaskId());
-          }
-        },
-        Instant.now().plus(Duration.ofSeconds(graceSeconds)));
+    Runnable watchdogTask = () -> {
+      if (executing.get()) {
+        if (EmptyChecks.isNotNull(threadLeakedCounter)) {
+          threadLeakedCounter.increment();
+        }
+        log.error(
+            "task execution thread did NOT exit within cancel grace ({}s): tenantId={},"
+                + " taskId={} — pool thread leaked, consider worker restart",
+            graceSeconds,
+            task.getTenantId(),
+            task.getTaskId());
+      }
+    };
+    Instant scheduledAt = Instant.now();
+    Duration cancelGrace = Duration.ofSeconds(graceSeconds);
+    Instant deadline = scheduledAt.plus(cancelGrace);
+    watchdog.schedule(watchdogTask, deadline);
   }
 
   private long resolveEffectiveTimeoutSeconds(PulledTask task) {
@@ -366,7 +610,16 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     executionContext.put(
         PipelineRuntimeKeys.TRACE_ID, task.getTraceId() == null ? "" : task.getTraceId());
     executionContext.put(PipelineRuntimeKeys.JOB_INSTANCE_ID, task.getJobInstanceId());
-    executionContext.put("jobPartitionId", task.getJobPartitionId());
+    executionContext.put(PipelineRuntimeKeys.JOB_PARTITION_ID, task.getJobPartitionId());
+    if (EmptyChecks.isNotNull(task.getPartitionInvocationId())) {
+      executionContext.put(
+          PipelineRuntimeKeys.PARTITION_INVOCATION_ID, task.getPartitionInvocationId());
+    }
+    if (EmptyChecks.isNotNull(task.getDependencyResultSnapshot())
+        && EmptyChecks.isNotEmpty(task.getDependencyResultSnapshot())) {
+      executionContext.put(
+          PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT, task.getDependencyResultSnapshot());
+    }
     executionContext.put("taskSeq", task.getTaskSeq());
     executionContext.put(
         "idempotencyKey", task.getIdempotencyKey() == null ? "" : task.getIdempotencyKey());
@@ -434,7 +687,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
       Map<String, Object> executionContext,
       boolean success) {
     TaskExecutionReport report = new TaskExecutionReport();
-    report.setTaskId(Long.valueOf(task.getTaskId()));
+    Long reportTaskId = Long.valueOf(task.getTaskId());
+    report.setTaskId(reportTaskId);
     report.setTenantId(task.getTenantId());
     report.setWorkerId(task.getWorkerId());
     report.setSuccess(success);
@@ -443,7 +697,9 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     if (!success) {
       report.setErrorCode(response.code());
       report.setErrorMessage(response.message());
-      report.setFailureClass(resolveFailureClass(response.code()));
+      String errorCode = response.code();
+      String failureClass = resolveFailureClass(errorCode);
+      report.setFailureClass(failureClass);
       // i18n 跨进程透传:plugin 用 StepExecutionResponse.failure(BizException, mapper)
       // 时,key/args 会一直传到 orchestrator 持久化。第三方异常 / literal 失败时为 null,orchestrator 仅用 message。
       report.setErrorKey(response.errorKey());
@@ -452,9 +708,13 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
     // 将 traceId 传递给 Orchestrator,确保状态更新与重试/DLQ 全链路可追踪
     report.setTraceId(task.getTraceId());
     report.setPartitionInvocationId(task.getPartitionInvocationId());
-    report.setResultSummary(JsonUtils.toJson(Map.of(
-        "code", Objects.requireNonNullElse(response.code(), ""),
-        "message", Objects.requireNonNullElse(response.message(), ""))));
+    String summaryCode = Objects.requireNonNullElse(response.code(), "");
+    String summaryMessage = Objects.requireNonNullElse(response.message(), "");
+    Map<String, String> responseSummary = Map.of(
+        "code", summaryCode,
+        "message", summaryMessage);
+    String resultSummary = JsonUtils.toJson(responseSummary);
+    report.setResultSummary(resultSummary);
     // INCREMENTAL pipeline 在 attributes 写出新水位 → 透传给 orchestrator;
     // 业务没显式写就保持 null,orchestrator 跳过持久化(保留旧值)。
     Object highWaterMarkOut = executionContext.get(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);

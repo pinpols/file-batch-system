@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectStoreAccessException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchRuntimeProperties;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchFileContentResolver;
@@ -30,6 +32,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -78,13 +81,14 @@ final class RemoteFilesystemDispatchSupport {
       DispatchFileContentResolver contentResolver,
       DispatchRuntimeProperties properties,
       NasCopyExecutor copyExecutor) {
+    boolean publicationAttempted = false;
+    boolean publicationConfirmed = false;
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String remoteDir =
           resolveEndpointOrFail(channelConfig, "nas_remote_directory", KEY_TARGET_ENDPOINT);
       if (!Texts.hasText(remoteDir)) {
-        return new DispatchResult(
-            false, null, null, false, false, "nas_remote_directory missing", null);
+        return DispatchResult.failureWithoutReceipt("nas_remote_directory missing");
       }
       // R-4.2: normalize 只处理 . 和 ..，不解析 symlink；恶意配置 /tmp/link_to_parent
       // 即可绕过路径遍历防线。此处额外解析 realPath，若可选的 sandbox root 配置了
@@ -95,7 +99,8 @@ final class RemoteFilesystemDispatchSupport {
       String remoteName =
           resolveRemoteFileName(channelConfig, command.fileRecord(), "nas_remote_file_name");
       Path target = directory.resolve(remoteName);
-      Path tempTarget = directory.resolve(remoteName + ".tmp-" + UUID.randomUUID());
+      String temporaryRemoteName = remoteName + ".tmp-" + UUID.randomUUID();
+      Path tempTarget = directory.resolve(temporaryRemoteName);
       DispatchManifestSupport.PayloadDigest payloadDigest;
       try {
         try (InputStream in = contentResolver.openInputStream(command.fileRecord());
@@ -104,7 +109,9 @@ final class RemoteFilesystemDispatchSupport {
           copyExecutor.copy(digesting, tempTarget, properties);
           payloadDigest = digesting.finish();
         }
+        publicationAttempted = true;
         movePublishedFile(tempTarget, target);
+        publicationConfirmed = true;
       } finally {
         Files.deleteIfExists(tempTarget);
       }
@@ -112,16 +119,13 @@ final class RemoteFilesystemDispatchSupport {
       if (DispatchManifestSupport.enabled(channelConfig)) {
         Path manifestPath =
             directory.resolve(remoteName + DispatchManifestSupport.suffix(channelConfig));
-        Path manifestTempPath =
-            directory.resolve(manifestPath.getFileName() + ".tmp-" + UUID.randomUUID());
+        String manifestTempName = manifestPath.getFileName() + ".tmp-" + UUID.randomUUID();
+        Path manifestTempPath = directory.resolve(manifestTempName);
+        DispatchManifestSupport.ManifestTarget manifestTarget =
+            new DispatchManifestSupport.ManifestTarget(
+                target.toString(), remoteName, manifestPath.toString());
         manifest = DispatchManifestSupport.manifestPayload(
-            command,
-            target.toString(),
-            remoteName,
-            externalRequestId,
-            receiptCode,
-            payloadDigest,
-            manifestPath.toString());
+            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
         try {
           Files.write(manifestTempPath, manifest.bytes());
           movePublishedFile(manifestTempPath, manifestPath);
@@ -134,7 +138,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return failResult(command, ex);
+      return failResult(command, ex, publicationAttempted, publicationConfirmed);
     }
   }
 
@@ -159,7 +163,9 @@ final class RemoteFilesystemDispatchSupport {
 
   private static Path resolveNasDirectory(String remoteDir, DispatchRuntimeProperties properties)
       throws IOException {
-    Path directory = Path.of(remoteDir).toAbsolutePath().normalize();
+    Path requestedDirectory = Path.of(remoteDir);
+    Path absoluteDirectory = requestedDirectory.toAbsolutePath();
+    Path directory = absoluteDirectory.normalize();
     Files.createDirectories(directory);
     Path realDirectory = directory.toRealPath();
     if (!realDirectory.equals(directory)
@@ -179,7 +185,10 @@ final class RemoteFilesystemDispatchSupport {
     }
     String sandboxRootRaw = properties.getNasSandboxRoot();
     if (Texts.hasText(sandboxRootRaw)) {
-      Path sandboxRoot = Path.of(sandboxRootRaw).toAbsolutePath().normalize().toRealPath();
+      Path configuredSandboxRoot = Path.of(sandboxRootRaw);
+      Path absoluteSandboxRoot = configuredSandboxRoot.toAbsolutePath();
+      Path normalizedSandboxRoot = absoluteSandboxRoot.normalize();
+      Path sandboxRoot = normalizedSandboxRoot.toRealPath();
       if (!realDirectory.startsWith(sandboxRoot)) {
         throw new SecurityException("NAS directory escapes sandbox root: real="
             + realDirectory
@@ -205,12 +214,14 @@ final class RemoteFilesystemDispatchSupport {
       S3StorageProperties s3Properties,
       BatchObjectStore objectStore,
       DispatchRuntimeProperties properties) {
+    boolean publicationAttempted = false;
+    boolean publicationConfirmed = false;
     try {
       Map<String, Object> channelConfig = command.channelConfig();
       String bucket =
           firstText(channelConfig, "oss_bucket", "storage_bucket", s3Properties.getBucket());
       if (!Texts.hasText(bucket)) {
-        return new DispatchResult(false, null, null, false, false, "oss_bucket missing", null);
+        return DispatchResult.failureWithoutReceipt("oss_bucket missing");
       }
       String objectPrefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
       String externalRequestId = resolveExternalRequestId(command);
@@ -229,37 +240,30 @@ final class RemoteFilesystemDispatchSupport {
         payload = in.readNBytes(maxInlinePayloadBytes + 1);
       }
       if (payload.length > maxInlinePayloadBytes) {
-        return new DispatchResult(
-            false,
-            null,
-            null,
-            false,
-            false,
-            "oss payload exceeds inline upload limit ("
-                + maxInlinePayloadBytes
-                + " bytes); reduce file size or use a streaming-capable channel",
-            null);
+        return DispatchResult.failureWithoutReceipt("oss payload exceeds inline upload limit ("
+            + maxInlinePayloadBytes
+            + " bytes); reduce file size or use a streaming-capable channel");
       }
       DispatchManifestSupport.PayloadDigest payloadDigest = DispatchManifestSupport.digest(payload);
+      publicationAttempted = true;
       objectStore.put(
           bucket, objectName, new ByteArrayInputStream(payload), payload.length, contentType);
+      publicationConfirmed = true;
       String evidence = "oss://" + bucket + PATH_SEP + objectName;
       DispatchManifestSupport.ManifestPayload manifest = null;
       if (DispatchManifestSupport.enabled(channelConfig)) {
         String manifestName = objectName + DispatchManifestSupport.suffix(channelConfig);
         String manifestRef = "oss://" + bucket + PATH_SEP + manifestName;
+        DispatchManifestSupport.ManifestTarget manifestTarget =
+            new DispatchManifestSupport.ManifestTarget(evidence, remoteName, manifestRef);
         manifest = DispatchManifestSupport.manifestPayload(
-            command,
-            evidence,
-            remoteName,
-            externalRequestId,
-            receiptCode,
-            payloadDigest,
-            manifestRef);
+            command, manifestTarget, externalRequestId, receiptCode, payloadDigest);
+        byte[] manifestBytes = manifest.bytes();
+        ByteArrayInputStream manifestStream = new ByteArrayInputStream(manifestBytes);
         objectStore.put(
             bucket,
             manifestName,
-            new ByteArrayInputStream(manifest.bytes()),
+            manifestStream,
             manifest.sizeBytes(),
             DispatchManifestSupport.CONTENT_TYPE);
       }
@@ -268,15 +272,43 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return failResult(command, ex);
+      return failResult(command, ex, publicationAttempted, publicationConfirmed);
     }
   }
 
-  private static DispatchResult failResult(DispatchCommand command, Exception ex) {
+  private static DispatchResult failResult(
+      DispatchCommand command,
+      Exception ex,
+      boolean publicationAttempted,
+      boolean publicationConfirmed) {
     String externalRequestId = resolveExternalRequestId(command);
     String receiptCode = resolveReceiptCode(command, externalRequestId);
+    boolean unknownExternalOutcome =
+        publicationConfirmed || (publicationAttempted && !isKnownNoEffectFailure(ex));
+    String failureSummary = SwallowedExceptionLogger.summary(ex);
+    if (unknownExternalOutcome) {
+      return DispatchResult.externalOutcomeUnknown(
+          externalRequestId,
+          receiptCode,
+          "EXTERNAL_OUTCOME_UNKNOWN: remote file publication may have completed: "
+              + failureSummary);
+    }
     return new DispatchResult(
-        false, externalRequestId, receiptCode, false, false, ex.getMessage(), null);
+        false, externalRequestId, receiptCode, false, false, failureSummary, null);
+  }
+
+  private static boolean isKnownNoEffectFailure(Exception failure) {
+    if (failure instanceof ObjectStoreAccessException) {
+      return true;
+    }
+    Throwable cause = failure.getCause();
+    while (EmptyChecks.isNotNull(cause)) {
+      if (cause instanceof AtomicMoveNotSupportedException) {
+        return true;
+      }
+      cause = cause.getCause();
+    }
+    return false;
   }
 
   static DispatchChannelProbeResult probeNas(Map<String, Object> channelConfig) {
@@ -306,14 +338,14 @@ final class RemoteFilesystemDispatchSupport {
       }
       String probeName = BatchFileConstants.newHealthProbeName();
       Path probeFile = directory.resolve(probeName);
-      Files.writeString(
-          probeFile, "probe@" + BatchDateTimeSupport.utcNow(), StandardCharsets.UTF_8);
+      String probeContent = "probe@" + BatchDateTimeSupport.utcNow();
+      Files.writeString(probeFile, probeContent, StandardCharsets.UTF_8);
       Files.deleteIfExists(probeFile);
       return new DispatchChannelProbeResult(true, "nas probe ok", probeFile.toString());
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -328,8 +360,10 @@ final class RemoteFilesystemDispatchSupport {
         return new DispatchChannelProbeResult(false, "oss_bucket missing", null);
       }
       String prefix = firstText(channelConfig, "oss_object_prefix", KEY_TARGET_ENDPOINT, "");
-      String objectName = normalizeObjectName(prefix, BatchFileConstants.newHealthProbeName());
-      byte[] payload = ("probe@" + BatchDateTimeSupport.utcNow()).getBytes(StandardCharsets.UTF_8);
+      String healthProbeName = BatchFileConstants.newHealthProbeName();
+      String objectName = normalizeObjectName(prefix, healthProbeName);
+      String payloadText = "probe@" + BatchDateTimeSupport.utcNow();
+      byte[] payload = payloadText.getBytes(StandardCharsets.UTF_8);
       objectStore.put(
           bucket,
           objectName,
@@ -346,7 +380,7 @@ final class RemoteFilesystemDispatchSupport {
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -366,17 +400,22 @@ final class RemoteFilesystemDispatchSupport {
       }
       int port = intProp(channelConfig, "sftp_port", 22);
       // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target = dnsGuardEnabled
-          ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
-          : new InetSocketAddress(host, port);
+      InetSocketAddress target;
+      if (dnsGuardEnabled) {
+        InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
+        target = new InetSocketAddress(validatedAddress, port);
+      } else {
+        target = new InetSocketAddress(host, port);
+      }
       try (Socket socket = new Socket()) {
-        socket.connect(target, probeConnectTimeoutMillis(properties));
+        int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
+        socket.connect(target, connectTimeoutMillis);
       }
       return new DispatchChannelProbeResult(true, "sftp probe ok", host + ":" + port);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -396,17 +435,22 @@ final class RemoteFilesystemDispatchSupport {
       }
       int port = intProp(channelConfig, "smtp_port", 25);
       // S-2.6: resolve-then-connect — 用已校验的 IP 建连
-      InetSocketAddress target = dnsGuardEnabled
-          ? new InetSocketAddress(DnsResolveGuard.resolveAndValidate(host), port)
-          : new InetSocketAddress(host, port);
+      InetSocketAddress target;
+      if (dnsGuardEnabled) {
+        InetAddress validatedAddress = DnsResolveGuard.resolveAndValidate(host);
+        target = new InetSocketAddress(validatedAddress, port);
+      } else {
+        target = new InetSocketAddress(host, port);
+      }
       try (Socket socket = new Socket()) {
-        socket.connect(target, probeConnectTimeoutMillis(properties));
+        int connectTimeoutMillis = probeConnectTimeoutMillis(properties);
+        socket.connect(target, connectTimeoutMillis);
       }
       return new DispatchChannelProbeResult(true, "smtp probe ok", host + ":" + port);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -428,24 +472,26 @@ final class RemoteFilesystemDispatchSupport {
           .readTimeout(Duration.ofMillis(properties.getProbeReadTimeoutMillis()))
           .build();
       if (dnsGuardEnabled) {
-        String probeHost = URI.create(endpoint).getHost();
+        URI endpointUri = URI.create(endpoint);
+        String probeHost = endpointUri.getHost();
         List<InetAddress> resolved = DnsResolveGuard.resolveAllAndValidate(probeHost);
         client = client.newBuilder().dns(hostname -> resolved).build();
       }
       Request request = new Request.Builder().url(endpoint).head().build();
       try (Response response = client.newCall(request).execute()) {
         int status = response.code();
+        String safeEndpoint = SecretMasking.maskEndpoint(endpoint);
         if (status >= 200 && status < 500) {
           return new DispatchChannelProbeResult(
-              true, "http probe ok (status=" + status + ")", endpoint);
+              true, "http probe ok (status=" + status + ")", safeEndpoint);
         }
         return new DispatchChannelProbeResult(
-            false, "http probe failed (status=" + status + ")", endpoint);
+            false, "http probe failed (status=" + status + ")", safeEndpoint);
       }
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(RemoteFilesystemDispatchSupport.class, LOG_CATCH_EXCEPTION, ex);
 
-      return new DispatchChannelProbeResult(false, ex.getMessage(), null);
+      return new DispatchChannelProbeResult(false, SwallowedExceptionLogger.summary(ex), null);
     }
   }
 
@@ -456,8 +502,9 @@ final class RemoteFilesystemDispatchSupport {
       boolean dnsGuardEnabled,
       DispatchRuntimeProperties properties,
       OkHttpClient httpProbeClient) {
-    String channelType =
-        String.valueOf(channelConfig.getOrDefault("channel_type", "")).toUpperCase(Locale.ROOT);
+    Object channelTypeValue = channelConfig.getOrDefault("channel_type", "");
+    String rawChannelType = String.valueOf(channelTypeValue);
+    String channelType = rawChannelType.toUpperCase(Locale.ROOT);
     FileChannelType type = DictEnum.fromCode(FileChannelType.class, channelType);
     if (EmptyChecks.isNull(type)) {
       return new DispatchChannelProbeResult(
@@ -500,8 +547,9 @@ final class RemoteFilesystemDispatchSupport {
       String evidence,
       DispatchManifestSupport.ManifestPayload manifest) {
     Map<String, Object> channelConfig = command.channelConfig();
-    String receiptPolicy =
-        String.valueOf(channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.SYNC.code()));
+    Object configuredReceiptPolicy =
+        channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.SYNC.code());
+    String receiptPolicy = String.valueOf(configuredReceiptPolicy);
     boolean acknowledged = FileReceiptPolicy.NONE.code().equalsIgnoreCase(receiptPolicy)
         || FileReceiptPolicy.SYNC.code().equalsIgnoreCase(receiptPolicy);
     boolean pending = FileReceiptPolicy.ASYNC.code().equalsIgnoreCase(receiptPolicy)
@@ -545,7 +593,8 @@ final class RemoteFilesystemDispatchSupport {
         && !command.payload().externalRequestId().isBlank()) {
       return command.payload().externalRequestId();
     }
-    return UUID.randomUUID().toString();
+    UUID requestId = UUID.randomUUID();
+    return requestId.toString();
   }
 
   private static String resolveReceiptCode(DispatchCommand command, String externalRequestId) {
@@ -562,9 +611,10 @@ final class RemoteFilesystemDispatchSupport {
     if (Texts.hasText(explicit)) {
       return sanitizeFileName(explicit);
     }
-    Object original = fileRecord == null
-        ? null
-        : firstNonNull(fileRecord.get("original_file_name"), fileRecord.get("file_name"));
+    Object originalFileName =
+        EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("original_file_name");
+    Object fileName = EmptyChecks.isNull(fileRecord) ? null : fileRecord.get("file_name");
+    Object original = firstNonNull(originalFileName, fileName);
     String fallback =
         original == null ? BatchFileConstants.DEFAULT_FILE_NAME : String.valueOf(original);
     return sanitizeFileName(fallback);
@@ -574,8 +624,13 @@ final class RemoteFilesystemDispatchSupport {
     if (name == null) {
       return BatchFileConstants.DEFAULT_FILE_NAME;
     }
-    String n = name.trim().replace("..", "_").replace('/', '_').replace('\\', '_');
-    return n.isBlank() ? BatchFileConstants.DEFAULT_FILE_NAME : n;
+    String trimmedName = name.trim();
+    String withoutParentTraversal = trimmedName.replace("..", "_");
+    String withoutForwardSlashes = withoutParentTraversal.replace('/', '_');
+    String sanitizedName = withoutForwardSlashes.replace('\\', '_');
+    return EmptyChecks.isBlank(Objects.requireNonNull(sanitizedName))
+        ? BatchFileConstants.DEFAULT_FILE_NAME
+        : sanitizedName;
   }
 
   private static String normalizeObjectName(String prefix, String name) {
@@ -594,7 +649,8 @@ final class RemoteFilesystemDispatchSupport {
     if (v == null) {
       return fallback;
     }
-    String text = String.valueOf(v).trim();
+    String rawText = String.valueOf(v);
+    String text = rawText.trim();
     return text.isEmpty() ? fallback : text;
   }
 
@@ -613,7 +669,9 @@ final class RemoteFilesystemDispatchSupport {
       return defaultValue;
     }
     try {
-      return Integer.parseInt(String.valueOf(v).trim());
+      String rawValue = String.valueOf(v);
+      String trimmedValue = rawValue.trim();
+      return Integer.parseInt(trimmedValue);
     } catch (NumberFormatException e) {
       SwallowedExceptionLogger.info(
           RemoteFilesystemDispatchSupport.class, "catch:NumberFormatException", e);
@@ -643,7 +701,8 @@ final class RemoteFilesystemDispatchSupport {
     if (v == null) {
       return null;
     }
-    String text = String.valueOf(v).trim();
+    String rawText = String.valueOf(v);
+    String text = rawText.trim();
     return text.isEmpty() ? null : text;
   }
 

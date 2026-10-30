@@ -3,7 +3,9 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.engine.CountContinuityOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService.NodeRunFinishCommand;
@@ -20,6 +22,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import lombok.Builder;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
@@ -41,51 +44,67 @@ final class TaskOutcomeDagProgressor {
   private final ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider;
   private final TaskOutcomeNodeRunRecorder nodeRunRecorder;
   private final CountContinuityOutboxService countContinuityOutboxService;
+  private final SecretPayloadProtector secretPayloadProtector;
 
   TaskOutcomeDagProgressor(
       OrchestratorWorkflowMappers workflowMappers,
       WorkflowDagService workflowDagService,
       ObjectProvider<WorkflowNodeDispatchService> dispatchServiceProvider,
       TaskOutcomeNodeRunRecorder nodeRunRecorder,
-      CountContinuityOutboxService countContinuityOutboxService) {
+      CountContinuityOutboxService countContinuityOutboxService,
+      SecretPayloadProtector secretPayloadProtector) {
     this.workflowMappers = workflowMappers;
     this.workflowDagService = workflowDagService;
     this.dispatchServiceProvider = dispatchServiceProvider;
     this.nodeRunRecorder = nodeRunRecorder;
     this.countContinuityOutboxService = countContinuityOutboxService;
+    this.secretPayloadProtector = secretPayloadProtector;
   }
 
   void advance(Context ctx) {
+    String sourcePayload = resolveSourcePayload(ctx);
     ctx.activeNodes().remove(ctx.currentNodeCode());
-    NodeRunOutcome currentOutcome = NodeRunOutcome.builder()
-        .success(ctx.nodeProgress().failedCount() == 0)
-        .errorCode(ctx.command().errorCode())
-        .errorMessage(ctx.command().errorMessage())
-        .errorKey(ctx.command().errorKey())
-        .errorArgs(ctx.command().errorArgs())
-        .startedAt(nodeRunRecorder.resolveStartedAt(
-            ctx.workflowRun().getId(),
-            ctx.currentNodeCode(),
-            ctx.workflowRun().getStartedAt(),
-            ctx.finishedAt()))
-        .finishedAt(ctx.finishedAt())
-        .outputJson(TaskOutcomeSummaryBuilder.serializeOutputs(ctx.nodeOutputs()))
-        .build();
-    NodeRunKey currentKey = new NodeRunKey(
-        ctx.workflowRun().getId(), ctx.currentNodeCode(), resolveCurrentNodeType(ctx.task()));
+    TaskOutcomeService.NodeRunOutcome.NodeRunOutcomeBuilder currentOutcomeBuilder =
+        NodeRunOutcome.builder()
+            .success(ctx.nodeProgress().unsuccessfulCount() == 0)
+            .errorCode(ctx.command().errorCode())
+            .errorMessage(ctx.command().errorMessage())
+            .errorKey(ctx.command().errorKey())
+            .errorArgs(ctx.command().errorArgs());
+    Long startedAtWorkflowRunId = ctx.workflowRun().getId();
+    String startedAtNodeCode = ctx.currentNodeCode();
+    Instant workflowStartedAt = ctx.workflowRun().getStartedAt();
+    Instant resolvedStartedAt = nodeRunRecorder.resolveStartedAt(
+        startedAtWorkflowRunId, startedAtNodeCode, workflowStartedAt, ctx.finishedAt());
+    currentOutcomeBuilder.startedAt(resolvedStartedAt).finishedAt(ctx.finishedAt());
+    Map<String, Object> nodeOutputs = ctx.nodeOutputs();
+    String outputJson = TaskOutcomeSummaryBuilder.serializeOutputs(nodeOutputs);
+    NodeRunOutcome currentOutcome = currentOutcomeBuilder.outputJson(outputJson).build();
+    Long workflowRunId = ctx.workflowRun().getId();
+    String currentNodeCode = ctx.currentNodeCode();
+    String currentNodeType = resolveCurrentNodeType(ctx.task());
+    NodeRunKey currentKey = new NodeRunKey(workflowRunId, currentNodeCode, currentNodeType);
     recordFinish(NodeRunFinishCommand.of(currentKey, currentOutcome));
 
-    List<WorkflowDagService.DagNodeResolution> nextNodes = workflowDagService.resolveNextNodes(
-        ctx.workflowRun().getWorkflowDefinitionId(),
-        ctx.currentNodeCode(),
-        ctx.nodeProgress().failedCount() == 0,
-        ctx.task().getTaskPayload());
+    // 暂停会保留进行中的工作并记录其结果，但不得推进任何边。
+    // 恢复进度器会在 PAUSED → RUNNING 后重新处理此持久化的 SUCCESS/FAILED 节点。
+    // 状态转换提交后再继续处理。
+    if (WorkflowRunStatus.PAUSED.code().equals(ctx.workflowRun().getRunStatus())) {
+      return;
+    }
+
+    List<WorkflowDagService.DagNodeResolution> nextNodes =
+        workflowDagService.resolveNextNodesForRun(
+            ctx.workflowRun(),
+            ctx.currentNodeCode(),
+            ctx.nodeProgress().unsuccessfulCount() == 0,
+            sourcePayload);
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (EmptyChecks.isNull(nextNode)) {
         continue;
       }
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-        completeEndNodeIfReady(ctx, nextNode);
+        completeEndNodeIfReady(ctx, nextNode, sourcePayload);
         continue;
       }
       int dispatched = dispatchServiceProvider
@@ -94,34 +113,42 @@ final class TaskOutcomeDagProgressor {
               ctx.jobInstance(),
               ctx.workflowRun(),
               nextNode,
-              ctx.task().getTaskPayload(),
+              sourcePayload,
               ctx.jobInstance().getTraceId());
       // 只有真正创建分区且节点仍处于 READY/RUNNING，才把节点写入活跃集合，避免游标残留。
-      if (dispatched > 0 && isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode())) {
+      boolean dispatchedNodeRemainsActive =
+          dispatched > 0 && isActiveNode(ctx.workflowRun().getId(), nextNode.nodeCode());
+      if (dispatchedNodeRemainsActive) {
         ctx.activeNodes().add(nextNode.nodeCode());
       }
     }
-    if (ctx.nodeProgress().failedCount() > 0) {
-      // 失败节点无法再满足 SUCCESS-edge，显式跳过下游，避免 ALL-mode join 永久等待。
-      workflowDagService.cascadeSkipDownstream(
-          ctx.workflowRun().getId(),
-          ctx.workflowRun().getWorkflowDefinitionId(),
-          ctx.currentNodeCode());
-    }
+    // 完成节点后统一记录再无机会触发的分支；失败边、未命中条件边和级联下游共用同一
+    // terminal/match 谓词，避免未选分支没有状态而让运行时间线与日结算看不见它。
+    workflowDagService.cascadeSkipDownstreamForRun(
+        ctx.workflowRun(), ctx.currentNodeCode(), sourcePayload);
   }
 
-  private void completeEndNodeIfReady(Context ctx, WorkflowDagService.DagNodeResolution nextNode) {
-    if (!workflowDagService.isNodeReadyForDispatch(
-        ctx.workflowRun().getId(),
-        ctx.workflowRun().getWorkflowDefinitionId(),
-        nextNode.nodeCode(),
-        ctx.task().getTaskPayload())) {
+  private String resolveSourcePayload(Context ctx) {
+    WorkflowNodeRunEntity nodeRun =
+        workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
+            ctx.workflowRun().getId(), ctx.currentNodeCode());
+    if (EmptyChecks.isNotNull(nodeRun)
+        && !EmptyChecks.isBlank(nodeRun.getSourcePayloadProtected())) {
+      return secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
+    }
+    return null;
+  }
+
+  private void completeEndNodeIfReady(
+      Context ctx, WorkflowDagService.DagNodeResolution nextNode, String sourcePayload) {
+    if (!workflowDagService.isNodeReadyForRunDispatch(
+        ctx.workflowRun(), nextNode.nodeCode(), sourcePayload)) {
       return;
     }
     nodeRunRecorder.recordStart(
         ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType(), ctx.finishedAt());
     NodeRunOutcome endOutcome = NodeRunOutcome.builder()
-        .success(ctx.nodeProgress().failedCount() == 0)
+        .success(ctx.nodeProgress().unsuccessfulCount() == 0)
         .errorCode(ctx.command().errorCode())
         .errorMessage(ctx.command().errorMessage())
         .errorKey(ctx.command().errorKey())
@@ -159,7 +186,7 @@ final class TaskOutcomeDagProgressor {
     return EmptyChecks.isBlank(nodeType) ? WorkflowNodeType.TASK.code() : nodeType;
   }
 
-  @lombok.Builder
+  @Builder
   record Context(
       TaskOutcomeCommand command,
       JobTaskEntity task,

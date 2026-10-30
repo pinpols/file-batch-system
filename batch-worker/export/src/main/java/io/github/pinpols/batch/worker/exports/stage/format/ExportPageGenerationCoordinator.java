@@ -24,8 +24,14 @@ final class ExportPageGenerationCoordinator {
       FileSync fileSync,
       PageRowWriter rowWriter)
       throws Exception {
-    Long batchIdLong =
-        EmptyChecks.isNull(ctx.batchId()) ? null : Long.valueOf(String.valueOf(ctx.batchId()));
+    Long batchIdLong;
+    if (EmptyChecks.isNull(ctx.batchId())) {
+      batchIdLong = null;
+    } else {
+      Object rawBatchId = ctx.batchId();
+      String batchIdText = String.valueOf(rawBatchId);
+      batchIdLong = Long.valueOf(batchIdText);
+    }
     GenerateCheckpoint checkpoint = ctx.checkpoint();
     boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
     long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
@@ -56,9 +62,10 @@ final class ExportPageGenerationCoordinator {
       }
       Object cursor = page.nextCursor();
       // 终页不记 null cursor；下一次续跑必须从最后一个有效页边界开始，避免重复写整份文件。
-      if (EmptyChecks.isNotNull(checkpoint)
+      boolean checkpointCanResumeWithFileCursor = EmptyChecks.isNotNull(checkpoint)
           && EmptyChecks.isNotNull(fileSync)
-          && EmptyChecks.isNotNull(cursor)) {
+          && EmptyChecks.isNotNull(cursor);
+      if (checkpointCanResumeWithFileCursor) {
         long byteOffset = fileSync.flushAndSync();
         checkpoint.advance(byteOffset, cursor, recordCount);
       }

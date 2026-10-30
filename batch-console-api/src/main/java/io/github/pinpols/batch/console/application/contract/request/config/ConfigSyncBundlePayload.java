@@ -1,39 +1,37 @@
 package io.github.pinpols.batch.console.application.contract.request.config;
 
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BusinessCalendarSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileTemplateSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.TenantQuotaPolicySpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import lombok.Data;
 
 @Data
 public class ConfigSyncBundlePayload {
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.JobDefinitionSpec> jobDefinitions;
+  private List<@NotNull @Valid JobDefinitionSpec> jobDefinitions;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.WorkflowDefinitionSpec> workflowDefinitions;
+  private List<@NotNull @Valid WorkflowDefinitionSpec> workflowDefinitions;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.PipelineDefinitionSpec> pipelineDefinitions;
+  private List<@NotNull @Valid FileChannelSpec> fileChannels;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.FileChannelSpec> fileChannels;
+  private List<@NotNull @Valid FileTemplateSpec> fileTemplates;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.FileTemplateSpec> fileTemplates;
+  private List<@NotNull @Valid ResourceQueueSpec> resourceQueues;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.ResourceQueueSpec> resourceQueues;
+  private List<@NotNull @Valid BatchWindowSpec> batchWindows;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.BatchWindowSpec> batchWindows;
+  private List<@NotNull @Valid BusinessCalendarSpec> businessCalendars;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.BusinessCalendarSpec> businessCalendars;
+  private List<@NotNull @Valid TenantQuotaPolicySpec> quotaPolicies;
 
-  @Valid
-  private List<TenantConfigBatchInitRequest.TenantQuotaPolicySpec> quotaPolicies;
-
-  @Valid
-  private List<TenantConfigBatchInitRequest.AlertRoutingSpec> alertRoutings;
+  private List<@NotNull @Valid AlertRoutingSpec> alertRoutings;
 }

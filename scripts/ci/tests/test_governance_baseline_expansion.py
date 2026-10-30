@@ -1,3 +1,5 @@
+# 用途：治理基线扩张守卫测试。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_governance_baseline_expansion.py。
 from __future__ import annotations
 
 import importlib.util

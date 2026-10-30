@@ -93,7 +93,11 @@ public final class CodeNormalizer {
   @Nullable
   public static String toConfigFormOrNull(@Nullable String raw) {
     String trimmed = trimToNull(raw);
-    return trimmed == null ? null : trimmed.toLowerCase(Locale.ROOT).replace('-', '_');
+    if (EmptyChecks.isNull(trimmed)) {
+      return null;
+    }
+    String lowercaseConfigCode = trimmed.toLowerCase(Locale.ROOT);
+    return lowercaseConfigCode.replace('-', '_');
   }
 
   /** 纯归一:trim + 空白→null,不改大小写。供大小写敏感的码引用(如 job_code 引用)复用。 */

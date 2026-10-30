@@ -26,7 +26,6 @@
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>
-            <arg column="pipeline_definition_id" javaType="java.lang.Long"/>
             <arg column="job_code" javaType="java.lang.String"/>
             <arg column="pipeline_type" javaType="java.lang.String"/>
             <arg column="file_id" javaType="java.lang.Long"/>
@@ -131,8 +130,7 @@
     <select id="selectPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
-               pipeline_definition_id,
-               job_code,
+                              job_code,
                pipeline_type,
                file_id,
                related_job_instance_id,
@@ -153,8 +151,7 @@
     <select id="selectArchivedPipelineInstances" resultMap="PipelineInstanceResultMap">
         select id,
                tenant_id,
-               pipeline_definition_id,
-               job_code,
+                              job_code,
                pipeline_type,
                file_id,
                related_job_instance_id,
@@ -201,12 +198,20 @@
                   where ji.tenant_id = #{tenantId}
                     and ji.id = #{jobInstanceId}
                     and ji.related_file_id is not null
+                  union
+                  select ji.related_file_id from archive.job_instance_archive ji
+                  where ji.tenant_id = #{tenantId} and ji.id = #{jobInstanceId}
+                    and ji.related_file_id is not null
               )
               or fr.id in (
                   select pi.file_id
                   from batch.pipeline_instance pi
                   where pi.tenant_id = #{tenantId}
                     and pi.related_job_instance_id = #{jobInstanceId}
+                    and pi.file_id is not null
+                  union
+                  select pi.file_id from archive.pipeline_instance_archive pi
+                  where pi.tenant_id = #{tenantId} and pi.related_job_instance_id = #{jobInstanceId}
                     and pi.file_id is not null
               )
               <if test="payloadFileId != null">
@@ -245,12 +250,20 @@
                   where ji.tenant_id = #{tenantId}
                     and ji.id = #{jobInstanceId}
                     and ji.related_file_id is not null
+                  union
+                  select ji.related_file_id from batch.job_instance ji
+                  where ji.tenant_id = #{tenantId} and ji.id = #{jobInstanceId}
+                    and ji.related_file_id is not null
               )
               or fr.id in (
                   select pi.file_id
                   from archive.pipeline_instance_archive pi
                   where pi.tenant_id = #{tenantId}
                     and pi.related_job_instance_id = #{jobInstanceId}
+                    and pi.file_id is not null
+                  union
+                  select pi.file_id from batch.pipeline_instance pi
+                  where pi.tenant_id = #{tenantId} and pi.related_job_instance_id = #{jobInstanceId}
                     and pi.file_id is not null
               )
               <if test="payloadFileId != null">
@@ -318,9 +331,13 @@
         left join archive.pipeline_instance_archive pi
           on pi.tenant_id = fdr.tenant_id
          and pi.id = fdr.pipeline_instance_id
+        left join batch.pipeline_instance hot_pi
+          on hot_pi.tenant_id = fdr.tenant_id
+         and hot_pi.id = fdr.pipeline_instance_id
         where fdr.tenant_id = #{tenantId}
           and (
               pi.related_job_instance_id = #{jobInstanceId}
+              or hot_pi.related_job_instance_id = #{jobInstanceId}
               <if test="fileIds != null and fileIds.size() > 0">
               or fdr.file_id in
               <foreach collection="fileIds" item="fileId" open="(" separator="," close=")">

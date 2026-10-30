@@ -19,6 +19,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -188,6 +189,6 @@ class ConsolePushApprovalNotifierTest {
   }
 
   private static <T> T eq(T value) {
-    return org.mockito.ArgumentMatchers.eq(value);
+    return ArgumentMatchers.eq(value);
   }
 }

@@ -17,7 +17,7 @@
 - 一个 `workerCode`(自取,在你 tenant 内唯一,例如 `acme-worker-01`)
 
 > 推荐用 `BatchPlatformClientConfig.fromEnv()` 直接吃环境变量,默认前缀 **`BATCH_SDK_`**(即 `BATCH_SDK_BASE_URL` / `BATCH_SDK_TENANT_ID` / ...)。完整变量名见 `BatchPlatformClientConfig.fromEnv()` 的 Javadoc。
-> sample 工程([`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/))走 builder 风格 + `BATCH_*` 短前缀,两种都行,二选一。
+> sample 工程([`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java))走 builder 风格 + `BATCH_*` 短前缀,两种都行,二选一。
 
 > 平台 `<revision>` 当前 `1.0.0`(见根 `pom.xml`)。SDK 坐标版本与平台版本同步。
 
@@ -79,13 +79,13 @@ client.start();   // 失败抛 RuntimeException,见 troubleshooting #worker-起�
 
 - console 「我的 Worker」页应能看到你的 `workerCode`(`is_self_hosted=true` 过滤)
 - 你注册的 task type 应能在 `GET /api/console/custom-task-types?tenantId=...` 列出
-- 触发一个该 type 的 job → handler 收到 `execute()` 调用
+- 保存引用该 Job 的 Workflow，从 Workflow 入口按业务日发起 → JOB 节点创建执行实例 → handler 收到 `execute()` 调用；完整步骤见接入旅程 §3
 
 ---
 
 ## 下一步
 
-- **Spring Boot 用户**:用 `batch-worker-sdk-spring-boot-starter`,configuration 走 `batch.worker-sdk.*` properties,handler 是 bean 即自动注册。示例:[`examples/self-hosted-sdk/sample-tenant-worker-java-spring/`](../../examples/self-hosted-sdk/sample-tenant-worker-java-spring/)。设计见 ADR-035 §1.1。
+- **Spring Boot 用户**:用 `batch-worker-sdk-spring-boot-starter`,configuration 走 `batch.worker-sdk.*` properties,handler 是 bean 即自动注册。示例:[`examples/self-hosted-sdk/sample-tenant-worker-java-spring/`](../../examples/self-hosted-sdk/sample-tenant-worker-java-spring)。设计见 ADR-035 §1.1。
 - **完整接入清单**(API key 申请 / Kafka ACL 初始化 / k8s manifest):[`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md)
 - **wire-protocol 字段细节**(Kafka payload / register body / report body):[`docs/sdk/wire-protocol.md`](wire-protocol.md)(读者视图),机器视图见 [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml);设计背景见 ADR-035 §「实施记录:协议字段细节」
 - **排障**:[`troubleshooting.md`](./troubleshooting.md)

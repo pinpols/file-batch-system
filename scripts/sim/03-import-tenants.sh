@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：import-tenants.sh:把 ta/tb/tc 的 4 类 worker 配置导入到 console-api。
+# 用法：在仓库根目录执行 bash scripts/sim/03-import-tenants.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 03-import-tenants.sh:把 ta/tb/tc 的 4 类 worker 配置导入到 console-api
 #   走 /api/console/config/tenant-package/excel/upload → /apply/{token}
@@ -10,13 +12,25 @@ cd "$ROOT"
 # shellcheck source=env-common.sh
 source "$ROOT/scripts/sim/env-common.sh"
 
-FIXTURE_DIR="$ROOT/docs/test-data/test-full-coverage-import-suite"
+FIXTURE_DIR="$ROOT/test-data/tenant-config-packages"
 
 # console-api bypass-mode=true 时不需要 auth header,否则需要 Cookie
 AUTH_HEADER=()
 [[ -n "${CONSOLE_TOKEN:-}" ]] && AUTH_HEADER=(-H "Cookie: batch_console_token=$CONSOLE_TOKEN")
 COOKIE_JAR=""
 CURL_AUTH_ARGS=("${AUTH_HEADER[@]}")
+FIXTURE_WORK_DIR="$(mktemp -d -t sim-tenant-fixtures.XXXXXX)"
+
+cleanup_import_artifacts() {
+  local tenant
+  for tenant in ta tb tc; do
+    rm -f -- "$FIXTURE_WORK_DIR/${tenant}-tenant-config-package-test.xlsx" || return 1
+  done
+  rmdir -- "$FIXTURE_WORK_DIR"
+}
+trap 'cleanup_import_artifacts || exit 1' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
 ensure_console_auth() {
   if [[ -n "${CONSOLE_TOKEN:-}" ]]; then
@@ -46,11 +60,46 @@ ensure_console_auth() {
 
 import_one() {
   local tenant="$1"
-  local file="$FIXTURE_DIR/${tenant}-tenant-config-package-test.xlsx"
-  [[ -f "$file" ]] || { echo "  ✗ 文件不存在:$file" >&2; return 1; }
+  local template="$FIXTURE_DIR/${tenant}-tenant-config-package-test.xlsx"
+  local file="$FIXTURE_WORK_DIR/${tenant}-tenant-config-package-test.xlsx"
+  [[ -f "$template" ]] || { echo "  ✗ 文件不存在:$template" >&2; return 1; }
+  # 在 Apply 前一次性固定当前运行方式的地址，防止探针读取尚未 bootstrap 的容器地址。
+  local mockserver_base_url
+  mockserver_base_url="$(sim_mockserver_base_url)"
+  "$PYTHON_BIN" "$ROOT/scripts/sim/prepare-tenant-fixture.py" \
+    --source "$template" --output "$file" --mockserver-base-url "$mockserver_base_url"
 
   echo "── tenant $tenant"
-  # 1) upload
+  local fixture_sha256 recorded_sha256 has_package_data
+  fixture_sha256=$("$PYTHON_BIN" - "$file" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+print(hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
+  )
+  recorded_sha256=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -v tenant_id="$tenant" -tA -f /dev/stdin \
+    < "$ROOT/scripts/sim/sql/select-sim-tenant-fixture-import.sql")
+  if [[ -n "$recorded_sha256" ]]; then
+    if [[ "$recorded_sha256" == "$fixture_sha256" ]]; then
+      echo "  ✓ 配置包指纹一致，跳过重复 Apply"
+      return 0
+    fi
+    echo "  ✗ 配置包与已导入指纹不同；SIM 只支持全新数据库部署，请切换到干净数据库" >&2
+    return 1
+  fi
+
+  has_package_data=$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 -v tenant_id="$tenant" -tA -f /dev/stdin \
+    < "$ROOT/scripts/sim/sql/has-sim-tenant-package-data.sql")
+  if [[ "$has_package_data" == "t" ]]; then
+    echo "  ✗ tenant $tenant 已有配置但没有 SIM 导入指纹；为避免版本冲突/覆盖，不会再次 Apply，请使用干净数据库" >&2
+    return 1
+  fi
+
+  # 第一步：上传配置包。
   local upload_resp upload_body upload_code
   upload_body="$(mktemp -t sim-tenant-upload.XXXXXX)"
   local upload_key
@@ -75,7 +124,7 @@ import_one() {
   fi
   echo "  ✓ upload token=$token"
 
-  # 2) apply
+  # 第二步：应用配置包。
   local apply_resp apply_body apply_code
   apply_body="$(mktemp -t sim-tenant-apply.XXXXXX)"
   local apply_key
@@ -96,7 +145,10 @@ import_one() {
   local code
   code=$(echo "$apply_resp" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('code',''))" 2>/dev/null)
   if [[ "$code" == "SUCCESS" || "$code" == "OK" ]]; then
-    echo "  ✓ apply OK"
+    docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+      -v ON_ERROR_STOP=1 -v tenant_id="$tenant" -v fixture_sha256="$fixture_sha256" \
+      -f /dev/stdin < "$ROOT/scripts/sim/sql/record-sim-tenant-fixture-import.sql" >/dev/null
+    echo "  ✓ apply OK，导入指纹已持久化"
   else
     echo "  ✗ apply 失败: $apply_resp" >&2
     return 1
@@ -105,6 +157,8 @@ import_one() {
 
 echo "==> console-api health"
 curl -sf --max-time 30 --connect-timeout 5 "$CONSOLE_BASE/actuator/health" -o /dev/null && echo "  ✓ UP" || { echo "  ✗ console-api DOWN"; exit 1; }
+docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -f /dev/stdin < "$ROOT/scripts/sim/sql/create-sim-tenant-fixture-import-state.sql" >/dev/null
 ensure_console_auth
 
 echo "==> 导入 3 个租户配置(ta / tb / tc)"
@@ -116,8 +170,9 @@ echo
 echo "==> 应用 sim-e2e bootstrap(runtime config refresh)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 \
   -v mockserver_base_url="$(sim_mockserver_base_url)" \
-  -f /dev/stdin < "$ROOT/docs/test-data/sim-e2e-bootstrap.sql" >/dev/null
+  -f /dev/stdin < "$ROOT/test-data/sim/sim-e2e-bootstrap.sql" >/dev/null
 echo "  ✓ bootstrap OK"
+sim_prepare_sftp_probe_channels
 
 if [[ "${SIM_IMPORT_TENANTS_QUIESCE_SCHEDULES:-true}" == "true" ]]; then
   echo
@@ -128,6 +183,9 @@ fi
 
 echo
 echo "==> ✅ 导入完成,验证"
+docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
+  -v ON_ERROR_STOP=1 -f /dev/stdin \
+  < "$ROOT/scripts/sim/sql/verify-sim-tenant-fixture-import.sql" >/dev/null
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -f /dev/stdin < "$ROOT/docs/test-data/sim-import-tenants-verify.sql" 2>&1 \
+  -f /dev/stdin < "$ROOT/test-data/sim/sim-import-tenants-verify.sql" 2>&1 \
   | awk 'NR <= 10 { print }'

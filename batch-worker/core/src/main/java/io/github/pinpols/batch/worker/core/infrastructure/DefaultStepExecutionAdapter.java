@@ -1,6 +1,9 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutorRegistry;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
@@ -10,9 +13,10 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.support.StepExecutionAdapter;
+import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -42,10 +46,21 @@ import org.springframework.stereotype.Component;
  */
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
 
   private final BatchTaskExecutorRegistry registry;
+  private final TaskExecutionClient taskExecutionClient;
+
+  @Autowired
+  public DefaultStepExecutionAdapter(
+      BatchTaskExecutorRegistry registry, TaskExecutionClient taskExecutionClient) {
+    this.registry = registry;
+    this.taskExecutionClient = taskExecutionClient;
+  }
+
+  DefaultStepExecutionAdapter(BatchTaskExecutorRegistry registry) {
+    this(registry, null);
+  }
 
   /** payload 里携带执行器子类型的字段名(SPI 协议)。 */
   private static final String PARAM_TASK_TYPE = "taskType";
@@ -53,17 +68,25 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
   private static final String OUTPUT_ERROR_CODE = "error_code";
 
   @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(StepExecutionRequest request) {
+    Map<String, Object> parameters = extractParameters(request);
+    String taskType = resolveExecutorType(request, parameters);
+    return registry.replayCapability(taskType, parameters);
+  }
+
+  @Override
   public StepExecutionResponse execute(StepExecutionRequest request) {
     Map<String, Object> parameters = extractParameters(request);
     String taskType = resolveExecutorType(request, parameters);
     BatchTaskExecutor executor = registry.find(taskType);
     if (executor == null) {
+      String safeTaskType = SwallowedExceptionLogger.safeMessage(taskType);
       log.warn(
           "no BatchTaskExecutor registered for taskType={}, registered={}",
-          taskType,
+          safeTaskType,
           registry.registeredTypes());
       return new StepExecutionResponse(
-          false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + taskType);
+          false, "NO_EXECUTOR", "no BatchTaskExecutor registered for taskType=" + safeTaskType);
     }
     TaskContext ctx = new TaskContext(
         request.tenantId(),
@@ -73,14 +96,69 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
         request.workerId(),
         parameters,
         request.context());
+    boolean executorIsSafeToReplay = executor.isSafeToReplay(ctx);
+    if (!executorIsSafeToReplay && !markNonIdempotentStart(request)) {
+      return new StepExecutionResponse(
+          false,
+          TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN,
+          "non-idempotent execution fence was not confirmed; executor was not run");
+    }
     try {
       TaskResult result = executor.execute(ctx);
+      if (result.success() && !EmptyChecks.isEmpty(result.output())) {
+        request.context().put(PipelineRuntimeKeys.NODE_OUTPUTS, result.output());
+      }
       return toResponse(result);
     } catch (RuntimeException ex) {
-      log.error("BatchTaskExecutor uncaught exception, taskType={}", taskType, ex);
-      String msg = ex.getMessage() == null ? ex.getClass().getName() : ex.getMessage();
-      return new StepExecutionResponse(false, "EXECUTOR_FAILURE", msg);
+      String failureSummary = SwallowedExceptionLogger.summary(ex);
+      log.error(
+          "BatchTaskExecutor uncaught exception, taskType={}, cause={}",
+          LogSanitizer.value(taskType),
+          failureSummary);
+      return new StepExecutionResponse(false, "EXECUTOR_FAILURE", failureSummary);
     }
+  }
+
+  private boolean markNonIdempotentStart(StepExecutionRequest request) {
+    if (EmptyChecks.isNull(taskExecutionClient)) {
+      return false;
+    }
+    Map<String, Object> context = request.context();
+    Long taskId =
+        asLong(EmptyChecks.isNull(context) ? null : context.get(PipelineRuntimeKeys.TASK_ID));
+    Object invocationValue = EmptyChecks.isNull(context)
+        ? null
+        : context.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+    if (EmptyChecks.isNull(taskId)
+        || !(invocationValue instanceof String invocationId)
+        || EmptyChecks.isBlank(invocationId)) {
+      log.error(
+          "non-idempotent task execution rejected because its persisted lease identity is absent");
+      return false;
+    }
+    try {
+      return taskExecutionClient.markNonIdempotentExecutionStarted(
+          request.tenantId(), taskId, request.workerId(), invocationId);
+    } catch (RuntimeException ex) {
+      log.warn(
+          "non-idempotent execution fence could not be confirmed; refusing executor call: {}",
+          SwallowedExceptionLogger.summary(ex));
+      return false;
+    }
+  }
+
+  private static Long asLong(Object value) {
+    if (value instanceof Number number) {
+      return number.longValue();
+    }
+    if (value instanceof String text) {
+      try {
+        return Long.valueOf(text);
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    return null;
   }
 
   /** 解析 payload(default_params / launch 参数 JSON)为参数 Map;缺失或非法 JSON 对象时返回空 Map。 */
@@ -125,6 +203,9 @@ public class DefaultStepExecutionAdapter implements StepExecutionAdapter {
     if (reportedCode instanceof String text && !text.isBlank()) {
       code = text.trim();
     }
-    return new StepExecutionResponse(false, code, result.message());
+    String message = EmptyChecks.isNull(result.error())
+        ? SwallowedExceptionLogger.safeMessage(result.message())
+        : SwallowedExceptionLogger.summary(result.error());
+    return new StepExecutionResponse(false, code, message);
   }
 }

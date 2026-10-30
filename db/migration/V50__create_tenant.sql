@@ -1,3 +1,5 @@
+-- 创建平台租户表，保存租户标识、状态和审计信息。
+
 CREATE TABLE IF NOT EXISTS batch.tenant (
     id          BIGSERIAL    PRIMARY KEY,
     tenant_id   VARCHAR(64)  NOT NULL,
@@ -12,6 +14,7 @@ CREATE TABLE IF NOT EXISTS batch.tenant (
 );
 
 -- 同步 console_user_account 中已存在的 tenant_id，避免历史数据丢失
+
 INSERT INTO batch.tenant (tenant_id, tenant_name, status, description, created_by)
 SELECT DISTINCT
     tenant_id,

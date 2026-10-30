@@ -69,5 +69,5 @@ qodana.sarif*.json
 .be-acceptance-state
 
 # 本地验收脚本生成的汇总报告不入库
-docs/backlog/be-acceptance-*.md
+reports/acceptance/be-acceptance-*.md
 /.workbuddy-ai/

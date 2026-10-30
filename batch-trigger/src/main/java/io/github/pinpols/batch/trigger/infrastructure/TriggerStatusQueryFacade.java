@@ -31,13 +31,16 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
       List<TriggerStatusInfo> result = new ArrayList<>();
       for (JobKey jobKey :
           scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP))) {
-        if (EmptyChecks.isNotNull(tenantId)
-            && !tenantId.equals(parseJobIdentity(jobKey).tenantId())) {
+        WorkflowIdentity identity = parseWorkflowIdentity(jobKey);
+        if (EmptyChecks.isNull(identity)) {
+          continue;
+        }
+        if (EmptyChecks.isNotNull(tenantId) && !tenantId.equals(identity.tenantId())) {
           continue;
         }
         JobDetail detail = scheduler.getJobDetail(jobKey);
         if (EmptyChecks.isNotNull(detail)) {
-          result.add(toTriggerStatusInfo(jobKey, detail));
+          result.add(toTriggerStatusInfo(jobKey, identity, detail));
         }
       }
       return result;
@@ -65,14 +68,19 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
     }
   }
 
-  private TriggerStatusInfo toTriggerStatusInfo(JobKey jobKey, JobDetail detail)
-      throws SchedulerException {
+  private TriggerStatusInfo toTriggerStatusInfo(
+      JobKey jobKey, WorkflowIdentity identity, JobDetail detail) throws SchedulerException {
     JobDataMap data = detail.getJobDataMap();
-    JobIdentity identity = parseJobIdentity(jobKey);
     TriggerFireState fireState = firstTriggerFireState(jobKey);
+    Long workflowDefinitionId = data.containsKey(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
+        ? data.getLongValue(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)
+        : null;
+    String jobCode = data.getString(QuartzLaunchJob.JOB_CODE);
     return TriggerStatusInfo.builder()
         .tenantId(identity.tenantId())
-        .jobCode(identity.jobCode())
+        .jobCode(jobCode)
+        .workflowDefinitionId(workflowDefinitionId)
+        .workflowCode(identity.workflowCode())
         .scheduleType(data.getString(QuartzLaunchJob.SCHEDULE_TYPE))
         .scheduleExpression(data.getString(QuartzLaunchJob.SCHEDULE_EXPRESSION))
         .timezone(data.getString(QuartzLaunchJob.TIMEZONE))
@@ -83,11 +91,16 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
         .build();
   }
 
-  private static JobIdentity parseJobIdentity(JobKey jobKey) {
-    String identity = jobKey.getName();
-    String[] parts = identity.split(":", 2);
-    return new JobIdentity(
-        parts.length > 0 ? parts[0] : "", parts.length > 1 ? parts[1] : identity);
+  private static WorkflowIdentity parseWorkflowIdentity(JobKey jobKey) {
+    String[] parts = jobKey.getName().split(":", 3);
+    boolean partsDoNotDescribeWorkflowIdentity = parts.length != 3
+        || EmptyChecks.isBlank(parts[0])
+        || !"WF".equals(parts[1])
+        || EmptyChecks.isBlank(parts[2]);
+    if (partsDoNotDescribeWorkflowIdentity) {
+      return null;
+    }
+    return new WorkflowIdentity(parts[0], parts[2]);
   }
 
   private TriggerFireState firstTriggerFireState(JobKey jobKey) throws SchedulerException {
@@ -97,17 +110,16 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
     }
     Trigger trigger = triggers.get(0);
     Trigger.TriggerState state = scheduler.getTriggerState(trigger.getKey());
-    return new TriggerFireState(
-        state.name(),
-        toInstant(trigger.getPreviousFireTime()),
-        toInstant(trigger.getNextFireTime()));
+    Instant previousFireTime = toInstant(trigger.getPreviousFireTime());
+    Instant nextFireTime = toInstant(trigger.getNextFireTime());
+    return new TriggerFireState(state.name(), previousFireTime, nextFireTime);
   }
 
   private static Instant toInstant(Date fireTime) {
     return EmptyChecks.isNull(fireTime) ? null : fireTime.toInstant();
   }
 
-  private record JobIdentity(String tenantId, String jobCode) {}
+  private record WorkflowIdentity(String tenantId, String workflowCode) {}
 
   private record TriggerFireState(String status, Instant previousFireTime, Instant nextFireTime) {
 

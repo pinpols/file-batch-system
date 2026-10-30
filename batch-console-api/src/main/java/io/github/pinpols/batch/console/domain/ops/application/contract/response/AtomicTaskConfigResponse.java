@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.application.contract.response
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import java.time.Instant;
 
-/** Public console view of a saved atomic task configuration. */
+/** 已保存原子任务配置的公开 Console 视图。 */
 public record AtomicTaskConfigResponse(
     Long id,
     String tenantId,

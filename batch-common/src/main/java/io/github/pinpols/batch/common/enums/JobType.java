@@ -21,7 +21,6 @@ public enum JobType implements DictEnum {
   EXPORT("EXPORT", "导出任务"),
   PROCESS("PROCESS", "加工任务"),
   DISPATCH("DISPATCH", "分发任务"),
-  WORKFLOW("WORKFLOW", "工作流任务"),
   /** ADR-029:原子任务(Task SPI:shell/sql/stored-proc/http),由专用 batch-worker-atomic 执行。 */
   ATOMIC("ATOMIC", "原子任务"),
   /**
@@ -90,7 +89,6 @@ public enum JobType implements DictEnum {
       case EXPORT -> BatchType.EXPORT;
       case PROCESS -> BatchType.PROCESS;
       case DISPATCH -> BatchType.DISPATCH;
-      case WORKFLOW -> BatchType.WORKFLOW;
       // ATOMIC(原子任务)无独立 BatchType,归 GENERAL carryover 桶(BatchType 仅作指标/分类投影)。
       case ATOMIC -> BatchType.GENERAL;
       // BUNDLE_IMPORT(文件束):一束多文件导入,投影到 IMPORT 桶。

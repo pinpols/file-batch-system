@@ -12,6 +12,8 @@ public class UpdateInstanceProgressParam {
   private final String instanceStatus;
   private final Integer successPartitionCount;
   private final Integer failedPartitionCount;
+  private final Integer cancelledPartitionCount;
+  private final Integer terminatedPartitionCount;
   private final String resultSummary;
   private final Instant finishedAt;
   private final Long expectedVersion;

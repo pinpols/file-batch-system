@@ -68,3 +68,37 @@ bash scripts/sim-4day/50-watch.sh --loop
 - `40-run-day.sh <bizDate> [ROWS]` 单日驱动(10 租户)
 - `41-run-4days.sh <startDate> [baseRows]` 4 天驱动(行数递增 + Day0 大文件)
 - `50-watch.sh [--loop]` 监控仪表盘
+
+## 脚本与配套 SQL 索引
+
+本表登记本目录的执行入口、公共模块及配套 SQL；测试代码通过测试命令执行。新增、移动或删除资产时同步跳转和用途，SQL 正文保持独立维护。
+
+| 文件 | 用途 / 调用归属 |
+|---|---|
+| [00-clean.sh](00-clean.sh) | ADR-sim 4day · P0 清空异常数据(保留所有 config)。 |
+| [10-clone-tenants.sql](10-clone-tenants.sql) | DANGER: 替换 4-day sim 克隆租户配置数据。仅限本地 sim 平台库，执行前确认租户范围。 |
+| [30-gen-bigfiles.sh](30-gen-bigfiles.sh) | ADR-sim 4day · P3 大文件:生成几个大 CSV 投到 MinIO ingress,演示大文件摄取(扫描器登记 + 真实体积)。 |
+| [40-run-day.sh](40-run-day.sh) | ADR-sim 4day · P4 单日驱动:对 10 租户按 archetype 跑 IMPORT→EXPORT→DISPATCH→WORKFLOW。 |
+| [41-run-4days.sh](41-run-4days.sh) | ADR-sim 4day · P4 四天驱动:连续 4 个 bizDate 跑批,行数逐日递增(增量放大)。 |
+| [42-run-4days-batchday.sh](42-run-4days-batchday.sh) | ADR-sim 4day · 真批量日版:每个业务日 open(由 launch 自动开)→ 跑批 → 手动日切 CLOSE(→SETTLED)→ 推进。 |
+| [50-watch.sh](50-watch.sh) | ADR-sim 4day · P5 监控仪表盘:批量调度过程一屏看。 |
+| [sql/batchday-status-by-day.sql](sql/batchday-status-by-day.sql) | 供 [42-run-4days-batchday.sh](42-run-4days-batchday.sh) 使用的配套 SQL。 |
+| [sql/batchday-summary.sql](sql/batchday-summary.sql) | 供 [42-run-4days-batchday.sh](42-run-4days-batchday.sh) 使用的配套 SQL。 |
+| [sql/clean-business-runtime.sql](sql/clean-business-runtime.sql) | 供 [00-clean.sh](00-clean.sh) 使用的配套 SQL。 |
+| [sql/clean-platform-runtime.sql](sql/clean-platform-runtime.sql) | 供 [00-clean.sh](00-clean.sh) 使用的配套 SQL。 |
+| [sql/close-day.sql](sql/close-day.sql) | 供 [42-run-4days-batchday.sh](42-run-4days-batchday.sh) 使用的配套 SQL。 |
+| [sql/config-baseline.sql](sql/config-baseline.sql) | 供 [00-clean.sh](00-clean.sh) 使用的配套 SQL。 |
+| [sql/runtime-residue.sql](sql/runtime-residue.sql) | 供 [00-clean.sh](00-clean.sh) 使用的配套 SQL。 |
+| [sql/select-latest-generated-file.sql](sql/select-latest-generated-file.sql) | 供 [40-run-day.sh](40-run-day.sh) 使用的配套 SQL。 |
+| [sql/select-request-execution-status.sql](sql/select-request-execution-status.sql) | 跨业务日 SIM 场景的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [sql/select-workflow-definition-id.sql](sql/select-workflow-definition-id.sql) | 供 [40-run-day.sh](40-run-day.sh) 使用的配套 SQL。 |
+| [sql/select-workflow-run-status.sql](sql/select-workflow-run-status.sql) | 供 [40-run-day.sh](40-run-day.sh) 使用的配套 SQL。 |
+| [sql/verify-business-counts.sql](sql/verify-business-counts.sql) | 供 [41-run-4days.sh](41-run-4days.sh) 使用的配套 SQL。 |
+| [sql/verify-export-files.sql](sql/verify-export-files.sql) | 供 [41-run-4days.sh](41-run-4days.sh) 使用的配套 SQL。 |
+| [sql/verify-platform-run.sql](sql/verify-platform-run.sql) | 供 [41-run-4days.sh](41-run-4days.sh) 使用的配套 SQL。 |
+| [sql/verify-workflow-fixtures.sql](sql/verify-workflow-fixtures.sql) | 供 [41-run-4days.sh](41-run-4days.sh) 使用的配套 SQL。 |
+| [sql/watch-business-counts.sql](sql/watch-business-counts.sql) | 供 [50-watch.sh](50-watch.sh) 使用的配套 SQL。 |
+| [sql/watch-job-instance-status.sql](sql/watch-job-instance-status.sql) | 供 [50-watch.sh](50-watch.sh) 使用的配套 SQL。 |
+| [sql/watch-outbox-deadletter.sql](sql/watch-outbox-deadletter.sql) | 供 [50-watch.sh](50-watch.sh) 使用的配套 SQL。 |
+| [sql/watch-pipeline-status.sql](sql/watch-pipeline-status.sql) | 供 [50-watch.sh](50-watch.sh) 使用的配套 SQL。 |
+| [sql/watch-recent-failures.sql](sql/watch-recent-failures.sql) | 供 [50-watch.sh](50-watch.sh) 使用的配套 SQL。 |

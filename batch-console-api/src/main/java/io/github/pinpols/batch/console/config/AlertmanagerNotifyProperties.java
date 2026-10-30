@@ -26,7 +26,7 @@ public class AlertmanagerNotifyProperties {
   /** AM 告警渠道归属租户(notification_channel 按租户维度存储);receiver 反查该租户下的 channel_code。 */
   private String tenantId = "system";
 
-  /** 正文逐条展开的告警数上限,防超大批量告警导致正文过大;超出折叠成摘要。 */
+  /** 每条通知展开的告警数上限；超过时分批投递，避免仅发送折叠摘要而遗漏实体回执。 */
   private int maxAlerts = 50;
 
   /**
@@ -47,6 +47,9 @@ public class AlertmanagerNotifyProperties {
 
     /** AM base URL(不含路径);桥接追加 {@code /api/v2/silences} 或 {@code /api/v2/alerts}。由部署配置注入。 */
     private String apiBaseUrl = "";
+
+    /** 技术告警的部署范围标签；必须与 Prometheus target 的 maintenance_scope 一致，空值不启用自动抑制。 */
+    private String maintenanceScope = "";
 
     /** silence/resolved 推送 HTTP 读超时(毫秒)。 */
     private long timeoutMillis = 2000L;

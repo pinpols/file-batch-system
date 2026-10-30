@@ -9,7 +9,7 @@ import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
-@DisplayName("处理默认阶段步骤:五个默认步骤覆盖全部阶段,非计算步骤为空操作且直接成功")
+@DisplayName("处理默认阶段步骤:覆盖五个阶段,并校验非计算步骤在空上下文下的成功结果")
 class DefaultProcessStepsTest {
 
   @Test

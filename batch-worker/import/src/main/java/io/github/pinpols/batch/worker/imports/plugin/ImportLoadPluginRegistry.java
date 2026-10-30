@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.worker.imports.plugin;
 
 import io.github.pinpols.batch.common.plugin.ImportLoadPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,5 +42,19 @@ public class ImportLoadPluginRegistry {
       throw new IllegalStateException("no ImportLoadPlugin registered for id: " + id);
     }
     return plugin;
+  }
+
+  /** 使用与 LOAD 相同的插件选择和冻结配置解析重放元数据。 */
+  public ReplayCapabilityDeclaration replayCapability(
+      String id, Map<String, Object> frozenTemplateConfig) {
+    ImportLoadPlugin plugin = require(id);
+    return plugin.replayCapability(frozenTemplateConfig);
+  }
+
+  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+    return byId.values().stream()
+        .sorted(Comparator.comparing(ImportLoadPlugin::id))
+        .map(ImportLoadPlugin::replayCapabilityDeclaration)
+        .toList();
   }
 }

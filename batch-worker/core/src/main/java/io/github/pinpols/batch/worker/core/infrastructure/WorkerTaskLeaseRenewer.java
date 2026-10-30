@@ -30,10 +30,10 @@ import org.springframework.stereotype.Component;
  * 定时为所有 in-flight 任务续租：从 {@link ActiveTaskLeaseRegistry#snapshot} 取出当前活跃租约列表，按 ADR-016 打包为单次（或可配置
  * chunk）HTTP {@code renew-batch} 调 Orchestrator；fast-retry 仍逐条 {@code renew}。
  *
- * <p>若 Orchestrator 返回 false（如任务已被取消或超时驱逐），记录 warn 日志； 续租失败不中断执行——任务仍会继续运行并在完成时正常 report， 但
- * Orchestrator 侧可能已将其标记为失活并重新派发（罕见情况）。
+ * <p>传输异常按暂时不可达处理，保留当前执行并继续重试；Orchestrator 明确拒绝续租表示 invocation 已失效，标记 lease lost，
+ * Worker 在业务启动前或结果上报前失败关闭，避免旧 invocation 与重派任务并行生效。
  *
- * <p><b>R-4.4 a</b>：按 taskId 追踪连续失败次数，超阈值时 log.error + micrometer 计数， 让运维可以在 Orchestrator
+ * <p><b>R-4.4 a</b>：按本地租约实例追踪连续失败次数，超阈值时 log.error + micrometer 计数， 让运维可以在 Orchestrator
  * 长时间不可达时告警。仍保持"不熔断"语义（激进熔断会级联）， 但不再静默——单次失败 warn、连续 N 次 error + counter、恢复后重置。
  *
  * <p><b>v6 hardening · 续期失败指数回退</b>：除了主周期（10s）固定续期外，新增 fast-retry 周期（默认 2s）， 仅处理 {@code
@@ -53,8 +53,9 @@ public class WorkerTaskLeaseRenewer {
   private final TaskExecutionClient taskExecutionClient;
   private final ObjectProvider<MeterRegistry> meterRegistryProvider;
   private final WorkerLeaseProperties leaseProperties;
-  // R-4.4 a: 按 taskId 维护连续失败计数器；成功 / remove 时清零
-  private final Map<String, AtomicInteger> consecutiveFailures = new ConcurrentHashMap<>();
+  // 按本地 lease incarnation 维护连续失败计数，避免迟到的旧 invocation 响应污染同 taskId 的新租约。
+  private final Map<ActiveTaskLeaseRegistry.ActiveTaskLease, AtomicInteger> consecutiveFailures =
+      new ConcurrentHashMap<>();
   // P1-8: 进程级熔断 — 整轮 100% renew 失败时 OPEN,跳过后续 tick 直到半开探测;orch 恢复任一成功 → CLOSE
   private final AtomicBoolean circuitOpen = new AtomicBoolean(false);
   private final AtomicInteger ticksSinceOpen = new AtomicInteger(0);
@@ -73,13 +74,13 @@ public class WorkerTaskLeaseRenewer {
   }
 
   /**
-   * P1: 订阅 {@link ActiveTaskLeaseRegistry#registerRemovalListener} — task 完成（正常 / 异常） 触发 {@link
-   * ActiveTaskLeaseRegistry#remove} 后立即清理 {@code consecutiveFailures} 条目， 避免 AtomicInteger
+   * P1: 订阅租约实例移除事件 — task 完成（正常 / 异常）触发 {@link
+   * ActiveTaskLeaseRegistry#remove} 后立即清理对应 {@code consecutiveFailures} 条目，避免 AtomicInteger
    * 永驻进程。tick 内的 snapshot-diff 清理（renewActiveTaskLeases 中 L-5 注释段）仍保留作为防御回退。
    */
   @PostConstruct
   void subscribeLeaseRemoval() {
-    activeTaskLeaseRegistry.registerRemovalListener(consecutiveFailures::remove);
+    activeTaskLeaseRegistry.registerLeaseRemovalListener(consecutiveFailures::remove);
     MeterRegistry registry = meterRegistryProvider.getIfAvailable();
     if (registry != null) {
       Gauge.builder(METRIC_CIRCUIT_STATE, circuitOpen, open -> open.get() ? 1.0 : 0.0)
@@ -106,27 +107,25 @@ public class WorkerTaskLeaseRenewer {
       log.info("renew circuit half-open probe: attempting renewal");
     }
     Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active = activeTaskLeaseRegistry.snapshot();
-    // L-5：清理 consecutiveFailures 里已不在活跃 lease 集合的条目，避免
-    // "失败达到阈值后任务被 orchestrator 驱逐不再 renew" 路径永驻 AtomicInteger。
-    // 按 taskId 比对当前活跃集 → 差集即是可回收的失败计数条目。
+    // 清理已不在活跃快照中的 lease incarnation，避免被驱逐的租约失败计数长期占用内存。
     if (!consecutiveFailures.isEmpty()) {
-      Set<String> activeIds = new HashSet<>(active.size());
-      for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : active) {
-        activeIds.add(lease.getTaskId());
-      }
-      consecutiveFailures.keySet().removeIf(taskId -> !activeIds.contains(taskId));
+      Set<ActiveTaskLeaseRegistry.ActiveTaskLease> activeLeases = new HashSet<>(active);
+      consecutiveFailures.keySet().removeIf(lease -> !activeLeases.contains(lease));
     }
     if (active.isEmpty()) {
+      // 没有待续租任务时不再用租约熔断阻断回报; 发件箱按自身有界重试策略探测恢复。
+      if (circuitOpen.compareAndSet(true, false)) {
+        ticksSinceOpen.set(0);
+        log.info("renew circuit released: no active leases; report outbox may retry independently");
+      }
       return;
     }
     List<ActiveTaskLeaseRegistry.ActiveTaskLease> leaseList = new ArrayList<>(active);
     List<TaskLeaseRenewItem> batchItems = new ArrayList<>(leaseList.size());
     for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : leaseList) {
+      Long taskId = Long.valueOf(lease.getTaskId());
       batchItems.add(new TaskLeaseRenewItem(
-          lease.getTenantId(),
-          Long.valueOf(lease.getTaskId()),
-          lease.getWorkerId(),
-          lease.getPartitionInvocationId()));
+          lease.getTenantId(), taskId, lease.getWorkerId(), lease.getPartitionInvocationId()));
     }
     recordRenewBatchSizeMetric(batchItems.size());
     Map<Long, TaskLeaseRenewResult> results;
@@ -152,11 +151,17 @@ public class WorkerTaskLeaseRenewer {
       boolean renewed = result != null && result.renewed();
       if (renewed) {
         success++;
-        consecutiveFailures.remove(activeTaskLease.getTaskId());
+        if (!activeTaskLeaseRegistry.markRenewedIfCurrent(activeTaskLease)) {
+          continue;
+        }
+        consecutiveFailures.remove(activeTaskLease);
         if (result.cancelRequested()) {
-          activeTaskLeaseRegistry.requestCancellation(activeTaskLease.getTaskId());
+          activeTaskLeaseRegistry.requestCancellationIfCurrent(activeTaskLease);
         }
       } else {
+        if (!activeTaskLeaseRegistry.markLostIfCurrent(activeTaskLease)) {
+          continue;
+        }
         failure++;
         log.warn(
             "task lease renew rejected: tenantId={}, taskId={}, workerId={}, fastRetry={}",
@@ -166,7 +171,6 @@ public class WorkerTaskLeaseRenewer {
             false);
         // P1-2: orchestrator 明确 REJECT 续租（DB CAS=false），说明 lease 已被驱逐 / 重新派发。
         // 标记 lost，让 wrapper 在 report 前中止，避免双执行结果同时上报。
-        activeTaskLeaseRegistry.markLost(activeTaskLease.getTaskId());
         trackFailure(activeTaskLease, "rejected");
       }
     }
@@ -197,7 +201,7 @@ public class WorkerTaskLeaseRenewer {
     }
     Collection<ActiveTaskLeaseRegistry.ActiveTaskLease> active = activeTaskLeaseRegistry.snapshot();
     for (ActiveTaskLeaseRegistry.ActiveTaskLease lease : active) {
-      AtomicInteger counter = consecutiveFailures.get(lease.getTaskId());
+      AtomicInteger counter = consecutiveFailures.get(lease);
       if (counter == null || counter.get() <= 0) {
         continue;
       }
@@ -211,9 +215,10 @@ public class WorkerTaskLeaseRenewer {
   private boolean attemptRenew(
       ActiveTaskLeaseRegistry.ActiveTaskLease activeTaskLease, boolean fastRetry) {
     try {
+      Long taskId = Long.valueOf(activeTaskLease.getTaskId());
       boolean renewed = taskExecutionClient.renewLease(
           activeTaskLease.getTenantId(),
-          Long.valueOf(activeTaskLease.getTaskId()),
+          taskId,
           activeTaskLease.getWorkerId(),
           activeTaskLease.getPartitionInvocationId());
       if (!renewed) {
@@ -224,11 +229,16 @@ public class WorkerTaskLeaseRenewer {
             activeTaskLease.getWorkerId(),
             fastRetry);
         // P1-2：与 batch 路径同步，明确 REJECT 时标 lost
-        activeTaskLeaseRegistry.markLost(activeTaskLease.getTaskId());
+        if (!activeTaskLeaseRegistry.markLostIfCurrent(activeTaskLease)) {
+          return false;
+        }
         trackFailure(activeTaskLease, "rejected");
         return false;
       } else {
-        if (fastRetry && consecutiveFailures.containsKey(activeTaskLease.getTaskId())) {
+        if (!activeTaskLeaseRegistry.markRenewedIfCurrent(activeTaskLease)) {
+          return false;
+        }
+        if (fastRetry && consecutiveFailures.containsKey(activeTaskLease)) {
           // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
           MeterRegistry registry = meterRegistryProvider.getIfAvailable();
           if (registry != null) {
@@ -236,7 +246,7 @@ public class WorkerTaskLeaseRenewer {
             Counter.builder(METRIC_FAST_RETRY).register(registry).increment();
           }
         }
-        consecutiveFailures.remove(activeTaskLease.getTaskId());
+        consecutiveFailures.remove(activeTaskLease);
         return true;
       }
     } catch (Exception exception) {
@@ -295,7 +305,7 @@ public class WorkerTaskLeaseRenewer {
 
   private void trackFailure(ActiveTaskLeaseRegistry.ActiveTaskLease lease, String reason) {
     int count = consecutiveFailures
-        .computeIfAbsent(lease.getTaskId(), k -> new AtomicInteger())
+        .computeIfAbsent(lease, ignored -> new AtomicInteger())
         .incrementAndGet();
     if (count >= leaseProperties.getConsecutiveFailureAlertThreshold()) {
       if ("rejected".equals(reason)) {

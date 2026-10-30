@@ -53,6 +53,6 @@ RUN_ID=p2-atomic-10w-<ts> STORM_TOTAL_REQUESTS=100000 STORM_RPS=200 \
 已有历史参考：
 
 - [`control-plane-100k-throughput-optimization-2026-09-12.md`](./control-plane-100k-throughput-optimization-2026-09-12.md)
-- [`worker-local-runtime-performance-2026-09-20.md`](./worker-local-runtime-performance-2026-09-20.md)
+- [`worker-local-runtime-performance-2026-09-20.md`](worker-local-acceptance-and-mixed-load-2026-09-20.md)
 - [`worker-matrix-verification-2026-06-08.md`](./worker-matrix-verification-2026-06-08.md)
 - [`worker-p2-capacity-profile-2026-06-08.md`](./worker-p2-capacity-profile-2026-06-08.md)

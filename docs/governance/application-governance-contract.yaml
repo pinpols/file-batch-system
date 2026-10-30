@@ -14,8 +14,9 @@ controls:
     priority: P1
     status: implemented
     evidence:
-      - docs/architecture/runtime-compatibility-contract-2026-09-01.md
-      - docs/analysis/script-runtime-compatibility-matrix-2026-09-01.md
+      - docs/architecture/runtime-compatibility-contract.md
+      - docs/runbook/script-runtime-compatibility-matrix.md
+      - docs/verifications/script-runtime-compatibility-validation-2026-09-01.md
       - docs/runbook/ipv6-runtime-compatibility.md
     live_validation: ci-and-target-environment
   - id: fault-injection

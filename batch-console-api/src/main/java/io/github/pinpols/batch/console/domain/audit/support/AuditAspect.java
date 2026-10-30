@@ -1,8 +1,10 @@
 package io.github.pinpols.batch.console.domain.audit.support;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Hashes;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -165,25 +167,26 @@ public class AuditAspect {
     try {
       OperatorInfo op = currentOperator(targetTenantId);
       RequestInfo req = currentRequest();
-      // canonical record 构造器(豁免参数数量约束),按 DB 列顺序传 16 个字段。
+      // 具名字段保持审计事件契约，避免按位置核对可选字段。
       // 一致性 SUCCESS / FAILED 由 errorCode 是否为 null 决定。
-      OperationAuditEvent event = new OperationAuditEvent(
-          op.tenantId(),
-          ann.aggregateType(),
-          aggregateId,
-          ann.action(),
-          op.operatorId(),
-          op.operatorRole(),
-          errorCode == null ? "SUCCESS" : "FAILED",
-          errorCode,
-          truncate(errorMsg, 1024),
-          paramsJson,
-          req.traceId(),
-          req.requestId(),
-          req.ipHash(),
-          req.uaHash(),
-          1,
-          Instant.now());
+      OperationAuditEvent event = OperationAuditEvent.builder()
+          .tenantId(op.tenantId())
+          .aggregateType(ann.aggregateType())
+          .aggregateId(aggregateId)
+          .action(ann.action())
+          .operatorId(op.operatorId())
+          .operatorRole(op.operatorRole())
+          .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
+          .errorCode(errorCode)
+          .errorMessage(truncate(errorMsg, 1024))
+          .paramsJson(paramsJson)
+          .traceId(req.traceId())
+          .requestId(req.requestId())
+          .ipHash(req.ipHash())
+          .uaHash(req.uaHash())
+          .eventVersion(1)
+          .createdAt(Instant.now())
+          .build();
       mapper.insert(event);
       recordUsageAfterCommit(event);
     } catch (Exception e) {
@@ -269,8 +272,8 @@ public class AuditAspect {
     }
     if (snapshot.isEmpty()) return null;
     try {
-      String json = objectMapper.writeValueAsString(
-          AuditParamRedactor.toRedactedTree(objectMapper, snapshot));
+      JsonNode redactedSnapshot = AuditParamRedactor.toRedactedTree(objectMapper, snapshot);
+      String json = objectMapper.writeValueAsString(redactedSnapshot);
       if (json.length() <= MAX_PARAMS_JSON_BYTES) {
         return json;
       }
@@ -315,13 +318,16 @@ public class AuditAspect {
   private OperatorInfo currentOperator(String targetTenantId) {
     Authentication auth = SecurityContextHolder.getContext().getAuthentication();
     if (auth == null || !(auth.getPrincipal() instanceof ConsolePrincipal p)) {
-      return new OperatorInfo(null, null, resolveTenantFallback(targetTenantId, null));
+      String tenantId = resolveTenantFallback(targetTenantId, null);
+      return new OperatorInfo(null, null, tenantId);
     }
     String role = p.authorities() == null || p.authorities().isEmpty()
         ? null
         : p.authorities().iterator().next();
-    return new OperatorInfo(
-        p.username(), role, resolveTenantFallback(targetTenantId, p.tenantId()));
+    String username = p.username();
+    String principalTenantId = p.tenantId();
+    String tenantId = resolveTenantFallback(targetTenantId, principalTenantId);
+    return new OperatorInfo(username, role, tenantId);
   }
 
   private static String resolveTenantFallback(String targetTenantId, String principalTenantId) {

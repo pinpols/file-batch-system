@@ -9,8 +9,11 @@ import io.github.pinpols.batch.worker.core.config.WorkerExecutionTimeoutProperti
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @DisplayName("任务执行线程池: 池容量校验与队列满载时的提交拒绝")
 class TaskExecutionPoolConfigurationTest {
@@ -66,6 +69,48 @@ class TaskExecutionPoolConfigurationTest {
       release.countDown();
       assertThat(running.get(2, TimeUnit.SECONDS)).isEqualTo("running");
     } finally {
+      release.countDown();
+      pool.shutdown();
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("强制或中断停机后，未执行的排队任务Future必须取消并解除等待")
+  void shouldCancelQueuedFutures_whenShutdownNowDrainsTheQueue(boolean interruptedShutdown)
+      throws Exception {
+    WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
+    properties.setPoolSize(1);
+    properties.setShutdownGraceSeconds(1);
+    TaskExecutionPool pool = new TaskExecutionPool(properties, concurrencyProperties(1));
+    CountDownLatch started = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    AtomicBoolean queuedExecuted = new AtomicBoolean();
+    pool.start();
+    try {
+      pool.submit(() -> {
+        started.countDown();
+        release.await();
+        return "running";
+      });
+      assertThat(started.await(2, TimeUnit.SECONDS)).isTrue();
+      var queued = pool.submit(() -> {
+        queuedExecuted.set(true);
+        return "queued";
+      });
+      if (interruptedShutdown) {
+        Thread.currentThread().interrupt();
+      }
+
+      pool.shutdown();
+
+      assertThat(queuedExecuted).isFalse();
+      assertThat(queued.isCancelled()).isTrue();
+      assertThat(queued.isDone()).isTrue();
+      assertThat(Thread.currentThread().isInterrupted()).isEqualTo(interruptedShutdown);
+    } finally {
+      // 清理当前测试线程的中断状态，并保证失败路径不会留下阻塞线程。
+      Thread.interrupted();
       release.countDown();
       pool.shutdown();
     }

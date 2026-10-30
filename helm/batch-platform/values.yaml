@@ -36,6 +36,8 @@ postgresql:
 
 kafka:
   bootstrapServers: "kafka:9092"
+  # 应用 Topic 和消费者组使用的唯一部署命名空间；生产环境覆盖配置必须设置此值。
+  namespace: ""
   # Kafka broker HA 由 chart 外的 Strimzi operator 提供（chart 只连地址，不自建 broker）。
   # 以下 broker.* 仅作“期望拓扑”的声明，供 ops 对照 deploy/ha/20-kafka-strimzi.yaml；
   # chart 不渲染 broker（无 Kafka 自建模板）。dev/单 broker 时这些值无意义，留默认即可。
@@ -78,6 +80,8 @@ alertmanager:
     tenantId: "system"
     silenceEnabled: false
     apiBaseUrl: ""
+    # 留空时使用 namespace.release，必须与 ServiceMonitor 范围一致。
+    maintenanceScope: ""
 
 storage:
   backend: "s3"
@@ -460,15 +464,26 @@ orchestrator:
     largeTargetItems: 500000
     standardTargetBytes: 536870912
     largeTargetBytes: 268435456
+  batchDay:
+    dependencyWaitTimeoutSeconds: 86400
+    catchupDaysPerScan: 14
+  jobDependencyWait:
+    timeoutAlertSeconds: 86400
   mqRouting:
     mode: "TENANT"
   quota:
     runtimeStore: "redis"
-    # Redis quota coordination failure policy. Keep fail-closed in production;
-    # FAIL_OPEN is reserved for explicitly isolated local compatibility runs.
+    # Redis 配额协调失败时生产保持失败关闭；FAIL_OPEN 仅用于明确隔离的本地兼容性验证。
     redisFailureMode: "FAIL_CLOSED"
     backendCutoverId: ""
     snapshotEnabled: true
+  # 传输批量化与逐任务状态独立；启用前完成对应环境的容量和恢复验收。
+  workerBatchClaim:
+    enabled: false
+    maxBatchSize: 32
+  workerTaskClient:
+    reportBatchEnabled: false
+    reportBatchWaitMillis: 5
   workerReportOutbox:
     enabled: false
     storage: "PLATFORM_PG"

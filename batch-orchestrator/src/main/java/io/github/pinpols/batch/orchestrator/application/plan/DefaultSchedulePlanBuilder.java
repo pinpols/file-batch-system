@@ -2,7 +2,9 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.ShardStrategy;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -13,6 +15,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -45,8 +48,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
   @Override
   public SchedulePlan build(SchedulePlanCommand command) {
-    JobDefinitionEntity jobDefinition =
-        configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
+    JobDefinitionEntity jobDefinition = resolveExecutionDefinition(command);
     WorkflowDefinitionEntity workflowDefinition =
         configCacheService.findEnabledWorkflowDefinition(command.tenantId(), command.jobCode());
     Map<String, Object> planParams = mergePlanParams(jobDefinition, command.params());
@@ -59,28 +61,30 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     plan.setWorkflowDefinitionId(workflowDefinition == null ? null : workflowDefinition.id());
     plan.setQueueCode(jobDefinition == null ? null : jobDefinition.queueCode());
     plan.setWorkerGroup(jobDefinition == null ? null : jobDefinition.workerGroup());
-    plan.setResourceProfile(firstText(
-        planParams.get("resourceProfile"),
-        planParams.get("resource_profile"),
-        planParams.get("resourceTag")));
+    Object resourceProfile = planParams.get("resourceProfile");
+    Object resourceProfileAlias = planParams.get("resource_profile");
+    Object resourceTag = planParams.get("resourceTag");
+    String resolvedResourceProfile = firstText(resourceProfile, resourceProfileAlias, resourceTag);
+    plan.setResourceProfile(resolvedResourceProfile);
     plan.setWindowCode(jobDefinition == null ? null : jobDefinition.windowCode());
     // ADR-046:束作业的 worker 类型须投射到交付类型(BUNDLE_IMPORT→IMPORT 等),否则 task_type=BUNDLE_* 会违反
     // ck_job_task_type 且无 worker 认领。非束作业 workerTypeCode()==自身 code,行为不变;未知 job_type 回退原字面量。
-    plan.setDefaultWorkerType(resolveDefaultWorkerType(jobDefinition));
+    String defaultWorkerType = resolveDefaultWorkerType(jobDefinition);
+    plan.setDefaultWorkerType(defaultWorkerType);
     if ("DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())) {
-      plan.setDownstreamChannelCode(firstText(
-          planParams.get("channelCode"),
-          planParams.get("dispatchChannelCode"),
-          planParams.get("targetChannelCode")));
+      Object channelCode = planParams.get("channelCode");
+      Object dispatchChannelCode = planParams.get("dispatchChannelCode");
+      Object targetChannelCode = planParams.get("targetChannelCode");
+      String resolvedChannelCode = firstText(channelCode, dispatchChannelCode, targetChannelCode);
+      plan.setDownstreamChannelCode(resolvedChannelCode);
     }
     plan.setPriority(jobDefinition == null ? 5 : jobDefinition.priority());
-    plan.setPartitionCount(resolvePartitionCount(jobDefinition, planParams));
-    plan.setTotalExpectedRows(resolveTotalExpectedRows(planParams));
+    int resolvedPartitionCount = resolvePartitionCount(jobDefinition, planParams);
+    plan.setPartitionCount(resolvedPartitionCount);
+    Long totalExpectedRows = resolveTotalExpectedRows(planParams);
+    plan.setTotalExpectedRows(totalExpectedRows);
 
-    WorkerRouteModel route = new WorkerRouteModel();
-    route.setWorkerType(plan.getDefaultWorkerType());
-    route.setPriority(plan.getPriority());
-    route.setAvailable(true);
+    WorkerRouteModel route = defaultWorkerRoute(plan);
     plan.setDefaultWorkerRoute(route);
 
     List<SchedulePlan.PartitionPlan> partitionPlans = new ArrayList<>();
@@ -99,7 +103,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       throw BundlePlanParams.invalidBundle(
           "bundleFiles must contain usable bindings for " + bundleType);
     }
-    if (bundleJob && !bundleFiles.isEmpty() && bundleFiles.size() != partitionCount) {
+    boolean bundleFileCountDoesNotMatchPartitions =
+        bundleJob && !EmptyChecks.isEmpty(bundleFiles) && bundleFiles.size() != partitionCount;
+    if (bundleFileCountDoesNotMatchPartitions) {
       // 数量须吻合,否则是配置错(束作业须 shardStrategy=DYNAMIC 让 BundlePartitionCountResolver 生效,
       // 且束大小 ≤ maxPartitionCount=256)。fail-fast,绝不静默丢绑定项。
       throw BundlePlanParams.invalidBundle("bundle partition count mismatch: items="
@@ -129,6 +135,33 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     return plan;
   }
 
+  private WorkerRouteModel defaultWorkerRoute(SchedulePlan plan) {
+    WorkerRouteModel route = new WorkerRouteModel();
+    route.setWorkerType(plan.getDefaultWorkerType());
+    route.setPriority(plan.getPriority());
+    route.setAvailable(true);
+    return route;
+  }
+
+  private JobDefinitionEntity resolveExecutionDefinition(SchedulePlanCommand command) {
+    JobDefinitionEntity jobDefinition = command.executionDefinition();
+    if (EmptyChecks.isNull(jobDefinition)) {
+      jobDefinition =
+          configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
+    } else {
+      boolean executionDefinitionDoesNotMatchScheduleTarget =
+          !Objects.equals(command.tenantId(), jobDefinition.tenantId())
+              || !Objects.equals(command.jobCode(), jobDefinition.jobCode());
+      if (executionDefinitionDoesNotMatchScheduleTarget) {
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            ResultCode.INVALID_ARGUMENT.detailKey(),
+            "execution definition must match schedule plan tenant and job code");
+      }
+    }
+    return jobDefinition;
+  }
+
   /** 解析分区任务的 worker 类型:束作业投射到交付类型,非束/未知作业保持原 job_type 字面量。 */
   private static String resolveDefaultWorkerType(JobDefinitionEntity jobDefinition) {
     if (jobDefinition == null) {
@@ -154,21 +187,25 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     ShardStrategy shardStrategy = jobDefinition == null
         ? ShardStrategy.NONE
         : ShardStrategy.fromCode(jobDefinition.shardStrategy());
-    int minPartitionCount =
-        Math.max(1, firstPositiveInt(params.get("minPartitionCount"), params.get("minShardCount")));
-    int maxPartitionCount = clampMaxPartitionCount(firstPositiveInt(
+    int configuredMinPartitionCount =
+        firstPositiveInt(params.get("minPartitionCount"), params.get("minShardCount"));
+    int minPartitionCount = Math.max(1, configuredMinPartitionCount);
+    int configuredMaxPartitionCount = firstPositiveInt(
         params.get("maxPartitionLimit"),
         params.get("maxPartitionCount"),
         params.get("maxShardCount"),
-        params.get("shardMaxCount")));
+        params.get("shardMaxCount"));
+    int maxPartitionCount = clampMaxPartitionCount(configuredMaxPartitionCount);
     int partitionCount =
         switch (shardStrategy) {
-          case STATIC ->
-            firstPositiveInt(
+          case STATIC -> {
+            int configuredStaticPartitionCount = firstPositiveInt(
                 params.get("partitionCount"),
                 params.get("staticPartitionCount"),
                 params.get("shardCount"),
                 params.get("fixedShardCount"));
+            yield configuredStaticPartitionCount;
+          }
           case DYNAMIC, AUTO -> resolveDynamicPartitionCount(jobDefinition, params, shardStrategy);
           case NONE -> 1;
         };
@@ -224,7 +261,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       int partitionCount, int minPartitionCount, int maxPartitionCount) {
     int normalizedMax = Math.max(minPartitionCount, maxPartitionCount);
     int normalized = partitionCount <= 0 ? minPartitionCount : partitionCount;
-    return Math.min(Math.max(normalized, minPartitionCount), normalizedMax);
+    int normalizedMinimum = Math.max(normalized, minPartitionCount);
+    return Math.min(normalizedMinimum, normalizedMax);
   }
 
   private int clampMaxPartitionCount(int partitionCount) {
@@ -238,7 +276,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       }
       if (value != null) {
         try {
-          int parsed = Integer.parseInt(String.valueOf(value).trim());
+          String rawValue = String.valueOf(value);
+          String normalizedValue = rawValue.trim();
+          int parsed = Integer.parseInt(normalizedValue);
           if (parsed > 0) {
             return parsed;
           }
@@ -252,12 +292,13 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   private Long resolveTotalExpectedRows(Map<String, Object> params) {
+    Object expectedRows = params.get("expectedRows");
+    Object totalExpectedRows = params.get("totalExpectedRows");
+    Object totalRowsHint = params.get("totalRowsHint");
+    Object recordCount = params.get("recordCount");
+    Object estimatedItemCount = params.get("estimatedItemCount");
     return firstNonNegativeLong(
-        params.get("expectedRows"),
-        params.get("totalExpectedRows"),
-        params.get("totalRowsHint"),
-        params.get("recordCount"),
-        params.get("estimatedItemCount"));
+        expectedRows, totalExpectedRows, totalRowsHint, recordCount, estimatedItemCount);
   }
 
   private Long firstNonNegativeLong(Object... values) {
@@ -267,7 +308,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
       }
       if (value != null) {
         try {
-          long parsed = Long.parseLong(String.valueOf(value).trim());
+          String rawValue = String.valueOf(value);
+          String normalizedValue = rawValue.trim();
+          long parsed = Long.parseLong(normalizedValue);
           if (parsed >= 0) {
             return parsed;
           }
@@ -282,8 +325,12 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
   private String firstText(Object... values) {
     for (Object value : values) {
-      if (EmptyChecks.isNotNull(value) && EmptyChecks.isNotBlank(String.valueOf(value))) {
-        return String.valueOf(value).trim();
+      if (EmptyChecks.isNotNull(value)) {
+        String checkedText = String.valueOf(value);
+        if (EmptyChecks.isNotBlank(checkedText)) {
+          String returnedText = String.valueOf(value);
+          return returnedText.trim();
+        }
       }
     }
     return null;

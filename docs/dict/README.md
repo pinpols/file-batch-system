@@ -8,7 +8,7 @@
 
 | # | 文件 | 来源 | 生成方式 |
 |---|---|---|---|
-| 01 | [error-codes.md](./error-codes.md) | `batch-common/.../enums/ResultCode.java` | `python3 scripts/codegen/gen-error-codes-dict.py` |
+| 01 | [error-codes.md](./error-codes.md) | `scripts/codegen/error-codes.yaml`（同时生成 ResultCode） | `python3 scripts/codegen/gen-error-codes-dict.py` |
 | 02 | [config-keys.md](./config-keys.md) | 各模块 `@ConfigurationProperties` | `mvn compile`（Spring Boot configuration-processor 自动生成 metadata.json） |
 | 03 | [glossary.md](./glossary.md) | 业务定义手写；易变枚举块来自 Java enum | `python3 scripts/ci/check-terminology-doc-sync.py` |
 
@@ -16,10 +16,10 @@
 
 ### error-codes.md
 
-- 源 = `ResultCode.java` 枚举
+- 源 = `scripts/codegen/error-codes.yaml`；`ResultCode.java` 和本字典都是生成物
 - 脚本 = `scripts/codegen/gen-error-codes-dict.py`
 - CI 校验：`python3 scripts/codegen/gen-error-codes-dict.py --check` 不一致则 fail
-- 改流程：改 `ResultCode.java` → `python3 scripts/codegen/gen-error-codes-dict.py` → 提交两份
+- 改流程：改 `scripts/codegen/error-codes.yaml` → `python3 scripts/codegen/gen-error-codes-dict.py` → 提交两份
 
 ### config-keys.md
 
@@ -28,7 +28,7 @@
 - IDE 效果：写 yml 自动补全 + 字段 javadoc 当 tooltip
 - **不在仓库维护**：metadata.json 是 build artifact，每次 `mvn compile` 重生
 
-→ 给字段加 `/** ... */` javadoc，IDE 提示就有说明文字。**这是描述配置键最优的方式**，比手写 markdown 准确且永不漂移。
+→ 给字段加 `/** ... */` javadoc，IDE 提示就有说明文字。**这是描述配置键最优的方式**，避免维护第二份手写字段表；仍须通过编译与配置漂移检查确认当前产物。
 
 ### glossary.md
 

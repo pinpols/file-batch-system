@@ -40,6 +40,7 @@ from typing import Any
 import httpx
 
 from batch_worker_sdk.client.config import BatchPlatformClientConfig
+from batch_worker_sdk.exceptions import PlatformError
 from batch_worker_sdk.internal import _signing
 from batch_worker_sdk.retry._retry import ClientErrorCounter, with_retry
 
@@ -72,7 +73,8 @@ class PlatformHttpClient:
             self._client = client
             self._owns_client = False
         else:
-            timeout = httpx.Timeout(config.http_timeout.total_seconds())
+            timeout_seconds = config.http_timeout.total_seconds()
+            timeout = httpx.Timeout(timeout_seconds)
             self._client = httpx.AsyncClient(
                 base_url=config.base_url,
                 timeout=timeout,
@@ -196,7 +198,13 @@ class PlatformHttpClient:
         与 heartbeat 同走 §C no-backoff 豁免(``max_attempts=1``):续约单次失败不退避,
         等下一个续约 tick 再试,避免内部退避拖过 lease TTL。见 fixture 25 / wire-protocol §C。
         """
-        return await self._post_json(f"/internal/tasks/{task_id}/renew", body, max_attempts=1)
+        response = await self._post_json_raw(
+            f"/internal/tasks/{task_id}/renew", body, max_attempts=1
+        )
+        # 续租的 409 表示当前租约已失效,不能沿用 CLAIM 的幂等成功口径。
+        if response.status_code == 409:
+            raise PlatformError("task lease was revoked", status_code=409)
+        return _decode_body(response)
 
     # ─── 内部实现 ────────────────────────────────────────────────────
 
@@ -220,7 +228,9 @@ class PlatformHttpClient:
         """
         if not (self.config.request_signing_enabled and self.config.api_key):
             return {}
-        timestamp = str(int(time.time() * 1000))
+        epoch_seconds = time.time()
+        epoch_millis = int(epoch_seconds * 1000)
+        timestamp = str(epoch_millis)
         nonce = str(uuid.uuid4())
         signature = _signing.sign(
             self.config.api_key,
@@ -257,10 +267,11 @@ class PlatformHttpClient:
 
         # max_attempts=None → 默认重试预算;heartbeat/renew 传 1 走 §C no-backoff 豁免。
         attempts = max_attempts if max_attempts is not None else self.config.retry_max_attempts
+        base_delay_seconds = self.config.retry_base_delay.total_seconds()
         return await with_retry(
             factory,
             max_attempts=attempts,
-            base_delay_s=self.config.retry_base_delay.total_seconds(),
+            base_delay_s=base_delay_seconds,
             counter=self._counter,
         )
 

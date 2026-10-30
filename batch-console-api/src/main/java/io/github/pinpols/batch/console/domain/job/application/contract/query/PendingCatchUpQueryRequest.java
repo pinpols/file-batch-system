@@ -14,8 +14,8 @@ public class PendingCatchUpQueryRequest extends PageQueryRequest {
   @ValidTenantId
   private String tenantId;
 
-  @Size(max = 128, message = "jobCode too long (max 128)")
-  private String jobCode;
+  @Size(max = 128, message = "workflowCode too long (max 128)")
+  private String workflowCode;
 
   @Size(max = 128, message = "requestId too long (max 128)")
   private String requestId;
@@ -24,7 +24,7 @@ public class PendingCatchUpQueryRequest extends PageQueryRequest {
   @Pattern(regexp = "\\d{4}-\\d{2}-\\d{2}", message = "bizDate must be ISO date yyyy-MM-dd")
   private String bizDate;
 
-  /** 关键字模糊过滤(大小写不敏感):匹配 request_id / job_code / trace_id 任一。 */
+  /** 关键字模糊过滤(大小写不敏感):匹配 request_id / workflow_code / trace_id 任一。 */
   @Size(max = 128, message = "keyword too long (max 128)")
   private String keyword;
 }

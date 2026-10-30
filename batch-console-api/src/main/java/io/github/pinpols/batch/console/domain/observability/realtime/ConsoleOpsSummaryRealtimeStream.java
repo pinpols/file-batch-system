@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.realtime;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryPort;
 import io.github.pinpols.batch.console.application.ops.ConsoleOpsSummaryRealtimePort;
 import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
@@ -123,6 +124,9 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
       if (existing != null && !existing.isDone()) {
         return existing;
       }
+      Instant scheduledNow = Instant.now();
+      Duration debounceDelay = Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS);
+      Instant scheduledAt = scheduledNow.plus(debounceDelay);
       return scheduler.schedule(
           () -> {
             try {
@@ -131,7 +135,7 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
               scheduledRefreshes.remove(tenantId);
             }
           },
-          Instant.now().plus(Duration.ofMillis(REFRESH_DEBOUNCE_MILLIS)));
+          scheduledAt);
     });
   }
 
@@ -140,13 +144,10 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
     if (summary == null) {
       return;
     }
-    ConsoleSseEvent event = new ConsoleSseEvent(
-        tenantId,
-        STREAM,
-        EVENT_TYPE,
-        cursorFactory.nextCursor(),
-        summary,
-        dateTimeSupport.nowInstant());
+    String cursor = cursorFactory.nextCursor();
+    Instant emittedAt = dateTimeSupport.nowInstant();
+    ConsoleSseEvent event =
+        new ConsoleSseEvent(tenantId, STREAM, EVENT_TYPE, cursor, summary, emittedAt);
     realtimeEventHub.publish(event);
     realtimeEventBusPublisher.publish(event);
   }
@@ -160,9 +161,10 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
     CachedSummary cached = summaryCache.getIfPresent(tenantId);
     // 双重 TTL 控制:Caffeine expireAfterWrite 回退 10s,业务侧再用 cachedAtMillis 精确判过期
     // —— 保留原逻辑等价语义,改动只是把无界存储换成有界 Caffeine。
-    if (!forceRefresh
-        && cached != null
-        && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS) {
+    boolean cachedSummaryIsReusable = !forceRefresh
+        && EmptyChecks.isNotNull(cached)
+        && now - cached.cachedAtMillis() <= SUMMARY_CACHE_TTL_MILLIS;
+    if (cachedSummaryIsReusable) {
       return cached.summary();
     }
     ConsoleOpsSummaryResponse summary = opsApplicationService.summary(tenantId);

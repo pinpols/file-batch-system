@@ -36,6 +36,12 @@ class SdkRetryableHandlerTest {
       this.toThrow = toThrow;
     }
 
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "flaky";
@@ -123,6 +129,12 @@ class SdkRetryableHandlerTest {
       this.failFirstN = failFirstN;
     }
 
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
+
     @Override
     public String taskType() {
       return "template_flaky";
@@ -161,6 +173,12 @@ class SdkRetryableHandlerTest {
       backoff = RetryOn.Backoff.FIXED)
   static class NoErrorFailHandler implements SdkTaskHandler {
     final AtomicInteger calls = new AtomicInteger();
+
+    // 夹具只模拟计数/瞬时异常，不提交外部业务动作，可安全重复以验证重试策略。
+    @Override
+    public boolean isSafeToReplay(SdkTaskContext ctx) {
+      return true;
+    }
 
     @Override
     public String taskType() {

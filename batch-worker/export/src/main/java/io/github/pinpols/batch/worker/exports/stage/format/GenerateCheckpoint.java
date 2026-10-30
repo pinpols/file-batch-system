@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.exports.stage.format;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPosition;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingPositionStore;
 import io.github.pinpols.batch.worker.core.infrastructure.checkpoint.ProcessingStage;
@@ -81,10 +82,11 @@ public final class GenerateCheckpoint {
       try {
         GenerateCursorCodec.Marker m = codec.decodeMarker(marker);
         Object decodedCursor = codec.decodeCursor(m.encodedCursor());
-        if (m.byteOffset() > 0
-            && decodedCursor != null
+        boolean checkpointFileCanResume = m.byteOffset() > 0
+            && EmptyChecks.isNotNull(decodedCursor)
             && Files.exists(generatedFile)
-            && Files.size(generatedFile) >= m.byteOffset()) {
+            && Files.size(generatedFile) >= m.byteOffset();
+        if (checkpointFileCanResume) {
           resuming = true;
           offset = m.byteOffset();
           cursor = decodedCursor;
@@ -140,12 +142,8 @@ public final class GenerateCheckpoint {
       return;
     }
     long increment = recordCountSoFar - lastReportedCount;
-    store.advance(
-        tenantId,
-        pipelineInstanceId,
-        ProcessingStage.GENERATE,
-        codec.encodeMarker(byteOffset, encoded.get()),
-        increment);
+    String marker = codec.encodeMarker(byteOffset, encoded.get());
+    store.advance(tenantId, pipelineInstanceId, ProcessingStage.GENERATE, marker, increment);
     lastReportedCount = recordCountSoFar;
   }
 

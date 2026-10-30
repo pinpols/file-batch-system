@@ -21,6 +21,9 @@
         <result column="escalation_notified_tier" property="escalationNotifiedTier"/>
         <result column="created_at" property="createdAt"/>
         <result column="updated_at" property="updatedAt"/>
+        <result column="closed_at" property="closedAt"/>
+        <result column="close_reason" property="closeReason"/>
+        <result column="am_last_reemit_at" property="amLastReemitAt"/>
     </resultMap>
 
     <select id="selectById" resultMap="AlertEventResultMap">
@@ -57,7 +60,7 @@
             and id &lt; #{cursorId}
         </if>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 order by id desc
                 limit #{pageRequest.pageSize}
             </when>
@@ -121,9 +124,12 @@
     <update id="updateStatus">
         update batch.alert_event
         set status = #{status},
+            closed_at = CASE WHEN #{status} = 'CLOSED' THEN current_timestamp ELSE closed_at END,
+            close_reason = CASE WHEN #{status} = 'CLOSED' THEN 'MANUAL' ELSE close_reason END,
             updated_at = now()
         where tenant_id = #{tenantId}
           and id = #{id}
+          and status &lt;&gt; 'CLOSED'
     </update>
 
     <select id="selectEscalatedPendingNotify" resultMap="AlertEventResultMap">

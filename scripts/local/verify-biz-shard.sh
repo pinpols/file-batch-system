@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：P2 tenant-routing 基础设施验证:起两片真实 PG,跑活体路由测试证明租户落到选定实例。
+# 用法：在仓库根目录执行 bash scripts/local/verify-biz-shard.sh；参数与前置环境见下方说明及所属 README。
 # P2 tenant-routing 基础设施验证:起两片真实 PG,跑活体路由测试证明租户落到选定实例。
 #
 #   shard-0 = 已在跑的 primary 容器的 batch_business(基线库)
@@ -19,9 +21,28 @@ SECRETS_DIR="${BIZ_SHARD_SECRETS_DIR:-secrets/biz-shards}"
 SHARD1_PORT="${BIZ_SHARD_1_PORT:-15442}"
 
 echo "==> 1/4 确保 shard-0 secret 就绪(缺则从 .example 生成;shard-0=primary,无需 provision)"
-if [ ! -f "$SECRETS_DIR/shard-0.env" ]; then
-  cp "$SECRETS_DIR/shard-0.env.example" "$SECRETS_DIR/shard-0.env"
-  echo "    生成 $SECRETS_DIR/shard-0.env(dev 默认账密)"
+mkdir -p "$SECRETS_DIR"
+expected_s0_url="jdbc:postgresql://$(batch_format_host_port "${PGHOST:-localhost}" "${POSTGRES_PORT:-15432}")/$BUSINESS_DB?currentSchema=biz&reWriteBatchedInserts=true"
+expected_s0_user="${BIZ_SHARD_0_USERNAME:-$POSTGRES_USER}"
+expected_s0_pass="${BIZ_SHARD_0_PASSWORD:-$POSTGRES_PASSWORD}"
+if [ -f "$SECRETS_DIR/shard-0.env" ]; then
+  # shellcheck disable=SC1090 # 本地 SIM 临时凭据文件。
+  source "$SECRETS_DIR/shard-0.env"
+  if [[ "${BIZ_SHARD_URL:-}" != "$expected_s0_url" \
+      || "${BIZ_SHARD_USERNAME:-}" != "$expected_s0_user" \
+      || "${BIZ_SHARD_PASSWORD:-}" != "$expected_s0_pass" ]]; then
+    echo "✗ shard-0 secret 与当前 BUSINESS_DB / 凭据不匹配，拒绝验证旧目标" >&2
+    exit 1
+  fi
+else
+  umask 077
+  {
+    printf 'BIZ_SHARD_URL="%s"\n' "$expected_s0_url"
+    printf 'BIZ_SHARD_USERNAME=%s\n' "$expected_s0_user"
+    printf 'BIZ_SHARD_PASSWORD=%s\n' "$expected_s0_pass"
+  } > "$SECRETS_DIR/shard-0.env"
+  chmod 600 "$SECRETS_DIR/shard-0.env"
+  echo "    根据当前环境生成 $SECRETS_DIR/shard-0.env"
 fi
 
 echo "==> 2/4 provision shard-1(复用 provision-biz-shard.sh:起 PG+建表+角色+写 secret)"

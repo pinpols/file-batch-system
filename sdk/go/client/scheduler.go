@@ -119,11 +119,18 @@ func (s *HeartbeatScheduler) LastDecision() protocol.Decision {
 // tests exercise the directive logic without spinning the ticker. Returns the
 // applied decision.
 func (s *HeartbeatScheduler) Beat(ctx context.Context) (protocol.Decision, error) {
-	resp, err := s.transport.Heartbeat(ctx, s.workerCode, HeartbeatRequest{
-		WorkerCode: s.workerCode,
-		TenantID:   s.tenantID,
-		InFlight:   s.inFlight(),
-		State:      string(s.fsm.State()),
+	heartbeatCall := s.transport.Heartbeat
+	workerCode := s.workerCode
+	requestWorkerCode := s.workerCode
+	tenantID := s.tenantID
+	inFlightCount := s.inFlight()
+	workerState := s.fsm.State()
+	stateName := string(workerState)
+	resp, err := heartbeatCall(ctx, workerCode, HeartbeatRequest{
+		WorkerCode: requestWorkerCode,
+		TenantID:   tenantID,
+		InFlight:   inFlightCount,
+		State:      stateName,
 	})
 	if err != nil {
 		return protocol.Decision{}, err
@@ -147,7 +154,8 @@ func (s *HeartbeatScheduler) Beat(ctx context.Context) (protocol.Decision, error
 	}
 	s.lastApplied = d
 	fireDrain := false
-	if d.DrainThenDeactivate != nil && *d.DrainThenDeactivate && !s.drained {
+	shouldBeginDrain := d.DrainThenDeactivate != nil && *d.DrainThenDeactivate && !s.drained
+	if shouldBeginDrain {
 		s.drained = true
 		fireDrain = true
 	}

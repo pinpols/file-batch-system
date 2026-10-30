@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：在线 strict 验证。
+# 用法：在仓库根目录执行 bash scripts/local/strict-verify.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # strict-verify.sh
 #
@@ -292,7 +294,7 @@ if [[ "${RUN_MAINTENANCE_SWITCH:-0}" == "1" ]]; then
       && pass "全冻结:GET → 503 + $(echo $xmaint | tr -d '\r')" "" \
       || fail "全冻结异常" "http=$blocked xmaint='$xmaint'"
 
-    # readOnly
+    # 只读模式。
     _restart_with BATCH_CONSOLE_MAINTENANCE_ENABLED=true BATCH_CONSOLE_MAINTENANCE_READ_ONLY=true BATCH_CONSOLE_MAINTENANCE_MESSAGE="strict-verify readonly"
     get_code=$(curl -sI --max-time 30 --connect-timeout 5 "$BASE/api/console/queries/instances" \
       | awk 'NR == 1 { code=$2 } END { print code }')

@@ -8,6 +8,8 @@ fixture 级 pause/resume 在 contract runner 中做端到端;这里只覆盖单�
 from __future__ import annotations
 
 import asyncio
+import json
+from types import SimpleNamespace
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -15,6 +17,7 @@ import pytest
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
 from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
+from batch_worker_sdk.exceptions import PlatformError
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.internal._kafka import (
     KafkaTaskConsumer,
@@ -515,3 +518,35 @@ async def test_poll_loop_crash_sets_crashed_flag() -> None:
     await consumer._poll_loop()
     assert consumer.crashed is True
     assert consumer.running is False
+
+
+async def test_claim_failure_retains_offset_with_actual_dispatcher() -> None:
+    """真实分发器认领失败时, 消费循环回退原位且不提交同批后续 offset。"""
+    consumer, dispatcher, kafka = await _make_consumer()
+
+    async def failed_claim(*_args: Any, **_kwargs: Any) -> tuple[dict[str, Any], int]:
+        raise PlatformError("unreachable before claim persistence")
+
+    dispatcher._http.claim_status = failed_claim  # type: ignore[method-assign]
+    value = json.dumps({"taskId": 901, "tenantId": "acme", "schemaVersion": "v2"}).encode()
+    record = SimpleNamespace(offset=5, value=value)
+    polls = 0
+
+    async def next_batch(**_kwargs: Any) -> dict[Any, Any]:
+        nonlocal polls
+        polls += 1
+        if polls == 1:
+            return {"p0": [record]}
+        consumer._running = False
+        return {}
+
+    kafka.getmany = AsyncMock(side_effect=next_batch)
+    kafka.commit = AsyncMock()
+    consumer._running = True
+    try:
+        await asyncio.wait_for(consumer._poll_loop(), timeout=2)
+        kafka.seek.assert_called_once_with("p0", 5)
+        kafka.commit.assert_not_awaited()
+        assert not consumer.crashed
+    finally:
+        await dispatcher._http.close()

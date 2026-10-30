@@ -15,8 +15,9 @@ import lombok.Setter;
  *   <li>字段命名变体:{@code RetryScheduleEntity.lastErrorMessage / lastErrorKey / lastErrorArgs}
  * </ul>
  *
- * <p>MyBatis 行为:ResultMap 通过反射写 inherited setter,继承字段无需改 mapper.xml。Lombok @Data 子类 默认
- * {@code @EqualsAndHashCode(callSuper=false)},entity equality 通常基于 id 主键,父字段不参与 equality 不影响业务正确性。
+ * <p>MyBatis 通过继承的 setter 写入错误字段，ResultMap 无需复制字段定义。本抽象载体只生成访问器，
+ * 不额外引入对象身份或相等性实现；具体实体沿用自身的相等性契约。Lombok {@code @Data} 子类默认不将父类字段纳入
+ * {@code equals/hashCode}，需要包含错误信息时应在具体实体明确声明，不能假定默认只比较主键。
  */
 @Getter
 @Setter

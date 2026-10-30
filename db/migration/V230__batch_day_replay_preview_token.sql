@@ -1,5 +1,6 @@
 -- 短时预览凭证用于把批次日重放提交绑定到用户确认过的候选与影响快照。
 -- 本表仅保存短时、可清理的幂等凭证，不属于冷存运行事实表，无需 archive 镜像。
+
 CREATE TABLE batch.batch_day_replay_preview_token (
     tenant_id       VARCHAR(64)  NOT NULL,
     token_hash      VARCHAR(64)  NOT NULL,

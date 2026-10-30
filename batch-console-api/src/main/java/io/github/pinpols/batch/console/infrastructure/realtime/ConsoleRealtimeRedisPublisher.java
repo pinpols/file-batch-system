@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.realtime;
 
+import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeInstanceIdProvider;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleRealtimeStreamEnvelope;
 import io.github.pinpols.batch.console.domain.observability.realtime.ConsoleSseEvent;
 import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeEventBus;
 import io.github.pinpols.batch.console.domain.observability.realtime.RealtimeReplayStore;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -22,6 +25,7 @@ public class ConsoleRealtimeRedisPublisher implements RealtimeEventBus {
   public static final String CHANNEL_KEY = "batch:console:realtime";
 
   private final StringRedisTemplate redisTemplate;
+  private final BatchRedisNamespace redisNamespace;
   private final ConsoleRealtimeInstanceIdProvider instanceIdProvider;
   private final RealtimeReplayStore replayStore;
 
@@ -30,16 +34,16 @@ public class ConsoleRealtimeRedisPublisher implements RealtimeEventBus {
     if (event == null) {
       return;
     }
+    String sourceInstanceId = instanceIdProvider.instanceId();
+    String tenantId = event.tenantId();
+    String stream = event.stream();
+    String eventType = event.eventType();
+    String cursor = event.cursor();
+    String serializedData = EmptyChecks.isNull(event.data()) ? "" : JsonUtils.toJson(event.data());
+    Instant emittedAt = event.emittedAt();
     ConsoleRealtimeStreamEnvelope envelope = new ConsoleRealtimeStreamEnvelope(
-        instanceIdProvider.instanceId(),
-        event.tenantId(),
-        event.stream(),
-        event.eventType(),
-        event.cursor(),
-        false,
-        event.data() == null ? "" : JsonUtils.toJson(event.data()),
-        event.emittedAt());
+        sourceInstanceId, tenantId, stream, eventType, cursor, false, serializedData, emittedAt);
     replayStore.append(envelope);
-    redisTemplate.convertAndSend(CHANNEL_KEY, JsonUtils.toJson(envelope));
+    redisTemplate.convertAndSend(redisNamespace.channel(CHANNEL_KEY), JsonUtils.toJson(envelope));
   }
 }

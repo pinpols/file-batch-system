@@ -16,15 +16,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
-import io.github.pinpols.batch.console.domain.workflow.mapper.PipelineStepDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import java.time.LocalTime;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -37,14 +36,11 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
   @DisplayName("配置包导出清空渠道 JSON，避免凭据随工作簿外流")
   void shouldOmitChannelConfigurationFromTenantExport() {
     TenantConfigPackageRowProjections projections = new TenantConfigPackageRowProjections(
-        mock(PipelineStepDefinitionMapper.class),
-        mock(WorkflowNodeMapper.class),
-        mock(WorkflowEdgeMapper.class));
-    Map<String, Object> source = new LinkedHashMap<>(Map.of(
-        "channel_code",
-        "PARTNER_SFTP",
-        COL_CONFIG_JSON,
-        "{\"sftp_password\":\"plain-text-secret\"}"));
+        mock(WorkflowNodeMapper.class), mock(WorkflowEdgeMapper.class));
+    FileChannelConfigQueryView source = FileChannelConfigQueryView.builder()
+        .channelCode("PARTNER_SFTP")
+        .configJson("{\"sftp_password\":\"plain-text-secret\"}")
+        .build();
 
     List<Map<String, Object>> rows = projections.toExportableChannelRows(List.of(source));
 
@@ -52,16 +48,14 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
       assertThat(row).containsEntry("channel_code", "PARTNER_SFTP");
       assertThat(row).containsEntry(COL_CONFIG_JSON, "");
     });
-    assertThat(source.get(COL_CONFIG_JSON)).isEqualTo("{\"sftp_password\":\"plain-text-secret\"}");
+    assertThat(source.configJson()).isEqualTo("{\"sftp_password\":\"plain-text-secret\"}");
   }
 
   @Test
   @DisplayName("策略实体的全部字段投影到监控策略 sheet")
   void shouldProjectMonitoringPolicyColumns() {
     TenantConfigPackageRowProjections projections = new TenantConfigPackageRowProjections(
-        mock(PipelineStepDefinitionMapper.class),
-        mock(WorkflowNodeMapper.class),
-        mock(WorkflowEdgeMapper.class));
+        mock(WorkflowNodeMapper.class), mock(WorkflowEdgeMapper.class));
     JobDefinitionEntity job = new JobDefinitionEntity();
     job.setTenantId("tenant-a");
     job.setJobCode("JOB_DAILY");
@@ -91,12 +85,46 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
   }
 
   @Test
-  @DisplayName("作业、Pipeline 步骤和 Workflow 节点导出递归遮罩动态 JSON 凭据")
-  void shouldMaskCredentialsFromDynamicJsonExportRows() {
-    PipelineStepDefinitionMapper stepMapper = mock(PipelineStepDefinitionMapper.class);
-    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
+  @DisplayName("工作流配置包投影保留独立的单作业关联与调度字段")
+  void shouldProjectWorkflowAssociationAndSchedule() {
     TenantConfigPackageRowProjections projections = new TenantConfigPackageRowProjections(
-        stepMapper, nodeMapper, mock(WorkflowEdgeMapper.class));
+        mock(WorkflowNodeMapper.class), mock(WorkflowEdgeMapper.class));
+    WorkflowDefinitionEntity workflow = new WorkflowDefinitionEntity();
+    workflow.setTenantId("tenant-a");
+    workflow.setWorkflowCode("WF_JOB_A");
+    workflow.setWorkflowName("Job A default flow");
+    workflow.setWorkflowType("DAG");
+    workflow.setVersion(2);
+    workflow.setSingleJobDefinitionId(41L);
+    workflow.setScheduleEnabled(true);
+    workflow.setScheduleType("CRON");
+    workflow.setScheduleExpr("0 0 2 * * ?");
+    workflow.setTimezone("Asia/Shanghai");
+    workflow.setTriggerMode("SCHEDULED");
+    workflow.setCalendarCode("CN_WORKDAY");
+    workflow.setDependsOnJobCode("JOB_PREVIOUS");
+
+    List<Map<String, Object>> rows =
+        projections.toWfDefRows(List.of(workflow), Map.of(41L, "JOB_A"));
+
+    assertThat(rows).singleElement().satisfies(row -> {
+      assertThat(row).containsEntry("single_job_code", "JOB_A");
+      assertThat(row).containsEntry("schedule_enabled", true);
+      assertThat(row).containsEntry("schedule_type", "CRON");
+      assertThat(row).containsEntry("schedule_expr", "0 0 2 * * ?");
+      assertThat(row).containsEntry("timezone", "Asia/Shanghai");
+      assertThat(row).containsEntry("trigger_mode", "SCHEDULED");
+      assertThat(row).containsEntry("calendar_code", "CN_WORKDAY");
+      assertThat(row).containsEntry("depends_on_job_code", "JOB_PREVIOUS");
+    });
+  }
+
+  @Test
+  @DisplayName("作业和 Workflow 节点导出递归遮罩动态 JSON 凭据")
+  void shouldMaskCredentialsFromDynamicJsonExportRows() {
+    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
+    TenantConfigPackageRowProjections projections =
+        new TenantConfigPackageRowProjections(nodeMapper, mock(WorkflowEdgeMapper.class));
 
     JobDefinitionEntity job = new JobDefinitionEntity();
     job.setDefaultParams("{\"password\":\"job-secret\",\"region\":\"west\"}");
@@ -104,15 +132,6 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
         .singleElement()
         .extracting(row -> row.get("default_params"))
         .isEqualTo("{\"password\":\"****\",\"region\":\"west\"}");
-
-    when(stepMapper.selectByPipelineDefinitionId(22L))
-        .thenReturn(List.of(Map.of("step_params", "{\"apiKey\":\"step-secret\"}")));
-    List<Map<String, Object>> steps = projections.collectPipelineSteps(
-        List.of(Map.of("id", 22L, "job_code", "JOB", "version", 1)));
-    assertThat(steps)
-        .singleElement()
-        .extracting(row -> row.get("step_params"))
-        .isEqualTo("{\"apiKey\":\"****\"}");
 
     WorkflowDefinitionEntity definition = new WorkflowDefinitionEntity();
     definition.setId(33L);

@@ -114,10 +114,13 @@ public final class CodingConventionsArchRules {
   /** 命中条件 = 方法同时带 triggerAnnotation 与 transactional 两个注解(同一方法)。 */
   private static ArchCondition<JavaMethod> haveBothAnnotations(
       String triggerAnnotation, String transactionalAnnotation) {
-    return new ArchCondition<>("be annotated with both @"
-        + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
-        + " and @"
-        + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)) {
+    String triggerAnnotationName =
+        triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1);
+    String transactionalAnnotationName =
+        transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1);
+    String description =
+        "be annotated with both @" + triggerAnnotationName + " and @" + transactionalAnnotationName;
+    return new ArchCondition<>(description) {
       @Override
       public void check(JavaMethod method, ConditionEvents events) {
         if (method.isAnnotatedWith(triggerAnnotation)
@@ -126,9 +129,9 @@ public final class CodingConventionsArchRules {
               method,
               method.getFullName()
                   + " 同时标了 @"
-                  + triggerAnnotation.substring(triggerAnnotation.lastIndexOf('.') + 1)
+                  + triggerAnnotationName
                   + " 与 @"
-                  + transactionalAnnotation.substring(transactionalAnnotation.lastIndexOf('.') + 1)
+                  + transactionalAnnotationName
                   + " — 违反 docs/agent-baseline.md #4,改用 TransactionTemplate 显式包裹事务"));
         }
       }

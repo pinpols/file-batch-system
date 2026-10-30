@@ -1,9 +1,13 @@
+# 用途：验证Shell 内联 SQL 的增量边界。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_sql_config_boundaries.py。
 from __future__ import annotations
 
 import importlib.util
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "check-sql-config-boundaries.py"
@@ -14,6 +18,22 @@ SPEC.loader.exec_module(SQL_BOUNDARY)
 
 
 class SqlConfigBoundaryTest(unittest.TestCase):
+    def test_baseline_move_still_reads_target_branch_legacy_budget(self) -> None:
+        missing = SimpleNamespace(returncode=128, stdout="")
+        legacy = SimpleNamespace(returncode=0, stdout="scripts/owned.sh\t2\n")
+        with patch.dict("os.environ", {"GUARD_BASE": "target"}), patch.object(
+            SQL_BOUNDARY.subprocess, "run", side_effect=[missing, legacy]
+        ) as run:
+            self.assertEqual({"scripts/owned.sh": 2}, SQL_BOUNDARY.read_base_baseline())
+        self.assertIn("target:scripts/ci/sql-inline-baseline.tsv", run.call_args.args[0])
+
+    def test_unavailable_base_budget_fails_closed(self) -> None:
+        missing = SimpleNamespace(returncode=128, stdout="")
+        with patch.dict("os.environ", {"GUARD_BASE": "target"}), patch.object(
+            SQL_BOUNDARY.subprocess, "run", return_value=missing
+        ), self.assertRaises(SystemExit):
+            SQL_BOUNDARY.read_base_baseline()
+
     def test_detects_lowercase_sql_and_combined_psql_options(self) -> None:
         content = """\
 psql -tAc "$query"

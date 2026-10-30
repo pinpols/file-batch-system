@@ -90,7 +90,7 @@ kafka-acls.sh --bootstrap-server kafka:29092 --command-config /tmp/admin-client.
 2. 平台 console:
    - **worker 在线**:`GET /api/console/workers/fingerprints` 返回该 buildId 1 个实例
      (controller:`batch-console-api/.../ConsoleWorkerFingerprintController.java:28`,
-     menu 入口由 Lane M 加 allowlist 后在 UI 出现;无 menu 时直接 curl 可验)。
+     页面入口与权限以当前导航契约为准)。
    - **task type 已注册**:`GET /api/console/custom-task-types`
      (`ConsoleCustomTaskTypeController.java:26`),descriptor JSON schema 来自 handler。
 
@@ -98,34 +98,27 @@ kafka-acls.sh --bootstrap-server kafka:29092 --command-config /tmp/admin-client.
 
 ---
 
-## 3. 派第一个 task(运维或平台触发)
+## 3. 从 Workflow 发起第一条任务
 
-最简单先用 console-api curl 派一单(完整 task DTO 见 `wire-protocol.md` §「Kafka 派单 payload」):
+先保存可执行 Job，并配置引用该 Job 的受管/组合 Workflow（`START → JOB → END`）。日程与顶层运行目标属于 Workflow。平台没有对租户开放的 `/internal/tasks/dispatch` 任意派单入口。
+
+在 Console 选择 Workflow 和业务日发起。自动化调用使用实际端点：
 
 ```sh
-curl -X POST "$BASE_URL/internal/tasks/dispatch" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" -H "X-Tenant-Id: bigcorp" \
+# 准备：使用已有 Console 登录会话与 CSRF cookie，目标 Workflow 已通过图校验。
+curl --fail-with-body -X POST "$BASE_URL/api/console/workflow-definitions/$WORKFLOW_ID/trigger" \
+  -b "$COOKIE_JAR" \
+  -H "X-XSRF-TOKEN: $CSRF_TOKEN" \
+  -H "Idempotency-Key: $LAUNCH_KEY" \
   -H 'Content-Type: application/json' \
-  -d '{"taskType":"echo","parameters":{"msg":"hello"}}'
+  --data "{\"tenantId\":\"$TENANT_ID\",\"bizDate\":\"$BIZ_DATE\",\"triggerType\":\"MANUAL\"}"
 ```
 
-worker 侧期望日志(按时间顺序):
+`LAUNCH_KEY` 在请求前生成并保存，同一次发起重试不得更换。权限、租户归属、定义启用与业务日校验均由服务端执行。响应丢失时用相同键查询 `GET /api/console/workflow-definitions/{id}/trigger-status?tenantId=...`，未查到仍不能证明在途请求未执行。
 
-```
-kafka poll → claim acquired (taskId=...)
-dispatcher.execute taskType=echo handler=EchoHandler
-report SUCCESS (taskId=..., elapsedMs=...)
-```
+核对链路：请求/WorkflowRun → JOB 节点与 JobInstance → Kafka 派单 → CLAIM → handler → REPORT。执行日志应能按 taskId 串联；验收还须确认平台终态与预期业务产物，不能只看 `report SUCCESS` 日志。
 
-**故障路径速查**:
-
-| 现象 | 看 |
-|---|---|
-| claim 401 / 403 | [`troubleshooting.md` §3](./troubleshooting.md)(API key scope / RLS) |
-| dispatch 没到 worker | [`troubleshooting.md` §4](./troubleshooting.md)(订阅 mode、ACL、partition revoke);确认 §1 的 topic 命名 |
-| handler 抛异常 → FAILED 但无重试 | [`troubleshooting.md` §5](./troubleshooting.md)(retry policy / DLQ);ADR-035 §「Scheduler 节奏」 |
-
----
+claim 认证、路由/ACL、租约和重试故障见 [troubleshooting.md](troubleshooting.md) 与 [wire-protocol.md](wire-protocol.md)。
 
 ## 4. 看进度 + 取消(运维)
 
@@ -162,8 +155,7 @@ API 在 `sdk/java/core/.../task/SdkTaskContext.java:125`。无自检的 handler 
 同一 workerCode 起 2 个进程,`BUILD_ID` 不同(例如 `v1.2.0` / `v1.3.0-rc1`):
 
 1. **看分布**:`GET /api/console/workers/fingerprints/summary`
-   (`ConsoleWorkerFingerprintController.java:56`),按 buildId 分组的在线实例数。Lane M
-   menu 接好后走 UI fingerprint 看板。
+   (`ConsoleWorkerFingerprintController.java:56`),按 buildId 分组的在线实例数。通过 Worker fingerprint 看板核对。
 2. **切流方式**(任选):
    - **partition revoke**:停 v1.2.0 进程的 Kafka consumer,新单只会落到 v1.3.0 的 partition 上;
      在跑中的 task 走完即结束。无侵入,但粒度粗(整 worker)。
@@ -242,7 +234,7 @@ unset BATCH_SDK_STRICT_TIMING
 - [ ] §2 启动后 `/api/console/workers/fingerprints` 看到 worker;`/api/console/custom-task-types` 看到 taskType
 - [ ] §3 第一单 echo 跑通,worker 日志有 `report SUCCESS`,平台 task 表状态 SUCCESS
 - [ ] §4.1 长任务 `/api/console/tasks/{id}/heartbeat-details` 看到 progress 递增
-- [ ] §4.2 cancel 后 handler 在 ≤ heartbeat 周期 (30s) 内退出,task 状态 CANCELLED
+- [ ] §4.2 cancel 后 handler 按 lease renew 周期及自身取消检查间隔退出,task 状态 CANCELLED
 - [ ] §5 同 workerCode 双 buildId 在 fingerprint summary 分布符合预期,切流后老 buildId drain 干净
 - [ ] §6 SIGTERM → SDK stop → 平台 OFFLINE 时间线 ≤ 2 min,无僵尸 task
 

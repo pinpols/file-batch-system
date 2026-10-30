@@ -23,7 +23,8 @@
 /// `hex(sha256(body))` — lowercase hex of the SHA-256 digest of the raw bytes.
 /// An empty body still hashes (the SHA-256 of zero bytes).
 pub fn body_sha256_hex(body: &[u8]) -> String {
-    to_hex(&sha256(body))
+    let digest = sha256(body);
+    to_hex(&digest)
 }
 
 /// Build the canonical string per the contract. `method` is upper-cased; all
@@ -35,13 +36,11 @@ pub fn canonical_string(
     nonce: &str,
     body: &[u8],
 ) -> String {
+    let normalized_method = method.to_uppercase();
+    let body_digest = body_sha256_hex(body);
     format!(
         "{}\n{}\n{}\n{}\n{}",
-        method.to_uppercase(),
-        path,
-        timestamp,
-        nonce,
-        body_sha256_hex(body),
+        normalized_method, path, timestamp, nonce, body_digest,
     )
 }
 
@@ -55,7 +54,8 @@ pub fn sign(
     body: &[u8],
 ) -> String {
     let canonical = canonical_string(method, path, timestamp, nonce, body);
-    to_hex(&hmac_sha256(api_key.as_bytes(), canonical.as_bytes()))
+    let signature_digest = hmac_sha256(api_key.as_bytes(), canonical.as_bytes());
+    to_hex(&signature_digest)
 }
 
 // ---------------------------------------------------------------------------
@@ -175,7 +175,8 @@ fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; SHA256_DIGEST] {
     // Keys longer than the block size are hashed first.
     let mut block_key = [0u8; SHA256_BLOCK];
     if key.len() > SHA256_BLOCK {
-        block_key[..SHA256_DIGEST].copy_from_slice(&sha256(key));
+        let key_digest = sha256(key);
+        block_key[..SHA256_DIGEST].copy_from_slice(&key_digest);
     } else {
         block_key[..key.len()].copy_from_slice(key);
     }

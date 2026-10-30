@@ -50,6 +50,7 @@ COMMENT ON COLUMN batch.batch_day_instance.dry_run IS
     'ADR-026 dry-run 整日演练标记';
 
 -- result_version 用既有 status 列扩展，加 DRY_RUN 状态值（不创建 EFFECTIVE 单一约束）
+
 ALTER TABLE batch.result_version DROP CONSTRAINT IF EXISTS ck_result_version_status;
 ALTER TABLE batch.result_version ADD CONSTRAINT ck_result_version_status
     CHECK (status IN ('PENDING', 'EFFECTIVE', 'SUPERSEDED', 'ARCHIVED', 'DRY_RUN'));

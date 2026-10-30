@@ -1,3 +1,5 @@
+# 用途：验证不可变发布清单校验与镜像引用。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/ci/tests/test_release_manifest.py。
 from __future__ import annotations
 
 import importlib.util

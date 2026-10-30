@@ -12,7 +12,7 @@ import lombok.RequiredArgsConstructor;
  * Quartz JobStore 健康指标命名 + 注册中心。
  *
  * <p>暴露给 Prometheus / Grafana 的 4 类指标，用于 Quartz 拐点预警（详见 {@code
- * docs/architecture/quartz-replacement-evaluation.md} §7）：
+ * docs/runbook/quartz-capacity-baseline.md}）：
  *
  * <ul>
  *   <li>{@code batch.trigger.quartz.fire.total} — Counter，每次 jobWasExecuted +1

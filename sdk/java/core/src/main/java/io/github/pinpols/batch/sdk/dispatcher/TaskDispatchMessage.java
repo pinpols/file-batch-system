@@ -14,7 +14,7 @@ import java.util.Set;
  * <p>设计原则:**只保留 SDK 框架真正需要的字段**,其余 jackson 用 {@link JsonIgnoreProperties}{@code
  * (ignoreUnknown=true)} 包容,让 SDK 不会因平台新加字段而 break。
  *
- * <p>Phase 0 ({@code docs/plans/sdk-roadmap-2026-h2.md} §2)起携带 {@code schemaVersion} — 平台派单时填
+ * <p>Phase 0 ({@code docs/plans/sdk-h2-roadmap-2026-05-31.md} §2)起携带 {@code schemaVersion} — 平台派单时填
  * {@code "v1"} / {@code "v2"} 等;SDK 解析时通过 {@link #SUPPORTED_MAJOR_VERSIONS} 检查主版本,未知 major 直接
  * reject(防错乱)。缺字段时 fallback {@code "v1"}(兼容老平台)。
  *
@@ -25,7 +25,7 @@ import java.util.Set;
  * @param taskType 任务类型(SDK 用它路由到对应 {@link io.github.pinpols.batch.sdk.task.SdkTaskHandler});绑定平台 v2
  *     JSON 字段 {@code workerType}(v1 旧名 {@code taskType} 经 {@link JsonAlias} 向后兼容)
  * @param taskInstanceId 本次执行的 instance ID
- * @param parameters 业务参数(jackson 反序列化)
+ * @param parameters 派发消息中的可选参数投影；handler 执行参数以 CLAIM 返回的持久化 payload 为准
  * @param runtimeAttributes 框架属性(traceId / bizDate / pipelineInstanceId 等)
  * @param schedulingContext Phase 2 §2.1 调度上下文(bizDate / 前后业务日 / attemptNo / 触发来源);老平台不填则为 null
  */

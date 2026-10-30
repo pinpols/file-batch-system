@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.sdk.handler.typed;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpointState;
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.SdkRowResult;
@@ -9,7 +10,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.util.Map;
 import java.util.Optional;
 
-/** Shared parameter, checkpoint, and output handling for typed row-stream templates. */
+/** 类型化行流模板共用的参数、检查点和输出处理逻辑。 */
 abstract class SdkAbstractTypedRowStreamHandler<I, O, R> extends SdkAbstractTaskHandler {
 
   private final SdkTypedParameters<I> parameters;
@@ -24,7 +25,9 @@ abstract class SdkAbstractTypedRowStreamHandler<I, O, R> extends SdkAbstractTask
 
   protected final Optional<SdkTaskResult> restoreCheckpoint(
       SdkTaskContext ctx, SdkRowResult counts, String completedMessage) {
-    Optional<SdkCheckpointState> resumed = ctx.checkpoint().load(String.valueOf(ctx.taskId()));
+    SdkCheckpoint checkpoint = ctx.checkpoint();
+    String taskId = String.valueOf(ctx.taskId());
+    Optional<SdkCheckpointState> resumed = checkpoint.load(taskId);
     if (resumed.map(SdkCheckpointState::completed).orElse(false)) {
       return Optional.of(SdkTaskResult.ok(completedMessage));
     }
@@ -40,7 +43,8 @@ abstract class SdkAbstractTypedRowStreamHandler<I, O, R> extends SdkAbstractTask
     if (output == null) {
       return SdkTaskResult.ok(defaultMessage, counts.toOutput());
     }
-    return SdkTaskResult.ok(defaultMessage, parameters.toOutputMap(output));
+    Map<String, Object> outputMap = parameters.toOutputMap(output);
+    return SdkTaskResult.ok(defaultMessage, outputMap);
   }
 
   protected final Map<String, Object> emptyBreakPosition() {

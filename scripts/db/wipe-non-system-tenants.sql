@@ -38,7 +38,6 @@ DELETE FROM batch.event_delivery_log        WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.event_outbox_retry        WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.outbox_event              WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.retry_schedule            WHERE tenant_id NOT IN :keep;
-DELETE FROM batch.compensation_checkpoint   WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.compensation_command      WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.approval_command          WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.idempotency_record        WHERE tenant_id NOT IN :keep;
@@ -50,6 +49,7 @@ DELETE FROM batch.workflow_node_run
 DELETE FROM batch.workflow_run              WHERE tenant_id NOT IN :keep;
 
 -- ── Pipeline 运行实例(必须先于 job_instance 删,FK:pipeline_instance.related_job_instance_id → job_instance) ──
+DELETE FROM batch.pipeline_progress         WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.pipeline_step_run
  WHERE pipeline_instance_id IN (SELECT id FROM batch.pipeline_instance WHERE tenant_id NOT IN :keep);
 DELETE FROM batch.pipeline_instance         WHERE tenant_id NOT IN :keep;
@@ -71,6 +71,9 @@ DELETE FROM batch.file_record               WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.file_channel_health       WHERE tenant_id NOT IN :keep;
 
 -- ── 触发 / 批次日 / 配额状态 / 快照 ──────────────────────────────────
+DELETE FROM batch.job_dependency_waiting_launch WHERE tenant_id NOT IN :keep;
+DELETE FROM batch.workflow_launch_wait          WHERE tenant_id NOT IN :keep;
+DELETE FROM batch.batch_day_waiting_launch     WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.trigger_request           WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.batch_day_instance        WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.quota_runtime_state       WHERE tenant_id NOT IN :keep;
@@ -82,6 +85,9 @@ DELETE FROM batch.notification_delivery_log WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.job_execution_log         WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.console_ai_audit_log      WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.webhook_delivery_log      WHERE tenant_id NOT IN :keep;
+-- 回执删除在两个接收方表清理之后执行（V328 的 NO ACTION 引用）。
+DELETE FROM batch.console_push_job_delivery WHERE tenant_id NOT IN :keep;
+DELETE FROM batch.workflow_terminal_notification_receipt WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.config_change_log         WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.config_sync_log           WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.config_release            WHERE tenant_id NOT IN :keep;
@@ -95,9 +101,6 @@ DELETE FROM batch.workflow_node
 DELETE FROM batch.workflow_definition       WHERE tenant_id NOT IN :keep;
 
 -- ── Pipeline 配置 ──────────────────────────────────────────────────────
-DELETE FROM batch.pipeline_step_definition
- WHERE pipeline_definition_id IN (SELECT id FROM batch.pipeline_definition WHERE tenant_id NOT IN :keep);
-DELETE FROM batch.pipeline_definition       WHERE tenant_id NOT IN :keep;
 
 -- ── Job 定义 ──────────────────────────────────────────────────────────
 DELETE FROM batch.job_definition            WHERE tenant_id NOT IN :keep;
@@ -106,6 +109,8 @@ DELETE FROM batch.job_definition            WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.resource_queue            WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.resource_tag              WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.batch_window              WHERE tenant_id NOT IN :keep;
+DELETE FROM batch.batch_day_catchup_control_event WHERE tenant_id NOT IN :keep;
+DELETE FROM batch.batch_day_catchup_control  WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.calendar_holiday
  WHERE calendar_id IN (SELECT id FROM batch.business_calendar WHERE tenant_id NOT IN :keep);
 DELETE FROM batch.business_calendar         WHERE tenant_id NOT IN :keep;

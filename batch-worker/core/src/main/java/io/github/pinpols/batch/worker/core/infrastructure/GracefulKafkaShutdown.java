@@ -164,8 +164,9 @@ public class GracefulKafkaShutdown
     long startNanos = System.nanoTime();
     boolean drained = false;
     try {
-      drained = activeTaskLeaseRegistry.awaitDrain(
-          Duration.ofSeconds(Math.max(0L, gracefulShutdownTimeoutSeconds)));
+      long drainTimeoutSeconds = Math.max(0L, gracefulShutdownTimeoutSeconds);
+      Duration drainTimeout = Duration.ofSeconds(drainTimeoutSeconds);
+      drained = activeTaskLeaseRegistry.awaitDrain(drainTimeout);
     } catch (Exception ex) {
       log.warn(
           "failed to await in-flight tasks drain: {}", SwallowedExceptionLogger.summary(ex), ex);

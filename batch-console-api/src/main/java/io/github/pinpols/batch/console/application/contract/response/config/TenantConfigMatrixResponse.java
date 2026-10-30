@@ -23,7 +23,6 @@ public record TenantConfigMatrixResponse(
       String calendarCode,
       String windowCode,
       String workerGroup,
-      List<String> pipelineJobCodes,
       List<String> workflowCodes,
       List<String> templateCodes,
       List<String> channelCodes,

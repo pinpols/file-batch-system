@@ -1,4 +1,8 @@
-# Workflow 动态 fan-out(P1, v0.1)
+# Workflow 分区契约与历史 TASK fan-out
+
+> **当前适用范围**：下述 `TASK.fanOut` 是旧根 Job 模型的设计说明。新根 WorkflowRun 不支持 TASK 直接派发，不能将该配置用于新图或据此宣称动态 task mapping 可用。新图使用 `JOB` 节点，分区/分片由对应 Job 的冻结分区计划产生；BUNDLE 类型按 manifest 展开。若需“上游数组动态展开 JOB 节点”，需单独确认契约和验收，当前不新增模型。
+>
+> 下文的分区快照与产物聚合仍是可复用执行契约；历史 TASK 展开步骤和测试数量只描述原实现，不能替代新根运行验收。
 
 > 2026-05-30。对标 Airflow dynamic task mapping:一个 workflow TASK 节点按上游节点的 output 数组,
 > 在运行时展开成 N 个并行执行单元。
@@ -69,6 +73,7 @@ worker report 成功时，平台会把该分片的 `outputs` 和 `verifierFailur
 - 单个成功分片：`workflow_node_run.output` 和 `result_version.payload_json` 保持原始 `outputs` 形状，兼容旧消费者。
 - 多个成功分片：输出包装为 `partitionedOutputs`，包含 `partitionId`、`partitionNo`、`partitionKey` 和该分片 `outputs`，避免最后一个 report 覆盖其它分片产物。
 - 失败分片不进入成功产物集合；`failedPartitionCount` 会保留在包装结构中，终态仍由 `SUCCESS / PARTIAL_FAILED / FAILED` 状态机表达。
+- 历史分片缺少产物时，仅成功报告的 `outputs` 可以作为回退；失败报告中的产物不能补入成功产物。
 - 当前节点 output 只聚合当前 workflow node 的分片；实例 result_version 聚合实例终态时所有成功分片。
 
 示例：

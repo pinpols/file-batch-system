@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：GitHub Actions SHA 固定。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-github-action-pinning.py；参数与前置环境见下方说明及所属 README。
 """校验 GitHub Actions 外部依赖均固定到完整提交 SHA。"""
 
 from __future__ import annotations

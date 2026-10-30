@@ -1,3 +1,5 @@
+# 用途：验证Sonar 变更行级增量报告。
+# 用法：在仓库根目录执行 python3 -m unittest scripts/dev/tests/test_sonar_incremental_report.py。
 import csv
 import importlib.util
 import tempfile

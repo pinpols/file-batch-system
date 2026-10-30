@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.web;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -11,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
@@ -21,6 +25,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Conf
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncRequestStatusResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -65,6 +70,22 @@ class ConsoleConfigSyncControllerTest {
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
+  }
+
+  @Test
+  @DisplayName("响应丢失后按原幂等键查询，未找到保持未知")
+  void shouldQueryOriginalRequestIdentityWithoutApplyingAgain() throws Exception {
+    when(service.requestStatus("ta", "original-key"))
+        .thenReturn(new ConfigSyncRequestStatusResponse(false, null));
+
+    mockMvc
+        .perform(get("/api/console/config/sync/requests/status")
+            .param("tenantId", "ta")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "original-key"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.found").value(false));
+
+    verify(service).requestStatus("ta", "original-key");
   }
 
   @Test
@@ -124,6 +145,30 @@ class ConsoleConfigSyncControllerTest {
   }
 
   @Test
+  @DisplayName("内部审计失败返回系统错误且不向用户透出SQL路径或伪装成参数错误")
+  void shouldReturnSystemErrorWhenAuditPersistenceFails() throws Exception {
+    when(service.importBundle(any(ConfigSyncImportRequest.class)))
+        .thenThrow(BizException.of(
+            ResultCode.SYSTEM_ERROR,
+            "error.common.system_error",
+            new IllegalStateException("SQL /private/Mapper.xml")));
+
+    mockMvc
+        .perform(post("/api/console/config/sync/import")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "audit-failure")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {"tenantId":"ta","sourceEnv":"dev","targetEnv":"prod",
+                 "targetTenantIds":["tb"],"bundle":{}}
+                """))
+        .andExpect(status().isInternalServerError())
+        .andExpect(jsonPath("$.code").value("SYSTEM_ERROR"))
+        .andExpect(jsonPath("$.message").value("系统错误"))
+        .andExpect(jsonPath("$.message").value(not(containsString("SQL"))))
+        .andExpect(jsonPath("$.message").value(not(containsString("Mapper.xml"))));
+  }
+
+  @Test
   @DisplayName("查询同步日志时, 租户与分页参数传给服务, 未指定时取缺省值")
   void shouldPassTenantAndPagination_whenQueryingLogs() throws Exception {
     when(service.logs("ta", 1, 15))
@@ -155,6 +200,6 @@ class ConsoleConfigSyncControllerTest {
   }
 
   private static ConfigSyncSummaryResponse summary() {
-    return new ConfigSyncSummaryResponse(1, 2, 3, 4, 5);
+    return new ConfigSyncSummaryResponse(1, 2, 4, 5, 6, 7, 8, 9, 10);
   }
 }

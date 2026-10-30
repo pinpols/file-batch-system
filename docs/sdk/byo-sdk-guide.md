@@ -1,8 +1,8 @@
 # BYO(Bring Your Own)SDK 接入指南
 
-> **目标**:让其他语言(Go / Python / TypeScript / Rust …)团队照协议规范自研 worker SDK,平台不维护多语言代码,只稳协议。当前已有官方实现:Go / Python / TypeScript / Rust(+ 参考实现 Java),**无 .NET 实现**。
+> **目标**:让其他语言(Go / Python / TypeScript / Rust …)团队照协议规范自研 worker SDK,平台维护共享协议与仓库内五语言 SDK，外部团队可按契约自研。当前已有官方实现:Go / Python / TypeScript / Rust(+ 参考实现 Java),**无 .NET 实现**。
 > **协议权威源(双轨)**:[`docs/sdk/wire-protocol.md`](wire-protocol.md)(读者视图)+ [`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)(机器视图)。
-> **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
+> **行为对账**:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) — language-agnostic JSON 契约用例,任何实现都可写 runner 跑通验证。
 > **配套**:[ADR-035](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md) §3/§4/§9/§11、[`docs/sdk/quickstart.md`](quickstart.md)(Java SDK 五分钟接入)、[`docs/sdk/troubleshooting.md`](troubleshooting.md)。
 > **五语言对齐矩阵(亲核、带 `文件:行号` 证据)**:[`docs/sdk/sdk-parity-matrix.md`](sdk-parity-matrix.md) —— 回答"哪些对齐 / 哪些没对齐",并记录了自动化审查在此题上系统性误报的根因与复核守则。
 
@@ -22,19 +22,22 @@
 
 ## 1. 实现清单(必做 —— 不实现 = 不接入)
 
-### 1.1 八个 HTTP `/internal/*` endpoint
+### 1.1 基础 HTTP 接口与可选批量扩展
 
-按 `orchestrator-internal.openapi.yaml` 实现以下 8 个稳定接口。**带 `x-protocol-stability: stable` 的必须实现;`internal-only` 的可跳过(平台运维专用,SDK 不主动调)。**
+以下表格区分 SDK 基础生命周期、可选批量优化和平台控制入口。`stable` 表示接口稳定性，不表示每个 SDK 必须调用所有稳定接口；Worker 不调用管理面入口。
 
 | Method | Path | x-protocol-stability | 谁主动 | 频率 | 必做语义 |
 |---|---|---|---|---|---|
 | `POST` | `/internal/workers/register` | **stable** | SDK start | 1 次 | 启动注册,带 `WorkerHeartbeatDto`(含 capabilityTags、buildId、sdkVersion 等指纹) |
 | `POST` | `/internal/workers/{code}/heartbeat` | **stable** | 心跳调度 | 30s | 解析回包 `WorkerHeartbeatResponse`,应用 directive(详 §1.3) |
 | `POST` | `/internal/workers/{code}/deactivate` | **stable** | SDK stop | 1 次 | 优雅停时主动告别 |
-| `POST` | `/internal/tasks/{id}/claim` | **stable** | 收 Kafka 后 | 每 task 1 次 | body 解析 `EffectiveTaskConfig`(任务业务参数实时快照) |
+| `POST` | `/internal/tasks/{id}/claim` | **stable** | 收 Kafka 后 | 每 task 1 次 | body 解析 `EffectiveTaskConfig`(任务身份与实例冻结执行配置) |
 | `POST` | `/internal/tasks/{id}/report` | **stable** | task 终态 | 每 task 1 次 | `errorCode` / `outputs` / `resultSummary` 字段名严格不可错(§B) |
 | `POST` | `/internal/tasks/{id}/renew` | **stable** | lease 续约调度 | 60s × 每 in-flight task | 解析回包 `cancelRequested`,触发 handler 中止 |
 | `POST` | `/internal/tasks/leases/renew-batch` | **stable** | lease 续约调度(批量) | 60s | ADR-016 批量优化;BYO SDK 可先用单 renew,后期换批量 |
+| `POST` | `/internal/tasks/claim-batch` | **stable** | 批量认领优化 | 可选 | 只执行 `claimed=true` 的项 |
+| `POST` | `/internal/tasks/report-batch` | **stable** | 批量上报优化 | 可选 | 逐项结果与事务，只重报失败项 |
+| `POST` | `/internal/tasks/{id}/non-idempotent-started` | **stable** | 非幂等执行入口 | 适用时 | 产生副作用前登记，保留 invocation 围栏 |
 | `POST` | `/internal/tasks/{id}/cancel` | internal-only | console / scheduler | — | **BYO SDK 不主动调**;通过 renew 响应感知 cancel |
 
 **HTTP 客户端最低要求**:
@@ -44,12 +47,12 @@
 
 ### 1.2 一个 Kafka consumer
 
-- **Topic 订阅**:wildcard `batch.task.dispatch.<tenant>.*`(per-tenant 隔离,租户只看自己 topic)
+- **Topic 订阅**:按平台实际发布路由显式配置正则；base 为 `batch.task.dispatch.<taskType>` 的实际路由结果（租户/优先级后缀及可选 `.node.<selectedWorkerId>`）。Java SDK 直接订阅配置值，不自动替调用方重排或补后缀；ACL 及消息 tenantId 校验共同约束租户隔离
 - **认证**:SASL/SCRAM-SHA-512(平台凭据走 env / secret,**严禁** payload 内传)
 - **Consumer group**:`g-sdk-<tenantId>-<workerCode>`(per worker,平台不感知 group 名)
 - **反序列化**:JSON UTF-8;DTO 字段集对照 [TaskDispatchMessage schema](../api/orchestrator-internal.openapi.yaml#L_search),未知字段忽略(`ignoreUnknown` 等价)
 - **schemaVersion 兼容矩阵**:见 wire-protocol §A —— 未知 major(`v3+`)直接 reject,不 commit offset
-- **at-least-once 投递**:平台不去重,SDK 收到后调 claim 时由 orch `409` 回退幂等
+- **at-least-once 投递**:消息允许重复投递；平台持久化去重身份和 CLAIM 围栏共同控制执行，SDK 不以 Kafka offset 代替业务幂等
 
 ### 1.3 心跳调度(默认 30s,消费 nextHeartbeatHint 动态调速)
 
@@ -91,6 +94,9 @@ DEGRADED  → Kafka assignment active,但日志降噪 / 降并发(平台还在�
 PAUSED    → Kafka assignment.pause(),不收新消息;in-flight 继续跑
 DRAINING  → Kafka assignment.pause();在手任务跑完后调 deactivate 退出
 ```
+
+已经 poll 到但尚未认领的记录也属于背压边界: 恢复后先处理原记录, 或 seek 回原 offset,
+提交不得跨过它。CLAIM 尚未确认或失败时不能按“已入队”确认消费, 也不能依赖尚不存在的租约补发。
 
 **partition 级 pause/resume**(Kafka client 一般有 `assignment.pause(partitions)` API):capacity-aware backpressure 用 —— in-flight 满了暂停 partition,处理完再 resume。Java SDK `KafkaTaskConsumer.applyBackpressure()` 是参考实现。
 
@@ -146,7 +152,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ## 3. 测试自检(契约 fixtures)
 
-[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/) 提供 language-agnostic JSON 契约用例。
+[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures) 提供 language-agnostic JSON 契约用例。
 
 **用法**:SDK conformance runner 按 fixture JSON 的 `given` 构造输入、`when` 执行决策或模拟 transport，再断言 `then`。当前 fixtures 的 schema 校验和五语言 conformance 已由 `sdk-contract-parity.yml` 执行；它不替代真实 Kafka broker、真实平台 API 或发布包安装验证。用例清单见 [`fixture README`](../api/sdk-contract-fixtures/README.md)。
 
@@ -200,14 +206,14 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 ## 5. 参考实现
 
-- **Java SDK(参考实现 + 协议主版本守护)**:[`sdk/java/core/`](../../sdk/java/core/) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
-- **Java SDK 示例租户 worker**:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java/) —— plain Java(无 Spring)、200 行起一个 worker 进程。
+- **Java SDK(参考实现 + 协议主版本守护)**:[`sdk/java/core/`](../../sdk/java/core) — 包含 `BatchPlatformClient` / `PlatformHttpClient` / `KafkaTaskConsumer` / `HeartbeatScheduler` / `LeaseRenewalScheduler` / `TaskDispatcher` 完整链路。
+- **Java SDK 示例租户 worker**:[`examples/self-hosted-sdk/sample-tenant-worker-java/`](../../examples/self-hosted-sdk/sample-tenant-worker-java) —— plain Java(无 Spring)、200 行起一个 worker 进程。
 - **Java SDK 契约测试**:[`sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java`](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/SdkPlatformContractTest.java) —— 字段集守护;本 lane 抽出的 JSON fixtures 即源自此。
 - **多语言示例租户 worker**(命名统一 `sample-tenant-worker-<lang>`):
-  - [`examples/self-hosted-sdk/sample-tenant-worker-go/`](../../examples/self-hosted-sdk/sample-tenant-worker-go/) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-typescript/`](../../examples/self-hosted-sdk/sample-tenant-worker-typescript/) —— `sdk/typescript` 运行时 + kafkajs(Node ≥20)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-rust/`](../../examples/self-hosted-sdk/sample-tenant-worker-rust/) —— `sdk/rust` + rdkafka,**已接 `ReqwestTransport`(真 HTTP),本机实测全链路绿**(见 `local-e2e-coverage.md`)。
-  - [`examples/self-hosted-sdk/sample-tenant-worker-python/`](../../examples/self-hosted-sdk/sample-tenant-worker-python/) —— Python 3.12 asyncio。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-go/`](../../examples/self-hosted-sdk/sample-tenant-worker-go) —— `sdk/go` 运行时 + segmentio/kafka-go(可 `go build`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-typescript/`](../../examples/self-hosted-sdk/sample-tenant-worker-typescript) —— `sdk/typescript` 运行时 + kafkajs(Node ≥20)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-rust/`](../../examples/self-hosted-sdk/sample-tenant-worker-rust) —— `sdk/rust` + rdkafka,**已接 `ReqwestTransport`(真 HTTP),本机实测全链路绿**(见 `local-e2e-coverage.md`)。
+  - [`examples/self-hosted-sdk/sample-tenant-worker-python/`](../../examples/self-hosted-sdk/sample-tenant-worker-python) —— Python 3.12 asyncio。
 
 ---
 
@@ -223,7 +229,7 @@ BYO SDK **必须**实现等价校验,代码层留 hook 供租户扩 deny-list。
 
 - 协议读者视图:[`docs/sdk/wire-protocol.md`](wire-protocol.md)
 - 协议机器视图:[`docs/api/orchestrator-internal.openapi.yaml`](../api/orchestrator-internal.openapi.yaml)
-- 契约 fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures/)
+- 契约 fixtures:[`docs/api/sdk-contract-fixtures/`](../api/sdk-contract-fixtures)
 - ADR-035 §9 两套绑定:[`docs/architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md`](../architecture/adr/ADR-035-tenant-self-hosted-worker-sdk.md)
 - 双轨滚动:[`docs/runbook/sdk-dual-rollout.md`](../runbook/sdk-dual-rollout.md)
 - 上线流程:[`docs/runbook/per-tenant-worker-onboarding.md`](../runbook/per-tenant-worker-onboarding.md)

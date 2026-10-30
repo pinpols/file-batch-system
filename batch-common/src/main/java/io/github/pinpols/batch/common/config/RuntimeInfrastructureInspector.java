@@ -1,5 +1,11 @@
 package io.github.pinpols.batch.common.config;
 
+import io.github.pinpols.batch.common.stateful.StatefulBackendIdentity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import java.util.List;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisConnectionDetails;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
@@ -9,9 +15,9 @@ import org.springframework.stereotype.Component;
  * <p>把启动守护读取 {@code spring.datasource.url} / {@code spring.data.redis.*} 实际生效值的逻辑收敛到一处，
  * 避免同类读取散落在多个守护类里。
  *
- * <p>本类只读取 Spring 基础设施配置的生效值，<b>不</b>把这些 {@code spring.*} 复制成自定义 {@code
- * @ConfigurationProperties}，也不作为业务规则来源（配置 Key 治理文档 §5.3 / §7）。默认值仅在计算后端身份时
- * 作为回退，与 Spring Boot Redis 客户端一致。
+ * <p>平台库地址从环境读取；Redis位置使用与框架客户端相同的 {@link DataRedisConnectionDetails}，
+ * 保留URL、列表绑定与连接信息覆盖的优先级，不重复解析属性、不读取凭据或建立网络连接。
+ * 这些基础设施属性不复制为自定义配置，也不作为业务规则来源。
  */
 @Component
 public class RuntimeInfrastructureInspector {
@@ -26,9 +32,12 @@ public class RuntimeInfrastructureInspector {
   public static final String REDIS_SENTINEL_NODES_KEY = "spring.data.redis.sentinel.nodes";
 
   private final Environment environment;
+  private final ObjectProvider<DataRedisConnectionDetails> redisConnectionDetails;
 
-  public RuntimeInfrastructureInspector(Environment environment) {
+  public RuntimeInfrastructureInspector(
+      Environment environment, ObjectProvider<DataRedisConnectionDetails> redisConnectionDetails) {
     this.environment = environment;
+    this.redisConnectionDetails = redisConnectionDetails;
   }
 
   /** 平台库 JDBC URL；缺失即 fail-fast，与直接读取 {@code getRequiredProperty} 语义一致。 */
@@ -36,17 +45,40 @@ public class RuntimeInfrastructureInspector {
     return environment.getRequiredProperty(DATASOURCE_URL_KEY);
   }
 
-  /** Redis 连接坐标，仅用于后端身份判定。 */
-  public RedisCoordinates redisCoordinates() {
-    return new RedisCoordinates(
-        environment.getProperty(REDIS_HOST_KEY, "localhost"),
-        environment.getProperty(REDIS_PORT_KEY, Integer.class, 6379),
-        environment.getProperty(REDIS_DATABASE_KEY, Integer.class, 0),
-        environment.getProperty(REDIS_SENTINEL_MASTER_KEY),
-        environment.getProperty(REDIS_SENTINEL_NODES_KEY));
+  /** Redis定位与Boot客户端模式选择一致；无有效连接信息时拒绝伪造默认位置。 */
+  public String redisBackendIdentity() {
+    DataRedisConnectionDetails details = redisConnectionDetails.getIfAvailable();
+    if (EmptyChecks.isNull(details)) {
+      throw new IllegalStateException(
+          "Redis connection details are required for stateful backend identity");
+    }
+    DataRedisConnectionDetails.Sentinel sentinel = details.getSentinel();
+    if (EmptyChecks.isNotNull(sentinel)) {
+      String nodes = formatNodes(sentinel.getNodes());
+      return StatefulBackendIdentity.redisSentinel(
+          sentinel.getMaster(), nodes, sentinel.getDatabase());
+    }
+    DataRedisConnectionDetails.Cluster cluster = details.getCluster();
+    if (EmptyChecks.isNotNull(cluster)) {
+      String nodes = formatNodes(cluster.getNodes());
+      return StatefulBackendIdentity.redisCluster(nodes);
+    }
+    DataRedisConnectionDetails.MasterReplica masterReplica = details.getMasterReplica();
+    if (EmptyChecks.isNotNull(masterReplica)) {
+      String nodes = formatNodes(masterReplica.getNodes());
+      return StatefulBackendIdentity.redisMasterReplica(nodes);
+    }
+    DataRedisConnectionDetails.Standalone standalone = details.getStandalone();
+    if (EmptyChecks.isNull(standalone)) {
+      throw new IllegalStateException("Redis standalone connection details are unavailable");
+    }
+    return StatefulBackendIdentity.redisStandalone(
+        standalone.getHost(), standalone.getPort(), standalone.getDatabase());
   }
 
-  /** Redis 连接坐标快照。 */
-  public record RedisCoordinates(
-      String host, int port, int database, String sentinelMaster, String sentinelNodes) {}
+  private static String formatNodes(List<DataRedisConnectionDetails.Node> nodes) {
+    return nodes.stream()
+        .map(node -> node.host() + ":" + node.port())
+        .collect(Collectors.joining(","));
+  }
 }

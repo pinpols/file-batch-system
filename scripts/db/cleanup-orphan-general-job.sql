@@ -9,9 +9,7 @@
 --        gen_index_rebuild 都声明 worker_group='GENERAL'，但系统只有
 --        IMPORT/EXPORT/DISPATCH 组 worker → 每 10s 刷一条 selector WARN。
 --
---    注：WORKFLOW 类型的 job_definition 允许 worker_group 为空（workflow
---        本身不挂 worker，节点才分发），worker_group IS NULL/'' 的条目
---        **不**算孤儿。下方 orphan_defs 过滤已排除。
+--    空 worker_group 的条目不纳入此脚本的自动清理范围，避免扩大为配置纠偏工具。
 --
 -- 2. Stale CREATED job_instance（独立孤立实例）
 --    判定：instance_status='CREATED' 且 created_at < now() - 1h。

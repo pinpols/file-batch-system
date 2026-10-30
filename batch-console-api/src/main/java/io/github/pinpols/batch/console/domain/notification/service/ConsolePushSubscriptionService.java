@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.notification.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushSubscribeRequest;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
@@ -43,7 +44,8 @@ public class ConsolePushSubscriptionService {
   /** 列出当前用户在当前租户下的全部订阅(用于"已绑定哪些设备"展示)。 */
   public List<ConsolePushSubscriptionEntity> listForUser(String tenantId, String username) {
     requireEnabled();
-    return repository.findByTenantAndUser(tenantGuard.resolveTenant(tenantId), username);
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    return repository.findByTenantAndUser(resolvedTenantId, username);
   }
 
   /**
@@ -65,12 +67,13 @@ public class ConsolePushSubscriptionService {
    * <p>这里只拒绝非法载荷,不承担认证判断。认证由 Controller 方法安全执行,写入前仍经租户守卫解析。
    */
   private static void requireValidSubscription(ConsolePushSubscribeRequest request) {
-    if (request == null
+    boolean subscriptionIsInvalid = EmptyChecks.isNull(request)
         || request.endpoint() == null
         || request.endpoint().isBlank()
         || request.keys() == null
         || request.keys().p256dh() == null
-        || request.keys().auth() == null) {
+        || EmptyChecks.isNull(request.keys().auth());
+    if (subscriptionIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.invalid_subscription");
     }
   }
@@ -79,7 +82,8 @@ public class ConsolePushSubscriptionService {
   private void persistSubscription(
       String tenantId, String username, ConsolePushSubscribeRequest request, String userAgent) {
     ConsolePushSubscriptionEntity entity = new ConsolePushSubscriptionEntity();
-    entity.setTenantId(tenantGuard.resolveTenant(tenantId));
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    entity.setTenantId(resolvedTenantId);
     entity.setUsername(username);
     entity.setEndpoint(request.endpoint());
     entity.setP256dhKey(request.keys().p256dh());
@@ -95,13 +99,16 @@ public class ConsolePushSubscriptionService {
     if (endpoint == null || endpoint.isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.push.endpoint_required");
     }
-    repository.deleteByEndpoint(tenantGuard.resolveTenant(tenantId), username, endpoint);
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    repository.deleteByEndpoint(resolvedTenantId, username, endpoint);
   }
 
   /** 定时任务用:清理 N 天未刷新的订阅。 */
   @Transactional
   public int purgeStale(Duration staleAfter) {
-    return repository.deleteIfStaleSince(Instant.now().minus(staleAfter));
+    Instant currentTime = Instant.now();
+    Instant staleBefore = currentTime.minus(staleAfter);
+    return repository.deleteIfStaleSince(staleBefore);
   }
 
   private void requireEnabled() {

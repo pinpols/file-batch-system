@@ -2,9 +2,12 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,16 +25,20 @@ import org.springframework.web.server.ResponseStatusException;
 @RequiredArgsConstructor
 public class LaunchApplicationService {
 
-  private final LaunchService launchService;
   private final TenantActionRateLimiter tenantActionRateLimiter;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
   public LaunchResponse launch(LaunchRequest request) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+      throw new ResponseStatusException(
+          HttpStatus.BAD_REQUEST, "top-level launch requires an explicit Workflow target");
+    }
     boolean allowed =
         tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);
     if (!allowed) {
       throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "launch rate limit exceeded");
     }
-    return launchService.launch(request);
+    return workflowRunLaunchService.launch(request);
   }
 
   /**
@@ -41,6 +48,9 @@ public class LaunchApplicationService {
    * 的幂等、租户隔离、配额和调度准入。
    */
   public LaunchResponse launchFromTrustedQueue(LaunchRequest request) {
-    return launchService.launch(request);
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.workflow.definition_id_required");
+    }
+    return workflowRunLaunchService.launch(request);
   }
 }

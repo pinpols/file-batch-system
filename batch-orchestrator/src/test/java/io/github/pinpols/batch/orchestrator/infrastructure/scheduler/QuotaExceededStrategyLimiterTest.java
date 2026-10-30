@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -22,6 +21,9 @@ import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 /**
  * V89 验证：tenant_quota_policy.exceeded_strategy 把租户超额检查的结果按策略转换。
@@ -36,34 +38,34 @@ import org.junit.jupiter.api.Test;
  * </ul>
  */
 @DisplayName("租户配额超额策略在并发准入检查中的转换验证,覆盖硬拒,排队等待,优先级降级与平台默认四类分支")
+@ExtendWith(MockitoExtension.class)
 class QuotaExceededStrategyLimiterTest {
 
   private DefaultConcurrencyLimiter limiter;
+
+  @Mock
   private JobInstanceMapper jobInstanceMapper;
+
+  @Mock
   private OrchestratorConfigCacheService configCache;
+
+  @Mock
   private QuotaRuntimeStateService quotaRuntime;
+
+  @Mock
   private GlobalJobAdmission globalJobAdmission;
+
+  @Mock
   private FairShareGroupAdmissionGuard fairShareGroupAdmissionGuard;
+
   private ResourceSchedulerProperties resScheduler;
+
+  @Mock
+  private BatchOrchestratorGovernanceProperties governance;
 
   @BeforeEach
   void setUp() {
-    jobInstanceMapper = mock(JobInstanceMapper.class);
-    configCache = mock(OrchestratorConfigCacheService.class);
-    quotaRuntime = mock(QuotaRuntimeStateService.class);
-    globalJobAdmission = mock(GlobalJobAdmission.class);
-    fairShareGroupAdmissionGuard = mock(FairShareGroupAdmissionGuard.class);
-    BatchOrchestratorGovernanceProperties governance =
-        mock(BatchOrchestratorGovernanceProperties.class);
-    resScheduler = mock(ResourceSchedulerProperties.class);
-    when(governance.resourceScheduler()).thenReturn(resScheduler);
-    when(resScheduler.getGlobalMaxRunningJobs()).thenReturn(0L); // 关掉全局闸门
-    when(resScheduler.getQuotaResetSlidingWindowHours()).thenReturn(24);
-    // ADR-041 Phase2.3:平台默认有界队列(QUEUE_DEFER),与生产 ResourceSchedulerProperties 默认一致。
-    when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.QUEUE_DEFER);
-    when(globalJobAdmission.hasCapacity()).thenReturn(true);
-    when(globalJobAdmission.hasObservedCapacity()).thenReturn(true);
-
+    resScheduler = new ResourceSchedulerProperties();
     limiter = new DefaultConcurrencyLimiter(
         jobInstanceMapper,
         globalJobAdmission,
@@ -126,7 +128,7 @@ class QuotaExceededStrategyLimiterTest {
   @DisplayName("平台默认策略配回硬拒时租户未配置策略的超额请求仍标记快速失败")
   void nullStrategy_withRejectPlatformDefault_stillRejects() {
     // 平台默认可配回 REJECT 恢复旧硬拒语义。
-    when(resScheduler.getDefaultExceededStrategy()).thenReturn(QuotaExceededStrategy.REJECT);
+    resScheduler.setDefaultExceededStrategy(QuotaExceededStrategy.REJECT);
     arrangeBurstExceeded(null);
 
     ResourceCheck check = limiter.check(request(), null);
@@ -148,6 +150,8 @@ class QuotaExceededStrategyLimiterTest {
   @Test
   @DisplayName("租户配额未触顶时直接放行,不受已启用配额策略的硬拒配置影响")
   void allowedQuota_shouldNotApplyStrategy() {
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
+    when(governance.resourceScheduler()).thenReturn(resScheduler);
     when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(1L);
     when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy("REJECT"));
     when(quotaRuntime.evaluateAndReserve(any())).thenReturn(ResourceCheck.allow());
@@ -158,18 +162,19 @@ class QuotaExceededStrategyLimiterTest {
   }
 
   @Test
-  @DisplayName("排队预览场景关闭公平份额准入强制后仍放行,仅观测分组容量不占用额外准入额度")
-  void waitingQueuePreview_shouldNotAcquireFairShareAdmissionLock() {
+  @DisplayName("已有作业在公平组满额时可继续释放分区,不重复占用作业名额")
+  void existingJob_shouldNotConsumeFairShareOrTenantJobSlot() {
     TenantQuotaPolicyEntity fairPolicy = new TenantQuotaPolicyEntity(
-        1L, "tenant-x", "fair", 0, 0, 0, 1, "settlement", 0, 0, "NONE", 3, true, "QUEUE_DEFER");
+        1L, "tenant-x", "fair", 1, 2, 0, 1, "settlement", 0, 0, "NONE", 1, true, "QUEUE_DEFER");
     when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(fairPolicy);
-    when(fairShareGroupAdmissionGuard.hasObservedCapacity(fairPolicy)).thenReturn(true);
     ResourceSchedulingRequest request = request();
-    request.setEnforceFairShareAdmission(false);
+    request.setNewJobAdmission(false);
 
     assertThat(limiter.check(request, null).allowed()).isTrue();
 
-    verify(fairShareGroupAdmissionGuard).hasObservedCapacity(fairPolicy);
+    verify(fairShareGroupAdmissionGuard, never()).hasCapacity(any());
+    verify(quotaRuntime, never()).evaluateAndReserve(any());
+    verify(jobInstanceMapper).acquireTenantResourceAdmissionLock("tenant-x");
   }
 
   @Test
@@ -197,11 +202,19 @@ class QuotaExceededStrategyLimiterTest {
   // ── helpers ────────────────────────────────────────────────────────────────
 
   private void arrangeBurstExceeded(String strategy) {
-    when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(99L);
+    when(globalJobAdmission.hasCapacity()).thenReturn(true);
+    if (!"QUEU_DEFER".equals(strategy)) {
+      when(governance.resourceScheduler()).thenReturn(resScheduler);
+    }
+    if (!"QUEU_DEFER".equals(strategy)) {
+      when(jobInstanceMapper.countActiveByTenant(anyString())).thenReturn(99L);
+    }
     when(configCache.findEnabledQuotaPolicy(anyString())).thenReturn(policy(strategy));
-    when(quotaRuntime.evaluateAndReserve(any()))
-        .thenReturn(ResourceCheck.waitForCapacity(
-            "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
+    if (!"QUEU_DEFER".equals(strategy)) {
+      when(quotaRuntime.evaluateAndReserve(any()))
+          .thenReturn(ResourceCheck.waitForCapacity(
+              "TENANT_JOB_LIMIT", "tenant running jobs exceed quota (including burst)"));
+    }
   }
 
   private static TenantQuotaPolicyEntity policy(String exceededStrategy) {

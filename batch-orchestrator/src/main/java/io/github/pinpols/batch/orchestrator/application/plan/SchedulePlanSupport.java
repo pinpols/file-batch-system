@@ -8,7 +8,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Shared conversion of a schedule plan to and from resource-admission decisions. */
+/** 调度计划与资源准入决策之间共用的转换逻辑。 */
 public final class SchedulePlanSupport {
 
   private SchedulePlanSupport() {}
@@ -21,7 +21,8 @@ public final class SchedulePlanSupport {
     request.setWorkerGroup(plan.getWorkerGroup());
     request.setResourceProfile(plan.getResourceProfile());
     request.setDownstreamChannelCode(plan.getDownstreamChannelCode());
-    request.setDownstreamChannelCodes(resolveDownstreamChannelCodes(plan));
+    List<String> downstreamChannelCodes = resolveDownstreamChannelCodes(plan);
+    request.setDownstreamChannelCodes(downstreamChannelCodes);
     request.setWorkerType(plan.getDefaultWorkerType());
     request.setRequiredCapability(plan.isDryRun() ? WorkerCapabilities.DRY_RUN_SAFE : null);
     request.setWindowCode(plan.getWindowCode());

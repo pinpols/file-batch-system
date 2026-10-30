@@ -1,12 +1,17 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.io.IOException;
 import java.security.Security;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +23,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nl.martijndwars.webpush.Notification;
-import nl.martijndwars.webpush.PushAsyncService;
 import org.asynchttpclient.Response;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.springframework.scheduling.annotation.Async;
@@ -58,23 +62,55 @@ public class ConsolePushSender {
   private final ConsolePushSubscriptionMapper repository;
   private final ObjectMapper objectMapper;
 
-  private final AtomicReference<PushAsyncService> pushService = new AtomicReference<>();
+  private final AtomicReference<ManagedWebPushClient> pushService = new AtomicReference<>();
 
   /** 单条推送 payload。{@code tag} 用于通知折叠;{@code url} 是点击后导航的 PWA 路由。 */
   public record PushPayload(String title, String body, String tag, String url) {}
+
+  /** 推送服务已接受请求，并不能证明浏览器显示或读取了通知。 */
+  public enum DeliveryOutcome {
+    ACCEPTED,
+    GONE,
+    RETRYABLE_FAILURE,
+    PERMANENT_FAILURE,
+    UNKNOWN,
+    NOT_READY
+  }
+
+  public record DeliveryResult(DeliveryOutcome outcome, Integer httpStatus) {}
+
+  /** 供拥有持久化投递状态的调用方执行的同步、有界单设备尝试。 */
+  public DeliveryResult sendToSubscription(ConsolePushSubscriptionEntity sub, PushPayload payload) {
+    if (EmptyChecks.isNull(pushService.get())) {
+      return new DeliveryResult(DeliveryOutcome.NOT_READY, null);
+    }
+    if (EmptyChecks.isNull(sub) || EmptyChecks.isNull(payload)) {
+      return new DeliveryResult(DeliveryOutcome.PERMANENT_FAILURE, null);
+    }
+    try {
+      byte[] serializedPayload = serializePayload(payload);
+      return sendOne(sub, serializedPayload);
+    } catch (Exception e) {
+      log.error("[push] payload serialize failed: {}", SwallowedExceptionLogger.summary(e));
+      return new DeliveryResult(DeliveryOutcome.PERMANENT_FAILURE, null);
+    }
+  }
 
   @PostConstruct
   void init() {
     if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
       Security.addProvider(new BouncyCastleProvider());
     }
-    if (properties.isEnabled()
+    boolean pushSigningKeysAreConfigured = properties.isEnabled()
         && properties.getPublicKey() != null
-        && properties.getPrivateKey() != null) {
+        && EmptyChecks.isNotNull(properties.getPrivateKey());
+    if (pushSigningKeysAreConfigured) {
       try {
-        this.pushService.set(
-            new PushAsyncService(properties.getPublicKey(), properties.getPrivateKey())
-                .setSubject(properties.getSubject()));
+        this.pushService.set(new ManagedWebPushClient(
+                properties.getPublicKey(),
+                properties.getPrivateKey(),
+                Duration.ofSeconds(SEND_TIMEOUT_SECONDS))
+            .setSubject(properties.getSubject()));
         log.info("[push] ConsolePushSender initialized, subject={}", properties.getSubject());
       } catch (Exception e) {
         log.error("[push] init failed; push disabled", e);
@@ -82,6 +118,17 @@ public class ConsolePushSender {
       }
     } else {
       log.info("[push] disabled (console.push.enabled=false or keys missing)");
+    }
+  }
+
+  @PreDestroy
+  void close() {
+    ManagedWebPushClient service = pushService.getAndSet(null);
+    if (EmptyChecks.isNull(service)) return;
+    try {
+      service.close();
+    } catch (IOException failure) {
+      log.warn("[push] transport close failed: {}", SwallowedExceptionLogger.summary(failure));
     }
   }
 
@@ -105,11 +152,7 @@ public class ConsolePushSender {
     if (subs.isEmpty()) return;
     byte[] body;
     try {
-      body = objectMapper.writeValueAsBytes(Map.of(
-          "title", payload.title() == null ? "" : payload.title(),
-          "body", payload.body() == null ? "" : payload.body(),
-          "tag", payload.tag() == null ? "" : payload.tag(),
-          "url", payload.url() == null ? "/m/ops/summary" : payload.url()));
+      body = serializePayload(payload);
     } catch (Exception e) {
       log.error("[push] payload serialize failed", e);
       return;
@@ -119,40 +162,63 @@ public class ConsolePushSender {
     }
   }
 
-  private void sendOne(ConsolePushSubscriptionEntity sub, byte[] body) {
+  private byte[] serializePayload(PushPayload payload) throws JsonProcessingException {
+    Map<String, String> serializedPayload = Map.of(
+        "title", EmptyChecks.isNull(payload.title()) ? "" : payload.title(),
+        "body", EmptyChecks.isNull(payload.body()) ? "" : payload.body(),
+        "tag", EmptyChecks.isNull(payload.tag()) ? "" : payload.tag(),
+        "url", EmptyChecks.isNull(payload.url()) ? "/m/ops/summary" : payload.url());
+    return objectMapper.writeValueAsBytes(serializedPayload);
+  }
+
+  private DeliveryResult sendOne(ConsolePushSubscriptionEntity sub, byte[] body) {
+    if (Thread.currentThread().isInterrupted()) {
+      return new DeliveryResult(DeliveryOutcome.UNKNOWN, null);
+    }
+    ManagedWebPushClient service = pushService.get();
+    if (EmptyChecks.isNull(service)) {
+      return new DeliveryResult(DeliveryOutcome.NOT_READY, null);
+    }
+    Notification notification;
     try {
       // web-push 5.1.1 没有 .subscription(Subscription) builder 方法;直接用
       // (endpoint, userPublicKey base64-url, userAuth base64-url, body, ttl)
       // 5-arg 构造器,免去 Subscription / Keys 包装。
-      Notification notification = new Notification(
+      notification = new Notification(
           sub.getEndpoint(),
           sub.getP256dhKey(),
           sub.getAuthSecret(),
           body,
           properties.getTtlSeconds());
 
-      // sendOne 已在 pushTaskExecutor,但发送仍要封顶等待,避免慢 endpoint 占住线程。
-      PushAsyncService service = pushService.get();
-      if (service == null) {
-        return;
-      }
+    } catch (Exception e) {
+      log.error(
+          "[push] invalid subscription id={} error={}",
+          sub.getId(),
+          SwallowedExceptionLogger.summary(e));
+      return new DeliveryResult(DeliveryOutcome.PERMANENT_FAILURE, null);
+    }
+    try {
       CompletableFuture<Response> future = service.send(notification);
       Response resp = future.get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       int code = resp.getStatusCode();
       if (code >= 200 && code < 300) {
-        repository.touchLastPushedAt(sub.getId(), Instant.now());
+        updateSubscriptionAfterResponse(sub, code);
+        return new DeliveryResult(DeliveryOutcome.ACCEPTED, code);
       } else if (code == 404 || code == 410) {
-        // 浏览器推送服务告知:此 endpoint 已永久失效 → 物理删除
-        log.info("[push] endpoint gone ({}), purging sub id={}", code, sub.getId());
-        repository.deleteAllByEndpoint(sub.getEndpoint());
-      } else {
-        log.warn("[push] send non-2xx status={} sub_id={}", code, sub.getId());
+        updateSubscriptionAfterResponse(sub, code);
+        return new DeliveryResult(DeliveryOutcome.GONE, code);
       }
+      log.warn("[push] send non-2xx status={} sub_id={}", code, sub.getId());
+      return new DeliveryResult(
+          code == 429 || code >= 500
+              ? DeliveryOutcome.RETRYABLE_FAILURE
+              : DeliveryOutcome.PERMANENT_FAILURE,
+          code);
     } catch (InterruptedException ie) {
       Thread.currentThread().interrupt();
     } catch (TimeoutException te) {
-      // 慢 endpoint:本次跳过、不重试、不立刻清理 sub(避免短瞬抖动误删),只 warn 留痕。
-      // web-push 6.x 升级后可引入「连续 N 次超时 → 暂时禁用 endpoint」更精细策略。
+      // 服务方可能已经接受请求；超时并不代表请求被拒绝。
       log.warn("[push] send timeout after {}s, sub_id={}", SEND_TIMEOUT_SECONDS, sub.getId());
     } catch (ExecutionException | RuntimeException e) {
       log.error(
@@ -163,6 +229,24 @@ public class ConsolePushSender {
       // web-push 抛 JoseException / GeneralSecurityException / IOException 等 checked exception 回退
       log.error(
           "[push] send unexpected sub_id={} error={}",
+          sub.getId(),
+          SwallowedExceptionLogger.summary(e));
+    }
+    return new DeliveryResult(DeliveryOutcome.UNKNOWN, null);
+  }
+
+  private void updateSubscriptionAfterResponse(ConsolePushSubscriptionEntity sub, int code) {
+    try {
+      if (code >= 200 && code < 300) {
+        repository.touchIfUnchanged(sub, Instant.now());
+      } else {
+        repository.deleteIfUnchanged(sub);
+      }
+    } catch (RuntimeException e) {
+      // 本地记账不能把已经观察到的服务方响应改成重试。
+      log.warn(
+          "[push] subscription bookkeeping failed status={} sub_id={} error={}",
+          code,
           sub.getId(),
           SwallowedExceptionLogger.summary(e));
     }

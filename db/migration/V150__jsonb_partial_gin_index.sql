@@ -33,16 +33,20 @@
 --    与 V133 idx_file_record_metadata_json_gin (全表) 并存:
 --    planner 在 WHERE metadata_json IS NOT NULL 谓词出现时优先 partial,
 --    其它查询(如全表 jsonb_exists)仍可走全表 GIN。
+
 CREATE INDEX IF NOT EXISTS idx_file_record_metadata_json_gin_partial
     ON batch.file_record USING GIN (metadata_json)
     WHERE metadata_json IS NOT NULL;
 
 -- 2) outbox_event.payload_json GIN — outbox 表 JSONB NOT NULL,partial 退化为全表
 --    单独建索引(不带 partial WHERE)覆盖 ConsoleOutboxMapper 可能的 payload 内
+
 --    字段过滤路径。如生产无此查询,V151+ 取证 DROP。
+
 CREATE INDEX IF NOT EXISTS idx_outbox_event_payload_json_gin
     ON batch.outbox_event USING GIN (payload_json);
 
 -- 3) 立即 ANALYZE 让 planner 拿到新索引统计;否则等 autovacuum 可能数小时。
+
 ANALYZE batch.file_record;
 ANALYZE batch.outbox_event;

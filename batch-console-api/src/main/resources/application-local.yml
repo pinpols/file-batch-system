@@ -1,5 +1,5 @@
 server:
-  port: 18080
+  port: ${BATCH_CONSOLE_API_PORT:18080}
 
 spring:
   main:
@@ -58,7 +58,7 @@ batch:
       # 生产由 application.yml 的环境变量 BATCH_CONSOLE_SINGLE_SESSION_ENABLED 控制,默认仍 true。
       single-session-enabled: false
       jwt-issuer: batch-console-api
-      jwt-secret: console-jwt-secret-change-me
+      jwt-secret: ${BATCH_CONSOLE_JWT_SECRET:console-jwt-secret-change-me}
       jwt-ttl: PT8H
       session-state-ttl: P30D
       # R7-A1-P2：本地 HTTP 调试关掉 cookie Secure（默认 true，生产 HTTPS 强制）。

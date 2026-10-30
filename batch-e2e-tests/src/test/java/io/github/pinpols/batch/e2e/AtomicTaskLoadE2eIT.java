@@ -10,11 +10,12 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,7 +50,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
   private static final int TASK_COUNT = 15;
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -74,7 +75,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 
       launchService.launch(new LaunchRequest(
           TENANT,
-          seed.jobCode(),
+          seed.workflowDefinitionId(),
           LocalDate.of(2026, 1, 15),
           TriggerType.API,
           seed.requestId(),
@@ -106,20 +107,17 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
   }
 
   private int succeededCount(List<String> dedupKeys) {
-    String inClause = String.join(",", java.util.Collections.nCopies(dedupKeys.size(), "?"));
+    String inClause = String.join(",", Collections.nCopies(dedupKeys.size(), "?"));
     Object[] args = new Object[dedupKeys.size() + 1];
     args[0] = TENANT;
     for (int i = 0; i < dedupKeys.size(); i++) {
       args[i + 1] = dedupKeys.get(i);
     }
-    Integer n = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_task t"
-            + " join batch.job_instance ji on ji.id = t.job_instance_id"
-            + " where ji.tenant_id = ? and ji.dedup_key in ("
-            + inClause
-            + ") and t.task_status = 'SUCCESS'",
-        Integer.class,
-        args);
+    final String selectCountSql = """
+        select count(*) from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
+        where ji.tenant_id = ? and ji.dedup_key in (%s) and t.task_status = 'SUCCESS'\
+        """.formatted(inClause);
+    Integer n = jdbcTemplate.queryForObject(selectCountSql, Integer.class, args);
     return n == null ? 0 : n;
   }
 }

@@ -1,5 +1,6 @@
 -- 为租户配置包预览与 Apply 建立数据库级版本栅栏。
 -- 所有配置写入口都由表触发器递增版本；Apply 锁定版本行后再比较，避免并发写入静默覆盖。
+
 CREATE TABLE batch.tenant_configuration_revision (
     tenant_id TEXT PRIMARY KEY,
     revision BIGINT NOT NULL DEFAULT 0,
@@ -151,11 +152,13 @@ END;
 $$;
 
 -- 函数只暴露租户配置版本，不开放版本表本身；业务表触发器由定义者权限维护版本。
+
 REVOKE ALL ON batch.tenant_configuration_revision FROM PUBLIC;
 REVOKE ALL ON FUNCTION batch.current_tenant_configuration_revision(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION batch.lock_tenant_configuration_revision(TEXT) FROM PUBLIC;
 REVOKE ALL ON FUNCTION batch.bump_tenant_configuration_revision() FROM PUBLIC;
 
 -- Flyway 与应用共用平台数据库账号；仅授权迁移执行账号，避免其他数据库角色探测或锁定任意租户版本。
+
 GRANT EXECUTE ON FUNCTION batch.current_tenant_configuration_revision(TEXT) TO CURRENT_USER;
 GRANT EXECUTE ON FUNCTION batch.lock_tenant_configuration_revision(TEXT) TO CURRENT_USER;

@@ -30,7 +30,13 @@ public class PipelineStageProgressRegistry {
     snapshots.put(
         key,
         new WorkerPipelineProgressDto(
-            key.taskId(), key.pipelineInstanceId(), key.stageCode(), rowsProcessed, totalRowsHint));
+            key.taskId(),
+            key.pipelineInstanceId(),
+            key.stageCode(),
+            rowsProcessed,
+            totalRowsHint,
+            key.invocationId(),
+            key.stepRunId()));
   }
 
   public void clear(ExecutionContext context, String stageCode) {
@@ -58,7 +64,15 @@ public class PipelineStageProgressRegistry {
     if (EmptyChecks.isNull(taskId) || EmptyChecks.isNull(pipelineInstanceId)) {
       return null;
     }
-    return new Key(taskId, pipelineInstanceId, stageCode);
+    Object invocation = context.getAttributes().get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
+    Long stepRunId =
+        longValue(context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_STEP_RUN_ID));
+    return new Key(
+        taskId,
+        pipelineInstanceId,
+        stageCode,
+        EmptyChecks.isNull(invocation) ? null : String.valueOf(invocation),
+        stepRunId);
   }
 
   private static Long longValue(Object value) {
@@ -69,11 +83,17 @@ public class PipelineStageProgressRegistry {
       return null;
     }
     try {
-      return Long.valueOf(String.valueOf(value));
+      String numericText = String.valueOf(value);
+      return Long.valueOf(numericText);
     } catch (NumberFormatException ignored) {
       return null;
     }
   }
 
-  private record Key(Long taskId, Long pipelineInstanceId, String stageCode) {}
+  private record Key(
+      Long taskId,
+      Long pipelineInstanceId,
+      String stageCode,
+      String invocationId,
+      Long stepRunId) {}
 }

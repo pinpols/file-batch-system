@@ -7,7 +7,11 @@ public interface TriggerDefinitionMapper {
 
   List<TriggerDescriptor> selectAllScheduledDefinitions();
 
-  TriggerDescriptor selectByJobCode(String tenantId, String jobCode);
+  List<TriggerDescriptor> selectDefinitionsWithPendingMisfires();
 
-  int updateEnabled(String tenantId, String jobCode, boolean enabled);
+  TriggerDescriptor selectByWorkflowCode(String tenantId, String workflowCode);
+
+  TriggerDescriptor selectByWorkflowDefinitionId(String tenantId, Long workflowDefinitionId);
+
+  int updateWorkflowScheduleEnabled(String tenantId, String workflowCode, boolean enabled);
 }

@@ -27,9 +27,8 @@ spring:
     schemas:
       - batch
       - quartz
-    # deploy/docker/postgres/init/001-create-schemas.sql 在 PG initdb 阶段先创建空 batch + quartz schema，
-    # Flyway 默认拒绝在「非空 schema 但无 history 表」上 migrate。baseline-on-migrate=true 让 Flyway
-    # 把 baseline-version=1 标记为已应用（即「V1 建 schema 已由 docker init 完成」），从 V2 开始迁移。
+    # Docker init 可预建 batch + quartz schema。空 schema 会执行 V1；若 schema 已含对象但无
+    # history 表，baseline-on-migrate=true 将 V1 标记为基线，再从 V2 执行迁移。
     # 不要把 baseline-version 改成最新版本号——那会跳过中间所有迁移。
     baseline-on-migrate: true
     baseline-version: 1
@@ -64,6 +63,17 @@ management:
         batch.trigger.launch.consume.duration: true
 
 batch:
+  replay-operation:
+    # 预览与准入的同步处理范围上限；仅依据 R25 范围容量证据调整。
+    max-range-days: ${BATCH_REPLAY_OPERATION_MAX_RANGE_DAYS:31}
+  job-dependency-wait:
+    # 告警不会改变 WAITING；0 关闭一次性告警。
+    timeout-alert-seconds: ${BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT_SECONDS:86400}
+  batch-day:
+    # 依赖等待超过该时长后发送一次去重告警，等待本身仍可在上游就绪后自动恢复；0 表示关闭超时告警。
+    dependency-wait-timeout-seconds: ${BATCH_BATCH_DAY_DEPENDENCY_WAIT_TIMEOUT_SECONDS:86400}
+    # 每轮最多补建的历史业务日；停机时间更长时后续扫描继续推进。
+    catchup-days-per-scan: ${BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN:14}
   data-quality:
     # ENFORCE 保持既有阻断语义；SHADOW 执行并留痕但不阻断结果生效；OFF 完全跳过。
     mode: ${BATCH_DATA_QUALITY_MODE:ENFORCE}
@@ -135,6 +145,9 @@ batch:
     # 单轮最多扫描的策略数
     batch-limit: ${BATCH_ASSET_FRESHNESS_BATCH_LIMIT:500}
   trigger:
+    internal:
+      # readiness 恢复沿用统一 Trigger 地址，随环境端口或集群 Service 地址覆盖。
+      base-url: ${BATCH_TRIGGER_BASE_URL:http://localhost:${BATCH_TRIGGER_PORT:18081}}
     consumer:
       # 每个 orchestrator 实例的 listener 数；生产 2 副本时 topic 至少 12 分区。
       concurrency: ${BATCH_TRIGGER_CONSUMER_CONCURRENCY:6}

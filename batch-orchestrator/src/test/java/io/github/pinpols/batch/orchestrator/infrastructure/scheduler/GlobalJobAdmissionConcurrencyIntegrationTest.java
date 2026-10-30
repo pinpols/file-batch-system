@@ -4,11 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -20,6 +24,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
@@ -36,6 +42,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTest {
 
   private static final String TENANT_ID = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 22);
 
   private final JobInstanceMapper jobInstanceMapper;
   private final JdbcTemplate jdbcTemplate;
@@ -44,10 +51,11 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
   GlobalJobAdmissionConcurrencyIntegrationTest(
       JobInstanceMapper jobInstanceMapper,
       JdbcTemplate jdbcTemplate,
-      TransactionTemplate transactionTemplate) {
+      PlatformTransactionManager transactionManager) {
     this.jobInstanceMapper = jobInstanceMapper;
     this.jdbcTemplate = jdbcTemplate;
-    this.transactionTemplate = transactionTemplate;
+    // 容器另有 Sensor 业务库的只读模板；本测试必须与平台 Mapper/JdbcTemplate 使用同一事务。
+    this.transactionTemplate = new TransactionTemplate(transactionManager);
   }
 
   @Test
@@ -101,62 +109,85 @@ class GlobalJobAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTe
       throws InterruptedException {
     startGate.await();
     return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+      assertThat(TransactionSynchronizationManager.hasResource(jdbcTemplate.getDataSource()))
+          .as("platform mapper and JDBC writes must share the admission transaction")
+          .isTrue();
       boolean accepted = admissionGuard.hasCapacity();
       if (accepted) {
-        jdbcTemplate.update(
-            "UPDATE batch.job_instance SET instance_status = 'RUNNING' WHERE id = ?", instanceId);
+        String activateJobInstanceSql = """
+            UPDATE batch.job_instance SET instance_status = 'RUNNING' WHERE id = ?
+        """;
+        jdbcTemplate.update(activateJobInstanceSql, instanceId);
       }
       return accepted;
     }));
   }
 
   private List<String> statuses(long firstId, long secondId) {
-    return jdbcTemplate.queryForList(
-        "SELECT instance_status FROM batch.job_instance WHERE id IN (?, ?)",
-        String.class,
-        firstId,
-        secondId);
+    String selectJobInstanceStatusesSql = """
+        SELECT instance_status FROM batch.job_instance WHERE id IN (?, ?)
+    """;
+    return jdbcTemplate.queryForList(selectJobInstanceStatusesSql, String.class, firstId, secondId);
   }
 
   private SeededInstance seedCreatedInstance(String suffix) {
     String jobCode = "JOB_" + suffix;
-    Long jobDefinitionId =
-        jdbcTemplate.queryForObject("""
+    String insertJobDefinitionSql = """
         INSERT INTO batch.job_definition (
             tenant_id, job_code, job_name, job_type, schedule_type, timezone, trigger_mode
         ) VALUES (?, ?, ?, 'GENERAL', 'MANUAL', 'UTC', 'API')
         RETURNING id
-        """, Long.class, TENANT_ID, jobCode, jobCode);
-    Long triggerRequestId = jdbcTemplate.queryForObject(
-        """
-        INSERT INTO batch.trigger_request (
-            tenant_id, request_id, trigger_type, job_code, dedup_key, request_status
-        ) VALUES (?, ?, 'API', ?, ?, 'LAUNCHED')
-        RETURNING id
-        """, Long.class, TENANT_ID, "REQ_" + suffix, jobCode, "TR_DEDUP_" + suffix);
-    Long instanceId = jdbcTemplate.queryForObject(
-        """
+        """;
+    Long jobDefinitionId = jdbcTemplate.queryForObject(
+        insertJobDefinitionSql, Long.class, TENANT_ID, jobCode, jobCode);
+    WorkflowChildTriggerSeed child =
+        LaunchIntegrationFixture.prepareWorkflowChildTriggerRequestForDefinition(
+            jdbcTemplate, TENANT_ID, jobDefinitionId, jobCode, suffix, BIZ_DATE, TriggerType.API);
+    Long triggerRequestId = child.triggerRequestId();
+    String insertJobInstanceSql = """
         INSERT INTO batch.job_instance (
             tenant_id, job_definition_id, trigger_request_id, job_code, instance_no,
             trigger_type, instance_status, dedup_key, biz_date
-        ) VALUES (?, ?, ?, ?, ?, 'API', 'CREATED', ?, CURRENT_DATE)
+        ) VALUES (?, ?, ?, ?, ?, 'EVENT', 'CREATED', ?, ?)
         RETURNING id
-        """,
+        """;
+    Long instanceId = jdbcTemplate.queryForObject(
+        insertJobInstanceSql,
         Long.class,
         TENANT_ID,
         jobDefinitionId,
         triggerRequestId,
         jobCode,
         "INST_" + suffix,
-        "DEDUP_" + suffix);
+        "DEDUP_" + suffix,
+        BIZ_DATE);
     return new SeededInstance(instanceId, triggerRequestId, jobDefinitionId);
   }
 
   private void cleanup(SeededInstance seeded) {
-    jdbcTemplate.update("DELETE FROM batch.job_instance WHERE id = ?", seeded.instanceId());
-    jdbcTemplate.update(
-        "DELETE FROM batch.trigger_request WHERE id = ?", seeded.triggerRequestId());
-    jdbcTemplate.update("DELETE FROM batch.job_definition WHERE id = ?", seeded.jobDefinitionId());
+    String deleteJobInstanceSql = """
+        DELETE FROM batch.job_instance WHERE id = ?
+    """;
+    jdbcTemplate.update(deleteJobInstanceSql, seeded.instanceId());
+    String selectParentWorkflowRunIdSql = """
+        SELECT parent_workflow_run_id FROM batch.trigger_request WHERE id = ?
+    """;
+    Long workflowRunId = jdbcTemplate.queryForObject(
+        selectParentWorkflowRunIdSql, Long.class, seeded.triggerRequestId());
+    String selectRootTriggerRequestIdSql = """
+        SELECT trigger_request_id FROM batch.workflow_run WHERE id = ?
+    """;
+    Long rootTriggerRequestId =
+        jdbcTemplate.queryForObject(selectRootTriggerRequestIdSql, Long.class, workflowRunId);
+    String deleteTriggerRequestSql = """
+        DELETE FROM batch.trigger_request WHERE id = ?
+    """;
+    jdbcTemplate.update(deleteTriggerRequestSql, seeded.triggerRequestId());
+    String deleteWorkflowRunSql = """
+        DELETE FROM batch.workflow_run WHERE id = ?
+    """;
+    jdbcTemplate.update(deleteWorkflowRunSql, workflowRunId);
+    jdbcTemplate.update(deleteTriggerRequestSql, rootTriggerRequestId);
   }
 
   private record SeededInstance(long instanceId, long triggerRequestId, long jobDefinitionId) {}

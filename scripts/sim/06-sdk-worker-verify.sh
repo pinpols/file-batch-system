@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：sdk-worker-verify.sh — 自托管 SDK worker 端到端真实调用验证(可重复执行)。
+# 用法：在仓库根目录执行 bash scripts/sim/06-sdk-worker-verify.sh；参数与前置环境见下方说明及所属 README。
 # 06-sdk-worker-verify.sh — 自托管 SDK worker 端到端真实调用验证(可重复执行)
 #
 # 对【本地运行栈】验证 examples/sample-tenant-worker(batch-worker-sdk)的真实接入:
@@ -37,7 +39,7 @@ INTERNAL_SECRET="${INTERNAL_SECRET:-internal-secret}"
 # 任务会因 claim 404 触发 SDK 的 fail-loud 保护,把本轮验证任务一并挡住。
 # 下面的默认值在启动 worker 前由 WORKER_CODE 展开为精确 node topic;仍允许调用方显式覆盖。
 DISPATCH_JOB_CODE="${DISPATCH_JOB_CODE:-SDK_VERIFY_DISPATCH_ECHO}"
-DISPATCH_FIXTURE="$REPO_ROOT/docs/test-data/sim06-sdk-dispatch-echo-fixtures.sql"
+DISPATCH_FIXTURE="$REPO_ROOT/test-data/sim/sim06-sdk-dispatch-echo-fixtures.sql"
 KAFKA_CONTAINER="${KAFKA_CONTAINER:-$BATCH_DEFAULT_KAFKA_CONTAINER}"
 KAFKA_INTERNAL_BOOTSTRAP="${KAFKA_INTERNAL_BOOTSTRAP:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 ADMIN_USER="${ADMIN_USER:-admin}"
@@ -212,11 +214,19 @@ if [[ "${PHASE2_DISPATCH:-1}" == "1" ]]; then
     fi
     # 7b. 触发 launch
     RID="sdk-verify-dispatch-$(date +%s)"
+    workflow_id=$(SIM_ROOT="$REPO_ROOT" "$PYTHON_BIN" \
+      "$REPO_ROOT/scripts/sim/launch_contract.py" "$TENANT" "$DISPATCH_JOB_CODE") || {
+      workflow_id=""
+    }
+    if [[ -z "$workflow_id" ]]; then
+      launch_code="not-started"
+    else
     launch_code=$(curl -s -m 15 -o /tmp/sdk-dispatch-launch.json -w '%{http_code}' \
       -X POST "$TRIGGER/api/triggers/launch" \
       -H 'Content-Type: application/json' -H "X-Tenant-Id: $TENANT" \
       -H "X-Internal-Secret: $INTERNAL_SECRET" -H "Idempotency-Key: $RID" -H "X-Request-Id: $RID" \
-      -d "{\"tenantId\":\"$TENANT\",\"jobCode\":\"$DISPATCH_JOB_CODE\",\"triggerType\":\"API\",\"bizDate\":\"$(date +%Y-%m-%d)\",\"requestId\":\"$RID\"}")
+      -d "{\"tenantId\":\"$TENANT\",\"workflowDefinitionId\":$workflow_id,\"triggerType\":\"API\",\"bizDate\":\"$(date +%Y-%m-%d)\",\"requestId\":\"$RID\"}")
+    fi
     if [[ "$launch_code" == "200" ]]; then
       ok "launch 受理(rid=$RID)"
     else

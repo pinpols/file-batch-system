@@ -13,7 +13,9 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.kafka.KafkaContainer;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 /**
  * 集成测试基类：需要真实 PostgreSQL、Kafka、S3 兼容对象存储、Redis 的模块继承本类。
@@ -32,23 +34,23 @@ public abstract class AbstractIntegrationTest {
 
   // PG 不复用：outbox_event 等表的跨运行残留会破坏依赖其状态的集成测试。
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
+  protected static final PostgreSQLContainer PLATFORM_POSTGRES = TestPostgresContainers.platform()
       .withInitScript("db/platform-init.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
   @SuppressWarnings("resource")
-  private static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business()
+  protected static final PostgreSQLContainer BUSINESS_POSTGRES = TestPostgresContainers.business()
       .withInitScript("db/create_biz_tables.sql")
       .withCommand("postgres", "-c", "max_connections=500");
 
   // Kafka 不复用：故障注入用例需要 stop/start，且每次测试运行应从干净 broker 状态开始。
-  private static final KafkaContainer KAFKA = TestKafkaContainers.create();
+  protected static final KafkaContainer KAFKA = TestKafkaContainers.create();
 
   @SuppressWarnings("resource")
-  private static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
+  protected static final TestObjectStoreEndpoint OBJECT_STORE = createObjectStoreEndpoint();
 
   @SuppressWarnings("resource")
-  private static final GenericContainer<?> REDIS = createRedisContainer();
+  protected static final GenericContainer<?> REDIS = createRedisContainer();
 
   static {
     // 在同一 JVM 中所有集成测试类之间保持测试基础设施端口稳定。
@@ -84,9 +86,17 @@ public abstract class AbstractIntegrationTest {
   }
 
   @DynamicPropertySource
-  static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+  protected static void registerDynamicProperties(DynamicPropertyRegistry registry) {
+    registerDynamicProperties(registry, true);
+  }
+
+  public static void registerDynamicProperties(
+      DynamicPropertyRegistry registry, boolean securityBypassMode) {
+    IntegrationTestInfrastructure.InfrastructureEndpoints endpoints =
+        new IntegrationTestInfrastructure.InfrastructureEndpoints(
+            PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
     IntegrationTestInfrastructure.registerDynamicProperties(
-        registry, PLATFORM_POSTGRES, BUSINESS_POSTGRES, KAFKA, OBJECT_STORE, REDIS);
+        registry, endpoints, securityBypassMode);
   }
 
   protected static String platformJdbcUrl() {
@@ -205,11 +215,8 @@ public abstract class AbstractIntegrationTest {
     requireObjectStore()
         .client()
         .putObject(
-            software.amazon.awssdk.services.s3.model.PutObjectRequest.builder()
-                .bucket(bucket)
-                .key(key)
-                .build(),
-            software.amazon.awssdk.core.sync.RequestBody.fromBytes(content));
+            PutObjectRequest.builder().bucket(bucket).key(key).build(),
+            RequestBody.fromBytes(content));
   }
 
   /** 确保 bucket（S3 桶 / FS 目录）存在。 */

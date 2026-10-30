@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -49,5 +51,19 @@ public class ExportDataPluginRegistry {
       throw new IllegalStateException("no ExportDataPlugin registered for id: " + id);
     }
     return plugin;
+  }
+
+  /** 使用与导出相同的插件选择和冻结配置解析重放元数据。 */
+  public ReplayCapabilityDeclaration replayCapability(
+      String id, Map<String, Object> frozenExportConfig) {
+    ExportDataPlugin plugin = require(id);
+    return plugin.replayCapability(frozenExportConfig);
+  }
+
+  public List<ReplayCapabilityDeclaration> replayCapabilityCatalog() {
+    return byId.values().stream()
+        .sorted(Comparator.comparing(ExportDataPlugin::id))
+        .map(ExportDataPlugin::replayCapabilityDeclaration)
+        .toList();
   }
 }

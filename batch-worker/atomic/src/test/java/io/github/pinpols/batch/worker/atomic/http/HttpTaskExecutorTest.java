@@ -1,28 +1,44 @@
 package io.github.pinpols.batch.worker.atomic.http;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
 import java.io.IOException;
 import java.io.InputStream;
+import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /** {@link HttpTaskExecutor} 单测 — validation / 黑白名单 / 真实 HTTP server(JDK {@link HttpServer})。 */
 @DisplayName("HTTP 任务执行器: 入参校验, 主机黑白名单与真实请求行为")
+@ExtendWith(OutputCaptureExtension.class)
 class HttpTaskExecutorTest {
 
   private HttpExecutorProperties props;
@@ -56,6 +72,41 @@ class HttpTaskExecutorTest {
 
   private TaskContext ctxWithParams(Map<String, Object> params) {
     return new TaskContext("t1", "job-1", "ti-1", "w-1", params, Map.of());
+  }
+
+  @Test
+  @DisplayName("无效超时参数不得静默使用默认超时并发送请求")
+  void shouldRejectNonIntegralOrNonNumericTimeout() {
+    AtomicInteger requests = new AtomicInteger();
+    server.createContext("/timeout-check", exchange -> {
+      requests.incrementAndGet();
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
+    for (Object value : List.of("1", 1.5d, new BigInteger("18446744073709551617"))) {
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url", "http://127.0.0.1:" + serverPort + "/timeout-check", "timeoutSeconds", value)));
+      assertThat(result.output())
+          .as("timeout=%s", value)
+          .containsEntry("error_code", "CONFIG_INVALID");
+    }
+    assertThat(requests).hasValue(0);
+  }
+
+  @Test
+  @DisplayName("执行器意外异常日志不得输出原始凭据")
+  void shouldMaskUnexpectedErrorInLog(CapturedOutput output) {
+    TaskContext context = mock(TaskContext.class);
+    when(context.tenantId()).thenReturn("t1");
+    when(context.jobCode()).thenReturn("job-1");
+    when(context.parameters()).thenThrow(new RuntimeException("context token=probe-secret"));
+
+    TaskResult result = executor.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+    assertThat(result.error()).hasMessageContaining("probe-secret");
+    assertThat(output.getOut()).doesNotContain("probe-secret");
   }
 
   private String url(String path) {
@@ -323,6 +374,37 @@ class HttpTaskExecutorTest {
 
       assertThat(r.success()).isFalse();
       assertThat(r.message()).contains("status 404 not in expected");
+      assertThat(r.output())
+          .containsEntry(AtomicErrorCode.OUTPUT_KEY, AtomicErrorCode.EXECUTION_FAILED.name());
+    }
+
+    @Test
+    @DisplayName("非幂等 HTTP 请求收到非预期响应时应标记外部副作用结果不明")
+    void shouldMarkUnknown_whenNonIdempotentHttpResponseIsUnexpected() {
+      AtomicInteger committedEffects = new AtomicInteger();
+      server.createContext("/commit-then-fail", ex -> {
+        committedEffects.incrementAndGet();
+        byte[] body = "upstream committed before returning 503".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(503, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url",
+          url("/commit-then-fail"),
+          "method",
+          "POST",
+          "body",
+          "side-effect",
+          "expectStatus",
+          200)));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.output())
+          .containsEntry(
+              AtomicErrorCode.OUTPUT_KEY, AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN.name());
+      assertThat(committedEffects).hasValue(1);
     }
 
     @Test
@@ -366,7 +448,7 @@ class HttpTaskExecutorTest {
       props.setMaxResponseBytes(10);
       server.createContext("/big", ex -> {
         byte[] body = new byte[1000];
-        java.util.Arrays.fill(body, (byte) 'X');
+        Arrays.fill(body, (byte) 'X');
         ex.sendResponseHeaders(200, body.length);
         ex.getResponseBody().write(body);
         ex.close();
@@ -422,9 +504,8 @@ class HttpTaskExecutorTest {
       // 服务端是否能在本机回环网络上感知 TCP 断连受内核/客户端缓冲影响,不是 HTTP API 可保证的语义。
       int max = 16;
       final long hugeTotal = 64L * 1024 * 1024; // 64 MiB
-      java.util.concurrent.atomic.AtomicLong written = new java.util.concurrent.atomic.AtomicLong();
-      java.util.concurrent.atomic.AtomicBoolean closed =
-          new java.util.concurrent.atomic.AtomicBoolean();
+      AtomicLong written = new AtomicLong();
+      AtomicBoolean closed = new AtomicBoolean();
       InputStream hugeStream = new InputStream() {
         private long remaining = hugeTotal;
 
@@ -434,7 +515,7 @@ class HttpTaskExecutorTest {
             return -1;
           }
           int count = (int) Math.min(length, remaining);
-          java.util.Arrays.fill(buffer, offset, offset + count, (byte) 'Z');
+          Arrays.fill(buffer, offset, offset + count, (byte) 'Z');
           remaining -= count;
           written.addAndGet(count);
           return count;
@@ -485,6 +566,110 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("显式期望的 5xx 是成功结果，不再进行重试")
+    void shouldAcceptExpectedServerError_withoutRetry() {
+      props.setMaxRetries(1);
+      props.setRetryBackoff(Duration.ofMillis(10));
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext("/expected-server-error", ex -> {
+        int status = calls.incrementAndGet() == 1 ? 503 : 200;
+        ex.sendResponseHeaders(status, -1);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(
+          ctxWithParams(Map.of("url", url("/expected-server-error"), "expectStatus", 503)));
+
+      assertThat(result.success()).isTrue();
+      assertThat(result.output()).containsEntry("statusCode", 503).containsEntry("attempts", 1);
+      assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("显式期望状态仍会在幂等请求收到 5xx 后重试")
+    void shouldRetryServerError_whenExpectedStatusIsSpecified() {
+      props.setMaxRetries(1);
+      props.setRetryBackoff(Duration.ofMillis(10));
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext("/flaky-expected", ex -> {
+        int status = calls.incrementAndGet() == 1 ? 503 : 200;
+        ex.sendResponseHeaders(status, -1);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(
+          ctxWithParams(Map.of("url", url("/flaky-expected"), "expectStatus", List.of(200))));
+
+      assertThat(result.success()).isTrue();
+      assertThat(result.output()).containsEntry("statusCode", 200).containsEntry("attempts", 2);
+      assertThat(calls).hasValue(2);
+    }
+
+    @Test
+    @DisplayName("显式期望状态的重试耗尽后只返回失败码，不回传响应载荷")
+    void shouldKeepFailureOutputMinimal_whenExpectedStatusRetryExhausts() {
+      props.setMaxRetries(1);
+      props.setRetryBackoff(Duration.ofMillis(10));
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext("/always-fail-expected", ex -> {
+        calls.incrementAndGet();
+        byte[] body = "token=do-not-return".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(503, body.length);
+        ex.getResponseBody().write(body);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(
+          ctxWithParams(Map.of("url", url("/always-fail-expected"), "expectStatus", 200)));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.output()).containsOnlyKeys("error_code");
+      assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+      assertThat(calls).hasValue(2);
+    }
+
+    @Test
+    @DisplayName("重试退避期间中断后不再发出后续请求")
+    void shouldStopRetry_whenInterruptedDuringServerErrorBackoff() throws Exception {
+      props.setMaxRetries(1);
+      props.setRetryBackoff(Duration.ofSeconds(10));
+      AtomicInteger calls = new AtomicInteger();
+      CountDownLatch firstRequest = new CountDownLatch(1);
+      server.createContext("/interrupted-retry", ex -> {
+        calls.incrementAndGet();
+        ex.sendResponseHeaders(503, -1);
+        ex.close();
+        firstRequest.countDown();
+      });
+      AtomicReference<TaskResult> result = new AtomicReference<>();
+      Thread worker = Thread.ofPlatform()
+          .start(() -> result.set(
+              executor.execute(ctxWithParams(Map.of("url", url("/interrupted-retry"))))));
+      try {
+        assertThat(firstRequest.await(5, TimeUnit.SECONDS)).isTrue();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+        while (worker.isAlive() && !isRetryBackoff(worker) && System.nanoTime() < deadline) {
+          Thread.sleep(10);
+        }
+        assertThat(isRetryBackoff(worker)).isTrue();
+        worker.interrupt();
+        worker.join(3000);
+        assertThat(worker.isAlive()).isFalse();
+        assertThat(calls).hasValue(1);
+        assertThat(result.get().success()).isFalse();
+      } finally {
+        worker.interrupt();
+        worker.join(3000);
+      }
+    }
+
+    private static boolean isRetryBackoff(Thread worker) {
+      return Arrays.stream(worker.getStackTrace())
+          .anyMatch(frame -> frame.getClassName().equals(HttpTaskExecutor.class.getName())
+              && frame.getMethodName().equals("sleep"));
+    }
+
+    @Test
     @DisplayName("非幂等请求遇到服务端错误时不应重试, 避免重复副作用")
     void shouldNotRetry_whenNonIdempotentRequestReturnsServerError() {
       props.setMaxRetries(2);
@@ -499,6 +684,29 @@ class HttpTaskExecutorTest {
 
       // POST 不重试,只 1 次
       assertThat(calls.get()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("非幂等 POST 已产生副作用但响应中断时不得在 Worker 内重发")
+    void shouldNotRetryPost_whenResponseIsInterruptedAfterRemoteSideEffect() {
+      props.setMaxRetries(2);
+      AtomicInteger remoteSideEffects = new AtomicInteger();
+      server.createContext("/post-side-effect-response-drop", ex -> {
+        remoteSideEffects.incrementAndGet();
+        byte[] partialResponse = "accepted".getBytes(StandardCharsets.UTF_8);
+        ex.sendResponseHeaders(200, partialResponse.length + 64L);
+        ex.getResponseBody().write(partialResponse);
+        ex.getResponseBody().flush();
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url", url("/post-side-effect-response-drop"),
+          "method", "POST",
+          "body", "perform irreversible remote action")));
+
+      assertThat(result.success()).isFalse();
+      assertThat(remoteSideEffects).hasValue(1);
     }
 
     @Test
@@ -563,8 +771,8 @@ class HttpTaskExecutorTest {
 
       assertThat(r.success()).isTrue();
       @SuppressWarnings("unchecked")
-      Map<String, java.util.List<String>> hdrs =
-          (Map<String, java.util.List<String>>) r.output().get("responseHeaders");
+      Map<String, List<String>> hdrs =
+          (Map<String, List<String>>) r.output().get("responseHeaders");
       // Set-Cookie / Authorization 必须被脱敏(任何大小写形态都不应残留原值)
       hdrs.forEach((name, values) -> {
         String lower = name.toLowerCase(Locale.ROOT);
@@ -582,23 +790,23 @@ class HttpTaskExecutorTest {
     @DisplayName("脱敏规则应忽略大小写, 并覆盖代理认证与旧版会话头")
     void shouldRedactSensitiveHeaders_whenCaseDiffers() {
       // 直接驱动静态 helper,避免 HTTP server 编排成本;case-insensitive 全覆盖。
-      Map<String, java.util.List<String>> in = new java.util.LinkedHashMap<>();
-      in.put("Set-Cookie", java.util.List.of("s=1"));
-      in.put("set-cookie2", java.util.List.of("legacy"));
-      in.put("AUTHORIZATION", java.util.List.of("Bearer abc"));
-      in.put("Proxy-Authorization", java.util.List.of("Basic xx"));
-      in.put("cookie", java.util.List.of("a=b"));
-      in.put("X-Trace-Id", java.util.List.of("t1"));
+      Map<String, List<String>> in = new LinkedHashMap<>();
+      in.put("Set-Cookie", List.of("s=1"));
+      in.put("set-cookie2", List.of("legacy"));
+      in.put("AUTHORIZATION", List.of("Bearer abc"));
+      in.put("Proxy-Authorization", List.of("Basic xx"));
+      in.put("cookie", List.of("a=b"));
+      in.put("X-Trace-Id", List.of("t1"));
 
-      Map<String, java.util.List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
+      Map<String, List<String>> out = HttpTaskExecutor.sanitizeResponseHeaders(in);
 
       assertThat(out)
-          .containsEntry("Set-Cookie", java.util.List.of("[REDACTED]"))
-          .containsEntry("set-cookie2", java.util.List.of("[REDACTED]"))
-          .containsEntry("AUTHORIZATION", java.util.List.of("[REDACTED]"))
-          .containsEntry("Proxy-Authorization", java.util.List.of("[REDACTED]"))
-          .containsEntry("cookie", java.util.List.of("[REDACTED]"))
-          .containsEntry("X-Trace-Id", java.util.List.of("t1"));
+          .containsEntry("Set-Cookie", List.of("[REDACTED]"))
+          .containsEntry("set-cookie2", List.of("[REDACTED]"))
+          .containsEntry("AUTHORIZATION", List.of("[REDACTED]"))
+          .containsEntry("Proxy-Authorization", List.of("[REDACTED]"))
+          .containsEntry("cookie", List.of("[REDACTED]"))
+          .containsEntry("X-Trace-Id", List.of("t1"));
     }
 
     @Test
@@ -609,7 +817,7 @@ class HttpTaskExecutorTest {
     }
   }
 
-  // ─── enforce allowlist (deny-all) ────────────────────────────────────────────
+  // ─── 强制执行允许列表（默认全部拒绝）────────────────────────────────────────────
 
   @Nested
   @DisplayName("白名单强制模式: 空名单下的默认拒绝")

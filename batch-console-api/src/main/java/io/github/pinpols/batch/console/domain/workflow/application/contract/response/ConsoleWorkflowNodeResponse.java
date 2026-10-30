@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.workflow.application.contract.response;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleWorkflowNodeResponse(
     Long id,
     Long workflowDefinitionId,
@@ -9,7 +11,6 @@ public record ConsoleWorkflowNodeResponse(
     String nodeName,
     String nodeType,
     String relatedJobCode,
-    String relatedPipelineCode,
     String workerGroup,
     String windowCode,
     Integer nodeOrder,

@@ -17,16 +17,17 @@ public record PipelineStepTemplate(
     boolean enabled) {
   /** 从参数对象创建 PipelineStepTemplate。 */
   public static PipelineStepTemplate from(PipelineStepTemplateParam param) {
-    return new PipelineStepTemplate(
-        param.stepCode(),
-        param.stepName(),
-        param.stageCode(),
-        param.stepOrder(),
-        param.implCode(),
-        param.stepParams(),
-        param.timeoutSeconds(),
-        param.retryPolicy(),
-        param.retryMaxCount(),
-        param.enabled());
+    return PipelineStepTemplate.builder()
+        .stepCode(param.stepCode())
+        .stepName(param.stepName())
+        .stageCode(param.stageCode())
+        .stepOrder(param.stepOrder())
+        .implCode(param.implCode())
+        .stepParams(param.stepParams())
+        .timeoutSeconds(param.timeoutSeconds())
+        .retryPolicy(param.retryPolicy())
+        .retryMaxCount(param.retryMaxCount())
+        .enabled(param.enabled())
+        .build();
   }
 }

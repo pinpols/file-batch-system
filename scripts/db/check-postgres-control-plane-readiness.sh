@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：外置 PostgreSQL 控制面容量预检。SQL 只读，阈值与退出策略由本脚本负责。
+# 用法：在仓库根目录执行 bash scripts/db/check-postgres-control-plane-readiness.sh；参数与前置环境见下方说明及所属 README。
 # 外置 PostgreSQL 控制面容量预检。SQL 只读，阈值与退出策略由本脚本负责。
 set -euo pipefail
 

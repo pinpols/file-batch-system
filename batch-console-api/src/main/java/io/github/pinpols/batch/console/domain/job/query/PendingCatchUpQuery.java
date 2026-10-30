@@ -10,7 +10,7 @@ import lombok.Builder;
 @Builder
 public record PendingCatchUpQuery(
     String tenantId,
-    String jobCode,
+    String workflowCode,
     String requestId,
     String bizDate,
     String keyword,

@@ -57,8 +57,10 @@ public class DefaultResourceQueueManager implements ResourceQueueManager {
       OrchestratorConfigCacheProperties properties,
       MeterRegistry meterRegistry) {
     this.resourceQueueMapper = resourceQueueMapper;
+    long localPositiveTtlMillis = properties.getLocalPositiveTtlMillis();
+    Duration localPositiveTtl = Duration.ofMillis(localPositiveTtlMillis);
     this.enabledQueuesByTenant = Caffeine.newBuilder()
-        .expireAfterWrite(Duration.ofMillis(properties.getLocalPositiveTtlMillis()))
+        .expireAfterWrite(localPositiveTtl)
         .maximumSize(properties.getLocalPositiveMaximumSize())
         .recordStats()
         .build();

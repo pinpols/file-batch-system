@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.application.contrac
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +16,7 @@ public record FrontendTelemetryRequest(
     @NotBlank @Size(max = 50) String app,
     @Size(max = 64) String userId,
     @Size(max = 128) String sessionId,
-    @NotEmpty @Size(max = 50) List<@Valid Event> events) {
+    @NotEmpty @Size(max = 50) List<@NotNull @Valid Event> events) {
   public record Event(
       @NotBlank @Size(max = 20) String type,
       @NotBlank @Size(max = 200) String name,

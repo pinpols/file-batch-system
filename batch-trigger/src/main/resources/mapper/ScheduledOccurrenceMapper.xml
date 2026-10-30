@@ -1,0 +1,418 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper">
+    <select id="selectTenantConfigurationRevision" resultType="long">
+        select batch.current_tenant_configuration_revision(#{tenantId})
+    </select>
+
+    <select id="selectTenantConfigurationUpdatedAt" resultType="java.time.Instant">
+        select updated_at
+          from batch.tenant_configuration_revision
+         where tenant_id = #{tenantId}
+    </select>
+
+    <select id="lockTenantConfigurationRevision" resultType="long">
+        select batch.lock_tenant_configuration_revision(#{tenantId})
+    </select>
+
+    <select id="isCoverageCurrentForTenantConfiguration" resultType="boolean">
+        select exists (
+            select 1
+              from batch.scheduled_occurrence_coverage coverage
+              left join batch.tenant_configuration_revision revision
+                on revision.tenant_id = coverage.tenant_id
+             where coverage.tenant_id = #{tenantId}
+               and coverage.workflow_definition_id = #{workflowDefinitionId}
+               and coverage.configuration_revision = coalesce(revision.revision, 0)
+        )
+    </select>
+
+    <resultMap id="coverageResultMap" type="io.github.pinpols.batch.trigger.support.ScheduledOccurrenceCoverage">
+        <constructor>
+            <arg column="coverage_from_at" javaType="java.time.Instant" name="coverageFrom"/>
+            <arg column="coverage_through_at" javaType="java.time.Instant" name="coverageThrough"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="observationResultMap" type="io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation">
+        <constructor>
+            <arg column="schedule_version" javaType="java.lang.Integer"/>
+            <arg column="calendar_code" javaType="java.lang.String"/>
+            <arg column="biz_date" javaType="java.time.LocalDate"/>
+            <arg column="occurrence_status" javaType="java.lang.String"/>
+            <arg column="request_id" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectObservedOccurrence" resultMap="observationResultMap">
+        select schedule_version, calendar_code, biz_date, occurrence_status, request_id
+        from batch.scheduled_occurrence
+        where tenant_id = #{tenantId} and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime} and occurrence_status != 'PLANNED'
+    </select>
+
+    <insert id="upsertObserved">
+        insert into batch.scheduled_occurrence (
+            tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
+            scheduled_fire_time, biz_date, occurrence_status, request_id, misfire_detected_at
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{workflowCode}, #{scheduleVersion}, #{calendarCode},
+            #{scheduledFireTime}, #{bizDate}, #{status}, #{requestId},
+            case when #{status} = 'MISFIRE_PENDING' then CURRENT_TIMESTAMP else null end
+        )
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time) do update
+        set schedule_version = case
+                when batch.scheduled_occurrence.occurrence_status = 'PLANNED'
+                then greatest(batch.scheduled_occurrence.schedule_version, excluded.schedule_version)
+                else batch.scheduled_occurrence.schedule_version end,
+            calendar_code = case
+                when batch.scheduled_occurrence.occurrence_status = 'PLANNED'
+                then excluded.calendar_code
+                else batch.scheduled_occurrence.calendar_code end,
+            biz_date = case
+                when batch.scheduled_occurrence.occurrence_status = 'PLANNED'
+                then excluded.biz_date
+                else batch.scheduled_occurrence.biz_date end,
+            occurrence_status = excluded.occurrence_status,
+            request_id = coalesce(batch.scheduled_occurrence.request_id, excluded.request_id),
+            misfire_detected_at = coalesce(batch.scheduled_occurrence.misfire_detected_at, excluded.misfire_detected_at),
+            updated_at = CURRENT_TIMESTAMP
+        where (
+                batch.scheduled_occurrence.occurrence_status in ('PLANNED', 'WAITING_READINESS', 'MISFIRE_PENDING')
+                or batch.scheduled_occurrence.occurrence_status = excluded.occurrence_status
+                or (batch.scheduled_occurrence.occurrence_status = 'CLOSED_DAY_REJECTED'
+                    and excluded.occurrence_status in ('REQUESTED', 'MISFIRE_PENDING')
+                    and exists (
+                        select 1 from batch.trigger_request request
+                        where request.tenant_id = excluded.tenant_id and request.request_id = excluded.request_id
+                          and request.workflow_definition_id = excluded.workflow_definition_id
+                          and request.biz_date = excluded.biz_date and request.trigger_type = 'CATCH_UP'
+                    ))
+              )
+          and (batch.scheduled_occurrence.occurrence_status = 'PLANNED' or (
+                batch.scheduled_occurrence.schedule_version = excluded.schedule_version
+                and batch.scheduled_occurrence.calendar_code is not distinct from excluded.calendar_code
+                and batch.scheduled_occurrence.biz_date is not distinct from excluded.biz_date
+              ))
+          and (batch.scheduled_occurrence.request_id is null
+               or batch.scheduled_occurrence.request_id = excluded.request_id)
+    </insert>
+
+    <insert id="recordClosedBatchDayRejection">
+        insert into batch.scheduled_occurrence (
+            tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
+            scheduled_fire_time, biz_date, occurrence_status, last_rejection_reason
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{workflowCode}, #{scheduleVersion}, #{calendarCode},
+            #{scheduledFireTime}, #{bizDate}, #{status}, #{reason}
+        )
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time) do update
+        set biz_date = case when batch.scheduled_occurrence.occurrence_status = 'PLANNED'
+                            then excluded.biz_date else batch.scheduled_occurrence.biz_date end,
+            occurrence_status = excluded.occurrence_status,
+            last_rejection_reason = excluded.last_rejection_reason,
+            updated_at = CURRENT_TIMESTAMP
+        where batch.scheduled_occurrence.occurrence_status in
+              ('PLANNED', 'WAITING_READINESS', 'MISFIRE_PENDING')
+          and batch.scheduled_occurrence.request_id is null
+    </insert>
+
+    <insert id="insertPlannedWithStatus">
+        insert into batch.scheduled_occurrence (
+            tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
+            scheduled_fire_time, biz_date, occurrence_status
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{workflowCode}, #{scheduleVersion}, #{calendarCode},
+            #{scheduledFireTime}, #{bizDate}, #{targetStatus}
+        )
+        <include refid="plannedConflictResolution"/>
+    </insert>
+
+    <insert id="insertPlannedBatch">
+        insert into batch.scheduled_occurrence (
+            tenant_id, workflow_definition_id, workflow_code, schedule_version, calendar_code,
+            scheduled_fire_time, biz_date, occurrence_status
+        ) values
+        <foreach collection="fires" item="fire" separator=",">
+            (#{tenantId}, #{workflowDefinitionId}, #{workflowCode}, #{scheduleVersion}, #{calendarCode},
+             #{fire.scheduledFireTime}, #{fire.bizDate}, #{targetStatus})
+        </foreach>
+        <include refid="plannedConflictResolution"/>
+    </insert>
+
+    <sql id="plannedConflictResolution">
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time) do update
+        set schedule_version = excluded.schedule_version,
+            calendar_code = excluded.calendar_code,
+            biz_date = excluded.biz_date,
+            occurrence_status = #{targetStatus},
+            readiness_deferred_since = null,
+            readiness_deadline = null,
+            updated_at = CURRENT_TIMESTAMP
+        where batch.scheduled_occurrence.occurrence_status in ('PLANNED', 'SUPERSEDED')
+          and batch.scheduled_occurrence.schedule_version &lt;= excluded.schedule_version
+          and (
+              batch.scheduled_occurrence.occurrence_status = 'SUPERSEDED'
+              or
+              batch.scheduled_occurrence.schedule_version &lt;&gt; excluded.schedule_version
+              or batch.scheduled_occurrence.calendar_code is distinct from excluded.calendar_code
+              or batch.scheduled_occurrence.biz_date is distinct from excluded.biz_date
+          )
+    </sql>
+
+    <update id="transitionStatus">
+        update batch.scheduled_occurrence
+        set occurrence_status = #{newStatus},
+            request_id = coalesce(#{requestId}, request_id),
+            misfire_detected_at = case when #{newStatus} = 'MISFIRE_PENDING'
+                then coalesce(misfire_detected_at, CURRENT_TIMESTAMP) else misfire_detected_at end,
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and occurrence_status = #{expectedStatus}
+          and (#{newStatus} != 'MISFIRE_PENDING' or exists (
+              select 1 from batch.workflow_definition wf
+              where wf.tenant_id = #{tenantId} and wf.id = #{workflowDefinitionId} and wf.enabled = true
+          ))
+    </update>
+
+    <update id="acceptRejectedOccurrence">
+        update batch.scheduled_occurrence
+        set occurrence_status = #{targetStatus},
+            request_id = #{requestId},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and biz_date = #{bizDate}
+          and occurrence_status = 'CLOSED_DAY_REJECTED'
+          and request_id is null
+    </update>
+
+    <insert id="insertCatchUpAudit">
+        insert into batch.scheduled_occurrence_catch_up_audit (
+            tenant_id, workflow_definition_id, scheduled_fire_time, biz_date,
+            request_id, requested_by, reason
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{scheduledFireTime}, #{bizDate},
+            #{requestId}, #{requestedBy}, #{reason}
+        )
+    </insert>
+
+    <select id="selectOccurrenceStatusForUpdate" resultType="string">
+        select occurrence_status
+          from batch.scheduled_occurrence
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and scheduled_fire_time = #{scheduledFireTime}
+           and biz_date = #{bizDate}
+         for update
+    </select>
+
+    <select id="selectCatchUpRequestId" resultType="string">
+        select request_id
+          from batch.scheduled_occurrence_catch_up_audit
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and scheduled_fire_time = #{scheduledFireTime}
+    </select>
+
+    <select id="isPendingMisfireRecovery" resultType="boolean">
+        select exists (
+            select 1 from batch.scheduled_occurrence
+            where tenant_id = #{tenantId}
+              and workflow_definition_id = #{workflowDefinitionId}
+              and scheduled_fire_time = #{scheduledFireTime}
+              and schedule_version = #{scheduleVersion}
+              and occurrence_status = 'MISFIRE_PENDING'
+              and misfire_detected_at is not null
+        )
+    </select>
+
+    <select id="selectOccurrenceStatus" resultType="string">
+        select occurrence_status
+          from batch.scheduled_occurrence
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and scheduled_fire_time = #{scheduledFireTime}
+    </select>
+
+    <select id="selectUnobservedPlannedTimesBefore" resultType="java.time.Instant">
+        select scheduled_fire_time
+          from batch.scheduled_occurrence
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and schedule_version = #{scheduleVersion}
+           and occurrence_status = 'PLANNED'
+           and request_id is null
+           and scheduled_fire_time &lt; #{beforeExclusive}
+         order by scheduled_fire_time
+         limit #{limit}
+    </select>
+
+    <select id="selectPendingMisfireTimes" resultType="java.time.Instant">
+        select scheduled_fire_time
+          from batch.scheduled_occurrence
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and occurrence_status = 'MISFIRE_PENDING'
+           and not exists (
+               select 1
+                 from batch.trigger_misfire_pending pending
+                where pending.tenant_id = batch.scheduled_occurrence.tenant_id
+                  and pending.workflow_definition_id = batch.scheduled_occurrence.workflow_definition_id
+                  and pending.scheduled_fire_time = batch.scheduled_occurrence.scheduled_fire_time
+                  and pending.status = 'PENDING'
+           )
+         order by scheduled_fire_time
+         limit #{limit}
+    </select>
+
+    <select id="selectExpiredReadinessWaits"
+            resultType="io.github.pinpols.batch.trigger.domain.query.ExpiredReadinessWaitRow">
+        select tenant_id            as tenantId,
+               workflow_definition_id as workflowDefinitionId,
+               scheduled_fire_time  as scheduledFireTime,
+               readiness_deadline   as deadline
+          from batch.scheduled_occurrence
+         where occurrence_status = 'WAITING_READINESS'
+           and readiness_deadline &lt;= #{now}
+         order by readiness_deadline asc
+         limit #{limit}
+    </select>
+
+    <update id="timeoutExpiredReadinessWait">
+        update batch.scheduled_occurrence
+           set occurrence_status = #{nextStatus}, updated_at = CURRENT_TIMESTAMP
+         where tenant_id = #{wait.tenantId}
+           and workflow_definition_id = #{wait.workflowDefinitionId}
+           and scheduled_fire_time = #{wait.scheduledFireTime}
+           and occurrence_status = 'WAITING_READINESS'
+           and readiness_deadline &lt;= #{now}
+    </update>
+
+    <resultMap id="readinessWaitWindow" type="io.github.pinpols.batch.trigger.support.ReadinessWaitWindow">
+        <constructor>
+            <arg column="readiness_deferred_since" javaType="java.time.Instant"/>
+            <arg column="readiness_deadline" javaType="java.time.Instant"/>
+        </constructor>
+    </resultMap>
+
+    <select id="selectReadinessWaitWindow" resultMap="readinessWaitWindow">
+        select readiness_deferred_since, readiness_deadline
+        from batch.scheduled_occurrence
+        where tenant_id = #{tenantId} and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and occurrence_status = 'WAITING_READINESS'
+          and schedule_version = #{scheduleVersion}
+    </select>
+
+    <update id="supersedeFuturePlannedWithStatus">
+        update batch.scheduled_occurrence
+        set occurrence_status = #{targetStatus},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and schedule_version &lt; #{currentScheduleVersion}
+          and scheduled_fire_time &gt; #{now}
+          and occurrence_status = 'PLANNED'
+    </update>
+
+    <update id="supersedeAllFuturePlannedWithStatus">
+        update batch.scheduled_occurrence
+        set occurrence_status = #{targetStatus},
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_code = #{workflowCode}
+          and scheduled_fire_time &gt; #{now}
+          and occurrence_status = 'PLANNED'
+    </update>
+
+    <insert id="recordCoverage">
+        insert into batch.scheduled_occurrence_coverage (
+            tenant_id, workflow_definition_id, configuration_revision, schedule_version, calendar_code,
+            coverage_from_at, coverage_through_at, last_success_at, updated_at
+        ) values (
+            #{tenantId}, #{workflowDefinitionId}, #{configurationRevision}, #{scheduleVersion}, #{calendarCode},
+            #{coverageFrom}, #{coverageThrough}, greatest(#{completedAt}, clock_timestamp()),
+            greatest(#{completedAt}, clock_timestamp())
+        )
+        on conflict (tenant_id, workflow_definition_id) do update
+        set schedule_version = excluded.schedule_version,
+            configuration_revision = excluded.configuration_revision,
+            calendar_code = excluded.calendar_code,
+            coverage_from_at = case
+                when excluded.schedule_version &gt; batch.scheduled_occurrence_coverage.schedule_version
+                  or excluded.calendar_code is distinct from batch.scheduled_occurrence_coverage.calendar_code
+                    then excluded.coverage_from_at
+                else least(
+                    batch.scheduled_occurrence_coverage.coverage_from_at,
+                    excluded.coverage_from_at)
+            end,
+            coverage_through_at = case
+                when excluded.schedule_version &gt; batch.scheduled_occurrence_coverage.schedule_version
+                  or excluded.calendar_code is distinct from batch.scheduled_occurrence_coverage.calendar_code
+                  or excluded.configuration_revision &gt; batch.scheduled_occurrence_coverage.configuration_revision
+                    then excluded.coverage_through_at
+                else greatest(
+                    batch.scheduled_occurrence_coverage.coverage_through_at,
+                    excluded.coverage_through_at)
+            end,
+            last_success_at = greatest(
+                batch.scheduled_occurrence_coverage.last_success_at,
+                excluded.last_success_at,
+                clock_timestamp()),
+            updated_at = greatest(
+                batch.scheduled_occurrence_coverage.updated_at,
+                excluded.updated_at,
+                clock_timestamp())
+        where batch.scheduled_occurrence_coverage.schedule_version &lt;= excluded.schedule_version
+          and batch.scheduled_occurrence_coverage.configuration_revision &lt;= excluded.configuration_revision
+    </insert>
+
+    <select id="selectCoverage" resultMap="coverageResultMap">
+        select coverage_from_at, coverage_through_at
+          from batch.scheduled_occurrence_coverage
+         where tenant_id = #{tenantId}
+           and workflow_definition_id = #{workflowDefinitionId}
+           and schedule_version = #{scheduleVersion}
+           and calendar_code is not distinct from #{calendarCode}
+    </select>
+
+    <select id="countBlockingByCalendarAndBizDate" resultType="int">
+        select count(*)
+        from batch.scheduled_occurrence
+        where tenant_id = #{tenantId}
+          and calendar_code = #{calendarCode}
+          and biz_date = #{bizDate}
+          and (
+              occurrence_status in (
+                  'PLANNED', 'WAITING_READINESS', 'MISFIRE_PENDING'
+              )
+              or (
+                  occurrence_status = 'REQUESTED'
+                  and not exists (
+                      select 1
+                      from batch.trigger_request tr
+                      join batch.job_instance ji
+                        on ji.tenant_id = tr.tenant_id
+                       and ji.trigger_request_id = tr.id
+                      where tr.tenant_id = batch.scheduled_occurrence.tenant_id
+                        and tr.request_id = batch.scheduled_occurrence.request_id
+                  )
+              )
+          )
+    </select>
+
+    <!-- 补写 readiness 等待窗口：只更新当前等待记录，避免覆盖已推进态。 -->
+    <update id="updateReadinessWait">
+        update batch.scheduled_occurrence
+        set readiness_deferred_since = coalesce(readiness_deferred_since, #{deferredSince}),
+            readiness_deadline = coalesce(readiness_deadline, #{deadline}),
+            updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId}
+          and workflow_definition_id = #{workflowDefinitionId}
+          and scheduled_fire_time = #{scheduledFireTime}
+          and occurrence_status = 'WAITING_READINESS'
+    </update>
+</mapper>

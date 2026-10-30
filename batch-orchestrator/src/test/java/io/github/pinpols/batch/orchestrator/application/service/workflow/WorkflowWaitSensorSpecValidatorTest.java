@@ -42,6 +42,31 @@ class WorkflowWaitSensorSpecValidatorTest {
 
     assertThat(codes(wait("FILE_ARRIVAL", "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60}")))
         .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true,"
+                + "\"bizDate\":\"2026-05-07\"}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true,"
+                + "\"bindWorkflowBizDate\":true}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,"
+                + "\"fileGroupCode\":\"SETTLEMENT\",\"requireCompleteGroup\":true}")))
+        .contains("V16-c");
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60," + "\"requireCompleteGroup\":true}")))
+        .contains("V16-c");
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"daily-*\",\"maxAgeSeconds\":60,\"bizDate\":\"yesterday\"}")))
+        .contains("V16-c");
     assertThat(codes(wait("HTTP_POLL", "{\"url\":\"https://example.test\",\"matchExpr\":\"ok\"}")))
         .isEmpty();
     assertThat(
@@ -49,6 +74,29 @@ class WorkflowWaitSensorSpecValidatorTest {
         .isEmpty();
     assertThat(codes(wait("DB_ROW_EXISTS", "{\"schema\":\"biz\",\"sql\":\"select 1\"}")))
         .isEmpty();
+  }
+
+  @Test
+  @DisplayName("Kafka 分区和偏移量必须是可表示的非负整数")
+  void shouldRejectInvalidKafkaOffsetNumbers() {
+    for (String spec : List.of(
+        "{\"topic\":\"events\",\"partition\":4294967296,\"minOffset\":1}",
+        "{\"topic\":\"events\",\"partition\":-1,\"minOffset\":1}",
+        "{\"topic\":\"events\",\"partition\":1.5,\"minOffset\":1}",
+        "{\"topic\":\"events\",\"partition\":0,\"minOffset\":-1}",
+        "{\"topic\":\"events\",\"partition\":0,\"minOffset\":1.5}")) {
+      assertThat(codes(wait("KAFKA_OFFSET", spec))).as(spec).contains("V16-c");
+    }
+    assertThat(
+            codes(wait("KAFKA_OFFSET", "{\"topic\":\"events\",\"partition\":0,\"minOffset\":0}")))
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("文件到达最大年龄为小数时图校验拒绝")
+  void shouldRejectFractionalFileMaxAge() {
+    assertThat(codes(wait("FILE_ARRIVAL", "{\"pattern\":\"*.csv\",\"maxAgeSeconds\":1.5}")))
+        .contains("V16-c");
   }
 
   @Test
@@ -66,6 +114,20 @@ class WorkflowWaitSensorSpecValidatorTest {
         {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"pattern":"x","maxAgeSeconds":1},
          "timeout_seconds":"10","poll_interval_seconds":"2","on_timeout":"FAIL"}
         """))).isEmpty();
+  }
+
+  @Test
+  @DisplayName("WAIT 超时和轮询间隔必须是完整且可表示的整数秒")
+  void shouldRejectFractionalAndOverflowWaitDurations() {
+    for (String durations : List.of(
+        "\"timeout_seconds\":120.5,\"poll_interval_seconds\":30",
+        "\"timeout_seconds\":120,\"poll_interval_seconds\":30.5",
+        "\"timeout_seconds\":18446744073709551736,\"poll_interval_seconds\":30")) {
+      String params = "{\"sensor_type\":\"FILE_ARRIVAL\","
+          + "\"sensor_spec\":{\"pattern\":\"x\",\"maxAgeSeconds\":1},"
+          + durations + ",\"on_timeout\":\"FAIL\"}";
+      assertThat(codes(node("WAIT", params))).as(durations).contains("V16-d");
+    }
   }
 
   private List<String> codes(WorkflowNodeEntity node) {

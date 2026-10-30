@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
+# 用途：trigger-stage6c.sh:Trigger scheduled / misfire / replay / storm 验证。
+# 用法：在仓库根目录执行 bash scripts/sim/22-trigger-stage6c.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 22-trigger-stage6c.sh:Trigger scheduled / misfire / replay / storm 验证
 #
 # 覆盖:
 #   - Quartz scheduled fire 真实落 trigger_request
-#   - MANUAL_APPROVAL misfire 尽力观察 trigger_misfire_pending；若 Quartz 已直接补触发，
-#     则以成功实例作为当前运行时行为证据
-#   - catch-up approve replay API 将 ACCEPTED CATCH_UP request 推进到 LAUNCHED
+#   - 管理 API 暂停/恢复真实 Quartz，按原 fire 验证 MANUAL_APPROVAL 待办
+#   - 审批原始请求后 Workflow/Job SUCCESS，保持原日期、区间和版本
 #   - API task storm 收敛
 #
-# SQL seed 独立放在 docs/test-data,脚本只负责编排、触发、轮询、断言。
+# SQL seed 独立放在 test-data/sim,脚本只负责编排、触发、轮询、断言。
 # =========================================================
 set -euo pipefail
 
@@ -31,9 +32,9 @@ cleanup_trigger_fixtures() {
   docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
     -v ON_ERROR_STOP=1 -f /dev/stdin \
     < "$SIM_SQL_DIR/disable-trigger-stage6c-jobs.sql" >/dev/null 2>&1 || true
-  for job_code in TA_TRIGGER_STAGE6C_SCHEDULED TA_TRIGGER_STAGE6C_MISFIRE; do
+  for workflow_code in WF-TA_TRIGGER_STAGE6C_SCHEDULED WF-TA_TRIGGER_STAGE6C_MISFIRE; do
     curl -s -m 5 -X POST \
-      "$TRIGGER_BASE/api/triggers/management/unregister?tenantId=ta&jobCode=$job_code" \
+      "$TRIGGER_BASE/api/triggers/management/workflow/unregister?tenantId=ta&workflowCode=$workflow_code" \
       -H "X-Tenant-Id: ta" -H "X-Internal-Secret: $INTERNAL_SECRET" \
       -o /dev/null 2>/dev/null || true
   done
@@ -66,7 +67,10 @@ restart_trigger_for_fixture() {
 # 启动 Trigger；仅调用 drain 或“重启后立即清理”都可能让新进程的 reconciler 与 psql 争抢
 # QRTZ_LOCKS。这个停启只属于 sim 的数据边界隔离，不代表生产流程需要按阶段重启服务。
 echo "==> stop trigger before direct Quartz fixture reset"
-if sim_container_running batch-trigger; then
+runtime_status=0
+sim_container_stack_active || runtime_status=$?
+[[ "$runtime_status" -le 1 ]] || exit "$runtime_status"
+if [[ "$runtime_status" == 0 ]]; then
   # 容器端口由 Docker 代理监听，不能按宿主端口 kill，否则会连带终止
   # Docker daemon。容器栈通过 Compose 停止，后续 restart.sh 负责重建。
   docker compose --env-file "${COMPOSE_ENV_FILE:-.env.local}" \
@@ -93,7 +97,7 @@ fi
 echo "==> seed trigger stage6c fixtures"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -v batch_no="$BATCH_NO" -v biz_date="$BIZ_DATE" \
-  -f /dev/stdin < docs/test-data/sim-stage6c-trigger-fixtures.sql >/dev/null
+  -f /dev/stdin < test-data/sim/sim-stage6c-trigger-fixtures.sql >/dev/null
 
 echo "==> start trigger after direct Quartz fixture reset"
 restart_trigger_for_fixture >"$REPORT_DIR/trigger-restart.log" 2>&1
@@ -114,6 +118,8 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/trigger-stage6c.log"
 import json, os, subprocess, sys, time, urllib.request
+from datetime import date, timedelta
+from scripts.sim.launch_contract import workflow_id_for_fixture
 from pathlib import Path
 
 BASE = os.environ["TRIGGER_BASE"]
@@ -133,14 +139,14 @@ def psql_file(sql_file, variables=None, tuples=False):
     args += ["-f", "/dev/stdin"]
     return subprocess.run(args, input=(SQL_DIR / sql_file).read_text(encoding="utf-8"), check=True, capture_output=True, text=True)
 
-def launch(request_id, batch_key):
+def launch(request_id, batch_key, biz_date=BIZ):
     body = {
         "tenantId": "ta",
-        "jobCode": "TA_PROCESS_STAGE4_EMPTY_SUCCESS",
+        "workflowDefinitionId": workflow_id_for_fixture("ta", "TA_PROCESS_STAGE4_EMPTY_SUCCESS"),
         "triggerType": "API",
-        "bizDate": BIZ,
+        "bizDate": biz_date,
         "requestId": request_id,
-        "params": {"batchNo": BATCH, "batchKey": batch_key, "bizDate": BIZ},
+        "params": {"batchNo": BATCH, "batchKey": batch_key, "bizDate": biz_date},
     }
     req = urllib.request.Request(
         f"{BASE}/api/triggers/launch",
@@ -174,6 +180,19 @@ def read_count(sql_file, variables):
     out = psql_file(sql_file, variables, tuples=True)
     return int((out.stdout or "0").strip() or "0")
 
+def manage_all(action):
+    req = urllib.request.Request(
+        f"{BASE}/api/triggers/management/{action}-all", data=b"",
+        headers={"X-Tenant-Id": "ta", "X-Internal-Secret": SECRET}, method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=30) as response:
+        payload = json.load(response)
+        if response.status != 200 or payload.get("code") != "SUCCESS":
+            raise RuntimeError(f"Quartz {action}-all failed: {payload}")
+
+
+manage_all("resume")
+
 print("==> wait Quartz scheduled + misfire", flush=True)
 wait_count(
     "quartz-misfire-registered",
@@ -181,7 +200,6 @@ wait_count(
     {},
     1,
 )
-psql_file("update-trigger-stage6c-quartz-misfire.sql")
 common_vars = {"tenant_id": "ta", "start_ts": START_TS}
 scheduled_count = wait_count(
     "scheduled",
@@ -189,27 +207,28 @@ scheduled_count = wait_count(
     common_vars,
     1,
 )
-misfire_count = 0
-deadline = time.time() + 45
-while time.time() < deadline:
-    misfire_count = read_count("count-trigger-stage6c-pending.sql", {"tenant_id": "ta"})
-    if misfire_count >= 1:
-        print(f"  [misfire-pending] {misfire_count} >= 1", flush=True)
-        break
-    time.sleep(3)
-if misfire_count < 1:
-    misfire_success = read_count("count-trigger-stage6c-misfire-success.sql", common_vars)
-    print(
-        "  [misfire-pending] 0; observed successful runtime fire count="
-        + str(misfire_success),
-        flush=True,
-    )
-    if misfire_success < 1:
-        raise TimeoutError("timeout waiting misfire-pending or successful misfire runtime fire")
+# 使用已持久化的原始触发和真实 Quartz 故障；不创建虚拟待处理请求，也不回拨时间戳。
+try:
+    manage_all("pause")
+    planned_fire = (psql_file("select-trigger-stage6d-planned-misfire.sql", tuples=True).stdout or "").strip()
+    if not planned_fire:
+        raise RuntimeError("Quartz next fire has no matching PLANNED occurrence")
+    fire_millis = int(planned_fire)
+    delay = max(0, fire_millis / 1000 - time.time()) + 65
+    print(f"  [misfire-pause] originalFireTime={fire_millis}, pauseSeconds={delay:.1f}", flush=True)
+    time.sleep(delay)
+finally:
+    manage_all("resume")
+misfire_vars = {"tenant_id": "ta", "start_ts": START_TS, "scheduled_fire_millis": fire_millis}
+misfire_count = wait_count(
+    "misfire-pending", "count-trigger-stage6d-pending.sql", misfire_vars, 1, timeout=120,
+)
 
 print("==> approve replay request", flush=True)
-replay_id = BATCH + "-replay"
-pending_id = (psql_file("select-trigger-stage6c-pending-id.sql", {"tenant_id": "ta"}, tuples=True).stdout or "").strip()
+pending_link = (psql_file("select-trigger-stage6d-pending-link.sql", misfire_vars, tuples=True).stdout or "").strip()
+pending_id, replay_id = pending_link.split("|", 1)
+if not replay_id:
+    raise RuntimeError(f"misfire pending not linked to original request: {pending_id}")
 req = urllib.request.Request(
     f"{BASE}/api/triggers/catch-up/approve",
     data=json.dumps({
@@ -244,13 +263,28 @@ while time.time() < deadline:
     time.sleep(3)
 
 print(f"  [replay] {replay_status}", flush=True)
+recovery_outcome = ""
+deadline = time.time() + 120
+while time.time() < deadline:
+    recovery_outcome = (psql_file("select-trigger-stage6d-recovery-outcome.sql", misfire_vars, tuples=True).stdout or "").strip()
+    if recovery_outcome == "APPROVED|REQUESTED|SUCCESS|SUCCESS|SNAPSHOT_OK|WORKFLOW_ENABLED":
+        break
+    time.sleep(2)
+print(f"  [recovery-outcome] {recovery_outcome}", flush=True)
+if recovery_outcome != "APPROVED|REQUESTED|SUCCESS|SUCCESS|SNAPSHOT_OK|WORKFLOW_ENABLED":
+    raise RuntimeError(f"misfire recovery did not complete: {recovery_outcome}")
+
 
 print(f"==> API task storm {STORM_COUNT}", flush=True)
 storm_ids = []
+storm_base_date = date.fromisoformat(BIZ) + timedelta(days=1)
 for i in range(STORM_COUNT):
     rid = f"{BATCH}-storm-{i:03d}"
     storm_ids.append(rid)
-    launch(rid, f"{BATCH}-storm-{i:03d}")
+    storm_biz_date = (storm_base_date + timedelta(days=i)).isoformat()
+    # 使用不同的 Workflow 业务日测量执行收敛情况，
+    # 避免同一 Workflow/同一天的幂等抑制影响结果。
+    launch(rid, f"{BATCH}-storm-{i:03d}", storm_biz_date)
 print("  [storm launch] all accepted", flush=True)
 
 deadline = time.time() + 240
@@ -266,15 +300,23 @@ report_vars = {"tenant_id": "ta", "batch_prefix": BATCH, "start_ts": START_TS}
 print(psql_file("select-trigger-stage6c-status.sql", report_vars).stdout, end="")
 
 storm_success = int((psql_file("count-trigger-stage6c-storm-success.sql", {"tenant_id": "ta", "batch_prefix": BATCH}, tuples=True).stdout or "0").strip() or "0")
+outcomes = psql_file("select-stage6b-workflow-outcomes.sql", {
+    "tenant_id": "ta", "request_ids": ",".join(storm_ids),
+}, tuples=True).stdout or ""
+outcome_rows = [line.split("|") for line in outcomes.splitlines()]
+actual_outcomes = {row[0]: tuple(row[1:]) for row in outcome_rows if len(row) == 5}
+bad_outcomes = {rid: actual_outcomes.get(rid) for rid in storm_ids
+                if actual_outcomes.get(rid) != ("LAUNCHED", "SUCCESS", "SUCCESS", "SUCCESS")}
+if bad_outcomes:
+    raise RuntimeError(f"API storm did not reach Workflow/Job success: {bad_outcomes}")
 
-misfire_success = read_count("count-trigger-stage6c-misfire-success.sql", common_vars)
 summary = (
     f"scheduled={scheduled_count}|misfirePending={misfire_count}|"
-    f"misfireSuccess={misfire_success}|replay={replay_status}|storm={storm_success}/{STORM_COUNT}"
+    f"misfireSource=quartz|recovery={recovery_outcome}|replay={replay_status}|storm={storm_success}/{STORM_COUNT}"
 )
 print(f"\n-- assertion_summary --\n{summary}", flush=True)
 if (scheduled_count < 1
-        or (misfire_count < 1 and misfire_success < 1)
+        or misfire_count < 1
         or not replay_status.startswith("LAUNCHED|")
         or replay_status == "LAUNCHED|"
         or storm_success < STORM_COUNT):

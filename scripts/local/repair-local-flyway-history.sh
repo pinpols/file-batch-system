@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+# 用途：本地开发库 Flyway history 修复工具。
+# 用法：在仓库根目录执行 bash scripts/local/repair-local-flyway-history.sh；参数与前置环境见下方说明及所属 README。
 # 本地开发库 Flyway history 修复工具。
 #
-# 用途：开发数据卷曾执行过旧版本迁移脚本，当前工作区的 V*.sql 已变化时，
+# 说明：开发数据卷曾执行过旧版本迁移脚本，当前工作区的 V*.sql 已变化时，
 # Flyway validate 会报 checksum mismatch。此脚本调用 Flyway 官方 API repair，
 # 将本地 schema_history 与当前仓库迁移脚本对齐，然后立即 validate。
 #

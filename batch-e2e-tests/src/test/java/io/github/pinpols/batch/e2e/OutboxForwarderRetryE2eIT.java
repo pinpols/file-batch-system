@@ -81,6 +81,13 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("投递持续失败时按配置上限耗尽重试,事件进入放弃终态,投递次数等于上限,审计表出现已耗尽记录")
   void retryExhaustion_marksGiveUp_andWritesExhaustedAuditRecord() {
+    final String selectPublishStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+    """;
+    final String selectPublishAttemptSql = """
+        select publish_attempt from batch.outbox_event where id = ?
+    """;
+
     // publisher always fails
     when(outboxPublisher.publish(any())).thenReturn(CompletableFuture.completedFuture(false));
 
@@ -92,21 +99,17 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
         .untilAsserted(() -> {
           E2eStatusLogger.logOutboxSnapshot(
               jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-          String status = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
-              String.class,
-              event.getId());
+          String status =
+              jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.GIVE_UP.code());
         });
 
-    // publish_attempt should equal max-retry-attempts
-    Integer attempt = jdbcTemplate.queryForObject(
-        "select publish_attempt from batch.outbox_event where id = ?",
-        Integer.class,
-        event.getId());
+    // publish_attempt 应等于最大重试次数。
+    Integer attempt =
+        jdbcTemplate.queryForObject(selectPublishAttemptSql, Integer.class, event.getId());
     assertThat(attempt).isEqualTo(2);
 
-    // audit trail: at least one EXHAUSTED retry record
+    // 审计记录中至少应存在一条状态为 EXHAUSTED 的重试记录。
     List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
         new EventOutboxRetryQuery("t1", null, "e2e-exhausted-001"));
     assertThat(retries).isNotEmpty();
@@ -119,7 +122,11 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
   @Test
   @DisplayName("首次投递失败后下一次成功,事件最终进入已发布终态,审计表保留至少一条失败轨迹记录")
   void transientFailure_thenRecovery_eventIsPublishedEventually() {
-    // fail on first publish attempt, succeed on the second
+    final String selectPublishStatusSql = """
+        select publish_status from batch.outbox_event where id = ?
+    """;
+
+    // 首次发布失败，第二次发布成功。
     when(outboxPublisher.publish(any()))
         .thenReturn(CompletableFuture.completedFuture(false))
         .thenReturn(CompletableFuture.completedFuture(true));
@@ -132,14 +139,12 @@ class OutboxForwarderRetryE2eIT extends AbstractIntegrationTest {
         .untilAsserted(() -> {
           E2eStatusLogger.logOutboxSnapshot(
               jdbcTemplate, "t1", eventKey(event), "OutboxForwarderRetryE2eIT");
-          String status = jdbcTemplate.queryForObject(
-              "select publish_status from batch.outbox_event where id = ?",
-              String.class,
-              event.getId());
+          String status =
+              jdbcTemplate.queryForObject(selectPublishStatusSql, String.class, event.getId());
           assertThat(status).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
         });
 
-    // audit trail: at least one FAILED retry record for the failed attempt
+    // 审计记录中至少应包含一条对应首次失败尝试的 FAILED 重试记录。
     List<EventOutboxRetryEntity> retries = eventOutboxRetryMapper.selectByQuery(
         new EventOutboxRetryQuery("t1", null, "e2e-recovery-001"));
     assertThat(retries).isNotEmpty();

@@ -1,5 +1,5 @@
 # R7 安全扫描 2026-05-16 — 测试 fixture / 文档示例白名单
-# 所有条目均经人工核查为非真实凭据（见 docs/analysis/security-scan-2026-05-16.md §1）
+# 所有条目均经人工核查为非真实凭据（见 docs/archive/audit/security-scan-2026-05-16.md §1）
 batch-console-api/src/test/java/io/github/pinpols/batch/console/support/auth/ConsoleJwtServiceTest.java:generic-api-key:38
 batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationTest.java:generic-api-key:225
 batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleHttpIntegrationIT.java:generic-api-key:146
@@ -7,3 +7,17 @@ docs/runbook/realtime-sse-verification.md:curl-auth-header:24
 batch-worker-import/src/test/resources/fixtures/test-rsa-private-pkcs8.pem:private-key:1
 # application-local.yml 是本地开发 profile,RSA 密钥用于本地登录加密;生产由 Helm Secret 注入覆盖
 batch-console-api/src/main/resources/application-local.yml:private-key:85
+
+# 2026-10-26 全历史扫描：以下五项均来自同一历史提交。
+# E2E 命中是仅供本地文件存储签名测试的固定 fixture；CSV 四项是前端复合判断盘点中的变量名，均非凭据。
+# 仅忽略精确的 commit/path/rule/line 指纹；新提交中的同类内容仍须扫描。
+6221f01a73bbac0c0a94ed2973fbfa1ba40f43d5:batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java:generic-api-key:870
+6221f01a73bbac0c0a94ed2973fbfa1ba40f43d5:docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:429
+6221f01a73bbac0c0a94ed2973fbfa1ba40f43d5:docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:430
+6221f01a73bbac0c0a94ed2973fbfa1ba40f43d5:docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:441
+6221f01a73bbac0c0a94ed2973fbfa1ba40f43d5:docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:457
+# 目录模式对同一受版本控制的历史盘点文件使用不带提交号的精确指纹。
+docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:429
+docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:430
+docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:441
+docs/audit/compound-condition-inventory-2026-10-24.csv:generic-api-key:457

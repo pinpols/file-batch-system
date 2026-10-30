@@ -3,7 +3,7 @@
 > 本文档是批量调度平台的**单一权威模型文档**。
 > 它统一定义四组最容易被分散理解的概念：**统一实例模型、统一状态模型、统一上下文模型、统一恢复模型**。
 >  
-> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [maturity-assessment.md](./maturity-assessment.md) 和 [scalability-assessment.md](./scalability-assessment.md)。
+> 阅读顺序建议：先看 [architecture-truth.md](./architecture-truth.md)，再看本文档，最后回看 [engineering-maturity-roadmap.md](engineering-maturity-roadmap.md) 和 [production-capacity-governance.md](../runbook/production-capacity-governance.md)。
 
 ## 1. 这份文档解决什么问题
 
@@ -30,13 +30,13 @@
 - `workerId` / `workerCode` / `workerGroup` 已明确职责边界
 - `Step` / `Stage` 的语义边界已定稿
 - `CompensationSubmitCommand` / `ApprovalCommand` 的命令边界已定稿
-- 数据库物理列重命名不进入本轮统一口径范围，当前 schema 口径冻结
+- 当前运行模型采用 ADR-048（替代 ADR-047） 的 Workflow 根与全新数据库切换；物理字段以迁移和 Mapper 为准，残留历史列不定义新业务关系
 
 ## 2. 四个模型总览
 
 | 模型 | 关注点 | 统一结论 |
 |---|---|---|
-| 统一实例模型 | 哪些对象算“执行实例” | `job_instance` 是单个 job 执行的根；partition / task / step instance 属于作业执行树，workflow_run / node_run 属于可选的工作流执行树 |
+| 统一实例模型 | 哪些对象算“执行实例” | WorkflowRun 是顶层根；NodeRun 关联按需创建的 JobInstance，再展开 partition/task/step；文件 Pipeline 保留阶段执行观测 |
 | 统一状态模型 | 状态值怎么解释 | 状态只描述当前生命周期位置，不承载恢复语义；终态不能直接回到非终态 |
 | 统一上下文模型 | 运行时信息怎么传递 | 上下文分成“稳定主键 + 可变 attributes bag”；`run_mode` 是上下文意图，不是状态 |
 | 统一恢复模型 | retry / rerun / recover / compensate 怎么区分 | 这四个词必须分开：系统重试、人工重跑、故障恢复、业务补偿是四种不同动作 |
@@ -47,38 +47,55 @@
 
 ### 3.1 实例层级
 
-当前持久化模型是两棵相关但不能串成单链的执行树：
+当前开发分支按 ADR-048（替代 ADR-047） 采用 Workflow 顶层运行。所有顶层请求显式指定 `workflowDefinitionId`；受管单作业与组合图使用同一主链。
 
-```text
-job_instance
-├── job_partition (1:N)
-├── job_task (1:N，通常关联 partition，特殊任务允许为空)
-├── job_step_instance (0:N，引用 task，可选引用 partition)
-└── workflow_run (工作流作业才创建，related_job_instance_id 关联根实例)
-    └── workflow_node_run (1:N，按 node_code + run_seq 区分运行序列)
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层"]
+  R --> N["WorkflowNodeRun"]
+  N --> C["START / END / GATEWAY / WAIT"]
+  N -->|"JOB"| J["独立 JobInstance"]
+  J --> P["JobPartition · 身份 / 租约 / 重试"]
+  P --> T["JobTask · CLAIM / EXECUTE / REPORT"]
+  T --> S["JobStepInstance · 步骤审计"]
+  J -. "文件类型阶段观测" .-> PI["PipelineInstance / PipelineStepRun"]
 ```
 
-`JOB` 类型的 workflow 节点会拉起独立的子 `job_instance`。父流程通过节点运行、虚拟 task 和启动参数关联子实例；当前 schema 没有把子实例伪装成 `workflow_run` 的直接子表。
-
-含义如下：
-
-| 对象 | 角色 | 说明 |
+| 对象 | 原语与身份 | 职责边界 |
 |---|---|---|
-| `job_instance` | 作业根实例 | 一次 job 触发的根对象，承载 tenant / jobCode / bizDate / requestId / dedup 等根信息 |
-| `workflow_run` | 流程运行镜像 | 工作流作业才创建；通过 `related_job_instance_id` 关联根实例，负责串起 DAG 节点推进 |
-| `workflow_node_run` | 节点运行记录 | workflow_run 的直接子记录，描述一个 DAG 节点某个 run_seq 的状态与输出 |
-| `job_partition` | 分片执行单元 | 调度与并发控制的最小派发粒度，承载 worker 归属、租约、重试次数 |
-| `job_task` | 任务执行单元 | Worker 实际领取和回报的执行单元；必属于 job_instance，通常关联 partition，特殊任务可不关联 partition |
-| `job_step_instance` | 步骤审计镜像 | 引用 job_task，可选引用 partition；面向 UI、审计和可视化，不应和 Worker stage 混为一谈 |
+| `workflow_run` | 租户下某次已接纳请求的顶层运行 | 保存 Workflow 身份、业务日、区间、冻结图与有效配置；不依赖旧的根 JobInstance |
+| `workflow_node_run` | WorkflowRun + nodeCode + runSeq | 保存节点状态、输出、等待与来源；同一 Job 被两个节点引用时有独立节点身份 |
+| `job_instance` | JOB 节点实际启动的作业执行 | 保存有效 Job 参数和执行策略，关联所属 Workflow/节点；不是日切时预建的作业清单 |
+| `job_partition` | 作业内分区身份 | 分区计划、Worker 归属、lease/invocation、自动重试与 checkpoint 的控制边界 |
+| `job_task` | Worker 执行工作项 | 经 Outbox/Kafka 投递，再 CLAIM、执行和 REPORT；不等同于 DAG 节点 |
+| `job_step_instance` | 任务/分区关联的步骤记录 | 步骤进度、状态及审计；不能替代 WorkflowNodeRun 或 Pipeline 阶段定义 |
+| `pipeline_instance` / `pipeline_step_run` | 文件类 Job 的内部执行观测 | 系统 Pipeline code/version 与阶段运行明细；不是另一套顶层调度入口 |
+
+`START`、`END`、`GATEWAY` 和 `WAIT` 有持久化节点记录，但不创建空的 Worker Job/Task 来模拟控制语义。JOB 的子请求仍经既有接纳链，节点唯一关联其 JobInstance；新模型不使用父虚拟 partition/task 等待，也不把旧 `job_type=WORKFLOW` 包装作业解释成子 Workflow。`TASK` 仍在枚举中保留，但缺少旧根 JobInstance 的新根派发明确拒绝；枚举保留不表示新图可使用旧 TASK 直接执行路径。
 
 ### 3.2 统一原则
 
-1. `job_instance` 是单个 job 执行的业务根，不是 worker 运行的最小单位。
-2. `workflow_run` 是可选流程视角；普通作业没有 workflow_run，不能假设每个实例都存在该层。
-3. `workflow_node_run` 是 DAG 节点视角，不等于 job_task；`JOB` 节点可以间接拉起新的 job_instance。
-4. `job_partition` 是调度视角，不是业务结果视角。
-5. `job_task` 是执行视角，不是 DAG 节点视角。
-6. `job_step_instance` 是展示与审计视角，不是调度核心视角。
+1. 顶层运行事实是 WorkflowRun；JobInstance 是节点执行事实，二者各自使用自己的状态机。
+2. 每日开日创建 BatchDay 与预期义务，不预建当天全部 JobInstance。请求接纳后准备 WorkflowRun，JOB 节点达到依赖及资源准入条件时才创建作业执行。
+3. 单作业使用受管 `START → JOB → END` 图；组合图是同一层 DAG。当前不支持 Workflow 嵌套，不把持久化对象的关联层级当成可配置子流程树。
+4. 同一 Job、同一业务日可以因不同节点或显式重放产生多次合法执行；不能仅按 jobCode/bizDate 合并身份。
+5. 冻结的业务日、数据区间和版本随延期、重试与恢复继承；跨日映射必须显式解析并保留证据。
+6. Orchestrator 是运行状态主机；数据库为事实源。Quartz、Kafka、Redis 和 ShedLock 不代替唯一约束、CAS 或终态保护。
+
+### 3.2.1 系统原语与资产分类
+
+| 类别 | 当前资产 / 原语 | 不应混淆的对象 |
+|---|---|---|
+| 定义资产 | Workflow、Job、日历、模板、通道、执行策略 | 定义的在线修改不回写已启动运行的冻结配置 |
+| 系统执行资产 | `SystemPipelineCatalog` 固定类型/版本、插件及执行器 | 不提供租户自定义阶段顺序；插件扩展不等于新增通用编排引擎 |
+| 计划与义务 | scheduled occurrence、expected work occurrence、覆盖进度、BatchDay | 机会、输入已到、请求已派发与业务成功是不同事实 |
+| 输入与业务资产 | `file_record`、到达组/manifest、`data_asset`、`asset_partition` | 平台保存身份、就绪及版本证据，不接管企业全域数据目录 |
+| 结果与消费证据 | `result_version`、冻结跨日结果、依赖选择快照 | Job 结果有效不等于整个 Workflow 成功；观察快照不自动证明外部 SQL 实际消费 |
+| 运行事实 | WorkflowRun/NodeRun、JobInstance/Partition/Task、阶段记录 | 层级关联不是 Workflow 嵌套，也不是开日预建的静态树 |
+| 治理与恢复记录 | Replay Operation、审批、重放 session、终态通知及投递审计 | 操作状态、运行状态、告警和投递状态分别收敛，不能互相冒充 |
+
+文件束按 manifest 展开异构分区，Worker 批量 claim/report 是传输优化；二者均保留逐节点/逐任务身份与幂等边界。文件类与束类型的固定 Pipeline 选择以 `SystemPipelineCatalog` 为准，GENERAL/ATOMIC 不创建文件 Pipeline。
 
 ### 3.3 attempt 不是一等实体
 
@@ -129,29 +146,21 @@ job_instance
 
 #### 3.6.1 三个运行时字段的端到端流向
 
-```
-orchestrator                                                    worker
-─────────────────                                               ─────────
-job_partition.partition_no  ──┐
-job_partition.partition_key ──┼─claim()─→ EffectiveTaskConfig
-job_instance.expected_       ──┘                ↓
-       partition_count                     PulledTask
-                                                ↓
-                                       DefaultTaskExecutionWrapper
-                                                ↓
-                                      context.attributes:
-                                        PARTITION_NO     = K (1-based)
-                                        PARTITION_COUNT  = N
-                                        PARTITION_KEY    = "<jobCode>:<bizDate>:<K>"
-                                                ↓
-                                      worker step / plugin
-                                      (ParseStep / ProcessComputePlugin / ...)
-                                                ↓
-                                      自行决定切什么:
-                                       - lineNo % N == K-1   (默认 ParseStep)
-                                       - hash(branchCode) % N == K-1
-                                       - id BETWEEN ... AND ...
-                                       - 按 input_snapshot 字段过滤
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  subgraph O["Orchestrator"]
+    P["partition_no / partition_key"]
+    J["expected_partition_count"]
+    CFG["EffectiveTaskConfig"]
+    P --> CFG
+    J --> CFG
+  end
+  CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]
+  T --> W["DefaultTaskExecutionWrapper"]
+  W --> C["执行上下文 · 分区序号 / 总数 / 键"]
+  C --> PL["Worker step / 业务插件"]
+  PL --> S["按行号 / Hash / ID 范围 / 输入快照切分"]
 ```
 
 **字段语义**（`PipelineRuntimeKeys`）：
@@ -161,6 +170,7 @@ job_instance.expected_       ──┘                ↓
 | `PARTITION_NO` | Integer (1-based) | 当前 task 的分区序号；不分片场景为 `1` |
 | `PARTITION_COUNT` | Integer | 本次 job_instance 的分区总数；`<= 1` 视为不分片 |
 | `PARTITION_KEY` | String | 业务标识，默认 `jobCode:bizDate:partitionNo`，业务可在 plan-build 时覆盖为机构号 / hash 桶等 |
+| `PARTITION_INVOCATION_ID` | String | Orchestrator 为当前分区 claim 分配的 invocation 身份；PROCESS 每个阶段在执行业务副作用前持有与 reclaim 共用的平台实例 advisory lock，并校验 task、partition、worker 和当前 invocation。此围栏覆盖 PROCESS 阶段执行入口，不授权 staging 自动清理，也不保护绕开该入口的直接 SQL/维护路径 |
 
 #### 3.6.2 默认 ParseStep 行 mod 切分
 
@@ -179,6 +189,12 @@ job_instance.expected_       ──┘                ↓
 3. **worker step**自定义 plugin 读 `PARTITION_KEY` / `input_snapshot` 自行路由数据范围；关闭默认行 mod 切分（`partition_aware_parse=false`）
 
 **反例**：不要在 `PartitionCountResolver` 里塞业务切分逻辑——它只决定数量，不决定字段。详见 [`ADR-005-partition-count-resolver-chain.md`](./adr/ADR-005-partition-count-resolver-chain.md)。
+
+#### 3.6.4 作业依赖结果引用
+
+Orchestrator 在启动依赖闸门记录它观察到的上游 `businessKey`、结果版本号/ID、来源实例和对齐业务日，并在 Worker CLAIM 的 `EffectiveTaskConfig.dependencyResultSnapshot` 返回。内置 Worker core 将该列表放入 `PipelineRuntimeKeys.DEPENDENCY_RESULT_SNAPSHOT`，供自定义步骤读取。它是启动时的判定证据，可包含同日或前一业务日对齐，不包含冻结业务载荷，也不会锁住业务表或平台结果版本。消费者若要求版本一致，必须显式按版本 ID 读取或在执行期间校验引用；任意业务 SQL 和 SDK handler 不能仅因收到此字段就宣称已有实际消费 lineage。
+
+Workflow 的 `crossDay` 是独立的冻结业务载荷契约；Java SDK handler 通过 `ctx.crossDayResults(alias)` 读取选定版本的只读 `INLINE_JSON` 数据，不重新查询最新版本。它的传递与恢复证据不覆盖未追踪的外部业务表查询；`EXTERNAL_REF` / `FILE_RECORD` 在解析阶段失败关闭，读取、授权和保留契约未完成前不提供隐式回退。
 
 ### 3.7 Step / Stage 边界
 
@@ -231,7 +247,7 @@ job_instance.expected_       ──┘                ↓
 `CREATED`, `WAITING`, `READY`, `RUNNING`, `PAUSED`, `PARTIAL_FAILED`, `SUCCESS`, `FAILED`, `CANCELLED`, `TERMINATED`, `SUCCESS_DRY_RUN`, `FAILED_DRY_RUN`
 <!-- enum-sync:JobInstanceStatus:end -->
 
-`PAUSED` 是可恢复的非终态；dry-run 使用独立成功/失败终态，不能进入正式结果版本的 EFFECTIVE 链。
+`PAUSED` 是可恢复的非终态；dry-run 使用独立成功/失败终态，不能进入正式结果版本的 EFFECTIVE 链。 对已有任务写入 `run_mode` 再派发时，任务载荷必须是 JSON 对象，且父作业、任务和载荷的演练标记必须一致；不一致时整次状态复位和出箱写入回滚，需先核查并修复原始状态。
 
 #### WorkflowRunStatus
 
@@ -247,7 +263,7 @@ workflow_run 没有 WAITING / READY；等待依赖属于节点运行状态。`PA
 `READY`, `WAITING_DEPENDENCY`, `RUNNING`, `SUCCESS`, `FAILED`, `SKIPPED`
 <!-- enum-sync:WorkflowNodeRunStatus:end -->
 
-`WAITING_DEPENDENCY` 表示跨批量日依赖未齐；`SKIPPED` 是 DAG 条件分支的成功式终结，不等于任务失败。
+`WAITING_DEPENDENCY` 表示所声明的依赖未齐（包括跨日结果或跨运行条件）；`SKIPPED` 是 DAG 条件分支的成功式终结，不等于任务失败。
 
 #### PartitionStatus
 
@@ -400,7 +416,7 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 
 #### rerun
 
-- 对某个范围做一次显式重跑
+- 对某个范围做一次显式重跑，创建带来源的新顶层运行或精确节点执行，不复活旧终态
 - 典型对象：`job_instance`、`job_partition`、`job_step_instance`
 - 典型驱动：人工修正输入数据、重新评估规则、重新生成产物
 - 特点：是“再跑一遍”，不等于“简单重试”
@@ -447,7 +463,7 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 | 模型 | 主要表 / 代码 |
 |---|---|
 | retry | `retry_schedule`、`dead_letter_task`、`DefaultRetryGovernanceService` |
-| rerun | `job_instance`、`job_step_instance`、`DefaultCompensationService`、控制台 rerun/compensate 接口 |
+| rerun / replay | `replay_operation`、WorkflowRun/NodeRun 来源快照、审批与现有补偿/启动服务；范围按 ADR-049 区分 |
 | recover | worker lease / outbox / drain / heartbeat 相关代码 |
 | compensate | `compensation_command`、`ApprovalWorkflowService`、`DefaultCompensationService` |
 
@@ -464,8 +480,8 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 
 | 术语 | 推荐解释 |
 |---|---|
-| instance | 一个业务触发的根执行对象，通常指 `job_instance` |
-| run | 某一层级的运行镜像，通常指 `workflow_run` / `workflow_node_run` |
+| instance | 具体运行实体的统称；必须指出 WorkflowRun、JobInstance、Partition 或 Task，不能默认顶层为 JobInstance |
+| run | WorkflowRun 为顶层运行，WorkflowNodeRun 为节点事实；不再将其解释为旧根 Job 的可选镜像 |
 | partition | 调度并发单元，通常指 `job_partition` |
 | task | worker 执行单元，通常指 `job_task` |
 | step instance | 步骤审计镜像，通常指 `job_step_instance` |
@@ -492,7 +508,7 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 ## 9. 需要同步阅读的文档
 
 - [architecture-truth.md](./architecture-truth.md)
-- [maturity-assessment.md](./maturity-assessment.md)
-- [scalability-assessment.md](./scalability-assessment.md)
+- [engineering-maturity-roadmap.md](engineering-maturity-roadmap.md)
+- [production-capacity-governance.md](../runbook/production-capacity-governance.md)
 - [runtime-module-communication.md](./runtime-module-communication.md)
 - [adr/README.md](./adr/README.md)

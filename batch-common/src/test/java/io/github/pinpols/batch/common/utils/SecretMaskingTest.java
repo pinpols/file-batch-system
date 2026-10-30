@@ -3,6 +3,7 @@ package io.github.pinpols.batch.common.utils;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Collections;
+import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -84,6 +85,13 @@ class SecretMaskingTest {
   }
 
   @Test
+  @DisplayName("无凭据的本地文件 URI 保留原始三斜杠格式")
+  void shouldPreserveLocalFileUriWithoutCredentials() {
+    assertThat(SecretMasking.maskEndpoint("file:///tmp/r25-warehouse"))
+        .isEqualTo("file:///tmp/r25-warehouse");
+  }
+
+  @Test
   @DisplayName("更新端点回传掩码时恢复原 userinfo 和查询凭据")
   void shouldRestoreCredentialsInMaskedEndpointUri() {
     assertThat(SecretMasking.preserveMaskedEndpoint(
@@ -96,7 +104,7 @@ class SecretMaskingTest {
   @DisplayName("额外敏感键可用于特定配置契约")
   void shouldMaskAdditionalSensitiveJsonKeys() {
     String masked = SecretMasking.maskSensitiveJson(
-        "{\"url\":\"https://hook.example/secret\",\"label\":\"ops\"}", java.util.Set.of("url"));
+        "{\"url\":\"https://hook.example/secret\",\"label\":\"ops\"}", Set.of("url"));
 
     assertThat(masked).isEqualTo("{\"url\":\"****\",\"label\":\"ops\"}");
   }

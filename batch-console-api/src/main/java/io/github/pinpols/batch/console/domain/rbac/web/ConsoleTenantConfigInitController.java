@@ -52,7 +52,8 @@ public class ConsoleTenantConfigInitController {
       @Valid @RequestBody TenantConfigBatchInitRequest request,
       Authentication authentication) {
     String operator = resolveOperator(authentication);
-    String batchOperationId = UUID.randomUUID().toString();
+    UUID operationId = UUID.randomUUID();
+    String batchOperationId = operationId.toString();
     return responseFactory.success(
         applicationService.batchInit(request, operator, batchOperationId));
   }
@@ -70,7 +71,8 @@ public class ConsoleTenantConfigInitController {
       @Valid @RequestBody TenantConfigCopyRequest request,
       Authentication authentication) {
     String operator = resolveOperator(authentication);
-    String batchOperationId = UUID.randomUUID().toString();
+    UUID operationId = UUID.randomUUID();
+    String batchOperationId = operationId.toString();
     return responseFactory.success(copyService.copy(request, operator, batchOperationId));
   }
 

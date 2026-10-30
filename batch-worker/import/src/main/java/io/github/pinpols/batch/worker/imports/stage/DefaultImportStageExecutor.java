@@ -2,18 +2,20 @@ package io.github.pinpols.batch.worker.imports.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
+import io.github.pinpols.batch.worker.imports.domain.ImportStagingFiles;
 import io.github.pinpols.batch.worker.imports.domain.ImportWorkerType;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService;
 import io.micrometer.core.instrument.Counter;
@@ -32,8 +34,8 @@ import org.springframework.stereotype.Service;
  * <p>职责：
  *
  * <ul>
- *   <li>从平台侧加载 pipeline step 定义（可配置；无配置则使用默认模板）
- *   <li>按 step 依赖/顺序执行各 stage（RECEIVE → PARSE → PREPROCESS → VALIDATE → LOAD → COMPLETE）
+ *   <li>读取适配器内联的系统固定步骤与 Job 冻结参数；步骤缺失时失败
+ *   <li>按 step 依赖/顺序执行各 stage（RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK）
  *   <li>统一异常归类（业务异常/基础设施异常），并产出标准化的 stage 结果（success/可重试/不可重试）
  *   <li>在流程结束时汇总并落地错误产物（{@link ImportRecordGovernanceService#finalizeErrorOutput}）
  * </ul>
@@ -55,11 +57,10 @@ public class DefaultImportStageExecutor
 
   public DefaultImportStageExecutor(
       List<ImportStageStep> steps,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       ImportRecordGovernanceService recordGovernanceService,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(pipelineDefinitions, pipelineRuns);
+    super(pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
@@ -69,26 +70,47 @@ public class DefaultImportStageExecutor
 
   @Override
   public List<ImportStageResult> execute(ImportJobContext context) {
+    ImportStagingFiles stagingFiles = new ImportStagingFiles();
+    if (EmptyChecks.isNotNull(context)) {
+      context.setStagingFiles(stagingFiles);
+    }
     // 主链路：执行 stage loop；无论成功/失败都尝试收敛错误明细产物（用于对账/审计）。
     try {
-      return runStageLoop(context);
+      List<ImportStageResult> results = runStageLoop(context);
+      if (EmptyChecks.isNotEmpty(results)
+          && results.stream().allMatch(ImportStageResult::success)) {
+        stagingFiles.markSuccessful();
+      }
+      return results;
     } finally {
       try {
-        recordImportRowsMetrics(context);
-      } catch (Exception exception) {
-        log.warn(
-            "failed to record import row metrics: {}",
-            SwallowedExceptionLogger.summary(exception),
-            exception);
+        finalizeImport(context);
+      } finally {
+        if (EmptyChecks.isNotNull(context)) {
+          context.setStagingFiles(null);
+        }
+        try {
+          stagingFiles.close();
+        } catch (Exception exception) {
+          SwallowedExceptionLogger.warn(
+              DefaultImportStageExecutor.class, "import-staging-cleanup", exception);
+        }
       }
-      try {
-        recordGovernanceService.finalizeErrorOutput(context);
-      } catch (Exception exception) {
-        log.warn(
-            "failed to finalize import error output: {}",
-            SwallowedExceptionLogger.summary(exception),
-            exception);
-      }
+    }
+  }
+
+  private void finalizeImport(ImportJobContext context) {
+    try {
+      recordImportRowsMetrics(context);
+    } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(
+          DefaultImportStageExecutor.class, "import-row-metrics", exception);
+    }
+    try {
+      recordGovernanceService.finalizeErrorOutput(context);
+    } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(
+          DefaultImportStageExecutor.class, "import-error-output-finalize", exception);
     }
   }
 
@@ -123,6 +145,19 @@ public class DefaultImportStageExecutor
   }
 
   @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(ImportJobContext context) {
+    ImportStageStep receiveStage = stepsByStage.get(ImportStage.RECEIVE);
+    ImportStageStep loadStage = stepsByStage.get(ImportStage.LOAD);
+    if (EmptyChecks.isNull(context)
+        || !(receiveStage instanceof ReceiveStep receiveStep)
+        || !(loadStage instanceof LoadStep loadStep)) {
+      return ReplayCapabilityDeclaration.unknown(ImportWorkerType.IMPORT);
+    }
+    Map<String, Object> frozenTemplateConfig = receiveStep.resolveTemplateConfig(context);
+    return loadStep.replayCapability(frozenTemplateConfig);
+  }
+
+  @Override
   protected ImportStageResult stepMissingFailure() {
     return ImportStageResult.failure(
         ImportStage.RECEIVE,
@@ -151,7 +186,7 @@ public class DefaultImportStageExecutor
     } catch (BizException exception) {
       // 业务级错误(state_conflict / 字段缺失 / 模板未配 等)由 orchestrator 端 retry/dead-letter 政策处理,
       // worker 这里只是局部失败转 BUSINESS_ERROR,记 WARN 不带 stack 即可;
-      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR + stack
+      // 真正的 infra 异常走下面的 catch(Exception),仍保留 ERROR 分类及净化摘要。
       log.warn(
           "import stage business error (will be governed by orchestrator retry policy):"
               + " stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
@@ -164,20 +199,21 @@ public class DefaultImportStageExecutor
       return ImportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+          "import stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          failureSummary);
       return ImportStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
   }
@@ -270,8 +306,13 @@ public class DefaultImportStageExecutor
       if (step == null) {
         throw new IllegalStateException("missing import step bean for stage: " + stage.name());
       }
-      ordered.add(
-          new StepDescriptor(step.stepCode(), step.stepName(), step.implCode(), stage.name()));
+      String stepCode = step.stepCode();
+      String stepName = step.stepName();
+      String implementationCode = step.implCode();
+      String stageCode = stage.name();
+      StepDescriptor descriptor =
+          new StepDescriptor(stepCode, stepName, implementationCode, stageCode);
+      ordered.add(descriptor);
     }
     return buildStepTemplates(ordered);
   }

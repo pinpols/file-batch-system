@@ -93,22 +93,25 @@ class ConsoleRetryScheduleQueryIntegrationTest extends AbstractIntegrationTest {
       String retryPolicy,
       String retryStatus,
       int retryCount) {
+    final String insertRetryScheduleSql = """
+    INSERT INTO batch.retry_schedule
+    (tenant_id, related_type, related_id, retry_policy, retry_count, max_retry_count,
+    next_retry_at, retry_status, dedup_key, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 3,
+    ?, ?, ?,
+    now(), now())
+    """;
+    Timestamp nextRetryAt = Timestamp.from(BatchDateTimeSupport.utcNow().plusSeconds(60));
+    String dedupKey = tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime();
     jdbcTemplate.update(
-        """
-        INSERT INTO batch.retry_schedule
-          (tenant_id, related_type, related_id, retry_policy, retry_count, max_retry_count,
-           next_retry_at, retry_status, dedup_key, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, 3,
-                ?, ?, ?,
-                now(), now())
-        """,
+        insertRetryScheduleSql,
         tenantId,
         relatedType,
         relatedId,
         retryPolicy,
         retryCount,
-        Timestamp.from(BatchDateTimeSupport.utcNow().plusSeconds(60)),
+        nextRetryAt,
         retryStatus,
-        tenantId + ":" + relatedId + ":" + retryCount + ":" + System.nanoTime());
+        dedupKey);
   }
 }

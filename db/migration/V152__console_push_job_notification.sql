@@ -19,5 +19,6 @@ CREATE TABLE IF NOT EXISTS batch.console_push_job_notification (
 );
 
 -- poller 顺序按 notified_at 监控延迟,辅助索引非必需(UNIQUE 已含 (tenant_id, job_instance_id))。
+
 CREATE INDEX IF NOT EXISTS idx_console_push_job_notification_notified_at
     ON batch.console_push_job_notification (notified_at);

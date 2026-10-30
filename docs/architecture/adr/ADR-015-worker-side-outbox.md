@@ -1,5 +1,7 @@
 # ADR-015 · Worker 端本地 outbox — report 重投与防重复执行
 
+> **当前适用性（2026-10-24）**：REPORT 重投只重放已完成结果，不授权再次执行业务副作用。业务提交成功而报告丢失/结果未知的恢复须保留原 invocation、结果证据并按 ADR-049 核对；本地 outbox 不构成平台库与业务库的分布式原子提交。 原决策与历史阶段记录保留。
+
 - **Status**: Accepted（2026-05-03）：HTTP REPORT 耗尽重试后写入 **平台 PG**（默认，`batch.worker_report_outbox` / Flyway **V96**）或 **SQLite**（`storage=SQLITE`）；poller `SKIP LOCKED` 多副本抢占、`PUBLISHING` 陈旧回收、续租熔断协同；Kafka offset 仍在 listener 成功后提交（与 durable outbox 顺序一致）。业务 JDBC 与 outbox **同一 PG 事务**未实现（executor 线程模型限制）。
 - **Date**: 2026-05-03
 - **Related**: ADR-014 (CLAIM 幂等) / docs/analysis/worker-vs-industry-2026-05-03.md P1-10
@@ -129,3 +131,20 @@ orch 周期 poll worker 的 `/internal/results` endpoint。
 ## 替代讨论
 
 参见 worker-vs-industry-2026-05-03.md P1-10。
+
+## 2026-10-26 空租约下的恢复边界
+
+续租熔断只在存在待续租任务时约束租约探测。最后租约已移除后, 半开检查解除该进程的续租熔断,
+允许回报发件箱按自身有界重试与退避探测 Orchestrator; 不依赖新任务或重启恢复。
+此时解除熔断仅表示不再阻止独立补报, 不证明网络已经恢复, 也不授权重做业务。
+真实 SQLite 与本地 HTTP 回归覆盖报告落库、空租约解除和成功补报后的记录清理。
+
+## 2026-10-27 执行身份、领取所有权与部署边界
+
+当前平台PG结构由V96加后续V360形成，仍由Orchestrator在Worker启动前统一迁移。V360及配套SQLite结构只用于[ADR-048](ADR-048-workflow-fresh-database-cutover.md)的全新存储、配套组件停旧启新，不支持旧运行队列原地升级或新旧组件混跑。非空旧PG队列拒绝迁移；不兼容SQLite文件保留原样并拒绝启动，禁止自动清表或搬运消息。同版本持久文件重启仍继续投递。
+
+待发报告以租户、任务、执行身份为唯一键；相同执行再次入队更新其结果，不同执行分别保留。无执行身份的存储键用空串，载荷原字段不变。指标中的队列行数因此是报告记录数，不能当作去重后的任务数。旧执行的结果仍受服务端执行围栏裁决，拒绝按既有有界重试/放弃人工排查处理，不授权重执行业务。
+
+领取生成独立claim_token，并和载荷一同返回。确认删除、重试、损坏载荷和重试耗尽放弃必须匹配行ID、PUBLISHING状态及凭据；再次入队、陈旧恢复和离开领取状态时旧凭据失效。迟到的HTTP成功不能删除新载荷，旧失败不能消耗新领取者预算或置为GIVE_UP。give_up.total仅在实际领取转为GIVE_UP后增加，同时包含损坏与耗尽，CAS未生效只记调试信息。
+
+真实PG/SQLite及同版本重开、旧存储拒绝等证据见[当日验证](../../review/frontend-backend-bug-review-2026-10-27.md#backend-validation-回报队列的领取cas与执行身份验证)。本地393项Worker Core通过不代表业务库与发件箱分布式原子提交，也不替代真实集群故障验收。

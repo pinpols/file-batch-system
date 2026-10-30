@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Require production Java/YAML suppressions to use the reviewed rule registry."""
+# 用途：Java 抑制项注册表。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-suppression-registry.py；参数与前置环境见下方说明及所属 README。
+"""生产 Java/YAML 抑制项必须使用经过评审的规则注册表。"""
 
 from __future__ import annotations
 
@@ -64,7 +66,7 @@ SCOPED_RULES = {
 }
 GATE_CODE = "JAVA_SUPPRESSION_REGISTRY"
 GATE_NAME = "生产代码静态检查抑制项登记"
-BASELINE = ROOT / "scripts/ci/java-suppression-baseline.tsv"
+BASELINE = ROOT / "scripts/ci/baselines/java-suppression-baseline.tsv"
 
 
 def production_sources(candidates: list[str] | None = None) -> list[Path]:
@@ -89,7 +91,9 @@ def production_sources(candidates: list[str] | None = None) -> list[Path]:
     return sorted(
         ROOT / relative
         for relative in result.stdout.splitlines()
-        if relative.endswith(".java") and "/src/main/java/" in relative
+        if relative.endswith(".java")
+        and "/src/main/java/" in relative
+        and (ROOT / relative).is_file()
     )
 
 
@@ -115,11 +119,12 @@ def production_yaml_configs(candidates: list[str] | None = None) -> list[Path]:
         for relative in result.stdout.splitlines()
         if Path(relative).suffix in {".yml", ".yaml"}
         and "/src/main/resources/" in relative
+        and (ROOT / relative).is_file()
     )
 
 
 def nosonar_comment_lines(source: str) -> list[int]:
-    """Return actual Java line comments containing a Sonar NOSONAR directive."""
+    """提取真正包含 Sonar NOSONAR 指令的 Java 行注释。"""
     lines: list[int] = []
     state = "code"
     line = 1
@@ -216,7 +221,7 @@ def scan(candidates: list[str] | None = None) -> list[tuple[str, int, str]]:
 
 
 def suppression_targets_type(source: str, line_number: int) -> bool:
-    """Whether an annotation on this line applies to a type rather than a member."""
+    """判断当前行注解作用于类型还是成员。"""
     type_declaration = re.compile(
         r"^(?:(?:public|protected|private|abstract|final|static|sealed|non-sealed)\s+)*"
         r"(?:class|interface|enum|record)\b"
@@ -281,9 +286,9 @@ def read_baseline() -> Counter[tuple[str, str]]:
 
 def write_baseline(findings: list[tuple[str, int, str]]) -> None:
     lines = [
-        "# Reviewed production Java @SuppressWarnings and YAML IDE inspection inventory.",
-        "# Update only after reviewing the source change and documenting its reason.",
-        "# Format: repository-relative path<TAB>rule<TAB>approved occurrence count.",
+        "# 已审查的生产 Java @SuppressWarnings 与 YAML IDE 抑制项清单。",
+        "# 仅在核对源码变更并记录原因后更新。",
+        "# 格式：仓库相对路径<TAB>规则<TAB>批准次数。",
     ]
     lines.extend(
         f"{path}\t{rule}\t{count}"

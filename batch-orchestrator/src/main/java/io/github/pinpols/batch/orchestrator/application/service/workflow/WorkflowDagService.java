@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.service.workflow;
 
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 
 /**
@@ -19,8 +21,22 @@ public interface WorkflowDagService {
   List<DagNodeResolution> resolveNextNodes(
       Long workflowDefinitionId, String currentNodeCode, boolean success, String payloadJson);
 
+  default List<DagNodeResolution> resolveNextNodesForRun(
+      WorkflowRunEntity run, String currentNodeCode, boolean success, String payloadJson) {
+    return EmptyChecks.isNull(run)
+        ? List.of()
+        : resolveNextNodes(run.getWorkflowDefinitionId(), currentNodeCode, success, payloadJson);
+  }
+
   boolean isNodeReadyForDispatch(
       Long workflowRunId, Long workflowDefinitionId, String nodeCode, String payloadJson);
+
+  default boolean isNodeReadyForRunDispatch(
+      WorkflowRunEntity run, String nodeCode, String payloadJson) {
+    return EmptyChecks.isNotNull(run)
+        && isNodeReadyForDispatch(
+            run.getId(), run.getWorkflowDefinitionId(), nodeCode, payloadJson);
+  }
 
   /**
    * SKIP 级联：从 {@code fromNodeCode}（FAILED 或 SKIPPED 节点）出发，沿 SUCCESS / CONDITION 出边 寻找无机会再触发的下游节点，写入
@@ -35,6 +51,18 @@ public interface WorkflowDagService {
    */
   List<String> cascadeSkipDownstream(
       Long workflowRunId, Long workflowDefinitionId, String fromNodeCode);
+
+  default List<String> cascadeSkipDownstreamForRun(WorkflowRunEntity run, String fromNodeCode) {
+    return cascadeSkipDownstreamForRun(run, fromNodeCode, null);
+  }
+
+  /** 对来源载荷中的条件入边进行判定时，级联跳过后继节点。 */
+  default List<String> cascadeSkipDownstreamForRun(
+      WorkflowRunEntity run, String fromNodeCode, String sourcePayloadJson) {
+    return EmptyChecks.isNull(run)
+        ? List.of()
+        : cascadeSkipDownstream(run.getId(), run.getWorkflowDefinitionId(), fromNodeCode);
+  }
 
   default DagNodeResolution resolveInitialNode(Long workflowDefinitionId) {
     List<DagNodeResolution> nodes = resolveInitialNodes(workflowDefinitionId, null);

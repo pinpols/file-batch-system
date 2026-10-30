@@ -58,15 +58,19 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .isOk();
 
-    var row = jdbcTemplate.queryForMap(
-        "SELECT tenant_id, window_code, timezone, end_strategy FROM batch.batch_window"
-            + " WHERE window_code = ?",
-        code);
+    String batchWindowSnapshotSql = """
+        select tenant_id, window_code, timezone, end_strategy from batch.batch_window
+        where window_code = ?
+        """;
+    var row = jdbcTemplate.queryForMap(batchWindowSnapshotSql, code);
     assertThat(row).containsEntry("tenant_id", "int-win-ta");
     assertThat(row).containsEntry("window_code", code);
     assertThat(row).containsEntry("end_strategy", "FINISH_RUNNING");
 
-    jdbcTemplate.update("DELETE FROM batch.batch_window WHERE window_code = ?", code);
+    String deleteBatchWindowSql = """
+        delete from batch.batch_window where window_code = ?
+    """;
+    jdbcTemplate.update(deleteBatchWindowSql, code);
   }
 
   @Test
@@ -84,8 +88,10 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         .expectBody(String.class)
         .value(b -> assertThat(b).contains("VALIDATION_ERROR"));
 
-    Long cnt = jdbcTemplate.queryForObject(
-        "SELECT COUNT(*) FROM batch.batch_window WHERE window_code = ?", Long.class, "q q q");
+    String batchWindowCountSql = """
+        select count(*) from batch.batch_window where window_code = ?
+        """;
+    Long cnt = jdbcTemplate.queryForObject(batchWindowCountSql, Long.class, "q q q");
     assertThat(cnt).isZero();
   }
 
@@ -127,6 +133,9 @@ class ConsoleBatchWindowMutationIntegrationTest extends AbstractMutationIntegrat
         .expectStatus()
         .value(s -> assertThat(s).isIn(400, 409, 500));
 
-    jdbcTemplate.update("DELETE FROM batch.batch_window WHERE window_code = ?", code);
+    String deleteBatchWindowSql = """
+        delete from batch.batch_window where window_code = ?
+    """;
+    jdbcTemplate.update(deleteBatchWindowSql, code);
   }
 }

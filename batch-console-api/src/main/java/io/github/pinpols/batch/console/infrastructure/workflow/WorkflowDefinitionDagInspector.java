@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
@@ -22,13 +24,25 @@ import org.springframework.stereotype.Component;
  * 负责已保存工作流的 DAG 诊断。
  *
  * <p>该检查与写入前的 {@code WorkflowDagValidator} 目的不同：它需要把数据库中当前拓扑和 JOB 引用转换为可供
- * Console 定位节点/边的结构化 findings。它只读数据库，不负责修改定义、发布事件或裁定业务语义。
+ * Console 定位节点/边的结构化 findings。写入口复用 JOB 引用检查；它不修改定义或发布事件。
  */
 @Component
 @RequiredArgsConstructor(access = AccessLevel.PUBLIC)
 public final class WorkflowDefinitionDagInspector {
 
   private final JobDefinitionMapper jobDefinitionMapper;
+
+  /** 发布入口复用诊断规则；草稿是否发布由拥有事务的调用方裁定。 */
+  public void requireExecutableJobReferences(String tenantId, List<WorkflowNodeEntity> nodes) {
+    List<DagValidationResult.Finding> findings = new ArrayList<>();
+    validateJobNodeReferences(findings, tenantId, nodes);
+    if (EmptyChecks.isNotEmpty(findings)) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          ResultCode.VALIDATION_ERROR.detailKey(),
+          findings.getFirst().message());
+    }
+  }
 
   public List<DagValidationResult.Finding> inspect(
       String tenantId, List<WorkflowNodeEntity> nodes, List<WorkflowEdgeEntity> edges) {
@@ -73,7 +87,7 @@ public final class WorkflowDefinitionDagInspector {
         continue;
       }
       JobDefinitionEntity jobDefinition = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
-      if (jobDefinition == null) {
+      if (EmptyChecks.isNull(jobDefinition)) {
         findings.add(DagValidationResult.Finding.error(
             "JOB_REF_NOT_FOUND",
             "JOB node " + node.getNodeCode() + " references non-existent job_definition: "
@@ -82,7 +96,7 @@ public final class WorkflowDefinitionDagInspector {
             null));
         continue;
       }
-      if (Boolean.FALSE.equals(jobDefinition.getEnabled())) {
+      if (!Boolean.TRUE.equals(jobDefinition.getEnabled())) {
         findings.add(DagValidationResult.Finding.error(
             "JOB_REF_DISABLED",
             "JOB node " + node.getNodeCode() + " references disabled job_definition: " + jobCode,

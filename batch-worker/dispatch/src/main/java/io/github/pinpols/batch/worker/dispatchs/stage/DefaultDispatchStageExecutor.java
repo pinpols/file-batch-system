@@ -2,11 +2,12 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplateParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.PipelineStepTemplateProvider;
@@ -52,10 +53,9 @@ public class DefaultDispatchStageExecutor
 
   public DefaultDispatchStageExecutor(
       List<DispatchStageStep> steps,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       MeterRegistry meterRegistry) {
-    super(pipelineDefinitions, pipelineRuns);
+    super(pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
@@ -125,20 +125,21 @@ public class DefaultDispatchStageExecutor
       return DispatchStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+          "dispatch stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          failureSummary);
       return DispatchStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
   }
@@ -242,18 +243,18 @@ public class DefaultDispatchStageExecutor
             case RETRY -> Map.of("onFailureNextStageCode", DispatchStage.COMPENSATE.name());
             default -> Map.of();
           };
-      // 使用 record 构造器创建参数对象（record 构造器不受参数数量约束）
-      PipelineStepTemplateParam param = new PipelineStepTemplateParam(
-          step.stepCode(),
-          step.stepName(),
-          stage.name(),
-          order++,
-          step.implCode(),
-          stepParams,
-          0,
-          "NONE",
-          0,
-          true);
+      PipelineStepTemplateParam param = PipelineStepTemplateParam.builder()
+          .stepCode(step.stepCode())
+          .stepName(step.stepName())
+          .stageCode(stage.name())
+          .stepOrder(order++)
+          .implCode(step.implCode())
+          .stepParams(stepParams)
+          .timeoutSeconds(0)
+          .retryPolicy("NONE")
+          .retryMaxCount(0)
+          .enabled(true)
+          .build();
       templates.add(param.toTemplate());
     }
     return List.copyOf(templates);

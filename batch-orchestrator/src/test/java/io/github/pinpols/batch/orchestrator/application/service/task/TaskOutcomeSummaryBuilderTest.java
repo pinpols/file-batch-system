@@ -6,7 +6,9 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +47,36 @@ class TaskOutcomeSummaryBuilderTest {
         List.of(partition), commandOutputs(Map.of("rows", 999)));
 
     assertThat(outputs).isEqualTo(Map.of("rows", 100));
+  }
+
+  @Test
+  @DisplayName("失败分片的最后报告不能补作成功分片缺失的输出")
+  void shouldNotUseFailedReportOutputsAsSuccessfulPartitionFallback() {
+    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+    JobPartitionEntity failed =
+        partition(2L, 2, "p2", PartitionStatus.FAILED.code(), Map.of("rows", 999));
+    TaskOutcomeCommand failedReport = TaskOutcomeCommand.builder()
+        .tenantId("ta")
+        .taskId(10L)
+        .success(false)
+        .outputs(Map.of("rows", 999))
+        .build();
+
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(success, failed), failedReport))
+        .isEmpty();
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(failed), failedReport))
+        .isEmpty();
+  }
+
+  @Test
+  @DisplayName("单个成功报告仍可补足历史分片缺失的输出")
+  void shouldKeepSuccessfulReportFallbackForLegacyPartition() {
+    JobPartitionEntity success = partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of());
+    assertThat(TaskOutcomeSummaryBuilder.aggregateSuccessfulPartitionOutputs(
+            List.of(success), commandOutputs(Map.of("rows", 100))))
+        .containsEntry("rows", 100);
   }
 
   @Test
@@ -111,8 +143,7 @@ class TaskOutcomeSummaryBuilderTest {
   @Test
   @DisplayName("perf(#5): 计数版 buildJobInstanceResultSummary 与列表版逐字段等价")
   void shouldEqualListBased_whenBuildingCountBasedSummary() {
-    io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity jobInstance =
-        new io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity();
+    JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setId(77L);
     List<JobPartitionEntity> partitions = List.of(
         partition(1L, 1, "p1", PartitionStatus.SUCCESS.code(), Map.of()),
@@ -130,11 +161,9 @@ class TaskOutcomeSummaryBuilderTest {
         .build();
 
     // 轻量投影(与列表同一批分区状态)。
-    List<io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef> statusRefs =
-        partitions.stream()
-            .map(p -> new io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef(
-                p.getId(), p.getPartitionStatus()))
-            .toList();
+    List<PartitionStatusRef> statusRefs = partitions.stream()
+        .map(p -> new PartitionStatusRef(p.getId(), p.getPartitionStatus()))
+        .toList();
     long successCount = statusRefs.stream()
         .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
         .count();

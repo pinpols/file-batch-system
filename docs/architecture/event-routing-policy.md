@@ -17,7 +17,7 @@
 
 历史上"一张大 outbox 包打天下"的方案曾被讨论，但最终拆分原因：
 
-1. **事件量级差异**：trigger fire 是高频事件（生产 95%+ 是定时器触发，每秒可能数千），与业务事件（每秒几十）混在一张表会让 orchestrator 端 outbox 扫描压力陡增。
+1. **事件量级差异**：trigger fire 与任务终态、配置通知的负载形态不同，分表可分别治理扫描与重试；实际比例和吞吐须由当前部署测量。
 2. **消费方差异**：trigger_outbox 只有一个消费方（orchestrator TriggerLaunchConsumer），而 outbox_event 有多个 topic 多个消费方。混在一起的路由元数据会让 schema 变臃肿。
 3. **关联表差异**：trigger_outbox_event 与 `trigger_request` 同事务（一对一），outbox_event 与状态机表（job_instance / workflow_run）同事务（一对多）。事务边界拆开避免互相影响。
 4. **重试策略差异**：trigger 失败靠退避重发即可（trigger_request 自带 dedup_key 回退），不需要单独的 retry 队列；业务事件失败要走 retry → DLQ → 人工 replay 全套流程。
@@ -28,6 +28,7 @@
   - `(tenant_id, request_id)` UNIQUE（V83 改成 CONSTRAINT，原 V80 是 UNIQUE INDEX）
   - 必须与 `trigger_request` 同事务写入
   - publish_status 状态机：NEW → PUBLISHING → PUBLISHED；失败走 NEW → PUBLISHING → FAILED → ...（带退避）→ GIVE_UP
+  - V361 起每次进入 PUBLISHING 生成独立 `publish_claim_token`；ACK 与失败回写必须同时匹配状态和 token，离开 PUBLISHING 清空 token。超时回收后旧投递者不得更新新一轮领取。
 
 - **outbox_event**:
   - 必须与业务状态变更同事务（`outbox_event 必须与任务状态写入处于同一事务` —— docs/agent-baseline.md §架构硬约束）
@@ -50,19 +51,20 @@ DefaultTriggerService.persistAndForward(...) [@Transactional]
   ├─ INSERT trigger_request (status=ACCEPTED)
   └─ INSERT trigger_outbox_event (status=NEW, payload=LaunchEnvelope JSON)
   ↓
-TriggerOutboxRelay (200ms 周期, ShedLock 互斥；按每秒释放预算批量 CAS 抢占 → Kafka async ACK → 批量 PUBLISHED 回写)
+TriggerOutboxRelay (200ms 周期, ShedLock 互斥；按每秒释放预算批量 CAS 抢占并写领取 token → Kafka async ACK → 按 token 回写 PUBLISHED/FAILED)
   ↓
 KafkaTriggerEventPublisher.publishAsync(topic="batch.trigger.launch.v1")
   ↓
 orchestrator TriggerLaunchConsumer.consume(envelope)
   ↓
-LaunchApplicationService.launch(launchRequest) → INSERT job_instance + outbox_event(同事务)
+顶层：Workflow 接纳 → INSERT workflow_run / START node（冻结图与日期）
+JOB 到达：子请求接纳 → INSERT job_instance / partition / task + outbox_event（各自事务边界）
 ```
 
 **幂等回退**：
 - `(tenant_id, request_id)` UNIQUE（trigger_outbox_event 重发拒绝）
-- `uk_job_instance_tenant_dedup`（orchestrator 端回退）
-- consumer 收到 409 CONFLICT 视为 ack 成功
+- 顶层 Workflow 的接纳/投递身份约束；子 Job 的 `job_instance_dedup_key`（V182）防止跨分区重复创建
+- 消费者按既有幂等结果处理；冲突不构成业务成功证据，终态与结果须回读各自事实
 
 ### 3.2 outbox_event（通用业务事件）
 
@@ -126,6 +128,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
 | V21 | 创建 `outbox_event` + `event_outbox_retry`（ADR-002 transactional outbox 落地） |
 | V80（2026-04-30） | 创建 `trigger_outbox_event`（ADR-010 trigger 异步解耦，独立表避免与业务 outbox 抢 scheduler 资源） |
 | V83（2026-05-03） | trigger_outbox_event UNIQUE INDEX → CONSTRAINT，对齐 SQL 标准 |
+| V361（2026-10-27） | Trigger Outbox 主表与归档镜像增加领取 token；回收重领后旧投递者回写被围栏拒绝 |
 | 2026-05-02 | ADR-010 同步 HTTP 桥（HttpOrchestratorTriggerAdapter）删除，trigger_outbox_event 成为唯一路径 |
 
 详见 `docs/architecture/adr/ADR-002-transactional-outbox.md` + `docs/architecture/adr/ADR-010-trigger-async-decoupling.md`。

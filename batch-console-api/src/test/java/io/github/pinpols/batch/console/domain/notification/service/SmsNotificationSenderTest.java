@@ -17,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -96,7 +97,7 @@ class SmsNotificationSenderTest {
   @Test
   @DisplayName("供应商编码重复时构造阶段即失败, 提示冲突的编码")
   void shouldFailFast_whenProviderCodeDuplicated() {
-    SmsProvider duplicate = org.mockito.Mockito.mock(SmsProvider.class);
+    SmsProvider duplicate = Mockito.mock(SmsProvider.class);
     when(duplicate.providerCode()).thenReturn("ALIYUN");
 
     assertThatThrownBy(() -> new SmsNotificationSender(

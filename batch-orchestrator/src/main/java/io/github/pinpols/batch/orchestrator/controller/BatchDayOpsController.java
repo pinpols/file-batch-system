@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * 批量日治理内部接口（仅供 console 通过 ConsoleOrchestratorProxyService HTTP 转发调用）。
  *
- * <p>动作集合：FREEZE / RELEASE / SKIP / REOPEN / CLOSE，对应 {@link BatchDayOperationService} 的状态转换 + 审计双写
+ * <p>动作集合：FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY，对应 {@link BatchDayOperationService} 的状态转换 + 审计双写
  * （`job_execution_log` + V105 `batch_day_operation_audit`）。RELEASE 会触发 `batch_day_waiting_launch`
  * 表的下一日重放（参见 §14.3.1）。
  *
@@ -30,11 +30,15 @@ public class BatchDayOpsController {
 
   @PostMapping("/operate")
   public BatchDayOperateResponse operate(@RequestBody BatchDayOperateRequest request) {
-    BatchDayOperateCommand command = BatchDayOperateCommand.builder()
-        .tenantId(request.tenantId())
-        .calendarCode(request.calendarCode())
-        .bizDate(request.bizDate())
-        .action(BatchDayOperation.valueOf(request.action()))
+    BatchDayOperateCommand.BatchDayOperateCommandBuilder commandBuilder =
+        BatchDayOperateCommand.builder()
+            .tenantId(request.tenantId())
+            .calendarCode(request.calendarCode())
+            .bizDate(request.bizDate());
+    String actionText = request.action();
+    BatchDayOperation action = BatchDayOperation.valueOf(actionText);
+    BatchDayOperateCommand command = commandBuilder
+        .action(action)
         .operatorId(request.operatorId())
         .reason(request.reason())
         .build();
@@ -48,7 +52,7 @@ public class BatchDayOpsController {
   }
 
   /**
-   * @param action FREEZE / RELEASE / SKIP / REOPEN / CLOSE
+   * @param action 操作类型：FREEZE / RELEASE / SKIP / REOPEN / CLOSE / SETTLE_EMPTY
    */
   public record BatchDayOperateRequest(
       String tenantId,

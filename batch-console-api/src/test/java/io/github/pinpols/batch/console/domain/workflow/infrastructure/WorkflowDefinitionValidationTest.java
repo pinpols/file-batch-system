@@ -9,10 +9,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -20,6 +22,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinition
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
+import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultWorkflowDefinitionService;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionResponseAssembler;
@@ -66,15 +69,15 @@ class WorkflowDefinitionValidationTest {
         mock(ConsoleRealtimeEventPort.class),
         tenantGuard,
         mock(ConsoleConfigCacheInvalidationService.class),
-        mock(
-            io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService
-                .class),
-        mock(io.github.pinpols.batch.console.domain.workflow.validation.WorkflowDagValidator.class),
+        mock(WorkflowDesignLockService.class),
+        mock(WorkflowDagValidator.class),
         new WorkflowDefinitionResponseAssembler(),
         new WorkflowDefinitionWriteSupport(
             nodeMapper, edgeMapper, versionMapper, new ObjectMapper()),
         new WorkflowDefinitionDagInspector(jobDefinitionMapper),
-        mock(JobResourceAssignmentGuard.class));
+        mock(JobResourceAssignmentGuard.class),
+        jobDefinitionMapper,
+        mock(BusinessCalendarMapper.class));
   }
 
   @Test

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.DeadLetterErrorClass;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
@@ -31,14 +32,18 @@ import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
+import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.testing.TestConstants.DeadLetter;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.Mockito;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -83,7 +88,8 @@ class DefaultRetryGovernanceServiceTest {
         jobPartitionMapper,
         jobInstanceMapper,
         jobStepInstanceMapper,
-        taskDispatchOutboxService);
+        taskDispatchOutboxService,
+        mock(WorkflowRunMapper.class));
 
     service = new DefaultRetryGovernanceService(
         retryScheduleMapper,
@@ -173,12 +179,33 @@ class DefaultRetryGovernanceServiceTest {
   void shouldCreateDeadLetterWhenRetryCountExhausted() {
     when(jobDefinitionMapper.selectById(1L)).thenReturn(jobDefinitionWithPolicy(1L, "FIXED", 2));
 
-    // partition already has 2 retries, max is 2 → exhausted
+    // 该分区已重试 2 次，达到最大次数 2，重试耗尽。
     boolean result = service.scheduleRetryIfNecessary(
         task("t1", 1L, 1L), partition(1L, 2), jobInstance(1L), "ERR", "exhausted");
 
     assertThat(result).isFalse();
     verify(deadLetterTaskMapper).insert(any());
+    verify(retryScheduleMapper, never()).insert(any());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"NONE,3,0", "FIXED,0,0", "FIXED,2,2"})
+  @DisplayName("不重试和预算耗尽的系统死信都不能重新取得自动重试预算")
+  void shouldCloseAutomaticRetryBudget_whenFailureIsDeadLettered(
+      String policy, int maximum, int used) {
+    when(jobDefinitionMapper.selectById(1L))
+        .thenReturn(jobDefinitionWithPolicy(1L, policy, maximum));
+
+    assertThat(service.scheduleRetryIfNecessary(
+            task("t1", 1L, 1L), partition(1L, used), jobInstance(1L), "SYSTEM_FAILURE", "failure"))
+        .isFalse();
+
+    ArgumentCaptor<DeadLetterTaskEntity> captured =
+        ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+    verify(deadLetterTaskMapper).insert(captured.capture());
+    assertThat(captured.getValue().getErrorClass()).isEqualTo("SYSTEM");
+    assertThat(captured.getValue().getMaxReplayCount()).isZero();
+    assertThat(captured.getValue().getNextReplayAt()).isNull();
     verify(retryScheduleMapper, never()).insert(any());
   }
 
@@ -200,6 +227,26 @@ class DefaultRetryGovernanceServiceTest {
     assertThat(schedule.getRetryCount()).isEqualTo(1);
     assertThat(schedule.getLastErrorCode()).isEqualTo("PARSE_ERR");
     assertThat(schedule.getNextRetryAt()).isAfter(BatchDateTimeSupport.utcNow().minusSeconds(5));
+  }
+
+  @Test
+  @DisplayName("外部副作用结果不明时即使策略为 FIXED 也只进入人工核对死信")
+  void shouldBlockRetry_whenExternalOutcomeIsUnknown() {
+    boolean scheduled = service.scheduleRetryIfNecessary(
+        task("t1", 1L, 1L),
+        partition(1L, 0),
+        jobInstance(1L),
+        "EXTERNAL_OUTCOME_UNKNOWN",
+        "remote side effect may have committed");
+
+    assertThat(scheduled).isFalse();
+    ArgumentCaptor<DeadLetterTaskEntity> captured =
+        ArgumentCaptor.forClass(DeadLetterTaskEntity.class);
+    verify(deadLetterTaskMapper).insert(captured.capture());
+    assertThat(captured.getValue().getErrorClass()).isEqualTo(DeadLetterErrorClass.SYSTEM.code());
+    assertThat(captured.getValue().getMaxReplayCount()).isZero();
+    assertThat(captured.getValue().getNextReplayAt()).isNull();
+    verify(retryScheduleMapper, never()).insert(any());
   }
 
   // ── 永久性输入/数据错 → 不重试,直接 BUSINESS 死信(防永久失败无限重试洪水)──────────
@@ -322,8 +369,10 @@ class DefaultRetryGovernanceServiceTest {
 
     assertThatThrownBy(() -> service.replayDeadLetter("t1", 1L)).isInstanceOf(BizException.class);
     verify(deadLetterTaskMapper)
-        .markReplayFailure(
-            anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
   }
 
   @Test
@@ -340,8 +389,10 @@ class DefaultRetryGovernanceServiceTest {
 
     verify(deadLetterTaskMapper).markGiveUp("t1", 1L);
     verify(deadLetterTaskMapper, never())
-        .markReplayFailure(
-            anyString(), anyLong(), anyString(), anyInt(), any(), anyString(), any());
+        .markReplayFailure(ArgumentMatchers.argThat(parameters -> parameters != null
+            && parameters.tenantId() != null
+            && parameters.targetStatus() != null
+            && parameters.lastReplayResult() != null));
   }
 
   // ── dispatchDueRetries — no retries ──────────────────────────────────────
@@ -349,11 +400,11 @@ class DefaultRetryGovernanceServiceTest {
   @Test
   @DisplayName("没有到期的重试计划时不做任何处理")
   void shouldDoNothingWhenNoRetrySchedulesDue() {
-    when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of());
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of());
 
     service.dispatchDueRetries();
 
-    verify(retryScheduleMapper).selectByQuery(any());
+    verify(retryScheduleMapper).selectDueNotPaused(any());
     verify(retryScheduleMapper, never())
         .markRunning(anyString(), anyLong(), anyString(), anyString());
   }
@@ -365,7 +416,7 @@ class DefaultRetryGovernanceServiceTest {
     schedule.setId(1L);
     schedule.setTenantId("t1");
     schedule.setRelatedId(100L);
-    when(retryScheduleMapper.selectByQuery(any())).thenReturn(List.of(schedule));
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(schedule));
     when(retryScheduleMapper.markRunning(
             "t1", 1L, RetryScheduleStatus.WAITING.code(), RetryScheduleStatus.RUNNING.code()))
         .thenReturn(0);
@@ -373,6 +424,29 @@ class DefaultRetryGovernanceServiceTest {
     service.dispatchDueRetries();
 
     verify(partitionMapper(), never()).selectById(anyString(), anyLong());
+  }
+
+  @Test
+  @DisplayName("全局重试扫描逐条在计划所属租户上下文中认领")
+  void shouldClaimEachDueRetryUnderItsTenantContext() {
+    RetryScheduleEntity t1 = new RetryScheduleEntity();
+    t1.setId(1L);
+    t1.setTenantId("t1");
+    RetryScheduleEntity t2 = new RetryScheduleEntity();
+    t2.setId(2L);
+    t2.setTenantId("t2");
+    when(retryScheduleMapper.selectDueNotPaused(any())).thenReturn(List.of(t1, t2));
+    Mockito.doAnswer(invocation -> {
+          String tenantId = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(tenantId);
+          return 0;
+        })
+        .when(retryScheduleMapper)
+        .markRunning(anyString(), anyLong(), anyString(), anyString());
+
+    service.dispatchDueRetries();
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

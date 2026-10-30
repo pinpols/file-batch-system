@@ -27,3 +27,7 @@ description: 用户要求评估或演练备份、PITR、数据库/Worker 故障�
 - `scripts/db/backup/dr-drill.sh`
 - `scripts/sim/dr-drill-pitr.sh`、`scripts/sim/dr-drill-fleet-crash.sh`
 - 涉及完整本地验收时同时使用 `acceptance-validation`；涉及数据库 DDL 使用 `database-migration-safety`。
+
+## 当前文档与脚本的方法补充
+
+制定或判读逻辑恢复、PITR和控制面/业务数据恢复时，按需读取[双数据库、WAL和业务恢复验证](references/recovery-methods.md)。只加载相关方法，不把文档列出的操作自动加入执行范围。

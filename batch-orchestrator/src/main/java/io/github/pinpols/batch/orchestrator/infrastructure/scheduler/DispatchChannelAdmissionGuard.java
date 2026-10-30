@@ -21,9 +21,10 @@ public class DispatchChannelAdmissionGuard implements DownstreamAdmissionGuard {
 
   @Override
   public ResourceCheck check(ResourceSchedulingRequest request) {
-    if (EmptyChecks.isNull(request)
+    boolean dispatchAdmissionIsNotApplicable = EmptyChecks.isNull(request)
         || !"DISPATCH".equalsIgnoreCase(request.getWorkerType())
-        || !Texts.hasText(request.getTenantId())) {
+        || !Texts.hasText(request.getTenantId());
+    if (dispatchAdmissionIsNotApplicable) {
       return ResourceCheck.allow();
     }
     List<String> channelCodes = resolveChannelCodes(request);

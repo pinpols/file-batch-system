@@ -19,6 +19,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -27,12 +28,11 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkerRegistryCache;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
-import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.LaunchSeed;
+import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
 import io.github.pinpols.batch.orchestrator.integration.support.WorkerRegistryCacheTestSupport;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
@@ -75,7 +75,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
   private TaskControllerApplicationService taskControllerApplicationService;
@@ -123,21 +123,22 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
    * 结果确定(本机偶发对齐、CI 必现该非确定性)。
    */
   private LaunchedTask launchOne(int idx) {
-    LaunchSeed seed = LaunchIntegrationFixture.prepareLaunchWithWorker(
+    WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "ITGRP_" + idx + "_" + System.nanoTime(), TriggerType.API);
     LaunchRequest req = LaunchRequest.builder()
         .tenantId(TENANT)
-        .jobCode(seed.jobCode())
+        .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("trace-batch-" + idx + "-" + seed.requestId())
         .params(Map.of())
         .build();
-    launchService.launch(req);
+    var response = workflowRunLaunchService.launch(req);
 
-    JobInstanceEntity instance =
-        jobInstanceMapper.selectByTenantAndDedupKey(TENANT, seed.dedupKey());
+    Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
+        jdbcTemplate, TENANT, response.instanceNo());
+    JobInstanceEntity instance = jobInstanceMapper.selectById(TENANT, instanceId);
     JobTaskEntity task = jobTaskMapper
         .selectByQuery(new JobTaskQuery(TENANT, instance.getId(), null, null, null))
         .get(0);
@@ -181,41 +182,43 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
       LaunchedTask lt = launched.get(i);
       JobPartitionEntity p = jobPartitionMapper.selectById(TENANT, lt.partitionId());
       if (i < 2) {
-        reportItems.add(new TaskExecutionReportCommand(
-            lt.taskId(),
-            TENANT,
-            lt.seed().workerCode(),
-            true,
-            null,
-            null,
-            "{\"records\":" + (i + 1) + "}",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            p.getCurrentInvocationId(),
-            null,
-            null));
+        reportItems.add(TaskExecutionReportCommand.builder()
+            .taskId(lt.taskId())
+            .tenantId(TENANT)
+            .workerId(lt.seed().workerCode())
+            .success(true)
+            .code(null)
+            .message(null)
+            .resultSummary("{\"records\":" + (i + 1) + "}")
+            .errorCode(null)
+            .errorMessage(null)
+            .errorKey(null)
+            .errorArgs(null)
+            .highWaterMarkOut(null)
+            .outputs(null)
+            .partitionInvocationId(p.getCurrentInvocationId())
+            .failureClass(null)
+            .verifierFailures(null)
+            .build());
       } else {
-        reportItems.add(new TaskExecutionReportCommand(
-            lt.taskId(),
-            TENANT,
-            lt.seed().workerCode(),
-            false,
-            "E_IT_FAIL",
-            "intentional failure for per-item isolation",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            p.getCurrentInvocationId(),
-            null,
-            null));
+        reportItems.add(TaskExecutionReportCommand.builder()
+            .taskId(lt.taskId())
+            .tenantId(TENANT)
+            .workerId(lt.seed().workerCode())
+            .success(false)
+            .code("E_IT_FAIL")
+            .message("intentional failure for per-item isolation")
+            .resultSummary(null)
+            .errorCode(null)
+            .errorMessage(null)
+            .errorKey(null)
+            .errorArgs(null)
+            .highWaterMarkOut(null)
+            .outputs(null)
+            .partitionInvocationId(p.getCurrentInvocationId())
+            .failureClass(null)
+            .verifierFailures(null)
+            .build());
       }
     }
     TaskReportBatchResult reportResp =
@@ -273,7 +276,8 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(rb.config()).isNotNull();
   }
 
-  private record LaunchedTask(LaunchSeed seed, Long instanceId, Long taskId, Long partitionId) {}
+  private record LaunchedTask(
+      WorkflowLaunchSeed seed, Long instanceId, Long taskId, Long partitionId) {}
 
   @Test
   @DisplayName("成功回报中的校验失败只写软告警，空元素不改变事件序号且重复回报不重复写入")
@@ -287,12 +291,14 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
     assertThat(verifierEventCount(launched)).isEqualTo(2L);
+    String verifierFailureEventKeysSql = """
+        SELECT event_key FROM batch.outbox_event
+        WHERE tenant_id = ? AND aggregate_id = ?
+          AND event_type = 'verifier.failure.v1'
+        ORDER BY event_key
+        """;
     List<String> keys = jdbcTemplate.queryForList(
-        "SELECT event_key FROM batch.outbox_event WHERE tenant_id = ? AND aggregate_id = ? "
-            + "AND event_type = 'verifier.failure.v1' ORDER BY event_key",
-        String.class,
-        TENANT,
-        launched.instanceId());
+        verifierFailureEventKeysSql, String.class, TENANT, launched.instanceId());
     assertThat(keys)
         .containsExactly(
             TENANT + ":verifier:" + launched.taskId() + ":COUNT:1",
@@ -348,11 +354,12 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   }
 
   private long verifierEventCount(LaunchedTask launched) {
+    String verifierFailureEventCountSql = """
+        SELECT count(*) FROM batch.outbox_event
+        WHERE tenant_id = ? AND aggregate_id = ?
+          AND event_type = 'verifier.failure.v1'
+        """;
     return jdbcTemplate.queryForObject(
-        "SELECT count(*) FROM batch.outbox_event WHERE tenant_id = ? AND aggregate_id = ? "
-            + "AND event_type = 'verifier.failure.v1'",
-        Long.class,
-        TENANT,
-        launched.instanceId());
+        verifierFailureEventCountSql, Long.class, TENANT, launched.instanceId());
   }
 }

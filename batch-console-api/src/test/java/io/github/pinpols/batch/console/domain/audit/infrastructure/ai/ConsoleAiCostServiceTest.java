@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -89,13 +90,14 @@ class ConsoleAiCostServiceTest {
     assertThat(result.status()).isEqualTo("PRICED");
     assertThat(result.amount()).isEqualByComparingTo("0.00600000");
     verify(mapper)
-        .settle(
-            "tenant-a",
-            reservation.billingMonth(),
-            reservation.reservedAmount(),
-            result.amount(),
-            1000,
-            500);
+        .settle(ConsoleAiMonthlyUsageSettleParam.builder()
+            .tenantId("tenant-a")
+            .billingMonth(reservation.billingMonth())
+            .reservedAmount(reservation.reservedAmount())
+            .actualAmount(result.amount())
+            .promptTokens(1000)
+            .completionTokens(500)
+            .build());
   }
 
   @Test

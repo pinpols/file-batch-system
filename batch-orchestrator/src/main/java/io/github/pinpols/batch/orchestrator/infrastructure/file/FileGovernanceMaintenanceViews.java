@@ -1,49 +1,43 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import java.util.Map;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
 
-/**
- * 文件治理维护任务使用的固定查询投影。
- *
- * <p>Mapper 仍以 Map 承接 MyBatis 行结果，但只在仓储边界转换一次；清理任务不再依赖列名字符串或未声明的
- * {@code select *} 字段，从而让归档/孤儿会话清理的输入契约可审查。
- */
+/** 文件治理维护任务使用的固定查询投影。 */
 final class FileGovernanceMaintenanceViews {
 
   private FileGovernanceMaintenanceViews() {}
 
-  static ArchivedFileCleanupView archivedFile(Map<String, Object> row) {
-    if (EmptyChecks.isEmpty(row)) {
+  static ArchivedFileCleanupView archivedFile(FileGovernanceViews.ArchivedFileCleanupRow row) {
+    if (EmptyChecks.isNull(row)) {
       return ArchivedFileCleanupView.absent();
     }
     return new ArchivedFileCleanupView(
-        longValue(row.get("id")),
-        textValue(row.get("tenant_id")),
-        textValue(row.get("storage_path")),
-        textValue(row.get("storage_type")),
-        textValue(row.get("file_status")));
+        row.id(), row.tenantId(), row.storagePath(), row.storageType(), row.fileStatus());
   }
 
-  static OrphanUploadSessionView orphanUploadSession(Map<String, Object> row) {
-    if (EmptyChecks.isEmpty(row)) {
+  static OrphanUploadSessionView orphanUploadSession(
+      FileGovernanceViews.OrphanUploadSessionRow row) {
+    if (EmptyChecks.isNull(row)) {
       return OrphanUploadSessionView.absent();
     }
     return new OrphanUploadSessionView(
-        longValue(row.get("id")),
-        textValue(row.get("tenant_id")),
-        textValue(row.get("storage_bucket")),
-        textValue(row.get("storage_path")));
+        row.id(), row.tenantId(), row.storageBucket(), row.storagePath());
   }
 
   private static Long longValue(Object value) {
     if (value instanceof Number number) {
       return number.longValue();
     }
-    if (EmptyChecks.isNull(value) || EmptyChecks.isBlank(String.valueOf(value))) {
+    if (EmptyChecks.isNull(value)) {
       return null;
     }
-    return Long.valueOf(String.valueOf(value));
+    String presenceText = String.valueOf(value);
+    if (EmptyChecks.isBlank(presenceText)) {
+      return null;
+    }
+    String rawValue = String.valueOf(value);
+    return Long.valueOf(rawValue);
   }
 
   private static String textValue(Object value) {

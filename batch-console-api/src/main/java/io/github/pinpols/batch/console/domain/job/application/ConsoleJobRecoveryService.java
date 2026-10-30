@@ -1,6 +1,11 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
+import io.github.pinpols.batch.console.application.contract.request.WorkflowNodeReplayPreviewRequest;
+import io.github.pinpols.batch.console.application.contract.request.WorkflowRunReplayRequest;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowNodeReplayPreviewResponse;
+import io.github.pinpols.batch.console.application.contract.response.ConsoleWorkflowRunReplayPreviewResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.CompensateRequest;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
 import io.github.pinpols.batch.console.shared.command.PartitionReplayRequest;
@@ -12,6 +17,15 @@ public interface ConsoleJobRecoveryService {
 
   /** 登记补偿类指令。 */
   String compensation(CompensationCommandRequest request, String idempotencyKey);
+
+  ConsoleWorkflowNodeReplayPreviewResponse previewWorkflowNodeReplay(
+      WorkflowNodeReplayPreviewRequest request);
+
+  ConsoleWorkflowRunReplayPreviewResponse previewWorkflowRunReplay(
+      WorkflowRunReplayRequest request);
+
+  ConsoleWorkflowRunReplaySubmissionResponse submitWorkflowRunReplay(
+      WorkflowRunReplayRequest request, String idempotencyKey);
 
   /** 执行补偿动作。 */
   String compensate(CompensateRequest request, String idempotencyKey);

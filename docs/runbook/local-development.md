@@ -85,6 +85,12 @@ docker compose logs -f minio
 docker compose logs -f redis
 ```
 
+## 构建产物与临时验证资产
+
+- `scripts/local/build-apps.sh` 输出运行 JAR 到 `build/runtime-jars/`。本地应用进程直接使用这些文件；脚本以同目录暂存后原子替换，服务运行期间不要移动或清空该目录。
+- `build/cds/` 是启动脚本使用的 CDS 缓存位置；`build/` 统一存放被忽略的生成物。Maven 和门禁使用的 PMD / SpotBugs 规则维护在 [config/quality/](../../config/quality/README.md)，不随构建目录清理。
+- 隔离验收源码副本放在被忽略的 `tmp/validation-snapshots/`，一次性 SQL/fixture 放在 `tmp/validation-assets/`，需要保留的构建恢复清单放在 `tmp/build-recovery/`。这些目录不属于 Maven 正常输出，也不应混入 `build/`。
+
 ## 连接信息
 
 ### PostgreSQL
@@ -171,6 +177,8 @@ bash scripts/local/stop-all.sh
 # 停止应用容器栈，但保留容器与网络
 bash scripts/docker/down-apps.sh
 ```
+
+本地裸 JVM 的 `stop-all.sh` 为开发便利保留默认每阶段等待 30 秒、随后强制结束残留进程的例外；长任务可能被中断，需延长时设置 `STOP_WAIT_SEC`。应用容器使用独立的 `BATCH_APP_STOP_GRACE_PERIOD`（默认 `300s`），详见[容器停机宽限](docker-deployment.md#应用容器停机宽限)。
 
 如果需要连数据卷一起清理：
 

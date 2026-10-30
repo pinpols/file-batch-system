@@ -66,8 +66,8 @@ public class RuntimeConsistencyMetricsScheduler {
       terminalInstancesWithActiveChildren.set(
           jobInstanceMapper.countTerminalInstancesWithActiveChildren());
     } catch (RuntimeException ex) {
-      log.warn(
-          "runtime consistency metrics sampling failed: {}", SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("runtime consistency metrics sampling failed: {}", causeSummary);
     }
   }
 }

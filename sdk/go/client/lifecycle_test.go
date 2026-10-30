@@ -3,6 +3,7 @@ package client
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -46,6 +47,7 @@ func dispatchRecord(taskID string) Record {
 func TestWorker_StartConsumeReportStop(t *testing.T) {
 	fp := NewFakePlatform()
 	fp.ClaimResp = ClaimResult{
+		Payload:               `{"batchSize":20,"crossDay":{"prior":{"resultVersionId":8}}}`,
 		EffectiveConfig:       map[string]any{"batchSize": 10},
 		TraceID:               "tr-1",
 		PartitionInvocationID: "inv-from-claim",
@@ -59,6 +61,9 @@ func TestWorker_StartConsumeReportStop(t *testing.T) {
 		mu.Unlock()
 		if ctx.TraceID != "tr-1" {
 			t.Errorf("expected traceId tr-1, got %q", ctx.TraceID)
+		}
+		if ctx.Parameters["batchSize"] != float64(20) || ctx.EffectiveConfig["batchSize"] != float64(20) {
+			t.Errorf("claim payload must be authoritative, got parameters=%v effectiveConfig=%v", ctx.Parameters, ctx.EffectiveConfig)
 		}
 		return Success(map[string]any{"ok": true}, "done")
 	})
@@ -112,6 +117,88 @@ func TestWorker_StartConsumeReportStop(t *testing.T) {
 	}
 	if w.FSM().State() != StateDraining {
 		t.Fatalf("expected DRAINING state after stop, got %s", w.FSM().State())
+	}
+}
+
+func TestWorker_ClaimPayloadReplacesEffectiveConfig(t *testing.T) {
+	tests := []struct {
+		name          string
+		payload       string
+		wantParams    map[string]any
+		wantErrorCode protocol.ErrorCode
+	}{
+		{
+			name:       "payload replaces legacy keys",
+			payload:    `{"limit":5}`,
+			wantParams: map[string]any{"limit": float64(5)},
+		},
+		{
+			name:       "empty object clears legacy keys",
+			payload:    `{}`,
+			wantParams: map[string]any{},
+		},
+		{
+			name:          "non-object payload is rejected without handler execution",
+			payload:       `[]`,
+			wantErrorCode: protocol.ErrorCodeExecutionFailed,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fp := NewFakePlatform()
+			fp.ClaimResp = ClaimResult{
+				Payload:         test.payload,
+				EffectiveConfig: map[string]any{"legacyOnly": "stale", "limit": 99},
+				TraceID:         "tr-payload",
+			}
+			handledParams := make(chan map[string]any, 1)
+			consumer := NewFakeConsumer([]Record{dispatchRecord("task-payload")})
+			handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+				handledParams <- ctx.Parameters
+				return Success(nil, "done")
+			})
+			worker := NewWorker(testConfig(), fp, consumer, handler, nil, quietLogger())
+			if err := worker.Start(context.Background()); err != nil {
+				t.Fatalf("start: %v", err)
+			}
+			defer worker.Stop(time.Second)
+
+			waitFor(t, time.Second, func() bool {
+				_, ok := fp.ReportFor("task-payload")
+				return ok
+			})
+			report, _ := fp.ReportFor("task-payload")
+			if test.wantErrorCode != "" {
+				if report.Result.ErrorCode != test.wantErrorCode {
+					t.Fatalf("error code = %q, want %q", report.Result.ErrorCode, test.wantErrorCode)
+				}
+				select {
+				case params := <-handledParams:
+					t.Fatalf("handler must not execute for invalid payload, got %v", params)
+				default:
+				}
+			} else {
+				if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
+					t.Fatalf("expected SUCCESS report, got %s", report.Result.ErrorCode)
+				}
+				select {
+				case params := <-handledParams:
+					if !reflect.DeepEqual(params, test.wantParams) {
+						t.Fatalf("handler parameters = %v, want %v", params, test.wantParams)
+					}
+				case <-time.After(time.Second):
+					t.Fatal("handler did not receive claim payload")
+				}
+			}
+
+			if !reflect.DeepEqual(
+				fp.ClaimResp.EffectiveConfig,
+				map[string]any{"legacyOnly": "stale", "limit": 99},
+			) {
+				t.Fatalf("claim effective config mutated: %v", fp.ClaimResp.EffectiveConfig)
+			}
+		})
 	}
 }
 
@@ -374,8 +461,11 @@ func TestWorker_FatalHeartbeatStopsWorker(t *testing.T) {
 	if err := w.Start(context.Background()); err != nil {
 		t.Fatalf("start: %v", err)
 	}
-	// The fatal heartbeat must escalate to a full worker Stop -> deactivate once.
-	waitFor(t, 2*time.Second, func() bool { return len(fp.DeactivateCalls) == 1 })
+	// 异步停机时使用夹具的加锁快照读取次数，避免直接读取正在更新的切片。
+	waitFor(t, 2*time.Second, func() bool {
+		_, _, _, _, _, deactivations := fp.Counts()
+		return deactivations == 1
+	})
 	if !consumer.closed() {
 		t.Fatalf("fatal heartbeat must stop (close) the consumer")
 	}
@@ -429,5 +519,42 @@ func TestWorker_DrainDoesNotCancelCompletingTask(t *testing.T) {
 	}
 	if report.Result.ErrorCode != protocol.ErrorCodeSuccess {
 		t.Fatalf("task completing during drain must report SUCCESS, got %s", report.Result.ErrorCode)
+	}
+}
+
+// 容量暂停时已经拉取的记录必须先处理, 后续提交不能跨过它。
+func TestWorker_BackpressureRetainsFetchedRecord(t *testing.T) {
+	cfg := testConfig()
+	cfg.MaxConcurrentTasks = 1
+	platform := NewFakePlatform()
+	consumer := NewFakeConsumer([]Record{dispatchRecord("first")}, []Record{dispatchRecord("deferred")}, []Record{dispatchRecord("later")})
+	release := make(chan struct{})
+	handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+		if ctx.TaskID == "first" {
+			<-release
+		}
+		return Success(nil, "done")
+	})
+	worker := NewWorker(cfg, platform, consumer, handler, nil, quietLogger())
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	defer worker.Stop(time.Second)
+	defer func() {
+		select {
+		case <-release:
+		default:
+			close(release)
+		}
+	}()
+	waitFor(t, time.Second, consumer.IsPaused)
+	close(release)
+	waitFor(t, 2*time.Second, func() bool {
+		_, deferred := platform.ReportFor("deferred")
+		_, later := platform.ReportFor("later")
+		return deferred && later
+	})
+	if got := consumer.commits(); got != 3 {
+		t.Fatalf("commits=%d, want all three claimed records", got)
 	}
 }

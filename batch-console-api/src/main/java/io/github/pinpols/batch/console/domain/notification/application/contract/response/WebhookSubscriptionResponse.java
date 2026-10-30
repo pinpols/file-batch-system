@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.domain.notification.application.contract
 
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import java.time.Instant;
+import lombok.Builder;
 
-/** Public webhook view; callback secrets are never returned by the API. */
+/** 公开 Webhook 视图；API 不会返回回调密钥。 */
+@Builder
 public record WebhookSubscriptionResponse(
     Long id,
     String tenantId,
@@ -17,16 +19,17 @@ public record WebhookSubscriptionResponse(
     Instant updatedAt) {
 
   public static WebhookSubscriptionResponse from(WebhookSubscriptionEntity entity) {
-    return new WebhookSubscriptionResponse(
-        entity.getId(),
-        entity.getTenantId(),
-        entity.getName(),
-        entity.getCallbackUrl(),
-        entity.getEventTypes(),
-        entity.getEnabled(),
-        entity.getCreatedBy(),
-        entity.getUpdatedBy(),
-        entity.getCreatedAt(),
-        entity.getUpdatedAt());
+    return WebhookSubscriptionResponse.builder()
+        .id(entity.getId())
+        .tenantId(entity.getTenantId())
+        .name(entity.getName())
+        .callbackUrl(entity.getCallbackUrl())
+        .eventTypes(entity.getEventTypes())
+        .enabled(entity.getEnabled())
+        .createdBy(entity.getCreatedBy())
+        .updatedBy(entity.getUpdatedBy())
+        .createdAt(entity.getCreatedAt())
+        .updatedAt(entity.getUpdatedAt())
+        .build();
   }
 }

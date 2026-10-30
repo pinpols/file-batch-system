@@ -11,17 +11,21 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.PartitionStatus;
+import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.engine.TaskDispatchOutboxService;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
+import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
 import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmission;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
@@ -127,7 +131,7 @@ class DefaultPartitionDispatchServiceTest {
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();
     decision.setDispatchable(true);
     decision.setPartitionStatus(PartitionStatus.CREATED.code());
-    decision.setTaskStatus(io.github.pinpols.batch.common.enums.TaskStatus.CREATED.code());
+    decision.setTaskStatus(TaskStatus.CREATED.code());
     when(schedulePlanBuilder.build(any())).thenReturn(plan);
     when(resourceScheduler.schedule(any())).thenReturn(decision);
 
@@ -144,19 +148,19 @@ class DefaultPartitionDispatchServiceTest {
     JobInstanceEntity jobInstance = new JobInstanceEntity();
     jobInstance.setId(10L);
     jobInstance.setTenantId("ta");
+    jobInstance.setBizDate(LocalDate.of(2026, 3, 22));
     jobInstance.setInstanceStatus(JobInstanceStatus.CREATED.code());
     jobInstance.setVersion(0L);
 
     service.dispatch(dispatchContext(jobInstance));
 
     @SuppressWarnings("unchecked")
-    ArgumentCaptor<List<io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity>> tasks =
-        ArgumentCaptor.forClass(List.class);
+    ArgumentCaptor<List<JobTaskEntity>> tasks = ArgumentCaptor.forClass(List.class);
     verify(taskCreationService).createTasks(tasks.capture());
-    assertThat(tasks.getValue())
-        .singleElement()
-        .satisfies(task -> assertThat(task.getTaskStatus())
-            .isEqualTo(io.github.pinpols.batch.common.enums.TaskStatus.READY.code()));
+    assertThat(tasks.getValue()).singleElement().satisfies(task -> {
+      assertThat(task.getTaskStatus()).isEqualTo(TaskStatus.READY.code());
+      assertThat(task.getJobInstanceBizDate()).isEqualTo(LocalDate.of(2026, 3, 22));
+    });
     assertThat(partitionPlan.getPartitionStatus()).isEqualTo(PartitionStatus.READY.code());
     assertThat(jobInstance.getExpectedPartitionCount()).isEqualTo(1);
     verify(partitionLifecycleService, never()).releaseForDispatch(any(), any(), any(), any());
@@ -184,7 +188,7 @@ class DefaultPartitionDispatchServiceTest {
         "trace-dag",
         Map.of());
     PartitionDispatchService.DispatchContext context = PartitionDispatchService.DispatchContext.of(
-        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-dag"),
+        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-dag", null),
         new PartitionDispatchService.DispatchRuntime(
             jobInstance,
             null,
@@ -230,10 +234,32 @@ class DefaultPartitionDispatchServiceTest {
         "request-1",
         "trace-1",
         Map.of());
+    JobDefinitionEntity executionDefinition = JobDefinitionEntity.builder()
+        .id(11L)
+        .tenantId("ta")
+        .jobCode("IMPORT_ORDERS")
+        .version(1)
+        .build();
     return PartitionDispatchService.DispatchContext.of(
-        new PartitionDispatchService.DispatchRequest(request, Map.of(), "trace-1"),
+        new PartitionDispatchService.DispatchRequest(
+            request, Map.of(), "trace-1", executionDefinition),
         new PartitionDispatchService.DispatchRuntime(
             jobInstance, null, List.of(), Instant.parse("2026-09-11T00:00:00Z")));
+  }
+
+  @Test
+  @DisplayName("分区计划接收已准入的作业定义,不在派发阶段重新选择当前版本")
+  void shouldPassAdmittedDefinition_whenBuildingPartitionPlan() {
+    JobInstanceEntity instance = dispatchablePlan(0L);
+    when(jobInstanceMapper.markRunning(any())).thenReturn(1);
+    PartitionDispatchService.DispatchContext context = dispatchContext(instance);
+
+    service.dispatch(context);
+
+    ArgumentCaptor<SchedulePlanCommand> command =
+        ArgumentCaptor.forClass(SchedulePlanCommand.class);
+    verify(schedulePlanBuilder).build(command.capture());
+    assertThat(command.getValue().executionDefinition()).isSameAs(context.executionDefinition());
   }
 
   @Test
@@ -257,6 +283,24 @@ class DefaultPartitionDispatchServiceTest {
         .containsEntry("batchNo", "2026-04-22")
         .containsEntry("bizDate", "2026-04-22")
         .containsEntry("jobCode", "TC_EXPORT_RISK_ALERT");
+  }
+
+  @Test
+  @DisplayName("任务载荷演练标记由作业实例决定，业务参数不得覆盖")
+  void enrichPayload_usesInstanceDryRunInsteadOfBusinessParameter() {
+    JobInstanceEntity formalInstance = new JobInstanceEntity();
+    formalInstance.setDryRun(false);
+    Map<String, Object> formalParams = Map.of("dryRun", true, "businessKey", "value");
+    Map<String, Object> formalPayload =
+        DefaultPartitionDispatchService.enrichPayload(null, formalInstance, formalParams);
+    assertThat(formalPayload).containsEntry("dryRun", false).containsEntry("businessKey", "value");
+    assertThat(formalParams).containsEntry("dryRun", true);
+
+    JobInstanceEntity dryRunInstance = new JobInstanceEntity();
+    dryRunInstance.setDryRun(true);
+    Map<String, Object> dryRunPayload = DefaultPartitionDispatchService.enrichPayload(
+        null, dryRunInstance, Map.of("dryRun", false));
+    assertThat(dryRunPayload).containsEntry("dryRun", true);
   }
 
   @Test
@@ -302,6 +346,57 @@ class DefaultPartitionDispatchServiceTest {
         .containsEntry("templateCode", "RISK_IMPORT_V2")
         .containsEntry("bundleTargetRef", "biz.risk_alert")
         .doesNotContainKeys("sourceFileId", "targetRef");
+  }
+
+  @Test
+  @DisplayName("束分区绑定覆盖载荷中的同名输入")
+  void enrichBundleBinding_usesAuthoritativePartitionValues() {
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setSourceFileId(42L);
+    partition.setTargetRef("partition-channel");
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("bundleSourceFileId", 99L);
+    payload.put("bundleTargetRef", "other-channel");
+
+    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+    assertThat(payload)
+        .containsEntry("bundleSourceFileId", 42L)
+        .containsEntry("bundleTargetRef", "partition-channel");
+  }
+
+  @Test
+  @DisplayName("普通分区不接受调用方伪造文件束绑定覆盖真实文件和渠道")
+  void enrichBundleBinding_removesUnboundCallerValues() {
+    JobPartitionEntity partition = new JobPartitionEntity();
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("fileId", 10L);
+    payload.put("channelCode", "EXPECTED");
+    payload.put("bundleSourceFileId", 99L);
+    payload.put("bundleTargetRef", "OTHER");
+
+    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+    assertThat(payload)
+        .containsEntry("fileId", 10L)
+        .containsEntry("channelCode", "EXPECTED")
+        .doesNotContainKeys("bundleSourceFileId", "bundleTargetRef");
+  }
+
+  @Test
+  @DisplayName("分区只绑定文件时不保留调用方伪造的目标渠道")
+  void enrichBundleBinding_removesUnboundTargetWhenFileIsBound() {
+    JobPartitionEntity partition = new JobPartitionEntity();
+    partition.setSourceFileId(42L);
+    Map<String, Object> payload = new HashMap<>();
+    payload.put("bundleSourceFileId", 99L);
+    payload.put("bundleTargetRef", "OTHER");
+
+    DefaultPartitionDispatchService.enrichBundleBinding(payload, partition);
+
+    assertThat(payload)
+        .containsEntry("bundleSourceFileId", 42L)
+        .doesNotContainKey("bundleTargetRef");
   }
 
   @Test

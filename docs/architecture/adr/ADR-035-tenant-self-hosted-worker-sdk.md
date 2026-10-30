@@ -1,5 +1,7 @@
 # ADR-035 · 平台定位:纯调度面 + 租户自托管 Worker SDK
 
+> **当前适用性（2026-10-24）**：HTTP/Kafka 与租户自托管边界继续适用；新任务由 Workflow 的 JOB 节点创建 JobInstance 后派发，不提供直接构造 task 的公开入口。基础 conformance 通过不代表 ADR-049 新增 Replay 能力已在五语言实现或实测。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
 - **Status**: Accepted；核心 SDK 已在 `sdk/` 实现。历史阶段表为 2026-05-31 快照，不能作为当前开发状态或生产验收证据（复核：2026-10-08）
 - **Date**: 2026-05-31
 - **Related**: ADR-029 dedicated SPI worker / `docs/design/task-spi-design.md` / ADR-034 CAP 定位
@@ -294,6 +296,8 @@ SDK 侧 `TaskDispatchMessage` 用 `@JsonIgnoreProperties(ignoreUnknown=true)` �
 | `POST /internal/tasks/{taskId}/claim` | `TaskClaimRequest` | tenantId / workerId / partitionInvocationId(可选) |
 | `POST /internal/tasks/{taskId}/renew` | `TaskClaimRequest` | 同上 |
 | `POST /internal/tasks/{taskId}/report` | `TaskExecutionReportDto` | taskId / tenantId / workerId / success / message / outputs(注意是复数,不是 output)/ errorCode / resultSummary |
+
+CLAIM 成功响应包含 `EffectiveTaskConfig`。可选字段 `dependencyResultSnapshot` 表示 Orchestrator 启动依赖闸门观察到的上游业务键、结果版本和来源实例；Java SDK 将其提供为 `SdkTaskContext.dependencyResultSnapshot()`。该字段是闸门判定证据，不自动 pin 外部业务表读取；业务 handler 若要求严格版本一致，必须按 `resultVersionId` 读取受控结果，或自行验证版本引用仍有效。旧平台缺少该字段时 SDK 返回空列表。
 
 ### Wire-protocol 契约守门
 

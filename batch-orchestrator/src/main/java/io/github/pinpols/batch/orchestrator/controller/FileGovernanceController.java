@@ -7,6 +7,8 @@ import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -33,45 +35,59 @@ public class FileGovernanceController {
   @PostMapping("/{fileId}/archive")
   public FileOperationResponse archive(
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
-    return new FileOperationResponse(fileGovernanceService.archiveFile(toCommand(fileId, request)));
+    FileGovernanceCommand command = toCommand(fileId, request);
+    String result = fileGovernanceService.archiveFile(command);
+    return new FileOperationResponse(result);
   }
 
   @PostMapping("/{fileId}/delete")
   public FileOperationResponse delete(
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
-    return new FileOperationResponse(fileGovernanceService.deleteFile(toCommand(fileId, request)));
+    FileGovernanceCommand command = toCommand(fileId, request);
+    String result = fileGovernanceService.deleteFile(command);
+    return new FileOperationResponse(result);
   }
 
   @PostMapping("/{fileId}/presign")
   public FileDownloadResponse presign(
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
-    return new FileDownloadResponse(
-        fileGovernanceService.presignFileDownload(toCommand(fileId, request)));
+    FileGovernanceCommand command = toCommand(fileId, request);
+    String downloadUrl = fileGovernanceService.presignFileDownload(command);
+    return new FileDownloadResponse(downloadUrl);
   }
 
   @PostMapping("/presign-upload")
   public FileUploadSessionResponse presignUpload(@RequestBody FileUploadRequest request) {
-    return fileGovernanceService.createUploadSession(FileUploadSessionCommand.builder()
+    FileUploadSessionCommand command = FileUploadSessionCommand.builder()
         .tenantId(request.tenantId())
         .channelCode(request.channelCode())
         .fileName(request.fileName())
         .operatorId(request.operatorId())
         .traceId(request.traceId())
-        .build());
+        .calendarCode(request.calendarCode())
+        .workflowDefinitionId(request.workflowDefinitionId())
+        .fileGroupCode(request.fileGroupCode())
+        .bizDate(request.bizDate())
+        .requiredFileNames(request.requiredFileNames())
+        .bundleTemplateCode(request.bundleTemplateCode())
+        .build();
+    return fileGovernanceService.createUploadSession(command);
   }
 
   @PostMapping("/{fileId}/confirm-arrival")
   public FileOperationResponse confirmArrival(
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
-    return new FileOperationResponse(
-        fileGovernanceService.confirmFileArrival(toCommand(fileId, request)));
+    FileGovernanceCommand command = toCommand(fileId, request);
+    String result = fileGovernanceService.confirmFileArrival(command);
+    return new FileOperationResponse(result);
   }
 
   @PostMapping("/{fileId}/redispatch")
   public FileOperationResponse redispatch(
       @PathVariable Long fileId, @RequestBody FileOperationRequest request) {
-    return new FileOperationResponse(
-        fileGovernanceService.redispatchFile(toCommand(fileId, request)));
+    FileGovernanceCommand command = toCommand(fileId, request);
+    String result = fileGovernanceService.redispatchFile(command);
+    return new FileOperationResponse(result);
   }
 
   @PostMapping("/arrival-groups/{fileGroupCode}/actions")
@@ -131,7 +147,17 @@ public class FileGovernanceController {
   public record FileDownloadResponse(String downloadUrl) {}
 
   public record FileUploadRequest(
-      String tenantId, String channelCode, String fileName, String operatorId, String traceId) {}
+      String tenantId,
+      String channelCode,
+      String fileName,
+      String operatorId,
+      String traceId,
+      String calendarCode,
+      Long workflowDefinitionId,
+      String fileGroupCode,
+      LocalDate bizDate,
+      List<String> requiredFileNames,
+      String bundleTemplateCode) {}
 
   public record ArrivalGroupOperationRequest(
       String tenantId,

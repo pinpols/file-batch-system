@@ -8,6 +8,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.config.OpenLineageProperties;
 import java.time.Duration;
@@ -31,8 +32,19 @@ class WorkflowTerminalLineageConsumerTest {
     emitter = mock(OpenLineageEmitter.class);
     properties = new OpenLineageProperties();
     properties.setRetryBackoffMs(2500L);
-    consumer = new WorkflowTerminalLineageConsumer(emitter, properties);
+    consumer =
+        new WorkflowTerminalLineageConsumer(emitter, properties, new BatchKafkaTopicNamespace(""));
     acknowledgment = mock(Acknowledgment.class);
+  }
+
+  @Test
+  @DisplayName("OpenLineage consumer 的 topic 与组名均带部署 namespace")
+  void shouldNamespaceTopicAndConsumerGroup() {
+    WorkflowTerminalLineageConsumer namespaced = new WorkflowTerminalLineageConsumer(
+        emitter, properties, new BatchKafkaTopicNamespace("run-a"));
+
+    assertThat(namespaced.topicName()).isEqualTo("run-a.batch.workflow.terminal.v1");
+    assertThat(namespaced.consumerGroupId()).isEqualTo("run-a.batch-openlineage-emitter");
   }
 
   @Test
@@ -88,6 +100,15 @@ class WorkflowTerminalLineageConsumerTest {
 
   private static ConsumerRecord<String, String> record(String value) {
     return new ConsumerRecord<>("batch.workflow.terminal.v1", 0, 42L, "workflow-100", value);
+  }
+
+  @Test
+  @DisplayName("未知终态载荷版本被拒绝且不触发外部血缘投递")
+  void shouldRejectUnsupportedSnapshotVersion_withoutExternalDelivery() {
+    consumer.consume(record(validPayload().replace("\"v2\"", "\"v999\"")), acknowledgment);
+
+    verify(emitter, never()).emitWorkflowTerminalReliably(any(), any(), any());
+    verify(acknowledgment).acknowledge();
   }
 
   private static String validPayload() {

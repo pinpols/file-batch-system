@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.response.excel.ExcelRowIssue;
@@ -310,8 +311,9 @@ public abstract class AbstractSingleSheetExcelService<R, T> {
 
   /** 序列化变更摘要 JSON（包含 reason + detail）。 */
   protected static String changeSummaryJson(String reason, Map<String, Object> detail) {
-    return JsonUtils.toJson(
-        mapOf("reason", ConsoleTextSanitizer.safeInput(reason, 512), "detail", detail));
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    Map<String, Object> changeSummary = mapOf("reason", safeReason, "detail", detail);
+    return JsonUtils.toJson(changeSummary);
   }
 
   /** 可选 JSON 字段：非空时校验 JSON 合法性。 */
@@ -348,8 +350,13 @@ public abstract class AbstractSingleSheetExcelService<R, T> {
         for (int i = 0; i < columns().size(); i++) {
           Cell cell = dataRow.createCell(i);
           Object value = row.get(columns().get(i));
-          cell.setCellValue(
-              value == null ? "" : ConsoleExcelStyles.escapeFormula(String.valueOf(value)));
+          if (EmptyChecks.isNull(value)) {
+            cell.setCellValue("");
+          } else {
+            String cellText = String.valueOf(value);
+            String safeCellText = ConsoleExcelStyles.escapeFormula(cellText);
+            cell.setCellValue(safeCellText);
+          }
         }
       }
       applyValidations(dataSheet);

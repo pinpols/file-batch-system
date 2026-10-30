@@ -16,7 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
-import java.util.Map;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,25 +42,27 @@ class ConsoleUserAccountControllerTest {
 
   private ConsoleUserAccountService service;
 
-  private static final Map<String, Object> ACCOUNT = Map.of(
-      "id", 42L,
-      "tenant_id", "tenant-a",
-      "username", "user-a",
-      "display_name", "User A",
-      "authorities_csv", "ROLE_TENANT_USER",
-      "enabled", true,
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final ConsoleUserAccountRow ACCOUNT = new ConsoleUserAccountRow(
+      42L,
+      "tenant-a",
+      "user-a",
+      "User A",
+      "ROLE_TENANT_USER",
+      true,
+      null,
+      "2026-01-01T00:00:00",
+      "2026-01-01T00:00:00");
 
-  private static final Map<String, Object> DISABLED_ACCOUNT = Map.of(
-      "id", 42L,
-      "tenant_id", "tenant-a",
-      "username", "user-a",
-      "display_name", "User A",
-      "authorities_csv", "ROLE_TENANT_USER",
-      "enabled", false,
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final ConsoleUserAccountRow DISABLED_ACCOUNT = new ConsoleUserAccountRow(
+      42L,
+      "tenant-a",
+      "user-a",
+      "User A",
+      "ROLE_TENANT_USER",
+      false,
+      null,
+      "2026-01-01T00:00:00",
+      "2026-01-01T00:00:00");
 
   @BeforeEach
   void setUp() {

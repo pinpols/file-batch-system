@@ -9,6 +9,7 @@
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_instance_id" property="jobInstanceId"/>
+        <result column="job_instance_biz_date" property="jobInstanceBizDate"/>
         <result column="job_partition_id" property="jobPartitionId"/>
         <result column="task_type" property="taskType"/>
         <result column="task_seq" property="taskSeq"/>
@@ -33,6 +34,10 @@
         <result column="failure_class" property="failureClass"/>
         <result column="dry_run" property="dryRun"/>
         <result column="task_timeout_seconds" property="taskTimeoutSeconds"/>
+        <result column="non_idempotent_started_at" property="nonIdempotentStartedAt"/>
+        <result column="external_outcome_resolution_version" property="externalOutcomeResolutionVersion"/>
+        <result column="external_outcome_resolution_trigger_request_id" property="externalOutcomeResolutionTriggerRequestId"/>
+        <result column="external_outcome_resolution_consumed_at" property="externalOutcomeResolutionConsumedAt"/>
     </resultMap>
 
     <resultMap id="TaskOutcomePersistenceContextMap"
@@ -49,6 +54,7 @@
         insert into batch.job_task (
             tenant_id,
             job_instance_id,
+            job_instance_biz_date,
             job_partition_id,
             task_type,
             task_seq,
@@ -69,6 +75,7 @@
         ) values (
             #{tenantId},
             #{jobInstanceId},
+            #{jobInstanceBizDate},
             #{jobPartitionId},
             #{taskType},
             #{taskSeq},
@@ -99,6 +106,7 @@
         insert into batch.job_task (
             tenant_id,
             job_instance_id,
+            job_instance_biz_date,
             job_partition_id,
             task_type,
             task_seq,
@@ -121,6 +129,7 @@
             (
                 #{e.tenantId},
                 #{e.jobInstanceId},
+                #{e.jobInstanceBizDate},
                 #{e.jobPartitionId},
                 #{e.taskType},
                 #{e.taskSeq},
@@ -144,6 +153,51 @@
             )
         </foreach>
     </insert>
+
+    <!-- 普通重试/人工重排队仅允许活跃父级，PAUSED 必须等待显式恢复。 -->
+    <sql id="ExecutableParentPredicate">
+          and exists (
+              select 1 from batch.job_instance parent_instance
+              where parent_instance.tenant_id = #{tenantId}
+                and parent_instance.id = job_task.job_instance_id
+                and parent_instance.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING')
+          )
+          and not exists (
+              select 1 from batch.workflow_node_run parent_node
+              join batch.workflow_run parent_workflow on parent_workflow.id = parent_node.workflow_run_id
+              where parent_workflow.tenant_id = #{tenantId}
+                and parent_node.job_instance_id = job_task.job_instance_id
+                and parent_workflow.run_status not in ('CREATED', 'RUNNING')
+          )
+    </sql>
+
+    <!-- 已派发任务的 CLAIM 与过期 lease 回收可穿过 PAUSED；终态和未知父级状态仍关闭。 -->
+    <sql id="LeaseReclaimableParentPredicate">
+          and exists (
+              select 1 from batch.job_instance parent_instance
+              where parent_instance.tenant_id = #{tenantId}
+                and parent_instance.id = job_task.job_instance_id
+                and parent_instance.instance_status in ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED')
+          )
+          and not exists (
+              select 1 from batch.workflow_node_run parent_node
+              join batch.workflow_run parent_workflow on parent_workflow.id = parent_node.workflow_run_id
+              where parent_workflow.tenant_id = #{tenantId}
+                and parent_node.job_instance_id = job_task.job_instance_id
+                and parent_workflow.run_status not in ('CREATED', 'RUNNING', 'PAUSED')
+          )
+    </sql>
+
+    <!-- ADR-044：暂停保留已派发任务的 CLAIM；新的重试/人工重排队则走 ExecutableParentPredicate。 -->
+    <sql id="ClaimableParentPredicate">
+        <include refid="LeaseReclaimableParentPredicate"/>
+    </sql>
+
+    <select id="selectForWorkerClaim" resultMap="JobTaskResultMap">
+        select * from batch.job_task
+        where tenant_id = #{tenantId} and id = #{id}
+          <include refid="ClaimableParentPredicate"/>
+    </select>
 
     <select id="selectById" resultMap="JobTaskResultMap">
         select *
@@ -182,6 +236,7 @@
                t.failure_class              as task_failure_class,
                t.dry_run                    as task_dry_run,
                t.task_timeout_seconds       as task_task_timeout_seconds,
+               t.non_idempotent_started_at  as task_non_idempotent_started_at,
                p.id                         as partition_id,
                p.tenant_id                  as partition_tenant_id,
                p.job_instance_id            as partition_job_instance_id,
@@ -214,6 +269,25 @@
         where t.tenant_id = #{tenantId}
           and t.id = #{id}
     </select>
+
+    <update id="markNonIdempotentExecutionStarted">
+        update batch.job_task t
+        set non_idempotent_started_at = now(),
+            version = version + 1,
+            updated_at = now()
+        where t.tenant_id = #{tenantId}
+          and t.id = #{id}
+          and t.task_status = 'RUNNING'
+          and t.assigned_worker_code = #{workerCode}
+          and t.non_idempotent_started_at is null
+          and exists (
+              select 1
+              from batch.job_partition p
+              where p.tenant_id = t.tenant_id
+                and p.id = t.job_partition_id
+                and p.current_invocation_id = #{partitionInvocationId}
+          )
+    </update>
 
     <!--
       reclaim 专用:立即取 task 行锁,取不到就抛 55P03(不等待)。见 PartitionReclaimUnit.doReclaim
@@ -250,6 +324,39 @@
             and task_status = #{taskStatus}
         </if>
         order by id desc
+    </select>
+
+    <select id="existsUnknownExternalOutcomeForJobInstance" resultType="boolean">
+        select exists (
+            select 1
+            from batch.job_task jt
+            where jt.tenant_id = #{tenantId}
+              and jt.job_instance_id = #{jobInstanceId}
+              and jt.error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+              and (
+                    jt.external_outcome_resolution_version is distinct from (jt.version - 1)
+                    or jt.external_outcome_resolution_consumed_at is not null
+                  )
+        )
+    </select>
+
+    <select id="existsUnknownExternalOutcomeForJobBizDate" resultType="boolean">
+        select exists (
+            select 1
+            from batch.job_task jt
+            join batch.job_instance ji
+              on ji.tenant_id = jt.tenant_id
+             and ji.id = jt.job_instance_id
+            where jt.tenant_id = #{tenantId}
+              and ji.tenant_id = #{tenantId}
+              and ji.job_code = #{jobCode}
+              and ji.biz_date = #{bizDate}
+              and jt.error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+              and (
+                    jt.external_outcome_resolution_version is distinct from (jt.version - 1)
+                    or jt.external_outcome_resolution_consumed_at is not null
+                  )
+        )
     </select>
 
     <resultMap id="NodePartitionAssignmentMap"
@@ -355,11 +462,11 @@
               or assigned_worker_code = #{expectedAssignedWorkerCode,jdbcType=VARCHAR}
           )
           and version = #{expectedVersion}
+          <include refid="ClaimableParentPredicate"/>
         returning *
     </select>
 
-    <update id="resetForRetry">
-        update batch.job_task
+    <sql id="ResetTaskForRetryAssignments">
         set task_status = #{readyStatus},
             assigned_worker_code = null,
             error_code = null,
@@ -372,9 +479,86 @@
             finished_at = null,
             version = version + 1,
             updated_at = current_timestamp
+    </sql>
+
+    <update id="resetForRetry">
+        update batch.job_task
+        <include refid="ResetTaskForRetryAssignments"/>
         where tenant_id = #{tenantId}
           and id = #{id}
           and version = #{expectedVersion}
+          <include refid="ExecutableParentPredicate"/>
+          and task_status in ('READY','RUNNING','FAILED')
+    </update>
+
+    <update id="markExternalOutcomeResolution">
+        update batch.job_task
+        set external_outcome_resolution_version = version,
+            version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and task_status = 'FAILED'
+          and error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+          and external_outcome_resolution_version is distinct from version
+          and external_outcome_resolution_trigger_request_id is null
+          and external_outcome_resolution_consumed_at is null
+    </update>
+
+    <update id="bindExternalOutcomeResolutionToWorkflowRequest">
+        update batch.job_task
+        set external_outcome_resolution_trigger_request_id = #{workflowTriggerRequestId},
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and task_status = 'FAILED'
+          and error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+          and external_outcome_resolution_version = #{sourceVersion}
+          and external_outcome_resolution_trigger_request_id is null
+          and external_outcome_resolution_consumed_at is null
+    </update>
+
+    <!-- 授权仅在绑定根请求的子 Job 首次开始时消费；CAS 与开始标记同事务，失败不放行外部动作。 -->
+    <update id="consumeExternalOutcomeResolution">
+        update batch.job_task source
+        set external_outcome_resolution_consumed_at = current_timestamp,
+            updated_at = current_timestamp
+        where source.tenant_id = #{tenantId}
+          and source.id = #{sourceTaskId}
+          and source.task_status = 'FAILED'
+          and source.error_code = 'EXTERNAL_OUTCOME_UNKNOWN'
+          and source.external_outcome_resolution_version = #{sourceVersion}
+          and source.version = #{sourceVersion} + 1
+          and source.external_outcome_resolution_consumed_at is null
+          and exists (
+              select 1
+              from batch.job_task retry_task
+              join batch.job_instance retry_instance
+                on retry_instance.tenant_id = retry_task.tenant_id
+               and retry_instance.id = retry_task.job_instance_id
+               and retry_instance.biz_date = retry_task.job_instance_biz_date
+              join batch.workflow_node_run node
+                on node.job_instance_id = retry_instance.id
+              join batch.workflow_run root
+                on root.tenant_id = retry_instance.tenant_id
+               and root.id = node.workflow_run_id
+               and root.biz_date = retry_instance.biz_date
+              where retry_task.tenant_id = source.tenant_id
+                and retry_task.id = #{retryTaskId}
+                and retry_instance.parent_instance_id = source.job_instance_id
+                and retry_instance.biz_date = source.job_instance_biz_date
+                and root.trigger_request_id = source.external_outcome_resolution_trigger_request_id
+          )
+    </update>
+
+    <update id="resetForLeaseReclaim">
+        update batch.job_task
+        <include refid="ResetTaskForRetryAssignments"/>
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          <include refid="LeaseReclaimableParentPredicate"/>
           and task_status in ('READY','RUNNING','FAILED')
     </update>
 
@@ -431,6 +615,20 @@
           and id = #{id}
           and task_status = 'RUNNING'
           and cancel_requested = false
+    </update>
+
+    <update id="requestCancelIfTimedOut">
+        update batch.job_task
+        set cancel_requested = true,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and task_status = 'RUNNING'
+          and cancel_requested = false
+          and started_at is not null
+          and task_timeout_seconds &gt; 0
+          and started_at &lt; current_timestamp - (task_timeout_seconds * interval '1 second')
     </update>
 
     <update id="requestCancelByInstance">

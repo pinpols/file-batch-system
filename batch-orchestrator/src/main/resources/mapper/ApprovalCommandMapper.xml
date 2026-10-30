@@ -16,6 +16,7 @@
         <result column="approver_id" property="approverId"/>
         <result column="rejection_reason" property="rejectionReason"/>
         <result column="approval_reason" property="approvalReason"/>
+        <result column="source_approval_reason" property="sourceApprovalReason"/>
         <result column="source_trace_id" property="sourceTraceId"/>
         <result column="source_idempotency_key" property="sourceIdempotencyKey"/>
         <result column="approved_at" property="approvedAt"/>
@@ -26,13 +27,23 @@
         insert into batch.approval_command (
             tenant_id, approval_no, approval_type, action_type, target_type, target_id,
             payload_json, approval_status, requester_id, source_trace_id, source_idempotency_key,
-            approval_reason, created_at, updated_at
+            approval_reason, source_approval_reason, created_at, updated_at
         ) values (
             #{tenantId}, #{approvalNo}, #{approvalType}, #{actionType}, #{targetType}, #{targetId},
             cast(#{payloadJson} as jsonb), #{approvalStatus}, #{requesterId}, #{sourceTraceId}, #{sourceIdempotencyKey},
-            #{approvalReason}, current_timestamp, current_timestamp
+            #{approvalReason}, #{sourceApprovalReason}, current_timestamp, current_timestamp
         )
+        on conflict (tenant_id, source_idempotency_key)
+        where source_idempotency_key is not null
+        do nothing
     </insert>
+
+    <select id="selectByTenantAndSourceIdempotencyKey" resultMap="approvalCommandMap">
+        select *
+        from batch.approval_command
+        where tenant_id = #{tenantId}
+          and source_idempotency_key = #{sourceIdempotencyKey}
+    </select>
 
     <select id="selectByTenantAndApprovalNo" resultMap="approvalCommandMap">
         select *

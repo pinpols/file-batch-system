@@ -1,16 +1,18 @@
 package io.github.pinpols.batch.orchestrator.application.service.replay;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
@@ -24,14 +26,18 @@ import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEnt
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Objects;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 
 @DisplayName("批量日重放终态对账器: 条目状态收敛与会话终态判定口径")
 class BatchDayReplayTerminalReconcilerTest {
@@ -46,21 +52,24 @@ class BatchDayReplayTerminalReconcilerTest {
 
   private BatchDayReplaySessionMapper sessionMapper;
   private BatchDayReplayEntryMapper entryMapper;
+  private ReplayOperationMapper replayOperationMapper;
   private BatchDayReplayTerminalReconciler reconciler;
 
   @BeforeEach
   void setUp() {
     sessionMapper = mock(BatchDayReplaySessionMapper.class);
     entryMapper = mock(BatchDayReplayEntryMapper.class);
+    replayOperationMapper = mock(ReplayOperationMapper.class);
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
         Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    reconciler = new BatchDayReplayTerminalReconciler(sessionMapper, entryMapper, dateTimeSupport);
+    reconciler = new BatchDayReplayTerminalReconciler(
+        sessionMapper, entryMapper, replayOperationMapper, dateTimeSupport);
   }
 
   @Test
   @DisplayName("作业成功时条目置为成功, 会话计数更新并收敛为成功")
   void shouldMarkEntrySucceededAndCompleteSession_whenJobSucceeds() {
-    when(sessionMapper.selectById("t1", 7L)).thenReturn(session(7L, "RUNNING", 2));
+    stubExistingSession(session(7L, "RUNNING", 2));
     BatchDayReplayEntryEntity pendingEntry = BatchDayReplayEntryEntity.builder()
         .id(11L)
         .sessionId(7L)
@@ -75,7 +84,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_B")
         .status(ENTRY_SUCCEEDED)
         .build();
-    when(entryMapper.selectBySessionId(7L)).thenReturn(List.of(pendingEntry, otherEntry));
+    when(entryMapper.selectByCurrentExecution("t1", 7L, "JOB_A", 1001L)).thenReturn(pendingEntry);
     when(entryMapper.countBySessionAndStatus(7L, ENTRY_SUCCEEDED)).thenReturn(2L);
     when(entryMapper.countBySessionAndStatus(7L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(7L, "PENDING")).thenReturn(0L);
@@ -100,7 +109,7 @@ class BatchDayReplayTerminalReconcilerTest {
   @Test
   @DisplayName("存在失败条目时会话收敛为部分失败")
   void shouldCompleteAsPartialFailed_whenSomeEntriesFailed() {
-    when(sessionMapper.selectById("t1", 8L)).thenReturn(session(8L, "RUNNING", 2));
+    stubExistingSession(session(8L, "RUNNING", 2));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(20L)
         .sessionId(8L)
@@ -108,7 +117,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_X")
         .status("RUNNING")
         .build();
-    when(entryMapper.selectBySessionId(8L)).thenReturn(List.of(entry));
+    when(entryMapper.selectByCurrentExecution("t1", 8L, "JOB_X", 2001L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(8L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(8L, ENTRY_FAILED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(8L, "PENDING")).thenReturn(0L);
@@ -131,7 +140,7 @@ class BatchDayReplayTerminalReconcilerTest {
   @Test
   @DisplayName("仍有条目在运行时会话不进入终态")
   void shouldKeepSessionRunning_whenEntryStillInFlight() {
-    when(sessionMapper.selectById("t1", 9L)).thenReturn(session(9L, "RUNNING", 2));
+    stubExistingSession(session(9L, "RUNNING", 2));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(30L)
         .sessionId(9L)
@@ -139,7 +148,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_C")
         .status("RUNNING")
         .build();
-    when(entryMapper.selectBySessionId(9L)).thenReturn(List.of(entry));
+    when(entryMapper.selectByCurrentExecution("t1", 9L, "JOB_C", 3001L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(9L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(9L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(9L, "PENDING")).thenReturn(0L);
@@ -148,15 +157,20 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 9L, "JOB_C", 3001L, JOB_SUCCESS);
 
     verify(sessionMapper, times(1))
-        .updateCounts(eq("t1"), eq(9L), eq(1), eq(0), eq(1), eq(2), any());
+        .updateCounts(ArgumentMatchers.argThat(parameters -> parameters != null
+            && Objects.equals(parameters.tenantId(), "t1")
+            && Objects.equals(parameters.id(), 9L)
+            && Objects.equals(parameters.succeededCount(), 1)
+            && Objects.equals(parameters.failedCount(), 0)
+            && Objects.equals(parameters.inFlightCount(), 1)
+            && Objects.equals(parameters.totalCount(), 2)));
     verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
   }
 
   @Test
   @DisplayName("失败条目恢复后, 部分失败的会话重新收敛为成功")
   void shouldMoveBackToSucceeded_whenFailedEntryRecovered() {
-    when(sessionMapper.selectById("t1", 10L))
-        .thenReturn(session(10L, JobInstanceStatus.PARTIAL_FAILED.code(), 1));
+    stubExistingSession(session(10L, JobInstanceStatus.PARTIAL_FAILED.code(), 1));
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(40L)
         .sessionId(10L)
@@ -164,7 +178,8 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_RECOVERED")
         .status(ENTRY_FAILED)
         .build();
-    when(entryMapper.selectBySessionId(10L)).thenReturn(List.of(entry));
+    when(entryMapper.selectByCurrentExecution("t1", 10L, "JOB_RECOVERED", 4001L))
+        .thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(10L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(10L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(10L, "PENDING")).thenReturn(0L);
@@ -186,22 +201,27 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 999L, "JOB_A", 100L, JOB_SUCCESS);
 
-    verify(entryMapper, never()).selectBySessionId(anyLong());
+    verify(sessionMapper).selectById("t1", 999L);
+    verify(sessionMapper, never()).selectForUpdate(anyString(), anyLong());
+    verifyNoInteractions(entryMapper);
     verify(sessionMapper, never())
-        .updateCounts(anyString(), anyLong(), anyInt(), anyInt(), anyInt(), anyInt(), any());
+        .updateCounts(ArgumentMatchers.argThat(
+            parameters -> parameters != null && parameters.tenantId() != null));
   }
 
   @Test
   @DisplayName("会话下没有对应条目时对账安全返回")
   void shouldDoNothing_whenEntryMissing() {
-    when(sessionMapper.selectById("t1", 50L)).thenReturn(session(50L, "RUNNING", 1));
-    when(entryMapper.selectBySessionId(50L)).thenReturn(List.of());
+    stubExistingSession(session(50L, "RUNNING", 1));
+    when(entryMapper.selectByCurrentExecution("t1", 50L, "JOB_X", 9999L)).thenReturn(null);
 
     reconciler.reconcileOnTerminal("t1", 50L, "JOB_X", 9999L, JOB_SUCCESS);
 
+    verify(entryMapper).selectByCurrentExecution("t1", 50L, "JOB_X", 9999L);
     verify(entryMapper, never()).updateStatus(any(UpdateBatchDayReplayEntryStatusParam.class));
     verify(sessionMapper, never())
-        .updateCounts(anyString(), anyLong(), anyInt(), anyInt(), anyInt(), anyInt(), any());
+        .updateCounts(ArgumentMatchers.argThat(
+            parameters -> parameters != null && parameters.tenantId() != null));
   }
 
   @Test
@@ -212,7 +232,7 @@ class BatchDayReplayTerminalReconcilerTest {
     reconciler.reconcileOnTerminal("t1", 1L, null, 1L, JOB_SUCCESS);
     reconciler.reconcileOnTerminal("t1", 1L, "JOB", 1L, null);
 
-    verify(sessionMapper, never()).selectById(anyString(), anyLong());
+    verifyNoInteractions(sessionMapper, replayOperationMapper, entryMapper);
   }
 
   @Test
@@ -221,7 +241,7 @@ class BatchDayReplayTerminalReconcilerTest {
     BatchDayReplaySessionEntity dryRunSession = session(60L, "RUNNING", 1).toBuilder()
         .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
         .build();
-    when(sessionMapper.selectById("t1", 60L)).thenReturn(dryRunSession);
+    stubExistingSession(dryRunSession);
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(61L)
         .sessionId(60L)
@@ -229,7 +249,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_DRY")
         .status("RUNNING")
         .build();
-    when(entryMapper.selectBySessionId(60L)).thenReturn(List.of(entry));
+    when(entryMapper.selectByCurrentExecution("t1", 60L, "JOB_DRY", 6001L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(60L, ENTRY_SUCCEEDED)).thenReturn(1L);
     when(entryMapper.countBySessionAndStatus(60L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(60L, "PENDING")).thenReturn(0L);
@@ -250,7 +270,7 @@ class BatchDayReplayTerminalReconcilerTest {
     BatchDayReplaySessionEntity dryRunSession = session(70L, "RUNNING", 1).toBuilder()
         .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
         .build();
-    when(sessionMapper.selectById("t1", 70L)).thenReturn(dryRunSession);
+    stubExistingSession(dryRunSession);
     BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
         .id(71L)
         .sessionId(70L)
@@ -258,7 +278,7 @@ class BatchDayReplayTerminalReconcilerTest {
         .jobCode("JOB_DRY")
         .status("RUNNING")
         .build();
-    when(entryMapper.selectBySessionId(70L)).thenReturn(List.of(entry));
+    when(entryMapper.selectByCurrentExecution("t1", 70L, "JOB_DRY", 7001L)).thenReturn(entry);
     when(entryMapper.countBySessionAndStatus(70L, ENTRY_SUCCEEDED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(70L, ENTRY_FAILED)).thenReturn(0L);
     when(entryMapper.countBySessionAndStatus(70L, "PENDING")).thenReturn(0L);
@@ -266,13 +286,68 @@ class BatchDayReplayTerminalReconcilerTest {
 
     reconciler.reconcileOnTerminal("t1", 70L, "JOB_DRY", 7001L, JobInstanceStatus.SUCCESS.code());
 
-    ArgumentCaptor<UpdateBatchDayReplayEntryStatusParam> statusUpdate =
-        ArgumentCaptor.forClass(UpdateBatchDayReplayEntryStatusParam.class);
-    verify(entryMapper).updateStatus(statusUpdate.capture());
-    assertThat(statusUpdate.getValue().getId()).isEqualTo(71L);
-    assertThat(statusUpdate.getValue().getToStatus()).isEqualTo("RUNNING");
-    assertThat(statusUpdate.getValue().getRerunInstanceId()).isEqualTo(7001L);
+    verify(entryMapper).selectByCurrentExecution("t1", 70L, "JOB_DRY", 7001L);
+    verify(entryMapper, never()).updateStatus(any());
     verify(sessionMapper, never()).updateStatus(any(UpdateBatchDayReplaySessionStatusParam.class));
+  }
+
+  @Test
+  @DisplayName("先锁父操作再锁日会话，准入对账后刷新父操作进度")
+  void shouldLockParentBeforeChildAndRefreshProgress_whenSessionBelongsToOperation() {
+    BatchDayReplaySessionEntity child =
+        session(80L, "RUNNING", 1).toBuilder().replayOperationId(90L).build();
+    stubExistingSession(child);
+    when(replayOperationMapper.lockForProgressRefresh("t1", 90L)).thenReturn(90L);
+    when(entryMapper.countBySessionAndStatus(80L, "RUNNING")).thenReturn(1L);
+
+    reconciler.reconcileAdmissions("t1", 80L);
+
+    InOrder locksAndWrites = inOrder(sessionMapper, replayOperationMapper, entryMapper);
+    locksAndWrites.verify(sessionMapper).selectById("t1", 80L);
+    locksAndWrites.verify(replayOperationMapper).lockForProgressRefresh("t1", 90L);
+    locksAndWrites.verify(sessionMapper).selectForUpdate("t1", 80L);
+    locksAndWrites.verify(entryMapper).bindCurrentExecutions(eq("t1"), eq(80L), any());
+    locksAndWrites.verify(replayOperationMapper).refreshFromChildSessions(eq("t1"), eq(90L), any());
+  }
+
+  @Test
+  @DisplayName("父操作不存在时拒绝继续写入日会话")
+  void shouldRejectReconciliation_whenParentOperationCannotBeLocked() {
+    BatchDayReplaySessionEntity child =
+        session(80L, "RUNNING", 1).toBuilder().replayOperationId(90L).build();
+    when(sessionMapper.selectById("t1", 80L)).thenReturn(child);
+    when(replayOperationMapper.lockForProgressRefresh("t1", 90L)).thenReturn(null);
+
+    assertThatThrownBy(() -> reconciler.reconcileAdmissions("t1", 80L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("replay operation not found");
+
+    verify(sessionMapper, never()).selectForUpdate(anyString(), anyLong());
+    verifyNoInteractions(entryMapper);
+  }
+
+  @Test
+  @DisplayName("取得行锁后父操作身份改变时拒绝写入")
+  void shouldRejectReconciliation_whenParentIdentityChangesWhileLocking() {
+    BatchDayReplaySessionEntity candidate =
+        session(80L, "RUNNING", 1).toBuilder().replayOperationId(90L).build();
+    BatchDayReplaySessionEntity changed =
+        candidate.toBuilder().replayOperationId(91L).build();
+    when(sessionMapper.selectById("t1", 80L)).thenReturn(candidate);
+    when(replayOperationMapper.lockForProgressRefresh("t1", 90L)).thenReturn(90L);
+    when(sessionMapper.selectForUpdate("t1", 80L)).thenReturn(changed);
+
+    assertThatThrownBy(() -> reconciler.reconcileAdmissions("t1", 80L))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("replay operation changed");
+
+    verifyNoInteractions(entryMapper);
+    verify(replayOperationMapper, never()).refreshFromChildSessions(anyString(), anyLong(), any());
+  }
+
+  private void stubExistingSession(BatchDayReplaySessionEntity session) {
+    when(sessionMapper.selectById(session.tenantId(), session.id())).thenReturn(session);
+    when(sessionMapper.selectForUpdate(session.tenantId(), session.id())).thenReturn(session);
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

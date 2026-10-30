@@ -90,7 +90,8 @@ def parse_directive(raw: dict[str, Any] | None) -> ParsedDirective:
     nested = raw.get("directive")
     payload: dict[str, Any] = nested if isinstance(nested, dict) else raw
 
-    state = _parse_state(payload.get("runtimeState") or payload.get("platformStatus"))
+    raw_state = payload.get("runtimeState") or payload.get("platformStatus")
+    state = _parse_state(raw_state)
     drain = bool(payload.get("shouldDrain", False))
     desired = _parse_int(payload.get("desiredMaxConcurrent"))
     paused = _parse_str_list(payload.get("pausedTaskTypes"))
@@ -151,7 +152,8 @@ def _parse_hint(raw: Any) -> timedelta | None:  # noqa: PLR0911
         return None
     if isinstance(raw, int | float):
         try:
-            return timedelta(seconds=float(raw))
+            seconds = float(raw)
+            return timedelta(seconds=seconds)
         except (TypeError, ValueError, OverflowError):
             logger.warning("malformed nextHeartbeatHint numeric: %r (ignored)", raw)
             return None
@@ -166,7 +168,8 @@ def _parse_hint(raw: Any) -> timedelta | None:  # noqa: PLR0911
             return _parse_iso8601_duration(s)
         # 纯数字字符串 "5" / "5.5" —— 按秒数处理。
         try:
-            return timedelta(seconds=float(s))
+            seconds = float(s)
+            return timedelta(seconds=seconds)
         except ValueError:
             logger.warning("malformed nextHeartbeatHint string: %r (ignored)", raw)
             return None

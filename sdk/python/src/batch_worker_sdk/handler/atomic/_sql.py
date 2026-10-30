@@ -252,7 +252,9 @@ def _parse_affected(command_tag: str) -> int:
     """从 asyncpg 的 command tag(如 ``"UPDATE 3"``)解析行数。"""
     if not command_tag:
         return 0
-    m = _AFFECTED_RE.search(command_tag.strip())
+    normalized_command_tag = command_tag.strip()
+    m = _AFFECTED_RE.search(normalized_command_tag)
     if m:
-        return int(m.group(2))
+        affected_rows_text = m.group(2)
+        return int(affected_rows_text)
     return 0

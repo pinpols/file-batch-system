@@ -1,4 +1,4 @@
 package io.github.pinpols.batch.console.domain.ops.infrastructure;
 
-/** Internal orchestrator response for cleanup counts. */
+/** Orchestrator 内部清理数量响应。 */
 public record OutboxCleanupProxyResponse(int published, int giveUp) {}

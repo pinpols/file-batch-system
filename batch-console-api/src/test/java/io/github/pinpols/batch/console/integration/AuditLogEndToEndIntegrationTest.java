@@ -64,8 +64,11 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
         .responseTimeout(Duration.ofSeconds(30))
         .build();
     // 测试前清空可能的异常数据,避免计数干扰
-    jdbcTemplate.update("DELETE FROM batch.console_operation_audit WHERE action IN ('alert.close',"
-        + " 'apiKey.create')");
+    String clearAuditRowsSql = """
+        DELETE FROM batch.console_operation_audit
+        WHERE action IN ('alert.close', 'apiKey.create')
+        """;
+    jdbcTemplate.update(clearAuditRowsSql);
   }
 
   @Test
@@ -93,20 +96,20 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(500))
         .untilAsserted(() -> {
+          String matchingAuditCountSql = """
+              SELECT count(*)::int FROM batch.console_operation_audit
+              WHERE action = ? AND aggregate_type = ? AND aggregate_id = ?
+              """;
           Integer count = jdbcTemplate.queryForObject(
-              "SELECT count(*)::int FROM batch.console_operation_audit"
-                  + " WHERE action = ? AND aggregate_type = ? AND aggregate_id = ?",
-              Integer.class,
-              "alert.close",
-              "alert",
-              "7");
+              matchingAuditCountSql, Integer.class, "alert.close", "alert", "7");
           assertThat(count).isEqualTo(1);
         });
 
-    String result = jdbcTemplate.queryForObject(
-        "SELECT result FROM batch.console_operation_audit"
-            + " WHERE action = 'alert.close' ORDER BY id DESC LIMIT 1",
-        String.class);
+    String latestAuditResultSql = """
+        SELECT result FROM batch.console_operation_audit
+        WHERE action = 'alert.close' ORDER BY id DESC LIMIT 1
+        """;
+    String result = jdbcTemplate.queryForObject(latestAuditResultSql, String.class);
     assertThat(result).isEqualTo("SUCCESS");
   }
 
@@ -135,11 +138,12 @@ class AuditLogEndToEndIntegrationTest extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(10))
         .pollInterval(Duration.ofMillis(500))
         .untilAsserted(() -> {
-          String params = jdbcTemplate.queryForObject(
-              "SELECT params FROM batch.console_operation_audit"
-                  + " WHERE action = 'alert.close' AND aggregate_id = '9'"
-                  + " ORDER BY id DESC LIMIT 1",
-              String.class);
+          String latestAuditParamsSql = """
+              SELECT params FROM batch.console_operation_audit
+              WHERE action = 'alert.close' AND aggregate_id = '9'
+              ORDER BY id DESC LIMIT 1
+              """;
+          String params = jdbcTemplate.queryForObject(latestAuditParamsSql, String.class);
           // alert.close 默认 recordParams=true,params 列非空且包含 reason 字段
           assertThat(params).isNotNull();
           assertThat(params).contains("fix-after-rcal");

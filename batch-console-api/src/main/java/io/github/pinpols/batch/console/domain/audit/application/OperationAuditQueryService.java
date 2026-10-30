@@ -8,10 +8,13 @@ import io.github.pinpols.batch.console.domain.audit.application.contract.query.O
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.ConsoleOperationAuditResponse;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper;
 import io.github.pinpols.batch.console.domain.audit.mapper.OperationAuditMapper.AuditRow;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQuery;
+import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
 import io.github.pinpols.batch.console.domain.audit.support.AuditParamRedactor;
 import io.github.pinpols.batch.console.shared.query.ConsoleQuerySupport;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.query.TenantScope;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -36,60 +39,86 @@ public class OperationAuditQueryService {
 
   @Transactional(readOnly = true)
   public PageResponse<ConsoleOperationAuditResponse> query(OperationAuditQueryRequest req) {
-    String tenantId = TenantScope.requireTenant(tenantGuard.resolveTenant(req.getTenantId()));
+    String resolvedTenantId = tenantGuard.resolveTenant(req.getTenantId());
+    String tenantId = TenantScope.requireTenant(resolvedTenantId);
+    mapper.bindTenant(tenantId);
     boolean cursorMode = EmptyChecks.isNotNull(req.getCursor());
     int requestedPageNo = EmptyChecks.isNull(req.getPageNo()) ? 1 : req.getPageNo();
     int requestedPageSize = EmptyChecks.isNull(req.getPageSize()) ? 20 : req.getPageSize();
     PageRequest pageRequest = new PageRequest(cursorMode ? 1 : requestedPageNo, requestedPageSize);
-    List<AuditRow> rows = mapper.query(
-        tenantId,
-        req.getAggregateType(),
-        req.getAggregateId(),
-        req.getAction(),
-        req.getOperatorId(),
-        req.getResult(),
-        req.getTraceId(),
-        req.getStartTime(),
-        req.getEndTime(),
-        ConsoleQuerySupport.decodeCursorId(req.getCursor()),
-        pageRequest);
+    OperationAuditQuery operationAuditQuery = OperationAuditQuery.builder()
+        .tenantId(tenantId)
+        .aggregateType(req.getAggregateType())
+        .aggregateId(req.getAggregateId())
+        .action(req.getAction())
+        .operatorId(req.getOperatorId())
+        .result(req.getResult())
+        .traceId(req.getTraceId())
+        .startTime(req.getStartTime())
+        .endTime(req.getEndTime())
+        .cursorId(ConsoleQuerySupport.decodeCursorId(req.getCursor()))
+        .cursorMode(cursorMode)
+        .pageRequest(pageRequest)
+        .build();
+    List<AuditRow> rows = mapper.query(operationAuditQuery);
     if (cursorMode) {
       return ConsoleQuerySupport.cursorPage(pageRequest, rows, this::toResponse, AuditRow::id);
     }
-    long total = mapper.count(
-        tenantId,
-        req.getAggregateType(),
-        req.getAggregateId(),
-        req.getAction(),
-        req.getOperatorId(),
-        req.getResult(),
-        req.getTraceId(),
-        req.getStartTime(),
-        req.getEndTime(),
-        null);
+    OperationAuditCountQuery operationAuditCountQuery = OperationAuditCountQuery.builder()
+        .tenantId(tenantId)
+        .aggregateType(req.getAggregateType())
+        .aggregateId(req.getAggregateId())
+        .action(req.getAction())
+        .operatorId(req.getOperatorId())
+        .result(req.getResult())
+        .traceId(req.getTraceId())
+        .startTime(req.getStartTime())
+        .endTime(req.getEndTime())
+        .cursorId(null)
+        .build();
+    long total = mapper.count(operationAuditCountQuery);
     List<ConsoleOperationAuditResponse> items =
         rows.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, pageRequest.pageNo(), pageRequest.pageSize(), items);
   }
 
   private ConsoleOperationAuditResponse toResponse(AuditRow r) {
-    return new ConsoleOperationAuditResponse(
-        r.id(),
-        r.tenantId(),
-        r.aggregateType(),
-        r.aggregateId(),
-        r.action(),
-        r.operatorId(),
-        r.operatorRole(),
-        r.result(),
-        r.errorCode(),
-        r.errorMessage(),
-        AuditParamRedactor.redactJson(objectMapper, r.paramsJson()),
-        r.traceId(),
-        r.requestId(),
-        r.ipHash(),
-        r.uaHash(),
-        r.eventVersion(),
-        r.createdAt());
+    Long id = r.id();
+    String tenantId = r.tenantId();
+    String aggregateType = r.aggregateType();
+    String aggregateId = r.aggregateId();
+    String action = r.action();
+    String operatorId = r.operatorId();
+    String operatorRole = r.operatorRole();
+    String result = r.result();
+    String errorCode = r.errorCode();
+    String errorMessage = r.errorMessage();
+    String paramsJson = r.paramsJson();
+    String safeParamsJson = AuditParamRedactor.redactJson(objectMapper, paramsJson);
+    String traceId = r.traceId();
+    String requestId = r.requestId();
+    String ipHash = r.ipHash();
+    String uaHash = r.uaHash();
+    Integer eventVersion = r.eventVersion();
+    Instant createdAt = r.createdAt();
+    return ConsoleOperationAuditResponse.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .aggregateType(aggregateType)
+        .aggregateId(aggregateId)
+        .action(action)
+        .operatorId(operatorId)
+        .operatorRole(operatorRole)
+        .result(result)
+        .errorCode(errorCode)
+        .errorMessage(errorMessage)
+        .params(safeParamsJson)
+        .traceId(traceId)
+        .requestId(requestId)
+        .ipHash(ipHash)
+        .uaHash(uaHash)
+        .eventVersion(eventVersion)
+        .createdAt(createdAt)
+        .build();
   }
 }

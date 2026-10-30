@@ -12,6 +12,9 @@ public class OutboxRetryLogQueryRequest extends PageQueryRequest {
   @ValidTenantId
   private String tenantId;
 
+  @Size(max = 64, message = "eventType too long (max 64)")
+  private String eventType;
+
   @Size(max = 32, message = "retryStatus too long (max 32)")
   private String retryStatus;
 

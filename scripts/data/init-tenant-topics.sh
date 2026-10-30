@@ -1,4 +1,6 @@
 #!/bin/sh
+# 用途：为 per-tenant worker pool 创建独立派发 topic。
+# 用法：在仓库根目录执行 bash scripts/data/init-tenant-topics.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # init-tenant-topics.sh - 为 per-tenant worker pool 创建独立派发 topic
 #
@@ -12,7 +14,7 @@
 #
 #   注意：不是 batch.task.dispatch.tenant.{tenantId}.{type}（旧 plan 的笔误，已订正）。
 #
-# 用法：
+# 调用示例：
 #   KAFKA_BOOTSTRAP_SERVER=localhost:19092 \
 #   TENANTS=bigcorp,acme \
 #   WORKER_TYPES=import,export \
@@ -33,6 +35,8 @@ SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
 
 bootstrap_server="${KAFKA_BOOTSTRAP_SERVER:-$BATCH_DEFAULT_KAFKA_CONTAINER_BOOTSTRAP}"
 kafka_container_bin_dir="${KAFKA_CONTAINER_BIN_DIR:-$BATCH_DEFAULT_KAFKA_CONTAINER_BIN_DIR}"
+topic_namespace="${BATCH_KAFKA_NAMESPACE:-}"
+batch_validate_kafka_namespace "$topic_namespace"
 tenants_csv="${TENANTS:?TENANTS env required, e.g. TENANTS=bigcorp,acme}"
 worker_types_csv="${WORKER_TYPES:-import,export,process,dispatch,atomic}"
 partitions="${KAFKA_PARTITIONS_DISPATCH:-${KAFKA_TOPIC_PARTITIONS:-4}}"
@@ -124,6 +128,7 @@ for raw_tenant in $(IFS=','; echo "$tenants_csv"); do
     wt="$(echo "${raw_type}" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
     [ -n "${wt}" ] || continue
     topic="batch.task.dispatch.${wt}.${tenant}"
+    topic="$(batch_namespace_kafka_name "$topic" "$topic_namespace")"
     echo "Creating ${topic} (partitions=${partitions}, rf=${replication_factor})"
     ensure_topic "${topic}"
   done

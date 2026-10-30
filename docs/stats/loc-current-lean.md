@@ -1,64 +1,64 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `214a15b81`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `3800ac8ea`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 5,009 | 540,223 | 279,304 | 51.7% |
+| 6,085 | 784,384 | 409,255 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| prod | 2,830 | 261,255 | 119,827 | 45.9% |
-| test | 1,345 | 203,924 | 111,700 | 54.8% |
-| script | 671 | 57,656 | 36,515 | 63.3% |
-| config | 65 | 9,265 | 6,841 | 73.8% |
-| infra-config | 34 | 5,845 | 4,249 | 72.7% |
-| sql | 64 | 2,278 | 172 | 7.6% |
+| test | 1,786 | 383,659 | 204,960 | 53.4% |
+| prod | 3,405 | 318,521 | 151,902 | 47.7% |
+| script | 716 | 63,419 | 40,041 | 63.1% |
+| config | 68 | 10,242 | 7,656 | 74.8% |
+| infra-config | 34 | 6,107 | 4,465 | 73.1% |
+| sql | 76 | 2,436 | 231 | 9.5% |
 
 ## 按语言
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 3,675 | 394,345 | 203,902 | 51.7% |
-| Shell | 215 | 32,939 | 26,007 | 79.0% |
-| Python | 269 | 39,158 | 20,334 | 51.9% |
-| YAML | 108 | 13,862 | 10,627 | 76.7% |
-| XML | 186 | 22,424 | 7,001 | 31.2% |
-| TypeScript | 37 | 6,667 | 3,141 | 47.1% |
-| Rust | 23 | 8,499 | 2,856 | 33.6% |
-| Properties | 5 | 2,943 | 2,417 | 82.1% |
-| SQL | 449 | 12,003 | 1,497 | 12.5% |
-| Go | 34 | 7,049 | 1,302 | 18.5% |
-| TOML | 8 | 334 | 220 | 65.9% |
+| Java | 4,568 | 611,523 | 322,060 | 52.7% |
+| Shell | 216 | 35,762 | 28,276 | 79.1% |
+| Python | 324 | 47,942 | 25,702 | 53.6% |
+| YAML | 109 | 14,929 | 11,576 | 77.5% |
+| XML | 219 | 30,812 | 9,198 | 29.9% |
+| TypeScript | 38 | 6,824 | 3,259 | 47.8% |
+| Rust | 24 | 8,952 | 3,064 | 34.2% |
+| Properties | 5 | 3,173 | 2,633 | 83.0% |
+| SQL | 539 | 16,636 | 1,872 | 11.3% |
+| Go | 35 | 7,479 | 1,384 | 18.5% |
+| TOML | 8 | 352 | 231 | 65.6% |
 
 ## 最大文件（按 Lean logical LOC）
 
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
-| `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,385 | 1,271 |
-| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,461 | 1,208 |
-| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,459 | 1,208 |
-| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,415 | 1,192 |
-| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,415 | 1,192 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,204 | 939 |
-| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 879 | 796 |
-| `helm/batch-platform/values.yaml` | infra-config | YAML | 1,017 | 734 |
-| `deploy/docker/compose/app.yml` | config | YAML | 735 | 652 |
-| `scripts/fix-fixture-xlsx.py` | script | Python | 1,112 | 626 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | prod | Java | 1,026 | 621 |
-| `scripts/ci/run-full-regression.sh` | script | Shell | 699 | 582 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java` | prod | Java | 976 | 569 |
-| `scripts/local/validate-seed-scenarios.sh` | script | Shell | 769 | 561 |
-| `scripts/local/start-all.sh` | script | Shell | 645 | 518 |
-| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationServiceTest.java` | test | Java | 824 | 513 |
-| `pom.xml` | config | XML | 845 | 512 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | prod | Java | 1,023 | 501 |
-| `scripts/dev/sonar-scan.sh` | script | Shell | 594 | 499 |
-| `scripts/local/sim-harness.sh` | script | Shell | 641 | 498 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,731 | 3,243 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,042 | 2,605 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,870 | 2,567 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,689 | 1,764 |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,772 | 1,457 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,914 | 1,388 |
+| `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
+| `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
+| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,576 | 1,316 |
+| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,574 | 1,316 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,929 | 1,303 |
+| `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,409 | 1,293 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,152 | 1,125 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,399 | 1,034 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,039 | 1,013 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ArchiveColdStorageIntegrationTest.java` | test | Java | 1,887 | 917 |
+| `scripts/local/sim-harness.sh` | script | Shell | 1,092 | 908 |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/BatchDayCatchUpOperationSchemaIntegrationTest.java` | test | Java | 1,577 | 896 |
 
 ## 复跑
 

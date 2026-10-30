@@ -46,7 +46,8 @@ public final class CronExpressionFormatRule {
             "schedule_expr is required when schedule_type=CRON"));
         continue;
       }
-      String[] parts = expr.trim().split("\\s+");
+      String trimmedExpression = expr.trim();
+      String[] parts = trimmedExpression.split("\\s+");
       if (parts.length != 6 && parts.length != 7) {
         issues.add(new WorkbookIssue(
             SHEET,

@@ -32,4 +32,12 @@ public class CompensationCommandRequest {
   private String operatorId;
   private String approvalId;
   private String strategy;
+  private Long sourceWorkflowRunId;
+  private Long sourceWorkflowNodeRunId;
+  private Long replayOperationId;
+  private String operationKey;
+  private String previewToken;
+  private String resultPolicy;
+  private String configVersionPolicy;
+  private Integer configVersion;
 }

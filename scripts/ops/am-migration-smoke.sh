@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Alertmanager 迁移全链 smoke(迁移方案 §7.1)。分两层:。
+# 用法：在仓库根目录执行 bash scripts/ops/am-migration-smoke.sh；参数与前置环境见下方说明及所属 README。
 # Alertmanager 迁移全链 smoke(迁移方案 §7.1)。分两层:
 #
 #  [A] AM-contract 层(本脚本默认跑,无需全栈):启动独立 AM(v0.28.1)+ 渲染 route +
@@ -14,7 +16,7 @@
 #   bash scripts/ops/am-migration-smoke.sh            # 跑 [A]
 #   bash scripts/ops/am-migration-smoke.sh --full     # 跑 [A]+[B](需全栈)
 #
-# 注意:跑前 unset BATCH_ENV_COMMON_ROOT(worktree profile 污染坑,见项目备忘)。
+# 注意:跑前 unset BATCH_ENV_COMMON_ROOT(工作树 profile 配置污染风险，见运行说明)。
 set -euo pipefail
 
 AMPORT="${ALERTMANAGER_SMOKE_PORT:-19093}"

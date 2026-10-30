@@ -2,12 +2,14 @@ package io.github.pinpols.batch.console.shared.view;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import lombok.Builder;
 
+@Builder
 public record ConsolePendingCatchUpResponse(
     Long id,
     String tenantId,
     String requestId,
-    String jobCode,
+    String workflowCode,
     LocalDate bizDate,
     String requestStatus,
     String traceId,

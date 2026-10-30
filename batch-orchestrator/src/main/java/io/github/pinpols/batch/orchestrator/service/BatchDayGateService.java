@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -55,45 +56,57 @@ public class BatchDayGateService {
       LaunchValidationService.LaunchLoadResult loaded,
       Map<String, Object> effectiveParams,
       String traceId) {
-    if (request == null || loaded == null || loaded.jobDefinition() == null) {
+    if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {
       return GateDecision.allow();
     }
     JobDefinitionEntity job = loaded.jobDefinition();
-    if (!Texts.hasText(job.calendarCode()) || request.bizDate() == null) {
+    if (EmptyChecks.isNull(job)) {
+      return GateDecision.allow();
+    }
+    String calendarCode = loaded.effectiveCalendarCode();
+    if (!Texts.hasText(calendarCode) || EmptyChecks.isNull(request.bizDate())) {
       return GateDecision.allow();
     }
     // FROZEN 优先于前日门闩。CATCH_UP / RERUN 显式覆盖 frozen 限制(运维补救路径)。
     if (!isFrozenBypassTrigger(request.triggerType())) {
       BatchDayInstanceEntity currentDay = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-          request.tenantId(), job.calendarCode(), request.bizDate());
+          request.tenantId(), calendarCode, request.bizDate());
       if (currentDay != null && Boolean.TRUE.equals(currentDay.frozen())) {
         String reason = "BATCH_DAY_FROZEN";
-        reject(request, currentDay, reason);
+        reject(request, loaded.triggerRequest(), currentDay, reason);
         return GateDecision.reject(reason);
       }
     }
-    String scope = normalize(job.previousDayDependencyScope(), "INHERIT");
+    String configuredDependencyScope = job.previousDayDependencyScope();
+    String scope = normalize(configuredDependencyScope, "INHERIT");
     if ("NONE".equals(scope)) {
       return GateDecision.allow();
     }
     BusinessCalendarEntity calendar =
-        configCacheService.findEnabledBusinessCalendar(request.tenantId(), job.calendarCode());
-    String policy = "INHERIT".equals(scope)
-        ? normalize(calendar == null ? null : calendar.dayRolloverPolicy(), POLICY_ALLOW_OVERLAP)
-        : POLICY_WAIT_PREVIOUS_DAY;
+        configCacheService.findEnabledBusinessCalendar(request.tenantId(), calendarCode);
+    String policy;
+    if ("INHERIT".equals(scope)) {
+      String configuredRolloverPolicy =
+          EmptyChecks.isNull(calendar) ? null : calendar.dayRolloverPolicy();
+      policy = normalize(configuredRolloverPolicy, POLICY_ALLOW_OVERLAP);
+    } else {
+      policy = POLICY_WAIT_PREVIOUS_DAY;
+    }
     if (POLICY_ALLOW_OVERLAP.equals(policy)) {
       return GateDecision.allow();
     }
     LocalDate prevBizDate = request.bizDate().minusDays(1);
     BatchDayInstanceEntity previous = batchDayInstanceMapper.selectByTenantCalendarBizDate(
-        request.tenantId(), job.calendarCode(), prevBizDate);
+        request.tenantId(), calendarCode, prevBizDate);
     // SAME_JOB / SAME_JOB_GROUP 细粒度: 在 batch_day_instance 之外, 还要看
     // job_instance 维度的实际终态(防止 calendar 已 SETTLED 但同组某 job 上一日还在 RUNNING)。
-    if ("SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope)) {
+    boolean usesFineGrainedDependencyScope =
+        "SAME_JOB".equals(scope) || "SAME_JOB_GROUP".equals(scope);
+    if (usesFineGrainedDependencyScope) {
       String fineReason = checkFineGrainedDependency(scope, request, job, prevBizDate);
       if (fineReason != null) {
         if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
-          reject(request, previous, fineReason);
+          reject(request, loaded.triggerRequest(), previous, fineReason);
           return GateDecision.reject(fineReason);
         }
         waitLaunch(
@@ -108,7 +121,7 @@ public class BatchDayGateService {
     }
     String reason = "PREVIOUS_BATCH_DAY_NOT_CLOSED";
     if (POLICY_REJECT_IF_PREVIOUS_OPEN.equals(policy)) {
-      reject(request, previous, reason);
+      reject(request, loaded.triggerRequest(), previous, reason);
       return GateDecision.reject(reason);
     }
     waitLaunch(request, loaded.triggerRequest(), effectiveParams, traceId, previous, reason);
@@ -147,6 +160,7 @@ public class BatchDayGateService {
       String traceId,
       BatchDayInstanceEntity previous,
       String reason) {
+    LaunchRequestIdentityGuard.requirePending(request, triggerRequest);
     Instant now = dateTimeSupport.nowInstant();
     String payload = buildLaunchPayload(request, effectiveParams);
     BatchDayWaitingLaunchEntity waiting = BatchDayWaitingLaunchEntity.builder()
@@ -174,10 +188,14 @@ public class BatchDayGateService {
           request.requestId());
     }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_WAIT", reason, traceId);
-    emitGateAlert(request, previous, "BATCH_DAY_GATE_WAITING", "WARN", reason, traceId);
+    emitGateAlert(request, triggerRequest, previous, GateAlertKind.WAITING, reason, traceId);
   }
 
-  private void reject(LaunchRequest request, BatchDayInstanceEntity previous, String reason) {
+  private void reject(
+      LaunchRequest request,
+      TriggerRequestEntity triggerRequest,
+      BatchDayInstanceEntity previous,
+      String reason) {
     int updated = triggerRequestMapper.updateAcceptance(
         request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
     if (updated == 0) {
@@ -187,17 +205,26 @@ public class BatchDayGateService {
           request.requestId());
     }
     appendAuditLog(request, previous, "BATCH_DAY_GATE_REJECT", reason, request.traceId());
-    emitGateAlert(request, previous, "BATCH_DAY_GATE_REJECTED", "ERROR", reason, request.traceId());
+    emitGateAlert(
+        request, triggerRequest, previous, GateAlertKind.REJECTED, reason, request.traceId());
+  }
+
+  /** 等待与拒绝使用固定级别，避免告警类型和严重性错配。 */
+  private enum GateAlertKind {
+    WAITING,
+    REJECTED
   }
 
   private void emitGateAlert(
       LaunchRequest request,
+      TriggerRequestEntity triggerRequest,
       BatchDayInstanceEntity previous,
-      String alertType,
-      String severity,
+      GateAlertKind kind,
       String reason,
       String traceId) {
-    Map<String, Object> detail = BatchDayAlertDetails.base(request, reason);
+    String alertType = "BATCH_DAY_GATE_" + kind.name();
+    String severity = kind == GateAlertKind.WAITING ? "WARN" : "ERROR";
+    Map<String, Object> detail = BatchDayAlertDetails.base(request, triggerRequest, reason);
     if (previous != null) {
       detail.put("calendarCode", previous.calendarCode());
       detail.put(
@@ -211,13 +238,14 @@ public class BatchDayGateService {
         + request.jobCode()
         + ":"
         + (request.bizDate() == null ? "" : request.bizDate());
+    String serializedDetail = JsonUtils.toJson(detail);
     AlertEmitRequest emitRequest = AlertEmitRequest.builder()
         .tenantId(request.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(alertType)
         .severity(severity)
         .title("batch day gate " + alertType.toLowerCase(Locale.ROOT) + ": " + reason)
-        .detailJson(JsonUtils.toJson(detail))
+        .detailJson(serializedDetail)
         .resourceKey(resourceKey)
         .traceId(traceId)
         .build();
@@ -271,13 +299,18 @@ public class BatchDayGateService {
     extra.put("reasonCode", reason);
     extra.put("operatorId", AuditLogConstants.OPERATOR_ID_SYSTEM);
     extra.put("operatorType", AuditLogConstants.OPERATOR_TYPE_SYSTEM);
-    audit.setExtraJson(JsonUtils.toJson(extra));
+    String extraJson = JsonUtils.toJson(extra);
+    audit.setExtraJson(extraJson);
     jobExecutionLogMapper.insert(audit);
   }
 
   @SuppressWarnings("java:S2259")
   private String normalize(String value, String defaultValue) {
-    return Texts.hasText(value) ? value.trim().toUpperCase(Locale.ROOT) : defaultValue;
+    if (!Texts.hasText(value)) {
+      return defaultValue;
+    }
+    String trimmedValue = value.trim();
+    return trimmedValue.toUpperCase(Locale.ROOT);
   }
 
   private boolean isFrozenBypassTrigger(TriggerType triggerType) {

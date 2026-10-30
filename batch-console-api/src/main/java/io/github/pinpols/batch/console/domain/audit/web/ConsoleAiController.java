@@ -95,11 +95,12 @@ public class ConsoleAiController {
         && EmptyChecks.isNotNull(clients)
         && EmptyChecks.isNotNull(clients.primary())
         && clients.primary().imageInput();
-    return responseFactory.success(new AiCapabilities(
+    AiCapabilities capabilities = new AiCapabilities(
         imageInput,
         imageInput ? aiProperties.getImage().getMaxImages() : 0,
         imageInput ? aiProperties.getImage().getMaxFileBytes() : 0,
-        imageInput ? aiProperties.getImage().getMaxTotalBytes() : 0));
+        imageInput ? aiProperties.getImage().getMaxTotalBytes() : 0);
+    return responseFactory.success(capabilities);
   }
 
   @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -110,17 +111,22 @@ public class ConsoleAiController {
       throws IOException {
     authorizationService.assertAllowed();
     ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
-    if (EmptyChecks.isNull(clients)
+    boolean primaryClientCannotAcceptImages = EmptyChecks.isNull(clients)
         || EmptyChecks.isNull(clients.primary())
-        || !clients.primary().imageInput()) {
+        || !clients.primary().imageInput();
+    if (primaryClientCannotAcceptImages) {
       throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
     }
     if (file.getSize() < 1 || file.getSize() > aiProperties.getImage().getMaxFileBytes()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.ai.image_invalid");
     }
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(attachmentService.upload(
-        metadata.tenantId(), metadata.operatorId(), clientAttachmentId, file.getBytes()));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    byte[] fileContent = file.getBytes();
+    ConsoleAiAttachmentUseCase.AttachmentView attachment =
+        attachmentService.upload(tenantId, operatorId, clientAttachmentId, fileContent);
+    return responseFactory.success(attachment);
   }
 
   @GetMapping("/attachments/by-client-id/{clientAttachmentId}")
@@ -128,8 +134,11 @@ public class ConsoleAiController {
       @PathVariable UUID clientAttachmentId) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(
-        attachmentService.status(metadata.tenantId(), metadata.operatorId(), clientAttachmentId));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    ConsoleAiAttachmentUseCase.AttachmentView attachment =
+        attachmentService.status(tenantId, operatorId, clientAttachmentId);
+    return responseFactory.success(attachment);
   }
 
   @GetMapping("/attachments/{id}/content")
@@ -138,11 +147,14 @@ public class ConsoleAiController {
     ConsoleRequestMetadata metadata = metadataResolver.current();
     ConsoleAiAttachmentUseCase.ImageContent image =
         attachmentService.content(metadata.tenantId(), metadata.operatorId(), id);
-    return ResponseEntity.ok()
-        .cacheControl(CacheControl.noStore())
-        .header("X-Content-Type-Options", "nosniff")
-        .contentType(MediaType.parseMediaType(image.mediaType()))
-        .body(image.bytes());
+    ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
+    responseBuilder.cacheControl(CacheControl.noStore());
+    responseBuilder.header("X-Content-Type-Options", "nosniff");
+    String mediaTypeValue = image.mediaType();
+    MediaType mediaType = MediaType.parseMediaType(mediaTypeValue);
+    responseBuilder.contentType(mediaType);
+    byte[] content = image.bytes();
+    return responseBuilder.body(content);
   }
 
   @DeleteMapping("/attachments/{id}")
@@ -173,7 +185,9 @@ public class ConsoleAiController {
         idempotencyKey,
         metadata.clientIp());
     Locale requestLocale = LocaleContextHolder.getLocale();
-    long timeout = Math.max(1, aiProperties.getRequestTimeout().toMillis()) + 10_000;
+    long configuredRequestTimeoutMillis = aiProperties.getRequestTimeout().toMillis();
+    long minimumRequestTimeoutMillis = Math.max(1, configuredRequestTimeoutMillis);
+    long timeout = minimumRequestTimeoutMillis + 10_000;
     SseEmitter emitter = new SseEmitter(timeout);
     ActiveStream active = new ActiveStream(metadata.tenantId(), metadata.operatorId(), emitter);
     if (EmptyChecks.isNotNull(activeStreams.putIfAbsent(requestId, active))) {
@@ -224,9 +238,10 @@ public class ConsoleAiController {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
     ActiveStream active = activeStreams.get(requestId);
-    if (EmptyChecks.isNull(active)
+    boolean activeStreamOwnerDoesNotMatch = EmptyChecks.isNull(active)
         || !Objects.equals(active.tenantId, metadata.tenantId())
-        || !Objects.equals(active.operatorId, metadata.operatorId())) {
+        || !Objects.equals(active.operatorId, metadata.operatorId());
+    if (activeStreamOwnerDoesNotMatch) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     active.cancel();
@@ -295,8 +310,11 @@ public class ConsoleAiController {
       @RequestParam(defaultValue = "20") int limit) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(
-        applicationService.conversations(metadata.tenantId(), metadata.operatorId(), limit));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    List<ConsoleAiApplicationService.ConversationSummary> conversations =
+        applicationService.conversations(tenantId, operatorId, limit);
+    return responseFactory.success(conversations);
   }
 
   @GetMapping("/conversations/page")
@@ -306,8 +324,11 @@ public class ConsoleAiController {
           @RequestParam(defaultValue = "20") int limit) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(applicationService.conversationPage(
-        metadata.tenantId(), metadata.operatorId(), cursor, limit));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    PageResponse<ConsoleAiApplicationService.ConversationSummary> page =
+        applicationService.conversationPage(tenantId, operatorId, cursor, limit);
+    return responseFactory.success(page);
   }
 
   @GetMapping("/conversations/{conversationId}/turns")
@@ -317,8 +338,11 @@ public class ConsoleAiController {
       @RequestParam(defaultValue = "50") int limit) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(applicationService.turns(
-        metadata.tenantId(), metadata.operatorId(), conversationId, beforeTurnNo, limit));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    List<ConsoleAiApplicationService.TurnSummary> turns =
+        applicationService.turns(tenantId, operatorId, conversationId, beforeTurnNo, limit);
+    return responseFactory.success(turns);
   }
 
   @GetMapping("/turns/by-client-id/{clientTurnId}")
@@ -326,8 +350,11 @@ public class ConsoleAiController {
       @PathVariable UUID clientTurnId) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    return responseFactory.success(applicationService.turnByClientId(
-        metadata.tenantId(), metadata.operatorId(), clientTurnId));
+    String tenantId = metadata.tenantId();
+    String operatorId = metadata.operatorId();
+    ConsoleAiApplicationService.ClientTurnSummary turn =
+        applicationService.turnByClientId(tenantId, operatorId, clientTurnId);
+    return responseFactory.success(turn);
   }
 
   @DeleteMapping("/conversations/{conversationId}")
@@ -350,7 +377,10 @@ public class ConsoleAiController {
     } catch (DateTimeParseException exception) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
-    return responseFactory.success(
-        applicationService.costSummary(metadataResolver.current().tenantId(), billingMonth));
+    ConsoleRequestMetadata metadata = metadataResolver.current();
+    String tenantId = metadata.tenantId();
+    ConsoleAiApplicationService.AiCostSummary summary =
+        applicationService.costSummary(tenantId, billingMonth);
+    return responseFactory.success(summary);
   }
 }

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.metrics;
 
 import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionGlobalQueueBacklogSummaryQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.QueuePartitionBacklogStats;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -59,12 +60,16 @@ public class SchedulerQueueBacklogMetricsScheduler {
       return;
     }
     try {
+      JobPartitionGlobalQueueBacklogSummaryQuery jobPartitionGlobalQueueBacklogSummaryQuery =
+          JobPartitionGlobalQueueBacklogSummaryQuery.builder()
+              .createdStatus(PartitionStatus.CREATED.code())
+              .waitingStatus(PartitionStatus.WAITING.code())
+              .readyStatus(PartitionStatus.READY.code())
+              .runningStatus(PartitionStatus.RUNNING.code())
+              .retryingStatus(PartitionStatus.RETRYING.code())
+              .build();
       QueuePartitionBacklogStats stats = jobPartitionMapper.summarizeGlobalQueueBacklog(
-          PartitionStatus.CREATED.code(),
-          PartitionStatus.WAITING.code(),
-          PartitionStatus.READY.code(),
-          PartitionStatus.RUNNING.code(),
-          PartitionStatus.RETRYING.code());
+          jobPartitionGlobalQueueBacklogSummaryQuery);
       if (stats == null) {
         stats = new QueuePartitionBacklogStats("ALL", 0, 0, 0, 0, 0, 0);
       }
@@ -76,9 +81,8 @@ public class SchedulerQueueBacklogMetricsScheduler {
       queuedPartitions.set(stats.queuedPartitions());
       oldestWaitingSeconds.set(stats.oldestWaitingSeconds());
     } catch (RuntimeException ex) {
-      log.warn(
-          "scheduler queue backlog metrics sampling failed: {}",
-          SwallowedExceptionLogger.summary(ex));
+      String causeSummary = SwallowedExceptionLogger.summary(ex);
+      log.warn("scheduler queue backlog metrics sampling failed: {}", causeSummary);
     }
   }
 }

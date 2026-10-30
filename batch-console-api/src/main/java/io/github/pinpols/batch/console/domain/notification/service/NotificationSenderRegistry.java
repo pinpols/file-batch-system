@@ -39,6 +39,11 @@ public class NotificationSenderRegistry {
   }
 
   private static String normalize(String value) {
-    return EmptyChecks.isBlank(value) ? null : value.trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isBlank(value)) {
+      return null;
+    }
+    String trimmedValue = value.trim();
+    String normalizedValue = trimmedValue.toUpperCase(Locale.ROOT);
+    return normalizedValue;
   }
 }

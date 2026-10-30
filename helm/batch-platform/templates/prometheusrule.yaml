@@ -26,6 +26,16 @@ metadata:
     {{- with .Values.prometheusRule.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
+{{- $scope := ((.Values.alertmanager).console).maintenanceScope | default (printf "%s.%s" .Release.Namespace .Release.Name) }}
+{{- $rules := .Files.Get "files/prometheus-batch-rules.yml" | fromYaml }}
+{{- range $group := $rules.groups }}
+{{- range $rule := $group.rules }}
+{{- if or (eq ($rule.alert | default "") "BatchServiceDown") (eq ($rule.alert | default "") "BatchCoreServiceTargetMissing") }}
+{{/* 可用性规则限定当前部署；absent() 会保留该等值范围，其他发布不影响判断。 */}}
+{{- $_ := set $rule "expr" (replace "up{" (printf "up{maintenance_scope=%s," ($scope | quote)) $rule.expr) }}
+{{- end }}
+{{- end }}
+{{- end }}
 spec:
-{{ .Files.Get "files/prometheus-batch-rules.yml" | indent 2 }}
+{{ $rules | toYaml | indent 2 }}
 {{- end }}

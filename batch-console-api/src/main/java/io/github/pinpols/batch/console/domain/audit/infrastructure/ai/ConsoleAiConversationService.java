@@ -10,15 +10,21 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentBindingInput;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiTurnStartInput;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiConversationEntity;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiTurnEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiConversationMapper;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiConversationAllocateTurnNoParam;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationPageByOwnerQuery;
+import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiConversationTurnsQuery;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
@@ -47,25 +53,13 @@ public class ConsoleAiConversationService {
   private final ConsoleAiAttachmentService attachmentService;
 
   @Transactional
-  public StartedTurn beginTurn(
-      String tenantId,
-      String ownerUserId,
-      String requestedConversationId,
-      String contextVersion,
-      String prompt) {
-    return beginTurn(
-        tenantId, ownerUserId, requestedConversationId, contextVersion, prompt, null, null);
-  }
-
-  @Transactional
-  public StartedTurn beginTurn(
-      String tenantId,
-      String ownerUserId,
-      String requestedConversationId,
-      String contextVersion,
-      String prompt,
-      UUID clientTurnId,
-      List<UUID> attachmentIds) {
+  public StartedTurn beginTurn(ConsoleAiTurnStartInput input) {
+    String tenantId = input.tenantId();
+    String ownerUserId = input.ownerUserId();
+    String requestedConversationId = input.requestedConversationId();
+    String contextVersion = input.contextVersion();
+    UUID clientTurnId = input.clientTurnId();
+    List<UUID> attachmentIds = input.attachmentIds();
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     if (!SUPPORTED_CONTEXT_VERSION.equals(contextVersion)) {
@@ -82,8 +76,9 @@ public class ConsoleAiConversationService {
     boolean creating = !Texts.hasText(requestedConversationId);
     String conversationId = creating ? UUID.randomUUID().toString() : requestedConversationId;
     OffsetDateTime now = nowUtc();
-    OffsetDateTime expiresAt =
-        now.plus(Duration.ofDays(properties.getPersistence().getRetentionDays()));
+    int retentionDays = properties.getPersistence().getRetentionDays();
+    Duration retentionDuration = Duration.ofDays(retentionDays);
+    OffsetDateTime expiresAt = now.plus(retentionDuration);
     ConsoleAiConversationEntity conversation = mapper.selectForUpdate(tenantId, conversationId);
     if (EmptyChecks.isNull(conversation)) {
       if (!creating) {
@@ -107,25 +102,47 @@ public class ConsoleAiConversationService {
         tenantId, conversationId, properties.getPersistence().getMaxHistoryTurns());
     Collections.reverse(history);
     history = boundHistory(history, properties.getPersistence().getMaxHistoryChars());
-    Long turnNo =
-        mapper.allocateTurnNo(tenantId, conversationId, ownerUserId, expiresAt, contextVersion);
+    ConsoleAiConversationAllocateTurnNoParam consoleAiConversationAllocateTurnNoParam =
+        ConsoleAiConversationAllocateTurnNoParam.builder()
+            .tenantId(tenantId)
+            .conversationId(conversationId)
+            .ownerUserId(ownerUserId)
+            .expiresAt(expiresAt)
+            .contextVersion(contextVersion)
+            .build();
+    Long turnNo = mapper.allocateTurnNo(consoleAiConversationAllocateTurnNoParam);
     if (EmptyChecks.isNull(turnNo)) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
+    persistStartedTurn(input, conversationId, turnNo);
+    ConsoleAiAttachmentBindingInput attachmentBinding = ConsoleAiAttachmentBindingInput.builder()
+        .tenantId(tenantId)
+        .ownerUserId(ownerUserId)
+        .ids(attachmentIds)
+        .conversationId(conversationId)
+        .turnNo(turnNo)
+        .expiresAt(expiresAt.toInstant())
+        .build();
+    attachmentService.bind(attachmentBinding);
+    return new StartedTurn(conversationId, turnNo, history);
+  }
+
+  /** 轮次分配后保存加密提示词；插入冲突仍回滚外层事务，附件只在该记录写入成功后绑定。 */
+  private void persistStartedTurn(
+      ConsoleAiTurnStartInput input, String conversationId, Long turnNo) {
     ConsoleAiTurnEntity turn = new ConsoleAiTurnEntity();
-    turn.setTenantId(tenantId);
+    turn.setTenantId(input.tenantId());
     turn.setConversationId(conversationId);
     turn.setTurnNo(turnNo);
-    turn.setClientTurnId(clientTurnId);
-    turn.setContextVersion(contextVersion);
-    turn.setPromptText(
-        encryptText(ConsoleTextSanitizer.safeInput(prompt, properties.getMaxPromptLength())));
+    turn.setClientTurnId(input.clientTurnId());
+    turn.setContextVersion(input.contextVersion());
+    int maxPromptLength = properties.getMaxPromptLength();
+    String sanitizedPrompt = ConsoleTextSanitizer.safeInput(input.prompt(), maxPromptLength);
+    String encryptedPrompt = encryptText(sanitizedPrompt);
+    turn.setPromptText(encryptedPrompt);
     if (mapper.insertTurn(turn) != 1) {
       throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
     }
-    attachmentService.bind(
-        tenantId, ownerUserId, attachmentIds, conversationId, turnNo, expiresAt.toInstant());
-    return new StartedTurn(conversationId, turnNo, history);
   }
 
   @Transactional
@@ -142,8 +159,11 @@ public class ConsoleAiConversationService {
     turn.setTenantId(completion.tenantId());
     turn.setConversationId(completion.conversationId());
     turn.setTurnNo(completion.turnNo());
-    turn.setResponseText(encryptText(
-        ConsoleTextSanitizer.safeInput(completion.response(), properties.getMaxResponseLength())));
+    int maxResponseLength = properties.getMaxResponseLength();
+    String sanitizedResponse =
+        ConsoleTextSanitizer.safeInput(completion.response(), maxResponseLength);
+    String encryptedResponse = encryptText(sanitizedResponse);
+    turn.setResponseText(encryptedResponse);
     turn.setTurnStatus(status);
     turn.setPromptDecision(completion.decision());
     turn.setModelName(completion.modelName());
@@ -161,9 +181,10 @@ public class ConsoleAiConversationService {
     requirePersistenceEnabled();
     requireOwner(ownerUserId);
     mapper.setTenantContext(tenantId);
-    int limit = Math.min(
-        Math.max(requestedLimit, 1), properties.getPersistence().getConversationPageSize());
-    return mapper.selectByOwner(tenantId, ownerUserId, limit).stream()
+    int limit = conversationPageLimit(requestedLimit);
+    List<ConsoleAiConversationEntity> conversations =
+        mapper.selectByOwner(tenantId, ownerUserId, limit);
+    return conversations.stream()
         .map(row -> new ConversationView(
             row.getId(),
             row.getTitle(),
@@ -181,10 +202,17 @@ public class ConsoleAiConversationService {
     requireOwner(ownerUserId);
     CursorPosition position = decodeCursor(cursor);
     mapper.setTenantContext(tenantId);
-    int limit = Math.min(
-        Math.max(requestedLimit, 1), properties.getPersistence().getConversationPageSize());
-    List<ConsoleAiConversationEntity> rows = mapper.selectPageByOwner(
-        tenantId, ownerUserId, position.updatedAt(), position.id(), limit + 1);
+    int limit = conversationPageLimit(requestedLimit);
+    ConsoleAiConversationPageByOwnerQuery consoleAiConversationPageByOwnerQuery =
+        ConsoleAiConversationPageByOwnerQuery.builder()
+            .tenantId(tenantId)
+            .ownerUserId(ownerUserId)
+            .beforeUpdatedAt(position.updatedAt())
+            .beforeId(position.id())
+            .limit(limit + 1)
+            .build();
+    List<ConsoleAiConversationEntity> rows =
+        mapper.selectPageByOwner(consoleAiConversationPageByOwnerQuery);
     boolean hasMore = rows.size() > limit;
     List<ConsoleAiConversationEntity> visible = rows.subList(0, Math.min(rows.size(), limit));
     List<ConversationView> items = visible.stream()
@@ -196,12 +224,21 @@ public class ConsoleAiConversationService {
             row.getUpdatedAt(),
             row.getExpiresAt()))
         .toList();
-    String nextCursor = hasMore
-        ? CursorCodec.encode(Map.of(
-            "updatedAt", visible.get(visible.size() - 1).getUpdatedAt().toString(),
-            "id", visible.get(visible.size() - 1).getId()))
-        : null;
+    String nextCursor = null;
+    if (hasMore) {
+      ConsoleAiConversationEntity lastVisible = visible.get(visible.size() - 1);
+      String lastUpdatedAt = lastVisible.getUpdatedAt().toString();
+      String lastConversationId = lastVisible.getId();
+      Map<String, Object> cursorValues =
+          Map.of("updatedAt", lastUpdatedAt, "id", lastConversationId);
+      nextCursor = CursorCodec.encode(cursorValues);
+    }
     return PageResponse.cursor(items, limit, nextCursor);
+  }
+
+  private int conversationPageLimit(int requestedLimit) {
+    int minimumLimit = Math.max(requestedLimit, 1);
+    return Math.min(minimumLimit, properties.getPersistence().getConversationPageSize());
   }
 
   private CursorPosition decodeCursor(String cursor) {
@@ -219,8 +256,9 @@ public class ConsoleAiConversationService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     try {
-      return new CursorPosition(Instant.parse(updatedAt), id);
-    } catch (java.time.format.DateTimeParseException exception) {
+      Instant parsedUpdatedAt = Instant.parse(updatedAt);
+      return new CursorPosition(parsedUpdatedAt, id);
+    } catch (DateTimeParseException exception) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
   }
@@ -238,12 +276,18 @@ public class ConsoleAiConversationService {
     if (EmptyChecks.isNull(mapper.selectActiveByOwner(tenantId, conversationId, ownerUserId))) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
-    int limit = Math.min(Math.max(requestedLimit, 1), 100);
-    List<TurnView> rows =
-        mapper.selectTurns(tenantId, conversationId, ownerUserId, beforeTurnNo, limit).stream()
-            .map(this::toTurnView)
-            .toList();
-    return rows;
+    int atLeastOneTurn = Math.max(requestedLimit, 1);
+    int limit = Math.min(atLeastOneTurn, 100);
+    ConsoleAiConversationTurnsQuery consoleAiConversationTurnsQuery =
+        ConsoleAiConversationTurnsQuery.builder()
+            .tenantId(tenantId)
+            .conversationId(conversationId)
+            .ownerUserId(ownerUserId)
+            .beforeTurnNo(beforeTurnNo)
+            .limit(limit)
+            .build();
+    List<ConsoleAiTurnEntity> turns = mapper.selectTurns(consoleAiConversationTurnsQuery);
+    return turns.stream().map(this::toTurnView).toList();
   }
 
   @Transactional(readOnly = true)
@@ -255,16 +299,23 @@ public class ConsoleAiConversationService {
     if (EmptyChecks.isNull(row)) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
-    return new ClientTurnView(row.getConversationId(), toTurnView(row));
+    String conversationId = row.getConversationId();
+    TurnView turn = toTurnView(row);
+    return new ClientTurnView(conversationId, turn);
   }
 
   private TurnView toTurnView(ConsoleAiTurnEntity row) {
+    long turnNo = row.getTurnNo();
+    UUID clientTurnId = row.getClientTurnId();
+    String contextVersion = row.getContextVersion();
+    String prompt = decryptText(row.getPromptText());
+    String response = decryptText(row.getResponseText());
     return new TurnView(
-        row.getTurnNo(),
-        row.getClientTurnId(),
-        row.getContextVersion(),
-        decryptText(row.getPromptText()),
-        decryptText(row.getResponseText()),
+        turnNo,
+        clientTurnId,
+        contextVersion,
+        prompt,
+        response,
         row.getTurnStatus(),
         row.getPromptDecision(),
         row.getModelName(),
@@ -300,8 +351,10 @@ public class ConsoleAiConversationService {
     int remaining = Math.max(0, maxChars);
     for (int i = turns.size() - 1; i >= 0 && remaining > 0; i--) {
       ConsoleAiTurnEntity turn = turns.get(i);
-      turn.setPromptText(decryptText(turn.getPromptText()));
-      turn.setResponseText(decryptText(turn.getResponseText()));
+      String decryptedPrompt = decryptText(turn.getPromptText());
+      turn.setPromptText(decryptedPrompt);
+      String decryptedResponse = decryptText(turn.getResponseText());
+      turn.setResponseText(decryptedResponse);
       int promptLength =
           EmptyChecks.isNull(turn.getPromptText()) ? 0 : turn.getPromptText().length();
       int responseLength = EmptyChecks.isNull(turn.getResponseText())
@@ -331,8 +384,10 @@ public class ConsoleAiConversationService {
     if (EmptyChecks.isNull(value)) {
       return null;
     }
-    return Base64.getEncoder()
-        .encodeToString(cryptoService.encrypt(value.getBytes(StandardCharsets.UTF_8), null));
+    Base64.Encoder encoder = Base64.getEncoder();
+    byte[] plaintext = value.getBytes(StandardCharsets.UTF_8);
+    byte[] ciphertext = cryptoService.encrypt(plaintext, null);
+    return encoder.encodeToString(ciphertext);
   }
 
   private String decryptText(String value) {
@@ -340,7 +395,8 @@ public class ConsoleAiConversationService {
       return null;
     }
     byte[] ciphertext = Base64.getDecoder().decode(value);
-    return new String(cryptoService.decrypt(ciphertext), StandardCharsets.UTF_8);
+    byte[] plaintext = cryptoService.decrypt(ciphertext);
+    return new String(plaintext, StandardCharsets.UTF_8);
   }
 
   private static void requireOwner(String ownerUserId) {
@@ -378,6 +434,7 @@ public class ConsoleAiConversationService {
 
   private record CursorPosition(Instant updatedAt, String id) {}
 
+  @Builder
   public record TurnView(
       long turnNo,
       UUID clientTurnId,

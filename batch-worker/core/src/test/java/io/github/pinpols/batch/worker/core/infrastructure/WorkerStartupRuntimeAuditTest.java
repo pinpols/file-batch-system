@@ -15,6 +15,7 @@ import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxReposi
 import io.github.pinpols.batch.worker.core.reportoutbox.WorkerReportOutboxStats;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -243,9 +244,7 @@ class WorkerStartupRuntimeAuditTest {
   private <T> ObjectProvider<T> provider(T value) {
     ObjectProvider<T> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(value);
-    when(provider.stream())
-        .thenReturn(
-            value == null ? java.util.stream.Stream.empty() : java.util.stream.Stream.of(value));
+    when(provider.stream()).thenReturn(value == null ? Stream.empty() : Stream.of(value));
     return provider;
   }
 
@@ -253,7 +252,7 @@ class WorkerStartupRuntimeAuditTest {
   private <T> ObjectProvider<T> absentProvider() {
     ObjectProvider<T> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(null);
-    when(provider.stream()).thenReturn(java.util.stream.Stream.empty());
+    when(provider.stream()).thenReturn(Stream.empty());
     return provider;
   }
 
@@ -261,7 +260,7 @@ class WorkerStartupRuntimeAuditTest {
   private ObjectProvider<WorkerStartupAuditContributor> provider(List<?> values) {
     ObjectProvider<WorkerStartupAuditContributor> provider = mock(ObjectProvider.class);
     when(provider.orderedStream())
-        .thenReturn((java.util.stream.Stream<WorkerStartupAuditContributor>) values.stream());
+        .thenReturn((Stream<WorkerStartupAuditContributor>) values.stream());
     return provider;
   }
 

@@ -39,7 +39,7 @@ import software.amazon.awssdk.services.s3.S3Configuration;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 
-/** Opt-in live S3 contract check against a locally managed S3-compatible service. */
+/** 可选的实时 S3 契约检查，针对本地管理的 S3 兼容服务执行。 */
 @EnabledIfEnvironmentVariable(named = "S3_COMPAT_POC_ENDPOINT", matches = "https?://.+")
 @DisplayName(
     "S3 兼容对象存储适配层活体契约(需环境变量开启):非法凭证被拒,上传下载与偏移读取内容一致,对象复制可用,列举分页游标推进,预签名上传与下载链接可用,超阈值对象分段上传往返完整,批量删除生效,多线程混合读写负载可完成")

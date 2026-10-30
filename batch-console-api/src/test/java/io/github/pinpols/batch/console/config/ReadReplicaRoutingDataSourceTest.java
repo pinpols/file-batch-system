@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 import javax.sql.DataSource;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -205,18 +206,21 @@ class ReadReplicaRoutingDataSourceTest {
   @Test
   @DisplayName("副本连接上的查询失败时,后续请求进入隔离并改用主库")
   void shouldQuarantineReplica_whenQueryOnReplicaConnectionFails() throws Exception {
+    final String select1Sql = """
+        select 1
+    """;
+
     ReadReplicaRoutingDataSource ds = buildDs(1, 30_000);
     TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
     Statement statement = mock(Statement.class);
     when(replicaConn.createStatement()).thenReturn(statement);
-    when(statement.executeQuery("select 1"))
+    when(statement.executeQuery(select1Sql))
         .thenThrow(new SQLException("connection reset", "08006"));
 
     Connection actual = ds.getConnection();
     Statement actualStatement = actual.createStatement();
     assertThat(actualStatement).isNotSameAs(statement);
-    org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> actualStatement.executeQuery("select 1"))
+    Assertions.assertThatThrownBy(() -> actualStatement.executeQuery(select1Sql))
         .isInstanceOf(SQLException.class);
 
     assertThat(ds.currentConsecutiveFailures()).isEqualTo(1);

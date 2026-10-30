@@ -59,14 +59,15 @@ class SdkAbstractProcessHandler[InputRow, OutputRow](SdkAbstractTaskHandler):
                 else:
                     await self._write_output(ctx, out)
                     counts.inc_success()
-            return SdkTaskResult.success_with(
-                output=counts.to_output(),
-                message=f"processed {counts.success()} rows",
-            )
+            output = counts.to_output()
+            successful_count = counts.success()
+            summary_message = f"processed {successful_count} rows"
+            return SdkTaskResult.success_with(output=output, message=summary_message)
         except Exception as ex:
+            failure_message = str(ex) or type(ex).__name__
             return SdkTaskResult.fail(
                 HANDLER_ERROR_CODE,
-                str(ex) or type(ex).__name__,
+                failure_message,
                 cause=ex,
             )
 

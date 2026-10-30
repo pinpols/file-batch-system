@@ -9,9 +9,12 @@ import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.DateTimeException;
 import java.time.Duration;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.TimeZone;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -26,9 +29,11 @@ import org.quartz.JobBuilder;
 import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
 import org.quartz.JobKey;
+import org.quartz.ObjectAlreadyExistsException;
 import org.quartz.Scheduler;
 import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
+import org.quartz.SimpleTrigger;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.impl.matchers.GroupMatcher;
@@ -38,8 +43,8 @@ import org.springframework.stereotype.Service;
 /**
  * Quartz 调度器门面，实现 {@link TriggerRegistrationService} 接口，集中管理所有 Quartz job 的 注册、暂停、恢复和状态查询。
  *
- * <p><b>JobKey 格式</b>：{@code tenantId:jobCode}，group 固定为 {@code batch-trigger}； {@link
- * #pauseByTenant}/{@link #resumeByTenant} 通过前缀匹配实现租户级批量操作。
+ * <p><b>JobKey 格式</b>：所有调度任务使用 {@code tenantId:WF:workflowCode}。
+ * group 固定为 {@code batch-trigger}；{@link #pauseByTenant}/{@link #resumeByTenant} 通过租户前缀实现批量操作。
  *
  * <p><b>调度类型支持</b>：
  *
@@ -51,8 +56,8 @@ import org.springframework.stereotype.Service;
  *   <li>EVENT / MANUAL — 静默跳过，无需 Quartz 注册（由外部事件或人工 API 触发）。
  * </ul>
  *
- * <p><b>幂等注册</b>：{@link #scheduleWithReplace} 在 {@code scheduleJob} 前先 deleteJob， 保证每次调用结果一致，无论 job
- * 是否已存在。{@link #registerAll} 持有 ShedLock ({@code lockAtMostFor=PT15M}) 防止多实例并发重复注册。
+ * <p><b>幂等注册</b>：{@link #scheduleWithReplace} 更新主日程时保留辅助恢复回调；
+ * 仅元数据变化时只更新 JobDetail，保留固定频率相位和下一次 fire。{@link #registerAll} 持有 ShedLock ({@code lockAtMostFor=PT15M}) 防止多实例并发重复注册。
  */
 @Slf4j
 @Service
@@ -97,10 +102,29 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   @Override
-  public void registerByJobCode(String tenantId, String jobCode) {
-    runManaged("registerByJobCode", () -> {
-      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
-      TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+  public void registerRecoveryJob(TriggerDescriptor descriptor) {
+    runManaged("registerRecoveryJob", () -> {
+      JobDetail job = buildJobDetail(descriptor)
+          .getJobBuilder()
+          .withIdentity(recoveryJobKey(descriptor))
+          .build();
+      try {
+        // 每条恢复 trigger 保存自己的元数据；共享 JobDetail 只作为后续恢复注册的当前模板。
+        scheduler.addJob(job, true);
+      } catch (ObjectAlreadyExistsException alreadyRegistered) {
+        log.debug("recovery job registered concurrently: {}", job.getKey());
+      } catch (SchedulerException exception) {
+        throw new IllegalStateException("failed to register Quartz recovery job", exception);
+      }
+    });
+  }
+
+  @Override
+  public void registerByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("registerByWorkflowCode", () -> {
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
       if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
         scheduleDescriptor(descriptor);
       }
@@ -108,40 +132,45 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   @Override
-  public void unregisterByJobCode(String tenantId, String jobCode) {
-    runManaged("unregisterByJobCode", () -> {
-      try {
-        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-        if (scheduler.checkExists(jobKey)) {
-          scheduler.deleteJob(jobKey);
-        }
-        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
-      } catch (SchedulerException e) {
-        throw new IllegalStateException("failed to unregister trigger: " + jobCode, e);
+  public void reconcileByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("reconcileByWorkflowCode", () -> {
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
+      if (EmptyChecks.isNull(descriptor) || !descriptor.isEnabled()) {
+        removeQuartzByIdentity(tenantId, "WF:" + workflowCode);
+        return;
       }
+      scheduleDescriptor(descriptor);
     });
   }
 
   @Override
-  public void pauseByJobCode(String tenantId, String jobCode) {
-    runManaged("pauseByJobCode", () -> {
-      try {
-        JobKey jobKey = JobKey.jobKey(tenantId + ":" + jobCode, JOB_GROUP);
-        if (scheduler.checkExists(jobKey)) {
-          scheduler.deleteJob(jobKey);
-        }
-        triggerDefinitionLoader.setEnabled(tenantId, jobCode, false);
-      } catch (SchedulerException e) {
-        throw new IllegalStateException("failed to pause trigger: " + jobCode, e);
-      }
+  public void unregisterByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("unregisterByWorkflowCode", () -> {
+      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
     });
   }
 
   @Override
-  public void resumeByJobCode(String tenantId, String jobCode) {
-    runManaged("resumeByJobCode", () -> {
-      triggerDefinitionLoader.setEnabled(tenantId, jobCode, true);
-      TriggerDescriptor descriptor = triggerDefinitionLoader.loadByJobCode(tenantId, jobCode);
+  public void removeQuartzJob(String tenantId, String quartzJobIdentity) {
+    runManaged("removeQuartzJob", () -> removeQuartzByIdentity(tenantId, quartzJobIdentity));
+  }
+
+  @Override
+  public void pauseByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("pauseByWorkflowCode", () -> {
+      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
+    });
+  }
+
+  @Override
+  public void resumeByWorkflowCode(String tenantId, String workflowCode) {
+    runManaged("resumeByWorkflowCode", () -> {
+      triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, true);
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
       if (EmptyChecks.isNotNull(descriptor) && descriptor.isEnabled()) {
         scheduleDescriptor(descriptor);
       }
@@ -224,7 +253,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       log.warn(
           "skipping invalid trigger descriptor for job={}/{}: {}",
           descriptor.getTenantId(),
-          descriptor.getJobCode(),
+          descriptor.getWorkflowCode(),
           SwallowedExceptionLogger.summary(e));
     }
   }
@@ -238,7 +267,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     // Linux 5 字段 cron（"分 时 日 月 星期"）在 Quartz 下会被当 6 字段 "秒 分 时 日 月 星期" 解析，
     // 语义严重错位：如 "0 1 * * *" 原意每日 01:00，Quartz 却读成"每小时第 1 分 0 秒触发"。
     // Quartz 标准 cron 必须 6（无年）或 7（有年）字段，此处硬校验，拒绝所有 Linux-cron 误用。
-    int fieldCount = expression.trim().split("\\s+").length;
+    String trimmedExpression = expression.trim();
+    String[] fields = trimmedExpression.split("\\s+");
+    int fieldCount = fields.length;
     if (fieldCount < 6 || fieldCount > 7) {
       throw new IllegalArgumentException(
           "cron must be Quartz format (6 or 7 fields: sec min hour day month dow [year]), got "
@@ -261,11 +292,12 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
             "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
       }
     }
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+    String identity = quartzIdentity(descriptor);
     JobDetail jobDetail = buildJobDetail(descriptor);
     CronTrigger trigger = TriggerBuilder.newTrigger()
         .withIdentity(identity, JOB_GROUP)
         .forJob(jobDetail)
+        .usingJobData(misfireIdentityData(descriptor))
         .withSchedule(CronScheduleBuilder.cronSchedule(expression)
             .inTimeZone(TimeZone.getTimeZone(timezone))
             .withMisfireHandlingInstructionDoNothing())
@@ -275,11 +307,12 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   private void scheduleFixedRateDescriptor(TriggerDescriptor descriptor) {
     int intervalSeconds = parseFixedRateIntervalSeconds(descriptor);
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
+    String identity = quartzIdentity(descriptor);
     JobDetail jobDetail = buildJobDetail(descriptor);
     Trigger trigger = TriggerBuilder.newTrigger()
         .withIdentity(identity, JOB_GROUP)
         .forJob(jobDetail)
+        .usingJobData(misfireIdentityData(descriptor))
         .withSchedule(SimpleScheduleBuilder.simpleSchedule()
             .withIntervalInSeconds(intervalSeconds)
             .repeatForever()
@@ -289,18 +322,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   private JobDetail buildJobDetail(TriggerDescriptor descriptor) {
-    String identity = descriptor.getTenantId() + ":" + descriptor.getJobCode();
-    JobDataMap jobDataMap = new JobDataMap();
-    jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
-    jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
-    jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
-    jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
-    jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
-    jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
-    jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
-    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, descriptor.getDependsOnJobCode());
-    jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
-    jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
+    String identity = quartzIdentity(descriptor);
+    JobDataMap jobDataMap = scheduledJobData(descriptor);
     return JobBuilder.newJob(QuartzLaunchJob.class)
         .withIdentity(identity, JOB_GROUP)
         .usingJobData(jobDataMap)
@@ -308,16 +331,186 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         .build();
   }
 
+  /** 对账与注册复用相同的有效调度载荷，版本和依赖变更不以 cron 变化为前提。 */
+  public static JobDataMap scheduledJobData(TriggerDescriptor descriptor) {
+    JobDataMap jobDataMap = new JobDataMap();
+    jobDataMap.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
+    jobDataMap.put(QuartzLaunchJob.JOB_CODE, descriptor.getJobCode());
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, descriptor.getWorkflowDefinitionId());
+    }
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowCode())) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_CODE, descriptor.getWorkflowCode());
+    }
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowVersion())) {
+      jobDataMap.put(QuartzLaunchJob.WORKFLOW_VERSION, descriptor.getWorkflowVersion());
+    }
+    jobDataMap.put(
+        QuartzLaunchJob.JOB_DEFINITION_VERSION,
+        EmptyChecks.isNull(descriptor.getJobDefinitionVersion())
+            ? 0
+            : descriptor.getJobDefinitionVersion());
+    jobDataMap.put(QuartzLaunchJob.SCHEDULE_TYPE, descriptor.getScheduleType());
+    jobDataMap.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, descriptor.getScheduleExpression());
+    jobDataMap.put(QuartzLaunchJob.TIMEZONE, descriptor.getTimezone());
+    jobDataMap.put(QuartzLaunchJob.TRIGGER_MODE, descriptor.getTriggerMode());
+    jobDataMap.put(QuartzLaunchJob.CALENDAR_CODE, descriptor.getCalendarCode());
+    jobDataMap.put(QuartzLaunchJob.DEPENDS_ON_JOB_CODE, descriptor.getDependsOnJobCode());
+    // null 表示使用既有回退语义，空列表表示明确无依赖；两者都必须遮住后续 JobDetail 的新值。
+    jobDataMap.put(
+        QuartzLaunchJob.DEPENDS_ON_JOB_CODES,
+        EmptyChecks.isNull(descriptor.getDependsOnJobCodes())
+            ? null
+            : new ArrayList<>(descriptor.getDependsOnJobCodes()));
+    jobDataMap.put(QuartzLaunchJob.CATCH_UP_POLICY, descriptor.getCatchUpPolicy());
+    jobDataMap.put(QuartzLaunchJob.CATCH_UP_MAX_DAYS, descriptor.getCatchUpMaxDays());
+    return jobDataMap;
+  }
+
+  private JobDataMap misfireIdentityData(TriggerDescriptor descriptor) {
+    JobDataMap data = new JobDataMap();
+    data.put(QuartzLaunchJob.TENANT_ID, descriptor.getTenantId());
+    if (EmptyChecks.isNotNull(descriptor.getWorkflowDefinitionId())) {
+      data.put(QuartzLaunchJob.WORKFLOW_DEFINITION_ID, descriptor.getWorkflowDefinitionId());
+    }
+    return data;
+  }
+
+  public static String quartzIdentity(TriggerDescriptor descriptor) {
+    boolean workflowScheduleDescriptorIsIncomplete = EmptyChecks.isNull(descriptor)
+        || EmptyChecks.isNull(descriptor.getTenantId())
+        || EmptyChecks.isNull(descriptor.getWorkflowCode())
+        || EmptyChecks.isBlank(descriptor.getWorkflowCode());
+    if (workflowScheduleDescriptorIsIncomplete) {
+      throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
+    }
+    return descriptor.getTenantId() + ":WF:" + descriptor.getWorkflowCode();
+  }
+
+  /** OPEN/CUTOFF，尤其是定时触发按预期跳过该节假日时。 */
+  public static JobKey recoveryJobKey(TriggerDescriptor descriptor) {
+    return JobKey.jobKey(
+        descriptor.getTenantId() + ":RECOVERY:" + descriptor.getWorkflowDefinitionId(), JOB_GROUP);
+  }
+
+  private void deleteQuartzForDescriptor(TriggerDescriptor descriptor) {
+    if (EmptyChecks.isNull(descriptor)) {
+      return;
+    }
+    try {
+      JobKey jobKey = JobKey.jobKey(quartzIdentity(descriptor), JOB_GROUP);
+      if (scheduler.checkExists(jobKey)) {
+        rebindPendingRecoveryTriggers(jobKey);
+        scheduler.deleteJob(jobKey);
+      }
+    } catch (SchedulerException exception) {
+      throw new IllegalStateException(
+          "failed to delete Quartz trigger: " + quartzIdentity(descriptor), exception);
+    }
+  }
+
+  private void rebindPendingRecoveryTriggers(JobKey workflowJobKey) throws SchedulerException {
+    JobDetail sourceJob = scheduler.getJobDetail(workflowJobKey);
+    if (EmptyChecks.isNull(sourceJob)) {
+      return;
+    }
+    JobDataMap sourceData = sourceJob.getJobDataMap();
+    if (!sourceData.containsKey(QuartzLaunchJob.WORKFLOW_DEFINITION_ID)) {
+      return;
+    }
+    List<? extends Trigger> attachedTriggers = scheduler.getTriggersOfJob(workflowJobKey);
+    if (EmptyChecks.isNull(attachedTriggers) || EmptyChecks.isEmpty(attachedTriggers)) {
+      return;
+    }
+    String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);
+    long workflowDefinitionId = sourceData.getLongValue(QuartzLaunchJob.WORKFLOW_DEFINITION_ID);
+    JobKey recoveryJobKey =
+        JobKey.jobKey(tenantId + ":RECOVERY:" + workflowDefinitionId, JOB_GROUP);
+    if (recoveryJobKey.equals(workflowJobKey)) {
+      return;
+    }
+    JobDetail recoveryJob =
+        sourceJob.getJobBuilder().withIdentity(recoveryJobKey).storeDurably().build();
+    if (!scheduler.checkExists(recoveryJobKey)) {
+      try {
+        scheduler.addJob(recoveryJob, false);
+      } catch (ObjectAlreadyExistsException alreadyRegistered) {
+        if (!scheduler.checkExists(recoveryJobKey)) {
+          throw alreadyRegistered;
+        }
+      }
+    }
+    for (Trigger trigger : attachedTriggers) {
+      boolean misfireRecovery =
+          QuartzMisfireRecoveryListener.RECOVERY_GROUP.equals(trigger.getKey().getGroup());
+      if (!misfireRecovery && !isReadinessRetry(trigger)) {
+        continue;
+      }
+      JobDataMap frozen = new JobDataMap(sourceData);
+      frozen.putAll(trigger.getJobDataMap());
+      Trigger rebound = trigger
+          .getTriggerBuilder()
+          .forJob(recoveryJobKey)
+          .usingJobData(frozen)
+          .build();
+      scheduler.rescheduleJob(trigger.getKey(), rebound);
+    }
+  }
+
+  /** 标记只用于避免删掉在途回调；持久义务准入仍须由 occurrence 状态裁决。 */
+  public static boolean isReadinessRetry(Trigger trigger) {
+    return EmptyChecks.isNotNull(trigger)
+        && trigger.getJobDataMap().containsKey(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME);
+  }
+
+  private void removeQuartzByIdentity(String tenantId, String quartzJobIdentity) {
+    try {
+      JobKey jobKey = JobKey.jobKey(tenantId + ":" + quartzJobIdentity, JOB_GROUP);
+      if (scheduler.checkExists(jobKey)) {
+        rebindPendingRecoveryTriggers(jobKey);
+        scheduler.deleteJob(jobKey);
+      }
+    } catch (SchedulerException exception) {
+      throw new IllegalStateException(
+          "failed to delete Quartz trigger: " + quartzJobIdentity, exception);
+    }
+  }
+
   private void scheduleWithReplace(JobDetail jobDetail, Trigger trigger) {
     try {
-      if (scheduler.checkExists(jobDetail.getKey())) {
-        scheduler.deleteJob(jobDetail.getKey());
+      if (!scheduler.checkExists(jobDetail.getKey())) {
+        scheduler.scheduleJob(jobDetail, trigger);
+        return;
       }
-      scheduler.scheduleJob(jobDetail, trigger);
+      Trigger storedPrimary = scheduler.getTrigger(trigger.getKey());
+      boolean primaryIdentityUnchanged = EmptyChecks.isNotNull(storedPrimary)
+          && Objects.equals(storedPrimary.getJobDataMap(), trigger.getJobDataMap());
+      if (primaryIdentityUnchanged && sameSchedule(storedPrimary, trigger)) {
+        // 单独替换定义，保留 FIXED_RATE 相位、nextFireTime 以及辅助重试的调度状态。
+        scheduler.addJob(jobDetail, true);
+        return;
+      }
+      // Quartz 在同一 JobStore 操作中替换指定主 trigger；其它辅助 trigger 保留。
+      Set<Trigger> primaryTriggers = Set.of(trigger);
+      scheduler.scheduleJob(jobDetail, primaryTriggers, true);
     } catch (SchedulerException e) {
       throw new IllegalStateException(
           "failed to register quartz trigger: " + jobDetail.getKey().getName(), e);
     }
+  }
+
+  private boolean sameSchedule(Trigger stored, Trigger requested) {
+    if (stored instanceof CronTrigger oldCron && requested instanceof CronTrigger newCron) {
+      String oldTimezone = oldCron.getTimeZone().getID();
+      String newTimezone = newCron.getTimeZone().getID();
+      return Objects.equals(oldCron.getCronExpression(), newCron.getCronExpression())
+          && Objects.equals(oldTimezone, newTimezone);
+    }
+    if (stored instanceof SimpleTrigger oldSimple && requested instanceof SimpleTrigger newSimple) {
+      return oldSimple.getRepeatInterval() == newSimple.getRepeatInterval()
+          && oldSimple.getRepeatCount() == newSimple.getRepeatCount();
+    }
+    return false;
   }
 
   private int parseFixedRateIntervalSeconds(TriggerDescriptor descriptor) {
@@ -329,7 +522,8 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
     }
     int seconds;
     try {
-      seconds = Integer.parseInt(expression.trim());
+      String trimmedExpression = expression.trim();
+      seconds = Integer.parseInt(trimmedExpression);
     } catch (NumberFormatException e) {
       throw new IllegalArgumentException(
           "FIXED_RATE schedule_expr must be a positive integer (seconds) for job: "

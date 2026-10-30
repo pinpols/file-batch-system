@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# 用途：编排密钥、依赖、代码、镜像与动态安全扫描。
+# 用法：在仓库根目录执行 bash scripts/ci/security-scan.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# security-scan.sh - 本地 / CI 安全扫描一键入口
+# security-scan.sh - 本地 / CI 安全扫描统一入口
 # 说明：
 # 1) 先打包 security-scan 独立 Java 模块，再运行其 jar。
 # 2) 该脚本只做编排，不实现扫描逻辑。
@@ -23,9 +25,7 @@ Usage:
 
 Options:
   --skip-build       Skip mvn package and run the existing jar directly
-  --skip-tests       Pass -DskipTests to mvn package (security-scan 子模块单测
-                     纯内部 orchestrator/options 逻辑,与扫描业务正确性无关;
-                     Mockito javaagent 偶发 fork JVM crash 会让 PR 误挂)
+  --skip-tests       Pass -DskipTests to mvn package; scan orchestration tests will not run
   --help             Show this message
 
 Examples:

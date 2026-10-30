@@ -52,7 +52,8 @@ public class ExportFileNonEmptyVerifier implements ContentVerifier {
     }
     if (value instanceof String s) {
       try {
-        return Long.parseLong(s.trim());
+        String trimmedValue = s.trim();
+        return Long.parseLong(trimmedValue);
       } catch (NumberFormatException ignored) {
         // 继续尝试下一种解析方式
       }

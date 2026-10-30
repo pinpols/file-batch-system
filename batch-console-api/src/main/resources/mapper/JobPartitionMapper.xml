@@ -52,7 +52,7 @@
         ) jt on true
         <include refid="filters"/>
         <choose>
-            <when test="cursorId != null">
+            <when test="cursorMode">
                 order by id desc
                 limit #{pageRequest.pageSize}
             </when>

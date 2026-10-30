@@ -24,6 +24,7 @@ SET authorities_csv = CASE
 WHERE authorities_csv LIKE '%ROLE_CONFIG_ADMIN%';
 
 -- 兜底清理:首尾可能残留的逗号
+
 UPDATE batch.console_user_account
 SET authorities_csv = TRIM(BOTH ',' FROM REGEXP_REPLACE(authorities_csv, ',+', ',', 'g')),
     updated_at = CURRENT_TIMESTAMP

@@ -1,14 +1,11 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
+
 /**
- * Dispatch 链路 {@code context.attributes} 的共享键。
+ * Dispatch Worker 的运行键；跨控制面/Worker 的 payload 键由 {@link DispatchTaskKeys} 定义。
  *
- * <p>这些键只在 dispatch worker 内部流通（写方：{@code DispatchInvocationSupport} / 各 stage step；
- * 读方：后续 step、receipt watcher 与 {@code DispatchStepExecutionAdapter}），因此不像
- * {@link io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys} 那样跨 worker 模块共享——
- * 与 {@code ShellAtomicHandler} 自持 {@code java.io.tmpdir} 常量同理：为字符串复用引入跨模块依赖不划算。
- *
- * <p>跨模块复用的键（如 {@code dryRunSkipped}）不放在这里，登记在 {@code PipelineRuntimeKeys}。
+ * <p>其余键在 Dispatch Worker 内部流通；除非出现跨模块契约，不在公共模块登记。
  *
  * <p>审计明细（{@code detailSummary}）键、出站 payload 键与 attributes 键同名，按既有约定复用同一常量。
  */
@@ -23,7 +20,7 @@ public final class DispatchRuntimeKeys {
   public static final String RECEIPT_STATUS = "receiptStatus";
   public static final String RETRY_REQUESTED = "retryRequested";
   public static final String RETRY_RECOVERED = "retryRecovered";
-  public static final String DISPATCH_SECRET_BINDINGS = "_dispatchSecretBindings";
+  public static final String DISPATCH_SECRET_BINDINGS = DispatchTaskKeys.SECRET_BINDINGS;
 
   /** 渠道编码键：dispatch payload 字段、file_record metadata 与审计明细三处同名同义。 */
   public static final String CHANNEL_CODE = "channelCode";

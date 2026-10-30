@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.infrastructure.kafka;
 
+import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.application.TriggerLaunchLagQueryPort;
@@ -33,6 +34,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
 
   private final KafkaAdmin kafkaAdmin;
   private final TriggerOutboxRelayProperties properties;
+  private final BatchKafkaTopicNamespace topicNamespace;
   private final Object adminClientMonitor = new Object();
   private final AtomicBoolean stopping = new AtomicBoolean();
   private AdminClient adminClient;
@@ -41,15 +43,17 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
   public long sampleLag() throws InterruptedException, ExecutionException, TimeoutException {
     long timeout = properties.getLagQueryTimeoutMillis();
     AdminClient admin = adminClient();
+    String consumerGroupId = topicNamespace.consumerGroup(properties.getConsumerGroupId());
     Map<TopicPartition, OffsetAndMetadata> committed = admin
-        .listConsumerGroupOffsets(properties.getConsumerGroupId())
+        .listConsumerGroupOffsets(consumerGroupId)
         .partitionsToOffsetAndMetadata()
         .get(timeout, TimeUnit.MILLISECONDS);
+    String launchTopic = topicNamespace.topic(BatchTopics.TRIGGER_LAUNCH_V1);
     TopicDescription topic = admin
-        .describeTopics(List.of(BatchTopics.TRIGGER_LAUNCH_V1))
+        .describeTopics(List.of(launchTopic))
         .allTopicNames()
         .get(timeout, TimeUnit.MILLISECONDS)
-        .get(BatchTopics.TRIGGER_LAUNCH_V1);
+        .get(launchTopic);
     if (EmptyChecks.isNull(topic)) {
       return UNKNOWN_LAG;
     }
@@ -57,8 +61,7 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
     topic
         .partitions()
         .forEach(partition -> requests.put(
-            new TopicPartition(BatchTopics.TRIGGER_LAUNCH_V1, partition.partition()),
-            OffsetSpec.latest()));
+            new TopicPartition(launchTopic, partition.partition()), OffsetSpec.latest()));
     Map<TopicPartition, ListOffsetsResultInfo> endOffsets =
         admin.listOffsets(requests).all().get(timeout, TimeUnit.MILLISECONDS);
     Map<TopicPartition, OffsetSpec> earliestRequests = new LinkedHashMap<>();
@@ -75,7 +78,9 @@ public class KafkaTriggerLaunchLagQueryAdapter implements TriggerLaunchLagQueryP
       long committedOffset = EmptyChecks.isNull(offset)
           ? earliestOffsets.get(entry.getKey()).offset()
           : offset.offset();
-      lag = Math.addExact(lag, Math.max(0L, entry.getValue().offset() - committedOffset));
+      long endOffset = entry.getValue().offset();
+      long partitionLag = Math.max(0L, endOffset - committedOffset);
+      lag = Math.addExact(lag, partitionLag);
     }
     return lag;
   }

@@ -10,12 +10,14 @@ import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
+import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.NodeAction;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.RunAction;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -37,6 +39,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * 工作流运行实例的生命周期管理应用服务，提供取消、终止和跳过节点等运维操作。
@@ -65,10 +69,12 @@ public class WorkflowRunManagementApplicationService {
   private final WorkflowTerminalOutboxService workflowTerminalOutboxService;
   private final WorkflowDagService workflowDagService;
   private final ObjectProvider<WorkflowNodeDispatchService> workflowNodeDispatchServiceProvider;
+  private final ObjectProvider<WorkflowRunResumeProgressor> resumeProgressorProvider;
   private final OrchestratorJobMappers jobMappers;
   // P1-2: audit + alert 依赖。新增可选 bean,生产环境必然装配;单测构造可传 null。
   private final ObjectProvider<JobExecutionLogMapper> jobExecutionLogMapperProvider;
   private final ObjectProvider<AlertEventService> alertEventServiceProvider;
+  private final WorkflowNodeTerminalFinalizer workflowNodeTerminalFinalizer;
 
   @Transactional
   public RunAction cancel(String tenantId, Long id) {
@@ -101,7 +107,22 @@ public class WorkflowRunManagementApplicationService {
   /** ADR-044 恢复 PAUSED → RUNNING:重新推进 DAG。 */
   @Transactional
   public RunAction resume(String tenantId, Long id) {
-    return lifecycleFlip(tenantId, id, RESUMABLE, WorkflowRunStatus.RUNNING.code());
+    RunAction action = lifecycleFlip(tenantId, id, RESUMABLE, WorkflowRunStatus.RUNNING.code());
+    Runnable progress = () -> resumeProgressorProvider.getObject().resume(tenantId, id);
+    if (TransactionSynchronizationManager.isSynchronizationActive()) {
+      // 子 Job 启动会在 REQUIRES_NEW 事务中把其 Job Instance 关联到 workflow_node_run。
+      // 等此状态转换事务提交后再重放 DAG，避免子事务
+      // 等待当前请求事务仍持有的锁。
+      TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+        @Override
+        public void afterCommit() {
+          progress.run();
+        }
+      });
+    } else {
+      progress.run();
+    }
+    return action;
   }
 
   /**
@@ -159,23 +180,36 @@ public class WorkflowRunManagementApplicationService {
           ResultCode.STATE_CONFLICT.detailKey(),
           "can only skip FAILED nodes, current: " + nodeRun.getNodeStatus());
     }
-    workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
+    int updated = workflowNodeRunMapper.updateStatus(UpdateNodeRunStatusParam.builder()
         .id(nodeRun.getId())
         .nodeStatus(WorkflowNodeRunStatus.SKIPPED.code())
+        .expectedStatus(WorkflowNodeRunStatus.FAILED.code())
         .errorCode(null)
         .errorMessage(null)
+        .skipReasonCode("OPERATOR_SKIPPED")
+        .skipReason(reason)
         .durationMs(nodeRun.getDurationMs())
         .finishedAt(BatchDateTimeSupport.utcNow())
         .build());
+    if (updated <= 0) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
+    }
     advanceDownstreamAfterSkip(run, nodeCode);
     // P1-2: 写 audit 行 + 发 WARN alert,补齐"运维介入"事后追溯。
-    appendSkipNodeAudit(run, nodeCode, nodeRun.getId(), operatorId, reason);
-    emitSkipNodeAlert(run, nodeCode, operatorId);
+    Long nodeRunId = nodeRun.getId();
+    Long jobInstanceId = nodeRun.getJobInstanceId();
+    appendSkipNodeAudit(run, nodeCode, nodeRunId, jobInstanceId, operatorId, reason);
+    emitSkipNodeAlert(run, nodeRun, operatorId);
     return new NodeAction(id, nodeCode, WorkflowNodeRunStatus.SKIPPED.code());
   }
 
   private void appendSkipNodeAudit(
-      WorkflowRunEntity run, String nodeCode, Long nodeRunId, String operatorId, String reason) {
+      WorkflowRunEntity run,
+      String nodeCode,
+      Long nodeRunId,
+      Long jobInstanceId,
+      String operatorId,
+      String reason) {
     JobExecutionLogMapper mapper = jobExecutionLogMapperProvider == null
         ? null
         : jobExecutionLogMapperProvider.getIfAvailable();
@@ -184,15 +218,23 @@ public class WorkflowRunManagementApplicationService {
     }
     JobExecutionLogEntity audit = new JobExecutionLogEntity();
     audit.setTenantId(run.getTenantId());
-    audit.setJobInstanceId(run.getRelatedJobInstanceId());
+    audit.setJobInstanceId(jobInstanceId);
     audit.setLogLevel("INFO");
     audit.setLogType(AuditLogConstants.LOG_TYPE_AUDIT);
+    audit.setTraceId(run.getTraceId());
     audit.setMessage(AuditLogConstants.AUDIT_OP_WORKFLOW_NODE_SKIP);
     audit.setDetailRef(AuditLogConstants.DETAIL_REF_WORKFLOW_NODE_RUN);
     Map<String, Object> extra = new LinkedHashMap<>();
     extra.put("workflowRunId", run.getId());
+    extra.put("workflowDefinitionId", run.getWorkflowDefinitionId());
     extra.put("nodeCode", nodeCode);
     extra.put("nodeRunId", nodeRunId);
+    extra.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
+    extra.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
     extra.put(
         "operatorId",
         Texts.hasText(operatorId) ? operatorId : AuditLogConstants.OPERATOR_ID_SYSTEM);
@@ -202,20 +244,32 @@ public class WorkflowRunManagementApplicationService {
             ? AuditLogConstants.OPERATOR_TYPE_REQUEST
             : AuditLogConstants.OPERATOR_TYPE_SYSTEM);
     extra.put("reason", reason);
-    audit.setExtraJson(JsonUtils.toJson(extra));
+    String extraJson = JsonUtils.toJson(extra);
+    audit.setExtraJson(extraJson);
     mapper.insert(audit);
   }
 
-  private void emitSkipNodeAlert(WorkflowRunEntity run, String nodeCode, String operatorId) {
+  private void emitSkipNodeAlert(
+      WorkflowRunEntity run, WorkflowNodeRunEntity nodeRun, String operatorId) {
     AlertEventService alertService =
         alertEventServiceProvider == null ? null : alertEventServiceProvider.getIfAvailable();
     if (alertService == null) {
       return;
     }
-    String resourceKey = "workflow_run:" + run.getId() + ":node:" + nodeCode;
+    String resourceKey = "workflow_run:" + run.getId() + ":node:" + nodeRun.getNodeCode();
     Map<String, Object> detail = new LinkedHashMap<>();
     detail.put("workflowRunId", run.getId());
-    detail.put("nodeCode", nodeCode);
+    detail.put("workflowDefinitionId", run.getWorkflowDefinitionId());
+    detail.put("nodeCode", nodeRun.getNodeCode());
+    detail.put("nodeRunId", nodeRun.getId());
+    detail.put(
+        "jobInstanceId",
+        EmptyChecks.isNull(nodeRun.getJobInstanceId())
+            ? null
+            : nodeRun.getJobInstanceId().toString());
+    detail.put(
+        "bizDate",
+        EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
     detail.put("operatorId", operatorId);
     AlertEmitRequest alertRequest = AlertEmitRequest.builder()
         .tenantId(run.getTenantId())
@@ -225,7 +279,7 @@ public class WorkflowRunManagementApplicationService {
         .title("Workflow node manually skipped")
         .resourceKey(resourceKey)
         .detailJson(JsonUtils.toJson(detail))
-        .traceId(null)
+        .traceId(run.getTraceId())
         .build();
     alertService.emit(alertRequest);
   }
@@ -253,21 +307,20 @@ public class WorkflowRunManagementApplicationService {
     return new RunAction(run.getId(), WorkflowRunStatus.TERMINATED.code());
   }
 
-  /**
-   * 人工 skip 后把节点视作"已成功"继续推进 DAG：沿 SUCCESS / ALWAYS / CONDITION 边解析下游并 dispatch；命中 END 节点时仅记日志，
-   * workflow_run 终态由后续节点的 outcome 自然收敛（避免在管理路径里复刻 state machine + outbox 的全套切换）。
-   */
+  /** 人工 skip 后沿可满足边推进，并持久化不会触发的分支。 */
   private void advanceDownstreamAfterSkip(WorkflowRunEntity run, String nodeCode) {
-    if (run.getRelatedJobInstanceId() == null || run.getWorkflowDefinitionId() == null) {
+    if (EmptyChecks.isNull(run.getWorkflowDefinitionId())) {
       log.warn(
-          "skipNode advancement skipped: workflow_run {} has no relatedJobInstanceId or"
-              + " workflowDefinitionId",
-          run.getId());
+          "skipNode advancement skipped: workflow_run {} has no workflowDefinitionId", run.getId());
       return;
     }
-    JobInstanceEntity jobInstance =
-        jobMappers.jobInstanceMapper.selectById(run.getTenantId(), run.getRelatedJobInstanceId());
-    if (jobInstance == null) {
+    Long relatedJobInstanceId = run.getRelatedJobInstanceId();
+    JobInstanceEntity jobInstance = EmptyChecks.isNull(relatedJobInstanceId)
+        ? null
+        : jobMappers.jobInstanceMapper.selectById(run.getTenantId(), relatedJobInstanceId);
+    boolean relatedJobInstanceMissing =
+        EmptyChecks.isNotNull(relatedJobInstanceId) && EmptyChecks.isNull(jobInstance);
+    if (relatedJobInstanceMissing) {
       log.warn(
           "skipNode advancement skipped: jobInstance {} not found for workflow_run {}",
           run.getRelatedJobInstanceId(),
@@ -275,32 +328,41 @@ public class WorkflowRunManagementApplicationService {
       return;
     }
     List<WorkflowDagService.DagNodeResolution> nextNodes =
-        workflowDagService.resolveNextNodes(run.getWorkflowDefinitionId(), nodeCode, true, null);
-    if (nextNodes == null || nextNodes.isEmpty()) {
-      return;
+        workflowDagService.resolveNextNodesForRun(run, nodeCode, true, null);
+    WorkflowNodeDispatchService dispatchService = null;
+    if (EmptyChecks.isNotNull(nextNodes)) {
+      for (WorkflowDagService.DagNodeResolution next : nextNodes) {
+        if (EmptyChecks.isNull(next)) {
+          continue;
+        }
+        if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
+          log.debug(
+              "manual skipNode {} reached END on workflow_run {}",
+              LogSanitizer.value(nodeCode),
+              run.getId());
+          continue;
+        }
+        if (!workflowDagService.isNodeReadyForRunDispatch(run, next.nodeCode(), null)) {
+          continue;
+        }
+        if (EmptyChecks.isNull(dispatchService)) {
+          dispatchService = workflowNodeDispatchServiceProvider.getObject();
+        }
+        String traceId =
+            EmptyChecks.isNull(jobInstance) ? run.getTraceId() : jobInstance.getTraceId();
+        dispatchService.dispatchNode(jobInstance, run, next, null, traceId);
+      }
     }
-    WorkflowNodeDispatchService dispatchService = workflowNodeDispatchServiceProvider.getObject();
-    for (WorkflowDagService.DagNodeResolution next : nextNodes) {
-      if (next == null) {
-        continue;
-      }
-      if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
-        log.warn(
-            "manual skipNode {} routed to END on workflow_run {}; workflow_run terminal will be"
-                + " driven by next outcome",
-            LogSanitizer.value(nodeCode),
-            run.getId());
-        continue;
-      }
-      if (!workflowDagService.isNodeReadyForDispatch(
-          run.getId(), run.getWorkflowDefinitionId(), next.nodeCode(), null)) {
-        continue;
-      }
-      dispatchService.dispatchNode(jobInstance, run, next, null, jobInstance.getTraceId());
-    }
+    // 与 TaskOutcomeDagProgressor 保持一致：每个终态结果都会生成后续无法
+    // 触发的分支，避免运维人员跳过节点后条件/失败分支不可见。
+    workflowDagService.cascadeSkipDownstreamForRun(run, nodeCode, null);
+    // 只要仍有派发中的/兄弟节点活动，共用收尾器就不执行；当本次跳过关闭最后一个待处理节点后，
+    // 由它负责写入终态并发送 Outbox 事件。
+    workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(run);
   }
 
   private WorkflowRunEntity findRun(String tenantId, Long id) {
-    return Guard.requireFound(workflowRunMapper.selectById(tenantId, id), "workflow run not found");
+    WorkflowRunEntity loadedRun = workflowRunMapper.selectById(tenantId, id);
+    return Guard.requireFound(loadedRun, "workflow run not found");
   }
 }

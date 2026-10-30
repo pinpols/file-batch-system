@@ -29,11 +29,15 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
   @Test
   @DisplayName("正在使用的连接遭遇 PG RST → 抛 SQLException(应用走重试路径)")
   void inUseConnection_whenPgGoesDown_shouldThrowSqlException() throws Exception {
+    final String select1Sql = """
+        SELECT 1
+    """;
+
     try (HikariDataSource ds = newHikariDataSource()) {
       try (Connection conn = ds.getConnection();
           Statement stmt = conn.createStatement()) {
         // 健康路径预热
-        stmt.executeQuery("SELECT 1").close();
+        stmt.executeQuery(select1Sql).close();
 
         withDown(
             ProxyTarget.PG,
@@ -58,9 +62,18 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
       String testTable = "chaos_pg_reset_" + UUID.randomUUID().toString().replace('-', '_');
       try (Connection c = ds.getConnection();
           Statement s = c.createStatement()) {
-        s.execute("CREATE TEMP TABLE " + testTable + " (v int)");
-        s.execute("INSERT INTO " + testTable + " VALUES (42)");
-        var rs = s.executeQuery("SELECT v FROM " + testTable);
+        final String createTempSql = """
+                CREATE TEMP TABLE %s (v int)
+            """.formatted(testTable);
+        s.execute(createTempSql);
+        final String insertStatementSql = """
+                INSERT INTO %s VALUES (42)
+            """.formatted(testTable);
+        s.execute(insertStatementSql);
+        final String selectVSql = """
+                SELECT v FROM %s
+            """.formatted(testTable);
+        var rs = s.executeQuery(selectVSql);
         assertThat(rs.next()).isTrue();
         assertThat(rs.getInt(1)).isEqualTo(42);
         rs.close();
@@ -82,8 +95,12 @@ class PgConnectionResetToxicIT extends AbstractChaosIntegrationTest {
   }
 
   private static void executeSelectOne(Connection connection) throws SQLException {
+    final String select1Sql = """
+        SELECT 1
+    """;
+
     try (Statement statement = connection.createStatement()) {
-      statement.executeQuery("SELECT 1").close();
+      statement.executeQuery(select1Sql).close();
     }
   }
 }

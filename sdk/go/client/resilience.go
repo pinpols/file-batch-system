@@ -68,7 +68,8 @@ func (h retryHandler) Execute(ctx *TaskContext) TaskResult {
 		}
 		if delay > 0 {
 			time.Sleep(delay)
-			delay = time.Duration(float64(delay) * h.policy.BackoffMultiplier)
+			scaledDelayNanoseconds := float64(delay) * h.policy.BackoffMultiplier
+			delay = time.Duration(scaledDelayNanoseconds)
 		}
 	}
 	return result
@@ -126,7 +127,8 @@ func (h idempotentHandler) Execute(taskCtx *TaskContext) (result TaskResult) {
 		if err == nil {
 			err = fmt.Errorf("idempotency key is empty")
 		}
-		return Fail(protocol.ErrorCodeConfigInvalid, err.Error())
+		failureMessage := err.Error()
+		return Fail(protocol.ErrorCodeConfigInvalid, failureMessage)
 	}
 	ctx := context.Background()
 	if taskCtx != nil && taskCtx.Cancellation != nil {
@@ -134,12 +136,14 @@ func (h idempotentHandler) Execute(taskCtx *TaskContext) (result TaskResult) {
 	}
 	acquired, err := h.store.TryAcquire(ctx, key, h.ttl)
 	if err != nil {
-		return Fail(protocol.ErrorCodeExecutionFailed, "idempotency acquire failed: "+err.Error())
+		failureSummary := "idempotency acquire failed: " + err.Error()
+		return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
 	}
 	if !acquired {
 		entity, found, err := h.store.Find(ctx, key)
 		if err != nil {
-			return Fail(protocol.ErrorCodeExecutionFailed, "idempotency lookup failed: "+err.Error())
+			failureSummary := "idempotency lookup failed: " + err.Error()
+			return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
 		}
 		if found {
 			return entity.Result
@@ -157,7 +161,8 @@ func (h idempotentHandler) Execute(taskCtx *TaskContext) (result TaskResult) {
 	result = h.inner.Execute(taskCtx)
 	if result.IsSuccess() {
 		if err := h.store.Record(ctx, key, IdempotencyEntity{Result: result}, h.ttl); err != nil {
-			return Fail(protocol.ErrorCodeExecutionFailed, "idempotency record failed: "+err.Error())
+			failureSummary := "idempotency record failed: " + err.Error()
+			return Fail(protocol.ErrorCodeExecutionFailed, failureSummary)
 		}
 		return result
 	}
@@ -208,7 +213,9 @@ func (s *InMemoryIdempotencyStore) TryAcquire(_ context.Context, key string, ttl
 	if _, exists := s.entries[key]; exists {
 		return false, nil
 	}
-	s.entries[key] = idempotencyEntry{expires: expiresAt(s.now(), ttl)}
+	currentTime := s.now()
+	expirationTime := expiresAt(currentTime, ttl)
+	s.entries[key] = idempotencyEntry{expires: expirationTime}
 	return true, nil
 }
 
@@ -226,7 +233,9 @@ func (s *InMemoryIdempotencyStore) Find(_ context.Context, key string) (Idempote
 func (s *InMemoryIdempotencyStore) Record(_ context.Context, key string, entity IdempotencyEntity, ttl time.Duration) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.entries[key] = idempotencyEntry{entity: &entity, expires: expiresAt(s.now(), ttl)}
+	currentTime := s.now()
+	expirationTime := expiresAt(currentTime, ttl)
+	s.entries[key] = idempotencyEntry{entity: &entity, expires: expirationTime}
 	return nil
 }
 
@@ -239,7 +248,10 @@ func (s *InMemoryIdempotencyStore) Release(_ context.Context, key string) error 
 
 func (s *InMemoryIdempotencyStore) deleteIfExpiredLocked(key string) {
 	entry, exists := s.entries[key]
-	if !exists || entry.expires.IsZero() || s.now().Before(entry.expires) {
+	if !exists || entry.expires.IsZero() {
+		return
+	}
+	if s.now().Before(entry.expires) {
 		return
 	}
 	delete(s.entries, key)

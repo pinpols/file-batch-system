@@ -6,7 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
+import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -81,6 +84,28 @@ class ExportDataPluginRegistryTest {
 
     assertThat(registry.require("settlement")).isSameAs(p1);
     assertThat(registry.require("jdbc_mapped_export")).isSameAs(p2);
+  }
+
+  @Test
+  @DisplayName("重放能力按实际解析的插件和冻结导出配置计算")
+  void shouldResolveReplayCapabilityFromSelectedPluginAndFrozenConfig() {
+    Map<String, Object> frozenConfig = Map.of("export_data_ref", "settlement");
+    ExportDataPlugin plugin = stubPlugin("settlement");
+    ReplayCapabilityDeclaration declaredCapability = new ReplayCapabilityDeclaration(
+        "settlement",
+        "1.2.3",
+        List.of("DATABASE_READ", "OBJECT_STORAGE_WRITE"),
+        IdempotencyCapability.NONE,
+        "NONE",
+        "operator-reconciliation",
+        ReplayCapabilityDeclaration.CURRENT_CONTRACT_VERSION);
+    when(plugin.replayCapability(frozenConfig)).thenReturn(declaredCapability);
+    ExportDataPluginRegistry registry = new ExportDataPluginRegistry(List.of(plugin));
+
+    ReplayCapabilityDeclaration actualCapability =
+        registry.replayCapability("SETTLEMENT", frozenConfig);
+
+    assertThat(actualCapability).isEqualTo(declaredCapability);
   }
 
   // --- helpers ---

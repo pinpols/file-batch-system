@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.web;
 
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -22,16 +21,24 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @DisplayName("血缘证据控制器: 按结果版本与业务键查询, 并透传租户越权拒绝")
+@ExtendWith(MockitoExtension.class)
 class ConsoleLineageEvidenceControllerTest {
 
-  private final ConsoleOrchestratorPort orchestratorProxy = mock(ConsoleOrchestratorPort.class);
-  private final ConsoleRequestMetadataResolver requestMetadataResolver =
-      mock(ConsoleRequestMetadataResolver.class);
+  @Mock
+  private ConsoleOrchestratorPort orchestratorProxy;
+
+  @Mock
+  private ConsoleRequestMetadataResolver requestMetadataResolver;
+
   private MockMvc mockMvc;
+  private LineageEvidenceResponse response;
 
   @BeforeEach
   void setUp() {
@@ -40,7 +47,7 @@ class ConsoleLineageEvidenceControllerTest {
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    LineageEvidenceResponse response = new LineageEvidenceResponse(
+    response = new LineageEvidenceResponse(
         LineageEvidenceResponse.ResultVersion.builder()
             .id(7L)
             .businessKey("job:daily:2026-06-30")
@@ -63,10 +70,6 @@ class ConsoleLineageEvidenceControllerTest {
             1,
             1,
             List.of()));
-    when(orchestratorProxy.lineageByResultVersion(7L, "ta"))
-        .thenReturn(CommonResponse.success(response));
-    when(orchestratorProxy.lineageByEffective("ta", "job:daily:2026-06-30"))
-        .thenReturn(CommonResponse.success(response));
     mockMvc = MockMvcBuilders.standaloneSetup(
             new ConsoleLineageEvidenceController(orchestratorProxy, responseFactory))
         .setControllerAdvice(exceptionHandler)
@@ -76,6 +79,8 @@ class ConsoleLineageEvidenceControllerTest {
   @Test
   @DisplayName("按结果版本查询血缘时, 响应返回版本明细、文件记录与覆盖统计")
   void shouldDelegateAndForwardEvidence_whenQueryingByResultVersion() throws Exception {
+    when(orchestratorProxy.lineageByResultVersion(7L, "ta"))
+        .thenReturn(CommonResponse.success(response));
     mockMvc
         .perform(get("/api/console/lineage/result-versions/7").param("tenantId", "ta"))
         .andExpect(status().isOk())
@@ -89,6 +94,8 @@ class ConsoleLineageEvidenceControllerTest {
   @Test
   @DisplayName("按业务键查询生效血缘时, 业务键原样传给编排端口")
   void shouldDelegateBusinessKey_whenQueryingEffectiveLineage() throws Exception {
+    when(orchestratorProxy.lineageByEffective("ta", "job:daily:2026-06-30"))
+        .thenReturn(CommonResponse.success(response));
     mockMvc
         .perform(get("/api/console/lineage/effective")
             .param("tenantId", "ta")

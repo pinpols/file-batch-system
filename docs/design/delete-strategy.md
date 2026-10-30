@@ -17,13 +17,14 @@
 
 ### 2.1 决策树
 
-```
-有运行时 FK 引用（job_instance / workflow_run / pipeline_instance 等指向该表）？
-├── 是 → 软删除（enabled = false）
-│        原因：硬删除会破坏历史实例的外键关联，导致运行记录孤儿化
-└── 否 → 是否为"叶子节点"配置（无任何依赖表引用）？
-          ├── 是 → 物理删除
-          └── 否 → 根据业务需要再判断（默认倾向软删除）
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  R{存在运行态引用？<br/>包括 FK 与业务标识引用}
+  R -->|是| S[禁用或退役配置，保留历史可追溯性]
+  R -->|否| P{实体策略允许物理删除？}
+  P -->|是| D[完成依赖校验后物理删除]
+  P -->|否或尚不明确| K[保留配置，按实体规则处理]
 ```
 
 ### 2.2 各实体策略
@@ -32,13 +33,14 @@
 |-----------|---------|------|
 | `job_definition` | **软删除** | `job_instance.job_definition_id` FK 引用 |
 | `workflow_definition` | **软删除** | `workflow_run.workflow_definition_id` FK 引用 |
-| `pipeline_definition` | **软删除** | `pipeline_instance.pipeline_definition_id` FK 引用 |
 | `file_channel_config` | **软删除** | 运行时文件记录持有 channelCode |
 | `file_template_config` | **软删除** | 运行时文件记录持有 templateCode |
 | `file_record` | **物理删除** | 叶子节点，无运行时实体以其为主键外键引用 |
 | `user_account` | **软删除（disable）** | 审计日志、权限记录持有 userId |
 
-> 新增实体时，先检查 DDL 中是否有其他表 `REFERENCES` 该表的主键，再决定删除策略。
+> 旧租户 `pipeline_definition` / `pipeline_step_definition` 及运行表中的定义ID已在 V347 退役，不适用在线软删除策略；当前系统阶段来自代码目录，Job 保存业务参数。
+
+> 新增实体时，同时核对 DDL 外键、稳定业务标识的运行态引用及实体留存策略；没有外键不代表可以直接物理删除。
 
 ---
 
@@ -225,7 +227,7 @@ Mapper 使用可选 `enabled` 过滤，调用方传入值时生效，不传时�
 
 新增涉及"删除"语义的 API 时，逐项确认：
 
-- [ ] 是否有其他表以 FK 引用本表主键？→ 有则**必须软删除**
+- [ ] 是否存在外键或稳定业务标识的运行态引用？有引用时保留历史关联；无引用时仍需核对实体留存策略及其他依赖。
 - [ ] HTTP 方法是否正确：物理删除用 `DELETE`，软删除用 `PATCH`
 - [ ] 软删除接口是否复用了 `EnabledPatchRequest` / `BatchEnabledPatchRequest`
 - [ ] 对应 QueryRequest 的 `enabled` 字段是否设置了 `= true` 默认值

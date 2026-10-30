@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * Phase A 守护：三份 RLS 运维脚本必须按真实 schema 动态发现租户表，不能退回固定表清单。 新增 biz 表只要带
- * tenant_id，就会被安装脚本覆盖；非分区子表由父表继承策略。
+ * tenant_id，分区父表和叶子都必须独立启用策略；直接访问叶子不能依赖父表策略。
  */
 @DisplayName("行级安全迁移脚本:安装、严格与回滚三份脚本都按真实模式动态发现租户表")
 class RlsPhaseAMigrationCoverageTest {
@@ -33,8 +33,9 @@ class RlsPhaseAMigrationCoverageTest {
           .as(filename + " 必须按 tenant_id 动态发现表")
           .contains("information_schema.columns")
           .contains("column_name = 'tenant_id'")
-          .contains("c.relispartition = false")
-          .contains("batch.process_staging");
+          .contains("child.relispartition")
+          .contains("batch.process_staging")
+          .doesNotContain("c.relispartition = false");
     }
   }
 }

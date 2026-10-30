@@ -3,7 +3,7 @@
 - **Status**: Accepted（**第 3 阶段 / P2-P3 暂缓**，最高越界风险 — 触发条件不到只保留 workerType + capabilityTags + resourceProfile + region/zone 字段）
 - **Date**: 2026-05-06
 - **Supersedes**: —
-- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2 / [ADR 012/021-027 优先级 + 范围边界](../../archive/analysis/adr-012-021-027-priority-scope-2026-05-06.md)
+- **Related**: ADR-019（域级配额）/ §worker_group / §14.3.2 / [系统职责范围](../system-scope-boundary.md)
 
 ## 范围边界（Scope Discipline）
 
@@ -142,23 +142,16 @@ job 加 toleration（"我能容忍这种 taint"）：
 
 现有 task dispatch 路径加 affinity 过滤层：
 
-```
-PartitionDispatchService.dispatch
-    │
-    ▼
-1. worker_group filter（保留兼容）
-    │
-    ▼
-2. AffinityResolver.filter(workers, job.affinity)
-   ├── required 全部满足才候选
-   ├── taint vs toleration 检查（不容忍 NO_SCHEDULE 的 worker 移出候选）
-   └── preferred + weight 排序
-    │
-    ▼
-3. quota / load 决策（保留现有）
-    │
-    ▼
-4. 选定 worker → 派发
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%% 决策示意；实施范围以本文状态记录为准。
+flowchart TB
+  D["PartitionDispatchService"] --> G["worker_group 过滤"]
+  G --> A["AffinityResolver"]
+  A --> R["required / taint / toleration 筛选"]
+  R --> P["preferred + weight 排序"]
+  P --> Q["quota / load 决策"]
+  Q --> W["选定 Worker 并派发"]
 ```
 
 候选空集 → task 进 `WAITING_NO_AFFINITY_MATCH` 状态（不等同于 FAILED），reconciler 周期重 evaluate（worker scale 后可能命中）。

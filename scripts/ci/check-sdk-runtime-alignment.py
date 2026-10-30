@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Keep SDK and paired frontend runtime declarations aligned with CI coverage."""
+# 用途：SDK 与前端运行时版本对齐。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-sdk-runtime-alignment.py；参数与前置环境见下方说明及所属 README。
+"""核对 SDK 与配对前端的运行时声明是否与 CI 覆盖一致。"""
 
 from __future__ import annotations
 
@@ -92,7 +94,7 @@ require("go-version: '1.27.x'" in e2e_workflow, "SDK orchestrator E2E must use c
 require("python-version: '3.14'" in e2e_workflow, "SDK orchestrator E2E must use current Python 3.14")
 require("node-version: '24'" in e2e_workflow, "SDK orchestrator E2E must use current Node 24")
 rust_manifest = read(ROOT / "sdk/rust/Cargo.toml")
-rust_policy = read(ROOT / "docs/architecture/runtime-compatibility-contract-2026-09-01.md")
+rust_policy = read(ROOT / "docs/architecture/runtime-compatibility-contract.md")
 rust_workflow = read(ROOT / ".github/workflows/sdk-contract-parity.yml")
 rust_toolchain = read(ROOT / "rust-toolchain.toml")
 require('rust-version = "1.75"' in rust_manifest, "Rust core MSRV must remain explicit in Cargo.toml")

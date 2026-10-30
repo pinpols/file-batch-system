@@ -1,9 +1,15 @@
 package io.github.pinpols.batch.sdk.task;
 
 import io.github.pinpols.batch.sdk.checkpoint.SdkCheckpoint;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
+import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import lombok.Builder;
 
 /**
  * 任务执行上下文 — 由 SDK 框架从派单消息构造,传给 {@link SdkTaskHandler#execute(SdkTaskContext)}。
@@ -20,14 +26,16 @@ import java.util.Objects;
  * @param taskInstanceId 本次执行的 task instance ID
  * @param taskId orchestrator 端 task 主键(用于 CLAIM / REPORT)
  * @param workerId 当前 worker 标识(SDK 在 register 时分配)
- * @param parameters 用户定义的任务参数(来自 job_definition.parameters JSON)
+ * @param parameters 当前任务的权威业务载荷(由 CLAIM 从持久化 job_task.task_payload 返回)
  * @param runtimeAttributes 平台注入的运行时属性(traceId / bizDate / pipelineInstanceId 等)
  * @param schedulingContext Phase 2 调度上下文;老平台未下发时为 null,便捷 getter 一律 null-safe
  * @param cancellation Phase 4 取消信号;由 dispatcher 注入,null 时构造器补一个永不取消的空信号(getter null-safe)
  * @param progress Phase 4 进度上报槽;由 dispatcher 注入,null 时构造器补一个空槽(handler 调 reportProgress 即写入)
  * @param commitCoordinator ADR-037 三合一可靠提交协调器;由续跑模板 / dispatcher 注入,null 时构造器补一个内存断点的空协调器(getter
  *     null-safe)
+ * @param dependencyResultSnapshot Orchestrator 依赖门禁证据；使用结果前，消费者必须显式固定或校验读取版本。
  */
+@Builder
 public record SdkTaskContext(
     String tenantId,
     String jobCode,
@@ -39,21 +47,166 @@ public record SdkTaskContext(
     SdkSchedulingContext schedulingContext,
     CancellationSignal cancellation,
     ProgressReporter progress,
-    SdkCommitCoordinator commitCoordinator) {
+    SdkCommitCoordinator commitCoordinator,
+    List<SdkDependencyResultReference> dependencyResultSnapshot) {
 
-  @SuppressWarnings("PMD.ExcessiveParameterList")
   public SdkTaskContext {
     Objects.requireNonNull(tenantId, "tenantId");
     Objects.requireNonNull(jobCode, "jobCode");
     Objects.requireNonNull(taskId, "taskId");
     parameters = parameters == null ? Map.of() : Map.copyOf(parameters);
     runtimeAttributes = runtimeAttributes == null ? Map.of() : Map.copyOf(runtimeAttributes);
+    dependencyResultSnapshot = EmptyChecks.isNull(dependencyResultSnapshot)
+        ? List.of()
+        : List.copyOf(dependencyResultSnapshot);
     cancellation = cancellation == null ? new CancellationSignal() : cancellation;
     progress = progress == null ? new ProgressReporter() : progress;
     // ADR-037: 默认空协调器(内存断点 + 默认限流),让未走续跑模板的 handler 调 commit/checkpoint 也 null-safe。
     commitCoordinator = commitCoordinator == null
         ? new SdkCommitCoordinator(String.valueOf(taskId), null, progress, cancellation, true, 1)
         : commitCoordinator;
+  }
+
+  /**
+   * 返回冻结在 {@code parameters.crossDay.<alias>} 中的内联结果版本。
+   *
+   * <p>处理器必须读取这些快照，不得在执行期间查询当前生效版本或最新版本。
+   * 别名缺失表示该依赖为可选项；若别名存在但格式错误或不受支持，则拒绝该载荷。
+   * 遇到不支持的格式时按失败关闭处理，避免消费者静默替换为其他版本。
+   */
+  public List<SdkCrossDayResult> crossDayResults(String alias) {
+    if (EmptyChecks.isNull(alias) || EmptyChecks.isBlank(alias)) {
+      throw new IllegalArgumentException("cross-day alias is required");
+    }
+    Object rawCrossDay = parameters.get("crossDay");
+    if (EmptyChecks.isNull(rawCrossDay)) {
+      return List.of();
+    }
+    if (!(rawCrossDay instanceof Map<?, ?> crossDay)) {
+      throw new IllegalArgumentException("crossDay payload must be an object");
+    }
+    if (!crossDay.containsKey(alias)) {
+      return List.of();
+    }
+    Object rawEntry = crossDay.get(alias);
+    if (!(rawEntry instanceof Map<?, ?> entry)) {
+      throw new IllegalArgumentException("cross-day result entry must be an object: " + alias);
+    }
+    Object rawOutputs = entry.get("outputs");
+    if (entry.containsKey("outputs")) {
+      if (!(rawOutputs instanceof List<?> outputs)) {
+        throw new IllegalArgumentException("cross-day outputs must be an array: " + alias);
+      }
+      List<SdkCrossDayResult> results = new ArrayList<>(outputs.size());
+      for (Object rawOutput : outputs) {
+        if (!(rawOutput instanceof Map<?, ?> output)) {
+          throw new IllegalArgumentException("cross-day output entry must be an object: " + alias);
+        }
+        SdkCrossDayResult parsedResult = parseCrossDayResult(alias, output);
+        results.add(parsedResult);
+      }
+      return List.copyOf(results);
+    }
+    SdkCrossDayResult result = parseCrossDayResult(alias, entry);
+    return List.of(result);
+  }
+
+  private static SdkCrossDayResult parseCrossDayResult(String alias, Map<?, ?> entry) {
+    if (!"INLINE_JSON".equals(entry.get("payloadStorage"))) {
+      throw new IllegalArgumentException("unsupported cross-day payload storage: " + alias);
+    }
+    Object rawOutput = entry.get("output");
+    if (!(rawOutput instanceof Map<?, ?> output)) {
+      throw new IllegalArgumentException("cross-day inline output must be an object: " + alias);
+    }
+    long resultVersionId = positiveLong(entry.get("resultVersionId"), "resultVersionId", alias);
+    String businessKey = requiredString(entry.get("businessKey"), "businessKey", alias);
+    int versionNo = positiveInteger(entry.get("versionNo"), alias);
+    Long jobInstanceId = optionalLong(entry.get("jobInstanceId"), "jobInstanceId", alias);
+    Map<String, Object> resultOutput = stringKeyedMap(output, alias);
+    return new SdkCrossDayResult(
+        resultVersionId, businessKey, versionNo, jobInstanceId, resultOutput);
+  }
+
+  private static long positiveLong(Object value, String field, String alias) {
+    Long parsed = optionalLong(value, field, alias);
+    if (EmptyChecks.isNull(parsed) || parsed <= 0) {
+      throw new IllegalArgumentException("cross-day " + field + " must be positive: " + alias);
+    }
+    return parsed;
+  }
+
+  private static Long optionalLong(Object value, String field, String alias) {
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    if (!(value instanceof Number number)) {
+      throw new IllegalArgumentException("cross-day " + field + " must be numeric: " + alias);
+    }
+    try {
+      String numericText = number.toString();
+      BigDecimal decimalValue = new BigDecimal(numericText);
+      return decimalValue.longValueExact();
+    } catch (NumberFormatException | ArithmeticException ex) {
+      throw new IllegalArgumentException("cross-day " + field + " must be an integer: " + alias);
+    }
+  }
+
+  private static int positiveInteger(Object value, String alias) {
+    Long parsed = optionalLong(value, "versionNo", alias);
+    boolean versionNumberIsInvalid =
+        EmptyChecks.isNull(parsed) || parsed <= 0 || parsed > Integer.MAX_VALUE;
+    if (versionNumberIsInvalid) {
+      throw new IllegalArgumentException("cross-day versionNo must be positive: " + alias);
+    }
+    return parsed.intValue();
+  }
+
+  private static String requiredString(Object value, String field, String alias) {
+    if (!(value instanceof String text) || EmptyChecks.isBlank(text)) {
+      throw new IllegalArgumentException("cross-day " + field + " is required: " + alias);
+    }
+    return text;
+  }
+
+  private static Map<String, Object> stringKeyedMap(Map<?, ?> source, String alias) {
+    Map<String, Object> parsed = new LinkedHashMap<>();
+    source.forEach((key, value) -> {
+      if (!(key instanceof String text)) {
+        throw new IllegalArgumentException("cross-day output keys must be strings: " + alias);
+      }
+      parsed.put(text, value);
+    });
+    return parsed;
+  }
+
+  /** 11 参兼容构造器 —— ADR-037 前完整调用方式继续可用。 */
+  @SuppressWarnings("PMD.ExcessiveParameterList")
+  public SdkTaskContext(
+      String tenantId,
+      String jobCode,
+      String taskInstanceId,
+      Long taskId,
+      String workerId,
+      Map<String, Object> parameters,
+      Map<String, Object> runtimeAttributes,
+      SdkSchedulingContext schedulingContext,
+      CancellationSignal cancellation,
+      ProgressReporter progress,
+      SdkCommitCoordinator commitCoordinator) {
+    this(
+        tenantId,
+        jobCode,
+        taskInstanceId,
+        taskId,
+        workerId,
+        parameters,
+        runtimeAttributes,
+        schedulingContext,
+        cancellation,
+        progress,
+        commitCoordinator,
+        List.of());
   }
 
   /** 10 参兼容构造器 —— ADR-037 前的构造方式继续可用,commit 走默认协调器。 */
@@ -163,10 +316,13 @@ public record SdkTaskContext(
     return cancellation.isCancelled();
   }
 
-  /** 本次任务是否为无业务副作用演练；平台属性优先，兼容旧调用方放在 parameters 的标记。 */
+  /** 本次任务是否为无业务副作用演练；运行属性或兼容参数任一为 true 即视为演练。 */
   public boolean isDryRun() {
-    return booleanAttribute(runtimeAttributes.get("dryRun"))
-        || booleanAttribute(parameters.get("dryRun"));
+    boolean runtimeDryRun = booleanAttribute(runtimeAttributes.get("dryRun"));
+    if (runtimeDryRun) {
+      return true;
+    }
+    return booleanAttribute(parameters.get("dryRun"));
   }
 
   private static boolean booleanAttribute(Object value) {

@@ -42,7 +42,8 @@ public class BuiltinTaskTypeGuard {
     if (jobType == null) {
       return;
     }
-    String normalized = jobType.trim().toLowerCase(Locale.ROOT);
+    String trimmedJobType = jobType.trim();
+    String normalized = trimmedJobType.toLowerCase(Locale.ROOT);
     if (!RESERVED_BUILTIN_TASK_TYPES.contains(normalized)) {
       return;
     }

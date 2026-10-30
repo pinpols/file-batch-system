@@ -22,31 +22,21 @@ curl -s localhost:9090/api/v1/alerts | jq .data.alerts  # Prometheus 当前告�
 
 ### 决策树
 
-```
-kubectl get pods -n batch-prod
-├─ worker pod 全 Running？
-│  ├─ 是 → 看 Kafka lag
-│  │  └─ curl -s batch-orchestrator:18082/actuator/prometheus | grep kafka_consumer
-│  │     ├─ lag > 1000 持续 → 走症状 2（Kafka 消费堆积）
-│  │     └─ lag 正常 → 看下一级
-│  └─ 否 → kubectl describe pod <name>，先修 Pod 问题
-│
-├─ 看 /api/console/workers
-│  ├─ 有 DRAINING 卡住 → drain 超时未接管
-│  │  → bash scripts/ops/heal-drain-timeout.sh
-│  │  → 若脚本频繁触发，检查 WorkerDrainTimeoutScheduler 日志
-│  │
-│  └─ ACTIVE 正常 → 下一级
-│
-├─ 看 Outbox 积压量（Prometheus：batch_outbox_pending_events）
-│  ├─ > 5000 且持续增长 → 走症状 3（Outbox 堆积）
-│  ├─ 正常 → 下一级
-│  └─ 看 batch_outbox_publishing_stale_events 是否 > 0
-│     → 走症状 4（OutboxPoll 轮询本身异常退出）
-│
-└─ 看 job_instance.instance_status 分布
-   ├─ 大量 RUNNING 卡住 → 查 SLA 告警：batch_job_sla_violation_count
-   └─ 任务根本没进来 → 查 trigger：curl localhost:18081/actuator/health
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  START["作业不推进"] --> POD{"Worker Pod 就绪？"}
+  POD -->|"否"| FIX["先处理 Pod / 依赖错误"]
+  POD -->|"是"| LAG{"Kafka lag 持续超阈值？"}
+  LAG -->|"是"| S2["症状 2：消费积压"]
+  LAG -->|"否"| WORKER{"Worker 在线且租约有效？"}
+  WORKER -->|"DRAINING 超时"| DRAIN["核查 drain 接管与超时调度器"]
+  WORKER -->|"是"| OUTBOX{"Outbox 指标异常？"}
+  OUTBOX -->|"pending 持续增长"| S3["症状 3：发送积压"]
+  OUTBOX -->|"publishing stale 持续"| S4["症状 4：轮询 / 租约 / 发送异常"]
+  OUTBOX -->|"否"| JOB{"实例是否已经创建？"}
+  JOB -->|"RUNNING 停滞"| SLA["核查 SLA / lease / report"]
+  JOB -->|"尚未创建"| TRIGGER["核查 Trigger 与 launch 接收"]
 ```
 
 ### 动作
@@ -92,28 +82,27 @@ kubectl scale deployment/batch-worker-import -n batch-prod --replicas=4
 
 ### 决策树
 
-```
-查 batch_outbox_publishing_stale_events
-├─ > 0 且持续 → OutboxPollScheduler 没跑
-│  → 走症状 4
-│
-└─ = 0（轮询在跑）→ 说明在发但发不赢
-   查 batch_dispatch_circuits_open
-   ├─ > 0 → 熔断触发，Kafka 或下游异常
-   │  → kubectl logs batch-orchestrator-0 | grep -i 'circuit\|publish'
-   │  → 看 Kafka 是否健康：kubectl exec batch-kafka-0 -- kafka-topics.sh --list
-   │
-   └─ = 0 → 吞吐不够
-      → 扩 orchestrator 副本（需先 sharding.mode=dynamic）
-      → kubectl scale sts batch-orchestrator --replicas=4
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  BACKLOG["Outbox 积压"] --> STALE{"publishing stale 持续？"}
+  STALE -->|"是"| POLL["核查 poll / 发布租约<br/>发送超时与恢复日志"]
+  STALE -->|"否"| CIRCUIT{"dispatch circuit 打开？"}
+  CIRCUIT -->|"是"| DEP["核查 Kafka 与发布异常"]
+  CIRCUIT -->|"否"| CAP["核查发送速率、分片<br/>限流与数据库瓶颈"]
+  POLL --> VERIFY["修复后观察指标与业务收敛"]
+  DEP --> VERIFY
+  CAP --> SCALE["确认容量不足后<br/>按分片模式扩容"]
+  SCALE --> VERIFY
 ```
 
 ### 应急回退
 
 ```bash
-# 只有明确是"一次性历史积压、新增速率已回正常"才跑
-bash scripts/ops/heal-stuck-outbox.sh --dry-run    # 先看会动哪些
-bash scripts/ops/heal-stuck-outbox.sh              # 确认后执行
+# 只读检查 stale PUBLISHING 候选；脚本不会更新 outbox_event
+bash scripts/ops/heal-stuck-outbox.sh --dry-run
+# stale PUBLISHING 由 OutboxPollScheduler 回收；检查调度器和 provider 后按下方症状 4 处理。
+# FAILED/GIVE_UP 重投使用 Orchestrator 的 /internal/outbox/republish 审计接口。
 ```
 
 ---
@@ -121,7 +110,7 @@ bash scripts/ops/heal-stuck-outbox.sh              # 确认后执行
 ## 症状 4：PUBLISHING 长期停滞（`BatchOutboxStalePublishingStuck`）
 
 ### 根因
-OutboxPollScheduler 没有在跑，`resetStalePublishing` 永远不清 0。
+持续 stale PUBLISHING 可能来自轮询未运行、租约/回收异常、发送超时或反复失败。该指标不能单独证明调度器已停止；结合 poll 日志、租约状态与恢复记录判断。
 
 ### 排查
 
@@ -152,34 +141,39 @@ kubectl exec batch-orchestrator-0 -- printenv | grep -i lazy
 
 ### 决策树
 
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  SAMPLE["查看 dead_letter_task<br/>按 last_replay_result 聚类"] --> UNKNOWN{"外部执行结果是否明确？"}
+  UNKNOWN -->|"未知 / 可能已提交"| RECON["先对账与核实幂等凭据"]
+  RECON --> SAFE{"确认可安全重放？"}
+  UNKNOWN -->|"明确失败"| ROOT{"主要失败原因"}
+  ROOT -->|"代码缺陷"| FIX["修复并发布验证版本"]
+  ROOT -->|"下游依赖"| RESTORE["恢复依赖并验证"]
+  ROOT -->|"分散 / 不明"| INVESTIGATE["扩大诊断证据"]
+  FIX --> SAFE
+  RESTORE --> SAFE
+  INVESTIGATE --> RECON
+  SAFE -->|"是"| REPLAY["正式重放预览 / 审批 / 执行"]
+  SAFE -->|"否"| HOLD["保留待处理并升级人工核查"]
 ```
-查 dead_letter_task 样本
-  SELECT * FROM batch.dead_letter_task
-   WHERE replay_status IN ('NEW','FAILED')
-   ORDER BY created_at DESC LIMIT 20
 
-按 last_replay_result 字段分组看错误模式：
-├─ 都指向同一业务 bug（NullPointerException 之类）
-│  → 修代码，打 release，再重放
-│
-├─ 都指向下游依赖超时（SFTP / API）
-│  → 下游恢复后再重放
-│
-└─ 错误分散，无明显共性
-   → 抽样 5-10 条手动 replay，观察成功率
+样本查询保持只读：
+
+```sql
+SELECT * FROM batch.dead_letter_task
+ WHERE replay_status IN ('NEW', 'FAILED')
+ ORDER BY created_at DESC LIMIT 20;
 ```
 
 ### 手动重放
 
-```bash
-# 控制台批量入口（per event）
-curl -X POST -H "X-Internal-Secret: <secret>" \
-  http://batch-console-api:18080/api/console/jobs/compensate \
-  -d '{"tenantId":"t1","targetType":"DLQ","targetId":"<dead_letter_id>","reason":"root cause fixed"}'
+先在 Console 的死信列表核对来源任务、错误原因和外部副作用状态，再提交 `DLQ_REPLAY` 审批申请，由独立管理员批准后执行。若任务为 `EXTERNAL_OUTCOME_UNKNOWN`，必须确认外部动作未执行并提交证据引用；批准后只允许一次性恢复。已执行或仍无法确认时保持阻塞。
 
-# 脚本批量（带 dry-run）
-bash scripts/ops/heal-dead-letters.sh --tenant t1 --dry-run
-bash scripts/ops/heal-dead-letters.sh --tenant t1
+运维脚本只读列出候选项：
+
+```bash
+bash scripts/ops/inspect-dead-letters.sh --tenant t1 --dry-run
 ```
 
 ---
@@ -188,27 +182,16 @@ bash scripts/ops/heal-dead-letters.sh --tenant t1
 
 ### 决策树
 
-```
-kubectl logs <pod> --previous | tail -50
-├─ "too many clients already" → PG 连接池耗尽
-│  → 本地：改 docker-compose.yml postgres 的 max_connections=300
-│  → K8s：检查所有模块的 Hikari maximum-pool-size 总和
-│
-├─ "Connection refused" 到 Kafka/Redis/PG → 依赖未就绪
-│  → 确认 batch-postgres / batch-kafka / batch-redis 服务 READY
-│
-├─ "Missing migration" / Flyway 报错 → 迁移未应用
-│  → 检查 db/migration 与生产 DB 版本：
-│    SELECT version, description, installed_on FROM flyway_schema_history
-│      ORDER BY installed_rank DESC LIMIT 5
-│
-├─ "startup probe failed" → 启动时间超 startupProbe.timeoutSeconds
-│  → 临时调大：values.yaml startupProbe.failureThreshold
-│  → 长期：减少 @PostConstruct 重活 / 缩 Flyway baseline / 评估 Spring Boot AOT
-│    （注：原方案里的 AppCDS 预热在 JDK 21 + SB 4 上因 dump/runtime native-access 标志
-│     错位会触发 NoClassDefFoundError，scripts/local/start-all.sh 已默认 -Xshare:off）
-│
-└─ BatchStartupSelfCheck 报错 → 按日志列出的缺失项处理
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  LOG["查看当前与 previous 启动日志"] --> ERROR{"首个有效错误"}
+  ERROR -->|"连接耗尽"| PG["核对数据库连接预算<br/>与所有实例连接池总量"]
+  ERROR -->|"Connection refused"| DEP["检查依赖健康与网络"]
+  ERROR -->|"Flyway 错误"| MIGRATION["比对迁移文件 / schema history<br/>修复首个迁移错误"]
+  ERROR -->|"startup probe failed"| PROBE["核查完整启动探针预算<br/>与实际启动耗时"]
+  ERROR -->|"启动自检失败"| SELF["按自检缺失项修复"]
+  PROBE --> COST["定位初始化与迁移耗时<br/>按实测调整探针"]
 ```
 
 ---
@@ -251,7 +234,7 @@ kubectl exec batch-orchestrator-0 -- printenv | grep SHARDING
 SELECT name, lock_until, locked_at, locked_by,
        EXTRACT(EPOCH FROM (lock_until - locked_at)) AS hold_seconds
   FROM batch.shedlock
- WHERE lock_until > NOW()
+ WHERE lock_until > timezone('utc', NOW())
  ORDER BY lock_until - locked_at DESC
  LIMIT 20;
 
@@ -290,9 +273,9 @@ jvm_memory_used_bytes{area="heap"} / jvm_memory_max_bytes{area="heap"}
 | 脚本 | 用途 | 何时用 |
 |---|---|---|
 | `scripts/ops/inspect-all.sh` | 全量诊断 | 告警响起第一时间跑 |
-| `scripts/ops/heal-stuck-outbox.sh` | 重置卡住 >300s 的 Outbox | 确认堆积非业务原因后 |
+| `scripts/ops/heal-stuck-outbox.sh` | 只读统计 stale `PUBLISHING` Outbox | 核对调度器与 Kafka；不直接修改 Outbox |
 | `scripts/ops/heal-drain-timeout.sh` | 强制下线排水超时 Worker | WorkerDrainTimeoutScheduler 没跑时 |
-| `scripts/ops/heal-dead-letters.sh` | 批量重放 DLQ | **根因明确修复后** |
+| `scripts/ops/inspect-dead-letters.sh` | 只读检查 DLQ 候选项 | 人工重放经 Console 审批；UNKNOWN 仅核实未执行后一次性恢复 |
 | `scripts/ops/heal-retry-tasks.sh` | 批量重放 FAILED 任务 | 确认非代码 bug |
 | `scripts/ops/heal-retry-partitions.sh` | 重试 FAILED 分区 | 分区集中失败 |
 | `scripts/ops/trigger-compensation.sh` | 手工补偿命令 | 定向修复单条任务 |

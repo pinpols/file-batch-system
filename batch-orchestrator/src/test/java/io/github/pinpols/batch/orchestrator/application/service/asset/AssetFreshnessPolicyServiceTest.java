@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
@@ -64,6 +66,27 @@ class AssetFreshnessPolicyServiceTest {
     assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_MISSING");
     assertThat(captor.getValue().severity()).isEqualTo("WARN");
     assertThat(captor.getValue().resourceKey()).isEqualTo("t1:JOB_A:2026-06-30");
+  }
+
+  @Test
+  @DisplayName("资产告警事务在策略所属租户上下文中写入并清理上下文")
+  void shouldEmitAlertUnderPolicyTenantContext() {
+    AssetFreshnessPolicyEntity policy = policy("09:00", 14_400, 1, "Asia/Shanghai", "WARN");
+    when(policyMapper.selectEnabledPolicies(10)).thenReturn(List.of(policy));
+    when(assetPartitionService.isJobPartitionReady(
+            "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
+        .thenReturn(false);
+    doAnswer(invocation -> {
+          AlertEmitRequest request = invocation.getArgument(0);
+          assertThat(RlsTenantContextHolder.get()).isEqualTo(request.tenantId());
+          return null;
+        })
+        .when(alertEventService)
+        .emit(any());
+
+    assertThat(service.scanDuePolicies(10)).isEqualTo(1);
+
+    assertThat(RlsTenantContextHolder.get()).isNull();
   }
 
   @Test
@@ -139,12 +162,12 @@ class AssetFreshnessPolicyServiceTest {
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
 
-    // act: re-scan the same still-stale asset (mirrors the ~60s scheduled scan re-firing)
+    // 执行：重新扫描同一仍过期的资产（模拟约 60 秒后定时扫描再次触发）。
     int firstEmitted = service.scanDuePolicies(10);
     int secondEmitted = service.scanDuePolicies(10);
 
-    // assert: each scan emits, but the dedup fingerprint is IDENTICAL so the downstream
-    // UPSERT merges instead of creating duplicate alert rows.
+    // 断言：每次扫描都会产生事件，但去重指纹完全一致，因此下游
+    // 通过 UPSERT 合并记录，不会创建重复告警。
     assertThat(firstEmitted).isEqualTo(1);
     assertThat(secondEmitted).isEqualTo(1);
     ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
@@ -153,13 +176,13 @@ class AssetFreshnessPolicyServiceTest {
     String firstKey = emissions.get(0).resourceKey();
     String secondKey = emissions.get(1).resourceKey();
     assertThat(firstKey).isEqualTo(secondKey);
-    // deterministic composite of the stable identifiers: tenant:assetCode:bizDate
+    // 由稳定标识 tenant:assetCode:bizDate 构成的确定性组合值。
     assertThat(firstKey)
         .isEqualTo("t1:JOB_A:2026-06-30")
         .contains("t1")
         .contains("JOB_A")
         .contains("2026-06-30");
-    // alertType is likewise stable across re-scans (same dedup class)
+    // 重复扫描时 alertType 也保持稳定（属于同一去重类别）。
     assertThat(emissions.get(0).alertType()).isEqualTo(emissions.get(1).alertType());
   }
 

@@ -2,6 +2,10 @@ package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkFailedParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingBatchParam;
+import io.github.pinpols.batch.orchestrator.domain.param.OutboxEventMarkPublishingParam;
 import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import java.time.Instant;
 import java.util.List;
@@ -13,12 +17,7 @@ public interface OutboxEventMapper {
 
   List<OutboxEventEntity> selectPending(OutboxEventQuery query);
 
-  int markPublishing(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("pendingStatus1") String pendingStatus1,
-      @Param("pendingStatus2") String pendingStatus2);
+  int markPublishing(OutboxEventMarkPublishingParam parameters);
 
   int markPublished(
       @Param("tenantId") String tenantId,
@@ -26,12 +25,7 @@ public interface OutboxEventMapper {
       @Param("status") String status,
       @Param("publishingStatus") String publishingStatus);
 
-  int markFailed(
-      @Param("tenantId") String tenantId,
-      @Param("id") Long id,
-      @Param("status") String status,
-      @Param("nextPublishAt") Instant nextPublishAt,
-      @Param("publishingStatus") String publishingStatus);
+  int markFailed(OutboxEventMarkFailedParam parameters);
 
   int markGiveUp(
       @Param("tenantId") String tenantId,
@@ -43,12 +37,7 @@ public interface OutboxEventMapper {
    * PERF(5.4) 阶段一：单租户一批 id 的 set-based 抢占 —— 一条 UPDATE 完成 NEW/FAILED→PUBLISHING CAS 并 RETURNING 胜出
    * id 集（publish_attempt 递增语义与单条 markPublishing 一致）。tenant_id 为复合分布键， 调用方按租户分组后逐租户调用。
    */
-  List<Long> markPublishingBatch(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("publishingStatus") String publishingStatus,
-      @Param("pendingStatus1") String pendingStatus1,
-      @Param("pendingStatus2") String pendingStatus2);
+  List<Long> markPublishingBatch(OutboxEventMarkPublishingBatchParam parameters);
 
   /**
    * PERF(5.4) 阶段三：单租户一批 id 的 set-based markPublished。保留 R3-P0-6 的 {@code publish_status=PUBLISHING}
@@ -61,12 +50,7 @@ public interface OutboxEventMapper {
       @Param("publishingStatus") String publishingStatus);
 
   /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markFailed（同一 nextPublishAt）。守卫同 markFailed。 */
-  int markFailedBatch(
-      @Param("tenantId") String tenantId,
-      @Param("ids") List<Long> ids,
-      @Param("status") String status,
-      @Param("nextPublishAt") Instant nextPublishAt,
-      @Param("publishingStatus") String publishingStatus);
+  int markFailedBatch(OutboxEventMarkFailedBatchParam parameters);
 
   /** PERF(5.4) 阶段三：单租户一批 id 的 set-based markGiveUp。守卫同 markGiveUp。 */
   int markGiveUpBatch(
@@ -106,6 +90,10 @@ public interface OutboxEventMapper {
   /** Console 运维清理：按租户删除 GIVE_UP 状态、updated_at 早于 cutoff 的事件。语义同上。 */
   int deleteGiveUpBefore(
       @Param("tenantId") String tenantId, @Param("beforeTime") Instant beforeTime);
+
+  /** 全局归档诊断：是否存在过期候选的子记录 tenant_id 与 Outbox 父事件不一致。 */
+  boolean existsTenantMismatchedArchiveCandidate(
+      @Param("status") String status, @Param("cutoff") Instant cutoff);
 
   /**
    * Console 运维重投递：将指定 id 中、当前状态属于 fromStatuses（如 FAILED/GIVE_UP）的事件 reset 回 NEW， 让 OutboxForwarder

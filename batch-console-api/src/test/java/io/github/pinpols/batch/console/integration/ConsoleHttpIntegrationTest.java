@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
@@ -21,7 +20,6 @@ import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownlo
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
-import io.github.pinpols.batch.console.domain.job.application.ConsoleJobTriggerService;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
@@ -30,6 +28,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +40,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -52,9 +52,6 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   private int port;
 
   private WebTestClient webTestClient;
-
-  @MockitoBean
-  private ConsoleJobTriggerService jobTriggerService;
 
   @MockitoBean
   private ConsoleJobRecoveryService jobRecoveryService;
@@ -99,10 +96,8 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("触发作业: 返回成功并回显实例编号,应用服务被调用一次")
-  void shouldTriggerJobViaHttp() {
-    when(jobTriggerService.trigger(any(), anyString())).thenReturn("job-instance-001");
-
+  @DisplayName("旧 Job 根触发路由已退役")
+  void shouldRejectRetiredJobRootTriggerRoutes() {
     webTestClient
         .post()
         .uri("/api/console/jobs/trigger")
@@ -113,14 +108,17 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
             """)
         .exchange()
         .expectStatus()
-        .isOk()
-        .expectBody(String.class)
-        .value(body -> {
-          assertThat(body).contains("\"code\":\"SUCCESS\"");
-          assertThat(body).contains("\"job-instance-001\"");
-        });
+        .isNotFound();
 
-    verify(jobTriggerService).trigger(any(), anyString());
+    webTestClient
+        .post()
+        .uri("/api/console/jobs/batch-trigger")
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-batch-trigger-001")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("[]")
+        .exchange()
+        .expectStatus()
+        .isNotFound();
   }
 
   @Test
@@ -128,8 +126,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   void shouldExportConfigReleasesReportViaHttp() {
     byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
     // R2-P1-9: 应用服务签名已切到 StreamingResponseBody，直接 lambda 写响应流
-    org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody body =
-        out -> out.write(content);
+    StreamingResponseBody body = out -> out.write(content);
     when(reportExcelApplicationService.exportConfigReleases(any()))
         .thenReturn(ResponseEntity.ok().body(body));
 
@@ -144,42 +141,19 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("缺少作业编码: 返回校验错误且不触达应用服务")
-  void shouldReturnValidationErrorWhenJobCodeMissing() {
-    webTestClient
-        .post()
-        .uri("/api/console/jobs/trigger")
-        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-trigger-002")
-        .contentType(MediaType.APPLICATION_JSON)
-        .bodyValue("""
-            {"tenantId":"tenant-a","bizDate":"2026-03-27"}
-            """)
-        .exchange()
-        .expectStatus()
-        .isBadRequest()
-        .expectBody(String.class)
-        .value(body -> assertThat(body).contains("\"code\":\"VALIDATION_ERROR\""));
-
-    verifyNoInteractions(jobTriggerService);
-  }
-
-  @Test
   @DisplayName("排水工作节点: 返回成功且响应体状态为排水中,应用服务被调用")
   void shouldDrainWorkerViaHttp() {
     when(workerApplicationService.drain(anyString(), any(), anyString()))
-        .thenReturn(new ConsoleWorkerRegistryResponse(
-            1L,
-            "tenant-a",
-            "worker-001",
-            "group-a",
-            null,
-            null,
-            "DRAINING",
-            BatchDateTimeSupport.utcNow(),
-            0,
-            null,
-            null,
-            null));
+        .thenReturn(ConsoleWorkerRegistryResponse.builder()
+            .id(1L)
+            .tenantId("tenant-a")
+            .workerCode("worker-001")
+            .workerGroup("group-a")
+            .status("DRAINING")
+            .heartbeatAt(BatchDateTimeSupport.utcNow())
+            .currentLoad(0)
+            .taskCapabilities(List.of())
+            .build());
 
     webTestClient
         .post()
@@ -224,7 +198,9 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
           assertThat(body).contains("\"APPROVED\"");
         });
 
-    verify(approvalApplicationService).approve("tenant-a", "appr-001", "user-1", "ok");
+    // operator 取鉴权身份（body.operatorId 不授权），测试安全上下文用户为 testing-console-user。
+    verify(approvalApplicationService)
+        .approve("tenant-a", "appr-001", "testing-console-user", "ok");
   }
 
   @Test

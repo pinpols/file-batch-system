@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.shared.command;
 import io.github.pinpols.batch.common.validation.ValidBizDate;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -16,6 +17,9 @@ public class ConsoleCatchUpApprovalRequest {
   @Size(max = 128, message = "requestId too long (max 128)")
   private String requestId;
 
+  @Positive
+  private Long workflowDefinitionId;
+
   @NotBlank
   @Size(max = 128, message = "jobCode too long (max 128)")
   /** 用于解析补跑目标的业务作业标识。 */
@@ -24,6 +28,10 @@ public class ConsoleCatchUpApprovalRequest {
   @NotBlank
   @ValidBizDate
   private String bizDate;
+
+  /** 批量日发起的审批携带其冻结日历；普通补跑审批可不传。 */
+  @Size(max = 128, message = "batchDayCalendarCode too long (max 128)")
+  private String batchDayCalendarCode;
 
   @Size(max = 64, message = "scheduledAt too long (max 64)")
   private String scheduledAt;

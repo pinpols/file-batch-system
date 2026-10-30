@@ -175,17 +175,11 @@ class AliyunCaptchaVerifierTest {
     canonicalHeaders.put("x-acs-version", "2023-03-05");
 
     String auth1 = AliyunCaptchaVerifier.buildAuthorization(
-        "POST",
-        "/",
-        "",
         new TreeMap<>(canonicalHeaders),
         canonicalHeaders.get("x-acs-content-sha256"),
         "ak-id",
         "ak-secret");
     String auth2 = AliyunCaptchaVerifier.buildAuthorization(
-        "POST",
-        "/",
-        "",
         new TreeMap<>(canonicalHeaders),
         canonicalHeaders.get("x-acs-content-sha256"),
         "ak-id",
@@ -212,10 +206,10 @@ class AliyunCaptchaVerifierTest {
     h.put("x-acs-action", "VerifyIntelligentCaptcha");
     String payload = CaptchaCrypto.sha256Hex("{}");
 
-    String a = AliyunCaptchaVerifier.buildAuthorization(
-        "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-A");
-    String b = AliyunCaptchaVerifier.buildAuthorization(
-        "POST", "/", "", new TreeMap<>(h), payload, "ak", "secret-B");
+    String a =
+        AliyunCaptchaVerifier.buildAuthorization(new TreeMap<>(h), payload, "ak", "secret-A");
+    String b =
+        AliyunCaptchaVerifier.buildAuthorization(new TreeMap<>(h), payload, "ak", "secret-B");
 
     assertThat(a).isNotEqualTo(b);
   }

@@ -1,12 +1,10 @@
 package io.github.pinpols.batch.console.support;
 
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import io.github.pinpols.batch.console.domain.param.ConfigChangeLogInsertParam;
 
 /**
- * 统一构造 {@code config_change_log} 插入参数 Map 的链式 Builder，消除 12 个 Excel Service 里重复的 {@code
- * configChangeLogMapper.insertConfigChangeLog(mapOf(...))} 样板。
+ * 统一构造 {@code config_change_log} 固定插入参数的链式 Builder，集中配置写入与审批入口的默认审计字段。
  *
  * <p>用法：
  *
@@ -91,18 +89,21 @@ public final class ConfigChangeLogBuilder {
     return this;
   }
 
-  public Map<String, Object> build() {
-    Map<String, Object> values = new LinkedHashMap<>();
-    values.put("tenantId", tenantId);
-    values.put("configType", configType);
-    values.put("configKey", configKey);
-    values.put("versionNo", versionNo);
-    values.put("changeAction", changeAction);
-    values.put("changeResult", changeResult);
-    values.put("operatorType", operatorType);
-    values.put("operatorId", ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
-    values.put("traceId", ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH));
-    values.put("changeSummaryJson", changeSummaryJson);
-    return values;
+  public ConfigChangeLogInsertParam build() {
+    String safeOperatorId = ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
+    String safeTraceId = ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH);
+    ConfigChangeLogInsertParam param = ConfigChangeLogInsertParam.builder()
+        .tenantId(tenantId)
+        .configType(configType)
+        .configKey(configKey)
+        .versionNo(versionNo)
+        .changeAction(changeAction)
+        .changeResult(changeResult)
+        .operatorType(operatorType)
+        .operatorId(safeOperatorId)
+        .traceId(safeTraceId)
+        .changeSummaryJson(changeSummaryJson)
+        .build();
+    return param;
   }
 }

@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：本地 java -jar 模式下的 worker 进程守护。
+# 用法：在仓库根目录执行 bash scripts/local/watchdog.sh；参数与前置环境见下方说明及所属 README。
 # =============================================================
 # watchdog.sh — 本地 java -jar 模式下的 worker 进程守护
 #
@@ -14,7 +16,7 @@
 #   - 缺失则自动调用 scripts/local/restart.sh 把缺失的拉起来。
 #   - 持续运行，Ctrl+C 退出（不是 daemon）。
 #
-# 用法：
+# 调用示例：
 #   ./scripts/local/watchdog.sh                # 默认 30s 检查
 #   INTERVAL=10 ./scripts/local/watchdog.sh    # 10s 一次
 #

@@ -1,15 +1,11 @@
 package io.github.pinpols.batch.console.application.contract.response.config;
 
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.booleanValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.instantValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.integerValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.longValue;
-import static io.github.pinpols.batch.console.application.contract.response.config.ResponseFieldReader.stringValue;
-
+import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import java.time.Instant;
-import java.util.Map;
+import lombok.Builder;
 
 /** 资源队列响应。 */
+@Builder
 public record ResourceQueueResponse(
     Long id,
     String tenantId,
@@ -28,26 +24,27 @@ public record ResourceQueueResponse(
     Instant createdAt,
     Instant updatedAt) {
 
-  public static ResourceQueueResponse from(Map<String, Object> row) {
+  public static ResourceQueueResponse from(ResourceQueueRow row) {
     if (row == null) {
       return null;
     }
-    return new ResourceQueueResponse(
-        longValue(row, "id"),
-        stringValue(row, "tenantId", "tenant_id"),
-        stringValue(row, "queueCode", "queue_code"),
-        stringValue(row, "queueName", "queue_name"),
-        stringValue(row, "queueType", "queue_type"),
-        integerValue(row, "maxRunningJobs", "max_running_jobs"),
-        integerValue(row, "maxRunningPartitions", "max_running_partitions"),
-        integerValue(row, "maxQps", "max_qps"),
-        stringValue(row, "workerGroup", "worker_group"),
-        stringValue(row, "resourceTag", "resource_tag"),
-        stringValue(row, "priorityPolicy", "priority_policy"),
-        integerValue(row, "fairShareWeight", "fair_share_weight"),
-        booleanValue(row, "enabled"),
-        stringValue(row, "description"),
-        instantValue(row, "createdAt", "created_at"),
-        instantValue(row, "updatedAt", "updated_at"));
+    return ResourceQueueResponse.builder()
+        .id(row.id())
+        .tenantId(row.tenantId())
+        .queueCode(row.queueCode())
+        .queueName(row.queueName())
+        .queueType(row.queueType())
+        .maxRunningJobs(row.maxRunningJobs())
+        .maxRunningPartitions(row.maxRunningPartitions())
+        .maxQps(row.maxQps())
+        .workerGroup(row.workerGroup())
+        .resourceTag(row.resourceTag())
+        .priorityPolicy(row.priorityPolicy())
+        .fairShareWeight(row.fairShareWeight())
+        .enabled(row.enabled())
+        .description(row.description())
+        .createdAt(row.createdAt())
+        .updatedAt(row.updatedAt())
+        .build();
   }
 }

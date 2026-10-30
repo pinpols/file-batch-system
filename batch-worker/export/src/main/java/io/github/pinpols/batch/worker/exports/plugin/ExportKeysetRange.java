@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.exports.plugin;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.math.BigDecimal;
 import java.math.MathContext;
 
@@ -27,17 +28,27 @@ public record ExportKeysetRange(
    */
   static ExportKeysetRange equalWidth(
       BigDecimal lo, BigDecimal hi, int partitionCount, int partitionNo) {
-    if (lo == null || hi == null || lo.compareTo(hi) >= 0 || partitionCount <= 1) {
+    boolean keysetRangeCannotBePartitioned = EmptyChecks.isNull(lo)
+        || EmptyChecks.isNull(hi)
+        || lo.compareTo(hi) >= 0
+        || partitionCount <= 1;
+    if (keysetRangeCannotBePartitioned) {
       return inactiveFor(partitionCount, partitionNo);
     }
     BigDecimal span = hi.subtract(lo);
-    BigDecimal loN = lo.add(span.multiply(BigDecimal.valueOf(partitionNo - 1L))
-        .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
+    long lowerPartitionOffset = partitionNo - 1L;
+    BigDecimal lowerPartitionNumerator = span.multiply(BigDecimal.valueOf(lowerPartitionOffset));
+    BigDecimal lowerPartitionWidth =
+        lowerPartitionNumerator.divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
+    BigDecimal loN = lo.add(lowerPartitionWidth);
     boolean last = partitionNo == partitionCount;
-    BigDecimal hiN = last
-        ? hi
-        : lo.add(span.multiply(BigDecimal.valueOf(partitionNo))
-            .divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64));
+    BigDecimal hiN = hi;
+    if (!last) {
+      BigDecimal upperPartitionNumerator = span.multiply(BigDecimal.valueOf(partitionNo));
+      BigDecimal upperPartitionWidth =
+          upperPartitionNumerator.divide(BigDecimal.valueOf(partitionCount), MathContext.DECIMAL64);
+      hiN = lo.add(upperPartitionWidth);
+    }
     return new ExportKeysetRange(true, loN, hiN, last, partitionCount, partitionNo);
   }
 }

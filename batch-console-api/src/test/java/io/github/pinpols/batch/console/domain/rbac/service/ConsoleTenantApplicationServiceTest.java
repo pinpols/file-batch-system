@@ -9,6 +9,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
@@ -17,18 +18,24 @@ import io.github.pinpols.batch.console.application.rbac.ConsoleTenantApplication
 import io.github.pinpols.batch.console.application.rbac.ConsoleTenantReadinessService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowRunMapper;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.env.Environment;
+import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("租户应用服务: 停用启用的实例占用校验、开通编排与跨租户读取范围")
@@ -62,22 +69,21 @@ class ConsoleTenantApplicationServiceTest {
   private ConsoleTenantReadinessService readinessService;
 
   @Mock
-  private io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard tenantGuard;
+  private ConsoleTenantGuard tenantGuard;
 
-  private final org.springframework.core.env.Environment environment =
-      new org.springframework.mock.env.MockEnvironment();
+  private final Environment environment = new MockEnvironment();
 
   private ConsoleTenantApplicationService service;
 
-  private static final Map<String, Object> ACTIVE_TENANT = Map.of(
-      "id", 1L,
-      "tenant_id", "tenant-a",
-      "tenant_name", "Tenant A",
-      "status", "ACTIVE",
-      "description", "",
-      "created_by", "admin",
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final TenantRow ACTIVE_TENANT = new TenantRow(
+      1L,
+      "tenant-a",
+      "Tenant A",
+      "ACTIVE",
+      "",
+      "admin",
+      "2026-01-01T00:00:00",
+      "2026-01-01T00:00:00");
 
   @BeforeEach
   void setUp() {
@@ -148,10 +154,10 @@ class ConsoleTenantApplicationServiceTest {
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
 
-  private static java.util.List<String> argsAsStrings(BizException ex) {
+  private static List<String> argsAsStrings(BizException ex) {
     Object[] args = ex.getMessageArgs();
-    if (args == null) return java.util.List.of();
-    java.util.List<String> result = new java.util.ArrayList<>(args.length);
+    if (args == null) return List.of();
+    List<String> result = new ArrayList<>(args.length);
     for (Object a : args) {
       result.add(a == null ? "null" : a.toString());
     }
@@ -206,9 +212,7 @@ class ConsoleTenantApplicationServiceTest {
     when(workflowRunMapper.countByStatuses(eq("tenant-a"), any())).thenReturn(0L);
     when(triggerProxyService.pauseByTenant("tenant-a"))
         .thenThrow(BizException.of(
-            io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
-            "error.common.downstream_unavailable",
-            "trigger"));
+            ResultCode.SERVICE_UNAVAILABLE, "error.common.downstream_unavailable", "trigger"));
 
     assertThatThrownBy(() -> service.suspendTenant("tenant-a")).isInstanceOf(BizException.class);
 
@@ -222,9 +226,7 @@ class ConsoleTenantApplicationServiceTest {
     when(tenantMapper.selectByTenantId("tenant-a")).thenReturn(ACTIVE_TENANT);
     when(triggerProxyService.resumeByTenant("tenant-a"))
         .thenThrow(BizException.of(
-            io.github.pinpols.batch.common.enums.ResultCode.SERVICE_UNAVAILABLE,
-            "error.common.downstream_unavailable",
-            "trigger"));
+            ResultCode.SERVICE_UNAVAILABLE, "error.common.downstream_unavailable", "trigger"));
 
     assertThatThrownBy(() -> service.activateTenant("tenant-a")).isInstanceOf(BizException.class);
 
@@ -232,15 +234,8 @@ class ConsoleTenantApplicationServiceTest {
     verify(tenantMapper, never()).updateStatus(any(), any());
   }
 
-  private static final Map<String, Object> ACME_TENANT = Map.of(
-      "id", 9L,
-      "tenant_id", "acme",
-      "tenant_name", "Acme",
-      "status", "ACTIVE",
-      "description", "",
-      "created_by", "admin",
-      "created_at", "2026-01-01T00:00:00",
-      "updated_at", "2026-01-01T00:00:00");
+  private static final TenantRow ACME_TENANT = new TenantRow(
+      9L, "acme", "Acme", "ACTIVE", "", "admin", "2026-01-01T00:00:00", "2026-01-01T00:00:00");
 
   @Test
   @DisplayName("未选择配置初始化时跳过配置复制, 但仍执行就绪自检")
@@ -249,8 +244,7 @@ class ConsoleTenantApplicationServiceTest {
     when(userAccountMapper.selectByUsername("acme-admin")).thenReturn(null);
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(readinessService.check("acme"))
-        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
-            .TenantReadinessResponse("acme", true, List.of(), List.of()));
+        .thenReturn(new TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");
@@ -266,7 +260,7 @@ class ConsoleTenantApplicationServiceTest {
 
   // ── SEC-IDOR(S2):租户管理只读端点跨租户越权修复 ──────────────────────────────
 
-  @org.junit.jupiter.api.Nested
+  @Nested
   @DisplayName("租户查询的跨租户范围: 守卫拒绝、同租户放行与按角色收敛")
   class TenantScopeOnRead {
 
@@ -274,8 +268,7 @@ class ConsoleTenantApplicationServiceTest {
     @DisplayName("跨租户查询被守卫拒绝, 且不触达数据查询")
     void getTenant_crossTenant_deniedByGuard_neverQueries() {
       // arrange:守卫对越权 tenantId 抛 FORBIDDEN(等价 TENANT_ADMIN 读他租户)
-      doThrow(io.github.pinpols.batch.common.exception.BizException.of(
-              io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN, "error.tenant.mismatch"))
+      doThrow(BizException.of(ResultCode.FORBIDDEN, "error.tenant.mismatch"))
           .when(tenantGuard)
           .assertTenantAllowed("tenant-b");
 
@@ -283,7 +276,7 @@ class ConsoleTenantApplicationServiceTest {
       assertThatThrownBy(() -> service.getTenant("tenant-b"))
           .isInstanceOf(BizException.class)
           .extracting(e -> ((BizException) e).getCode())
-          .isEqualTo(io.github.pinpols.batch.common.enums.ResultCode.FORBIDDEN);
+          .isEqualTo(ResultCode.FORBIDDEN);
       verify(tenantMapper, never()).selectByTenantId("tenant-b");
     }
 
@@ -336,8 +329,7 @@ class ConsoleTenantApplicationServiceTest {
     when(passwordHasher.encode(any())).thenReturn("hash");
     when(configCopyService.copy(any(), eq("admin"), any())).thenReturn(null);
     when(readinessService.check("acme"))
-        .thenReturn(new io.github.pinpols.batch.console.domain.rbac.application.contract.response
-            .TenantReadinessResponse("acme", true, List.of(), List.of()));
+        .thenReturn(new TenantReadinessResponse("acme", true, List.of(), List.of()));
 
     var cmd = new ConsoleTenantApplicationService.CreateTenantCommand(
         "acme", "Acme", "d", "acme-admin", "pw12345678", "admin");

@@ -126,11 +126,12 @@ public class AuditFieldsInterceptor implements Interceptor {
       while (cursor != null && cursor != Object.class) {
         for (Field f : cursor.getDeclaredFields()) {
           String name = f.getName();
-          if (FIELD_CREATED_AT.equals(name)
+          boolean isAuditManagedField = FIELD_CREATED_AT.equals(name)
               || FIELD_UPDATED_AT.equals(name)
               || FIELD_CREATED_BY.equals(name)
               || FIELD_UPDATED_BY.equals(name)
-              || FIELD_TENANT_ID.equals(name)) {
+              || FIELD_TENANT_ID.equals(name);
+          if (isAuditManagedField) {
             f.setAccessible(true);
             map.putIfAbsent(name, f);
           }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.support;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -39,10 +40,16 @@ public final class PipelineStepFlowSupport {
       boolean success,
       List<PipelineStepDefinition> steps,
       Map<String, Object> attributes) {
-    if (current != null && success && current.booleanParam("terminalOnSuccess", "stopOnSuccess")) {
+    boolean terminalOnSuccess = EmptyChecks.isNotNull(current)
+        && success
+        && current.booleanParam("terminalOnSuccess", "stopOnSuccess");
+    if (terminalOnSuccess) {
       return null;
     }
-    if (current != null && !success && current.booleanParam("terminalOnFailure", "stopOnFailure")) {
+    boolean terminalOnFailure = EmptyChecks.isNotNull(current)
+        && !success
+        && current.booleanParam("terminalOnFailure", "stopOnFailure");
+    if (terminalOnFailure) {
       return null;
     }
     String selector = popSelector(attributes);
@@ -58,7 +65,9 @@ public final class PipelineStepFlowSupport {
         return explicitNext;
       }
     }
-    if (!success || current == null || steps == null || steps.isEmpty()) {
+    boolean stepFlowCannotAdvance =
+        !success || EmptyChecks.isNull(current) || EmptyChecks.isEmpty(steps);
+    if (stepFlowCannotAdvance) {
       return null;
     }
     for (int index = 0; index < steps.size(); index++) {
@@ -100,9 +109,10 @@ public final class PipelineStepFlowSupport {
       return null;
     }
     for (PipelineStepDefinition step : steps) {
-      if (step != null
+      boolean selectorMatchesStepOrStage = EmptyChecks.isNotNull(step)
           && (selector.equalsIgnoreCase(step.stepCode())
-              || selector.equalsIgnoreCase(step.stageCode()))) {
+              || selector.equalsIgnoreCase(step.stageCode()));
+      if (selectorMatchesStepOrStage) {
         return step;
       }
     }

@@ -14,12 +14,14 @@ import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEnt
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.dao.DuplicateKeyException;
 
 @DisplayName("OIDC 身份绑定服务")
@@ -71,7 +73,14 @@ class ConsoleOidcIdentityServiceTest {
 
     assertThat(response.id()).isEqualTo(7L);
     assertThat(response.subject()).isEqualTo("subject-1");
-    verify(identityMapper).insert(TENANT_ID, 42L, ISSUER, "subject-1", "admin");
+    verify(identityMapper)
+        .insert(ConsoleOidcIdentityInsertParam.builder()
+            .tenantId(TENANT_ID)
+            .accountId(42L)
+            .issuer(ISSUER)
+            .subject("subject-1")
+            .linkedBy("admin")
+            .build());
   }
 
   @Test
@@ -84,7 +93,14 @@ class ConsoleOidcIdentityServiceTest {
             TENANT_ID, new ConsoleOidcIdentityRequest("operator", "subject-1"), "admin"))
         .isInstanceOf(BizException.class);
 
-    verify(identityMapper, never()).insert(TENANT_ID, 42L, ISSUER, "subject-1", "admin");
+    verify(identityMapper, never())
+        .insert(ConsoleOidcIdentityInsertParam.builder()
+            .tenantId(TENANT_ID)
+            .accountId(42L)
+            .issuer(ISSUER)
+            .subject("subject-1")
+            .linkedBy("admin")
+            .build());
   }
 
   @Test
@@ -102,9 +118,15 @@ class ConsoleOidcIdentityServiceTest {
   void shouldTranslateDuplicateBindingToConflict() {
     when(userAccountMapper.findByUsernameIgnoreCase("operator"))
         .thenReturn(Optional.of(account(42L, TENANT_ID, "operator", true)));
-    org.mockito.Mockito.doThrow(new DuplicateKeyException("duplicate"))
+    Mockito.doThrow(new DuplicateKeyException("duplicate"))
         .when(identityMapper)
-        .insert(TENANT_ID, 42L, ISSUER, "subject-1", "admin");
+        .insert(ConsoleOidcIdentityInsertParam.builder()
+            .tenantId(TENANT_ID)
+            .accountId(42L)
+            .issuer(ISSUER)
+            .subject("subject-1")
+            .linkedBy("admin")
+            .build());
 
     assertThatThrownBy(() -> service.bind(
             TENANT_ID, new ConsoleOidcIdentityRequest("operator", "subject-1"), "admin"))

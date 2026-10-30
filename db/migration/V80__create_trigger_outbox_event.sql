@@ -1,5 +1,5 @@
 -- =========================================================
--- V80: trigger_outbox_event
+-- V80：trigger_outbox_event 触发 Outbox 事件表。
 --
 -- ADR-010: Trigger → Orchestrator 异步解耦
 -- 详见 docs/architecture/adr/ADR-010-trigger-async-decoupling.md
@@ -39,15 +39,17 @@ CREATE TABLE IF NOT EXISTS batch.trigger_outbox_event (
 );
 
 -- 防 trigger 端意外双写(同 tenantId+requestId 多次落事件 → 重复消费)
+
 CREATE UNIQUE INDEX IF NOT EXISTS uk_trigger_outbox_event_tenant_request
     ON batch.trigger_outbox_event (tenant_id, request_id);
 
 -- relay 扫描热点:status + next_publish_at,partial index 只覆盖待发状态
+
 CREATE INDEX IF NOT EXISTS idx_trigger_outbox_event_pending
     ON batch.trigger_outbox_event (publish_status, next_publish_at)
     WHERE publish_status IN ('NEW', 'FAILED');
 
 COMMENT ON TABLE  batch.trigger_outbox_event IS 'ADR-010: trigger 异步发布事件表,与 trigger_request 同事务写入';
-COMMENT ON COLUMN batch.trigger_outbox_event.payload IS 'LaunchEnvelope JSON: {launchRequest, dedupKey, traceId, sourceFireTime}';
+COMMENT ON COLUMN batch.trigger_outbox_event.payload IS 'LaunchEnvelope JSON，字段包括 launchRequest、dedupKey、traceId 和 sourceFireTime。';
 COMMENT ON COLUMN batch.trigger_outbox_event.publish_status IS 'NEW/PUBLISHING/PUBLISHED/FAILED/GIVE_UP, 对齐 OutboxPublishStatus enum';
 COMMENT ON COLUMN batch.trigger_outbox_event.next_publish_at IS '退避用,最早可被 relay 扫到的时刻';

@@ -67,7 +67,7 @@ SELECT definition.tenant_id,
 FROM batch.workflow_definition definition
 CROSS JOIN (VALUES
     ('START', 'Start', 'START', NULL::text, 0, '{"entry":true}'),
-    ('EXPORT_STEP', 'Export Step', 'TASK', 'export_settlement_job', 1, '{"step":"export"}'),
+    ('EXPORT_STEP', 'Export Step', 'JOB', 'export_settlement_job', 1, '{"step":"export"}'),
     ('END', 'End', 'END', NULL::text, 2, '{"entry":false}')
 ) AS node(node_code, node_name, node_type, related_job_code, node_order, node_params)
 WHERE definition.tenant_id = :'tenant_id'
@@ -113,56 +113,6 @@ WHERE definition.tenant_id = :'tenant_id'
   AND definition.version = 1
 ON CONFLICT (tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type) DO UPDATE
 SET enabled = TRUE,
-    updated_at = CURRENT_TIMESTAMP;
-
-INSERT INTO batch.job_definition (
-    tenant_id,
-    job_code,
-    job_name,
-    job_type,
-    schedule_type,
-    timezone,
-    trigger_mode,
-    queue_code,
-    worker_group,
-    window_code,
-    priority,
-    enabled,
-    created_by,
-    updated_by,
-    created_at,
-    updated_at
-)
-VALUES (
-    :'tenant_id',
-    :'job_code',
-    'seedval pipeline workflow',
-    'WORKFLOW',
-    'MANUAL',
-    'Asia/Shanghai',
-    'SCHEDULED',
-    'export_queue',
-    'EXPORT',
-    'always_open',
-    5,
-    TRUE,
-    :'probe_tag',
-    :'probe_tag',
-    CURRENT_TIMESTAMP,
-    CURRENT_TIMESTAMP
-)
-ON CONFLICT (tenant_id, job_code) DO UPDATE
-SET job_name = EXCLUDED.job_name,
-    job_type = EXCLUDED.job_type,
-    schedule_type = EXCLUDED.schedule_type,
-    timezone = EXCLUDED.timezone,
-    trigger_mode = EXCLUDED.trigger_mode,
-    queue_code = EXCLUDED.queue_code,
-    worker_group = EXCLUDED.worker_group,
-    window_code = EXCLUDED.window_code,
-    priority = EXCLUDED.priority,
-    enabled = TRUE,
-    updated_by = EXCLUDED.updated_by,
     updated_at = CURRENT_TIMESTAMP;
 
 COMMIT;

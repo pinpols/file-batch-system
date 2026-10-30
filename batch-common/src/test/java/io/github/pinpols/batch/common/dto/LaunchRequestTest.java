@@ -32,20 +32,22 @@ class LaunchRequestTest {
   }
 
   @Test
-  @DisplayName("九参构造: 数据区间原样保留, 重放会话为空, 试运行标记默认关闭")
-  void shouldPreserveIntervalAndDefaultReplayAndDryRun_whenUsingNineArgConstructor() {
+  @DisplayName("建造器入口: 数据区间原样保留, 重放会话为空, 显式关闭试运行")
+  void shouldPreserveIntervalAndDryRun_whenBuiltWithDataInterval() {
     Instant start = Instant.parse("2026-05-07T00:00:00Z");
     Instant end = Instant.parse("2026-05-08T00:00:00Z");
-    LaunchRequest r = new LaunchRequest(
-        "t1",
-        "JOB_A",
-        LocalDate.of(2026, Month.MAY, 7),
-        TriggerType.SCHEDULED,
-        "req-1",
-        "trace-1",
-        Map.of(),
-        start,
-        end);
+    LaunchRequest r = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
+        .triggerType(TriggerType.SCHEDULED)
+        .requestId("req-1")
+        .traceId("trace-1")
+        .params(Map.of())
+        .dataIntervalStart(start)
+        .dataIntervalEnd(end)
+        .dryRun(false)
+        .build();
 
     assertThat(r.dataIntervalStart()).isEqualTo(start);
     assertThat(r.dataIntervalEnd()).isEqualTo(end);
@@ -54,19 +56,19 @@ class LaunchRequestTest {
   }
 
   @Test
-  @DisplayName("十参构造: 重放会话原样保留, 试运行标记默认关闭")
-  void shouldPreserveReplaySessionAndDefaultDryRun_whenUsingTenArgConstructor() {
-    LaunchRequest r = new LaunchRequest(
-        "t1",
-        "JOB_A",
-        LocalDate.of(2026, Month.MAY, 7),
-        TriggerType.MANUAL,
-        "req-1",
-        "trace-1",
-        Map.of(),
-        null,
-        null,
-        42L);
+  @DisplayName("建造器入口: 重放会话原样保留, 显式关闭试运行")
+  void shouldPreserveReplaySessionAndDryRun_whenBuiltWithReplaySession() {
+    LaunchRequest r = LaunchRequest.builder()
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .bizDate(LocalDate.of(2026, Month.MAY, 7))
+        .triggerType(TriggerType.MANUAL)
+        .requestId("req-1")
+        .traceId("trace-1")
+        .params(Map.of())
+        .replaySessionId(42L)
+        .dryRun(false)
+        .build();
 
     assertThat(r.replaySessionId()).isEqualTo(42L);
     assertThat(r.dryRun()).isFalse();
@@ -88,5 +90,19 @@ class LaunchRequestTest {
 
     assertThat(r.dryRun()).isTrue();
     assertThat(r.replaySessionId()).isNull();
+  }
+
+  @Test
+  @DisplayName("Workflow 简洁入口: 固定 Workflow 目标和业务日, 不生成 Job 目标")
+  void shouldPreserveWorkflowIdentityAndBizDate_whenUsingWorkflowConstructor() {
+    LocalDate bizDate = LocalDate.of(2026, Month.OCTOBER, 16);
+    LaunchRequest request = new LaunchRequest(
+        "t1", 42L, bizDate, TriggerType.SCHEDULED, "workflow-request", "trace", Map.of());
+
+    assertThat(request.workflowDefinitionId()).isEqualTo(42L);
+    assertThat(request.jobCode()).isNull();
+    assertThat(request.bizDate()).isEqualTo(bizDate);
+    assertThat(request.requestId()).isEqualTo("workflow-request");
+    assertThat(request.dryRun()).isFalse();
   }
 }

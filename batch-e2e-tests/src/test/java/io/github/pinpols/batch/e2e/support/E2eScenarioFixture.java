@@ -2,23 +2,22 @@ package io.github.pinpols.batch.e2e.support;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
-import java.util.List;
-import java.util.Locale;
+import java.time.LocalDate;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Seeds the configured job/pipeline/workflow/request records so {@code LaunchService#launch} runs
- * scheduling against workers registered at runtime by worker loops (same tenant / worker group).
+ * 为 Job、其受管单作业 Workflow 和以 Workflow 为根的请求写入夹具，使运行时能够
+ * 针对 Worker 循环注册的 Worker 调度（同租户、同 Worker 组）。
  *
- * <p>The pipeline definition is deliberately provisioned by the fixture, representing the
- * Console/admin configuration step. Worker execution must remain read-only for platform
- * definitions.
+ * <p>Pipeline 阶段从系统目录解析。此夹具不得创建租户自有 Pipeline 定义，也不得将 Job
+ * 用作顶层触发目标。
  */
 public final class E2eScenarioFixture {
 
   private E2eScenarioFixture() {}
 
-  public record LaunchSeed(String jobCode, String requestId, String dedupKey) {}
+  public record LaunchSeed(
+      String jobCode, Long workflowDefinitionId, String requestId, String dedupKey) {}
 
   public static final class LaunchPreparationSpec {
     private final JdbcTemplate jdbc;
@@ -29,6 +28,8 @@ public final class E2eScenarioFixture {
     private String retryPolicy = "NONE";
     private int retryMaxCount = 0;
     private String shardStrategy = "NONE";
+    private boolean dryRun;
+    private LocalDate bizDate = LocalDate.of(2026, 1, 15);
 
     public LaunchPreparationSpec(
         JdbcTemplate jdbc,
@@ -55,6 +56,16 @@ public final class E2eScenarioFixture {
 
     public LaunchPreparationSpec shardStrategy(String shardStrategy) {
       this.shardStrategy = shardStrategy;
+      return this;
+    }
+
+    public LaunchPreparationSpec dryRun(boolean dryRun) {
+      this.dryRun = dryRun;
+      return this;
+    }
+
+    public LaunchPreparationSpec bizDate(LocalDate bizDate) {
+      this.bizDate = bizDate;
       return this;
     }
 
@@ -89,11 +100,19 @@ public final class E2eScenarioFixture {
     private String shardStrategy() {
       return shardStrategy;
     }
+
+    private boolean dryRun() {
+      return dryRun;
+    }
+
+    private LocalDate bizDate() {
+      return bizDate;
+    }
   }
 
   /**
-   * Inserts job + pipeline definition + workflow + trigger. No {@code worker_registry} row — the
-   * worker process registers on startup.
+   * 写入 Job、单作业 Workflow、Workflow 节点和 Trigger。不会写入 {@code worker_registry} 记录，
+   * Worker 进程会在启动时自行注册。
    */
   public static LaunchSeed prepareLaunchWithoutPreSeededWorker(
       JdbcTemplate jdbc,
@@ -105,6 +124,18 @@ public final class E2eScenarioFixture {
         new LaunchPreparationSpec(jdbc, tenantId, jobType, workerGroup, triggerType));
   }
 
+  public static LaunchSeed prepareLaunchWithoutPreSeededWorker(
+      JdbcTemplate jdbc,
+      String tenantId,
+      String jobType,
+      String workerGroup,
+      TriggerType triggerType,
+      LocalDate bizDate) {
+    return prepareLaunchWithoutPreSeededWorker(
+        new LaunchPreparationSpec(jdbc, tenantId, jobType, workerGroup, triggerType)
+            .bizDate(bizDate));
+  }
+
   public static LaunchSeed prepareBundleLaunchWithoutPreSeededWorker(
       JdbcTemplate jdbc, String tenantId, String bundleJobType, String workerGroup) {
     return prepareLaunchWithoutPreSeededWorker(
@@ -113,19 +144,12 @@ public final class E2eScenarioFixture {
   }
 
   /**
-   * Same as {@link #prepareLaunchWithoutPreSeededWorker(JdbcTemplate, String, String, String,
-   * TriggerType)} but allows orchestrator-level retry policy (FIXED / EXPONENTIAL) for failure-path
+   * 与 {@link #prepareLaunchWithoutPreSeededWorker(JdbcTemplate, String, String, String,
+   * TriggerType)} 相同，但允许为失败路径轮询配置 Orchestrator 级重试策略（FIXED / EXPONENTIAL）。
    * E2E.
    */
   public static LaunchSeed prepareLaunchWithoutPreSeededWorker(LaunchPreparationSpec spec) {
-    String suffix = Long.toUnsignedString(System.nanoTime());
-    String jobCode = "E2E_" + spec.jobType() + "_" + suffix;
-    String requestId = "e2e-req-" + suffix;
-    String dedupKey = "e2e-dedup-" + suffix;
-
-    spec.jdbc()
-        .update(
-            """
+    final String insertJobDefinitionSql = """
                 insert into batch.job_definition (
                     tenant_id, job_code, job_name, job_type, biz_type, schedule_type, timezone,
                 priority, queue_code, worker_group, trigger_mode, dag_enabled, shard_strategy,
@@ -133,7 +157,52 @@ public final class E2eScenarioFixture {
             ) values (?, ?, ?, ?, ?, 'MANUAL', 'UTC',
                 5, 'e2e-q', ?, 'API', false, ?,
                 ?, ?, 0, true, 1)
-            """,
+            returning id
+            """;
+    final String insertBusinessCalendarSql = """
+            insert into batch.business_calendar (
+                tenant_id, calendar_code, calendar_name, timezone, enabled
+            ) values (?, 'e2e_calendar', 'E2E business calendar', 'UTC', true)
+            on conflict (tenant_id, calendar_code) do nothing
+            """;
+    final String insertWorkflowDefinitionSql = """
+            insert into batch.workflow_definition (
+                tenant_id, workflow_code, workflow_name, workflow_type, version, enabled,
+                calendar_code, single_job_definition_id
+            ) values (?, ?, 'e2e wf', 'DAG', 1, true, 'e2e_calendar', ?)
+            returning id
+            """;
+    final String insertWorkflowNodeSql = """
+            insert into batch.workflow_node (
+                tenant_id, workflow_definition_id, node_code, node_name, node_type,
+                related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
+            ) values
+                (?, ?, 'START', 'Start', 'START', null, 0, 'NONE', 0, 0, true),
+                (?, ?, 'JOB', 'Job', 'JOB', ?, 1, 'NONE', 0, 0, true),
+                (?, ?, 'END', 'End', 'END', null, 2, 'NONE', 0, 0, true)
+            """;
+    final String insertWorkflowEdgeSql = """
+            insert into batch.workflow_edge (
+                tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+            ) values (?, ?, 'START', 'JOB', 'ALWAYS', true),
+                     (?, ?, 'JOB', 'END', 'SUCCESS', true)
+            """;
+    final String insertTriggerRequestSql = """
+            insert into batch.trigger_request (
+                tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
+                dedup_key, request_status, trace_id, dry_run
+            ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', 'e2e-trace', ?)
+            """;
+
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String jobCode = "E2E_" + spec.jobType() + "_" + suffix;
+    String requestId = "e2e-req-" + suffix;
+    String dedupKey = "e2e-dedup-" + suffix;
+
+    Long jobDefinitionId = spec.jdbc()
+        .queryForObject(
+            insertJobDefinitionSql,
+            Long.class,
             spec.tenantId(),
             jobCode,
             "e2e " + jobCode,
@@ -144,102 +213,41 @@ public final class E2eScenarioFixture {
             spec.retryPolicy(),
             spec.retryMaxCount());
 
-    provisionPipelineDefinition(spec.jdbc(), spec.tenantId(), jobCode, spec.workerGroup());
+    spec.jdbc().update(insertBusinessCalendarSql, spec.tenantId());
 
-    spec.jdbc().update("""
-            insert into batch.workflow_definition (
-                tenant_id, workflow_code, workflow_name, workflow_type, version, enabled
-            ) values (?, ?, 'e2e wf', 'DAG', 1, true)
-            """, spec.tenantId(), jobCode);
+    Long workflowDefinitionId = spec.jdbc()
+        .queryForObject(
+            insertWorkflowDefinitionSql, Long.class, spec.tenantId(), jobCode, jobDefinitionId);
 
     spec.jdbc()
-        .update("""
-            insert into batch.trigger_request (
-                tenant_id, request_id, trigger_type, job_code, biz_date, dedup_key, request_status, trace_id
-            ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace')
-            """, spec.tenantId(), requestId, spec.triggerType().code(), jobCode, dedupKey);
+        .update(
+            insertWorkflowNodeSql,
+            spec.tenantId(),
+            workflowDefinitionId,
+            spec.tenantId(),
+            workflowDefinitionId,
+            jobCode,
+            spec.tenantId(),
+            workflowDefinitionId);
+    spec.jdbc()
+        .update(
+            insertWorkflowEdgeSql,
+            spec.tenantId(),
+            workflowDefinitionId,
+            spec.tenantId(),
+            workflowDefinitionId);
 
-    return new LaunchSeed(jobCode, requestId, dedupKey);
+    spec.jdbc()
+        .update(
+            insertTriggerRequestSql,
+            spec.tenantId(),
+            requestId,
+            spec.triggerType().code(),
+            workflowDefinitionId,
+            spec.bizDate(),
+            dedupKey,
+            spec.dryRun());
+
+    return new LaunchSeed(jobCode, workflowDefinitionId, requestId, dedupKey);
   }
-
-  /**
-   * Provisions the pipeline definition owned by the Console/admin configuration path. Custom E2E
-   * scenarios can reuse this when they seed their own job/workflow records instead of calling the
-   * standard launch fixture.
-   */
-  public static void provisionPipelineDefinition(
-      JdbcTemplate jdbc, String tenantId, String jobCode, String workerGroup) {
-    String pipelineType = CodeNormalizer.toUpperOrNull(workerGroup);
-    if (pipelineType == null || !List.of("IMPORT", "EXPORT", "DISPATCH").contains(pipelineType)) {
-      // PROCESS tests provide custom step definitions because their compute plugin parameters are
-      // part of the scenario. ATOMIC has no pipeline stage definition.
-      return;
-    }
-
-    Long pipelineDefinitionId = jdbc.queryForObject(
-        """
-            insert into batch.pipeline_definition (
-                tenant_id, job_code, pipeline_name, pipeline_type, biz_type, worker_group,
-                version, enabled
-            ) values (?, ?, ?, ?, 'E2E', ?, 1, true)
-            returning id
-            """,
-        Long.class,
-        tenantId,
-        jobCode,
-        "e2e " + pipelineType.toLowerCase(Locale.ROOT) + " pipeline",
-        pipelineType,
-        pipelineType);
-
-    List<PipelineStepSeed> steps =
-        switch (pipelineType) {
-          case "IMPORT" ->
-            List.of(
-                step("IMPORT_RECEIVE", "RECEIVE", "{}"),
-                step("IMPORT_PREPROCESS", "PREPROCESS", "{}"),
-                step("IMPORT_PARSE", "PARSE", "{}"),
-                step("IMPORT_VALIDATE", "VALIDATE", "{}"),
-                step("IMPORT_LOAD", "LOAD", "{}"),
-                step("IMPORT_FEEDBACK", "FEEDBACK", "{}"));
-          case "EXPORT" ->
-            List.of(
-                step("EXPORT_PREPARE", "PREPARE", "{}"),
-                step("EXPORT_GENERATE", "GENERATE", "{}"),
-                step("EXPORT_STORE", "STORE", "{}"),
-                step("EXPORT_REGISTER", "REGISTER", "{}"),
-                step("EXPORT_COMPLETE", "COMPLETE", "{}"));
-          case "DISPATCH" ->
-            List.of(
-                step("DISPATCH_PREPARE", "PREPARE", "{}"),
-                step("DISPATCH_DISPATCH", "DISPATCH", "{}"),
-                step("DISPATCH_ACK", "ACK", "{\"onSuccessNextStageCode\":\"COMPLETE\"}"),
-                step("DISPATCH_RETRY", "RETRY", "{\"onFailureNextStageCode\":\"COMPENSATE\"}"),
-                step("DISPATCH_COMPENSATE", "COMPENSATE", "{\"terminalOnSuccess\":true}"),
-                step("DISPATCH_COMPLETE", "COMPLETE", "{\"terminalOnSuccess\":true}"));
-          default -> List.of();
-        };
-    for (int i = 0; i < steps.size(); i++) {
-      PipelineStepSeed step = steps.get(i);
-      jdbc.update(
-          """
-          insert into batch.pipeline_step_definition (
-              pipeline_definition_id, step_code, step_name, stage_code, step_order,
-              impl_code, step_params, timeout_seconds, retry_policy, retry_max_count, enabled
-          ) values (?, ?, ?, ?, ?, ?, ?::jsonb, 0, 'NONE', 0, true)
-          """,
-          pipelineDefinitionId,
-          step.stepCode(),
-          step.stepCode(),
-          step.stageCode(),
-          i + 1,
-          step.stepCode(),
-          step.stepParamsJson());
-    }
-  }
-
-  private static PipelineStepSeed step(String stepCode, String stageCode, String stepParamsJson) {
-    return new PipelineStepSeed(stepCode, stageCode, stepParamsJson);
-  }
-
-  private record PipelineStepSeed(String stepCode, String stageCode, String stepParamsJson) {}
 }

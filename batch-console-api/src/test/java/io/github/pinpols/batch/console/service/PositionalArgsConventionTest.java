@@ -27,6 +27,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import javax.tools.DiagnosticCollector;
 import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
 import javax.tools.SimpleJavaFileObject;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.DisplayName;
@@ -44,7 +45,7 @@ import org.junit.jupiter.api.Test;
  *   <li>状态型参数对象不得重新暴露公共构造器或通用 builder
  * </ol>
  *
- * <p>方案见 {@code docs/archive/analysis/positional-args-cleanup-plan.md} v3。
+ * <p>现行规则见 {@code docs/coding-conventions.md} §1。
  */
 @DisplayName("方法位置参数规约守护: 已治理类型禁止构造与空值组合回潮")
 class PositionalArgsConventionTest {
@@ -346,14 +347,13 @@ class PositionalArgsConventionTest {
     if (compiler == null) throw new IllegalStateException("JDK compiler is required for AST gate");
     SimpleJavaFileObject sourceFile =
         new SimpleJavaFileObject(
-            URI.create("string:///" + file.replace(' ', '_')),
-            javax.tools.JavaFileObject.Kind.SOURCE) {
+            URI.create("string:///" + file.replace(' ', '_')), JavaFileObject.Kind.SOURCE) {
           @Override
           public CharSequence getCharContent(boolean ignoreEncodingErrors) {
             return source;
           }
         };
-    DiagnosticCollector<javax.tools.JavaFileObject> diagnostics = new DiagnosticCollector<>();
+    DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
     JavacTask task = (JavacTask) compiler.getTask(
         null,
         null,

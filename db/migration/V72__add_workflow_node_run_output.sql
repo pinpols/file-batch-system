@@ -23,6 +23,7 @@
 -- `CREATE TABLE archive.X (LIKE batch.X)` 形态，如果 testcontainer / 复用 PG
 -- 中 batch 表已含 output（再次重跑场景），克隆出的 archive 表也会自带 output
 -- → 此时 ALTER ADD 会重复报错。幂等 ADD 既兼容首次也兼容已存在场景。
+
 ALTER TABLE batch.workflow_node_run
   ADD COLUMN IF NOT EXISTS output JSONB;
 
@@ -31,6 +32,7 @@ COMMENT ON COLUMN batch.workflow_node_run.output IS
 
 -- 同步给 archive 冷表加 output 列：ArchiveSchemaDriftCheck 启动自检要求
 -- archive.* 与 batch.* schema 一致；不同步会让 orchestrator 启动失败。
+
 ALTER TABLE archive.workflow_node_run_archive
   ADD COLUMN IF NOT EXISTS output JSONB;
 

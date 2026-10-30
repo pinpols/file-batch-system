@@ -14,10 +14,12 @@
 
 默认所有报告统一输出到仓库根目录下的 `target/security-scan-report/`：
 
-- `gitleaks.json`
+- `gitleaks.json`（Git 历史）
+- `gitleaks-worktree.json`（当前工作树，含未提交源码）
 - `dependency-check/`
 - `semgrep.json`
 - `trivy-fs.json`
+- `trivy-config.json`
 - `trivy-image.json`
 - `zap-report.html`
 
@@ -64,4 +66,8 @@ java -jar target/security-scan-1.0.0.jar --mode=all --root=.. --target-url=http:
 ## 说明
 
 - 这个模块不在根 `pom.xml` 的 reactor 里，避免影响常规构建。
+- `--mode=secret` 依次检查历史与工作树；即使历史发现命中，也会生成工作树报告并汇总失败。本机 `.env.local` 和 `logs/` 被 Git 忽略，不属于源码扫描输入。
+- `--mode=filesystem` 分别扫描高危/严重漏洞与密钥、IaC 配置；两项都执行并分别以 `.trivyignore`、`.trivyignore.yaml` 的既有精确豁免判定退出码。
+- `--mode=sast` 需要 Semgrep 和 `python3`。扫描一次并保留完整 JSON；报告中的 `ERROR`、`HIGH`、`CRITICAL` 命中阻断，其他已知级别供人工复核。扫描错误或警告、无法读取的报告和未知级别导致失败，避免把覆盖不完整当作通过。规则命中仍需人工判断是否真实漏洞。
+- DAST 失败汇总会遮蔽 ZAP 认证配置；认证值仍会传给扫描进程，进程参数及扫描器自身输出应按敏感信息控制访问。
 - 扫描本身仍由外部工具完成，这里只做命令编排和结果汇总。

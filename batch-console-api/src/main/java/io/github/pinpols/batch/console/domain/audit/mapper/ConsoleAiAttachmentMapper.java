@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAttachmentEntity;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentBindParam;
+import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiAttachmentMarkDraftParam;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -59,8 +61,14 @@ public interface ConsoleAiAttachmentMapper {
 
   ConsoleAiAttachmentEntity byId(@Param("tenantId") String tenantId, @Param("id") UUID id);
 
-  default int markDraft(
-      String tenantId, UUID id, String mediaType, long byteSize, int width, int height) {
+  default int markDraft(ConsoleAiAttachmentMarkDraftParam parameters) {
+    String tenantId = parameters.tenantId();
+    UUID id = parameters.id();
+    String mediaType = parameters.mediaType();
+    long byteSize = parameters.byteSize();
+    int width = parameters.width();
+    int height = parameters.height();
+
     DraftTransitionParam transition = new DraftTransitionParam(
         tenantId,
         id,
@@ -75,13 +83,14 @@ public interface ConsoleAiAttachmentMapper {
 
   int transitionToDraft(DraftTransitionParam param);
 
-  default int bind(
-      String tenantId,
-      UUID id,
-      String ownerUserId,
-      String conversationId,
-      long turnNo,
-      Instant expiresAt) {
+  default int bind(ConsoleAiAttachmentBindParam parameters) {
+    String tenantId = parameters.tenantId();
+    UUID id = parameters.id();
+    String ownerUserId = parameters.ownerUserId();
+    String conversationId = parameters.conversationId();
+    long turnNo = parameters.turnNo();
+    Instant expiresAt = parameters.expiresAt();
+
     BindTransitionParam transition = new BindTransitionParam(
         tenantId,
         id,

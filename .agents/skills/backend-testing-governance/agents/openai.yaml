@@ -1,0 +1,3 @@
+interface:
+  display_name: "后端测试治理"
+  short_description: "设计 Java 测试分层、共享 fixture 和真实依赖验证，维护可复用的测试能力"

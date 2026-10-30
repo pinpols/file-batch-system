@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：五语言 BYO SDK 样例 worker 对真实 Orchestrator/Trigger 的端到端验证。
+# 用法：bash scripts/ci/run-sdk-orchestrator-e2e.sh <go|python|java|typescript|rust>。
 # 五语言 BYO SDK 样例 worker 对真实 Orchestrator/Trigger 的端到端验证。
 set -euo pipefail
 

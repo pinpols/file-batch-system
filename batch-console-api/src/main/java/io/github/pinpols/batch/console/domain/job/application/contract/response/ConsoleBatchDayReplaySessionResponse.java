@@ -9,6 +9,7 @@ import java.time.LocalDate;
 public record ConsoleBatchDayReplaySessionResponse(
     Long id,
     String tenantId,
+    Long replayOperationId,
     String calendarCode,
     LocalDate bizDate,
     String scope,

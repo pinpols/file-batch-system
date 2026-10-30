@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：import-stage2.sh:Import 业务分支系统级验证。
+# 用法：在仓库根目录执行 bash scripts/sim/08-import-stage2.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
 # 08-import-stage2.sh:Import 业务分支系统级验证
 #
@@ -24,8 +26,8 @@ SQL_DIR="$ROOT/scripts/sim/sql"
 
 echo "==> apply bootstrap(XML/FIXED_WIDTH runtime config)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
-  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT:-11080}" \
-  -f /dev/stdin < docs/test-data/sim-e2e-bootstrap.sql >/dev/null
+  -v ON_ERROR_STOP=1 -v mockserver_host_port="${MOCKSERVER_HOST_PORT}" \
+  -f /dev/stdin < test-data/sim/sim-e2e-bootstrap.sql >/dev/null
 
 START_TS="$(docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -tA -v ON_ERROR_STOP=1 -f /dev/stdin < "$SQL_DIR/select-current-timestamp.sql")"
@@ -33,11 +35,14 @@ export START_TS
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/import-stage2.log"
 import json, os, time, urllib.request, subprocess
+from datetime import date, timedelta
+from scripts.sim.launch_contract import workflow_id_for_fixture
 
 BASE = os.environ["TRIGGER_BASE"]
 SECRET = os.environ["INTERNAL_SECRET"]
 BIZ = os.environ["BIZ_DATE"]
 BATCH = os.environ["BATCH_NO"]
+RUN_TOKEN = "".join(character for character in BATCH if character.isalnum())[-6:]
 START_TS = os.environ["START_TS"].strip()
 SQL_DIR = os.path.join(os.getcwd(), "scripts", "sim", "sql")
 
@@ -69,22 +74,22 @@ def fixed_row(customer_no, name, status):
     ]
     return "".join(fields)
 
-XML_OK = """<?xml version="1.0" encoding="UTF-8"?>
+XML_OK = f"""<?xml version="1.0" encoding="UTF-8"?>
 <customers>
   <customer>
-    <customer_no>S2XML000001</customer_no>
+    <customer_no>S2X{RUN_TOKEN}A01</customer_no>
     <customer_name>Stage2 XML A</customer_name>
     <customer_type>PERSONAL</customer_type>
-    <certificate_no>S2XMLCERT000001</certificate_no>
+    <certificate_no>S2XMLCERT{RUN_TOKEN}A01</certificate_no>
     <mobile_no>13900000001</mobile_no>
     <email>s2a@x.io</email>
     <status>ACTIVE</status>
   </customer>
   <customer>
-    <customer_no>S2XML000002</customer_no>
+    <customer_no>S2X{RUN_TOKEN}A02</customer_no>
     <customer_name>Stage2 XML B</customer_name>
     <customer_type>PERSONAL</customer_type>
-    <certificate_no>S2XMLCERT000002</certificate_no>
+    <certificate_no>S2XMLCERT{RUN_TOKEN}A02</certificate_no>
     <mobile_no>13900000002</mobile_no>
     <email>s2b@x.io</email>
     <status>INACTIVE</status>
@@ -93,8 +98,8 @@ XML_OK = """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 FIXED_OK = "\n".join([
-    fixed_row("S2FIX000001", "Stage2 Fixed A", "ACTIVE"),
-    fixed_row("S2FIX000002", "Stage2 Fixed B", "INACTIVE"),
+    fixed_row(f"S2F{RUN_TOKEN}A01", "Stage2 Fixed A", "ACTIVE"),
+    fixed_row(f"S2F{RUN_TOKEN}A02", "Stage2 Fixed B", "INACTIVE"),
 ]) + "\n"
 
 SCENARIOS = [
@@ -142,13 +147,13 @@ SCENARIOS = [
     }, "FAILED"),
 ]
 
-def launch(label, job, params):
+def launch(label, job, params, biz_date):
     rid = f"sim-stage2-{label}-{int(time.time()*1000)%100000000}"
     body = {
         "tenantId": "ta",
-        "jobCode": job,
+        "workflowDefinitionId": workflow_id_for_fixture("ta", job),
         "triggerType": "API",
-        "bizDate": BIZ,
+        "bizDate": biz_date,
         "requestId": rid,
         "params": params,
     }
@@ -169,9 +174,17 @@ def launch(label, job, params):
         print(f"  [launch] {label:16s} {job:28s} {'✓' if ok else '✗'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
+    return rid
 
-for label, job, params, expected in SCENARIOS:
-    launch(label, job, params)
+scenario_request_ids = {}
+base_biz_date = date.fromisoformat(BIZ) + timedelta(days=1)
+for scenario_index, (label, job, params, expected) in enumerate(SCENARIOS):
+    # 对于给定租户和业务日，Workflow 会保持幂等，即使调用方提供了新的
+    # requestId。为每个独立的解析器用例使用不同业务日，避免重复抑制
+    # 把格式错误输入误判成启动已确认。使用未来
+    # 业务日，确保重复运行 SIM 时不会重新开启之前已结算的日期。
+    scenario_biz_date = (base_biz_date + timedelta(days=scenario_index)).isoformat()
+    scenario_request_ids[label] = launch(label, job, params, scenario_biz_date)
 
 print("==> wait worker terminal states", flush=True)
 deadline = time.time() + 120
@@ -187,6 +200,31 @@ while time.time() < deadline:
     if done >= expected_jobs:
         break
     time.sleep(3)
+
+request_ids = ",".join(scenario_request_ids.values())
+outcomes = psql(
+    os.environ["PLATFORM_DB"],
+    "select-stage2-workflow-outcomes.sql",
+    {"request_ids": request_ids},
+    tuples=True,
+)
+actual = {}
+for line in (outcomes.stdout or "").splitlines():
+    fields = line.split("|")
+    if len(fields) == 6:
+        actual[fields[0]] = tuple(fields[1:])
+
+expected_workflow_status = {label: expected for label, _, _, expected in SCENARIOS}
+for label, request_id in scenario_request_ids.items():
+    expected_job_status = expected_workflow_status[label]
+    expected_status = "LAUNCHED|{0}|{0}|{0}|{0}".format(expected_job_status)
+    actual_status = "|".join(actual.get(request_id, ()))
+    if actual_status != expected_status:
+        raise SystemExit(
+            f"scenario {label} did not reach its expected workflow/job terminal state: "
+            f"requestId={request_id} expected={expected_status} actual={actual_status or '<missing>'}"
+        )
+    print(f"  [terminal] {label:16s} {actual_status}", flush=True)
 
 queries = {
     "job_status": "select-import-instance-status.sql",

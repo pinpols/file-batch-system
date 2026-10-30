@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.shared.view;
 
 import java.time.Instant;
+import lombok.Builder;
 
+@Builder
 public record ConsoleOutboxDeliveryLogResponse(
     Long id,
     String tenantId,

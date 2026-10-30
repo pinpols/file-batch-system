@@ -92,10 +92,8 @@ batch:
         probe-interval-millis: ${BATCH_DISPATCH_HEALTH_PROBE_INTERVAL_MS:60000}
         # 最大退避上限（毫秒）
         max-backoff-millis: ${BATCH_DISPATCH_HEALTH_MAX_BACKOFF_MS:900000}
-        # 探测通道类型列表（按实现约定）
-        probe-channel-types:
-          - NAS
-          - OSS
+        # 探测类型使用 DispatchChannelHealthProperties 的统一默认值。
+        # 不能缩减为 NAS/OSS，否则 API 等渠道失败后没有恢复探针，派发会永久等待。
       receipt-poll:
         # 回执轮询：定期拉取/确认回执状态
         enabled: true

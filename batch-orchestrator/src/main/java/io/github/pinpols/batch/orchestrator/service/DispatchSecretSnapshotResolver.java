@@ -1,19 +1,16 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
+import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
-import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +21,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DispatchSecretSnapshotResolver {
 
-  static final String SNAPSHOT_KEY = "_dispatchSecretBindings";
   private static final Set<String> CHANNEL_KEYS = Set.of(
       "channelCode",
       "channel_code",
@@ -34,25 +30,23 @@ public class DispatchSecretSnapshotResolver {
       "dispatchChannelCode");
 
   private final DispatchSecretBindingMapper bindingMapper;
-  private final WorkflowNodeMapper workflowNodeMapper;
 
   public Map<String, Object> pin(
-      String tenantId,
-      String jobType,
-      Long workflowDefinitionId,
-      Map<String, Object> effectiveParams) {
+      String tenantId, String jobType, Map<String, Object> effectiveParams) {
     Map<String, Object> trustedParams = withoutCallerBindings(effectiveParams);
-    if (!JobType.DISPATCH.code().equals(jobType) && !JobType.WORKFLOW.code().equals(jobType)) {
+    if (!JobType.DISPATCH.code().equals(jobType)
+        && !JobType.BUNDLE_DISPATCH.code().equals(jobType)) {
       return trustedParams;
     }
-    Set<String> channelCodes = new LinkedHashSet<>();
-    collectChannels(trustedParams, channelCodes);
-    if (JobType.WORKFLOW.code().equals(jobType) && EmptyChecks.isNotNull(workflowDefinitionId)) {
-      List<WorkflowNodeEntity> nodes =
-          workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId);
-      for (WorkflowNodeEntity node : nodes) {
-        collectChannels(parseObject(node.getNodeParams()), channelCodes);
-      }
+    boolean bundleDispatch = JobType.BUNDLE_DISPATCH.code().equals(jobType);
+    String selectedChannel =
+        bundleDispatch ? null : DispatchChannelSelection.explicitChannel(trustedParams);
+    Set<String> channelCodes;
+    if (bundleDispatch) {
+      channelCodes = BundlePlanParams.dispatchChannelCodes(trustedParams);
+    } else {
+      channelCodes = new LinkedHashSet<>();
+      collectChannels(trustedParams, channelCodes);
     }
     if (EmptyChecks.isEmpty(channelCodes)) {
       return trustedParams;
@@ -64,6 +58,12 @@ public class DispatchSecretSnapshotResolver {
         bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
       if (EmptyChecks.isNull(binding.secretVersionId())
           || EmptyChecks.isNull(binding.versionNo())) {
+        // 递归候选可能仅存在于业务元数据；仅明确目标或无明确目标时沿原语义阻断。
+        if (!bundleDispatch
+            && EmptyChecks.isNotNull(selectedChannel)
+            && !selectedChannel.equals(binding.channelCode())) {
+          continue;
+        }
         throw BizException.of(
             ResultCode.CREDENTIAL_REF_UNRESOLVED,
             ResultCode.CREDENTIAL_REF_UNRESOLVED.detailKey(),
@@ -76,17 +76,18 @@ public class DispatchSecretSnapshotResolver {
       bindings.put(binding.channelCode(), reference);
     }
     if (EmptyChecks.isNotEmpty(bindings)) {
-      pinned.put(SNAPSHOT_KEY, bindings);
+      pinned.put(DispatchTaskKeys.SECRET_BINDINGS, bindings);
     }
     return pinned;
   }
 
   private Map<String, Object> withoutCallerBindings(Map<String, Object> effectiveParams) {
-    if (EmptyChecks.isNull(effectiveParams) || !effectiveParams.containsKey(SNAPSHOT_KEY)) {
+    if (EmptyChecks.isNull(effectiveParams)
+        || !effectiveParams.containsKey(DispatchTaskKeys.SECRET_BINDINGS)) {
       return EmptyChecks.isNull(effectiveParams) ? Map.of() : effectiveParams;
     }
     Map<String, Object> sanitized = new LinkedHashMap<>(effectiveParams);
-    sanitized.remove(SNAPSHOT_KEY);
+    sanitized.remove(DispatchTaskKeys.SECRET_BINDINGS);
     return sanitized;
   }
 
@@ -95,10 +96,12 @@ public class DispatchSecretSnapshotResolver {
       for (Map.Entry<?, ?> entry : map.entrySet()) {
         String key = String.valueOf(entry.getKey());
         Object nested = entry.getValue();
-        if (CHANNEL_KEYS.contains(key)
-            && EmptyChecks.isNotNull(nested)
-            && EmptyChecks.isNotBlank(String.valueOf(nested))) {
-          channels.add(String.valueOf(nested).trim());
+        if (CHANNEL_KEYS.contains(key) && EmptyChecks.isNotNull(nested)) {
+          String checkedChannel = String.valueOf(nested);
+          if (EmptyChecks.isNotBlank(checkedChannel)) {
+            String channel = String.valueOf(nested);
+            channels.add(channel.trim());
+          }
         }
         collectChannels(nested, channels);
       }
@@ -108,23 +111,6 @@ public class DispatchSecretSnapshotResolver {
       for (Object item : values) {
         collectChannels(item, channels);
       }
-    }
-  }
-
-  private Map<String, Object> parseObject(String json) {
-    if (EmptyChecks.isBlank(json)) {
-      return Map.of();
-    }
-    try {
-      Object parsed = JsonUtils.fromJson(json, new TypeReference<Object>() {});
-      if (!(parsed instanceof Map<?, ?> values)) {
-        return Map.of();
-      }
-      Map<String, Object> result = new LinkedHashMap<>();
-      values.forEach((key, value) -> result.put(String.valueOf(key), value));
-      return result;
-    } catch (RuntimeException exception) {
-      return Map.of();
     }
   }
 }

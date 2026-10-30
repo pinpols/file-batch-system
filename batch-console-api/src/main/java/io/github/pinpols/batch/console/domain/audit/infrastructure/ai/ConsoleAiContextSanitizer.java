@@ -26,7 +26,9 @@ final class ConsoleAiContextSanitizer {
     if (!"v1".equals(contextVersion)) {
       throw invalid("unsupported context version");
     }
-    if (EmptyChecks.isNotEmpty(context) && EmptyChecks.isNotNull(pageContext)) {
+    boolean bothContextSourcesWereProvided =
+        EmptyChecks.isNotEmpty(context) && EmptyChecks.isNotNull(pageContext);
+    if (bothContextSourcesWereProvided) {
       throw invalid("context and pageContext cannot both be provided");
     }
     Map<String, Object> normalized =
@@ -51,7 +53,8 @@ final class ConsoleAiContextSanitizer {
       safeContext.put(key, sanitized);
     }
     String json = JsonUtils.toJson(safeContext);
-    if (json.length() > Math.min(maxChars, HARD_MAX_CONTEXT_CHARS)) {
+    int effectiveMaxChars = Math.min(maxChars, HARD_MAX_CONTEXT_CHARS);
+    if (json.length() > effectiveMaxChars) {
       throw invalid("context exceeds maximum serialized length");
     }
     return json;

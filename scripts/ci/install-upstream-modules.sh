@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：安装 E2E 与治理测试依赖的上游 Maven 模块。
+# 用法：在仓库根目录执行 bash scripts/ci/install-upstream-modules.sh；参数与前置环境见下方说明及所属 README。
 set -euo pipefail
 
 # Maven Central 的临时 5xx 不应让完整 E2E 门禁在依赖安装阶段直接失败。

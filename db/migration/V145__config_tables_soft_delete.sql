@@ -23,6 +23,7 @@
 -- ============================================================================
 
 -- file_channel_config
+
 ALTER TABLE batch.file_channel_config
     ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_file_channel_config_active
@@ -32,6 +33,7 @@ COMMENT ON COLUMN batch.file_channel_config.is_deleted IS
     '软删除标记(true = 已删除);业务 SELECT 默认过滤,delete 路径改 UPDATE。CommonFragments.xml#activePredicate';
 
 -- notification_channel
+
 ALTER TABLE batch.notification_channel
     ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_notification_channel_active
@@ -41,6 +43,7 @@ COMMENT ON COLUMN batch.notification_channel.is_deleted IS
     '软删除标记(true = 已删除);业务 SELECT 默认过滤,delete 路径改 UPDATE。CommonFragments.xml#activePredicate';
 
 -- webhook_subscription
+
 ALTER TABLE batch.webhook_subscription
     ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_webhook_subscription_active
@@ -50,6 +53,7 @@ COMMENT ON COLUMN batch.webhook_subscription.is_deleted IS
     '软删除标记(true = 已删除);业务 SELECT 默认过滤,delete 路径改 UPDATE。CommonFragments.xml#activePredicate';
 
 -- alert_routing_config
+
 ALTER TABLE batch.alert_routing_config
     ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_alert_routing_config_active

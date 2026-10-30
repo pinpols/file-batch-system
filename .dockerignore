@@ -54,3 +54,9 @@ examples/**/target
 examples/**/node_modules
 !batch-e2e-tests/
 !batch-e2e-tests/pom.xml
+
+# 本地环境文件不进入 Docker 上下文，避免被 COPY 写入 builder 层和构建缓存。
+# 只保留明确的公开示例模板；新模板需逐项确认后登记。
+**/.env
+**/.env.*
+!**/.env.example

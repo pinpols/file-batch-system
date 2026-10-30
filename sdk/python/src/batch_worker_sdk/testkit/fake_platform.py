@@ -244,7 +244,8 @@ async def _read_json(request: web.Request) -> dict[str, Any]:
     if not raw:
         return {}
     with contextlib.suppress(json.JSONDecodeError, UnicodeDecodeError):
-        decoded = json.loads(raw.decode("utf-8"))
+        decoded_body = raw.decode("utf-8")
+        decoded = json.loads(decoded_body)
         if isinstance(decoded, dict):
             return decoded
     return {}

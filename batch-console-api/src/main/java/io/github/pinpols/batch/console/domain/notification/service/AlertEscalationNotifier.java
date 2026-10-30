@@ -12,6 +12,9 @@ import io.github.pinpols.batch.console.config.AlertEscalationNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.AlertEscalationNotificationOutboxEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEscalationNotificationOutboxMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkFailedParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkGiveUpParam;
+import io.github.pinpols.batch.console.domain.notification.param.AlertEscalationNotificationOutboxMarkPublishingParam;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -58,7 +61,7 @@ import org.springframework.stereotype.Component;
  * <p>边界:本组件只发布 {@code ALERT_ESCALATED} 领域事件；后续由订阅规则按 WEBHOOK、EMAIL、DINGTALK、WECOM、
  * SLACK 或 SMS 路由到已注册的 sender。Alertmanager 迁移后本组件默认关闭，仅保留为回滚路径。
  *
- * <p>条件启用:默认开({@code batch.alert.escalation.notify.enabled=true});关掉退化回 V176 纯日志/指标放大。
+ * <p>条件启用:默认关闭；显式设置 {@code batch.alert.escalation.notify.enabled=true} 时启用回滚通知路径。
  */
 @Component
 @Slf4j
@@ -186,9 +189,8 @@ public class AlertEscalationNotifier {
       lockingTaskExecutor.executeWithLock((Runnable) this::pollLocked, lockConfig());
     } catch (DataAccessException dae) {
       if (stopping.get() && isShutdownNoise(dae)) {
-        log.info(
-            "AlertEscalationNotifier poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(dae));
+        String causeSummary = SwallowedExceptionLogger.summary(dae);
+        log.info("AlertEscalationNotifier poll skipped during shutdown: {}", causeSummary);
         return;
       }
       log.warn(
@@ -198,9 +200,8 @@ public class AlertEscalationNotifier {
               : SwallowedExceptionLogger.summary(dae.getMostSpecificCause()));
     } catch (Exception t) {
       if (stopping.get() && isShutdownNoise(t)) {
-        log.info(
-            "AlertEscalationNotifier poll skipped during shutdown: {}",
-            SwallowedExceptionLogger.summary(t));
+        String causeSummary = SwallowedExceptionLogger.summary(t);
+        log.info("AlertEscalationNotifier poll skipped during shutdown: {}", causeSummary);
         return;
       }
       log.error("AlertEscalationNotifier failed", t);
@@ -213,10 +214,11 @@ public class AlertEscalationNotifier {
     Throwable current = throwable;
     while (current != null) {
       String message = current.getMessage();
-      if (message != null
+      boolean isConnectionShutdownMessage = EmptyChecks.isNotNull(message)
           && (message.contains("LettuceConnectionFactory is STOPPING")
               || message.contains("has been closed")
-              || message.contains("Connection pool shut down"))) {
+              || message.contains("Connection pool shut down"));
+      if (isConnectionShutdownMessage) {
         return true;
       }
       current = current.getCause();
@@ -309,12 +311,16 @@ public class AlertEscalationNotifier {
   }
 
   private void publishOne(AlertEscalationNotificationOutboxEntity row) {
-    int claimed = outboxMapper.markPublishing(
-        row.getId(),
-        row.getTenantId(),
-        OutboxPublishStatus.PUBLISHING.code(),
-        OutboxPublishStatus.NEW.code(),
-        OutboxPublishStatus.FAILED.code());
+    AlertEscalationNotificationOutboxMarkPublishingParam
+        alertEscalationNotificationOutboxMarkPublishingParam =
+            AlertEscalationNotificationOutboxMarkPublishingParam.builder()
+                .id(row.getId())
+                .tenantId(row.getTenantId())
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .pendingStatus1(OutboxPublishStatus.NEW.code())
+                .pendingStatus2(OutboxPublishStatus.FAILED.code())
+                .build();
+    int claimed = outboxMapper.markPublishing(alertEscalationNotificationOutboxMarkPublishingParam);
     if (claimed == 0) {
       return;
     }
@@ -341,12 +347,16 @@ public class AlertEscalationNotifier {
     int nextAttempt = zeroIfNull(row.getAttemptCount()) + 1;
     String error = BizExceptionUtils.ofLiteral(ex.getMessage()).renderedMessage();
     if (nextAttempt >= MAX_PUBLISH_ATTEMPTS) {
-      outboxMapper.markGiveUp(
-          row.getId(),
-          row.getTenantId(),
-          OutboxPublishStatus.GIVE_UP.code(),
-          error,
-          OutboxPublishStatus.PUBLISHING.code());
+      AlertEscalationNotificationOutboxMarkGiveUpParam
+          alertEscalationNotificationOutboxMarkGiveUpParam =
+              AlertEscalationNotificationOutboxMarkGiveUpParam.builder()
+                  .id(row.getId())
+                  .tenantId(row.getTenantId())
+                  .giveUpStatus(OutboxPublishStatus.GIVE_UP.code())
+                  .lastError(error)
+                  .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                  .build();
+      outboxMapper.markGiveUp(alertEscalationNotificationOutboxMarkGiveUpParam);
       log.error(
           "AlertEscalationNotifier GIVE_UP: outboxId={} alertId={} tenantId={} attempt={} error={}",
           row.getId(),
@@ -357,13 +367,17 @@ public class AlertEscalationNotifier {
       return;
     }
     Instant nextPublishAt = BatchDateTimeSupport.utcNow().plusSeconds(RETRY_DELAY_SECONDS);
-    outboxMapper.markFailed(
-        row.getId(),
-        row.getTenantId(),
-        OutboxPublishStatus.FAILED.code(),
-        nextPublishAt,
-        error,
-        OutboxPublishStatus.PUBLISHING.code());
+    AlertEscalationNotificationOutboxMarkFailedParam
+        alertEscalationNotificationOutboxMarkFailedParam =
+            AlertEscalationNotificationOutboxMarkFailedParam.builder()
+                .id(row.getId())
+                .tenantId(row.getTenantId())
+                .failedStatus(OutboxPublishStatus.FAILED.code())
+                .nextPublishAt(nextPublishAt)
+                .lastError(error)
+                .publishingStatus(OutboxPublishStatus.PUBLISHING.code())
+                .build();
+    outboxMapper.markFailed(alertEscalationNotificationOutboxMarkFailedParam);
     log.warn(
         "AlertEscalationNotifier publish failed: outboxId={} alertId={} tenantId={} attempt={} "
             + "nextPublishAt={} error={}",

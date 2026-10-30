@@ -206,14 +206,14 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
       assertThat(templateCount(templateCode)).isEqualTo(1);
     } finally {
       if (uploadToken != null) {
-        jdbcTemplate.update(
-            "delete from batch.file_channel_config where tenant_id = ? and channel_code = ?",
-            TENANT_ID,
-            channelCode);
-        jdbcTemplate.update(
-            "delete from batch.file_template_config where tenant_id = ? and template_code = ?",
-            TENANT_ID,
-            templateCode);
+        String deleteFileChannelConfigSql = """
+            delete from batch.file_channel_config where tenant_id = ? and channel_code = ?
+            """;
+        jdbcTemplate.update(deleteFileChannelConfigSql, TENANT_ID, channelCode);
+        String deleteFileTemplateConfigSql = """
+            delete from batch.file_template_config where tenant_id = ? and template_code = ?
+            """;
+        jdbcTemplate.update(deleteFileTemplateConfigSql, TENANT_ID, templateCode);
       }
     }
   }
@@ -257,19 +257,17 @@ class ConsoleTenantConfigPackageAuthenticatedIdempotencyIntegrationTest
   private record AuthenticatedClient(String jwt, String csrfToken) {}
 
   private Integer channelCount(String channelCode) {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.file_channel_config where tenant_id = ? and channel_code = ?",
-        Integer.class,
-        TENANT_ID,
-        channelCode);
+    String channelCountSql = """
+        select count(*) from batch.file_channel_config where tenant_id = ? and channel_code = ?
+        """;
+    return jdbcTemplate.queryForObject(channelCountSql, Integer.class, TENANT_ID, channelCode);
   }
 
   private Integer templateCount(String templateCode) {
-    return jdbcTemplate.queryForObject(
-        "select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?",
-        Integer.class,
-        TENANT_ID,
-        templateCode);
+    String templateCountSql = """
+        select count(*) from batch.file_template_config where tenant_id = ? and template_code = ?
+        """;
+    return jdbcTemplate.queryForObject(templateCountSql, Integer.class, TENANT_ID, templateCode);
   }
 
   private static byte[] workbookWithUniqueCodes(String channelCode, String templateCode)

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * 集成测试：QuotaRuntimeStateService 在真实数据库上的验证。 覆盖 SLIDING_WINDOW 和 CALENDAR_DAY 重置、峰值追踪及 reconcile。
@@ -21,7 +22,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@org.springframework.test.context.TestPropertySource(
+@TestPropertySource(
     properties = {
       "batch.quota.runtime-store=database",
       "batch.quota.backend-guard.cutover-id=quota-it-database"
@@ -273,6 +274,39 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("全局过期窗口对账应分别重置同名配额状态且不串租户")
+  void shouldReconcileExpiredStatesIndependentlyAcrossTenants() {
+    String ownerCode = "reconcile-multi-tenant-" + BatchDateTimeSupport.utcEpochMillis();
+    var now = BatchDateTimeSupport.utcNow();
+    for (String tenantId : List.of("quota-tenant-a", "quota-tenant-b")) {
+      quotaRuntimeStateMapper.insert(new QuotaRuntimeStateEntity(
+          null,
+          tenantId,
+          "JOB",
+          ownerCode,
+          "SLIDING_WINDOW",
+          now.minusSeconds(7200),
+          now.minusSeconds(3600),
+          5,
+          null,
+          now,
+          now,
+          null));
+    }
+
+    quotaRuntimeStateService.reconcileExpiredStates(2);
+
+    for (String tenantId : List.of("quota-tenant-a", "quota-tenant-b")) {
+      QuotaRuntimeStateEntity updated =
+          quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner(tenantId, "JOB", ownerCode);
+      assertThat(updated).isNotNull();
+      assertThat(updated.peakBorrowedCount()).isZero();
+      assertThat(updated.windowExpiresAt()).isAfter(now);
+      assertThat(updated.version()).isEqualTo(1L);
+    }
+  }
+
+  @Test
   @DisplayName("窗口已过期时再次预留应在一次版本更新内刷新窗口,并同时记录借用峰值与新的过期时间")
   void shouldRefreshExpiredWindowAndReserveWithOneVersionUpdate() {
     String ownerCode = "sw-reset-reserve-" + BatchDateTimeSupport.utcEpochMillis();
@@ -335,5 +369,49 @@ class QuotaRuntimeStateIntegrationTest extends AbstractIntegrationTest {
 
     boolean found = expired.stream().anyMatch(r -> ownerCode.equals(r.ownerCode()));
     assertThat(found).isTrue();
+  }
+
+  @Test
+  @DisplayName("配额状态 CAS 更新必须同时匹配记录租户")
+  void updateWithCas_rejectsTenantMismatch() {
+    String ownerCode = "tenant-fence-" + BatchDateTimeSupport.utcEpochMillis();
+    var now = BatchDateTimeSupport.utcNow();
+    quotaRuntimeStateMapper.insert(new QuotaRuntimeStateEntity(
+        null,
+        "quota-tenant-a",
+        "JOB",
+        ownerCode,
+        "SLIDING_WINDOW",
+        now.minusSeconds(7200),
+        now.minusSeconds(3600),
+        5,
+        null,
+        now,
+        now,
+        null));
+    QuotaRuntimeStateEntity persisted =
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("quota-tenant-a", "JOB", ownerCode);
+    QuotaRuntimeStateEntity forgedTenant = new QuotaRuntimeStateEntity(
+        persisted.id(),
+        "quota-tenant-b",
+        persisted.quotaScope(),
+        persisted.ownerCode(),
+        "CALENDAR_DAY",
+        persisted.windowStartedAt(),
+        persisted.windowExpiresAt(),
+        0,
+        persisted.lastResetAt(),
+        persisted.createdAt(),
+        now,
+        persisted.version());
+
+    int updated = quotaRuntimeStateMapper.updateWithCas(forgedTenant);
+
+    QuotaRuntimeStateEntity unchanged =
+        quotaRuntimeStateMapper.selectByTenantQuotaScopeOwner("quota-tenant-a", "JOB", ownerCode);
+    assertThat(updated).isZero();
+    assertThat(unchanged.quotaResetPolicy()).isEqualTo("SLIDING_WINDOW");
+    assertThat(unchanged.peakBorrowedCount()).isEqualTo(5);
+    assertThat(unchanged.version()).isZero();
   }
 }

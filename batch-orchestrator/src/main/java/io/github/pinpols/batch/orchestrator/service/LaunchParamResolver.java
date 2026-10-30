@@ -4,10 +4,12 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.context.RunModeSupport;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
+import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
@@ -16,9 +18,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
@@ -59,8 +64,12 @@ public class LaunchParamResolver {
     if (request != null && request.params() != null) {
       merged.putAll(request.params());
     }
+    // 文件束身份只能由分区绑定生成，不能从调用方或作业默认参数继承。
+    merged.remove("bundleSourceFileId");
+    merged.remove("bundleTargetRef");
     TriggerType triggerType = request == null ? null : request.triggerType();
-    return RunModeSupport.copyWithDefault(merged, resolveRunMode(triggerType, merged));
+    RunMode resolvedRunMode = resolveRunMode(triggerType, merged);
+    return RunModeSupport.copyWithDefault(merged, resolvedRunMode);
   }
 
   /**
@@ -76,16 +85,23 @@ public class LaunchParamResolver {
     }
     CustomTaskTypeRegistryEntity entity = customTaskTypeRegistryMapper.selectByTenantAndCode(
         jobDefinition.tenantId(), jobDefinition.jobType());
-    if (entity == null || entity.descriptor() == null || entity.descriptor().isBlank()) {
+    if (EmptyChecks.isNull(entity)) {
       return;
     }
-    Map<String, Object> defaults = parseDescriptorDefaults(entity.descriptor());
+    String descriptorJson = entity.descriptor();
+    if (EmptyChecks.isNull(descriptorJson) || EmptyChecks.isBlank(descriptorJson)) {
+      return;
+    }
+    Map<String, Object> defaults = parseDescriptorDefaults(descriptorJson);
     if (defaults.isEmpty()) {
       return;
     }
     Map<String, String> variables = templateVariables(request);
     for (Map.Entry<String, Object> entry : defaults.entrySet()) {
-      merged.put(entry.getKey(), substituteTemplates(entry.getValue(), variables));
+      String key = entry.getKey();
+      Object defaultValue = entry.getValue();
+      Object resolvedValue = substituteTemplates(defaultValue, variables);
+      merged.put(key, resolvedValue);
     }
   }
 
@@ -134,8 +150,9 @@ public class LaunchParamResolver {
     StringBuilder sb = new StringBuilder();
     while (matcher.find()) {
       String replacement = variables.get(matcher.group(1));
-      matcher.appendReplacement(
-          sb, Matcher.quoteReplacement(replacement != null ? replacement : matcher.group()));
+      String replacementText = EmptyChecks.isNotNull(replacement) ? replacement : matcher.group();
+      String quotedReplacement = Matcher.quoteReplacement(replacementText);
+      matcher.appendReplacement(sb, quotedReplacement);
     }
     matcher.appendTail(sb);
     return sb.toString();
@@ -143,15 +160,23 @@ public class LaunchParamResolver {
 
   String resolveBatchNo(LocalDate bizDate, Map<String, Object> params) {
     Object v = firstNonNull(params.get("batchNo"), params.get("batch_no"), params.get("batchCode"));
-    if (v != null && !String.valueOf(v).isBlank()) {
-      return String.valueOf(v).trim();
+    if (EmptyChecks.isNotNull(v)) {
+      String checkedText = String.valueOf(v);
+      if (!EmptyChecks.isBlank(Objects.requireNonNull(checkedText))) {
+        String returnedText = String.valueOf(v);
+        return returnedText.trim();
+      }
     }
     return bizDate == null ? null : bizDate.toString();
   }
 
   static String resolveOperatorId(Map<String, Object> params) {
     Object v = firstNonNull(params.get("operatorId"), params.get("operator"), params.get("userId"));
-    return v == null ? null : String.valueOf(v).trim();
+    if (EmptyChecks.isNull(v)) {
+      return null;
+    }
+    String rawText = String.valueOf(v);
+    return rawText.trim();
   }
 
   boolean resolveRerunFlag(TriggerType triggerType, Map<String, Object> params) {
@@ -200,17 +225,23 @@ public class LaunchParamResolver {
 
   String resolveRerunReason(Map<String, Object> params) {
     Object v = firstNonNull(params.get("rerunReason"), params.get("reason"));
-    return v == null ? null : String.valueOf(v).trim();
+    if (EmptyChecks.isNull(v)) {
+      return null;
+    }
+    String rawText = String.valueOf(v);
+    return rawText.trim();
   }
 
   Long resolveRelatedFileId(Map<String, Object> params) {
-    return toPositiveLong(firstNonNull(
-        params.get("relatedFileId"), params.get("fileId"), params.get("sourceFileId")));
+    Object relatedFileIdValue =
+        firstNonNull(params.get("relatedFileId"), params.get("fileId"), params.get("sourceFileId"));
+    return toPositiveLong(relatedFileIdValue);
   }
 
-  Long resolveParentInstanceId(Map<String, Object> params) {
-    return toPositiveLong(
-        firstNonNull(params.get("parentInstanceId"), params.get("targetInstanceId")));
+  public Long resolveParentInstanceId(Map<String, Object> params) {
+    Object parentInstanceIdValue =
+        firstNonNull(params.get("parentInstanceId"), params.get("targetInstanceId"));
+    return toPositiveLong(parentInstanceIdValue);
   }
 
   Instant resolveDeadlineAt(
@@ -219,22 +250,26 @@ public class LaunchParamResolver {
       JobDefinitionEntity jobDefinition,
       Map<String, Object> params,
       Instant batchDaySlaDeadlineAt) {
-    Instant explicit = parseDeadlineInstant(
-        firstNonNull(params.get("deadlineAt"), params.get("deadline"), params.get("slaDeadlineAt")),
-        bizDate);
+    Object requestedDeadlineValue =
+        firstNonNull(params.get("deadlineAt"), params.get("deadline"), params.get("slaDeadlineAt"));
+    Instant explicit = parseDeadlineInstant(requestedDeadlineValue, bizDate);
     Instant deadlineTime = parseDeadlineInstant(params.get("deadlineTime"), bizDate);
     Instant jobDeadlineAt = resolveJobDeadlineAt(createdAt, jobDefinition);
     return earliest(explicit, deadlineTime, jobDeadlineAt, batchDaySlaDeadlineAt);
   }
 
   Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionEntity jobDefinition) {
-    if (createdAt == null
-        || jobDefinition == null
-        || jobDefinition.timeoutSeconds() == null
-        || jobDefinition.timeoutSeconds() <= 0) {
+    if (EmptyChecks.isNull(createdAt)) {
       return null;
     }
-    return createdAt.plusSeconds(jobDefinition.timeoutSeconds());
+    if (EmptyChecks.isNull(jobDefinition)) {
+      return null;
+    }
+    Integer timeoutSeconds = jobDefinition.timeoutSeconds();
+    if (EmptyChecks.isNull(timeoutSeconds) || timeoutSeconds <= 0) {
+      return null;
+    }
+    return createdAt.plusSeconds(timeoutSeconds);
   }
 
   Integer resolveExpectedDurationSeconds(
@@ -247,10 +282,11 @@ public class LaunchParamResolver {
     if (explicitValue != null) {
       return explicitValue;
     }
-    if (jobDefinition != null
-        && jobDefinition.timeoutSeconds() != null
-        && jobDefinition.timeoutSeconds() > 0) {
-      return jobDefinition.timeoutSeconds();
+    if (EmptyChecks.isNotNull(jobDefinition)) {
+      Integer timeoutSeconds = jobDefinition.timeoutSeconds();
+      if (EmptyChecks.isNotNull(timeoutSeconds) && timeoutSeconds > 0) {
+        return timeoutSeconds;
+      }
     }
     return 0;
   }
@@ -259,7 +295,8 @@ public class LaunchParamResolver {
       @Nullable JobDefinitionEntity jobDefinition,
       LaunchRequest request,
       Map<String, Object> effectiveParams,
-      String traceId) {
+      String traceId,
+      ReplayExecutionGuard replayExecutionGuard) {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("jobDefinitionId", jobDefinition == null ? null : jobDefinition.id());
     snapshot.put("jobDefinitionVersion", jobDefinition == null ? null : jobDefinition.version());
@@ -282,6 +319,12 @@ public class LaunchParamResolver {
             : jobDefinition.defaultParams());
     snapshot.put("requestParams", request.params() == null ? Map.of() : request.params());
     snapshot.put("effectiveParams", effectiveParams == null ? Map.of() : effectiveParams);
+    if (EmptyChecks.isNotEmpty(request.dependencyResultSnapshot())) {
+      snapshot.put("dependencyResultSnapshot", request.dependencyResultSnapshot());
+    }
+    if (EmptyChecks.isNotNull(replayExecutionGuard)) {
+      snapshot.put("replayExecutionGuard", replayExecutionGuard);
+    }
     return JsonUtils.toJson(snapshot);
   }
 
@@ -299,7 +342,8 @@ public class LaunchParamResolver {
   }
 
   String buildPayloadJson(Map<String, Object> params) {
-    return JsonUtils.toJson(params == null ? Map.of() : params);
+    Map<String, Object> resolvedParams = EmptyChecks.isNull(params) ? Map.of() : params;
+    return JsonUtils.toJson(resolvedParams);
   }
 
   Instant parseDeadlineInstant(Object value, LocalDate bizDate) {
@@ -310,13 +354,19 @@ public class LaunchParamResolver {
       return instant;
     }
     if (value instanceof LocalDateTime ldt) {
-      return ldt.atZone(timezoneProvider.defaultZone()).toInstant();
+      ZoneId defaultZone = timezoneProvider.defaultZone();
+      ZonedDateTime zonedDeadline = ldt.atZone(defaultZone);
+      return zonedDeadline.toInstant();
     }
     if (value instanceof LocalTime lt) {
       LocalDate d = resolveDateOrTodayInDefaultZone(bizDate);
-      return d.atTime(lt).atZone(timezoneProvider.defaultZone()).toInstant();
+      LocalDateTime deadline = d.atTime(lt);
+      ZoneId defaultZone = timezoneProvider.defaultZone();
+      ZonedDateTime zonedDeadline = deadline.atZone(defaultZone);
+      return zonedDeadline.toInstant();
     }
-    String text = String.valueOf(value).trim();
+    String rawText = String.valueOf(value);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
@@ -326,15 +376,20 @@ public class LaunchParamResolver {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     try {
-      return LocalDateTime.parse(text).atZone(timezoneProvider.defaultZone()).toInstant();
+      LocalDateTime localDeadline = LocalDateTime.parse(text);
+      ZoneId defaultZone = timezoneProvider.defaultZone();
+      ZonedDateTime zonedDeadline = localDeadline.atZone(defaultZone);
+      return zonedDeadline.toInstant();
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
     try {
       LocalDate d = resolveDateOrTodayInDefaultZone(bizDate);
-      return d.atTime(LocalTime.parse(text))
-          .atZone(timezoneProvider.defaultZone())
-          .toInstant();
+      LocalTime parsedDeadline = LocalTime.parse(text);
+      LocalDateTime localDeadline = d.atTime(parsedDeadline);
+      ZoneId defaultZone = timezoneProvider.defaultZone();
+      ZonedDateTime zonedDeadline = localDeadline.atZone(defaultZone);
+      return zonedDeadline.toInstant();
     } catch (Exception ignored) {
       SwallowedExceptionLogger.warn(LaunchParamResolver.class, "catch:Exception", ignored);
     }
@@ -385,7 +440,8 @@ public class LaunchParamResolver {
     if (candidate == null) {
       return null;
     }
-    String text = String.valueOf(candidate).trim();
+    String rawText = String.valueOf(candidate);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
@@ -401,14 +457,11 @@ public class LaunchParamResolver {
   }
 
   Long toPositiveLong(Object candidate) {
-    if (candidate instanceof Number n) {
-      long v = n.longValue();
-      return v > 0 ? v : null;
-    }
     if (candidate == null) {
       return null;
     }
-    String text = String.valueOf(candidate).trim();
+    String rawText = String.valueOf(candidate);
+    String text = rawText.trim();
     if (text.isEmpty()) {
       return null;
     }
@@ -436,7 +489,8 @@ public class LaunchParamResolver {
     if (candidate == null) {
       return null;
     }
-    String text = String.valueOf(candidate).trim();
+    String rawText = String.valueOf(candidate);
+    String text = rawText.trim();
     return text.isEmpty() ? null : text;
   }
 

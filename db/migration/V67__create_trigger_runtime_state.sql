@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS batch.trigger_runtime_state (
     scheduled_at             TIMESTAMPTZ,
     -- misfire 累计计数(用于运维观察某 trigger 长期不健康)
     misfire_count            BIGINT       NOT NULL DEFAULT 0,
-    version                  INTEGER      NOT NULL DEFAULT 1,  -- 乐观锁
+    -- 乐观锁
+    version                  INTEGER      NOT NULL DEFAULT 1,
     created_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at               TIMESTAMPTZ  NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_trigger_runtime_state_job_def UNIQUE (job_definition_id),
@@ -39,16 +40,19 @@ CREATE TABLE IF NOT EXISTS batch.trigger_runtime_state (
 );
 
 -- 给 slidingWindow 扫库用:只看未占位的、即将 fire 的行
+
 CREATE INDEX IF NOT EXISTS idx_trigger_runtime_state_next_fire
     ON batch.trigger_runtime_state (next_fire_time)
     WHERE scheduled_fire_marker IS NULL;
 
 -- 给 stale marker 接管扫描用:周期清理崩溃 leader 留下的占位
+
 CREATE INDEX IF NOT EXISTS idx_trigger_runtime_state_marker_stale
     ON batch.trigger_runtime_state (scheduled_at)
     WHERE scheduled_fire_marker IS NOT NULL;
 
 -- 给运维查询某 tenant 所有 trigger 状态用
+
 CREATE INDEX IF NOT EXISTS idx_trigger_runtime_state_tenant_job
     ON batch.trigger_runtime_state (tenant_id, job_code);
 

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleResultVersionResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>5 个端点：list / effective / detail / promote / reject。 console UI 通过本路径访问 orchestrator 的 {@code
  * /internal/orchestrator/result-versions/...} 内部端点； 业务规则（partial unique index / promote 顺序）由
- * orchestrator service 保证，console 只做鉴权 + 透传。
+ * orchestrator service 保证，console 负责角色/租户边界及安全元数据投影。
  */
 @RestController
 @RequestMapping("/api/console/result-versions")
@@ -63,6 +64,11 @@ public class ConsoleResultVersionController {
 
   // P0-1: promote/reject 是高危结果版本变更，要求管理员/配置管理员权限；P1-6：强制幂等键
   @PostMapping("/{id}/promote")
+  @AuditAction(
+      action = "result_version.promote",
+      aggregateType = "result_version",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @Idempotent
   public CommonResponse<ConsoleResultVersionResponse> promote(
@@ -75,6 +81,11 @@ public class ConsoleResultVersionController {
   }
 
   @PostMapping("/{id}/reject")
+  @AuditAction(
+      action = "result_version.reject",
+      aggregateType = "result_version",
+      aggregateId = "#id",
+      targetTenantParam = "#tenantId")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   @Idempotent
   public CommonResponse<ConsoleResultVersionResponse> reject(

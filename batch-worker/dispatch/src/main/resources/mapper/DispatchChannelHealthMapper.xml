@@ -2,8 +2,47 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthMapper">
 
-    <select id="findEnabledProbeChannels" resultType="map">
-        select *
+    <resultMap id="dispatchChannelConfigViewMap"
+               type="io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelConfigView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_name" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="target_endpoint" javaType="java.lang.String"/>
+            <arg column="auth_type" javaType="java.lang.String"/>
+            <arg column="config_json" javaType="java.lang.Object"/>
+            <arg column="receipt_policy" javaType="java.lang.String"/>
+            <arg column="timeout_seconds" javaType="java.lang.Integer"/>
+            <arg column="enabled" javaType="java.lang.Boolean"/>
+            <arg column="created_at" javaType="java.time.Instant"/>
+            <arg column="updated_at" javaType="java.time.Instant"/>
+            <arg column="is_deleted" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+
+    <resultMap id="dispatchChannelHealthViewMap"
+               type="io.github.pinpols.batch.worker.dispatchs.mapper.DispatchChannelHealthView">
+        <constructor>
+            <arg column="tenant_id" javaType="java.lang.String"/>
+            <arg column="channel_code" javaType="java.lang.String"/>
+            <arg column="channel_type" javaType="java.lang.String"/>
+            <arg column="health_status" javaType="java.lang.String"/>
+            <arg column="consecutive_failures" javaType="java.lang.Integer"/>
+            <arg column="last_probe_at" javaType="java.time.Instant"/>
+            <arg column="last_success_at" javaType="java.time.Instant"/>
+            <arg column="last_failure_at" javaType="java.time.Instant"/>
+            <arg column="next_probe_at" javaType="java.time.Instant"/>
+            <arg column="probe_message" javaType="java.lang.String"/>
+            <arg column="probe_evidence" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <select id="findEnabledProbeChannels" resultMap="dispatchChannelConfigViewMap">
+        select id, tenant_id, channel_code, channel_name, channel_type, target_endpoint,
+               auth_type, config_json, receipt_policy, timeout_seconds, enabled,
+               created_at, updated_at, is_deleted
           from batch.file_channel_config
          where enabled = true
            and is_deleted = false
@@ -15,8 +54,10 @@
          limit #{limit}
     </select>
 
-    <select id="findHealth" resultType="map">
-        select *
+    <select id="findHealth" resultMap="dispatchChannelHealthViewMap">
+        select tenant_id, channel_code, channel_type, health_status, consecutive_failures,
+               last_probe_at, last_success_at, last_failure_at, next_probe_at,
+               probe_message, probe_evidence
           from batch.file_channel_health
          where tenant_id   = #{tenantId}
            and channel_code = #{channelCode}
@@ -27,7 +68,7 @@
       仅当当前 next_probe_at <= :now 且状态非 HEALTHY 时才更新，返回受影响行数 0/1；
       1 表示本线程获得半开通行证，可以放行一次真实分发作为隐式探针。
     -->
-    <update id="tryClaimHalfOpenProbe" parameterType="map">
+    <update id="tryClaimHalfOpenProbe" parameterType="io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthProbeClaimParam">
         update batch.file_channel_health
            set next_probe_at = #{newNextProbeAt},
                updated_at    = current_timestamp
@@ -47,9 +88,9 @@
             last_probe_at, last_success_at, last_failure_at, next_probe_at,
             probe_message, probe_evidence, updated_at
         ) values (
-            #{tenantId}, #{channelCode}, #{channelType}, #{healthyStatus}, 0,
-            #{now}, #{now}, null, #{nextProbeAt},
-            #{probeMessage}, #{probeEvidence}, current_timestamp
+            #{params.tenantId}, #{params.channelCode}, #{params.channelType}, #{healthyStatus}, 0,
+            #{params.now}, #{params.now}, null, #{params.nextProbeAt},
+            #{params.probeMessage}, #{params.probeEvidence}, current_timestamp
         )
         on conflict (tenant_id, channel_code) do update set
             channel_type          = excluded.channel_type,
@@ -74,18 +115,18 @@
             last_probe_at, last_success_at, last_failure_at, next_probe_at,
             probe_message, probe_evidence, updated_at
         ) values (
-            #{tenantId}, #{channelCode}, #{channelType},
-            case when 1 &gt;= #{failureThreshold} then #{unhealthyStatus} else #{degradedStatus} end,
+            #{params.tenantId}, #{params.channelCode}, #{params.channelType},
+            case when 1 &gt;= #{params.failureThreshold} then #{unhealthyStatus} else #{degradedStatus} end,
             1,
-            #{now}, null, #{now}, #{firstFailureBackoffAt},
-            #{probeMessage}, #{probeEvidence}, current_timestamp
+            #{params.now}, null, #{params.now}, #{params.firstFailureBackoffAt},
+            #{params.probeMessage}, #{params.probeEvidence}, current_timestamp
         )
         on conflict (tenant_id, channel_code) do update set
             channel_type         = excluded.channel_type,
             consecutive_failures = coalesce(batch.file_channel_health.consecutive_failures, 0) + 1,
             health_status        = case
                 when coalesce(batch.file_channel_health.consecutive_failures, 0) + 1
-                     &gt;= #{failureThreshold}
+                     &gt;= #{params.failureThreshold}
                 then #{unhealthyStatus} else #{degradedStatus} end,
             last_probe_at        = excluded.last_probe_at,
             last_failure_at      = excluded.last_failure_at,
@@ -106,7 +147,7 @@
       column references")。改为 next_probe_at 由 Java 侧读回新 count 后算好指数退避再以纯参数写回
       (公式与原 SQL 等价:probeInterval × 2^min(max(failures-1,0),30),上限 maxBackoff)。双栈安全。
     -->
-    <update id="recalcBackoff" parameterType="map">
+    <update id="recalcBackoff" parameterType="io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthBackoffParam">
         update batch.file_channel_health
            set next_probe_at = #{newNextProbeAt},
                updated_at    = #{now}
@@ -117,8 +158,12 @@
 
     <select id="countByHealthStatus" resultType="long">
         select count(*)
-          from batch.file_channel_health
-         where health_status = #{healthStatus}
+          from batch.file_channel_health health
+          join batch.file_channel_config config
+            on config.tenant_id = health.tenant_id and config.channel_code = health.channel_code
+         where config.enabled = true
+           and config.is_deleted = false
+           and health.health_status = #{healthStatus}
     </select>
 
     <!--
@@ -129,13 +174,17 @@
     -->
     <select id="countProbeOverdue" resultType="long">
         select count(*)
-          from batch.file_channel_health
-         where health_status = 'UNHEALTHY'
-           and next_probe_at is not null
-           and next_probe_at &lt;= #{now}
+          from batch.file_channel_health health
+          join batch.file_channel_config config
+            on config.tenant_id = health.tenant_id and config.channel_code = health.channel_code
+         where config.enabled = true
+           and config.is_deleted = false
+           and health.health_status = 'UNHEALTHY'
+           and health.next_probe_at is not null
+           and health.next_probe_at &lt;= #{now}
     </select>
 
-    <insert id="upsertHealth" parameterType="map">
+    <insert id="upsertHealth" parameterType="io.github.pinpols.batch.worker.dispatchs.param.DispatchChannelHealthUpsertParam">
         insert into batch.file_channel_health (
             tenant_id, channel_code, channel_type, health_status, consecutive_failures,
             last_probe_at, last_success_at, last_failure_at, next_probe_at,

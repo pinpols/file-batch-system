@@ -15,17 +15,21 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.asset.AssetPartitionService;
+import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityCheckExecutor;
+import io.github.pinpols.batch.orchestrator.application.service.dataquality.DataQualityGateOutcome;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.mapper.ResultVersionMapper;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.Month;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 
 @DisplayName("结果版本写入器: 首次生效, 重跑策略与质量门禁阻断口径")
 class ResultVersionWriterTest {
@@ -34,9 +38,7 @@ class ResultVersionWriterTest {
   private AssetPartitionService assetPartitionService;
   private ResultVersionWriter writer;
 
-  private io.github.pinpols.batch.orchestrator.application.service.dataquality
-          .DataQualityCheckExecutor
-      dqExecutor;
+  private DataQualityCheckExecutor dqExecutor;
 
   @BeforeEach
   void setUp() {
@@ -44,18 +46,11 @@ class ResultVersionWriterTest {
     assetPartitionService = mock(AssetPartitionService.class);
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(
         Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
-    dqExecutor = mock(
-        io.github.pinpols.batch.orchestrator.application.service.dataquality
-            .DataQualityCheckExecutor.class);
+    dqExecutor = mock(DataQualityCheckExecutor.class);
     @SuppressWarnings("unchecked")
-    org.springframework.beans.factory.ObjectProvider<
-            io.github.pinpols.batch.orchestrator.application.service.dataquality
-                .DataQualityCheckExecutor>
-        dqProvider = mock(org.springframework.beans.factory.ObjectProvider.class);
+    ObjectProvider<DataQualityCheckExecutor> dqProvider = mock(ObjectProvider.class);
     when(dqProvider.getIfAvailable()).thenReturn(dqExecutor);
-    when(dqExecutor.execute(any(), anyString()))
-        .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
-            .DataQualityGateOutcome.noRules());
+    when(dqExecutor.execute(any(), anyString())).thenReturn(DataQualityGateOutcome.noRules());
     when(mapper.insertReturning(any())).thenAnswer(invocation -> invocation.getArgument(0));
     writer = new ResultVersionWriter(mapper, dateTimeSupport, assetPartitionService, dqProvider);
   }
@@ -257,12 +252,9 @@ class ResultVersionWriterTest {
     when(mapper.selectByJobInstanceId("t1", 500L)).thenReturn(null);
     when(mapper.selectMaxVersionNo(anyString(), anyString())).thenReturn(null);
     when(dqExecutor.execute(any(), anyString()))
-        .thenReturn(io.github.pinpols.batch.orchestrator.application.service.dataquality
-            .DataQualityGateOutcome.builder()
-            .status(
-                io.github.pinpols.batch.orchestrator.application.service.dataquality
-                    .DataQualityGateOutcome.GateStatus.BLOCKED)
-            .findings(java.util.List.of())
+        .thenReturn(DataQualityGateOutcome.builder()
+            .status(DataQualityGateOutcome.GateStatus.BLOCKED)
+            .findings(List.of())
             .build());
 
     writer.writeOnTerminal(instance, Map.of("recordCount", 1));

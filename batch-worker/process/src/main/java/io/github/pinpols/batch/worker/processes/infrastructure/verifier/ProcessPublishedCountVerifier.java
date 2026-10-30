@@ -64,7 +64,9 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
       return n.longValue();
     }
     try {
-      return Long.parseLong(value.toString().trim());
+      String rawCountText = value.toString();
+      String countText = rawCountText.trim();
+      return Long.parseLong(countText);
     } catch (NumberFormatException ignored) {
       return -1L;
     }
@@ -78,7 +80,10 @@ public class ProcessPublishedCountVerifier implements ContentVerifier {
       return false;
     }
     try {
-      return Long.parseLong(value.toString().trim()) == 0;
+      String rawCountText = value.toString();
+      String countText = rawCountText.trim();
+      long parsedCount = Long.parseLong(countText);
+      return parsedCount == 0;
     } catch (NumberFormatException ignored) {
       return false;
     }

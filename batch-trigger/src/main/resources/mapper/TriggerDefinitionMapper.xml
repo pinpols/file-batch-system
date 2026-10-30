@@ -3,6 +3,10 @@
 <mapper namespace="io.github.pinpols.batch.trigger.mapper.TriggerDefinitionMapper">
     <resultMap id="TriggerDescriptorResultMap" type="io.github.pinpols.batch.trigger.support.TriggerDescriptor">
         <result column="job_definition_id" property="jobDefinitionId"/>
+        <result column="workflow_definition_id" property="workflowDefinitionId"/>
+        <result column="workflow_code" property="workflowCode"/>
+        <result column="workflow_version" property="workflowVersion"/>
+        <result column="job_definition_version" property="jobDefinitionVersion"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="job_code" property="jobCode"/>
         <result column="schedule_type" property="scheduleType"/>
@@ -13,59 +17,143 @@
         <result column="catch_up_policy" property="catchUpPolicy"/>
         <result column="catch_up_max_days" property="catchUpMaxDays"/>
         <result column="depends_on_job_code" property="dependsOnJobCode"/>
+        <result column="depends_on_job_codes" property="dependsOnJobCodesCsv"/>
         <result column="enabled" property="enabled"/>
+        <result column="workflow_enabled" property="workflowEnabled"/>
     </resultMap>
 
     <sql id="TriggerDefinitionBaseColumns">
         jd.id as job_definition_id,
-        jd.tenant_id,
+        wf.id as workflow_definition_id,
+        wf.workflow_code,
+        wf.enabled as workflow_enabled,
+        wf.version as workflow_version,
+        wf.tenant_id,
+        jd.version as job_definition_version,
         jd.job_code,
-        jd.schedule_type,
-        jd.schedule_expr,
-        jd.timezone,
-        jd.trigger_mode,
-        jd.calendar_code,
+        wf.schedule_type,
+        wf.schedule_expr,
+        wf.timezone,
+        wf.trigger_mode,
+        wf.calendar_code,
         coalesce(bc.catch_up_policy, 'NONE') as catch_up_policy,
         coalesce(bc.catch_up_max_days, 0) as catch_up_max_days,
-        jd.depends_on_job_code,
-        jd.enabled
+        wf.depends_on_job_code,
+        case when exists (
+            select 1 from batch.job_dependency jdep
+            where jdep.tenant_id = jd.tenant_id
+              and jdep.downstream_job_code = jd.job_code
+        ) then coalesce((
+            select string_agg(jdep.upstream_job_code, chr(31) order by jdep.dependency_order)
+            from batch.job_dependency jdep
+            where jdep.tenant_id = jd.tenant_id
+              and jdep.downstream_job_code = jd.job_code
+              and jdep.biz_date_alignment = 'SAME_DAY'
+        ), '') else wf.depends_on_job_code end as depends_on_job_codes,
+        (coalesce(jd.enabled, true) and wf.enabled and wf.schedule_enabled) as enabled
     </sql>
 
     <select id="selectAllScheduledDefinitions" resultMap="TriggerDescriptorResultMap">
         select
         <include refid="TriggerDefinitionBaseColumns"/>
-        from batch.job_definition jd
+        from batch.workflow_definition wf
+        left join batch.job_definition jd
+          on jd.tenant_id = wf.tenant_id
+         and (
+              wf.single_job_definition_id = jd.id
+         )
         join batch.tenant t
-          on t.tenant_id = jd.tenant_id
-         and t.status != 'SUSPENDED'
+          on t.tenant_id = wf.tenant_id
+          and t.status != 'SUSPENDED'
         left join batch.business_calendar bc
-          on bc.tenant_id = jd.tenant_id
-         and bc.calendar_code = jd.calendar_code
+          on bc.tenant_id = wf.tenant_id
+         and bc.calendar_code = wf.calendar_code
          and bc.enabled = true
-        where jd.enabled = true
-          and jd.schedule_type in ('CRON', 'FIXED_RATE')
-          and jd.trigger_mode in ('SCHEDULED', 'MIXED')
-        order by jd.tenant_id, jd.job_code
+        where (jd.id is null or jd.enabled = true)
+          and wf.enabled = true
+          and wf.schedule_enabled = true
+          and wf.version = (
+              select max(latest.version)
+              from batch.workflow_definition latest
+              where latest.tenant_id = wf.tenant_id
+                and latest.workflow_code = wf.workflow_code
+          )
+          and wf.schedule_type in ('CRON', 'FIXED_RATE')
+          and wf.trigger_mode in ('SCHEDULED', 'MIXED')
+        order by wf.tenant_id, wf.workflow_code
     </select>
 
-    <select id="selectByJobCode" resultMap="TriggerDescriptorResultMap">
+    <!-- advisory 锁；等待任一操作完成的报告必须读取其已提交的 -->
+    <select id="selectDefinitionsWithPendingMisfires" resultMap="TriggerDescriptorResultMap">
         select
         <include refid="TriggerDefinitionBaseColumns"/>
-        from batch.job_definition jd
+        from batch.workflow_definition wf
+        left join batch.job_definition jd
+          on jd.tenant_id = wf.tenant_id and jd.id = wf.single_job_definition_id
+        join batch.tenant tenant
+          on tenant.tenant_id = wf.tenant_id and tenant.status != 'SUSPENDED'
         left join batch.business_calendar bc
-          on bc.tenant_id = jd.tenant_id
-         and bc.calendar_code = jd.calendar_code
-         and bc.enabled = true
-        where jd.tenant_id = #{tenantId}
-          and jd.job_code = #{jobCode}
+          on bc.tenant_id = wf.tenant_id and bc.calendar_code = wf.calendar_code and bc.enabled = true
+        where (jd.id is null or jd.enabled = true)
+          and exists (
+              select 1 from batch.scheduled_occurrence occurrence
+              where occurrence.tenant_id = wf.tenant_id
+                and occurrence.workflow_definition_id = wf.id
+                and occurrence.occurrence_status = 'MISFIRE_PENDING'
+                and occurrence.misfire_detected_at is not null
+          )
+        order by wf.tenant_id, wf.workflow_code
     </select>
 
-    <update id="updateEnabled">
-        update batch.job_definition
-        set enabled = #{enabled},
-            version = version + 1,
+    <select id="selectByWorkflowDefinitionId" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        from batch.workflow_definition wf
+        left join batch.job_definition jd
+          on jd.tenant_id = wf.tenant_id
+         and jd.id = wf.single_job_definition_id
+        left join batch.business_calendar bc
+          on bc.tenant_id = wf.tenant_id
+         and bc.calendar_code = wf.calendar_code
+         and bc.enabled = true
+        where wf.tenant_id = #{tenantId}
+          and wf.id = #{workflowDefinitionId}
+    </select>
+
+    <select id="selectByWorkflowCode" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        from batch.workflow_definition wf
+        left join batch.job_definition jd
+          on jd.tenant_id = wf.tenant_id
+         and (
+              wf.single_job_definition_id = jd.id
+         )
+        left join batch.business_calendar bc
+          on bc.tenant_id = wf.tenant_id
+         and bc.calendar_code = wf.calendar_code
+         and bc.enabled = true
+        where wf.tenant_id = #{tenantId}
+          and wf.workflow_code = #{workflowCode}
+          and wf.version = (
+              select max(latest.version)
+              from batch.workflow_definition latest
+              where latest.tenant_id = wf.tenant_id
+                and latest.workflow_code = wf.workflow_code
+          )
+    </select>
+
+    <update id="updateWorkflowScheduleEnabled">
+        update batch.workflow_definition wf
+        set schedule_enabled = #{enabled},
             updated_at = CURRENT_TIMESTAMP
-        where tenant_id = #{tenantId}
-          and job_code = #{jobCode}
+        where wf.tenant_id = #{tenantId}
+          and wf.workflow_code = #{workflowCode}
+          and wf.version = (
+              select max(latest.version)
+              from batch.workflow_definition latest
+              where latest.tenant_id = wf.tenant_id
+                and latest.workflow_code = wf.workflow_code
+          )
     </update>
 </mapper>

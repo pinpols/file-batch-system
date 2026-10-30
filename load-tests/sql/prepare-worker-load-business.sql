@@ -70,26 +70,27 @@ CREATE TABLE IF NOT EXISTS biz.process_event_copy (
 
 DELETE FROM biz.process_event_copy
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
+  AND account_id LIKE left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-%';
 
 DELETE FROM biz.process_account_summary
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
+  AND account_id LIKE left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-%';
 
 DELETE FROM biz.process_order_event
 WHERE tenant_id = 'default-tenant'
-  AND account_id LIKE left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16) || '-ACCT-%';
+  AND account_id LIKE left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16) || '-ACCT-%';
 
 INSERT INTO biz.process_order_event (tenant_id, account_id, biz_date, event_id, amount)
 SELECT
   'default-tenant',
-  left(regexp_replace(:'run_id', '[^A-Za-z0-9]', '', 'g'), 16)
+  left(encode(sha256(convert_to(:'run_id', 'UTF8')), 'hex'), 16)
     || '-ACCT-'
     || lpad((gs % :process_account_count::bigint)::text, :process_account_width::integer, '0'),
-  :'biz_date'::date,
-  :process_event_id_start::bigint + gs,
+  :'biz_date'::date + date_offset.days,
+  :process_event_id_start::bigint + date_offset.days::bigint * :process_source_rows::bigint + gs,
   (gs % 100 + 1)::numeric
-FROM generate_series(0, :process_source_rows::bigint - 1) gs;
+FROM generate_series(0, :process_source_rows::bigint - 1) gs
+CROSS JOIN generate_series(0, :process_biz_date_cardinality::integer - 1) AS date_offset(days);
 
 COMMIT;
 -- DANGER: 执行前会清空/重建压测业务夹具。仅限专用本地压测库；禁止连接生产或共享验收库。

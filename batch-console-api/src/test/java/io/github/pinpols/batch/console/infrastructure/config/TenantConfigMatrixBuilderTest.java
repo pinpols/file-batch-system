@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigMatrixRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,7 +31,6 @@ class TenantConfigMatrixBuilderTest {
               .containsExactlyInAnyOrder(
                   ConfigType.JOB_DEFINITION,
                   ConfigType.WORKFLOW_DEFINITION,
-                  ConfigType.PIPELINE_DEFINITION,
                   ConfigType.FILE_CHANNEL,
                   ConfigType.FILE_TEMPLATE,
                   ConfigType.RESOURCE_QUEUE,
@@ -71,5 +71,50 @@ class TenantConfigMatrixBuilderTest {
     ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
     bundle.setJobDefinitions(List.of(job));
     return bundle;
+  }
+
+  @Test
+  @DisplayName("显式基准可不在展示租户列表中，仍读取基准并计算差异")
+  void shouldCompareAgainstExternalBaseline_withoutAddingBaselineToRequestedRows() {
+    TenantConfigMatrixRequest request = new TenantConfigMatrixRequest();
+    request.setTenantIds(List.of("tenant-b"));
+    request.setJobCodes(List.of("JOB_A"));
+    request.setBaselineTenantId("tenant-a");
+    List<String> loadedTenants = new ArrayList<>();
+
+    TenantConfigMatrixResponse response = TenantConfigMatrixBuilder.build(
+        request,
+        (tenantId, types) -> {
+          loadedTenants.add(tenantId);
+          return bundle("tenant-a".equals(tenantId) ? "DAILY" : "HOURLY");
+        },
+        new TenantConfigReferenceResolver());
+
+    assertThat(response.tenantIds()).containsExactly("tenant-b");
+    assertThat(response.rows()).singleElement().satisfies(row -> {
+      assertThat(row.tenantId()).isEqualTo("tenant-b");
+      assertThat(row.driftFields()).containsExactly("scheduleType");
+    });
+    assertThat(loadedTenants).containsExactlyInAnyOrder("tenant-a", "tenant-b");
+  }
+
+  @Test
+  @DisplayName("展示范围外的基准缺少作业时，以缺失事实计算存在性差异")
+  void shouldKeepMissingBaselineJobObservable_whenBaselineIsOutsideRequestedTenants() {
+    TenantConfigMatrixRequest request = new TenantConfigMatrixRequest();
+    request.setTenantIds(List.of("tenant-b"));
+    request.setJobCodes(List.of("JOB_A"));
+    request.setBaselineTenantId("tenant-a");
+
+    TenantConfigMatrixResponse response = TenantConfigMatrixBuilder.build(
+        request,
+        (tenantId, types) ->
+            "tenant-a".equals(tenantId) ? new ConfigSyncBundlePayload() : bundle("HOURLY"),
+        new TenantConfigReferenceResolver());
+
+    assertThat(response.rows()).singleElement().satisfies(row -> {
+      assertThat(row.exists()).isTrue();
+      assertThat(row.driftFields()).containsExactly("exists", "scheduleType");
+    });
   }
 }

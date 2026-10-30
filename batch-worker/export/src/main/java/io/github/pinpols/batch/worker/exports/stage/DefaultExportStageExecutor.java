@@ -2,10 +2,13 @@ package io.github.pinpols.batch.worker.exports.stage;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
+import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineDefinitionRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.AbstractStageExecutor;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
@@ -26,7 +29,7 @@ import org.springframework.stereotype.Service;
 /**
  * Export 主链路的 stage 执行器（worker 侧）。
  *
- * <p>职责与 Import 类似：加载 pipeline 定义并执行各 stage。差异点在于：
+ * <p>职责与 Import 类似：读取适配器内联的系统固定步骤与冻结参数并执行各 stage。差异点在于：
  *
  * <ul>
  *   <li>export 的成功产物通常是“输出文件 + 平台 file_record 更新 + 对象存储写入”
@@ -55,10 +58,9 @@ public class DefaultExportStageExecutor
 
   public DefaultExportStageExecutor(
       List<ExportStageStep> steps,
-      PlatformPipelineDefinitionRepository pipelineDefinitions,
       PlatformPipelineRunRepository pipelineRuns,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
-    super(pipelineDefinitions, pipelineRuns);
+    super(pipelineRuns);
     this.stepsByImplCode = indexByImplCode(steps);
     this.stepsByStage = indexByStage(steps);
     this.defaultStepDefinitions = buildDefaultStepDefinitions();
@@ -102,6 +104,19 @@ public class DefaultExportStageExecutor
   }
 
   @Override
+  public ReplayCapabilityDeclaration resolveReplayCapability(ExportJobContext context) {
+    ExportStageStep prepareStage = stepsByStage.get(ExportStage.PREPARE);
+    ExportStageStep generateStage = stepsByStage.get(ExportStage.GENERATE);
+    if (EmptyChecks.isNull(context)
+        || !(prepareStage instanceof PrepareStep prepareStep)
+        || !(generateStage instanceof GenerateStep generateStep)) {
+      return ReplayCapabilityDeclaration.unknown(ExportWorkerType.EXPORT);
+    }
+    Map<String, Object> frozenTemplateConfig = prepareStep.resolveTemplateConfig(context);
+    return generateStep.replayCapability(frozenTemplateConfig);
+  }
+
+  @Override
   protected ExportStageResult stepMissingFailure() {
     return ExportStageResult.failure(
         ExportStage.PREPARE,
@@ -141,20 +156,21 @@ public class DefaultExportStageExecutor
       return ExportStageResult.failure(
           stage, StageFailureCode.BUSINESS_ERROR.name(), exception, ERROR_OBJECT_MAPPER);
     } catch (Exception exception) {
+      String failureSummary = SwallowedExceptionLogger.summary(exception);
       log.error(
-          "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}",
+          "export stage infra error: stage={}, stepCode={}, implCode={}, tenantId={}, fileId={}, cause={}",
           stage,
-          step.stepCode(),
-          step.implCode(),
-          context.getTenantId(),
-          context.getAttributes().get(PipelineRuntimeKeys.FILE_ID),
-          exception);
+          LogSanitizer.value(step.stepCode()),
+          LogSanitizer.value(step.implCode()),
+          LogSanitizer.value(context.getTenantId()),
+          LogSanitizer.value(context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)),
+          failureSummary);
       return ExportStageResult.failure(
           stage,
           StageFailureCode.INFRA_ERROR.name(),
           "error.worker.stage_infra_error",
-          new Object[] {exception.getMessage()},
-          exception.getMessage(),
+          new Object[] {failureSummary},
+          failureSummary,
           ERROR_OBJECT_MAPPER);
     }
   }

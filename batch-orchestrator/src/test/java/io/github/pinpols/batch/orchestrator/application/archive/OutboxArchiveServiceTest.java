@@ -18,10 +18,14 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
+@ExtendWith(OutputCaptureExtension.class)
 @DisplayName("出箱归档服务: 开关短路, 冷热表搬运顺序与保留期口径")
 class OutboxArchiveServiceTest {
 
@@ -60,6 +64,25 @@ class OutboxArchiveServiceTest {
     assertThat(result.candidates()).isZero();
     verify(mapper, never()).deleteByIds(any());
     verify(mapper, never()).deleteEventDeliveryLogsByOutboxIds(any());
+  }
+
+  @Test
+  @DisplayName("发现租户不匹配的归档子记录时记录人工核查告警并跳过损坏候选")
+  void shouldWarnAndSkipTenantMismatchedArchiveCandidate(CapturedOutput output) {
+    props.setEnabled(true);
+    when(mapper.existsTenantMismatchedArchiveCandidate(eq("PUBLISHED"), any(Instant.class)))
+        .thenReturn(true);
+    when(mapper.selectArchivableIds(eq("PUBLISHED"), any(Instant.class), anyInt()))
+        .thenReturn(List.of());
+
+    ArchiveBatchResult result = service.archivePublished();
+
+    assertThat(result.candidates()).isZero();
+    assertThat(output)
+        .contains("tenant-mismatched child records")
+        .contains("manual-integrity-review-required");
+    verify(mapper).existsTenantMismatchedArchiveCandidate(eq("PUBLISHED"), any(Instant.class));
+    verify(mapper, never()).deleteByIds(any());
   }
 
   @Test

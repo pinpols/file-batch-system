@@ -105,16 +105,18 @@ COMMENT ON COLUMN batch.result_version.promotion_policy IS
 -- =====================================================================
 -- archive 冷表镜像（按 §archive 冷表对齐红线）
 -- =====================================================================
+
 CREATE TABLE IF NOT EXISTS archive.result_version_archive
     (LIKE batch.result_version INCLUDING ALL);
 
 COMMENT ON TABLE archive.result_version_archive IS
-    'V108 archive mirror of batch.result_version; populated by retention scheduler when status=ARCHIVED';
+    'V108 新增的 batch.result_version 归档镜像；记录由保留期调度器在状态为 ARCHIVED 时写入。';
 
 -- =====================================================================
 -- job_instance 加 replay_session_id（ADR-020 前置 + 通用 replay 标签）
 -- 即使 ADR-020 未实施，本列也允许 RerunRequest 透传 replay 关联标签
 -- =====================================================================
+
 ALTER TABLE batch.job_instance
     ADD COLUMN IF NOT EXISTS replay_session_id BIGINT;
 
@@ -124,7 +126,7 @@ ALTER TABLE archive.job_instance_archive
 COMMENT ON COLUMN batch.job_instance.replay_session_id IS
     'ADR-020 batch_day_replay_session.id 反查标签; NULL = 非 replay 创建';
 COMMENT ON COLUMN archive.job_instance_archive.replay_session_id IS
-    'V108 mirror column';
+    'V108 新增的镜像字段。';
 
 -- =====================================================================
 -- 历史 SUCCESS 实例回填 v1 EFFECTIVE
@@ -139,6 +141,7 @@ COMMENT ON COLUMN archive.job_instance_archive.replay_session_id IS
 --   {"legacy_summary": "..."}; 空 summary → '{}'::jsonb。
 --   ON CONFLICT DO NOTHING — 允许多次跑 migration 幂等。
 -- =====================================================================
+
 WITH latest_success AS (
     SELECT
         ji.tenant_id,

@@ -56,7 +56,8 @@ public final class FilesystemPresignTokens {
     if (signature == null || secret == null || secret.isBlank()) {
       return false;
     }
-    if (Instant.now().getEpochSecond() > expEpochSec) {
+    long currentEpochSecond = Instant.now().getEpochSecond();
+    if (currentEpochSecond > expEpochSec) {
       return false;
     }
     String expected = signRaw(bucket, key, expEpochSec, secret);
@@ -86,9 +87,14 @@ public final class FilesystemPresignTokens {
     String payload = bucket + "|" + key + "|" + expEpochSec;
     try {
       Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-      mac.init(new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
-      byte[] digest = mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-      return Base64.getUrlEncoder().withoutPadding().encodeToString(digest);
+      byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);
+      SecretKeySpec secretKey = new SecretKeySpec(secretBytes, HMAC_ALGORITHM);
+      mac.init(secretKey);
+      byte[] payloadBytes = payload.getBytes(StandardCharsets.UTF_8);
+      byte[] digest = mac.doFinal(payloadBytes);
+      Base64.Encoder urlEncoder = Base64.getUrlEncoder();
+      Base64.Encoder encoderWithoutPadding = urlEncoder.withoutPadding();
+      return encoderWithoutPadding.encodeToString(digest);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to compute presign HMAC", ex);
     }

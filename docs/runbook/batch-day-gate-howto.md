@@ -57,21 +57,17 @@ WHERE tenant_id = 'tenantA'
 
 ### 4.1 自动释放路径
 
-```
-Day-1 跑完最后一个 job
-   │
-   ▼
-BatchDaySettleScheduler(默认 60s 一次)
-   │ tx1: IN_FLIGHT → SETTLING
-   │ tx2: SETTLING → SETTLED + 写 batch_day_operation_audit
-   ▼
-BatchDayWaitingReleaseScheduler(默认 60s 一次)
-   │ 扫 batch_day_waiting_launch where wait_status='WAITING'
-   │ 按 (tenantId, calendarCode, bizDate-1) 去重
-   │ 探测前一日 day_status ∈ {SETTLED, SKIPPED, MANUAL_RELEASED}
-   │ 命中 → 委托 BatchDayOperationService.releaseWaitingLaunchesForBatchDay
-   ▼
-重投 LaunchService.launch + markReleased(operator='AUTO_RELEASE')
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  READY["前一业务日达到结算条件"] --> CLAIM["BatchDaySettleScheduler<br/>tx1：CAS 到 SETTLING"]
+  CLAIM --> FINAL["tx2：重读工作与指标"]
+  FINAL -->|"成功收敛"| SETTLED["SETTLED + 审计"]
+  FINAL -->|"仍有工作 / 失败"| HOLD["回到活动态或 FAILED<br/>继续等待 / 补救"]
+  SETTLED --> SCAN["BatchDayWaitingReleaseScheduler<br/>扫描 WAITING 并按前一日去重"]
+  MANUAL["SKIPPED / MANUAL_RELEASED"] --> SCAN
+  SCAN --> RELEASE["releaseWaitingLaunchesForBatchDay"]
+  RELEASE --> LAUNCH["重投 launch<br/>成功后标记 RELEASED / AUTO_RELEASE"]
 ```
 
 **释放延迟** ≈ settle 间隔 + waiting-release 间隔(默认上限约 2 分钟)。可调:
@@ -120,7 +116,33 @@ SELECT tenant_id, request_id, released_at, released_by
 | 故障期间错过的批量 | `triggerType=CATCH_UP` 补跑,绕过 frozen + 前日门闩 |
 | 同一日重跑 | `triggerType=RERUN` 绕过 frozen,但仍受前日门闩约束 |
 
-## 7. 常见问题排查
+## 7. 日切停机恢复进度
+
+`BatchDayOpenScheduler` 每轮最多扫描 `BATCH_BATCH_DAY_CATCHUP_DAYS_PER_SCAN` 个原始日期，后续周期会从持久化游标继续。通过 Prometheus 查看：
+
+- `batch_batch_day_open_catchup_remaining_days`：最近一次完整成功扫描后，所有启用日历中最大的剩余日期数。
+- `batch_batch_day_open_catchup_calendars_behind`：该扫描后仍有原始日期待检查的日历数。
+- `batch_batch_day_open_catchup_scan_failures_total`：扫描失败累计次数；失败时积压 gauge 保留上一次完整快照。
+
+## 8. CUTOFF 空日自动结算
+
+`BatchDaySettleScheduler` 只对已到 `CUTOFF` 且没有任何已创建实例的批量日尝试自动结算。它在同一短事务里检查预期 occurrence、定时定义覆盖、尚未派发的 Trigger 请求、跨日历/作业依赖等待；检查通过后才 CAS 到 `SETTLED` 并写 `AUTO_EMPTY_NO_EXPECTED_WORK` 审计原因。
+
+`FILE_GROUP` 作业用 `/internal/file-group-expectations` 配置每日预期；外部事件作业用 `/internal/event-expectations` 配置 `eventCode`、预期本地时间和可选同日截止时间。业务日首次开启时生成逐日 `EXPECTED` 项。事件消费方发起 EVENT 触发时必须在 Trigger 请求中传入同一 `externalEventCode`；系统会将其持久化到对应 `trigger_request`。请求达到 `LAUNCHED` 后，消费方调用 `/internal/event-expectations/satisfied` 并携带原 `triggerRequestId` 和 `eventCode`；服务校验请求与预期事件编码一致，避免同一作业的另一个事件误满足该项，重复调用幂等。未到事件仍阻止自动结算，即使超过 due 时间也不会自动忽略。启用的 EVENT/MIXED 作业若没有任何逐日预期规则，日历继续失败关闭；不要仅凭 `job_instance` 为零推断当天无工作。
+
+当积压持续大于 0 时，先核对 Orchestrator `batch_day_open` 调度器和数据库错误日志；扫描失败计数增加时，修复失败原因后等待下一轮周期扫描。不要直接更新 `batch_day_open_cursor`。这组全局指标不列出具体租户/日历，也不覆盖 cursor 锚点之前的历史缺口；定位单个日历的锚点前缺口时，使用下方 Console 历史缺口候选查询，不据此手工改游标。
+
+Console「批量日」页面的「日切补齐预览」可按当前租户和日历显示下轮将评估的原始日期范围、游标来源及剩余日期数。预览只读，不会创建批量日或推进游标；`LATEST_BATCH_DAY_BASELINE` 表示系统首次初始化游标时以最近一条已落库批量日为锚点，锚点之前的历史缺口不在本预览范围，也不会由后台自动回溯。节假日滚动、依赖阻塞和灾难日规则会在真正扫描时按当前策略判断；预览中的原始日期不代表一定新建同日批量日。
+
+管理员可在同一预览面板暂停/恢复一个日历的自动历史 catch-up，必须填写原因。暂停仅停止该日历游标推进，当前业务日正常开启、日历依赖等待恢复和积压指标仍继续；恢复后从原游标续扫。操作及操作者、原因会追加审计事件。若暂停期间继续积累 backlog，先确认依赖/日历配置和运行容量，再恢复；不要手工改游标或将暂停当作历史补跑审批。
+
+### 部署前历史缺口盘点
+
+上线或切换调度策略前，在 Console「批量日」页面选择租户和日历，使用「历史缺口候选」填写明确的起止日期（最多 90 天），记录缺失日期，并由业务负责人核对当时适用的节假日、滚动规则、灾难日覆盖和依赖结果。该查询仅按“日期范围内没有批量日记录”列候选，不推断历史上该日是否应开批，也不触发作业；结果是人工核对清单，不是自动回填指令。
+
+上线后由持久化游标负责在线 catch-up；游标锚点之前的缺口仍需单独治理。目前没有为缺失 `batch_day_instance` 建立历史业务日的生产回填流程。现有 `BatchDayReplay` 审批链面向已有实例重跑；`SCHEDULE_PLAN` 仅支持 dry-run，不能据当前作业定义发起历史生产作业。确认需要补建时，记录候选日期并按组织既有变更审批流程评估；在专用回填能力交付前，不得宣称已批准/已回填，不得用当前日历规则自动推演历史，也不得直接插入 `batch_day_instance` 或移动游标。
+
+## 8. 常见问题排查
 
 ### Q1. 配了 `WAIT_PREVIOUS_DAY`,Day-2 还是直接跑了
 
@@ -144,7 +166,55 @@ SELECT tenant_id, request_id, released_at, released_by
 
 查 `BatchDayOperationServiceTest#shouldReleaseWaitingLaunchesForNextBizDate` 验证逻辑;若线上确实卡住,可能命中已知边界:同 requestId 二次 launch 被 gate 再次卡为 WAIT 时,`on conflict do nothing` 会让原行保留 — 此时 `wait_status` 仍是 WAITING,等下一轮 settle 完成会被 auto-release 重试。若反复多次仍未释放,人工 `RELEASE` 操作回退。
 
-## 8. 相关代码 / 文档
+## 8. 文件组预期到达登记
+
+先配置周期文件组规则；每个批量日首次打开成功时，系统按该日历工作日自动创建当天 EXPECTED 项，重复开日不会重复建账。规则的 expected/due 使用日历时区的本地时间，due 必须晚于 expected 且落在同一个业务日。
+
+```http
+PUT /internal/file-group-expectations
+X-Internal-Secret: <service secret>
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenantA",
+  "calendarCode": "IMPORT_DAILY",
+  "workflowDefinitionId": 501,
+  "fileGroupCode": "ORDERS_DAILY",
+  "expectedLocalTime": "09:00:00",
+  "dueLocalTime": "11:00:00",
+  "enabled": true
+}
+```
+
+`workflowDefinitionId` 必须替换为该租户已启用 Workflow 的 ID；服务端会校验 Workflow 与日历归属。
+
+规则日历必须匹配目标 Workflow 的 `calendar_code`。文件记录里的 `fileGroupCode` 和 `bundleWorkflowCode` 要与规则一致，bundle 到达后才会推进同一 Workflow 预期项。
+
+如上游业务清单要覆盖单个日期或补偿已打开日期，可调用逐日登记接口；否则系统无法从尚不存在的 `file_record` 推断缺失文件。接口幂等身份为 tenant + calendar + workflowDefinitionId + fileGroupCode + bizDate。
+
+```http
+POST /internal/expected-work-occurrences/file-groups
+X-Internal-Secret: <service secret>
+Content-Type: application/json
+```
+
+```json
+{
+  "tenantId": "tenantA",
+  "calendarCode": "IMPORT_DAILY",
+  "workflowDefinitionId": 501,
+  "fileGroupCode": "ORDERS_20261014",
+  "bizDate": "2026-10-14",
+  "expectedAt": "2026-10-14T01:00:00Z",
+  "dueAt": "2026-10-14T03:00:00Z"
+}
+```
+
+登记成功后，`EXPECTED` 会阻止该业务日空结算；bundle 到达时复用相同身份推进为 `ARRIVED`，Trigger 请求已接受或等待依赖后转为 `SATISFIED`。相同请求重放会返回 `inserted=false`。`dueLocalTime` 目前只记录期限，尚未自动生成超时终态；文件未到时仍保持阻塞，直至运维处置。
+
+## 9. 相关代码 / 文档
 
 - `batch-orchestrator/.../BatchDayGateService.java` — 门闩判定
 - `batch-orchestrator/.../BatchDayWaitingReleaseScheduler.java` — 自动释放
@@ -152,3 +222,26 @@ SELECT tenant_id, request_id, released_at, released_by
 - 设计文档:[`docs/design/batch-day-capability-design.md`](../design/batch-day-capability-design.md) — 能力总览
 - 时区/DST 配合:[`docs/design/batch-day-timezone-dst-optimized-design.md`](../design/batch-day-timezone-dst-optimized-design.md)
 - 部署模式:[`docs/design/worker-deployment-models.md`](../design/worker-deployment-models.md) §4.1.E
+
+
+## Console治理与状态回读
+
+失败批日的自动补跑重扫会复用已接纳请求保存的 Workflow 目标与启动载荷，不会因当前单作业 Workflow 关联变化改写原请求。首次创建补跑请求仍要求当前存在可用的受管 Workflow；实际启动仍由 Workflow 启动入口执行准入与状态校验，复用请求不表示执行成功。
+
+批日失败结算事务完成后才登记并启动补跑；若进程在两者之间退出，失败日扫描会继续恢复尚未终态的自动补跑请求。
+
+已派发、已拒绝、重复和 `GIVE_UP` 请求不由批日自动补跑重投；`GIVE_UP` 表示重试耗尽，需要人工核对处理。
+
+补跑恢复按根请求判断状态；子 Job 可继承相同去重键，其状态不代替根请求状态。
+
+批日补跑根请求通过租户和业务键唯一索引收敛并发接纳；未取得该键的执行器不启动，若已接纳请求未完成则由后续扫描恢复。V369 按空库部署基线执行，不自动处理既有重复数据。
+
+现有批次日列表和窗口提供治理抽屉。ADMIN可按当前状态执行FREEZE/RELEASE/SKIP/REOPEN/CLOSE/SETTLE_EMPTY，并暂停/恢复自动补扫；AUDITOR和TENANT_ADMIN仅读预览与历史缺口，普通租户用户仅读窗口。RELEASE置为MANUAL_RELEASED并尝试释放后一日等待启动，不是单纯解冻；服务端继续核对状态、依赖等待与未收敛义务。
+
+窗口查询 `GET /api/console/queries/batch-days/{bizDate}/window` 返回数据库 `frozen`，无批次日记录为null，不能当成false。前端写入后重新读取窗口确认。历史缺口查询最多90个自然日，结束日期不得晚于该日历当前业务日期；缺记录不证明漏跑。
+
+前端未知命令按当前用户/租户/日历在标签页保留原请求身份，刷新后只重试原幂等键。服务端幂等保留24小时，客户端23小时后阻止自动重试并要求人工核对审计；过期或损坏恢复记录不能生成替代命令。用户说明与本地证据见配对前端的批次日治理指南和同日实施报告。该控制台验收不替代Quartz、依赖释放后Worker执行或发布门禁。
+
+批次日窗口的自动 Catch-up 为每个作业冻结独立项目键：组合键不超过 Trigger 的 256 字符上限时保持原形式，超过时使用原请求键与作业编码生成的稳定摘要。提交结果不确定时以原批次状态和对端回执核验为准；摘要键不是执行成功证明，也不能用换键重发代替对账。
+
+管理员查询原补跑请求未找到时，可选择“放弃未建档请求”。服务端与首次冻结竞争同一租户和原键的唯一约束：若围栏获胜，返回 `ABANDONED`，该原键不能再建档；若批次已冻结，返回既有状态，按原请求继续查询或对账。只有确认 `ABANDONED` 或 `COMPLETE` 后，页面才允许清除本地原键。单次未查到、请求失败或围栏请求响应丢失都不能作为换键的依据。

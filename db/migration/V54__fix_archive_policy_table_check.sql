@@ -1,5 +1,6 @@
 -- 修正 archive_policy CHECK 约束中的错误表名：
 -- outbox_delivery_log 表不存在，实际表名为 event_delivery_log。
+
 ALTER TABLE batch.archive_policy
     DROP CONSTRAINT ck_archive_policy_table;
 

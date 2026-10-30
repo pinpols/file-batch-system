@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
+# 用途：启动本地 Compose 应用服务并检查启动结果。
+# 用法：在仓库根目录执行 bash scripts/docker/up-apps.sh；参数与前置环境见下方说明及所属 README。
 # =========================================================
-# up-apps.sh - 一键启动本地基础依赖 + 应用容器
+# up-apps.sh - 统一启动本地基础依赖 + 应用容器
 # 说明：
 # 1) 默认使用 .env.local。
 # 2) 默认启动 docker-compose.yml + deploy/docker/compose/app.yml 的 apps + replica profile

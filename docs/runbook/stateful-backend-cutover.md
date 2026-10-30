@@ -142,3 +142,13 @@ Compose 必须把以下 guard 相关变量传入对应容器：
 | `BATCH_S3_ENDPOINT` / `BATCH_S3_REGION` / `BATCH_S3_BUCKET` | S3 模式的全部服务 |
 
 本 runbook 不负责修改 Compose；透传应由部署配置治理任务统一完成。
+
+## 7. 定位身份与配置来源
+
+位置比较必须保留有业务含义的大小写：数据库名、Sentinel主名、对象接入路径及文件系统桶目录不能整体转小写。协议与主机名可归一化；数据库URL继续剥离认证信息、查询和片段，原始资源编码保留。只改变资源名大小写也会要求新的cutover-id，拒绝时原登记和审计不变；不自动改写历史绑定以求启动。
+
+Quota的Redis定位来自客户端同一份DataRedisConnectionDetails，包含URL覆盖、扁平或索引节点绑定、连接信息Bean覆盖，以及Standalone/Sentinel/Cluster/MasterReplica模式；不再用另一套host/port默认值推测位置。缺少有效连接信息时失败关闭。节点变化和模式变化继续属于有状态切换，凭据不进入Redis身份。该守卫不证明远端拓扑可用，也不复制Quota状态。
+
+本手册描述同协议版本的显式后端切换。跨当前Workflow数据库/协议版本必须遵循[ADR-048](../architecture/adr/ADR-048-workflow-fresh-database-cutover.md)的全新数据库、配套组件、停旧启新。Report Outbox的V360和SQLite兼容结构检查不能用cutover-id绕过；旧队列保全与同版本恢复见[ADR-015](../architecture/adr/ADR-015-worker-side-outbox.md#2026-10-27-执行身份领取所有权与部署边界)。
+
+真实PG定位拒绝、框架配置绑定、真实Redis/PG配额的本地证据及未验证环境见[当日验证](../review/frontend-backend-bug-review-2026-10-27.md#backend-validation-后端定位与致命验收结果验证)。本轮没有执行生产切换。

@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 用途：Java 结构化多行字符串。
+# 用法：在仓库根目录执行 python3 scripts/ci/check-java-structured-string-concat.py；参数与前置环境见下方说明及所属 README。
 """阻止新增的结构化多行字符串拼接。"""
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ GATE_NAME = "Java 结构化多行字符串"
 STRING = re.compile(r'"(?:\\.|[^"\\])*"')
 STRUCTURED_MARKERS = {
     "JSON": re.compile(r'"[A-Za-z_][A-Za-z0-9_.-]*"\s*:'),
-    "XML": re.compile(r"</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s|/?>)"),
+    "XML": re.compile(r"^\s*</?[A-Za-z][A-Za-z0-9_.:-]*(?:\s|/?>)"),
     # YAML 映射冒号后要求分隔空白，避免误判 "FOOTER:total=2" 这类定长记录。
     "YAML": re.compile(r"(?m)^\s{0,8}[A-Za-z_][A-Za-z0-9_.-]*:(?:\s+[^:]|\s*$)"),
     "SQL": re.compile(
@@ -195,11 +197,13 @@ def changed_java_paths(base_ref: str | None, files: list[str]) -> list[str]:
             path for path in git_text("diff", "--name-only", f"{base_ref}...HEAD").splitlines()
             if path.endswith(".java")
         ]
-    return [
+    return sorted({
         path
-        for path in git_text("ls-files", "--", "*.java").splitlines()
-        if path.endswith(".java")
-    ]
+        for path in git_text(
+            "ls-files", "--cached", "--others", "--exclude-standard", "--", "*.java"
+        ).splitlines()
+        if path.endswith(".java") and (ROOT / path).is_file()
+    })
 
 
 def source_at_ref(ref: str, path: str) -> str | None:

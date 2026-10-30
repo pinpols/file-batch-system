@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Objects;
 import java.util.UUID;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.testcontainers.containers.GenericContainer;
@@ -35,19 +36,36 @@ final class IntegrationTestInfrastructure {
 
   private IntegrationTestInfrastructure() {}
 
-  static void registerDynamicProperties(
-      DynamicPropertyRegistry registry,
+  /** 容器作为同一测试环境的端点集合；文件系统后端允许对象存储端点为空。 */
+  record InfrastructureEndpoints(
       PostgreSQLContainer platformPostgres,
       PostgreSQLContainer businessPostgres,
       KafkaContainer kafka,
       TestObjectStoreEndpoint objectStore,
       GenericContainer<?> redis) {
-    registerPlatformDatabaseProperties(registry, platformPostgres);
-    registerKafkaProperties(registry, kafka);
-    registerBusinessDatabaseProperties(registry, businessPostgres);
-    registerObjectStoreProperties(registry, objectStore);
-    registerRedisProperties(registry, redis);
-    registerSecurityProperties(registry);
+    InfrastructureEndpoints {
+      Objects.requireNonNull(platformPostgres, "platformPostgres");
+      Objects.requireNonNull(businessPostgres, "businessPostgres");
+      Objects.requireNonNull(kafka, "kafka");
+      Objects.requireNonNull(redis, "redis");
+    }
+
+    @Override
+    public String toString() {
+      return "InfrastructureEndpoints[redacted]";
+    }
+  }
+
+  static void registerDynamicProperties(
+      DynamicPropertyRegistry registry,
+      InfrastructureEndpoints endpoints,
+      boolean securityBypassMode) {
+    registerPlatformDatabaseProperties(registry, endpoints.platformPostgres());
+    registerKafkaProperties(registry, endpoints.kafka());
+    registerBusinessDatabaseProperties(registry, endpoints.businessPostgres());
+    registerObjectStoreProperties(registry, endpoints.objectStore());
+    registerRedisProperties(registry, endpoints.redis());
+    registerSecurityProperties(registry, securityBypassMode);
   }
 
   static void registerPlatformDatabaseProperties(
@@ -112,7 +130,11 @@ final class IntegrationTestInfrastructure {
   }
 
   static void registerSecurityProperties(DynamicPropertyRegistry registry) {
-    registry.add("batch.security.bypass-mode", () -> true);
+    registerSecurityProperties(registry, true);
+  }
+
+  static void registerSecurityProperties(DynamicPropertyRegistry registry, boolean bypassMode) {
+    registry.add("batch.security.bypass-mode", () -> bypassMode);
     registry.add("batch.security.kms.default-key-ref", () -> DEFAULT_KMS_KEY_REF);
     registry.add("batch.security.kms.keys." + DEFAULT_KMS_KEY_REF, () -> DEFAULT_KMS_KEY_MATERIAL);
     // 单 JVM 长耗时 IT：覆盖 application-test.yml merge 漂移，禁用会与 claim / launch 并发竞态的后台 Bean

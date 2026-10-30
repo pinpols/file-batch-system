@@ -16,6 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.infrastructure.realtime.ConsoleRealtimeRedisPublisher;
 import io.github.pinpols.batch.console.shared.view.ConsoleOpsSummaryResponse;
 import java.time.Clock;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -50,10 +51,11 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   private ConsoleTenantGuard tenantGuard;
 
   private ConsoleOpsSummaryRealtimeStream stream;
+  private ThreadPoolTaskScheduler scheduler;
 
   @BeforeEach
   void setUp() {
-    ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+    scheduler = new ThreadPoolTaskScheduler();
     scheduler.setPoolSize(1);
     scheduler.setThreadNamePrefix("console-realtime-test-");
     scheduler.initialize();
@@ -70,6 +72,19 @@ class ConsoleOpsSummaryRealtimeStreamTest {
     when(cursorFactory.nextCursor()).thenReturn("cursor-1");
     when(realtimeEventHub.subscribeAllEvents(anyString(), anyString(), isNull()))
         .thenReturn(new SseEmitter());
+  }
+
+  @AfterEach
+  void tearDown() {
+    try {
+      if (stream != null) {
+        stream.shutdown();
+      }
+    } finally {
+      if (scheduler != null) {
+        scheduler.shutdown();
+      }
+    }
   }
 
   private static BatchDateTimeSupport dateTimeSupport() {
@@ -92,7 +107,20 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   @DisplayName("节流窗口内连续两次刷新请求只查询并发布一次")
   void shouldThrottleRepeatedRefreshRequests() {
     when(opsApplicationService.summary("t1"))
-        .thenReturn(new ConsoleOpsSummaryResponse("t1", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));
+        .thenReturn(ConsoleOpsSummaryResponse.builder()
+            .tenantId("t1")
+            .pendingApprovals(1)
+            .openAlerts(2)
+            .criticalAlerts(3)
+            .runningJobs(4)
+            .failedJobs(5)
+            .slaBreaches(6)
+            .onlineWorkers(7)
+            .drainingWorkers(8)
+            .offlineWorkers(9)
+            .outboxRetryBacklog(10)
+            .outboxDeliveryFailures(11)
+            .build());
 
     stream.publishRefresh("t1");
     stream.publishRefresh("t1");
@@ -111,7 +139,20 @@ class ConsoleOpsSummaryRealtimeStreamTest {
   @DisplayName("订阅时开启首帧推送会立即查询概览并发布事件")
   void shouldForceInitialSnapshotWhenSubscribed() {
     when(opsApplicationService.summary("t1"))
-        .thenReturn(new ConsoleOpsSummaryResponse("t1", 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11));
+        .thenReturn(ConsoleOpsSummaryResponse.builder()
+            .tenantId("t1")
+            .pendingApprovals(1)
+            .openAlerts(2)
+            .criticalAlerts(3)
+            .runningJobs(4)
+            .failedJobs(5)
+            .slaBreaches(6)
+            .onlineWorkers(7)
+            .drainingWorkers(8)
+            .offlineWorkers(9)
+            .outboxRetryBacklog(10)
+            .outboxDeliveryFailures(11)
+            .build());
 
     stream.subscribe("t1", null, true);
 

@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
+# 用途：BYO SDK 样例 worker × 真 orchestrator 本地全链路验证。
+# 用法：bash scripts/local/sdk-e2e-local.sh <go|python|java|typescript|rust>。
 # =============================================================================
 # sdk-e2e-local.sh — BYO SDK 样例 worker × 真 orchestrator 本地全链路验证
 #
 # 用**已在本地跑着的**真实依赖栈(orchestrator+trigger+postgres+kafka)驱动一个
 # examples/self-hosted-sdk/sample-tenant-worker-<lang>,走真链路逐阶段断言:
-# register → dispatch → claim → execute → report → terminal。
+# 验证链路：register → dispatch → claim → execute → report → terminal。
 #
 # 共享逻辑全在 scripts/lib/sdk-e2e-common.sh(CI 入口 run-sdk-orchestrator-e2e.sh
 # 复用同一套);本脚本只负责"栈已起"的本地入口。覆盖矩阵 + 已知 wire bug 见

@@ -70,7 +70,8 @@ public class BatchObjectCryptoAutoConfiguration {
           "FATAL: batch.security.kms.keys." + keyRef + " must not be blank");
     }
     try {
-      return Base64.getDecoder().decode(value.trim());
+      String trimmedValue = value.trim();
+      return Base64.getDecoder().decode(trimmedValue);
     } catch (IllegalArgumentException ex) {
       throw new IllegalStateException(
           "FATAL: batch.security.kms.keys." + keyRef + " must be valid base64", ex);

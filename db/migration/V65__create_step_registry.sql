@@ -4,6 +4,7 @@
 --
 -- 快照覆盖策略：每次应用启动时先 DELETE WHERE module=? 再 INSERT 当前集合，
 -- 保证已删除的 Step 类自动出表，避免冷数据。
+
 CREATE TABLE IF NOT EXISTS batch.step_registry (
   id            BIGSERIAL PRIMARY KEY,
   module        VARCHAR(32)  NOT NULL,

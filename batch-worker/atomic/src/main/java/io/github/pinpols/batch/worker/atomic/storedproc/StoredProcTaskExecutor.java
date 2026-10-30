@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.atomic.storedproc;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.spi.task.BatchTaskExecutor;
@@ -11,6 +12,7 @@ import io.github.pinpols.batch.common.spi.task.TaskResult;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicConnectionManager;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicErrorCode;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicParameterNumbers;
 import io.github.pinpols.batch.worker.atomic.runtime.DataSourceResolver;
 import io.github.pinpols.batch.worker.atomic.runtime.SpringDataSourceResolver;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
@@ -168,14 +170,14 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
           AtomicErrorCode.SECURITY_REJECTED, "SENSITIVE_DATA_IN_PARAMETERS: " + ex.getMessage());
     } catch (RuntimeException ex) {
       log.error(
-          "stored proc executor unexpected error: tenantId={}, jobCode={}",
-          ctx.tenantId(),
-          ctx.jobCode(),
-          ex);
-      return AtomicErrorCode.fail(
-          AtomicErrorCode.EXECUTION_FAILED,
-          ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage(),
-          ex);
+          "stored proc executor unexpected error: tenantId={}, jobCode={}, cause={}",
+          LogSanitizer.value(ctx.tenantId()),
+          LogSanitizer.value(ctx.jobCode()),
+          SwallowedExceptionLogger.summary(ex));
+      String exceptionMessage = ex.getMessage();
+      String failureMessage =
+          EmptyChecks.isNull(exceptionMessage) ? ex.getClass().getSimpleName() : exceptionMessage;
+      return AtomicErrorCode.fail(AtomicErrorCode.EXECUTION_FAILED, failureMessage, ex);
     }
   }
 
@@ -202,13 +204,13 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     // timeout(只能缩短)
     int timeoutSec = (int) props.getDefaultStatementTimeout().toSeconds();
     Object t = params.get(PARAM_TIMEOUT);
-    if (t instanceof Number number) {
-      long requested = number.longValue();
-      if (requested <= 0) {
-        throw new StoredProcValidationException("statementTimeoutSeconds must be positive");
+    if (EmptyChecks.isNotNull(t)) {
+      Long requested = AtomicParameterNumbers.positiveLong(t);
+      if (EmptyChecks.isNull(requested)) {
+        throw new StoredProcValidationException("statementTimeoutSeconds must be positive integer");
       }
       if (requested < timeoutSec) {
-        timeoutSec = (int) requested;
+        timeoutSec = requested.intValue();
       }
     }
 
@@ -299,7 +301,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
       if (o == null) {
         throw new StoredProcValidationException("outParams contains null");
       }
-      String type = String.valueOf(o).trim().toUpperCase(Locale.ROOT);
+      String rawType = String.valueOf(o);
+      String trimmedType = rawType.trim();
+      String type = trimmedType.toUpperCase(Locale.ROOT);
       if (!props.getAllowedOutSqlTypes().contains(type)) {
         throw new StoredProcValidationException(
             "OUT type " + type + " not in allowedOutSqlTypes=" + props.getAllowedOutSqlTypes());
@@ -353,23 +357,28 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
     try {
       return AtomicConnectionManager.withConnection(inv.dataSource, opts, conn -> {
-        String call = buildCallSql(conn, inv.procName, totalParams);
-        // 同一事务内 pin search_path,固定过程解析(防 search_path shadowing/注入)
-        pinSearchPath(conn, inv.procName);
+        // 授权与实际执行必须使用同一 schema；自动提交下 SET LOCAL 不跨语句生效。
+        String targetProcName = EmptyChecks.isNull(schemaOf(inv.procName))
+            ? props.getDefaultSchema() + "." + inv.procName
+            : inv.procName;
+        String call = buildCallSql(conn, targetProcName, totalParams);
+        // 事务模式下固定过程内部的 search_path；调用目标始终使用限定名。
+        pinSearchPath(conn, targetProcName);
         // 堵死 OS:① 角色 ② SECURITY DEFINER(借 owner 提权绕过①)
         if (props.isForbidOsCapableRole()) {
           requireNonOsCapableRole(conn);
         }
         if (!props.isAllowSecurityDefiner()) {
-          requireNotSecurityDefiner(conn, inv.procName);
+          requireNotSecurityDefiner(conn, targetProcName);
         }
         if (props.isVerifyExecutePrivilege()) {
-          requireExecutePrivilege(conn, inv.procName);
+          requireExecutePrivilege(conn, targetProcName);
         }
         return execCallableStatement(conn, call, inv, start);
       });
     } catch (SQLException ex) {
-      boolean isTimeout = "57014".equals(ex.getSQLState())
+      boolean hasTimeoutSqlState = "57014".equals(ex.getSQLState());
+      boolean isTimeout = hasTimeoutSqlState
           || (ex.getMessage() != null
               && ex.getMessage().toLowerCase(Locale.ROOT).contains("timeout"));
       return AtomicErrorCode.fail(
@@ -387,7 +396,10 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
         cs.setObject(i + 1, inv.inParams.get(i));
       }
       for (int i = 0; i < inv.outTypes.size(); i++) {
-        cs.registerOutParameter(inv.inParams.size() + i + 1, toSqlType(inv.outTypes.get(i)));
+        int position = inv.inParams.size() + i + 1;
+        String outputType = inv.outTypes.get(i);
+        int sqlType = toSqlType(outputType);
+        cs.registerOutParameter(position, sqlType);
       }
       cs.execute();
 
@@ -413,7 +425,9 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
             outValues.put(key, "<REF_CURSOR>");
           }
         } else {
-          outValues.put(key, truncateIfNeeded(cs.getObject(pos)));
+          Object outputValue = cs.getObject(pos);
+          Object truncatedOutputValue = truncateIfNeeded(outputValue);
+          outValues.put(key, truncatedOutputValue);
         }
       }
 
@@ -524,8 +538,8 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
   /**
    * 在当前事务内 pin search_path:{@code SET LOCAL search_path = pg_catalog, <schema>}。schema = 过程名
    * schema(若 qualified)否则 {@link StoredProcExecutorProperties#getDefaultSchema()}。 防止调用方借 session
-   * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL),autoCommit=true 时无事务, 退化为对单条语句生效。非 PG /
-   * 不支持时静默忽略(由白名单 + 限定名回退)。
+   * search_path 把过程解析到攻击者可控 schema。仅在事务中生效(SET LOCAL)；自动提交模式下调用目标使用限定名，但过程内部的
+   * search_path 仍由数据库会话配置决定。非 PG / 不支持时静默忽略。
    */
   @SuppressWarnings("java:S2077")
   private void pinSearchPath(Connection conn, String procName) {
@@ -533,7 +547,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     if (schema == null) {
       schema = props.getDefaultSchema();
     }
-    // schema 已经过 PROC_NAME 正则校验(identifier 字符集),拼接安全;仍走静态 SQL。
+    // 限定过程名的 schema 已由 PROC_NAME 校验；未限定时使用运维配置的 defaultSchema。
     String sql = "SET LOCAL search_path = pg_catalog, " + schema;
     try (Statement st = conn.createStatement()) {
       st.execute(sql);

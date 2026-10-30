@@ -1,0 +1,60 @@
+repository,path,mermaid_before,mermaid_after,semantic_notes
+backend,README.en.md,1,1,纠正Worker直写平台状态的箭头暗示、Outbox与消息发布的事务边界；中英文同步，PROCESS阶段与SystemPipelineCatalog一致。
+backend,README.md,1,1,纠正Worker直写平台状态的箭头暗示、Outbox与消息发布的事务边界；中英文同步，PROCESS阶段与SystemPipelineCatalog一致。
+backend,docs/architecture/adr/ADR-002-transactional-outbox.md,0,1,将发布状态ASCII转状态图；纠正旧示意中NEW直接指向PUBLISHED的歧义，保持正文CAS/ACK五态协议。
+backend,docs/architecture/adr/ADR-011-idempotency-boundary-alignment.md,0,1,三层幂等ASCII转分层图；将原Job唯一键和早期trigger_request边界明确标为原决策，不改写当前Workflow身份合同。
+backend,docs/architecture/adr/ADR-017-result-version-model.md,0,1,结果版本图转换为流程图而非枚举状态机，避免把拒绝/废弃说明误标为持久化状态。
+backend,docs/architecture/adr/ADR-018-cross-batch-day-dag-dependency.md,0,2,跨日版本解析图保留日期/版本查找、输出注入与等待重查三条语义。；跨日依赖状态ASCII转Mermaid，保留历史ADR的状态口径。
+backend,docs/architecture/adr/ADR-019-cross-domain-rate-limit.md,0,1,限额决策链转Mermaid，仅表达ADR拟议准入顺序，不提升暂缓实施状态。
+backend,docs/architecture/adr/ADR-020-batch-day-replay.md,0,1,重放Session原决策状态图转Mermaid；不将其冒充ADR-049 ReplayOperation状态机。
+backend,docs/architecture/adr/ADR-021-data-quality-reconciliation.md,0,1,数据质量原决策流程转短节点图，保留BLOCKER阻断自动提升；实施触发条件不变。
+backend,docs/architecture/adr/ADR-024-archive-tiering.md,0,1,冷存提案ASCII转目标流程，原文暂缓状态、周期/保留期说明不变；不声称已验收搬运或恢复链。
+backend,docs/architecture/adr/ADR-025-workflow-static-validator.md,0,1,校验图突出启用与导入共享校验及all-or-nothing边界，省去节点内长URL。
+backend,docs/architecture/adr/ADR-027-resource-affinity.md,0,1,资源亲和原提案ASCII转流程；只改善表示，不启动暂缓的机器选择功能。
+backend,docs/architecture/adr/ADR-036-sdk-task-handler-templates.md,0,1,SDK类层次ASCII转UML继承/实现图；仅保留原决策类型，泛型与职责见邻接正文。
+backend,docs/architecture/adr/ADR-037-sdk-checkpoint-resume-and-reliable-commit.md,0,1,SDK目标类层次转UML；包含签名的前一代码树保持原样，实施状态仍以ADR状态段为准。；渲染复核：继承树改LR，将六个子类纵向排布，保留全部类型与继承/实现边。
+backend,docs/architecture/adr/ADR-046-file-bundle-aggregation.md,0,1,Bundle图保留独立Partition身份、执行和批量传输分层，不引入束级租约或状态机。
+backend,docs/architecture/core-model.md,1,2,对象图短标签且保留控制节点、JOB与Pipeline观测边界。；分区参数透传ASCII改为边界明确的Mermaid，具体常量示例保留于说明语义。
+backend,docs/architecture/outbox-architecture.md,1,1,ER聚焦发布与复合父引用；校正outbox_event主键含created_at，Trigger请求唯一约束为租户+requestId，不误标单列唯一。
+backend,docs/architecture/pipeline-vs-workflow-boundary.md,1,1,固定系统Pipeline为代码目录；不把Workflow控制图或ATOMIC放入文件阶段模型。
+backend,docs/architecture/project-structure.md,2,3,运行总览区分应用进程与共享库；core不再作为独立网络节点或平台状态写入主体。；第二图专讲源代码依赖，删除混入模块依赖图的Kafka/RPC边；Console基础设施实现领域端口，ATOMIC与文件Pipeline分清。；渲染复核：宽模块图拆为Worker/控制模块依赖与Console内部依赖两图，Worker列表仍逐个保留；通过LR布局与短行标签收窄。
+backend,docs/architecture/runtime-module-communication.md,2,2,主通信图移除21表大节点，归属分层并明确五类Worker、HTTP状态控制及受限文件元数据。；状态写入边界图归并重复边，保留注册、运行、恢复和事务Outbox四类持久化职责。
+backend,docs/architecture/system-flow-overview.md,20,24,主链分层；顶层WorkflowRun与JOB子实例分离，Relay发送Kafka，Worker经HTTP认领/上报。；异步入口改为短时序图，数据库不直接向Kafka发布。；SSE按现行Redis Pub/Sub与重放缓冲表达；运维动作归属Orchestrator，去除旧端口与长端点标签。；观测图按信号收集、存储、查询与告警分层，保留可选Trace后端而不声称全部环境同时启用。；明确控制节点不创建Worker空任务；文件Pipeline是Job内部阶段观测。；区分毒消息DLQ与业务死信，重放经新尝试及Outbox，删除Orchestrator直发Kafka和复活旧终态暗示。；将死信重放ASCII状态图转Mermaid，保留原状态与运营决策边。；扩缩图补齐ATOMIC，移除固定副本数；HPA/KEDA作为按部署选择的策略，Quartz锁与Outbox分片各归其主。；IMPORT保留代码目录六阶段，短标签；文件状态说明留在正文。；EXPORT保留系统目录五阶段，去除节点内执行细节和彩色状态。；对照Deliver/Ack/Retry和DefaultDispatchStageExecutor修正分支：ACK可转RETRY，重试成功回ACK，COMPENSATE不自动回PREPARE；未知外部结果停止核对。；PROCESS保留五阶段，staging明确为业务数据源；不把Worker业务计算画成平台状态直写。；配置图拆分文件Pipeline与独立ATOMIC，冻结图和有效配置的来源分别表达。；Export Worker时序改正CLAIM由Orchestrator处理，补顶层Workflow与Outbox Relay，去除具体运行ID。；Import Worker时序改正CLAIM由Orchestrator处理，补顶层Workflow与Outbox Relay，去除具体运行ID。；Dispatch Worker时序改正CLAIM由Orchestrator处理，补顶层Workflow与Outbox Relay，去除具体运行ID。；按文件资产视角保留三条数据路径；不把其余类型误作遗漏。；分区图补TERMINATED；成功不再限定所有Pipeline阶段，覆盖ATOMIC；示意图不声称穷尽所有控制迁移。；Outbox时序保留事务、CAS认领、发送ACK和退避边界，移除大段SQL节点。；Outbox五态保留当前发布语义，统一短边标签。；将水位三层ASCII时序转简洁图，保留成功报告推进、业务插件解释水位和Orchestrator持久化边界。；WAP/DIRECT图分清业务source/staging/target与平台运行状态，水位经REPORT提交，去除Worker直写Job状态边。；渲染复核：三类文件资产流拆成三张独立纵向图，完整保留业务数据、文件存储与元数据读写边。
+backend,docs/architecture/workflow-dependency-guide.md,6,6,将三类依赖例子分组排布，保留SUCCESS/FAILURE和ALL/N_OF语义。；定义关系ER去除伪数据库实体system_pipeline_catalog和旧TASK新建枚举；控制节点不强制关联Job，JOB引用是逻辑同租户关系。；时序明确Relay是应用行为，消除DB直接发布Kafka；保留内部子JOB请求的实际接纳链。；运行对象ER保留逻辑归属，JOB才按需物化；无伪物理FK声明。；串行例子缩短标签，准确保留三类JOB和首尾控制节点。；保留历史wf_probe_gateway实例的TASK事实并显式标旧模型，不把历史探针伪装成新建JOB配置。
+backend,docs/coding-conventions.md,0,3,3个ASCII类型/流程图改为Mermaid；异常继承对照Java类型；删除图不再把无FK误判为可无条件物理删除，与实体生命周期及运行标识引用一致。
+backend,docs/design/batch-day-design.md,0,1,按 V107 与 selectBatchDayMetrics 核对：SETTLING 独立事务占位/重入，根 WorkflowRun 聚合并检查子 JOB 活跃态；失败为根 FAILED/TERMINATED，不能把 PARTIAL_FAILED 当成功；紧邻算法与初始 DDL 状态口径同步。
+backend,docs/design/database-schema-guide.md,2,3,拆分超大关系图；明确 Trigger 独占 Quartz 调度职责、PROCESS 暂存只属于 PROCESS；关系图为逻辑归属，避免未逐条核实的 FK 断言。
+backend,docs/design/delete-strategy.md,0,1,与 coding-conventions 同口径：无 FK 不等于无运行引用，业务编码引用也阻止直接删除；未改删除 API 或实现。
+backend,docs/design/file-pipeline-design.md,8,8,按 SystemPipelineCatalog 核对四类固定阶段；补齐 PROCESS 与 ATOMIC 边界、CLAIM 租约，移除 task_instance/export_record 错名；分发补齐 RETRY/COMPENSATE 分支，外部结果不明不盲重试。
+backend,docs/design/logging-architecture.md,0,3,三个 ASCII 图改 Mermaid；遥测使用开关，业务审计入库与运行日志采集分开；stdout 为容器输出，OTLP 是显式 Collector 链路。
+backend,docs/design/partition-idempotency-decision.md,1,1,保留全局台账先于分区 Outbox 的事务语义；缩短节点，台账表名保留在邻近正文。
+backend,docs/design/redis-usage-design.md,0,0,原内容是能力状态分组而非架构流，改紧凑表格；保留原状态，不新增当前完成声明。
+backend,docs/design/status-state-machines.md,0,3,按 enum 和 Mapper 对照；Outbox FAILED 退避后直接 CAS 到 PUBLISHING，GIVE_UP 不自动回 NEW；Trigger 图只画现行接纳/审批主路径，不将保留枚举值强串为必经步骤。
+backend,docs/design/task-spi-design.md,0,1,将 SPI 方案层级转换为 Mermaid，保留四类文件 Pipeline 与独立原子任务，不将早期方案中的新增标记当作当前进度。
+backend,docs/design/time-date-semantics.md,4,4,业务日沿 WorkflowRun 根冻结并由 JOB 继承；跨地区节点不能重算业务日；扫描器优先级和 Console LocalDate/Instant 展示分开。 区分普通对象扫描与导出清单触发，只有后者优先读取 manifest.bizDate。
+backend,docs/design/worker-deployment-models.md,0,4,四个 ASCII 流程转换；JOB 节点引用 Job 后路由，不把 taskType 写在 Workflow 根；门禁 WAIT/REJECT 仅阻止 Worker 任务派发，Trigger Kafka 已发生；文件 Pipeline 不是统一五阶段。
+backend,docs/plans/ai-assistant-contextual-experience-and-cost-governance-2026-09-29.md,1,1,保留方案与外部验收待完成属性；拆清拒绝审计分支，减少横向宽度，不提升落地状态。
+backend,docs/plans/console-usage-statistics-plan-2026-09-29.md,0,1,保留仍待目标环境核验的方案属性；查询 API 从已聚合日表读取，避免原 ASCII 从归一化输入直接旁路读取的歧义。
+backend,docs/plans/ha-deployment-plan-2026-06-13.md,0,1,将目标 HA 拓扑拆成职责节点；保留副本数、ISR 与备份链路，Citus 明确可选且有前置，不表示目标环境已部署验收。
+backend,docs/plans/multi-tenant-isolation-plan-2026-05-31.md,0,0,部署/数据位置是二维矩阵，改表格而非伪流程；旧 Phase 推进图为历史规划快照，保留原顺序与状态，不用当前事实覆盖。
+backend,docs/plans/workflow-unified-execution-and-system-pipeline-plan-2026-10-14.md,1,1,保持 2026-10-14 目标方案属性；WorkflowRun 是根，只有 JOB 节点创建 JobInstance；四类文件 Pipeline 与 ATOMIC 分离。
+backend,docs/runbook/autoscaling-strategy.md,0,5,修正积压时 Worker 一定空转的断言，聚焦 CPU 无法独立代表业务积压。；KEDA 链路压缩为五步，不承诺任意扩容都能降低 lag；并行度受可分配分区限制。；纠正把 Quartz DB 锁保持至整次作业结束、其他 Pod 全程空转的错误；区分同次触发与独立触发。；去掉与实际模块数量不符的固定数量。；同步图的 Quartz 集群协调语义。；删除 Pod 数量对并发无收益的绝对结论；保留同次 fire 不会拆分的边界。；静态分片误配会造成空分片或重叠竞争，不等于必然双发；保留数据库和幂等边界。；动态分片采用成员心跳、超时清理和确定排序，去掉原图中参数顺序错误的 ZADD 命令。；不把某一种扩缩信号写成所有负载唯一可用的选择。；与图中 I/O/消费容量情形保持一致，避免将积压误解为空转。；标题与独立 fire 可分担的事实保持一致。；移除仅有 HA 价值与固定副本足够的无条件断言。；表格不再把 Quartz 机制解释为固定副本数的充分依据。；消除与修正后 Quartz 图冲突的自动扩容绝对结论。；动态成员图不承诺所有实例同时观察新成员集合。；评估表同步修正后的 Quartz 容量边界。
+backend,docs/runbook/batch-day-gate-howto.md,0,1,按 SettleScheduler 两个短事务和 WaitingReleaseScheduler 当前实现补齐失败/未收敛分支；不再暗示最后一个 job 完成必定 SETTLED。
+backend,docs/runbook/biz-tenant-routing.md,0,2,将多层 ASCII 调用树转为请求、解析模式与连接池选择的单一路径。；简化凭据来源链，不在图中堆叠具体环境变量；保留外部注入与属性绑定边界。
+backend,docs/runbook/compose-cd-roadmap.md,3,4,将错误的 Orchestrator→Worker 直连派单改为 Kafka 通道，单独表示 claim/report；合并四类文件 Worker 以减少交叉线，Atomic 权限边界保留。；目标图保留 GitOps、五类 Worker、HA 数据与观测，修正 Kafka 派单链路并减少无权限上下文的全 Worker→PG 连线；具体副本参数保留正文。；区分 staging 失败停止晋级与生产验证失败回滚；所有阶段使用同一 release set，不将制品仓库视作审批或部署执行器。；将四阶段演进过程转为紧凑路线图，明确当前基线与未来目标。
+backend,docs/runbook/console-login-encryption.md,0,1,将多副本密钥不一致的反例画成时序图，明确是错误示例而非推荐架构。
+backend,docs/runbook/distributed-locking-checklist.md,0,1,保留四类协调需求与现有决策，不将 Redis 原子计数误当通用分布式锁。
+backend,docs/runbook/first-tenant-config-quickstart.md,0,1,以 FileTemplateType 枚举纠正 template_type=PROCESS/DISPATCH 的错误；明确资源路由由平台策略解析。
+backend,docs/runbook/gitlab-self-managed-migration.md,1,1,迁移方案图分清镜像仓库与报告制品存储，保留 Runner、Job 和 Docker 依赖层次及受信部署边界。
+backend,docs/runbook/mobile-frontend-tunnel.md,0,1,分开静态资源与 API 反代路径，去掉与五类 Worker 不符的旧 Java 应用计数；不画直接暴露的后端公网端口。
+backend,docs/runbook/observability-stack.md,0,1,依 deploy/docker/observability/otel-collector.yml 分开指标抓取、日志与链路导出，区分 Grafana 查询和 Alertmanager 告警。
+backend,docs/runbook/sdk-release.md,0,1,保留 conformance 与 breaking 的并行前置关系，区分 best-effort 供应链证据与正式发布审批条件。
+backend,docs/runbook/troubleshooting-decision-tree.md,0,4,将排障长树拆成单一决策链，用在线/租约描述替代不准确的 ACTIVE 枚举；stale 指标仅作为异常线索。；不再把 stale=0 当作轮询正常或吞吐不足的证明；扩容需先定位发送/数据库/分片瓶颈。；移除无明确结果时抽样盲目 replay 的建议；先区分外部结果未知与明确失败，再进入正式重放流程。；修正 startupProbe.timeoutSeconds 被当成总启动预算；删除图内硬编码调连接数和缩 Flyway baseline 的建议。；症状4的文字与修正后的指标决策图保持一致。；从原 ASCII 图提取 SQL 为独立可复制代码块，保留原有诊断入口。
+backend,docs/sdk/wire-protocol.md,0,1,ASCII双通道图改为分组Mermaid；明确SDK只通过HTTP与Kafka连接平台，CLAIM先于执行，平台状态由Orchestrator收敛。
+frontend,docs/architecture/project-structure.md,1,1,将请求与响应合并为 HTTP/SSE 双向边，保留路由、页面、状态、契约类型、文案和视觉依赖。
+frontend,docs/engineering/page-naming-convention.md,0,1,将七个页面域的职责分配树转成简洁决策图，保留现有分类边界。
+frontend,docs/engineering/前端可观测性方案.md,0,1,按 logger.ts 和 sentry.ts 明确遥测默认关闭、会话就绪后发送，以及独立的可选 Sentry 管道。；补充图中启用条件，防止把可选采集解释为默认开启。；修正默认关闭时仍有本地日志的误解。
+frontend,docs/engineering/批量调度系统前端方案设计说明书_开发落地版_V3.md,0,3,布局概览核对 App.vue 与 DefaultLayout.vue；去掉已不在主体布局中的可选 TabsNav，使用当前组件名。；按现有 ProTable.vue 与 VirtualProTable.vue 展示表格封装层次。；按 WorkflowDesigner.vue 当前模板修正旧 DAGToolbar、DAGSidePanel 与可选 BottomBar 的漂移。
+frontend,docs/runbook/ci.md,0,3,将长命令串压缩为五个阶段；具体检查与失败聚合边界保留正文。；压缩图标签后保留原图的可执行命令与检查范围。；按 full-ci-gate.yml 的 needs 关系纠正并行边界：安全审计独立，Docker/Lighthouse 依赖构建且只在非 PR 执行。；标题同步实际 job 依赖，避免称四个 job 全并行。；按 staging-gate.yml 的 needs=precheck 将 E2E 与 Lighthouse 画成并行分支；保留真实环境验收含义。；保留原 ASCII 图内浏览器矩阵、慢场景和运行入口。
+frontend,docs/runbook/compose-cd-roadmap.md,2,2,区分静态入口与 /api 代理，并明确任务经过 Kafka，Worker claim/report 返回控制面；数据连接为概览。；目标图改为 Ops Repo 驱动 Argo，镜像仓库仅提供制品；保留 Kafka 派单、五类 Worker 与 HA 目标。；当前 Compose 图改为纵向 App/Infra 分组，消除低矮超宽布局；保留 Kafka 间接派单和独立 claim/report 返回路径。
+frontend,e2e-data/EXEC-MATRIX.md,0,1,依邻接依赖表修正 09 仅依赖 03；04 的配置审批页依赖 05 步骤2，使用虚线注明局部依赖。独立准备不代表同租户变更可并行。

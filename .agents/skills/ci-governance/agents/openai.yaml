@@ -1,0 +1,3 @@
+interface:
+  display_name: "持续集成与门禁治理"
+  short_description: "审查 GitHub Actions、必需检查、Full Gate、合并队列和失败运行处置"

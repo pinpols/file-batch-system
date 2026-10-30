@@ -1,11 +1,15 @@
 # ADR-010: Trigger → Orchestrator 异步解耦(trigger_outbox + Kafka)
 
+> **当前适用性（2026-10-24）**：异步 Trigger Outbox 继续适用；顶层目标改为 Workflow，子 JOB 请求保留父 Run/Node 关联。requestId、occurrence/事件投递与运行实例身份分别持久化，不再以根 Job 包装 Workflow。 原决策背景与阶段记录保留，正式关闭状态以当前验收矩阵为准。
+
+> **实现职责更新（2026-10-27）**：`DefaultTriggerService` 保留统一入口；普通请求的原子持久化迁入 `TriggerRequestPersistence`，事件多目标接纳和定时审批仍保持各自原事务。现行职责与边界见[Trigger运维手册](../../runbook/trigger-operations.md)。下文原实施位置与阶段计划保留历史上下文。
+
 - **状态**: 已实施（Accepted & Implemented，2026-05-02 全量上线 + 同步 HTTP 桥物理删除）
 - **日期**: 2026-04-30（提案），2026-05-02（实施收尾），2026-05-15（状态修订 R4-P1-9）
 - **实施后记**: 异步路径已固化，`batch.trigger.async-launch.enabled` 开关与 `HttpOrchestratorTriggerAdapter` 已同步删除。下文 §灰度开关 / §验收标准 仅作历史参考。
 - **决策人**: 后端平台团队
 - **关联**: [ADR-002 transactional-outbox](./ADR-002-transactional-outbox.md)(本 ADR 直接复用其模式)
-- **解决问题**: [`docs/analysis/deep-issue-analysis.md` §5.7](../../analysis/deep-issue-analysis.md)
+- **解决问题**: [`docs/archive/audit/deep-issue-analysis-2026-04-30.md` §5.7](../../archive/audit/deep-issue-analysis-2026-04-30.md)
 
 ## 背景
 
@@ -110,7 +114,7 @@ CREATE UNIQUE INDEX uk_trigger_outbox_request_id
 
 `LaunchEnvelope` 是新加的 wrapper,把 trigger 端**已经做过的 dedup 计算**和 trace 上下文传给 orchestrator,避免 orchestrator 重复算 dedup。
 
-### 实现位置
+### 原实施位置（历史）
 
 | 模块 | 新增 / 修改 |
 |---|---|

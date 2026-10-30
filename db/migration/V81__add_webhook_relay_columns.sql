@@ -1,4 +1,4 @@
--- ADR §5.11 / project-assessment-2026-04-30 §6.5: Webhook durability —
+-- ADR §5.11 / project-assessment-2026-04-30 §6.5：Webhook 持久化保障。
 -- WebhookDeliveryRelay 周期扫 EXHAUSTED + next_retry_at <= now() 行重投,达 ABSOLUTE_MAX 标 GIVE_UP。
 -- delivery_status CHECK 加 GIVE_UP;为 relay 扫描加 (delivery_status, next_retry_at) 索引。
 

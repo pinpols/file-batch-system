@@ -1,5 +1,6 @@
 rule_files:
   - prometheus-batch-rules.yml
+  - prometheus-docker-target-rules.yml
 
 evaluation_interval: 1m
 
@@ -78,7 +79,7 @@ tests:
               alert_group: alerting
             exp_annotations:
               summary: Alertmanager scrape target is unavailable
-              description: Prometheus cannot scrape Alertmanager. This rule cannot deliver while Alertmanager is down; an independent monitor must page on the Prometheus alert state.
+              description: Alertmanager 目标缺失或抓取失败。此规则不能在 Alertmanager 整体停止时自行送达，必须由栈外监控检测。
       - eval_time: 3m
         alertname: BatchAlertmanagerNotificationFailures
         exp_alerts:
@@ -101,6 +102,164 @@ tests:
             exp_annotations:
               summary: Alertmanager rejected its latest configuration
               description: Alertmanager is still running with the previous configuration. Validate the rendered config and correct the rejected change.
+
+  - name: Prometheus self-scrape, rejected configuration and failed rule evaluations are detected
+    interval: 1m
+    input_series:
+      - series: 'up{job="prometheus", instance="localhost:9090"}'
+        values: '1 0 0 0'
+      - series: 'prometheus_config_last_reload_successful{job="prometheus", instance="localhost:9090"}'
+        values: '1 0 0 0'
+      - series: 'prometheus_rule_evaluation_failures_total{job="prometheus", instance="localhost:9090"}'
+        values: '0 0 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchPrometheusDown
+        exp_alerts:
+          - exp_labels:
+              job: prometheus
+              instance: localhost:9090
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Prometheus 自监控目标缺失或抓取失败
+              description: Prometheus 未能抓取自身指标端点。此规则不能在 Prometheus 整体停止时自行送达，必须由栈外监控检测。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchPrometheusConfigReloadFailed
+        exp_alerts:
+          - exp_labels:
+              job: prometheus
+              instance: localhost:9090
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Prometheus 配置重载失败
+              description: Prometheus 拒绝了最近一次配置重载，当前仍使用旧配置；检查抓取、规则文件和服务发现配置。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchPrometheusRuleEvaluationFailures
+        exp_alerts:
+          - exp_labels:
+              job: prometheus
+              instance: localhost:9090
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Prometheus 告警规则计算失败
+              description: 最近五分钟内发生规则计算失败；检查 Prometheus 规则日志及查询耗时，确认业务告警仍可计算。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+
+  - name: missing Prometheus and Alertmanager scrape targets are detected
+    interval: 1m
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchPrometheusDown
+        exp_alerts:
+          - exp_labels:
+              job: prometheus
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Prometheus 自监控目标缺失或抓取失败
+              description: Prometheus 未能抓取自身指标端点。此规则不能在 Prometheus 整体停止时自行送达，必须由栈外监控检测。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchAlertmanagerDown
+        exp_alerts:
+          - exp_labels:
+              job: alertmanager
+              severity: critical
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: Alertmanager scrape target is unavailable
+              description: Alertmanager 目标缺失或抓取失败。此规则不能在 Alertmanager 整体停止时自行送达，必须由栈外监控检测。
+
+  - name: healthy monitoring schedulers stay clear and disabled schedulers are excluded
+    interval: 1m
+    input_series:
+      - series: 'batch_job_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '1+0x4'
+      - series: 'batch_job_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '30+0x4'
+      - series: 'batch_job_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="NOT_STARTED", failure_stage="scan"}'
+        values: '0 0 121+0x2'
+      - series: 'batch_job_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-b"}'
+        values: '0+0x4'
+      - series: 'batch_job_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-b"}'
+        values: '30+0x4'
+      - series: 'batch_job_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-b", violation_type="NOT_STARTED", failure_stage="scan"}'
+        values: '0+0x4'
+      - series: 'batch_workflow_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '1+0x4'
+      - series: 'batch_workflow_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '30+0x4'
+      - series: 'batch_workflow_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", stage="directory"}'
+        values: '0 0 121+0x2'
+      - series: 'batch_workflow_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-b"}'
+        values: '0+0x4'
+      - series: 'batch_workflow_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-b"}'
+        values: '30+0x4'
+      - series: 'batch_workflow_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-b", stage="directory"}'
+        values: '0+0x4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BatchJobMonitoringStale
+        exp_alerts: []
+      - eval_time: 2m
+        alertname: BatchWorkflowMonitoringStale
+        exp_alerts: []
+
+  - name: enabled monitoring schedulers with no successful scan are detected
+    interval: 1m
+    input_series:
+      - series: 'batch_job_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '1+0x4'
+      - series: 'batch_job_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '30+0x4'
+      - series: 'batch_job_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="NOT_STARTED", failure_stage="scan"}'
+        values: '0+0x4'
+      - series: 'batch_workflow_monitoring_enabled{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '1+0x4'
+      - series: 'batch_workflow_monitoring_poll_interval_seconds{job="batch-orchestrator", instance="orchestrator-a"}'
+        values: '30+0x4'
+      - series: 'batch_workflow_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", stage="directory"}'
+        values: '0+0x4'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BatchJobMonitoringStale
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator-a
+              violation_type: NOT_STARTED
+              failure_stage: scan
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: 作业时限监控扫描长时间未成功
+              description: 作业监控从未完成成功扫描，或距离上次成功扫描已超过扫描周期的五倍且至少五分钟；检查启用状态、ShedLock、扫描线程和数据库。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 2m
+        alertname: BatchWorkflowMonitoringStale
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator-a
+              stage: directory
+              severity: warning
+              team: batch-platform
+              alert_group: workflow-monitoring
+            exp_annotations:
+              summary: Workflow 时限监控扫描长时间未成功
+              description: Workflow 监控从未完成成功整轮扫描，或距离上次成功扫描已超过扫描周期的五倍且至少五分钟；检查启用状态、租户目录、ShedLock、扫描线程和数据库。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
 
   - name: trigger event alerts exclude expected business and rate-limit outcomes
     interval: 1m
@@ -213,6 +372,177 @@ tests:
               summary: Alert notification delivery failed for batch-sla
               description: Console matched a notification channel but its sender reported delivery failure. Inspect notification_delivery_log and verify an independent escalation channel.
 
+  - name: dependency health metrics detect service failures behind reachable exporters
+    interval: 1m
+    input_series:
+      - series: 'pg_up{job="postgres-exporter", instance="postgres-exporter:9187"}'
+        values: '1 0 0 0'
+      - series: 'redis_up{job="redis-exporter", instance="redis-exporter:9121"}'
+        values: '1 0 0 0'
+      - series: 'kafka_brokers{job="kafka-exporter", instance="kafka-exporter:9308"}'
+        values: '3 0 0 0'
+      - series: 'minio_cluster_nodes_offline_total{job="minio", instance="minio:9000"}'
+        values: '0 1 1 1'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchPostgresUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: postgres-exporter
+              instance: postgres-exporter:9187
+              severity: critical
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: PostgreSQL 数据库探测失败
+              description: Exporter 抓取端点可达，但 pg_up 为 0；检查数据库连通性、认证和连接配置。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchRedisUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: redis-exporter
+              instance: redis-exporter:9121
+              severity: critical
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: Redis 服务探测失败
+              description: Redis exporter 报告目标不可达；检查 Redis 实例、网络和鉴权。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchKafkaUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: kafka-exporter
+              instance: kafka-exporter:9308
+              severity: critical
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: Kafka 未发现可用 Broker
+              description: Kafka exporter 发现的 Broker 数为 0；检查集群连通性和 exporter 权限。该规则不判定部分 Broker 故障。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 3m
+        alertname: BatchMinioNodesOffline
+        exp_alerts:
+          - exp_labels:
+              job: minio
+              instance: minio:9000
+              severity: warning
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: MinIO 集群出现离线节点或磁盘
+              description: MinIO 集群指标报告节点或磁盘离线；检查集群仲裁、磁盘和对象存储读写能力。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+
+  - name: Kafka lag includes namespaced trigger and Console event consumers
+    interval: 1m
+    input_series:
+      - series: 'kafka_consumergroup_lag{consumergroup="nightly.batch-console-workflow-terminal-notifications", topic="batch.workflow.terminal.v1", partition="0"}'
+        values: '0 1501+0x12'
+      - series: 'kafka_consumergroup_lag{consumergroup="batch-console-job-terminal-notifications", topic="batch.job.terminal.v1", partition="0"}'
+        values: '0 1201+0x12'
+      - series: 'kafka_consumergroup_lag{consumergroup="unrelated-group", topic="other.topic", partition="0"}'
+        values: '0 5000+0x12'
+    alert_rule_test:
+      - eval_time: 12m
+        alertname: BatchKafkaConsumerLagHigh
+        exp_alerts:
+          - exp_labels:
+              consumergroup: nightly.batch-console-workflow-terminal-notifications
+              topic: batch.workflow.terminal.v1
+              partition: "0"
+              severity: warning
+              team: batch-platform
+              alert_group: kafka
+            exp_annotations:
+              summary: Kafka consumer lag is high for nightly.batch-console-workflow-terminal-notifications
+              description: Consumer group nightly.batch-console-workflow-terminal-notifications topic batch.workflow.terminal.v1 partition 0 lag exceeds 1000 messages for 10 minutes.
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+          - exp_labels:
+              consumergroup: batch-console-job-terminal-notifications
+              topic: batch.job.terminal.v1
+              partition: "0"
+              severity: warning
+              team: batch-platform
+              alert_group: kafka
+            exp_annotations:
+              summary: Kafka consumer lag is high for batch-console-job-terminal-notifications
+              description: Consumer group batch-console-job-terminal-notifications topic batch.job.terminal.v1 partition 0 lag exceeds 1000 messages for 10 minutes.
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+
+  - name: monitor failure state survives the first scrape and clears after success
+    interval: 1m
+    input_series:
+      - series: 'batch_job_monitoring_last_failure_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="RUNNING_TOO_LONG", failure_stage="scan"}'
+        values: '1740000001+0x4'
+      - series: 'batch_job_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="RUNNING_TOO_LONG", failure_stage="scan"}'
+        values: '0 0 0 1740000002+0x2'
+      - series: 'batch_job_monitoring_last_failure_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="NOT_STARTED", failure_stage="alert_persistence"}'
+        values: '1740001001+0x4'
+      - series: 'batch_job_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", violation_type="NOT_STARTED", failure_stage="alert_persistence"}'
+        values: '0 0 0 1740001002+0x2'
+      - series: 'batch_workflow_monitoring_last_failure_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", stage="directory"}'
+        values: '1740002001+0x4'
+      - series: 'batch_workflow_monitoring_last_success_timestamp_seconds{job="batch-orchestrator", instance="orchestrator-a", stage="directory"}'
+        values: '0 0 0 1740002002+0x2'
+    alert_rule_test:
+      - eval_time: 0m
+        alertname: BatchJobMonitoringScanFailures
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator-a
+              violation_type: RUNNING_TOO_LONG
+              failure_stage: scan
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: 作业监控查询尚未恢复：RUNNING_TOO_LONG
+              description: 最近一次查询失败晚于该类别最近一次成功查询；等待完整成功扫描后自动解除，并检查数据库和 JobMonitoringScheduler 日志。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 0m
+        alertname: BatchJobMonitoringEventFailures
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator-a
+              violation_type: NOT_STARTED
+              failure_stage: alert_persistence
+              severity: warning
+              team: batch-platform
+              alert_group: job-monitoring
+            exp_annotations:
+              summary: 作业监控告警写入尚未恢复：NOT_STARTED
+              description: 最近一次告警持久化失败晚于该类别最近一次成功处理；等待该类别完整成功处理后自动解除，并检查 alert_event 数据库写入。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 0m
+        alertname: BatchWorkflowMonitoringFailures
+        exp_alerts:
+          - exp_labels:
+              job: batch-orchestrator
+              instance: orchestrator-a
+              stage: directory
+              severity: warning
+              team: batch-platform
+              alert_group: workflow-monitoring
+            exp_annotations:
+              summary: Workflow 监控扫描尚未恢复：directory
+              description: 最近一次完整 Workflow 监控扫描失败晚于最近一次成功扫描；修复租户目录、候选查询或告警写入后，成功完成整轮扫描会自动解除。
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/slo-sli-catalog.md#告警映射
+      - eval_time: 4m
+        alertname: BatchJobMonitoringScanFailures
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: BatchJobMonitoringEventFailures
+        exp_alerts: []
+      - eval_time: 4m
+        alertname: BatchWorkflowMonitoringFailures
+        exp_alerts: []
+
   - name: all four job monitoring violation types have dedicated alerts
     interval: 1m
     input_series:
@@ -287,4 +617,148 @@ tests:
         exp_alerts: []
       - eval_time: 10m
         alertname: ArchiveSchedulerStale
+        exp_alerts: []
+
+  - name: 固定抓取目标缺失时分别告警
+    interval: 1m
+    input_series:
+      - series: 'up{job="redis-exporter", instance="redis-exporter:9121"}'
+        values: '1+0x3'
+      - series: 'up{job="postgres-exporter", instance="postgres-exporter:9187"}'
+        values: '1+0x3'
+      - series: 'up{job="minio", instance="minio:9000"}'
+        values: '1+0x3'
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1+0x3'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchDependencyTargetMissing
+        exp_alerts:
+          - exp_labels:
+              job: kafka-exporter
+              severity: critical
+              team: batch-platform
+              alert_group: dependency
+            exp_annotations:
+              summary: "依赖监控目标缺失：kafka-exporter"
+              description: "Prometheus 未发现 Docker 固定清单中的依赖指标抓取目标。检查 scrape 配置、服务发现和目标服务。"
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/observability-stack.md#5-验收
+      - eval_time: 3m
+        alertname: BatchTelemetryBackendTargetMissing
+        exp_alerts:
+          - exp_labels:
+              job: tempo
+              severity: critical
+              team: batch-platform
+              alert_group: observability
+            exp_annotations:
+              summary: "遥测后端监控目标缺失：tempo"
+              description: "Prometheus 未发现 Docker 固定清单中的 Loki/Tempo 指标目标。检查服务发现、配置挂载和观测栈部署。"
+              runbook_url: https://github.com/pinpols/file-batch-system/blob/main/docs/runbook/observability-stack.md#5-验收
+
+  - name: 固定抓取目标齐全时不触发缺失告警
+    interval: 1m
+    input_series:
+      - series: 'up{job="redis-exporter", instance="redis-exporter:9121"}'
+        values: '1+0x3'
+      - series: 'up{job="postgres-exporter", instance="postgres-exporter:9187"}'
+        values: '1+0x3'
+      - series: 'up{job="kafka-exporter", instance="kafka-exporter:9308"}'
+        values: '1+0x3'
+      - series: 'up{job="minio", instance="minio:9000"}'
+        values: '1+0x3'
+      - series: 'up{job="loki", instance="loki:3100"}'
+        values: '1+0x3'
+      - series: 'up{job="tempo", instance="tempo:3200"}'
+        values: '1+0x3'
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: BatchDependencyTargetMissing
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: BatchTelemetryBackendTargetMissing
+        exp_alerts: []
+
+  - name: 计划维护 503 不计入普通服务错误率
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="batch-console-api",status="503",maintenance="planned"}'
+        values: '0+100x12'
+      - series: 'http_server_requests_seconds_count{job="batch-console-api",status="200"}'
+        values: '0+10x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HttpServerErrorRateHigh
+        exp_alerts: []
+
+  - name: 维护请求不能稀释真实服务错误或状态失联 503
+    interval: 1m
+    input_series:
+      - series: 'http_server_requests_seconds_count{job="batch-console-api",status="503",maintenance="planned"}'
+        values: '0+1000x12'
+      - series: 'http_server_requests_seconds_count{job="batch-console-api",status="500"}'
+        values: '0+2x12'
+      - series: 'http_server_requests_seconds_count{job="batch-console-api",status="200"}'
+        values: '0+8x12'
+      - series: 'http_server_requests_seconds_count{job="batch-trigger",status="503"}'
+        values: '0+2x12'
+      - series: 'http_server_requests_seconds_count{job="batch-trigger",status="200"}'
+        values: '0+8x12'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: HttpServerErrorRateHigh
+        exp_alerts:
+          - exp_labels:
+              job: batch-console-api
+              severity: warning
+              team: batch-platform
+              alert_group: http
+            exp_annotations:
+              summary: HTTP 5xx ratio on batch-console-api is 20%
+              description: 服务 batch-console-api 近 5min HTTP 5xx 占比超过 5%，且请求数达到告警下限。结合 Grafana 的 URI 维度面板定位异常端点；不要将高基数 URI 加入告警标签。
+          - exp_labels:
+              job: batch-trigger
+              severity: warning
+              team: batch-platform
+              alert_group: http
+            exp_annotations:
+              summary: HTTP 5xx ratio on batch-trigger is 20%
+              description: 服务 batch-trigger 近 5min HTTP 5xx 占比超过 5%，且请求数达到告警下限。结合 Grafana 的 URI 维度面板定位异常端点；不要将高基数 URI 加入告警标签。
+
+  - name: 维护同步失败与窗口超时仍需告警
+    interval: 1m
+    input_series:
+      - series: 'batch_console_maintenance_enabled{job="batch-console-api",instance="console-1"}'
+        values: '1+0x12'
+      - series: 'batch_console_maintenance_alert_suppression_deadline_seconds{job="batch-console-api",instance="console-1"}'
+        values: '300+0x12'
+      - series: 'batch_console_maintenance_alert_suppression_available{job="batch-console-api",instance="console-1"}'
+        values: '0+0x12'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: BatchConsoleMaintenanceSuppressionUnavailable
+        exp_alerts:
+          - exp_labels:
+              job: batch-console-api
+              instance: console-1
+              severity: warning
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: 维护通知抑制未确认
+              description: 维护公告已启用，但部署范围、Alertmanager 地址、共享状态或控制信号同步尚未确认；预期停机告警仍可能通知，请核实配置与同步结果。
+      - eval_time: 6m
+        alertname: BatchConsoleMaintenanceWindowOverdue
+        exp_alerts:
+          - exp_labels:
+              job: batch-console-api
+              instance: console-1
+              severity: warning
+              team: batch-platform
+              alert_group: alerting
+            exp_annotations:
+              summary: 维护通知窗口已到期
+              description: 维护模式仍开启，但通知抑制窗口已结束；普通告警恢复通知，业务冻结不会自动解除。请核实维护进度，结束维护或显式调整窗口。
+      - eval_time: 6m
+        alertname: BatchConsoleMaintenanceSuppressionUnavailable
         exp_alerts: []

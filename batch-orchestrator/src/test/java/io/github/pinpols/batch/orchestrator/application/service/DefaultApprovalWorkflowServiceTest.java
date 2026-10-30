@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,10 +13,13 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.governance.ApprovalWorkflowService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DefaultApprovalWorkflowService;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.ApproveCommandDecisionParam;
+import io.github.pinpols.batch.orchestrator.domain.param.RejectCommandDecisionParam;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * 单元测试：{@link DefaultApprovalWorkflowService} 状态流转。 覆盖
@@ -135,6 +139,79 @@ class DefaultApprovalWorkflowServiceTest {
     verify(approvalCommandMapper).insert(any());
   }
 
+  @Test
+  @DisplayName("相同租户和幂等键重提相同审批时复用原审批单")
+  void shouldReuseApprovalForSameIdempotentSubmission() {
+    ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
+    existing.setApprovalType("COMPENSATION");
+    existing.setActionType("RETRY");
+    existing.setTargetType("JOB");
+    existing.setTargetId("1");
+    existing.setPayloadJson("{}");
+    existing.setRequesterId("op");
+    existing.setApprovalReason("reason");
+    existing.setSourceApprovalReason("reason");
+    when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
+        .thenReturn(existing);
+
+    String approvalNo = service.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB")
+        .targetId("1")
+        .requesterId("op")
+        .sourceIdempotencyKey("idem")
+        .approvalReason("reason")
+        .build());
+
+    assertThat(approvalNo).isEqualTo("apr-existing");
+    verify(approvalCommandMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("同一幂等键对应不同申请内容时拒绝提交")
+  void shouldRejectDifferentSubmissionForSameIdempotencyKey() {
+    ApprovalCommandEntity existing = pendingApproval("t1", "apr-existing");
+    existing.setApprovalType("COMPENSATION");
+    existing.setActionType("RETRY");
+    existing.setTargetType("JOB");
+    existing.setTargetId("different-target");
+    existing.setPayloadJson("{}");
+    existing.setRequesterId("op");
+    existing.setApprovalReason("reason");
+    existing.setSourceApprovalReason("reason");
+    when(approvalCommandMapper.selectByTenantAndSourceIdempotencyKey("t1", "idem"))
+        .thenReturn(existing);
+
+    assertThatThrownBy(() -> service.submit(new ApprovalSubmissionSpec()
+            .actionType("RETRY")
+            .targetType("JOB")
+            .targetId("1")
+            .requesterId("op")
+            .sourceIdempotencyKey("idem")
+            .approvalReason("reason")
+            .build()))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.approval.idempotency_conflict");
+  }
+
+  @Test
+  @DisplayName("空白来源幂等键按未提供处理")
+  void shouldPersistNullForBlankSourceIdempotencyKey() {
+    when(approvalCommandMapper.insert(any())).thenReturn(1);
+
+    service.submit(new ApprovalSubmissionSpec()
+        .actionType("RETRY")
+        .targetType("JOB")
+        .targetId("1")
+        .sourceIdempotencyKey("  ")
+        .build());
+
+    ArgumentCaptor<ApprovalCommandEntity> entityCaptor =
+        ArgumentCaptor.forClass(ApprovalCommandEntity.class);
+    verify(approvalCommandMapper).insert(entityCaptor.capture());
+    assertThat(entityCaptor.getValue().getSourceIdempotencyKey()).isNull();
+  }
+
   // ── approve ───────────────────────────────────────────────────────────────
 
   @Test
@@ -170,13 +247,14 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-002"))
         .thenReturn(entity)
         .thenReturn(approved);
-    when(approvalCommandMapper.markApproved(
-            "t1",
-            "apr-002",
-            "approver-001",
-            "approved",
-            ApprovalCommandStatus.APPROVED.code(),
-            ApprovalCommandStatus.PENDING.code()))
+    when(approvalCommandMapper.markApproved(ApproveCommandDecisionParam.builder()
+            .tenantId("t1")
+            .approvalNo("apr-002")
+            .approverId("approver-001")
+            .approvalReason("approved")
+            .approvedStatus(ApprovalCommandStatus.APPROVED.code())
+            .pendingStatus(ApprovalCommandStatus.PENDING.code())
+            .build()))
         .thenReturn(1);
 
     ApprovalWorkflowService.ApprovalRecord result =
@@ -208,13 +286,14 @@ class DefaultApprovalWorkflowServiceTest {
     when(approvalCommandMapper.selectByTenantAndApprovalNo("t1", "apr-003"))
         .thenReturn(entity)
         .thenReturn(rejected);
-    when(approvalCommandMapper.markRejected(
-            "t1",
-            "apr-003",
-            "approver-001",
-            "data incorrect",
-            ApprovalCommandStatus.REJECTED.code(),
-            ApprovalCommandStatus.PENDING.code()))
+    when(approvalCommandMapper.markRejected(RejectCommandDecisionParam.builder()
+            .tenantId("t1")
+            .approvalNo("apr-003")
+            .approverId("approver-001")
+            .approvalReason("data incorrect")
+            .rejectedStatus(ApprovalCommandStatus.REJECTED.code())
+            .pendingStatus(ApprovalCommandStatus.PENDING.code())
+            .build()))
         .thenReturn(1);
 
     ApprovalWorkflowService.ApprovalRecord result =

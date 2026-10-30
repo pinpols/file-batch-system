@@ -16,7 +16,7 @@ public interface ConsoleTriggerProxyService {
 
   List<ConsoleTriggerStatusResponse> triggerList();
 
-  ConsoleTriggerActionResponse triggerAction(String tenantId, String jobCode, String action);
+  ConsoleTriggerActionResponse triggerAction(String tenantId, String workflowCode, String action);
 
   ConsoleTriggerActionResponse pauseByTenant(String tenantId);
 

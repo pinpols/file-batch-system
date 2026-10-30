@@ -103,7 +103,7 @@ public class BatchPlatformClient {
     List<SdkTaskTypeDescriptor> descriptors = collectDescriptors();
     List<String> capabilityTags = capabilityTags();
     // 与旧载荷保持同一可选字段策略：空指纹和空 taskTypes 不上报，避免覆盖平台注册信息。
-    RegisterRequest request = RegisterRequest.builder()
+    RegisterRequest.RegisterRequestBuilder requestBuilder = RegisterRequest.builder()
         .tenantId(config.getTenantId())
         .workerCode(config.getWorkerCode())
         .workerGroup("sdk-self-hosted")
@@ -111,12 +111,23 @@ public class BatchPlatformClient {
         .heartbeatAt(Instant.now())
         .currentLoad(0)
         .maxConcurrent(config.getMaxConcurrentTasks())
-        .capabilityTags(capabilityTags)
-        .hostName(optionalFingerprint(WorkerFingerprint.hostName()))
-        .hostIp(optionalFingerprint(WorkerFingerprint.hostIp()))
-        .processId(optionalFingerprint(WorkerFingerprint.processId()))
-        .buildId(optionalFingerprint(config.getBuildId()))
-        .sdkVersion(optionalFingerprint(WorkerFingerprint.sdkVersion()))
+        .capabilityTags(capabilityTags);
+    String rawHostName = WorkerFingerprint.hostName();
+    String hostName = optionalFingerprint(rawHostName);
+    requestBuilder.hostName(hostName);
+    String rawHostIp = WorkerFingerprint.hostIp();
+    String hostIp = optionalFingerprint(rawHostIp);
+    requestBuilder.hostIp(hostIp);
+    String rawProcessId = WorkerFingerprint.processId();
+    String processId = optionalFingerprint(rawProcessId);
+    requestBuilder.processId(processId);
+    String rawBuildId = config.getBuildId();
+    String buildId = optionalFingerprint(rawBuildId);
+    requestBuilder.buildId(buildId);
+    String rawSdkVersion = WorkerFingerprint.sdkVersion();
+    String sdkVersion = optionalFingerprint(rawSdkVersion);
+    requestBuilder.sdkVersion(sdkVersion);
+    RegisterRequest request = requestBuilder
         .protocolVersion(RegisterRequest.CURRENT_PROTOCOL_VERSION)
         .taskTypes(EmptyChecks.isEmpty(descriptors) ? null : descriptors)
         .build();
@@ -177,7 +188,9 @@ public class BatchPlatformClient {
     for (Map.Entry<String, SdkTaskHandler> entry : handlers.entrySet()) {
       SdkTaskTypeDescriptor descriptor = entry.getValue().descriptor();
       if (descriptor != null) {
-        out.add(descriptor.withCode(entry.getKey()));
+        String registeredTaskType = entry.getKey();
+        SdkTaskTypeDescriptor canonicalDescriptor = descriptor.withCode(registeredTaskType);
+        out.add(canonicalDescriptor);
       }
     }
     return out;
@@ -221,7 +234,8 @@ public class BatchPlatformClient {
   }
 
   private void stop(Duration timeout, boolean forceCleanup) {
-    if (!forceCleanup && !started && !hasRuntimeResources()) {
+    boolean clientNeedsNoRuntimeCleanup = !forceCleanup && !started && !hasRuntimeResources();
+    if (clientNeedsNoRuntimeCleanup) {
       return;
     }
     long totalMs = Math.max(0L, timeout == null ? 0L : timeout.toMillis());
@@ -269,7 +283,9 @@ public class BatchPlatformClient {
           body.put("tenantId", config.getTenantId());
           body.put("workerCode", config.getWorkerCode());
           body.put("status", "OFFLINE");
-          body.put("heartbeatAt", Instant.now().toString());
+          Instant heartbeatAt = Instant.now();
+          String heartbeatAtText = heartbeatAt.toString();
+          body.put("heartbeatAt", heartbeatAtText);
           httpClient.deactivate(
               config.getWorkerCode(), body, Duration.ofMillis(deactivateTimeoutMs));
         } catch (Exception ex) {
@@ -300,7 +316,9 @@ public class BatchPlatformClient {
     if (schedulerCount == 0) {
       return;
     }
-    long schedulerBudgetMs = Math.min(remainingMs(stopStartNanos, totalMs), totalMs * 10 / 100);
+    long remainingStopBudgetMs = remainingMs(stopStartNanos, totalMs);
+    long maximumSchedulerBudgetMs = totalMs * 10 / 100;
+    long schedulerBudgetMs = Math.min(remainingStopBudgetMs, maximumSchedulerBudgetMs);
     long schedulerStartNanos = System.nanoTime();
     if (EmptyChecks.isNotNull(heartbeatScheduler)) {
       long heartbeatBudgetMs = schedulerBudgetMs / schedulerCount;
@@ -308,9 +326,9 @@ public class BatchPlatformClient {
     }
     if (EmptyChecks.isNotNull(leaseRenewalScheduler)) {
       long schedulerElapsedMs = (System.nanoTime() - schedulerStartNanos) / 1_000_000L;
-      long leaseBudgetMs = Math.min(
-          remainingMs(stopStartNanos, totalMs),
-          Math.max(0L, schedulerBudgetMs - schedulerElapsedMs));
+      long remainingStopBudgetForLeaseMs = remainingMs(stopStartNanos, totalMs);
+      long remainingSchedulerBudgetMs = Math.max(0L, schedulerBudgetMs - schedulerElapsedMs);
+      long leaseBudgetMs = Math.min(remainingStopBudgetForLeaseMs, remainingSchedulerBudgetMs);
       leaseRenewalScheduler.close(Duration.ofMillis(leaseBudgetMs));
     }
   }
@@ -338,18 +356,19 @@ public class BatchPlatformClient {
     boolean crashed = (kafkaConsumer != null && kafkaConsumer.hasCrashed()) || authFail;
     int inFlight = dispatcher == null ? 0 : dispatcher.inFlightCount();
     long consumerLag = kafkaConsumer == null ? -1L : kafkaConsumer.consumerLagMax();
-    return new SdkClientMetrics(
-        config.getTenantId(),
-        config.getWorkerCode(),
-        startedSnap,
-        startedSnap && !fatal && !crashed,
-        inFlight,
-        config.getMaxConcurrentTasks(),
-        handlers.size(),
-        fatal,
-        draining,
-        crashed,
-        consumerLag);
+    return SdkClientMetrics.builder()
+        .tenantId(config.getTenantId())
+        .workerCode(config.getWorkerCode())
+        .started(startedSnap)
+        .healthy(startedSnap && !fatal && !crashed)
+        .inFlightTaskCount(inFlight)
+        .maxConcurrentTasks(config.getMaxConcurrentTasks())
+        .registeredHandlerCount(handlers.size())
+        .dispatcherFatal(fatal)
+        .dispatcherDraining(draining)
+        .consumerCrashed(crashed)
+        .kafkaConsumerLag(consumerLag)
+        .build();
   }
 
   /**

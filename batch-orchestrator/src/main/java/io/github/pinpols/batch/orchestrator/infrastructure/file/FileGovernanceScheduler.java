@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
@@ -60,6 +61,7 @@ public class FileGovernanceScheduler {
   private final AtomicLong arrivalDelayViolations = new AtomicLong();
   private final AtomicLong arrivalDelayMaxSeconds = new AtomicLong();
   private final AtomicLong arrivalGroupWaitingCount = new AtomicLong();
+  private final AtomicLong arrivalGroupOldestWaitSeconds = new AtomicLong();
   private final AtomicLong arrivalGroupTriggeredCount = new AtomicLong();
   private final AtomicLong arrivalGroupTimeoutCount = new AtomicLong();
   private final AtomicLong processingDelayViolations = new AtomicLong();
@@ -86,6 +88,8 @@ public class FileGovernanceScheduler {
     meterRegistry.gauge("batch.file.arrival.delay.violations", arrivalDelayViolations);
     meterRegistry.gauge("batch.file.arrival.delay.max.seconds", arrivalDelayMaxSeconds);
     meterRegistry.gauge("batch.file.arrival.group.waiting.count", arrivalGroupWaitingCount);
+    meterRegistry.gauge(
+        "batch.file.arrival.group.oldest_wait.seconds", arrivalGroupOldestWaitSeconds);
     meterRegistry.gauge("batch.file.arrival.group.triggered.count", arrivalGroupTriggeredCount);
     meterRegistry.gauge("batch.file.arrival.group.timeout.count", arrivalGroupTimeoutCount);
     meterRegistry.gauge("batch.pipeline.processing.delay.violations", processingDelayViolations);
@@ -99,13 +103,12 @@ public class FileGovernanceScheduler {
     }
     String tenantId = properties.getReconcile().getDefaultTenantId();
     sweepStaleRunningPipelines(tenantId);
-    Map<String, Object> rawMetrics = metricsCacheService.compute(
+    FileGovernanceLatencyMetrics metrics = metricsCacheService.compute(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
         properties.getLatency().getSampleSize());
-    FileGovernanceLatencyMetrics metrics = FileGovernanceLatencyMetrics.from(rawMetrics);
     long arrivalCount = metrics.arrivalDelayViolations();
     long arrivalMax = metrics.maxArrivalDelaySeconds();
     long processingCount = metrics.processingDelayViolations();
@@ -114,7 +117,7 @@ public class FileGovernanceScheduler {
     arrivalDelayMaxSeconds.set(arrivalMax);
     processingDelayViolations.set(processingCount);
     processingDelayMaxSeconds.set(processingMax);
-    metricsCacheService.write(tenantId, rawMetrics);
+    metricsCacheService.write(tenantId, metrics);
 
     if (arrivalCount > 0) {
       List<Map<String, Object>> samples = metrics.arrivalDelaySamples();
@@ -165,12 +168,12 @@ public class FileGovernanceScheduler {
   }
 
   public FileGovernanceLatencyMetrics loadLatencyMetrics(String tenantId) {
-    return FileGovernanceLatencyMetrics.from(metricsCacheService.load(
+    return metricsCacheService.load(
         tenantId,
         properties.getLatency().getArrivalDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayThresholdSeconds(),
         properties.getLatency().getProcessingDelayMaxAgeSeconds(),
-        properties.getLatency().getSampleSize()));
+        properties.getLatency().getSampleSize());
   }
 
   public void manageFileArrivalGroups() {
@@ -183,9 +186,9 @@ public class FileGovernanceScheduler {
     Map<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> grouped =
         new HashMap<>();
     if (EmptyChecks.isEmpty(candidates)) {
-      arrivalGroupWaitingCount.set(0L);
       arrivalGroupTriggeredCount.set(0L);
       arrivalGroupTimeoutCount.set(0L);
+      refreshArrivalGroupBacklogMetrics();
       return;
     }
     for (FileGovernanceArrivalViews.ArrivalCandidateView candidate : candidates) {
@@ -195,27 +198,46 @@ public class FileGovernanceScheduler {
       }
       grouped.computeIfAbsent(key, ignored -> new ArrayList<>()).add(candidate);
     }
-    long waitingGroups = 0L;
     long triggeredGroups = 0L;
     long timeoutGroups = 0L;
     Instant now = BatchDateTimeSupport.utcNow();
     for (Map.Entry<ArrivalGroupKey, List<FileGovernanceArrivalViews.ArrivalCandidateView>> entry :
         grouped.entrySet()) {
-      ArrivalGroupDecision decision = evaluateArrivalGroup(entry.getKey(), entry.getValue(), now);
+      ArrivalGroupKey key = entry.getKey();
+      ArrivalGroupDecision decision = RlsTenantContextHolder.runWithTenant(
+          key.tenantId(), () -> evaluateArrivalGroup(key, entry.getValue(), now));
       if (EmptyChecks.isNull(decision) || EmptyChecks.isNull(decision.state())) {
         continue;
       }
       switch (decision.state()) {
-        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM ->
-          waitingGroups++;
+        case STATUS_WAITING_ARRIVAL, "WAITING_FILE_GROUP", STATUS_WAITING_MANUAL_CONFIRM -> {}
         case STATUS_TRIGGERED -> triggeredGroups++;
         case STATUS_TIMEOUT -> timeoutGroups++;
         default -> {}
       }
     }
-    arrivalGroupWaitingCount.set(waitingGroups);
     arrivalGroupTriggeredCount.set(triggeredGroups);
     arrivalGroupTimeoutCount.set(timeoutGroups);
+    refreshArrivalGroupBacklogMetrics();
+  }
+
+  private void refreshArrivalGroupBacklogMetrics() {
+    try {
+      FileGovernanceArrivalViews.ArrivalGroupBacklogView backlog =
+          fileGovernanceRepository.selectArrivalGroupBacklogMetrics();
+      long waitingGroups = valueOrZero(backlog.waitingGroups());
+      long oldestWaitSeconds = valueOrZero(backlog.oldestWaitSeconds());
+      arrivalGroupWaitingCount.set(Math.max(0L, waitingGroups));
+      arrivalGroupOldestWaitSeconds.set(Math.max(0L, oldestWaitSeconds));
+    } catch (RuntimeException failure) {
+      log.warn(
+          "file arrival group backlog metrics refresh failed: {}",
+          SwallowedExceptionLogger.summary(failure));
+    }
+  }
+
+  private long valueOrZero(Long value) {
+    return EmptyChecks.isNull(value) ? 0L : value;
   }
 
   public void cleanupArchivedFiles() {
@@ -290,7 +312,9 @@ public class FileGovernanceScheduler {
       return triggerArrivalGroup(
           key, groupFiles, requiredFiles, missingFiles, "TIMEOUT_OVERRIDE_" + timeoutAction, now);
     }
-    if (EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles)) {
+    boolean allRequiredFilesArrived =
+        EmptyChecks.isNotEmpty(requiredFiles) && EmptyChecks.isEmpty(missingFiles);
+    if (allRequiredFilesArrived) {
       if (properties.getArrival().isRequireVerified() && !allMembersVerified(groupFiles)) {
         // 文件名虽齐，但有成员缺少实际字节校验形成的 VERIFIED 证据：保持等待，超时仍走 timeoutAction。
         ArrivalGroupUpdateState updateState =
@@ -404,23 +428,32 @@ public class FileGovernanceScheduler {
     metadata.put("arrivalTimeoutAction", context.key().arrivalTimeoutAction());
     metadata.put("arrivalState", targetState);
     metadata.put("arrivalReason", targetReason);
-    metadata.put("arrivalCheckedAt", context.state().now().toString());
+    String arrivalCheckedAt = context.state().now().toString();
+    metadata.put("arrivalCheckedAt", arrivalCheckedAt);
     metadata.put("groupArrivedCount", context.files().groupFiles().size());
     metadata.put("groupRequiredCount", context.files().requiredFiles().size());
-    metadata.put("groupMissingFileSet", String.join(",", context.files().missingFiles()));
+    Set<String> missingFileNames = context.files().missingFiles();
+    String missingFileSet = String.join(",", missingFileNames);
+    metadata.put("groupMissingFileSet", missingFileSet);
     if (STATUS_TRIGGERED.equals(targetState)) {
-      metadata.put("arrivalTriggeredAt", context.state().now().toString());
+      metadata.put("arrivalTriggeredAt", arrivalCheckedAt);
     }
     if (STATUS_TIMEOUT.equals(targetState)) {
-      metadata.put("arrivalTimedOutAt", context.state().now().toString());
+      metadata.put("arrivalTimedOutAt", arrivalCheckedAt);
     }
+    int updatedFiles = 0;
     for (FileGovernanceArrivalViews.ArrivalCandidateView file : context.files().groupFiles()) {
       Long fileId = file.fileId();
       String tenantId = file.tenantId();
       if (EmptyChecks.isNull(fileId) || EmptyChecks.isNull(tenantId)) {
         continue;
       }
-      fileGovernanceRepository.updateFileMetadata(tenantId, fileId, metadata);
+      int updated = fileGovernanceRepository.updateArrivalGroupMetadataIfNonTerminal(
+          tenantId, fileId, metadata);
+      if (updated == 0) {
+        continue;
+      }
+      updatedFiles += updated;
       FileGovernanceRepository.FileAuditCommand auditCommand =
           new FileGovernanceRepository.FileAuditCommand(
               tenantId,
@@ -432,6 +465,9 @@ public class FileGovernanceScheduler {
               "arrival-group-" + context.key().fileGroupCode(),
               metadata);
       fileGovernanceRepository.appendAudit(auditCommand);
+    }
+    if (updatedFiles == 0) {
+      return;
     }
     log.info(
         "file arrival group updated: tenantId={}, fileGroupCode={}, state={}, reason={},"
@@ -532,13 +568,18 @@ public class FileGovernanceScheduler {
       if (EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(fileGroupCode)) {
         return null;
       }
+      String bizDate = defaultString(candidate.bizDate(), MISSING_BIZ_DATE);
+      String waitFileGroupMode = defaultString(candidate.waitFileGroupMode(), "ALL_OF");
+      String requiredFileSet = defaultString(candidate.requiredFileSet(), "");
+      String arrivalTimeoutAction =
+          defaultString(candidate.arrivalTimeoutAction(), "MANUAL_CONFIRM");
       return new ArrivalGroupKey(
           tenantId,
-          defaultString(candidate.bizDate(), MISSING_BIZ_DATE),
+          bizDate,
           fileGroupCode,
-          defaultString(candidate.waitFileGroupMode(), "ALL_OF"),
-          defaultString(candidate.requiredFileSet(), ""),
-          defaultString(candidate.arrivalTimeoutAction(), "MANUAL_CONFIRM"));
+          waitFileGroupMode,
+          requiredFileSet,
+          arrivalTimeoutAction);
     }
 
     private static String defaultString(String value, String fallback) {

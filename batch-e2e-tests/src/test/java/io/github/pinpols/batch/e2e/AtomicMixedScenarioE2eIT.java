@@ -11,12 +11,14 @@ import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
-import io.github.pinpols.batch.orchestrator.service.LaunchService;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
@@ -24,8 +26,10 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,15 +44,17 @@ import org.springframework.jdbc.core.JdbcTemplate;
     classes = E2eAtomicApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @E2eBusinessSchema
-@DisplayName(
-    "原子任务混合执行器端到端:同一 worker 进程交错处理数据库查询,命令行脚本,存储过程与 HTTP 调用四类任务,连续三轮投放,验证混合流量下派发与执行链路全部收敛到终态成功")
+@DisplayName("原子任务混合执行器端到端:同一 worker 进程交错处理数据库读写,命令行脚本,存储过程与 HTTP 调用,连续三轮投放并验证各类任务成功和实际副作用")
 class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
   private static final int ROUNDS = 3;
 
+  @TempDir
+  private Path shellOutputDirectory;
+
   @Autowired
-  private LaunchService launchService;
+  private WorkflowRunLaunchService launchService;
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
@@ -57,13 +63,26 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  @DisplayName("连续三轮各投放四类执行器任务:验证每个任务都走到终态成功,成功任务数与投放数完全一致")
+  @DisplayName("连续三轮投放四类执行器任务:验证每个任务成功及数据库、文件和 HTTP 副作用")
   void shouldReachSuccessForAllTasks_whenMixedExecutorsRunInRepeatedRounds() throws IOException {
-    jdbcTemplate.execute(
-        "CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$ BEGIN END; $$");
+    final String createSqlLogSql = """
+        CREATE TABLE batch.e2e_mixed_sql_calls (round_no integer PRIMARY KEY)
+        """;
+    final String createProcedureLogSql = """
+        CREATE TABLE batch.e2e_mixed_proc_calls (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY)
+        """;
+    final String createProcedureSql = """
+        CREATE OR REPLACE PROCEDURE batch.e2e_mixed_proc() LANGUAGE plpgsql AS $$
+        BEGIN INSERT INTO batch.e2e_mixed_proc_calls DEFAULT VALUES; END; $$
+        """;
+    jdbcTemplate.execute(createSqlLogSql);
+    jdbcTemplate.execute(createProcedureLogSql);
+    jdbcTemplate.execute(createProcedureSql);
 
     HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    AtomicInteger httpRequests = new AtomicInteger();
     server.createContext("/ok", exchange -> {
+      httpRequests.incrementAndGet();
       byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
       exchange.sendResponseHeaders(200, body.length);
       try (OutputStream os = exchange.getResponseBody()) {
@@ -75,21 +94,42 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
     try {
       String httpUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/ok";
       List<String> dedupKeys = new ArrayList<>();
+      Map<String, String> expectedTypes = new LinkedHashMap<>();
 
       for (int round = 0; round < ROUNDS; round++) {
-        for (Map<String, Object> params : mixedBatch(round, httpUrl)) {
-          dedupKeys.add(launch(params, "e2e-tr-atomic-mixed-" + round));
+        for (Map<String, Object> params : mixedBatch(round, httpUrl, shellOutputDirectory)) {
+          String dedupKey = launch(params, "e2e-tr-atomic-mixed-" + round);
+          dedupKeys.add(dedupKey);
+          expectedTypes.put(dedupKey, (String) params.get("taskType"));
         }
       }
       e2eOutboxPublishSupport.publishAllPending(TENANT);
 
-      int total = ROUNDS * 4;
+      int total = ROUNDS * 5;
       await()
           .atMost(Duration.ofSeconds(240))
           .pollInterval(Duration.ofMillis(500))
           .untilAsserted(() -> assertThat(succeededCount(dedupKeys)).isEqualTo(total));
 
       assertThat(succeededCount(dedupKeys)).isEqualTo(total);
+      assertThat(expectedTypes).hasSize(total);
+      for (Map.Entry<String, String> expected : expectedTypes.entrySet()) {
+        assertTaskMatchesRequest(expected.getKey(), expected.getValue());
+      }
+      assertThat(httpRequests.get()).as("每轮 HTTP 任务应被接收一次").isEqualTo(ROUNDS);
+      final String countProcedureCallsSql = "SELECT count(*) FROM batch.e2e_mixed_proc_calls";
+      Integer procedureCalls = jdbcTemplate.queryForObject(countProcedureCallsSql, Integer.class);
+      assertThat(procedureCalls).as("存储过程应实际执行三次").isEqualTo(ROUNDS);
+      final String selectSqlRounds =
+          "SELECT round_no FROM batch.e2e_mixed_sql_calls ORDER BY round_no";
+      assertThat(jdbcTemplate.queryForList(selectSqlRounds, Integer.class))
+          .as("SQL 写入任务应分别提交三轮业务记录")
+          .containsExactly(0, 1, 2);
+      for (int round = 0; round < ROUNDS; round++) {
+        assertThat(Files.isRegularFile(shellOutputDirectory.resolve("round-" + round)))
+            .as("Shell 任务应创建本轮临时文件 %s", round)
+            .isTrue();
+      }
     } finally {
       server.stop(0);
     }
@@ -98,15 +138,21 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
   // ─── helpers ─────────────────────────────────────────────────────────────────
 
   /** 一轮的 4 类执行器混合参数(轮次掺入 round 制造变参)。 */
-  private static List<Map<String, Object>> mixedBatch(int round, String httpUrl) {
+  private static List<Map<String, Object>> mixedBatch(
+      int round, String httpUrl, Path shellDirectory) {
     Map<String, Object> sql = new LinkedHashMap<>();
     sql.put("taskType", "sql");
-    sql.put("sql", "SELECT " + (round + 1));
+    sql.put("sql", "SELECT %d".formatted(round + 1));
+
+    Map<String, Object> sqlWrite = new LinkedHashMap<>();
+    sqlWrite.put("taskType", "sql");
+    sqlWrite.put(
+        "sql", "INSERT INTO batch.e2e_mixed_sql_calls (round_no) VALUES (%d)".formatted(round));
 
     Map<String, Object> shell = new LinkedHashMap<>();
     shell.put("taskType", "shell");
-    shell.put("command", "/bin/echo");
-    shell.put("args", List.of("round-" + round));
+    shell.put("command", "/usr/bin/touch");
+    shell.put("args", List.of(shellDirectory.resolve("round-" + round).toString()));
 
     Map<String, Object> proc = new LinkedHashMap<>();
     proc.put("taskType", "stored_proc");
@@ -117,7 +163,7 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
     http.put("url", httpUrl);
     http.put("method", "GET");
 
-    return List.of(sql, shell, proc, http);
+    return List.of(sql, sqlWrite, shell, proc, http);
   }
 
   private String launch(Map<String, Object> params, String triggerId) {
@@ -125,13 +171,27 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
     launchService.launch(new LaunchRequest(
         TENANT,
-        seed.jobCode(),
+        seed.workflowDefinitionId(),
         LocalDate.of(2026, 1, 15),
         TriggerType.API,
         seed.requestId(),
         triggerId,
         params));
     return seed.dedupKey();
+  }
+
+  private void assertTaskMatchesRequest(String dedupKey, String expectedType) {
+    final String selectTaskSql = """
+        select t.task_status, t.task_payload ->> 'taskType' as executor_type
+        from batch.job_task t
+        join batch.job_instance ji on ji.tenant_id = t.tenant_id and ji.id = t.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+    List<Map<String, Object>> tasks = jdbcTemplate.queryForList(selectTaskSql, TENANT, dedupKey);
+    assertThat(tasks).as("每个请求对应一个任务：%s", dedupKey).hasSize(1);
+    assertThat(tasks.getFirst())
+        .containsEntry("task_status", "SUCCESS")
+        .containsEntry("executor_type", expectedType);
   }
 
   private int succeededCount(List<String> dedupKeys) {
@@ -141,14 +201,11 @@ class AtomicMixedScenarioE2eIT extends AbstractIntegrationTest {
     for (int i = 0; i < dedupKeys.size(); i++) {
       args[i + 1] = dedupKeys.get(i);
     }
-    Integer n = jdbcTemplate.queryForObject(
-        "select count(*) from batch.job_task t"
-            + " join batch.job_instance ji on ji.id = t.job_instance_id"
-            + " where ji.tenant_id = ? and ji.dedup_key in ("
-            + inClause
-            + ") and t.task_status = 'SUCCESS'",
-        Integer.class,
-        args);
+    final String selectCountSql = """
+        select count(*) from batch.job_task t join batch.job_instance ji on ji.id = t.job_instance_id\s\
+        where ji.tenant_id = ? and ji.dedup_key in (%s) and t.task_status = 'SUCCESS'\
+        """.formatted(inClause);
+    Integer n = jdbcTemplate.queryForObject(selectCountSql, Integer.class, args);
     return n == null ? 0 : n;
   }
 }

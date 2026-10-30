@@ -6,6 +6,10 @@
 
 凡是新加 Flyway migration（`db/migration/V*.sql`），上线前必须自查本清单。审计 PR 评审者按本清单逐项核对。
 
+## 当前文件命名基线
+
+2026-10-24 的用途命名整理按空库部署：文件束地基使用 [V183__file_bundle_foundation.sql](../../db/migration/V183__file_bundle_foundation.sql)，导出/分发类型扩展使用 [V184__file_bundle_export_dispatch.sql](../../db/migration/V184__file_bundle_export_dispatch.sql)。版本号与 SQL 字节保持一致。部署前对受影响模块执行 `clean` 并重新构建迁移资源，在全新数据库执行完整迁移；不复用旧 schema history，也不提供历史修复或旧名兼容。
+
 ## 红线清单
 
 ### 1. 大表 DML 禁入 migration

@@ -1,6 +1,6 @@
 # Import PARTITION_REPLACE_COPY 1000w 系统链路验证（2026-06-07）
 
-吞吐优化主文档：[`single-node-throughput-optimization-2026-06-06.md`](../backlog/single-node-throughput-optimization-2026-06-06.md)。
+吞吐优化主文档：[streaming-large-file-import-export-2026-06-06.md](streaming-large-file-import-export-2026-06-06.md)。
 
 ## 结论
 
@@ -306,7 +306,7 @@ mvn -pl batch-worker-import -am -Dtest=ParseStepFixedWidthAndXmlTest -Dsurefire.
 ```text
 POST /api/console/config/tenant-package/excel/upload?tenantId=default-tenant
 Content-Type: multipart/form-data
-file=@docs/test-data/test-full-coverage-import-suite/default-tenant-config-package-test.xlsx
+file=@test-data/tenant-config-packages/default-tenant-config-package-test.xlsx
 ```
 
 认证：`POST /api/console/auth/login` 使用本地 seed 管理员 `admin/admin123`，通过 `batch_console_token` cookie 调用上传。

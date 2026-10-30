@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# 用途：Test Impact Analysis (TIA) POC — bash 入口,封装 python 实现。
+# 用法：在仓库根目录执行 bash scripts/ci/select-affected-tests.sh；参数与前置环境见下方说明及所属 README。
 # Test Impact Analysis (TIA) POC — bash 入口,封装 python 实现。
 #
 # 用法:
@@ -16,7 +18,7 @@
 #     + 5 跳传递闭包,见 select-affected-tests.py。
 #
 # 这是 POC 脚本,**不接入 pr-gate.yml**,待人工 review 后再决定是否启用。
-# 详见 docs/runbook/tia-poc-2026-05-22.md。
+# 详见 docs/archive/verifications/tia-poc-2026-05-22.md。
 
 set -euo pipefail
 

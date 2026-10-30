@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.stage.format;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -96,13 +97,16 @@ public record FormatParseRequest(
       // 只在构造 reader 失败时关闭已打开的 stream，避免返回一个底层已关闭的 reader。
       InputStream in = Files.newInputStream(spoolPath);
       try {
-        return new BufferedReader(new InputStreamReader(in, decoder));
+        InputStreamReader decodedReader = new InputStreamReader(in, decoder);
+        return new BufferedReader(decodedReader);
       } catch (RuntimeException | Error failure) {
         in.close();
         throw failure;
       }
     }
-    return new BufferedReader(new StringReader(payloadText == null ? "" : payloadText));
+    StringReader payloadReader =
+        new StringReader(EmptyChecks.isNull(payloadText) ? "" : payloadText);
+    return new BufferedReader(payloadReader);
   }
 
   /** 是否有可消费的文本内容（spool 文件或非空 payloadText）。 */
