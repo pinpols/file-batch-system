@@ -40,11 +40,7 @@ pub fn canonical_string(
     let body_digest = body_sha256_hex(body);
     format!(
         "{}\n{}\n{}\n{}\n{}",
-        normalized_method,
-        path,
-        timestamp,
-        nonce,
-        body_digest,
+        normalized_method, path, timestamp, nonce, body_digest,
     )
 }
 

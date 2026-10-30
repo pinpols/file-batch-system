@@ -20,7 +20,11 @@ const baseConfig = {
 
 test("lifecycle: start registers, starts schedulers, then runs claim→execute→report", async () => {
   const platform = new FakePlatform({
-    claim: { payload: '{"k":"authoritative","crossDay":{"upstream":{"resultVersionId":3}}}', effectiveConfig: { k: "stale" }, traceId: "trace-1" },
+    claim: {
+      payload: '{"k":"authoritative","crossDay":{"upstream":{"resultVersionId":3}}}',
+      effectiveConfig: { k: "stale" },
+      traceId: "trace-1",
+    },
   });
   platform.feedMessages({
     taskId: "task-1",
