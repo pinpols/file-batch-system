@@ -156,15 +156,10 @@ if git rev-parse --git-dir >/dev/null 2>&1 && git rev-parse "$BASE_REF" >/dev/nu
     echo "   Flyway checksums change; deploy only by creating a fresh empty database."
   fi
   if [[ -n "$drifted" ]]; then
-    if [[ "${FLYWAY_ALLOW_EXISTING_DDL_CHANGES:-false}" == "true" ]]; then
-      echo "⚠️  temporary exception: existing migration SQL changes are allowed for fresh empty databases only:"
-      echo "$drifted"
-    else
-      echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"
-      echo "$drifted"
-      echo "   action: 不要改已 commit 的 V<num>__*.sql,要修就新建 V<next>__fix_xxx.sql 走重做语义"
-      errors=$((errors + 1))
-    fi
+    echo "❌ ERROR: existing migration file(s) modified in this PR (Flyway checksum drift):"
+    echo "$drifted"
+    echo "   action: 不要改已 commit 的 V<num>__*.sql,要修就新建 V<next>__fix_xxx.sql 走重做语义"
+    errors=$((errors + 1))
   else
     echo "ℹ️  No effective SQL drift on existing migrations vs $BASE_REF"
   fi

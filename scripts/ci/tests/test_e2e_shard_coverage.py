@@ -10,6 +10,16 @@ from pathlib import Path
 
 
 class E2eShardCoverageTest(unittest.TestCase):
+    def test_filesystem_backend_runs_in_its_own_configured_shard(self):
+        root = Path(__file__).resolve().parents[3]
+        for name in ("full-ci-gate.yml", "staging-gate.yml"):
+            with self.subTest(workflow=name):
+                workflow = (root / ".github/workflows" / name).read_text(encoding="utf-8")
+                shard = workflow.split("          - id: 19\n", 1)[1].split("\n    steps:", 1)[0]
+                self.assertIn("FilesystemBackendPipelineE2eIT", shard)
+                self.assertIn('"$TESTS" == "FilesystemBackendPipelineE2eIT"', workflow)
+                self.assertIn('-Dbatch.test.storage.backend=filesystem', workflow)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)

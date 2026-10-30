@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import textwrap
 import unittest
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -14,13 +15,58 @@ SCRIPT = ROOT / "scripts/ci/run-pr-coverage-integration.sh"
 
 
 class PrCoverageIntegrationTest(unittest.TestCase):
+    def test_orchestrator_parallel_shards_are_required_and_reports_are_merged(self) -> None:
+        workflow = (ROOT / ".github/workflows/pr-gate.yml").read_text(encoding="utf-8")
+        aggregate = workflow.split("  unit-it-a:\n", 1)[1].split("\n  # ===", 1)[0]
+        self.assertIn("unit-it-a-main, unit-it-a-extra", aggregate.split("runs-on:", 1)[0])
+        self.assertIn("pr-a-coverage-main", aggregate)
+        self.assertIn("pr-a-coverage-extra", aggregate)
+        self.assertIn("--extra-report batch-orchestrator=ci-coverage/a-extra/jacoco.xml", aggregate)
+        guard = aggregate.split("      - name: Verify orchestrator shard results\n", 1)[1]
+        guard = guard.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        command = textwrap.dedent(guard)
+        env = {**os.environ, "SCOPE_RESULT": "success", "A_REQUIRED": "true",
+               "A_MAIN_RESULT": "success", "A_EXTRA_RESULT": "success"}
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+        for key in ("A_MAIN_RESULT", "A_EXTRA_RESULT"):
+            for result in ("failure", "skipped", "cancelled"):
+                with self.subTest(key=key, result=result):
+                    self.assertNotEqual(0, subprocess.run(["bash", "-e", "-c", command],
+                                                         env={**env, key: result}).returncode)
+        env.update(A_REQUIRED="false", A_MAIN_RESULT="skipped", A_EXTRA_RESULT="skipped")
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+
+    def test_console_parallel_shards_are_required_and_reports_are_merged(self) -> None:
+        workflow = (ROOT / ".github/workflows/pr-gate.yml").read_text(encoding="utf-8")
+        aggregate = workflow.split("  unit-it-b2:\n", 1)[1].split("\n  # ===", 1)[0]
+        self.assertIn("unit-it-b2-console-extra", aggregate.split("runs-on:", 1)[0])
+        self.assertIn("pr-console-coverage-main", aggregate)
+        self.assertIn("pr-console-coverage-extra", aggregate)
+        self.assertIn("--extra-report batch-console-api=.coverage/console-extra/jacoco.xml", aggregate)
+        guard = aggregate.split("      - name: Verify split unit shard results\n", 1)[1]
+        guard = guard.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        command = textwrap.dedent(guard)
+        env = {**os.environ, "SCOPE_RESULT": "success", "WORKERS_RESULT": "success",
+               "CONSOLE_RESULT": "success", "CONSOLE_EXTRA_RESULT": "success",
+               "GOVERNANCE_RESULT": "success", "CONSOLE_REQUIRED": "true"}
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+        for key in ("CONSOLE_RESULT", "CONSOLE_EXTRA_RESULT"):
+            for result in ("failure", "skipped", "cancelled"):
+                with self.subTest(key=key, result=result):
+                    self.assertNotEqual(0, subprocess.run(["bash", "-e", "-c", command],
+                                                         env={**env, key: result}).returncode)
+        env.update(CONSOLE_REQUIRED="false", CONSOLE_RESULT="skipped", CONSOLE_EXTRA_RESULT="skipped")
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+
     def test_lists_existing_unique_test_classes_in_owned_modules(self) -> None:
         seen = set()
         expected_modules = {
             "a": {"batch-orchestrator"},
+            "a-extra": {"batch-orchestrator"},
             "b1": {"batch-trigger", "batch-worker/process", "batch-worker/dispatch"},
             "b2-workers": {"batch-worker/import", "batch-worker/export"},
             "b2-console": {"batch-console-api"},
+            "b2-console-extra": {"batch-console-api"},
         }
         for shard, expected in expected_modules.items():
             result = subprocess.run(

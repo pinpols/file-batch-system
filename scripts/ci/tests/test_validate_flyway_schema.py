@@ -76,12 +76,12 @@ class ValidateFlywaySchemaTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("existing migration file(s) modified", result.stdout)
 
-    def test_temporary_existing_ddl_exception_is_reported(self) -> None:
+    def test_removed_exception_cannot_allow_existing_ddl_changes(self) -> None:
         result = self.run_existing_ddl_guard(True)
-        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        self.assertIn("temporary exception", result.stdout)
+        self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("existing migration file(s) modified", result.stdout)
 
-    def test_temporary_exception_does_not_allow_version_gap(self) -> None:
+    def test_old_exception_setting_does_not_allow_version_gap(self) -> None:
         result = self.run_existing_ddl_guard(True, add_gap=True)
         self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn("expected V2", result.stdout)

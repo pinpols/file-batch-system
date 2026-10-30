@@ -161,9 +161,6 @@ jobs:
       - name: Validate Flyway schema (parse + checksum drift detection)
         if: needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
-        # 仅本仓 WDI 分支的 PR 临时允许存量迁移 SQL 变化；合并后删除此例外。
-        env:
-          FLYWAY_ALLOW_EXISTING_DDL_CHANGES: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'fix/wdi-current' && 'true' || 'false' }}
         run: bash scripts/ci/run-gate.sh PR_FLYWAY_SCHEMA "Flyway 迁移静态校验" -- bash scripts/ci/validate-flyway-schema.sh
 
       - name: Verify generated dicts in sync
@@ -274,7 +271,9 @@ jobs:
             scripts/ci/tests/test_pre_push_module_selection.py \
             scripts/ci/tests/test_pre_push_environment.py \
             scripts/ci/tests/test_pr_coverage_integration.py \
-            scripts/ci/tests/test_report_ci_quality_trends.py
+            scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_capture_sdk_test.py \
+            scripts/ci/tests/test_report_sdk_test_summary.py
 
       - name: Verify module dependency boundaries
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'
@@ -794,7 +793,8 @@ jobs:
   #
   # Job 2: unit-shard-1 — orchestrator + worker-core
   # ===========================================================================
-  unit-it-a:
+  unit-it-a-main:
+    name: 'PR tests / orchestration, core and SDK'
     needs: changes
     # 无 A 分片影响的变更跳过；Java SDK 变更属于 A 分片。
     if: |
@@ -829,15 +829,26 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-pr-coverage-integration.sh a
 
-      - name: Verify changed-line coverage
+      - name: Generate coverage reports
         shell: bash
         run: |
           ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
-          BASE="${{ github.event.pull_request.base.sha }}"
-          [[ -n "$BASE" ]] || BASE="HEAD^"
-          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
-            --path batch-orchestrator --path batch-worker/core \
-            --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
+          for module in batch-orchestrator batch-worker/core sdk/java/core sdk/java/spring sdk/java/testkit; do
+            report="$module/target/site/jacoco/jacoco.xml"
+            if [[ -f "$report" ]]; then
+              mkdir -p "ci-coverage/a-main/$(dirname "$report")"
+              cp "$report" "ci-coverage/a-main/$report"
+            fi
+          done
+          test -f ci-coverage/a-main/batch-orchestrator/target/site/jacoco/jacoco.xml
+
+      - name: Upload primary coverage reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-a-coverage-main
+          path: ci-coverage/a-main/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Surefire Reports
         if: always()
@@ -847,6 +858,102 @@ jobs:
           path: |
             **/target/surefire-reports/**
           retention-days: 14
+
+  unit-it-a-extra:
+    name: 'PR tests / orchestration recovery'
+    needs: changes
+    if: |
+      needs.changes.outputs.unit-a-required == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+      - name: Install orchestrator dependencies
+        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+      - name: Run remaining orchestrator integration scenarios
+        run: bash scripts/ci/run-pr-coverage-integration.sh a-extra
+      - name: Generate orchestrator coverage report
+        run: ./mvnw jacoco:report -pl batch-orchestrator -B
+      - name: Upload orchestrator coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-a-coverage-extra
+          path: batch-orchestrator/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-unit-it-a-extra-reports
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+
+  unit-it-a:
+    name: unit-it-a
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [changes, unit-it-a-main, unit-it-a-extra]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify orchestrator shard results
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          A_REQUIRED: ${{ needs.changes.outputs.unit-a-required }}
+          A_MAIN_RESULT: ${{ needs.unit-it-a-main.result }}
+          A_EXTRA_RESULT: ${{ needs.unit-it-a-extra.result }}
+        shell: bash
+        run: |
+          [[ "$SCOPE_RESULT" == "success" ]]
+          [[ "$A_MAIN_RESULT" == "success" || "$A_MAIN_RESULT" == "skipped" ]]
+          [[ "$A_EXTRA_RESULT" == "success" || "$A_EXTRA_RESULT" == "skipped" ]]
+          if [[ "$A_REQUIRED" == "true" ]]; then
+            [[ "$A_MAIN_RESULT" == "success" && "$A_EXTRA_RESULT" == "success" ]]
+          fi
+      - name: Checkout for combined coverage
+        if: needs.changes.outputs.unit-a-required == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download primary coverage reports
+        if: needs.changes.outputs.unit-a-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-a-coverage-main
+          path: ci-coverage/a-main-download
+      - name: Download extra orchestrator coverage
+        if: needs.changes.outputs.unit-a-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-a-coverage-extra
+          path: ci-coverage/a-extra
+      - name: Verify combined changed-line coverage
+        if: needs.changes.outputs.unit-a-required == 'true'
+        shell: bash
+        run: |
+          for module in batch-orchestrator batch-worker/core sdk/java/core sdk/java/spring sdk/java/testkit; do
+            report="$module/target/site/jacoco/jacoco.xml"
+            if [[ -f "ci-coverage/a-main-download/$report" ]]; then
+              mkdir -p "$(dirname "$report")"
+              cp "ci-coverage/a-main-download/$report" "$report"
+            fi
+          done
+          test -f batch-orchestrator/target/site/jacoco/jacoco.xml
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-orchestrator --path batch-worker/core \
+            --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit \
+            --extra-report batch-orchestrator=ci-coverage/a-extra/jacoco.xml
 
   # ===========================================================================
   # Job 3: unit-shard-2 — common + trigger + worker-process + worker-dispatch
@@ -906,6 +1013,7 @@ jobs:
   # Job 4a: worker-import + worker-export + worker-atomic
   # ===========================================================================
   unit-it-b2-workers:
+    name: 'PR tests / import, export and atomic workers'
     needs: changes
     if: |
       needs.changes.outputs.unit-b2-workers-required == 'true' &&
@@ -960,6 +1068,7 @@ jobs:
   # Job 4b: Console API 独立分片，避免与三个 Worker 串成 PR 长尾。
   # ===========================================================================
   unit-it-b2-console:
+    name: 'PR tests / Console configuration and delivery'
     needs: changes
     if: |
       needs.changes.outputs.unit-b2-console-required == 'true' &&
@@ -1001,13 +1110,16 @@ jobs:
         shell: bash
         run: bash scripts/ci/run-pr-coverage-integration.sh b2-console
 
-      - name: Verify changed-line coverage
-        shell: bash
-        run: |
-          ./mvnw jacoco:report -pl batch-console-api -B
-          BASE="${{ github.event.pull_request.base.sha }}"
-          [[ -n "$BASE" ]] || BASE="HEAD^"
-          python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api
+      - name: Generate Console coverage report
+        run: ./mvnw jacoco:report -pl batch-console-api -B
+
+      - name: Upload Console coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-console-coverage-main
+          path: batch-console-api/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Surefire Reports
         if: always()
@@ -1016,6 +1128,43 @@ jobs:
           name: pr-gate-unit-it-b2-console-reports
           path: |
             **/target/surefire-reports/**
+          retention-days: 14
+
+  # Console 补充场景与主分片并行；两个报告由稳定的 unit-it-b2 汇总。
+  unit-it-b2-console-extra:
+    name: 'PR tests / Console queries and operations'
+    needs: changes
+    if: |
+      needs.changes.outputs.unit-b2-console-required == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+      - name: Install Console dependencies
+        run: ./mvnw install -pl batch-console-api -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+      - name: Run remaining Console integration scenarios
+        run: bash scripts/ci/run-pr-coverage-integration.sh b2-console-extra
+      - name: Generate Console coverage report
+        run: ./mvnw jacoco:report -pl batch-console-api -B
+      - name: Upload Console coverage report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-console-coverage-extra
+          path: batch-console-api/target/site/jacoco/jacoco.xml
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-unit-it-b2-console-extra-reports
+          path: '**/target/surefire-reports/**'
           retention-days: 14
 
   # ===========================================================================
@@ -1067,22 +1216,95 @@ jobs:
     if: >-
       always() &&
       (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    needs: [changes, unit-it-b2-workers, unit-it-b2-console, java-governance]
+    needs: [changes, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
     runs-on: ubuntu-latest
-    timeout-minutes: 3
+    timeout-minutes: 5
     steps:
       - name: Verify split unit shard results
         env:
           SCOPE_RESULT: ${{ needs.changes.result }}
           WORKERS_RESULT: ${{ needs.unit-it-b2-workers.result }}
           CONSOLE_RESULT: ${{ needs.unit-it-b2-console.result }}
+          CONSOLE_EXTRA_RESULT: ${{ needs.unit-it-b2-console-extra.result }}
+          CONSOLE_REQUIRED: ${{ needs.changes.outputs.unit-b2-console-required }}
           GOVERNANCE_RESULT: ${{ needs.java-governance.result }}
         shell: bash
         run: |
           [[ "$SCOPE_RESULT" == "success" ]]
           [[ "$WORKERS_RESULT" == "success" || "$WORKERS_RESULT" == "skipped" ]]
           [[ "$CONSOLE_RESULT" == "success" || "$CONSOLE_RESULT" == "skipped" ]]
+          [[ "$CONSOLE_EXTRA_RESULT" == "success" || "$CONSOLE_EXTRA_RESULT" == "skipped" ]]
+          if [[ "$CONSOLE_REQUIRED" == "true" ]]; then
+            [[ "$CONSOLE_RESULT" == "success" && "$CONSOLE_EXTRA_RESULT" == "success" ]]
+          fi
           [[ "$GOVERNANCE_RESULT" == "success" || "$GOVERNANCE_RESULT" == "skipped" ]]
+
+      - name: Checkout for Console coverage
+        if: needs.changes.outputs.unit-b2-console-required == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download main Console coverage
+        if: needs.changes.outputs.unit-b2-console-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-console-coverage-main
+          path: batch-console-api/target/site/jacoco
+      - name: Download extra Console coverage
+        if: needs.changes.outputs.unit-b2-console-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-console-coverage-extra
+          path: .coverage/console-extra
+      - name: Verify combined Console changed-line coverage
+        if: needs.changes.outputs.unit-b2-console-required == 'true'
+        shell: bash
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-console-api \
+            --extra-report batch-console-api=.coverage/console-extra/jacoco.xml
+
+  pr-test-summary:
+    name: 'PR tests / consolidated report'
+    if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [unit-it-a-main, unit-it-a-extra, unit-it-b1, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download test reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: pr-gate-*-reports
+          path: build/ci-test-reports
+      - name: Summarize test results and job states
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          mkdir -p build/ci-quality
+          printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
+          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports \
+            --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
+            --expect-artifact unit-it-a-main=pr-gate-unit-it-a-reports \
+            --expect-artifact unit-it-a-extra=pr-gate-unit-it-a-extra-reports \
+            --expect-artifact unit-it-b1=pr-gate-unit-it-b1-reports \
+            --expect-artifact unit-it-b2-workers=pr-gate-unit-it-b2-workers-reports \
+            --expect-artifact unit-it-b2-console=pr-gate-unit-it-b2-console-reports \
+            --expect-artifact unit-it-b2-console-extra=pr-gate-unit-it-b2-console-extra-reports \
+            --expect-artifact java-governance=pr-gate-java-governance-reports \
+            --markdown build/ci-quality/summary.md
+      - name: Upload consolidated test report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-test-summary
+          path: build/ci-quality/
+          retention-days: 14
 
   # ===========================================================================
   # NOTE: e2e-smoke 已从 pr-gate 移除(C 方案 #1)。

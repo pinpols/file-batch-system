@@ -132,7 +132,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
 | **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行 unit + IT |
-| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 18 个并发 shard；恢复长类按方法分成四片，新增分片耗时待 CI 验证 |
+| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 19 个并发 shard；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置；新增分片耗时待 CI 验证 |
 | **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
@@ -152,7 +152,9 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | Console API | B2 Console |
 | Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
-`unit-it-b2` 是 Ruleset 使用的稳定聚合 context；内部 Worker/Console 子分片任一失败都会使聚合失败。
+`unit-it-a` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为两个并行片：主片运行单测与部分集成场景，补充片运行其余集成场景；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
+
+更改 `scripts/ci/run-pr-coverage-integration.sh` 或 `scripts/ci/check-diff-coverage.py` 时，范围探测会启动四个测试范围，确保执行器和覆盖率汇总的变更得到真实 CI 验证；其他不影响业务测试的 CI 改动仍不启动 Maven 单测。
 
 ## 非代码提交触发吗?
 
@@ -198,7 +200,7 @@ SDK 五语言契约矩阵。
 |---|---|---|
 | 应用与基础设施版本对齐 | `check-version-alignment.sh`：应用发布版本、基础服务镜像环境值、Testcontainers 镜像和 Compose/Sim 运行入口对齐 | PR Gate；Full CI Gate |
 | OpenAPI 路径对齐 | `check-console-openapi-paths.py` | PR 静态策略、Full Gate 静态检查、手动 Staging Gate；每个流程执行一次 |
-| Flyway 文件结构与迁移漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；缺号、重复版本阻断。已有迁移有效 SQL 改动默认阻断，本仓 `fix/wdi-current` 的 PR 临时例外只允许新建空库，合并后删除；其他分支与 merge queue 保持严格检查 |
+| Flyway 文件结构与迁移漂移 | `validate-flyway-schema.sh` | PR：database / CI 文件域；缺号、重复版本及已有迁移有效 SQL 改动均阻断，修正使用增量迁移 |
 | Flyway 危险 DDL | `check-migration-safety.sh`（Squawk，diff-only） | PR：database / CI 文件域；扫描新增迁移和已有迁移的有效 SQL 改动，纯注释改动不触发历史 DDL 误报 |
 | 新增数据库对象注释覆盖 | `check-db-comment-coverage.sh`（diff-only） | PR 与 Full CI：database 变更 |
 | 新增平台表文档登记 | `check-new-table-doc-coverage.py`（增量） | PR 与 Full CI：database、docs 变更；新增 `batch` / `archive` 表须登记，已有表目录条目不得删除 |
@@ -489,9 +491,10 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 ## 覆盖率、变异测试与趋势
 
-- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。 PR 的编排、调度、Worker 和 Console 分片在单测后各自运行已验证的集成场景并追加覆盖数据，四个分片继续并行；Full Gate 执行完整集成测试。
+- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。PR 的编排、调度、Worker 和 Console 运行已验证的集成场景，编排和 Console 各拆为两片并分别在 `unit-it-a` 和 `unit-it-b2` 合并覆盖率；Full Gate 执行完整集成测试。
 - 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
-- `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和已完成运行的平均耗时；JSON/Markdown 产物保留 90 天。工作流耗时按创建到最后更新时间计算，不纳入正在运行的样本。报告区分 E2E 套件成功、失败及全部跳过，并按分片列出报告中的测试累计耗时；累计时间不是作业墙钟时间或 runner 排队时间。报告还包含测试总量、失败/跳过、首次失败重跑、失败类型、禁用测试和软门禁数量。
+- PR 和手动 Staging Gate 在各测试任务结束后汇总当前 Surefire/Failsafe XML、任务状态和分片结果，产物保留 14 天；Full Gate 的 `quality-trend` 同样汇总并读取最近 30 次运行的成功率和已完成运行的平均耗时，产物保留 90 天。成功任务缺少规定报告时汇总失败；失败或跳过的任务显示原状态，不把缺失报告当成成功。E2E matrix 成功时逐片核对报告。报告按分片列出测试累计耗时；该耗时不是作业墙钟或 runner 排队时间。Java XML 汇总不包含单独工作流中的多语言 SDK、前端 Vitest/Playwright 或 Python/Shell 门禁测试，不能作为这些测试的通过证明。
+- `sdk-contract-parity` 的 `SDK tests / consolidated report` 单独汇总 Java、Python、TypeScript、Go、Rust 各版本的契约测试，以及作为独立执行项的五语言真实传输门禁；原始日志和真实退出码随各自 artifact 保存 14 天。测试任务成功却缺少日志会使汇总失败；未运行和跳过不会记为成功。此汇总记录执行项状态，不声称已统计每个语言的测试用例数量；真实传输与静态契约结果分列。
 - 报告/忽略模式统一登记在 `docs/governance/soft-gates.json`；每项必须有分组、模式、控制方式、owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。
 
 ---

@@ -133,8 +133,8 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("dry-run 导出完整执行 Workflow,但不写入 file_record 或上传正式文件")
-  void shouldFinishDryRunWithoutRegisteringOrUploadingExportArtifact() {
+  @DisplayName("SQL 模板导出演练明确拒绝执行计划,且不写文件记录或业务数据")
+  void shouldRejectSqlTemplateExport_whenDryRun() {
     final String selectTotalAmountSql = """
         select total_amount from biz.settlement_batch where tenant_id = ? and batch_no = ?
     """;
@@ -150,11 +150,11 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
                   and ji.id = node_run.job_instance_id
               where tr.tenant_id = ? and tr.request_id = ?
               """;
-    final String selectCountSql = """
-                  select count(*)::int from batch.job_task task
+    final String selectTaskErrorSql = """
+                  select task.error_code from batch.job_task task
                   join batch.job_instance ji on ji.tenant_id = task.tenant_id
                       and ji.id = task.job_instance_id
-                  where ji.tenant_id = ? and ji.dedup_key = ? and task.task_status = 'SUCCESS'
+                  where ji.tenant_id = ? and ji.dedup_key = ? and task.task_status = 'FAILED'
                   """;
     final String selectCountSql2 = """
         select count(*)::int from batch.file_record where tenant_id = ? and source_ref = ?
@@ -197,11 +197,11 @@ class ExportPipelineE2eIT extends AbstractIntegrationTest {
         .untilAsserted(() -> {
           Map<String, Object> run = jdbcTemplate.queryForMap(selectRunStatusSql, TENANT, requestId);
           assertThat(run)
-              .containsEntry("run_status", "SUCCESS_DRY_RUN")
-              .containsEntry("instance_status", "SUCCESS_DRY_RUN");
-          Integer selectedCount =
-              jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, seed.dedupKey());
-          assertThat(selectedCount).isEqualTo(1);
+              .containsEntry("run_status", "FAILED_DRY_RUN")
+              .containsEntry("instance_status", "FAILED_DRY_RUN");
+          assertThat(jdbcTemplate.queryForList(
+                  selectTaskErrorSql, String.class, TENANT, seed.dedupKey()))
+              .containsExactly("EXPORT_DRY_RUN_SQL_UNAVAILABLE");
         });
 
     Integer selectedCountRead2 =

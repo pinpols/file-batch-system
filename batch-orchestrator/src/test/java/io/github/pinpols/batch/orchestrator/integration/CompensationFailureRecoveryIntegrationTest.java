@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.AdditionalAnswers.delegatesTo;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
@@ -175,8 +176,21 @@ class CompensationFailureRecoveryIntegrationTest extends AbstractIntegrationTest
     properties.setEnabled(true);
     properties.setRetentionDays(1);
     properties.setBatchSize(10);
+    // 隔离全局扫描的候选集，避免其他测试的历史实例占满批次；归档操作仍走真实 Mapper。
+    SuccessInstanceArchiveMapper scopedArchiveMapper =
+        mock(SuccessInstanceArchiveMapper.class, delegatesTo(archiveMapper));
+    doAnswer(invocation -> {
+          Long lockedId = jdbcTemplate.queryForObject(
+              "select id from batch.job_instance where tenant_id = ? and id = ? for update",
+              Long.class,
+              tenant,
+              instanceId);
+          return List.of(lockedId);
+        })
+        .when(scopedArchiveMapper)
+        .selectArchivableInstanceIds(ArgumentMatchers.any(), ArgumentMatchers.anyInt());
     SuccessInstanceArchiveService archive = new SuccessInstanceArchiveService(
-        archiveMapper, properties, mock(ArchiveIntegrityAlertService.class));
+        scopedArchiveMapper, properties, mock(ArchiveIntegrityAlertService.class));
     var command = CompensationSubmitCommand.builder()
         .tenantId(tenant)
         .compensationType("STEP")

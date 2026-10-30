@@ -38,6 +38,7 @@ def parse_reports(root: Path) -> dict[str, object]:
     categories = Counter()
     e2e = Counter()
     e2e_shards: dict[str, Counter] = {}
+    artifacts: dict[str, Counter] = {}
     files = sorted(root.glob("**/TEST-*.xml"))
     for path in files:
         suite = ET.parse(path).getroot()
@@ -45,6 +46,11 @@ def parse_reports(root: Path) -> dict[str, object]:
         failures = int(float(suite.attrib.get("failures", "0")))
         errors = int(float(suite.attrib.get("errors", "0")))
         skipped = int(float(suite.attrib.get("skipped", "0")))
+        components = path.relative_to(root).parts
+        artifact = components[0] if len(components) > 1 else "(root)"
+        artifact_totals = artifacts.setdefault(artifact, Counter())
+        artifact_totals.update(reports=1, tests=tests, failures=failures, errors=errors, skipped=skipped)
+        artifact_totals["durationSeconds"] += float(suite.attrib.get("time", "0"))
         totals.update(tests=tests, failures=failures, errors=errors, skipped=skipped)
         totals["durationSeconds"] += float(suite.attrib.get("time", "0"))
         is_e2e = "E2eIT" in path.name or "E2eIT" in suite.attrib.get("name", "")
@@ -59,7 +65,7 @@ def parse_reports(root: Path) -> dict[str, object]:
                 tests=tests,
             )
             for component in path.relative_to(root).parts:
-                match = re.fullmatch(r"full-ci-e2e-shard-(\d+)-reports", component)
+                match = re.fullmatch(r"(?:full-ci|staging-gate)-e2e-shard-(\d+)-reports", component)
                 if match:
                     shard = e2e_shards.setdefault(match.group(1), Counter())
                     shard.update(suites=1, tests=tests, skipped=skipped)
@@ -82,12 +88,39 @@ def parse_reports(root: Path) -> dict[str, object]:
         if totals["tests"]
         else 0,
         "e2e": dict(e2e),
+        "artifacts": {
+            key: {**value, "durationSeconds": round(value["durationSeconds"], 3)}
+            for key, value in sorted(artifacts.items())
+        },
         "e2eShards": {
             key: {**value, "durationSeconds": round(value["durationSeconds"], 3)}
             for key, value in sorted(e2e_shards.items(), key=lambda item: int(item[0]))
         },
         "failureCategories": dict(categories),
     }
+
+
+def parse_job_results(path: Path | None) -> dict[str, str]:
+    if path is None:
+        return {}
+    return {name: value.get("result", "unknown")
+            for name, value in json.loads(path.read_text(encoding="utf-8")).items()}
+
+
+def missing_artifacts(jobs: dict[str, str], artifacts: dict[str, object], required: dict[str, str]) -> list[str]:
+    return [f"{job}: {artifact}" for job, artifact in required.items()
+            if jobs.get(job) == "success" and artifact not in artifacts]
+
+
+def missing_e2e_artifacts(jobs: dict[str, str], artifacts: dict[str, object], workflow: Path,
+                          job: str, prefix: str) -> list[str]:
+    shard_ids = re.findall(r"^\s*- id:\s*(\d+)\s*$", workflow.read_text(encoding="utf-8"), re.M)
+    if not shard_ids or len(set(shard_ids)) != len(shard_ids):
+        raise ValueError(f"无法解析唯一 E2E 分片编号：{workflow}")
+    if jobs.get(job) != "success":
+        return []
+    return [f"{job}: {prefix}-e2e-shard-{shard}-reports" for shard in shard_ids
+            if f"{prefix}-e2e-shard-{shard}-reports" not in artifacts]
 
 
 def parse_workflow_runs(path: Path | None) -> dict[str, object]:
@@ -164,6 +197,23 @@ def markdown(report: dict[str, object]) -> str:
             "",
             f"失败类型：`{json.dumps(tests['failureCategories'], ensure_ascii=False, sort_keys=True)}`",
             "",
+            f"测试报告文件数：{tests['reportFiles']}（为 0 时不能判定测试通过）。",
+            f"成功任务缺失报告：{', '.join(report.get('missingReports', [])) or '无'}。",
+            "",
+            "### 测试任务状态",
+            "",
+            "| 任务 | 状态 |",
+            "|---|---|",
+            *(f"| {name} | {result} |" for name, result in sorted(report.get("jobs", {}).items())),
+            "",
+            "### 测试报告分片",
+            "",
+            "| 报告 | 文件 | 测试 / 失败 / 错误 / 跳过 | 累计秒数 |",
+            "|---|---:|---|---:|",
+            *(f"| {name} | {values['reports']} | {values['tests']} / {values['failures']} / "
+              f"{values['errors']} / {values['skipped']} | {values['durationSeconds']} |"
+              for name, values in tests.get("artifacts", {}).items()),
+            "",
             "### E2E 分片测试累计耗时（非作业墙钟）",
             "",
             "| 分片 | 报告数 | 测试数 / 跳过 | 累计秒数 |",
@@ -181,6 +231,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--reports-root", type=Path, required=True)
     parser.add_argument("--workflow-runs-json", type=Path)
+    parser.add_argument("--jobs-json", type=Path)
+    parser.add_argument("--expect-artifact", action="append", default=[], metavar="JOB=ARTIFACT")
+    parser.add_argument("--expect-e2e-workflow", type=Path)
+    parser.add_argument("--expect-e2e-job")
+    parser.add_argument("--expect-e2e-prefix")
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--markdown", type=Path, required=True)
     args = parser.parse_args()
@@ -188,8 +243,22 @@ def main() -> int:
         "generatedAt": dt.datetime.now(dt.UTC).isoformat(),
         "tests": parse_reports(args.reports_root),
         "workflow": parse_workflow_runs(args.workflow_runs_json),
+        "jobs": parse_job_results(args.jobs_json),
         "source": source_counts(),
     }
+    required = {}
+    for entry in args.expect_artifact:
+        job, separator, artifact = entry.partition("=")
+        if not separator or not job or not artifact or job in required:
+            parser.error(f"无效或重复的报告映射：{entry}")
+        required[job] = artifact
+    report["missingReports"] = missing_artifacts(report["jobs"], report["tests"]["artifacts"], required)
+    e2e_options = (args.expect_e2e_workflow, args.expect_e2e_job, args.expect_e2e_prefix)
+    if any(e2e_options) and not all(e2e_options):
+        parser.error("E2E 报告校验需要同时提供 workflow、job 和 prefix")
+    if all(e2e_options):
+        report["missingReports"].extend(missing_e2e_artifacts(
+            report["jobs"], report["tests"]["artifacts"], *e2e_options))
     args.json.parent.mkdir(parents=True, exist_ok=True)
     args.json.write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     rendered = markdown(report)
@@ -198,7 +267,7 @@ def main() -> int:
         with Path(summary).open("a", encoding="utf-8") as output:
             output.write(rendered)
     print(f"CI 质量趋势报告已生成：{args.markdown}")
-    return 0
+    return 1 if report["missingReports"] else 0
 
 
 if __name__ == "__main__":

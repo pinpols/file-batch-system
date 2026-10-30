@@ -343,7 +343,8 @@ class MultiTenantIsolationIntegrationTest extends AbstractIntegrationTest {
     assertThat(countOutboxEvents("t1")).isEqualTo(tenantAOutboxEventsBefore);
     String selectedRequestStatus =
         jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, tenantA.requestId());
-    assertThat(selectedRequestStatus).isEqualTo("REJECTED");
+    // 伪造载荷不拥有原请求，拒绝时不能修改原请求状态。
+    assertThat(selectedRequestStatus).isEqualTo("ACCEPTED");
   }
 
   @Test

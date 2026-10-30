@@ -215,6 +215,7 @@ python3 -m unittest scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py
 未登记的 `batch-*` 源码模块均 fail-closed 为全分片。CI、脚本、
 SDK 变更仍应由各自专项 workflow/静态检查覆盖。已登记的根目录运行时与质量工具配置归入
 `config`，不因缺少 Java 影响而启动 Maven unit；未登记的新路径仍归入 `unknown` 并保守执行。
+例外：PR 集成测试执行脚本 `run-pr-coverage-integration.sh` 或覆盖率检查器 `check-diff-coverage.py` 改动时，四个测试范围全部执行，以实际验证分片和覆盖率汇总；其他 CI/脚本改动仍按原范围路由。
 SDK 契约 workflow 与 PR gate 共用同一探测器。
 `config/quality/*.xml` 明确归入 `java/config/ci`，触发 Java 静态质量检查；规则变化本身不启动业务单元分片，目录 README 仍只属于文档范围。
 
@@ -356,7 +357,11 @@ bash scripts/ci/run-staging-live-smoke.sh
 
 PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。PR 的编排、Trigger、PROCESS、DISPATCH、IMPORT、EXPORT 和 Console API 分片通过 `run-pr-coverage-integration.sh` 追加经验证的真实业务集成场景；Console API 分片也运行配置包和配置定义的定向 Testcontainers 集成测试。Full Gate 仍执行各模块完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
 
-Full Gate 汇总 Surefire/Failsafe 报告与最近 30 次工作流运行，使用 `report-ci-quality-trends.py` 输出 JSON 和 Markdown，保存 90 天。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 中的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。
+PR 的编排集成场景拆为 `a` / `a-extra`，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。
+
+PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
+
+SDK 契约工作流通过 `capture-sdk-test.sh` 保留五语言测试原始日志和真实退出码，由 `report-sdk-test-summary.py` 汇总各语言版本及独立的真实传输门禁。成功任务缺报告会失败，跳过和未执行单独显示；报告不把日志中的测试执行项伪装为统一用例计数。
 
 ```bash
 bash scripts/ci/collect-flaky.sh
@@ -539,7 +544,7 @@ python3 -m unittest scripts.ci.tests.test_check_migration_safety
 
 静态检查迁移名称、从 V1 开始的连续性、重复版本、空文件、BOM/CRLF 和已有迁移有效 SQL 漂移。版本缺号会使检查失败；历史注释或 `COMMENT ON` 变更仍会改变 checksum，仅适用于新建空库。版本连续、缺号和重复的正反例接入本地脚本域预检及 PR/Full 的 CI 质量守卫测试组，也可单独执行：
 
-当前本仓 `fix/wdi-current` 发起的 PR 临时设置 `FLYWAY_ALLOW_EXISTING_DDL_CHANGES=true`，只放开已有迁移有效 SQL 漂移阻断，并打印空库部署提示；版本连续性及其他检查不变。其他分支、手动运行和 merge queue 默认严格检查。该 PR 合并后删除工作流例外与脚本开关，避免后续复用同名分支时继续放行。
+已合入基线上的迁移有效 SQL 变更一律阻断；结构调整使用连续编号的增量迁移。旧的临时例外开关已移除，设置该变量也不能放行。
 
 ```bash
 python3 -m unittest scripts.ci.tests.test_validate_flyway_schema
@@ -905,6 +910,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | 文件 | 用途 / 调用归属 |
 |---|---|
 | [bump-version.sh](bump-version.sh) | 一条命令升级应用版本，同步关键落点。 |
+| [capture-sdk-test.sh](capture-sdk-test.sh) | 保留 SDK 测试原始日志及真实退出码，供跨语言汇总。 |
 | [check-application-governance.py](check-application-governance.py) | 应用治理契约。 |
 | [check-biz-table-tenant-rls.py](check-biz-table-tenant-rls.py) | 业务表多租户与 RLS。 |
 | [check-changelog-sync.py](check-changelog-sync.py) | Changelog 同步。 |
@@ -1000,6 +1006,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [prepare-platform-release.py](prepare-platform-release.py) | 核对双仓版本并计算下一统一版本及 Release 准备参数。 |
 | [report-bounded-context-dependencies.sh](report-bounded-context-dependencies.sh) | 报告模块之间的限界上下文依赖。 |
 | [report-ci-quality-trends.py](report-ci-quality-trends.py) | 生成测试质量快照和 Full Gate 历史趋势报告。 |
+| [report-sdk-test-summary.py](report-sdk-test-summary.py) | 汇总五语言 SDK 契约及真实传输测试状态与日志位置。 |
 | [report-java-readability-inventory.py](report-java-readability-inventory.py) | 生成 Java 可读性候选清单并核对当前快照。 |
 | [run-critical-mutation.sh](run-critical-mutation.sh) | 对关键状态转换与生命周期映射运行 PIT 变异测试。 |
 | [run-flaky-quarantine.sh](run-flaky-quarantine.sh) | 执行已登记的隔离测试并记录其真实结果。 |

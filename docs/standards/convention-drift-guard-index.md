@@ -24,6 +24,7 @@
 | ADR | 47 个 ADR 文件 | [docs/architecture/adr/](../architecture/adr) | 包含架构边界、SDK、checkpoint、capacity、依赖调度等决策 |
 | 专项审计报告 | 13 个文件 | [docs/audit/](../audit) | 包含全仓架构审计、治理总账和后续后端深扫 |
 | CI 守卫脚本 | 80 个已登记的 `check-*` / `validate-*` 守卫 | [scripts/ci/README.md](../../scripts/ci/README.md) | 覆盖文档、脚本、仓库卫生、租户隔离、迁移、OpenAPI、配置、版本、许可、测试完整性、Java 规约、安全与可观测；分类正反例和失败汇总边界见守卫目录 |
+| PR 并行测试覆盖率 | 编排及 Console 各两个执行片与 `unit-it-a` / `unit-it-b2` 汇总 | [CI 运行手册](../runbook/ci.md) | 两片均须成功，覆盖率按可执行行取并集；报告缺失阻断，差异覆盖率仍至少 80% |
 | GitHub Actions | 18 个 workflow | `.github/workflows/` | PR gate、full CI、staging、SDK parity、CodeQL、workflow lint、OpenSSF Scorecard |
 | SDK 契约 fixture | 31 个 case | [docs/api/sdk-contract-fixtures/](../api/sdk-contract-fixtures) | 覆盖注册、心跳、claim、renew、report、Kafka schema 兼容等 |
 | 顶层规范文档 | 3 个核心入口 | [docs/README.md](../README.md) | `agent-baseline`、`coding-conventions`、`changelog` |

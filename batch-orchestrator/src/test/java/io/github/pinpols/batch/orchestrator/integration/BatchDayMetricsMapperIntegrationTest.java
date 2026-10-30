@@ -229,6 +229,9 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     final String countRequestSql = """
         select count(*) from batch.trigger_request where tenant_id=? and request_id=?
         """;
+    final String disableFixtureCatchUpSql = """
+        update batch.business_calendar set catch_up_policy='NONE' where tenant_id=? and calendar_code=?
+        """;
     String tenant = unique("commit-tenant");
     String calendar = unique("commit-calendar");
     String jobCode = unique("commit-job");
@@ -261,10 +264,15 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     Long workflowId = insertManagedSingleJobWorkflow(tenant, calendar, jobCode, jobDefinitionId);
     insertWorkflowRun(tenant, workflowId, day, "FAILED", false);
 
-    batchDaySettleScheduler.settle();
+    try {
+      batchDaySettleScheduler.settle();
 
-    assertThat(firstObservedCount.get()).isEqualTo(1);
-    assertThat(firstBatchDayStatus.get()).isEqualTo("SETTLING");
+      assertThat(firstObservedCount.get()).isEqualTo(1);
+      assertThat(firstBatchDayStatus.get()).isEqualTo("SETTLING");
+    } finally {
+      // 假启动不会推进请求状态；避免后续测试的恢复扫描实际启动此夹具。
+      jdbcTemplate.update(disableFixtureCatchUpSql, tenant, calendar);
+    }
   }
 
   @Test

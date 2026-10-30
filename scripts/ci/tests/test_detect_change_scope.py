@@ -95,6 +95,19 @@ class DetectChangeScopeTest(unittest.TestCase):
         self.assertFalse(result["unit-required"])
         self.assertTrue(result["ci"])
 
+    def test_coverage_runner_and_checker_changes_require_all_unit_shards(self) -> None:
+        for path in ("scripts/ci/run-pr-coverage-integration.sh", "scripts/ci/check-diff-coverage.py"):
+            with self.subTest(path=path):
+                result = MODULE.classify_paths([path])
+                for name in MODULE.UNIT_SHARD_NAMES:
+                    self.assertTrue(result[name], name)
+
+    def test_sdk_test_capture_and_workflow_require_sdk_checks(self) -> None:
+        for path in ("scripts/ci/capture-sdk-test.sh", "scripts/ci/report-sdk-test-summary.py",
+                     ".github/workflows/sdk-contract-parity.yml"):
+            with self.subTest(path=path):
+                self.assertTrue(MODULE.classify_paths([path])["sdk"])
+
     def test_known_root_tool_configs_skip_maven_unit(self) -> None:
         result = MODULE.classify_paths([".nvmrc", ".node-version", "qodana.yaml"])
 

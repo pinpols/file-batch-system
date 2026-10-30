@@ -22,7 +22,9 @@ ARCHIVE_SHA512 = (
     "39d20e7ad9bb1642195b629c4eafa6058f2e175d1071b395ea3a91c53d55"
 )
 ARCHIVE_URL = (
-    "https://archive.apache.org/dist/spark/spark-4.0.1/pyspark-4.0.1.tar.gz"
+    "https://files.pythonhosted.org/packages/ae/40/"
+    "1414582f16c1d7b051c668c2e19c62d21a18bd181d944cb24f5ddbb2423f/"
+    "pyspark-4.0.1.tar.gz"
 )
 ROOT = Path(__file__).resolve().parents[2]
 RECOVERY_CLASS = "WorkerReportLostAfterBusinessCommitE2eIT"

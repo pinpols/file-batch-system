@@ -38,6 +38,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -1094,7 +1095,7 @@ class SensorProbeTransactionExecutorIntegrationTest extends AbstractIntegrationT
     nodeRun.setNodeType("WAIT");
     nodeRun.setNodeStatus("RUNNING");
 
-    Instant now = Instant.now();
+    Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
     CountDownLatch firstProbeEntered = new CountDownLatch(1);
     CountDownLatch allowFirstProbeToCommit = new CountDownLatch(1);
     CountDownLatch secondProbeStarted = new CountDownLatch(1);

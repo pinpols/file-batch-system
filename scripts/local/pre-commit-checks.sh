@@ -290,6 +290,8 @@ if ((scripts_changed == 1)); then
     scripts/ci/tests/test_pre_push_environment.py \
     scripts/ci/tests/test_pr_coverage_integration.py \
     scripts/ci/tests/test_report_ci_quality_trends.py \
+    scripts/ci/tests/test_capture_sdk_test.py \
+    scripts/ci/tests/test_report_sdk_test_summary.py \
     scripts/ci/tests/test_sdk_orchestrator_e2e_scripts.py \
     scripts/ci/tests/test_control_plane_benchmark_cleanup.py \
     scripts/ci/tests/test_control_plane_mixed_pressure.py \

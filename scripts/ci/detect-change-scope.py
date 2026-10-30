@@ -127,6 +127,9 @@ def classify_path(path: str) -> set[str]:
     if under(normalized, "sdk") or under(normalized, "docs/api/sdk-contract-fixtures"):
         scopes.add("sdk")
     if normalized in {
+        ".github/workflows/sdk-contract-parity.yml",
+        "scripts/ci/capture-sdk-test.sh",
+        "scripts/ci/report-sdk-test-summary.py",
         "docs/api/sdk-shared-constants.yaml",
         "docs/api/orchestrator-internal.openapi.yaml",
         "docs/sdk/byo-conformance-contract.md",
@@ -177,6 +180,7 @@ def required_unit_shards(path: str) -> set[str]:
         return set()
     if (
         under(normalized, "db/migration")
+        or normalized in {"scripts/ci/run-pr-coverage-integration.sh", "scripts/ci/check-diff-coverage.py"}
         or normalized == "pom.xml"
         or normalized.endswith("/pom.xml")
         or under(normalized, ".mvn")
