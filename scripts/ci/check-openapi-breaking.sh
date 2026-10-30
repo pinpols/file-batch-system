@@ -95,6 +95,21 @@ for spec in "${SPECS[@]}"; do
   # PATCH /{id}/enabled。仅忽略下列精确路径，其他端点移除仍须阻断。
   # AI 对话已由调用方切换到 SSE，用户明确要求不保留旧 JSON 路由。
   if [[ "$spec" == "docs/api/console-api.openapi.yaml" ]]; then
+    # 2026-10-31 用户批准以下请求限制及不兼容切换；精确匹配方法、路径、字段、数值和差异种类。
+    # 本次前后端应同步交付；其他收紧仍由门禁阻断。
+    while IFS= read -r approved_change; do
+      grep -F "$approved_change" "$raw_diff_tmp" >> "$clarification_ignore_tmp" || true
+    done <<'APPROVED_REQUEST_CONSTRAINTS'
+in API POST /api/console/job-definitions the `priority` request property's max was set to `9.00` [request-property-max-set].
+in API POST /api/console/job-definitions the `priority` request property's min was set to `1.00` [request-property-min-set].
+in API PUT /api/console/job-definitions/{id} the `priority` request property's max was set to `9.00` [request-property-max-set].
+in API PUT /api/console/job-definitions/{id} the `priority` request property's min was set to `1.00` [request-property-min-set].
+in API GET /api/console/queries/outbox-deliveries for the `query` request parameter `eventType`, the maxLength was set to `64` [request-parameter-max-length-set].
+in API GET /api/console/queries/outbox-deliveries for the `query` request parameter `targetTopic`, the maxLength was set to `256` [request-parameter-max-length-set].
+in API GET /api/console/queries/outbox-retries for the `query` request parameter `eventType`, the maxLength was set to `64` [request-parameter-max-length-set].
+in API POST /api/console/workflow-definitions the request property `nodes/items/nodeName` became required [request-property-became-required].
+in API PUT /api/console/workflow-definitions/{id}/full the request property `definition/nodes/items/nodeName` became required [request-property-became-required].
+APPROVED_REQUEST_CONSTRAINTS
     printf '%s\n' \
       'POST /api/console/ai/chat api path removed without deprecation' \
       'POST /api/console/alert-routings/{id}/toggle api path removed without deprecation' \

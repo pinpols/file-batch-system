@@ -49,6 +49,8 @@
 | 安全 / 供应链 / 许可 | 未登记的高危漏洞豁免、例外到期、禁止许可证、SBOM 与 POM 不一致、Action 使用可变引用 | 扫描器确认的误报可按规则与路径精确登记；许可结论明确且符合项目策略的依赖 | `check-trivy-ignore-expiry.py`、`check-license-compliance.sh`、`check-sbom-sync.sh`、`check-github-action-pinning.py` |
 | 可观测性 | 告警定义与服务指标契约漂移、日志生命周期破坏敏感信息保护要求 | 业务日志内容变化但不改变受守护字段、生命周期或敏感信息规则 | `check-observability-contract.py`、`check-helm-prometheusrule-sync.sh`、`check-log-lifecycle.sh` |
 
+OpenAPI 另精确登记 2026-10-31 用户批准的 9 条请求约束差异，范围、同步交付要求和正反例命令见 [CI 运行手册](../../docs/runbook/ci.md)。其他请求收紧仍须阻断。
+
 例子如何读：`scripts/local/be-acceptance.sh` 若重新声明 `CONSOLE_PORT` 的平台默认值，或观测脚本重新拼装 Console/Orchestrator 本地地址，属于配置重复，应被 `check-hardcoded-runtime-config.sh` 拦截；若某测试脚本定义自己的 `PREVIEW_PORT`，该值仅控制测试进程监听端口且可由环境变量覆盖，则不应因“出现数字端口”被误拦。测试中的状态值若是要验证的公开协议 fixture，应与生产权威枚举保持对照，而不是简单禁止字面量。
 
 本页的拦截/放行例子是面向人的说明文字，不是可执行配置或门禁 fixture；不粘贴违规片段，不把说明文档纳入代码规则的误报豁免。若未来确需在文档中展示精确违规源码，应使用明确的非执行标记，并为对应扫描器添加窄范围文档样例测试，证明样例不会触发门禁且真实源码仍会被拦截。
