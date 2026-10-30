@@ -259,8 +259,10 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .filter(candidate -> tenantId.equals(candidate.getTenantId()))
         .findFirst()
         .orElseThrow();
-    assertThat(mapper.timeoutExpiredReadinessWait(row, now)).isEqualTo(1);
-    assertThat(mapper.timeoutExpiredReadinessWait(row, now)).isZero();
+    assertThat(mapper.timeoutExpiredReadinessWait(row, now, "READINESS_TIMEOUT"))
+        .isEqualTo(1);
+    assertThat(mapper.timeoutExpiredReadinessWait(row, now, "READINESS_TIMEOUT"))
+        .isZero();
     String sql =
         "select occurrence_status from batch.scheduled_occurrence where tenant_id=? and workflow_definition_id=? and scheduled_fire_time=?";
     assertThat(jdbcTemplate.queryForObject(

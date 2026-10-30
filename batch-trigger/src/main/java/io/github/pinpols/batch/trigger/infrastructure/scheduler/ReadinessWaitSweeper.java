@@ -54,7 +54,8 @@ public class ReadinessWaitSweeper {
     }
     int timedOut = 0;
     for (ExpiredReadinessWaitRow expiredWait : expiredWaits) {
-      int transitioned = occurrenceMapper.timeoutExpiredReadinessWait(expiredWait, sweepAt);
+      int transitioned = occurrenceMapper.timeoutExpiredReadinessWait(
+          expiredWait, sweepAt, ScheduledOccurrenceStatus.READINESS_TIMEOUT.code());
       if (transitioned == 1) {
         timedOut++;
         meterRegistry.counter(METRIC_TIMEOUT).increment();

@@ -271,6 +271,7 @@ Shell Linux 兼容守卫在 PR / Full 默认扫描工作树中现存的已跟踪
 
 - `pre-commit` 按暂存文件域路由，尽量只扫暂存命中的文件；CI 仍保留全量扫描。
 - `pre-push` 面向分支级轻量契约，允许使用 `origin/main...HEAD` 的增量基线。
+- pre-push 的 Java 全限定类型检查使用提交版源码识别实际代码，注释、普通字符串和文本块不视为类型引用；扫描失败按门禁失败处理。
 - 两个 hook 复用 `detect-change-scope.py`：pre-commit 使用 `--staged`，pre-push 使用 `--base/--head`；相同 scope 名称作为按需路由依据，不再独立维护第二套域分类。
 - hook 统一使用 `run-gate.sh` / `gate-result.sh` 的 `enforce`、`report`、`ignore` 控制；分组或单门禁覆盖只影响本地 hook，不得用于放宽 CI required checks。
 - 一个检查失败不阻断其他独立检查；pre-push 即使静态检查失败也继续运行适用的 clean compile，并在结尾报告失败总数与诊断项。

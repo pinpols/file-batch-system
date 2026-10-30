@@ -283,7 +283,7 @@
 
     <update id="timeoutExpiredReadinessWait">
         update batch.scheduled_occurrence
-           set occurrence_status = 'READINESS_TIMEOUT', updated_at = CURRENT_TIMESTAMP
+           set occurrence_status = #{nextStatus}, updated_at = CURRENT_TIMESTAMP
          where tenant_id = #{wait.tenantId}
            and workflow_definition_id = #{wait.workflowDefinitionId}
            and scheduled_fire_time = #{wait.scheduledFireTime}

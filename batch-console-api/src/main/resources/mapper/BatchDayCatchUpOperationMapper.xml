@@ -61,7 +61,7 @@
 
     <update id="resolveUnknown">
         update batch.batch_day_catchup_operation
-        set operation_status = 'RUNNING', items_json = cast(#{itemsJson} as jsonb),
+        set operation_status = #{nextStatus}, items_json = cast(#{itemsJson} as jsonb),
             revision = revision + 1, updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and request_key_hash = #{requestKeyHash}

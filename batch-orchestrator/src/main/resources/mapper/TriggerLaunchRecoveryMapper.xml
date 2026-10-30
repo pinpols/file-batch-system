@@ -22,7 +22,7 @@
 
     <update id="requeueDead">
         update batch.trigger_launch_recovery
-        set recovery_status = 'PENDING', attempts = 0, recovery_generation = recovery_generation + 1,
+        set recovery_status = #{nextStatus}, attempts = 0, recovery_generation = recovery_generation + 1,
             next_attempt_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP
         where tenant_id = #{tenantId} and request_id = #{requestId} and recovery_status = 'DEAD'
     </update>

@@ -20,7 +20,10 @@ public interface TriggerLaunchRecoveryMapper {
   TriggerLaunchRecoveryEntity selectByIdentityForUpdate(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
-  int requeueDead(@Param("tenantId") String tenantId, @Param("requestId") String requestId);
+  int requeueDead(
+      @Param("tenantId") String tenantId,
+      @Param("requestId") String requestId,
+      @Param("nextStatus") String nextStatus);
 
   List<TriggerLaunchRecoveryEntity> selectDue(@Param("now") Instant now, @Param("limit") int limit);
 

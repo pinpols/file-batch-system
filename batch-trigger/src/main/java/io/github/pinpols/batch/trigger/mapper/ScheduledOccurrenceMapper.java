@@ -30,7 +30,9 @@ public interface ScheduledOccurrenceMapper {
 
   /** 只终结扫描时刻仍到期的等待，防止扫描后窗口被延长。 */
   int timeoutExpiredReadinessWait(
-      @Param("wait") ExpiredReadinessWaitRow wait, @Param("now") Instant now);
+      @Param("wait") ExpiredReadinessWaitRow wait,
+      @Param("now") Instant now,
+      @Param("nextStatus") String nextStatus);
 
   ReadinessWaitWindow selectReadinessWaitWindow(
       @Param("tenantId") String tenantId,

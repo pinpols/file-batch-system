@@ -113,7 +113,7 @@ public class TriggerLaunchRecoveryService {
     }
     String status = existing.getRecoveryStatus();
     if (STATUS_DEAD.equals(status)) {
-      return mapper.requeueDead(request.tenantId(), request.requestId()) == 1
+      return mapper.requeueDead(request.tenantId(), request.requestId(), STATUS_PENDING) == 1
           ? ParkOutcome.PARKED
           : ParkOutcome.UNSAFE;
     }

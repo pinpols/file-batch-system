@@ -45,14 +45,19 @@ class ReadinessWaitSweeperTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(occurrenceMapper.selectExpiredReadinessWaits(any(Instant.class), anyInt()))
         .thenReturn(List.of(row("tenant-a", 7L), row("tenant-b", 8L)));
-    when(occurrenceMapper.timeoutExpiredReadinessWait(any(), any())).thenReturn(1);
+    when(occurrenceMapper.timeoutExpiredReadinessWait(
+            any(), any(), ArgumentMatchers.eq("READINESS_TIMEOUT")))
+        .thenReturn(1);
 
     sweeper.sweep();
 
     ArgumentCaptor<Instant> scannedAt = ArgumentCaptor.forClass(Instant.class);
     verify(occurrenceMapper).selectExpiredReadinessWaits(scannedAt.capture(), anyInt());
     verify(occurrenceMapper, Mockito.times(2))
-        .timeoutExpiredReadinessWait(any(), ArgumentMatchers.eq(scannedAt.getValue()));
+        .timeoutExpiredReadinessWait(
+            any(),
+            ArgumentMatchers.eq(scannedAt.getValue()),
+            ArgumentMatchers.eq("READINESS_TIMEOUT"));
     assertThat(meterRegistry.counter(METRIC_TIMEOUT).count()).isEqualTo(2.0);
   }
 
@@ -62,11 +67,14 @@ class ReadinessWaitSweeperTest {
     when(gracefulShutdown.isDraining()).thenReturn(false);
     when(occurrenceMapper.selectExpiredReadinessWaits(any(Instant.class), anyInt()))
         .thenReturn(List.of(row("tenant-a", 7L)));
-    when(occurrenceMapper.timeoutExpiredReadinessWait(any(), any())).thenReturn(0);
+    when(occurrenceMapper.timeoutExpiredReadinessWait(
+            any(), any(), ArgumentMatchers.eq("READINESS_TIMEOUT")))
+        .thenReturn(0);
 
     sweeper.sweep();
 
-    verify(occurrenceMapper).timeoutExpiredReadinessWait(any(), any());
+    verify(occurrenceMapper)
+        .timeoutExpiredReadinessWait(any(), any(), ArgumentMatchers.eq("READINESS_TIMEOUT"));
     assertThat(meterRegistry.counter(METRIC_TIMEOUT).count()).isZero();
   }
 
@@ -81,7 +89,8 @@ class ReadinessWaitSweeperTest {
     when(occurrenceMapper.selectExpiredReadinessWaits(any(Instant.class), anyInt()))
         .thenReturn(List.of());
     sweeper.sweep();
-    verify(occurrenceMapper, never()).timeoutExpiredReadinessWait(any(), any());
+    verify(occurrenceMapper, never())
+        .timeoutExpiredReadinessWait(any(), any(), ArgumentMatchers.eq("READINESS_TIMEOUT"));
   }
 
   private static ExpiredReadinessWaitRow row(String tenantId, Long workflowDefinitionId) {

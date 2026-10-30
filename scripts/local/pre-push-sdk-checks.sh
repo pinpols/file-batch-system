@@ -383,9 +383,11 @@ if [[ -n "$CHANGED_JAVA" ]] && [[ -n "$BASE_REF" ]]; then
     }
 
     # 规约 #1:FQN(只看新增行的真实代码,排除 import/package 行)
-    fqn_hits=$(grep -E ":[0-9]+:[[:space:]]*[^[:space:]\"].*java\.(util|net|io|time|nio|lang)\.[A-Z][a-zA-Z0-9_]+" "$TMP_DIFF" \
-      | grep -vE ":[0-9]+:[[:space:]]*(import|package)[[:space:]]" \
-      | head -10 || true)
+    fqn_status=0
+    fqn_hits=$("$PYTHON_BIN" scripts/ci/check-java-fqn-diff.py "$TMP_DIFF") || fqn_status=$?
+    if [[ "$fqn_status" -ne 0 ]]; then
+      fail "规约 #1 全限定类型扫描执行失败"
+    fi
     if [[ -n "$fqn_hits" ]]; then
       fail "规约 #1 违反 — FQN(必走 import)"
       echo "$fqn_hits" | sed 's/^/    /'

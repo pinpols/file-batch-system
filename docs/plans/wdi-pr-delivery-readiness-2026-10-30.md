@@ -86,3 +86,24 @@ PR 与 Full CI 的测试组依赖 Flyway、迁移安全、导出内容及选测�
 4. 草稿说明中列清后续项和验证范围。合并前核对适用 required checks、前后端契约、迁移以及本次变更受影响的回归；此前全 reactor 失败或中断，局部通过不能替代完整成功。性能和容量验证按用户要求暂缓，不据此声称性能验收通过。
 
 本轮仅进行 Git/源码只读盘点和记录，未暂存、提交、推送、创建 PR 或重复运行测试。无可靠的完成时间估计；下一步以依赖闭合和实际检查结果确定候选 PR，而非继续扩大扫描范围。
+
+## 2026-10-30 本地提交及推送门禁结果
+
+用户要求把 WDI 双仓本地改动提交 PR。前端本地提交为 `4b3a244`、`548db72`，后端本地提交为 `cda501955`，均基于 `fix/wdi-current`；尚未成功推送或创建 PR。后端提交门禁通过，前端工作树未安装 Husky hook，补做变更范围检查并修复已发现的问题。配对 OpenAPI 漂移检查、前端构建、文档构建、可维护性和调用可读性检查通过；四组受影响 Vitest 共 44 项通过，五个拆分样式的编译结果与原 scoped CSS 一致。后端最终提交历史的 Gitleaks 扫描无命中；前端 3 项扫描命中为测试或业务操作键，并非已确认凭据。
+
+`git push -u origin fix/wdi-current` 的 pre-push 检查实际退出 1，完整日志 `/tmp/wdi-backend-pr-push.log`：
+
+1. `check-empty-checks.py --base origin/main` 报告约 130 处新增空值判断；这是规范命中，不等同于已证实的业务缺陷，需要按实际模块和语义处理。
+2. 推送检查自动刷新 `docs/stats/java-readability-inventory.md`，生成差异尚未提交，保留在工作树中。
+3. 隔离工作树 Java 治理测试中，`MapperStatusWriteConventionTest` 报告 3 处 UPDATE SET 状态字面量，`RepositoryMapReturnConventionTest` 的旧覆盖数量断言失败；应分别核对调用链和基线，不能直接削弱门禁。
+4. 推送脚本的 FQN 检查将 `@ResourceLock("java.util.Locale.default")` 字符串误认为全限定类型；需修正守卫并验证真违规和字符串放行。字段注入检查同时报告测试字段注入，须按实际测试约定逐项处理。
+5. 隔离工作树 clean compile 通过；全量 SIM、BE-ACC、远端 CI、Sonar、目标环境以及按用户要求后续再做的性能容量验证均未因此通过。
+
+提交门禁早期曾因 Git hook 的环境变量泄漏导致临时仓库自测影响共享仓库 `core.bare`；已恢复并在自测进程隔离 Git 本地变量，使用受污染的模拟环境复验 73 项自测通过（1 项跳过），临时父仓库仍为非裸仓库。不要通过忽略门禁或扩大白名单来推送；前端 CI 的契约解析依赖后端同名远端分支，待后端可交付后再推送前端及创建配对草稿 PR。
+
+### 2026-10-30 推送阻塞修复进展
+
+- 仓储 `Map` 返回基线剔除 6 条已类型化的历史方法；覆盖验证改为检查每个剩余基线文件和方法，定向 `RepositoryMapReturnConventionTest` 通过。
+- 三条状态更新改由业务调用方传入原目标状态；`MapperStatusWriteConventionTest`、`ReadinessWaitSweeperTest`、`TriggerLaunchRecoveryServiceTest` 共 22 项通过。使用 Testcontainers PostgreSQL 的 `ScheduledOccurrenceMapperIntegrationTest#shouldTimeoutStillExpiredReadinessOnlyOnce`、`TriggerLaunchRecoveryIdentityIntegrationTest`、`BatchDayCatchUpOperationSchemaIntegrationTest` 共 47 项通过。
+- 本地 pre-push 全限定类型扫描按提交版完整 Java 源码屏蔽注释和字面量，保留真实代码命中；正反例测试 2 项通过，在当前提交差异复核无实际 FQN 命中。脚本治理与 `shellcheck -S warning` 通过。
+- 空值门禁原始输出为 133 个候选、82 个文件；注入检查的新增差异有 525 个 `@Autowired` 注解，含构造器及测试，不能把注解总数直接当违规数。两项尚须按边界和源码逐项处理，不能机械等同业务缺陷或绕过门禁。

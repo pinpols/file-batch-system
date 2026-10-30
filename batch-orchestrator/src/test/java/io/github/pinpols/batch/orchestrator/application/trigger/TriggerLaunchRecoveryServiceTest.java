@@ -90,7 +90,7 @@ class TriggerLaunchRecoveryServiceTest {
     when(mapper.selectByIdentityForUpdate("tenant-a", "req-1")).thenReturn(existing);
 
     assertThat(service.park(json, "trace-1")).isTrue();
-    verify(mapper, never()).requeueDead(anyString(), anyString());
+    verify(mapper, never()).requeueDead(anyString(), anyString(), anyString());
   }
 
   @Test
@@ -102,10 +102,10 @@ class TriggerLaunchRecoveryServiceTest {
     when(payloadProtector.protect(json)).thenReturn("new-cipher");
     when(payloadProtector.reveal("cipher")).thenReturn(json);
     when(mapper.selectByIdentityForUpdate("tenant-a", "req-1")).thenReturn(existing);
-    when(mapper.requeueDead("tenant-a", "req-1")).thenReturn(1);
+    when(mapper.requeueDead("tenant-a", "req-1", "PENDING")).thenReturn(1);
 
     assertThat(service.park(json, "trace-1")).isTrue();
-    verify(mapper).requeueDead("tenant-a", "req-1");
+    verify(mapper).requeueDead("tenant-a", "req-1", "PENDING");
   }
 
   @Test
@@ -130,7 +130,7 @@ class TriggerLaunchRecoveryServiceTest {
     when(payloadProtector.reveal("cipher")).thenThrow(new IllegalArgumentException("bad cipher"));
     when(mapper.selectByIdentityForUpdate("tenant-a", "req-1")).thenReturn(existing);
     assertThat(service.park(json, "trace-1")).isFalse();
-    verify(mapper, never()).requeueDead(anyString(), anyString());
+    verify(mapper, never()).requeueDead(anyString(), anyString(), anyString());
   }
 
   @ParameterizedTest
@@ -149,7 +149,7 @@ class TriggerLaunchRecoveryServiceTest {
     when(mapper.selectByIdentityForUpdate("tenant-a", "req-1")).thenReturn(existing);
 
     assertThat(service.park(json, "trace-1")).isFalse();
-    verify(mapper, never()).requeueDead(anyString(), anyString());
+    verify(mapper, never()).requeueDead(anyString(), anyString(), anyString());
   }
 
   @Test

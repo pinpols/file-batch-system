@@ -277,6 +277,8 @@ python3 scripts/ci/check-comment-language.py --paths scripts load-tests/scripts 
 
 默认检查当前工作区相对 `HEAD` 的新增行，并包含 Git 未跟踪的生产 Java 源码；
 显式指定 `--base` 时只比较该提交与 `HEAD`。测试、忽略文件和已删除文件不纳入。
+
+`check-java-fqn-diff.py` 供本地 pre-push 使用：以提交版 Java 源码掩去注释、字符串和文本块，再检查新增行中的全限定类型名；执行失败会阻断推送。回归测试为 `python3 -m unittest scripts/ci/tests/test_check_java_fqn_diff.py`。
 SDK 使用自己的 `internal.EmptyChecks`，不依赖后端公共模块。
 
 ```bash
@@ -936,6 +938,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-infrastructure-utf8.py](check-infrastructure-utf8.py) | 基础设施 UTF-8 配置。 |
 | [check-integration-test-coverage.py](check-integration-test-coverage.py) | 集成测试覆盖。 |
 | [check-java-contract-governance.py](check-java-contract-governance.py) | Java 固定契约与协议值治理。 |
+| [check-java-fqn-diff.py](check-java-fqn-diff.py) | 本地推送时检查新增 Java 代码的全限定类型名。 |
 | [check-java-governance-test-coverage.py](check-java-governance-test-coverage.py) | Java 治理测试清单。 |
 | [check-java-logging-governance.py](check-java-logging-governance.py) | Java 日志与异常输出治理。 |
 | [check-java-lombok-injection.py](check-java-lombok-injection.py) | Java Lombok 与依赖注入规约。 |
