@@ -278,13 +278,14 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
-    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+    TaskOutcomeCommand successfulReport = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(task.getId())
         .success(true)
         .resultSummary("{\"relatedFileId\":" + fileId + ".9}")
         .partitionInvocationId(partition.getCurrentInvocationId())
-        .build());
+        .build();
+    taskExecutionService.applyTaskOutcome(successfulReport);
 
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());

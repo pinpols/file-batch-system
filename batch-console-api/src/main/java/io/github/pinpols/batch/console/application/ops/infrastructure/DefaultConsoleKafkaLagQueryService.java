@@ -181,11 +181,12 @@ public class DefaultConsoleKafkaLagQueryService implements ConsoleKafkaLagQueryP
     if (EmptyChecks.isNull(response.error())) {
       return response;
     }
+    String safeError = SwallowedExceptionLogger.safeMessage(response.error());
     return new ConsoleKafkaConsumerLagResponse(
         response.groupId(),
         response.totalLag(),
         response.partitionCount(),
         response.partitionsWithLag(),
-        SwallowedExceptionLogger.safeMessage(response.error()));
+        safeError);
   }
 }

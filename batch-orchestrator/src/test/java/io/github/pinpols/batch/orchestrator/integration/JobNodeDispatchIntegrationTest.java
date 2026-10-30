@@ -3634,7 +3634,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         seed.workflowDefinitionId());
     Map<String, Object> rootParams = new LinkedHashMap<>();
     rootParams.put("optionalMode", null);
-    workflowRunLaunchService.launch(LaunchRequest.builder()
+    LaunchRequest rootLaunchRequest = LaunchRequest.builder()
         .tenantId(testTenantId)
         .workflowDefinitionId(seed.workflowDefinitionId())
         .bizDate(BIZ_DATE)
@@ -3642,19 +3642,21 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         .requestId(seed.requestId())
         .traceId("trace-output-chain")
         .params(rootParams)
-        .build());
+        .build();
+    workflowRunLaunchService.launch(rootLaunchRequest);
     Long workflowRunId = jdbcTemplate.queryForObject(
         selectRunSql, Long.class, testTenantId, testTenantId, seed.requestId());
     Long firstInstanceId = linkedNodeJobInstance(workflowRunId, "JOB_NODE_1");
     Long taskId =
         jdbcTemplate.queryForObject(selectTaskSql, Long.class, testTenantId, firstInstanceId);
     jdbcTemplate.update(startTaskSql, Timestamp.from(BatchDateTimeSupport.utcNow()), taskId);
-    taskOutcomeService.applyTaskOutcome(TaskOutcomeCommand.builder()
+    TaskOutcomeCommand rootTaskOutcome = TaskOutcomeCommand.builder()
         .tenantId(testTenantId)
         .taskId(taskId)
         .success(true)
         .outputs(Map.of("fileId", 12345, "statusCode", 200))
-        .build());
+        .build();
+    taskOutcomeService.applyTaskOutcome(rootTaskOutcome);
 
     assertThat(jdbcTemplate.queryForObject(selectOutputSql, String.class, workflowRunId))
         .isEqualTo("12345");

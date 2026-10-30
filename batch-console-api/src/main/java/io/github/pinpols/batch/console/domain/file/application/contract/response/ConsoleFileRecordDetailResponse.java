@@ -23,15 +23,18 @@ public record ConsoleFileRecordDetailResponse(
     @JsonProperty("metadata_json") Object metadataJson) {
 
   public static ConsoleFileRecordDetailResponse from(FileRecordStorageView row) {
+    String maskedStoragePath = SensitiveEvidenceMasking.maskText(row.storagePath());
+    Object normalizedMetadata = normalizeMetadata(row.metadataJson());
+    Object maskedMetadata = SensitiveEvidenceMasking.maskJsonValue(normalizedMetadata);
     return new ConsoleFileRecordDetailResponse(
         row.id(),
         row.tenantId(),
         row.fileName(),
         row.mimeType(),
         row.storageType(),
-        SensitiveEvidenceMasking.maskText(row.storagePath()),
+        maskedStoragePath,
         row.storageBucket(),
-        SensitiveEvidenceMasking.maskJsonValue(normalizeMetadata(row.metadataJson())));
+        maskedMetadata);
   }
 
   private static Object normalizeMetadata(Object metadata) {

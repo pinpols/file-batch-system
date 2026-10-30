@@ -6,6 +6,12 @@ set -euo pipefail
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null)"
 
+# Git 钩子继承当前仓库变量；后续会切换 worktree 并创建临时仓库，必须先清除。
+while IFS= read -r git_var; do
+  unset "$git_var"
+done < <(git rev-parse --local-env-vars)
+cd "$ROOT"
+
 # 禁止绕过 PR 直接推送受保护主分支。stdin 每行格式由 Git 定义：
 # <local-ref> <local-sha> <remote-ref> <remote-sha>。
 reject_direct_push=0

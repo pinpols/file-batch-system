@@ -725,11 +725,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private void applyTaskNodeSchedulingOverrides(
       SchedulePlan plan, WorkflowNodeEntity workflowNode, JobInstanceEntity jobInstance) {
     plan.setDryRun(Boolean.TRUE.equals(jobInstance.getDryRun()));
-    plan.setWindowCode(
-        EmptyChecks.isNull(workflowNode.getWindowCode())
-                || EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getWindowCode()))
-            ? plan.getWindowCode()
-            : workflowNode.getWindowCode());
+    String windowCode = workflowNode.getWindowCode();
+    plan.setWindowCode(EmptyChecks.isBlank(windowCode) ? plan.getWindowCode() : windowCode);
     boolean hasNonBlankWorkerGroupOverride = EmptyChecks.isNotNull(workflowNode.getWorkerGroup())
         && !EmptyChecks.isBlank(Objects.requireNonNull(workflowNode.getWorkerGroup()));
     if (hasNonBlankWorkerGroupOverride) {

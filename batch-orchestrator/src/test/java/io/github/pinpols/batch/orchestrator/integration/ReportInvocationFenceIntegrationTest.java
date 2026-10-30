@@ -273,7 +273,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     Long instanceId = LaunchIntegrationFixture.selectDispatchedJobInstanceId(
         jdbcTemplate, TENANT, response.instanceNo());
     JobTaskEntity task = jobTaskMapper
-        .selectByQuery(new JobTaskQuery(TENANT, instanceId, null, null, null))
+        .selectByQuery(JobTaskQuery.ofJobInstance(TENANT, instanceId))
         .getFirst();
     JobTaskEntity claimed = assignWorkerWithRetry(task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();

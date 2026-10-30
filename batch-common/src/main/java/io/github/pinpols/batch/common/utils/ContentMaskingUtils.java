@@ -92,9 +92,11 @@ public final class ContentMaskingUtils {
         array.set(index, maskJsonNode(array.get(index), ruleSetCode, depth + 1));
       }
     } else if (node.isTextual()) {
-      return TextNode.valueOf(maskText(node.textValue(), ruleSetCode, depth + 1));
+      String maskedText = maskText(node.textValue(), ruleSetCode, depth + 1);
+      return TextNode.valueOf(maskedText);
     } else if (node.isNumber() && DIGIT_RUNS.matcher(node.asText()).find()) {
-      return TextNode.valueOf(maskTextValue(node.asText(), ruleSetCode));
+      String maskedValue = maskTextValue(node.asText(), ruleSetCode);
+      return TextNode.valueOf(maskedValue);
     }
     return node;
   }

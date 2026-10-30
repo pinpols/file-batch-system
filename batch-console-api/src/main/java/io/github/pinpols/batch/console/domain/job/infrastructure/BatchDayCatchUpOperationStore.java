@@ -345,7 +345,9 @@ public class BatchDayCatchUpOperationStore {
   private String hash(String value) {
     try {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
-      return HexFormat.of().formatHex(digest.digest(value.getBytes(StandardCharsets.UTF_8)));
+      byte[] input = value.getBytes(StandardCharsets.UTF_8);
+      byte[] hash = digest.digest(input);
+      return HexFormat.of().formatHex(hash);
     } catch (NoSuchAlgorithmException failure) {
       throw new IllegalStateException(failure);
     }

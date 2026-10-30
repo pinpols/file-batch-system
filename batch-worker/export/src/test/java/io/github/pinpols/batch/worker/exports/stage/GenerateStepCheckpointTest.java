@@ -248,21 +248,21 @@ class GenerateStepCheckpointTest {
       }
     }
     var executor = new DefaultExportStageExecutor(stages, pipelineRuns, meters);
-    var definitions = List.of(
-        new PipelineStepDefinition(
-            1L,
-            "EXPORT_GENERATE",
-            "Generate",
-            "GENERATE",
-            1,
-            "EXPORT_GENERATE",
-            Map.of(),
-            0,
-            "NONE",
-            0,
-            true),
-        new PipelineStepDefinition(
-            2L, "EXPORT_STORE", "Store", "STORE", 2, "EXPORT_STORE", Map.of(), 0, "NONE", 0, true));
+    var generateDefinition = new PipelineStepDefinition(
+        1L,
+        "EXPORT_GENERATE",
+        "Generate",
+        "GENERATE",
+        1,
+        "EXPORT_GENERATE",
+        Map.of(),
+        0,
+        "NONE",
+        0,
+        true);
+    var storeDefinition = new PipelineStepDefinition(
+        2L, "EXPORT_STORE", "Store", "STORE", 2, "EXPORT_STORE", Map.of(), 0, "NONE", 0, true);
+    var definitions = List.of(generateDefinition, storeDefinition);
     ExportJobContext first = buildContext();
     first.getAttributes().put(PipelineRuntimeKeys.DRY_RUN, true);
     first.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);

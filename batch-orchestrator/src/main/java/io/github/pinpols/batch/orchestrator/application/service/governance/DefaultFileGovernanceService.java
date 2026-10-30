@@ -628,7 +628,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
           || !Texts.hasText(payloadChannel.toString())) {
         return null;
       }
-      return new RedispatchTarget(Long.valueOf(payloadFile.toString()), payloadChannel.toString());
+      Long fileId = Long.valueOf(payloadFile.toString());
+      return new RedispatchTarget(fileId, payloadChannel.toString());
     } catch (IllegalArgumentException exception) {
       return null;
     }

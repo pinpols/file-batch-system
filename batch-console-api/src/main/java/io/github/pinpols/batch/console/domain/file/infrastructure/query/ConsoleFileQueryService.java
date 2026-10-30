@@ -561,8 +561,9 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     String inputSummary = maskedJsonValue(row.inputSummary());
     String outputSummary = maskedJsonValue(row.outputSummary());
     String errorCode = display(row.errorCode());
-    String errorMessage = SensitiveEvidenceMasking.maskText(renderLocalizedError(
-        display(row.errorKey()), row.errorArgs(), display(row.errorMessage())));
+    String localizedError =
+        renderLocalizedError(display(row.errorKey()), row.errorArgs(), display(row.errorMessage()));
+    String errorMessage = SensitiveEvidenceMasking.maskText(localizedError);
     Integer retryCount = row.retryCount();
     Long durationMs = row.durationMs();
     Instant startedAt = row.startedAt();
@@ -670,8 +671,9 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     String receiptStatus = display(row.receiptStatus());
     String externalRequestId = display(row.externalRequestId());
     String errorCode = display(row.errorCode());
-    String errorMessage = SensitiveEvidenceMasking.maskText(renderLocalizedError(
-        display(row.errorKey()), row.errorArgs(), display(row.errorMessage())));
+    String localizedError =
+        renderLocalizedError(display(row.errorKey()), row.errorArgs(), display(row.errorMessage()));
+    String errorMessage = SensitiveEvidenceMasking.maskText(localizedError);
     Instant dispatchedAt = row.dispatchedAt();
     Instant ackAt = row.ackAt();
     Instant createdAt = row.createdAt();

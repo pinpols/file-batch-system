@@ -25,7 +25,8 @@ public class InternalCatchUpVerificationController {
   public CommonResponse<LaunchResponse> verify(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String key,
       @Valid @RequestBody TriggerLaunchRequest request) {
-    return CommonResponse.success(
-        triggerService.verifyCatchUpSubmission(new TriggerLaunchCommand(request, key, null, null)));
+    TriggerLaunchCommand command = new TriggerLaunchCommand(request, key, null, null);
+    LaunchResponse response = triggerService.verifyCatchUpSubmission(command);
+    return CommonResponse.success(response);
   }
 }

@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `b04dbecc2`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `d62bcab5e`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,081 | 784,040 | 409,006 | 52.2% |
+| 6,082 | 784,121 | 409,062 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,783 | 383,400 | 204,797 | 53.4% |
-| prod | 3,405 | 318,508 | 151,882 | 47.7% |
+| test | 1,784 | 383,464 | 204,833 | 53.4% |
+| prod | 3,405 | 318,525 | 151,902 | 47.7% |
 | script | 715 | 63,347 | 39,975 | 63.1% |
 | config | 68 | 10,242 | 7,656 | 74.8% |
 | infra-config | 34 | 6,107 | 4,465 | 73.1% |
@@ -23,9 +23,9 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,568 | 611,501 | 322,033 | 52.7% |
+| Java | 4,568 | 611,523 | 322,060 | 52.7% |
 | Shell | 215 | 35,690 | 28,210 | 79.0% |
-| Python | 321 | 47,692 | 25,547 | 53.6% |
+| Python | 322 | 47,751 | 25,576 | 53.6% |
 | YAML | 109 | 14,929 | 11,576 | 77.5% |
 | XML | 219 | 30,812 | 9,198 | 29.9% |
 | TypeScript | 38 | 6,820 | 3,258 | 47.8% |
@@ -40,7 +40,7 @@
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,731 | 3,243 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,040 | 2,603 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,042 | 2,605 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,870 | 2,567 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,689 | 1,764 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,772 | 1,457 |

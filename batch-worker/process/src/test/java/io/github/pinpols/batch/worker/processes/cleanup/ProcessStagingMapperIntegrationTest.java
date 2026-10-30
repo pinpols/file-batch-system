@@ -317,7 +317,7 @@ class ProcessStagingMapperIntegrationTest {
     List<ProcessStagingGenerationCandidate> firstPage = transaction.execute(status -> {
       jdbcTemplate.queryForObject(tenantSql, String.class, "t1");
       return mapper.listExpiredGenerationsAfter(
-          new ProcessStagingExpiredScanQuery("t1", 24, 1, null, null));
+          ProcessStagingExpiredScanQuery.firstPage("t1", 24, 1));
     });
     assertThat(firstPage).hasSize(1);
     ProcessStagingGenerationCandidate first = firstPage.getFirst();

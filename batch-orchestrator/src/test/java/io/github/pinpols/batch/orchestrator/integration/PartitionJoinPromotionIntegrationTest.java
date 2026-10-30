@@ -240,14 +240,15 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     reportOutcome(shards.get(0), true);
     Shard failedShard = shards.get(1);
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, failedShard.partitionId());
-    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+    TaskOutcomeCommand failedReport = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(failedShard.taskId())
         .success(false)
         .errorCode("E_SHARD_FAIL")
         .outputs(Map.of("failedOnly", 999))
         .partitionInvocationId(partition.getCurrentInvocationId())
-        .build());
+        .build();
+    taskExecutionService.applyTaskOutcome(failedReport);
 
     assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
         .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
@@ -426,13 +427,14 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(oldReport))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.task.invocation_mismatch");
-    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+    TaskOutcomeCommand retriedReport = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(retryShard.taskId())
         .success(true)
         .outputs(Map.of("newAttempt", "success"))
         .partitionInvocationId(newInvocation)
-        .build());
+        .build();
+    taskExecutionService.applyTaskOutcome(retriedReport);
     reportOutcome(shards.get(1), true);
     reportOutcome(shards.get(2), true);
 

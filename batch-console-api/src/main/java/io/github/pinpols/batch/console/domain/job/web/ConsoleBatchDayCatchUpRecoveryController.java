@@ -41,8 +41,9 @@ public class ConsoleBatchDayCatchUpRecoveryController {
   public CommonResponse<BatchDayCatchUpRequestStatusResponse> abandonUnprepared(
       @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
       @Valid @RequestBody BatchDayCatchUpAbandonRequest request) {
-    return responseFactory.success(recoveryService.abandonUnprepared(
-        request.tenantId(), originalKey, request.bizDate(), request.calendarCode()));
+    BatchDayCatchUpRequestStatusResponse result = recoveryService.abandonUnprepared(
+        request.tenantId(), originalKey, request.bizDate(), request.calendarCode());
+    return responseFactory.success(result);
   }
 
   @PostMapping("/continue")
@@ -56,8 +57,9 @@ public class ConsoleBatchDayCatchUpRecoveryController {
   public CommonResponse<BatchDayCatchUpRequestStatusResponse> continueRequest(
       @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
       @Valid @RequestBody BatchDayCatchUpContinueRequest request) {
-    return responseFactory.success(
-        recoveryService.continueRequest(request.tenantId(), originalKey));
+    BatchDayCatchUpRequestStatusResponse result =
+        recoveryService.continueRequest(request.tenantId(), originalKey);
+    return responseFactory.success(result);
   }
 
   @PostMapping("/reconcile")
@@ -72,7 +74,8 @@ public class ConsoleBatchDayCatchUpRecoveryController {
   public CommonResponse<BatchDayCatchUpRequestStatusResponse> reconcile(
       @RequestHeader("X-Original-Idempotency-Key") @NotBlank String originalKey,
       @Valid @RequestBody BatchDayCatchUpReconcileRequest request) {
-    return responseFactory.success(
-        recoveryService.reconcile(request.tenantId(), originalKey, request.jobCode()));
+    BatchDayCatchUpRequestStatusResponse result =
+        recoveryService.reconcile(request.tenantId(), originalKey, request.jobCode());
+    return responseFactory.success(result);
   }
 }
