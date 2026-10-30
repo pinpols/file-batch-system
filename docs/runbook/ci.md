@@ -489,7 +489,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 ## 覆盖率、变异测试与趋势
 
-- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。
+- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。 PR 的编排、调度和 Worker 分片在单测后各自运行已验证的集成场景并追加覆盖数据，三个分片继续并行；Full Gate 执行完整集成测试。
 - 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
 - `quality-trend` job 汇总当前 Surefire/Failsafe XML，并读取最近 30 次 `full-ci-gate` 的成功率和已完成运行的平均耗时；JSON/Markdown 产物保留 90 天。工作流耗时按创建到最后更新时间计算，不纳入正在运行的样本。报告区分 E2E 套件成功、失败及全部跳过，并按分片列出报告中的测试累计耗时；累计时间不是作业墙钟时间或 runner 排队时间。报告还包含测试总量、失败/跳过、首次失败重跑、失败类型、禁用测试和软门禁数量。
 - 报告/忽略模式统一登记在 `docs/governance/soft-gates.json`；每项必须有分组、模式、控制方式、owner、当前基线、升级期限和目标。CodeQL 上传的有限重试属于传输容错，不计为软门禁。

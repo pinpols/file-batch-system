@@ -352,7 +352,7 @@ bash scripts/ci/run-staging-live-smoke.sh
 
 必需门禁不再全局重跑失败测试。确认的 flaky 用例使用 `@FlakyTest` 填写 Issue、责任人和到期日，默认测试排除，定时任务通过 `run-flaky-quarantine.sh` 单独执行。`collect-flaky.sh` 仍用于识别隔离执行中的首次失败记录。
 
-PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。Console API 的 PR shard 在单测后另跑配置包和配置定义的定向 Testcontainers 集成测试，追加 JaCoCo 执行数据；Full Gate 仍执行 Console API 完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
+PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。PR 的编排、Trigger、PROCESS、DISPATCH、IMPORT 和 EXPORT 分片通过 `run-pr-coverage-integration.sh` 追加经验证的真实业务集成场景；Console API 分片另跑配置包和配置定义的定向 Testcontainers 集成测试，均追加 JaCoCo 执行数据。Full Gate 仍执行各模块完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
 
 Full Gate 汇总 Surefire/Failsafe 报告与最近 30 次工作流运行，使用 `report-ci-quality-trends.py` 输出 JSON 和 Markdown，保存 90 天。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 中的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。
 
@@ -917,6 +917,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [check-dependency-licenses.sh](check-dependency-licenses.sh) | 第三方依赖许可证审查。 |
 | [check-destructive-ops-governance.py](check-destructive-ops-governance.py) | 高风险操作清单。 |
 | [check-diff-coverage.py](check-diff-coverage.py) | 使用 JaCoCo XML 校验本次变更新增/修改的可执行 Java 行覆盖率。 |
+| [run-pr-coverage-integration.sh](run-pr-coverage-integration.sh) | 按 PR 分片运行业务集成场景并追加 JaCoCo 数据。 |
 | [check-direct-client-boundaries.py](check-direct-client-boundaries.py) | 业务层直连客户端边界。 |
 | [check-direct-config-key-access.py](check-direct-config-key-access.py) | 直接配置 Key 读取快照。 |
 | [check-doc-timestamp-policy.py](check-doc-timestamp-policy.py) | 文档日期命名策略。 |

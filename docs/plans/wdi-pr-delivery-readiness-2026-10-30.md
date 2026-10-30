@@ -133,3 +133,15 @@ SDK 的分发、HTTP/SQL Atomic 和 testkit 命中使用 SDK 自有 `EmptyChecks
 后续推送门禁发现批日补跑服务跨上下文依赖 RBAC 具体实现，现改为现有共享租户解析接口；`BoundedContextDependencyArchTest` 定向 1 项通过（`/tmp/wdi-bounded-context-fix.log`）。门禁也发现新增嵌套表达式及测试参数构造不符合现行规范，已按调用语义逐处整理；查询构造守卫及其他参数规则通过，最后一个嵌套表达式守卫定向 1 项通过（`/tmp/wdi-positional-convention-last.log`）。
 
 推送 hook 继承 `GIT_DIR` 导致隔离 worktree 内的临时 Git 夹具误用原仓库配置，已恢复 `core.bare=false` 并在 hook 进入检查前清除 Git 的本地环境变量；`python3 -m unittest scripts.ci.tests.test_pre_push_environment` 验证临时仓库隔离、普通分支放行及主分支拒绝。第二次推送未成功，日志 `/tmp/wdi-backend-pr-retry-push.log`；其中临时 Git 夹具错误属于此环境串扰，不作为业务缺陷。
+
+## 2026-10-31 PR 检查与合并跟踪
+
+后端 [PR #1265](https://github.com/pinpols/file-batch-system/pull/1265) 与前端 [PR #345](https://github.com/pinpols/batch-console/pull/345) 已创建并标为待审，用户已要求跟踪并合并；拟先合后端，再合依赖其 API 契约的前端。前端最新提交 `6f2eb754` 的适用 PR 检查和 CodeQL 通过，PR 阶段 Docker/Trivy 与 Lighthouse 按工作流配置跳过，不代表发布验收通过。
+
+后端 `d47501b47` 的远端检查：Java 治理、安全扫描、CodeQL、Java/Go/Python SDK 契约通过；Rust 与 TypeScript SDK 格式失败已在本地 `9f27ab79c` 修正并通过各自格式检查。为避免对已知失败的版本重复触发 CI，该格式提交的推送在本地预检期间主动终止，尚未到达远端。静态策略还报告 ShellCheck、预览参数注释误报、两条约束替换的高风险操作登记、OpenAPI 破坏性差异；前三项已修正或按空库部署范围完成审查，后者的兼容性取舍尚待确认。
+
+PR 分片测试中，Console 一项测试因请求英文却断言中文而失败，已修正并通过该场景真实集成验证。其余三个单测分片的差异覆盖率分别为 74.2%、62.5%、76.2%，低于现有 80% 门槛；这些分片排除大部分集成测试，须分析并补足当前提交的实际覆盖，不能降低阈值或将旧报告当作通过。完整失败日志位于 `/tmp/wdi-backend-static-policy.log` 和 `/tmp/wdi-ci-{a,b1,workers,console}.log`。
+
+已针对原 CI 未覆盖行，使用当前源码和独立 JaCoCo 数据验证 PR 分片候选：编排场景分别执行 93、91、34、19、37、30 项，全部通过；与原 CI 覆盖合并估算为 80.22%。Trigger 两组 93、14 项、PROCESS 39 项、DISPATCH 分两组 10、11 项通过，合并估算为 81.04%；IMPORT 30 项与 EXPORT 10 项通过，Worker 分片估算为 80.76%。估算只取原 CI 未覆盖行与对应本地报告已覆盖行的交集，使用原 PR 检查分母，不替代远端最终覆盖结果。PR 分片通过 `scripts/ci/run-pr-coverage-integration.sh` 按上述已通过的组追加 JaCoCo 数据，沿用三组并行与 80% 阈值；Full Gate 仍运行完整集成测试。脚本与推送 hook 的隔离自测通过，工作流 Actionlint 通过。
+
+补充试验中 `ReplayExecutionIdentityIntegrationTest` 的 31 日批次场景与其他测试组合运行时一次观察到 31 项、超出单轮预算 20；该场景单独重跑通过，原因尚未证实，未纳入本次 PR 覆盖候选（`/tmp/wdi-orchestrator-integration-margin3.log`、`/tmp/wdi-replay-budget-isolated.log`）。DISPATCH 健康与外部渠道测试组合运行时曾因注册 HTTP 404 导致上下文启动失败；两组分别重跑通过（`/tmp/wdi-dispatch-integration-coverage.log`、`/tmp/wdi-dispatch-health.log`、`/tmp/wdi-dispatch-integration-second.log`），按已单独通过的两组串行执行，仍需在 CI 核实稳定性。

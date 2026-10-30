@@ -146,7 +146,7 @@ batch_load_default_env() {
   export BUSINESS_DB="${BUSINESS_DB:-$BUSINESS_DB_NAME}"
 
   export CONSOLE_API_PORT="${CONSOLE_API_PORT:-${BATCH_CONSOLE_API_PORT:-${CONSOLE_PORT:-$BATCH_DEFAULT_CONSOLE_PORT}}}"
-  batch_configure_local_jvm_port_env
+  batch_configure_local_jvm_port_env false
 
   export CONSOLE_BASE="${CONSOLE_BASE:-http://localhost:${CONSOLE_API_PORT}}"
   export TRIGGER_BASE="${TRIGGER_BASE:-http://localhost:${TRIGGER_PORT}}"
@@ -304,7 +304,7 @@ batch_configure_local_jvm_redis_env() {
 }
 
 batch_configure_local_jvm_runtime_env() {
-  batch_configure_local_jvm_port_env
+  batch_configure_local_jvm_port_env false
   batch_configure_local_jvm_database_env
   batch_configure_local_jvm_redis_env
 }

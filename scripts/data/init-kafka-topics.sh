@@ -29,8 +29,6 @@
 #   KAFKA_TOPIC_MIN_INSYNC_REPLICAS=2      # ← 配 RF=3 + producer acks=all，在途事件 0 丢
 #   KAFKA_PARTITIONS_DISPATCH=40
 #   KAFKA_PARTITIONS_RESULT=20
-# --enable-preview：检查 java、javac 与 Maven compilerArg 参数。
-# <enablePreview>true：检查 Maven 编译器配置。
 #
 # 副本因子 / min.insync.replicas 均可配，默认值保持 dev 单 broker 行为不变：
 #   - KAFKA_TOPIC_REPLICATION_FACTOR：默认 1；prod 设 3。

@@ -1019,7 +1019,7 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
       assertThat(applyResponse.statusCode()).isEqualTo(HttpStatus.BAD_REQUEST.value());
       JsonNode result = new ObjectMapper().readTree(applyResponse.body());
       assertThat(result.path("code").asText()).isEqualTo("INVALID_ARGUMENT");
-      assertThat(result.path("message").asText()).isEqualTo("Excel 中存在无效行");
+      assertThat(result.path("message").asText()).isEqualTo("excel contains invalid rows");
     }
 
     Integer selectedJobDependencyCount =
