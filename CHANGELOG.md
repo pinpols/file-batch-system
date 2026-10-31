@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- 出箱故障注入清理 `DROP TRIGGER` 与轮询器写锁冲突时按死锁重试，避免 40P01 把已提交的恢复用例打成错误。
+
 - Sim 租户配置场景：WORKFLOW 与 ALL 场景模板断言补充 `workflow_monitoring_policy` sheet（#1265 起由 `ConfigPackageSheetSpecs` 正式纳入 WORKFLOW 场景）；stage2e checkpoint 崩溃场景按 `<行号>:<文件摘要>` 格式解析 LOAD `position_marker`，修复 marker 解析 `ValueError`。
 
 - 依赖等待被并发释放时，恢复器不再把已由同一 TriggerRequest 创建实例的请求覆盖为 REJECTED；修复“实例已启动、请求被拒”的状态不一致。
