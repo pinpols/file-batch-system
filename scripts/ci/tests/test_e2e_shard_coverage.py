@@ -65,6 +65,9 @@ class E2eShardCoverageTest(unittest.TestCase):
         self.assertLess(setup_at, clear_at)
         self.assertLess(clear_at, cache_at)
         self.assertLess(cache_at, install_at)
+        clear_run = job["steps"][clear_at]["run"]
+        self.assertIn("/home/runner/.m2/repository/io/github/pinpols", clear_run)
+        self.assertIn('rm -rf -- "$repo"', clear_run)
         cache_step = job["steps"][cache_at]
         install_step = job["steps"][install_at]
         self.assertIn("${{ github.sha }}", cache_step["with"]["key"])
