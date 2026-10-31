@@ -3940,7 +3940,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     assertThat(activePartitionsForWorkflow(workflowRunId))
         .isEqualTo(quotaSnapshotWhileSecondJobWaits.activePartitions()
             - quotaSnapshotBeforeLaunch.activePartitions());
-    Mockito.verify(resourceScheduler, Mockito.times(2))
+    // 后台 waiting-partition dispatcher 释放容量后可能追加一次重评估；这里只要求至少两次，
+    // 后续用 scheduleDecisions.size() 的增量断言容量释放后的真实重派。
+    Mockito.verify(resourceScheduler, Mockito.atLeast(2))
         .schedule(Mockito.any(ResourceSchedulingRequest.class));
     assertThat(
             jobPartitionMapper.selectWaitingPartitionsGlobal(100, PartitionStatus.WAITING.code()))

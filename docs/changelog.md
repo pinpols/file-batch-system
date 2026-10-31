@@ -2,6 +2,8 @@
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
+- Full CI 剩余时序测试稳定化：JobNodeDispatch 的 schedule 次数断言改为至少两次（后台 waiting-partition 重评估属合法追加）；Sensor 重启的 deadline 探测等待 30s→90s；bounded-coverage E2E 的结算业务日改到次日，避免首批 coverage 上限恰好覆盖完整首日导致 CUTOFF/SETTLED 竞态。
+
 - Full CI E2E 稳定性：WorkerReportLost 系列在派发前显式等待独立 Worker 的 Kafka 消费组完成分区分配，避免消费者入组前消息按 latest 跳过导致整段等待超时；并放宽报告等待窗口以适配低配 CI。
 
 - 编排测试的 MyBatis SQL 使用日志级别控制，减少 CI 日志截断；需要时可启用 Mapper 调试输出。

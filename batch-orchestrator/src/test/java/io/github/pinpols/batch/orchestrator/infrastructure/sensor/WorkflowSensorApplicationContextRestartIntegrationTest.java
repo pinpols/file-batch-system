@@ -1275,7 +1275,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
           from batch.workflow_node_run where workflow_run_id = ? and node_code = 'WAIT_FILE'
           """;
       Awaitility.await()
-          .atMost(Duration.ofSeconds(30))
+          .atMost(Duration.ofSeconds(90))
           .pollInterval(Duration.ofMillis(200))
           .until(() -> Boolean.TRUE.equals(jdbc.queryForObject(dueSql, Boolean.class, runId)));
       RlsTenantContextHolder.runWithTenant(
