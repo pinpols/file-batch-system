@@ -2247,9 +2247,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .build();
     Instant firstFire = initialTrigger.getFireTimeAfter(Date.from(scanAt)).toInstant();
     Instant nextFire = initialTrigger.getFireTimeAfter(Date.from(firstFire)).toInstant();
-    // 使用首日之后的业务日：首批 coverage 上限（~10 万条）可能刚好覆盖完整首日，导致
-    // settle 直接 SETTLED 而非 CUTOFF（CI 上偶发）；第二天 coverage 必然不完整，断言确定。
-    LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate().plusDays(1);
+    LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
     jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
@@ -3414,13 +3412,15 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(20))
         .pollInterval(Duration.ofMillis(100))
         .untilAsserted(() -> {
-          String selectedOccurrenceStatus = jdbcTemplate.queryForObject(
+          // Quartz 触发的 occurrence 写入是异步的，首拍可能尚无该行；queryForList 让 await 在行出现前
+          // 以断言失败重试，而不是让 queryForObject 直接抛 EmptyResultDataAccessException 结束用例。
+          List<String> selectedOccurrenceStatuses = jdbcTemplate.queryForList(
               selectOccurrenceStatusSql,
               String.class,
               TENANT,
               seed.workflowDefinitionId(),
               Timestamp.from(FIRE_TIME));
-          assertThat(selectedOccurrenceStatus).isEqualTo("CLOSED_DAY_REJECTED");
+          assertThat(selectedOccurrenceStatuses).containsExactly("CLOSED_DAY_REJECTED");
         });
 
     JsonNode catchUp = postConsoleJson(
@@ -3494,6 +3494,11 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               TENANT,
               requestId);
           assertThat(selectedWorkflowNodeRunCount).isEqualTo(1);
+          // 审批回放后的 LAUNCHED 由异步 launch 链回写；创建/workflow 行可见时请求仍是 PROCESSING，
+          // 必须纳入同一有界等待，避免慢 CI 上读到中间态。
+          String launchedRequestStatus =
+              jdbcTemplate.queryForObject(selectRequestStatusSql, String.class, TENANT, requestId);
+          assertThat(launchedRequestStatus).isEqualTo("LAUNCHED");
         });
 
     String selectedRequestStatus =

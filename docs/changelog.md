@@ -1,5 +1,13 @@
 # 工程基线规范条款变化日志
 
+## 2026-10-31 并发恢复与 Full CI 剩余用例稳定化
+
+- 并发依赖释放恢复：父节点校验发现已绑定同一 TriggerRequest 的 JobInstance 时按重复请求幂等短路，不再把请求覆盖为 REJECTED；新增单测覆盖同请求实例短路与其它请求实例仍拒绝两条路径。
+- ReportInvocationFence 集成测试：共享全量库和 worker 选择缓存会保留同租户历史 ONLINE worker，用例改用专属 workerGroup，使派单只能命中本用例 seed worker，避免 claim 永久 READY。
+- catch-up 审批 E2E：把 TriggerRequest=`LAUNCHED` 纳入同一有界等待，避免在异步启动链完成前读到 `PROCESSING` 中间态。
+- 恢复锚点 Kafka offset 集成测试：拉长后台恢复扫描轮询间隔，避免 park 后的锚点立即被真实 launch 回收成 REJECTED，保持“稍后恢复”的 PENDING 断言确定。
+- 回退 #1274 误加到 `shouldConvergeCoverage_whenConfigurationAndSettlementRace` 的结算业务日变更：该变更让预置 `nextFire` occurrence 落入查询业务日，`selectCountSql` 恒返回 1 造成确定性失败；bounded-coverage 用例的 CUTOFF/SETTLED 偶发仍需单独定位，本次不改其业务日。
+
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
 - Full CI 剩余时序测试稳定化：JobNodeDispatch 的 schedule 次数断言改为至少两次（后台 waiting-partition 重评估属合法追加）；Sensor 重启的 deadline 探测等待 30s→90s；bounded-coverage E2E 的结算业务日改到次日，避免首批 coverage 上限恰好覆盖完整首日导致 CUTOFF/SETTLED 竞态。
