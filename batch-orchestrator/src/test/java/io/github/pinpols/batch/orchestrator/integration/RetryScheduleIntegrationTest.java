@@ -222,7 +222,8 @@ class RetryScheduleIntegrationTest extends AbstractIntegrationTest {
     e.setMaxRetryCount(maxRetryCount);
     e.setNextRetryAt(BatchDateTimeSupport.utcNow().minusSeconds(30));
     e.setRetryStatus(RetryScheduleStatus.WAITING.code());
-    e.setDedupKey(tenantId + ":" + relatedId + ":" + retryCount);
+    // 去重键在真实库中唯一；追加进程内唯一后缀，避免与同库其他用例/重跑共享固定键。
+    e.setDedupKey(tenantId + ":" + relatedId + ":" + retryCount + ":test-" + System.nanoTime());
     return e;
   }
 }

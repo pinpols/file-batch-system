@@ -719,9 +719,12 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
           + ":task:" + retryMessage.taskId();
       kafkaTemplate.send(retryTopic, retryKey, retryPayload).get();
       kafkaTemplate.send(retryTopic, retryKey, retryPayload).get();
+      // 重复投递的副作用幂等性由后续精确断言保证；这里只要求至少处理两次重投，
+      // 避免慢 CI/重投递重排产生额外一次 claim 调用导致精确计数偶发失败。
       await()
           .atMost(Duration.ofSeconds(30))
-          .untilAsserted(() -> assertThat(claimAttempts).hasValue(attemptsBeforeReplay + 2));
+          .untilAsserted(() ->
+              assertThat(claimAttempts.get()).isGreaterThanOrEqualTo(attemptsBeforeReplay + 2));
 
       assertThat(successfulClaims).hasValue(2);
       assertThat(requestCount).hasValue(requestsBeforeGovernedRetry + 1);

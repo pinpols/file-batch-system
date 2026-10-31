@@ -52,10 +52,12 @@ import org.quartz.JobDataMap;
 import org.quartz.JobDetail;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
+import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
 import org.quartz.TriggerKey;
+import org.quartz.impl.matchers.GroupMatcher;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -862,8 +864,28 @@ class QuartzMisfireApplicationRestartIntegrationTest extends AbstractIntegration
         try {
           if (jobKey != null) {
             Scheduler scheduler = cleanupContext.getBean(Scheduler.class);
-            if (!scheduler.isShutdown() && scheduler.checkExists(jobKey)) {
-              scheduler.deleteJob(jobKey);
+            if (!scheduler.isShutdown()) {
+              // 重启后 Quartz 中 trigger 与 job 的归属可能短暂不一致，直接 deleteJob 会抛
+              // "Unable to unschedule trigger while deleting job" 并掩盖真实断言结果；
+              // 清理阶段先按 trigger->jobKey 反查并解绑，再删除 job（best-effort）。
+              try {
+                for (TriggerKey triggerKey :
+                    scheduler.getTriggerKeys(GroupMatcher.anyTriggerGroup())) {
+                  Trigger trigger = scheduler.getTrigger(triggerKey);
+                  if (trigger != null && jobKey.equals(trigger.getJobKey())) {
+                    scheduler.unscheduleJob(triggerKey);
+                  }
+                }
+              } catch (SchedulerException ignored) {
+                // best-effort cleanup
+              }
+              if (scheduler.checkExists(jobKey)) {
+                try {
+                  scheduler.deleteJob(jobKey);
+                } catch (SchedulerException ignored) {
+                  // best-effort cleanup
+                }
+              }
             }
           }
           JdbcTemplate jdbc = cleanupContext.getBean(JdbcTemplate.class);
