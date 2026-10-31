@@ -38,19 +38,6 @@ class CiQualityTrendReportTest(unittest.TestCase):
             self.assertEqual({"unit-it-a-main": "failure", "unit-it-b1": "skipped"},
                              MODULE.parse_job_results(jobs))
 
-    def test_single_flat_download_belongs_to_the_only_successful_job(self):
-        jobs = {"java-governance": "success", "unit-it-a-main": "skipped"}
-        required = {
-            "java-governance": "pr-gate-java-governance-reports",
-            "unit-it-a-main": "pr-gate-unit-it-a-reports",
-        }
-        flat = {"batch-orchestrator": {"reports": 2, "tests": 3, "durationSeconds": 1.5}}
-        attributed = MODULE.attribute_single_flat_download(jobs, flat, required)
-        self.assertEqual({"pr-gate-java-governance-reports": flat["batch-orchestrator"]}, attributed)
-        self.assertEqual([], MODULE.missing_artifacts(jobs, attributed, required))
-        jobs["unit-it-a-main"] = "success"
-        self.assertEqual(flat, MODULE.attribute_single_flat_download(jobs, dict(flat), required))
-
     def test_reports_missing_artifacts_only_for_successful_jobs(self):
         jobs = {"unit-it-a-main": "success", "unit-it-b1": "failure", "unit-it-b2": "skipped"}
         required = {"unit-it-a-main": "a-reports", "unit-it-b1": "b-reports",

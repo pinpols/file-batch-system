@@ -11,9 +11,6 @@
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
-- PR 测试汇总：`download-artifact` 只命中一份报告时会直接解到目标目录。仅一个成功任务时，把这些报告记到该任务上，避免只跑 Java 治理守卫的 CI 变更被误判为缺少报告。
-- Full CI / Staging E2E A/B 墙钟优化：`e2e-upstream-install` 单次安装上游 reactor（B）；E2E matrix `max-parallel: 12` 降低 org runner 排队（A）。分片在 `setup-java` 之后按本次 SHA 还原 `~/.m2/repository/io/github/pinpols`。`setup-java` 的 Maven cache 只按 pom 哈希，会覆盖 reactor jar，因此不能在它之前还原，也不能用 jar 是否存在判断命中；精确 key 未命中时该分片自行安装。清理仅限 GitHub-hosted runner 的 `/home/runner/.m2/repository/io/github/pinpols`，路径不符则拒绝删除；已审查并登记 filesystem-remove（full 4→6，staging 1→3）。墙钟以合入后连续在线 run 的 P50/P90 验收。
-
 - Full CI 剩余时序测试稳定化：JobNodeDispatch 的 schedule 次数断言改为至少两次（后台 waiting-partition 重评估属合法追加）；Sensor 重启的 deadline 探测等待 30s→90s；bounded-coverage E2E 的结算业务日改到次日，避免首批 coverage 上限恰好覆盖完整首日导致 CUTOFF/SETTLED 竞态。
 
 - Full CI E2E 稳定性：WorkerReportLost 系列在派发前显式等待独立 Worker 的 Kafka 消费组完成分区分配，避免消费者入组前消息按 latest 跳过导致整段等待超时；并放宽报告等待窗口以适配低配 CI。

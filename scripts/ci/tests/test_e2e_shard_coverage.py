@@ -8,8 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
-
 
 class E2eShardCoverageTest(unittest.TestCase):
     def test_filesystem_backend_runs_in_its_own_configured_shard(self):
@@ -21,67 +19,6 @@ class E2eShardCoverageTest(unittest.TestCase):
                 self.assertIn("FilesystemBackendPipelineE2eIT", shard)
                 self.assertIn('"$TESTS" == "FilesystemBackendPipelineE2eIT"', workflow)
                 self.assertIn('-Dbatch.test.storage.backend=filesystem', workflow)
-
-    def test_shards_restore_sha_reactor_cache_after_setup_java(self):
-        root = Path(__file__).resolve().parents[3]
-        cases = (
-            ("full-ci-gate.yml", "e2e-shard", "full-e2e-reactor-m2-"),
-            ("staging-gate.yml", "e2e-shard-full", "staging-e2e-reactor-m2-"),
-        )
-        for filename, shard_name, key_prefix in cases:
-            with self.subTest(workflow=filename):
-                document = yaml.safe_load(
-                    (root / ".github/workflows" / filename).read_text(encoding="utf-8")
-                )
-                jobs = document["jobs"]
-                upstream = jobs["e2e-upstream-install"]
-                shard = jobs[shard_name]
-                needs = shard["needs"]
-                if isinstance(needs, str):
-                    needs = [needs]
-                self.assertIn("e2e-upstream-install", needs)
-                self.assertEqual(12, shard["strategy"]["max-parallel"])
-                self._assert_reactor_cache_order(upstream, key_prefix, exact_only=False)
-                self._assert_reactor_cache_order(shard, key_prefix, exact_only=True)
-
-    def _assert_reactor_cache_order(self, job, key_prefix, exact_only):
-        setup_at = clear_at = cache_at = install_at = None
-        for index, step in enumerate(job["steps"]):
-            uses = step.get("uses") or ""
-            run = step.get("run") or ""
-            if uses.endswith("setup-build-env"):
-                setup_at = index
-            if "rm -rf" in run and "io/github/pinpols" in run:
-                clear_at = index
-            cache_path = str((step.get("with") or {}).get("path", ""))
-            if "actions/cache" in uses and cache_path.endswith("io/github/pinpols"):
-                cache_at = index
-            if "install-upstream-modules.sh" in run:
-                install_at = index
-        self.assertIsNotNone(setup_at)
-        self.assertIsNotNone(clear_at)
-        self.assertIsNotNone(cache_at)
-        self.assertIsNotNone(install_at)
-        self.assertLess(setup_at, clear_at)
-        self.assertLess(clear_at, cache_at)
-        self.assertLess(cache_at, install_at)
-        clear_run = job["steps"][clear_at]["run"]
-        self.assertIn("/home/runner/.m2/repository/io/github/pinpols", clear_run)
-        self.assertIn('rm -rf -- "$repo"', clear_run)
-        cache_step = job["steps"][cache_at]
-        install_step = job["steps"][install_at]
-        self.assertIn("${{ github.sha }}", cache_step["with"]["key"])
-        self.assertTrue(cache_step["with"]["key"].startswith(key_prefix))
-        if exact_only:
-            self.assertEqual("reactor-m2", cache_step["id"])
-            self.assertNotIn("restore-keys", cache_step["with"])
-            self.assertEqual(
-                "steps.reactor-m2.outputs.cache-hit != 'true'",
-                install_step.get("if"),
-            )
-        else:
-            self.assertIn("restore-keys", cache_step["with"])
-            self.assertNotIn("if", install_step)
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
