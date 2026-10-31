@@ -10,6 +10,7 @@
 | [full-ci-gate.yml](full-ci-gate.yml) | main push（有路径排除）、周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、并行 E2E、安全扫描；定时/手动补充测试质量分析。main-failure-triage 是本工作流内的失败归责 job，可写 PR 标签/评论或 Issue |
 | [dispatch-full-ci-empty-checks.yml](dispatch-full-ci-empty-checks.yml) | 仅 `cursor/dispatch-full-ci-1280-387a` 的同仓 PR opened/synchronize/reopened/ready_for_review | 一次性用同仓 GITHUB_TOKEN 对 `cursor/redundant-empty-checks-387a` 发 full-ci-gate 的 workflow_dispatch；不写入业务数据，不合并进 main，其他 head 分支跳过 |
 | [dispatch-full-ci-wrapper-flake.yml](dispatch-full-ci-wrapper-flake.yml) | 仅 `cursor/dispatch-full-ci-1281-f836` 的同仓 PR opened/synchronize/reopened/ready_for_review | 一次性用同仓 GITHUB_TOKEN 对 `cursor/fix-retired-wrapper-cache-flake-f836` 发 full-ci-gate 的 workflow_dispatch；不写入业务数据，不合并进 main，其他 head 分支跳过 |
+| [dispatch-full-ci-manifest.yml](dispatch-full-ci-manifest.yml) | 仅 `cursor/dispatch-full-ci-manifest-387a` 的同仓 PR opened/synchronize/reopened/ready_for_review | 一次性用同仓 GITHUB_TOKEN 对 `cursor/fix-rolling-month-schema-manifest-387a` 发 full-ci-gate 的 workflow_dispatch；不写入业务数据，不合并进 main，其他 head 分支跳过 |
 | [codeql.yml](codeql.yml) | PR → main、main push（有路径排除）、周一 03:00 UTC | Java CodeQL；PR 使用无构建模式，main/定时使用编译和扩展查询；上传安全分析结果 |
 | [workflow-lint.yml](workflow-lint.yml) | workflow/action、Zizmor 配置或其 Python 工具依赖变更的 PR 和 main push | actionlint 与 zizmor 检查 Actions 语法和安全配置 |
 | [license-review.yml](license-review.yml) | main PR 中的 POM、许可脚本及本工作流变更 | 依赖许可证审查；覆盖范围按路径过滤，不能替代漏洞扫描 |
