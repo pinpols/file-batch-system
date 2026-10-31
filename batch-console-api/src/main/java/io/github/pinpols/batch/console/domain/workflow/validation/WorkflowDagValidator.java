@@ -187,8 +187,10 @@ public class WorkflowDagValidator {
   private void validateOptionalJoinMode(NodeItem node, int incoming) {
     Map<?, ?> params = parseNodeParams(node.getNodeParams());
     Object rawMode = params.get("joinMode");
-    if (EmptyChecks.isNull(rawMode) || isBlank(rawMode.toString())) return;
-    String joinMode = rawMode.toString().trim().toUpperCase(Locale.ROOT);
+    if (EmptyChecks.isNull(rawMode)) return;
+    String rawModeText = rawMode.toString();
+    if (isBlank(rawModeText)) return;
+    String joinMode = rawModeText.trim().toUpperCase(Locale.ROOT);
     if (!Set.of("ALL", "ANY", "N_OF").contains(joinMode)) {
       throw BizException.of(
           ResultCode.VALIDATION_ERROR,

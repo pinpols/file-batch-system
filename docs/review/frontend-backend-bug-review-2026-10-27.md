@@ -1,5 +1,11 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-10-31：检查通过后复用的访问器只取一次
+
+接收方和字段不是同一表达式时，判空仍然保留。本轮只处理检查通过后还会再次调用同一 getter 的 16 个生产文件：先确认接收方，再绑定字段，后续使用这份局部变量。空请求、空集合和失败分支仍按原顺序返回，不提前调用被短路的 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 297 项、0 失败。覆盖 `CalendarBizDateResolverTest` 9、`DefaultTriggerServiceTest` 32、`DefaultTaskCreationServiceTest` 25、`WorkflowRunReplayPreviewServiceTest` 40、`ChildJobLaunchSupportTest` 5、`DefaultPartitionDispatchServiceTest` 14、`DefaultPartitionLifecycleServiceTest` 19、`DefaultTaskAssignmentServiceTest` 30、`TaskOutcomeDagProgressorTest` 2、`TaskOutcomeSummaryBuilderTest` 8、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunReportLockTest` 2、`SqlTemplateExportSqlValidatorTest` 41、`SqlTransformComputeSqlValidatorTest` 25、`ConsoleFilePipelineProgressBridgeTest` 10、`WorkflowDagValidatorTest` 24。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
 ## 2026-10-31：同一取值的重复判空再收敛
 
 上一节只处理简单标识符。本轮处理同一 getter 或访问器被判空两次的 20 处：先取一次局部变量，再交给 `isBlank` 或 `isEmpty`。通过检查后还会使用该值时，后续也用这份局部变量。`WorkflowRunExecutionSnapshot.from`、启动请求校验、`quartzIdentity` 和冻结图 `nodes()` 仍先确认接收方非空，再调用 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝，空白字符串保持原口径。

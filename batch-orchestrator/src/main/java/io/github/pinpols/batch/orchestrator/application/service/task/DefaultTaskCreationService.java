@@ -102,9 +102,9 @@ public class DefaultTaskCreationService implements TaskCreationService {
         current = current.getCause()) {
       if (current instanceof PSQLException sql && "23503".equals(sql.getSQLState())) {
         ServerErrorMessage error = sql.getServerErrorMessage();
-        boolean isTaskOwnershipConstraintViolation = EmptyChecks.isNotNull(error)
-            && EmptyChecks.isNotBlank(error.getConstraint())
-            && OWNERSHIP_CONSTRAINTS.contains(error.getConstraint());
+        String constraint = EmptyChecks.isNull(error) ? null : error.getConstraint();
+        boolean isTaskOwnershipConstraintViolation =
+            EmptyChecks.isNotBlank(constraint) && OWNERSHIP_CONSTRAINTS.contains(constraint);
         if (isTaskOwnershipConstraintViolation) {
           return BizException.of(ResultCode.CONFLICT, "error.job_task.reference_changed", failure);
         }

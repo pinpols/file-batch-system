@@ -79,8 +79,11 @@ public class CalendarBizDateResolver {
   }
 
   private ZoneId resolveZoneId(ZoneId fallbackZoneId, CalendarBizDateDefinition calendar) {
-    if (EmptyChecks.isNotNull(calendar) && EmptyChecks.isNotBlank(calendar.timezone())) {
-      return ZoneId.of(calendar.timezone());
+    if (EmptyChecks.isNotNull(calendar)) {
+      String timezone = calendar.timezone();
+      if (EmptyChecks.isNotBlank(timezone)) {
+        return ZoneId.of(timezone);
+      }
     }
     return EmptyChecks.isNull(fallbackZoneId) ? timezoneProvider.defaultZone() : fallbackZoneId;
   }

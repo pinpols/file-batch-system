@@ -842,17 +842,21 @@ public class WorkflowRunReplayPreviewService {
       return latestByNode;
     }
     for (WorkflowNodeRunEntity candidate : sourceNodes) {
-      if (EmptyChecks.isNull(candidate) || EmptyChecks.isBlank(candidate.getNodeCode())) {
+      if (EmptyChecks.isNull(candidate)) {
         continue;
       }
-      WorkflowNodeRunEntity existing = latestByNode.get(candidate.getNodeCode());
+      String nodeCode = candidate.getNodeCode();
+      if (EmptyChecks.isBlank(nodeCode)) {
+        continue;
+      }
+      WorkflowNodeRunEntity existing = latestByNode.get(nodeCode);
       boolean candidateIsLatestForNode = EmptyChecks.isNull(existing)
           || runSequence(candidate) > runSequence(existing)
           || (Objects.equals(candidate.getRunSeq(), existing.getRunSeq())
               && EmptyChecks.isNull(existing.getJobInstanceId())
               && EmptyChecks.isNotNull(candidate.getJobInstanceId()));
       if (candidateIsLatestForNode) {
-        latestByNode.put(candidate.getNodeCode(), candidate);
+        latestByNode.put(nodeCode, candidate);
       }
     }
     return latestByNode;

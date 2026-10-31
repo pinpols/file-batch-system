@@ -261,14 +261,18 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       WorkflowRunEntity run, WorkflowDefinitionEntity definition) {
     WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
     if (EmptyChecks.isNotNull(snapshot)) {
-      if (EmptyChecks.isBlank(snapshot.workflowCalendarCode())) {
+      String calendarCode = snapshot.workflowCalendarCode();
+      if (EmptyChecks.isBlank(calendarCode)) {
         throw BizException.of(
             ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
       }
-      return snapshot.workflowCalendarCode();
+      return calendarCode;
     }
-    if (EmptyChecks.isNotNull(definition) && EmptyChecks.isNotBlank(definition.calendarCode())) {
-      return definition.calendarCode();
+    if (EmptyChecks.isNotNull(definition)) {
+      String calendarCode = definition.calendarCode();
+      if (EmptyChecks.isNotBlank(calendarCode)) {
+        return calendarCode;
+      }
     }
     throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
   }
@@ -563,10 +567,14 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
     WorkflowNodeRunEntity start = workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
         run.getId(), WorkflowNodeCode.START.code());
-    if (EmptyChecks.isNull(start) || EmptyChecks.isBlank(start.getSourcePayloadProtected())) {
+    if (EmptyChecks.isNull(start)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
     }
-    String payload = secretPayloadProtector.reveal(start.getSourcePayloadProtected());
+    String protectedPayload = start.getSourcePayloadProtected();
+    if (EmptyChecks.isBlank(protectedPayload)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
+    String payload = secretPayloadProtector.reveal(protectedPayload);
     String tenantId = request.tenantId();
     Long workflowRunId = run.getId();
     String runningStatus = WorkflowRunStatus.RUNNING.code();
