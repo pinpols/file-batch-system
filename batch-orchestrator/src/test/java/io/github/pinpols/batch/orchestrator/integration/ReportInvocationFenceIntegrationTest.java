@@ -314,8 +314,8 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
 
   /** 复刻 lifecycle 测试的 CAS 抖动重试:延长重试 + 每拍刷新 worker 可见性,直至 task RUNNING。 */
   private JobTaskEntity assignWorkerWithRetry(Long taskId, String workerCode) {
+    long deadline = System.currentTimeMillis() + 20_000L;
     JobTaskEntity claimed = null;
-    long deadline = System.currentTimeMillis() + 5_000L;
     while (System.currentTimeMillis() < deadline) {
       LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
       claimed = taskExecutionService.assignWorker(TENANT, taskId, workerCode);
@@ -326,9 +326,17 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         Thread.sleep(50L);
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
-        return claimed;
+        break;
       }
     }
-    return claimed;
+    JobTaskEntity latest = jobTaskMapper.selectById(TENANT, taskId);
+    throw new AssertionError("task did not reach RUNNING within 20s: taskId="
+        + taskId
+        + ", workerCode="
+        + workerCode
+        + ", lastClaimedStatus="
+        + (claimed == null ? null : claimed.getTaskStatus())
+        + ", persistedStatus="
+        + (latest == null ? null : latest.getTaskStatus()));
   }
 }

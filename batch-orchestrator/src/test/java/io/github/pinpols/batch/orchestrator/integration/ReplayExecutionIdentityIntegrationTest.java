@@ -636,12 +636,15 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     BatchDayReplayDispatcher target = AopTestUtils.getUltimateTargetObject(dispatcher);
     boolean wasEnabled = replayProperties.isEnabled();
     try {
+      // 整段断言期间关闭后台 @Scheduled 轮询，只在显式调用前短暂开启；
+      // 否则共享 Spring 上下文的后台派发会插入额外批次，破坏“单轮不超过 sessionBatchSize”的批次边界。
+      replayProperties.setEnabled(false);
       for (int round = 0; completedSessions.size() < dayCount && round < dayCount; round++) {
+        replayProperties.setEnabled(true);
         try {
-          replayProperties.setEnabled(true);
           target.scheduledDispatch();
         } finally {
-          replayProperties.setEnabled(wasEnabled);
+          replayProperties.setEnabled(false);
         }
         int completedBeforeRound = completedSessions.size();
         for (BatchDayReplaySessionEntity session : sessions) {
