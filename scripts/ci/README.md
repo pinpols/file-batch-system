@@ -686,7 +686,7 @@ python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
 
 ## `install-upstream-modules.sh`
 
-将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
+将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。`full-ci-gate` 与 `staging-gate` 在 `e2e-upstream-install` job 中**每 workflow run 执行一次**；各 E2E 分片依赖该 job 并通过 `setup-java` Maven cache 复用 `~/.m2`，不再 20 路重复 install。它保持 `batch-e2e-tests`
 排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的子构建中生成，不依赖上游预构建产物。对 Maven Central 的临时 5xx / 传输失败使用 Maven
 强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
 
