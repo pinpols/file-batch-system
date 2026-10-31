@@ -1283,8 +1283,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
     Process worker2 = null;
     try {
       worker1 = startDispatchWorker(workerPoolCode, consumerGroupId, worker1Log, "attempt-1");
-      awaitDispatchWorkerStarted(worker1, worker1Log);
-      awaitWorkerPoolOnline(workerPoolCode, "DISPATCH");
+      awaitDispatchWorkerReadyForLaunch(workerPoolCode, consumerGroupId, worker1, worker1Log);
 
       launchService.launch(new LaunchRequest(
           TENANT,
@@ -1434,8 +1433,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           firstWorkerLog,
           "api-push-crash-first",
           workerOverrides);
-      awaitDispatchWorkerStarted(firstWorker, firstWorkerLog);
-      awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
+      awaitDispatchWorkerReadyForLaunch(
+          scenario.workerPoolCode(), scenario.consumerGroupId(), firstWorker, firstWorkerLog);
       launchDispatchCrashScenario(scenario);
 
       boolean accepted = acceptedBeforeResponse.await(180, TimeUnit.SECONDS);
@@ -1603,8 +1602,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
             firstWorkerLog,
             "oss-complete-report-first",
             workerOverrides);
-        awaitDispatchWorkerStarted(firstWorker, firstWorkerLog);
-        awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
+        awaitDispatchWorkerReadyForLaunch(
+            scenario.workerPoolCode(), scenario.consumerGroupId(), firstWorker, firstWorkerLog);
         launchDispatchCrashScenario(scenario);
 
         boolean firstReportArrived = firstReportStarted.await(300, TimeUnit.SECONDS);
@@ -1871,8 +1870,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
             firstWorkerLog,
             "oss-crash-first",
             workerOverrides);
-        awaitDispatchWorkerStarted(firstWorker, firstWorkerLog);
-        awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
+        awaitDispatchWorkerReadyForLaunch(
+            scenario.workerPoolCode(), scenario.consumerGroupId(), firstWorker, firstWorkerLog);
         // 延迟真实 MinIO 的 PUT 确认；主对象已提交时 Worker 仍无法继续写旁挂清单。
         storageProxy.toxics().latency("hold_oss_put_ack", ToxicDirection.DOWNSTREAM, 60_000);
         launchDispatchCrashScenario(scenario);
@@ -2291,8 +2290,8 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       try {
         firstWorker = startDispatchWorker(
             workerPoolCode, consumerGroupId, firstWorkerLog, "r25-attempt-1-" + suffix);
-        awaitDispatchWorkerStarted(firstWorker, firstWorkerLog);
-        awaitWorkerPoolOnline(workerPoolCode, "DISPATCH");
+        awaitDispatchWorkerReadyForLaunch(
+            workerPoolCode, consumerGroupId, firstWorker, firstWorkerLog);
 
         launchService.launch(new LaunchRequest(
             TENANT,
@@ -4383,6 +4382,57 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
               .contains("Started BatchWorkerDispatchApplication")
               .contains("partitions assigned");
         });
+  }
+
+  /**
+   * Full CI 并行 E2E 共享租户时，历史 ONLINE 的 DISPATCH worker 可能被调度选中，导致 outbox
+   * 定向 topic 与当前子进程不一致；同时日志里的 partitions assigned 也可能早于 Admin 视角的 STABLE。
+   */
+  private void awaitDispatchWorkerReadyForLaunch(
+      String workerPoolCode, String consumerGroupId, Process worker, Path workerLog) {
+    awaitDispatchWorkerStarted(worker, workerLog);
+    awaitWorkerPoolOnline(workerPoolCode, "DISPATCH");
+    isolateDispatchWorkerPool(workerPoolCode);
+    awaitKafkaConsumerGroupStable(consumerGroupId);
+  }
+
+  private void isolateDispatchWorkerPool(String workerPoolCode) {
+    final String isolateSql = """
+        update batch.worker_registry set status = 'OFFLINE'
+        where tenant_id = ? and worker_group = 'DISPATCH'
+          and coalesce(worker_pool_code, worker_code) <> ?
+        """;
+    platformJdbc.update(isolateSql, TENANT, workerPoolCode);
+  }
+
+  private void awaitKafkaConsumerGroupStable(String consumerGroupId) {
+    Map<String, Object> config =
+        Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBootstrapServers());
+    try (AdminClient adminClient = AdminClient.create(config)) {
+      await()
+          .atMost(Duration.ofSeconds(90))
+          .pollInterval(Duration.ofMillis(500))
+          .until(() -> {
+            try {
+              Map<String, ConsumerGroupDescription> descriptions = adminClient
+                  .describeConsumerGroups(List.of(consumerGroupId))
+                  .all()
+                  .get(10, TimeUnit.SECONDS);
+              ConsumerGroupDescription description = descriptions.get(consumerGroupId);
+              return description != null
+                  && description.groupState() == GroupState.STABLE
+                  && !description.members().isEmpty();
+            } catch (ExecutionException exception) {
+              if (exception.getCause() instanceof GroupIdNotFoundException) {
+                return false;
+              }
+              throw exception;
+            } catch (TimeoutException exception) {
+              // Admin 一次查询超时只是"还没确认到 STABLE"，交给 90s 有界等待重试，而非直接判负。
+              return false;
+            }
+          });
+    }
   }
 
   private Process startAtomicWorker(
