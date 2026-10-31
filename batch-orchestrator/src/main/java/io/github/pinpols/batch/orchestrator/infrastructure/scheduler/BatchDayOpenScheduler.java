@@ -468,7 +468,7 @@ public class BatchDayOpenScheduler {
     List<CalendarDependencyWaitEntity> pending =
         calendarDependencyWaitMapper.selectWaitingForUpdate(
             calendar.tenantId(), calendar.calendarCode(), now, 100);
-    if (EmptyChecks.isNull(pending) || EmptyChecks.isEmpty(pending)) return;
+    if (EmptyChecks.isEmpty(pending)) return;
     for (CalendarDependencyWaitEntity wait : pending) {
       BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(
           wait.tenantId(), wait.calendarCode(), wait.bizDate());

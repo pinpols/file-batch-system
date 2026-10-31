@@ -23,8 +23,7 @@ public class PipelineProgressQueryService {
   private final ConsoleFileQueryService files;
 
   public static List<Long> normalize(List<Long> ids) {
-    if (EmptyChecks.isNull(ids)
-        || EmptyChecks.isEmpty(ids)
+    if (EmptyChecks.isEmpty(ids)
         || ids.size() > 100
         || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
       throw BizException.of(

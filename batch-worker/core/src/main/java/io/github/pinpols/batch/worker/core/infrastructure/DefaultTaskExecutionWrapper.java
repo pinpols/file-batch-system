@@ -193,10 +193,8 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
   public List<TaskClaimResult> claimBatch(List<TaskClaimItem> items) {
     long claimStartedAtNanos = activeTaskLeaseRegistry.currentNanos();
     List<TaskClaimResult> results = taskExecutionClient.claimBatch(items);
-    boolean claimBatchHasNoTrackableItems = EmptyChecks.isNull(results)
-        || EmptyChecks.isEmpty(results)
-        || EmptyChecks.isNull(items)
-        || EmptyChecks.isEmpty(items);
+    boolean claimBatchHasNoTrackableItems =
+        EmptyChecks.isEmpty(results) || EmptyChecks.isEmpty(items);
     if (claimBatchHasNoTrackableItems) {
       return results;
     }
@@ -229,7 +227,7 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
 
   @Override
   public void registerClaimedBatch(List<PulledTask> tasks) {
-    if (EmptyChecks.isNull(tasks) || EmptyChecks.isEmpty(tasks)) {
+    if (EmptyChecks.isEmpty(tasks)) {
       return;
     }
     for (PulledTask task : tasks) {

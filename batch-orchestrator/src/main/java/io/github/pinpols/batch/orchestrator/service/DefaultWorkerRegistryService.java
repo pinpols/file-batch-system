@@ -266,7 +266,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         continue;
       }
       String taskTypeCode = descriptor.code();
-      if (EmptyChecks.isNull(taskTypeCode) || EmptyChecks.isBlank(taskTypeCode)) {
+      if (EmptyChecks.isBlank(taskTypeCode)) {
         continue;
       }
       // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
@@ -401,7 +401,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (requestedRegistryStatusIsValid) {
       return requestedStatus;
     }
-    if (EmptyChecks.isNull(defaultStatus) || EmptyChecks.isBlank(defaultStatus)) {
+    if (EmptyChecks.isBlank(defaultStatus)) {
       return currentStatus;
     }
     return defaultStatus;

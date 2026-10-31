@@ -30,8 +30,7 @@ public class WorkflowNodeReplayTargetResolver {
 
   @Transactional
   public WorkflowNodeReplayTarget resolve(String tenantId, Long workflowRunId, Long nodeRunId) {
-    boolean nodeReplayIdentityIsIncomplete = EmptyChecks.isNull(tenantId)
-        || EmptyChecks.isBlank(tenantId)
+    boolean nodeReplayIdentityIsIncomplete = EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(workflowRunId)
         || EmptyChecks.isNull(nodeRunId);
     if (nodeReplayIdentityIsIncomplete) {

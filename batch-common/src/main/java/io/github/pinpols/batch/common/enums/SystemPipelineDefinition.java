@@ -7,7 +7,7 @@ import java.util.List;
 public record SystemPipelineDefinition(String code, int semanticVersion, List<String> stages) {
 
   public SystemPipelineDefinition {
-    if (EmptyChecks.isNull(code) || EmptyChecks.isBlank(code)) {
+    if (EmptyChecks.isBlank(code)) {
       throw new IllegalArgumentException("system pipeline code is required");
     }
     if (semanticVersion < 1) {
@@ -15,8 +15,7 @@ public record SystemPipelineDefinition(String code, int semanticVersion, List<St
     }
     stages = List.copyOf(stages);
     if (EmptyChecks.isEmpty(stages)
-        || stages.stream()
-            .anyMatch(stage -> EmptyChecks.isNull(stage) || EmptyChecks.isBlank(stage))) {
+        || stages.stream().anyMatch(stage -> EmptyChecks.isBlank(stage))) {
       throw new IllegalArgumentException("system pipeline stages must be non-empty");
     }
   }

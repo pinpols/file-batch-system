@@ -37,8 +37,7 @@ public class DefaultConsoleTenantConfigInitApplicationService
       TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
     List<String> targetTenantIds = request.getTargetTenantIds();
     // 在首个租户事务开始前校验全部目标，避免参数错误发生在其他租户已提交之后。
-    boolean invalidTargets = EmptyChecks.isNull(targetTenantIds)
-        || EmptyChecks.isEmpty(targetTenantIds)
+    boolean invalidTargets = EmptyChecks.isEmpty(targetTenantIds)
         || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank);
     if (invalidTargets) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");

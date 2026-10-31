@@ -1,5 +1,13 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-10-31：简单变量重复判空收敛
+
+2026-10-28 扫描列出的 71 处 `EmptyChecks.isNull(x) || isBlank/isEmpty(x)` 都是同一简单标识符。`isBlank` 与 `isEmpty` 的各重载已经把 null 视为空，两段判断结果相同。现只保留后一段调用。null 集合仍在进入 `size()` 或 `stream()` 之前返回，短路顺序保持。
+
+本轮改动落在当前 `main` 的 45 个生产文件。方法调用形式仍会求值两次，包括 `request.traceId()`、`request.getJobCodes()`、`run.getTenantId()` 与 `node.getNodeCode()`，本轮未改。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。`EmptyChecksTest`、`SdkTaskContextTest`、`TaskDispatchExecutorTest`、`PipelineProgressQueryServiceTest` 合计 25 项通过（batch-common 3、Java SDK 13、Worker Core 6、Console 3）。随后 Trigger、Orchestrator、Import、Export、Process、Dispatch 生产编译通过。未跑全 reactor 测试，也未改 SQL、接口或迁移。
+
 ## 2026-10-30：批量日补跑根请求修复复核
 
 沿 `BUG-20261030-BATCHDAY-CATCHUP-ROOT` 及 `BUG-20261030-BATCHDAY-PARENT-IDENTITY` 核对当前源码：批日调度器生成 `tenant:batch-day-catchup:calendar:date:job` 键；根请求读取及失败日扫描都按租户、该键、`CATCH_UP` 类型和空父 Workflow 限定，避免同键子 Job 遮蔽根请求。V369 部分唯一索引覆盖该键前缀的同租户 `CATCH_UP` 根请求，不限制子请求。Trigger 通用按键回查也排除子请求，但保留别名匹配和原有排序/单条选择；其业务范围比批日根请求查询更广，不能把两条 SQL 简化为同一口径。

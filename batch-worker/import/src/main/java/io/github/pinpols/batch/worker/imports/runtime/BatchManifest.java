@@ -80,7 +80,7 @@ public record BatchManifest(
    * 不等文件到达)。导入/分发束清单必有 requiredFiles(数据文件),故不会命中。
    */
   public boolean isManifestOnlyExport() {
-    if (EmptyChecks.isNull(workflowCode) || EmptyChecks.isBlank(workflowCode)) {
+    if (EmptyChecks.isBlank(workflowCode)) {
       return false;
     }
     if (hasRetiredJobTarget()) {

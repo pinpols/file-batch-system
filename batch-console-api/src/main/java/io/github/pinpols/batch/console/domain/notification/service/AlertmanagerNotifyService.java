@@ -197,7 +197,7 @@ public class AlertmanagerNotifyService {
     List<String> identities = new ArrayList<>();
     for (AlertmanagerAlert alert : payload.safeAlerts()) {
       String fingerprint = alert.label("fingerprint");
-      if (EmptyChecks.isNull(fingerprint) || EmptyChecks.isBlank(fingerprint)) {
+      if (EmptyChecks.isBlank(fingerprint)) {
         fingerprint = alert.fingerprint();
       }
       NotificationIdentity identity =

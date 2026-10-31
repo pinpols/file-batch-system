@@ -53,7 +53,7 @@ public class WorkflowScheduleUpdateRequest {
       return false;
     }
     String effectiveTriggerMode = triggerMode;
-    if (EmptyChecks.isNull(effectiveTriggerMode) || EmptyChecks.isBlank(effectiveTriggerMode)) {
+    if (EmptyChecks.isBlank(effectiveTriggerMode)) {
       effectiveTriggerMode = switch (scheduleType) {
         case "CRON", "FIXED_RATE" -> "SCHEDULED";
         case "EVENT" -> "EVENT";
@@ -81,7 +81,7 @@ public class WorkflowScheduleUpdateRequest {
       return false;
     }
     if ("CRON".equals(scheduleType)) {
-      if (EmptyChecks.isNull(scheduleExpr) || EmptyChecks.isBlank(scheduleExpr)) {
+      if (EmptyChecks.isBlank(scheduleExpr)) {
         return false;
       }
       try {
@@ -93,7 +93,7 @@ public class WorkflowScheduleUpdateRequest {
         return false;
       }
     } else if ("FIXED_RATE".equals(scheduleType)) {
-      if (EmptyChecks.isNull(scheduleExpr) || EmptyChecks.isBlank(scheduleExpr)) {
+      if (EmptyChecks.isBlank(scheduleExpr)) {
         return false;
       }
       try {

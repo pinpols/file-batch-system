@@ -224,8 +224,7 @@ public class ConsoleAiProperties {
       throw new IllegalStateException("AI monthly budget requires at least one provider rate");
     }
     cost.getProviderRates().forEach((providerName, rate) -> {
-      boolean providerRateIsInvalid = EmptyChecks.isNull(providerName)
-          || EmptyChecks.isBlank(providerName)
+      boolean providerRateIsInvalid = EmptyChecks.isBlank(providerName)
           || EmptyChecks.isNull(rate)
           || EmptyChecks.isNull(rate.getInputUsdPerMillionTokens())
           || EmptyChecks.isNull(rate.getOutputUsdPerMillionTokens())

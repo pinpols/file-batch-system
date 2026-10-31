@@ -131,7 +131,7 @@ public class ConsolePushApprovalNotifier {
     String title = String.format("%s 申请%s", typeLabel, statusLabel);
     String reason =
         "REJECTED".equals(p.getApprovalStatus()) ? p.getRejectionReason() : p.getApprovalReason();
-    boolean reasonMissing = EmptyChecks.isNull(reason) || EmptyChecks.isBlank(reason);
+    boolean reasonMissing = EmptyChecks.isBlank(reason);
     String approverId = nullToDash(p.getApproverId());
     String body = reasonMissing
         ? String.format("approver=%s · %s", approverId, p.getApprovalNo())

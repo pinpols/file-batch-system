@@ -141,7 +141,7 @@ public class BatchDaySettleScheduler {
   private void recoverFailedCatchUps() {
     List<BatchDayInstanceEntity> failedDays =
         batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(FAILED_CATCH_UP_RECOVERY_LIMIT);
-    if (EmptyChecks.isNull(failedDays) || EmptyChecks.isEmpty(failedDays)) return;
+    if (EmptyChecks.isEmpty(failedDays)) return;
     Instant now = dateTimeSupport.nowInstant();
     for (BatchDayInstanceEntity failedDay : failedDays) {
       if (EmptyChecks.isNull(failedDay) || !Texts.hasText(failedDay.tenantId())) continue;
@@ -363,7 +363,7 @@ public class BatchDaySettleScheduler {
     List<ExpectedWorkOccurrenceOverride> overdue =
         expectedWorkOccurrenceMapper.selectDueExpectedWithoutMissingAlert(
             expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery);
-    if (EmptyChecks.isNull(overdue) || EmptyChecks.isEmpty(overdue)) {
+    if (EmptyChecks.isEmpty(overdue)) {
       return;
     }
     for (ExpectedWorkOccurrenceOverride occurrence : overdue) {
