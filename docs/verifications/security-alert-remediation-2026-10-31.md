@@ -89,6 +89,7 @@
 | Java 编译（含测试源码） | `./mvnw -T 1C -DskipTests test-compile`（本机新工作树，无既有 `target/`） | ✅ BUILD SUCCESS，02:30 |
 | 日志净化单测 | `./mvnw -pl batch-common -Dtest=LogSanitizerTest test` | ✅ 2 个测试通过，0 失败 |
 | 进度采样错误路径单测 | `./mvnw -pl batch-console-api -am -Dtest=ConsoleProgressSnapshotPublisherTest -Dsurefire.failIfNoSpecifiedTests=false test` | ✅ 4 个测试通过，0 失败（含新增净化分支） |
+| RLS trace 日志单测 | `./mvnw -pl batch-common -Dtest=RlsTenantSessionSupportTest test` | ✅ 5 个测试通过，0 失败（含新增有效上下文 TRACE 行） |
 | Java 格式 | `./mvnw -pl batch-common,batch-trigger,batch-orchestrator,batch-console-api spotless:check` | ✅ 4 个受影响模块通过 |
 | Rust SDK 单测 | `cd sdk/rust && cargo test` | ✅ 96 个测试通过（82 单测 + 1 constants + 4 contract + 9 runtime），0 失败 |
 | 示例工程检查 | `cd examples/self-hosted-sdk/sample-tenant-worker-rust && cargo check` | ✅ `Finished dev profile`，03:00 |
@@ -105,5 +106,5 @@
 - 13 条误报已由维护者账号 `pinpols` 于 2026-10-31 05:33–05:34Z 按具体编号以 `false positive` 关闭，关闭评论附本记录中的路径/防护依据；未批量操作、未修改校验逻辑。关闭后 `open` 的 CodeQL 仅剩 #309–#312 四条日志注入（由本分支修复，待合入 `main` 后下一次扫描自动关闭）。
 - 本记录中“误报”是代码与配置层面的判定；CodeQL 扫描的最终确认仍需 PR 上的 CodeQL 结果，若后续扫描因代码/规则变化重新出现，需重新核对，不能沿用本次结论。
 - PR #1271 已创建（base `main`），PR Gate/CodeQL 等 required checks 以 PR 实时状态为准；本记录不宣称 CI 通过或可合入。
-- 首次 PR CI 的失败项为：`QuartzMisfireRecoveryIntegrationTest` 的时序波动（与本次日志字段清洗无关，需重跑确认）以及 Console 差异覆盖率门禁未覆盖 `ConsoleProgressSnapshotPublisher` 的兜底日志分支（已补充上述单测）。
+- PR CI 首次失败项为 `QuartzMisfireRecoveryIntegrationTest` 的时序波动（与本次日志字段清洗无关，重跑后通过）与 Console 差异覆盖率门禁（`ConsoleProgressSnapshotPublisher` 兜底日志分支，已补单测）；第二轮 b1 覆盖率门禁又报 `RlsTenantSessionSupport` 的 TRACE 行未覆盖，已补有效上下文 TRACE 单测。
 - 前端仓库的 4 条 CodeQL shell 注入与 4 条 npm Dependabot 告警不在本记录范围（PR #347 正在处理 shell 注入）。
