@@ -29,6 +29,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
 import java.time.Month;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -99,8 +100,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("reclaim 重派后旧 invocation(及缺失)的迟到 report 被 fence 拒,I2 真实结果不丢")
   void staleReportAfterReclaim_isRejectedByInvocationFence_andI2ResultWins() {
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
-        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
-    isolateSeedWorker(seed.workerCode());
+        jdbcTemplate, TENANT, "IMPORT", exclusiveWorkerGroup("FENCE_IMPORT"), TriggerType.API);
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -261,8 +261,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     final String selectEventCountSql =
         "select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?";
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
-        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
-    isolateSeedWorker(seed.workerCode());
+        jdbcTemplate, TENANT, "IMPORT", exclusiveWorkerGroup("FENCE_ROLLBACK"), TriggerType.API);
     var response = workflowRunLaunchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
@@ -315,15 +314,12 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   }
 
   /**
-   * 全量测试共享真实数据库时，历史用例残留的 ONLINE worker 可能被资源调度优先选中，
-   * 导致本用例用 seed.workerCode() claim 时因 assignedWorkerCode 不匹配而永久 READY。
-   * 本用例只依赖自己的 seed worker，因此在 launch 前把同租户其他 worker 置为 OFFLINE 隔离。
+   * 每个用例使用独立的 workerGroup：全量测试共享同一真实数据库和 worker 选择缓存时，同租户历史用例残留的 ONLINE
+   * worker 仍可能被缓存视为候选，导致任务派给其它 worker 后本用例的 seed worker 认领一直 READY。专属 group
+   * 让选择器只能命中本用例刚插入的 seed worker，且不改变其它用例的 worker 状态。
    */
-  private void isolateSeedWorker(String workerCode) {
-    jdbcTemplate.update(
-        "update batch.worker_registry set status = 'OFFLINE' where tenant_id = ? and worker_code <> ?",
-        TENANT,
-        workerCode);
+  private static String exclusiveWorkerGroup(String prefix) {
+    return prefix + "_" + Long.toUnsignedString(System.nanoTime(), 36).toUpperCase(Locale.ROOT);
   }
 
   /** 复刻 lifecycle 测试的 CAS 抖动重试:延长重试 + 每拍刷新 worker 可见性,直至 task RUNNING。 */

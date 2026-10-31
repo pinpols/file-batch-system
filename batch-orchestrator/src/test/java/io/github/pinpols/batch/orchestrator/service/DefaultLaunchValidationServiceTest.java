@@ -22,6 +22,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.time.LocalDate;
@@ -59,12 +60,15 @@ class DefaultLaunchValidationServiceTest {
   @Mock
   private WorkflowRunMapper workflowRunMapper;
 
+  @Mock
+  private JobInstanceMapper jobInstanceMapper;
+
   private DefaultLaunchValidationService service;
 
   @BeforeEach
   void setUp() {
     service = new DefaultLaunchValidationService(
-        triggerRequestMapper, configCacheService, workflowRunMapper);
+        triggerRequestMapper, configCacheService, workflowRunMapper, jobInstanceMapper);
   }
 
   private LaunchRequest validRequest() {
@@ -225,53 +229,7 @@ class DefaultLaunchValidationServiceTest {
     TriggerRequestEntity trigger = triggerRequestEntity();
     trigger.setParentWorkflowRunId(50L);
     trigger.setParentNodeCode("IMPORT_NODE");
-    WorkflowRunEntity run = new WorkflowRunEntity();
-    run.setTenantId("ta");
-    run.setId(50L);
-    run.setWorkflowDefinitionId(90L);
-    run.setWorkflowVersionSnapshot(7);
-    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
-        "schemaVersion",
-        2,
-        "workflowDefinitionId",
-        90,
-        "workflowVersion",
-        7,
-        "nodes",
-        List.of(Map.of(
-            "nodeCode", "IMPORT_NODE",
-            "nodeType", "JOB",
-            "tenantId", "ta",
-            "workflowDefinitionId", 90,
-            "relatedJobCode", "job_ok")),
-        "edges",
-        List.of(),
-        "jobDefinitions",
-        Map.of(
-            "IMPORT_NODE",
-            Map.of(
-                "jobDefinitionId",
-                1,
-                "jobCode",
-                "job_ok",
-                "jobType",
-                "GENERAL",
-                "jobDefinitionVersion",
-                1,
-                "executionDefinition",
-                Map.of(
-                    "id",
-                    1,
-                    "tenantId",
-                    "ta",
-                    "jobCode",
-                    "job_ok",
-                    "jobType",
-                    "GENERAL",
-                    "version",
-                    1,
-                    "defaultParams",
-                    Map.of("pinned", true)))))));
+    WorkflowRunEntity run = parentNodeSnapshotRun();
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(trigger, null));
     when(workflowRunMapper.selectById("ta", 50L)).thenReturn(run);
@@ -419,6 +377,112 @@ class DefaultLaunchValidationServiceTest {
     verify(configCacheService, never()).findEnabledSingleJobWorkflowDefinition(anyString(), any());
     verify(triggerRequestMapper)
         .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+  }
+
+  @Test
+  @DisplayName("并发恢复器已用同一请求落库实例时按重复请求短路，不覆盖请求状态")
+  void shouldTreatConcurrentLaunchAsDuplicateWhenParentNodeAlreadyBound() {
+    LaunchRequest req = validRequest();
+    TriggerRequestEntity trigger = triggerRequestEntity();
+    trigger.setId(77L);
+    trigger.setParentWorkflowRunId(50L);
+    trigger.setParentNodeCode("IMPORT_NODE");
+    JobInstanceEntity concurrentInstance = new JobInstanceEntity();
+    concurrentInstance.setId(501L);
+    concurrentInstance.setTenantId("ta");
+    concurrentInstance.setTriggerRequestId(77L);
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(trigger, null));
+    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
+    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
+    when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1"))
+        .thenReturn(concurrentInstance);
+
+    LaunchValidationService.LaunchLoadResult result = service.load(req);
+
+    assertThat(result.existingInstance()).isSameAs(concurrentInstance);
+    assertThat(result.jobDefinition().jobCode()).isEqualTo("job_ok");
+    verify(triggerRequestMapper, never())
+        .updateAcceptance(
+            anyString(), anyString(), eq(TriggerRequestStatus.REJECTED.code()), any());
+  }
+
+  @Test
+  @DisplayName("节点校验失败且实例归属其它请求时仍拒绝启动并终结请求")
+  void shouldRejectParentNodeLaunchWhenInstanceBelongsToAnotherRequest() {
+    LaunchRequest req = validRequest();
+    TriggerRequestEntity trigger = triggerRequestEntity();
+    trigger.setId(77L);
+    trigger.setParentWorkflowRunId(50L);
+    trigger.setParentNodeCode("IMPORT_NODE");
+    JobInstanceEntity otherRequestInstance = new JobInstanceEntity();
+    otherRequestInstance.setId(502L);
+    otherRequestInstance.setTenantId("ta");
+    otherRequestInstance.setTriggerRequestId(999L);
+    when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
+        .thenReturn(persistenceContext(trigger, null));
+    when(workflowRunMapper.selectById("ta", 50L)).thenReturn(parentNodeSnapshotRun());
+    when(triggerRequestMapper.isValidParentWorkflowNodeLaunch(any())).thenReturn(false);
+    when(jobInstanceMapper.selectByTenantAndDedupKey("ta", "dedup-1"))
+        .thenReturn(otherRequestInstance);
+
+    assertThatThrownBy(() -> service.load(req))
+        .isInstanceOf(BizException.class)
+        .extracting("messageKey")
+        .isEqualTo("error.workflow.parent_node_launch_invalid");
+    verify(triggerRequestMapper)
+        .updateAcceptance(eq("ta"), eq("req-001"), eq(TriggerRequestStatus.REJECTED.code()), any());
+  }
+
+  private WorkflowRunEntity parentNodeSnapshotRun() {
+    WorkflowRunEntity run = new WorkflowRunEntity();
+    run.setTenantId("ta");
+    run.setId(50L);
+    run.setWorkflowDefinitionId(90L);
+    run.setWorkflowVersionSnapshot(7);
+    run.setExecutionSnapshot(JsonUtils.toJson(Map.of(
+        "schemaVersion",
+        2,
+        "workflowDefinitionId",
+        90,
+        "workflowVersion",
+        7,
+        "nodes",
+        List.of(Map.of(
+            "nodeCode", "IMPORT_NODE",
+            "nodeType", "JOB",
+            "tenantId", "ta",
+            "workflowDefinitionId", 90,
+            "relatedJobCode", "job_ok")),
+        "edges",
+        List.of(),
+        "jobDefinitions",
+        Map.of(
+            "IMPORT_NODE",
+            Map.of(
+                "jobDefinitionId",
+                1,
+                "jobCode",
+                "job_ok",
+                "jobType",
+                "GENERAL",
+                "jobDefinitionVersion",
+                1,
+                "executionDefinition",
+                Map.of(
+                    "id",
+                    1,
+                    "tenantId",
+                    "ta",
+                    "jobCode",
+                    "job_ok",
+                    "jobType",
+                    "GENERAL",
+                    "version",
+                    1,
+                    "defaultParams",
+                    Map.of("pinned", true)))))));
+    return run;
   }
 
   private TriggerRequestEntity triggerRequestEntity() {

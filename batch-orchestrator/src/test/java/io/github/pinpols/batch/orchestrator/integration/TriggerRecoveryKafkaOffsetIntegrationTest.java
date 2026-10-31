@@ -45,10 +45,14 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.KafkaMessageListenerContainer;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
+import org.springframework.test.context.TestPropertySource;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
+// park 之后后台恢复扫描会用真实 LaunchApplicationService 重放锚点；本用例用不存在的 job 模拟“稍后恢复”，
+// 若 30s 轮询恰好命中会把锚点写成 REJECTED。测试内拉长轮询间隔，保证 new 锚点断言的是 PENDING 而非扫描结果。
+@TestPropertySource(properties = "batch.trigger.launch-recovery.poll-interval-millis=3600000")
 @DisplayName("启动恢复锚点与真实 Kafka offset")
 class TriggerRecoveryKafkaOffsetIntegrationTest extends AbstractIntegrationTest {
   private final TriggerLaunchRecoveryService service;

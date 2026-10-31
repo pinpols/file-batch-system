@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.Map;
@@ -41,6 +42,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   private final TriggerRequestMapper triggerRequestMapper;
   private final OrchestratorConfigCacheService configCacheService;
   private final WorkflowRunMapper workflowRunMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
   /**
    * 注意副作用：job/workflow 定义缺失时，本方法会把 trigger_request 状态更新为 REJECTED 后再抛 {@code
@@ -101,6 +103,28 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
             triggerRequest,
             persistenceContext,
             EmptyChecks.isNotNull(parentJobSnapshot))) {
+      JobInstanceEntity concurrentLaunch =
+          findConcurrentLaunchOfSameRequest(request, triggerRequest);
+      if (EmptyChecks.isNotNull(concurrentLaunch)) {
+        // 并发恢复器可能已用同一 trigger_request 落库实例但尚未回写 LAUNCHED；此时节点校验会因
+        // job_instance_id 已被抢占而失败。不能把请求覆盖为 REJECTED，否则胜者稍后的
+        // updateAcceptance(LAUNCHED) 会因终态保护写不进去，留下“实例已启动、请求 REJECTED”的不一致。
+        log.warn(
+            "parent node already bound to the same trigger request's job instance; treat as"
+                + " concurrent duplicate: tenantId={}, requestId={}, jobInstanceId={}",
+            LogSanitizer.value(request.tenantId()),
+            LogSanitizer.value(request.requestId()),
+            concurrentLaunch.getId());
+        return new LaunchLoadResult(
+            triggerRequest,
+            jobDefinition,
+            null,
+            workflowCalendarCode,
+            concurrentLaunch,
+            EmptyChecks.isNull(parentJobSnapshot)
+                ? null
+                : parentJobSnapshot.workflowReplayExecutionBinding());
+      }
       int updatedRows = triggerRequestMapper.updateAcceptance(
           request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
       warnIfNotUpdated(updatedRows, request);
@@ -118,6 +142,19 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         EmptyChecks.isNull(parentJobSnapshot)
             ? null
             : parentJobSnapshot.workflowReplayExecutionBinding());
+  }
+
+  /** 并发恢复场景下，同一 dedup_key 的实例可能已由原 trigger_request 创建但请求状态尚未回写。 */
+  private JobInstanceEntity findConcurrentLaunchOfSameRequest(
+      LaunchRequest request, TriggerRequestEntity triggerRequest) {
+    if (EmptyChecks.isBlank(triggerRequest.getDedupKey())) {
+      return null;
+    }
+    JobInstanceEntity instance = jobInstanceMapper.selectByTenantAndDedupKey(
+        request.tenantId(), triggerRequest.getDedupKey());
+    boolean launchedBySameRequest = EmptyChecks.isNotNull(instance)
+        && Objects.equals(instance.getTriggerRequestId(), triggerRequest.getId());
+    return launchedBySameRequest ? instance : null;
   }
 
   private ParentWorkflowJobSnapshot loadJobDefinitionFromWorkflowSnapshot(
