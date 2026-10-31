@@ -203,7 +203,7 @@ jobs:
 
       - name: Set up Python for LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version-file: .python-version
 
