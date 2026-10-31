@@ -271,6 +271,7 @@ jobs:
             scripts/ci/tests/test_pre_push_module_selection.py \
             scripts/ci/tests/test_pre_push_environment.py \
             scripts/ci/tests/test_pr_coverage_integration.py \
+            scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py
@@ -958,7 +959,8 @@ jobs:
   # ===========================================================================
   # Job 3: unit-shard-2 — common + trigger + worker-process + worker-dispatch
   # ===========================================================================
-  unit-it-b1:
+  unit-it-b1-main:
+    name: 'PR tests / Trigger and workers unit tests'
     needs: changes
     if: |
       needs.changes.outputs.unit-b1-required == 'true' &&
@@ -986,28 +988,136 @@ jobs:
             -DskipITs=true -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
 
-      - name: Run selected integration scenarios for coverage
-        shell: bash
-        run: bash scripts/ci/run-pr-coverage-integration.sh b1
-
-      - name: Verify changed-line coverage
+      - name: Generate primary coverage reports
         shell: bash
         run: |
           ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
-          BASE="${{ github.event.pull_request.base.sha }}"
-          [[ -n "$BASE" ]] || BASE="HEAD^"
-          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
-            --path batch-common --path batch-trigger \
-            --path batch-worker/process --path batch-worker/dispatch
+          for module in batch-common batch-trigger batch-worker/process batch-worker/dispatch; do
+            report="$module/target/site/jacoco/jacoco.xml"
+            test -f "$report"
+            mkdir -p "ci-coverage/b1-main/$(dirname "$report")"
+            cp "$report" "ci-coverage/b1-main/$report"
+          done
+      - name: Upload primary coverage reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-b1-coverage-main
+          path: ci-coverage/b1-main/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: pr-gate-unit-it-b1-reports
+          name: pr-gate-unit-it-b1-main-reports
           path: |
             **/target/surefire-reports/**
           retention-days: 14
+
+  unit-it-b1-extra:
+    name: 'PR tests / Trigger and workers integration'
+    needs: changes
+    if: |
+      needs.changes.outputs.unit-b1-required == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+      - name: Install integration dependencies
+        run: ./mvnw install -pl batch-common,batch-test-support,batch-trigger,batch-worker/process,batch-worker/dispatch -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+      - name: Run selected integration scenarios for coverage
+        run: bash scripts/ci/run-pr-coverage-integration.sh b1
+      - name: Generate integration coverage reports
+        shell: bash
+        run: |
+          ./mvnw jacoco:report -pl batch-common,batch-trigger,batch-worker/process,batch-worker/dispatch -B
+          for module in batch-trigger batch-worker/process batch-worker/dispatch; do
+            report="$module/target/site/jacoco/jacoco.xml"
+            test -f "$report"
+            mkdir -p "ci-coverage/b1-extra/$(dirname "$report")"
+            cp "$report" "ci-coverage/b1-extra/$report"
+          done
+      - name: Upload integration coverage reports
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-b1-coverage-extra
+          path: ci-coverage/b1-extra/
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pr-gate-unit-it-b1-extra-reports
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+
+  unit-it-b1:
+    name: unit-it-b1
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
+    needs: [changes, unit-it-b1-main, unit-it-b1-extra]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Verify Trigger and worker shard results
+        env:
+          SCOPE_RESULT: ${{ needs.changes.result }}
+          REQUIRED: ${{ needs.changes.outputs.unit-b1-required }}
+          MAIN_RESULT: ${{ needs.unit-it-b1-main.result }}
+          EXTRA_RESULT: ${{ needs.unit-it-b1-extra.result }}
+        shell: bash
+        run: |
+          [[ "$SCOPE_RESULT" == "success" ]]
+          [[ "$MAIN_RESULT" == "success" || "$MAIN_RESULT" == "skipped" ]]
+          [[ "$EXTRA_RESULT" == "success" || "$EXTRA_RESULT" == "skipped" ]]
+          if [[ "$REQUIRED" == "true" ]]; then
+            [[ "$MAIN_RESULT" == "success" && "$EXTRA_RESULT" == "success" ]]
+          fi
+      - name: Checkout for combined coverage
+        if: needs.changes.outputs.unit-b1-required == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Download primary coverage reports
+        if: needs.changes.outputs.unit-b1-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-b1-coverage-main
+          path: ci-coverage/b1-main
+      - name: Download integration coverage reports
+        if: needs.changes.outputs.unit-b1-required == 'true'
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: pr-b1-coverage-extra
+          path: ci-coverage/b1-extra
+      - name: Verify combined changed-line coverage
+        if: needs.changes.outputs.unit-b1-required == 'true'
+        shell: bash
+        run: |
+          for module in batch-common batch-trigger batch-worker/process batch-worker/dispatch; do
+            report="$module/target/site/jacoco/jacoco.xml"
+            test -f "ci-coverage/b1-main/$report"
+            mkdir -p "$(dirname "$report")"
+            cp "ci-coverage/b1-main/$report" "$report"
+          done
+          BASE="${{ github.event.pull_request.base.sha }}"
+          [[ -n "$BASE" ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
+            --path batch-common --path batch-trigger --path batch-worker/process --path batch-worker/dispatch \
+            --extra-report batch-trigger=ci-coverage/b1-extra/batch-trigger/target/site/jacoco/jacoco.xml \
+            --extra-report batch-worker/process=ci-coverage/b1-extra/batch-worker/process/target/site/jacoco/jacoco.xml \
+            --extra-report batch-worker/dispatch=ci-coverage/b1-extra/batch-worker/dispatch/target/site/jacoco/jacoco.xml
 
   # ===========================================================================
   # Job 4a: worker-import + worker-export + worker-atomic
@@ -1269,7 +1379,7 @@ jobs:
   pr-test-summary:
     name: 'PR tests / consolidated report'
     if: always() && (github.event_name != 'pull_request' || github.event.pull_request.draft == false)
-    needs: [unit-it-a-main, unit-it-a-extra, unit-it-b1, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
+    needs: [unit-it-a-main, unit-it-a-extra, unit-it-b1, unit-it-b1-main, unit-it-b1-extra, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -1293,7 +1403,8 @@ jobs:
             --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
             --expect-artifact unit-it-a-main=pr-gate-unit-it-a-reports \
             --expect-artifact unit-it-a-extra=pr-gate-unit-it-a-extra-reports \
-            --expect-artifact unit-it-b1=pr-gate-unit-it-b1-reports \
+            --expect-artifact unit-it-b1-main=pr-gate-unit-it-b1-main-reports \
+            --expect-artifact unit-it-b1-extra=pr-gate-unit-it-b1-extra-reports \
             --expect-artifact unit-it-b2-workers=pr-gate-unit-it-b2-workers-reports \
             --expect-artifact unit-it-b2-console=pr-gate-unit-it-b2-console-reports \
             --expect-artifact unit-it-b2-console-extra=pr-gate-unit-it-b2-console-extra-reports \

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 用途：核验端到端分片的测试报告与实际执行情况。
+# 用途：核验 E2E 和显式选测分片的测试报告与实际执行情况。
 # 用法：bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔测试类>" <reports-dir>。
 # 守护端到端分片的实际执行情况。
 #
@@ -65,5 +65,5 @@ for selector in selectors.split(","):
         sys.exit(f"❌ 所选方法存在跳过: {cls}")
 if not seen:
     sys.exit("❌ 测试选择为空")
-print("✅ E2E 报告已验证，所选方法与执行结果一致")
+print("✅ 测试报告已验证，所选类和方法与执行结果一致")
 PY

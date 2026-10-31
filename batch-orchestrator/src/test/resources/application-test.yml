@@ -9,8 +9,8 @@ mybatis:
   # 即使 batch-defaults.yml 不在 classpath，也要保证测试可自包含运行
   mapper-locations: classpath*:mapper/*.xml
   configuration:
-    # 测试输出 SQL 日志到 stdout，便于排查
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 使用日志级别控制 SQL 明细，避免集成测试持续输出大量 stdout。
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
 
 batch:
   sla:
