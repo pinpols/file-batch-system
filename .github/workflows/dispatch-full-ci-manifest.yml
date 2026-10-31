@@ -26,6 +26,7 @@ jobs:
       actions: write
       contents: read
     steps:
+      # 否定缓存删除已登记基线后，按分支名重新派发，解析当时的远端 HEAD。
       - name: Dispatch full-ci-gate on the schema manifest fix branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
