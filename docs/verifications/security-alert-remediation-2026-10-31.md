@@ -4,7 +4,7 @@
 
 - 仓库：`pinpols/file-batch-system`（后端）；配对前端 `pinpols/batch-console` 的 4 条 shell 注入告警由独立 PR #347 处理，本记录不覆盖。
 - 扫描基线：`main` 提交 `28a69b9d57c567535b44a95607f244f3295d4ef8`（CodeQL 2.27.3，2026-10-31 04:56Z 分析，19 条结果）。
-- 处置分支：`fix/security-quality-alerts`（从 `origin/main` 创建的本机工作树 `~/.codex/worktrees/security-quality/file-batch-system`，未提交、未推送）。
+- 处置分支：`fix/security-quality-alerts`（本机工作树 `~/.codex/worktrees/security-quality/file-batch-system`）；提交 `aca410856`，PR [#1271](https://github.com/pinpols/file-batch-system/pull/1271)，后续状态以 PR 与 CI 实时结果为准。
 - 告警来源：`gh api repos/pinpols/file-batch-system/code-scanning/alerts?state=open`、`.../dependabot/alerts?state=open`。
 
 ## 告警清点
@@ -94,7 +94,8 @@
 | Python 锁文件 | `cd sdk/python && uv lock --check` | ✅ 通过，aiohttp 3.14.4 |
 | 文档/LOC 门禁 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-script-governance.py` | ✅ 5/5；LOC 快照（`docs/stats/loc-current-lean.md`）已按门禁重新生成 |
 | 13 条误报关闭 | `gh api -X PATCH repos/pinpols/file-batch-system/code-scanning/alerts/<编号> -f state=dismissed -f dismissed_reason="false positive" -f dismissed_comment=...` | ✅ 13/13 dismissed（#300–#308、#313–#316，2026-10-31 05:33–05:34Z，关闭评论含逐条依据） |
-| CodeQL 复扫 | 需 PR 触发 CodeQL（本机未安装 CodeQL CLI，未本地复现） | 未运行 |
+| PR 与 CI | PR #1271（head `aca410856`） | 已创建；required checks 状态以 PR 为准，不在本记录宣称通过 |
+| CodeQL 复扫 | 由 PR #1271 触发 CodeQL（本机未安装 CodeQL CLI，未本地复现） | 未验证，等待 CI |
 | Scorecard/Dependabot 关闭 | 需修复合入 `main` 后由平台下一次扫描刷新 | 未验证（不得提前宣称关闭） |
 
 ## 七、未运行与残余
@@ -102,4 +103,5 @@
 - 未运行完整单元/集成/E2E、SIM、BE acceptance、真实环境验证与远端 CI。
 - 13 条误报已由维护者账号 `pinpols` 于 2026-10-31 05:33–05:34Z 按具体编号以 `false positive` 关闭，关闭评论附本记录中的路径/防护依据；未批量操作、未修改校验逻辑。关闭后 `open` 的 CodeQL 仅剩 #309–#312 四条日志注入（由本分支修复，待合入 `main` 后下一次扫描自动关闭）。
 - 本记录中“误报”是代码与配置层面的判定；CodeQL 扫描的最终确认仍需 PR 上的 CodeQL 结果，若后续扫描因代码/规则变化重新出现，需重新核对，不能沿用本次结论。
+- PR #1271 已创建（base `main`，head `aca410856`），PR Gate/CodeQL 等 required checks 以 PR 实时状态为准；本记录不宣称 CI 通过或可合入。
 - 前端仓库的 4 条 CodeQL shell 注入与 4 条 npm Dependabot 告警不在本记录范围（PR #347 正在处理 shell 注入）。
