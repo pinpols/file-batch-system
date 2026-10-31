@@ -14,6 +14,8 @@
 
 - Rust SDK 与自托管 Worker 示例升级锁定 `libz-sys` 1.1.31、`webpki-roots` 1.0.11、`tokio` 1.54.1，修复 RUSTSEC-2026-0418/0381/0386 供应链告警。
 
+- Rust SDK 与自托管 Worker 示例继续升级 `rustls-webpki` 0.103.16，修复 RUSTSEC-2026-0382（Scorecard Vulnerabilities）。
+
 - Rust 自托管 Worker 示例读取认领响应中的实际参数，修复参数类型调整后的编译失败。
 
 - 两种内置导出数据插件的多分片统一使用哈希，避免各分片独立范围探测失败时混用策略导致重复或遗漏；旧区间配置暂不启用范围优化，性能容量后续验证。
