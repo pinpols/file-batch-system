@@ -96,3 +96,12 @@
 - 页面、状态仓库、导航和本地运行说明分别位于 `../batch-console/src/views`、`src/stores`、`src/constants/navigation.ts` 和 `README.md`。
 - 修改 `/api/console/**` 时，同步核对生成类型和受影响的 API 调用方。
 - 修改认证载荷或权限/导航契约时，检查对应的前端映射和状态仓库。
+
+## Cursor Cloud
+
+Cloud Agent 启动时会拉起 Docker 依赖和八个本地 Java 进程。JDK 21 已在基础镜像中，不要另装一套 JDK。
+
+- 依赖安装执行 `bash scripts/local/build-apps.sh`，可执行 jar 在 `build/runtime-jars/`。改 Java 代码后重新执行该命令；安装阶段打出来的 jar 对应构建所用的默认分支。
+- 启动阶段在没有 systemd 的虚拟机里启动 `dockerd`（存储驱动 `fuse-overlayfs`，iptables 使用 legacy），再执行 `bash scripts/local/start-all.sh`。八个 JVM 的堆限制为 `JAVA_OPTS=-Xmx384m -XX:MaxMetaspaceSize=256m`，避免按宿主机内存估算堆。
+- 控制台是 `http://127.0.0.1:18080`，种子账号见 `docs/runbook/local-development.md`。应用日志在 `logs/current/app/`。本地模板密钥的 WARN 会记为 UNKNOWN；启动不设置 `RUNTIME_WARNING_STRICT=1`。
+- 仓库 Python 脚本使用 `.venv`，依赖来自 `scripts/requirements.txt`。
