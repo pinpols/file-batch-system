@@ -7,6 +7,7 @@
 - catch-up 审批 E2E：把 TriggerRequest=`LAUNCHED` 纳入同一有界等待，避免在异步启动链完成前读到 `PROCESSING` 中间态。
 - 恢复锚点 Kafka offset 集成测试：拉长后台恢复扫描轮询间隔，避免 park 后的锚点立即被真实 launch 回收成 REJECTED，保持“稍后恢复”的 PENDING 断言确定。
 - 回退 #1274 误加到 `shouldConvergeCoverage_whenConfigurationAndSettlementRace` 的结算业务日变更：该变更让预置 `nextFire` occurrence 落入查询业务日，`selectCountSql` 恒返回 1 造成确定性失败；bounded-coverage 用例的 CUTOFF/SETTLED 偶发仍需单独定位，本次不改其业务日。
+- WorkerReportLost DISPATCH 恢复 E2E：launch 前隔离同租户其它 DISPATCH worker 并等待 Kafka 消费组 STABLE，避免 Full CI 共享库下 outbox 定向 topic 派给历史 worker、当前子进程永远收不到派发。
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 

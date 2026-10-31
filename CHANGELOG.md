@@ -12,6 +12,8 @@
 
 - 依赖等待被并发释放时，恢复器不再把已由同一 TriggerRequest 创建实例的请求覆盖为 REJECTED；修复“实例已启动、请求被拒”的状态不一致。
 
+- Full CI E2E：DISPATCH 业务提交后 REPORT 丢失恢复用例在 launch 前隔离同租户其它 worker 并等待 Kafka 消费组 STABLE，避免定向 topic 派给历史 worker 导致 API_PUSH/SMTP 断言超时。
+
 - 日志输出中的用户可控字段统一经 `LogSanitizer` 清理换行，覆盖进度事件订阅、RLS 会话上下文、Trigger 跳过与 Workflow 级联跳过日志；修复 CodeQL `java/log-injection` 告警。
 
 - Rust SDK 与自托管 Worker 示例升级锁定 `libz-sys` 1.1.31、`webpki-roots` 1.0.11、`tokio` 1.54.1，修复 RUSTSEC-2026-0418/0381/0386 供应链告警。
