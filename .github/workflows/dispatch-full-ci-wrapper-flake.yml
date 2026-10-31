@@ -1,0 +1,36 @@
+name: Dispatch full-ci for wrapper flake
+
+# 一次性辅助，只为让同仓 GITHUB_TOKEN 对 wrapper 缓存修复分支发出 workflow_dispatch。
+# 云代理令牌只有 actions:read，不能直接触发 full-ci-gate。
+# 本文件停在 cursor/dispatch-full-ci-1281-f836，不合并进 main。
+# 其他 PR 的 head 分支不匹配时 job 跳过，避免每次合入都再跑一遍全量门禁。
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dispatch-full-ci-wrapper-flake-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  dispatch-full-ci:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'cursor/dispatch-full-ci-1281-f836'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch full-ci-gate on the wrapper flake branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh workflow run full-ci-gate.yml --repo "${GH_REPO}" --ref cursor/fix-retired-wrapper-cache-flake-f836

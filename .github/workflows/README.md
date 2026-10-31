@@ -8,6 +8,7 @@
 |---|---|---|
 | [pr-gate.yml](pr-gate.yml) | 非草稿 PR → main、merge_group、手动 | 按变更范围并行执行静态治理、单测及定向集成测试分片和安全扫描；编排、Console 并行片分别合并覆盖率，汇总 Java 测试报告；static-checks 汇总静态分组 |
 | [full-ci-gate.yml](full-ci-gate.yml) | main push（有路径排除）、周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、并行 E2E、安全扫描；定时/手动补充测试质量分析。main-failure-triage 是本工作流内的失败归责 job，可写 PR 标签/评论或 Issue |
+| [dispatch-full-ci-wrapper-flake.yml](dispatch-full-ci-wrapper-flake.yml) | 仅 `cursor/dispatch-full-ci-1281-f836` 的同仓 PR opened/synchronize/reopened/ready_for_review | 一次性用同仓 GITHUB_TOKEN 对 `cursor/fix-retired-wrapper-cache-flake-f836` 发 full-ci-gate 的 workflow_dispatch；不写入业务数据，不合并进 main，其他 head 分支跳过 |
 | [codeql.yml](codeql.yml) | PR → main、main push（有路径排除）、周一 03:00 UTC | Java CodeQL；PR 使用无构建模式，main/定时使用编译和扩展查询；上传安全分析结果 |
 | [workflow-lint.yml](workflow-lint.yml) | workflow/action、Zizmor 配置或其 Python 工具依赖变更的 PR 和 main push | actionlint 与 zizmor 检查 Actions 语法和安全配置 |
 | [license-review.yml](license-review.yml) | main PR 中的 POM、许可脚本及本工作流变更 | 依赖许可证审查；覆盖范围按路径过滤，不能替代漏洞扫描 |
