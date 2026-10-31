@@ -344,6 +344,27 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
       }
     }
     JobTaskEntity latest = jobTaskMapper.selectById(TENANT, taskId);
+    JobPartitionEntity latestPartition = latest == null || latest.getJobPartitionId() == null
+        ? null
+        : jobPartitionMapper.selectById(TENANT, latest.getJobPartitionId());
+    Map<String, Object> workerRow = jdbcTemplate
+        .queryForList(
+            "select status, worker_group from batch.worker_registry where tenant_id = ? and worker_code = ?",
+            TENANT,
+            workerCode)
+        .stream()
+        .findFirst()
+        .orElse(Map.of());
+    Long activeJobs = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_instance where tenant_id = ? and instance_status in"
+            + " ('PLANNED','CREATED','WAITING','RUNNING','RETRYING')",
+        Long.class,
+        TENANT);
+    Long activePartitions = jdbcTemplate.queryForObject(
+        "select count(*) from batch.job_partition where tenant_id = ? and partition_status in"
+            + " ('WAITING','READY','RUNNING','RETRYING')",
+        Long.class,
+        TENANT);
     throw new AssertionError("task did not reach RUNNING within 20s: taskId="
         + taskId
         + ", workerCode="
@@ -351,6 +372,20 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         + ", lastClaimedStatus="
         + (claimed == null ? null : claimed.getTaskStatus())
         + ", persistedStatus="
-        + (latest == null ? null : latest.getTaskStatus()));
+        + (latest == null ? null : latest.getTaskStatus())
+        + ", taskAssignedWorker="
+        + (latest == null ? null : latest.getAssignedWorkerCode())
+        + ", partitionId="
+        + (latestPartition == null ? null : latestPartition.getId())
+        + ", partitionStatus="
+        + (latestPartition == null ? null : latestPartition.getPartitionStatus())
+        + ", partitionWorkerGroup="
+        + (latestPartition == null ? null : latestPartition.getWorkerGroup())
+        + ", workerRegistry="
+        + workerRow
+        + ", tenantActiveJobs="
+        + activeJobs
+        + ", tenantActivePartitions="
+        + activePartitions);
   }
 }
