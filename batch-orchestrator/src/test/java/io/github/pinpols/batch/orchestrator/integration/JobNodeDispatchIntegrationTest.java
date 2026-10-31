@@ -3957,7 +3957,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         .contains(secondInstanceId);
 
     // 启动空扫仍受最小持锁期保护；先确认真实锁已可用，再测提交后 kick，避免测试的长周期掩盖一次竞争。
-    await().atMost(Duration.ofSeconds(10)).until(() -> {
+    // 后台 waiting_partition_dispatch 扫描的 ShedLock lockAtMostFor=PT1M，CI 高峰期可能长时间持锁；
+    // 探针等待需覆盖持锁上限（1 分钟），否则慢环境会以 10s 超时误报。
+    await().atMost(Duration.ofSeconds(75)).until(() -> {
       LockConfiguration probeConfiguration = new LockConfiguration(
           Instant.now(), "waiting_partition_dispatch", Duration.ofSeconds(2), Duration.ZERO);
       Optional<SimpleLock> probe = lockProvider.lock(probeConfiguration);
@@ -3985,14 +3987,14 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectFinishedAtSql, Timestamp.class, firstInstanceId);
     assertThat(selectedFinishedAt).isNotNull();
     await()
-        .atMost(Duration.ofSeconds(5))
+        .atMost(Duration.ofSeconds(15))
         .untilAsserted(() -> assertThat(meterRegistry
                 .counter("batch.scheduler.waiting_dispatch.kick.requested")
                 .count())
             .as("a committed task outcome schedules a capacity-release kick")
             .isGreaterThan(requestedKicksBefore));
     await()
-        .atMost(Duration.ofSeconds(5))
+        .atMost(Duration.ofSeconds(15))
         .untilAsserted(() -> assertThat(meterRegistry
                 .counter("batch.scheduler.waiting_dispatch.kick.executed")
                 .count())

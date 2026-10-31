@@ -100,6 +100,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   void staleReportAfterReclaim_isRejectedByInvocationFence_andI2ResultWins() {
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    isolateSeedWorker(seed.workerCode());
 
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId(TENANT)
@@ -261,6 +262,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         "select count(*) from batch.outbox_event where tenant_id = ? and event_key = ?";
     WorkflowLaunchSeed seed = LaunchIntegrationFixture.prepareWorkflowLaunchWithWorker(
         jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+    isolateSeedWorker(seed.workerCode());
     var response = workflowRunLaunchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
@@ -310,6 +312,18 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     assertThat(jdbcTemplate.queryForMap(selectStepSql, TENANT, task.getId())).isEqualTo(beforeStep);
     assertThat(jdbcTemplate.queryForObject(selectEventCountSql, Long.class, TENANT, reclaimKey))
         .isZero();
+  }
+
+  /**
+   * 全量测试共享真实数据库时，历史用例残留的 ONLINE worker 可能被资源调度优先选中，
+   * 导致本用例用 seed.workerCode() claim 时因 assignedWorkerCode 不匹配而永久 READY。
+   * 本用例只依赖自己的 seed worker，因此在 launch 前把同租户其他 worker 置为 OFFLINE 隔离。
+   */
+  private void isolateSeedWorker(String workerCode) {
+    jdbcTemplate.update(
+        "update batch.worker_registry set status = 'OFFLINE' where tenant_id = ? and worker_code <> ?",
+        TENANT,
+        workerCode);
   }
 
   /** 复刻 lifecycle 测试的 CAS 抖动重试:延长重试 + 每拍刷新 worker 可见性,直至 task RUNNING。 */
