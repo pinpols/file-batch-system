@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.realtime;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleExecutionProgressConfiguration;
 import jakarta.annotation.PreDestroy;
@@ -123,7 +124,10 @@ public class ConsoleProgressSnapshotPublisher {
             key.event() + "-error",
             Map.of("reason", "SNAPSHOT_UNAVAILABLE"));
       } catch (RuntimeException unavailable) {
-        log.debug("progress event unavailable tenant={}, stream={}", key.tenant(), key.stream());
+        log.debug(
+            "progress event unavailable tenant={}, stream={}",
+            LogSanitizer.value(key.tenant()),
+            LogSanitizer.value(key.stream()));
       }
     }
   }

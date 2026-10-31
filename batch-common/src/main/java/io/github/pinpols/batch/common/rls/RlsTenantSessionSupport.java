@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.rls;
 
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -69,7 +70,7 @@ public final class RlsTenantSessionSupport {
       ps.setString(2, tenantId);
       ps.execute();
       if (log.isTraceEnabled()) {
-        log.trace("RLS set_config {} = {}", SESSION_VAR_NAME, tenantId);
+        log.trace("RLS set_config {} = {}", SESSION_VAR_NAME, LogSanitizer.value(tenantId));
       }
     } catch (SQLException e) {
       // SET LOCAL 失败意味着本事务没有数据库级租户隔离，必须阻断而不是降级放行。

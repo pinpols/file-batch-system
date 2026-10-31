@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowJoinMode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
@@ -337,9 +338,9 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       log.info(
           "cascade-skipped {} downstream node(s) of {} on workflow_run {}: {}",
           skipped.size(),
-          fromNodeCode,
-          workflowRunId,
-          skipped);
+          LogSanitizer.value(fromNodeCode),
+          LogSanitizer.value(workflowRunId),
+          LogSanitizer.value(skipped));
     }
     return skipped;
   }
