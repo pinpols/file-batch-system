@@ -359,7 +359,7 @@ PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `c
 
 PR 的编排集成场景拆为 `a` / `a-extra`，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。PR 的 Trigger 与 PROCESS/DISPATCH 测试也拆为单测及集成两片，由 `unit-it-b1` 汇合两片状态与覆盖率。Full CI 将编排耗时类按 `scripts/ci/test-shards/full-orchestrator-heavy.txt` 拆出，合并两片 JaCoCo 执行数据后保留完整覆盖率门槛；业务提交恢复场景也按方法拆片。实际总耗时仍受 runner 排队影响。
 
-PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
+PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。`download-artifact` 在只命中一个 artifact 时会把内容直接解到目标目录，此时若只有一个成功任务，这些报告记到该任务名下；多个成功任务仍要求各自的 artifact 目录。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
 
 SDK 契约工作流通过 `capture-sdk-test.sh` 保留五语言测试原始日志和真实退出码，由 `report-sdk-test-summary.py` 汇总各语言版本及独立的真实传输门禁。成功任务缺报告会失败，跳过和未执行单独显示；报告不把日志中的测试执行项伪装为统一用例计数。
 
@@ -686,7 +686,7 @@ python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
 
 ## `install-upstream-modules.sh`
 
-将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
+将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。`full-ci-gate` 与 `staging-gate` 在 `e2e-upstream-install` job 中**每 workflow run 执行一次**；各 E2E 分片 `needs` 该 job，并在 `setup-java` 之后用 `actions/cache` 按本次 `github.sha` 还原 `~/.m2/repository/io/github/pinpols`。`setup-java` 的 Maven cache 只按 pom 哈希，不能当作本次 reactor 产物。分片不使用 `restore-keys`；精确 key 未命中时该分片自行安装。矩阵 `max-parallel` 为 12。它保持 `batch-e2e-tests`
 排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的子构建中生成，不依赖上游预构建产物。对 Maven Central 的临时 5xx / 传输失败使用 Maven
 强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
 

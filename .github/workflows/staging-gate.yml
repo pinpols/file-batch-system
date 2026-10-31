@@ -61,17 +61,54 @@ jobs:
           retention-days: 14
 
   # ===========================================================================
-  # e2e-shard:全量 E2E 并发,无 tag 过滤(smoke + critical + regression 全跑)。
-  # 原六片保留历史基线；新增场景独立分片，实际耗时待 CI 测量。
+  # E2E 上游安装（单次）+ 分片矩阵（与 full-ci-gate 相同的 A/B 并发模型）。
   # ===========================================================================
+  e2e-upstream-install:
+    name: E2E upstream install
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      # setup-java 的 Maven cache 只按 pom 哈希覆盖整个 ~/.m2，其中可能含其他提交的 reactor jar。
+      # 先清掉本坐标，再用以往 SHA 预热；本次提交始终安装，缓存到 job 成功后才保存。
+      - name: Clear reactor artifacts before cache restore
+        shell: bash
+        run: |
+          repo="${HOME}/.m2/repository/io/github/pinpols"
+          case "$repo" in
+            /home/runner/.m2/repository/io/github/pinpols) rm -rf -- "$repo" ;;
+            *) echo "refuse to remove unexpected reactor cache path: ${repo}" >&2; exit 1 ;;
+          esac
+
+      - name: Restore E2E reactor ~/.m2 (warm start)
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.m2/repository/io/github/pinpols
+          key: staging-e2e-reactor-m2-${{ github.sha }}
+          restore-keys: |
+            staging-e2e-reactor-m2-
+
+      - name: Install upstream Maven modules (once per workflow run)
+        shell: bash
+        run: bash scripts/ci/install-upstream-modules.sh
+
   e2e-shard-full:
     name: 'E2E ${{ matrix.shard.id }} / ${{ matrix.shard.label }}'
+    needs: e2e-upstream-install
     runs-on: ubuntu-latest
     timeout-minutes: ${{ (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT') && 45 || 40 }}
     env:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     strategy:
       fail-fast: false
+      max-parallel: 12
       matrix:
         shard:
           - id: 1
@@ -192,6 +229,24 @@ jobs:
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
+      # 必须在 setup-java 之后还原。否则其 pom 哈希缓存会盖住本次 SHA 的 reactor，
+      # 分片看到旧 jar 就跳过安装。不用 restore-keys：前缀命中不是本次提交的产物。
+      - name: Clear reactor artifacts before cache restore
+        shell: bash
+        run: |
+          repo="${HOME}/.m2/repository/io/github/pinpols"
+          case "$repo" in
+            /home/runner/.m2/repository/io/github/pinpols) rm -rf -- "$repo" ;;
+            *) echo "refuse to remove unexpected reactor cache path: ${repo}" >&2; exit 1 ;;
+          esac
+
+      - name: Restore E2E reactor ~/.m2 (from upstream install)
+        id: reactor-m2
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.m2/repository/io/github/pinpols
+          key: staging-e2e-reactor-m2-${{ github.sha }}
+
       - name: Setup Python for Spark recovery scenarios
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
@@ -202,6 +257,11 @@ jobs:
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
         run: python3 scripts/local/spark-e2e-runtime.py --prepare
 
+      - name: Ensure upstream reactor artifacts in ~/.m2
+        if: steps.reactor-m2.outputs.cache-hit != 'true'
+        shell: bash
+        run: bash scripts/ci/install-upstream-modules.sh
+
       - name: Cleanup orphan testcontainers (pre-IT)
         shell: bash
         run: |
@@ -209,11 +269,6 @@ jobs:
             --format '{{.ID}} {{.Labels}}' | \
             awk '$0 !~ /reuse-hash/ {print $1}' | \
             xargs -r docker rm -f >/dev/null 2>&1 || true
-
-      - name: Install upstream modules to ~/.m2 (skip tests)
-        shell: bash
-        # 与 full-ci-gate 共用，避免依赖仓库临时 5xx 误报 staging/E2E 失败。
-        run: bash scripts/ci/install-upstream-modules.sh
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash
@@ -256,7 +311,7 @@ jobs:
   test-summary:
     name: 'Staging tests / consolidated report'
     if: always()
-    needs: [java-governance, e2e-shard-full]
+    needs: [java-governance, e2e-upstream-install, e2e-shard-full]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
