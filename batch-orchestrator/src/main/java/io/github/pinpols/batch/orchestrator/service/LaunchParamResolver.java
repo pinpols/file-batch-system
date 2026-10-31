@@ -89,7 +89,7 @@ public class LaunchParamResolver {
       return;
     }
     String descriptorJson = entity.descriptor();
-    if (EmptyChecks.isNull(descriptorJson) || EmptyChecks.isBlank(descriptorJson)) {
+    if (EmptyChecks.isBlank(descriptorJson)) {
       return;
     }
     Map<String, Object> defaults = parseDescriptorDefaults(descriptorJson);

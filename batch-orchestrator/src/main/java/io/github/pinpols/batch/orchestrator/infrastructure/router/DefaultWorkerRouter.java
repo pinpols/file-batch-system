@@ -26,9 +26,7 @@ public class DefaultWorkerRouter implements WorkerRouter {
   public WorkerRouteModel route(String tenantId, String jobCode, String stepCode) {
     WorkerRouteModel route = new WorkerRouteModel();
     route.setWorkerCode(tenantId + ":" + jobCode + ":" + stepCode);
-    String workerType = EmptyChecks.isNull(stepCode) || EmptyChecks.isBlank(stepCode)
-        ? "DEFAULT"
-        : stepCode.toUpperCase();
+    String workerType = EmptyChecks.isBlank(stepCode) ? "DEFAULT" : stepCode.toUpperCase();
     route.setWorkerType(workerType);
     route.setPriority(5);
     route.setAvailable(true);

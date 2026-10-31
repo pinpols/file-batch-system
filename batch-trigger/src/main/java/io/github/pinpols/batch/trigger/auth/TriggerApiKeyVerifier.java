@@ -47,7 +47,6 @@ public class TriggerApiKeyVerifier {
   public Optional<TriggerApiKeyPrincipal> authenticate(String rawKey, String tenantId) {
     boolean apiKeyCredentialsAreIncomplete = EmptyChecks.isNull(rawKey)
         || rawKey.length() < KEY_PREFIX_LENGTH
-        || EmptyChecks.isNull(tenantId)
         || EmptyChecks.isBlank(tenantId);
     if (apiKeyCredentialsAreIncomplete) {
       return Optional.empty();

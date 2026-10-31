@@ -24,13 +24,13 @@ public class JobDefinitionEntity {
   private List<JobDependencyRuleResponse> jobDependencyRules = List.of();
 
   public void setDependencyRulesJson(String value) {
-    jobDependencyRules = EmptyChecks.isNull(value) || EmptyChecks.isBlank(value)
+    jobDependencyRules = EmptyChecks.isBlank(value)
         ? List.of()
         : JsonUtils.fromJson(value, new TypeReference<List<JobDependencyRuleResponse>>() {});
   }
 
   public void setDependsOnJobCodesCsv(String value) {
-    dependsOnJobCodes = EmptyChecks.isNull(value) || EmptyChecks.isBlank(value)
+    dependsOnJobCodes = EmptyChecks.isBlank(value)
         ? List.of()
         : Arrays.stream(value.split(DEPENDENCY_CODE_DELIMITER))
             .map(String::trim)

@@ -252,10 +252,10 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       TriggerRequestEntity triggerRequest,
       TriggerLaunchPersistenceContext persistenceContext,
       boolean frozenWorkflowSnapshot) {
+    Long parentWorkflowRunId = triggerRequest.getParentWorkflowRunId();
+    String parentNodeCode = triggerRequest.getParentNodeCode();
     boolean parentWorkflowNodeIdentityIsIncomplete =
-        EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
-            || EmptyChecks.isNull(triggerRequest.getParentNodeCode())
-            || EmptyChecks.isBlank(triggerRequest.getParentNodeCode());
+        EmptyChecks.isNull(parentWorkflowRunId) || EmptyChecks.isBlank(parentNodeCode);
     if (parentWorkflowNodeIdentityIsIncomplete) {
       return false;
     }
@@ -264,8 +264,8 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
         triggerRequestIsValidParentWorkflowNodeLaunchParam =
             TriggerRequestIsValidParentWorkflowNodeLaunchParam.builder()
                 .tenantId(request.tenantId())
-                .parentWorkflowRunId(triggerRequest.getParentWorkflowRunId())
-                .parentNodeCode(triggerRequest.getParentNodeCode())
+                .parentWorkflowRunId(parentWorkflowRunId)
+                .parentNodeCode(parentNodeCode)
                 .existingChildJobInstanceId(
                     EmptyChecks.isNull(existingInstance) ? null : existingInstance.getId())
                 .frozenWorkflowSnapshot(frozenWorkflowSnapshot)

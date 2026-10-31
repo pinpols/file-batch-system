@@ -73,12 +73,10 @@ final class NodePartitionProgressCalculator {
     if (EmptyChecks.isNotBlank(payloadNodeCode)) {
       return payloadNodeCode;
     }
-    boolean workflowHasCurrentNode = EmptyChecks.isNotNull(workflowRun)
-        && EmptyChecks.isNotNull(workflowRun.getCurrentNodeCode())
-        && EmptyChecks.isNotBlank(workflowRun.getCurrentNodeCode());
-    if (workflowHasCurrentNode) {
-      Set<String> activeNodes =
-          TaskOutcomeStatePolicy.parseActiveNodes(workflowRun.getCurrentNodeCode());
+    String currentNodeCode =
+        EmptyChecks.isNull(workflowRun) ? null : workflowRun.getCurrentNodeCode();
+    if (EmptyChecks.isNotBlank(currentNodeCode)) {
+      Set<String> activeNodes = TaskOutcomeStatePolicy.parseActiveNodes(currentNodeCode);
       if (activeNodes.size() == 1) {
         return activeNodes.iterator().next();
       }

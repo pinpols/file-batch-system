@@ -87,7 +87,7 @@ public class PlatformProcessStagingGenerationCoordinator
       return mapper.selectCurrentStagingGeneration(
           processInvocationFenceCurrentStagingGenerationQuery);
     });
-    if (EmptyChecks.isNull(generationId) || EmptyChecks.isBlank(generationId)) {
+    if (EmptyChecks.isBlank(generationId)) {
       throw stateConflict();
     }
     return generationId;

@@ -246,11 +246,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
 
   private String resolveInitialPartitionStatus(
       SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
-    boolean partitionHasRecordedStatus = EmptyChecks.isNotNull(partitionPlan)
-        && EmptyChecks.isNotNull(partitionPlan.getPartitionStatus())
-        && EmptyChecks.isNotBlank(partitionPlan.getPartitionStatus());
-    if (partitionHasRecordedStatus) {
-      return partitionPlan.getPartitionStatus();
+    String recordedStatus =
+        EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionStatus();
+    if (EmptyChecks.isNotBlank(recordedStatus)) {
+      return recordedStatus;
     }
     return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
   }
@@ -297,13 +296,15 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
   /** 分发束和 fan-out 的渠道属于单个分区；普通分发仍回退到计划级渠道。 */
   private String resolveDownstreamChannelCode(
       SchedulePlan plan, SchedulePlan.PartitionPlan partitionPlan) {
-    boolean partitionHasExplicitDispatchTarget = EmptyChecks.isNotNull(plan)
-        && "DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
-        && EmptyChecks.isNotNull(partitionPlan)
-        && EmptyChecks.isNotBlank(partitionPlan.getTargetRef());
-    if (partitionHasExplicitDispatchTarget) {
-      return partitionPlan.getTargetRef();
+    if (EmptyChecks.isNull(plan)
+        || !"DISPATCH".equalsIgnoreCase(plan.getDefaultWorkerType())
+        || EmptyChecks.isNull(partitionPlan)) {
+      return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
     }
-    return EmptyChecks.isNull(plan) ? null : plan.getDownstreamChannelCode();
+    String targetRef = partitionPlan.getTargetRef();
+    if (EmptyChecks.isNotBlank(targetRef)) {
+      return targetRef;
+    }
+    return plan.getDownstreamChannelCode();
   }
 }

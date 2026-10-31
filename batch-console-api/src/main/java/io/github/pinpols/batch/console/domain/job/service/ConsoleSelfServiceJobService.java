@@ -53,14 +53,14 @@ public class ConsoleSelfServiceJobService {
   public String requestCompensation(
       CompensationParam param, String operator, String idempotencyKey) {
     String tenantId = tenantGuard.resolveTenant(param.tenantId());
-    boolean jobCompensationTargetIsInvalid = !"JOB".equalsIgnoreCase(param.compensationType())
-        || EmptyChecks.isNull(param.targetInstanceNo())
-        || EmptyChecks.isBlank(param.targetInstanceNo());
+    String targetInstanceNo = param.targetInstanceNo();
+    boolean jobCompensationTargetIsInvalid =
+        !"JOB".equalsIgnoreCase(param.compensationType()) || EmptyChecks.isBlank(targetInstanceNo);
     if (jobCompensationTargetIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
     List<JobInstanceEntity> matchingInstances =
-        jobInstanceMapper.selectByInstanceNos(tenantId, List.of(param.targetInstanceNo())).stream()
+        jobInstanceMapper.selectByInstanceNos(tenantId, List.of(targetInstanceNo)).stream()
             .filter(instance -> Objects.equals(instance.getJobCode(), param.jobCode()))
             .filter(instance -> {
               LocalDate instanceBizDate = instance.getBizDate();

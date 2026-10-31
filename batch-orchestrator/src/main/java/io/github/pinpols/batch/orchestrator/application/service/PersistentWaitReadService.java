@@ -38,7 +38,7 @@ public class PersistentWaitReadService {
   }
 
   private static String blankToNull(String value) {
-    return EmptyChecks.isNull(value) || EmptyChecks.isBlank(value) ? null : value;
+    return EmptyChecks.isBlank(value) ? null : value;
   }
 
   public record PersistentWaitPage(

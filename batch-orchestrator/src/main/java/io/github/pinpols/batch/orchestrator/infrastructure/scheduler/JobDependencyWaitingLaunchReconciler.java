@@ -58,7 +58,7 @@ public class JobDependencyWaitingLaunchReconciler {
       return;
     }
     List<String> tenantIds = tenantDirectoryMapper.selectRunnableTenantIds();
-    if (EmptyChecks.isNull(tenantIds) || EmptyChecks.isEmpty(tenantIds)) {
+    if (EmptyChecks.isEmpty(tenantIds)) {
       return;
     }
     for (String tenantId : tenantIds) {

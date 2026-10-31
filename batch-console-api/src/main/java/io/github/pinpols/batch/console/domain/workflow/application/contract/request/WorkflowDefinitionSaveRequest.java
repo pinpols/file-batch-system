@@ -53,7 +53,7 @@ public class WorkflowDefinitionSaveRequest {
 
   @AssertTrue(message = "workflow schedule expression or timezone is invalid")
   public boolean isScheduleConfigurationValid() {
-    if (EmptyChecks.isNotNull(timezone) && EmptyChecks.isNotBlank(timezone)) {
+    if (EmptyChecks.isNotBlank(timezone)) {
       try {
         ZoneId.of(timezone);
       } catch (RuntimeException exception) {
@@ -64,7 +64,7 @@ public class WorkflowDefinitionSaveRequest {
       return true;
     }
     if ("CRON".equals(scheduleType)) {
-      if (EmptyChecks.isNull(scheduleExpr) || EmptyChecks.isBlank(scheduleExpr)) {
+      if (EmptyChecks.isBlank(scheduleExpr)) {
         return false;
       }
       try {
@@ -76,7 +76,7 @@ public class WorkflowDefinitionSaveRequest {
       }
     }
     if ("FIXED_RATE".equals(scheduleType)) {
-      if (EmptyChecks.isNull(scheduleExpr) || EmptyChecks.isBlank(scheduleExpr)) {
+      if (EmptyChecks.isBlank(scheduleExpr)) {
         return false;
       }
       String expression = scheduleExpr.trim();

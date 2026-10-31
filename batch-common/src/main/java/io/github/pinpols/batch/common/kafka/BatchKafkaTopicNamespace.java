@@ -30,7 +30,7 @@ public final class BatchKafkaTopicNamespace {
   }
 
   private String apply(String name) {
-    if (EmptyChecks.isNull(name) || EmptyChecks.isBlank(name)) {
+    if (EmptyChecks.isBlank(name)) {
       throw new IllegalArgumentException("Kafka name must not be blank");
     }
     return EmptyChecks.isEmpty(Objects.requireNonNull(namespace)) ? name : namespace + "." + name;

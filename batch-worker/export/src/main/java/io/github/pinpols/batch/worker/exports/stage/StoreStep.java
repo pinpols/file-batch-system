@@ -169,7 +169,7 @@ public class StoreStep implements ExportStageStep {
     }
     Map<String, Object> record = fileRecords.loadFileRecordByStoragePath(
         context.getTenantId(), storageProperties.getBucket(), objectName);
-    if (EmptyChecks.isNull(record) || EmptyChecks.isEmpty(record)) {
+    if (EmptyChecks.isEmpty(record)) {
       return null;
     }
     if (!ExportArtifactIdentity.belongsToJob(context, record)) {

@@ -19,7 +19,7 @@ public record SdkCrossDayResult(
     if (EmptyChecks.isNull(resultVersionId) || resultVersionId <= 0) {
       throw new IllegalArgumentException("cross-day resultVersionId must be positive");
     }
-    if (EmptyChecks.isNull(businessKey) || EmptyChecks.isBlank(businessKey)) {
+    if (EmptyChecks.isBlank(businessKey)) {
       throw new IllegalArgumentException("cross-day businessKey is required");
     }
     if (EmptyChecks.isNull(versionNo) || versionNo <= 0) {

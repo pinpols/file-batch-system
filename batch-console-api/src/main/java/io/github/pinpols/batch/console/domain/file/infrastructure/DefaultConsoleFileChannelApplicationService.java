@@ -180,7 +180,7 @@ public class DefaultConsoleFileChannelApplicationService
   }
 
   private static String normalizeConfigJson(String configJson) {
-    if (EmptyChecks.isNull(configJson) || EmptyChecks.isBlank(configJson)) {
+    if (EmptyChecks.isBlank(configJson)) {
       return "{}";
     }
     try {

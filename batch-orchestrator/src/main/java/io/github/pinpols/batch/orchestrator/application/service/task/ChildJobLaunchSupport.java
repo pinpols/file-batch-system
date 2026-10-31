@@ -139,12 +139,13 @@ public class ChildJobLaunchSupport {
     if (isWaitingForBatchDay(response, workflowRun.getTenantId(), childRequestId)) {
       return 0;
     }
+    String childInstanceNo = EmptyChecks.isNull(response) ? null : response.instanceNo();
     Guard.require(
-        EmptyChecks.isNotNull(response) && !EmptyChecks.isBlank(response.instanceNo()),
+        EmptyChecks.isNotBlank(childInstanceNo),
         ResultCode.STATE_CONFLICT,
         "error.workflow.child_job_instance_missing");
-    JobInstanceEntity childInstance = jobMappers.jobInstanceMapper.selectByInstanceNo(
-        workflowRun.getTenantId(), response.instanceNo());
+    JobInstanceEntity childInstance =
+        jobMappers.jobInstanceMapper.selectByInstanceNo(workflowRun.getTenantId(), childInstanceNo);
     Guard.require(
         EmptyChecks.isNotNull(childInstance) && EmptyChecks.isNotNull(childInstance.getId()),
         ResultCode.STATE_CONFLICT,
@@ -162,8 +163,11 @@ public class ChildJobLaunchSupport {
     }
     TriggerRequestEntity rootRequest = jobMappers.triggerRequestMapper.selectById(
         workflowRun.getTenantId(), workflowRun.getTriggerRequestId());
-    if (EmptyChecks.isNotNull(rootRequest) && EmptyChecks.isNotBlank(rootRequest.getDedupKey())) {
-      return rootRequest.getDedupKey();
+    if (EmptyChecks.isNotNull(rootRequest)) {
+      String dedupKey = rootRequest.getDedupKey();
+      if (EmptyChecks.isNotBlank(dedupKey)) {
+        return dedupKey;
+      }
     }
     return idempotencyKey + ":child";
   }

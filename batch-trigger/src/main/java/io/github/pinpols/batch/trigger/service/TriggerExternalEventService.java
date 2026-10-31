@@ -170,29 +170,34 @@ final class TriggerExternalEventService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     ExternalEventLaunchRequest requestForValidation = command.request();
-    if (EmptyChecks.isNull(requestForValidation)
-        || EmptyChecks.isBlank(requestForValidation.getTenantId())
-        || EmptyChecks.isBlank(command.eventSource())) {
+    if (EmptyChecks.isNull(requestForValidation)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String eventSourceForLength = command.eventSource();
-    String trimmedEventSourceForLength = eventSourceForLength.trim();
-    if (trimmedEventSourceForLength.length() > 128) {
+    String tenantId = requestForValidation.getTenantId();
+    if (EmptyChecks.isBlank(tenantId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.getExternalEventCode())) {
+    String eventSource = command.eventSource();
+    if (EmptyChecks.isBlank(eventSource)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventCodeForLength = requestForValidation.getExternalEventCode();
-    String trimmedExternalEventCode = externalEventCodeForLength.trim();
+    String trimmedEventSource = eventSource.trim();
+    if (trimmedEventSource.length() > 128) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    }
+    String externalEventCode = requestForValidation.getExternalEventCode();
+    if (EmptyChecks.isBlank(externalEventCode)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    }
+    String trimmedExternalEventCode = externalEventCode.trim();
     if (trimmedExternalEventCode.length() > 128) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.getExternalEventId())) {
+    String externalEventId = requestForValidation.getExternalEventId();
+    if (EmptyChecks.isBlank(externalEventId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventIdForLength = requestForValidation.getExternalEventId();
-    String trimmedExternalEventId = externalEventIdForLength.trim();
+    String trimmedExternalEventId = externalEventId.trim();
     if (trimmedExternalEventId.length() > 256) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
@@ -204,22 +209,15 @@ final class TriggerExternalEventService {
     if (externalEventRequestIdentityIsIncomplete) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String eventSource = command.eventSource();
-    String normalizedEventSource = eventSource.trim();
-    if (!eventSource.equals(normalizedEventSource)) {
+    if (!eventSource.equals(trimmedEventSource)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }
-    ExternalEventLaunchRequest request = command.request();
-    String externalEventCode = request.getExternalEventCode();
-    String normalizedExternalEventCode = externalEventCode.trim();
-    if (!externalEventCode.equals(normalizedExternalEventCode)) {
+    if (!externalEventCode.equals(trimmedExternalEventCode)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }
-    String externalEventId = request.getExternalEventId();
-    String normalizedExternalEventId = externalEventId.trim();
-    if (!externalEventId.equals(normalizedExternalEventId)) {
+    if (!externalEventId.equals(trimmedExternalEventId)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }

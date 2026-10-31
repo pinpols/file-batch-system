@@ -58,8 +58,7 @@ public interface LaunchValidationService {
     }
 
     public String effectiveCalendarCode() {
-      if (EmptyChecks.isNotNull(workflowCalendarCode)
-          && EmptyChecks.isNotBlank(workflowCalendarCode)) {
+      if (EmptyChecks.isNotBlank(workflowCalendarCode)) {
         return workflowCalendarCode;
       }
       return EmptyChecks.isNull(jobDefinition) ? null : jobDefinition.calendarCode();

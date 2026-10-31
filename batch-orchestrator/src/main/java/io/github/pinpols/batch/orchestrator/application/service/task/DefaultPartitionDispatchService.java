@@ -380,8 +380,9 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
   }
 
   private String resolveSelectedWorkerId(SchedulePlan plan, JobPartitionEntity partition) {
-    if (EmptyChecks.isNotNull(partition) && EmptyChecks.isNotBlank(partition.getWorkerCode())) {
-      return partition.getWorkerCode();
+    String workerCode = EmptyChecks.isNull(partition) ? null : partition.getWorkerCode();
+    if (EmptyChecks.isNotBlank(workerCode)) {
+      return workerCode;
     }
     if (hasDefaultRoute(plan)) {
       return plan.getDefaultWorkerRoute().getWorkerCode();

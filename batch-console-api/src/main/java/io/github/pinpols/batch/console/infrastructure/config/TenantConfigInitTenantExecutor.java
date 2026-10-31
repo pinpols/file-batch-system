@@ -165,7 +165,7 @@ class TenantConfigInitTenantExecutor {
   }
 
   private static List<JobDefinitionSpec> copyJobSpecs(List<JobDefinitionSpec> source) {
-    if (EmptyChecks.isNull(source) || EmptyChecks.isEmpty(source)) {
+    if (EmptyChecks.isEmpty(source)) {
       return new ArrayList<>();
     }
     List<JobDefinitionSpec> copies = new ArrayList<>(source.size());

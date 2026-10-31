@@ -55,9 +55,7 @@ public final class TrailerControlRecord {
   /** {@code trailerTemplate.present=true} 时按分隔符切 trailer 行取声明值;空模板 / 非 present 返回空记录。 */
   public static TrailerControlRecord parse(
       String trailerLine, Map<String, Object> trailerTemplate) {
-    if (EmptyChecks.isNull(trailerLine)
-        || EmptyChecks.isNull(trailerTemplate)
-        || EmptyChecks.isEmpty(trailerTemplate)) {
+    if (EmptyChecks.isNull(trailerLine) || EmptyChecks.isEmpty(trailerTemplate)) {
       return new TrailerControlRecord(null, null);
     }
     boolean present = boolOr(trailerTemplate.get("present"), false);

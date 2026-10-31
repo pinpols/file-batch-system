@@ -83,15 +83,18 @@ public class SqlTransformComputeSqlValidator {
     if (selectStarMustBeRejected) {
       checkNoSelectStar(select);
     }
-    boolean schemaAllowlistMustBeEnforced = enforceSchemaAllowlist
-        && EmptyChecks.isNotNull(security)
-        && EmptyChecks.isNotEmpty(security.getAllowedSchemas());
-    if (schemaAllowlistMustBeEnforced) {
-      checkAllowedSchemas(statement, security.getAllowedSchemas());
+    List<String> allowedSchemas = null;
+    if (enforceSchemaAllowlist && EmptyChecks.isNotNull(security)) {
+      allowedSchemas = security.getAllowedSchemas();
     }
-    if (EmptyChecks.isNotNull(security)
-        && EmptyChecks.isNotEmpty(security.getForbiddenFunctions())) {
-      checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
+    boolean schemaAllowlistMustBeEnforced = EmptyChecks.isNotEmpty(allowedSchemas);
+    if (schemaAllowlistMustBeEnforced) {
+      checkAllowedSchemas(statement, allowedSchemas);
+    }
+    List<String> forbiddenFunctions =
+        EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
+    if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
+      checkNoForbiddenFunctions(statement, forbiddenFunctions);
     }
     // requireLimit 仅对主源 SQL (业务路径) 强制;VALIDATE 阶段读 process_staging 的检查 SQL 表本身已小,豁免。
     boolean mainSourceRequiresLimit =

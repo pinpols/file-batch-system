@@ -583,7 +583,7 @@ public class TaskDispatcher {
 
   /** 解析数据库中的 CLAIM 载荷；非空载荷格式错误时，任务必须安全失败。 */
   private Map<String, Object> parseClaimPayload(String payload) throws IOException {
-    if (EmptyChecks.isNull(payload) || EmptyChecks.isBlank(payload)) {
+    if (EmptyChecks.isBlank(payload)) {
       return Map.of();
     }
     Map<String, Object> parsed = CLAIM_PAYLOAD_MAPPER.readValue(payload, CLAIM_PAYLOAD_TYPE);
