@@ -37,8 +37,9 @@
 | RUSTSEC-2026-0418 | `libz-sys` | 1.1.29 / 1.1.29 | 1.1.31 / 1.1.31 | `>= 1.1.31` |
 | RUSTSEC-2026-0381 | `webpki-roots` | 1.0.9 / 1.0.8 | 1.0.11 / 1.0.11 | `>= 1.0.10`（或 0.26.11） |
 | RUSTSEC-2026-0386 | `tokio` | 1.53.1 / 1.52.3 | 1.54.1 / 1.54.1 | `>= 1.51.6`；`>=1.53.0` 需 `>= 1.53.3` |
+| RUSTSEC-2026-0382（跟进） | `rustls-webpki` | 0.103.15 / 0.103.15 | 0.103.16 / 0.103.16 | `>= 0.103.16` |
 
-（左/右分别为 `sdk/rust/Cargo.lock` 与 `examples/self-hosted-sdk/sample-tenant-worker-rust/Cargo.lock` 的修复前后版本；均通过 `cargo update -p libz-sys -p webpki-roots -p tokio` 在原有语义版本约束内升级，未改 `Cargo.toml`。）
+（左/右分别为 `sdk/rust/Cargo.lock` 与 `examples/self-hosted-sdk/sample-tenant-worker-rust/Cargo.lock` 的修复前后版本；均通过 `cargo update` 在原有语义版本约束内升级，未改 `Cargo.toml`。`rustls-webpki` 为 PR #1271 合入后 Scorecard 复扫发现的跟进项，见第八节。）
 
 `Vulnerabilities` 告警只能在修复合入 `main` 并由下一次 Scorecard 扫描后关闭，当前未关闭。
 
@@ -96,7 +97,7 @@
 | Python 锁文件 | `cd sdk/python && uv lock --check` | ✅ 通过，aiohttp 3.14.4 |
 | 文档/LOC 门禁 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-script-governance.py` | ✅ 5/5；LOC 快照（`docs/stats/loc-current-lean.md`）已按门禁重新生成 |
 | 13 条误报关闭 | `gh api -X PATCH repos/pinpols/file-batch-system/code-scanning/alerts/<编号> -f state=dismissed -f dismissed_reason="false positive" -f dismissed_comment=...` | ✅ 13/13 dismissed（#300–#308、#313–#316，2026-10-31 05:33–05:34Z，关闭评论含逐条依据） |
-| PR 与 CI | PR #1271 | 已创建；required checks 状态以 PR 为准，不在本记录宣称通过 |
+| PR 与 CI | PR #1271（squash 合并提交 `98bb81f5f`） | ✅ 已合入 main；35 项检查全部通过，合入后 CodeQL main 扫描将 #309–#312 标记为 `fixed` |
 | CodeQL 复扫 | 由 PR #1271 触发 CodeQL（本机未安装 CodeQL CLI，未本地复现） | 未验证，等待 CI |
 | Scorecard/Dependabot 关闭 | 需修复合入 `main` 后由平台下一次扫描刷新 | 未验证（不得提前宣称关闭） |
 
@@ -105,6 +106,14 @@
 - 未运行完整单元/集成/E2E、SIM、BE acceptance、真实环境验证与远端 CI。
 - 13 条误报已由维护者账号 `pinpols` 于 2026-10-31 05:33–05:34Z 按具体编号以 `false positive` 关闭，关闭评论附本记录中的路径/防护依据；未批量操作、未修改校验逻辑。关闭后 `open` 的 CodeQL 仅剩 #309–#312 四条日志注入（由本分支修复，待合入 `main` 后下一次扫描自动关闭）。
 - 本记录中“误报”是代码与配置层面的判定；CodeQL 扫描的最终确认仍需 PR 上的 CodeQL 结果，若后续扫描因代码/规则变化重新出现，需重新核对，不能沿用本次结论。
-- PR #1271 已创建（base `main`），PR Gate/CodeQL 等 required checks 以 PR 实时状态为准；本记录不宣称 CI 通过或可合入。
+- PR #1271 已 squash 合入 `main`（合并提交 `98bb81f5f`）；合入后 CodeQL main 扫描成功，#309–#312 已标记 `fixed`。#296 Scorecard 复扫更新为 RUSTSEC-2026-0382，由跟进 PR 修复。
 - PR CI 首次失败项为 `QuartzMisfireRecoveryIntegrationTest` 的时序波动（与本次日志字段清洗无关，重跑后通过）与 Console 差异覆盖率门禁（`ConsoleProgressSnapshotPublisher` 兜底日志分支，已补单测）；第二轮 b1 覆盖率门禁又报 `RlsTenantSessionSupport` 的 TRACE 行未覆盖，已补有效上下文 TRACE 单测。
 - 前端仓库的 4 条 CodeQL shell 注入与 4 条 npm Dependabot 告警不在本记录范围（PR #347 正在处理 shell 注入）。
+
+## 八、跟进：RUSTSEC-2026-0382（2026-10-31 15:00）
+
+- PR #1271 合入后，Scorecard 在 `main` `98bb81f5f` 重新扫描，`Vulnerabilities`（#296）从 3 条降为 1 条：`rustls-webpki < 0.103.16` 的 RUSTSEC-2026-0382。
+- 处理：两个 `Cargo.lock` 的 `rustls-webpki` 由 0.103.15 升级到 0.103.16（`cargo update -p rustls-webpki`，未改 `Cargo.toml`）。
+- 复核：对两个锁文件的 309 个 Rust 包执行 OSV `querybatch`；升级前仅 `rustls-webpki 0.103.15` 命中 RUSTSEC-2026-0382，升级后 0 命中。
+- 验证：`cd sdk/rust && cargo test` 96/96 通过；`cd examples/self-hosted-sdk/sample-tenant-worker-rust && cargo check` 通过。
+- #296 的关闭仍需跟进 PR 合入 `main` 后的下一次 Scorecard 扫描确认，本记录不提前宣称关闭。
