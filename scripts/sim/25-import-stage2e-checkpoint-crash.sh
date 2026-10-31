@@ -240,7 +240,7 @@ def state_row(rid):
         "instance_id": parts[0],
         "partition_id": parts[1],
         "pipeline_id": parts[2],
-        "marker": int(parts[3] or "0"),
+        "marker": int(parts[3].split(":")[0] or "0"),
         "processed": int(parts[4] or "0"),
         "completed": parts[5] == "true",
         "instance_status": parts[6],

@@ -178,9 +178,9 @@ run_case EXPORT EXPORT 'job_definition,file_template_config' 2
 run_case PROCESS PROCESS 'job_definition' 3
 run_case DISPATCH DISPATCH 'job_definition,file_channel_config' 4
 run_case ATOMIC ATOMIC 'job_definition' 5
-run_case WORKFLOW WORKFLOW 'job_definition,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge' 6
+run_case WORKFLOW WORKFLOW 'job_definition,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge,workflow_monitoring_policy' 6
 run_case SCHEDULE SCHEDULE 'business_calendar,batch_window,job_definition,job_monitoring_policy' 7
 run_case IMPORT+DISPATCH IMPORT+DISPATCH 'job_definition,file_channel_config,file_template_config' 8
-run_case ALL ALL 'business_calendar,batch_window,job_definition,job_monitoring_policy,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge' 9
+run_case ALL ALL 'business_calendar,batch_window,job_definition,job_monitoring_policy,file_channel_config,file_template_config,workflow_definition,workflow_node,workflow_edge,workflow_monitoring_policy' 9
 
 echo "==> ✅ 租户场景模板 SIM 完成:9 个生成/校验/预览用例;未 Apply 配置"

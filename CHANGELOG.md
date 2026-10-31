@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Sim 租户配置场景：WORKFLOW 与 ALL 场景模板断言补充 `workflow_monitoring_policy` sheet（#1265 起由 `ConfigPackageSheetSpecs` 正式纳入 WORKFLOW 场景）；stage2e checkpoint 崩溃场景按 `<行号>:<文件摘要>` 格式解析 LOAD `position_marker`，修复 marker 解析 `ValueError`。
+
 - 依赖等待被并发释放时，恢复器不再把已由同一 TriggerRequest 创建实例的请求覆盖为 REJECTED；修复“实例已启动、请求被拒”的状态不一致。
 
 - Full CI E2E：DISPATCH 业务提交后 REPORT 丢失恢复用例在 launch 前隔离同租户其它 worker 并等待 Kafka 消费组 STABLE，避免定向 topic 派给历史 worker 导致 API_PUSH/SMTP 断言超时。
