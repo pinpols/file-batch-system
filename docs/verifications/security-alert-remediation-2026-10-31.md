@@ -28,7 +28,7 @@
 | #310 | `batch-trigger/.../trigger/service/TriggerRequestPersistence.java` | `tenantId`、`workflowDefinitionId`、`fireTime` 日志参数经 `LogSanitizer.value` |
 | #309 | `batch-orchestrator/.../workflow/DefaultWorkflowDagService.java` | `fromNodeCode`、`workflowRunId`、`skipped` 日志参数经 `LogSanitizer.value` |
 
-保留了全部原字段、日志模板、级别与业务判断；只改变对外输出前的换行清洗。
+保留了全部原字段、日志模板、级别与业务判断；只改变对外输出前的换行清洗。另为 `ConsoleProgressSnapshotPublisher` 的“事件推送失败且错误推送也失败”兜底分支补充单测（`shouldLogSanitizedContext_whenErrorPublisherAlsoFails`），覆盖净化后的日志参数并满足 PR 差异覆盖率门禁。
 
 ## 二、已修复：供应链依赖（Scorecard `Vulnerabilities`，#296）
 
@@ -88,13 +88,14 @@
 |---|---|---|
 | Java 编译（含测试源码） | `./mvnw -T 1C -DskipTests test-compile`（本机新工作树，无既有 `target/`） | ✅ BUILD SUCCESS，02:30 |
 | 日志净化单测 | `./mvnw -pl batch-common -Dtest=LogSanitizerTest test` | ✅ 2 个测试通过，0 失败 |
+| 进度采样错误路径单测 | `./mvnw -pl batch-console-api -am -Dtest=ConsoleProgressSnapshotPublisherTest -Dsurefire.failIfNoSpecifiedTests=false test` | ✅ 4 个测试通过，0 失败（含新增净化分支） |
 | Java 格式 | `./mvnw -pl batch-common,batch-trigger,batch-orchestrator,batch-console-api spotless:check` | ✅ 4 个受影响模块通过 |
 | Rust SDK 单测 | `cd sdk/rust && cargo test` | ✅ 96 个测试通过（82 单测 + 1 constants + 4 contract + 9 runtime），0 失败 |
 | 示例工程检查 | `cd examples/self-hosted-sdk/sample-tenant-worker-rust && cargo check` | ✅ `Finished dev profile`，03:00 |
 | Python 锁文件 | `cd sdk/python && uv lock --check` | ✅ 通过，aiohttp 3.14.4 |
 | 文档/LOC 门禁 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-script-governance.py` | ✅ 5/5；LOC 快照（`docs/stats/loc-current-lean.md`）已按门禁重新生成 |
 | 13 条误报关闭 | `gh api -X PATCH repos/pinpols/file-batch-system/code-scanning/alerts/<编号> -f state=dismissed -f dismissed_reason="false positive" -f dismissed_comment=...` | ✅ 13/13 dismissed（#300–#308、#313–#316，2026-10-31 05:33–05:34Z，关闭评论含逐条依据） |
-| PR 与 CI | PR #1271（head `aca410856`） | 已创建；required checks 状态以 PR 为准，不在本记录宣称通过 |
+| PR 与 CI | PR #1271 | 已创建；required checks 状态以 PR 为准，不在本记录宣称通过 |
 | CodeQL 复扫 | 由 PR #1271 触发 CodeQL（本机未安装 CodeQL CLI，未本地复现） | 未验证，等待 CI |
 | Scorecard/Dependabot 关闭 | 需修复合入 `main` 后由平台下一次扫描刷新 | 未验证（不得提前宣称关闭） |
 
@@ -103,5 +104,6 @@
 - 未运行完整单元/集成/E2E、SIM、BE acceptance、真实环境验证与远端 CI。
 - 13 条误报已由维护者账号 `pinpols` 于 2026-10-31 05:33–05:34Z 按具体编号以 `false positive` 关闭，关闭评论附本记录中的路径/防护依据；未批量操作、未修改校验逻辑。关闭后 `open` 的 CodeQL 仅剩 #309–#312 四条日志注入（由本分支修复，待合入 `main` 后下一次扫描自动关闭）。
 - 本记录中“误报”是代码与配置层面的判定；CodeQL 扫描的最终确认仍需 PR 上的 CodeQL 结果，若后续扫描因代码/规则变化重新出现，需重新核对，不能沿用本次结论。
-- PR #1271 已创建（base `main`，head `aca410856`），PR Gate/CodeQL 等 required checks 以 PR 实时状态为准；本记录不宣称 CI 通过或可合入。
+- PR #1271 已创建（base `main`），PR Gate/CodeQL 等 required checks 以 PR 实时状态为准；本记录不宣称 CI 通过或可合入。
+- 首次 PR CI 的失败项为：`QuartzMisfireRecoveryIntegrationTest` 的时序波动（与本次日志字段清洗无关，需重跑确认）以及 Console 差异覆盖率门禁未覆盖 `ConsoleProgressSnapshotPublisher` 的兜底日志分支（已补充上述单测）。
 - 前端仓库的 4 条 CodeQL shell 注入与 4 条 npm Dependabot 告警不在本记录范围（PR #347 正在处理 shell 注入）。
