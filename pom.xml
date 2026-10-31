@@ -80,7 +80,7 @@
         <spring-retry.version>2.0.13</spring-retry.version>
         <!-- OTel Logback appender 必须与 Spring Boot 4.1 管理的 OTel 1.62 API 对齐；
              2.28.0-alpha 对应 API 1.62，后续版本会要求更高 API，不能单独滚动。 -->
-        <opentelemetry-instrumentation.version>2.28.0-alpha</opentelemetry-instrumentation.version>
+        <opentelemetry-instrumentation.version>2.33.1-alpha</opentelemetry-instrumentation.version>
         <!-- ArchUnit:守护 docs/agent-baseline.md 硬性架构与编码规约(ZoneId / Charset / 模块边界)。
              仅用于 test scope,不进运行时 jar。 -->
         <archunit.version>1.5.1</archunit.version>
