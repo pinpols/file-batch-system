@@ -905,16 +905,22 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Restore E2E reactor ~/.m2 (pre-install)
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      # setup-java 的 Maven cache 只按 pom 哈希覆盖整个 ~/.m2，其中可能含其他提交的 reactor jar。
+      # 先清掉本坐标，再用以往 SHA 预热；本次提交始终安装，缓存到 job 成功后才保存。
+      - name: Clear reactor artifacts before cache restore
+        shell: bash
+        run: rm -rf "$HOME/.m2/repository/io/github/pinpols"
+
+      - name: Restore E2E reactor ~/.m2 (warm start)
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/io/github/pinpols
           key: full-e2e-reactor-m2-${{ github.sha }}
           restore-keys: |
             full-e2e-reactor-m2-
-
-      - name: Setup build environment
-        uses: ./.github/actions/setup-build-env
 
       - name: Install upstream Maven modules (once per workflow run)
         shell: bash
@@ -1052,16 +1058,21 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+
+      # 必须在 setup-java 之后还原。否则其 pom 哈希缓存会盖住本次 SHA 的 reactor，
+      # 分片看到旧 jar 就跳过安装。不用 restore-keys：前缀命中不是本次提交的产物。
+      - name: Clear reactor artifacts before cache restore
+        shell: bash
+        run: rm -rf "$HOME/.m2/repository/io/github/pinpols"
+
       - name: Restore E2E reactor ~/.m2 (from upstream install)
+        id: reactor-m2
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
           path: ~/.m2/repository/io/github/pinpols
           key: full-e2e-reactor-m2-${{ github.sha }}
-          restore-keys: |
-            full-e2e-reactor-m2-
-
-      - name: Setup build environment
-        uses: ./.github/actions/setup-build-env
 
       - name: Setup Python for Spark recovery scenarios
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
@@ -1074,12 +1085,9 @@ jobs:
         run: python3 scripts/local/spark-e2e-runtime.py --prepare
 
       - name: Ensure upstream reactor artifacts in ~/.m2
+        if: steps.reactor-m2.outputs.cache-hit != 'true'
         shell: bash
-        run: |
-          marker="$HOME/.m2/repository/io/github/pinpols/batch/batch-orchestrator/1.0.0/batch-orchestrator-1.0.0.jar"
-          if [[ ! -f "$marker" ]]; then
-            bash scripts/ci/install-upstream-modules.sh
-          fi
+        run: bash scripts/ci/install-upstream-modules.sh
 
       - name: Run E2E shard ${{ matrix.shard.id }} (${{ matrix.shard.label }})
         shell: bash

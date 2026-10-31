@@ -132,7 +132,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
 | **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 固定分片并发执行；编排长类按清单独立运行并合并 JaCoCo 执行数据后检查覆盖率，目标模块执行 unit + IT |
-| **E2E suite** | 不运行，由合入后门禁回退 | 49 个测试类拆为 20 shard；单次 `e2e-upstream-install` + 分片 `max-parallel: 12`；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置 |
+| **E2E suite** | 不运行，由合入后门禁回退 | 49 个测试类拆为 20 shard；单次 `e2e-upstream-install` + 分片 `max-parallel: 12`；分片在 setup-java 之后按本次 SHA 复用 reactor cache，精确 key 未命中再安装；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置 |
 | **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
