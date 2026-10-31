@@ -107,25 +107,6 @@ def parse_job_results(path: Path | None) -> dict[str, str]:
             for name, value in json.loads(path.read_text(encoding="utf-8")).items()}
 
 
-def attribute_single_flat_download(jobs: dict[str, str], artifacts: dict[str, object],
-                                  required: dict[str, str]) -> dict[str, object]:
-    """把唯一成功任务的扁平解压报告记到它的 artifact 名下。
-
-    actions/download-artifact 在 pattern 只命中一个 artifact 时直接解到 path，
-    第一层目录是模块名而不是 artifact 名。多个成功任务时无法判断归属，保持原样。
-    """
-    successful = [job for job in required if jobs.get(job) == "success"]
-    if len(successful) != 1 or not artifacts:
-        return artifacts
-    expected_names = set(required.values())
-    if expected_names & set(artifacts):
-        return artifacts
-    merged: Counter = Counter()
-    for values in artifacts.values():
-        merged.update(values)
-    return {required[successful[0]]: dict(merged)}
-
-
 def missing_artifacts(jobs: dict[str, str], artifacts: dict[str, object], required: dict[str, str]) -> list[str]:
     return [f"{job}: {artifact}" for job, artifact in required.items()
             if jobs.get(job) == "success" and artifact not in artifacts]
@@ -271,8 +252,6 @@ def main() -> int:
         if not separator or not job or not artifact or job in required:
             parser.error(f"无效或重复的报告映射：{entry}")
         required[job] = artifact
-    report["tests"]["artifacts"] = attribute_single_flat_download(
-        report["jobs"], report["tests"]["artifacts"], required)
     report["missingReports"] = missing_artifacts(report["jobs"], report["tests"]["artifacts"], required)
     e2e_options = (args.expect_e2e_workflow, args.expect_e2e_job, args.expect_e2e_prefix)
     if any(e2e_options) and not all(e2e_options):

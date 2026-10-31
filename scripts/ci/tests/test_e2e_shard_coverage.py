@@ -8,8 +8,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
-
 
 class E2eShardCoverageTest(unittest.TestCase):
     def test_filesystem_backend_runs_in_its_own_configured_shard(self):
@@ -21,29 +19,6 @@ class E2eShardCoverageTest(unittest.TestCase):
                 self.assertIn("FilesystemBackendPipelineE2eIT", shard)
                 self.assertIn('"$TESTS" == "FilesystemBackendPipelineE2eIT"', workflow)
                 self.assertIn('-Dbatch.test.storage.backend=filesystem', workflow)
-
-    def test_each_shard_installs_upstream_modules(self):
-        root = Path(__file__).resolve().parents[3]
-        cases = (
-            ("full-ci-gate.yml", "e2e-shard"),
-            ("staging-gate.yml", "e2e-shard-full"),
-        )
-        for filename, shard_name in cases:
-            with self.subTest(workflow=filename):
-                document = yaml.safe_load(
-                    (root / ".github/workflows" / filename).read_text(encoding="utf-8")
-                )
-                jobs = document["jobs"]
-                self.assertNotIn("e2e-upstream-install", jobs)
-                shard = jobs[shard_name]
-                self.assertNotIn("max-parallel", shard["strategy"])
-                install_steps = [
-                    step
-                    for step in shard["steps"]
-                    if "install-upstream-modules.sh" in (step.get("run") or "")
-                ]
-                self.assertEqual(1, len(install_steps))
-                self.assertNotIn("if", install_steps[0])
 
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

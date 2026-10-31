@@ -11,9 +11,6 @@
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
-- PR 测试汇总：`download-artifact` 只命中一份报告时会直接解到目标目录。仅一个成功任务时，把这些报告记到该任务上，避免只跑 Java 治理守卫的 CI 变更被误判为缺少报告。
-- 撤回 Full CI / Staging 的 E2E 上游单次安装与 `max-parallel: 12`。合入后的 [full-ci-gate 41207233688](https://github.com/pinpols/file-batch-system/actions/runs/41207233688) 精确命中约 9 MB 的 SHA reactor 缓存并跳过安装，E2E 7 / E2E 10 仍在自行编译 `batch-worker-import` / `batch-worker-export` 时失败。各分片重新每次执行 `install-upstream-modules.sh`，不再删除 runner 上的 `io/github/pinpols`，filesystem-remove 基线回到 full 4、staging 1。单份测试报告的汇总修复保留。
-
 - Full CI 剩余时序测试稳定化：JobNodeDispatch 的 schedule 次数断言改为至少两次（后台 waiting-partition 重评估属合法追加）；Sensor 重启的 deadline 探测等待 30s→90s；bounded-coverage E2E 的结算业务日改到次日，避免首批 coverage 上限恰好覆盖完整首日导致 CUTOFF/SETTLED 竞态。
 
 - Full CI E2E 稳定性：WorkerReportLost 系列在派发前显式等待独立 Worker 的 Kafka 消费组完成分区分配，避免消费者入组前消息按 latest 跳过导致整段等待超时；并放宽报告等待窗口以适配低配 CI。
