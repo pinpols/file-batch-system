@@ -2,9 +2,18 @@ package io.github.pinpols.batch.common.rls;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /**
  * 单测 {@link RlsTenantSessionSupport} 的纯函数路径——形态白名单(P2-2 纵深防御层)。
@@ -33,6 +42,29 @@ class RlsTenantSessionSupportTest {
           .isInstanceOf(IllegalArgumentException.class)
           .hasMessageContaining("invalid shape");
     } finally {
+      RlsTenantContextHolder.clear();
+    }
+  }
+
+  @Test
+  @DisplayName("有效租户上下文写入会话变量，并在 TRACE 下记录净化后的租户")
+  void applyWithValidTenant_writesSessionVariableAndLogsSanitizedTenant() throws Exception {
+    DataSource dataSource = mock(DataSource.class);
+    Connection connection = mock(Connection.class);
+    PreparedStatement statement = mock(PreparedStatement.class);
+    when(dataSource.getConnection()).thenReturn(connection);
+    when(connection.prepareStatement("SELECT set_config(?, ?, true)")).thenReturn(statement);
+    Logger logger = (Logger) LoggerFactory.getLogger(RlsTenantSessionSupport.class);
+    Level originalLevel = logger.getLevel();
+    RlsTenantContextHolder.set("tenant-01");
+    try {
+      logger.setLevel(Level.TRACE);
+      RlsTenantSessionSupport.applyIfPresent(dataSource);
+      verify(statement).setString(1, RlsTenantSessionSupport.SESSION_VAR_NAME);
+      verify(statement).setString(2, "tenant-01");
+      verify(statement).execute();
+    } finally {
+      logger.setLevel(originalLevel);
       RlsTenantContextHolder.clear();
     }
   }

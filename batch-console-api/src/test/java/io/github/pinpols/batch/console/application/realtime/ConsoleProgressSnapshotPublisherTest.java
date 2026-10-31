@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.application.realtime;
 
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
@@ -108,6 +110,29 @@ class ConsoleProgressSnapshotPublisherTest {
     verify(events)
         .publishChanged(
             "ta", "daily-2040", "daily-progress-error", Map.of("reason", "SNAPSHOT_UNAVAILABLE"));
+    publisher.stop();
+  }
+
+  @Test
+  @DisplayName("错误推送也失败时记录净化后的上下文且不向调用方抛出")
+  void shouldLogSanitizedContext_whenErrorPublisherAlsoFails() {
+    doReturn(future)
+        .when(scheduler)
+        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+    when(subscriptions.subscribe("ta\nforged", "daily-2040\nforged", null, null, null))
+        .thenReturn(emitter);
+    publisher.subscribe(
+        "ta\nforged", "daily-2040\nforged", "daily-progress", 0, () -> 1, value -> value);
+    var sample = ArgumentCaptor.forClass(Runnable.class);
+    verify(scheduler).scheduleWithFixedDelay(sample.capture(), any(Duration.class));
+    doThrow(new IllegalStateException("sensitive"))
+        .when(events)
+        .publishChanged("ta\nforged", "daily-2040\nforged", "daily-progress", 1);
+    doThrow(new IllegalStateException("sensitive"))
+        .when(events)
+        .publishChanged(
+            eq("ta\nforged"), eq("daily-2040\nforged"), eq("daily-progress-error"), any());
+    assertThatCode(() -> sample.getValue().run()).doesNotThrowAnyException();
     publisher.stop();
   }
 }
