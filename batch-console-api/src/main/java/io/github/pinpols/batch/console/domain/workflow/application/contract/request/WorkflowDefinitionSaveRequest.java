@@ -53,7 +53,7 @@ public class WorkflowDefinitionSaveRequest {
 
   @AssertTrue(message = "workflow schedule expression or timezone is invalid")
   public boolean isScheduleConfigurationValid() {
-    if (EmptyChecks.isNotNull(timezone) && EmptyChecks.isNotBlank(timezone)) {
+    if (EmptyChecks.isNotBlank(timezone)) {
       try {
         ZoneId.of(timezone);
       } catch (RuntimeException exception) {

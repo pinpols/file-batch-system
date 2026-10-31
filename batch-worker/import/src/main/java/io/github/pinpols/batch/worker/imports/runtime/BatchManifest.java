@@ -35,7 +35,7 @@ public record BatchManifest(
     String generatedAt) {
 
   public boolean hasRetiredJobTarget() {
-    return EmptyChecks.isNotNull(jobCode) && EmptyChecks.isNotBlank(jobCode);
+    return EmptyChecks.isNotBlank(jobCode);
   }
 
   /**

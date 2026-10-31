@@ -1,5 +1,13 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-10-31：同一取值的重复判空再收敛
+
+上一节只处理简单标识符。本轮处理同一 getter 或访问器被判空两次的 20 处：先取一次局部变量，再交给 `isBlank` 或 `isEmpty`。通过检查后还会使用该值时，后续也用这份局部变量。`WorkflowRunExecutionSnapshot.from`、启动请求校验、`quartzIdentity` 和冻结图 `nodes()` 仍先确认接收方非空，再调用 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝，空白字符串保持原口径。
+
+另外 10 处已经是同一简单值或已绑定 getter 的 `isNotNull(x) && isNotBlank(x)`、`isNotNull(x) && !isBlank(x)`，收成 `isNotBlank(x)`。接收方和字段不是同一表达式的组合保持原样。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 291 项、0 失败；`PlatformHttpClientTest` 另有 1 项跳过。覆盖 `NamespacedObjectStoreTest` 3、`QuartzLaunchJobTest` 12、`TriggerSchedulerFacadeTest` 25、`PlatformHttpClientTest` 15、`BatchDayReplayServiceTest` 31、`DefaultPartitionLifecycleServiceTest` 19、`NodePartitionProgressCalculatorTest` 3、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunExecutionSnapshotTest` 11、`DefaultLaunchValidationServiceTest` 16、`DefaultWorkerRegistryServiceTest` 35、`JobDependencyWaitingLaunchServiceTest` 69、`BatchManifestTest` 9、`DefaultConsoleJobApprovalServiceWorkflowTest` 14、`ConsoleSelfServiceJobServiceTest` 5、`WorkflowExecutionGraphAssemblerTest` 9、`TenantConfigPackageRowProjectionsMonitoringPolicyTest` 4。同名 Worker Core 的 `DefaultWorkerRegistryServiceTest` 7 项也通过，该类未改。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
 ## 2026-10-31：简单变量重复判空收敛
 
 2026-10-28 扫描列出的 71 处 `EmptyChecks.isNull(x) || isBlank/isEmpty(x)` 都是同一简单标识符。`isBlank` 与 `isEmpty` 的各重载已经把 null 视为空，两段判断结果相同。现只保留后一段调用。null 集合仍在进入 `size()` 或 `stream()` 之前返回，短路顺序保持。

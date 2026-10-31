@@ -246,11 +246,10 @@ public class DefaultPartitionLifecycleService implements PartitionLifecycleServi
 
   private String resolveInitialPartitionStatus(
       SchedulePlan.PartitionPlan partitionPlan, String initialStatus) {
-    boolean partitionHasRecordedStatus = EmptyChecks.isNotNull(partitionPlan)
-        && EmptyChecks.isNotNull(partitionPlan.getPartitionStatus())
-        && EmptyChecks.isNotBlank(partitionPlan.getPartitionStatus());
-    if (partitionHasRecordedStatus) {
-      return partitionPlan.getPartitionStatus();
+    String recordedStatus =
+        EmptyChecks.isNull(partitionPlan) ? null : partitionPlan.getPartitionStatus();
+    if (EmptyChecks.isNotBlank(recordedStatus)) {
+      return recordedStatus;
     }
     return EmptyChecks.isBlank(initialStatus) ? PartitionStatus.CREATED.code() : initialStatus;
   }

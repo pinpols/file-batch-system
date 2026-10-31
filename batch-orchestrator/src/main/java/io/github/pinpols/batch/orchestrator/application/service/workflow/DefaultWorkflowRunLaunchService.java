@@ -195,9 +195,9 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       rejectIfUnprepared(request);
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
     }
-    String traceId = EmptyChecks.isNull(request.traceId()) || EmptyChecks.isBlank(request.traceId())
-        ? IdGenerator.newTraceId()
-        : request.traceId();
+    String requestedTraceId = request.traceId();
+    String traceId =
+        EmptyChecks.isBlank(requestedTraceId) ? IdGenerator.newTraceId() : requestedTraceId;
     if (EmptyChecks.isNotNull(capacitySnapshot)) {
       traceId = capacitySnapshot.traceId();
     }
@@ -680,13 +680,16 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   }
 
   private void validateRequest(LaunchRequest request) {
-    boolean requiredLaunchFieldsAreInvalid = EmptyChecks.isNull(request)
-        || EmptyChecks.isNull(request.tenantId())
-        || EmptyChecks.isBlank(request.tenantId())
-        || EmptyChecks.isNull(request.requestId())
-        || EmptyChecks.isBlank(request.requestId())
-        || EmptyChecks.isNull(request.workflowDefinitionId())
-        || request.workflowDefinitionId() <= 0
+    if (EmptyChecks.isNull(request)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");
+    }
+    String tenantId = request.tenantId();
+    String requestId = request.requestId();
+    Long workflowDefinitionId = request.workflowDefinitionId();
+    boolean requiredLaunchFieldsAreInvalid = EmptyChecks.isBlank(tenantId)
+        || EmptyChecks.isBlank(requestId)
+        || EmptyChecks.isNull(workflowDefinitionId)
+        || workflowDefinitionId <= 0
         || EmptyChecks.isNull(request.bizDate());
     if (requiredLaunchFieldsAreInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.request_body_required");

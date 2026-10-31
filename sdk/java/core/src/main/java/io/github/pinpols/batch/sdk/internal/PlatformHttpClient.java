@@ -179,7 +179,7 @@ public class PlatformHttpClient {
         .header("X-Batch-Tenant-Id", config.getTenantId())
         .post(RequestBody.create(payload, JSON));
     String apiKey = config.getApiKey();
-    if (EmptyChecks.isNotNull(apiKey) && !EmptyChecks.isBlank(apiKey)) {
+    if (EmptyChecks.isNotBlank(apiKey)) {
       req.header("X-Batch-Api-Key", apiKey);
       // 请求签名(方案 A,opt-in):HMAC + 时间戳 + nonce 防重放;须服务端 batch.request-signing.enabled 配合。
       if (config.isRequestSigningEnabled()) {

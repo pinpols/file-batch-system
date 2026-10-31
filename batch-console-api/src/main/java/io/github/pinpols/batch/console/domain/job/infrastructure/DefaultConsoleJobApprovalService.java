@@ -134,14 +134,14 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), 128);
     LocalDate parsedBizDate = ops.parseBizDate(bizDate);
     String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
-    List<String> requested =
-        EmptyChecks.isNull(request.getJobCodes()) || EmptyChecks.isEmpty(request.getJobCodes())
-            ? null
-            : request.getJobCodes().stream()
-                .filter(ops::hasText)
-                .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
-                .distinct()
-                .toList();
+    List<String> requestedJobCodes = request.getJobCodes();
+    List<String> requested = EmptyChecks.isEmpty(requestedJobCodes)
+        ? null
+        : requestedJobCodes.stream()
+            .filter(ops::hasText)
+            .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
+            .distinct()
+            .toList();
     String requestJson =
         JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
     BatchDayCatchUpOperation existing = operationStore.find(tenantId, idempotencyKey, requestJson);

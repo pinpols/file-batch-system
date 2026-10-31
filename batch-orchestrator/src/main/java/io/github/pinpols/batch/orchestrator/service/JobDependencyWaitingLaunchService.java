@@ -410,9 +410,7 @@ public class JobDependencyWaitingLaunchService {
     BusinessCalendarEntity calendar = EmptyChecks.isBlank(calendarCode)
         ? null
         : businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-    boolean missingCalendar = EmptyChecks.isNotNull(calendarCode)
-        && EmptyChecks.isNotBlank(calendarCode)
-        && EmptyChecks.isNull(calendar);
+    boolean missingCalendar = EmptyChecks.isNotBlank(calendarCode) && EmptyChecks.isNull(calendar);
     return rules.stream()
         .map(rule -> {
           if (!JobDependencyRule.PREVIOUS_BIZ_DAY.equals(rule.bizDateAlignment())) {
