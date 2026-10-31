@@ -73,6 +73,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Restore E2E reactor ~/.m2 (pre-install)
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.m2/repository/io/github/pinpols
+          key: staging-e2e-reactor-m2-${{ github.sha }}
+          restore-keys: |
+            staging-e2e-reactor-m2-
+
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
@@ -207,6 +215,14 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Restore E2E reactor ~/.m2 (from upstream install)
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ~/.m2/repository/io/github/pinpols
+          key: staging-e2e-reactor-m2-${{ github.sha }}
+          restore-keys: |
+            staging-e2e-reactor-m2-
+
       - name: Setup build environment
         uses: ./.github/actions/setup-build-env
 
@@ -219,6 +235,14 @@ jobs:
       - name: Prepare verified Spark runtime
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
         run: python3 scripts/local/spark-e2e-runtime.py --prepare
+
+      - name: Ensure upstream reactor artifacts in ~/.m2
+        shell: bash
+        run: |
+          marker="$HOME/.m2/repository/io/github/pinpols/batch/batch-orchestrator/1.0.0/batch-orchestrator-1.0.0.jar"
+          if [[ ! -f "$marker" ]]; then
+            bash scripts/ci/install-upstream-modules.sh
+          fi
 
       - name: Cleanup orphan testcontainers (pre-IT)
         shell: bash

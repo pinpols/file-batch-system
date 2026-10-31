@@ -2,7 +2,7 @@
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
-- Full CI / Staging E2E A/B 墙钟优化：`e2e-upstream-install` 单次安装上游 reactor（B）；E2E matrix `max-parallel: 12` 降低 org runner 排队（A）。各分片不再重复 `install-upstream-modules.sh`；墙钟以合入后连续在线 run 的 P50/P90 验收。
+- Full CI / Staging E2E A/B 墙钟优化：`e2e-upstream-install` 单次安装上游 reactor（B）；E2E matrix `max-parallel: 12` 降低 org runner 排队（A）。分片通过 `actions/cache` 复用 `~/.m2/repository/io/github/pinpols`（`setup-java` 不含 `mvn install` 产物）；缓存未命中时分片 fallback 安装。墙钟以合入后连续在线 run 的 P50/P90 验收。
 
 - Full CI 剩余时序测试稳定化：JobNodeDispatch 的 schedule 次数断言改为至少两次（后台 waiting-partition 重评估属合法追加）；Sensor 重启的 deadline 探测等待 30s→90s；bounded-coverage E2E 的结算业务日改到次日，避免首批 coverage 上限恰好覆盖完整首日导致 CUTOFF/SETTLED 竞态。
 
