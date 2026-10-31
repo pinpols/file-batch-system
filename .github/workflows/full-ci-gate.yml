@@ -247,7 +247,7 @@ jobs:
 
       - name: Upload direct config key access inventory
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: direct-config-key-access
           path: build/config-key-access.json
@@ -488,7 +488,7 @@ jobs:
             --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
 
       - name: Upload orchestrator coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-a-main-coverage
           path: batch-orchestrator/target/jacoco.exec
@@ -497,7 +497,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-a-main-reports
           path: |
@@ -530,7 +530,7 @@ jobs:
       - name: Verify selected orchestrator classes ran
         run: bash scripts/ci/check-e2e-run-completeness.sh "$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)" batch-orchestrator/target/surefire-reports
       - name: Upload orchestrator coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-a-heavy-coverage
           path: batch-orchestrator/target/jacoco.exec
@@ -538,7 +538,7 @@ jobs:
           retention-days: 1
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-a-heavy-reports
           path: '**/target/surefire-reports/**'
@@ -566,12 +566,12 @@ jobs:
       - name: Build orchestrator classes for coverage
         run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Download main coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: full-ci-a-main-coverage
           path: batch-orchestrator/target/ci-jacoco-shards/main
       - name: Download heavy coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: full-ci-a-heavy-coverage
           path: batch-orchestrator/target/ci-jacoco-shards/heavy
@@ -640,7 +640,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b1-reports
           path: |
@@ -699,7 +699,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b2-workers-reports
           path: |
@@ -755,7 +755,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b2-console-reports
           path: |
@@ -793,7 +793,7 @@ jobs:
 
       - name: Upload Java governance reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-java-governance-reports
           path: '**/target/surefire-reports/**'
@@ -851,7 +851,7 @@ jobs:
 
       - name: Upload SBOM
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom-cyclonedx
           path: target/bom.json
@@ -1072,7 +1072,7 @@ jobs:
 
       - name: Upload catch-up child-process diagnostics
         if: failure() && contains(matrix.shard.tests, 'WorkflowOccurrenceCatchUpApprovalE2eIT')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-catchup-process-diagnostics-${{ matrix.shard.id }}
           path: logs/verification/backend25-2026-10-30/batchday-process/*.log
@@ -1081,7 +1081,7 @@ jobs:
 
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-e2e-shard-${{ matrix.shard.id }}-reports
           path: |
@@ -1112,7 +1112,7 @@ jobs:
 
       - name: Upload scheduled test quality evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: scheduled-test-quality-evidence
           path: |
@@ -1137,7 +1137,7 @@ jobs:
           persist-credentials: false
 
       - name: Download test reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: full-ci-*-reports
           path: build/ci-test-reports
@@ -1169,7 +1169,7 @@ jobs:
             --markdown build/ci-quality/summary.md
 
       - name: Upload CI quality trend
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-quality-trend
           path: build/ci-quality/**
