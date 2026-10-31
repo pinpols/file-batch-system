@@ -711,6 +711,8 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
 
   private static void assertFreshSchemaManifest(
       JdbcTemplate jdbc, String manifestPath, String manifestDescription) throws Exception {
+    // PostgreSQL 会按会话时区呈现 timestamptz 分区边界，快照须与迁移会话一致。
+    jdbc.execute("SET TIME ZONE 'Asia/Shanghai'");
     String manifestQuery = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, manifestDescription);
     Map<String, List<String>> objectsByType = new TreeMap<>();
     jdbc.query(manifestQuery, resultSet -> {
@@ -836,6 +838,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   private static Flyway newFlyway() {
     return Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
+        .initSql("SET TIME ZONE 'Asia/Shanghai'")
         .schemas("batch", "quartz")
         .defaultSchema("batch")
         .locations("classpath:db/migration")

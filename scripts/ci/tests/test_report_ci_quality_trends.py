@@ -15,6 +15,47 @@ SPEC.loader.exec_module(MODULE)
 
 
 class CiQualityTrendReportTest(unittest.TestCase):
+    def test_reports_each_artifact_and_staging_e2e_shard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for artifact, failed in [("staging-gate-e2e-shard-3-reports", 0),
+                                     ("pr-gate-unit-it-a-reports", 1)]:
+                target = root / artifact
+                target.mkdir()
+                (target / "TEST-DemoE2eIT.xml").write_text(
+                    f'<testsuite name="DemoE2eIT" tests="2" failures="{failed}" '
+                    'errors="0" skipped="0" time="2.5"/>', encoding="utf-8")
+            report = MODULE.parse_reports(root)
+            self.assertEqual(2, report["artifacts"]["pr-gate-unit-it-a-reports"]["tests"])
+            self.assertEqual(1, report["artifacts"]["pr-gate-unit-it-a-reports"]["failures"])
+            self.assertEqual(2.5, report["e2eShards"]["3"]["durationSeconds"])
+
+    def test_reports_job_status_even_if_no_artifact_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            jobs = Path(directory) / "jobs.json"
+            jobs.write_text(json.dumps({"unit-it-a-main": {"result": "failure"},
+                                        "unit-it-b1": {"result": "skipped"}}), encoding="utf-8")
+            self.assertEqual({"unit-it-a-main": "failure", "unit-it-b1": "skipped"},
+                             MODULE.parse_job_results(jobs))
+
+    def test_reports_missing_artifacts_only_for_successful_jobs(self):
+        jobs = {"unit-it-a-main": "success", "unit-it-b1": "failure", "unit-it-b2": "skipped"}
+        required = {"unit-it-a-main": "a-reports", "unit-it-b1": "b-reports",
+                    "unit-it-b2": "c-reports"}
+        self.assertEqual(["unit-it-a-main: a-reports"], MODULE.missing_artifacts(jobs, {}, required))
+        self.assertEqual([], MODULE.missing_artifacts(jobs, {"a-reports": {"reports": 1}}, required))
+
+    def test_checks_every_e2e_shard_artifact_for_successful_matrix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            workflow = Path(directory) / "workflow.yml"
+            workflow.write_text("matrix:\n  - id: 1\n  - id: 2\n", encoding="utf-8")
+            actual = {"staging-gate-e2e-shard-1-reports": {"reports": 1}}
+            self.assertEqual(["e2e-shard-full: staging-gate-e2e-shard-2-reports"],
+                             MODULE.missing_e2e_artifacts({"e2e-shard-full": "success"}, actual,
+                                                          workflow, "e2e-shard-full", "staging-gate"))
+            self.assertEqual([], MODULE.missing_e2e_artifacts({"e2e-shard-full": "failure"}, actual,
+                                                             workflow, "e2e-shard-full", "staging-gate"))
+
     def test_average_duration_uses_completed_runs_only(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "runs.json"

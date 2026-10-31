@@ -35,8 +35,8 @@ def changed_lines(base: str, paths: list[str], root: Path = ROOT) -> dict[Path, 
     return result
 
 
-def jacoco_lines(report: Path, root: Path = ROOT) -> dict[Path, dict[int, bool]]:
-    module = report.parents[3]
+def jacoco_lines(report: Path, root: Path = ROOT, module: Path | None = None) -> dict[Path, dict[int, bool]]:
+    module = report.parents[3] if module is None else module
     result: dict[Path, dict[int, bool]] = {}
     tree = ET.parse(report)
     for package in tree.getroot().findall("package"):
@@ -51,6 +51,13 @@ def jacoco_lines(report: Path, root: Path = ROOT) -> dict[Path, dict[int, bool]]
             for line in source.findall("line"):
                 entries[int(line.attrib["nr"])] = int(line.attrib.get("ci", "0")) > 0
     return result
+
+
+def merge_coverage(target: dict[Path, dict[int, bool]], additional: dict[Path, dict[int, bool]]) -> None:
+    for path, lines in additional.items():
+        merged = target.setdefault(path, {})
+        for number, covered in lines.items():
+            merged[number] = merged.get(number, False) or covered
 
 
 def evaluate(changed: dict[Path, set[int]], coverage: dict[Path, dict[int, bool]]) -> tuple[int, int]:
@@ -81,6 +88,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", required=True)
     parser.add_argument("--path", action="append", required=True, dest="paths")
+    parser.add_argument("--extra-report", action="append", default=[], metavar="MODULE=XML")
     parser.add_argument("--minimum", type=float, default=0.80)
     args = parser.parse_args()
 
@@ -92,7 +100,13 @@ def main() -> int:
         return 1
     coverage: dict[Path, dict[int, bool]] = {}
     for report in reports:
-        coverage.update(jacoco_lines(report))
+        merge_coverage(coverage, jacoco_lines(report))
+    for item in args.extra_report:
+        module, separator, filename = item.partition("=")
+        if not separator or module not in args.paths or not Path(filename).is_file():
+            print(f"无效或缺失的并行覆盖率报告：{item}", file=sys.stderr)
+            return 1
+        merge_coverage(coverage, jacoco_lines(Path(filename), module=ROOT / module))
     covered, total = evaluate(changed, coverage)
     if total == 0:
         print("差异覆盖率检查通过：本范围没有变更的可执行 Java 行")

@@ -65,6 +65,7 @@ jobs:
   # 原六片保留历史基线；新增场景独立分片，实际耗时待 CI 测量。
   # ===========================================================================
   e2e-shard-full:
+    name: 'E2E ${{ matrix.shard.id }} / ${{ matrix.shard.label }}'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT') && 45 || 40 }}
     env:
@@ -118,8 +119,7 @@ jobs:
               ExportContentVerificationE2eIT,
               MultiTenantConcurrentE2eIT,
               DispatchPipelineE2eIT,
-              AtomicTaskLoadE2eIT,
-              FilesystemBackendPipelineE2eIT
+              AtomicTaskLoadE2eIT
           - id: 7
             label: "business commit recovery"
             tests: >-
@@ -179,6 +179,10 @@ jobs:
             label: "recovery methods 4"
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldStopAtomicSqlReplay_whenWorkerCrashesAfterDatabaseCommit+shouldStopAtomicStoredProcReplay_whenWorkerCrashesAfterDatabaseCommit+shouldReuseExportArtifactAfterReclaimOnReplacementWorker_withoutDuplicateFileRecord
+          - id: 19
+            label: "filesystem storage backend"
+            tests: >-
+              FilesystemBackendPipelineE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -222,6 +226,9 @@ jobs:
           if [[ "$TESTS" == *shouldStopAtomicSparkReplay* || "$TESTS" == "WorkerReportLostAfterBusinessCommitE2eIT" ]]; then
             python3 scripts/local/spark-e2e-runtime.py -- ./mvnw test -pl batch-e2e-tests \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
+          elif [[ "$TESTS" == "FilesystemBackendPipelineE2eIT" ]]; then
+            ./mvnw test -pl batch-e2e-tests -Dbatch.test.storage.backend=filesystem \
+              -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
           else
             ./mvnw test -pl batch-e2e-tests \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
@@ -244,4 +251,40 @@ jobs:
           name: staging-gate-e2e-shard-${{ matrix.shard.id }}-reports
           path: |
             batch-e2e-tests/target/surefire-reports/**
+          retention-days: 14
+
+  test-summary:
+    name: 'Staging tests / consolidated report'
+    if: always()
+    needs: [java-governance, e2e-shard-full]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download test reports
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: staging-gate-*-reports
+          path: build/ci-test-reports
+      - name: Summarize test results and job states
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        shell: bash
+        run: |
+          mkdir -p build/ci-quality
+          printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
+          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports \
+            --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
+            --expect-artifact java-governance=staging-gate-java-governance-reports \
+            --expect-e2e-workflow .github/workflows/staging-gate.yml \
+            --expect-e2e-job e2e-shard-full --expect-e2e-prefix staging-gate \
+            --markdown build/ci-quality/summary.md
+      - name: Upload consolidated test report
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: staging-gate-test-summary
+          path: build/ci-quality/
           retention-days: 14

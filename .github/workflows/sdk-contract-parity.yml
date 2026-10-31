@@ -43,6 +43,9 @@ concurrency:
   group: sdk-contract-parity-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  SDK_TEST_REPORT_DIR: ${{ github.workspace }}/build/sdk-test-reports
+
 jobs:
   # Job 0:探测 sdk 相关变更。PR 事件按 base diff 判定;非 PR 事件(merge_group /
   # workflow_dispatch)无 base diff,探测器对非 PR 事件回退全跑 → 各下游
@@ -104,11 +107,18 @@ jobs:
           cache: maven
       - name: Run JsonFixtureContractTest + request-side + SharedConstantsParityTest
         run: |
-          ./mvnw -B -pl sdk/java/core -am \
+          bash scripts/ci/capture-sdk-test.sh java-contract -- ./mvnw -B -pl sdk/java/core -am \
             -DskipITs \
             -Dsurefire.failIfNoSpecifiedTests=false \
             -Dtest='JsonFixtureContractTest,JsonFixtureRequestSideContractTest,SharedConstantsParityTest' \
             test
+      - name: Upload Java SDK test log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-java-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
 
   python-contract:
     name: python contract + shared-constants parity (Python ${{ matrix.python-version }})
@@ -135,9 +145,16 @@ jobs:
       - name: Install
         run: uv sync --locked --extra dev
       - name: Run contract runner
-        run: uv run --locked pytest tests/contract -v
+        run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" python-contract -- uv run --locked pytest tests/contract -v
       - name: Run shared-constants parity
-        run: uv run --locked pytest tests/test_shared_constants_parity.py -v
+        run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" python-constants -- uv run --locked pytest tests/test_shared_constants_parity.py -v
+      - name: Upload Python SDK test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-python-${{ matrix.python-version }}-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
 
   # --- BYO SDKs (Go / TypeScript / Rust): each runs its own conformance runner
   # over the shared fixtures' then.expect + shared-constants parity. Contract:
@@ -168,7 +185,14 @@ jobs:
       # Unit + conformance live under test/; the broker integration test (kafka/*.integration.test.ts)
       # needs kafkajs + a live broker and is run locally/manually, NOT in this broker-free job.
       - name: Run conformance + parity (node --test, type-stripped)
-        run: node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
+        run: bash scripts/ci/capture-sdk-test.sh typescript-contract -- node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
+      - name: Upload TypeScript SDK test log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-typescript-${{ matrix.node-version }}-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
 
   go-contract:
     name: go contract (Go ${{ matrix.go-version }})
@@ -191,7 +215,14 @@ jobs:
         run: test -z "$(gofmt -l sdk/go)"
       - name: Run conformance + parity + unit (root module, zero-dep)
         working-directory: sdk/go
-        run: go vet ./... && go test ./...
+        run: go vet ./... && bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" go-contract -- go test -v ./...
+      - name: Upload Go SDK test log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-go-${{ matrix.go-version }}-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
       - name: Build Kafka adapter (nested module, segmentio/kafka-go)
         working-directory: sdk/go/kafka
         run: go build ./... && go vet ./...
@@ -216,7 +247,7 @@ jobs:
           cp Cargo.lock /tmp/sdk-rust-Cargo.lock
           trap 'cp /tmp/sdk-rust-Cargo.lock Cargo.lock' EXIT
           sed -i 's/^version = 4$/version = 3/' Cargo.lock
-          cargo +1.75.0 test --locked
+          bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" rust-msrv -- cargo +1.75.0 test --locked
       - name: Set up Rust (locked baseline)
         run: rustup show active-toolchain
       - name: Check Rust formatting
@@ -224,14 +255,21 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Run conformance + parity + unit (default features, zero-dep)
         working-directory: sdk/rust
-        run: cargo test
+        run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" rust-default -- cargo test
       # Real reqwest HTTP transport is feature-gated (`http`, rustls-tls → no
       # system OpenSSL needed). Run its wire-contract tests (Idempotency-Key
       # freshness, protocolVersion, path/auth headers) — they were dead in CI
       # while only default features ran, so the production transport could rot.
       - name: Run reqwest HTTP transport tests (--features http)
         working-directory: sdk/rust
-        run: cargo test --features http
+        run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" rust-http -- cargo test --features http
+      - name: Upload Rust SDK test logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-rust-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
       # Kafka adapter is feature-gated (rdkafka builds librdkafka via cmake).
       # Live broker behavior is hard-gated by sdk-live-transport below; this job
       # keeps a cheap compile check close to the Rust contract suite.
@@ -389,13 +427,54 @@ jobs:
       - name: Run SDK live transport gate
         env:
           BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092
-        run: bash scripts/ci/run-sdk-live-transport-gate.sh
+        run: bash scripts/ci/capture-sdk-test.sh sdk-live-transport -- bash scripts/ci/run-sdk-live-transport-gate.sh
+
+      - name: Upload SDK live transport test log
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-live-reports
+          path: build/sdk-test-reports/
+          retention-days: 14
 
       - name: Dump broker logs on failure
         if: failure()
         run: |
           echo "::group::kafka"; docker logs sdk-live-kafka --tail 200 2>/dev/null || true; echo "::endgroup::"
           docker ps -a || true
+
+  sdk-test-summary:
+    name: 'SDK tests / consolidated report'
+    if: always()
+    needs: [java-contract, python-contract, typescript-contract, go-contract, rust-contract, sdk-live-transport]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Download SDK test logs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: sdk-test-*-reports
+          path: build/sdk-test-logs
+      - name: Summarize SDK tests and job states
+        shell: bash
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          mkdir -p build/sdk-test-summary
+          printf '%s' "$JOB_RESULTS" > build/sdk-test-summary/jobs.json
+          python3 scripts/ci/report-sdk-test-summary.py --reports-root build/sdk-test-logs \
+            --jobs-json build/sdk-test-summary/jobs.json --output build/sdk-test-summary
+      - name: Upload SDK consolidated report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sdk-test-summary
+          path: build/sdk-test-summary/
+          retention-days: 14
 
   # Parity report — soft-mode: log diff between Java and Python pass sets,
   # but never fail the build (Python is xfail until Lane Q lands). When

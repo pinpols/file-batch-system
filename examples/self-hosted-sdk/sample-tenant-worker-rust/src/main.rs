@@ -38,7 +38,9 @@ use batch_worker_sdk::client::lifecycle::Worker;
 use batch_worker_sdk::client::reqwest_transport::{ReqwestConfig, ReqwestTransport};
 use batch_worker_sdk::client::scheduler::{HeartbeatScheduler, LeaseRenewalScheduler};
 use batch_worker_sdk::client::sensitive::SensitiveValidator;
-use batch_worker_sdk::client::transport::{classify_response, Transport, TransportOutcome};
+use batch_worker_sdk::client::transport::{
+    classify_response, decode_claim_response, Transport, TransportOutcome,
+};
 use batch_worker_sdk::kafka::{
     DispatchMessage, KafkaConsumerConfig, KafkaTaskConsumer, MessageHandler,
 };
@@ -465,7 +467,16 @@ impl TaskHandler for EchoHandler {
         let mut result = TaskResult::success(&format!("echoed {} param(s)", ctx.parameters.len()))
             .with_output("handledBy", "sample-tenant-worker-rust");
         for (k, v) in &ctx.parameters {
-            result = result.with_output(k, v);
+            let rendered = match v.as_str() {
+                Some(value) => value.to_owned(),
+                None => match serde_json::to_string(v) {
+                    Ok(value) => value,
+                    Err(error) => {
+                        return TaskResult::failure("EXECUTION_FAILED", &error.to_string())
+                    }
+                },
+            };
+            result = result.with_output(k, &rendered);
         }
         result
     }
@@ -546,8 +557,10 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
 
         // v2 dispatch 不携带 partitionInvocationId；该令牌由平台在 claim 时生成。
         // renew/report 必须复用 claim 回包中的值，否则平台会以 409 拒绝旧令牌。
+        let mut claim = decode_claim_response(&claim_resp)?;
         let partition_invocation_id =
             claim_partition_invocation_id(&claim_resp.body, &msg.partition_invocation_id);
+        claim.partition_invocation_id = partition_invocation_id.clone();
 
         // ── 2. EXECUTE the business handler. (TaskContext has a private field,
         // so build it via the constructor + builders, not a struct literal.)
@@ -558,7 +571,7 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
         };
         let mut ctx = TaskContext::new(&task_id, &tenant, &msg.task_type)
             .with_partition_invocation_id(partition_invocation_id.clone());
-        ctx.parameters = extract_params(msg);
+        ctx.apply_claim_response(&claim)?;
         ctx.progress = Box::new(NoopProgressReporter);
 
         // Register in the in-flight set so the lease-renewal loop keeps this task's
@@ -692,21 +705,6 @@ fn build_body(fields: &[(&str, serde_json::Value)], pinv: &Option<String>) -> St
     serde_json::Value::Object(map).to_string()
 }
 
-/// Flatten the dispatch's raw `extra` JSON into the string→string parameter map
-/// the [`TaskContext`] carries. Non-string scalars are stringified; nested
-/// objects/arrays are rendered as compact JSON so nothing is silently dropped.
-fn extract_params(msg: &DispatchMessage) -> BTreeMap<String, String> {
-    let mut out = BTreeMap::new();
-    for (k, v) in &msg.extra {
-        let value = match v.as_str() {
-            Some(s) => s.to_string(),
-            None => v.to_string(),
-        };
-        out.insert(k.clone(), value);
-    }
-    out
-}
-
 // ───────────────────────────────────────────────────────────────────────────
 // Config
 // ───────────────────────────────────────────────────────────────────────────
@@ -808,7 +806,8 @@ fn log(msg: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::claim_partition_invocation_id;
+    use super::{claim_partition_invocation_id, EchoHandler, TaskContext, TaskHandler};
+    use batch_worker_sdk::client::transport::{decode_claim_response, HttpResponse};
 
     #[test]
     fn claim_invocation_id_takes_precedence_over_dispatch_value() {
@@ -825,5 +824,21 @@ mod tests {
         let fallback = Some("dispatch-id".to_string());
 
         assert_eq!(claim_partition_invocation_id("{}", &fallback), fallback);
+    }
+
+    #[test]
+    fn claim_payload_preserves_values_for_echo() {
+        let response = HttpResponse::new(
+            200,
+            r#"{"payload":"{\"text\":\"hello\",\"count\":3,\"nested\":{\"ok\":true}}"}"#,
+        );
+        let claim = decode_claim_response(&response).unwrap();
+        let ctx = TaskContext::new("task", "tenant", "sample-echo")
+            .with_claim_response(&claim)
+            .unwrap();
+        let result = EchoHandler.execute(&ctx);
+        assert_eq!(result.outputs["text"], "hello");
+        assert_eq!(result.outputs["count"], "3");
+        assert_eq!(result.outputs["nested"], r#"{"ok":true}"#);
     }
 }

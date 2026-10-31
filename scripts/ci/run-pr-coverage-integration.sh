@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 用途：按 PR 并行分片运行已验证的业务集成测试并追加覆盖数据。
-# 用法：bash scripts/ci/run-pr-coverage-integration.sh <a|b1|b2-workers|b2-console> [--list]。
+# 用法：bash scripts/ci/run-pr-coverage-integration.sh <a|a-extra|b1|b2-workers|b2-console|b2-console-extra> [--list]。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -27,6 +27,8 @@ case "$shard" in
     run_group batch-orchestrator 'JobNodeDispatchIntegrationTest'
     run_group batch-orchestrator 'CompensationFailureRecoveryIntegrationTest,WaitingLaunchIdentityIntegrationTest,JobLaunchToFinishLifecycleIntegrationTest,PartitionJoinPromotionIntegrationTest,WorkflowRunResumeRecoveryIntegrationTest'
     run_group batch-orchestrator 'FileGovernanceStaleSweepIntegrationTest,WorkflowFrozenPartitionPlanIntegrationTest,CrossDayDependencyReconcilerIntegrationTest,JobTypeOutboxChainIntegrationTest,ConcurrentTaskFinishIntegrationTest,BatchDayWaitingLaunchReferenceIntegrationTest,WorkflowReplayApprovalDecisionIntegrationTest'
+    ;;
+  a-extra)
     run_group batch-orchestrator 'JobRetryFlowIntegrationTest,ConcurrentTaskClaimIntegrationTest,TriggerLaunchRecoveryIdentityIntegrationTest'
     run_group batch-orchestrator 'ArchiveColdStorageIntegrationTest,JobMonitoringAlertEmissionRecoveryIntegrationTest,FileErrorRecordIntegrationTest,JobTerminalOutboxIntegrationTest'
     run_group batch-orchestrator 'CountContinuityOutboxIntegrationTest,JobSlaSchedulerRecoveryIntegrationTest,FileTemplateSnapshotCaptureIntegrationTest,OutboxPublishIntegrationTest,FileArrivalGroupBacklogIntegrationTest'
@@ -46,6 +48,8 @@ case "$shard" in
   b2-console)
     run_group batch-console-api 'ConsoleBatchDayCatchUpHttpIntegrationTest,BatchDayCatchUpOperationSchemaIntegrationTest,ConsolePendingCatchUpQueryIntegrationTest,PendingCatchUpApprovalPagingIntegrationTest,ApprovalCommandQueryIntegrationTest'
     run_group batch-console-api 'JobPushDeliveryIntegrationTest,JobPushIntakeIntegrationTest,TerminalNotificationRecoveryIntegrationTest,WorkflowTerminalNotificationIntegrationTest,JobWorkflowSlaAlertDeliveryIntegrationTest,TerminalNotificationArchiveIntegrationTest'
+    ;;
+  b2-console-extra)
     run_group batch-console-api 'ConsoleFileRecordDetailSecurityIntegrationTest,FileJobAssociationQueryIntegrationTest,JobInstanceQueryIntegrationTest,ConsoleRetryScheduleQueryIntegrationTest,DeadLetterQueryIntegrationTest,FileBusinessDateQueryIntegrationTest,OpsCursorOrderIntegrationTest'
     run_group batch-console-api 'AuditLogEndToEndIntegrationTest,OperationAuditCursorHttpIntegrationTest,ConfigSyncAuditRecoveryIntegrationTest,ConsoleAiAuditServiceIntegrationTest,WorkflowConfigApprovalHttpIntegrationTest,ConsoleRealtimeReplayStoreIntegrationTest,WorkflowSensorErrorReadIntegrationTest,NotificationDeliveryTypedMapperIntegrationTest'
     run_group batch-console-api 'OutboxDeliveryTopicFilterIntegrationTest,OutboxRetryEventTypeIntegrationTest,OutboxDeliveryErrorRedactionIntegrationTest,AlertEventActionIntegrationTest,AlertEventIntegrationTest,BatchDayMapperIntegrationTest,DailyProgressMapperIntegrationTest,ExecutionCursorOrderIntegrationTest,ConsoleAtomicTaskConfigMutationIntegrationTest'

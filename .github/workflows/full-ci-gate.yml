@@ -173,7 +173,9 @@ jobs:
             scripts/ci/tests/test_pre_push_module_selection.py \
             scripts/ci/tests/test_pre_push_environment.py \
             scripts/ci/tests/test_pr_coverage_integration.py \
-            scripts/ci/tests/test_report_ci_quality_trends.py
+            scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_capture_sdk_test.py \
+            scripts/ci/tests/test_report_sdk_test_summary.py
 
       - name: Verify module dependency boundaries
         shell: bash
@@ -799,6 +801,7 @@ jobs:
   # 分组证据见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md。
   # ===========================================================================
   e2e-shard:
+    name: 'E2E ${{ matrix.shard.id }} / ${{ matrix.shard.label }}'
     runs-on: ubuntu-latest
     timeout-minutes: ${{ (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT') && 30 || 25 }}
     env:
@@ -852,8 +855,7 @@ jobs:
               ExportContentVerificationE2eIT,
               MultiTenantConcurrentE2eIT,
               DispatchPipelineE2eIT,
-              AtomicTaskLoadE2eIT,
-              FilesystemBackendPipelineE2eIT
+              AtomicTaskLoadE2eIT
           - id: 7
             label: "business commit recovery"
             tests: >-
@@ -913,6 +915,10 @@ jobs:
             label: "recovery methods 4"
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldStopAtomicSqlReplay_whenWorkerCrashesAfterDatabaseCommit+shouldStopAtomicStoredProcReplay_whenWorkerCrashesAfterDatabaseCommit+shouldReuseExportArtifactAfterReclaimOnReplacementWorker_withoutDuplicateFileRecord
+          - id: 19
+            label: "filesystem storage backend"
+            tests: >-
+              FilesystemBackendPipelineE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -947,6 +953,9 @@ jobs:
           TESTS=$(echo "$TESTS" | tr -d ' \n')
           if [[ "$TESTS" == *shouldStopAtomicSparkReplay* || "$TESTS" == "WorkerReportLostAfterBusinessCommitE2eIT" ]]; then
             python3 scripts/local/spark-e2e-runtime.py -- ./mvnw test -pl batch-e2e-tests \
+              -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
+          elif [[ "$TESTS" == "FilesystemBackendPipelineE2eIT" ]]; then
+            ./mvnw test -pl batch-e2e-tests -Dbatch.test.storage.backend=filesystem \
               -Dtest="$TESTS" -Dsurefire.failIfNoSpecifiedTests=false -B
           else
             ./mvnw test -pl batch-e2e-tests \
@@ -1030,13 +1039,23 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+          JOB_RESULTS: ${{ toJSON(needs) }}
         run: |
           mkdir -p build/ci-quality
+          printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
           gh api "repos/${REPO}/actions/workflows/full-ci-gate.yml/runs?per_page=30" \
             > build/ci-quality/workflow-runs.json
           python3 scripts/ci/report-ci-quality-trends.py \
             --reports-root build/ci-test-reports \
             --workflow-runs-json build/ci-quality/workflow-runs.json \
+            --jobs-json build/ci-quality/jobs.json \
+            --expect-artifact unit-it-a=full-ci-unit-it-a-reports \
+            --expect-artifact unit-it-b1=full-ci-unit-it-b1-reports \
+            --expect-artifact unit-it-b2-workers=full-ci-unit-it-b2-workers-reports \
+            --expect-artifact unit-it-b2=full-ci-unit-it-b2-console-reports \
+            --expect-artifact java-governance=full-ci-java-governance-reports \
+            --expect-e2e-workflow .github/workflows/full-ci-gate.yml \
+            --expect-e2e-job e2e-shard --expect-e2e-prefix full-ci \
             --json build/ci-quality/metrics.json \
             --markdown build/ci-quality/summary.md
 

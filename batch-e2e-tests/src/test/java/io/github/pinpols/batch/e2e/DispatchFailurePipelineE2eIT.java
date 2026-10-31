@@ -26,12 +26,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /**
  * 端到端测试：Dispatch 渠道配置缺失导致失败。
  *
- * <p>测试意图：验证 dispatch worker 在无法解析 {@code channelCode} 时会失败收敛，且不会错误地把文件标记为 DISPATCHED。
+ * <p>测试意图：验证缺失 {@code channelCode} 对应配置时启动被拒绝，且不会错误地把文件标记为 DISPATCHED。
  *
  * <p>断言点：
  *
  * <ul>
- *   <li>task_status = FAILED
+ *   <li>Workflow JOB 节点失败，且未创建 JobInstance
  *   <li>file_record.file_status 不能是 DISPATCHED
  * </ul>
  */
@@ -40,7 +40,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = "batch.worker.dispatch.worker-type=DISPATCH")
 @E2eBusinessSchema
-@DisplayName("派发失败链路端到端归因:渠道配置缺失时派发任务收敛失败,验证任务终态为失败,且文件记录不会被错误标记为已派发")
+@DisplayName("派发失败链路端到端归因:渠道配置缺失时启动被拒绝,文件记录不会被错误标记为已派发")
 class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
@@ -55,8 +55,8 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
   @Test
-  @DisplayName("投放引用不存在渠道的派发任务:验证任务终态为失败,且输出文件记录状态不会被写成已派发")
-  void shouldMarkTaskFailed_whenChannelConfigMissing() {
+  @DisplayName("派发渠道不存在时节点失败,不创建作业且文件状态不会被写成已派发")
+  void shouldRejectLaunch_whenChannelConfigMissing() {
     final String insertFileRecordSql = """
             insert into batch.file_record (
                 tenant_id, file_code, biz_type, file_category, file_name, original_file_name, file_ext,
@@ -68,11 +68,13 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
                 ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-fail-trace'
             ) returning id
             """;
-    final String selectTaskStatusSql = """
-                      select t.task_status from batch.job_task t
-                      join batch.job_instance ji on ji.id = t.job_instance_id
-                      where ji.tenant_id = ? and ji.dedup_key = ?
-                      """;
+    final String selectNodeSql = """
+        select n.node_status, n.error_message, n.job_instance_id
+        from batch.workflow_node_run n
+        join batch.workflow_run w on w.id = n.workflow_run_id
+        join batch.trigger_request r on r.id = w.trigger_request_id and r.tenant_id = w.tenant_id
+        where r.tenant_id = ? and r.request_id = ? and n.node_type = 'JOB'
+        """;
     final String selectFileStatusSql = """
         select file_status from batch.file_record where id = ?
     """;
@@ -109,9 +111,12 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
         .atMost(Duration.ofSeconds(120))
         .pollInterval(Duration.ofMillis(200))
         .untilAsserted(() -> {
-          String status = jdbcTemplate.queryForObject(
-              selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
-          assertThat(status).isEqualTo("FAILED");
+          var nodes = jdbcTemplate.queryForList(selectNodeSql, TENANT, seed.requestId());
+          assertThat(nodes).hasSize(1);
+          assertThat(nodes.getFirst())
+              .containsEntry("node_status", "FAILED")
+              .containsEntry("error_message", "error.file_channel.not_found")
+              .containsEntry("job_instance_id", null);
         });
 
     // 失败时文件记录不得标记为 DISPATCHED。
