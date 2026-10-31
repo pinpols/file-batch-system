@@ -1,5 +1,11 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-10-31：补跑日方法拆分以通过 NCSS
+
+`d23a51483` 的 pr-gate 里，`DefaultConsoleJobApprovalService.catchUpBatchDay` 的 NCSS 为 60，达到 PMD `NcssCount` 方法阈值。请求作业码的清洗抽到 `sanitizedRequestedJobCodes`。空列表仍返回 null；非空时仍过滤空白、按 128 截断并去重。`request.getJobCodes()` 仍只调用一次。同一提交刷新 `docs/stats/java-readability-inventory.md`，行数变化来自本分支已经落地的判空收敛。
+
+验证：`batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker/process`、`batch-worker/export` 及 reactor 依赖的 `pmd:check` 通过。`DefaultConsoleJobApprovalServiceWorkflowTest` 14 项通过。未改 SQL、接口或迁移。
+
 ## 2026-10-31：检查通过后复用的访问器只取一次
 
 接收方和字段不是同一表达式时，判空仍然保留。本轮只处理检查通过后还会再次调用同一 getter 的 16 个生产文件：先确认接收方，再绑定字段，后续使用这份局部变量。空请求、空集合和失败分支仍按原顺序返回，不提前调用被短路的 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝。一次调用的私有薄包装和前端包装候选仍按原记录保留。

@@ -134,14 +134,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), 128);
     LocalDate parsedBizDate = ops.parseBizDate(bizDate);
     String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
-    List<String> requestedJobCodes = request.getJobCodes();
-    List<String> requested = EmptyChecks.isEmpty(requestedJobCodes)
-        ? null
-        : requestedJobCodes.stream()
-            .filter(ops::hasText)
-            .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
-            .distinct()
-            .toList();
+    List<String> requested = sanitizedRequestedJobCodes(request.getJobCodes());
     String requestJson =
         JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
     BatchDayCatchUpOperation existing = operationStore.find(tenantId, idempotencyKey, requestJson);
@@ -233,6 +226,17 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     operation = operationStore.complete(tenantId, operation.requestKeyHash(), operation.revision());
     ops.publishRefresh(tenantId);
     return completedResponse(operation);
+  }
+
+  private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
+    if (EmptyChecks.isEmpty(jobCodes)) {
+      return null;
+    }
+    return jobCodes.stream()
+        .filter(ops::hasText)
+        .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
+        .distinct()
+        .toList();
   }
 
   @Override
