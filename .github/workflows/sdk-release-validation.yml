@@ -395,7 +395,7 @@ jobs:
           format: spdx-json
           output-file: sdk-sbom.spdx.json
       - name: Upload SBOM artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-sbom
           path: sdk-sbom.spdx.json
@@ -421,7 +421,7 @@ jobs:
             echo "无上个 release tag 或 base spec 不存在,跳过 changelog 生成" | tee sdk-protocol-changelog.txt
           fi
       - name: Upload changelog artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-protocol-changelog
           path: sdk-protocol-changelog.txt
@@ -488,7 +488,7 @@ jobs:
         working-directory: sdk/python
         run: uv build
       - name: Publish to PyPI(Trusted Publishing / OIDC)
-        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
         with:
           packages-dir: sdk/python/dist/
           skip-existing: true
