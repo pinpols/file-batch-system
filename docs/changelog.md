@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-01 跨月 schema 清单与 Maven 否定缓存
+
+- 平台 Flyway 新鲜库清单按会话当前月把滚动月分区名和边界改写成相对偏移后再哈希，避免 V172、V173、V216 的固定窗口在跨月后改变 COLUMN、CONSTRAINT、INDEX、PARTITION、RELATION、TRIGGER 摘要。
+- 上游 Maven 安装重试前只删除没有 jar/pom 的 `*.lastUpdated` 否定缓存。目标、幂等性和恢复方式已写入 `docs/runbook/high-risk-operations.md`，并只登记该脚本 1 项 filesystem-remove。
+
 ## 2026-10-31 并发恢复与 Full CI 剩余用例稳定化
 
 - 并发依赖释放恢复：父节点校验发现已绑定同一 TriggerRequest 的 JobInstance 时按重复请求幂等短路，不再把请求覆盖为 REJECTED；新增单测覆盖同请求实例短路与其它请求实例仍拒绝两条路径。
