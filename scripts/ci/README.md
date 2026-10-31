@@ -357,7 +357,7 @@ bash scripts/ci/run-staging-live-smoke.sh
 
 PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。PR 的编排、Trigger、PROCESS、DISPATCH、IMPORT、EXPORT 和 Console API 分片通过 `run-pr-coverage-integration.sh` 追加经验证的真实业务集成场景；Console API 分片也运行配置包和配置定义的定向 Testcontainers 集成测试。Full Gate 仍执行各模块完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
 
-PR 的编排集成场景拆为 `a` / `a-extra`，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。
+PR 的编排集成场景拆为 `a` / `a-extra`，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。PR 的 Trigger 与 PROCESS/DISPATCH 测试也拆为单测及集成两片，由 `unit-it-b1` 汇合两片状态与覆盖率。Full CI 将编排耗时类按 `scripts/ci/test-shards/full-orchestrator-heavy.txt` 拆出，合并两片 JaCoCo 执行数据后保留完整覆盖率门槛；业务提交恢复场景也按方法拆片。实际总耗时仍受 runner 排队影响。
 
 PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
 
@@ -655,7 +655,7 @@ bash scripts/ci/check-version-alignment.sh
 
 ## `check-e2e-run-completeness.sh`
 
-e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本要求每个类有唯一报告且至少一个用例实际执行；全类跳过或空报告失败，部分跳过仍单独保留报告。与 `check-e2e-shard-coverage.sh`（静态校验漏项、失效项及重复类）互补；PR 和 Full CI 运行其正反例 `test_e2e_shard_coverage.py`。
+e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本要求每个类有唯一报告且至少一个用例实际执行；全类跳过或空报告失败，部分跳过仍单独保留报告。与 `check-e2e-shard-coverage.sh`（静态校验漏项、失效项及重复类）互补；PR 和 Full CI 运行其正反例 `test_e2e_shard_coverage.py`。 Full CI 的编排长类分片复用同一运行报告检查，防止个别选定类未执行。
 
 当选择器包含 `类名#方法一+方法二` 时，静态守卫核对该类全部测试方法各分配一次；运行侧读取 Surefire XML，逐方法要求集合完全一致且无失败或跳过。方法选择仅支持不带通配符的明确名称，无法识别源码测试时失败关闭。对应正反例由 PR 和 Full CI 执行。
 

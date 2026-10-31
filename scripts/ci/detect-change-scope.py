@@ -175,7 +175,7 @@ def required_unit_shards(path: str) -> set[str]:
     """保守确定一个路径所影响的单元测试分片。"""
     normalized = path.removeprefix("./")
     # E2E 源码由 static-java-quality 的全 reactor test-compile 保证可编译，并在 main / nightly
-    # 的六片 E2E 中执行；PR 单元分片不重复启动。
+    # 的 E2E 分片中执行；PR 单元分片不重复启动。
     if under(normalized, "batch-e2e-tests/src"):
         return set()
     if (

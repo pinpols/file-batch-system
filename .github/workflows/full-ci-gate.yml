@@ -173,6 +173,7 @@ jobs:
             scripts/ci/tests/test_pre_push_module_selection.py \
             scripts/ci/tests/test_pre_push_environment.py \
             scripts/ci/tests/test_pr_coverage_integration.py \
+            scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py
@@ -428,14 +429,16 @@ jobs:
           gate_assert_collected
 
   # ===========================================================================
-  # 4 个 unit/IT 执行分片并发；原 b2 拆成 Worker 与 Console，避免串成长尾：
-  #   a:  orchestrator + worker-core               (~3 min)
+  # 5 个 unit/IT 执行分片并发；编排耗时类独立执行并合并覆盖率：
+  #   a-main: orchestrator 其余测试 + worker-core + SDK
+  #   a-heavy: 按最近一次 Full CI 耗时挑选的编排长类
   #   b1: common + trigger + worker-process + worker-dispatch  (~3.5 min)
   #   b2-workers: worker-import + worker-export + worker-atomic
   #   b2: console-api（保留历史 job 名称）
-  # wall-clock 目标 4-5 min。
+  # 总耗时以运行时长与 runner 排队为准。
   # ===========================================================================
-  unit-it-a:
+  unit-it-a-main:
+    name: 'Full tests / orchestration and SDK'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
@@ -465,33 +468,125 @@ jobs:
           MODULES="batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit"
           ./mvnw install -pl "$MODULES" -am -DskipTests \
             -Dspotless.check.skip=true -Dpmd.skip=true -B
+          heavy_excludes=$(sed 's/^/!/' scripts/ci/test-shards/full-orchestrator-heavy.txt | paste -sd, -)
           ./mvnw verify -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit \
-            -Dtest='!*ArchTest,!*ConventionTest,!ArchiveDiagnosticCadenceProbeIT' \
+            "-Dtest=!*ArchTest,!*ConventionTest,!ArchiveDiagnosticCadenceProbeIT,$heavy_excludes" \
             -DskipITs=false -Dspotless.check.skip=true -Dpmd.skip=true \
             -fae -B
           # 覆盖率门禁(BUNDLE 25% LINE + 15 个核心类 80% lock-in 棘轮)。原仅本地 strict-verify 跑,
           # 现上 CI。只查本 shard 跑了测试的目标模块,不带 -am(否则上游模块 0% 覆盖误判失败)。
-          ./mvnw jacoco:check@check -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          ./mvnw jacoco:check@check -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
 
       - name: Verify changed-line coverage
         shell: bash
         run: |
-          ./mvnw jacoco:report -pl batch-orchestrator,batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
+          ./mvnw jacoco:report -pl batch-worker/core,sdk/java/core,sdk/java/spring,sdk/java/testkit -B
           BASE="${{ github.event.before }}"
           [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
           python3 scripts/ci/check-diff-coverage.py --base "$BASE" \
-            --path batch-orchestrator --path batch-worker/core \
+            --path batch-worker/core \
             --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
+
+      - name: Upload orchestrator coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-a-main-coverage
+          path: batch-orchestrator/target/jacoco.exec
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Upload Surefire Reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: full-ci-unit-it-a-reports
+          name: full-ci-unit-it-a-main-reports
           path: |
             **/target/surefire-reports/**
             **/target/failsafe-reports/**
           retention-days: 14
+
+  unit-it-a-heavy:
+    name: 'Full tests / orchestration recovery and database'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+      - name: Install orchestrator dependencies
+        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+      - name: Run long orchestrator integration classes
+        shell: bash
+        run: |
+          tests=$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)
+          ./mvnw test -pl batch-orchestrator "-Dtest=$tests" -Dsurefire.failIfNoSpecifiedTests=true \
+            -Dspotless.check.skip=true -Dpmd.skip=true -fae -B
+      - name: Verify selected orchestrator classes ran
+        run: bash scripts/ci/check-e2e-run-completeness.sh "$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)" batch-orchestrator/target/surefire-reports
+      - name: Upload orchestrator coverage data
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-a-heavy-coverage
+          path: batch-orchestrator/target/jacoco.exec
+          if-no-files-found: error
+          retention-days: 1
+      - name: Upload Surefire Reports
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-unit-it-a-heavy-reports
+          path: '**/target/surefire-reports/**'
+          retention-days: 14
+
+  unit-it-a:
+    name: unit-it-a
+    if: always()
+    needs: [unit-it-a-main, unit-it-a-heavy]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Verify orchestrator shard results
+        env:
+          MAIN_RESULT: ${{ needs.unit-it-a-main.result }}
+          HEAVY_RESULT: ${{ needs.unit-it-a-heavy.result }}
+        run: '[[ "$MAIN_RESULT" == "success" && "$HEAVY_RESULT" == "success" ]]'
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Setup build environment
+        uses: ./.github/actions/setup-build-env
+      - name: Build orchestrator classes for coverage
+        run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
+      - name: Download main coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-a-main-coverage
+          path: batch-orchestrator/target/ci-jacoco-shards/main
+      - name: Download heavy coverage data
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: full-ci-a-heavy-coverage
+          path: batch-orchestrator/target/ci-jacoco-shards/heavy
+      - name: Merge and verify orchestrator coverage
+        shell: bash
+        run: |
+          mkdir -p batch-orchestrator/target/ci-jacoco-shards
+          mv batch-orchestrator/target/ci-jacoco-shards/main/jacoco.exec batch-orchestrator/target/ci-jacoco-shards/main.exec
+          mv batch-orchestrator/target/ci-jacoco-shards/heavy/jacoco.exec batch-orchestrator/target/ci-jacoco-shards/heavy.exec
+          ./mvnw jacoco:merge@merge-ci-shards -pl batch-orchestrator -B
+          test -s batch-orchestrator/target/jacoco.exec
+          ./mvnw jacoco:check@check jacoco:report -pl batch-orchestrator -B
+          BASE="${{ github.event.before }}"
+          [[ -n "$BASE" && ! "$BASE" =~ ^0+$ ]] || BASE="HEAD^"
+          python3 scripts/ci/check-diff-coverage.py --base "$BASE" --path batch-orchestrator
 
   # ===========================================================================
   # Job 3: unit-it-b1 — common + trigger + worker-process + worker-dispatch
@@ -859,7 +954,7 @@ jobs:
           - id: 7
             label: "business commit recovery"
             tests: >-
-              WorkerReportLostAfterBusinessCommitE2eIT#shouldRecoverWhenReportAcknowledgementIsLostAfterCommitAndWorkerRestarts+shouldResumeImportCheckpointAfterWorkerProcessIsKilled+shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect+shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldRecoverWhenReportAcknowledgementIsLostAfterCommitAndWorkerRestarts+shouldResumeImportCheckpointAfterWorkerProcessIsKilled+shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect
           - id: 8
             label: "workflow catch-up and approval"
             tests: >-
@@ -919,6 +1014,10 @@ jobs:
             label: "filesystem storage backend"
             tests: >-
               FilesystemBackendPipelineE2eIT
+          - id: 20
+            label: "process commit recovery"
+            tests: >-
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -971,6 +1070,15 @@ jobs:
             "${{ matrix.shard.tests }}" \
             batch-e2e-tests/target/surefire-reports
 
+      - name: Upload catch-up child-process diagnostics
+        if: failure() && contains(matrix.shard.tests, 'WorkflowOccurrenceCatchUpApprovalE2eIT')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: full-ci-catchup-process-diagnostics-${{ matrix.shard.id }}
+          path: logs/verification/backend25-2026-10-30/batchday-process/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -1016,7 +1124,7 @@ jobs:
   quality-trend:
     name: CI and test quality trend
     if: always()
-    needs: [unit-it-a, unit-it-b1, unit-it-b2-workers, unit-it-b2, java-governance, e2e-shard]
+    needs: [unit-it-a, unit-it-a-main, unit-it-a-heavy, unit-it-b1, unit-it-b2-workers, unit-it-b2, java-governance, e2e-shard]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -1049,7 +1157,8 @@ jobs:
             --reports-root build/ci-test-reports \
             --workflow-runs-json build/ci-quality/workflow-runs.json \
             --jobs-json build/ci-quality/jobs.json \
-            --expect-artifact unit-it-a=full-ci-unit-it-a-reports \
+            --expect-artifact unit-it-a-main=full-ci-unit-it-a-main-reports \
+            --expect-artifact unit-it-a-heavy=full-ci-unit-it-a-heavy-reports \
             --expect-artifact unit-it-b1=full-ci-unit-it-b1-reports \
             --expect-artifact unit-it-b2-workers=full-ci-unit-it-b2-workers-reports \
             --expect-artifact unit-it-b2=full-ci-unit-it-b2-console-reports \

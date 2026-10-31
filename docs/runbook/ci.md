@@ -131,8 +131,8 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 |---|---|---|
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
-| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 全部固定分片并发执行；依赖只构建一次/分片，目标模块执行 unit + IT |
-| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 19 个并发 shard；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置；新增分片耗时待 CI 验证 |
+| **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 固定分片并发执行；编排长类按清单独立运行并合并 JaCoCo 执行数据后检查覆盖率，目标模块执行 unit + IT |
+| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 20 个并发 shard；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置；新增分片耗时待 CI 验证 |
 | **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
@@ -152,7 +152,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | Console API | B2 Console |
 | Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
-`unit-it-a` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为两个并行片：主片运行单测与部分集成场景，补充片运行其余集成场景；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
+`unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
 
 更改 `scripts/ci/run-pr-coverage-integration.sh` 或 `scripts/ci/check-diff-coverage.py` 时，范围探测会启动四个测试范围，确保执行器和覆盖率汇总的变更得到真实 CI 验证；其他不影响业务测试的 CI 改动仍不启动 Maven 单测。
 
@@ -171,6 +171,8 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 SDK 纯变更由 SDK workflow 负责，`docs/api/**` 等契约路径不在忽略列表。PR gate 对 database
 变更运行 Flyway 结构/checksum、迁移安全和数据库注释检查；这些静态检查不依赖 Maven scope，
 不应因 Maven `skip` 而漏跑。OpenAPI 有独立路径同步与破坏性变更检查。
+
+编排集成测试的 MyBatis SQL 明细默认由日志级别控制，避免无条件输出导致 CI 日志截断；排查 SQL 时可临时将对应 Mapper 的日志级别设为 `DEBUG`。批日补跑进程恢复 E2E 失败时会额外保存 Console 子进程日志，供定位请求与启动问题。
 
 ### 统一变更范围探测
 
@@ -491,7 +493,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 ## 覆盖率、变异测试与趋势
 
-- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。PR 的编排、调度、Worker 和 Console 运行已验证的集成场景，编排和 Console 各拆为两片并分别在 `unit-it-a` 和 `unit-it-b2` 合并覆盖率；Full Gate 执行完整集成测试。
+- PR / Full Gate 的 Java shard 使用 `check-diff-coverage.py` 校验本次变更的可执行行覆盖率，最低 80%；存量 Bundle 25% 和核心类 80% 棘轮继续保留。PR 的编排、调度、Worker 和 Console 运行已验证的集成场景，编排、Trigger/PROCESS/DISPATCH 和 Console 的并行片分别在 `unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 合并覆盖率；Full Gate 执行完整集成测试。
 - 每周及手动 Full Gate 使用 `run-critical-mutation.sh` 对 `FileStateMachine` 和 `DefaultLifecycleEventMapper` 运行 PIT，阈值为变异杀死率 70%、覆盖率 80%。范围保持小而稳定，不做全仓变异测试。
 - PR 和手动 Staging Gate 在各测试任务结束后汇总当前 Surefire/Failsafe XML、任务状态和分片结果，产物保留 14 天；Full Gate 的 `quality-trend` 同样汇总并读取最近 30 次运行的成功率和已完成运行的平均耗时，产物保留 90 天。成功任务缺少规定报告时汇总失败；失败或跳过的任务显示原状态，不把缺失报告当成成功。E2E matrix 成功时逐片核对报告。报告按分片列出测试累计耗时；该耗时不是作业墙钟或 runner 排队时间。Java XML 汇总不包含单独工作流中的多语言 SDK、前端 Vitest/Playwright 或 Python/Shell 门禁测试，不能作为这些测试的通过证明。
 - `sdk-contract-parity` 的 `SDK tests / consolidated report` 单独汇总 Java、Python、TypeScript、Go、Rust 各版本的契约测试，以及作为独立执行项的五语言真实传输门禁；原始日志和真实退出码随各自 artifact 保存 14 天。测试任务成功却缺少日志会使汇总失败；未运行和跳过不会记为成功。此汇总记录执行项状态，不声称已统计每个语言的测试用例数量；真实传输与静态契约结果分列。

@@ -76,6 +76,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import javax.sql.DataSource;
@@ -414,6 +415,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     CountDownLatch accepted = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     AtomicInteger launches = new AtomicInteger();
+    AtomicReference<String> consoleResponse = new AtomicReference<>("not scheduled");
     var proxy = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
     proxy.createContext("/", exchange -> {
       try {
@@ -461,7 +463,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           """.formatted(TENANT, seed.jobCode());
       var pending = CompletableFuture.runAsync(() -> {
         try {
-          firstClient
+          consoleResponse.set("sending request");
+          var response = firstClient
               .post()
               .uri("/api/console/jobs/batch-days/2035-01-01/catchup")
               .cookie("batch_console_token", admin.jwt())
@@ -471,13 +474,17 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
               .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, requestKey)
               .contentType(MediaType.APPLICATION_JSON)
               .bodyValue(body)
-              .exchange();
+              .exchange()
+              .expectBody(String.class)
+              .returnResult();
+          consoleResponse.set("HTTP " + response.getStatus() + ": " + response.getResponseBody());
         } catch (RuntimeException expectedDisconnect) {
           // 故意在请求进行中终止进程，以验证恢复行为。
+          consoleResponse.set(expectedDisconnect.toString());
         }
       });
       assertThat(accepted.await(30, TimeUnit.SECONDS))
-          .as("Trigger accepted before crash")
+          .as("Trigger accepted before crash; Console response: %s", consoleResponse.get())
           .isTrue();
       String selectRequestSql =
           "select request_id from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is null";
@@ -611,6 +618,23 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .until(() -> Files.readString(log).contains("Started BatchConsoleApiApplication")
             || !child.isAlive());
     assertThat(child.isAlive()).as("Console startup log: %s", log).isTrue();
+    // Started 日志早于 ApplicationReadyEvent；维护共享状态确认后才允许业务写入。
+    String readinessToken =
+        consoleJwtService.issueToken(OPERATOR, TENANT, Set.of("ROLE_ADMIN")).accessToken();
+    HttpRequest readiness = HttpRequest.newBuilder(
+            URI.create("http://127.0.0.1:" + port + "/actuator/health/readiness"))
+        .header("Cookie", "batch_console_token=" + readinessToken)
+        .timeout(Duration.ofSeconds(3))
+        .GET()
+        .build();
+    await().atMost(Duration.ofSeconds(90)).untilAsserted(() -> {
+      assertThat(child.isAlive()).as("Console startup log: %s", log).isTrue();
+      assertThat(HTTP_CLIENT
+              .send(readiness, HttpResponse.BodyHandlers.discarding())
+              .statusCode())
+          .as("Console readiness; startup log: %s", log)
+          .isEqualTo(200);
+    });
     return child;
   }
 

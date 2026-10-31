@@ -563,6 +563,23 @@ $1$2 $4 $5(</replacement>
                                 </excludes>
                             </configuration>
                         </execution>
+                        <!-- CI 并行测试片合并执行数据后再检查完整覆盖率。 -->
+                        <execution>
+                            <id>merge-ci-shards</id>
+                            <phase>none</phase>
+                            <goals>
+                                <goal>merge</goal>
+                            </goals>
+                            <configuration>
+                                <fileSets>
+                                    <fileSet>
+                                        <directory>${project.build.directory}/ci-jacoco-shards</directory>
+                                        <includes><include>*.exec</include></includes>
+                                    </fileSet>
+                                </fileSets>
+                                <destFile>${project.build.directory}/jacoco.exec</destFile>
+                            </configuration>
+                        </execution>
                         <!-- phase=none：不绑定生命周期，由 CI 脚本显式调用 jacoco:check -->
                         <execution>
                             <id>check</id>

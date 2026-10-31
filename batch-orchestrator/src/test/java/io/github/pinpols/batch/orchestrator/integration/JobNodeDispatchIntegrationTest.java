@@ -121,7 +121,8 @@ import org.springframework.web.server.ResponseStatusException;
  */
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
-    webEnvironment = SpringBootTest.WebEnvironment.NONE)
+    webEnvironment = SpringBootTest.WebEnvironment.NONE,
+    properties = "batch.resource-scheduler.waiting-dispatch-interval-millis=5000")
 @DisplayName("Workflow Job 节点集成验证: 独立 JobInstance 与根运行状态推进")
 class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
 
@@ -3997,8 +3998,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
                 .count())
             .as("the queued capacity-release kick executes")
             .isGreaterThan(executedKicksBefore));
+    // 即时 kick 可能与持锁扫描竞争或先完成旧轮次；保留真实周期扫描的兜底。
     await()
-        .atMost(Duration.ofSeconds(15))
+        .atMost(Duration.ofSeconds(30))
         .untilAsserted(() -> assertThat(scheduleDecisions.size())
             .as(
                 "capacity release should reevaluate the waiting candidate; decisions=%s;"

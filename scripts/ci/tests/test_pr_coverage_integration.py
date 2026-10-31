@@ -36,6 +36,26 @@ class PrCoverageIntegrationTest(unittest.TestCase):
         env.update(A_REQUIRED="false", A_MAIN_RESULT="skipped", A_EXTRA_RESULT="skipped")
         self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
 
+    def test_trigger_worker_parallel_shards_keep_coverage_and_fail_closed(self) -> None:
+        workflow = (ROOT / ".github/workflows/pr-gate.yml").read_text(encoding="utf-8")
+        aggregate = workflow.split("  unit-it-b1:\n", 1)[1].split("\n  # ===", 1)[0]
+        self.assertIn("unit-it-b1-main, unit-it-b1-extra", aggregate.split("runs-on:", 1)[0])
+        for module in ("batch-trigger", "batch-worker/process", "batch-worker/dispatch"):
+            self.assertIn(f"--extra-report {module}=ci-coverage/b1-extra/{module}/target/site/jacoco/jacoco.xml", aggregate)
+        guard = aggregate.split("      - name: Verify Trigger and worker shard results\n", 1)[1]
+        guard = guard.split("        run: |\n", 1)[1].split("\n      - name:", 1)[0]
+        command = textwrap.dedent(guard)
+        env = {**os.environ, "SCOPE_RESULT": "success", "REQUIRED": "true",
+               "MAIN_RESULT": "success", "EXTRA_RESULT": "success"}
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+        for key in ("MAIN_RESULT", "EXTRA_RESULT"):
+            for result in ("failure", "skipped", "cancelled"):
+                with self.subTest(key=key, result=result):
+                    self.assertNotEqual(0, subprocess.run(["bash", "-e", "-c", command],
+                                                         env={**env, key: result}).returncode)
+        env.update(REQUIRED="false", MAIN_RESULT="skipped", EXTRA_RESULT="skipped")
+        self.assertEqual(0, subprocess.run(["bash", "-e", "-c", command], env=env).returncode)
+
     def test_console_parallel_shards_are_required_and_reports_are_merged(self) -> None:
         workflow = (ROOT / ".github/workflows/pr-gate.yml").read_text(encoding="utf-8")
         aggregate = workflow.split("  unit-it-b2:\n", 1)[1].split("\n  # ===", 1)[0]

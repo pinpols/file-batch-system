@@ -837,6 +837,7 @@
 - 修复 Trigger 高压下 admission/relay 失衡、冷启动释放停顿和恢复残留；收紧批量日生命周期、Worker 状态更新及 dry-run/dispatch backoff 的租户 CAS 条件。
 - 升级存在已知漏洞的嵌入式 Tomcat，并强化生产配置、凭据和 CI 安全门禁的 fail-close 行为。
 - 修复日志归档路径、Grafana provisioning、XFF MDC 透传和观测脚本路径漂移。
+- CI 并行测试分片合并覆盖率数据并均衡编排长尾分片；恢复相关 E2E / 集成测试的等待窗口与 MyBatis 日志控制修正。仅影响测试与构建配置，不改变生产运行行为。
 
 ### Docs
 
