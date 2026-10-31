@@ -2247,7 +2247,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .build();
     Instant firstFire = initialTrigger.getFireTimeAfter(Date.from(scanAt)).toInstant();
     Instant nextFire = initialTrigger.getFireTimeAfter(Date.from(firstFire)).toInstant();
-    LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
+    // 使用首日之后的业务日：首批 coverage 上限（~10 万条）可能刚好覆盖完整首日，导致
+    // settle 直接 SETTLED 而非 CUTOFF（CI 上偶发）；第二天 coverage 必然不完整，断言确定。
+    LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate().plusDays(1);
     jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
