@@ -2,6 +2,8 @@
 
 ## 2026-10-31 测试汇总与 Flyway 门禁
 
+- Full CI E2E 稳定性：WorkerReportLost 系列在派发前显式等待独立 Worker 的 Kafka 消费组完成分区分配，避免消费者入组前消息按 latest 跳过导致整段等待超时；并放宽报告等待窗口以适配低配 CI。
+
 - 编排测试的 MyBatis SQL 使用日志级别控制，减少 CI 日志截断；需要时可启用 Mapper 调试输出。
 
 - PR 的 Trigger 与 Worker 测试分片并行执行并合并覆盖率；Full CI 拆分编排长类与业务提交恢复长尾，合并覆盖数据并保留原有测试与必需检查。

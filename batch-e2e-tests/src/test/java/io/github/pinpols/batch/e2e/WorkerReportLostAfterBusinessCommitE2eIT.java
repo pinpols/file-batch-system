@@ -640,7 +640,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           params));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("I1 has committed the business write and reached the REPORT endpoint")
           .isTrue();
       TaskExecutionReportCommand i1Report = firstInvocationReport.get();
@@ -671,7 +671,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           startImportWorker(workerPoolCode, consumerGroupId, worker2Log, 600_000, "attempt-2");
       awaitWorkerStarted(worker2, worker2Log);
       awaitWorkerPoolOnline(workerPoolCode);
-      assertThat(replacementReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(replacementReportStarted.await(300, TimeUnit.SECONDS))
           .as("a replacement Worker instance claims the unpinned reclaim dispatch")
           .isTrue();
       TaskExecutionReportCommand i2Report = replacementReport.get();
@@ -869,7 +869,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           Map.of("bizDate", BIZ_DATE.toString())));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("PROCESS COMMIT completed before the first invocation reaches REPORT")
           .isTrue();
       TaskExecutionReportCommand i1Report = firstReport.get();
@@ -892,7 +892,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       worker2 = startProcessWorker(workerPoolCode, consumerGroupId, worker2Log, "attempt-2");
       awaitProcessWorkerStarted(worker2, worker2Log);
       awaitWorkerPoolOnline(workerPoolCode, "PROCESS");
-      assertThat(replacementReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(replacementReportStarted.await(300, TimeUnit.SECONDS))
           .as("replacement PROCESS invocation claims the reclaimed task and reports")
           .isTrue();
       TaskExecutionReportCommand i2Report = replacementReport.get();
@@ -1296,7 +1296,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           params));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("HTTP receiver accepted the dispatch before the first Worker reaches REPORT")
           .isTrue();
       TaskExecutionReportCommand i1Report = firstReport.get();
@@ -1321,7 +1321,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       worker2 = startDispatchWorker(workerPoolCode, consumerGroupId, worker2Log, "attempt-2");
       awaitDispatchWorkerStarted(worker2, worker2Log);
       awaitWorkerPoolOnline(workerPoolCode, "DISPATCH");
-      assertThat(replacementReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(replacementReportStarted.await(300, TimeUnit.SECONDS))
           .as("replacement DISPATCH invocation completes from the persisted ACKED record")
           .isTrue();
       TaskExecutionReportCommand i2Report = replacementReport.get();
@@ -1438,7 +1438,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
       launchDispatchCrashScenario(scenario);
 
-      boolean accepted = acceptedBeforeResponse.await(90, TimeUnit.SECONDS);
+      boolean accepted = acceptedBeforeResponse.await(180, TimeUnit.SECONDS);
       assertThat(accepted).as("真实 API_PUSH 接收端在响应返回前已追加业务台账").isTrue();
       assertDispatchCrashWindow(scenario, firstWorker);
       stopProcess(firstWorker);
@@ -1607,7 +1607,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
         awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
         launchDispatchCrashScenario(scenario);
 
-        boolean firstReportArrived = firstReportStarted.await(180, TimeUnit.SECONDS);
+        boolean firstReportArrived = firstReportStarted.await(300, TimeUnit.SECONDS);
         assertThat(firstReportArrived)
             .as("原独立 OSS Worker 在主对象和清单提交后发送真实 REPORT")
             .isTrue();
@@ -1650,7 +1650,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
             workerOverrides);
         awaitDispatchWorkerStarted(replacementWorker, replacementWorkerLog);
         awaitWorkerPoolOnline(scenario.workerPoolCode(), "DISPATCH");
-        boolean replacementReportArrived = replacementReportStarted.await(180, TimeUnit.SECONDS);
+        boolean replacementReportArrived = replacementReportStarted.await(300, TimeUnit.SECONDS);
         assertThat(replacementReportArrived)
             .as("替代独立 OSS Worker 实际消费并从已持久 ACKED 状态完成 REPORT")
             .isTrue();
@@ -2498,7 +2498,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           params));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("ATOMIC HTTP receiver accepts the request before the first Worker reaches REPORT")
           .isTrue();
       TaskExecutionReportCommand i1Report = firstReport.get();
@@ -2520,7 +2520,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       worker2 = startAtomicWorker(workerPoolCode, consumerGroupId, worker2Log, "attempt-2");
       awaitAtomicWorkerStarted(worker2, worker2Log);
       awaitWorkerPoolOnline(workerPoolCode, "ATOMIC");
-      assertThat(replacementReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(replacementReportStarted.await(300, TimeUnit.SECONDS))
           .as("replacement ATOMIC invocation repeats the same receiver request")
           .isTrue();
       TaskExecutionReportCommand i2Report = replacementReport.get();
@@ -2675,7 +2675,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           params));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("the non-idempotent HTTP side effect completed before the Worker reached REPORT")
           .isTrue();
       assertThat(receivedRequests).hasValue(1);
@@ -2945,7 +2945,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       launchService.launch(request);
       outboxPublishSupport.publishAllPending(TENANT);
 
-      boolean completedBeforeReport = firstReportStarted.await(180, TimeUnit.SECONDS);
+      boolean completedBeforeReport = firstReportStarted.await(300, TimeUnit.SECONDS);
       assertThat(completedBeforeReport)
           .as("the real process completes before REPORT is accepted")
           .isTrue();
@@ -3737,7 +3737,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           parameters));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS)).isTrue();
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS)).isTrue();
       assertThat(firstReport.get().success())
           .as("the database executor committed successfully")
           .isTrue();
@@ -4042,7 +4042,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
           params));
       outboxPublishSupport.publishAllPending(TENANT);
 
-      assertThat(firstReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(firstReportStarted.await(300, TimeUnit.SECONDS))
           .as("Export I1 has stored and registered its object before REPORT")
           .isTrue();
       TaskExecutionReportCommand i1Report = firstReport.get();
@@ -4073,7 +4073,7 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
       worker2 = startExportWorker(workerPoolCode, consumerGroupId, worker2Log, "attempt-2");
       awaitExportWorkerStarted(worker2, worker2Log);
       awaitWorkerPoolOnline(workerPoolCode, "EXPORT");
-      assertThat(replacementReportStarted.await(180, TimeUnit.SECONDS))
+      assertThat(replacementReportStarted.await(300, TimeUnit.SECONDS))
           .as("replacement Export Worker reuses the registered artifact and reaches REPORT")
           .isTrue();
       TaskExecutionReportCommand i2Report = replacementReport.get();
@@ -4371,12 +4371,17 @@ class WorkerReportLostAfterBusinessCommitE2eIT extends AbstractIntegrationTest {
 
   private void awaitDispatchWorkerStarted(Process worker, Path logFile) {
     await()
-        .atMost(Duration.ofSeconds(180))
-        .pollInterval(Duration.ofMillis(200))
+        .atMost(Duration.ofSeconds(240))
+        .pollInterval(Duration.ofMillis(250))
         .untilAsserted(() -> {
           assertThat(worker.isAlive()).isTrue();
           String log = Files.readString(logFile, StandardCharsets.UTF_8);
-          assertThat(log).contains("Started BatchWorkerDispatchApplication");
+          // 仅 "Started Application" 不代表 Kafka 消费者已完成分区分配：在消费者入组前派发的
+          // 消息会被 latest 起点跳过，随后所有等待都会超时。这里显式等待消费组完成分区分配，
+          // 再触发 launch，消除该时序竞争。
+          assertThat(log)
+              .contains("Started BatchWorkerDispatchApplication")
+              .contains("partitions assigned");
         });
   }
 
