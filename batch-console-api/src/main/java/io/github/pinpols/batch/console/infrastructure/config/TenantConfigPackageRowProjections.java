@@ -54,6 +54,7 @@ import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
@@ -125,12 +126,11 @@ public class TenantConfigPackageRowProjections {
   }
 
   private String dependencyBizDateAlignments(JobDefinitionEntity entity) {
-    boolean dependencyRulesAreMissing = EmptyChecks.isNull(entity.getJobDependencyRules())
-        || EmptyChecks.isEmpty(entity.getJobDependencyRules());
-    if (dependencyRulesAreMissing) {
+    List<JobDependencyRuleResponse> dependencyRules = entity.getJobDependencyRules();
+    if (EmptyChecks.isEmpty(dependencyRules)) {
       return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
     }
-    return entity.getJobDependencyRules().stream()
+    return dependencyRules.stream()
         .map(rule -> rule.bizDateAlignment())
         .collect(Collectors.joining(","));
   }

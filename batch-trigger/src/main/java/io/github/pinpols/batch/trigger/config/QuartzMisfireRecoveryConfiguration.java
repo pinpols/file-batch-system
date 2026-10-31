@@ -37,7 +37,7 @@ public class QuartzMisfireRecoveryConfiguration {
   }
 
   static String schedulerName(String deploymentNamespace) {
-    if (EmptyChecks.isNull(deploymentNamespace) || EmptyChecks.isBlank(deploymentNamespace)) {
+    if (EmptyChecks.isBlank(deploymentNamespace)) {
       return "BatchTriggerScheduler";
     }
     return "BatchTriggerScheduler-" + deploymentNamespace.trim();

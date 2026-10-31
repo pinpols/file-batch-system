@@ -54,22 +54,24 @@ public final class WorkflowExecutionGraphAssembler {
             .startedAt(run.getStartedAt())
             .finishedAt(run.getFinishedAt())
             .generatedAt(BatchDateTimeSupport.utcNow());
-    if (EmptyChecks.isNull(run.getExecutionSnapshot())
-        || EmptyChecks.isBlank(run.getExecutionSnapshot())) {
+    String executionSnapshot = run.getExecutionSnapshot();
+    if (EmptyChecks.isBlank(executionSnapshot)) {
       return response.snapshotAvailable(false).nodes(List.of()).edges(List.of()).build();
     }
     Snapshot snapshot;
     try {
-      snapshot = JsonUtils.fromJsonStrict(run.getExecutionSnapshot(), Snapshot.class);
+      snapshot = JsonUtils.fromJsonStrict(executionSnapshot, Snapshot.class);
     } catch (IllegalArgumentException malformed) {
       throw invalidSnapshot();
     }
-    if (EmptyChecks.isNull(snapshot)
-        || !Objects.equals(snapshot.schemaVersion(), 2)
+    if (EmptyChecks.isNull(snapshot)) {
+      throw invalidSnapshot();
+    }
+    List<FrozenNode> frozenNodes = snapshot.nodes();
+    if (!Objects.equals(snapshot.schemaVersion(), 2)
         || !Objects.equals(snapshot.workflowDefinitionId(), run.getWorkflowDefinitionId())
         || !Objects.equals(snapshot.workflowVersion(), run.getWorkflowVersionSnapshot())
-        || EmptyChecks.isNull(snapshot.nodes())
-        || EmptyChecks.isEmpty(snapshot.nodes())
+        || EmptyChecks.isEmpty(frozenNodes)
         || EmptyChecks.isNull(snapshot.edges())) {
       throw invalidSnapshot();
     }
@@ -79,15 +81,15 @@ public final class WorkflowExecutionGraphAssembler {
     }
     Set<String> codes = new HashSet<>();
     List<NodeProgress> nodes = new ArrayList<>();
-    for (FrozenNode frozen : snapshot.nodes()) {
+    for (FrozenNode frozen : frozenNodes) {
       if (Boolean.FALSE.equals(frozen.enabled())) continue;
-      if (EmptyChecks.isNull(frozen.nodeCode())
-          || EmptyChecks.isBlank(frozen.nodeCode())
+      String nodeCode = frozen.nodeCode();
+      if (EmptyChecks.isBlank(nodeCode)
           || EmptyChecks.isNull(frozen.nodeType())
-          || !codes.add(frozen.nodeCode())) throw invalidSnapshot();
-      WorkflowExecutionNodeView current = latest.get(frozen.nodeCode());
+          || !codes.add(nodeCode)) throw invalidSnapshot();
+      WorkflowExecutionNodeView current = latest.get(nodeCode);
       NodeProgress.NodeProgressBuilder node = NodeProgress.builder()
-          .nodeCode(frozen.nodeCode())
+          .nodeCode(nodeCode)
           .nodeName(frozen.nodeName())
           .nodeType(frozen.nodeType())
           .relatedJobCode(frozen.relatedJobCode());
@@ -107,10 +109,10 @@ public final class WorkflowExecutionGraphAssembler {
                 + zero(current.getFailedPartitions())
                 + zero(current.getCancelledPartitions())
                 + zero(current.getTerminatedPartitions());
-        List<String> activeSteps = EmptyChecks.isNull(current.getActiveSteps())
-                || EmptyChecks.isBlank(current.getActiveSteps())
+        String activeStepText = current.getActiveSteps();
+        List<String> activeSteps = EmptyChecks.isBlank(activeStepText)
             ? List.of()
-            : Arrays.asList(current.getActiveSteps().split(","));
+            : Arrays.asList(activeStepText.split(","));
         nodes.add(node.nodeStatus(current.getNodeStatus())
             .nodeRunId(current.getId())
             .runSeq(current.getRunSeq())

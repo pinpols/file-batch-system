@@ -122,8 +122,7 @@ public class DefaultConsoleConfigSyncApplicationService
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.bundle_required");
     }
     List<String> targetTenantIds = request.getTargetTenantIds();
-    boolean targetTenantSelectionIsInvalid = EmptyChecks.isNull(targetTenantIds)
-        || EmptyChecks.isEmpty(targetTenantIds)
+    boolean targetTenantSelectionIsInvalid = EmptyChecks.isEmpty(targetTenantIds)
         || targetTenantIds.stream().anyMatch(EmptyChecks::isBlank)
         || new HashSet<>(targetTenantIds).size() != targetTenantIds.size();
     if (targetTenantSelectionIsInvalid) {
@@ -246,8 +245,7 @@ public class DefaultConsoleConfigSyncApplicationService
     }
     AuditPlan plan = JsonUtils.fromJson(storedDetail.toString(), AuditPlan.class);
     List<String> targets = plan.targetTenantIds();
-    boolean syncPlanTargetsAreInvalid = EmptyChecks.isNull(targets)
-        || EmptyChecks.isEmpty(targets)
+    boolean syncPlanTargetsAreInvalid = EmptyChecks.isEmpty(targets)
         || EmptyChecks.isNull(plan.summary())
         || targets.size() != new HashSet<>(targets).size();
     if (syncPlanTargetsAreInvalid) {

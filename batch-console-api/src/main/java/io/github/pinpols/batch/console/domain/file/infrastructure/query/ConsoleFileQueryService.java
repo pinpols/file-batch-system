@@ -607,9 +607,8 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     Instant lastHeartbeatAt = row.lastHeartbeatAt();
     ConsolePipelineProgressItemResponse live = liveProgress.get(display(row.stageCode()));
     // 跨服务查询不共享数据库快照；必须再次核对缓存来源阶段ID，避免新尝试计数污染旧快照。
-    boolean sameAttempt = EmptyChecks.isNotNull(live)
-        && EmptyChecks.isNotEmpty(live.stepRunIds())
-        && live.stepRunIds().contains(row.stepId());
+    List<Long> stepRunIds = EmptyChecks.isNull(live) ? null : live.stepRunIds();
+    boolean sameAttempt = EmptyChecks.isNotEmpty(stepRunIds) && stepRunIds.contains(row.stepId());
     Long rowsProcessed = row.rowsProcessed();
     Long totalRowsHint = row.totalRowsHint();
     boolean running = STEP_STATUS_RUNNING.equals(display(row.stepStatus()));

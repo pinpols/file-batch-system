@@ -132,9 +132,10 @@ final class TaskOutcomeDagProgressor {
     WorkflowNodeRunEntity nodeRun =
         workflowMappers.workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(
             ctx.workflowRun().getId(), ctx.currentNodeCode());
-    if (EmptyChecks.isNotNull(nodeRun)
-        && !EmptyChecks.isBlank(nodeRun.getSourcePayloadProtected())) {
-      return secretPayloadProtector.reveal(nodeRun.getSourcePayloadProtected());
+    String protectedPayload =
+        EmptyChecks.isNull(nodeRun) ? null : nodeRun.getSourcePayloadProtected();
+    if (EmptyChecks.isNotBlank(protectedPayload)) {
+      return secretPayloadProtector.reveal(protectedPayload);
     }
     return null;
   }

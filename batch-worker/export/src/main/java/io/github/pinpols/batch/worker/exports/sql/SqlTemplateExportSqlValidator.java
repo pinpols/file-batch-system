@@ -7,7 +7,6 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import net.sf.jsqlparser.parser.CCJSqlParserUtil;
 import net.sf.jsqlparser.statement.Statement;
@@ -63,18 +62,16 @@ public class SqlTemplateExportSqlValidator {
       checkNoSelectStar(select);
     }
 
-    boolean schemaAllowlistIsConfigured = EmptyChecks.isNotNull(security)
-        && EmptyChecks.isNotNull(security.getAllowedSchemas())
-        && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getAllowedSchemas()));
-    if (schemaAllowlistIsConfigured) {
-      checkAllowedSchemas(statement, security.getAllowedSchemas());
+    List<String> allowedSchemas =
+        EmptyChecks.isNull(security) ? null : security.getAllowedSchemas();
+    if (EmptyChecks.isNotEmpty(allowedSchemas)) {
+      checkAllowedSchemas(statement, allowedSchemas);
     }
 
-    boolean forbiddenFunctionsAreConfigured = EmptyChecks.isNotNull(security)
-        && EmptyChecks.isNotNull(security.getForbiddenFunctions())
-        && !EmptyChecks.isEmpty(Objects.requireNonNull(security.getForbiddenFunctions()));
-    if (forbiddenFunctionsAreConfigured) {
-      checkNoForbiddenFunctions(statement, security.getForbiddenFunctions());
+    List<String> forbiddenFunctions =
+        EmptyChecks.isNull(security) ? null : security.getForbiddenFunctions();
+    if (EmptyChecks.isNotEmpty(forbiddenFunctions)) {
+      checkNoForbiddenFunctions(statement, forbiddenFunctions);
     }
 
     checkRequiredParams(sql);

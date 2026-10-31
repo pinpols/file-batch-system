@@ -1,5 +1,33 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-10-31：补跑日方法拆分以通过 NCSS
+
+`d23a51483` 的 pr-gate 里，`DefaultConsoleJobApprovalService.catchUpBatchDay` 的 NCSS 为 60，达到 PMD `NcssCount` 方法阈值。请求作业码的清洗抽到 `sanitizedRequestedJobCodes`。空列表仍返回 null；非空时仍过滤空白、按 128 截断并去重。`request.getJobCodes()` 仍只调用一次。同一提交刷新 `docs/stats/java-readability-inventory.md`，行数变化来自本分支已经落地的判空收敛。
+
+验证：`batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker/process`、`batch-worker/export` 及 reactor 依赖的 `pmd:check` 通过。`DefaultConsoleJobApprovalServiceWorkflowTest` 14 项通过。未改 SQL、接口或迁移。
+
+## 2026-10-31：检查通过后复用的访问器只取一次
+
+接收方和字段不是同一表达式时，判空仍然保留。本轮只处理检查通过后还会再次调用同一 getter 的 16 个生产文件：先确认接收方，再绑定字段，后续使用这份局部变量。空请求、空集合和失败分支仍按原顺序返回，不提前调用被短路的 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 297 项、0 失败。覆盖 `CalendarBizDateResolverTest` 9、`DefaultTriggerServiceTest` 32、`DefaultTaskCreationServiceTest` 25、`WorkflowRunReplayPreviewServiceTest` 40、`ChildJobLaunchSupportTest` 5、`DefaultPartitionDispatchServiceTest` 14、`DefaultPartitionLifecycleServiceTest` 19、`DefaultTaskAssignmentServiceTest` 30、`TaskOutcomeDagProgressorTest` 2、`TaskOutcomeSummaryBuilderTest` 8、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunReportLockTest` 2、`SqlTemplateExportSqlValidatorTest` 41、`SqlTransformComputeSqlValidatorTest` 25、`ConsoleFilePipelineProgressBridgeTest` 10、`WorkflowDagValidatorTest` 24。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
+## 2026-10-31：同一取值的重复判空再收敛
+
+上一节只处理简单标识符。本轮处理同一 getter 或访问器被判空两次的 20 处：先取一次局部变量，再交给 `isBlank` 或 `isEmpty`。通过检查后还会使用该值时，后续也用这份局部变量。`WorkflowRunExecutionSnapshot.from`、启动请求校验、`quartzIdentity` 和冻结图 `nodes()` 仍先确认接收方非空，再调用 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝，空白字符串保持原口径。
+
+另外 10 处已经是同一简单值或已绑定 getter 的 `isNotNull(x) && isNotBlank(x)`、`isNotNull(x) && !isBlank(x)`，收成 `isNotBlank(x)`。接收方和字段不是同一表达式的组合保持原样。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 291 项、0 失败；`PlatformHttpClientTest` 另有 1 项跳过。覆盖 `NamespacedObjectStoreTest` 3、`QuartzLaunchJobTest` 12、`TriggerSchedulerFacadeTest` 25、`PlatformHttpClientTest` 15、`BatchDayReplayServiceTest` 31、`DefaultPartitionLifecycleServiceTest` 19、`NodePartitionProgressCalculatorTest` 3、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunExecutionSnapshotTest` 11、`DefaultLaunchValidationServiceTest` 16、`DefaultWorkerRegistryServiceTest` 35、`JobDependencyWaitingLaunchServiceTest` 69、`BatchManifestTest` 9、`DefaultConsoleJobApprovalServiceWorkflowTest` 14、`ConsoleSelfServiceJobServiceTest` 5、`WorkflowExecutionGraphAssemblerTest` 9、`TenantConfigPackageRowProjectionsMonitoringPolicyTest` 4。同名 Worker Core 的 `DefaultWorkerRegistryServiceTest` 7 项也通过，该类未改。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
+## 2026-10-31：简单变量重复判空收敛
+
+2026-10-28 扫描列出的 71 处 `EmptyChecks.isNull(x) || isBlank/isEmpty(x)` 都是同一简单标识符。`isBlank` 与 `isEmpty` 的各重载已经把 null 视为空，两段判断结果相同。现只保留后一段调用。null 集合仍在进入 `size()` 或 `stream()` 之前返回，短路顺序保持。
+
+本轮改动落在当前 `main` 的 45 个生产文件。方法调用形式仍会求值两次，包括 `request.traceId()`、`request.getJobCodes()`、`run.getTenantId()` 与 `node.getNodeCode()`，本轮未改。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。`EmptyChecksTest`、`SdkTaskContextTest`、`TaskDispatchExecutorTest`、`PipelineProgressQueryServiceTest` 合计 25 项通过（batch-common 3、Java SDK 13、Worker Core 6、Console 3）。随后 Trigger、Orchestrator、Import、Export、Process、Dispatch 生产编译通过。未跑全 reactor 测试，也未改 SQL、接口或迁移。
+
 ## 2026-10-30：批量日补跑根请求修复复核
 
 沿 `BUG-20261030-BATCHDAY-CATCHUP-ROOT` 及 `BUG-20261030-BATCHDAY-PARENT-IDENTITY` 核对当前源码：批日调度器生成 `tenant:batch-day-catchup:calendar:date:job` 键；根请求读取及失败日扫描都按租户、该键、`CATCH_UP` 类型和空父 Workflow 限定，避免同键子 Job 遮蔽根请求。V369 部分唯一索引覆盖该键前缀的同租户 `CATCH_UP` 根请求，不限制子请求。Trigger 通用按键回查也排除子请求，但保留别名匹配和原有排序/单条选择；其业务范围比批日根请求查询更广，不能把两条 SQL 简化为同一口径。

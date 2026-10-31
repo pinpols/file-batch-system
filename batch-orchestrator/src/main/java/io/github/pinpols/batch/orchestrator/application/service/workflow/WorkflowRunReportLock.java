@@ -51,9 +51,11 @@ public final class WorkflowRunReportLock {
 
   private String resolveCalendarCode(WorkflowRunEntity workflowRun) {
     WorkflowRunExecutionSnapshot executionSnapshot = WorkflowRunExecutionSnapshot.from(workflowRun);
-    if (EmptyChecks.isNotNull(executionSnapshot)
-        && EmptyChecks.isNotBlank(executionSnapshot.workflowCalendarCode())) {
-      return executionSnapshot.workflowCalendarCode();
+    if (EmptyChecks.isNotNull(executionSnapshot)) {
+      String calendarCode = executionSnapshot.workflowCalendarCode();
+      if (EmptyChecks.isNotBlank(calendarCode)) {
+        return calendarCode;
+      }
     }
     Long workflowDefinitionId = workflowRun.getWorkflowDefinitionId();
     WorkflowDefinitionEntity workflowDefinition =

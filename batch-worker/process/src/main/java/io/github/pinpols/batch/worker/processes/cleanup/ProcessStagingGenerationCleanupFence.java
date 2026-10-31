@@ -45,7 +45,7 @@ public class ProcessStagingGenerationCleanupFence {
     // 围栏内重新读取任务的当前代际；不能确认当前代际时不回收。
     String currentGeneration = platformMapper.selectTaskCurrentStagingGeneration(
         candidate.getTenantId(), candidate.getTaskId());
-    if (EmptyChecks.isNull(currentGeneration) || EmptyChecks.isBlank(currentGeneration)) {
+    if (EmptyChecks.isBlank(currentGeneration)) {
       return false;
     }
     UUID current;

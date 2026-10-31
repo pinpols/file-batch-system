@@ -47,7 +47,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     delegate.deleteMany(
         bucket,
         keys.stream()
-            .filter(key -> EmptyChecks.isNotNull(key) && !EmptyChecks.isBlank(key))
+            .filter(key -> EmptyChecks.isNotBlank(key))
             .map(this::physicalKey)
             .toList());
   }
@@ -123,11 +123,11 @@ public final class NamespacedObjectStore implements BatchObjectStore {
   }
 
   private String physicalMarker(String marker) {
-    return EmptyChecks.isNull(marker) || EmptyChecks.isBlank(marker) ? marker : physicalKey(marker);
+    return EmptyChecks.isBlank(marker) ? marker : physicalKey(marker);
   }
 
   private String logicalMarker(String marker) {
-    return EmptyChecks.isNull(marker) || EmptyChecks.isBlank(marker) ? marker : logicalKey(marker);
+    return EmptyChecks.isBlank(marker) ? marker : logicalKey(marker);
   }
 
   private String logicalKey(String key) {

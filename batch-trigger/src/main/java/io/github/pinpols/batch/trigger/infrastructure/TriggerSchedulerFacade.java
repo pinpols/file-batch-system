@@ -377,14 +377,17 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   }
 
   public static String quartzIdentity(TriggerDescriptor descriptor) {
-    boolean workflowScheduleDescriptorIsIncomplete = EmptyChecks.isNull(descriptor)
-        || EmptyChecks.isNull(descriptor.getTenantId())
-        || EmptyChecks.isNull(descriptor.getWorkflowCode())
-        || EmptyChecks.isBlank(descriptor.getWorkflowCode());
+    if (EmptyChecks.isNull(descriptor)) {
+      throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
+    }
+    String tenantId = descriptor.getTenantId();
+    String workflowCode = descriptor.getWorkflowCode();
+    boolean workflowScheduleDescriptorIsIncomplete =
+        EmptyChecks.isNull(tenantId) || EmptyChecks.isBlank(workflowCode);
     if (workflowScheduleDescriptorIsIncomplete) {
       throw new IllegalArgumentException("Scheduled triggers require a Workflow identity");
     }
-    return descriptor.getTenantId() + ":WF:" + descriptor.getWorkflowCode();
+    return tenantId + ":WF:" + workflowCode;
   }
 
   /** OPEN/CUTOFF，尤其是定时触发按预期跳过该节假日时。 */
@@ -419,7 +422,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       return;
     }
     List<? extends Trigger> attachedTriggers = scheduler.getTriggersOfJob(workflowJobKey);
-    if (EmptyChecks.isNull(attachedTriggers) || EmptyChecks.isEmpty(attachedTriggers)) {
+    if (EmptyChecks.isEmpty(attachedTriggers)) {
       return;
     }
     String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);

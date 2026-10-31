@@ -266,7 +266,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         continue;
       }
       String taskTypeCode = descriptor.code();
-      if (EmptyChecks.isNull(taskTypeCode) || EmptyChecks.isBlank(taskTypeCode)) {
+      if (EmptyChecks.isBlank(taskTypeCode)) {
         continue;
       }
       // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
@@ -395,13 +395,12 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
     // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
     // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
-    boolean requestedRegistryStatusIsValid = EmptyChecks.isNotNull(requestedStatus)
-        && !EmptyChecks.isBlank(requestedStatus)
-        && isValidRegistryStatus(requestedStatus);
+    boolean requestedRegistryStatusIsValid =
+        EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
     if (requestedRegistryStatusIsValid) {
       return requestedStatus;
     }
-    if (EmptyChecks.isNull(defaultStatus) || EmptyChecks.isBlank(defaultStatus)) {
+    if (EmptyChecks.isBlank(defaultStatus)) {
       return currentStatus;
     }
     return defaultStatus;
