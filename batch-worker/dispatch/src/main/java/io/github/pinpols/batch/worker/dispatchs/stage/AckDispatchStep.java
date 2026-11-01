@@ -67,7 +67,8 @@ public class AckDispatchStep implements DispatchStageStep {
             : null;
     String receiptCode = dispatchPayload.receiptCode();
     boolean dispatchResultCanSupplyReceiptCode =
-        EmptyChecks.isBlank(receiptCode) && EmptyChecks.isNotNull(dispatchResult);
+        (EmptyChecks.isBlank(receiptCode))
+            && EmptyChecks.isNotNull(dispatchResult);
     if (dispatchResultCanSupplyReceiptCode) {
       receiptCode = dispatchResult.receiptCode();
     }

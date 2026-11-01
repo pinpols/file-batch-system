@@ -66,17 +66,17 @@ public class ConsoleAuthApplicationService {
 
   /** 在认证用例入口解密登录凭据，并执行加密登录策略。 */
   private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
-    if (EmptyChecks.isNull(request)) {
+    if (request == null) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
     }
     if (request.isEncrypted()) {
       String plaintext = loginKeyPairService.decrypt(
           request.getEncryptedKey(), request.getIv(), request.getCiphertext());
       ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
-      if (EmptyChecks.isNull(decoded)) {
+      if (decoded == null) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
       }
-      if (EmptyChecks.isNull(decoded.getCaptchaToken())) {
+      if (decoded.getCaptchaToken() == null) {
         decoded.setCaptchaToken(request.getCaptchaToken());
       }
       return decoded;

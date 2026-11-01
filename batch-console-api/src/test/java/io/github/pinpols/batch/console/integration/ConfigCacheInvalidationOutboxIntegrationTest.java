@@ -26,25 +26,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @DisplayName("配置缓存失效意图的事务和领取栅栏")
 class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTest {
-  private final ConfigCacheInvalidationRelay relay;
-
-  private final ConfigCacheInvalidationOutboxMapper outbox;
-
-  private final JdbcTemplate jdbc;
-
-  private final PlatformTransactionManager manager;
+  @Autowired
+  private ConfigCacheInvalidationRelay relay;
 
   @Autowired
-  ConfigCacheInvalidationOutboxIntegrationTest(
-      ConfigCacheInvalidationRelay relay,
-      ConfigCacheInvalidationOutboxMapper outbox,
-      JdbcTemplate jdbc,
-      @Qualifier("transactionManager") PlatformTransactionManager manager) {
-    this.relay = relay;
-    this.outbox = outbox;
-    this.jdbc = jdbc;
-    this.manager = manager;
-  }
+  private ConfigCacheInvalidationOutboxMapper outbox;
+
+  @Autowired
+  private JdbcTemplate jdbc;
+
+  @Autowired
+  @Qualifier("transactionManager")
+  private PlatformTransactionManager manager;
 
   private String tenant;
   private String createdRole;
@@ -80,7 +73,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("配额写入与意图同事务提交，回滚不保留意图")
-  void shouldRecordOnlyCommittedIntentsForQuotaChanges() {
+  void quotaChangesRecordOnlyCommittedIntents() {
     String insert = """
         insert into batch.tenant_quota_policy (tenant_id, policy_code, max_running_jobs_per_tenant)
         values (?, 'quota', 10)
@@ -107,7 +100,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("过期领取被重领后，旧令牌不能确认或释放")
-  void shouldRejectExpiredClaimForNewClaim() {
+  void expiredClaimCannotAcknowledgeNewClaim() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
     String prioritizeSql = """
         update batch.config_cache_invalidation_outbox set next_attempt_at = '-infinity'
@@ -145,7 +138,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("普通无绕过权限角色不能读取其他租户的失效意图")
-  void shouldHidePendingIntentsFromOrdinaryRole() {
+  void ordinaryRoleCannotReadPendingIntents() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
     String role = "config_cache_test_" + UUID.randomUUID().toString().replace("-", "");
     String createRoleSql = "create role %s nologin nosuperuser nobypassrls".formatted(role);

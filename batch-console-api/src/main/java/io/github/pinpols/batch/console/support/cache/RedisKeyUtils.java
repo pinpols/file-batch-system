@@ -81,7 +81,7 @@ public final class RedisKeyUtils {
 
   private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {
     Long n = redisTemplate.delete(keys);
-    if (EmptyChecks.isNull(n)) {
+    if (n == null) {
       throw new IllegalStateException("Redis batch delete did not execute");
     }
     return n;

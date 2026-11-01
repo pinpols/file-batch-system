@@ -66,7 +66,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
     if (!tenantActionRateLimiter.tryConsume(
-        EmptyChecks.isNull(request) ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
+        request == null ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
       throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
     }
     rejectMissingWorkerGroup(request);

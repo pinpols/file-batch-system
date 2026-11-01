@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookSubscriptionMapper;
@@ -74,6 +75,7 @@ class ConsoleWebhookServiceTest {
   private ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private ConsoleTenantGuard tenantGuard;
   private CallbackUrlValidator callbackUrlValidator;
+  private WebhookRelayProperties relayProperties;
   private ConsoleWebhookService service;
 
   @BeforeEach
@@ -82,9 +84,36 @@ class ConsoleWebhookServiceTest {
     deliveryLogRepository = mock(ConsoleWebhookDeliveryLogMapper.class);
     tenantGuard = mock(ConsoleTenantGuard.class);
     callbackUrlValidator = mock(CallbackUrlValidator.class);
+    relayProperties = new WebhookRelayProperties();
     service = new ConsoleWebhookService(
-        subscriptionRepository, deliveryLogRepository, tenantGuard, callbackUrlValidator);
+        subscriptionRepository,
+        deliveryLogRepository,
+        tenantGuard,
+        callbackUrlValidator,
+        relayProperties);
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+  }
+
+  @Test
+  @DisplayName("订阅数达到租户上限时拒绝创建，不再写库")
+  void shouldRejectCreate_whenTenantSubscriptionLimitReached() {
+    relayProperties.setMaxSubscriptionsPerTenant(2);
+    when(subscriptionRepository.findByTenantAndName("t1", "ops-hook")).thenReturn(Optional.empty());
+    when(subscriptionRepository.countByTenant("t1")).thenReturn(2L);
+    CreateSubscriptionCommand command = CreateSubscriptionCommand.builder()
+        .tenantId("t1")
+        .name("ops-hook")
+        .callbackUrl("https://example.com/hook")
+        .eventTypes("JOB_FAILED")
+        .enabled(true)
+        .build();
+    assertThatThrownBy(() -> service.createSubscription(command))
+        .isInstanceOfSatisfying(
+            BizException.class,
+            ex -> assertThat(ex.getMessageKey())
+                .isEqualTo("error.webhook.subscription_limit_exceeded"));
+    verify(subscriptionRepository, never())
+        .insert(ArgumentMatchers.any(ConsoleWebhookSubscriptionInsertParam.class));
   }
 
   @Test

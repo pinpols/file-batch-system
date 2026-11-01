@@ -2,7 +2,6 @@ package io.github.pinpols.batch.console.domain.job.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
@@ -40,7 +39,7 @@ public class ConsoleJobBundleController {
   public CommonResponse<ConsoleJobBundleResultResponse> create(
       @Valid @RequestBody JobBundleCreateRequest request, HttpServletRequest httpRequest) {
     String requestHash = requestHash(httpRequest);
-    ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
+    ConsoleJobBundleResultResponse result = requestHash == null
         ? applicationService.create(request)
         : applicationService.create(request, requestHash);
     return responseFactory.success(result);
@@ -56,7 +55,7 @@ public class ConsoleJobBundleController {
   public CommonResponse<ConsoleJobBundleResultResponse> importBundle(
       @Valid @RequestBody JobBundleImportRequest request, HttpServletRequest httpRequest) {
     String requestHash = requestHash(httpRequest);
-    ConsoleJobBundleResultResponse result = EmptyChecks.isNull(requestHash)
+    ConsoleJobBundleResultResponse result = requestHash == null
         ? applicationService.importBundle(request)
         : applicationService.importBundle(request, requestHash);
     return responseFactory.success(result);

@@ -493,7 +493,7 @@ public class JobDependencyWaitingLaunchService {
     Object rawError = values.get("resolutionError");
     String resolutionError = rawError instanceof String text ? text : null;
     boolean legacyResolutionErrorNeedsDecoding =
-        EmptyChecks.isNotNull(rawError) && EmptyChecks.isBlank(resolutionError);
+        EmptyChecks.isNotNull(rawError) && (EmptyChecks.isBlank(resolutionError));
     if (legacyResolutionErrorNeedsDecoding) {
       throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
     }

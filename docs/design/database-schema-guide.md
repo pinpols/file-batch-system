@@ -180,7 +180,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `console_operation_audit`、`approval_command`、`compensation_command`、`compensation_checkpoint` | 管理操作、审批和补偿执行审计；[V362](../../db/migration/V362__index_catch_up_latest_approval.sql) 为补跑列表按租户、请求查询最新审批建立部分索引；[V368](../../db/migration/V368__preserve_approval_submission_reason.sql) 分别保留原提交原因和审批决定原因，供同键对账使用（仅空库部署） |
 | `config_release`、`config_approval`、`config_change_log`、`config_sync_log` | 配置发布版本、审批、变更审计和同步记录 |
 | `config_sync_target_receipt` | [V345](../../db/migration/V345__persist_config_sync_target_receipts.sql) 的逐目标配置导入提交回执；与目标配置同事务保存，聚合审计补录只能据此核对，不得再次导入 |
-| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功；当前无自动过期或归档，暂按租户清理边界保留，双租户级联和回查限制见[配置治理手册](../runbook/config-governance.md#配置同步响应丢失与原请求恢复) |
+| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功 |
 | `system_parameter`、`batch_runtime_default_parameter` | 系统参数和运行参数基线 |
 | `api_key`、`secret_version` | API 凭据元数据及密钥版本；不存放可直接使用的明文密钥 |
 | `alert_event`、`alert_routing_config` | 告警事件及路由配置；V357 保存新关闭意图的时刻、原因及公平轮询尝试水位，最终渠道回执另由 `alert_notification_receipt` 保存 |
@@ -210,7 +210,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `job_monitoring_policy`、`job_monitoring_alert_claim` | 作业监控策略和告警认领/去重控制；策略语义见 [SLA 与质量设计](./sla-and-quality.md) |
 | `batch_day_replay_preview_token` | 批量日重放 Preview/Apply 的短期并发与确认令牌，不是业务幂等键 |
 | `tenant_configuration_revision` | 租户配置发布修订栅栏，阻止旧版本配置写入覆盖较新修订 |
-| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交；Console 投递成功并确认后删除，失败保留重试，不归档且不表示各实例均已应用 |
+| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交，由 Console 投递后删除；不表示各实例均已应用 |
 | `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记及可配置任务类型 |
 | `biz_table_schema` | Import Worker 启动时覆盖写入业务库 `biz` schema 快照；当前仓库未接入 Console 基于该快照校验目标表或列的读取链路。读取元数据失败保留旧快照，不能保证快照代表当前业务库；消费与去留待核实。 |

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -46,11 +45,11 @@ public class OrchestratorRedisSupport {
     String wildcardKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, "*");
     String exactKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code);
     Long wildcardRevision = configRevision(wildcardKey);
-    if (EmptyChecks.isNull(wildcardRevision)) {
+    if (wildcardRevision == null) {
       return null;
     }
     Long exactRevision = configRevision(exactKey);
-    if (EmptyChecks.isNull(exactRevision)) {
+    if (exactRevision == null) {
       return null;
     }
     return wildcardRevision + ":" + exactRevision;
@@ -59,7 +58,7 @@ public class OrchestratorRedisSupport {
   private Long configRevision(String key) {
     try {
       String value = redisTemplate.opsForValue().get(key);
-      if (EmptyChecks.isNull(value)) {
+      if (value == null) {
         return 0L;
       }
       long revision = Long.parseLong(value);

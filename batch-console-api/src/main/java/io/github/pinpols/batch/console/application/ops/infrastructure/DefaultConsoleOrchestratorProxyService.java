@@ -529,8 +529,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     LocalDate bizDateFrom = command.bizDateFrom();
     LocalDate bizDateTo = command.bizDateTo();
     List<String> jobCodes = command.jobCodes();
-    String exportFormat =
-        EmptyChecks.isNull(command.exportFormat()) ? "BUNDLE" : command.exportFormat();
+    String exportFormat = command.exportFormat() == null ? "BUNDLE" : command.exportFormat();
     String requestedBy = command.requestedBy();
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> body = new LinkedHashMap<>();

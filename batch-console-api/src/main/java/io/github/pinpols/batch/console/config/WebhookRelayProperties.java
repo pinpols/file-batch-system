@@ -24,4 +24,11 @@ public class WebhookRelayProperties {
    * 报警。
    */
   private int absoluteMaxAttempts = 8;
+
+  /**
+   * 单租户最多可创建的 Webhook 订阅数。默认 50。
+   *
+   * <p>订阅数直接放大 relay 的轮询与投递量；没有上限时租户用户可无界创建，导致投递队列与库表膨胀。
+   */
+  private int maxSubscriptionsPerTenant = 50;
 }

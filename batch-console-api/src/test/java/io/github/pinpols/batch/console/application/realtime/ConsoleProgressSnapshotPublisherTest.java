@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.application.realtime;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
@@ -87,6 +88,43 @@ class ConsoleProgressSnapshotPublisherTest {
     assertThatThrownBy(() ->
             publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
         .isInstanceOf(IllegalStateException.class);
+    verify(future).cancel(false);
+  }
+
+  @Test
+  @DisplayName("初始快照发布失败时关闭已建立的订阅并释放采样")
+  void shouldCloseSubscription_whenInitialPublishFails() {
+    doReturn(future)
+        .when(scheduler)
+        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+    doThrow(new IllegalStateException("publish failed"))
+        .when(events)
+        .publishChanged("ta", "daily-2040", "daily-progress", 0);
+    assertThatThrownBy(() ->
+            publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("publish failed");
+    verify(subscriptions).close(emitter);
+    verify(future).cancel(false);
+  }
+
+  @Test
+  @DisplayName("初始发布失败后的清理异常作为 suppressed 保留，不覆盖原始失败")
+  void shouldSuppressCleanupFailure_whenInitialPublishFails() {
+    doReturn(future)
+        .when(scheduler)
+        .scheduleWithFixedDelay(any(Runnable.class), any(Duration.class));
+    when(subscriptions.subscribe("ta", "daily-2040", null, null, null)).thenReturn(emitter);
+    doThrow(new IllegalStateException("publish failed"))
+        .when(events)
+        .publishChanged("ta", "daily-2040", "daily-progress", 0);
+    doThrow(new IllegalStateException("cleanup failed")).when(subscriptions).close(emitter);
+    assertThatThrownBy(() ->
+            publisher.subscribe("ta", "daily-2040", "daily-progress", 0, () -> 1, value -> value))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("publish failed")
+        .satisfies(error -> assertThat(error.getSuppressed()).hasSize(1));
     verify(future).cancel(false);
   }
 

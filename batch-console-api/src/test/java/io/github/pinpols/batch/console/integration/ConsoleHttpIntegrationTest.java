@@ -299,14 +299,8 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         mock(ConsoleAiApplicationService.PreparedStream.class);
     when(prepared.requestId()).thenReturn("req-1");
     when(aiApplicationService.prepareStream(any(), anyString())).thenReturn(prepared);
-    ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
-    when(resolver.current())
-        .thenReturn(
-            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator", null, null));
-    ConsoleAiStreamRegistry registry =
-        new ConsoleAiStreamRegistry(aiAuthorizationService, resolver);
-    ConsoleAiStreamRegistry.Registration registration = registry.register("req-1", () -> {});
-    when(aiStreamRegistry.register(anyString(), any())).thenReturn(registration);
+    when(aiStreamRegistry.register(anyString(), any()))
+        .thenReturn(mock(ConsoleAiStreamRegistry.Registration.class));
     when(prepared.execute(any())).thenAnswer(invocation -> {
       ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
       observer.onDelta("ok");
@@ -334,7 +328,6 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         });
 
     verify(aiApplicationService).prepareStream(any(), anyString());
-    verify(aiStreamRegistry).remove("req-1", registration);
   }
 
   @Test

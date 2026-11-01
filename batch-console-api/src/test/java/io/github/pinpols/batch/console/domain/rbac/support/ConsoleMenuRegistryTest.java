@@ -63,7 +63,7 @@ class ConsoleMenuRegistryTest {
 
   @Test
   @DisplayName("默认菜单与接口权限对齐：队列和窗口仅管理员可见，移除不存在的流水线定义入口")
-  void shouldAlignDefaultMenuQueueAndWindowWithControllerRoles() throws Exception {
+  void defaultMenuAlignsQueueAndWindowWithControllerRoles() throws Exception {
     var environment = new StandardEnvironment();
     var sources = new YamlPropertySourceLoader().load("menu", new ClassPathResource("menu.yml"));
     sources.forEach(environment.getPropertySources()::addLast);

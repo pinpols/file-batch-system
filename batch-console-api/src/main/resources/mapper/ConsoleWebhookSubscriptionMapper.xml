@@ -28,6 +28,12 @@
          order by name
     </select>
 
+    <select id="countByTenant" resultType="long">
+        select count(*)
+          from batch.webhook_subscription
+         where tenant_id = #{tenantId} and is_deleted = false
+    </select>
+
     <select id="findByTenantAndId" resultMap="subscriptionMap">
         select <include refid="selectColumns"/>
           from batch.webhook_subscription

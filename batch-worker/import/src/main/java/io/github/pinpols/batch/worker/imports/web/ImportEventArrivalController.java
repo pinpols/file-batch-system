@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.worker.imports.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.runtime.ImportEventArrivalService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,11 +20,9 @@ public class ImportEventArrivalController {
   public CommonResponse<ImportEventArrivalResponse> objectArrival(
       @RequestBody(required = false) ObjectArrivalNotification notification) {
     ImportEventArrivalService.Result result = arrivalService.onArrival(
-        EmptyChecks.isNull(notification) ? null : notification.getTenantId(),
-        EmptyChecks.isNull(notification) ? null : notification.getBucket(),
-        EmptyChecks.isNull(notification) ? null : notification.getObjectKey());
-    ImportEventArrivalResponse response =
-        new ImportEventArrivalResponse(result.triggered(), result.reason());
-    return CommonResponse.success(response);
+        notification == null ? null : notification.getTenantId(),
+        notification == null ? null : notification.getBucket(),
+        notification == null ? null : notification.getObjectKey());
+    return CommonResponse.success(new ImportEventArrivalResponse(result.triggered(), result.reason()));
   }
 }

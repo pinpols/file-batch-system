@@ -602,7 +602,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         opsMappers.batchDayMapper.selectScheduledOccurrences(tenantId, calendarCode, bizDate);
     Map<OccurrenceKey, List<ConsoleScheduledOccurrenceFireResponse>> firesByOccurrence =
         new HashMap<>();
-    if (EmptyChecks.isNotEmpty(occurrences)) {
+    if (!occurrences.isEmpty()) {
       opsMappers.batchDayMapper.setTenantContext(tenantId);
       for (BatchDayScheduledOccurrenceFireView fire :
           opsMappers.batchDayMapper.selectScheduledOccurrenceFires(
@@ -616,13 +616,12 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
       }
     }
     List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences = occurrences.stream()
-        .map(occurrence -> {
-          OccurrenceKey key =
-              new OccurrenceKey(occurrence.workflowDefinitionId(), occurrence.scheduledFireTime());
-          List<ConsoleScheduledOccurrenceFireResponse> fires =
-              firesByOccurrence.getOrDefault(key, List.of());
-          return toScheduledOccurrenceResponse(occurrence, fires);
-        })
+        .map(occurrence -> toScheduledOccurrenceResponse(
+            occurrence,
+            firesByOccurrence.getOrDefault(
+                new OccurrenceKey(
+                    occurrence.workflowDefinitionId(), occurrence.scheduledFireTime()),
+                List.of())))
         .toList();
     return new ConsoleBatchDayWindowResponse(
         bizDate,

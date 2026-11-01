@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.CronPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
-import io.github.pinpols.batch.console.application.observability.ConsoleMaintenanceApplicationService;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

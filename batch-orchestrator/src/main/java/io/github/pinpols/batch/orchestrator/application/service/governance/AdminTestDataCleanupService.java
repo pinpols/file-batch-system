@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.infrastructure.admin.AdminTestDataCleanupRepository;
 import java.util.Arrays;
 import java.util.List;
@@ -34,9 +33,9 @@ public class AdminTestDataCleanupService {
     rejectProductionProfile();
     List<String> tenantIds = Arrays.stream(ids.split(","))
         .map(String::trim)
-        .filter(value -> EmptyChecks.isNotEmpty(value))
+        .filter(value -> !value.isEmpty())
         .toList();
-    if (EmptyChecks.isEmpty(tenantIds)) {
+    if (tenantIds.isEmpty()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     return repository.cleanupByExactTenantIds(tenantIds);

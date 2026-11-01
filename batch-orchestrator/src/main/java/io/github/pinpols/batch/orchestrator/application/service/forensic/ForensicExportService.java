@@ -91,10 +91,10 @@ public class ForensicExportService {
       throws IOException {
     ForensicExportLogEntity exportLog =
         forensicExportLogMapper.selectByExportId(tenantId, exportId);
-    if (EmptyChecks.isNull(exportLog)) {
+    if (exportLog == null) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
     }
-    if (!"COMPLETED".equals(exportLog.status()) || EmptyChecks.isNull(exportLog.storagePath())) {
+    if (!"COMPLETED".equals(exportLog.status()) || exportLog.storagePath() == null) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.forensic.export_not_ready");
     }
     Path file = Path.of(exportLog.storagePath());

@@ -167,14 +167,13 @@ public class TriggerLaunchConsumer {
             tenantId,
             request.requestId(),
             rateLimitBackoff.toMillis());
-        counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, "rate_limited")
-            .increment();
+        counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "rate_limited").increment();
         ack.nack(rateLimitBackoff);
         return;
       }
       String reason =
           TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()).toLowerCase(Locale.ROOT);
-      counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, reason).increment();
+      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, reason).increment();
       throw ex;
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 429) {

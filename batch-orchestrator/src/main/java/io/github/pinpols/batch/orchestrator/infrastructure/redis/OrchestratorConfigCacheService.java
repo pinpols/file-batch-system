@@ -131,13 +131,13 @@ public class OrchestratorConfigCacheService {
   private String versionedCacheKey(String tenantId, String type, String code) {
     String versions = redis.configInvalidationVersions(tenantId, type, code);
     String key = BatchRedisKeys.config(tenantId, type, code);
-    return EmptyChecks.isNull(versions) ? null : key + ":v2:" + versions;
+    return versions == null ? null : key + ":v2:" + versions;
   }
 
   private boolean usesFixedTransactionSnapshot() {
     Integer isolation = TransactionSynchronizationManager.getCurrentTransactionIsolationLevel();
     return TransactionSynchronizationManager.isActualTransactionActive()
-        && EmptyChecks.isNotNull(isolation)
+        && isolation != null
         && (isolation == Connection.TRANSACTION_REPEATABLE_READ
             || isolation == Connection.TRANSACTION_SERIALIZABLE);
   }
@@ -159,21 +159,21 @@ public class OrchestratorConfigCacheService {
     long epoch = localInvalidationEpoch;
     String cacheKey = versionedCacheKey(tenantId, "job-definition", jobCode);
     JobDefinitionView cached =
-        EmptyChecks.isNull(cacheKey) ? null : redis.getJson(cacheKey, JobDefinitionView.class);
+        cacheKey == null ? null : redis.getJson(cacheKey, JobDefinitionView.class);
     if (cached != null) {
       putLocalIfUnchanged(jobDefinitionLocalCache, key, cached, epoch);
       return cached;
     }
-    if (EmptyChecks.isNotNull(cacheKey) && isNegativeCached(key, cacheKey)) {
+    if (cacheKey != null && isNegativeCached(key, cacheKey)) {
       return null;
     }
     JobDefinitionView loaded =
         configMappers.jobDefinition().selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
     boolean canCacheResult = !TransactionSynchronizationManager.isActualTransactionActive();
-    if (EmptyChecks.isNotNull(cacheKey) && canCacheResult && EmptyChecks.isNotNull(loaded)) {
+    if (cacheKey != null && canCacheResult && loaded != null) {
       redis.setJson(cacheKey, loaded, CONFIG_CACHE_TTL);
       putLocalIfUnchanged(jobDefinitionLocalCache, key, loaded, epoch);
-    } else if (EmptyChecks.isNotNull(cacheKey) && canCacheResult) {
+    } else if (cacheKey != null && canCacheResult) {
       putLocalIfUnchanged(negativeCache, key, cacheKey, epoch);
     }
     return loaded;
@@ -197,22 +197,22 @@ public class OrchestratorConfigCacheService {
     long epoch = localInvalidationEpoch;
     String cacheKey = versionedCacheKey(tenantId, WORKFLOW_DEFINITION_CACHE_TYPE, workflowCode);
     WorkflowDefinitionView cached =
-        EmptyChecks.isNull(cacheKey) ? null : redis.getJson(cacheKey, WorkflowDefinitionView.class);
+        cacheKey == null ? null : redis.getJson(cacheKey, WorkflowDefinitionView.class);
     if (cached != null) {
       putLocalIfUnchanged(workflowDefinitionLocalCache, key, cached, epoch);
       return cached;
     }
-    if (EmptyChecks.isNotNull(cacheKey) && isNegativeCached(key, cacheKey)) {
+    if (cacheKey != null && isNegativeCached(key, cacheKey)) {
       return null;
     }
     WorkflowDefinitionView loaded = configMappers
         .workflowDefinition()
         .selectFirstByTenantAndCodeAndEnabled(tenantId, workflowCode, true);
     boolean canCacheResult = !TransactionSynchronizationManager.isActualTransactionActive();
-    if (EmptyChecks.isNotNull(cacheKey) && canCacheResult && EmptyChecks.isNotNull(loaded)) {
+    if (cacheKey != null && canCacheResult && loaded != null) {
       redis.setJson(cacheKey, loaded, CONFIG_CACHE_TTL);
       putLocalIfUnchanged(workflowDefinitionLocalCache, key, loaded, epoch);
-    } else if (EmptyChecks.isNotNull(cacheKey) && canCacheResult) {
+    } else if (cacheKey != null && canCacheResult) {
       putLocalIfUnchanged(negativeCache, key, cacheKey, epoch);
     }
     return loaded;
@@ -262,20 +262,20 @@ public class OrchestratorConfigCacheService {
     long epoch = localInvalidationEpoch;
     String cacheKey = versionedCacheKey(tenantId, "business-calendar", calendarCode);
     BusinessCalendarEntity cached =
-        EmptyChecks.isNull(cacheKey) ? null : redis.getJson(cacheKey, BusinessCalendarEntity.class);
+        cacheKey == null ? null : redis.getJson(cacheKey, BusinessCalendarEntity.class);
     if (cached != null) {
       return cached;
     }
-    if (EmptyChecks.isNotNull(cacheKey) && isNegativeCached(key, cacheKey)) {
+    if (cacheKey != null && isNegativeCached(key, cacheKey)) {
       return null;
     }
     BusinessCalendarEntity loaded = configMappers
         .businessCalendar()
         .selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     boolean canCacheResult = !TransactionSynchronizationManager.isActualTransactionActive();
-    if (EmptyChecks.isNotNull(cacheKey) && canCacheResult && EmptyChecks.isNotNull(loaded)) {
+    if (cacheKey != null && canCacheResult && loaded != null) {
       redis.setJson(cacheKey, loaded, CONFIG_CACHE_TTL);
-    } else if (EmptyChecks.isNotNull(cacheKey) && canCacheResult) {
+    } else if (cacheKey != null && canCacheResult) {
       putLocalIfUnchanged(negativeCache, key, cacheKey, epoch);
     }
     return loaded;
@@ -294,20 +294,20 @@ public class OrchestratorConfigCacheService {
     long epoch = localInvalidationEpoch;
     String cacheKey = versionedCacheKey(tenantId, "batch-window", windowCode);
     BatchWindowEntity cached =
-        EmptyChecks.isNull(cacheKey) ? null : redis.getJson(cacheKey, BatchWindowEntity.class);
+        cacheKey == null ? null : redis.getJson(cacheKey, BatchWindowEntity.class);
     if (cached != null) {
       return cached;
     }
-    if (EmptyChecks.isNotNull(cacheKey) && isNegativeCached(key, cacheKey)) {
+    if (cacheKey != null && isNegativeCached(key, cacheKey)) {
       return null;
     }
     BatchWindowEntity loaded = configMappers
         .batchWindow()
         .selectFirstByTenantAndCodeAndEnabled(tenantId, windowCode, true);
     boolean canCacheResult = !TransactionSynchronizationManager.isActualTransactionActive();
-    if (EmptyChecks.isNotNull(cacheKey) && canCacheResult && EmptyChecks.isNotNull(loaded)) {
+    if (cacheKey != null && canCacheResult && loaded != null) {
       redis.setJson(cacheKey, loaded, CONFIG_CACHE_TTL);
-    } else if (EmptyChecks.isNotNull(cacheKey) && canCacheResult) {
+    } else if (cacheKey != null && canCacheResult) {
       putLocalIfUnchanged(negativeCache, key, cacheKey, epoch);
     }
     return loaded;
@@ -320,30 +320,29 @@ public class OrchestratorConfigCacheService {
     if (usesFixedTransactionSnapshot()) {
       return configMappers.tenantQuotaPolicy().selectFirstEnabledByTenantId(tenantId, true);
     }
-    String key = BatchRedisKeys.config(tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, "enabled-first");
+    String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
     TenantQuotaPolicyEntity local = quotaPolicyLocalCache.getIfPresent(key);
     if (local != null) {
       return local;
     }
     long epoch = localInvalidationEpoch;
-    String cacheKey = versionedCacheKey(tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, "enabled-first");
-    TenantQuotaPolicyEntity cached = EmptyChecks.isNull(cacheKey)
-        ? null
-        : redis.getJson(cacheKey, TenantQuotaPolicyEntity.class);
+    String cacheKey = versionedCacheKey(tenantId, "tenant-quota-policy", "enabled-first");
+    TenantQuotaPolicyEntity cached =
+        cacheKey == null ? null : redis.getJson(cacheKey, TenantQuotaPolicyEntity.class);
     if (cached != null) {
       putLocalIfUnchanged(quotaPolicyLocalCache, key, cached, epoch);
       return cached;
     }
-    if (EmptyChecks.isNotNull(cacheKey) && isNegativeCached(key, cacheKey)) {
+    if (cacheKey != null && isNegativeCached(key, cacheKey)) {
       return null;
     }
     TenantQuotaPolicyEntity loaded =
         configMappers.tenantQuotaPolicy().selectFirstEnabledByTenantId(tenantId, true);
     boolean canCacheResult = !TransactionSynchronizationManager.isActualTransactionActive();
-    if (EmptyChecks.isNotNull(cacheKey) && canCacheResult && EmptyChecks.isNotNull(loaded)) {
+    if (cacheKey != null && canCacheResult && loaded != null) {
       redis.setJson(cacheKey, loaded, CONFIG_CACHE_TTL);
       putLocalIfUnchanged(quotaPolicyLocalCache, key, loaded, epoch);
-    } else if (EmptyChecks.isNotNull(cacheKey) && canCacheResult) {
+    } else if (cacheKey != null && canCacheResult) {
       putLocalIfUnchanged(negativeCache, key, cacheKey, epoch);
     }
     return loaded;
@@ -369,14 +368,12 @@ public class OrchestratorConfigCacheService {
     if (!Texts.hasText(tenantId)) {
       return;
     }
-    String key = BatchRedisKeys.config(tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, "enabled-first");
-    String oldVersionedKey =
-        versionedCacheKey(tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, "enabled-first");
-    redis.advanceConfigInvalidationRevision(
-        tenantId, TENANT_QUOTA_POLICY_CACHE_TYPE, "enabled-first");
-    evictLocalByKey(TENANT_QUOTA_POLICY_CACHE_TYPE, key);
+    String key = BatchRedisKeys.config(tenantId, "tenant-quota-policy", "enabled-first");
+    String oldVersionedKey = versionedCacheKey(tenantId, "tenant-quota-policy", "enabled-first");
+    redis.advanceConfigInvalidationRevision(tenantId, "tenant-quota-policy", "enabled-first");
+    evictLocalByKey("tenant-quota-policy", key);
     redis.delete(key);
-    if (EmptyChecks.isNotNull(oldVersionedKey)) {
+    if (oldVersionedKey != null) {
       redis.delete(oldVersionedKey);
     }
   }
@@ -410,7 +407,7 @@ public class OrchestratorConfigCacheService {
     redis.advanceConfigInvalidationRevision(tenantId, type, code);
     evictLocalByKey(type, key);
     redis.delete(key);
-    if (EmptyChecks.isNotNull(oldVersionedKey)) {
+    if (oldVersionedKey != null) {
       redis.delete(oldVersionedKey);
     }
   }

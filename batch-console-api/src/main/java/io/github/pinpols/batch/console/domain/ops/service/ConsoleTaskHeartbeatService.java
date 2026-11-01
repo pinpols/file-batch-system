@@ -34,7 +34,7 @@ public class ConsoleTaskHeartbeatService {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     JobTaskHeartbeatView heartbeat =
         jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
-    if (EmptyChecks.isNull(heartbeat)) {
+    if (heartbeat == null) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
     }
     Long heartbeatTaskId = heartbeat.getId();

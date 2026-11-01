@@ -72,7 +72,10 @@ public class DefaultConsoleJobBundleApplicationService
     TenantConfigBatchInitResponse response = executeBatch(
         initRequest,
         operator,
-        new BatchOperationIdentity(tenantId, operationIdText, requestHash, "JOB_BUNDLE_CREATE"),
+        operationIdText,
+        requestHash,
+        "JOB_BUNDLE_CREATE",
+        tenantId,
         summary);
     return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
@@ -100,7 +103,10 @@ public class DefaultConsoleJobBundleApplicationService
     TenantConfigBatchInitResponse response = executeBatch(
         initRequest,
         operator,
-        new BatchOperationIdentity(tenantId, operationIdText, requestHash, "JOB_BUNDLE_IMPORT"),
+        operationIdText,
+        requestHash,
+        "JOB_BUNDLE_IMPORT",
+        tenantId,
         summary);
     return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
@@ -108,31 +114,26 @@ public class DefaultConsoleJobBundleApplicationService
   private TenantConfigBatchInitResponse executeBatch(
       TenantConfigBatchInitRequest request,
       String operator,
-      BatchOperationIdentity identity,
+      String operationId,
+      String requestHash,
+      String operationKind,
+      String tenantId,
       ConsoleJobBundleSummaryResponse summary) {
-    if (EmptyChecks.isNull(identity.requestHash()) || request.isDryRun()) {
-      return initApplicationService.batchInit(request, operator, identity.operationId());
+    if (requestHash == null || request.isDryRun()) {
+      return initApplicationService.batchInit(request, operator, operationId);
     }
     List<String> targets = request.getTargetTenantIds();
     if (EmptyChecks.isEmpty(targets) || targets.stream().anyMatch(EmptyChecks::isBlank)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
     ObjectNode responseMetadata = objectMapper.createObjectNode();
-    responseMetadata.put("tenantId", identity.tenantId());
+    responseMetadata.put("tenantId", tenantId);
     responseMetadata.set("summary", objectMapper.valueToTree(summary));
     ConfigBatchOperationRequest operation = new ConfigBatchOperationRequest(
-        identity.tenantId(),
-        identity.operationId(),
-        identity.requestHash(),
-        identity.kind(),
-        targets,
-        responseMetadata);
+        tenantId, operationId, requestHash, operationKind, targets, responseMetadata);
     ConfigBatchOperationContext context = operationService.begin(operation);
     return initApplicationService.batchInit(request, operator, context);
   }
-
-  private record BatchOperationIdentity(
-      String tenantId, String operationId, String requestHash, String kind) {}
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncBundlePayload bundle) {
     if (bundle == null) {

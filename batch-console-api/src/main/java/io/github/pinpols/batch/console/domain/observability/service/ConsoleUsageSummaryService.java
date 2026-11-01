@@ -56,8 +56,7 @@ public class ConsoleUsageSummaryService {
             .eventCount(row.eventCount())
             .successCount(row.successCount())
             .failureCount(row.failureCount())
-            .lastSeenAt(
-                EmptyChecks.isNull(row.lastSeenAt()) ? null : row.lastSeenAt().toString())
+            .lastSeenAt(row.lastSeenAt() == null ? null : row.lastSeenAt().toString())
             .build())
         .toList();
   }
