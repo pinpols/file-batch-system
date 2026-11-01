@@ -24,12 +24,14 @@
 | BE fuzzing | 手动 | 每周二 03:15 UTC | 维护责任：后端安全/CI；保留为安全边界随机/性质测试，不提升为每日全量任务 |
 | BE Scorecard | main push | 每周三 02:23 UTC | 维护责任：后端安全/CI；保留为仓库供应链姿态快照 |
 | BE quarterly dependency review | 手动 | 每季度首日 03:00 UTC | 维护责任：依赖治理；低频盘点，不自动改依赖或创建 PR |
-| FE `pr-gate` / `frontend-ci` | PR、main push | 无 | 代码变更门禁；不设 nightly |
+| FE `pr-gate` / `frontend-ci` | PR、main push；兼容套件手动 | 无 | PR 主门禁执行 Node 基线的类型、单测与构建；文档站自动构建，同版本重复兼容套件仅手动运行 |
 | FE `full-ci-gate` | PR、main push | 每周一 02:00 UTC | 维护责任：前端 CI；每周 runner/依赖/门禁漂移检查；Docker/Trivy/Lighthouse 仅非 PR 事件执行 |
 | FE `build-image` | main push、版本 tag | 每日 19:00 UTC | 维护责任：前端交付；定时先检查前后端前一日变更；无相关变更不构建，后端变更还要等待 BE sim 成功 |
 | FE CodeQL | PR、main push | 每周一 02:30 UTC | 维护责任：前端安全/CI；保留，安全规则和漏洞情报可独立更新 |
 | FE `staging-gate` | 发布 tag、手动 | 无 | 维护责任：发布验收；面向真实 staging，不做无变更 nightly |
 | FE quarterly dependency inventory | 手动 | 每季度首日 03:00 UTC | 维护责任：依赖治理；仅依赖盘点，不自动升级 |
+
+`sdk-orchestrator-e2e` 暂不直接绑定 Full 成功事件：Full 会排除纯多语言 SDK 变更，而这些变更仍必须触发真实 SDK 栈验证。若将来串行，必须同时保持纯 SDK 变更覆盖，并绑定实际通过的 commit；不能仅用 workflow 名称或最新成功 run 推断。
 
 BE `sdk-orchestrator-e2e` 的路径过滤见 `.github/workflows/sdk-orchestrator-e2e.yml`；新增其依赖的生产模块、迁移、Compose 文件、环境模板、SDK E2E 共享脚本或启动脚本时，必须同步扩展该 `paths` 清单。路径漏配会使非 required 的全链路验证静默不触发。
 
