@@ -61,7 +61,6 @@ class ConsoleAdminTestDataControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
@@ -104,6 +103,7 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
   void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
+    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
         .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
     when(requestMetadataResolver.responseMeta())
@@ -120,6 +120,7 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
   void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
+    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
         .thenReturn(Map.of("tenant", 2));
     when(requestMetadataResolver.responseMeta())

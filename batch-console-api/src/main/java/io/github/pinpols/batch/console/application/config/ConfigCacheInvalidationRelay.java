@@ -62,7 +62,7 @@ public class ConfigCacheInvalidationRelay {
       ConfigCacheInvalidationIntent intent = transactions.execute(status -> {
         ConfigCacheInvalidationIntent next = outbox.lockNext();
         if (next != null) {
-          outbox.claim(next.id(), token);
+          outbox.claim(next.id(), next.tenantId(), token);
         }
         return next;
       });
@@ -71,11 +71,13 @@ public class ConfigCacheInvalidationRelay {
       }
       try {
         invalidation.deliver(intent);
-        transactions.executeWithoutResult(status -> outbox.acknowledge(intent.id(), token));
+        transactions.executeWithoutResult(
+            status -> outbox.acknowledge(intent.id(), intent.tenantId(), token));
       } catch (RuntimeException failure) {
-        transactions.executeWithoutResult(status -> outbox.retry(intent.id(), token));
-        log.warn("配置缓存失效投递失败: id={}, reason={}",
-            intent.id(), SwallowedExceptionLogger.summary(failure));
+        transactions.executeWithoutResult(
+            status -> outbox.retry(intent.id(), intent.tenantId(), token));
+        log.warn(
+            "配置缓存失效投递失败: id={}, reason={}", intent.id(), SwallowedExceptionLogger.summary(failure));
         log.debug("配置缓存失效投递失败详情: id={}", intent.id(), failure);
       }
     }

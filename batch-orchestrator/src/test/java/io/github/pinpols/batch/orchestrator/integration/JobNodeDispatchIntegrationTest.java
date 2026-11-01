@@ -20,6 +20,8 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySnapshotResolver;
@@ -107,8 +109,6 @@ import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
  * 集成测试：工作流 DAG 中的 JOB 节点类型。
@@ -358,9 +358,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           releaseStale.countDown();
           assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
               .hasCauseInstanceOf(OperationFailure.class)
-              .satisfies(
-                  error -> assertThat(((OperationFailure) error.getCause()).kind())
-                      .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
+              .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
+                  .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
         } finally {
           releaseStale.countDown();
           releaseReceipt.countDown();
@@ -494,8 +493,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
             releaseRollback.countDown();
             assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
                 .hasCauseInstanceOf(OperationFailure.class)
-                .satisfies(error -> assertThat(
-                        ((OperationFailure) error.getCause()).kind())
+                .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
                     .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
           } finally {
             releaseRollback.countDown();
@@ -651,8 +649,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           } else {
             assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
                 .hasCauseInstanceOf(OperationFailure.class)
-                .satisfies(error -> assertThat(
-                        ((OperationFailure) error.getCause()).kind())
+                .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
                     .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
           }
         } finally {
@@ -714,8 +711,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           LaunchRequest current = invocation.getArgument(0);
           Object response = invocation.callRealMethod();
           if (seed.requestId().equals(current.requestId()) && attempts.getAndIncrement() == 0) {
-            throw new OperationFailure(
-                Kind.CONFLICT, "simulated post-launch conflict");
+            throw new OperationFailure(Kind.CONFLICT, "simulated post-launch conflict");
           }
           return response;
         })
@@ -1091,10 +1087,14 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     // V270 禁止把 WORKFLOW 写入 job_definition。生产查找先读 Redis。
     // 不能在共享 spy 上临时打桩：调度线程同时调用该 spy，Mockito 打桩不是线程安全的，
     // 桩一旦被抢走就会走真实查找并得到 definition_not_found。
-    String cacheKey = BatchRedisKeys.config(testTenantId, "job-definition", wrapperCode);
+    String versions = orchestratorRedisSupport.configInvalidationVersions(
+        testTenantId, "job-definition", wrapperCode);
+    assertThat(versions).isNotNull();
+    String cacheKey =
+        BatchRedisKeys.config(testTenantId, "job-definition", wrapperCode) + ":v2:" + versions;
     orchestratorRedisSupport.setJson(cacheKey, retiredWrapper, Duration.ofMinutes(5));
     try {
-      JobDefinitionEntity cachedWrapper =
+      JobDefinitionView cachedWrapper =
           configCacheService.findEnabledJobDefinition(testTenantId, wrapperCode);
       assertThat(cachedWrapper).isNotNull();
       assertThat(cachedWrapper.jobType()).isEqualTo("WORKFLOW");

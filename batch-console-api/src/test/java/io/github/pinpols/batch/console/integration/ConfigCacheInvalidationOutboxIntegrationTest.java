@@ -20,7 +20,8 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-@SpringBootTest(classes = BatchConsoleApiApplication.class,
+@SpringBootTest(
+    classes = BatchConsoleApiApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.MOCK)
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @DisplayName("配置缓存失效意图的事务和领取栅栏")
@@ -51,7 +52,8 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
   @AfterEach
   void cleanupOwnedData() {
     String deleteQuotaSql = "delete from batch.tenant_quota_policy where tenant_id = ?";
-    String deleteIntentSql = "delete from batch.config_cache_invalidation_outbox where tenant_id = ?";
+    String deleteIntentSql =
+        "delete from batch.config_cache_invalidation_outbox where tenant_id = ?";
     jdbc.update(deleteQuotaSql, tenant);
     jdbc.update(deleteIntentSql, tenant);
     if (createdPolicy != null) {
@@ -112,7 +114,8 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
       assertThat(intent.tenantId()).isEqualTo(tenant);
-      assertThat(outbox.claim(intent.id(), oldToken)).isOne();
+      assertThat(outbox.claim(intent.id(), "other-tenant", oldToken)).isZero();
+      assertThat(outbox.claim(intent.id(), intent.tenantId(), oldToken)).isOne();
       return intent;
     });
     String expireClaimSql = """
@@ -123,12 +126,14 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
     ConfigCacheInvalidationIntent second = transaction.execute(status -> {
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent.id()).isEqualTo(first.id());
-      assertThat(outbox.claim(intent.id(), newToken)).isOne();
+      assertThat(outbox.claim(intent.id(), intent.tenantId(), newToken)).isOne();
       return intent;
     });
-    assertThat(outbox.acknowledge(second.id(), oldToken)).isZero();
-    assertThat(outbox.retry(second.id(), oldToken)).isZero();
-    assertThat(outbox.acknowledge(second.id(), newToken)).isOne();
+    assertThat(outbox.acknowledge(second.id(), second.tenantId(), oldToken)).isZero();
+    assertThat(outbox.retry(second.id(), second.tenantId(), oldToken)).isZero();
+    assertThat(outbox.acknowledge(second.id(), "other-tenant", newToken)).isZero();
+    assertThat(outbox.retry(second.id(), "other-tenant", newToken)).isZero();
+    assertThat(outbox.acknowledge(second.id(), second.tenantId(), newToken)).isOne();
   }
 
   @Test
@@ -196,8 +201,8 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
       assertThat(intent.tenantId()).isEqualTo(tenant);
-      assertThat(outbox.claim(intent.id(), token)).isOne();
-      assertThat(outbox.acknowledge(intent.id(), token)).isOne();
+      assertThat(outbox.claim(intent.id(), intent.tenantId(), token)).isOne();
+      assertThat(outbox.acknowledge(intent.id(), intent.tenantId(), token)).isOne();
     });
     assertThat(count(tenant)).isZero();
   }

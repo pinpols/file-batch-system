@@ -21,17 +21,17 @@
         UPDATE batch.config_cache_invalidation_outbox
            SET claim_token = #{token}::uuid, claim_until = clock_timestamp() + interval '60 seconds',
                attempts = attempts + 1
-         WHERE id = #{id}
+         WHERE id = #{id} AND tenant_id = #{tenantId}
     </update>
     <delete id="acknowledge">
         DELETE FROM batch.config_cache_invalidation_outbox
-         WHERE id = #{id} AND claim_token = #{token}::uuid
+         WHERE id = #{id} AND tenant_id = #{tenantId} AND claim_token = #{token}::uuid
     </delete>
     <update id="retry">
         UPDATE batch.config_cache_invalidation_outbox
            SET claim_token = NULL, claim_until = NULL,
                next_attempt_at = clock_timestamp() + interval '5 seconds'
-         WHERE id = #{id} AND claim_token = #{token}::uuid
+         WHERE id = #{id} AND tenant_id = #{tenantId} AND claim_token = #{token}::uuid
     </update>
     <insert id="insert">
         INSERT INTO batch.config_cache_invalidation_outbox (tenant_id, config_type, config_code)
