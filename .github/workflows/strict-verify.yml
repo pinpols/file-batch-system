@@ -1,4 +1,4 @@
-name: strict-verify
+name: Backend / Strict verification
 
 # 严格模式真实数据验证(scripts/local/strict-verify.sh)的 CI 接入。
 #
@@ -47,6 +47,7 @@ jobs:
   # ~1s 真实执行(加 checkout / setup 总共 ~30s)。
   # =========================================================================
   strict-verify-dry-run:
+    name: Validate strict verification setup
     if: github.event_name != 'workflow_dispatch' || github.event.inputs.mode == 'dry-run'
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -74,6 +75,7 @@ jobs:
   # 注意:cursor 翻页项需要 seed 数据,空库会 SKIP(脚本设计如此)。
   # =========================================================================
   strict-verify-live:
+    name: Run live strict verification
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.mode == 'live'
     runs-on: ubuntu-latest
     timeout-minutes: 30

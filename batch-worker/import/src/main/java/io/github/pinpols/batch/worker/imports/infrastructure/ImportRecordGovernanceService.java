@@ -31,6 +31,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
@@ -236,7 +237,8 @@ public class ImportRecordGovernanceService {
         .operationResult(OperationResult.SUCCESS.code())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_SYSTEM)
         .operatorId(context.getWorkerId());
-    String auditTraceId = stringValue(attrs.get(PipelineRuntimeKeys.TRACE_ID));
+    Object auditTraceValue = attrs.get(PipelineRuntimeKeys.TRACE_ID);
+    String auditTraceId = Objects.toString(auditTraceValue, null);
     FileAuditParam audit = auditBuilder
         .traceId(auditTraceId)
         .evidenceRef("import-error-output")
@@ -502,9 +504,5 @@ public class ImportRecordGovernanceService {
   private ErrorSinkType resolveErrorSinkType() {
     ErrorSinkType sinkType = DictEnum.fromCode(ErrorSinkType.class, skipProperties.errorSinkType());
     return sinkType == null ? ErrorSinkType.BOTH : sinkType;
-  }
-
-  private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
   }
 }

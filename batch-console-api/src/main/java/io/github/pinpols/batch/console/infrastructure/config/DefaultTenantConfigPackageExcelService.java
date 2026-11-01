@@ -804,8 +804,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     Row headerRow = sheet.getRow(sheet.getFirstRowNum());
     Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
     Map<String, Integer> headerIndex = buildHeaderIndex(sheetName, headerRow, fmt);
-    validateSheetHeaders(
-        sheetName, headerIndex, requiredHeaders(sheetName, columns), Set.copyOf(columns));
+    Set<String> requiredHeaders = ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
+    validateSheetHeaders(sheetName, headerIndex, requiredHeaders, Set.copyOf(columns));
     List<Map<String, String>> rows = new ArrayList<>();
     for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
       Row row = sheet.getRow(i);
@@ -828,10 +828,6 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       rows.add(values);
     }
     return rows;
-  }
-
-  private static Set<String> requiredHeaders(String sheetName, List<String> columns) {
-    return ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
   }
 
   private List<Map<String, String>> parseOptionalSheet(

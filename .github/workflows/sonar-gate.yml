@@ -1,4 +1,4 @@
-name: SonarQube CI
+name: Backend / SonarQube quality gate
 
 # 独立于 Full Gate 运行，不阻塞主干门禁；完整 Git 历史用于 30 天新代码基线。
 # 夜间只在最近 24 小时有相关代码/构建变更时扫描。

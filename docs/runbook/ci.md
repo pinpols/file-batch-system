@@ -22,9 +22,9 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 | `sdk-contract-parity` | SDK 契约门禁 | 所有 PR（按 SDK 变更范围执行）、`merge_group`、手动 | 五语言共享契约验证；`sdk-contract-required` 聚合结果是稳定门禁，live transport 在 SDK 相关 PR 上运行但不属于 required 聚合 | 各 job 单独设置 |
 | `full-ci-gate` | main 全量回归 | main push、每周日 02:00 UTC、手动 | 主干静态检查、单元/集成测试、E2E 和安全检查；定时/手动还运行测试质量分析 | 各 job 单独设置，不设统一 workflow 超时 |
 | `staging-gate` | 手动后端 E2E 复验 | 手动 | GitHub-hosted runner 上的 Java 治理与并行后端 E2E，依赖由 Testcontainers 管理；不连接外部 staging，不执行部署 | 各 job 单独设置 |
-| `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 检测当日代码/配置变化后运行 `sim-harness all` 和 BE-ACC strict；纯 Markdown/RST、`LICENSE`、`NOTICE` 不触发当天验证。手动运行按当前北京时间日期判断；定时运行使用计划触发时间所属日期。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
+| `daily-sim-strict-validation` | 变更感知的定时真实数据验证 | 每天 13:31 UTC（北京 21:31）、手动（`force=true` 可强制执行） | 比较最近一次实际成功完成 sim + strict 的提交与当前提交；无成功基线、最近验证失败或存在代码/配置变化时运行 `sim-harness all` 和 BE-ACC strict；仅 Markdown/RST、`LICENSE`、`NOTICE` 变化可跳过。手动运行可强制执行；日期用于记录计划验证日。SIM 失败不跳过 strict，但启动失败/取消/runner 丢失不算通过。只有两项成功才构建 nightly 镜像 | 验证 job 240 min；内部步骤分别设限 |
 | `daily-backend-reliability` | 每日隔离故障回归 | 每天 20:17 UTC（北京次日 04:17）、手动 | 在独立 GitHub-hosted runner 调用 `scripts/local/backend-reliability-tests.sh`，用 Testcontainers 验证文件完整性、并发、checkpoint 续跑、NAS 发布、Kafka 故障恢复、Outbox exactly-once 与消费者背压；上传 Surefire 报告。不会连接 Compose Sim 或 staging，也不执行 PITR/HA 切换 | 120 min |
-| `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在当天有代码/配置变更且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
+| `docker-image-build` | 变更感知的镜像构建 | 由 `daily-sim-strict-validation` 在需要验证且 sim + strict 成功后调用；也支持手动和复用调用 | 默认只用 Docker Bake 构建全部应用镜像和运维工具箱镜像；显式 `publish=true` 时登录 GHCR、推送 SHA 镜像并上传含 immutable digest 的 backend image set。CI 使用 Maven Central 配置并带依赖下载重试 | 30 min |
 | `compose-cd` | 受控手动交付 | 仅从 `main` 手动触发 | 固定前后端 main SHA，复用两个镜像构建工作流并组装统一 digest manifest；可选连接 staging Docker 主机执行 Compose、health/version、前端 Playwright 与 Lighthouse，验收失败时回滚。它不随 push 自动部署，真实 staging 需先配置 GitHub Environment 和主机凭据 | 分 job 设置；Playwright 50 min |
 | `prepare-platform-release` | 联合版本准备 | 维护者手动选择 patch/minor/major | 校验双仓版本后计算同一目标版本，并创建/补齐两仓 Release PR；需要安装到两仓的 GitHub App 凭据，不合并、不打 tag、不发布 | 15 min |
 | `OpenSSF Scorecard` | 供应链治理报告 | push main、每周三、手动 | 生成 SARIF 并上传 Code Scanning；不按总分阻断 PR | 20 min |
@@ -34,6 +34,8 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 > **2026-05-23 删除 `capacity-gate` / `promote-staging`**:`capacity-gate` 目标是 `*.svc.cluster.local`(k8s 集群内 DNS),GitHub-hosted runner 永远连不上 → 100% Connection refused;`promote-staging` 要写 `pinpols/file-batch-system-ops` 但仓 / PAT 都没在用,等同 dead code。Checkov K8s manifest 静态扫已迁到 `full-ci-gate`。若未来要恢复真·生产环境验证 / 容量回归 / ops 仓同步,改用 self-hosted runner 部署到集群内,或 staging 暴露公网 ingress + 配 PAT。
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
+
+Actions 页面以 `Backend / ...`、`SDK / ...` 和 `Platform / ...` 标识工作流用途；本文 `pr-gate` 等名称指对应的 workflow 文件标识。Ruleset 必需检查名称保持不变，E2E 分片显示测试业务范围而非历史耗时。
 
 其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
@@ -61,7 +63,7 @@ CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或
 
 OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只生成 artifact 与 Actions Summary，由维护者需要时建立一张人工 PR 并核对 release、变更说明和所需权限。
 
-CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
+CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
 
 运行环境约束：
 
@@ -567,7 +569,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 ### CodeQL 构建模式
 
-- PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `Analyze (java)` 检查。
+- PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `CodeQL Java security analysis` 检查。
 - main push、schedule：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
 - SARIF 由 `github/codeql-action/analyze` 原生上传。同一 job 内不得针对同一 tool/category 再调用 `upload-sarif` 重试；GitHub 会将后续调用判定为重复上传。上传故障通过重新运行 job 处理。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。

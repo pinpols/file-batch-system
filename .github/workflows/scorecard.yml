@@ -1,4 +1,4 @@
-name: OpenSSF Scorecard
+name: Backend / OpenSSF supply chain scorecard
 
 on:
   push:

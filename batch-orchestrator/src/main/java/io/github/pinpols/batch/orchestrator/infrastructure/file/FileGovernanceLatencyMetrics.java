@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.file;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 文件治理延迟指标的固定输出契约。
@@ -23,7 +24,8 @@ public record FileGovernanceLatencyMetrics(
     if (EmptyChecks.isEmpty(values)) {
       return empty(null);
     }
-    String tenantId = text(values.get("tenantId"));
+    Object tenantIdValue = values.get("tenantId");
+    String tenantId = Objects.toString(tenantIdValue, null);
     long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
     long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
     long processingDelayViolations = number(values.get("processingDelayViolations"));
@@ -59,9 +61,5 @@ public record FileGovernanceLatencyMetrics(
   @SuppressWarnings("unchecked")
   private static List<Map<String, Object>> samples(Object value) {
     return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
-  }
-
-  private static String text(Object value) {
-    return value == null ? null : String.valueOf(value);
   }
 }

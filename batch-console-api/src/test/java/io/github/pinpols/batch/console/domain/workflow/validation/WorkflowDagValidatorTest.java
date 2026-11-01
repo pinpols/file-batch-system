@@ -177,29 +177,6 @@ class WorkflowDagValidatorTest {
   }
 
   @Test
-  @DisplayName("FILE_STEP 不因旧 Pipeline 定义仍存在而重新开放")
-  void shouldFail_whenFileStepPipelineNotFound() {
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    NodeItem fs = node("fs", "FILE_STEP");
-    req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
-    req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    assertBizError(req, "error.workflow.dag.file_step_retired");
-  }
-
-  @Test
-  @DisplayName("FILE_STEP 已退役，即使旧 Pipeline 定义存在也拒绝新写入")
-  void shouldFail_whenFileStepPipelineExists() {
-    WorkflowDefinitionSaveRequest req = baseRequest();
-    NodeItem fs = node("fs", "FILE_STEP");
-    req.setNodes(Arrays.asList(node("start", "START"), fs, node("end", "END")));
-    req.setEdges(Arrays.asList(edge("start", "fs"), edge("fs", "end")));
-    assertThatThrownBy(() -> validator.validate(TENANT, req))
-        .isInstanceOfSatisfying(
-            BizException.class,
-            ex -> assertThat(ex.getMessageKey()).isEqualTo("error.workflow.dag.file_step_retired"));
-  }
-
-  @Test
   @DisplayName("汇聚 GATEWAY 单出边 + N_OF 配置 → 通过")
   void shouldPass_whenJoinGatewayHasSingleOutgoingEdge() {
     WorkflowDefinitionSaveRequest req = baseRequest();

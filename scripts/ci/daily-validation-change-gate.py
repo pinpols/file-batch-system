@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-# 用途：仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。
+# 用途：按最近一次成功验证的提交检测代码或配置变更。
 # 用法：在仓库根目录执行 python3 scripts/ci/daily-validation-change-gate.py；参数与前置环境见下方说明及所属 README。
-"""仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。"""
+"""按最近一次成功验证的提交检测代码或配置变更。"""
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -60,6 +61,50 @@ def validation_day(now: datetime, event_name: str, schedule: str) -> date:
     return scheduled_local.date()
 
 
+def relevant_paths(paths: list[str]) -> list[str]:
+    return sorted(
+        {path for path in paths if Path(path).suffix.lower() not in {".md", ".rst"}
+         and path not in {"LICENSE", "NOTICE"}}
+    )
+
+
+def last_validated_sha(runs: list[dict]) -> str | None:
+    for run in runs:
+        for job in run["jobs"]:
+            if job["name"] in {"sim-and-strict", "Run simulation and strict validation"}:
+                result = job["conclusion"]
+                if result == "success":
+                    return run["head_sha"]
+                if result in {"failure", "timed_out", "cancelled", "action_required"}:
+                    return None
+    return None
+
+
+def gh_json(endpoint: str) -> dict:
+    result = subprocess.run(
+        ["gh", "api", endpoint], cwd=ROOT, check=True, capture_output=True, text=True
+    )
+    return json.loads(result.stdout)
+
+
+def successful_baseline() -> str | None:
+    repo = os.environ["GITHUB_REPOSITORY"]
+    endpoint = (f"repos/{repo}/actions/workflows/daily-sim-strict-validation.yml/runs"
+                "?branch=main&status=completed&per_page=100")
+    for run in gh_json(endpoint)["workflow_runs"]:
+        jobs = gh_json(f"repos/{repo}/actions/runs/{run['id']}/jobs?per_page=100")["jobs"]
+        candidate = {"head_sha": run["head_sha"], "jobs": jobs}
+        simulation = [
+            job for job in jobs
+            if job["name"] in {"sim-and-strict", "Run simulation and strict validation"}
+        ]
+        if simulation and simulation[0]["conclusion"] != "skipped":
+            return last_validated_sha([candidate])
+        if run["conclusion"] in {"failure", "timed_out", "cancelled", "action_required"}:
+            return None
+    return None
+
+
 def main() -> int:
     today_text = os.environ.get("VALIDATION_DAY")
     now_text = os.environ.get("VALIDATION_NOW")
@@ -76,61 +121,47 @@ def main() -> int:
             os.environ.get("VALIDATION_SCHEDULE", ""),
         )
     )
-    start = datetime.combine(today, time.min, SHANGHAI).astimezone(timezone.utc)
-    end = start + timedelta(days=1)
-    since = start.isoformat(timespec="seconds")
-    result = subprocess.run(
-        [
-            "git",
-            "log",
-            f"--since={since}",
-            f"--before={end.isoformat(timespec='seconds')}",
-            "--format=",
-            "--name-only",
-            "--no-renames",
-            "HEAD",
-        ],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
-    changed_paths = sorted({line.strip() for line in result.stdout.splitlines() if line.strip()})
-    code_paths = [
-        path
-        for path in changed_paths
-        if Path(path).suffix.lower() not in {".md", ".rst"} and path not in {"LICENSE", "NOTICE"}
-    ]
     force = os.environ.get("FORCE_VALIDATION", "false").lower() == "true"
-    should_run = force or bool(code_paths)
-    reason = (
-        "手动触发并强制运行"
-        if force
-        else (
-            f"验证日检测到 {len(code_paths)} 个代码/配置变更路径"
-            if code_paths
-            else "验证日无代码/配置变更"
+    baseline = None if force else successful_baseline()
+    code_paths: list[str] = []
+    if baseline:
+        ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", baseline, "HEAD"], cwd=ROOT, check=False
         )
-    )
-
+        if ancestor.returncode == 0:
+            result = subprocess.run(
+                ["git", "diff", "--name-only", "--no-renames", baseline, "HEAD"],
+                cwd=ROOT, check=True, capture_output=True, text=True,
+            )
+            code_paths = relevant_paths(result.stdout.splitlines())
+        elif ancestor.returncode != 1:
+            raise subprocess.CalledProcessError(ancestor.returncode, ancestor.args)
+        else:
+            baseline = None
+    should_run = force or baseline is None or bool(code_paths)
+    if force:
+        reason = "手动强制运行"
+    elif baseline is None:
+        reason = "无可用成功验证基线，执行验证"
+    elif code_paths:
+        reason = f"自成功基线 {baseline} 有 {len(code_paths)} 个代码/配置变更"
+    else:
+        reason = f"自成功基线 {baseline} 无代码/配置变更"
     output("should_run", "true" if should_run else "false")
     output("reason", reason)
-    print(
-        f"验证日期（北京时间）：{today.isoformat()}；检查区间："
-        f"[{since}, {end.isoformat(timespec='seconds')})"
-    )
-    print(f"判定依据：{reason}")
+    print(f"验证日期（北京时间）：{today.isoformat()}；判定依据：{reason}")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a", encoding="utf-8") as stream:
             stream.write(
                 f"## 每日仿真与严格验证\n\n- 计划验证日：`{today.isoformat()}`\n"
-                f"- 检查区间：`[{since}, {end.isoformat(timespec='seconds')})`\n"
                 f"- 判定依据：{reason}\n"
             )
 
     if force:
         report_gate_result("PASS", "DAILY_SIM_STRICT_MANUAL_FORCE")
+    elif baseline is None:
+        report_gate_result("PASS", "DAILY_SIM_STRICT_RETRY_REQUIRED")
     elif code_paths:
         report_gate_result("PASS", "DAILY_SIM_STRICT_CODE_CHANGED")
     else:
@@ -146,7 +177,7 @@ def main() -> int:
 if __name__ == "__main__":
     try:
         raise SystemExit(main())
-    except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+    except (OSError, subprocess.CalledProcessError, ValueError, KeyError) as exc:
         try:
             report_gate_result("FAIL", "DAILY_SIM_STRICT_CHANGE_DETECTION", "2")
         except (OSError, subprocess.CalledProcessError):

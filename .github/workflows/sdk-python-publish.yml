@@ -1,4 +1,4 @@
-name: sdk-python-publish
+name: SDK / Publish Python package
 
 on:
   push:
@@ -17,6 +17,7 @@ permissions:
 
 jobs:
   build-and-publish:
+    name: Build and publish Python package
     runs-on: ubuntu-latest
     permissions:
       id-token: write

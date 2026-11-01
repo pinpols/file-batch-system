@@ -1,4 +1,4 @@
-name: workflow-lint
+name: Backend / Workflow security and syntax
 
 # 两层 workflow / composite action 自身扫描:
 #   1) actionlint — yaml 结构 + shellcheck on `run:` blocks(防 typo/语法错只能 push 试错)
@@ -33,6 +33,7 @@ concurrency:
 
 jobs:
   actionlint:
+    name: Validate GitHub Actions syntax
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -52,6 +53,7 @@ jobs:
           "$RUNNER_TEMP/bin/actionlint" -color -shellcheck="shellcheck -S warning"
 
   zizmor:
+    name: Audit GitHub Actions security
     runs-on: ubuntu-latest
     timeout-minutes: 5
     # zizmor 默认行为是发现问题非零退出。Pin minor version 防上游规则突变误伤。

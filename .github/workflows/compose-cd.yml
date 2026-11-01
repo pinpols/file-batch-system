@@ -1,4 +1,4 @@
-name: compose-cd
+name: Platform / Compose staging deployment
 
 on:
   workflow_dispatch:
@@ -22,6 +22,7 @@ concurrency:
 
 jobs:
   resolve-revisions:
+    name: Resolve backend and frontend revisions
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -76,6 +77,7 @@ jobs:
           echo "frontend_sha=$frontend_sha" >> "$GITHUB_OUTPUT"
 
   build-backend:
+    name: Build backend image
     needs: resolve-revisions
     permissions:
       contents: read
@@ -85,6 +87,7 @@ jobs:
       publish: true
 
   build-frontend:
+    name: Build frontend image
     needs: resolve-revisions
     permissions:
       contents: read
@@ -97,6 +100,7 @@ jobs:
       VITE_SENTRY_DSN: ${{ secrets.VITE_SENTRY_DSN }}
 
   assemble-release:
+    name: Assemble release manifest
     needs:
       - resolve-revisions
       - build-backend
@@ -174,6 +178,7 @@ jobs:
           retention-days: 30
 
   deploy-staging:
+    name: Deploy release to staging
     needs:
       - resolve-revisions
       - assemble-release
@@ -266,6 +271,7 @@ jobs:
           rm -f "$key_file" "$known_hosts_file"
 
   staging-smoke:
+    name: Run staging smoke checks
     needs:
       - resolve-revisions
       - deploy-staging
@@ -301,6 +307,7 @@ jobs:
           done
 
   staging-e2e:
+    name: Run staging end-to-end tests
     needs:
       - resolve-revisions
       - staging-smoke
@@ -359,6 +366,7 @@ jobs:
         run: bash scripts/ci/run-gate.sh --group testing CD_E2E_CROSS_BROWSER "跨浏览器冒烟测试" -- npm run test:e2e:all -- e2e/smoke.spec.ts --grep @cross-browser
 
   staging-lighthouse:
+    name: Run staging Lighthouse audit
     needs:
       - resolve-revisions
       - staging-smoke
@@ -385,6 +393,7 @@ jobs:
           configPath: .github/lighthouse-budget.json
 
   rollback-staging-on-smoke-failure:
+    name: Roll back staging after smoke failure
     needs:
       - resolve-revisions
       - assemble-release

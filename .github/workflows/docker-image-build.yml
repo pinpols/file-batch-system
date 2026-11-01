@@ -1,4 +1,4 @@
-name: docker-image-build
+name: Backend / Build container image
 
 on:
   workflow_dispatch:
@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   build:
+    name: Build backend container image
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:

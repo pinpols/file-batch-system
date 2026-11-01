@@ -160,10 +160,10 @@ PolyForm、无 Classpath Exception 的纯 GPL 及未知许可证均阻断。
 
 ## `daily-validation-change-gate.py`
 
-判断定时触发对应的北京时间运行日是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。日期按最近一次 cron 计划时间推导，因此定时任务延迟到午夜后启动仍检查原计划日；手动 dispatch 按当前北京时间日期处理，并可勾选 `force` 绕过变更条件。本地运行可设 `VALIDATION_DAY` 固定检查日期、`VALIDATION_EVENT=schedule` 与 `VALIDATION_SCHEDULE='31 13 * * *'`模拟定时触发，或设 `FORCE_VALIDATION=true` 强制运行；脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
+查询 main 上最近一次实际执行并成功的 sim + strict 对应提交，与当前提交比较代码和配置；跳过的运行不作为成功基线，最近一次验证失败或找不到可用基线时重新验证。Markdown、RST、`LICENSE` 和 `NOTICE` 的变更不单独触发验证。历史查询失败时明确失败；当前提交与基线无法证明祖先关系时保守执行。手动可设 `FORCE_VALIDATION=true` 强制运行，无需查询历史；日期用于记录计划验证日。非强制本地运行需要设置 `GITHUB_REPOSITORY` 并使用已认证的 `gh`。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 写入 `$GITHUB_OUTPUT` 供 workflow 路由。
 
 ```bash
-python3 scripts/ci/daily-validation-change-gate.py
+GITHUB_REPOSITORY=pinpols/file-batch-system python3 scripts/ci/daily-validation-change-gate.py
 FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 ```
 
@@ -1000,7 +1000,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [collect-flaky.py](collect-flaky.py) | 汇总 Surefire 与 Failsafe 报告中的不稳定测试。 |
 | [collect-flaky.sh](collect-flaky.sh) | surefire/failsafe flaky 汇总薄封装。 |
 | [compare-sbom.py](compare-sbom.py) | 比较两份 CycloneDX SBOM 的依赖语义，忽略跨环境的不稳定展示字段。 |
-| [daily-validation-change-gate.py](daily-validation-change-gate.py) | 仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。 |
+| [daily-validation-change-gate.py](daily-validation-change-gate.py) | 按最近成功验证提交检测代码或配置变更。 |
 | [detect-change-scope.py](detect-change-scope.py) | 分类变更文件并输出本地与 CI 门禁的执行范围。 |
 | [feature_switch_registry.py](feature_switch_registry.py) | 提供功能开关注册表的加载与解析能力。 |
 | [install-upstream-modules.sh](install-upstream-modules.sh) | 安装 E2E 与治理测试依赖的上游 Maven 模块。 |

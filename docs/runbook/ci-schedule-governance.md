@@ -16,7 +16,7 @@
 |---|---|---|---|
 | BE `pr-gate` | PR、merge queue | 无 | 变更范围门禁；不设 nightly |
 | BE `full-ci-gate` | main push（按路径排除纯文档/SDK） | 每周日 02:00 UTC | 维护责任：后端 CI；用托管 runner、外部依赖解析和全量路径路由做低频漂移检查；不是每日回归 |
-| BE `daily-sim-strict-validation` | 无直接 push；每日调度检测北京时间当日代码/配置变更 | 每日 13:31 UTC | 仅有当日相关变更才跑真实 sim + strict；手动可强制。检测基线目前是日历日，失败后若需跨日重验应手动 force，不能把后续无变更跳过当作失败已恢复 |
+| BE `daily-sim-strict-validation` | 无直接 push；每日比较最近成功验证提交与当前提交 | 每日 13:31 UTC | 代码或配置有变化、无成功基线或最近验证失败时运行真实 sim + strict；仅文档变化可跳过，手动可强制。历史查询失败时检测失败而非视为通过 |
 | BE `sdk-contract-parity` | 所有 PR（job 按 SDK 变更范围执行）、merge queue | 无 | 五语言契约/live transport 随 SDK 变更验证；不做每日无变更空跑 |
 | BE `sdk-orchestrator-e2e` | SDK、样例、Orchestrator、Trigger、迁移、协议和运行脚本相关 main push | 无 | 非 required 真栈 E2E；相关变更后及时验证，手动复验可用，不每日重建整套 Compose 环境 |
 | BE `staging-gate` | 手动 | 无 | 与 Full CI 的 E2E 清单重叠；仅用于独立复验，不再每日重复 |
@@ -24,20 +24,20 @@
 | BE fuzzing | 手动 | 每周二 03:15 UTC | 维护责任：后端安全/CI；保留为安全边界随机/性质测试，不提升为每日全量任务 |
 | BE Scorecard | main push | 每周三 02:23 UTC | 维护责任：后端安全/CI；保留为仓库供应链姿态快照 |
 | BE quarterly dependency review | 手动 | 每季度首日 03:00 UTC | 维护责任：依赖治理；低频盘点，不自动改依赖或创建 PR |
-| FE `pr-gate` / `frontend-ci` | PR、main push | 无 | 代码变更门禁；不设 nightly |
+| FE `pr-gate` / `frontend-ci` | PR、main push；兼容套件手动 | 无 | PR 主门禁执行 Node 基线的类型、单测与构建；文档站自动构建，同版本重复兼容套件仅手动运行 |
 | FE `full-ci-gate` | PR、main push | 每周一 02:00 UTC | 维护责任：前端 CI；每周 runner/依赖/门禁漂移检查；Docker/Trivy/Lighthouse 仅非 PR 事件执行 |
 | FE `build-image` | main push、版本 tag | 每日 19:00 UTC | 维护责任：前端交付；定时先检查前后端前一日变更；无相关变更不构建，后端变更还要等待 BE sim 成功 |
 | FE CodeQL | PR、main push | 每周一 02:30 UTC | 维护责任：前端安全/CI；保留，安全规则和漏洞情报可独立更新 |
 | FE `staging-gate` | 发布 tag、手动 | 无 | 维护责任：发布验收；面向真实 staging，不做无变更 nightly |
 | FE quarterly dependency inventory | 手动 | 每季度首日 03:00 UTC | 维护责任：依赖治理；仅依赖盘点，不自动升级 |
 
+`sdk-orchestrator-e2e` 暂不直接绑定 Full 成功事件：Full 会排除纯多语言 SDK 变更，而这些变更仍必须触发真实 SDK 栈验证。若将来串行，必须同时保持纯 SDK 变更覆盖，并绑定实际通过的 commit；不能仅用 workflow 名称或最新成功 run 推断。
+
 BE `sdk-orchestrator-e2e` 的路径过滤见 `.github/workflows/sdk-orchestrator-e2e.yml`；新增其依赖的生产模块、迁移、Compose 文件、环境模板、SDK E2E 共享脚本或启动脚本时，必须同步扩展该 `paths` 清单。路径漏配会使非 required 的全链路验证静默不触发。
 
 ## 已知边界与后续改进
 
-`daily-sim-strict-validation` 目前按北京时间日历日找代码变更，而不是比较“最近一次成功 sim 的 commit”与当前 main。若提交发生在当日定时验证之后，或验证失败后跨日，自动判定可能漏掉该提交/重试；手动 `force=true` 是当前补救方式。前端夜间镜像门禁也按前一日变更并查找当天后端 sim run，不能仅凭“同一天存在成功 run”证明该 run 覆盖了最新后端代码。
-
-**后续应优先改为 SHA 覆盖判定**：定位最近一次 `sim-and-strict` 成功且实际执行的 run，比较其 `head_sha` 与当前 main 之间的相关代码/配置差异；前端镜像构建还应确认后端成功 run 覆盖了待构建所依赖的后端代码，而非只匹配日期。实施前补充“定时前提交、定时后提交、失败后无新提交、仅文档变更、后端新提交晚于 sim”的正反向测试。该项未实现前，跨日漏验场景必须手动强制复验，并避免将日期匹配视为 SHA 级验证证据。
+前端夜间镜像门禁仍按前一日变更查找后端 sim run；当需要后端验证时，会检查成功 run 的提交覆盖目标后端代码并固定该目标提交。前端自身的变更检测仍依赖日历日，失败跨日后需要手动复验；改为上次成功构建的提交基线仍待完成。
 
 ## 定时变更检测要求
 

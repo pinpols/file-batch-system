@@ -38,10 +38,4 @@ class BatchWorkerDispatchApplicationIntegrationTest extends AbstractIntegrationT
             applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
         .isEqualTo(boundPort);
   }
-
-  @Test
-  @DisplayName("应用上下文成功启动,容器实例可注入")
-  void shouldLoadApplicationContext_whenStarted() {
-    assertThat(applicationContext).isNotNull();
-  }
 }

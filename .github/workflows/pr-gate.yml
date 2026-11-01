@@ -1,4 +1,4 @@
-name: pr-gate
+name: Backend / Pull request gate
 
 # PR 合入门禁：按变更范围运行静态检查、测试分片和安全扫描；E2E 在 Full CI
 # 的 main/每周回归中执行，另可通过 staging-gate 手动复验。路由以本 workflow 和 runbook 为准。
@@ -93,6 +93,7 @@ jobs:
   # 与供应链和 Java 静态质量分路并发，末尾继续汇总本路所有独立失败。
   # ===========================================================================
   static-policy:
+    name: PR checks / policy and configuration
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -642,6 +643,7 @@ jobs:
   # 只在 Maven、镜像、Compose、Helm 或 Trivy 白名单输入变化时做重扫描。
   # ===========================================================================
   static-supply-chain:
+    name: PR checks / supply chain security
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -728,6 +730,7 @@ jobs:
   # Job 1c: static-java-quality — 编译、PMD 与 Spotless
   # ===========================================================================
   static-java-quality:
+    name: PR checks / Java code quality
     needs: changes
     if: |
       (needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true') &&
@@ -1282,6 +1285,7 @@ jobs:
   # Java 架构/约定守卫独立执行，不与业务 unit/IT 混合；失败仍汇入稳定 required context。
   # ==========================================================================
   java-governance:
+    name: PR tests / Java architecture and conventions
     needs: changes
     if: |
       (needs.changes.outputs.unit-required == 'true' || needs.changes.outputs.ci == 'true') &&

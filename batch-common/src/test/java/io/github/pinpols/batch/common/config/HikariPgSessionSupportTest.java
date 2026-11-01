@@ -49,6 +49,8 @@ class HikariPgSessionSupportTest {
   @Test
   @DisplayName("应用名超过六十三字符时截断到六十三位,以匹配数据库标识长度上限")
   void shouldTruncateApplicationName_whenExceedingSixtyThreeChars() {
-    assertThat(HikariPgSessionSupport.truncate("a".repeat(80), 63)).hasSize(63);
+    String applicationName = "batch_" + "a".repeat(74);
+    assertThat(HikariPgSessionSupport.truncate(applicationName, 63))
+        .isEqualTo("batch_" + "a".repeat(57));
   }
 }
