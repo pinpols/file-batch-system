@@ -7,13 +7,14 @@ on:
   workflow_dispatch:
     inputs:
       force:
-        description: 当天没有代码或配置变更时仍强制运行（Asia/Shanghai）
+        description: 无未验证代码或配置变更时仍强制运行
         required: false
         default: false
         type: boolean
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: daily-sim-strict-validation-${{ github.ref }}
@@ -32,9 +33,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Evaluate today's code changes
+      - name: Compare changes against last successful validation
         id: gate
         env:
+          GH_TOKEN: ${{ github.token }}
           FORCE_VALIDATION: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
           VALIDATION_EVENT: ${{ github.event_name }}
           VALIDATION_SCHEDULE: ${{ github.event.schedule }}
@@ -169,7 +171,7 @@ jobs:
           bash scripts/local/clean-stale-test-env.sh || true
           docker network rm batch-platform_batch-network >/dev/null 2>&1 || true
 
-  # 当天有代码/配置变更时，镜像构建必须排在完整 sim + strict 之后；
+  # 检测到未验证变更或需要重试时，镜像构建必须排在完整 sim + strict 之后；
   # 无变更时两个任务都跳过，避免 nightly 产生无意义的构建。
   nightly-image-build:
     name: Nightly image build after sim-strict
