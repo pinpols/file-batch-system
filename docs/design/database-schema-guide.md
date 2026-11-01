@@ -125,6 +125,7 @@ flowchart LR
 | `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开；V297以 `(tenant_id,request_id)` `NO ACTION` FK保护来源请求，应用仍负责同事务创建、payload 身份和业务状态校验；[V361](../../db/migration/V361__trigger_outbox_claim_fence.sql) 用领取 token 防止超时回收后旧投递者回写新领取，归档表同步镜像字段 |
 | `trigger_request_idempotency_alias` | 将不同 HTTP 幂等键映射到已接纳的 EVENT TriggerRequest；见 [V278](../../db/migration/V278__trigger_request_idempotency_alias.sql) |
 | `scheduled_occurrence` | Workflow 计划 fire 的唯一 occurrence 台账和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V261](../../db/migration/V261__scheduled_occurrence_ledger.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
+| `scheduled_occurrence_fire` | [V374](../../db/migration/V374__record_quartz_actual_fires.sql) 逐次记录 Quartz 实际回调及重试身份；不同于计划 occurrence 或启动成功，历史缺失和记录失败不回填，以租户隔离。留存清理仅覆盖指定租户、截止时间前且批次日已结算的记录 |
 | `scheduled_occurrence_coverage` | 记录 occurrence 扫描覆盖水位与配置代际；见 [V262](../../db/migration/V262__scheduled_occurrence_coverage.sql) |
 | `scheduled_occurrence_catch_up_audit` | 审计人工补跑的 occurrence 决策；见 [V274](../../db/migration/V274__audit_scheduled_occurrence_catch_up.sql) |
 | `scheduled_occurrence_supersession_history` | 保留旧计划 occurrence 被新计划替代的历史；见 [V272](../../db/migration/V272__scheduled_occurrence_supersession_history.sql) |
