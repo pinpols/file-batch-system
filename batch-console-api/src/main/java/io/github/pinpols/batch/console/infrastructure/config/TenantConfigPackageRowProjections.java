@@ -127,8 +127,7 @@ public class TenantConfigPackageRowProjections {
 
   private String dependencyBizDateAlignments(JobDefinitionView entity) {
     List<JobDependencyRuleView> dependencyRules = entity.getJobDependencyRules();
-    boolean dependencyRulesAreMissing =
-        EmptyChecks.isNull(dependencyRules) || EmptyChecks.isEmpty(dependencyRules);
+    boolean dependencyRulesAreMissing = EmptyChecks.isEmpty(dependencyRules);
     if (dependencyRulesAreMissing) {
       return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
     }

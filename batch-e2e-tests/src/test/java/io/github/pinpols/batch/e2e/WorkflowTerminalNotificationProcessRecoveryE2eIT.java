@@ -96,7 +96,7 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
       try {
         JsonNode body = new ObjectMapper().readTree(exchange.getRequestBody());
         String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-        if (EmptyChecks.isNull(key) || key.isBlank()) {
+        if (EmptyChecks.isBlank(key)) {
           exchange.sendResponseHeaders(400, -1);
           return;
         }

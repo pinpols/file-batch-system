@@ -101,7 +101,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
       JsonNode body = new ObjectMapper().readTree(exchange.getRequestBody());
       ATTEMPTS.add(body);
       String key = exchange.getRequestHeaders().getFirst("Idempotency-Key");
-      if (EmptyChecks.isNull(key) || key.isBlank()) {
+      if (EmptyChecks.isBlank(key)) {
         exchange.sendResponseHeaders(400, -1);
         exchange.close();
         return;
