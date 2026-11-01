@@ -1914,8 +1914,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("计划触发先接纳时结算等待同一业务日围栏并保留 occurrence")
   void scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking(ScheduledAdmissionEntry entry)
       throws Exception {
+    // 允许 Quartz 观察记录的外键检查，同时阻塞接纳流程的 FOR SHARE。
     final String selectIdSql = """
-            select id from batch.workflow_definition where tenant_id = ? and id = ? for update
+            select id from batch.workflow_definition where tenant_id = ? and id = ? for no key update
         """;
 
     final String insertBusinessCalendarSql = """

@@ -676,12 +676,7 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
       Path logFile,
       boolean holdResponse)
       throws IOException, InterruptedException {
-    Path workerExecJar = holdResponse
-        ? findLatestExecJar(projectRoot().resolve("batch-worker/dispatch/target"))
-        : locateWorkerExecJar();
-    if (workerExecJar == null) {
-      throw new IllegalStateException("在途派发测试需要预先准备独立 Worker 的可执行包");
-    }
+    Path workerExecJar = locateWorkerExecJar();
     List<String> command = new ArrayList<>(List.of(
         JAVA_BIN,
         "-jar",
