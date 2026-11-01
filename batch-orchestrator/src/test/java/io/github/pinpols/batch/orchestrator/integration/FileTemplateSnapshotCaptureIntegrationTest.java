@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.FileTemplateSnapshotService;
@@ -90,7 +90,7 @@ class FileTemplateSnapshotCaptureIntegrationTest {
     }
     SqlSessionFactory sessions = new SqlSessionFactoryBuilder().build(configuration);
     SecretPayloadProtector protector = protector();
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(1L)
         .tenantId(tenant)
         .jobCode("FILE_JOB")

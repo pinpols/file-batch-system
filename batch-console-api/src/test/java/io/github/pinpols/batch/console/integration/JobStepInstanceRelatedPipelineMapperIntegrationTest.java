@@ -11,11 +11,11 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineStepRunMapper;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobStepInstanceQuery;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
+import io.github.pinpols.batch.console.domain.job.view.JobStepInstanceView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowExecutionMapper;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
@@ -109,15 +109,15 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
     long plainStepId = insertStep(tenantId, plainJobInstanceId, plainTaskId, "MAIN");
 
     // act
-    JobStepInstanceEntity withPipeline = selectStep(tenantId, jobInstanceId, stepId);
-    JobStepInstanceEntity plain = selectStep(tenantId, plainJobInstanceId, plainStepId);
+    JobStepInstanceView withPipeline = selectStep(tenantId, jobInstanceId, stepId);
+    JobStepInstanceView plain = selectStep(tenantId, plainJobInstanceId, plainStepId);
 
     // assert
     assertThat(withPipeline.getRelatedPipelineInstanceId()).isEqualTo(pipelineInstanceId);
     assertThat(plain.getRelatedPipelineInstanceId()).isNull();
 
     // selectById 路径同样带出关联 id
-    JobStepInstanceEntity byId = jobStepInstanceMapper.selectById(tenantId, stepId);
+    JobStepInstanceView byId = jobStepInstanceMapper.selectById(tenantId, stepId);
     assertThat(byId.getRelatedPipelineInstanceId()).isEqualTo(pipelineInstanceId);
   }
 
@@ -252,9 +252,9 @@ class JobStepInstanceRelatedPipelineMapperIntegrationTest extends AbstractIntegr
         .satisfies(node -> assertThat(node.getActiveSteps()).isNull());
   }
 
-  private JobStepInstanceEntity selectStep(String tenantId, long jobInstanceId, long stepId) {
+  private JobStepInstanceView selectStep(String tenantId, long jobInstanceId, long stepId) {
     JobStepInstanceQuery query = JobStepInstanceQuery.forJobInstance(tenantId, jobInstanceId);
-    List<JobStepInstanceEntity> rows = jobStepInstanceMapper.selectByQuery(query);
+    List<JobStepInstanceView> rows = jobStepInstanceMapper.selectByQuery(query);
     return rows.stream().filter(r -> r.getId().equals(stepId)).findFirst().orElseThrow();
   }
 

@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.worker.processes.mapper.business.ProcessStagingMapper;
@@ -70,7 +71,9 @@ class ProcessStagingPartitionMaintenanceTest {
   @Test
   @DisplayName("默认不按年龄删除 staging 行")
   void shouldKeepRowsUntilDeletionIsEnabled() {
+    assertThat(properties.isDeletionEnabled()).isFalse();
     assertThat(cleaner.cleanOnce()).isZero();
+    verifyNoInteractions(mapper);
   }
 
   @Test

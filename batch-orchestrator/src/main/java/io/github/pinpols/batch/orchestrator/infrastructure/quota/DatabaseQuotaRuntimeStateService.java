@@ -124,7 +124,8 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
     int burstLimit = request.burstLimit();
     int slidingWindowHours = request.slidingWindowHours();
     if (!Texts.hasText(tenantId) || !Texts.hasText(quotaScope) || !Texts.hasText(ownerCode)) {
-      return QuotaRuntimeSnapshot.withoutWindow(normalizePolicy(quotaResetPolicy), burstLimit);
+      QuotaResetPolicy fallbackPolicy = QuotaResetPolicy.from(quotaResetPolicy);
+      return QuotaRuntimeSnapshot.withoutWindow(fallbackPolicy.name(), burstLimit);
     }
     QuotaResetPolicy policy = QuotaResetPolicy.from(quotaResetPolicy);
     if (!policy.isRuntimeManaged() || burstLimit <= 0) {
@@ -288,10 +289,6 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
       persist(state);
     }
     return state;
-  }
-
-  private String normalizePolicy(String policy) {
-    return QuotaResetPolicy.from(policy).name();
   }
 
   private ResourceCheck waitForCapacity(QuotaReservationRequest request) {

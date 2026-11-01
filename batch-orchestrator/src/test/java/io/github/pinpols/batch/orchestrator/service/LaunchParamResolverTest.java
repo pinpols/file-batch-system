@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.enums.RunMode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import java.time.Clock;
 import java.time.Instant;
@@ -77,8 +77,8 @@ class LaunchParamResolverTest {
         null);
   }
 
-  private JobDefinitionEntity jobDef(String jobType, Map<String, Object> defaultParams) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView jobDef(String jobType, Map<String, Object> defaultParams) {
+    return JobDefinitionView.builder()
         .id(1L)
         .tenantId("ta")
         .jobCode("J1")
@@ -283,7 +283,7 @@ class LaunchParamResolverTest {
   @Test
   @DisplayName("启动参数不能注入仅由分区绑定生成的文件束字段")
   void shouldRemoveCallerBundleBindings_whenMergingLaunchParams() {
-    JobDefinitionEntity definition = jobDef("DISPATCH", Map.of("bundleSourceFileId", 91));
+    JobDefinitionView definition = jobDef("DISPATCH", Map.of("bundleSourceFileId", 91));
     LaunchRequest request = launchRequest(
         Map.of(
             "fileId",
@@ -311,7 +311,7 @@ class LaunchParamResolverTest {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity(
             "{\"code\":\"tenant_ta_import\",\"defaults\":{\"batchSize\":500,\"region\":\"cn\"}}"));
-    JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of("region", "us"));
+    JobDefinitionView jobDef = jobDef("tenant_ta_import", Map.of("region", "us"));
     LaunchRequest request = launchRequest(Map.of("timeout", 30), null);
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
@@ -326,7 +326,7 @@ class LaunchParamResolverTest {
   void shouldLetRequestParamsOverrideDescriptorDefaults() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"batchSize\":500}}"));
-    JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of());
+    JobDefinitionView jobDef = jobDef("tenant_ta_import", Map.of());
     LaunchRequest request = launchRequest(Map.of("batchSize", 999), null);
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
@@ -339,7 +339,7 @@ class LaunchParamResolverTest {
   void shouldSubstituteTemplateVariablesInDescriptorDefaults() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${bizDate}/in\"}}"));
-    JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of());
+    JobDefinitionView jobDef = jobDef("tenant_ta_import", Map.of());
     LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, Month.JUNE, 1));
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
@@ -352,7 +352,7 @@ class LaunchParamResolverTest {
   void shouldKeepUnknownTemplateTokenAsIs() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{\"defaults\":{\"path\":\"/data/${unknownVar}/in\"}}"));
-    JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of());
+    JobDefinitionView jobDef = jobDef("tenant_ta_import", Map.of());
     LaunchRequest request = launchRequest(Map.of(), LocalDate.of(2026, Month.JUNE, 1));
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
@@ -363,7 +363,7 @@ class LaunchParamResolverTest {
   @Test
   @DisplayName("作业类型未注册描述符时跳过默认参数注入,仅保留作业自身默认参数")
   void shouldSkipDescriptorDefaultsWhenJobTypeNotRegistered() {
-    JobDefinitionEntity jobDef = jobDef("file-import", Map.of("region", "cn"));
+    JobDefinitionView jobDef = jobDef("file-import", Map.of("region", "cn"));
     LaunchRequest request = launchRequest(Map.of(), null);
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);
@@ -376,7 +376,7 @@ class LaunchParamResolverTest {
   void shouldNotFailWhenDescriptorJsonMalformed() {
     when(customTaskTypeRegistryMapper.selectByTenantAndCode("ta", "tenant_ta_import"))
         .thenReturn(descriptorEntity("{not-json"));
-    JobDefinitionEntity jobDef = jobDef("tenant_ta_import", Map.of("region", "cn"));
+    JobDefinitionView jobDef = jobDef("tenant_ta_import", Map.of("region", "cn"));
     LaunchRequest request = launchRequest(Map.of(), null);
 
     Map<String, Object> merged = resolver.mergeLaunchParams(jobDef, request);

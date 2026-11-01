@@ -10,7 +10,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,8 +40,8 @@ class WorkflowReplayJobDefinitionResolverTest {
   private WorkflowReplayJobDefinitionResolver resolver;
 
   private WorkflowRunExecutionSnapshot sourceSnapshot;
-  private JobDefinitionEntity sourceDefinition;
-  private JobDefinitionEntity latestDefinition;
+  private JobDefinitionView sourceDefinition;
+  private JobDefinitionView latestDefinition;
 
   @BeforeEach
   void setUp() {
@@ -53,7 +53,7 @@ class WorkflowReplayJobDefinitionResolverTest {
   @Test
   @DisplayName("原配置策略直接使用来源运行的节点定义快照")
   void shouldUseFrozenSourceNodeDefinition_whenOriginalPolicySelected() {
-    JobDefinitionEntity selected = resolve(ConfigVersionPolicy.USE_ORIGINAL_CONFIG, null, null);
+    JobDefinitionView selected = resolve(ConfigVersionPolicy.USE_ORIGINAL_CONFIG, null, null);
 
     assertThat(selected.id()).isEqualTo(sourceDefinition.id());
     assertThat(selected.version()).isEqualTo(sourceDefinition.version());
@@ -63,7 +63,7 @@ class WorkflowReplayJobDefinitionResolverTest {
   @Test
   @DisplayName("最新配置策略校验租户和 Job 身份后使用当前定义")
   void shouldUseLatestDefinition_whenTenantAndJobMatch() {
-    JobDefinitionEntity selected =
+    JobDefinitionView selected =
         resolve(ConfigVersionPolicy.USE_LATEST_CONFIG, null, latestDefinition);
 
     assertThat(selected).isSameAs(latestDefinition);
@@ -72,7 +72,7 @@ class WorkflowReplayJobDefinitionResolverTest {
   @Test
   @DisplayName("同编码作业删除重建后不能把新身份作为来源作业的最新版本")
   void shouldRejectLatestDefinition_whenJobIdentityWasRecreated() {
-    JobDefinitionEntity recreated = JobDefinitionEntity.builder()
+    JobDefinitionView recreated = JobDefinitionView.builder()
         .id(999L)
         .tenantId(TENANT)
         .jobCode(JOB_CODE)
@@ -89,7 +89,7 @@ class WorkflowReplayJobDefinitionResolverTest {
     when(workflowRuns.selectLatestJobDefinitionSnapshot(TENANT, JOB_DEFINITION_ID, JOB_CODE, 3))
         .thenReturn(runWith(definition(3, "historical-v3")));
 
-    JobDefinitionEntity selected = resolve(ConfigVersionPolicy.USE_SPECIFIED_VERSION, 3, null);
+    JobDefinitionView selected = resolve(ConfigVersionPolicy.USE_SPECIFIED_VERSION, 3, null);
 
     assertThat(selected.version()).isEqualTo(3);
     assertThat(selected.queueCode()).isEqualTo("historical-v3");
@@ -121,7 +121,7 @@ class WorkflowReplayJobDefinitionResolverTest {
     when(workflowRuns.selectLatestJobDefinitionSnapshot(TENANT, JOB_DEFINITION_ID, JOB_CODE, 3))
         .thenReturn(runWithRepeatedJob(false));
 
-    JobDefinitionEntity selected = resolve(ConfigVersionPolicy.USE_SPECIFIED_VERSION, 3, null);
+    JobDefinitionView selected = resolve(ConfigVersionPolicy.USE_SPECIFIED_VERSION, 3, null);
 
     assertThat(selected.version()).isEqualTo(3);
     assertThat(selected.queueCode()).isEqualTo("historical-v3");
@@ -161,8 +161,8 @@ class WorkflowReplayJobDefinitionResolverTest {
     return run;
   }
 
-  private JobDefinitionEntity resolve(
-      ConfigVersionPolicy policy, Integer specifiedVersion, JobDefinitionEntity latest) {
+  private JobDefinitionView resolve(
+      ConfigVersionPolicy policy, Integer specifiedVersion, JobDefinitionView latest) {
     WorkflowReplayJobDefinitionRequest request = WorkflowReplayJobDefinitionRequest.builder()
         .tenantId(TENANT)
         .nodeCode(NODE_CODE)
@@ -175,11 +175,11 @@ class WorkflowReplayJobDefinitionResolverTest {
     return resolver.resolve(request);
   }
 
-  private WorkflowRunExecutionSnapshot snapshot(JobDefinitionEntity definition) {
+  private WorkflowRunExecutionSnapshot snapshot(JobDefinitionView definition) {
     return WorkflowRunExecutionSnapshot.from(runWith(definition));
   }
 
-  private WorkflowRunEntity runWith(JobDefinitionEntity definition) {
+  private WorkflowRunEntity runWith(JobDefinitionView definition) {
     Map<String, Object> node = Map.of(
         "nodeCode", NODE_CODE,
         "nodeType", "JOB",
@@ -228,8 +228,8 @@ class WorkflowReplayJobDefinitionResolverTest {
     return run;
   }
 
-  private JobDefinitionEntity definition(int version, String queueCode) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView definition(int version, String queueCode) {
+    return JobDefinitionView.builder()
         .id(JOB_DEFINITION_ID)
         .tenantId(TENANT)
         .jobCode(JOB_CODE)

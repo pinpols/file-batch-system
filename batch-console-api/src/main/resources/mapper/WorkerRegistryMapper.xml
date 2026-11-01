@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper">
-    <resultMap id="WorkerRegistryResultMap" type="io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity">
+    <resultMap id="WorkerRegistryResultMap" type="io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView">
         <id column="id" property="id"/>
         <result column="tenant_id" property="tenantId"/>
         <result column="worker_code" property="workerCode"/>
@@ -12,6 +12,8 @@
         <result column="task_capabilities_json" property="taskCapabilitiesJson"/>
         <result column="status" property="status"/>
         <result column="heartbeat_at" property="heartbeatAt"/>
+        <result column="current_load" property="currentLoad"/>
+        <result column="max_concurrent" property="maxConcurrent"/>
         <result column="drain_started_at" property="drainStartedAt"/>
         <result column="drain_deadline_at" property="drainDeadlineAt"/>
     </resultMap>

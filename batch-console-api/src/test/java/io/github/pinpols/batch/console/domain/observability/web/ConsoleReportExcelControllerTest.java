@@ -6,10 +6,12 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,10 +19,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("报表导出接口:配置发布与调度快照的流式导出")
@@ -42,12 +42,11 @@ class ConsoleReportExcelControllerTest {
   void shouldExportConfigReleasesAndSchedulerSnapshotExcel() throws Exception {
     byte[] configBytes = "config-releases".getBytes(StandardCharsets.UTF_8);
     byte[] snapshotBytes = "scheduler-snapshot".getBytes(StandardCharsets.UTF_8);
-    // R2-P1-9: 返回类型已切到 StreamingResponseBody（lambda 流式写入响应流）
-    StreamingResponseBody configBody = out -> out.write(configBytes);
-    StreamingResponseBody snapshotBody = out -> out.write(snapshotBytes);
-    when(reportService.exportConfigReleases(any())).thenReturn(ResponseEntity.ok(configBody));
+    ExcelDownload configBody = new ExcelDownload("config.xlsx", out -> out.write(configBytes));
+    ExcelDownload snapshotBody = new ExcelDownload("snapshot.xlsx", out -> out.write(snapshotBytes));
+    when(reportService.exportConfigReleases(any())).thenReturn(configBody);
     when(reportService.exportSchedulerSnapshot(anyString()))
-        .thenReturn(ResponseEntity.ok(snapshotBody));
+        .thenReturn(snapshotBody);
 
     // R2-P1-9: StreamingResponseBody 走 Spring async dispatch，MockMvc 需要先抓 async result
     // 再走 asyncDispatch 才能渲染响应体；否则 content() 为空。
@@ -58,6 +57,8 @@ class ConsoleReportExcelControllerTest {
     mockMvc
         .perform(asyncDispatch(configResult))
         .andExpect(status().isOk())
+        .andExpect(header().string("Content-Disposition", "attachment; filename=\"config.xlsx\""))
+        .andExpect(header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .andExpect(content().bytes(configBytes));
 
     var snapshotResult = mockMvc

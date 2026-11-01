@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.CustomTaskTypeRegistryEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -55,7 +55,7 @@ public class LaunchParamResolver {
    * <p>descriptor.defaults 仅在 {@code job_definition.job_type} 命中 {@code custom_task_type_registry}
    * 时注入;模板变量见 {@link #templateVariables}。敏感凭据禁止走 defaults(走环境变量,roadmap §5.5)。
    */
-  Map<String, Object> mergeLaunchParams(JobDefinitionEntity jobDefinition, LaunchRequest request) {
+  Map<String, Object> mergeLaunchParams(JobDefinitionView jobDefinition, LaunchRequest request) {
     Map<String, Object> merged = new LinkedHashMap<>();
     applyDescriptorDefaults(merged, jobDefinition, request);
     if (jobDefinition != null && jobDefinition.defaultParams() != null) {
@@ -77,7 +77,7 @@ public class LaunchParamResolver {
    * ${bizDate}} 等)。无命中 / 无 defaults / 解析失败均静默跳过,不阻断派单。
    */
   private void applyDescriptorDefaults(
-      Map<String, Object> merged, JobDefinitionEntity jobDefinition, LaunchRequest request) {
+      Map<String, Object> merged, JobDefinitionView jobDefinition, LaunchRequest request) {
     if (jobDefinition == null
         || jobDefinition.tenantId() == null
         || jobDefinition.jobType() == null) {
@@ -89,7 +89,7 @@ public class LaunchParamResolver {
       return;
     }
     String descriptorJson = entity.descriptor();
-    if (EmptyChecks.isNull(descriptorJson) || EmptyChecks.isBlank(descriptorJson)) {
+    if (EmptyChecks.isBlank(descriptorJson)) {
       return;
     }
     Map<String, Object> defaults = parseDescriptorDefaults(descriptorJson);
@@ -247,7 +247,7 @@ public class LaunchParamResolver {
   Instant resolveDeadlineAt(
       Instant createdAt,
       LocalDate bizDate,
-      JobDefinitionEntity jobDefinition,
+      JobDefinitionView jobDefinition,
       Map<String, Object> params,
       Instant batchDaySlaDeadlineAt) {
     Object requestedDeadlineValue =
@@ -258,7 +258,7 @@ public class LaunchParamResolver {
     return earliest(explicit, deadlineTime, jobDeadlineAt, batchDaySlaDeadlineAt);
   }
 
-  Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionEntity jobDefinition) {
+  Instant resolveJobDeadlineAt(Instant createdAt, JobDefinitionView jobDefinition) {
     if (EmptyChecks.isNull(createdAt)) {
       return null;
     }
@@ -273,7 +273,7 @@ public class LaunchParamResolver {
   }
 
   Integer resolveExpectedDurationSeconds(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params) {
+      JobDefinitionView jobDefinition, Map<String, Object> params) {
     Integer explicitValue = firstPositiveInt(
         params.get("expectedDurationSeconds"),
         params.get("expected_duration_seconds"),
@@ -292,7 +292,7 @@ public class LaunchParamResolver {
   }
 
   String buildParamsSnapshot(
-      @Nullable JobDefinitionEntity jobDefinition,
+      @Nullable JobDefinitionView jobDefinition,
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId,
@@ -328,7 +328,7 @@ public class LaunchParamResolver {
     return JsonUtils.toJson(snapshot);
   }
 
-  private Map<String, Object> executionPolicySnapshot(@Nullable JobDefinitionEntity jobDefinition) {
+  private Map<String, Object> executionPolicySnapshot(@Nullable JobDefinitionView jobDefinition) {
     if (jobDefinition == null) { // empty-check: allow - Sonar S2259
       return Map.of();
     }

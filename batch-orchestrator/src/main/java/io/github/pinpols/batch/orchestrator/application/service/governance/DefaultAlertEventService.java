@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -36,7 +36,7 @@ public class DefaultAlertEventService implements AlertEventService {
 
   @Override
   @Transactional
-  public void emit(AlertEmitRequest request) {
+  public void emit(AlertEmitCommand request) {
     if (request == null
         || !Texts.hasText(request.tenantId())
         || !Texts.hasText(request.alertType())) {

@@ -26,7 +26,6 @@ import io.github.pinpols.batch.orchestrator.config.BatchDayDryRunProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
@@ -34,6 +33,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUp
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobInstanceBatchDayCandidatesQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayPreviewTokenMapper;
@@ -893,13 +893,13 @@ public class BatchDayReplayService {
     if (isCalendarBlocked(command, now)) {
       return List.of();
     }
-    List<JobDefinitionEntity> definitions =
+    List<JobDefinitionView> definitions =
         jobDefinitionMapper.selectByTenantAndEnabled(command.tenantId(), true);
     if (EmptyChecks.isEmpty(definitions)) {
       return List.of();
     }
     List<BatchDayReplayEntryEntity> entries = new ArrayList<>();
-    for (JobDefinitionEntity definition : definitions) {
+    for (JobDefinitionView definition : definitions) {
       if (!isSchedulePlanCandidate(
           definition, command.calendarCode(), command.bizDate(), requestedCodes)) {
         continue;
@@ -940,7 +940,7 @@ public class BatchDayReplayService {
   }
 
   private boolean isSchedulePlanCandidate(
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       String calendarCode,
       LocalDate bizDate,
       List<String> requestedCodes) {
@@ -996,7 +996,7 @@ public class BatchDayReplayService {
   }
 
   private String buildPlanSnapshot(
-      JobDefinitionEntity definition, SchedulePlan plan, LocalDate bizDate) {
+      JobDefinitionView definition, SchedulePlan plan, LocalDate bizDate) {
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("schemaVersion", "batch-day-dry-run-plan-v1");
     snapshot.put("jobDefinitionId", definition.id());

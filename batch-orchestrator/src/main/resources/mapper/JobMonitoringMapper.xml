@@ -58,8 +58,26 @@
         ) workflow_context ON true
     </sql>
 
+    <resultMap id="slaCandidateMap" type="io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate">
+        <id column="id" property="id"/>
+        <result column="tenant_id" property="tenantId"/>
+        <result column="biz_date" property="bizDate"/>
+        <result column="job_code" property="jobCode"/>
+        <result column="instance_no" property="instanceNo"/>
+        <result column="instance_status" property="instanceStatus"/>
+        <result column="trace_id" property="traceId"/>
+        <result column="deadline_at" property="deadlineAt"/>
+        <result column="expected_duration_seconds" property="expectedDurationSeconds"/>
+        <result column="started_at" property="startedAt"/>
+        <result column="execution_started_at" property="executionStartedAt"/>
+        <result column="finished_at" property="finishedAt"/>
+        <result column="sla_alerted_at" property="slaAlertedAt"/>
+        <result column="parent_workflow_run_id" property="parentWorkflowRunId"/>
+        <result column="parent_node_code" property="parentNodeCode"/>
+    </resultMap>
+
     <select id="selectSlaViolationCandidates"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+            resultMap="slaCandidateMap">
         <!-- 按租户轮转排序，避免一个租户占满批次后让其他租户的 SLA 告警长期饥饿。 -->
         SELECT job_instance.*,
                <include refid="slaWorkflowContextColumns"/>
@@ -92,7 +110,7 @@
     </update>
 
     <select id="selectSlaViolationCandidate"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+            resultMap="slaCandidateMap">
         SELECT job_instance.*,
                <include refid="slaWorkflowContextColumns"/>
         FROM batch.job_instance
@@ -102,7 +120,7 @@
     </select>
 
     <select id="selectSlaEscalationCandidates"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+            resultMap="slaCandidateMap">
         SELECT job_instance.*,
                <include refid="slaWorkflowContextColumns"/>
         FROM batch.job_instance
@@ -119,7 +137,7 @@
 
     </select>
     <select id="selectSlaEscalationCandidateForUpdate"
-            resultMap="io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper.JobInstanceResultMap">
+            resultMap="slaCandidateMap">
         SELECT job_instance.*,
                <include refid="slaWorkflowContextColumns"/>
         FROM batch.job_instance

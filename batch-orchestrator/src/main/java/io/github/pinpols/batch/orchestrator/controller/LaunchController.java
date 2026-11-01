@@ -2,10 +2,8 @@ package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
@@ -25,13 +23,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class LaunchController {
 
   private final LaunchApplicationService launchApplicationService;
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final OrchestratorDrainService drainService;
 
   @PostMapping("/launch")
   public LaunchResponse launch(@RequestBody LaunchRequest request, HttpServletRequest httpRequest) {
-    if (gracefulShutdown.isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.orchestrator.draining");
-    }
+    drainService.ensureAcceptingLaunches();
     // 租户边界守卫(与 Worker/Task 控制器一致):租户 API-Key 路径下,以 filter 解析出的真实租户
     // 为准,与 body 声明对账,不一致即拒。legacy X-Internal-Secret 路径无解析租户时透传 body。
     LaunchRequest guardedRequest = withGuardedTenant(request, httpRequest);

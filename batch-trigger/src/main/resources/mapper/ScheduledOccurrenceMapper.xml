@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+    <insert id="insertActualFire">
+        insert into batch.scheduled_occurrence_fire
+            (tenant_id, workflow_definition_id, scheduled_fire_time, fire_instance_id,
+             refire_count, actual_fire_time, fire_kind)
+        values (#{tenantId}, #{workflowDefinitionId}, #{scheduledFireTime}, #{fireInstanceId},
+                #{refireCount}, #{actualFireTime}, #{fireKind})
+        on conflict (tenant_id, workflow_definition_id, scheduled_fire_time, fire_instance_id, refire_count)
+        do nothing
+    </insert>
     <select id="selectTenantConfigurationRevision" resultType="long">
         select batch.current_tenant_configuration_revision(#{tenantId})
     </select>

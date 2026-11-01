@@ -10,7 +10,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResourceQueueEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;

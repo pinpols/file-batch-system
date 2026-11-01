@@ -6,8 +6,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.math.BigDecimal;
@@ -35,8 +35,8 @@ public class RerunJobDefinitionResolver {
     this.workflowRunMapper = workflowRunMapper;
   }
 
-  public JobDefinitionEntity resolve(
-      LaunchRequest request, String jobCode, JobDefinitionEntity latestDefinition) {
+  public JobDefinitionView resolve(
+      LaunchRequest request, String jobCode, JobDefinitionView latestDefinition) {
     Map<String, Object> params = EmptyChecks.isNull(request.params()) ? Map.of() : request.params();
     if (!OPERATION_JOB_RERUN.equals(params.get(PARAM_OPERATION_TYPE))) {
       return latestDefinition;
@@ -72,11 +72,11 @@ public class RerunJobDefinitionResolver {
     };
   }
 
-  private JobDefinitionEntity originalDefinition(
+  private JobDefinitionView originalDefinition(
       String tenantId, JobInstanceEntity source, String jobCode) {
     WorkflowRunEntity sourceRun =
         workflowRunMapper.selectByNodeJobInstanceId(tenantId, source.getId());
-    JobDefinitionEntity snapshot =
+    JobDefinitionView snapshot =
         jobDefinitionFromRun(sourceRun, jobCode, source.getJobDefinitionId());
     if (EmptyChecks.isNull(snapshot)
         || !Objects.equals(snapshot.version(), source.getJobDefinitionVersion())) {
@@ -85,7 +85,7 @@ public class RerunJobDefinitionResolver {
     return snapshot;
   }
 
-  private JobDefinitionEntity specifiedDefinition(
+  private JobDefinitionView specifiedDefinition(
       String tenantId, JobInstanceEntity source, String jobCode, Map<String, Object> params) {
     Integer version = positiveInteger(params.get(PARAM_CONFIG_VERSION));
     if (EmptyChecks.isNull(version)) {
@@ -93,7 +93,7 @@ public class RerunJobDefinitionResolver {
     }
     WorkflowRunEntity versionedRun = workflowRunMapper.selectLatestJobDefinitionSnapshot(
         tenantId, source.getJobDefinitionId(), jobCode, version);
-    JobDefinitionEntity snapshot =
+    JobDefinitionView snapshot =
         jobDefinitionFromRun(versionedRun, jobCode, source.getJobDefinitionId());
     if (EmptyChecks.isNull(snapshot) || !version.equals(snapshot.version())) {
       throw BizException.of(
@@ -102,13 +102,13 @@ public class RerunJobDefinitionResolver {
     return snapshot;
   }
 
-  private JobDefinitionEntity jobDefinitionFromRun(
+  private JobDefinitionView jobDefinitionFromRun(
       WorkflowRunEntity run, String jobCode, Long jobDefinitionId) {
     WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
     if (EmptyChecks.isNull(snapshot)) {
       return null;
     }
-    List<JobDefinitionEntity> matches = snapshot.jobDefinitions().values().stream()
+    List<JobDefinitionView> matches = snapshot.jobDefinitions().values().stream()
         .filter(job -> jobCode.equals(job.jobCode()) && jobDefinitionId.equals(job.id()))
         .toList();
     return matches.size() == 1 ? matches.get(0) : null;

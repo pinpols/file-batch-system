@@ -78,6 +78,59 @@ class DefaultConsoleFileTemplateApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("未知批次关系时导出草稿要求填写 SQL，但不把游标强加到文件字段")
+  void draftMapping_exportRequiresScopedSqlWithoutAddingCursorToOutput() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    FileTemplateMappingDraftCommand command = new FileTemplateMappingDraftCommand(
+        "t1",
+        "EXPORT",
+        "biz",
+        "orders",
+        null,
+        List.of(),
+        null,
+        null,
+        List.of(new FileTemplateMappingDraftCommand.Field(
+            "order_no", null, "Order", null, null, null, null)));
+    FileTemplateMappingDraftResult response = service.draftMapping(command);
+    assertThat(response.defaultQuerySql()).isNull();
+    assertThat(response.warnings())
+        .anySatisfy(warning -> assertThat(warning).contains(":tenantId", ":batchNo", "分页游标"));
+    assertThat(response.fieldMappingsJson())
+        .contains("\"sourceColumn\":\"order_no\"")
+        .doesNotContain("\"sourceColumn\":\"id\"");
+    assertThat(response.queryParamSchemaJson())
+        .contains("\"cursorColumn\":\"id\"")
+        .contains("\"csvColumns\":[{\"header\":\"Order\",\"source\":\"detail.order_no\"}]");
+  }
+
+  @Test
+  @DisplayName("导出草稿保留用户指定查询并正确生成文件列")
+  void draftMapping_exportExplicitSqlIsPreserved() {
+    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
+    var fields = List.of(
+        new FileTemplateMappingDraftCommand.Field("id", null, null, null, null, null, null));
+    var generated = new FileTemplateMappingDraftCommand(
+        "t1", "EXPORT", null, "orders", null, List.of(), null, null, fields);
+    assertThat(service.draftMapping(generated).defaultQuerySql()).isNull();
+    assertThat(service.draftMapping(generated).queryParamSchemaJson())
+        .contains("\"csvColumns\":[{\"header\":\"id\",\"source\":\"detail.id\"}]");
+    var explicit = new FileTemplateMappingDraftCommand(
+        "t1",
+        "EXPORT",
+        null,
+        "orders",
+        null,
+        List.of(),
+        null,
+        "select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo",
+        fields);
+    assertThat(service.draftMapping(explicit).defaultQuerySql())
+        .isEqualTo(
+            "select id from special_orders where tenant_id = :tenantId and batch_no = :batchNo");
+  }
+
+  @Test
   @DisplayName("更新模板时持久化加载与导出插件引用")
   void update_shouldPersistPluginRefs() {
     when(metadataResolver.current())

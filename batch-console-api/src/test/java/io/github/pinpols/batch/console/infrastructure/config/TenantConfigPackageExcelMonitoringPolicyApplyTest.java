@@ -26,13 +26,13 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
@@ -144,7 +144,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @Test
   @DisplayName("导入 Cron 策略时解析计划完成时刻并补齐默认告警级别")
   void shouldApplyCronMonitoringPolicy_withDefaults() {
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(41L);
     job.setJobCode("JOB_DAILY");
     job.setScheduleType("CRON");
@@ -230,7 +230,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   void shouldImportWorkflowAssociationAndSchedule() {
     when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(List.of());
     when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of());
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(81L);
     job.setJobCode("JOB_DAILY");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(job);
@@ -285,7 +285,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   void shouldReuseTargetManagedWorkflowWhenImportingPortablePackage() {
     when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(List.of());
     when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of());
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(81L);
     job.setJobCode("JOB_DAILY");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(job);
@@ -396,7 +396,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @Test
   @DisplayName("场景模板未包含的平台监控列保留现有策略")
   void shouldPreserveMonitoringFieldsOmittedByScenarioTemplate() {
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(42L);
     job.setJobCode("JOB_DAILY");
     job.setScheduleType("CRON");
@@ -440,7 +440,7 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
   @Test
   @DisplayName("精简作业行更新时保留未填写和空白字段")
   void shouldPreserveExistingJobValues_whenScenarioRowOmitsFields() {
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setJobCode("JOB_DAILY");
     existing.setJobName("Existing name");
     existing.setQueueCode("TENANT_QUEUE");

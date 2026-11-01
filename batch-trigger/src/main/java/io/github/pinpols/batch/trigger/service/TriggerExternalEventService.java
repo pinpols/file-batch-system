@@ -21,7 +21,7 @@ import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand
 import io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity;
 import io.github.pinpols.batch.trigger.mapper.ExternalEventDeliveryMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.trigger.web.request.ExternalEventLaunchRequest;
+import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -50,37 +50,37 @@ final class TriggerExternalEventService {
 
   ExternalEventLaunchResponse launchExternalEvent(ExternalEventLaunchCommand command) {
     validateExternalEventCommand(command);
-    ExternalEventLaunchRequest request = command.request();
-    admissionRules.assertTenantActive(request.getTenantId());
+    ExternalEventLaunchInput request = command.request();
+    admissionRules.assertTenantActive(request.tenantId());
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     TransactionCallback<ExternalEventLaunchResponse> admissionTransaction =
         ignored -> admitExternalEvent(command);
     try {
       return RlsTenantContextHolder.runWithTenant(
-          request.getTenantId(), () -> tx.execute(admissionTransaction));
+          request.tenantId(), () -> tx.execute(admissionTransaction));
     } catch (RuntimeException failure) {
       if (!JdbcExceptionSupport.hasSqlState(failure, CLOSED_BATCH_DAY_SQL_STATE)) {
         throw failure;
       }
       throw BizException.of(
-          ResultCode.STATE_CONFLICT, "error.trigger.batch_day_closed", request.getBizDate());
+          ResultCode.STATE_CONFLICT, "error.trigger.batch_day_closed", request.bizDate());
     }
   }
 
   private ExternalEventLaunchResponse admitExternalEvent(ExternalEventLaunchCommand command) {
-    ExternalEventLaunchRequest request = command.request();
-    externalEventDeliveryMapper.setTenantContext(request.getTenantId());
-    triggerRequestMapper.acquireIdempotencyFence(request.getTenantId(), command.idempotencyKey());
+    ExternalEventLaunchInput request = command.request();
+    externalEventDeliveryMapper.setTenantContext(request.tenantId());
+    triggerRequestMapper.acquireIdempotencyFence(request.tenantId(), command.idempotencyKey());
     TriggerRequestEntity existingRequest = triggerRequestMapper.selectByTenantAndDedupKey(
-        request.getTenantId(), command.idempotencyKey());
+        request.tenantId(), command.idempotencyKey());
     if (EmptyChecks.isNotNull(existingRequest)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
     }
     triggerRequestMapper.acquireExternalEventIdentityFence(
-        request.getTenantId(), command.eventSource(), request.getExternalEventId());
+        request.tenantId(), command.eventSource(), request.externalEventId());
     ExternalEventDeliveryEntity existing = externalEventDeliveryMapper.selectByIdentityForUpdate(
-        request.getTenantId(), command.eventSource(), request.getExternalEventId());
+        request.tenantId(), command.eventSource(), request.externalEventId());
     if (EmptyChecks.isNotNull(existing)) {
       assertSameExternalEventPayload(existing, request);
       registerExternalEventDeliveryAlias(existing, command.idempotencyKey());
@@ -88,27 +88,27 @@ final class TriggerExternalEventService {
     }
 
     List<Long> targets = triggerRequestMapper.selectEnabledExternalEventWorkflowTargets(
-        request.getTenantId(), request.getExternalEventCode());
+        request.tenantId(), request.externalEventCode());
     if (EmptyChecks.isEmpty(targets)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.trigger.external_event_target_not_found");
     }
     List<Long> existingWorkflowTargets =
         triggerRequestMapper.selectWorkflowTargetsByExternalEventIdentity(
-            request.getTenantId(), command.eventSource(), request.getExternalEventId());
+            request.tenantId(), command.eventSource(), request.externalEventId());
     if (EmptyChecks.isNotEmpty(existingWorkflowTargets)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
     }
     for (Long workflowDefinitionId : targets) {
       triggerRequestMapper.acquireBatchDaySettlementFence(
-          request.getTenantId(), workflowDefinitionId, null, request.getBizDate());
+          request.tenantId(), workflowDefinitionId, null, request.bizDate());
     }
 
     ExternalEventDeliveryEntity delivery = new ExternalEventDeliveryEntity();
-    delivery.setTenantId(request.getTenantId());
+    delivery.setTenantId(request.tenantId());
     delivery.setEventSource(command.eventSource());
-    delivery.setEventId(request.getExternalEventId());
-    delivery.setEventCode(request.getExternalEventCode());
-    delivery.setBizDate(request.getBizDate());
+    delivery.setEventId(request.externalEventId());
+    delivery.setEventCode(request.externalEventCode());
+    delivery.setBizDate(request.bizDate());
     delivery.setRequestId(command.requestId());
     String payloadSnapshot = JsonUtils.toJson(request);
     delivery.setPayloadSnapshot(payloadSnapshot);
@@ -117,7 +117,7 @@ final class TriggerExternalEventService {
     delivery.setTraceId(command.traceId());
     if (externalEventDeliveryMapper.insert(delivery) == 0) {
       delivery = externalEventDeliveryMapper.selectByIdentityForUpdate(
-          request.getTenantId(), command.eventSource(), request.getExternalEventId());
+          request.tenantId(), command.eventSource(), request.externalEventId());
       Guard.requireFound(delivery, "concurrent external event delivery not found");
       assertSameExternalEventPayload(delivery, request);
       registerExternalEventDeliveryAlias(delivery, command.idempotencyKey());
@@ -130,9 +130,9 @@ final class TriggerExternalEventService {
       LaunchRequest launchRequest =
           createExternalEventLaunchRequest(command, workflowDefinitionId, requestId);
       String dedupKey = externalEventTargetDedupKey(
-          request.getTenantId(),
+          request.tenantId(),
           command.eventSource(),
-          request.getExternalEventId(),
+          request.externalEventId(),
           workflowDefinitionId);
       TriggerRequestEntity acceptedRequest =
           requestPersistence.buildAcceptedEntity(launchRequest, dedupKey);
@@ -147,21 +147,21 @@ final class TriggerExternalEventService {
 
   private LaunchRequest createExternalEventLaunchRequest(
       ExternalEventLaunchCommand command, Long workflowDefinitionId, String requestId) {
-    ExternalEventLaunchRequest request = command.request();
+    ExternalEventLaunchInput request = command.request();
     return LaunchRequest.builder()
-        .tenantId(request.getTenantId())
+        .tenantId(request.tenantId())
         .workflowDefinitionId(workflowDefinitionId)
-        .bizDate(request.getBizDate())
+        .bizDate(request.bizDate())
         .triggerType(TriggerType.EVENT)
         .requestId(requestId)
         .traceId(command.traceId())
-        .params(request.getParams())
-        .dataIntervalStart(request.getDataIntervalStart())
-        .dataIntervalEnd(request.getDataIntervalEnd())
-        .dryRun(Boolean.TRUE.equals(request.getDryRun()))
-        .externalEventCode(request.getExternalEventCode())
+        .params(request.params())
+        .dataIntervalStart(request.dataIntervalStart())
+        .dataIntervalEnd(request.dataIntervalEnd())
+        .dryRun(Boolean.TRUE.equals(request.dryRun()))
+        .externalEventCode(request.externalEventCode())
         .externalEventSource(command.eventSource())
-        .externalEventId(request.getExternalEventId())
+        .externalEventId(request.externalEventId())
         .build();
   }
 
@@ -169,9 +169,9 @@ final class TriggerExternalEventService {
     if (EmptyChecks.isNull(command)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    ExternalEventLaunchRequest requestForValidation = command.request();
+    ExternalEventLaunchInput requestForValidation = command.request();
     if (EmptyChecks.isNull(requestForValidation)
-        || EmptyChecks.isBlank(requestForValidation.getTenantId())
+        || EmptyChecks.isBlank(requestForValidation.tenantId())
         || EmptyChecks.isBlank(command.eventSource())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
@@ -180,24 +180,24 @@ final class TriggerExternalEventService {
     if (trimmedEventSourceForLength.length() > 128) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.getExternalEventCode())) {
+    if (EmptyChecks.isBlank(requestForValidation.externalEventCode())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventCodeForLength = requestForValidation.getExternalEventCode();
+    String externalEventCodeForLength = requestForValidation.externalEventCode();
     String trimmedExternalEventCode = externalEventCodeForLength.trim();
     if (trimmedExternalEventCode.length() > 128) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.getExternalEventId())) {
+    if (EmptyChecks.isBlank(requestForValidation.externalEventId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventIdForLength = requestForValidation.getExternalEventId();
+    String externalEventIdForLength = requestForValidation.externalEventId();
     String trimmedExternalEventId = externalEventIdForLength.trim();
     if (trimmedExternalEventId.length() > 256) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     boolean externalEventRequestIdentityIsIncomplete =
-        EmptyChecks.isNull(requestForValidation.getBizDate())
+        EmptyChecks.isNull(requestForValidation.bizDate())
             || EmptyChecks.isBlank(command.idempotencyKey())
             || EmptyChecks.isBlank(command.requestId())
             || EmptyChecks.isBlank(command.traceId());
@@ -210,14 +210,14 @@ final class TriggerExternalEventService {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }
-    ExternalEventLaunchRequest request = command.request();
-    String externalEventCode = request.getExternalEventCode();
+    ExternalEventLaunchInput request = command.request();
+    String externalEventCode = request.externalEventCode();
     String normalizedExternalEventCode = externalEventCode.trim();
     if (!externalEventCode.equals(normalizedExternalEventCode)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }
-    String externalEventId = request.getExternalEventId();
+    String externalEventId = request.externalEventId();
     String normalizedExternalEventId = externalEventId.trim();
     if (!externalEventId.equals(normalizedExternalEventId)) {
       throw BizException.of(
@@ -226,17 +226,17 @@ final class TriggerExternalEventService {
   }
 
   private void assertSameExternalEventPayload(
-      ExternalEventDeliveryEntity existing, ExternalEventLaunchRequest incoming) {
-    ExternalEventLaunchRequest original;
+      ExternalEventDeliveryEntity existing, ExternalEventLaunchInput incoming) {
+    ExternalEventLaunchInput original;
     try {
       original =
-          JsonUtils.fromJsonStrict(existing.getPayloadSnapshot(), ExternalEventLaunchRequest.class);
+          JsonUtils.fromJsonStrict(existing.getPayloadSnapshot(), ExternalEventLaunchInput.class);
     } catch (IllegalArgumentException invalidPayload) {
       throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);
     }
     boolean externalEventRequestConflictsWithExisting =
-        !Objects.equals(existing.getEventCode(), incoming.getExternalEventCode())
-            || !Objects.equals(existing.getBizDate(), incoming.getBizDate())
+        !Objects.equals(existing.getEventCode(), incoming.externalEventCode())
+            || !Objects.equals(existing.getBizDate(), incoming.bizDate())
             || !Objects.equals(original, incoming);
     if (externalEventRequestConflictsWithExisting) {
       throw BizException.of(ResultCode.STATE_CONFLICT, EXTERNAL_EVENT_IDENTITY_CONFLICT);

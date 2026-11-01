@@ -38,7 +38,6 @@ public class ControlTotalEvaluator {
   public void accumulate(ValidationSession session, List<Map<String, Object>> rows) {
     boolean accumulationInputIsIncomplete = EmptyChecks.isNull(session)
         || EmptyChecks.isNull(session.context())
-        || EmptyChecks.isNull(rows)
         || EmptyChecks.isEmpty(rows);
     if (accumulationInputIsIncomplete) {
       return;

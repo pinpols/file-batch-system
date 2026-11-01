@@ -8,6 +8,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
+import io.github.pinpols.batch.console.domain.notification.application.ConsoleEventCatalogService;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -49,7 +50,7 @@ class ConsoleEventCatalogControllerTest {
     messageSource.setDefaultEncoding("UTF-8");
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleEventCatalogController(
-            responseFactory, messageSource, new BatchKafkaTopicNamespace("")))
+            responseFactory, new ConsoleEventCatalogService(messageSource, new BatchKafkaTopicNamespace(""))))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();

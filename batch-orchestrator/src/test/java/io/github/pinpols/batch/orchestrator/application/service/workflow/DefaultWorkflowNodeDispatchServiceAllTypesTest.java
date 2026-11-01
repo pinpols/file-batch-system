@@ -24,9 +24,9 @@ import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLi
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -157,7 +157,7 @@ class DefaultWorkflowNodeDispatchServiceAllTypesTest {
         batchDayInstanceMapper,
         workflowDefinitionMapper);
     when(workflowDefinitionMapper.selectById(50L))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             50L, "ta", "FLOW", "Flow", "COMPOSITE", 1, true, null, "CAL"));
     when(workflowRunMapper.selectByTenantAndIdForUpdate(anyString(), anyLong()))
         .thenAnswer(invocation -> {

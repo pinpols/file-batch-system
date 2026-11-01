@@ -19,7 +19,6 @@ import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
@@ -27,6 +26,7 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.AccountRow;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.RowIssue;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperationView;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.io.ByteArrayOutputStream;
@@ -304,7 +304,7 @@ class ConsoleUserBatchProvisioningServiceTest {
   @DisplayName("租户管理员查询操作记录时始终收敛到自身租户")
   void shouldScopeLookupToOwnTenant_whenTenantAdminQueries() {
     UUID operationId = UUID.randomUUID();
-    ConsoleUserBatchOperationEntity row = operation(operationId, UUID.randomUUID(), "ta,tb");
+    ConsoleUserBatchOperationView row = operation(operationId, UUID.randomUUID(), "ta,tb");
     when(operationMapper.selectByOperationId(eq(operationId), anyString(), eq("ta")))
         .thenReturn(row);
 
@@ -319,7 +319,7 @@ class ConsoleUserBatchProvisioningServiceTest {
   void shouldFilterByTargetTenant_whenPlatformAdminQueries() {
     asAdmin();
     UUID requestId = UUID.randomUUID();
-    ConsoleUserBatchOperationEntity row = operation(UUID.randomUUID(), requestId, "ta,tb");
+    ConsoleUserBatchOperationView row = operation(UUID.randomUUID(), requestId, "ta,tb");
     when(operationMapper.selectByRequestId(eq(requestId), eq("admin"), eq("tb")))
         .thenReturn(row);
 
@@ -378,9 +378,9 @@ class ConsoleUserBatchProvisioningServiceTest {
         .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null));
   }
 
-  private static ConsoleUserBatchOperationEntity operation(
+  private static ConsoleUserBatchOperationView operation(
       UUID operationId, UUID requestId, String tenantIds) {
-    ConsoleUserBatchOperationEntity row = new ConsoleUserBatchOperationEntity();
+    ConsoleUserBatchOperationView row = new ConsoleUserBatchOperationView();
     row.setOperationId(operationId);
     row.setRequestId(requestId);
     row.setTenantIds(tenantIds);

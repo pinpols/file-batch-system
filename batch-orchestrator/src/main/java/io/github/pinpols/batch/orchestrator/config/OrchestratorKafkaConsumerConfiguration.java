@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
@@ -182,6 +183,8 @@ public class OrchestratorKafkaConsumerConfiguration {
     // 业务异常一次跳过：jobCode 不存在 / 协议字段缺失 / 跨租拒绝 等都不可能靠重试恢复
     handler.addNotRetryableExceptions(BizException.class);
     handler.addNotRetryableExceptions(IllegalArgumentException.class);
+    // 用例失败的内部 cause 不能把它降级为不可重试的参数错误。
+    handler.addRetryableExceptions(OperationFailure.class);
     return handler;
   }
 
@@ -191,6 +194,7 @@ public class OrchestratorKafkaConsumerConfiguration {
     while (current != null
         && current.getCause() != null
         && current.getCause() != current
+        && !(current instanceof OperationFailure)
         && !(current instanceof BizException)
         && !(current instanceof IllegalArgumentException)) {
       current = current.getCause();

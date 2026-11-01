@@ -15,6 +15,8 @@ public interface FileGovernanceService {
 
   FileUploadSessionResponse createUploadSession(FileUploadSessionCommand command);
 
+  FileGovernanceLatencyResponse loadLatencyMetrics(String tenantId);
+
   String confirmFileArrival(FileGovernanceCommand command);
 
   String redispatchFile(FileGovernanceCommand command);

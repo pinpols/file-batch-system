@@ -30,6 +30,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -359,7 +360,6 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
           run, fromNodeCode, sourcePayloadJson);
     }
     if (EmptyChecks.isNull(run.getId())
-        || EmptyChecks.isNull(fromNodeCode)
         || EmptyChecks.isBlank(fromNodeCode)) {
       return List.of();
     }
@@ -374,8 +374,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
       for (WorkflowEdgeEntity edge : snapshot.outgoing(current)) {
         String target = edge.getToNodeCode();
-        boolean targetNodeIsMissingOrTerminal = EmptyChecks.isNull(target)
-            || EmptyChecks.isBlank(target)
+        boolean targetNodeIsMissingOrTerminal = EmptyChecks.isBlank(target)
             || WorkflowNodeCode.END.code().equalsIgnoreCase(target);
         if (targetNodeIsMissingOrTerminal) {
           continue;
@@ -639,7 +638,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
       Map<String, Object> params = (Map<String, Object>) nodeParamsMap;
       Object rawJoinMode = params.get("joinMode");
-      String joinModeCode = stringValue(rawJoinMode);
+      String joinModeCode = Objects.toString(rawJoinMode, null);
       WorkflowJoinMode joinMode = WorkflowJoinMode.fromCode(joinModeCode);
       if (joinMode == WorkflowJoinMode.ALL) {
         return new JoinRule(joinMode, minimumIncomingEdgeCount);
@@ -660,10 +659,6 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
       return new JoinRule(WorkflowJoinMode.ALL, minimumIncomingEdgeCount);
     }
-  }
-
-  private String stringValue(Object value) {
-    return value == null ? null : String.valueOf(value);
   }
 
   private int integerValue(Object value) {

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -10,16 +10,16 @@ import org.apache.ibatis.annotations.Param;
 /** 作业监控查询与告警标记；不推进 job_instance 生命周期状态。 */
 public interface JobMonitoringMapper {
 
-  List<JobInstanceEntity> selectSlaViolationCandidates(@Param("limit") int limit);
+  List<JobSlaCandidate> selectSlaViolationCandidates(@Param("limit") int limit);
 
   long countSlaViolationCandidates();
 
-  List<JobInstanceEntity> selectSlaEscalationCandidates(
+  List<JobSlaCandidate> selectSlaEscalationCandidates(
       @Param("escalationBefore") Instant escalationBefore, @Param("limit") int limit);
 
   long countSlaEscalationCandidates(@Param("escalationBefore") Instant escalationBefore);
 
-  JobInstanceEntity selectSlaEscalationCandidateForUpdate(
+  JobSlaCandidate selectSlaEscalationCandidateForUpdate(
       @Param("tenantId") String tenantId,
       @Param("id") Long id,
       @Param("escalationBefore") Instant escalationBefore);
@@ -29,7 +29,7 @@ public interface JobMonitoringMapper {
       @Param("id") Long id,
       @Param("slaAlertedAt") Instant slaAlertedAt);
 
-  JobInstanceEntity selectSlaViolationCandidate(
+  JobSlaCandidate selectSlaViolationCandidate(
       @Param("tenantId") String tenantId, @Param("id") Long id);
 
   List<JobMonitoringAlertCandidate> selectRunningTooLong(@Param("limit") int limit);

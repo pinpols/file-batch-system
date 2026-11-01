@@ -5,21 +5,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
-import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
-import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.domain.rbac.application.ConsoleTenantSelfServiceApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.time.Clock;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,16 +30,10 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
 class ConsoleTenantSelfServiceControllerTest {
 
   @Mock
-  private ConsoleQuotaPolicyApplicationService quotaPolicyService;
-
-  @Mock
-  private ConsoleSystemParameterService parameterService;
+  private ConsoleTenantSelfServiceApplicationService applicationService;
 
   @Mock
   private ConsoleRequestMetadataResolver requestMetadataResolver;
-
-  @Mock
-  private ConsoleTenantGuard tenantGuard;
 
   private MockMvc mockMvc;
 
@@ -61,20 +50,10 @@ class ConsoleTenantSelfServiceControllerTest {
     validator.afterPropertiesSet();
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTenantSelfServiceController(
-            quotaPolicyService,
-            parameterService,
-            responseFactory,
-            requestMetadataResolver,
-            tenantGuard,
-            dateTimeSupport()))
+            applicationService, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
-  }
-
-  private static BatchDateTimeSupport dateTimeSupport() {
-    return new BatchDateTimeSupport(
-        Clock.systemUTC(), new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @Test
@@ -82,7 +61,7 @@ class ConsoleTenantSelfServiceControllerTest {
   void shouldReturnQuota() throws Exception {
     QuotaPolicyResponse policy =
         new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
-    when(quotaPolicyService.listAll("t1", 1, 100))
+    when(applicationService.quota("t1"))
         .thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
 
     mockMvc
@@ -95,11 +74,8 @@ class ConsoleTenantSelfServiceControllerTest {
   @Test
   @DisplayName("按租户汇总运行作业、日触发与文件数量")
   void shouldReturnUsage() throws Exception {
-    when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    when(parameterService.getValue("t1", "tenant.usage.running-jobs")).thenReturn(Optional.of("5"));
-    when(parameterService.getValue("t1", "tenant.usage.daily-triggers"))
-        .thenReturn(Optional.of("120"));
-    when(parameterService.getValue("t1", "tenant.usage.file-count")).thenReturn(Optional.of("42"));
+    when(applicationService.usage("t1"))
+        .thenReturn(new ConsoleTenantUsageSummaryResponse("5", "120", "42"));
 
     mockMvc
         .perform(get("/api/console/tenants/usage").param("tenantId", "t1"))

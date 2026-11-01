@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.BusinessShardCatalogResponse;
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
-import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
+import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleBusinessShardCatalogService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -59,7 +59,7 @@ public class ConsoleBusinessShardCatalogController {
       aggregateId = "#request.placementKey")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertShardCatalogRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    BusinessShardCatalogUpsertParam upsertParam = BusinessShardCatalogUpsertParam.builder()
+    BusinessShardCatalogUpsertCommand command = BusinessShardCatalogUpsertCommand.builder()
         .placementKey(request.placementKey())
         .host(request.host())
         .port(request.port())
@@ -70,7 +70,7 @@ public class ConsoleBusinessShardCatalogController {
         .description(request.description())
         .operator(operator)
         .build();
-    catalogService.upsert(upsertParam);
+    catalogService.upsert(command);
     return responseFactory.success(null);
   }
 

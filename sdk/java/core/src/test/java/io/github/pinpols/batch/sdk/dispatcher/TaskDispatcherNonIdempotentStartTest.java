@@ -11,7 +11,7 @@ import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicConfig;
 import io.github.pinpols.batch.sdk.handler.atomic.HttpAtomicHandler;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyEntity;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencySnapshot;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
 import io.github.pinpols.batch.sdk.internal.SdkJsonMapperFactory;
@@ -180,8 +180,8 @@ class TaskDispatcherNonIdempotentStartTest {
   void shouldNotMarkStartOrInvokePost_whenIdempotentResultIsCached() {
     frozenParameters.set(parameters("POST", Map.of()));
     SdkIdempotencyStore store = mock(SdkIdempotencyStore.class);
-    SdkIdempotencyEntity existing =
-        new SdkIdempotencyEntity("already committed", Map.of("receipt", "receipt-42"));
+    SdkIdempotencySnapshot existing =
+        new SdkIdempotencySnapshot("already committed", Map.of("receipt", "receipt-42"));
     when(store.tryAcquire("http:tx:job-1", 0L)).thenReturn(false);
     when(store.find("http:tx:job-1")).thenReturn(Optional.of(existing));
     HttpAtomicConfig httpConfig = handlerConfig();

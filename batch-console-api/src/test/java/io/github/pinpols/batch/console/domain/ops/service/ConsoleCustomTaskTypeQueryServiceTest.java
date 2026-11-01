@@ -5,8 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -36,7 +36,7 @@ class ConsoleCustomTaskTypeQueryServiceTest {
   @Test
   @DisplayName("有效列表:先解析租户再查询, 返回该租户的全部有效类型")
   void shouldResolveTenantBeforeQuery_whenListingActiveTypes() {
-    CustomTaskTypeEntity entity = entity("tenant_tx_import");
+    CustomTaskTypeView entity = entity("tenant_tx_import");
     when(tenantGuard.resolveTenant("tx")).thenReturn("tx");
     when(mapper.selectActiveByTenant("tx")).thenReturn(List.of(entity));
 
@@ -61,8 +61,8 @@ class ConsoleCustomTaskTypeQueryServiceTest {
     assertThatThrownBy(() -> service.detail("tx", "missing")).isInstanceOf(BizException.class);
   }
 
-  private CustomTaskTypeEntity entity(String code) {
-    CustomTaskTypeEntity entity = new CustomTaskTypeEntity();
+  private CustomTaskTypeView entity(String code) {
+    CustomTaskTypeView entity = new CustomTaskTypeView();
     entity.setTaskTypeCode(code);
     entity.setStatus("ACTIVE");
     return entity;

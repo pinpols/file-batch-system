@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Timestamp;
@@ -666,9 +666,9 @@ class JobMonitoringMapperIntegrationTest {
     setExecutionStart(tenant, unknown, null);
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       JobMonitoringMapper mapper = session.getMapper(JobMonitoringMapper.class);
-      List<JobInstanceEntity> candidates = mapper.selectSlaViolationCandidates(100);
+      List<JobSlaCandidate> candidates = mapper.selectSlaViolationCandidates(100);
       assertThat(candidates)
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .contains(overdue)
           .doesNotContain(shortExecution, unknown);
     }
@@ -731,9 +731,9 @@ class JobMonitoringMapperIntegrationTest {
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       JobMonitoringMapper mapper = session.getMapper(JobMonitoringMapper.class);
-      List<JobInstanceEntity> candidates = mapper.selectSlaViolationCandidates(100);
+      List<JobSlaCandidate> candidates = mapper.selectSlaViolationCandidates(100);
       assertThat(candidates)
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .contains(lateDeadline, lateRuntime)
           .doesNotContain(onTimeCompletion, terminalWithoutFinish, dryRun, unknownExecutionStart);
     }
@@ -770,11 +770,11 @@ class JobMonitoringMapperIntegrationTest {
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       JobMonitoringMapper mapper = session.getMapper(JobMonitoringMapper.class);
-      List<JobInstanceEntity> tenantCandidates = mapper.selectSlaViolationCandidates(100).stream()
+      List<JobSlaCandidate> tenantCandidates = mapper.selectSlaViolationCandidates(100).stream()
           .filter(candidate -> tenant.equals(candidate.getTenantId()))
           .toList();
       assertThat(tenantCandidates)
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .containsExactlyInAnyOrderElementsOf(expectedCandidateIds);
     }
   }
@@ -942,7 +942,7 @@ class JobMonitoringMapperIntegrationTest {
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       assertThat(session.getMapper(JobMonitoringMapper.class).selectSlaViolationCandidates(100))
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .contains(controlInstanceId)
           .doesNotContain(instanceId);
     }
@@ -951,7 +951,7 @@ class JobMonitoringMapperIntegrationTest {
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       var mapper = session.getMapper(JobMonitoringMapper.class);
       assertThat(mapper.selectSlaViolationCandidates(100))
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .contains(instanceId);
       assertThat(mapper.selectSlaViolationCandidates(100))
           .filteredOn(row -> row.getId().equals(instanceId))
@@ -960,6 +960,13 @@ class JobMonitoringMapperIntegrationTest {
             assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
             assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
           });
+      assertThat(mapper.selectSlaViolationCandidate(tenant, instanceId))
+          .satisfies(row -> {
+            assertThat(row.getTenantId()).isEqualTo(tenant);
+            assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
+            assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
+          });
+      assertThat(mapper.selectSlaViolationCandidate(controlTenant, instanceId)).isNull();
     }
 
     Instant slaAlertedAt = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(900);

@@ -33,6 +33,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
@@ -48,6 +49,7 @@ import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
+import io.github.pinpols.batch.console.mapper.ConfigBatchOperationMapper;
 import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Objects;
@@ -142,6 +144,9 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   @Mock
   private ConsoleConfigCacheInvalidationService cacheInvalidationService;
 
+  @Mock
+  private ConfigBatchOperationMapper operationMapper;
+
   private DefaultConsoleTenantConfigInitApplicationService service;
 
   @BeforeEach
@@ -188,7 +193,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigInitApplyHandlers handlers =
         new TenantConfigInitApplyHandlers(jobs, manager, files, operational, workflows);
     service = new DefaultConsoleTenantConfigInitApplicationService(
-        new TenantConfigInitTenantExecutor(handlers, cacheInvalidationService));
+        new TenantConfigInitTenantExecutor(handlers, cacheInvalidationService, operationMapper));
   }
 
   // ------------------------------------------------------------------ job definitions
@@ -201,7 +206,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     request.getJobDefinitions().getFirst().setDefaultParams("""
         {"connection":{"password":"****"},"limit":2}
         """);
-    JobDefinitionEntity existing = existingJobWithDefaults("""
+    JobDefinitionView existing = existingJobWithDefaults("""
         {"connection":{"password":"stored-credential"},"limit":1}
         """);
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
@@ -244,7 +249,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     request.getJobDefinitions().getFirst().setDefaultParams("""
         {"connection":{"password":"****"}}
         """);
-    JobDefinitionEntity existing = existingJobWithDefaults("{\"limit\":1}");
+    JobDefinitionView existing = existingJobWithDefaults("{\"limit\":1}");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
 
     TenantConfigBatchInitResponse response =
@@ -264,7 +269,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     request.getJobDefinitions().getFirst().setDefaultParams("""
         {"connection":{"password":"replacement-credential"},"label":"****"}
         """);
-    JobDefinitionEntity existing = existingJobWithDefaults("""
+    JobDefinitionView existing = existingJobWithDefaults("""
         {"connection":{"password":"stored-credential"},"label":"old"}
         """);
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
@@ -287,7 +292,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void shouldKeepDefaultsUnspecified_whenInitOmitsJobDefaults() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.UPSERT);
-    JobDefinitionEntity existing = existingJobWithDefaults("{\"limit\":1}");
+    JobDefinitionView existing = existingJobWithDefaults("{\"limit\":1}");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
 
     TenantConfigBatchInitResponse response =
@@ -301,8 +306,8 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(captor.getValue().getDefaultParams()).isNull();
   }
 
-  private JobDefinitionEntity existingJobWithDefaults(String defaults) {
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+  private JobDefinitionView existingJobWithDefaults(String defaults) {
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setTenantId("t1");
     existing.setJobCode("job-1");
     existing.setScheduleType("MANUAL");
@@ -316,7 +321,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.getJobDefinitions().get(0).setDependsOnJobCode("upstream-job");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(null);
-    JobDefinitionEntity upstream = new JobDefinitionEntity();
+    JobDefinitionView upstream = new JobDefinitionView();
     upstream.setTenantId("t1");
     upstream.setJobCode("upstream-job");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "upstream-job")).thenReturn(upstream);
@@ -328,9 +333,11 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     assertThat(response.results().get(0).jobDefinitions().skipped()).isZero();
     verify(jobDefinitionMapper)
         .insert(argThat(entity -> "upstream-job".equals(entity.getDependsOnJobCode())
-            && "t1".equals(entity.getTenantId())
-            && entity.getSoftRuntimeSeconds() == 0
-            && entity.getStartGraceSeconds() == 300));
+            && "t1".equals(entity.getTenantId())));
+    verify(jobDefinitionMapper)
+        .upsertJobMonitoringPolicy(argThat(policy -> "t1".equals(policy.getTenantId())
+            && policy.getSoftRuntimeSeconds() == 0
+            && policy.getStartGraceSeconds() == 300));
     verify(cacheInvalidationService).evictAllJobDefinitions("t1");
     verify(cacheInvalidationService).evictAllWorkflowDefinitions("t1");
   }
@@ -346,9 +353,9 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setDependencyRules(dependencyRules);
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-downstream")).thenReturn(null);
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-upstream-a"))
-        .thenReturn(new JobDefinitionEntity());
+        .thenReturn(new JobDefinitionView());
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-upstream-b"))
-        .thenReturn(new JobDefinitionEntity());
+        .thenReturn(new JobDefinitionView());
     when(jobDefinitionMapper.selectAllDependencies("t1")).thenReturn(List.of());
 
     TenantConfigBatchInitResponse response =
@@ -371,7 +378,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setParamSchema("{\"type\":\"object\"}");
     spec.setPriority(7);
 
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setTenantId("t1");
     existing.setJobCode("job-1");
     existing.setScheduleType("CRON");
@@ -439,7 +446,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.SKIP_EXISTING);
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1"))
-        .thenReturn(new JobDefinitionEntity());
+        .thenReturn(new JobDefinitionView());
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 
@@ -454,11 +461,11 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.getJobDefinitions().get(0).setDependsOnJobCode("next-upstream");
     request.setMode(InitMode.UPSERT);
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setJobCode("job-1");
     existing.setTenantId("t1");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(existing);
-    JobDefinitionEntity upstream = new JobDefinitionEntity();
+    JobDefinitionView upstream = new JobDefinitionView();
     upstream.setTenantId("t1");
     upstream.setJobCode("next-upstream");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "next-upstream")).thenReturn(upstream);
@@ -740,7 +747,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     spec.setTriggerMode("SCHEDULED");
     spec.setScheduleEnabled(true);
     spec.setSingleJobCode("job-1");
-    JobDefinitionEntity managedJob = new JobDefinitionEntity();
+    JobDefinitionView managedJob = new JobDefinitionView();
     managedJob.setId(51L);
     managedJob.setJobCode("job-1");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(managedJob);
@@ -792,7 +799,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
     existing.setWorkflowType("DAG");
     existing.setVersion(3);
     existing.setEnabled(true);
-    JobDefinitionEntity managedJob = new JobDefinitionEntity();
+    JobDefinitionView managedJob = new JobDefinitionView();
     managedJob.setId(70L);
     managedJob.setJobCode("JOB_A");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "JOB_A")).thenReturn(managedJob);
@@ -854,7 +861,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void batchInit_dryRunDoesNotProvisionManagedWorkflow() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-existing", List.of("t1"));
     request.setDryRun(true);
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setTenantId("t1");
     existing.setJobCode("job-existing");
     when(jobDefinitionMapper.selectByUniqueKey("t1", "job-existing")).thenReturn(existing);

@@ -59,11 +59,10 @@ class DefaultConsoleReportExcelApplicationServiceTest {
             .updatedAt(BatchDateTimeSupport.utcNow())
             .build()));
 
-    // R2-P1-9: 返回类型已切到 StreamingResponseBody；通过 lambda 写出到 ByteArrayOutputStream 再校验
+    // 应用结果只携带延迟写入器；写出到内存后验证工作簿内容。
     var response = service.exportConfigReleases(new ConfigReleaseQueryRequest());
-    assertThat(response.getStatusCode().is2xxSuccessful()).isTrue();
     ByteArrayOutputStream sink = new ByteArrayOutputStream();
-    response.getBody().writeTo(sink);
+    response.writer().writeTo(sink);
     try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(sink.toByteArray()))) {
       assertThat(workbook.getNumberOfSheets()).isEqualTo(2);
       assertThat(workbook.getSheetAt(0).getSheetName()).isEqualTo("config_releases");
@@ -85,13 +84,11 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     when(orchestratorPort.schedulerSnapshot("tenant-a")).thenReturn(null);
     when(orchestratorPort.schedulerSnapshotHistory("tenant-a", 10)).thenReturn(List.of());
 
-    assertThat(service.exportSchedulerSnapshot("tenant-a").getStatusCode().is2xxSuccessful())
-        .isTrue();
+    assertThat(service.exportSchedulerSnapshot("tenant-a").fileName()).endsWith(".xlsx");
     assertThat(service
             .exportSchedulerSnapshotHistory("tenant-a", 10)
-            .getStatusCode()
-            .is2xxSuccessful())
-        .isTrue();
+            .fileName())
+        .endsWith(".xlsx");
 
     verify(orchestratorPort).schedulerSnapshot("tenant-a");
     verify(orchestratorPort).schedulerSnapshotHistory("tenant-a", 10);

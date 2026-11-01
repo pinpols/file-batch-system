@@ -6,9 +6,9 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import java.time.Duration;
@@ -33,11 +33,11 @@ public class JobSlaViolationProcessor {
   private final AlertEventService alertEventService;
 
   @Transactional
-  public boolean process(JobInstanceEntity candidate, Instant now) {
+  public boolean process(JobSlaCandidate candidate, Instant now) {
     if (jobMonitoringMapper.markSlaAlerted(candidate.getTenantId(), candidate.getId(), now) <= 0) {
       return false;
     }
-    JobInstanceEntity claimedCandidate =
+    JobSlaCandidate claimedCandidate =
         jobMonitoringMapper.selectSlaViolationCandidate(candidate.getTenantId(), candidate.getId());
     if (EmptyChecks.isNull(claimedCandidate)) {
       throw new IllegalStateException("claimed SLA violation candidate is no longer available");
@@ -75,7 +75,7 @@ public class JobSlaViolationProcessor {
       auditLog.setExtraJson(auditExtraJson);
       jobExecutionLogMapper.insert(auditLog);
 
-      AlertEmitRequest request = AlertEmitRequest.builder()
+      AlertEmitCommand request = AlertEmitCommand.builder()
           .tenantId(candidate.getTenantId())
           .serviceName("batch-orchestrator")
           .alertType("JOB_SLA_VIOLATION")
@@ -103,21 +103,21 @@ public class JobSlaViolationProcessor {
   /** 候选扫描之外再锁定当前实例,让终态提交与升级通知有确定的先后顺序。 */
   @Transactional
   public boolean processEscalation(
-      JobInstanceEntity observed, Instant now, long delaySeconds, String severity) {
-    JobInstanceEntity candidate = jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
+      JobSlaCandidate observed, Instant now, long delaySeconds, String severity) {
+    JobSlaCandidate candidate = jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
         observed.getTenantId(), observed.getId(), now.minusSeconds(delaySeconds));
     if (EmptyChecks.isNull(candidate)) {
       return false;
     }
     Map<String, Object> extra = buildEscalationExtra(candidate, now, delaySeconds);
-    AlertEmitRequest.AlertEmitRequestBuilder requestBuilder = AlertEmitRequest.builder()
+    AlertEmitCommand.AlertEmitCommandBuilder requestBuilder = AlertEmitCommand.builder()
         .tenantId(candidate.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType("JOB_SLA_VIOLATION_ESCALATED")
         .severity(severity)
         .title("job SLA still violating after escalation window");
     String detailJson = JsonUtils.toJson(extra);
-    AlertEmitRequest request = requestBuilder
+    AlertEmitCommand request = requestBuilder
         .detailJson(detailJson)
         .resourceKey(String.valueOf(candidate.getId()))
         .traceId(candidate.getTraceId())
@@ -127,7 +127,7 @@ public class JobSlaViolationProcessor {
   }
 
   Map<String, Object> buildEscalationExtra(
-      JobInstanceEntity candidate, Instant now, long delaySeconds) {
+      JobSlaCandidate candidate, Instant now, long delaySeconds) {
     Map<String, Object> baseExtra = buildExtra(candidate, now);
     Map<String, Object> extra = new LinkedHashMap<>(baseExtra);
     extra.put("escalationDelaySeconds", delaySeconds);
@@ -140,7 +140,7 @@ public class JobSlaViolationProcessor {
     return extra;
   }
 
-  private Map<String, Object> buildExtra(JobInstanceEntity candidate, Instant now) {
+  private Map<String, Object> buildExtra(JobSlaCandidate candidate, Instant now) {
     Map<String, Object> extra = new LinkedHashMap<>();
     extra.put("jobInstanceId", String.valueOf(candidate.getId()));
     extra.put(

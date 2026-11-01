@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.worker.core.mapper;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
+import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import org.apache.ibatis.annotations.Param;
 

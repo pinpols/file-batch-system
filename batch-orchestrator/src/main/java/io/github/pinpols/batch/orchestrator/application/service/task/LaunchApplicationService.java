@@ -9,9 +9,9 @@ import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitActio
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
  * 任务启动应用服务，区分同步 HTTP 入口与已持久化的 Kafka 队列入口。
@@ -30,13 +30,12 @@ public class LaunchApplicationService {
 
   public LaunchResponse launch(LaunchRequest request) {
     if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
-      throw new ResponseStatusException(
-          HttpStatus.BAD_REQUEST, "top-level launch requires an explicit Workflow target");
+      throw new OperationFailure(Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
     }
     boolean allowed =
         tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);
     if (!allowed) {
-      throw new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "launch rate limit exceeded");
+      throw new OperationFailure(Kind.RATE_LIMITED, "launch rate limit exceeded");
     }
     return workflowRunLaunchService.launch(request);
   }

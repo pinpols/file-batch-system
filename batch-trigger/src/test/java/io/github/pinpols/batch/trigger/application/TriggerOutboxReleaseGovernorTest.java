@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.trigger.config.TriggerOutboxRelayProperties;
@@ -38,6 +39,7 @@ class TriggerOutboxReleaseGovernorTest {
     properties.setAdaptiveReleaseEnabled(false);
 
     assertThat(governor.effectiveLimit()).isEqualTo(40);
+    verifyNoInteractions(lagMonitor);
   }
 
   @Test

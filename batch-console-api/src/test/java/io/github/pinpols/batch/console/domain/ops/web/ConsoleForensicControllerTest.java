@@ -86,6 +86,29 @@ class ConsoleForensicControllerTest {
   }
 
   @Test
+  @DisplayName("导出格式缺省时原值交给应用代理，由代理保持下游默认格式")
+  void shouldPassMissingFormatToProxy() throws Exception {
+    when(requestMetadataResolver.responseMeta())
+        .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata(
+            "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
+    when(proxy.requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+            && command.exportFormat() == null)))
+        .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
+    mockMvc
+        .perform(post("/api/console/forensic/export")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "k1")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19"}
+                """))
+        .andExpect(status().isOk());
+    verify(proxy).requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+        && command.exportFormat() == null && "authenticated-admin".equals(command.requestedBy())));
+  }
+
+  @Test
   @DisplayName("导出透传:租户与请求参数提交编排层, 且请求人取自认证上下文")
   void shouldPassThroughToProxy_whenRequestingExport() throws Exception {
     when(requestMetadataResolver.responseMeta())

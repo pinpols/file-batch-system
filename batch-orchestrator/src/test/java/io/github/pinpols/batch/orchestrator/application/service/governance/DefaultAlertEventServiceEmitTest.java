@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
 import io.github.pinpols.batch.orchestrator.mapper.AlertEventMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -37,7 +37,7 @@ class DefaultAlertEventServiceEmitTest {
   @Test
   @DisplayName("落库后把告警推给 AM publisher(无活跃事务时直推)")
   void emit_publishesToAlertmanagerAfterInsert() {
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId("ta")
         .alertType("JOB_SLA_BREACH")
         .severity("CRITICAL")
@@ -61,7 +61,7 @@ class DefaultAlertEventServiceEmitTest {
     AlertEventEntity persisted = new AlertEventEntity();
     persisted.setStatus("CLOSED");
     when(alertEventMapper.selectByFingerprint(anyString(), anyString())).thenReturn(persisted);
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId("ta")
         .alertType("JOB_RUNNING_TOO_LONG")
         .resourceKey("42")
@@ -75,7 +75,7 @@ class DefaultAlertEventServiceEmitTest {
   @Test
   @DisplayName("无效请求(缺 tenant/alertType)不落库也不推 AM")
   void emit_skipsInvalidRequest() {
-    AlertEmitRequest invalidRequest = AlertEmitRequest.builder().alertType("X").build();
+    AlertEmitCommand invalidRequest = AlertEmitCommand.builder().alertType("X").build();
     service().emit(invalidRequest);
 
     verify(alertEventMapper, never()).insertOrMerge(any());

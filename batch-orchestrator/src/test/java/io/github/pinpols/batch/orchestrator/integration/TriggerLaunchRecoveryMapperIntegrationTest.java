@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryAttemptParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryRetryParam;
+import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
@@ -117,12 +117,12 @@ class TriggerLaunchRecoveryMapperIntegrationTest extends AbstractIntegrationTest
             + " where tenant_id = ? and request_id = 'req-future'";
     jdbcTemplate.update(updateTriggerLaunchRecoverySql2, tenantId);
 
-    List<TriggerLaunchRecoveryEntity> due =
+    List<TriggerLaunchRecoveryView> due =
         mapper.selectDue(BatchDateTimeSupport.utcNow(), 50).stream()
             .filter(entity -> tenantId.equals(entity.getTenantId()))
             .toList();
     assertThat(due)
-        .extracting(TriggerLaunchRecoveryEntity::getRequestId)
+        .extracting(TriggerLaunchRecoveryView::getRequestId)
         .containsExactly("req-due");
     assertThat(due.getFirst().getEnvelopeCiphertext()).isEqualTo("c1");
   }

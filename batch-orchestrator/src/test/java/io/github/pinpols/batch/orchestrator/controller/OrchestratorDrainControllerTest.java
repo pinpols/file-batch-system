@@ -7,7 +7,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService.DrainStatus;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -22,21 +23,20 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 class OrchestratorDrainControllerTest {
 
   @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+  private OrchestratorDrainService drainService;
 
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(gracefulShutdown))
+    mockMvc = MockMvcBuilders.standaloneSetup(new OrchestratorDrainController(drainService))
         .build();
   }
 
   @Test
   @DisplayName("查询排空状态时返回成功,并透出当前未排空的状态标记")
   void shouldReturnDrainStatus() throws Exception {
-    when(gracefulShutdown.status())
-        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(false, null, "none"));
+    when(drainService.status()).thenReturn(new DrainStatus(false, null, "none"));
 
     mockMvc
         .perform(get("/internal/orchestrator/drain/status"))
@@ -47,28 +47,26 @@ class OrchestratorDrainControllerTest {
   @Test
   @DisplayName("开启排空时返回成功并透出已排空标记,同时以人工原因启动排空流程")
   void shouldEnableDrain() throws Exception {
-    when(gracefulShutdown.status())
-        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(true, null, "manual-enable"));
+    when(drainService.enable()).thenReturn(new DrainStatus(true, null, "manual-enable"));
 
     mockMvc
         .perform(post("/internal/orchestrator/drain/enable"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.draining").value(true));
 
-    verify(gracefulShutdown).startDraining("manual-enable");
+    verify(drainService).enable();
   }
 
   @Test
   @DisplayName("关闭排空时返回成功并透出未排空标记,同时以人工原因停止排空流程")
   void shouldDisableDrain() throws Exception {
-    when(gracefulShutdown.status())
-        .thenReturn(new OrchestratorGracefulShutdown.DrainStatus(false, null, "manual-disable"));
+    when(drainService.disable()).thenReturn(new DrainStatus(false, null, "manual-disable"));
 
     mockMvc
         .perform(post("/internal/orchestrator/drain/disable"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.draining").value(false));
 
-    verify(gracefulShutdown).stopDraining("manual-disable");
+    verify(drainService).disable();
   }
 }

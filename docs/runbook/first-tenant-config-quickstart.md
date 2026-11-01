@@ -127,6 +127,10 @@ curl -X POST /api/console/tenants \
 
 一个 EXPORT 模板填两块:`default_query_sql`(取数 SQL,**用 `:tenantId` 命名参数**)、`field_mappings`(**注意 export 用 "sourceColumn" + "header"**,和 import 不同)。
 
+使用 `sql_template_export` 时，须根据真实业务表关系填写导出 SQL，使用 `:tenantId` 和 `:batchNo` 分别过滤当前租户及批次；映射草案不会猜测批次字段或表关联，也不会生成默认 SQL。查询结果还必须包含 `query_param_schema.sqlTemplateExport.cursorColumn` 指定的分页游标；缺省为 `id`，应确认该列存在并适合稳定分页。游标可只用于分页，不必出现在 `csvColumns` 文件输出字段中。若业务表使用其他游标，需要同时修改查询和游标配置并核对排序及唯一性。
+
+映射草案同时生成 `query_param_schema.csvColumns`，按所选字段顺序保存输出来源和表头；这是分隔符文件实际使用的列配置。分页游标只在用户明确选择时输出。已有模板不会自动重写，修改查询或输出字段时应同步检查该配置。
+
 ```sql
 -- default_query_sql::tenantId / :status 是命名参数(运行时绑定);别和文件命名的 ${bizDate} 混淆。
 SELECT customer_no, customer_name, customer_type, credit_limit, currency_code, email, status, open_date

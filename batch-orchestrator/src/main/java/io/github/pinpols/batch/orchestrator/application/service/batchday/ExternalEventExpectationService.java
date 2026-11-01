@@ -8,11 +8,11 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ExternalEventExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.ExternalEventExpectationDefinition;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExternalEventExpectationDefinitionMapper;
@@ -25,11 +25,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /** 配置周期性外部事件，并为每个业务日生成相应的结算预期。 */
 @Service
@@ -83,8 +83,7 @@ public class ExternalEventExpectationService {
     } catch (DataIntegrityViolationException failure) {
       if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
           failure, "fk_external_event_expectation_workflow_calendar")) {
-        throw new ResponseStatusException(
-            HttpStatus.CONFLICT,
+        throw new OperationFailure(Kind.CONFLICT,
             "Workflow calendar changed while configuring the external-event expectation",
             failure);
       }
@@ -141,8 +140,7 @@ public class ExternalEventExpectationService {
       boolean existingBatchDayIsTerminal =
           EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus());
       if (existingBatchDayIsTerminal) {
-        throw new ResponseStatusException(
-            HttpStatus.CONFLICT,
+        throw new OperationFailure(Kind.CONFLICT,
             "Cannot materialize an external-event expectation for a terminal batch day");
       }
       ZoneId zone = ZoneId.of(timezoneSnapshot);
@@ -207,8 +205,7 @@ public class ExternalEventExpectationService {
           && request.eventCode().equals(triggerRequest.getExternalEventCode())
           && TriggerRequestStatus.LAUNCHED.code().equals(triggerRequest.getRequestStatus());
       if (!launchedEventMatchesExpectation) {
-        throw new ResponseStatusException(
-            HttpStatus.CONFLICT,
+        throw new OperationFailure(Kind.CONFLICT,
             "Expected event can be satisfied only by its launched EVENT request");
       }
       validateWorkflowCalendarForLaunchedEvent(
@@ -235,20 +232,19 @@ public class ExternalEventExpectationService {
 
   private void validateWorkflowCalendar(
       String tenantId, String calendarCode, Long workflowDefinitionId) {
-    WorkflowDefinitionEntity workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
+    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
         tenantId, workflowDefinitionId, true);
     boolean workflowIsMissingOrUsesAnotherCalendar =
         EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
     if (workflowIsMissingOrUsesAnotherCalendar) {
-      throw new ResponseStatusException(
-          HttpStatus.UNPROCESSABLE_CONTENT,
+      throw new OperationFailure(Kind.INVALID_CONFIGURATION,
           "External-event expectation must target an enabled Workflow on the same calendar");
     }
   }
 
   private void validateWorkflowCalendarForLaunchedEvent(
       String tenantId, String calendarCode, Long workflowDefinitionId) {
-    WorkflowDefinitionEntity workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
+    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
         tenantId, workflowDefinitionId, true);
     if (EmptyChecks.isNull(workflow)) {
       workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
@@ -257,8 +253,7 @@ public class ExternalEventExpectationService {
     boolean workflowIsMissingOrUsesAnotherCalendar =
         EmptyChecks.isNull(workflow) || !calendarCode.equals(workflow.calendarCode());
     if (workflowIsMissingOrUsesAnotherCalendar) {
-      throw new ResponseStatusException(
-          HttpStatus.UNPROCESSABLE_CONTENT,
+      throw new OperationFailure(Kind.INVALID_CONFIGURATION,
           "External-event expectation must target a Workflow on the same calendar");
     }
   }

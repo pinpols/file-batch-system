@@ -15,6 +15,8 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchFailureDiagnostics;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -26,6 +28,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.Locale;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -39,16 +42,15 @@ import org.springframework.web.server.ResponseStatusException;
  * ADR-010 Stage 4: 消费 batch.trigger.launch.v1 topic,把 envelope 反序列化后调用现有 {@link
  * LaunchApplicationService#launchFromTrustedQueue(LaunchRequest)} 内部 API。
  *
- * <p>幂等保证:同 requestId 多次消费 → orchestrator 端 {@code uk_job_instance_tenant_dedup} 回退,不会真正双跑。重复消费时
- * launch 抛 CONFLICT(409), 我们视为成功 ack(消息已被处理过,不需要重投)。
+ * <p>同 requestId 重投时由启动服务核对持久身份并继续尚未完成的步骤；只有启动服务成功返回才确认消息。
  *
  * <p>失败处理:
  *
  * <ul>
  *   <li>空消息、反序列化失败、旧协议版本和不可重试业务拒绝 → 记录指标后明确 ack，避免毒消息阻塞 partition
- *   <li>幂等冲突(409) → 视为已处理并 ack
+ *   <li>冲突(409) → 交给容器重试，状态码本身不证明启动已完成
  *   <li>容量反压(429) → 显式 nack 当前 offset 并暂停 partition，不进入有限次数 recoverer
- *   <li>其他 unchecked → 交给容器有限重试；耗尽后按当前 LOG_ONLY 策略记录错误并提交 offset
+ *   <li>其他 unchecked → 交给容器有限重试；耗尽后持久化恢复锚点，成功后才提交 offset
  * </ul>
  *
  * <p>ADR-010 固化路径，无条件实例化（2026-05-02 同步 HTTP 路径已删除）。
@@ -59,7 +61,6 @@ public class TriggerLaunchConsumer {
   private static final String REASON_KEY = "reason";
 
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
-  private static final String METRIC_DEDUPED = "batch.trigger.launch.deduped.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
   private static final String METRIC_DEFERRED = "batch.trigger.launch.deferred.total";
   private static final String METRIC_CONSUME_DURATION = "batch.trigger.launch.consume.duration";
@@ -158,16 +159,19 @@ public class TriggerLaunchConsumer {
           EmptyChecks.isNull(response) ? null : response.instanceNo());
       counter(METRIC_CONSUMED, "tenant", tenantTag, "outcome", "ok").increment();
       ack.acknowledge();
-    } catch (ResponseStatusException ex) {
-      if (ex.getStatusCode().value() == 409) {
-        log.info(
-            "TriggerLaunchConsumer duplicate requestId was deduplicated; treating it as success: tenantId={} requestId={}",
-            tenantId,
-            request.requestId());
-        counter(METRIC_DEDUPED, "tenant", tenantTag).increment();
-        ack.acknowledge();
+    } catch (OperationFailure ex) {
+      if (ex.kind() == OperationFailure.Kind.RATE_LIMITED) {
+        log.warn(
+            "TriggerLaunchConsumer was rate limited; pausing the partition before redelivery: tenantId={} requestId={} backoffMs={}",
+            tenantId, request.requestId(), rateLimitBackoff.toMillis());
+        counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "rate_limited").increment();
+        ack.nack(rateLimitBackoff);
         return;
       }
+      String reason = TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()).toLowerCase(Locale.ROOT);
+      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, reason).increment();
+      throw ex;
+    } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 429) {
         log.warn(
             "TriggerLaunchConsumer was rate limited; pausing the partition before redelivery: tenantId={} requestId={} backoffMs={}",

@@ -10,11 +10,11 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEntity;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleOidcIdentityView;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +49,7 @@ class ConsoleOidcIdentityServiceTest {
   @Test
   @DisplayName("列表只返回已配置租户的绑定")
   void shouldListIdentityBindingsForConfiguredTenant() {
-    ConsoleOidcIdentityEntity entity = identity(7L, 42L, "operator", "subject-1");
+    ConsoleOidcIdentityView entity = identity(7L, 42L, "operator", "subject-1");
     when(identityMapper.findByTenant(TENANT_ID)).thenReturn(List.of(entity));
 
     var result = service.list(TENANT_ID);
@@ -64,7 +64,7 @@ class ConsoleOidcIdentityServiceTest {
   @DisplayName("显式绑定现有启用账号，并使用平台配置的 issuer")
   void shouldBindSubjectToEnabledLocalAccount() {
     ConsoleUserAccountEntity account = account(42L, TENANT_ID, "operator", true);
-    ConsoleOidcIdentityEntity saved = identity(7L, 42L, "operator", "subject-1");
+    ConsoleOidcIdentityView saved = identity(7L, 42L, "operator", "subject-1");
     when(userAccountMapper.findByUsernameIgnoreCase("operator")).thenReturn(Optional.of(account));
     when(identityMapper.findByAccountAndTenant(42L, TENANT_ID)).thenReturn(Optional.of(saved));
 
@@ -160,9 +160,9 @@ class ConsoleOidcIdentityServiceTest {
     assertThatThrownBy(() -> service.unbind(TENANT_ID, 7L)).isInstanceOf(BizException.class);
   }
 
-  private ConsoleOidcIdentityEntity identity(
+  private ConsoleOidcIdentityView identity(
       long id, long accountId, String username, String subject) {
-    ConsoleOidcIdentityEntity entity = new ConsoleOidcIdentityEntity();
+    ConsoleOidcIdentityView entity = new ConsoleOidcIdentityView();
     entity.setId(id);
     entity.setTenantId(TENANT_ID);
     entity.setAccountId(accountId);

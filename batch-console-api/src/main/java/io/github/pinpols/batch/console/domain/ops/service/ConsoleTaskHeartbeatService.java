@@ -6,8 +6,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.JobTaskHeartbeatEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
+import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,19 +26,22 @@ public class ConsoleTaskHeartbeatService {
 
   private final JobTaskMapper jobTaskMapper;
   private final ObjectMapper objectMapper;
+  private final TenantIdResolver tenantGuard;
 
   /** 读指定租户下某 task 的最新心跳进度;不存在(或不属于该租户)抛 NOT_FOUND。 */
   public TaskHeartbeatDetailsResponse getHeartbeatDetails(String tenantId, Long taskId) {
-    JobTaskHeartbeatEntity entity = jobTaskMapper.selectHeartbeatByTenantAndId(tenantId, taskId);
-    if (entity == null) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
+    JobTaskHeartbeatView heartbeat =
+        jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
+    if (heartbeat == null) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
     }
-    Long heartbeatTaskId = entity.getId();
-    String taskStatus = entity.getTaskStatus();
-    String heartbeatDetailsJson = entity.getHeartbeatDetails();
+    Long heartbeatTaskId = heartbeat.getId();
+    String taskStatus = heartbeat.getTaskStatus();
+    String heartbeatDetailsJson = heartbeat.getHeartbeatDetails();
     Object parsedHeartbeatDetails = parseDetails(heartbeatDetailsJson, taskId);
-    Instant heartbeatAt = entity.getHeartbeatAt();
-    Boolean cancelRequested = entity.getCancelRequested();
+    Instant heartbeatAt = heartbeat.getHeartbeatAt();
+    Boolean cancelRequested = heartbeat.getCancelRequested();
     return new TaskHeartbeatDetailsResponse(
         heartbeatTaskId,
         taskStatus,

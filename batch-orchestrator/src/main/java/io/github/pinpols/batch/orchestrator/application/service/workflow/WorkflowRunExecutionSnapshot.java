@@ -14,9 +14,9 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -39,7 +39,7 @@ public record WorkflowRunExecutionSnapshot(
     Long replayOperationId,
     List<WorkflowNodeEntity> nodes,
     List<WorkflowEdgeEntity> edges,
-    Map<String, JobDefinitionEntity> jobDefinitions,
+    Map<String, JobDefinitionView> jobDefinitions,
     Map<String, SystemPipelineIdentity> systemPipelines,
     Map<String, ReplayExecutionGuard> replayExecutionGuards,
     Map<String, Map<String, String>> frozenFileTemplateSnapshots,
@@ -71,7 +71,7 @@ public record WorkflowRunExecutionSnapshot(
     }
     List<WorkflowNodeEntity> nodes = readList(raw.get("nodes"), WorkflowNodeEntity.class);
     List<WorkflowEdgeEntity> edges = readList(raw.get("edges"), WorkflowEdgeEntity.class);
-    Map<String, JobDefinitionEntity> jobs = new LinkedHashMap<>();
+    Map<String, JobDefinitionView> jobs = new LinkedHashMap<>();
     Map<String, SystemPipelineIdentity> pipelines = new LinkedHashMap<>();
     Map<String, ReplayExecutionGuard> replayExecutionGuards = new LinkedHashMap<>();
     Map<String, Map<String, String>> frozenFileTemplateSnapshots = new LinkedHashMap<>();
@@ -90,8 +90,8 @@ public record WorkflowRunExecutionSnapshot(
           Object definition = jobEntry.get("executionDefinition");
           if (EmptyChecks.isNotNull(definition)) {
             String serializedDefinition = JsonUtils.toJson(definition);
-            JobDefinitionEntity job =
-                JsonUtils.fromJson(serializedDefinition, JobDefinitionEntity.class);
+            JobDefinitionView job =
+                JsonUtils.fromJson(serializedDefinition, JobDefinitionView.class);
             if (EmptyChecks.isNotNull(job)) {
               jobs.put(nodeCode, job);
             }
@@ -173,7 +173,7 @@ public record WorkflowRunExecutionSnapshot(
         .crossDayDependencyResultVersionIdsByNode(crossDayDependencyResultVersionIdsByNode)
         .build();
     validateFrozenDefinitions(run, nodes, edges, definitions);
-    Map<String, JobDefinitionEntity> immutableJobs = Map.copyOf(jobs);
+    Map<String, JobDefinitionView> immutableJobs = Map.copyOf(jobs);
     Map<String, SystemPipelineIdentity> immutablePipelines = Map.copyOf(pipelines);
     Map<String, ReplayExecutionGuard> immutableReplayExecutionGuards =
         Map.copyOf(replayExecutionGuards);
@@ -206,7 +206,7 @@ public record WorkflowRunExecutionSnapshot(
   /** 同一次冻结定义核对共享的元数据，不重新加载当前配置。 */
   @Builder
   private record FrozenDefinitions(
-      Map<String, JobDefinitionEntity> jobs,
+      Map<String, JobDefinitionView> jobs,
       Map<String, SystemPipelineIdentity> pipelines,
       Map<String, Map<?, ?>> jobMetadata,
       Long replayOperationId,
@@ -287,7 +287,7 @@ public record WorkflowRunExecutionSnapshot(
         && !Objects.equals(definitions.replayOperationId(), replayGuard.replayOperationId())) {
       throw invalidSnapshot();
     }
-    JobDefinitionEntity job = definitions.jobs().get(node.getNodeCode());
+    JobDefinitionView job = definitions.jobs().get(node.getNodeCode());
     Map<?, ?> metadata = definitions.jobMetadata().get(node.getNodeCode());
     boolean jobSnapshotIdentityIsInvalid = EmptyChecks.isNull(job)
         || EmptyChecks.isNull(metadata)
@@ -318,7 +318,7 @@ public record WorkflowRunExecutionSnapshot(
   }
 
   private static void validatePipelineIdentity(
-      JobDefinitionEntity job,
+      JobDefinitionView job,
       WorkflowNodeEntity node,
       Map<?, ?> metadata,
       FrozenDefinitions definitions) {
@@ -344,7 +344,7 @@ public record WorkflowRunExecutionSnapshot(
   }
 
   private static void validateReplayInputSnapshots(
-      JobDefinitionEntity job, WorkflowNodeEntity node, FrozenDefinitions definitions) {
+      JobDefinitionView job, WorkflowNodeEntity node, FrozenDefinitions definitions) {
     Map<String, String> templateSnapshots =
         definitions.frozenFileTemplateSnapshots().get(node.getNodeCode());
     Map<String, String> channelSnapshots =
@@ -387,7 +387,7 @@ public record WorkflowRunExecutionSnapshot(
 
   private static void validateSnapshotNodeReferences(
       Map<String, WorkflowNodeEntity> nodesByCode, FrozenDefinitions definitions) {
-    for (Map.Entry<String, JobDefinitionEntity> entry : definitions.jobs().entrySet()) {
+    for (Map.Entry<String, JobDefinitionView> entry : definitions.jobs().entrySet()) {
       WorkflowNodeEntity node = nodesByCode.get(entry.getKey());
       if (EmptyChecks.isNull(node) || !WorkflowNodeType.JOB.code().equals(node.getNodeType())) {
         throw invalidSnapshot();
@@ -416,7 +416,7 @@ public record WorkflowRunExecutionSnapshot(
     }
     for (String nodeCode : definitions.frozenDispatchChannelSnapshots().keySet()) {
       WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-      JobDefinitionEntity job = definitions.jobs().get(nodeCode);
+      JobDefinitionView job = definitions.jobs().get(nodeCode);
       boolean dispatchReplayContextIsInvalid = EmptyChecks.isNull(node)
           || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
           || EmptyChecks.isNull(definitions.replayOperationId())
@@ -428,7 +428,7 @@ public record WorkflowRunExecutionSnapshot(
     }
     for (String nodeCode : definitions.dispatchSecretBindings().keySet()) {
       WorkflowNodeEntity node = nodesByCode.get(nodeCode);
-      JobDefinitionEntity job = definitions.jobs().get(nodeCode);
+      JobDefinitionView job = definitions.jobs().get(nodeCode);
       boolean dispatchReplayContextIsInvalid = EmptyChecks.isNull(node)
           || !WorkflowNodeType.JOB.code().equals(node.getNodeType())
           || EmptyChecks.isNull(definitions.replayOperationId())
@@ -561,7 +561,7 @@ public record WorkflowRunExecutionSnapshot(
         .orElse(null);
   }
 
-  public JobDefinitionEntity jobDefinition(String nodeCode) {
+  public JobDefinitionView jobDefinition(String nodeCode) {
     return EmptyChecks.isNull(jobDefinitions) ? null : jobDefinitions.get(nodeCode);
   }
 

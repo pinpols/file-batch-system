@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.support.maintenance;
 
+import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;

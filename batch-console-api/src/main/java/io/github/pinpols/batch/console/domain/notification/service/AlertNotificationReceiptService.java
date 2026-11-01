@@ -24,7 +24,6 @@ public class AlertNotificationReceiptService {
       String fingerprint = alert.label("fingerprint");
       String alertTenant = alert.label("tenant");
       if (!tenantId.equals(alertTenant)
-          || EmptyChecks.isNull(fingerprint)
           || EmptyChecks.isBlank(fingerprint)) {
         continue;
       }

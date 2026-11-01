@@ -189,7 +189,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         || EmptyChecks.isNull(payload.replayOperationId())
         || payload.replayOperationId() <= 0
         || !tenantId.equals(payload.tenantId())
-        || EmptyChecks.isNull(operatorId)
         || EmptyChecks.isBlank(operatorId);
     if (workflowRunReplayApprovalIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_request");

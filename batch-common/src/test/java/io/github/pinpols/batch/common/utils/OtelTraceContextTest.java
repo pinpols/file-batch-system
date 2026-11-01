@@ -26,14 +26,18 @@ class OtelTraceContextTest {
   @Test
   @DisplayName("无活动链路上下文: 当前追踪标识返回空")
   void shouldReturnNull_whenNoActiveSpan() {
-    assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();
+    try (Scope ignored = Context.root().makeCurrent()) {
+      assertThat(OtelTraceContext.currentTraceIdOrNull()).isNull();
+    }
   }
 
   @Test
   @DisplayName("无活动链路上下文: 业务追踪号回退为随机生成值")
   void shouldFallBackToGeneratedId_whenNoActiveSpan() {
-    String traceId = IdGenerator.newTraceId();
-    assertThat(traceId).hasSize(32).matches("[0-9a-f]+");
+    try (Scope ignored = Context.root().makeCurrent()) {
+      String traceId = IdGenerator.newTraceId();
+      assertThat(traceId).hasSize(32).matches("[0-9a-f]+");
+    }
   }
 
   @Test

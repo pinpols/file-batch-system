@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService;
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
-import java.time.Instant;
+import io.github.pinpols.batch.orchestrator.application.service.PipelineProgressReadService.PipelineProgressItem;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,25 +29,6 @@ public class PipelineProgressInternalController {
   public List<PipelineProgressItem> queryByPipeline(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("pipelineInstanceId") Long pipelineInstanceId) {
-    List<PipelineSnapshot> snapshots = progress.snapshot(tenantId, pipelineInstanceId);
-    return snapshots.stream()
-        .map(PipelineProgressInternalController::toPipelineProgressItem)
-        .toList();
+    return progress.snapshot(tenantId, pipelineInstanceId);
   }
-
-  private static PipelineProgressItem toPipelineProgressItem(PipelineSnapshot snapshot) {
-    return new PipelineProgressItem(
-        snapshot.stageCode(),
-        snapshot.rowsProcessed(),
-        snapshot.totalRowsHint(),
-        snapshot.heartbeatAt(),
-        snapshot.stepRunIds());
-  }
-
-  public record PipelineProgressItem(
-      String stageCode,
-      Long rowsProcessed,
-      Long totalRowsHint,
-      Instant heartbeatAt,
-      List<Long> stepRunIds) {}
 }

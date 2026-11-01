@@ -6,9 +6,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.FileGroupExpectationDefinition;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.FileGroupExpectationDefinitionMapper;
@@ -26,7 +26,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 @DisplayName("文件组预期按 Workflow 身份配置与物化")
 @ExtendWith(MockitoExtension.class)
@@ -65,7 +65,7 @@ class FileGroupExpectationServiceTest {
   @Test
   void shouldConfiguresAndMaterializesByWorkflowIdentity() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 91L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             91L, "tenant-a", "WF_IMPORT", "Import", "DAG", 1, true, 11L, "CAL_A"));
     var request = new FileGroupExpectationService.DefinitionRequest(
         "tenant-a", "CAL_A", 91L, "ORDER_DAILY", LocalTime.of(9, 0), LocalTime.of(10, 0), true);
@@ -110,15 +110,17 @@ class FileGroupExpectationServiceTest {
   @Test
   void shouldRejectsWorkflowOutsideRequestedCalendar() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 91L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             91L, "tenant-a", "WF_IMPORT", "Import", "DAG", 1, true, 11L, "CAL_A"));
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 91L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             91L, "tenant-a", "WF_IMPORT", "Import", "DAG", 1, true, 11L, "OTHER_CAL"));
 
     assertThatThrownBy(() -> service.configure(new FileGroupExpectationService.DefinitionRequest(
             "tenant-a", "CAL_A", 91L, "ORDER_DAILY", LocalTime.of(9, 0), null, true)))
-        .isInstanceOf(ResponseStatusException.class);
+        .isInstanceOf(OperationFailure.class)
+        .satisfies(error -> assertThat(((OperationFailure) error).kind())
+            .isEqualTo(OperationFailure.Kind.INVALID_CONFIGURATION));
   }
 
   @DisplayName("删除预期定义只移除当前周期配置")

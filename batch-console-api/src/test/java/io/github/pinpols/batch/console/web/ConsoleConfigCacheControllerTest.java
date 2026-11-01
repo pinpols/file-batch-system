@@ -56,7 +56,7 @@ class ConsoleConfigCacheControllerTest {
             .param("jobCode", "JOB_A"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.evicted").value("job-definition:ta:JOB_A"));
-    verify(service).evictJobDefinition("ta", "JOB_A");
+    verify(service).evictManual("ta", "job-definition", "JOB_A");
   }
 
   @Test
@@ -65,7 +65,7 @@ class ConsoleConfigCacheControllerTest {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-all-job-definitions").param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(service).evictAllJobDefinitions("ta");
+    verify(service).evictManual("ta", "job-definition", "*");
   }
 
   @Test
@@ -76,7 +76,7 @@ class ConsoleConfigCacheControllerTest {
             .param("tenantId", "ta")
             .param("workflowCode", "WF_A"))
         .andExpect(status().isOk());
-    verify(service).evictWorkflowDefinition("ta", "WF_A");
+    verify(service).evictManual("ta", "workflow-definition", "WF_A");
   }
 
   @Test
@@ -92,8 +92,8 @@ class ConsoleConfigCacheControllerTest {
             .param("tenantId", "ta")
             .param("windowCode", "W_A"))
         .andExpect(status().isOk());
-    verify(service).evictBusinessCalendar("ta", "C_A");
-    verify(service).evictBatchWindow("ta", "W_A");
+    verify(service).evictManual("ta", "business-calendar", "C_A");
+    verify(service).evictManual("ta", "batch-window", "W_A");
   }
 
   @Test
@@ -102,6 +102,6 @@ class ConsoleConfigCacheControllerTest {
     mockMvc
         .perform(post("/api/console/ops/cache/evict-quota-policies").param("tenantId", "ta"))
         .andExpect(status().isOk());
-    verify(service).evictQuotaPolicies("ta");
+    verify(service).evictManual("ta", "tenant-quota-policy", "enabled-first");
   }
 }

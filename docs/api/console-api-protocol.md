@@ -7,6 +7,8 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-11-01 | 批量日重放的区间和单日审批保留必填 `approver` 查询参数以兼容既有客户端，实际记录和重试使用当前认证管理员身份。 |
+| 2026-11-01 | **配置批操作原键回查**：租户复制和作业包创建/导入增加管理员只读回查；按原目标顺序返回已确认回执和未知项，不重新执行。历史操作、无键请求和试运行不保证可查询。 |
 | 2026-10-28 | Dry-run L3 的 SQL 参数只做静态检查；数据库执行计划因规划阶段可能产生副作用而停用，合法 SQL 返回 `EXEC_SQL_PLAN_UNAVAILABLE`，不报告计划通过。对象存储与 HTTP 探测按各自规则执行。 |
 | 2026-10-27 | 复制在读写前拒绝源目标重合；复制/预览/矩阵拒绝空集合元素，类型解析使用固定Locale。Workflow导入使用精确编码，升版后仍拒绝同码创建，配置包每编码仅含当前最高版本及图。 |
 | 2026-10-27 | 配置包复制/导出/差异按完整集合读取，普通列表200条上限不变；作业矩阵支持展示范围外显式基准并保持响应展示范围。同步原请求/收据、日志分页、初始化必填目标及九类配置说明按当前实现修正。 |
@@ -792,6 +794,7 @@ Deployment note:
 - `GET /api/console/file-templates`
 - `POST /api/console/file-templates`
 - `POST /api/console/file-templates/mapping-draft`
+  - EXPORT 未提供 SQL 时仅生成字段及查询参数草案，须根据真实业务关系补充同时过滤 `:tenantId`、`:batchNo` 且返回游标列的查询；显式 SQL 原样保留。
 - `GET /api/console/file-templates/{id}`
 - `PUT /api/console/file-templates/{id}`
 - `PATCH /api/console/file-templates/{id}` — enable/disable; body: `EnabledPatchRequest { tenantId, enabled }`
@@ -978,6 +981,15 @@ Deployment note:
 - 指定 `jobCodes` 时构建所列作业的依赖配置包；复制通过严格初始化按目标租户执行，响应结构与初始化相同。租户/作业元素不得为null或空白，配置类型元素不得为null；可选空集合仍表示原先的全部范围。
 - 源租户不能同时作为目标；重合返回HTTP400，读取和写入目标配置均不执行。类型兼容解析使用固定Locale，不随部署主机语言变化。
 - 配置包读取当前配置完整集合，Workflow每编码只带最高版本及其节点/边，停用状态保留；不能套用普通列表的200条分页。导入按精确编码定位，不使用列表模糊搜索选择写入对象。渠道复制去除环境端点和凭据，目标环境信息需要单独核对。
+
+### 配置批操作原请求回查
+
+- 租户复制、作业包创建和作业包导入的正式请求使用原 `Idempotency-Key` 登记后，可通过 `GET /api/console/config/batch-operation` 只读核对。调用需要 `ROLE_ADMIN`，服务端同时校验 `auditTenantId` 的租户访问权限。
+- 查询参数 `operationKind` 分别为 `TENANT_COPY`、`JOB_BUNDLE_CREATE`、`JOB_BUNDLE_IMPORT`；`auditTenantId` 对应复制的源租户或作业包请求所属租户。请求头使用原 `Idempotency-Key` 和原 `X-Tenant-Id`；原请求未发送租户头时查询也不发送。身份还包含原 POST 路径和应用上下文路径，不能以当前查询的 GET 路径代替。
+- 响应按原目标顺序返回 `targets`，包含每项 `ordinal`、`tenantId`、`status` 和 `result`；重复目标在原顺序中分别保留。目标配置提交的回执与对应目标事务共同提交；已确认回滚与提交结果未知分别处理。
+- 总体 `COMPLETE` 只表示各项目标回执齐全；各项是否业务成功仍须查看 `result.success` 及其明细。缺少或无法确认回执的项目为 `UNKNOWN`、`result` 为 null；总体存在未知项目时为 `UNKNOWN`。
+- 找不到登记或操作类型不匹配返回 HTTP 404；缺少或空的原键、无效类型返回 HTTP 400。`UNKNOWN` 和 404 均不能证明原操作没有执行，也不能作为自动重做的依据。回查不会重新应用配置或自动执行缺失目标。
+- 该能力适用于已登记的带键正式请求；上线前的历史请求、无键开发旁路和 `dryRun` 不保证有可查记录。普通租户初始化以及跨环境配置同步仍分别遵循自身契约，不能把此回查外推到其他入口。
 
 ### 租户配置差异、Overlay与作业矩阵
 
@@ -1228,7 +1240,7 @@ Notes:
 - 导入逐目标事务执行，目标收据与该目标配置同事务提交。审计使用 RUNNING、SUCCESS、PARTIAL_FAILED、FAILED；提交结果未知时保留RUNNING并按原身份核对，不直接推断失败。
 - `GET /api/console/config/sync/logs` 通过 `tenantId`、`pageNo`、`pageSize` 分页查询；`GET /api/console/config/sync/requests/status` 以审计租户和原 `Idempotency-Key` 读取原审计，未找到不证明未执行。
 - `POST /api/console/config/sync/logs/{logId}/reconcile` 只核对持久目标收据，不重新应用配置。原请求恢复与未知结果处置见[配置治理手册](../runbook/config-governance.md#配置同步响应丢失与原请求恢复)。
-- 持久事实为 `config_sync_log` 与 `config_sync_target_receipt`；普通初始化/复制入口不能直接套用同步导入的收据恢复保证。
+- 持久事实为 `config_sync_log` 与 `config_sync_target_receipt`；普通初始化与租户复制不能直接套用同步导入的收据恢复保证。租户复制的原请求回查适用上述[配置批操作契约](#配置批操作原请求回查)。
 
 ### Alert Routing / Notification Policy Status
 

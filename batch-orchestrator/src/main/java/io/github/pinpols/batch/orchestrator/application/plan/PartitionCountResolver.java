@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.application.plan;
 
 import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
 
 /**
@@ -23,5 +23,5 @@ public interface PartitionCountResolver {
 
   /** 能解析时返回正整数分区数，不适用时返回 {@code 0}。 */
   int resolve(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy);
+      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy);
 }

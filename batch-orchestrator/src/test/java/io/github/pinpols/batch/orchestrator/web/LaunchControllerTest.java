@@ -15,11 +15,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.controller.LaunchController;
 import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,7 +41,7 @@ class LaunchControllerTest {
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Mock
-  private OrchestratorGracefulShutdown gracefulShutdown;
+  private OrchestratorDrainService drainService;
 
   private MockMvc mockMvc;
 
@@ -50,7 +50,7 @@ class LaunchControllerTest {
     LaunchApplicationService launchApplicationService =
         new LaunchApplicationService(tenantActionRateLimiter, workflowRunLaunchService);
     mockMvc = MockMvcBuilders.standaloneSetup(
-            new LaunchController(launchApplicationService, gracefulShutdown))
+            new LaunchController(launchApplicationService, drainService))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
         .build();
   }

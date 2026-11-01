@@ -15,12 +15,8 @@ import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -56,7 +52,6 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
   private static final Duration STREAM_PENDING_TTL = Duration.ofMinutes(10);
   private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
-  private static final String KEY_PREFIX = "console:idempotency:";
   private static final String PENDING = "PENDING";
   private static final String DONE = "DONE";
   // C-2.10: 区分 DONE / PENDING 两种 CONFLICT 场景，便于前端决定是"提示已处理"还是"稍后重试"
@@ -173,16 +168,13 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
       return true;
     }
 
-    String tenantId = resolveTenantId(request);
-    String redisKey = KEY_PREFIX
-        + tenantId
-        + ":"
-        + method
-        + ":"
-        + request.getRequestURI()
-        + ":"
-        + idempotencyKey.trim();
-    String durableKey = durableKey(redisKey);
+    String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+    String tenantId = ConsoleIdempotencyRequestIdentity.tenantId(tenantHeader);
+    String requestUri = request.getRequestURI();
+    String redisKey =
+        ConsoleIdempotencyRequestIdentity.redisKey(tenantHeader, method, requestUri, idempotencyKey);
+    String durableKey =
+        ConsoleIdempotencyRequestIdentity.durableKey(tenantHeader, method, requestUri, idempotencyKey);
 
     String existing = readRedisState(redisKey, idempotencyKey, response);
     if (EmptyChecks.isNull(existing)
@@ -378,23 +370,6 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
             deleteException);
       }
     }
-  }
-
-  private static String durableKey(String redisKey) {
-    try {
-      MessageDigest digestGenerator = MessageDigest.getInstance("SHA-256");
-      byte[] redisKeyBytes = redisKey.getBytes(StandardCharsets.UTF_8);
-      byte[] digest = digestGenerator.digest(redisKeyBytes);
-      return "console-http:" + HexFormat.of().formatHex(digest);
-    } catch (NoSuchAlgorithmException exception) {
-      throw new IllegalStateException(
-          "SHA-256 is required for durable idempotency keys", exception);
-    }
-  }
-
-  private String resolveTenantId(HttpServletRequest request) {
-    String tenantId = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
-    return Texts.hasText(tenantId) ? tenantId.trim() : "_";
   }
 
   private void writeJson(HttpServletResponse response, HttpStatus httpStatus, String body)

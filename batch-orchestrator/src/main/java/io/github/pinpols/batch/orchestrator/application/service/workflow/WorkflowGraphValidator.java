@@ -10,9 +10,9 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.domain.workflow.CrossDayDependencySpec;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
@@ -174,7 +174,7 @@ public class WorkflowGraphValidator {
 
     validateNodeJoinMode(byCode.values(), incoming, errors);
 
-    Map<String, JobDefinitionEntity> jobDefByCode = loadJobDefinitions(byCode, errors);
+    Map<String, JobDefinitionView> jobDefByCode = loadJobDefinitions(byCode, errors);
     Set<String> optionalNodes = collectOptionalNodes(byCode);
     for (WorkflowNodeEntity n : byCode.values()) {
       validateOutputContractRefs(n, byCode, jobDefByCode, optionalNodes, errors, warnings);
@@ -312,9 +312,9 @@ public class WorkflowGraphValidator {
   }
 
   /** JOB 引用是运行准入条件；数据库查询失败必须传播，不能转为健康结果。 */
-  private Map<String, JobDefinitionEntity> loadJobDefinitions(
+  private Map<String, JobDefinitionView> loadJobDefinitions(
       Map<String, WorkflowNodeEntity> nodes, List<ValidationIssue> errors) {
-    Map<String, JobDefinitionEntity> result = new HashMap<>();
+    Map<String, JobDefinitionView> result = new HashMap<>();
     for (WorkflowNodeEntity node : nodes.values()) {
       String jobCode = node.getRelatedJobCode();
       boolean jobNode = WorkflowNodeType.JOB.code().equalsIgnoreCase(node.getNodeType());
@@ -328,7 +328,7 @@ public class WorkflowGraphValidator {
       if (result.containsKey(jobCode)) {
         continue;
       }
-      JobDefinitionEntity def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+      JobDefinitionView def = jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
           node.getTenantId(), jobCode, true);
       boolean jobNodeDefinitionIsUnavailable =
           jobNode && (EmptyChecks.isNull(def) || !Boolean.TRUE.equals(def.enabled()));
@@ -380,7 +380,7 @@ public class WorkflowGraphValidator {
   private void validateOutputContractRefs(
       WorkflowNodeEntity node,
       Map<String, WorkflowNodeEntity> nodesByCode,
-      Map<String, JobDefinitionEntity> jobDefByCode,
+      Map<String, JobDefinitionView> jobDefByCode,
       Set<String> optionalNodes,
       List<ValidationIssue> errors,
       List<ValidationIssue> warnings) {
@@ -403,7 +403,7 @@ public class WorkflowGraphValidator {
         // V4 已经报；这里跳过 V5/V12
         continue;
       }
-      JobDefinitionEntity refJobDef = refNode.getRelatedJobCode() == null
+      JobDefinitionView refJobDef = refNode.getRelatedJobCode() == null
           ? null
           : jobDefByCode.get(refNode.getRelatedJobCode());
       if (refJobDef == null) {
@@ -441,13 +441,13 @@ public class WorkflowGraphValidator {
   /** V15 — 同 workflow 多个节点引用的 job_definition.calendarCode / timezone 不一致 → WARN。 */
   private void validateCalendarTimezoneConsistency(
       Collection<WorkflowNodeEntity> nodes,
-      Map<String, JobDefinitionEntity> jobDefByCode,
+      Map<String, JobDefinitionView> jobDefByCode,
       List<ValidationIssue> warnings) {
     Set<String> calendars = new HashSet<>();
     Set<String> timezones = new HashSet<>();
     for (WorkflowNodeEntity node : nodes) {
       if (!Texts.hasText(node.getRelatedJobCode())) continue;
-      JobDefinitionEntity def = jobDefByCode.get(node.getRelatedJobCode());
+      JobDefinitionView def = jobDefByCode.get(node.getRelatedJobCode());
       if (def == null) continue;
       if (Texts.hasText(def.calendarCode())) calendars.add(def.calendarCode());
       if (Texts.hasText(def.timezone())) timezones.add(def.timezone());

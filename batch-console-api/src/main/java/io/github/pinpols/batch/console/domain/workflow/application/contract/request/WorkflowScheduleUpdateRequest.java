@@ -53,7 +53,7 @@ public class WorkflowScheduleUpdateRequest {
       return false;
     }
     String effectiveTriggerMode = triggerMode;
-    if (EmptyChecks.isNull(effectiveTriggerMode) || EmptyChecks.isBlank(effectiveTriggerMode)) {
+    if (EmptyChecks.isBlank(effectiveTriggerMode)) {
       effectiveTriggerMode = switch (scheduleType) {
         case "CRON", "FIXED_RATE" -> "SCHEDULED";
         case "EVENT" -> "EVENT";

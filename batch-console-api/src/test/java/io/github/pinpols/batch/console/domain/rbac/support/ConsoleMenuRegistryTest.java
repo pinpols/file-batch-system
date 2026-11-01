@@ -8,6 +8,11 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.boot.context.properties.bind.Bindable;
+import org.springframework.boot.context.properties.bind.Binder;
+import org.springframework.boot.env.YamlPropertySourceLoader;
+import org.springframework.core.env.StandardEnvironment;
+import org.springframework.core.io.ClassPathResource;
 
 @DisplayName("控制台菜单注册:按角色过滤可见菜单, 未配置授权时回退最小角色, 历史角色配置直接拒绝")
 class ConsoleMenuRegistryTest {
@@ -54,6 +59,30 @@ class ConsoleMenuRegistryTest {
     assertThatThrownBy(() -> registryWithItem("VIEWER", List.of("ROLE_USER"), "VIEWER"))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("unsupported console roles");
+  }
+
+  @Test
+  @DisplayName("默认菜单与接口权限对齐：队列和窗口仅管理员可见，移除不存在的流水线定义入口")
+  void defaultMenuAlignsQueueAndWindowWithControllerRoles() throws Exception {
+    var environment = new StandardEnvironment();
+    var sources = new YamlPropertySourceLoader().load("menu", new ClassPathResource("menu.yml"));
+    sources.forEach(environment.getPropertySources()::addLast);
+    ConsoleMenuProperties properties = Binder.get(environment)
+        .bind("batch.console.menu", Bindable.of(ConsoleMenuProperties.class))
+        .get();
+    ConsoleMenuRegistry registry = new ConsoleMenuRegistry(properties);
+
+    for (String role : List.of("ROLE_TENANT_ADMIN", "ROLE_TENANT_USER", "ROLE_AUDITOR")) {
+      assertThat(registry.filterByAuthorities(Set.of(role)))
+          .flatExtracting(ConsoleMenuRegistry.MenuGroup::children)
+          .extracting(ConsoleMenuRegistry.MenuItem::path)
+          .doesNotContain("/governance/queues", "/governance/windows", "/jobs/pipelines");
+    }
+    assertThat(registry.filterByAuthorities(Set.of("ROLE_ADMIN")))
+        .flatExtracting(ConsoleMenuRegistry.MenuGroup::children)
+        .extracting(ConsoleMenuRegistry.MenuItem::path)
+        .contains("/governance/queues", "/governance/windows")
+        .doesNotContain("/jobs/pipelines");
   }
 
   private static ConsoleMenuRegistry registryWithItem(

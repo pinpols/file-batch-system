@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.audit.application.ai;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -16,12 +15,13 @@ import reactor.core.publisher.Mono;
 /** 控制台 AI 对话应用服务：基于 Spring AI 的聊天与审计写入数据库。 */
 public interface ConsoleAiApplicationService {
 
-  /** 调用方须在异步分派前完成授权并捕获请求元数据。 */
-  AiChatResponse chatStream(
-      AiChatRequest request,
-      String idempotencyKey,
-      ConsoleRequestMetadata metadata,
-      StreamObserver observer);
+  /** 在请求线程完成授权与身份捕获，返回可交给后台线程执行的对象。 */
+  PreparedStream prepareStream(AiChatRequest request, String idempotencyKey);
+
+  interface PreparedStream {
+    String requestId();
+    AiChatResponse execute(StreamObserver observer);
+  }
 
   interface StreamObserver {
     void onDelta(String text);

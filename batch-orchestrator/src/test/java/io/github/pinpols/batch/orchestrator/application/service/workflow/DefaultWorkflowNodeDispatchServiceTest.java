@@ -25,11 +25,11 @@ import io.github.pinpols.batch.orchestrator.application.service.task.Orchestrato
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -151,7 +151,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
         workflowDefinitionMapper);
     lenient()
         .when(workflowDefinitionMapper.selectById(50L))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             50L, "ta", "FLOW", "Flow", "COMPOSITE", 1, true, null, "CAL"));
     lenient()
         .when(workflowRunMapper.selectByTenantAndIdForUpdate("ta", 10L))
@@ -359,7 +359,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     node.setNodeType("JOB");
     node.setRelatedJobCode("JOB_A");
     node.setEnabled(true);
-    JobDefinitionEntity job = JobDefinitionEntity.builder()
+    JobDefinitionView job = JobDefinitionView.builder()
         .id(101L)
         .tenantId("ta")
         .jobCode("JOB_A")
@@ -402,7 +402,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
     node.setEnabled(true);
     node.setCrossDayDependencies(
         "[{\"alias\":\"previous\",\"jobCode\":\"JOB_PREVIOUS\",\"bizDateOffset\":-1}]");
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(101L)
         .tenantId("ta")
         .jobCode("JOB_A")

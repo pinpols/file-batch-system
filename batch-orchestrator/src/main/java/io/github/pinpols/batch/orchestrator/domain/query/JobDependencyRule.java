@@ -10,7 +10,7 @@ public record JobDependencyRule(String upstreamJobCode, String bizDateAlignment)
   public static final String PREVIOUS_BIZ_DAY = "PREVIOUS_BIZ_DAY";
 
   public JobDependencyRule {
-    if (EmptyChecks.isNull(bizDateAlignment) || EmptyChecks.isBlank(bizDateAlignment)) {
+    if (EmptyChecks.isBlank(bizDateAlignment)) {
       bizDateAlignment = SAME_DAY;
     } else {
       String trimmedAlignment = bizDateAlignment.trim();

@@ -10,8 +10,8 @@ import io.github.pinpols.batch.common.enums.ReplayOperationType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.time.Instant;
@@ -232,7 +232,7 @@ class WorkflowRunReplaySnapshotResolverTest {
   }
 
   private Fixture fixture(String jobType) throws Exception {
-    JobDefinitionEntity selectedDefinition = JobDefinitionEntity.builder()
+    JobDefinitionView selectedDefinition = JobDefinitionView.builder()
         .id(101L)
         .tenantId(TENANT)
         .jobCode("COMPUTE_A")
@@ -336,7 +336,7 @@ class WorkflowRunReplaySnapshotResolverTest {
   }
 
   private Map<String, Object> definition(int version, String jobType) {
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(101L)
         .tenantId(TENANT)
         .jobCode("COMPUTE_A")

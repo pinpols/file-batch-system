@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -74,8 +76,9 @@ public class AlertmanagerNotifyService {
   /** AM alert 携带租户维度的 label 名(见迁移方案 §4:AM 单实例靠 label 携带租户)。 */
   private static final String LABEL_TENANT = "tenant";
 
-  /** 接住一个 receiver 的 AM 告警并投递。绝不抛异常(off 关键路径),失败折叠进 outcome + 日志。 */
+  /** 接住一个 receiver 的 AM 告警并投递。关闭时拒绝；投递失败折叠进 outcome + 日志。 */
   public AmNotifyOutcome deliver(String receiver, AlertmanagerWebhookPayload payload) {
+    assertEnabled();
     String tenantId = resolveTenant(payload);
     String channelCode = receiver;
     for (AlertmanagerAlert alert : payload.safeAlerts()) {
@@ -132,6 +135,14 @@ public class AlertmanagerNotifyService {
       offset = end;
     }
     return new AmNotifyOutcome(receiver, channelCode, true, "SUCCESS", null);
+  }
+
+  /** 接入关闭时，所有投递入口均拒绝处理。 */
+  public void assertEnabled() {
+    if (!properties.isEnabled()) {
+      throw BizException.of(
+          ResultCode.SERVICE_UNAVAILABLE, "error.common.unauthorized_detail", "am-notify disabled");
+    }
   }
 
   private AmNotifyOutcome deliverBatch(
@@ -197,7 +208,7 @@ public class AlertmanagerNotifyService {
     List<String> identities = new ArrayList<>();
     for (AlertmanagerAlert alert : payload.safeAlerts()) {
       String fingerprint = alert.label("fingerprint");
-      if (EmptyChecks.isNull(fingerprint) || EmptyChecks.isBlank(fingerprint)) {
+      if (EmptyChecks.isBlank(fingerprint)) {
         fingerprint = alert.fingerprint();
       }
       NotificationIdentity identity =

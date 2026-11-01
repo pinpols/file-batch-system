@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
@@ -59,7 +59,7 @@ final class TenantWorkflowDefinitionApplySupport {
 
   WorkflowDefinitionEntity findWorkflowForImport(String tenantId, WorkflowDefinitionSpec spec) {
     if (Texts.hasText(spec.getSingleJobCode())) {
-      JobDefinitionEntity job = definitionMappers.jobDefinition.selectByUniqueKey(
+      JobDefinitionView job = definitionMappers.jobDefinition.selectByUniqueKey(
           tenantId, spec.getSingleJobCode().trim());
       if (EmptyChecks.isNotNull(job)) {
         WorkflowDefinitionEntity managed =
@@ -78,7 +78,7 @@ final class TenantWorkflowDefinitionApplySupport {
       String tenantId, Long existingId, WorkflowDefinitionSpec spec, String operator) {
     Long singleJobDefinitionId = null;
     if (Texts.hasText(spec.getSingleJobCode())) {
-      JobDefinitionEntity singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
+      JobDefinitionView singleJob = definitionMappers.jobDefinition.selectByUniqueKey(
           tenantId, spec.getSingleJobCode().trim());
       if (EmptyChecks.isNull(singleJob)) {
         throw BizException.of(

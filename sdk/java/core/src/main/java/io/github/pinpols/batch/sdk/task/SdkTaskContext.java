@@ -75,7 +75,7 @@ public record SdkTaskContext(
    * 遇到不支持的格式时按失败关闭处理，避免消费者静默替换为其他版本。
    */
   public List<SdkCrossDayResult> crossDayResults(String alias) {
-    if (EmptyChecks.isNull(alias) || EmptyChecks.isBlank(alias)) {
+    if (EmptyChecks.isBlank(alias)) {
       throw new IllegalArgumentException("cross-day alias is required");
     }
     Object rawCrossDay = parameters.get("crossDay");

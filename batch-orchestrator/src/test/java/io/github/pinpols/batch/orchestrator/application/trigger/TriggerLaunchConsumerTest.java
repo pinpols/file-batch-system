@@ -16,6 +16,8 @@ import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -30,11 +32,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * ADR-010 Stage 5: TriggerLaunchConsumer 单测,覆盖 9 类路径:
@@ -43,7 +45,7 @@ import org.springframework.web.server.ResponseStatusException;
  *   <li>正常 launch 成功 → ack + counter
  *   <li>反序列化失败 → ack + 跳过(DLQ counter)
  *   <li>envelope/launchRequest 为 null → ack + 跳过
- *   <li>409 dedup 命中 → 视为成功 ack(uk_job_instance_tenant_dedup 回退)
+ *   <li>409 冲突未证明启动完成 → 抛出交给监听器重试
  *   <li>429 限流 → nack 当前 offset 并暂停 partition,绕过有限重试丢弃路径
  *   <li>RuntimeException → 抛出走 listener 重试
  *   <li>消费端不重复写 trigger_request，状态仅由 launch 主服务在事务中推进
@@ -140,16 +142,23 @@ class TriggerLaunchConsumerTest {
   }
 
   @Test
-  @DisplayName("启动返回去重冲突时按成功处理并确认消息")
-  void consume_dedupConflict_treatedAsSuccessAndAcks() {
-    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-dup");
+  @DisplayName("事件预期核对冲突不确认消息，重试成功后才确认")
+  void consume_expectationConflict_retriesAndAcksOnlyAfterSuccess() {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-conflict");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
-        .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "dedup hit"));
+        .thenThrow(new OperationFailure(Kind.CONFLICT, "event expectation conflict"))
+        .thenReturn(new LaunchResponse("existing-run", "trace-1"));
+
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
+        .isInstanceOf(OperationFailure.class)
+        .satisfies(error -> assertThat(((OperationFailure) error).kind()).isEqualTo(Kind.CONFLICT));
+    verify(ack, never()).acknowledge();
+    assertThat(failed("http_409")).isEqualTo(1.0);
 
     consumer.consume(consumerRecord(envelope), ack);
 
     verify(ack).acknowledge();
-    assertThat(deduped("tenant-a")).isEqualTo(1.0);
+    assertThat(consumed("tenant-a", "ok")).isEqualTo(1.0);
   }
 
   @Test
@@ -157,14 +166,28 @@ class TriggerLaunchConsumerTest {
   void consume_serviceUnavailable_propagatesWithoutAcknowledging() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-in-progress");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
-        .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "retry"));
+        .thenThrow(new OperationFailure(Kind.TEMPORARILY_UNAVAILABLE, "retry"));
 
     assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
-        .isInstanceOf(ResponseStatusException.class)
-        .satisfies(error -> assertThat(((ResponseStatusException) error).getStatusCode())
-            .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+        .isInstanceOf(OperationFailure.class)
+        .satisfies(error -> assertThat(((OperationFailure) error).kind())
+            .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
     verify(ack, never()).acknowledge();
     assertThat(failed("http_503")).isEqualTo(1.0);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"INVALID_INPUT, http_400", "NOT_FOUND, http_404", "INVALID_CONFIGURATION, http_422"})
+  @DisplayName("其他用例失败保留原诊断标签并交由容器重试")
+  void consume_operationFailure_preservesRetryAndMetric(Kind kind, String expectedReason) {
+    LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-failure");
+    OperationFailure failure = new OperationFailure(kind, "retryable");
+    when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
+        .thenThrow(failure);
+
+    assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack)).isSameAs(failure);
+    verify(ack, never()).acknowledge();
+    assertThat(failed(expectedReason)).isEqualTo(1.0);
   }
 
   @Test
@@ -172,7 +195,7 @@ class TriggerLaunchConsumerTest {
   void consume_rateLimited_doesNotAckSoKafkaCanRedeliver() {
     LaunchEnvelope envelope = sampleEnvelope("tenant-a", "req-rate");
     when(launchApplicationService.launchFromTrustedQueue(any(LaunchRequest.class)))
-        .thenThrow(new ResponseStatusException(HttpStatus.TOO_MANY_REQUESTS, "rate limit"));
+        .thenThrow(new OperationFailure(Kind.RATE_LIMITED, "rate limit"));
 
     consumer.consume(consumerRecord(envelope), ack);
 
@@ -231,12 +254,6 @@ class TriggerLaunchConsumerTest {
   private double consumed(String tenant, String outcome) {
     return meterRegistry
         .counter("batch.trigger.launch.consumed.total", "tenant", tenant, "outcome", outcome)
-        .count();
-  }
-
-  private double deduped(String tenant) {
-    return meterRegistry
-        .counter("batch.trigger.launch.deduped.total", "tenant", tenant)
         .count();
   }
 

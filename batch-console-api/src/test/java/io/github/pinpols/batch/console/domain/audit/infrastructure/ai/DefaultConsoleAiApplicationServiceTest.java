@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -43,6 +44,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -187,6 +190,30 @@ class DefaultConsoleAiApplicationServiceTest {
   private static ConsoleRequestMetadata meta(String tenantId, String requestId, String traceId) {
     return new ConsoleRequestMetadata(
         requestId, traceId, tenantId, "operator-1", "idem-1", "1.1.1.1");
+  }
+
+  @Test
+  @DisplayName("应用入口拒绝未授权流式请求，不进入模型执行")
+  void shouldRejectStreamPreparationWithoutAuthorization() {
+    doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
+        .when(authorizationService).assertAllowed();
+    AiChatRequest request = request("tenant-1", "查询失败作业");
+    assertThatThrownBy(() -> service.prepareStream(request, "idem"))
+        .isInstanceOf(BizException.class);
+    verify(requestMetadataResolver, never()).current();
+    verify(promptGuard, never()).check(any());
+  }
+
+  @Test
+  @DisplayName("应用入口拒绝跨租户或跨用户的会话查询与删除")
+  void shouldRejectMismatchedConversationIdentity() {
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req", "trace"));
+    assertThatThrownBy(() -> service.conversations("tenant-2", "operator-1", 10))
+        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service.deleteConversation("tenant-1", "other", "conversation"))
+        .isInstanceOf(BizException.class);
+    verify(conversationService, never()).list(anyString(), anyString(), anyInt());
+    verify(conversationService, never()).delete(anyString(), anyString(), anyString());
   }
 
   private static AiChatRequest request(String tenantId, String prompt) {
@@ -378,7 +405,7 @@ class DefaultConsoleAiApplicationServiceTest {
 
   @Test
   @DisplayName("流式对话:逐片下发内容,并按最终用量记录审计")
-  void shouldStreamProviderChunksAndAuditFinalResponse() {
+  void shouldStreamProviderChunksAndAuditFinalResponse() throws Exception {
     aiProperties.getTools().setEnabled(false);
     when(promptGuard.check(any()))
         .thenReturn(AiPromptGateResult.approved(AiPromptCategory.PLATFORM, "normalized"));
@@ -421,11 +448,19 @@ class DefaultConsoleAiApplicationServiceTest {
           }
         };
 
-    AiChatResponse response = service.chatStream(
-        request("tenant-1", "查询失败作业"),
-        "idem-1",
-        meta("tenant-1", "req-stream", "trace-1"),
-        observer);
+    Thread requestThread = Thread.currentThread();
+    doAnswer(invocation -> {
+      assertThat(Thread.currentThread()).isSameAs(requestThread);
+      return null;
+    }).when(authorizationService).assertAllowed();
+    when(requestMetadataResolver.current()).thenAnswer(invocation -> {
+      assertThat(Thread.currentThread()).isSameAs(requestThread);
+      return meta("tenant-1", "req-stream", "trace-1");
+    });
+    ConsoleAiApplicationService.PreparedStream prepared =
+        service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1");
+    AiChatResponse response = CompletableFuture.supplyAsync(() -> prepared.execute(observer))
+        .get(10, TimeUnit.SECONDS);
 
     assertThat(deltas).containsExactly("hello ", "world");
     assertThat(response.getAnswer()).contains("hello world");
@@ -482,11 +517,9 @@ class DefaultConsoleAiApplicationServiceTest {
           }
         };
 
-    AiChatResponse response = service.chatStream(
-        request("tenant-1", "查询失败作业"),
-        "idem-1",
-        meta("tenant-1", "req-stream", "trace-1"),
-        observer);
+    when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-stream", "trace-1"));
+    AiChatResponse response = service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1")
+        .execute(observer);
 
     assertThat(cancelled.get()).isTrue();
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryAttemptParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryRetryParam;
+import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
 import java.time.Instant;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
@@ -17,7 +17,7 @@ public interface TriggerLaunchRecoveryMapper {
       @Param("envelopeCiphertext") String envelopeCiphertext,
       @Param("traceId") String traceId);
 
-  TriggerLaunchRecoveryEntity selectByIdentityForUpdate(
+  TriggerLaunchRecoveryView selectByIdentityForUpdate(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
   int requeueDead(
@@ -25,7 +25,7 @@ public interface TriggerLaunchRecoveryMapper {
       @Param("requestId") String requestId,
       @Param("nextStatus") String nextStatus);
 
-  List<TriggerLaunchRecoveryEntity> selectDue(@Param("now") Instant now, @Param("limit") int limit);
+  List<TriggerLaunchRecoveryView> selectDue(@Param("now") Instant now, @Param("limit") int limit);
 
   int markDone(
       @Param("tenantId") String tenantId,

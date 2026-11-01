@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.command.AssetFreshnessPolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.mapper.ConsoleAssetFreshnessPolicyMapper;
 import io.github.pinpols.batch.console.service.ConsoleAssetFreshnessPolicyService;
@@ -54,7 +55,7 @@ class ConsoleAssetFreshnessPolicyReferenceIntegrationTest extends AbstractIntegr
         .satisfies(
             ex -> assertThat(((BizException) ex).getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
 
-    assertThatThrownBy(() -> mapper.upsert(policy(tenantId, jobCode)))
+    assertThatThrownBy(() -> mapper.upsert(mapperPolicy(tenantId, jobCode)))
         .isInstanceOf(DataIntegrityViolationException.class);
 
     Long selectedAssetFreshnessPolicyCount =
@@ -70,7 +71,7 @@ class ConsoleAssetFreshnessPolicyReferenceIntegrationTest extends AbstractIntegr
     String jobCode = "JOB_" + UUID.randomUUID().toString().replace("-", "");
     insertJob(otherTenantId, jobCode, true);
 
-    assertThatThrownBy(() -> mapper.upsert(policy(tenantId, jobCode)))
+    assertThatThrownBy(() -> mapper.upsert(mapperPolicy(tenantId, jobCode)))
         .isInstanceOf(DataIntegrityViolationException.class);
 
     assertThat(policyCount(tenantId, jobCode)).isZero();
@@ -119,7 +120,21 @@ class ConsoleAssetFreshnessPolicyReferenceIntegrationTest extends AbstractIntegr
     return jdbc.queryForObject(selectCountSql, Long.class, tenantId, jobCode);
   }
 
-  private static AssetFreshnessPolicyUpsertParam policy(String tenantId, String jobCode) {
+  private static AssetFreshnessPolicyUpsertCommand policy(String tenantId, String jobCode) {
+    return AssetFreshnessPolicyUpsertCommand.builder()
+        .tenantId(tenantId)
+        .assetCode(jobCode)
+        .assetType("JOB")
+        .expectedByLocalTime(LocalTime.NOON)
+        .timezone("UTC")
+        .staleAfterSeconds(60)
+        .lookbackDays(1)
+        .severity("WARN")
+        .enabled(true)
+        .build();
+  }
+
+  private static AssetFreshnessPolicyUpsertParam mapperPolicy(String tenantId, String jobCode) {
     return AssetFreshnessPolicyUpsertParam.builder()
         .tenantId(tenantId)
         .assetCode(jobCode)

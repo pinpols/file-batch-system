@@ -1,13 +1,10 @@
 package io.github.pinpols.batch.console.domain.observability.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.response.CronPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
 import io.github.pinpols.batch.console.domain.observability.application.CronPreviewService;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
-import java.time.Instant;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleMaintenanceApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,7 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleSystemController {
 
-  private final MaintenanceStateHolder maintenanceStateHolder;
+  private final ConsoleMaintenanceApplicationService maintenanceService;
   private final CronPreviewService cronPreviewService;
 
   /**
@@ -31,18 +28,7 @@ public class ConsoleSystemController {
    */
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> maintenanceStatus() {
-    MaintenanceState state = maintenanceStateHolder.current();
-    MaintenanceStatusResponse response = new MaintenanceStatusResponse(
-        state.enabled(),
-        state.readOnly(),
-        state.message(),
-        state.etaAt() != null ? state.etaAt().toString() : null,
-        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
-        state.active(Instant.now()),
-        state.affectedServices(),
-        state.version(),
-        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
-    return CommonResponse.success(response);
+    return CommonResponse.success(maintenanceService.status());
   }
 
   /**

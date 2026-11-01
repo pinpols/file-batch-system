@@ -16,9 +16,9 @@ import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -61,7 +61,7 @@ class BundleArrivalLauncherTest {
     when(provider.getObject()).thenReturn(launchService);
     when(workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
             anyString(), anyString(), ArgumentMatchers.eq(true)))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             901L, "t1", "WF_BUNDLE", "Bundle", "DAG", 1, true, 301L, "CALENDAR_A"));
     launcher = new BundleArrivalLauncher(
         provider,

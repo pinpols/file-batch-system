@@ -3,7 +3,6 @@ package io.github.pinpols.batch.orchestrator.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -14,8 +13,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
 import io.github.pinpols.batch.common.dto.WorkerPipelineProgressDto;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
 import io.github.pinpols.batch.orchestrator.config.InternalAuthFilter;
 import io.github.pinpols.batch.orchestrator.controller.OrchestratorApiExceptionHandler;
@@ -33,7 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("工作节点注册与心跳接口的控制器行为,覆盖限流,租户归一,进度保留与下线指令下发")
+@DisplayName("工作节点注册与心跳接口的控制器行为,覆盖租户归一,进度保留与下线指令下发")
 class WorkerControllerTest {
 
   @Mock
@@ -42,15 +39,12 @@ class WorkerControllerTest {
   @Mock
   private WorkerDrainGovernanceService workerDrainGovernanceService;
 
-  @Mock
-  private TenantActionRateLimiter tenantActionRateLimiter;
-
   private MockMvc mockMvc;
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new WorkerController(
-            workerRegistryService, workerDrainGovernanceService, tenantActionRateLimiter))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new WorkerController(workerRegistryService, workerDrainGovernanceService))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
         .build();
   }
@@ -187,13 +181,9 @@ class WorkerControllerTest {
         .andExpect(jsonPath("$.shouldDrain").value(true));
   }
 
-  // 缺口①: per-tenant worker 注册限流 (opt-in)
-
   @Test
-  @DisplayName("租户级限流放行时工作节点注册成功并完成落库")
-  void shouldRegisterWorker_whenRateLimiterAllowsRequest() throws Exception {
-    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
-        .thenReturn(true);
+  @DisplayName("工作节点注册入口转发规范化请求")
+  void shouldRegisterWorker() throws Exception {
     when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("ONLINE", 10));
 
@@ -209,8 +199,6 @@ class WorkerControllerTest {
   @Test
   @DisplayName("注册请求携带的稳定工作节点池编码在租户归一后保持不变,不回退为节点编码")
   void shouldPreserveWorkerPoolCode_whenRegisterTenantIsNormalized() throws Exception {
-    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
-        .thenReturn(true);
     when(workerRegistryService.register(any(WorkerHeartbeatDto.class)))
         .thenReturn(onlineWorker("ONLINE", 10));
 
@@ -230,21 +218,6 @@ class WorkerControllerTest {
     verify(workerRegistryService).register(captor.capture());
     assertThat(captor.getValue().workerCode()).isEqualTo("export-heavy-pod-01");
     assertThat(captor.getValue().workerPoolCode()).isEqualTo("export-heavy");
-  }
-
-  @Test
-  @DisplayName("租户级限流拒绝时注册返回限流状态码,且不触发落库")
-  void shouldRejectRegistration_whenRateLimiterDeniesRequest() throws Exception {
-    when(tenantActionRateLimiter.tryConsume("t1", RateLimitAction.WORKER_REGISTER))
-        .thenReturn(false);
-
-    mockMvc
-        .perform(post("/internal/workers/register")
-            .contentType(APPLICATION_JSON)
-            .content("{\"tenantId\":\"t1\",\"workerCode\":\"w1\"}"))
-        .andExpect(status().isTooManyRequests());
-
-    verify(workerRegistryService, never()).register(any(WorkerHeartbeatDto.class));
   }
 
   private WorkerRegistryEntity onlineWorker(String status, Integer maxConcurrent) {

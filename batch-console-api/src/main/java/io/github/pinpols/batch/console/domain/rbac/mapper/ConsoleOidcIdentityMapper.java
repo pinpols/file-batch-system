@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEntity;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleOidcIdentityView;
 import java.util.List;
 import java.util.Optional;
 import org.apache.ibatis.annotations.Param;
@@ -15,9 +15,9 @@ public interface ConsoleOidcIdentityMapper {
       @Param("issuer") String issuer,
       @Param("subject") String subject);
 
-  List<ConsoleOidcIdentityEntity> findByTenant(@Param("tenantId") String tenantId);
+  List<ConsoleOidcIdentityView> findByTenant(@Param("tenantId") String tenantId);
 
-  Optional<ConsoleOidcIdentityEntity> findByAccountAndTenant(
+  Optional<ConsoleOidcIdentityView> findByAccountAndTenant(
       @Param("accountId") long accountId, @Param("tenantId") String tenantId);
 
   int insert(ConsoleOidcIdentityInsertParam parameters);

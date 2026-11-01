@@ -13,7 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
+import io.github.pinpols.batch.console.domain.command.BusinessTenantPlacementUpsertCommand;
 import io.github.pinpols.batch.console.service.ConsoleBusinessTenantPlacementService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -85,7 +85,7 @@ class ConsoleBusinessTenantPlacementControllerTest {
             .contentType(APPLICATION_JSON)
             .content("{\"tenantId\":\"t-1\",\"placementKey\":\"shard-1\"}"))
         .andExpect(status().isOk());
-    verify(service).upsert(any(BusinessTenantPlacementUpsertParam.class));
+    verify(service).upsert(any(BusinessTenantPlacementUpsertCommand.class));
   }
 
   @Test

@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
-import io.github.pinpols.batch.console.domain.param.ArchivePolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.command.ArchivePolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleArchivePolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -50,7 +50,7 @@ public class ConsoleArchivePolicyController {
       @RequestParam("tenantId") String tenantId,
       @Valid @RequestBody UpsertArchivePolicyRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    ArchivePolicyUpsertParam upsertParam = ArchivePolicyUpsertParam.builder()
+    ArchivePolicyUpsertCommand command = ArchivePolicyUpsertCommand.builder()
         .tenantId(tenantId)
         .targetTable(request.targetTable())
         .retentionDays(request.retentionDays())
@@ -60,7 +60,7 @@ public class ConsoleArchivePolicyController {
         .description(request.description())
         .operator(operator)
         .build();
-    archivePolicyService.upsert(upsertParam);
+    archivePolicyService.upsert(command);
     return responseFactory.success(null);
   }
 

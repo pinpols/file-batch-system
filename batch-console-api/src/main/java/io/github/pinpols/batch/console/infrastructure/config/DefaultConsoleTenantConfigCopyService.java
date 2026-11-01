@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
@@ -10,6 +11,9 @@ import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -39,7 +43,6 @@ import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -48,6 +51,7 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
@@ -139,10 +143,18 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConsoleTenantConfigInitApplicationService initService;
   private final TenantConfigReferenceResolver referenceResolver;
+  private final ConsoleConfigBatchOperationService operationRecoveryService;
+  private final ObjectMapper objectMapper;
 
   @Override
   public TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId) {
+    return copy(request, operator, batchOperationId, null);
+  }
+
+  @Override
+  public TenantConfigBatchInitResponse copy(
+      TenantConfigCopyRequest request, String operator, String batchOperationId, String requestHash) {
     // 复制会剥离环境端点与凭据，禁止把处理后的包回写源租户。
     if (EmptyChecks.isNotEmpty(request.getTargetTenantIds())
         && request.getTargetTenantIds().contains(request.getSourceTenantId())) {
@@ -173,7 +185,18 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         dryRunForLog,
         batchOperationIdForLog);
 
-    return initService.batchInit(initRequest, operator, batchOperationId);
+    if (requestHash == null || request.isDryRun()) {
+      return initService.batchInit(initRequest, operator, batchOperationId);
+    }
+    List<String> targets = request.getTargetTenantIds();
+    if (EmptyChecks.isEmpty(targets) || targets.stream().anyMatch(EmptyChecks::isBlank)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    ConfigBatchOperationRequest operation = new ConfigBatchOperationRequest(
+        request.getSourceTenantId(), batchOperationId, requestHash, "TENANT_COPY",
+        targets, objectMapper.createObjectNode());
+    ConfigBatchOperationContext context = operationRecoveryService.begin(operation);
+    return initService.batchInit(initRequest, operator, context);
   }
 
   private List<FileChannelSpec> channelsWithoutEnvironmentCredentials(
@@ -508,9 +531,9 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   private List<JobDefinitionSpec> readJobDefinitions(String tenantId) {
     JobDefinitionQuery query = JobDefinitionQuery.ofTenant(tenantId, null);
-    List<JobDefinitionEntity> entities = jobDefinitionMapper.selectByQuery(query);
+    List<JobDefinitionView> entities = jobDefinitionMapper.selectByQuery(query);
     List<JobDefinitionSpec> specs = new ArrayList<>(entities.size());
-    for (JobDefinitionEntity e : entities) {
+    for (JobDefinitionView e : entities) {
       JobDefinitionSpec s = new JobDefinitionSpec();
       List<JobDependencyRuleRequest> dependencyRules = e.getJobDependencyRules().stream()
           .map(
@@ -583,7 +606,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       s.setCalendarCode(e.getCalendarCode());
       s.setDependsOnJobCode(e.getDependsOnJobCode());
       if (EmptyChecks.isNotNull(e.getSingleJobDefinitionId())) {
-        JobDefinitionEntity singleJob =
+        JobDefinitionView singleJob =
             jobDefinitionMapper.selectById(tenantId, e.getSingleJobDefinitionId());
         if (EmptyChecks.isNull(singleJob)) {
           throw new IllegalStateException(

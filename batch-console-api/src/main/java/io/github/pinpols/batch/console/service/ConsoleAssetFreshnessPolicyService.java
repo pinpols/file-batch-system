@@ -10,6 +10,8 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
+import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
+import io.github.pinpols.batch.console.domain.command.AssetFreshnessPolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConsoleAssetFreshnessPolicyMapper;
@@ -37,7 +39,7 @@ public class ConsoleAssetFreshnessPolicyService {
   private final ConsoleTenantGuard tenantGuard;
 
   @Transactional(readOnly = true)
-  public PageResponse<AssetFreshnessPolicyEntity> list(
+  public PageResponse<AssetFreshnessPolicyResponse> list(
       String tenantId, String assetCode, Boolean enabled, int pageNo, int pageSize) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     PageRequest page = new PageRequest(pageNo, pageSize);
@@ -45,19 +47,38 @@ public class ConsoleAssetFreshnessPolicyService {
     long total = mapper.countByTenant(resolved, normalizedAssetCode, enabled);
     List<AssetFreshnessPolicyEntity> items =
         mapper.findByTenant(resolved, normalizedAssetCode, enabled, page);
-    return new PageResponse<>(total, page.pageNo(), page.pageSize(), items);
+    List<AssetFreshnessPolicyResponse> responses = items.stream().map(this::toResponse).toList();
+    return new PageResponse<>(total, page.pageNo(), page.pageSize(), responses);
   }
 
   @Transactional(readOnly = true)
-  public AssetFreshnessPolicyEntity get(String tenantId, Long id) {
+  public AssetFreshnessPolicyResponse get(String tenantId, Long id) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    return mapper
+    AssetFreshnessPolicyEntity policy = mapper
         .findById(resolved, id)
         .orElseThrow(() -> BizException.of(ResultCode.NOT_FOUND, "error.common.not_found", id));
+    return toResponse(policy);
+  }
+
+  private AssetFreshnessPolicyResponse toResponse(AssetFreshnessPolicyEntity entity) {
+    return AssetFreshnessPolicyResponse.builder()
+        .id(entity.id())
+        .tenantId(entity.tenantId())
+        .assetCode(entity.assetCode())
+        .assetType(entity.assetType())
+        .expectedByLocalTime(entity.expectedByLocalTime())
+        .timezone(entity.timezone())
+        .staleAfterSeconds(entity.staleAfterSeconds())
+        .lookbackDays(entity.lookbackDays())
+        .severity(entity.severity())
+        .enabled(entity.enabled())
+        .createdAt(entity.createdAt())
+        .updatedAt(entity.updatedAt())
+        .build();
   }
 
   @Transactional
-  public void upsert(AssetFreshnessPolicyUpsertParam param) {
+  public void upsert(AssetFreshnessPolicyUpsertCommand param) {
     AssetFreshnessPolicyUpsertParam normalized = normalize(param);
     requireJobDefinition(normalized.tenantId(), normalized.assetCode());
     if (normalized.id() == null) {
@@ -89,7 +110,7 @@ public class ConsoleAssetFreshnessPolicyService {
     }
   }
 
-  private AssetFreshnessPolicyUpsertParam normalize(AssetFreshnessPolicyUpsertParam param) {
+  private AssetFreshnessPolicyUpsertParam normalize(AssetFreshnessPolicyUpsertCommand param) {
     if (param == null || param.expectedByLocalTime() == null) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

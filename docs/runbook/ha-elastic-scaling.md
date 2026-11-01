@@ -17,7 +17,7 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 |---|---|---|---|
 | **P1-1 Outbox SQL 归档** | ✅ | 纯 SQL cron job，外部调度 | 无需协调 |
 | **P1-2 SuccessInstance SQL 归档** | ✅ | 同上 | 无需协调 |
-| **P1-3 配置 cache Redis pub/sub** | ✅ | console 改配置 → publish；多实例订阅广播 evict | Redis pub/sub 原子 |
+| **P1-3 配置 cache Redis pub/sub** | ⚠️ | 配置变更持久化失效意图；Console 投递，实例订阅并对账 | 投递成功不等于各实例已生效；多进程与目标环境仍需验证，见[配置治理](config-governance.md) |
 | **P1-4 观测 dashboard** | ✅ | Prometheus scrape 各实例独立 | 多实例聚合 |
 | **P1-5 Worker 自动重启** | ✅ | k8s `restart: unless-stopped` / watchdog | 容器编排管 |
 | **P2-1 Quota Redis Lua** | ✅ | `RedisQuotaRuntimeStateService` 单 EVAL 原子 read-modify-write | 中央化、无 race |
@@ -30,7 +30,7 @@ P1/P2/P3（已完成部分）**整体 HA-safe**，可以直接部署 3-5 实例 
 | **P3-3 OutboxArchiveScheduler** | ✅ | `@SchedulerLock(name="outbox_archive", lockAtMostFor=PT30M, lockAtLeastFor=PT1M)` | ShedLock + Redis |
 | **OutboxPollScheduler（核心写路径）** | ✅ | `LockingTaskExecutor` + 动态分片名 `outbox_poll_shard_N` | 支持横向分片 |
 | **TenantActionRateLimiter** | ✅ | `TokenBucketRateLimiter:59` `redis.incrementWithinWindow()` | **限额是集群级**，N 实例不会让总限额翻 N 倍 |
-| **配置 cache（OrchestratorConfigCacheService）** | ✅ | Redis 5min TTL，无本地缓存 | 各实例独立读 |
+| **配置 cache（OrchestratorConfigCacheService）** | ⚠️ | Redis 二级缓存为 5 分钟 TTL；各实例还维护短期正缓存及未命中缓存 | 通过失效事件、版本与对账收敛；各实例实际生效需分别验证 |
 | **观测三件套（Loki / Tempo / Prometheus）** | ✅ | 每实例独立 OTLP 上报 | otel-collector 聚合 |
 | **ConsoleRealtimeEventHub（SSE）** | ⚠️ | 本地 `CopyOnWriteArrayList<Subscription>` 订阅列表 | 实例死亡 → SSE 断开；replay buffer 在 Redis 重连可续 |
 

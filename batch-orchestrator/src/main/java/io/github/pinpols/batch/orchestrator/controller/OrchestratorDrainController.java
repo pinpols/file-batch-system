@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
-import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown.DrainStatus;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService;
+import io.github.pinpols.batch.orchestrator.application.service.OrchestratorDrainService.DrainStatus;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -18,22 +18,20 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class OrchestratorDrainController {
 
-  private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final OrchestratorDrainService drainService;
 
   @GetMapping("/status")
   public DrainStatus status() {
-    return gracefulShutdown.status();
+    return drainService.status();
   }
 
   @PostMapping("/enable")
   public DrainStatus enable() {
-    gracefulShutdown.startDraining("manual-enable");
-    return gracefulShutdown.status();
+    return drainService.enable();
   }
 
   @PostMapping("/disable")
   public DrainStatus disable() {
-    gracefulShutdown.stopDraining("manual-disable");
-    return gracefulShutdown.status();
+    return drainService.disable();
   }
 }

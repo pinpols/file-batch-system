@@ -36,7 +36,6 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLa
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
@@ -44,6 +43,7 @@ import io.github.pinpols.batch.orchestrator.domain.query.JobPartitionQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
@@ -207,7 +207,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   private String resolveCurrentCalendarCode(WorkflowRunEntity workflowRun) {
-    WorkflowDefinitionEntity definition =
+    WorkflowDefinitionView definition =
         workflowDefinitionMapper.selectById(workflowRun.getWorkflowDefinitionId());
     if (EmptyChecks.isNull(definition)
         || !Objects.equals(definition.tenantId(), workflowRun.getTenantId())) {
@@ -513,7 +513,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       return sourcePayload;
     }
     Map<String, Object> base;
-    if (EmptyChecks.isNull(sourcePayload) || EmptyChecks.isBlank(sourcePayload)) {
+    if (EmptyChecks.isBlank(sourcePayload)) {
       base = new LinkedHashMap<>();
     } else {
       Object parsedPayload = JsonUtils.fromJson(sourcePayload, Map.class);
@@ -619,7 +619,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     // → 整个 TriggerLaunchConsumer 无限循环重试 → DLQ 跳过。这里 fail-fast 拒绝派发，
     // 把节点 ready 状态留给重试 / 运维补 job_definition 后再次触发。
     String defaultWorkerType = plan.getDefaultWorkerType();
-    if (EmptyChecks.isNull(defaultWorkerType) || EmptyChecks.isBlank(defaultWorkerType)) {
+    if (EmptyChecks.isBlank(defaultWorkerType)) {
       log.error(
           "workflow node task_type unresolved (job_definition missing or disabled): "
               + "tenantId={} workflowRunId={} nodeCode={} targetJobCode={}",
@@ -966,7 +966,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   }
 
   private String protectSourcePayload(String sourcePayload) {
-    return EmptyChecks.isNull(sourcePayload) || EmptyChecks.isBlank(sourcePayload)
+    return EmptyChecks.isBlank(sourcePayload)
         ? null
         : secretPayloadProtector.protect(sourcePayload);
   }

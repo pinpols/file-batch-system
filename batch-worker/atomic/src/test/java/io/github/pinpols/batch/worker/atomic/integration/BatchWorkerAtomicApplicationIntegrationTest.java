@@ -43,9 +43,4 @@ class BatchWorkerAtomicApplicationIntegrationTest extends AbstractIntegrationTes
         .isEqualTo(boundPort);
   }
 
-  @Test
-  @DisplayName("应用启动后上下文应完成装配并可注入, 不因缺少中间件而中断")
-  void shouldExposeApplicationContext_whenStarted() {
-    assertThat(applicationContext).isNotNull();
-  }
 }

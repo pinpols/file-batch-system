@@ -882,7 +882,7 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
     String deleteEffectsSql = "delete from biz.customer_account where tenant_id = ?";
     platformJdbc.update(deleteRetriesSql, scenario.tenant);
     platformJdbc.update(deleteDeadLettersSql, scenario.tenant);
-    cleanupService.cleanupByExactTenantIds(List.of(scenario.tenant));
+    cleanupService.cleanupByExactTenantIds(scenario.tenant);
     platformJdbc.update(deleteWorkersSql, scenario.tenant);
     platformJdbc.update(deleteCatchupControlsSql, scenario.tenant);
     platformJdbc.update(deleteCalendarsSql, scenario.tenant);

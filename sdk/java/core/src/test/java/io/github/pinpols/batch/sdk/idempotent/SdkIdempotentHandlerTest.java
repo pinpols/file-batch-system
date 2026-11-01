@@ -59,7 +59,7 @@ class SdkIdempotentHandlerTest {
 
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
-    final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
+    final Map<String, SdkIdempotencySnapshot> map = new HashMap<>();
     final Set<String> placeholders = new HashSet<>();
     final AtomicInteger findCalls = new AtomicInteger();
     String lastRecordKey;
@@ -75,13 +75,13 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public Optional<SdkIdempotencySnapshot> find(String key) {
       findCalls.incrementAndGet();
       return Optional.ofNullable(map.get(key));
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
+    public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
       this.lastRecordKey = key;
       this.lastTtl = ttlMillis;
       map.put(key, entity);
@@ -134,7 +134,7 @@ class SdkIdempotentHandlerTest {
     // 准备
     RecordingStore store = new RecordingStore();
     store.map.put(
-        "import:t1:A100", new SdkIdempotencyEntity("imported(cached)", Map.of("rows", 99)));
+        "import:t1:A100", new SdkIdempotencySnapshot("imported(cached)", Map.of("rows", 99)));
     AnnotatedHandler handler = new AnnotatedHandler();
     SdkTaskHandler wrapped = SdkIdempotentHandler.wrap(handler, store);
 
@@ -257,12 +257,12 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public Optional<SdkIdempotencySnapshot> find(String key) {
       return Optional.empty();
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
+    public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
       // 无需执行实际操作：该伪存储仅覆盖 acquire 失败处理。
     }
 
@@ -283,12 +283,12 @@ class SdkIdempotentHandlerTest {
     }
 
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public Optional<SdkIdempotencySnapshot> find(String key) {
       return Optional.empty();
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
+    public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
       throw new IllegalStateException("record backend down");
     }
 

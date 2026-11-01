@@ -11,12 +11,12 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
@@ -59,7 +59,7 @@ public class BatchDayGateService {
     if (EmptyChecks.isNull(request) || EmptyChecks.isNull(loaded)) {
       return GateDecision.allow();
     }
-    JobDefinitionEntity job = loaded.jobDefinition();
+    JobDefinitionView job = loaded.jobDefinition();
     if (EmptyChecks.isNull(job)) {
       return GateDecision.allow();
     }
@@ -134,7 +134,7 @@ public class BatchDayGateService {
    * <p>非 null 返回值表示阻塞原因(同 job 或同组前一日仍有非终态实例); null 表示通过。
    */
   private String checkFineGrainedDependency(
-      String scope, LaunchRequest request, JobDefinitionEntity job, LocalDate prevBizDate) {
+      String scope, LaunchRequest request, JobDefinitionView job, LocalDate prevBizDate) {
     if ("SAME_JOB_GROUP".equals(scope) && Texts.hasText(job.jobGroupCode())) {
       int active = jobInstanceMapper.countNonTerminalByJobGroupAndBizDate(
           request.tenantId(), job.jobGroupCode(), prevBizDate);
@@ -239,7 +239,7 @@ public class BatchDayGateService {
         + ":"
         + (request.bizDate() == null ? "" : request.bizDate());
     String serializedDetail = JsonUtils.toJson(detail);
-    AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+    AlertEmitCommand emitRequest = AlertEmitCommand.builder()
         .tenantId(request.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(alertType)

@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
@@ -100,6 +101,23 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
   private String tenantId;
   private Long workflowDefinitionId;
   private String workflowCode;
+
+  @Test
+  @DisplayName("实际 Quartz fire 按回调身份幂等，同一计划的不同重试分别保留")
+  void shouldRecordDistinctActualFiresIdempotently() {
+    Instant planned = Instant.parse("2036-05-15T12:00:00Z");
+    var first = new ScheduledOccurrenceFireParam(
+        tenantId, workflowDefinitionId, planned, "fire-1", 0, planned.plusSeconds(2), "SCHEDULED");
+    var retry = new ScheduledOccurrenceFireParam(
+        tenantId, workflowDefinitionId, planned, "fire-1", 1, planned.plusSeconds(7), "READINESS_RETRY");
+    assertThat(mapper.insertActualFire(first)).isEqualTo(1);
+    assertThat(mapper.insertActualFire(first)).isZero();
+    assertThat(mapper.insertActualFire(retry)).isEqualTo(1);
+    Long count = jdbcTemplate.queryForObject(
+        "select count(*) from batch.scheduled_occurrence_fire where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?",
+        Long.class, tenantId, workflowDefinitionId, java.sql.Timestamp.from(planned));
+    assertThat(count).isEqualTo(2L);
+  }
 
   @Test
   @DisplayName("迟到的关闭日拒绝不能覆盖已绑定待审批补跑请求的 occurrence")

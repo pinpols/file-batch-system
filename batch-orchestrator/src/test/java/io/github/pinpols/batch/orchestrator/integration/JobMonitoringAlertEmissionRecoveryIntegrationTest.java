@@ -12,7 +12,7 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
@@ -95,7 +95,7 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
     try {
       doThrow(new IllegalStateException("injected alert persistence failure"))
           .when(alertEventService)
-          .emit(any(AlertEmitRequest.class));
+          .emit(any(AlertEmitCommand.class));
 
       assertThatThrownBy(() -> emit(candidate, violation))
           .isInstanceOf(IllegalStateException.class)
@@ -126,7 +126,7 @@ class JobMonitoringAlertEmissionRecoveryIntegrationTest extends AbstractIntegrat
     String alertType = Violation.RUNNING_TOO_LONG.alertType();
     String resourceKey = "instance-42";
     String fingerprint = AlertFingerprints.build(tenantId, alertType, resourceKey);
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId(tenantId)
         .serviceName("batch-orchestrator")
         .alertType(alertType)

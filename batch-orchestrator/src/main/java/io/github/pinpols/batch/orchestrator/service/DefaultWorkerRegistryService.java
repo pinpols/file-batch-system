@@ -13,6 +13,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -26,6 +28,8 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -56,10 +60,15 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private final PipelineStageProgressCache pipelineStageProgressCache;
   private final SystemParameterMapper systemParameterMapper;
   private final WorkerRegistryProperties workerRegistryProperties;
+  private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @Override
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+    if (!tenantActionRateLimiter.tryConsume(
+        request == null ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
+      throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
+    }
     rejectMissingWorkerGroup(request);
     rejectUnsupportedProtocolVersion(request);
     rejectOutdatedSdkVersion(request);
@@ -266,7 +275,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         continue;
       }
       String taskTypeCode = descriptor.code();
-      if (EmptyChecks.isNull(taskTypeCode) || EmptyChecks.isBlank(taskTypeCode)) {
+      if (EmptyChecks.isBlank(taskTypeCode)) {
         continue;
       }
       // Lane C:在持久化前对 descriptor.defaults / inputSchema 做凭据静态拒入,
@@ -401,7 +410,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (requestedRegistryStatusIsValid) {
       return requestedStatus;
     }
-    if (EmptyChecks.isNull(defaultStatus) || EmptyChecks.isBlank(defaultStatus)) {
+    if (EmptyChecks.isBlank(defaultStatus)) {
       return currentStatus;
     }
     return defaultStatus;

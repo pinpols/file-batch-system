@@ -12,7 +12,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.JobMonitoringAlertEmissionService.Violation;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
@@ -52,10 +52,10 @@ class JobMonitoringAlertEmissionServiceTest {
       assertThat(emissionService.emitOnce(candidate, violation)).isTrue();
     }
 
-    ArgumentCaptor<AlertEmitRequest> requests = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> requests = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService, times(Violation.values().length)).emit(requests.capture());
     assertThat(requests.getAllValues())
-        .extracting(AlertEmitRequest::alertType)
+        .extracting(AlertEmitCommand::alertType)
         .containsExactly(
             "JOB_RUNNING_TOO_LONG",
             "JOB_NOT_STARTED_BY_DEADLINE",
@@ -97,7 +97,7 @@ class JobMonitoringAlertEmissionServiceTest {
 
     emissionService.emitOnce(candidate("CRITICAL"), Violation.RUNNING_TOO_LONG);
 
-    ArgumentCaptor<AlertEmitRequest> request = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> request = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(request.capture());
     assertThat(request.getValue().severity()).isEqualTo("CRITICAL");
   }
@@ -123,7 +123,7 @@ class JobMonitoringAlertEmissionServiceTest {
     assertThat(emissionService.emitOnce(candidate("WARN"), Violation.RUNNING_TOO_LONG))
         .isTrue();
 
-    ArgumentCaptor<AlertEmitRequest> request = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> request = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(request.capture());
     assertThat(request.getValue().severity()).isEqualTo("CRITICAL");
   }
@@ -159,7 +159,7 @@ class JobMonitoringAlertEmissionServiceTest {
     verify(mapper, never()).tryAcquireInstanceAdvisoryLock(any(), any());
     verify(mapper, never()).claimAlert(any(), any(), any());
 
-    ArgumentCaptor<AlertEmitRequest> request = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> request = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(request.capture());
     assertThat(request.getValue().resourceKey()).isEqualTo("workflow_job_request:101");
     Map<String, Object> details =

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper">
-    <resultMap id="UsageMap" type="io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity">
+    <resultMap id="UsageMap" type="io.github.pinpols.batch.console.domain.audit.view.ConsoleAiMonthlyUsageView">
         <id column="tenant_id" property="tenantId"/>
         <id column="billing_month" property="billingMonth"/>
         <result column="request_count" property="requestCount"/>

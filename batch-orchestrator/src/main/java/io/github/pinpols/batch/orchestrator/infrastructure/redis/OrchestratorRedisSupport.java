@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.RedisConnectionFailureException;
 import org.springframework.data.redis.RedisSystemException;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -36,6 +38,53 @@ public class OrchestratorRedisSupport {
 
   public StringRedisTemplate redisTemplate() {
     return redisTemplate;
+  }
+
+  /** 按租户和配置类型读取失效版本；任一版本不可用时不得回填配置缓存。 */
+  public String configInvalidationVersions(String tenantId, String type, String code) {
+    String wildcardKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, "*");
+    String exactKey = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code);
+    Long wildcardRevision = configRevision(wildcardKey);
+    if (wildcardRevision == null) {
+      return null;
+    }
+    Long exactRevision = configRevision(exactKey);
+    if (exactRevision == null) {
+      return null;
+    }
+    return wildcardRevision + ":" + exactRevision;
+  }
+
+  private Long configRevision(String key) {
+    try {
+      String value = redisTemplate.opsForValue().get(key);
+      if (value == null) {
+        return 0L;
+      }
+      long revision = Long.parseLong(value);
+      if (revision < 0) {
+        throw new NumberFormatException("negative config invalidation revision");
+      }
+      return revision;
+    } catch (RedisConnectionFailureException
+        | RedisSystemException
+        | QueryTimeoutException
+        | NumberFormatException ex) {
+      log.warn(
+          "config invalidation revision unavailable: reason={}",
+          SwallowedExceptionLogger.summary(ex));
+      return null;
+    }
+  }
+
+  /** 直接清理配置缓存时推进对应配置和全局版本。 */
+  public void advanceConfigInvalidationRevision(String tenantId, String type, String code) {
+    String key = BatchRedisKeys.configInvalidationKeyRevision(tenantId, type, code);
+    String globalKey = BatchRedisKeys.configInvalidationGlobalRevision();
+    cacheWrite(key, () -> {
+      redisTemplate.opsForValue().increment(key);
+      redisTemplate.opsForValue().increment(globalKey);
+    });
   }
 
   public <T> T getJson(String key, Class<T> type) {
@@ -87,7 +136,7 @@ public class OrchestratorRedisSupport {
   private <T> T cacheRead(String key, Supplier<T> supplier) {
     try {
       return supplier.get();
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+    } catch (RedisConnectionFailureException | RedisSystemException | QueryTimeoutException ex) {
       log.warn(
           "Redis cache read unavailable; falling back to DB: key={}, cause={}",
           LogSanitizer.value(key),
@@ -100,7 +149,7 @@ public class OrchestratorRedisSupport {
   private void cacheWrite(String key, Runnable action) {
     try {
       action.run();
-    } catch (RedisConnectionFailureException | RedisSystemException ex) {
+    } catch (RedisConnectionFailureException | RedisSystemException | QueryTimeoutException ex) {
       log.debug(
           "Redis cache write/delete skipped: key={}, cause={}",
           LogSanitizer.value(key),

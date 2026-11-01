@@ -12,7 +12,7 @@ import io.github.pinpols.batch.orchestrator.application.service.batchday.Externa
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -451,7 +451,7 @@ public class BatchDayOpenScheduler {
     detail.put("blockedReason", reason);
     detail.put("firstWaitingAt", wait.firstWaitingAt().toString());
     detail.put("timeoutSeconds", batchDayScanProperties.getDependencyWaitTimeoutSeconds());
-    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
+    AlertEmitCommand alertRequest = AlertEmitCommand.builder()
         .tenantId(calendar.tenantId())
         .serviceName("batch-orchestrator")
         .alertType("BATCH_CALENDAR_DEPENDENCY_WAIT_TIMEOUT")
@@ -468,7 +468,7 @@ public class BatchDayOpenScheduler {
     List<CalendarDependencyWaitEntity> pending =
         calendarDependencyWaitMapper.selectWaitingForUpdate(
             calendar.tenantId(), calendar.calendarCode(), now, 100);
-    if (EmptyChecks.isNull(pending) || EmptyChecks.isEmpty(pending)) return;
+    if (EmptyChecks.isEmpty(pending)) return;
     for (CalendarDependencyWaitEntity wait : pending) {
       BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(
           wait.tenantId(), wait.calendarCode(), wait.bizDate());

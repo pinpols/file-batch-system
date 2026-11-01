@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -15,6 +16,8 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpres
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -69,11 +72,18 @@ public class ConsoleTenantConfigInitController {
   public CommonResponse<TenantConfigBatchInitResponse> tenantCopy(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody TenantConfigCopyRequest request,
-      Authentication authentication) {
+      Authentication authentication,
+      HttpServletRequest servletRequest) {
     String operator = resolveOperator(authentication);
     UUID operationId = UUID.randomUUID();
     String batchOperationId = operationId.toString();
-    return responseFactory.success(copyService.copy(request, operator, batchOperationId));
+    if (!Texts.hasText(idempotencyKey) || request.isDryRun()) {
+      return responseFactory.success(copyService.copy(request, operator, batchOperationId));
+    }
+    String tenantHeader = servletRequest.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+    String requestHash = ConsoleIdempotencyRequestIdentity.requestHash(
+        tenantHeader, servletRequest.getMethod(), servletRequest.getRequestURI(), idempotencyKey);
+    return responseFactory.success(copyService.copy(request, operator, batchOperationId, requestHash));
   }
 
   /** 跨租户复制前预览 add/update/delete-candidate 和影响面，不执行写库。 */

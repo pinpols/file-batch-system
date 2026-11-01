@@ -8,10 +8,10 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -111,7 +111,7 @@ class WorkflowDefinitionValidationTest {
   @Test
   @DisplayName("作业节点关联的作业定义已停用时校验不通过, 并报出该作业编码")
   void shouldFailWhenJobNodeReferencesDisabledJobDefinition() {
-    JobDefinitionEntity disabled = new JobDefinitionEntity();
+    JobDefinitionView disabled = new JobDefinitionView();
     disabled.setEnabled(false);
     stub(
         List.of(node("n1", "START"), node("n2", "JOB", "DISABLED_JOB"), node("n3", "END")),
@@ -128,7 +128,7 @@ class WorkflowDefinitionValidationTest {
   @Test
   @DisplayName("作业节点关联的作业定义已启用时校验通过且无错误项")
   void shouldPassWhenJobNodeReferencesEnabledJobDefinition() {
-    JobDefinitionEntity enabled = new JobDefinitionEntity();
+    JobDefinitionView enabled = new JobDefinitionView();
     enabled.setEnabled(true);
     stub(
         List.of(node("n1", "START"), node("n2", "JOB", "GOOD_JOB"), node("n3", "END")),

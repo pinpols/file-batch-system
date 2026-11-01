@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -48,7 +49,7 @@ final class TenantJobDefinitionApplySupport {
   private final JobMonitoringDefaultsProperties monitoringDefaults;
   private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
-  JobDefinitionEntity findJob(String tenantId, JobDefinitionSpec spec) {
+  JobDefinitionView findJob(String tenantId, JobDefinitionSpec spec) {
     return jobDefinitionMapper.selectByUniqueKey(tenantId, spec.getJobCode());
   }
 
@@ -64,7 +65,7 @@ final class TenantJobDefinitionApplySupport {
       if (!Texts.hasText(spec.getJobCode())) {
         continue;
       }
-      JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(tenantId, spec.getJobCode());
+      JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, spec.getJobCode());
       if (EmptyChecks.isNotNull(job)) {
         singleJobWorkflowProvisioner.provision(job);
       }
@@ -169,20 +170,13 @@ final class TenantJobDefinitionApplySupport {
     entity.setRetryMaxCount(spec.getRetryMaxCount());
     entity.setTimeoutSeconds(spec.getTimeoutSeconds());
     int softRuntimeSeconds = resolveSoftRuntime(spec.getSoftRuntimeSeconds());
-    entity.setSoftRuntimeSeconds(softRuntimeSeconds);
-    entity.setSoftRuntimeSeverity(severityOrWarn(spec.getSoftRuntimeSeverity()));
     int startGraceSeconds =
         resolveStartGrace(spec.getScheduleType(), dependsOnJobCode, spec.getStartGraceSeconds());
-    entity.setStartGraceSeconds(startGraceSeconds);
-    entity.setStartGraceSeverity(severityOrWarn(spec.getStartGraceSeverity()));
-    entity.setCompletionDeadlineLocalTime(spec.getCompletionDeadlineLocalTime());
-    entity.setDependencyCompletionWindowSeconds(
-        valueOrZero(spec.getDependencyCompletionWindowSeconds()));
+    LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime();
+    int dependencyCompletionWindowSeconds = valueOrZero(spec.getDependencyCompletionWindowSeconds());
     int completionDeadlineDayOffset = EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
         ? 0
         : valueOrZero(spec.getCompletionDeadlineDayOffset());
-    entity.setCompletionDeadlineDayOffset(completionDeadlineDayOffset);
-    entity.setCompletionDeadlineSeverity(severityOrWarn(spec.getCompletionDeadlineSeverity()));
     entity.setExecutionHandler(spec.getExecutionHandler());
     entity.setParamSchema(spec.getParamSchema());
     String defaultParams = TenantConfigMaskedParameters.resolve(spec.getDefaultParams(), null);
@@ -206,10 +200,24 @@ final class TenantJobDefinitionApplySupport {
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
     replaceJobDependencyRules(tenantId, spec.getJobCode(), dependencyRules);
-    saveMonitoringPolicy(tenantId, entity, operator);
+    validateMonitoringCompletionMode(completionDeadlineLocalTime, dependencyCompletionWindowSeconds);
+    JobMonitoringPolicyUpsertParam monitoringPolicy = JobMonitoringPolicyUpsertParam.builder()
+        .tenantId(tenantId)
+        .jobDefinitionId(entity.getId())
+        .softRuntimeSeconds(softRuntimeSeconds)
+        .softRuntimeSeverity(severityOrWarn(spec.getSoftRuntimeSeverity()))
+        .startGraceSeconds(startGraceSeconds)
+        .startGraceSeverity(severityOrWarn(spec.getStartGraceSeverity()))
+        .completionDeadlineLocalTime(completionDeadlineLocalTime)
+        .completionDeadlineDayOffset(completionDeadlineDayOffset)
+        .dependencyCompletionWindowSeconds(dependencyCompletionWindowSeconds)
+        .completionDeadlineSeverity(severityOrWarn(spec.getCompletionDeadlineSeverity()))
+        .updatedBy(operator)
+        .build();
+    jobDefinitionMapper.upsertJobMonitoringPolicy(monitoringPolicy);
   }
 
-  void updateJobDefinition(JobDefinitionEntity existing, JobDefinitionSpec spec, String operator) {
+  void updateJobDefinition(JobDefinitionView existing, JobDefinitionSpec spec, String operator) {
     List<JobDependencyRuleRequest> dependencyRules = resolveJobDependencyRules(spec, existing);
     validateJobDependencyRules(existing.getTenantId(), existing.getJobCode(), dependencyRules);
     String dependsOnJobCode = firstUpstreamCode(dependencyRules);
@@ -299,7 +307,7 @@ final class TenantJobDefinitionApplySupport {
   }
 
   private void updateJobMonitoringPolicy(
-      JobDefinitionEntity existing,
+      JobDefinitionView existing,
       JobDefinitionSpec spec,
       JobDefinitionMaintenanceUpdateParam param,
       LocalTime completionDeadlineLocalTime,
@@ -350,36 +358,8 @@ final class TenantJobDefinitionApplySupport {
     jobDefinitionMapper.upsertJobMonitoringPolicy(monitoringPolicy);
   }
 
-  private void saveMonitoringPolicy(String tenantId, JobDefinitionEntity entity, String operator) {
-    validateMonitoringCompletionMode(
-        entity.getCompletionDeadlineLocalTime(), entity.getDependencyCompletionWindowSeconds());
-    JobMonitoringPolicyUpsertParam.JobMonitoringPolicyUpsertParamBuilder monitoringPolicyBuilder =
-        JobMonitoringPolicyUpsertParam.builder();
-    monitoringPolicyBuilder.tenantId(tenantId);
-    monitoringPolicyBuilder.jobDefinitionId(entity.getId());
-    Integer softRuntimeSeconds = valueOrZero(entity.getSoftRuntimeSeconds());
-    monitoringPolicyBuilder.softRuntimeSeconds(softRuntimeSeconds);
-    String softRuntimeSeverity = severityOrWarn(entity.getSoftRuntimeSeverity());
-    monitoringPolicyBuilder.softRuntimeSeverity(softRuntimeSeverity);
-    Integer startGraceSeconds = valueOrZero(entity.getStartGraceSeconds());
-    monitoringPolicyBuilder.startGraceSeconds(startGraceSeconds);
-    String startGraceSeverity = severityOrWarn(entity.getStartGraceSeverity());
-    monitoringPolicyBuilder.startGraceSeverity(startGraceSeverity);
-    monitoringPolicyBuilder.completionDeadlineLocalTime(entity.getCompletionDeadlineLocalTime());
-    Integer completionDeadlineDayOffset = valueOrZero(entity.getCompletionDeadlineDayOffset());
-    monitoringPolicyBuilder.completionDeadlineDayOffset(completionDeadlineDayOffset);
-    Integer dependencyCompletionWindowSeconds =
-        valueOrZero(entity.getDependencyCompletionWindowSeconds());
-    monitoringPolicyBuilder.dependencyCompletionWindowSeconds(dependencyCompletionWindowSeconds);
-    String completionDeadlineSeverity = severityOrWarn(entity.getCompletionDeadlineSeverity());
-    monitoringPolicyBuilder.completionDeadlineSeverity(completionDeadlineSeverity);
-    monitoringPolicyBuilder.updatedBy(operator);
-    JobMonitoringPolicyUpsertParam monitoringPolicy = monitoringPolicyBuilder.build();
-    jobDefinitionMapper.upsertJobMonitoringPolicy(monitoringPolicy);
-  }
-
   private List<JobDependencyRuleRequest> resolveJobDependencyRules(
-      JobDefinitionSpec spec, JobDefinitionEntity existing) {
+      JobDefinitionSpec spec, JobDefinitionView existing) {
     List<JobDependencyRuleRequest> requestedRules = spec.getDependencyRules();
     if (EmptyChecks.isNotNull(requestedRules)) {
       List<JobDependencyRuleRequest> normalized = normalizeJobDependencyRules(requestedRules);

@@ -16,9 +16,9 @@ import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.ops.entity.ApprovalCommandEntity;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.WorkerRegistryMapper;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -54,7 +54,7 @@ class ConsoleOpsQueryServiceTest {
   @Test
   @DisplayName("查询 Worker 列表时返回已持久化的执行器能力")
   void shouldIncludeWorkerTaskCapabilities_whenLoadingWorkerList() {
-    WorkerRegistryEntity worker = new WorkerRegistryEntity();
+    WorkerRegistryView worker = new WorkerRegistryView();
     worker.setId(1L);
     worker.setTenantId("tenant-a");
     worker.setWorkerCode("atomic-1");

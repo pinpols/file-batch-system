@@ -56,10 +56,8 @@ public class ConsoleWebhookController {
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "subscriptionId", required = false) Long subscriptionId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    int minimumLimit = Math.max(limit, 1);
-    int effectiveLimit = Math.min(minimumLimit, 200);
     List<WebhookDeliveryLogEntity> deliveryLogs =
-        webhookService.deliveryLogs(tenantId, subscriptionId, effectiveLimit);
+        webhookService.deliveryLogs(tenantId, subscriptionId, limit);
     List<WebhookDeliveryLogResponse> responses =
         deliveryLogs.stream().map(WebhookDeliveryLogResponse::from).toList();
     return responseFactory.success(responses);

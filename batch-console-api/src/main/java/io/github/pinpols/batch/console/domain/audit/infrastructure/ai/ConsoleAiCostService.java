@@ -4,9 +4,9 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity;
 import io.github.pinpols.batch.console.domain.audit.mapper.ConsoleAiMonthlyUsageMapper;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
+import io.github.pinpols.batch.console.domain.audit.view.ConsoleAiMonthlyUsageView;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -141,7 +141,7 @@ public class ConsoleAiCostService {
   public CostSummary summary(String tenantId, YearMonth month) {
     mapper.setTenantContext(tenantId);
     LocalDate billingMonth = month.atDay(1);
-    ConsoleAiMonthlyUsageEntity usage = mapper.find(tenantId, billingMonth);
+    ConsoleAiMonthlyUsageView usage = mapper.find(tenantId, billingMonth);
     if (EmptyChecks.isNull(usage)) {
       return new CostSummary(
           month, 0, 0, 0, ZERO_COST, ZERO_COST, properties.getCost().getMonthlyBudgetUsd());

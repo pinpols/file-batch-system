@@ -6,7 +6,6 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleUserAccountResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity;
 import io.github.pinpols.batch.console.domain.rbac.infrastructure.ConsoleUserBatchProvisioningStore;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper;
@@ -14,6 +13,7 @@ import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserBatchOperationInsertOperationParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserAccountRow;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperationView;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
@@ -264,7 +264,7 @@ public class ConsoleUserBatchProvisioningService {
 
   public Operation operation(UUID operationId, String targetTenantId) {
     ConsolePrincipal principal = actor();
-    ConsoleUserBatchOperationEntity found = operationMapper.selectByOperationId(
+    ConsoleUserBatchOperationView found = operationMapper.selectByOperationId(
         operationId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
     if (EmptyChecks.isNull(found))
       throw BizException.of(ResultCode.NOT_FOUND, "batch operation not found");
@@ -273,7 +273,7 @@ public class ConsoleUserBatchProvisioningService {
 
   public Operation findByRequestId(UUID requestId, String targetTenantId) {
     ConsolePrincipal principal = actor();
-    ConsoleUserBatchOperationEntity found = operationMapper.selectByRequestId(
+    ConsoleUserBatchOperationView found = operationMapper.selectByRequestId(
         requestId, principal.username(), effectiveTenantFilter(targetTenantId, principal));
     return EmptyChecks.isNull(found) ? null : toOperation(found);
   }
@@ -282,7 +282,7 @@ public class ConsoleUserBatchProvisioningService {
     return findByRequestId(requestId, null);
   }
 
-  private static Operation toOperation(ConsoleUserBatchOperationEntity row) {
+  private static Operation toOperation(ConsoleUserBatchOperationView row) {
     return new Operation(
         row.getOperationId(),
         row.getRequestId(),

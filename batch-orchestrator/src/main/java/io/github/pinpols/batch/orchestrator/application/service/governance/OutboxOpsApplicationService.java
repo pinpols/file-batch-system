@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.orchestrator.controller.OutboxCleanupResponse;
-import io.github.pinpols.batch.orchestrator.controller.OutboxRepublishResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
@@ -51,6 +51,9 @@ public class OutboxOpsApplicationService {
 
   private OutboxCleanupResponse cleanupInternal(
       String tenantId, int retainDays, boolean dryRun, String operatorId, String reason) {
+    if (retainDays <= 0) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
     Instant cutoff = BatchDateTimeSupport.utcNow().minus(retainDays, ChronoUnit.DAYS);
     int published;
     int giveUp;

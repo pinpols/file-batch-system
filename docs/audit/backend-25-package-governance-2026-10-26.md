@@ -3,8 +3,35 @@
 ## 基线与判定口径
 
 - 工作树：WDI 独立 checkout，分支 `fix/wdi-current`，HEAD `f3d5e400d3b5bd737124b57cf0a38e685432aab2`；对比基线 `origin/main` merge-base `ee01e97515b04fd167ed17977535ec5cab8572f8`。2026-10-26 18:29 CST 快照含暂存 1440、未暂存 939、未跟踪 91 个路径；这些集合仍在变化，后续验证须重新确认哈希和差异。
+- **交付锚点（2026-10-31 核对）**：`f3d5e400d` 不是交付分支，而是合入前的 `git stash` 快照（提交说明 `On feature/workflow-daily-integration: wip-baseline-snapshot`，父提交 `6221f01a7 index on feature/workflow-daily-integration: ee01e9751`）。本台账与[证据索引](backend-25-package-bug-evidence-index-2026-10-29.md)记录的修复已由 `6e3e9668e 集成工作流批日编排与治理修复 (#1265)` 合入 `main`（4,832 文件 / +347,248 / -50,419）。`main` 当前含 `BatchDayCatchUp`（24 个生产文件）、`ContentMaskingUtils`、`bundleSourceFileId`、`targetRef` 等修复载体，且 `ConsoleBatchDayCatchUpHttpIntegrationTest` 仅在 `main` 存在、在 `f3d5e400d` 不存在，说明 `main` 领先该快照。**后续核对一律以 `main` 为代码基线；按 `f3d5e400d` 核对会把已交付修复误判为未合入。** 逐条交付映射见[交付锚点](#交付锚点)。
 - 分母为 [`backend-convention-coverage.md`](../../.agents/skills/project-engineering-review/references/backend-convention-coverage.md) 的 25 个工作包（编号 1–24，3 分 3a/3b），另有 6 项补充。检查覆盖生产、测试、SDK、Flyway、脚本、配置、文档。按可读性枚举器的业务模块与SDK范围，当前生产 Java 文件为 2983 个（Map 返回词法快照采集时为 2935 个，随后新增 47 个具名Mapper参数类型及 1 个窗口规则类）；词法候选不是违规数量。
 - **本轮尚未完成 25 包逐文件语义关闭。** 下表“守卫通过”只表示对应脚本的输入范围；“定向通过”只表示列出的测试。历史 2026-10-24 清单的源码哈希已有大量漂移，不继承其完成状态。全仓测试、真实多实例、目标环境及 PR/CI 尚未验收。
+
+## 交付锚点
+
+本表把台账主题映射到 `main` 上的实际代码与测试载体，解决“修复已交付、但台账基线指向合入前快照”的追溯断点。**本表登记的是可重放的测试载体，不是对每条编号重新验收**；逐编号的原始首红与复验日志状态仍以各条正文为准。
+
+| 主题 | 涉及编号（约） | 合入锚点 | `main` 上的测试载体 | 证据现状 |
+|---|---:|---|---|---|
+| 批量日补跑、审批与日历 | 8 + 2 项待裁定 | #1265 | `ConsoleBatchDayCatchUpHttpIntegrationTest`、`BatchDayCutoffMultiTenantIntegrationTest` | 原始日志已删，测试可重放 |
+| 敏感信息脱敏与拒入 | 28 | #1265 | `ContentMaskingUtils` 相关服务/HTTP 测试 | 原始日志已删，测试可重放 |
+| 文件束绑定与派发快照 | 10 | #1265 | `DispatchPipelineE2eIT#shouldDeliverEveryFile_whenBundleDispatchTaskExpandsIntoSubtasks` | 原始日志已删，测试可重放 |
+| 超时、重试与传感器边界 | 11 | #1265 | `WorkflowSensorApplicationContextRestartIntegrationTest`、`DefaultDryRunPlanServiceTest` | 原始日志已删，测试可重放 |
+| 归档与冷热血缘 | 6 | #1265 | `SameJobMultiRunArchiveLineageIntegrationTest` | 原始日志已删，测试可重放 |
+| 配置初始化与同步 | 6 | #1265 | `TenantConfigInitCommitOutcomeIntegrationTest`、`TenantConfigBundleCompletenessIntegrationTest` | 原始日志已删，测试可重放 |
+
+证据目录现状（2026-10-31 核对）：
+
+- `logs/verification/backend25-2026-10-29/` 已不存在；现存 `logs/verification/backend25-2026-10-30/` 与 `logs/verification/workflow/`。
+- 前端批次证据多在 `/private/tmp/wdi-*.log`，属临时目录，不可作为长期验收依据。
+- 日志缺失不改变“已执行验证”这一事实，但使 45 个“首红，复验待证”编号无法用原始证据关闭。
+
+重放规则：
+
+1. 重放对象是上表测试载体，不是全部 144 个编号；优先选择能区分错误、且对应 `main` 当前代码的用例。
+2. 新证据统一落 `logs/verification/backend25-<YYYY-MM-DD>/<case>/`，目录名与命令写入对应条目，不再使用临时目录。
+3. 重放结论写回本台账对应条目，注明“重放日期 + 命令 + 结果”；重放通过不等于补齐历史首红，原首红状态保留原样。
+4. 未重放的条目继续标记“首红，复验待证”，不得因测试载体存在而升级为已验证。
 
 ## 工作包当前证据与缺口
 

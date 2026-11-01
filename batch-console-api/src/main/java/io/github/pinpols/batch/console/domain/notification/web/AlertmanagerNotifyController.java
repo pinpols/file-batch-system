@@ -48,10 +48,7 @@ public class AlertmanagerNotifyController {
       @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
       @PathVariable String receiver,
       @RequestBody AlertmanagerWebhookPayload payload) {
-    if (!properties.isEnabled()) {
-      throw BizException.of(
-          ResultCode.SERVICE_UNAVAILABLE, "error.common.unauthorized_detail", "am-notify disabled");
-    }
+    notifyService.assertEnabled();
     authenticate(authorization);
     AmNotifyOutcome outcome = notifyService.deliver(receiver, payload);
     if (!outcome.delivered() && !outcome.intentionallyDisabled()) {

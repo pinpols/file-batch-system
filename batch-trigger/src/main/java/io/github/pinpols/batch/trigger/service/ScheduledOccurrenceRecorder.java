@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertCatchUpAuditParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /** 记录定时触发 occurrence 的观察、状态转换及补跑审计。 */
@@ -33,6 +35,12 @@ public class ScheduledOccurrenceRecorder {
 
   private final ScheduledOccurrenceMapper mapper;
   private final TriggerRequestMapper triggerRequestMapper;
+
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  public void recordActualFire(ScheduledOccurrenceFireParam fire) {
+    mapper.setTenantContext(fire.tenantId());
+    mapper.insertActualFire(fire);
+  }
 
   /** 首次等待与启停更新串行化；已观察等待按原 fire 身份继续，不创建暂停后的新义务。 */
   @Transactional
@@ -220,9 +228,9 @@ public class ScheduledOccurrenceRecorder {
       String requestedBy,
       String reason,
       ScheduledOccurrenceStatus targetStatus) {
-    String tenantId = command.request().getTenantId();
-    Long workflowDefinitionId = command.request().getWorkflowDefinitionId();
-    LocalDate bizDate = command.request().getBizDate();
+    String tenantId = command.request().tenantId();
+    Long workflowDefinitionId = command.request().workflowDefinitionId();
+    LocalDate bizDate = command.request().bizDate();
     String requestId = command.requestId();
     ScheduledOccurrenceAcceptRejectedOccurrenceParam
         scheduledOccurrenceAcceptRejectedOccurrenceParam =

@@ -892,7 +892,7 @@ class DeadLetterApprovalReplayE2eIT extends AbstractIntegrationTest {
     Files.write(sourceFile, content);
 
     try (GenericContainer<?> sftp = new GenericContainer<>(
-            DockerImageName.parse("atmoz/sftp:alpine"))
+            DockerImageName.parse("jmcombs/sftp:alpine"))
         .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
         .withExposedPorts(22)
         .withCommand(sftpUser + ":" + sftpPassword + ":::upload")

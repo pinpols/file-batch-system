@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.logging.StructuredLogField;
 import io.github.pinpols.batch.common.security.SecretComparator;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.web.ServletRequestPaths;
-import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
+import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -49,7 +49,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
   /** Filter 校验通过后写入,controller 通过 {@code request.getAttribute} 取。 */
   public static final String ATTR_RESOLVED_TENANT_ID = "batch.auth.resolvedTenantId";
 
-  /** Filter 校验通过后写入,值为 {@link ApiKeyEntity};secret 通道写 null。 */
+  /** Filter 校验通过后写入,值为 {@link ApiKeyCandidate};secret 通道写 null。 */
   public static final String ATTR_API_KEY_RECORD = "batch.auth.apiKeyRecord";
 
   private static final String API_KEY_INTERNAL_PREFIX_TASKS = "/internal/tasks/";
@@ -94,7 +94,7 @@ public class InternalAuthFilter extends OncePerRequestFilter {
       }
       // 读端点(GET)接受 worker.read 或 worker.execute(execute 是 read 超集);
       // 写端点(claim/report/register 等非 GET)必须 worker.execute。据此可发"只读 key"。
-      Optional<ApiKeyEntity> rec = HttpMethod.GET.matches(request.getMethod())
+      Optional<ApiKeyCandidate> rec = HttpMethod.GET.matches(request.getMethod())
           ? apiKeyVerifier.verifyWithAnyScope(
               apiKey,
               tenantHeader,

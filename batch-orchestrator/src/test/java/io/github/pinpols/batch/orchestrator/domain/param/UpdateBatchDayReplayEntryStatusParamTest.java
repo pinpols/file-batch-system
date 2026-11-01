@@ -13,17 +13,6 @@ class UpdateBatchDayReplayEntryStatusParamTest {
   private static final Instant NOW = Instant.parse("2026-10-13T00:00:00Z");
 
   @Test
-  @DisplayName("公开入口构造必填字段完整的参数")
-  void shouldBuildWhenRequiredFieldsArePresent() {
-    UpdateBatchDayReplayEntryStatusParam param =
-        UpdateBatchDayReplayEntryStatusParam.succeededWithResult(1L, 2L, NOW);
-
-    assertThat(param.getId()).isEqualTo(1L);
-    assertThat(param.getToStatus()).isEqualTo("SUCCEEDED");
-    assertThat(param.getNow()).isEqualTo(NOW);
-  }
-
-  @Test
   @DisplayName("具名工厂固定各状态需要写入的字段")
   void shouldBuildLegalStateShapesFromNamedFactories() {
     UpdateBatchDayReplayEntryStatusParam running =
@@ -36,6 +25,8 @@ class UpdateBatchDayReplayEntryStatusParamTest {
     assertThat(running.getToStatus()).isEqualTo("RUNNING");
     assertThat(running.getRerunInstanceId()).isEqualTo(2L);
     assertThat(running.getFinishedAt()).isNull();
+    assertThat(succeeded.getId()).isEqualTo(3L);
+    assertThat(succeeded.getNow()).isEqualTo(NOW);
     assertThat(succeeded.getToStatus()).isEqualTo("SUCCEEDED");
     assertThat(succeeded.getResultVersionId()).isEqualTo(4L);
     assertThat(succeeded.getStartedAt()).isEqualTo(NOW);

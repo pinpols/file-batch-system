@@ -52,7 +52,7 @@ public class ConsoleForensicController {
         request.getBizDateFrom(),
         request.getBizDateTo(),
         request.getJobCodes(),
-        request.getExportFormat() == null ? "BUNDLE" : request.getExportFormat(),
+        request.getExportFormat(),
         requestMetadataResolver.current().operatorId());
     ConsoleForensicExportResponse exportResponse =
         orchestratorProxyService.requestForensicExport(command);

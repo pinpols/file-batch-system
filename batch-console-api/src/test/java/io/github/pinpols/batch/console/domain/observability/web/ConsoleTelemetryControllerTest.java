@@ -11,6 +11,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleTelemetryService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -48,7 +49,8 @@ class ConsoleTelemetryControllerTest {
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTelemetryController(responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleTelemetryController(responseFactory, new ConsoleTelemetryService()))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();

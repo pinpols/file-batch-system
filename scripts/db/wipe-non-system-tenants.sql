@@ -42,6 +42,10 @@ DELETE FROM batch.compensation_command      WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.approval_command          WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.idempotency_record        WHERE tenant_id NOT IN :keep;
 DELETE FROM batch.dead_letter_task          WHERE tenant_id NOT IN :keep;
+-- 删除目标租户回执；保留审计租户的原目标列表，缺失回执不得当作失败或完成。
+DELETE FROM batch.config_batch_target_receipt WHERE tenant_id NOT IN :keep;
+-- 清理审计租户的操作时，由外键级联删除该操作的其余目标回执。
+DELETE FROM batch.config_batch_operation WHERE audit_tenant_id NOT IN :keep;
 
 -- ── Workflow 运行实例(workflow_node_run 无 tenant_id,走 workflow_run 子查询) ──
 DELETE FROM batch.workflow_node_run

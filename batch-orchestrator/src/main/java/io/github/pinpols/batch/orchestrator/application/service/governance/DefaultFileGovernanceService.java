@@ -34,7 +34,9 @@ import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.Disp
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.TemplateSecurityRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceArrivalViews;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -91,6 +93,20 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
   private final BatchSecurityProperties batchSecurityProperties;
   private final FileGovernanceCommitService fileGovernanceCommitService;
   private final FileGroupExpectationService fileGroupExpectationService;
+  private final FileGovernanceScheduler fileGovernanceScheduler;
+
+  @Override
+  public FileGovernanceLatencyResponse loadLatencyMetrics(String tenantId) {
+    FileGovernanceLatencyMetrics metrics = fileGovernanceScheduler.loadLatencyMetrics(tenantId);
+    return new FileGovernanceLatencyResponse(
+        metrics.tenantId(),
+        metrics.arrivalDelayViolations(),
+        metrics.maxArrivalDelaySeconds(),
+        metrics.processingDelayViolations(),
+        metrics.maxProcessingDelaySeconds(),
+        metrics.arrivalDelaySamples(),
+        metrics.processingDelaySamples());
+  }
 
   @Override
   @Transactional

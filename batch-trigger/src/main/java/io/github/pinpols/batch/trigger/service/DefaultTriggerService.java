@@ -48,7 +48,7 @@ public class DefaultTriggerService implements TriggerService {
   @Override
   public LaunchResponse launch(TriggerLaunchCommand command) {
     validateRequest(command);
-    admissionRules.assertTenantActive(command.request().getTenantId());
+    admissionRules.assertTenantActive(command.request().tenantId());
     LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
     try {
       return requestPersistence.persistAndForward(launchRequest, command.idempotencyKey());
@@ -67,11 +67,11 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isNull(command)
         || EmptyChecks.isNull(command.request())
         || EmptyChecks.isBlank(command.idempotencyKey())
-        || EmptyChecks.isBlank(command.request().getTenantId())
-        || EmptyChecks.isNull(command.request().getWorkflowDefinitionId())
-        || command.request().getWorkflowDefinitionId() <= 0
-        || EmptyChecks.isNull(command.request().getBizDate())
-        || command.request().getTriggerType() != TriggerType.CATCH_UP) {
+        || EmptyChecks.isBlank(command.request().tenantId())
+        || EmptyChecks.isNull(command.request().workflowDefinitionId())
+        || command.request().workflowDefinitionId() <= 0
+        || EmptyChecks.isNull(command.request().bizDate())
+        || command.request().triggerType() != TriggerType.CATCH_UP) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     return launchQueryService.verifyCatchUpSubmission(
@@ -131,43 +131,43 @@ public class DefaultTriggerService implements TriggerService {
     if (EmptyChecks.isNull(command.request())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(command.request().getTenantId())) {
+    if (EmptyChecks.isBlank(command.request().tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.tenant_id_required");
     }
-    Map<String, Object> params = command.request().getParams();
+    Map<String, Object> params = command.request().params();
     boolean containsForbiddenParentWorkflowContext = EmptyChecks.isNotNull(params)
         && (params.containsKey("_parentWorkflowRunId") || params.containsKey("_parentNodeCode"));
     if (containsForbiddenParentWorkflowContext) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.parent_context_forbidden");
     }
-    boolean hasWorkflowTarget = EmptyChecks.isNotNull(command.request().getWorkflowDefinitionId());
+    boolean hasWorkflowTarget = EmptyChecks.isNotNull(command.request().workflowDefinitionId());
     if (!hasWorkflowTarget) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.workflow_target_required");
     }
-    if (hasWorkflowTarget && command.request().getWorkflowDefinitionId() <= 0) {
+    if (hasWorkflowTarget && command.request().workflowDefinitionId() <= 0) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     if (!triggerRequestMapper.existsEnabledWorkflowDefinition(
-        command.request().getTenantId(), command.request().getWorkflowDefinitionId())) {
+        command.request().tenantId(), command.request().workflowDefinitionId())) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
     }
-    if (EmptyChecks.isNull(command.request().getBizDate())) {
+    if (EmptyChecks.isNull(command.request().bizDate())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.biz_date_required");
     }
-    if (EmptyChecks.isNull(command.request().getTriggerType())) {
+    if (EmptyChecks.isNull(command.request().triggerType())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.trigger.type_required");
     }
-    String externalEventCode = command.request().getExternalEventCode();
+    String externalEventCode = command.request().externalEventCode();
     boolean externalEventCodeIsInvalidForTrigger = EmptyChecks.isNotNull(externalEventCode)
         && (!Texts.hasText(externalEventCode)
             || externalEventCode.trim().length() > 128
-            || command.request().getTriggerType() != TriggerType.EVENT);
+            || command.request().triggerType() != TriggerType.EVENT);
     if (externalEventCodeIsInvalidForTrigger) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_code_invalid");
     }
-    String eventSource = command.request().getExternalEventSource();
-    String eventId = command.request().getExternalEventId();
+    String eventSource = command.request().externalEventSource();
+    String eventId = command.request().externalEventId();
     boolean externalEventIdentityWasProvided = EmptyChecks.isNotNull(externalEventCode)
         || EmptyChecks.isNotNull(eventSource)
         || EmptyChecks.isNotNull(eventId);
@@ -178,7 +178,7 @@ public class DefaultTriggerService implements TriggerService {
             || !Texts.hasText(eventId)
             || eventId.trim().length() > 256
             || !eventId.equals(eventId.trim())
-            || command.request().getTriggerType() != TriggerType.EVENT
+            || command.request().triggerType() != TriggerType.EVENT
             || !Texts.hasText(externalEventCode));
     if (providedExternalEventIdentityIsInvalid) {
       throw BizException.of(

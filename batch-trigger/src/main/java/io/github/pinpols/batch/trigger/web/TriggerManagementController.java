@@ -3,9 +3,9 @@ package io.github.pinpols.batch.trigger.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.trigger.domain.TriggerActionResult;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService.TriggerDrainStatus;
 import lombok.RequiredArgsConstructor;
 import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.*;
@@ -22,7 +22,7 @@ public class TriggerManagementController {
 
   private static final String KEY_TENANT_ID = "tenantId";
   private final TriggerRegistrationService triggerRegistrationService;
-  private final TriggerGracefulShutdown gracefulShutdown;
+  private final TriggerDrainService drainService;
 
   @PostMapping("/workflow/register")
   public CommonResponse<TriggerActionResult> registerWorkflow(
@@ -84,13 +84,11 @@ public class TriggerManagementController {
 
   @PostMapping("/drain/enable")
   public CommonResponse<TriggerDrainStatus> enableDrain() throws SchedulerException {
-    gracefulShutdown.startDraining("manual-enable");
-    return CommonResponse.success(gracefulShutdown.status());
+    return CommonResponse.success(drainService.enable());
   }
 
   @PostMapping("/drain/disable")
   public CommonResponse<TriggerDrainStatus> disableDrain() throws SchedulerException {
-    gracefulShutdown.stopDraining("manual-disable");
-    return CommonResponse.success(gracefulShutdown.status());
+    return CommonResponse.success(drainService.disable());
   }
 }

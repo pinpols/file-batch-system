@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
+import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -16,6 +19,35 @@ class OrchestratorApiExceptionHandlerTest {
 
   private final OrchestratorApiExceptionHandler handler =
       OrchestratorApiExceptionHandler.forStandaloneTest();
+
+  @Test
+  @DisplayName("用例失败保持现有 HTTP 状态与响应码，内部原因不作为对外消息")
+  void shouldMapApplicationFailuresToExistingWireContract() {
+    Map<Kind, Integer> statuses = Map.of(
+        Kind.INVALID_INPUT, 400,
+        Kind.NOT_FOUND, 404,
+        Kind.CONFLICT, 409,
+        Kind.INVALID_CONFIGURATION, 422,
+        Kind.RATE_LIMITED, 429,
+        Kind.TEMPORARILY_UNAVAILABLE, 503);
+    Map<Kind, ResultCode> codes = Map.of(
+        Kind.INVALID_INPUT, ResultCode.INVALID_ARGUMENT,
+        Kind.NOT_FOUND, ResultCode.NOT_FOUND,
+        Kind.CONFLICT, ResultCode.CONFLICT,
+        Kind.INVALID_CONFIGURATION, ResultCode.SYSTEM_ERROR,
+        Kind.RATE_LIMITED, ResultCode.RATE_LIMITED,
+        Kind.TEMPORARILY_UNAVAILABLE, ResultCode.SYSTEM_ERROR);
+    statuses.forEach((kind, status) -> {
+      IllegalStateException cause = new IllegalStateException("database cause");
+      OperationFailure failure = new OperationFailure(kind, "internal diagnostic", cause);
+      ResponseEntity<CommonResponse<Void>> response = handler.handleOperationFailure(failure);
+      assertThat(failure.getCause()).isSameAs(cause);
+      assertThat(response.getStatusCode().value()).isEqualTo(status);
+      assertThat(response.getBody()).isNotNull();
+      assertThat(response.getBody().code()).isEqualTo(codes.get(kind));
+      assertThat(response.getBody().message()).isEqualTo(codes.get(kind).label());
+    });
+  }
 
   @Test
   @DisplayName("触发限流时映射为限流响应码,不得降级成系统错误")

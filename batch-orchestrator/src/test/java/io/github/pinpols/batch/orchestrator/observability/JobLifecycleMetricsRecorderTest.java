@@ -7,8 +7,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import java.time.Duration;
@@ -55,7 +55,7 @@ class JobLifecycleMetricsRecorderTest {
   void shouldRecordTerminalMetricsFromSnapshot_forWorkerReportedState() {
     JobInstanceEntity instance = instance(100L, 200L, true);
     when(jobDefinitionMapper.selectById(200L))
-        .thenReturn(JobDefinitionEntity.builder().jobType("ATOMIC").build());
+        .thenReturn(JobDefinitionView.builder().jobType("ATOMIC").build());
 
     recorder.recordCompletionAfterCommit(
         "ta",
@@ -83,7 +83,7 @@ class JobLifecycleMetricsRecorderTest {
     instance.setFailureClass("BUSINESS");
     when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);
     when(jobDefinitionMapper.selectById(200L))
-        .thenReturn(JobDefinitionEntity.builder().jobType("PROCESS").build());
+        .thenReturn(JobDefinitionView.builder().jobType("PROCESS").build());
 
     recorder.recordCompletionAfterCommit(
         "ta", 100L, JobInstanceStatus.PARTIAL_FAILED.code(), Instant.parse("2026-09-13T00:00:05Z"));

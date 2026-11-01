@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.mapper;
 
 import io.github.pinpols.batch.common.enums.ScheduledOccurrenceStatus;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceAcceptRejectedOccurrenceParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertCatchUpAuditParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
@@ -23,6 +24,10 @@ import org.apache.ibatis.annotations.Param;
 
 /** 定时触发 occurrence、补跑审计与覆盖范围的数据访问。 */
 public interface ScheduledOccurrenceMapper {
+
+  String setTenantContext(@Param("tenantId") String tenantId);
+
+  int insertActualFire(ScheduledOccurrenceFireParam fire);
 
   /** 已过 readiness 等待窗口的 WAITING_READINESS 记录；按截止时间升序限批量扫尾。 */
   List<ExpiredReadinessWaitRow> selectExpiredReadinessWaits(

@@ -11,7 +11,7 @@ import io.github.pinpols.batch.orchestrator.application.engine.DefaultScheduleFo
 import io.github.pinpols.batch.orchestrator.application.engine.ScheduleForwarderResult;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxOpsApplicationService;
-import io.github.pinpols.batch.orchestrator.controller.OutboxRepublishResponse;
+import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxRepublishResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.OutboxEventEntity;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;

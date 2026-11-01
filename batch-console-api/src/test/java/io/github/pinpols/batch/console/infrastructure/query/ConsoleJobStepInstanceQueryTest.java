@@ -8,13 +8,13 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobStepInstanceResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
+import io.github.pinpols.batch.console.domain.job.view.JobStepInstanceView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -55,7 +55,7 @@ class ConsoleJobStepInstanceQueryTest {
   @DisplayName("步骤结果摘要中的 JSON 字符串任务载荷不回显密码")
   void shouldMaskCredentialsInEmbeddedTaskPayload() throws Exception {
     String taskPayload = JsonUtils.toJson(Map.of("password", "probe-secret", "region", "west"));
-    JobStepInstanceEntity entity = new JobStepInstanceEntity();
+    JobStepInstanceView entity = new JobStepInstanceView();
     entity.setId(7L);
     entity.setResultSummary(
         JsonUtils.toJson(Map.of("taskPayload", taskPayload, "outputs", Map.of("rows", 1))));
@@ -84,7 +84,7 @@ class ConsoleJobStepInstanceQueryTest {
   @Test
   @DisplayName("原子 HTTP 成功输出中的 JSON 响应正文不回显凭据")
   void shouldMaskCredentialsInAtomicHttpResponseBody() throws Exception {
-    JobStepInstanceEntity entity = new JobStepInstanceEntity();
+    JobStepInstanceView entity = new JobStepInstanceView();
     entity.setId(12L);
     entity.setResultSummary(JsonUtils.toJson(Map.of(
         "outputs",
@@ -113,10 +113,10 @@ class ConsoleJobStepInstanceQueryTest {
   @Test
   @DisplayName("损坏的 JSON 响应正文遮蔽，普通正文保持原样")
   void shouldMaskMalformedAtomicHttpJsonAndPreservePlainResponseBody() throws Exception {
-    JobStepInstanceEntity malformed = new JobStepInstanceEntity();
+    JobStepInstanceView malformed = new JobStepInstanceView();
     malformed.setResultSummary(JsonUtils.toJson(
         Map.of("outputs", Map.of("responseBody", "{\"accessToken\":\"probe-secret\","))));
-    JobStepInstanceEntity plain = new JobStepInstanceEntity();
+    JobStepInstanceView plain = new JobStepInstanceView();
     plain.setResultSummary(JsonUtils.toJson(Map.of("outputs", Map.of("responseBody", "accepted"))));
     when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
     when(jobStepInstanceMapper.selectById("tenant-a", 13L)).thenReturn(malformed);
@@ -141,7 +141,7 @@ class ConsoleJobStepInstanceQueryTest {
   @Test
   @DisplayName("内嵌任务载荷损坏时遮蔽整个字段而保留其它结果")
   void shouldMaskMalformedEmbeddedTaskPayload() throws Exception {
-    JobStepInstanceEntity entity = new JobStepInstanceEntity();
+    JobStepInstanceView entity = new JobStepInstanceView();
     entity.setId(8L);
     entity.setResultSummary(JsonUtils.toJson(
         Map.of("taskPayload", "{\"password\":\"probe-secret\",", "outputs", Map.of("rows", 2))));
@@ -168,7 +168,7 @@ class ConsoleJobStepInstanceQueryTest {
   @DisplayName("Worker 结果摘要中的内嵌 JSON 凭据不回显")
   void shouldMaskCredentialsInEmbeddedWorkerResultSummary() throws Exception {
     String workerSummary = JsonUtils.toJson(Map.of("accessToken", "worker-secret", "rows", 3));
-    JobStepInstanceEntity entity = new JobStepInstanceEntity();
+    JobStepInstanceView entity = new JobStepInstanceView();
     entity.setId(9L);
     entity.setResultSummary(
         JsonUtils.toJson(Map.of("resultSummary", workerSummary, "outputs", Map.of("rows", 3))));
@@ -197,11 +197,11 @@ class ConsoleJobStepInstanceQueryTest {
   @Test
   @DisplayName("损坏的 Worker JSON 摘要关闭回显，普通文字摘要保持原样")
   void shouldMaskMalformedWorkerJsonAndPreservePlainSummary() throws Exception {
-    JobStepInstanceEntity malformed = new JobStepInstanceEntity();
+    JobStepInstanceView malformed = new JobStepInstanceView();
     malformed.setId(10L);
     malformed.setResultSummary(JsonUtils.toJson(Map.of(
         "resultSummary", "{\"accessToken\":\"worker-secret\",", "outputs", Map.of("rows", 4))));
-    JobStepInstanceEntity plain = new JobStepInstanceEntity();
+    JobStepInstanceView plain = new JobStepInstanceView();
     plain.setId(11L);
     plain.setResultSummary(JsonUtils.toJson(
         Map.of("resultSummary", "processed 4 rows", "outputs", Map.of("rows", 4))));

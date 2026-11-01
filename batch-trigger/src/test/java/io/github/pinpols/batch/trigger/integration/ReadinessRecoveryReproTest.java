@@ -6,7 +6,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessRecoveryService;
+import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
 import io.github.pinpols.batch.trigger.infrastructure.scheduler.ReadinessWaitSweeper;
 import io.github.pinpols.batch.trigger.mapper.ScheduledOccurrenceMapper;
 import io.github.pinpols.batch.trigger.service.TriggerService;

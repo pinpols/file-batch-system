@@ -20,7 +20,6 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -28,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.AssignWorkerParam;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseBatchRow;
 import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -414,7 +414,7 @@ class DefaultTaskAssignmentServiceTest {
         """);
     when(jobPartitionMapper.selectById("ta", 50L)).thenReturn(partition);
     when(jobDefinitionMapper.selectById(20L))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(20L)
             .executionMode("FULL")
             .retryPolicy("NONE")
@@ -502,7 +502,7 @@ class DefaultTaskAssignmentServiceTest {
         """);
     when(jobInstanceMapper.selectById("ta", 11L)).thenReturn(instance);
     when(jobDefinitionMapper.selectById(20L))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(20L)
             .executionMode("FULL")
             .watermarkField("live_field")

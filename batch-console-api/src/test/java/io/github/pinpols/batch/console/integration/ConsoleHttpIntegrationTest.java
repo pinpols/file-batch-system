@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -12,11 +13,14 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
 import io.github.pinpols.batch.console.application.contract.response.file.ConsolePresignDownloadResponse;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStreamRegistry;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileOperationResponse;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
@@ -34,13 +38,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -79,6 +80,9 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
 
   @MockitoBean
   private ConsoleAiAuthorizationService aiAuthorizationService;
+
+  @MockitoBean
+  private ConsoleAiStreamRegistry aiStreamRegistry;
 
   @MockitoBean
   private ConsoleFileDownloadApplicationService fileDownloadApplicationService;
@@ -125,10 +129,8 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("导出配置发布报表: 返回成功,响应体字节与导出内容一致")
   void shouldExportConfigReleasesReportViaHttp() {
     byte[] content = "config-releases-report".getBytes(StandardCharsets.UTF_8);
-    // R2-P1-9: 应用服务签名已切到 StreamingResponseBody，直接 lambda 写响应流
-    StreamingResponseBody body = out -> out.write(content);
     when(reportExcelApplicationService.exportConfigReleases(any()))
-        .thenReturn(ResponseEntity.ok().body(body));
+        .thenReturn(new ExcelDownload("config.xlsx", out -> out.write(content)));
 
     webTestClient
         .get()
@@ -291,9 +293,14 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
     chatResponse.setPromptDecision("APPROVED");
     chatResponse.setModelName("gpt-4o-mini");
     chatResponse.setAnswer("ok");
-    when(aiApplicationService.chatStream(any(), anyString(), any(), any()))
+    ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+    when(prepared.requestId()).thenReturn("req-1");
+    when(aiApplicationService.prepareStream(any(), anyString())).thenReturn(prepared);
+    when(aiStreamRegistry.register(anyString(), any()))
+        .thenReturn(mock(ConsoleAiStreamRegistry.Registration.class));
+    when(prepared.execute(any()))
         .thenAnswer(invocation -> {
-          ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(3);
+          ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
           observer.onDelta("ok");
           return chatResponse;
         });
@@ -318,7 +325,7 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
           assertThat(body).contains("\"ok\"");
         });
 
-    verify(aiApplicationService).chatStream(any(), anyString(), any(), any());
+    verify(aiApplicationService).prepareStream(any(), anyString());
   }
 
   @Test
@@ -326,8 +333,8 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
   void shouldDownloadFileViaHttp() {
     byte[] content = "hello-batch".getBytes(StandardCharsets.UTF_8);
     when(fileDownloadApplicationService.download(anyString(), any(), anyString()))
-        .thenReturn(
-            ResponseEntity.ok().body(new InputStreamResource(new ByteArrayInputStream(content))));
+        .thenReturn(new FileDownloadArtifact(
+            new ByteArrayInputStream(content), "file.bin", "application/octet-stream", true));
 
     webTestClient
         .get()

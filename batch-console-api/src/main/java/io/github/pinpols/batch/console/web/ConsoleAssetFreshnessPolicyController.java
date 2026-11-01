@@ -3,8 +3,7 @@ package io.github.pinpols.batch.console.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
-import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
-import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.command.AssetFreshnessPolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleAssetFreshnessPolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -15,7 +14,6 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.LocalTime;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -48,12 +46,8 @@ public class ConsoleAssetFreshnessPolicyController {
       @RequestParam(value = "enabled", required = false) Boolean enabled,
       @RequestParam(value = "pageNo", defaultValue = "1") @Min(1) Integer pageNo,
       @RequestParam(value = "pageSize", defaultValue = "15") @Min(1) @Max(200) Integer pageSize) {
-    PageResponse<AssetFreshnessPolicyEntity> page =
-        policyService.list(tenantId, assetCode, enabled, pageNo, pageSize);
-    List<AssetFreshnessPolicyResponse> items =
-        page.items().stream().map(AssetFreshnessPolicyResponse::from).toList();
     PageResponse<AssetFreshnessPolicyResponse> response =
-        new PageResponse<>(page.total(), page.pageNo(), page.pageSize(), items);
+        policyService.list(tenantId, assetCode, enabled, pageNo, pageSize);
     return responseFactory.success(response);
   }
 
@@ -61,8 +55,7 @@ public class ConsoleAssetFreshnessPolicyController {
   public CommonResponse<AssetFreshnessPolicyResponse> get(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @PathVariable("id") Long id) {
-    AssetFreshnessPolicyEntity policy = policyService.get(tenantId, id);
-    AssetFreshnessPolicyResponse response = AssetFreshnessPolicyResponse.from(policy);
+    AssetFreshnessPolicyResponse response = policyService.get(tenantId, id);
     return responseFactory.success(response);
   }
 
@@ -70,7 +63,7 @@ public class ConsoleAssetFreshnessPolicyController {
   public CommonResponse<Void> create(
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @Valid @RequestBody UpsertAssetFreshnessPolicyRequest request) {
-    policyService.upsert(request.toParam(null, tenantId));
+    policyService.upsert(request.toCommand(null, tenantId));
     return responseFactory.success(null);
   }
 
@@ -79,7 +72,7 @@ public class ConsoleAssetFreshnessPolicyController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @PathVariable("id") Long id,
       @Valid @RequestBody UpsertAssetFreshnessPolicyRequest request) {
-    policyService.upsert(request.toParam(id, tenantId));
+    policyService.upsert(request.toCommand(id, tenantId));
     return responseFactory.success(null);
   }
 
@@ -105,8 +98,8 @@ public class ConsoleAssetFreshnessPolicyController {
       @Size(max = 16) String severity,
       Boolean enabled) {
 
-    AssetFreshnessPolicyUpsertParam toParam(Long id, String tenantId) {
-      return AssetFreshnessPolicyUpsertParam.builder()
+    AssetFreshnessPolicyUpsertCommand toCommand(Long id, String tenantId) {
+      return AssetFreshnessPolicyUpsertCommand.builder()
           .id(id)
           .tenantId(tenantId)
           .assetCode(assetCode)

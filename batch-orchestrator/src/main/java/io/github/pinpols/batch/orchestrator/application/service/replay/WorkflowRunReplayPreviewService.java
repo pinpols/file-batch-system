@@ -28,13 +28,13 @@ import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowR
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySourceResolver.Source;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDayDependencyResolver;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -574,7 +574,7 @@ public class WorkflowRunReplayPreviewService {
         blockers.add(Blocker.DEPENDENCY_RESULTS_NOT_PINNED.name());
       }
     }
-    JobDefinitionEntity definition;
+    JobDefinitionView definition;
     try {
       definition = resolveDefinition(node, context);
     } catch (BizException unavailableConfiguration) {
@@ -597,12 +597,12 @@ public class WorkflowRunReplayPreviewService {
     return nodePreview(node, definition, pluginId, capability, blockers);
   }
 
-  private JobDefinitionEntity resolveDefinition(WorkflowNodeEntity node, PreviewContext context) {
-    JobDefinitionEntity latest = null;
+  private JobDefinitionView resolveDefinition(WorkflowNodeEntity node, PreviewContext context) {
+    JobDefinitionView latest = null;
     if (context.policies().config() == ConfigVersionPolicy.USE_LATEST_CONFIG) {
       String jobCode = node.getRelatedJobCode();
       if (!context.latestDefinitions().containsKey(jobCode)) {
-        JobDefinitionEntity selected =
+        JobDefinitionView selected =
             configCacheService.findEnabledJobDefinition(context.command().tenantId(), jobCode);
         context.latestDefinitions().put(jobCode, selected);
       }
@@ -622,7 +622,7 @@ public class WorkflowRunReplayPreviewService {
 
   private String selectedPlugin(
       WorkflowNodeEntity node,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       PreviewContext context,
       List<String> blockers) {
     Map<String, Object> params =
@@ -669,7 +669,7 @@ public class WorkflowRunReplayPreviewService {
 
   private String selectedDispatchPlugin(
       WorkflowNodeEntity node,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       Map<String, Object> effectiveParams,
       PreviewContext context,
       List<String> blockers) {
@@ -741,7 +741,7 @@ public class WorkflowRunReplayPreviewService {
   }
 
   private Map<String, Object> effectiveJobParams(
-      WorkflowNodeEntity node, JobDefinitionEntity definition, Map<String, Object> rootParams) {
+      WorkflowNodeEntity node, JobDefinitionView definition, Map<String, Object> rootParams) {
     Map<String, Object> params = new LinkedHashMap<>();
     if (EmptyChecks.isNotNull(definition.defaultParams())) {
       params.putAll(definition.defaultParams());
@@ -765,7 +765,7 @@ public class WorkflowRunReplayPreviewService {
   }
 
   private Map<String, Object> originalEffectiveParams(
-      WorkflowNodeEntity node, JobDefinitionEntity definition, PreviewContext context) {
+      WorkflowNodeEntity node, JobDefinitionView definition, PreviewContext context) {
     WorkflowNodeRunEntity sourceNode = context.sourceNodeRuns().get(node.getNodeCode());
     boolean sourceNodeDoesNotBelongToReplayRun = EmptyChecks.isNull(sourceNode)
         || !context.source().run().getId().equals(sourceNode.getWorkflowRunId())
@@ -775,7 +775,7 @@ public class WorkflowRunReplayPreviewService {
     }
     JobInstanceEntity sourceInstance =
         jobInstanceMapper.selectById(context.command().tenantId(), sourceNode.getJobInstanceId());
-    JobDefinitionEntity sourceDefinition =
+    JobDefinitionView sourceDefinition =
         context.source().executionSnapshot().jobDefinition(node.getNodeCode());
     boolean sourceInstanceIsNotEligibleForReplay = EmptyChecks.isNull(sourceInstance)
         || !context.command().tenantId().equals(sourceInstance.getTenantId())
@@ -881,7 +881,7 @@ public class WorkflowRunReplayPreviewService {
 
   private NodePreview nodePreview(
       WorkflowNodeEntity node,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       String pluginId,
       WorkflowReplayCapabilityService.Assessment capability,
       List<String> blockers) {
@@ -953,7 +953,7 @@ public class WorkflowRunReplayPreviewService {
 
   /** 预览实际选择的执行配置；序列化时整体封存，避免审批后重新选择。 */
   private record SelectedConfigurations(
-      Map<String, JobDefinitionEntity> selectedDefinitions,
+      Map<String, JobDefinitionView> selectedDefinitions,
       Map<String, Map<String, String>> selectedFileTemplateSnapshots,
       Map<String, Map<String, String>> selectedDispatchChannelSnapshots,
       Map<String, Map<String, Object>> selectedDispatchSecretBindings,
@@ -980,6 +980,6 @@ public class WorkflowRunReplayPreviewService {
       Policies policies,
       Set<String> unknownNodes,
       Map<String, WorkflowNodeRunEntity> sourceNodeRuns,
-      Map<String, JobDefinitionEntity> latestDefinitions,
+      Map<String, JobDefinitionView> latestDefinitions,
       SelectedConfigurations selectedConfigurations) {}
 }

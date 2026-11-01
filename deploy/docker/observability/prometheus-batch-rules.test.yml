@@ -266,6 +266,8 @@ tests:
     input_series:
       - series: 'batch_trigger_launch_failed_total{reason="internal"}'
         values: '0 0 1 1 1'
+      - series: 'batch_trigger_launch_failed_total{reason="http_409"}'
+        values: '0 0 1 1 1'
       - series: 'batch_trigger_launch_failed_total{reason="business"}'
         values: '0 0 5 5 5'
       - series: 'batch_trigger_launch_failed_total{reason="rate_limited"}'
@@ -283,6 +285,14 @@ tests:
               alert_group: trigger-async
             exp_annotations:
               summary: 'Trigger launch technical failure detected: internal'
+              description: A non-rate-limit, non-business trigger launch failure occurred in the last five minutes. Check the Orchestrator logs and trigger_request recovery state.
+          - exp_labels:
+              reason: http_409
+              severity: warning
+              team: batch-platform
+              alert_group: trigger-async
+            exp_annotations:
+              summary: 'Trigger launch technical failure detected: http_409'
               description: A non-rate-limit, non-business trigger launch failure occurred in the last five minutes. Check the Orchestrator logs and trigger_request recovery state.
       - eval_time: 4m
         alertname: StaleCreatedLaunchRecoveryFailed

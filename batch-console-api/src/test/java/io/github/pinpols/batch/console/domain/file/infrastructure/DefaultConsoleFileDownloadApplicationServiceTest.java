@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.BatchObjectCryptoService;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
+import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
@@ -123,7 +124,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
 
     var response = service.exportFileErrors("t1", 100L, null);
     String csv =
-        new String(response.getBody().getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
 
     assertThat(csv).contains(",\"first\rsecond\",");
   }
@@ -139,7 +140,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
 
     var response = service.exportFileErrors("t1", 100L, null);
     String csv =
-        new String(response.getBody().getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
 
     assertThat(csv).contains(",\"a,\"\"b\"\"\nc\",");
   }
@@ -174,7 +175,21 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
 
     var response = service.download("t1", 100L, "AP-100");
 
-    assertThat(response.getStatusCode().value()).isEqualTo(200);
+    assertThat(response.unknownLength()).isTrue();
+    assertThat(response.fileName()).isNotBlank();
+  }
+
+  @Test
+  @DisplayName("对象存储缺失文件时保留未找到错误")
+  void shouldReturnNotFoundWhenStoredObjectIsMissing() {
+    stubEncryptedFile(100L);
+    stubApproval("APPROVED", "FILE", "100");
+    when(objectStore.get("bucket-a", "uploads/t1/100.bin"))
+        .thenThrow(new ObjectNotFoundException("missing"));
+    assertThatThrownBy(() -> service.download("t1", 100L, "AP-100"))
+        .isInstanceOf(BizException.class)
+        .extracting(exception -> ((BizException) exception).getCode())
+        .isEqualTo(ResultCode.NOT_FOUND);
   }
 
   @Test

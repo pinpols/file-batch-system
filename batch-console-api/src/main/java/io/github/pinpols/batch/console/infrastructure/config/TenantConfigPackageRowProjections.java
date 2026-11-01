@@ -54,7 +54,7 @@ import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -85,7 +85,7 @@ public class TenantConfigPackageRowProjections {
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
   List<Map<String, Object>> toJobRows(
-      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
+      List<JobDefinitionView> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(e -> {
           Map<String, Object> m = new LinkedHashMap<>();
@@ -124,7 +124,7 @@ public class TenantConfigPackageRowProjections {
         .collect(Collectors.toList());
   }
 
-  private String dependencyBizDateAlignments(JobDefinitionEntity entity) {
+  private String dependencyBizDateAlignments(JobDefinitionView entity) {
     boolean dependencyRulesAreMissing = EmptyChecks.isNull(entity.getJobDependencyRules())
         || EmptyChecks.isEmpty(entity.getJobDependencyRules());
     if (dependencyRulesAreMissing) {
@@ -136,7 +136,7 @@ public class TenantConfigPackageRowProjections {
   }
 
   List<Map<String, Object>> toJobMonitoringPolicyRows(
-      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
+      List<JobDefinitionView> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(entity -> {
           Map<String, Object> row = new LinkedHashMap<>();

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -94,6 +95,17 @@ class ConsoleWebhookServiceTest {
     assertThat(rows).isEmpty();
     verify(deliveryLogRepository).bindTenant("t1");
     verify(deliveryLogRepository).findRecentByTenant("t1", 20);
+  }
+
+  @Test
+  @DisplayName("直接查询投递历史时，数量限制在 1 到 200 并保持边界值")
+  void shouldClampDeliveryLogLimitAtServiceBoundary() {
+    service.deliveryLogs("t1", null, 0);
+    service.deliveryLogs("t1", null, 1);
+    service.deliveryLogs("t1", 7L, 200);
+    service.deliveryLogs("t1", 7L, 201);
+    verify(deliveryLogRepository, times(2)).findRecentByTenant("t1", 1);
+    verify(deliveryLogRepository, times(2)).findBySubscription("t1", 7L, 200);
   }
 
   @Test

@@ -3,12 +3,14 @@ package io.github.pinpols.batch.orchestrator.infrastructure.file;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
- * 文件治理延迟指标的固定输出契约。
+ * 文件治理延迟指标的基础设施侧固定视图。
  *
- * <p>Redis 缓存内部仍允许使用 Map，因为缓存数据需要兼容历史字段和 JSON 样本；但 Controller 和
- * 调度器只接收这个固定视图，避免把稳定字段名散落到业务代码中。样本行来自固定的 Mapper 投影，当前在缓存和响应边界使用 Map 保留既有字段形状。
+ * <p>Redis 缓存内部仍允许使用 Map，因为缓存数据需要兼容历史字段和 JSON 样本；调度器通过这个固定视图读取缓存结果。HTTP
+ * 响应由应用服务映射为独立的 {@code FileGovernanceLatencyResponse}，避免 Controller 依赖基础设施类型。
+ * 样本行来自固定的 Mapper 投影，当前在缓存边界使用 Map 保留既有字段形状。
  */
 public record FileGovernanceLatencyMetrics(
     String tenantId,
@@ -23,7 +25,8 @@ public record FileGovernanceLatencyMetrics(
     if (EmptyChecks.isEmpty(values)) {
       return empty(null);
     }
-    String tenantId = text(values.get("tenantId"));
+    Object tenantIdValue = values.get("tenantId");
+    String tenantId = Objects.toString(tenantIdValue, null);
     long arrivalDelayViolations = number(values.get("arrivalDelayViolations"));
     long maxArrivalDelaySeconds = number(values.get("maxArrivalDelaySeconds"));
     long processingDelayViolations = number(values.get("processingDelayViolations"));
@@ -61,7 +64,4 @@ public record FileGovernanceLatencyMetrics(
     return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
   }
 
-  private static String text(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
 }

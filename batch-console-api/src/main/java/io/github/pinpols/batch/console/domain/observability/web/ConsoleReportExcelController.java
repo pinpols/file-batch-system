@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.application.contract.query.SecretVersionQ
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.support.web.ConsoleExcelDownloadResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -34,7 +35,7 @@ public class ConsoleReportExcelController {
   @GetMapping("/config-releases")
   public ResponseEntity<StreamingResponseBody> configReleases(
       @ModelAttribute ConfigReleaseQueryRequest request) {
-    return applicationService.exportConfigReleases(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportConfigReleases(request));
   }
 
   /** 导出密钥版本 Excel。 */
@@ -42,28 +43,28 @@ public class ConsoleReportExcelController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public ResponseEntity<StreamingResponseBody> secrets(
       @ModelAttribute SecretVersionQueryRequest request) {
-    return applicationService.exportSecretVersions(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportSecretVersions(request));
   }
 
   /** 导出配置变更日志 Excel。 */
   @GetMapping("/change-logs")
   public ResponseEntity<StreamingResponseBody> configChangeLogs(
       @ModelAttribute ConfigChangeLogQueryRequest request) {
-    return applicationService.exportConfigChangeLogs(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportConfigChangeLogs(request));
   }
 
   /** 导出审计日志 Excel。 */
   @GetMapping("/audits")
   public ResponseEntity<StreamingResponseBody> audits(
       @ModelAttribute AuditLogQueryRequest request) {
-    return applicationService.exportAuditLogs(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportAuditLogs(request));
   }
 
   /** 导出调度快照 Excel。 */
   @GetMapping("/scheduler-snapshot")
   public ResponseEntity<StreamingResponseBody> schedulerSnapshot(
       @RequestParam("tenantId") String tenantId) {
-    return applicationService.exportSchedulerSnapshot(tenantId);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportSchedulerSnapshot(tenantId));
   }
 
   /** 导出调度快照历史 Excel。 */
@@ -71,27 +72,27 @@ public class ConsoleReportExcelController {
   public ResponseEntity<StreamingResponseBody> schedulerHistory(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    return applicationService.exportSchedulerSnapshotHistory(tenantId, limit);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportSchedulerSnapshotHistory(tenantId, limit));
   }
 
   /** 导出 Worker 列表 Excel。 */
   @GetMapping("/workers")
   public ResponseEntity<StreamingResponseBody> workers(
       @ModelAttribute WorkerRegistryQueryRequest request) {
-    return applicationService.exportWorkers(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportWorkers(request));
   }
 
   /** 导出 Outbox 重试日志 Excel。 */
   @GetMapping("/outbox-retries")
   public ResponseEntity<StreamingResponseBody> outboxRetries(
       @ModelAttribute OutboxRetryLogQueryRequest request) {
-    return applicationService.exportOutboxRetries(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportOutboxRetries(request));
   }
 
   /** 导出 Outbox 投递日志 Excel。 */
   @GetMapping("/outbox-deliveries")
   public ResponseEntity<StreamingResponseBody> outboxDeliveries(
       @ModelAttribute OutboxDeliveryLogQueryRequest request) {
-    return applicationService.exportOutboxDeliveries(request);
+    return ConsoleExcelDownloadResponse.from(applicationService.exportOutboxDeliveries(request));
   }
 }

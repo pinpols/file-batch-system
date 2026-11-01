@@ -504,7 +504,7 @@
     },
     {
       "type": "timeseries",
-      "title": "Trigger launch deduped increase (1h)",
+      "title": "Trigger launch 409 conflicts (1h)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -513,8 +513,8 @@
       },
       "targets": [
         {
-          "expr": "sum by (tenant_id) (increase(batch_trigger_launch_deduped_total[1h]))",
-          "legendFormat": "{{tenant_id}}"
+          "expr": "sum(increase(batch_trigger_launch_failed_total{reason=\"http_409\"}[1h]))",
+          "legendFormat": "409 conflicts"
         }
       ]
     },

@@ -42,7 +42,7 @@ import org.springframework.stereotype.Component;
  *
  * <ul>
  *   <li><b>验证结果缓存</b>:进程内 Caffeine,key = {@code SHA-256(rawKey) hex + "|" + tenantId}(**绝不**用
- *       rawKey 明文,防堆转储泄漏),value = 命中的不可变 {@link ApiKeyEntity}。<b>只缓存成功</b>,失败不入缓存(避免误封
+ *       rawKey 明文,防堆转储泄漏),value = 命中的不可变 {@link ApiKeyCandidate}。<b>只缓存成功</b>,失败不入缓存(避免误封
  *       窗口,失败本就罕见)。TTL {@value #VERIFY_CACHE_TTL_MINUTES} 分钟,maximumSize {@value
  *       #VERIFY_CACHE_MAX_SIZE}。命中缓存直接返回,跳过候选查库 + PBKDF2 比对慢路径。
  *       <p><b>失效语义</b>:api_key 的 revoke/disable/rotate 写路径全在 {@code ConsoleApiKeyService}
@@ -94,7 +94,7 @@ public class ApiKeyVerifier {
   private final InstantSource instantSource;
 
   /** 验证成功结果缓存:key = SHA-256(rawKey)|tenantId,value = 命中的不可变 entity。只缓存成功。 */
-  private final Cache<String, ApiKeyEntity> verifyCache;
+  private final Cache<String, ApiKeyCandidate> verifyCache;
 
   /**
    * O4:命中率/逐出/加载可观测。缓存价值=躲 PBKDF2 600k 迭代 CPU 税(本轮 perf 核心), 但此前不可观测 → TTL/size 无法校准、缓存穿透 CPU
@@ -173,16 +173,16 @@ public class ApiKeyVerifier {
   /**
    * @param rawKey 客户端传来的 X-Batch-Api-Key 原文
    * @param claimedTenantId 客户端传来的 X-Batch-Tenant-Id;必须与 key 在表里的 tenant_id 一致
-   * @return 命中且活跃的 {@link ApiKeyEntity};否则空(filter 直接返 401,不暴露具体原因防侧信道)
+   * @return 命中且活跃的 {@link ApiKeyCandidate};否则空(filter 直接返 401,不暴露具体原因防侧信道)
    */
-  public Optional<ApiKeyEntity> verify(String rawKey, String claimedTenantId) {
+  public Optional<ApiKeyCandidate> verify(String rawKey, String claimedTenantId) {
     if (rawKey == null || rawKey.isBlank()) return Optional.empty();
     if (claimedTenantId == null || claimedTenantId.isBlank()) return Optional.empty();
     if (rawKey.length() < KEY_PREFIX_LEN) return Optional.empty();
 
     // 缓存命中:跳过候选查库 + PBKDF2 慢路径,直接返回。仍走 touch 节流(命中也代表 key 活跃)。
     String cacheKey = verifyCacheKey(rawKey, claimedTenantId);
-    ApiKeyEntity cached = verifyCache.getIfPresent(cacheKey);
+    ApiKeyCandidate cached = verifyCache.getIfPresent(cacheKey);
     if (cached != null) {
       // expires_at 硬边界内存复查:自然过期不允许被缓存 TTL 延长(revoke 的 5 分钟窗口是另一回事,见类 javadoc)。
       Instant expiresAt = cached.expiresAt();
@@ -198,13 +198,13 @@ public class ApiKeyVerifier {
     }
 
     String prefix = rawKey.substring(0, KEY_PREFIX_LEN);
-    List<ApiKeyEntity> candidates =
+    List<ApiKeyCandidate> candidates =
         mapper.findActiveCandidatesByPrefixAndTenant(prefix, claimedTenantId);
     if (candidates == null || candidates.isEmpty()) return Optional.empty();
 
     // 候选数极小(同一租户同一前缀的活跃 key,索引剪枝后通常 0-1 行,极端冲突 <5)。
     // 逐行常量时间比对,命中即停;legacy sha256 命中后异步升级 KDF。
-    for (ApiKeyEntity rec : candidates) {
+    for (ApiKeyCandidate rec : candidates) {
       String algo = rec.keyHashAlgo() == null ? ApiKeyHasher.ALGO_SHA256_LEGACY : rec.keyHashAlgo();
       if (ApiKeyHasher.verify(rawKey, rec.keyHash(), rec.salt(), algo)) {
         // 只缓存成功;失败不入缓存(避免误封窗口)。
@@ -252,9 +252,9 @@ public class ApiKeyVerifier {
   /**
    * 同 {@link #verify} 但强制 key.scope 含 {@code requiredScope}(或 {@code "*"} 通配)。
    *
-   * @return 命中且 scope 通过的 {@link ApiKeyEntity};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
+   * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空(scope 不通过也返空,filter 一律 401,不区分原因)
    */
-  public Optional<ApiKeyEntity> verifyWithScope(
+  public Optional<ApiKeyCandidate> verifyWithScope(
       String rawKey, String claimedTenantId, String requiredScope) {
     return verify(rawKey, claimedTenantId).filter(rec -> scopesAllow(rec.scopes(), requiredScope));
   }
@@ -263,9 +263,9 @@ public class ApiKeyVerifier {
    * 同 {@link #verifyWithScope} 但 key 命中 {@code acceptedScopes} 中**任一**(或 {@code "*"} 通配)即放行。 读端点用
    * {@code (SCOPE_WORKER_READ, SCOPE_WORKER_EXECUTE)} 表达"读 key 或写 key 都可读"。
    *
-   * @return 命中且 scope 通过的 {@link ApiKeyEntity};否则空
+   * @return 命中且 scope 通过的 {@link ApiKeyCandidate};否则空
    */
-  public Optional<ApiKeyEntity> verifyWithAnyScope(
+  public Optional<ApiKeyCandidate> verifyWithAnyScope(
       String rawKey, String claimedTenantId, String... acceptedScopes) {
     return verify(rawKey, claimedTenantId)
         .filter(rec -> scopesAllowAny(rec.scopes(), acceptedScopes));

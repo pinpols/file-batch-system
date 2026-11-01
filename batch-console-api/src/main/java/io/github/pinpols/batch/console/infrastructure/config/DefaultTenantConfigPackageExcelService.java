@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelApplyResponse;
@@ -27,7 +28,6 @@ import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -37,6 +37,7 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
@@ -58,7 +59,6 @@ import io.github.pinpols.batch.console.mapper.TenantConfigRevisionMapper;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
-import io.github.pinpols.batch.console.support.excel.ConsoleSingleSheetExcelImportSupport;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
 import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PreviewSnapshot;
@@ -89,7 +89,6 @@ import org.apache.poi.ss.usermodel.WorkbookFactory;
 import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.context.MessageSource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
@@ -97,7 +96,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * 租户配置包 Excel 的全生命周期管理：export / template / upload → preview → apply。
@@ -169,7 +167,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
 
   @Override
   @Transactional(readOnly = true)
-  public ResponseEntity<StreamingResponseBody> exportPackage(String tenantId) {
+  public ExcelDownload exportPackage(String tenantId) {
     String tid = tenantGuard.resolveTenant(tenantId);
     boolean includePlatformFields = applyAuthorization.canViewPlatformFields();
     // R2-P1-9: 数据快照在请求线程里取（事务上下文），但 workbook 写入流的动作推迟到
@@ -188,7 +186,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             .map(BatchWindowRow::toMap)
             .toList();
     JobDefinitionQuery jobDefinitionQuery = JobDefinitionQuery.ofTenant(tid, null);
-    List<JobDefinitionEntity> jobDefinitions =
+    List<JobDefinitionView> jobDefinitions =
         jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
     List<Map<String, Object>> jobs =
         rowProjections.toJobRows(jobDefinitions, includePlatformFields);
@@ -212,7 +210,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<WorkflowDefinitionEntity> wfEntities =
         workflowDefinitionMapper.selectByQuery(workflowDefinitionQuery);
     Map<Long, String> jobCodeById = jobDefinitions.stream()
-        .collect(Collectors.toMap(JobDefinitionEntity::getId, JobDefinitionEntity::getJobCode));
+        .collect(Collectors.toMap(JobDefinitionView::getId, JobDefinitionView::getJobCode));
     List<Map<String, Object>> wfDefs = rowProjections.toWfDefRows(wfEntities, jobCodeById);
     List<Map<String, Object>> wfNodes = rowProjections.collectWorkflowNodes(tid, wfEntities);
     if (!includePlatformFields) {
@@ -238,7 +236,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+    return new ExcelDownload(
         fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
   }
 
@@ -286,16 +284,16 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> downloadTemplate() {
+  public ExcelDownload downloadTemplate() {
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
-    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+    return new ExcelDownload(
         "tenant-config-package-template.xlsx",
         out -> writer.writeTemplateWorkbook(out, implRegistry));
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> downloadScenarioTemplate(List<String> scenarios) {
+  public ExcelDownload downloadScenarioTemplate(List<String> scenarios) {
     List<String> selectedScenarios =
         ConfigPackageSampleDataFactory.tenantTemplateScenarios(scenarios).stream()
             .sorted()
@@ -303,13 +301,13 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     ConfigPackageExcelWorkbookWriter writer = workbookWriter(selectedScenarios);
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     String scenarioName = String.join("-", selectedScenarios).toLowerCase(Locale.ROOT);
-    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+    return new ExcelDownload(
         "tenant-config-package-" + scenarioName + ".xlsx",
         out -> writer.writeFocusedTemplateWorkbook(out, implRegistry));
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> downloadSampleTemplate(
+  public ExcelDownload downloadSampleTemplate(
       String scenario, List<String> scenarios) {
     List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
         ? scenarios
@@ -322,7 +320,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         ConfigPackageSampleDataFactory.sampleSheets(normalizedScenarios);
     String scenarioName = String.join("-", normalizedScenarios).toLowerCase(Locale.ROOT);
     String fileName = "tenant-config-package-sample-" + scenarioName + ".xlsx";
-    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+    return new ExcelDownload(
         fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
   }
 
@@ -545,14 +543,14 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> downloadPreviewWorkbook(String uploadToken) {
+  public ExcelDownload downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
     Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName());
-    return ConsoleSingleSheetExcelImportSupport.excelStreamingResponse(
+    return new ExcelDownload(
         fileName, out -> writer.writePreviewWorkbook(out, session, result, implRegistry));
   }
 
@@ -804,8 +802,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     Row headerRow = sheet.getRow(sheet.getFirstRowNum());
     Guard.require(headerRow != null, "header row missing in sheet: " + sheetName);
     Map<String, Integer> headerIndex = buildHeaderIndex(sheetName, headerRow, fmt);
-    validateSheetHeaders(
-        sheetName, headerIndex, requiredHeaders(sheetName, columns), Set.copyOf(columns));
+    Set<String> requiredHeaders = ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
+    validateSheetHeaders(sheetName, headerIndex, requiredHeaders, Set.copyOf(columns));
     List<Map<String, String>> rows = new ArrayList<>();
     for (int i = headerRow.getRowNum() + 1; i <= sheet.getLastRowNum(); i++) {
       Row row = sheet.getRow(i);
@@ -828,10 +826,6 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
       rows.add(values);
     }
     return rows;
-  }
-
-  private static Set<String> requiredHeaders(String sheetName, List<String> columns) {
-    return ConfigPackageSheetSpecs.requiredImportHeaders(sheetName, columns);
   }
 
   private List<Map<String, String>> parseOptionalSheet(

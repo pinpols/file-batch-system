@@ -66,11 +66,11 @@ public class JobDependencyWaitingLaunchService {
 
   public List<JobDependencyWaitingLaunchSummary> listRecent(
       String tenantId, String waitStatus, String jobCode, int limit) {
-    if (EmptyChecks.isNull(tenantId) || EmptyChecks.isBlank(tenantId)) {
+    if (EmptyChecks.isBlank(tenantId)) {
       throw new IllegalArgumentException("tenantId is required");
     }
     String status;
-    if (EmptyChecks.isNull(waitStatus) || EmptyChecks.isBlank(waitStatus)) {
+    if (EmptyChecks.isBlank(waitStatus)) {
       status = null;
     } else {
       String trimmedStatus = waitStatus.trim();
@@ -81,7 +81,7 @@ public class JobDependencyWaitingLaunchService {
       throw new IllegalArgumentException("Unsupported job dependency wait status");
     }
     String normalizedJobCode =
-        EmptyChecks.isNull(jobCode) || EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
+        EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
     int pageSize = Math.max(1, Math.min(limit, 200));
     return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
       TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
@@ -374,7 +374,7 @@ public class JobDependencyWaitingLaunchService {
 
   private String evaluateDependencies(
       String tenantId, String jobCode, LocalDate bizDate, List<DependencySnapshot> dependencies) {
-    if (EmptyChecks.isNull(dependencies) || EmptyChecks.isEmpty(dependencies)) {
+    if (EmptyChecks.isEmpty(dependencies)) {
       return null;
     }
     for (DependencySnapshot dependency : dependencies) {
@@ -400,7 +400,7 @@ public class JobDependencyWaitingLaunchService {
       String downstreamJobCode,
       LocalDate downstreamBizDate,
       List<JobDependencyRule> rules) {
-    if (EmptyChecks.isNull(rules) || EmptyChecks.isEmpty(rules)) {
+    if (EmptyChecks.isEmpty(rules)) {
       return List.of();
     }
     boolean needsPreviousBusinessDay = rules.stream()
@@ -408,8 +408,7 @@ public class JobDependencyWaitingLaunchService {
     String calendarCode = needsPreviousBusinessDay
         ? dependencyMapper.selectCalendarCodeByTenantAndJob(tenantId, downstreamJobCode)
         : null;
-    BusinessCalendarEntity calendar = EmptyChecks.isNull(calendarCode)
-            || EmptyChecks.isBlank(calendarCode)
+    BusinessCalendarEntity calendar = EmptyChecks.isBlank(calendarCode)
         ? null
         : businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
     boolean missingCalendar = EmptyChecks.isNotNull(calendarCode)
@@ -465,8 +464,7 @@ public class JobDependencyWaitingLaunchService {
   }
 
   private List<DependencySnapshot> decodeDependencies(String json, LocalDate downstreamBizDate) {
-    if (EmptyChecks.isNull(json)
-        || EmptyChecks.isBlank(json)
+    if (EmptyChecks.isBlank(json)
         || EmptyChecks.isNull(downstreamBizDate)) {
       return List.of();
     }
@@ -499,7 +497,7 @@ public class JobDependencyWaitingLaunchService {
     Object rawError = values.get("resolutionError");
     String resolutionError = rawError instanceof String text ? text : null;
     boolean legacyResolutionErrorNeedsDecoding = EmptyChecks.isNotNull(rawError)
-        && (EmptyChecks.isNull(resolutionError) || EmptyChecks.isBlank(resolutionError));
+        && (EmptyChecks.isBlank(resolutionError));
     if (legacyResolutionErrorNeedsDecoding) {
       throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
     }

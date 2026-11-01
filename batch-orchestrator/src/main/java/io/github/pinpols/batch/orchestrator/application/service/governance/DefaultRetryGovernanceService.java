@@ -19,7 +19,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -28,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplaySuccessParam;
 import io.github.pinpols.batch.orchestrator.domain.query.RetryScheduleQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -37,6 +37,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -665,7 +666,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
     }
-    JobDefinitionEntity jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
+    JobDefinitionView jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
     if (jobDefinitionRecord == null) {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
@@ -683,7 +684,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private RetryPolicyPlan resolveRetryPolicy(JobInstanceEntity jobInstance) {
     Map<String, Object> snapshot = executionPolicySnapshot(jobInstance);
     if (EmptyChecks.isNotNull(snapshot)) {
-      String retryPolicy = stringValue(snapshot.get("retryPolicy"));
+      Object retryPolicyValue = snapshot.get("retryPolicy");
+      String retryPolicy = Objects.toString(retryPolicyValue, null);
       Integer retryMaxCount = integerValue(snapshot.get("retryMaxCount"));
       String resolvedRetryPolicy =
           Texts.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code();
@@ -716,10 +718,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           malformedSnapshot);
       return null;
     }
-  }
-
-  private String stringValue(Object value) {
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private Integer integerValue(Object value) {

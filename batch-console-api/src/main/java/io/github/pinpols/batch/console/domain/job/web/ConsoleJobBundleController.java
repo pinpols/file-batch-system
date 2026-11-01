@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
+import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobBundleApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleCreateRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobBundleImportRequest;
@@ -8,7 +10,9 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleResultResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
 import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -33,8 +37,12 @@ public class ConsoleJobBundleController {
 
   @PostMapping("/create")
   public CommonResponse<ConsoleJobBundleResultResponse> create(
-      @Valid @RequestBody JobBundleCreateRequest request) {
-    return responseFactory.success(applicationService.create(request));
+      @Valid @RequestBody JobBundleCreateRequest request, HttpServletRequest httpRequest) {
+    String requestHash = requestHash(httpRequest);
+    ConsoleJobBundleResultResponse result = requestHash == null
+        ? applicationService.create(request)
+        : applicationService.create(request, requestHash);
+    return responseFactory.success(result);
   }
 
   @GetMapping("/export")
@@ -45,7 +53,21 @@ public class ConsoleJobBundleController {
 
   @PostMapping("/import")
   public CommonResponse<ConsoleJobBundleResultResponse> importBundle(
-      @Valid @RequestBody JobBundleImportRequest request) {
-    return responseFactory.success(applicationService.importBundle(request));
+      @Valid @RequestBody JobBundleImportRequest request, HttpServletRequest httpRequest) {
+    String requestHash = requestHash(httpRequest);
+    ConsoleJobBundleResultResponse result = requestHash == null
+        ? applicationService.importBundle(request)
+        : applicationService.importBundle(request, requestHash);
+    return responseFactory.success(result);
+  }
+
+  private String requestHash(HttpServletRequest request) {
+    String key = request.getHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER);
+    if (!Texts.hasText(key)) {
+      return null;
+    }
+    String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
+    return ConsoleIdempotencyRequestIdentity.requestHash(
+        tenantHeader, request.getMethod(), request.getRequestURI(), key);
   }
 }

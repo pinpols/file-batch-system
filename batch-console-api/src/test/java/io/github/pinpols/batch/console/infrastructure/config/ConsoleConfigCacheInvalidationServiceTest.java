@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.infrastructure.config;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -16,6 +17,7 @@ import io.github.pinpols.batch.common.config.ConfigCacheInvalidationEvent;
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import java.util.Iterator;
 import java.util.List;
@@ -50,6 +52,8 @@ class ConsoleConfigCacheInvalidationServiceTest {
   @BeforeEach
   void setUp() {
     lenient().when(redisTemplate.opsForValue()).thenReturn(valueOperations);
+    lenient().when(redisTemplate.delete(anyString())).thenReturn(false);
+    lenient().when(redisTemplate.convertAndSend(anyString(), anyString())).thenReturn(0L);
     lenient().when(valueOperations.increment(anyString())).thenReturn(1L);
     service = new ConsoleConfigCacheInvalidationService(
         new RedisConfigInvalidationStore(redisTemplate, new BatchRedisNamespace("")),
@@ -165,5 +169,37 @@ class ConsoleConfigCacheInvalidationServiceTest {
 
     verify(redisTemplate, never()).delete(anyCollection());
     verify(redisTemplate, never()).convertAndSend(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("严格投递中发布命令未执行时，不能视为成功")
+  void strictDeliveryRejectsNullPublishResult() {
+    when(redisTemplate.convertAndSend(anyString(), anyString())).thenReturn(null);
+    ConfigCacheInvalidationIntent intent =
+        new ConfigCacheInvalidationIntent(1L, "t1", "job-definition", "job1");
+    assertThatThrownBy(() -> service.deliver(intent)).isInstanceOf(NullPointerException.class);
+  }
+
+  @Test
+  @DisplayName("严格投递中扫描删除未执行时，不能视为成功")
+  void strictDeliveryRejectsNullBatchDeleteResult() {
+    @SuppressWarnings("unchecked")
+    Cursor<String> cursor = mock(Cursor.class);
+    when(cursor.hasNext()).thenReturn(true, false);
+    when(cursor.next()).thenReturn("config:t1:job-definition:job1");
+    when(redisTemplate.scan(any(ScanOptions.class))).thenReturn(cursor);
+    when(redisTemplate.delete(anyCollection())).thenReturn(null);
+    ConfigCacheInvalidationIntent intent =
+        new ConfigCacheInvalidationIntent(1L, "t1", "job-definition", "*");
+    assertThatThrownBy(() -> service.deliver(intent)).isInstanceOf(IllegalStateException.class);
+  }
+
+  @Test
+  @DisplayName("发布命令成功但没有订阅者时，严格投递仍可确认")
+  void strictDeliveryAcceptsZeroSubscribers() {
+    ConfigCacheInvalidationIntent intent =
+        new ConfigCacheInvalidationIntent(1L, "t1", "job-definition", "job1");
+    service.deliver(intent);
+    verify(redisTemplate).convertAndSend(anyString(), anyString());
   }
 }

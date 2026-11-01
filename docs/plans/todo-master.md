@@ -2,7 +2,11 @@
 
 ## 当前差异审查清单
 
-本仓 `fix/wdi-current` PR 临时放开已有 Flyway 迁移有效 SQL 漂移阻断，仅适用于空库；合并后须删除 `.github/workflows/pr-gate.yml` 的例外及 `validate-flyway-schema.sh` 对应开关与测试，再复验严格阻断。其他分支、merge queue、版本连续性和迁移安全扫描保持原检查。
+- **配置失效与在途任务 / 本地部分修复**：失效已完成后的旧查询回填及事务快照污染已修复，隔离 Redis、真实 PG 和同 JVM 双缓存/Worker 定向验证通过。Redis 局部写入失败及不可用期间提交后旧值未失效已真实复现；V372 和 Console 持久重试已在开发工作区实现，隔离 PG/Valkey 故障恢复及丢广播对账定向通过；独立主库账号的队列授权/撤销 SQL 已在隔离 PG 验证；Spring 分账号部署、独立进程、版本回退和混版仍待验证。缓存新增读取/回源、队列投递的容量影响未测。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
+- **跨账号认证 / 本地部分修复**：登录页误登出、旧会话异步结果及换发成功响应判断已修复；同源当前版本浏览器锁场景通过。同版 Chromium 已验证当前参与协调的双标签切账号及旧登出确认框；未参与锁的旧标签/客户端仍有真实 Cookie 乱序首红，OIDC、其他业务确认框和目标环境尚未关闭。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
+- **复制与作业包未知结果 / 待实施**：现有提示要求核对目标，但旧入口尚无持久原键和逐目标回执对账；目标列表原序及重复项、源快照、权限与旧 wire 须保留，缺回执不能自动重试。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
+
+WDI 合并后已移除已有 Flyway 迁移有效 SQL 漂移的临时例外；PR、merge queue 与其他分支均恢复严格阻断，旧开关不能重新放行。版本连续性和迁移安全扫描继续执行。
 
 安全扫描编排单测此前不属于主 reactor，PR 和 Full CI 又均显式跳过；现本地工作流改为执行，独立模块构建与入口失败传播已验证，远端 CI 尚待验证。详见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md)。
 
@@ -205,7 +209,7 @@ Go 三包及实际 Kafka 模块 race 回归通过, Helm 双 Release 2 项通过�
 
 ## 作业与 Workflow 六类时限告警（2026-10-25，2026-10-26复核）
 
-仍在进行，完整范围见[专项计划](job-workflow-sla-completion-plan-2026-10-25.md)。截至 2026-10-26，六类软时限已覆盖已建 Job、Workflow 根运行及尚未物化的 Workflow 子作业机会；来源事实自动解除和恢复重投已接入。Workflow 策略配置包、租户管理员读写与租户用户拒绝已有定向测试；修复默认 MyBatis 配置下查询返回默认值的问题后，API/RBAC 10 项通过，Mapper/Service 9 项通过，配置包校验/应用 23 项通过。Alertmanager 到本地 HTTP 收件端的 503 重试、发生/恢复回执及投递日志有真实 PostgreSQL 定向验证；Flyway 已从空库迁移至 V358。仍缺真实 Orchestrator→Alertmanager→Console 联合发送、Docker/Helm 目标环境 firing/resolved、最终渠道收件及外部可用性验收；定向通过不等于发布或生产验收。
+仍在进行，完整范围见[专项计划](job-workflow-sla-completion-plan-2026-10-25.md)。截至 2026-10-26，六类软时限已覆盖已建 Job、Workflow 根运行及尚未物化的 Workflow 子作业机会；来源事实自动解除和恢复重投已接入。Workflow 策略配置包、租户管理员读写与租户用户拒绝已有定向测试；修复默认 MyBatis 配置下查询返回默认值的问题后，API/RBAC 10 项通过，Mapper/Service 9 项通过，配置包校验/应用 23 项通过。Alertmanager 到本地 HTTP 收件端的 503 重试、发生/恢复回执及投递日志有真实 PostgreSQL 定向验证；Flyway 已从空库迁移至 V358。隔离测试已补真实 Orchestrator 告警服务→Alertmanager→Console HTTP→本地 Webhook 的发生失败重试及恢复回执；应用共进程、租户权限为替身。独立部署、Docker/Helm 目标环境 firing/resolved、真实供应商及外部可用性验收仍缺；定向通过不等于发布或生产验收。
 
 - 历史批次（第五批）：四类条件复用原 SQL，按租户/实例复读策略，实例锁竞争非阻塞跳过且不写 claim；当批 50 个定向用例通过。当时未完成项已在后续批次更新，不能作为当前状态。
 - 历史批次（第六批）：V356 逐实体/渠道隔离发生和恢复回执；当批 36 个定向用例通过，覆盖事务回滚、强制 RLS 和迁移。当时尚未完成的解除、CLOSED 补发与未建 Job 机会后续见第八至十二批。

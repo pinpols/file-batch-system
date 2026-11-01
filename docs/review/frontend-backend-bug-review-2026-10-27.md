@@ -1,5 +1,214 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-11-01：本地关键边界与前后端联验续查
+
+**后续串行复验（覆盖下方对应的历史待验状态）**：修复复制弹窗租户切换和作业包迟到响应后，`npx vitest run --maxWorkers=2 src/utils/configBatchRecovery.test.ts src/api/configBatchRecovery.test.ts src/api/configBatchMutationKeys.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts` 共 5 个文件、109 项通过，日志 `/private/tmp/wdi-config-batch-frontend-retest-20261101.log`。前述真实 HTTP 回查暴露的 JSON 序列化问题修复后，`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigBatchOperationRecoveryServiceTest,ConsoleConfigBatchRecoveryControllerTest,ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false test` 共 18 项通过，包含 4 项真实认证 HTTP 和隔离 PostgreSQL 用例，日志 `/private/tmp/wdi-config-batch-http-fixed-20261101.log`。这些结果不等同于网络断连后的真实浏览器联验。
+
+**补充静态检查**：当前前端源码 `npm run typecheck`、`npm run check:i18n`、`npm run gen:api:check`、`npm run check:docs` 及本批受影响文件 ESLint 均通过；后端文档结构和脚本治理检查通过。脚本治理首次发现实际触发观察记录的两个 SQL 未列入索引，补充 `scripts/db/README.md` 后重跑通过。两仓的工作区和暂存区 `git diff --check` 均通过。
+
+**后端受影响类串行复验**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigBatchOperationMapperIntegrationTest,ConsoleIdempotencyRequestIdentityTest,ConsoleIdempotencyInterceptorTest,TenantConfigInitOutcomeTest,DefaultConsoleTenantConfigInitApplicationServiceTest,ConfigBatchOperationRecoveryServiceTest,ConsoleConfigBatchRecoveryControllerTest,ConsoleTenantConfigInitValidationTest,DefaultConsoleTenantConfigCopyServiceTest,DefaultConsoleJobBundleApplicationServiceTest,ConsoleJobBundleControllerTest,TenantWipeScriptsIntegrityIntegrationTest,ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 1：114 项中 110 项通过、4 项错误、0 断言失败、0 跳过。4 项均属 `ConfigSyncAuditRecoveryIntegrationTest`，首个错误为隔离 PostgreSQL 容器等待启动超时，Spring 上下文未能初始化，业务未执行；剩余 3 项受上下文失败阈值影响。其余包括真实数据库 Mapper 5 项和租户清理脚本 3 项通过；日志 `/private/tmp/wdi-console-target-full-20261101.log`。这次失败不能覆盖同一 4 项此前成功的记录，也不能称本轮全部通过。
+
+超时的 4 项随后以 `./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 单独重跑，4 项通过，日志 `/private/tmp/wdi-http-four-retry-20261101.log`；此前 114 项整批命令仍记录为失败。
+
+**边界与新增测试状态**：双独立 Orchestrator 进程缓存失效及独立 Worker 请求在途时导入渠道配置的测试已通过，证据见下。浏览器探针已补容器匿名卷清理和断连断言，运行结果见下。仅针对实际复现或确定的契约缺陷修复；复制弹窗跨标签账号切换候选尚无该路径复现，不据此添加生产防御。
+
+**真实浏览器首次尝试**：使用当前源码构建的 Console 可执行包、专属 PostgreSQL/Valkey 与前端快照执行探针，空库迁移成功、Console 就绪且匿名请求返回 401；页面提交和断连阶段探针报错，未取得恢复结果，退出 1。脱敏记录 `/private/tmp/wdi-browser-recovery-run-20261101.log`，本次隔离进程和容器按 owner 清理；具体原因仍在定位，不能作为业务或浏览器联验通过。构建命令 `./mvnw -ntp -pl batch-console-api,batch-worker/dispatch -am -Dmaven.test.skip=true package` 成功，该命令跳过测试。
+
+**真实浏览器第二次尝试**：修复临时 Vite 字体目录白名单并增加阶段诊断后，探针在导入弹窗选择目标租户时超时，尚未提交；日志 `/private/tmp/wdi-browser-recovery-retry-20261101.log`。该次 Vite 日志有依赖优化引起页面重载，但不能据此断定它就是选择超时的原因。测试夹具已增加导航观察与失败诊断，待重新验证；尚无浏览器端原键回查通过证据。
+
+**真实浏览器第三次尝试**：已观测到开发服务器触发主页面重载；重载后探针尝试再次打开导入弹窗时，已有弹窗仍存在而点击超时，尚未发送业务请求。日志 `/private/tmp/wdi-browser-recovery-retry2-20261101.log`；本轮不能证明或否定业务恢复能力，临时夹具待修正。
+
+**真实浏览器最终重跑通过（快照边界）**：修正多选框的实际聚焦、标签选择和目标确认后，`python3 /private/tmp/wdi-browser-recovery-draft/runner.py` 退出 0；真实 Chromium 登录、CSRF、两个目标正式导入，拦截到后端成功及数据库写入后丢弃浏览器响应，刷新页面以原键只读回查，核对页面未知提示、完成提示、逐目标结果、原请求完成标记、配置及修订号，未重复写入。日志 `/private/tmp/wdi-browser-recovery-retry4-20261101.log`；仅清理本轮 owner 资源。此为作业包导入本地链路，不代表租户复制已做同等浏览器断连复验或目标环境验收。运行期间另一任务恢复对共享前端工作树的改动：浏览器使用临时前端副本和此前构建的 Console JAR，隔离库实际迁移至新增 V375；这不是两个仓库最新源码的原子快照，不能外推为最新整仓联验。
+
+**端到端测试编译问题**：双进程用例首次编译因该模块没有 Lombok 而失败，已改用现有 SLF4J 依赖；第二次暴露现有 SDK 测试将列表传给字符串类型的清理服务参数，已按当前服务契约传入单个租户字符串。两次均未运行目标用例，原日志分别为 `/private/tmp/wdi-two-orchestrators-20261101.log` 和 `/private/tmp/wdi-two-orchestrators-retry-20261101.log`；修正后的定向验证结果另记。
+
+**独立进程缓存联验通过**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=RuntimeConfigImportCacheE2eIT#shouldInvalidateIndependentOrchestratorCachesForImportedTenant' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 0，1 项通过。两个不同 Orchestrator JVM 各自预热两个租户缓存，正式导入后核对数据库及目标回执、两进程失效事件、新配置读取和另一租户原值。日志 `/private/tmp/wdi-two-orchestrators-retry2-20261101.log`。本测试采用 120 秒本地缓存和 1 小时对账间隔以隔离自然过期/周期对账，使用测试安全旁路；不代表生产参数、鉴权、混版或目标环境验证。
+
+**独立 Worker 在途导入联验通过**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=WorkerProcessRestartRecoveryE2eIT#shouldCompleteInFlightDispatchWhenChannelIsImported+shouldContinueDispatching_whenWorkerProcessRestarted' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 0，2 项通过。独立 Dispatch Worker 的旧地址请求被真实接收后，测试执行正式导入并确认新地址及目标回执，再放行旧请求，核对任务成功和新地址未收到旧请求；原有进程重启用例同时通过。日志 `/private/tmp/wdi-worker-inflight-target-20261101.log`。导入通过应用服务执行，此项不覆盖 Console HTTP 鉴权或目标部署环境。
+
+**原键回查整改进行中**：已为租户复制及作业包创建、导入接入按原 HTTP 身份登记和逐目标回执；成功回执与目标写入同事务，缺失项保持未知，重复目标按序号区分。前端在正式提交前保存原键，支持同账号、原请求租户及同标签页刷新后的只读回查；用户可确认停止跟踪，该操作不改变服务端结果。历史请求、无键操作、试运行、跨标签页及服务端未登记的请求不保证可回查。当前不保存原请求正文，不自动续跑未确认目标；混合新旧版本、独立角色完整部署及目标环境未验证。
+
+**本批验证与未完成项**：前端 `npx vitest run --maxWorkers=2 src/utils/configBatchRecovery.test.ts src/api/configBatchRecovery.test.ts src/api/configBatchMutationKeys.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts`：5 个文件、94 项通过（`/private/tmp/wdi-config-batch-frontend-final-20261101.log`）；前端 i18n、文档与 API 生成一致性检查通过。首批后端定向运行中，真实 PostgreSQL Mapper 事务及普通角色隔离 5 项通过；另有 1 项纯单测因 Mockito 缺少空回执桩报错，补齐后 `ConfigBatchOperationRecoveryServiceTest` 5 项通过。随后包含真实认证 HTTP 三个新用例的重跑失败：隔离 PostgreSQL 启动超时，三项均未进入业务；同次运行后段出现多个 class 缺失，同时有其他 Maven 进程使用同一项目和 `target` 目录，不能把该次失败或既有单项通过作为当前完整结果。日志分别为 `/private/tmp/wdi-config-batch-recovery-target-20261101.log`、`/private/tmp/wdi-config-batch-service-rerun-20261101.log`、`/private/tmp/wdi-config-batch-recovery-full-target-20261101.log`。待其他任务结束并稳定源码后，应串行重跑受影响类及真实认证用例，再以新版制品运行已准备的真实 HTTP 响应断连回查探针；当前尚无该修复的真实浏览器与后端联验结论。
+
+本批最终前端类型检查因资源竞争由本任务终止，exit 143；补充“停止跟踪”前的类型检查曾通过，但不代表最终源码已复验。停止时误将另一前端任务的 `vue-tsc` 进程识别为本任务进程并发送 SIGTERM，该检查被中断，未修改其文件；随后已停止本任务自己的重复类型检查。两任务的类型检查均需各自复验。
+
+并发期间，工作树索引新增了本批 V373、回查代码和其他任务的 V374 等新文件；本任务未执行暂存，保持观察到的索引状态，不据此推断用户希望提交。其他任务仍在修改和构建同一工作树时，不重新使用共享 Maven `target` 或覆盖其文件。
+
+**租户重置衔接待验**：两份租户重置 SQL 已补删除被清理目标租户的 V373 回执，并删除被清理审计租户的操作及其级联回执；未被清理的审计操作保留原目标列表，已删回执的目标仍为未知。`TenantWipeScriptsIntegrityIntegrationTest` 已补相应隔离数据库案例，但尚未运行。脚本需要已应用 V373 且执行账号具备跨租户清理权限，不曾在共享数据库执行。混版期间旧实例不会登记新回执，旧实例仍处理写请求时不能承诺原键恢复覆盖所有请求。
+
+**前端续核待整改**：复制抽屉的同步 watcher 在租户 store 更新、localStorage 尚未写入时读取请求租户，可能错误显示租户不一致并隐藏待查记录；需保持旧结果同步失效，待 store 写入完成后刷新列表并补真实 setter 顺序的组件回归。作业包页面处理回查和提交的迟到响应时，未再次比较实际请求租户头；跨标签切换后的影响以及成功后本地记录清理失败的提示需补针对性复核和修复。保存原键与拦截器读取租户头之间的跨标签交错尚未复现；该拦截器为同步执行，不能按普通异步微任务竞态认定为现有 Bug。上述事项因配对前端工作树正由另一任务使用，尚未修改或验证。
+
+**并行任务暂停后的复验进展**：复制弹窗用真实 Pinia setter 的切租户用例首红（1 项失败，日志 `/private/tmp/wdi-copy-tenant-switch-red-20261101.log`）；作业包用例模拟另一标签切换请求租户后，旧成功响应错误清除原记录，首红 1 项（`/private/tmp/wdi-job-recovery-late-tenant-first-red-20261101.log`）。两个修复已写入，修复后测试尚待运行。后端 4 条真实认证 HTTP/隔离 PostgreSQL 用例已进入业务，但全部失败：实际响应把 Jackson 2 的 JSON 节点按普通对象输出；原目标写入和已知回滚已发生，首次原始响应的重复目标更新计数为 1，失败位于回查结果或摘要。日志 `/private/tmp/wdi-config-batch-http-retry-20261101.log`。已将响应边界改为目标回执 record 和普通元数据对象；需修正相关测试并重跑后才能称为修复通过。另一标签切换账号时复制弹窗的迟到响应目前只有源码候选，尚无该具体路径的真实浏览器复现。
+
+**原始目标**：完成本地可执行的配置导入、缓存失效和在途任务；事务、锁、租约与副作用；SQL 状态、租户隔离、归档恢复；配置复制与作业包未知结果、跨账号权限、浏览器真实后端操作及告警最终收件验证。分别记录当前源码、实测层级、未验证和目标环境依赖，不以独立测试结果推断完整链路。
+
+**工作区与授权**：后端 `/Users/dengchao/Downloads/file-batch-system`、前端 `/Users/dengchao/Downloads/batch-console` 开始时均为 `perf/local-loadtest-2026-10-31`；审查期间两仓当前分支被重命名为 `fix/bug-fixes`，HEAD 和工作区路径未变，既有未提交改动保留。隔离 Testcontainers 和本地测试接收端用于本轮验证；本机现有共享 Compose 与其数据不作为写入目标。未发送外部通知。
+
+**环境重建后的角色用例复验**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigCacheInvalidationOutboxIntegrationTest#shouldRequireTableGrantsAndPolicy_whenDeliveryRoleClaims' -Dsurefire.failIfNoSpecifiedTests=false test`：隔离 PostgreSQL 等真实依赖启动，指定方法 1 项通过、0 失败、0 错误、0 跳过，exit 0；日志 `/private/tmp/wdi-outbox-role-method-20261101.log`。该结果只覆盖该方法的表授权、RLS 策略和领取边界，不代表分角色部署的整条链路已验收。
+
+**待业务决定**：共享文件多作业归档的回看口径（首次、逐作业快照或最新状态），以及显式补跑作业的请求日历与历史冻结日历归属，均不预设答案、不按 Bug 修改。两项分别需要业务方裁定；其他验证继续。
+
+**隔离数据库定向验证 PASS**：`./mvnw -ntp -pl batch-orchestrator -am '-Dtest=WorkflowArchiveIntegrityIntegrationTest#shouldSerializeWorkflowNodeAttachmentAgainstJobInstanceDelete+shouldRetainHotTreeAndRollbackColdNodesWhenRootCopyFails+shouldAcceptMatchingColdCopiesWhenRetryingArchive,ArchiveColdStorageIntegrationTest#shouldSerializeCompensationAssociationWithArchive+shouldNotLoseCommittedStepUpdateDuringArchive+shouldRetainHotTree_whenLogReferencesForeignTenantInstance,MultiTenantIsolationIntegrationTest#shouldNotEnforceTimeout_whenLastRunningTaskWasReclaimedAfterScan+shouldNotExposeJobInstanceAcrossTenants+shouldRejectForgedCrossTenantWorkflowAssociation' -Dsurefire.failIfNoSpecifiedTests=false test`：9 项通过，0 失败、0 错误、0 跳过；PostgreSQL 17.11 隔离容器从空库应用 371 个 Flyway 迁移。覆盖归档并发锁、复制失败回滚和重试、跨租户保护及租约回收后的旧超时候选；不代表全部事务或目标环境通过。完整日志 `logs/verification/local-boundaries-2026-11-01/archive-lock-isolation.log`。
+
+**前端提示 PASS，恢复仍未完成**：配置复制、作业包导入和创建向导的正式请求遇网络中断、5xx 或冲突时提示结果可能未知并要求核对目标；明确 400 和预演不误提示。两个组件测试文件 61 项通过，定向 ESLint、i18n、`npm run check:docs` 和最后一次 `npm run typecheck` 通过。该提示不保存原请求或支持跨刷新回查，不能称为持久回执恢复；同版真实浏览器与后端待执行。
+
+**缓存失效竞态首红（历史）**：`OrchestratorConfigCacheRefillRaceIntegrationTest#shouldNotRefillOldDefinitionAfterInvalidation` 在隔离真实 Redis 和受控 Mapper 下固定旧读取→失效→旧读取回填，后续读期望“新配置”实际得到“旧配置”；1 项失败、0 错误、0 跳过，Maven exit 1，首红日志 `/private/tmp/config-cache-refill-race-first-20261101.log`。该首红确认缓存层交错缺陷；后续补充了下述真实 PostgreSQL 配置导入联合验证。相同源码模式涉及作业、Workflow、日历、窗口、配额及本地正负缓存；后续已实现局部修复并完成下述定向验证；Cluster 键槽、混合版本及容量边界仍须分别验证。
+
+**失效发布故障首红及后续验证**：修复前源码中 Console 在配置提交后先删除旧键，再推进 Redis 全局和键版本并广播；异常只记录日志/指标，ConfigSync receipt 对账不补发失效，也不覆盖直接初始化、复制、Excel 及常规编辑。全局版本推进后键版本失败、或 Redis 整段不可用期间提交后恢复，可能使旧 v2 值继续命中；首轮定向注入因测试 JDBC 使用未规范化大写策略码查询不到行而失败，未到恢复断言，日志 `/private/tmp/config-invalidation-key-failure-first-20261101.log`。夹具修正后已取得有效首红：真实 PG/Redis 的配置导入和成功回执均已确认，定向注入一次配额 key revision 写入失败，全局版本 1→2、键版本 1→1；真实 subscriber 对账后 30 秒仍读取旧配额 10，而数据库新值为 20。1 项因 Awaitility 超时报错、exit 1，日志 `/private/tmp/config-invalidation-key-failure-rerun-20261101.log`；另在专属非复用 Valkey 容器暂停期间实际提交导入和成功回执，恢复后清本地缓存，全局/配额版本均 1→1，30 秒仍读旧值 10（预期 20）；1 项 Awaitility 超时报错、exit 1，日志 `/private/tmp/config-invalidation-outage-first-20261101.log`。测试确认自有容器已解除暂停并恢复读取。两类故障均已复现；后续持久队列的同 JVM 真实 PG/Valkey 恢复用例已通过，见下文。旧实例兼容与目标环境仍需核查。
+
+**事务缓存定向首红**：`OrchestratorConfigCacheServiceTest` 的事务隔离与活跃事务回源场景 5 项失败、0 错误、0 跳过，显示 RR/Serializable 仍会读缓存，READ COMMITTED 事务的旧正值和旧缺失仍可回填本地缓存；日志 `/private/tmp/config-cache-transaction-first-20261101.log`。这属于受控单测；真实 PostgreSQL/MyBatis 会话交错的联合用例随后已通过，见下文。Workflow 重放预览及启动存在明确的固定快照调用路径，性能与故障恢复边界仍需另验。
+
+**状态契约及 SDK 恢复局部 PASS**：本轮 `LeaseParentLifecycleSqlContractTest`、`CapacityProfileMapperXmlTest#shouldMatchJobLifecycle_whenClassifyingCapacityProfiles`、`JobInstanceStatusSqlContractTest` 共 6 项通过，属于 Mapper XML 与状态枚举集合对照；`SdkOrdinaryLeaseRecoveryE2eIT` 的 3 个指定方法通过，覆盖隔离独立进程提交后强杀、已提交报告响应断连及幂等任务经 Outbox/Kafka 恢复。日志 `logs/verification/local-boundaries-2026-11-01/sdk-dispatch-status.log`；这不是所有 Mapper/真实供应商验收。独立 Dispatch 的本地 API_PUSH 接收持久化后崩溃用例也通过：重领后收敛为 UNKNOWN，接收台账仅一条；执行 JAR 与当前编译输出的 Dispatch 136、worker-core 204、common 417 个 class 逐项一致。完整命令：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=LeaseParentLifecycleSqlContractTest,CapacityProfileMapperXmlTest#shouldMatchJobLifecycle_whenClassifyingCapacityProfiles,JobInstanceStatusSqlContractTest,SdkOrdinaryLeaseRecoveryE2eIT#shouldBlockUnsafeEffectAfterSdkProcessIsKilled+shouldRecoverSdkReportAfterCommittedResponseIsDisconnected+shouldRecoverSafeEffectThroughProductionOutboxAndKafka,WorkerReportLostAfterBusinessCommitE2eIT#shouldNotRedeliverAfterWorkerCrash_whenApiPushAcceptedBeforeOutcomePersisted' -Dsurefire.failIfNoSpecifiedTests=false test`，SQL 6 项和 E2E 4 项通过，exit 0。
+
+**缓存修复定向单测 PASS**：`./mvnw -ntp -pl batch-orchestrator -am '-Dtest=OrchestratorConfigCacheServiceTest,OrchestratorRedisSupportRevisionTest,OrchestratorConfigInvalidationSubscriberTest' -Dsurefire.failIfNoSpecifiedTests=false test`：当前源码 35 项通过、0 失败/错误/跳过；日志 `/private/tmp/config-cache-unit-final-20261101.log`（此前 34 项日志 `/private/tmp/config-cache-unit-fixed-20261101.log`）。局部修复为按租户/类型的通配和精确版本区分共享缓存、本地失效代次保护回填、显式固定快照事务直接查库及禁止活跃事务回源污染缓存，并对已确认的 Redis 命令超时作降级。该结果不证明真实 PG 并发、双实例/Worker 联合、Redis 故障期间提交后的恢复、key revision 部分失败、版本回退、混合旧实例或性能；上述边界仍开放。
+
+**未知结果恢复的现状和约束**：ConfigSync 在目标提交同一事务中写目标回执，并以原请求键建立审计身份；复制与作业包旧入口没有复用该身份。复制会重新读取源配置，故新请求可能对应不同快照；ConfigSync 当前也不在服务端保存完整导入正文。可靠的原键对账需明确操作类型和键命名空间，防止污染既有同步日志或跨入口键冲突；仅所有目标都有收据时可确认终态，缺收据仍为未知。自动补跑还需要保护原始快照并围栏在途请求，不能依据找不到状态就自动换键重发。此段为当前源码核查和待实施设计约束，非已完成恢复。
+
+**持久失效测试首次环境失败与重试**：`./mvnw -ntp -pl batch-console-api -am -Dtest=ConfigCacheInvalidationOutboxIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test` 在专属 Testcontainers Kafka 启动时等待 `RECOVERY → RUNNING` 超时，3 项均为上下文初始化错误，未执行业务断言；exit 1，首错日志 `/private/tmp/config-outbox-isolation-20261101.log`。此前同类旧版源码 3 项通过不覆盖本次测试隔离改动。随后按受影响的三个类进行单次串行重试，同机专属 Kafka 启动成功，当前版本 `ConfigCacheInvalidationOutboxIntegrationTest` 3 项通过、0 失败/错误/跳过；两类 Redis E2E 随后也通过，整体命令 exit 0，日志 `/private/tmp/config-invalidation-three-target-retry-20261101.log`。未清理用户的共享服务或将环境失败归因于业务逻辑。
+
+**持久失效本地定向复验 PASS**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=ConfigCacheInvalidationOutboxIntegrationTest,ConfigCacheInvalidationRecoveryE2eIT,ConfigInvalidationReconcileOrderingE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0；真实 PostgreSQL 的队列事务和领取隔离 3 项、真实 PG/Valkey 的局部版本写入失败与 Redis 暂停恢复 2 项、广播丢失与对账交错 1 项，合计 6 项通过、0 失败/错误/跳过。日志 `/private/tmp/config-invalidation-three-target-retry-20261101.log`；故障容器已解除暂停。该验证为隔离依赖及同 JVM 服务/订阅器，不覆盖独立进程、分角色部署、Redis 已确认后的数据回退、混版或吞吐容量。
+
+**独立主库角色授权工具 PASS**：新增 `scripts/db/config-cache-invalidation-role.sql`，由 DBA 显式指定既有可信角色和 grant/revoke，不创建账号、不授权 PUBLIC，也不更改已有 schema、V232 或其他业务权限；重复执行和冲突检查均在同一事务内。`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigCacheInvalidationRoleSqlIntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0，隔离 PostgreSQL 空库执行全部 372 项 Flyway 迁移，2 项通过、0 失败/错误/跳过，覆盖含空格和引号角色、权限与 RLS 隔离、重复授权/撤销以及非法参数和策略冲突。日志 `/private/tmp/wdi-config-role-sql-target-rename-20261101.log`；`check-script-governance.py`、文档结构和差异空白检查通过。此为脚本和数据库局部验证，未对共享或目标数据库执行授权，Spring 分账号部署及原有 V232 函数权限仍待验证。
+
+**持久失效运行成本**：当前 V372 对受保护配置表变更写入待投递记录，成功提交后既有立即失效和 relay 后续投递可能各推进一次版本并发布事件。重复投递是现有实现事实，是否影响吞吐和资源尚未测量，不能推断性能瓶颈；也不为消除此重复引入未经验证的确认协议。
+
+**持久失效独立数据库角色验证**：V372 默认只对 Flyway 执行账号建立策略，而 Console primary 账号可独立配置。隔离 PostgreSQL 空库执行真实 372 项迁移后，以独立 LOGIN、NOSUPERUSER、NOBYPASSRLS 账号和真实 MyBatis Mapper 验证：仅有表权限但无专属 RLS 策略时 `lockNext()` 返回空；授予可信角色专属策略后可领取、认领和确认，普通角色仍不可见；手动写入另需 INSERT 与序列 USAGE。探针退出 0，日志 `/private/tmp/wdi-config-role-20261101-ZtHfBk/run.log`，专属容器已清理。新增的同类 JUnit 仍未运行；该探针不证明 Spring 分账号部署或 V232 等既有函数权限已配置。当前未修改生产授权，不能以默认同账号的通过结果覆盖分角色部署。
+
+**作业包提交后响应丢失已复现**：使用当前 Console 可执行 JAR、独立 PostgreSQL/Valkey 和真实登录、CSRF，经本机代理转发真实 Job Bundle 导入；代理在收到服务端 200 和完整结果后关闭客户端连接。两个目标的提交由原始响应和数据库独立核对：相同原键再次提交返回 409、两目标 revision 未变化；换新键再次提交时两目标 revision 均增加。`python3 /private/tmp/wdi_loss_runner.py` exit 0；探针及 SQL、日志保留于 `logs/verification/local-boundaries-2026-11-01/job-bundle-response-loss/`，探针 SHA-256 为 `ce4ed444f1a3b1af5ac4bb2b656ae28db989daa615a936ce2ad51dce9f2c8171`。4 次此前尝试分别停在文件存储配置、PG 初始化 stderr 缺失、内部密钥配置和临时探针命名冲突；均未提交业务，首错保留于 `/private/tmp/wdi-loss-run-{yy04qev6,sqo336rc,krp_gj0w,bno79i7_}/`。本轮仅证实这个实际 HTTP 丢响应路径及现有键行为，不代表原键回查已实现、浏览器通过或部分目标事务异常已复现；专属容器与进程已清理。
+
+**未知结果恢复的未定方案**：Job Bundle 和租户复制原键回查接口及持久恢复尚未实现。两条针对未定接口的新增测试草稿未执行、不会证明真实网络断连，已备份至 `/tmp/wdi-unimplemented-recovery-tests.patch` 后从测试类移出，原有测试内容保留。随后针对现有作业包导入的真实响应丢失用例执行单方法测试，但专属 Kafka 启动超时，测试上下文未完成、业务断言未执行，首错 `/private/tmp/wdi-response-loss-20261101.log`；本轮新增的未验证测试已另行备份并从工作区移出。复制预览只能核对当前数据，不能证明原请求的逐项目标结果。
+
+**前端 E2E 类型检查边界**：`npx tsc --noEmit -p e2e/tsconfig.json` 失败，首错为已有测试缺 Node 类型；显式加入 Node 类型后仍有其他存量 E2E 类型或路径错误。仅针对 `closure-recovery-real.spec.ts` 及其依赖用临时配置补 Node 与路径别名检查通过，不代表全 E2E 类型通过；真实浏览器执行仍待完成。
+
+**真实浏览器隔离环境，执行中**：当前源码以 `./mvnw -ntp -pl batch-console-api -am -DskipTests package` 打包成功（测试跳过，不计为测试通过），仅用于专属 PG/Valkey、Console 与 Vite 的浏览器验证；不会复用本机共享 Compose。隔离库已迁移至 V371，Console 关闭安全旁路且匿名 `/api/console/auth/me` 返回 401；原浏览器用例首轮因缺少项目版本 Chromium 未进入测试，首错 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original.log`，已在私有临时目录安装对应浏览器。原有 ConfigSync 用例随后进入业务，两个目标提交和回执断言执行后，页面等待同步日志标签超时；当时 Vite 正在依赖优化并重载，环境因素是待验证候选，尚未排除页面问题。该轮日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original-retry.log`，现正单例复验；测试独占租户和故障触发器清理计数均为 0；本次 Console/Vite 进程已退出、19880/15175 无监听、专属标签容器为 0。首错与通过日志检查无测试口令后已复制到忽略目录 `logs/verification/local-boundaries-2026-11-01/`。
+
+**跨账号会话风险，修复中**：真实浏览器 trace 显示登录页在 logout 204 后再次执行兜底 logout，两次复用同一自动幂等键而出现 409；自动键未包含会话身份，快速跨账号切换存在错误复用风险。另有旧配置页请求在登出后返回 401 并触发 token 刷新；旧会话 401 在账号切换后仍发起刷新已由受控测试先红（`/private/tmp/wdi-session-stale-first-20261101.log`）。现针对 logout 停止自动注入幂等键，并让请求捕获会话代次、阻止旧错误刷新/重试/提示；`interceptors.integration.test.ts` 与 `auth.test.ts` 共 43 项通过，目标 ESLint 通过。真实浏览器进一步复现跨标签页 Cookie 竞态：旧标签页的 logout 204 被延迟，新标签页成功登录且 `/auth/me` 返回 200，释放旧响应后新会话变为 401；首红 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-cookie-first.log`。内存代次本身不能阻止浏览器处理 Set-Cookie；当前版本已以同源 Web Locks 协调密码登录/登出/换发，并以 Chromium 双标签验证该复现时序。旧标签、无锁/非安全上下文、OIDC 回调和超时后响应仍未覆盖；refresh 等其他写 Cookie 路径尚未完整验证。本轮仅使用隔离账号与数据。
+
+**认证追踪续项**：后端 `/auth/token` 成功响应不返回 accessToken，前端此前却要求该字段，真实形态单测先红 `/private/tmp/wdi-refresh-cookie-first-20261101.log`；修复应按解包后的成功响应判断，不能向浏览器脚本泄露 token。登录页挂载时无条件 logout 会使另一已登录标签失效，组件测试先红 `/private/tmp/wdi-login-page-logout-first-20261101.log`，已移除该历史兜底；失效 Cookie 公开登录先有过滤器测试，现也已通过隔离 Chromium 真实登录专项。当前认证、登录页、维护和降级等 6 个受影响测试文件合计 66 项通过，日志 `/private/tmp/wdi-auth-final-66-20261101.log`；最终 `npm run typecheck` 也已通过（`/private/tmp/wdi-auth-final-typecheck-20261101.log`）。
+
+**第二次隔离浏览器环境首错**：Console 启动时遗漏 `BATCH_PLATFORM_DB_*`，错误尝试默认 `localhost:15432` 并因空密码认证失败，未完成认证或执行 SQL；浏览器因此收到 502，未进入业务。原日志 `/private/tmp/wdi-auth-lock-20261101-eNQEbt/playwright.log`。随后确认独立启用的 read-replica 使用独立配置，通用数据源变量不能覆盖其默认地址；第二次进程启动日志仍出现该默认目标。已停进程、核对并禁用该功能，重启时所有 DB/Redis/存储指向专属目标或不可达端口，实际建立 TCP 连接仅见专属 PG 61073，匿名请求返回 401。浏览器专项结束后测试租户及故障触发器均为 0，专属 Console/Vite 已退出、19880/15175 无监听、专属标签容器为 0。不得把本次写成全程未尝试共享地址。
+
+**跨标签 Cookie 协调，待浏览器复验**：对当前版本同源页面的密码登录、登出和换发请求使用 Web Locks 排队，锁等待支持超时和取消，不抢占持锁请求；旧登录加密迟到和排队期间会话变化均有受控首红。当前源码的 8 个受影响前端测试文件 74 项、ESLint 和 typecheck 通过，日志 `/private/tmp/wdi-auth-lock-snapshot-final-20261101.log`、`/private/tmp/wdi-auth-lock-snapshot-typecheck-20261101.log`。无 Locks/非安全上下文沿用原行为，旧标签、未参与客户端、OIDC 回调与超时后迟到响应均不能视为已覆盖；隔离 Chromium 已通过两个专项：真实旧登出响应扣留时新标签登录排队并最终保持新账号，以及失效 HttpOnly Cookie 下不自动登出并成功登录；日志 `/private/tmp/wdi-auth-lock-20261101-eNQEbt/playwright-final.log`。该结果不覆盖旧标签/OIDC/其他浏览器或无 API 环境。标准语义见 [Web Locks 规范](https://www.w3.org/TR/web-locks/)，适配边界见前端浏览器支持文档。
+
+**跨标签复现数据库范围**：临时认证复现环境迁移时读取到了正在编写、尚未稳定的 V372；它仅作为旧 Console JAR 的隔离认证复现数据，不构成迁移成功或同版后端验证。最终迁移验证必须在 V372 稳定后使用全新隔离库重建。
+
+**跨标签身份状态候选**：浏览器 Cookie 在同一存储分区共享，但当前 `authSession.ts` 代次按页面内存保存。一个标签切账号后，另一个标签可能继续展示旧 profile/权限，而请求使用新 Cookie；隔离 Chromium 双标签已实测旧页显示 admin、同页 `/auth/me` 实际为 auditor；正常关闭引导后从旧页面真实登出，会将新标签 auditor 会话从 200 变为 401。日志 `/private/tmp/wdi-cross-account-20261101-F5zWmQ/playwright-second.log`；首轮因引导遮罩未能完成操作的日志亦保留。该轮使用先前 Console JAR 与尚未稳定的 V372 临时库，仅证明认证身份错配，不构成当前后端或迁移验收；本轮 fixture 租户及故障触发器均清理为 0，专属进程、端口和标签容器已退出。需核对跨标签共享代次、休眠恢复与在途请求，不把锁串行或单页账号切换视为该问题已解决。
+
+**跨标签当前版本浏览器局部 PASS**：前端共享会话代次、恢复时身份复核和旧登出确认拦截，相关受影响前端测试 89 项、typecheck 和目标 ESLint 通过。当前版本使用同版 Console JAR、专属 PG/Valkey 和 Chromium 验证：首轮 3 项中认证锁及失效 Cookie 登录 2 项通过，跨标签项在认证断言前被延迟新手引导遮挡；只修正引导等待并重跑该项，1 项通过。该项核对旧 admin 确认框打开后 auditor 登录、旧页及 `/auth/me` 变为 auditor，确认旧框不发送 logout 且 auditor 会话仍有效。测试源码两次间只改引导等待，后端和前端业务源码摘要一致；首错与复验分别见 `logs/verification/local-boundaries-2026-11-01/current-auth-playwright-first.log`、`current-auth-playwright-retry.log`，fixture 租户及故障触发器均清理为 0。未协调的旧标签/客户端、OIDC、超时迟到响应和其他业务确认框不在本次通过范围；补充源码复核：配置发布、租户复制和作业包页面已监听主体或权限变化并使旧操作代次失效；不能仅凭局部确认函数推断这些页面会以新身份提交。文件重派、归档和到达确认等其他操作仍需实际双账号时序验证，尚未证实越权写入，未据此添加防御。
+
+**JWT 撤销容忍期已复现，修复中**：真实签发/解码器与受控撤销存储测试证实普通 token 的撤销 TTL 少覆盖 clock skew，且过 exp 但仍在容忍期的 token 注销后仍可认证；日志 `logs/verification/local-boundaries-2026-11-01/auth-first-red.log`。已令撤销 TTL 覆盖实际接受窗口并保留存储异常传播；首红方法及新增边界 6 项通过，两类完整回归共 36 项通过；真实 Redis 和多节点时钟仍未验证。
+
+**认证过滤器异常已复现，修复中**：有效 Cookie 的 `filterChain.doFilter` 与鉴权共用 `catch(Exception)`；受控负例证实下游异常逸出时公开路径执行两次、私有路径吞掉异常并误处理为鉴权失败。适用范围限未被下游框架处理的异常；首红日志 `logs/verification/local-boundaries-2026-11-01/auth-first-red.log`，已将下游调用移出认证异常捕获；首红方法及新增边界 6 项通过，两类完整回归共 36 项通过。
+
+**认证相关类完整定向回归 PASS**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConsoleAuthenticationFilterTest,ConsoleJwtServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0；过滤器 16 项、JWT 20 项均通过，日志 `logs/verification/local-boundaries-2026-11-01/auth-classes.log`。无撤销 store、无 jti 沿用原兼容行为，极端 skew 配置及真实 Redis/多节点时钟不在通过范围。
+
+**认证响应类型校正**：生成 OpenAPI 类型保留可选 `accessToken` 供旧客户端兼容，当前后端 Cookie 响应不返回它。已删除前端内部错误必填字段和未被生产调用方消费的 token 返回值；相关 9 个测试文件 84 项、ESLint 和 typecheck 通过，日志 `/private/tmp/wdi-auth-wire-final-suite-20261101.log`、`/private/tmp/wdi-auth-wire-final-typecheck-20261101.log`。最近两项浏览器通过先于该内部类型变更，未在此变更后重跑。
+
+**ConfigSync 真实浏览器局部 PASS**：隔离浏览器与关闭安全旁路的同版 Console、独占 PostgreSQL/Valkey 联验，`closure-recovery-real.spec.ts` 原有“真实 ConfigSync 核对”单例 1/1 通过：真实登录与 CSRF、真实 HTTP 导入和受控审计故障后，两个目标及回执提交，浏览器核对转 SUCCESS，刷新及数据库回读无重复。首次导入由 `page.request` 发起，不是页面按钮；日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original-direct.log`。此前经仪表盘导航的两次超时保留，不据此认定根因；页面按钮与跨账号专项最终 1/1 通过（43.2 秒）：页面提交两个独占目标、预设审计故障后回读两个目标及回执，页面切换 auditor/admin 验证写入口权限和原待核查隔离，刷新后按同键核对至 SUCCESS，数据库无重复；网络哨兵仅允许该请求的预期 500。最终日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-page-fifth.log`。首次选择器遮挡及第三轮 logout 409 / 旧请求 401 首错分别保留于 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-page-first.log` 和 `playwright-page-third.log`。该浏览器结果产生于移除登录页预清理之前，最后源码版本需重跑；证据限此隔离环境和 ConfigSync 场景，不能外推旧复制/作业包持久恢复或所有账号并发路径。
+
+**CI 分片静态检查 PASS**：五个新增 E2E 已登记到 Full CI 与 Staging 的独立分片；`bash scripts/ci/check-e2e-shard-coverage.sh` 验证两份清单覆盖当前 54 个类、无漂移，`actionlint .github/workflows/full-ci-gate.yml .github/workflows/staging-gate.yml` 退出 0。该结果不代表 E2E 实际通过或远端 CI 已执行。
+
+**隔离 Redis 复验局部 PASS**：上述联合 reactor 中 `OrchestratorConfigCacheRefillRaceIntegrationTest` 与 `OrchestratorConfigCacheServiceIntegrationTest` 各 3 项、合计 6 项通过，覆盖已复现的迟到旧读取及缓存基础路径；后三个跨服务 E2E 仍未结束。缓存键与事务语义已同步至 [配置治理运行手册](../runbook/config-governance.md)，其中明确 Redis 故障、旧实例和性能限制。
+
+**配置导入与缓存本地联合 PASS**：`RuntimeConfigImportCacheE2eIT` 4 项通过、0 失败/错误/跳过；真实 PG/Redis 下核对配置同步与目标回执、同 JVM 两份独立缓存和订阅器、固定快照事务及 READ COMMITTED/MyBatis 的旧正值/旧缺失，含只读 REQUIRES_NEW 与外层事务恢复。日志 `/private/tmp/config-runtime-joined-20261101.log`。这是修复后结果；不等同两个独立进程或 Redis 故障恢复验收；Dispatch 结果见下。
+
+**真实 Alertmanager 本地联合 PASS**：`AlertmanagerDeliveryChainE2eIT` 1 项通过、0 失败/错误/跳过。隔离 PostgreSQL 中经真实 Orchestrator 告警服务提交，异步发布到真实 Alertmanager，再经真实 Console HTTP 到本地 Webhook；接收端先返 503 后成功，验证同阶段幂等键、发生及关闭后的恢复通知和数据库回执。应用共进程装配且租户权限为测试替身、本地接收端非真实供应商；不代表生产权限、独立部署或外部供应商验收。日志 `/private/tmp/config-runtime-joined-20261101.log`，配置 E2E 结果另见本节。
+
+**修正测试装配后联合 PASS**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=OrchestratorConfigCacheRefillRaceIntegrationTest,OrchestratorConfigCacheServiceIntegrationTest,RuntimeConfigImportCacheE2eIT,RuntimeConfigImportDispatchE2eIT,AlertmanagerDeliveryChainE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0、BUILD SUCCESS；真实 Redis 6 项和三类 E2E 共 6 项全部通过，0 失败/错误/跳过。Dispatch 场景先冻结旧渠道，再实际导入新配置并核对回执，最后由真实 Worker 在旧 LOCAL 目录投递而新目录无信封；使用隔离 PG/Redis/Kafka、同 JVM Worker 和手动驱动出箱，非独立进程或外部渠道。日志 `/private/tmp/config-runtime-joined-20261101.log`。
+
+**验证快照说明**：SDK/SQL reactor 启动后，`OrchestratorRedisSupport.java` 的 import 顺序和日志换行曾被调整；本批复用格式调整前的类文件，已核对仅为空白与 import 顺序变化。后续格式检查及相关验证应按最终源码重核，不将格式调整后的源码误称为本批重新编译。
+
+**首次运行失败记录**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=RuntimeConfigImportCacheE2eIT,RuntimeConfigImportDispatchE2eIT,AlertmanagerDeliveryChainE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test`；原始日志 `/private/tmp/wdi-local-boundary-e2e-20261101.log`。首个告警用例 FAIL：复用测试应用时无关的 Import Worker 在就绪事件自注册读超时；双缓存用例 FAIL：MOCK Web 环境未绑定 Worker 端口。Dispatch 用例 FAIL：测试专用 Console 扫描漏掉 `DownstreamFallback`。三类均是测试应用装配问题，业务断言尚未执行，整个命令 exit 1；随后修正测试装配并按下述联合 reactor 定向复验通过，首错不直接归因于生产逻辑。
+
+## 2026-11-01：短断言、薄包装与 Map 候选复核续记
+
+两仓分别位于 `/Users/dengchao/Downloads/file-batch-system` 和 `/Users/dengchao/Downloads/batch-console`；开始时为 `perf/local-loadtest-2026-10-31`，审查中同一 HEAD 上重命名为 `fix/bug-fixes`，保留已有未提交改动。原始分母是短断言 321 项、后端薄包装 110 项和 public Map 返回值 60 项，逐编号或逐方法结论仍以本报告相应台账为准，不外推到清单以外的测试、Map 入参和接口。
+
+- 后端短断言 B001–B104 对照当前方法、输入、断言和相邻测试逐项复核，涉及 54 个文件的摘要均与台账快照一致；99 项保留，5 项保留先前增强。B105–B208 对照当前方法及相关上下文，四个已删除的 Worker 上下文非空用例仍由对应真实启动与注册端口测试覆盖。B123/B124 补验证参数错误码及必填国际化 key；B136 补充空 Workflow ID 时节点、连线及作业 Mapper 无调用；B144 补充 misfire 日志中的实际触发名；B156 更正固定哈希样本的说明和名称，避免误称实时读取迁移；B194 同时验证故障渠道熔断和正常渠道放行。B143 的必填 Bean 注入在同类测试中虽会先执行，仍保留其独立装配检查以支持单独运行和定位。相关受影响类已随下述定向命令通过。
+- 前端短断言 F001–F113 对照当前断言与相邻场景复核；F015 更名为准确描述的只读回退，F023/F024 验证实际 Plus/Menu 组件，F068/F069 精确验证密码强度边界与上限，F100–F103 验证具体日志及仅在属性中出现的筛选词。`npx vitest run src/utils/iconResolve.test.ts src/utils/passwordGenerator.test.ts src/utils/logger.test.ts src/constants/theme.test.ts`：4 文件 40 项通过，日志 `/private/tmp/wdi-short-assertion-fe-final-20261101.log`；四个文件的 Prettier 检查和差异空白检查通过。未运行浏览器 E2E。
+- 60 项 public Map 返回值的当前文件摘要与台账一致，逐项对照方法实现及已记录的调用边界；保留动态参数、插件和 JSON/Excel 既有契约，不因词法形式强行改为对象。110 项后端薄包装已逐方法对照当前实现和调用位置：原有 9 项已简化，本轮再移除 2 项纯转发，其余 99 项保留；生产 profile 判断和配额策略转换保留原求值分支及回退语义。受影响类已随下述定向命令通过。
+
+后端受影响类验证：`./mvnw -ntp -pl batch-console-api,batch-orchestrator,batch-trigger,batch-worker/atomic,batch-worker/dispatch -am '-Dtest=ConsoleAiPromptGuardTest,ConsolePasswordHasherTest,WorkflowGraphValidatorTest,MisfireHandlerIntegrationTest,DispatchChannelCircuitBreakerTest,AtomicRuntimeStatusServiceTest,DatabaseQuotaRuntimeStateServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test`，exit 0，7 类合计 98 项通过，0 失败、0 错误、0 跳过；日志 `/private/tmp/wdi-candidate-final-targeted-20261101.log`。其中 misfire 测试使用隔离 Testcontainers，其他为受控单测；编译依赖模块不代表运行了全部模块测试。
+
+台账的 SHA-256 仍是原建表快照，并非本轮修改后的摘要；本轮增强和更名会使对应文件摘要变化。候选结论为源码/测试设计判断；只有明确列出并完成的运行命令才是执行证据。
+
+## 2026-11-01：候选逐项台账与验证进度
+
+两仓在原 `perf/local-loadtest-2026-10-31` 工作区继续，当前分支名为 `fix/bug-fixes`。原 321 个短断言候选已按[逐项台账](#2026-11-01短断言候选逐项处置台账)记录处理：290 项保留，22 项增强，4 项删除，1 项合并并增强，4 项更名；此分母包含先前批次的改动，不代表全工程所有测试。原 110 个后端薄包装和清单生成器列出的 60 个 public Map 返回候选也已逐项登记；Map 入参、隐式 public 和清单之外的其他形式不在该分母内。下方各批“未完成”描述为当时状态，以本节及各台账为当前进度。
+
+本轮另将 TypeScript SDK 默认错误码断言改用独立协议字面量；前端时间戳测试补 UTC 精确值，HTML 清洗测试验证清洗器输出而非仅验证恒等 mock，认证状态测试更名以反映 session 标记。诊断页 E2E 的集群区块断言限定于集群卡片标题并使用现有国际化来源；E2E 用例列表可加载、对应组件测试通过，真实后端浏览器执行尚未完成。
+
+4 个 Worker 保留的注册端口测试均在隔离容器的真实依赖上通过；OTel 空上下文定向测试通过。5 个字符串转换包装的受影响类测试已通过；浏览器 E2E 尚未执行。
+
+## 2026-11-01：本轮受影响测试验证
+
+- `./mvnw -ntp -pl batch-orchestrator,batch-worker/import -am '-Dtest=ImportRecordGovernanceServiceTest,ImportDataQualityServiceTest,DefaultWorkflowDagServiceTest,DefaultRetryGovernanceServiceTest,FileGovernanceMetricsCacheServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test`：五个测试类合计 90 项通过，0 失败、0 错误、0 跳过。新增 `ImportDataQualityServiceTest` 核查缺失上下文、缺失载荷和非字符串载荷；日志 `/private/tmp/string-wrappers-review-20261101.log`。
+- `./mvnw -ntp -pl batch-worker/atomic,batch-worker/dispatch,batch-worker/import,batch-worker/export -am '-Dtest=BatchWorkerAtomicApplicationIntegrationTest,BatchWorkerDispatchApplicationIntegrationTest,BatchWorkerImportApplicationIntegrationTest,BatchWorkerExportApplicationIntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test`：四个保留的注册端口用例均通过，各 1 项，0 失败、0 错误、0 跳过；真实中间件由隔离 Testcontainers 提供，日志 `/private/tmp/worker-context-review-20261101.log`。
+- `./mvnw -ntp -pl batch-common '-Dtest=OtelTraceContextTest' test`：4 项通过、0 失败、0 错误、0 跳过；无活跃链路场景显式使用根上下文并在结束时恢复。
+- `node --test --experimental-strip-types tests/handler.test.ts`（`sdk/typescript`）：4 项通过，默认错误码使用独立预期值。
+- `npx vitest run src/utils/datetime.test.ts`（前端）：21 项通过；`npx vitest run src/utils/safeHtml.test.ts src/stores/auth.test.ts`：27 项通过；`npx vitest run src/views/ops/OpsDiagnostic.test.ts`：20 项通过。
+- `npx playwright test e2e/ops-diagnostic.spec.ts --list`（前端）仅确认 4 个用例可被加载，未执行浏览器测试。诊断页组件测试使用 mock；本轮未针对真实后端执行浏览器 E2E，不能视为端到端通过。
+
+## 2026-11-01：薄包装清单续核
+
+后端原始 110 个词法候选按[逐项台账](#2026-11-01后端薄包装历史候选逐项台账)核对当前方法及直接用途：11 项已简化，其余 99 项因具名业务判断、必要的格式转换、边界封装或测试夹具而保留。新增简化 `BatchWindowGateTest.mockWorkerSelector` 和 `LoadStepTest.mockPayload`，并将 5 个仅做可空字符串转换的单次包装替换为 `Objects.toString(value, null)`；输入只求值一次，空值与非空值语义保持不变。该结论仅覆盖原始 110 项。
+
+`./mvnw -ntp -pl batch-orchestrator,batch-worker/import -am '-Dtest=BatchWindowGateTest,LoadStepTest' -Dsurefire.failIfNoSpecifiedTests=false test`：分别 4 项、18 项通过，0 失败、0 错误、0 跳过。Map 60 项当前逐方法结论见[Map 台账](#2026-11-01当前-public-map-候选逐项台账)，结论仅针对列出的返回类型候选，输入参数、隐式 public 等不在分母内。短断言当前结果以文首和逐项台账为准。
+
+## 2026-11-01：测试候选与 Map 台账续核
+
+- `PreprocessRangeSliceTest.shouldConcatenatePartitionsWithoutDuplicateOrGap` 原有四分片输入和无损结果保留，复用同类已有的切片辅助断言，移除重复的测试内切片循环。`./mvnw -ntp -pl batch-worker/import -am '-Dtest=PreprocessRangeSliceTest' -Dsurefire.failIfNoSpecifiedTests=false test`：15 项通过。
+- `ProcessStagingPartitionMaintenanceTest` 原来仅凭清理数为零不能证明默认开关关闭：测试实例未配置清理依赖，开关错误开启也可能返回零。现增加默认开关为 false 和 mapper 无操作断言。`./mvnw -ntp -pl batch-worker/process -am '-Dtest=ProcessStagingPartitionMaintenanceTest' -Dsurefire.failIfNoSpecifiedTests=false test`：4 项通过。
+- `HikariPgSessionSupportTest` 的长度断言改为检查截断后的完整预期字符串，保留原 63 字符上限并验证前缀。`./mvnw -ntp -pl batch-common '-Dtest=HikariPgSessionSupportTest' test`：3 项通过。以上均未修改生产逻辑。
+- 文件切片末行无换行、空行和 CRLF 分别保留；回放集成测试的暂停、状态不匹配、外部结果未知和不同载荷属于不同场景；租户清理测试的同租户、跨租户和冷数据也不能因使用同一辅助方法删除。`RetryScheduleStatusTest` 的数量断言用于检出新增状态，与现有各编码断言不重复。
+- public Map 原始 60 个候选现已逐方法列入[当前台账](#2026-11-01当前-public-map-候选逐项台账)，包含源码摘要、60 个当前已核查保留、0 个待核查项；Kafka producer 配置需透传和覆盖 client 参数，诊断端点保持现有条件字段和 wire 格式，JSON 转换及递归脱敏承载不定字段，故不强制改成固定对象。
+
+候选台账中待核查不代表缺陷。其余短断言、后端薄包装及 Map 项仍未全部逐一裁定，用户目标尚未完成。
+
+## 2026-11-01：短断言与动态 Map 再核对
+
+- `TriggerOutboxReleaseGovernorTest.disabled_returnsConfiguredLimitWithoutReadingLag` 原来只断言返回配置上限，未验证名称所述的不读取 lag；保留原断言并补充对 lag monitor 无调用的验证。`./mvnw -ntp -pl batch-trigger -am '-Dtest=TriggerOutboxReleaseGovernorTest' -Dsurefire.failIfNoSpecifiedTests=false test`：7 项通过，0 失败、0 错误、0 跳过。生产逻辑未变。
+- `CorrelationIdsTest` 的裁剪、非法字符、长度与回退输入不同；`ProcessPublishedCountVerifierTest` 的数字和数字字符串覆盖不同载荷类型；前端 `statusTagResolve` 的显式默认值、隐式默认值与未知状态、引导完成状态和权限空列表分别具有独立断言，保留。
+- `BatchDayReplayService.failedStatuses` 与 `isCancellable` 对应失败重放范围及可取消状态的不同业务判断，保留具名方法。`MapJsonbTypeHandler` 的三个方法实现 MyBatis 的结果读取重载；`ParseSupport.parseHints/readJsonObject` 分别处理不同格式和插件可扩展 JSON；SDK `ProgressReporter.latest` 承载执行线程写入、续租线程读取的动态进度，均保留 Map。上述 Map 与包装结论为静态源码及直接调用关系核查。
+
+本轮未对其余候选逐一完成上下文裁定，不代表原始短断言、包装与 Map 清单已全部关闭。
+
+## 2026-11-01：短断言及包装、Map 续核
+
+- `datetime.test.ts` 中两个空字符串用例调用和断言完全相同，且名为 typed 的用例没有额外输入或类型覆盖；删除一项，保留另一项。`npx vitest run src/utils/datetime.test.ts`：21 项通过。相邻的 null、undefined、无效日期及时间戳输入不同，继续保留。
+- `queryFormOptions.test.ts` 的空输入、提取 undefined、去重排序及空白裁剪分别检查不同路径；`formatAiUsd.test.ts`、`errorCatalog.test.ts` 的零金额/普通金额与网络/未知错误分别属于不同场景，保留。
+- `workerActions.test.ts` 的 ONLINE、DRAINING、OFFLINE 断言对应不同的操作集，保留；ONLINE 用例标题原来漏写预期中的排空动作，已更名以匹配原有断言。`npx vitest run src/views/worker/workerActions.test.ts`：4 项通过。两个 Worker fingerprint 空响应测试分别调用列表和汇总接口；`structuredSummary` 和 `pipelineStepSummary` 的短断言分别覆盖文本截断、各阶段字段与异常输入，保留。
+- `DefaultWorkflowNodeDispatchService.isJobNode/isWaitNode` 命名不同节点分支；HTTP transport 的 `sameHost` 在 DNS 回调中统一处理 IPv6 括号和大小写比较，保留，避免将业务或网络边界嵌入调用点。
+- 文件渠道和模板的 `toMap` 由 `TenantConfigPackageExcelApplyService` 在旧配置与导入列合并时调用，保留其旧 snake_case/缺失键行为；日历 `toExportRow` 被配置包 Excel 导出消费，保留最终行的 Map 格式。上述为静态调用关系核查，未更改后端代码，也未运行后端测试。
+
+本轮只对上述已列位置作出结论；其余短断言、后端包装及 Map 候选仍未逐项核完，不能宣称全部整改完成。
+
+## 2026-11-01：候选续核与幂等键测试修正
+
+- 前端 `src/utils/idempotency.test.ts` 的非空和类型断言原先分别调用两次生成器，现对同一个返回值断言；无 `crypto` 场景使用 `finally` 恢复全局状态，断言失败也不会污染后续测试。`npx vitest run src/utils/idempotency.test.ts`：4 项通过；本批只改测试，不改变幂等键实现。
+- 后端薄包装抽查：`CalendarBizDateResolver.previousWorkday` 和 `nextWorkday` 分别命名节假日向前、向后滚动，并传入对应方向和诊断文本；`ActiveTaskLeaseRegistry` 的状态更新和原子值读取包装承载租约状态操作边界，保留。这些结论不代表其余包装均已核查。
+- 使用 `python3 scripts/ci/report-java-readability-inventory.py --output /private/tmp/readability-candidates-20261101.md` 重新生成当前词法清单，退出码 0；指定范围有 60 个 public Map 返回候选，分布于 44 文件。`CursorCodec.decode` 承载可扩展分页排序键，其调用方包括会话分页和按 id 的通用查询；`RunModeSupport.copyWithDefault` 复制原有业务参数并规范化运行模式，调用方是启动参数解析；两者保留 Map。数字是词法候选而非缺陷，也不覆盖所有 Map 入参与私有方法。
+
+本轮仍未逐项完成全部短断言、后端薄包装和 Map 候选；历史清单与当前代码可能存在漂移，后续以当前函数、调用方及测试夹具为准，不能按候选数量批量删改。用户要求的目标尚未完成。
+
+## 2026-11-01：重复判空和事件处理候选续改
+
+在当前后端 `perf/local-loadtest-2026-10-31` 工作区和配对前端工作区继续处理。历史 71 个重复判空模式中，前两批已简化 10 处；本批按实际类型、工具方法对 null 的处理和表达式求值核对后，又简化 39 个文件中的 57 处局部值或不可变记录字段判断。当前源码扫描剩余 4 处，均直接读取请求对象可变字段 `scheduleExpr`；为保持原读取次数和求值行为，本批保留。扫描模式和范围与原始候选相同，不代表其他防御判断均已审完。
+
+前端 `MyWorkers.onRefresh` 和审批表格的 `selectableRow` 确认为简单转发，调用处改为直接使用原函数。配对前端此前检出 `main`，本批先撤回对这两个文件的修改；用户随后指定使用与后端同名分支，现已在原前端工作区创建并切换至 `perf/local-loadtest-2026-10-31`，重新应用相同修改，保留既有未提交内容。`npx vitest run src/views/approvals/ActionContextRisks.test.ts` 在切换分支前、相同修改内容下运行：1 个文件、26 项通过；该测试不构成 MyWorkers 页面刷新交互验证。前端旧候选清单含模板事件回调，很多回调内部仍有筛选、重置及加载操作；不能根据单行正则将其视为无用包装。
+
+前端原 84 个包装语法候选按当前函数声明和调用形态核对：78 个调用搜索、重置或刷新辅助函数并提供场景回调，需保留事件参数与筛选、分页或加载行为；上述 2 个直接转发已简化。其余 4 个中，`ProTable.scheduleRecompute` 保留 `nextTick` 调度，`useTenantReload.onErr` 同时用于同步异常和异步拒绝，文档生成脚本的 `escapeLabel` 命名 Markdown 转义规则，E2E 的 `ts` 每次调用生成时间戳；不按一次调用删除。历史行号已有漂移，本结论针对候选名称在当前文件中的实现，不覆盖候选之外的其他抽象。
+
+后端定向测试：`./mvnw -ntp -pl batch-console-api,batch-orchestrator,batch-trigger,batch-worker/dispatch,batch-worker/export,batch-worker/import,batch-worker/process,sdk/java/core -am '-Dtest=AckDispatchStepTest,AlertNotificationReceiptServiceTest,AlertmanagerNotifyServiceTest,BatchDayCatchupPreviewServiceTest,BatchDayOpenSchedulerTest,BatchDaySettleSchedulerTest,BatchManifestTest,ConfigSyncAuditRecoveryTest,ConsoleAiPropertiesTest,ConsolePushApprovalNotifierTest,ControlTotalEvaluatorTest,DefaultConsoleApprovalApplicationServiceTest,DefaultConsoleTenantConfigInitApplicationServiceTest,DefaultWorkerRegistryServiceTest,DefaultWorkflowDagServiceTest,DefaultWorkflowNodeDispatchServiceTest,JobDependencyWaitingLaunchServiceTest,LaunchParamResolverTest,PersistentWaitReadServiceTest,ProcessStagingGenerationCleanupFenceTest,QuartzMisfireRecoveryConfigurationTest,SdkTaskContextTest,StoreStepTest,SystemPipelineCatalogTest,TaskDispatcherTest,TrailerControlRecordTest,TriggerApiKeyVerifierTest,TriggerSchedulerFacadeTest,WorkflowDefinitionMutationValidationTest,WorkflowNodeReplayTargetResolverTest,WorkflowRunReplaySourceResolverTest' -Dsurefire.failIfNoSpecifiedTests=false test` 成功，实际合计 433 项、0 失败、0 错误、0 跳过；完整类名和命令见日志 `/private/tmp/wdi-overdefense-batch-20261101.log`。Maven 按依赖编译上游模块，此结果不代表完整测试或全部变更位置均有独立用例。
+
+后续核对 `WorkflowDagValidatorTest`：旧 Pipeline 已存在的测试并未构造该前提，其输入和错误码与邻近的 FILE_STEP 退役测试相同；删除重复测试，保留同时检查异常码和消息键的测试。`./mvnw -ntp -pl batch-console-api -am '-Dtest=WorkflowDagValidatorTest,WorkflowConditionEvaluatorTest' -Dsurefire.failIfNoSpecifiedTests=false test` 成功，实际仅 `WorkflowDagValidatorTest` 运行 22 项并通过：该 reactor 不包含 orchestrator，因此并未运行后者。`WorkflowConditionEvaluator.findAtomicOperator` 只转发至 `AtomicOperator.find`，调用处改为直接调用；随后执行 `./mvnw -ntp -pl batch-orchestrator -am '-Dtest=WorkflowConditionEvaluatorTest' -Dsurefire.failIfNoSpecifiedTests=false test`，23 项通过。
+
+原 321 个短断言和其余前后端包装、Map 等候选尚未全部完成上下文裁定；候选命中不等于问题，也不应凭此宣布全部完成。
+
+补充逐组核对：`resourceCodeBuilder.test.ts` 的短断言分别约束规范化、长度和首字符边界、版本后缀与资源码拼装；`metaEnumPick.test.ts` 区分未匹配、缺失输入、空数组和无候选键；`taskHeartbeat.test.ts` 区分百分数、比例换算、四舍五入和字段优先级。`HttpTaskExecutorIpBlockTest` 中的地址覆盖不同协议族、网段及公网反例，不能只因断言形式相同删除。这些结论依据对应完整测试类及其输入与断言，未据此推断其余短断言已完成核查。
+
+另核对 `DelimitedCodecTest` 的普通字段、引号中分隔符、末尾空字段和自定义分隔符；`QuotaResetPolicyTest` 的空值、空白、未知配置和不同策略托管状态；`ValidTenantIdTest`、`ValidResourceCodeTest` 的 null、空白及长度边界；以及前端 `text.test.ts`、`safeJson.test.ts`、`theme.test.ts`、`lastApiMeta.test.ts` 的字符截断、JSON 输入、主题迁移和缺省值边界。各自测试不同输入或状态，保留；本次没有因其断言短而合并或删除。
+
 ## 2026-10-30：批量日补跑根请求修复复核
 
 沿 `BUG-20261030-BATCHDAY-CATCHUP-ROOT` 及 `BUG-20261030-BATCHDAY-PARENT-IDENTITY` 核对当前源码：批日调度器生成 `tenant:batch-day-catchup:calendar:date:job` 键；根请求读取及失败日扫描都按租户、该键、`CATCH_UP` 类型和空父 Workflow 限定，避免同键子 Job 遮蔽根请求。V369 部分唯一索引覆盖该键前缀的同租户 `CATCH_UP` 根请求，不限制子请求。Trigger 通用按键回查也排除子请求，但保留别名匹配和原有排序/单条选择；其业务范围比批日根请求查询更广，不能把两条 SQL 简化为同一口径。
@@ -318,6 +527,53 @@
 9. [tag-ops.spec.ts:42](../../../batch-console/e2e/tag-ops.spec.ts) `Tag Key 输入 → 查询`；[tag-ops.spec.ts:73](../../../batch-console/e2e/tag-ops.spec.ts) `Tag Key 搜索`
 
 后端另有208个、前端113个短断言语法候选，尚未逐一确认；短小不等于无效，边界、状态机、持久化键及独立协议预期应保留。下一步应优先核对这些候选的具体行为和相邻测试，而非按数字批量删除。
+
+## 2026-11-01：测试与规约候选续核
+
+核对基线：后端 `/Users/dengchao/Downloads/file-batch-system` 的 `perf/local-loadtest-2026-10-31`，HEAD `0258697d14229e9da1bddb547943acf9d2481338`，治理台账有既有未提交修改；前端配对仓库 `main`，HEAD `e44c3b2d29e29805d95a48bafc167e8d5725129d`。只读代码并在本报告留记录，未修改业务或测试代码。
+
+### 确认可以提出的规约整改
+
+| 位置 | 证据与建议 | 范围和验证要求 |
+|---|---|---|
+| [BatchKafkaTopicNamespace](../../batch-common/src/main/java/io/github/pinpols/batch/common/kafka/BatchKafkaTopicNamespace.java) `apply` | `isNull(name) || isBlank(name)` 对同一个方法参数重复检查；`isBlank` 经 `Texts.hasText` 对 null 返回 true。可删除前半项，保留空白拒绝。 | 仅检查该表达式；实施时验证 null、空白和合法命名空间语义及异常。 |
+| [NamespacedObjectStore](../../batch-common/src/main/java/io/github/pinpols/batch/common/storage/NamespacedObjectStore.java) `physicalMarker`、`logicalMarker` | `isNull(marker) || isBlank(marker)` 的 null 分支被后者包含；可保留后者并维持 null、空白 marker 原值返回。 | 不删除判空功能，不改 prefix/marker 处理或对象存储契约。 |
+| [PipelineProgressQueryService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/application/progress/PipelineProgressQueryService.java) `normalize` | `isEmpty(ids)` 对 null 和空集合均返回 true，前面的 `isNull(ids)` 可省；后续 size 与元素判断的短路顺序保留。 | 验证 null、空、超限及非法 ID；不能提前执行 stream。 |
+| [DefaultTenantConfigPackageExcelService](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java) `requiredHeaders` | 私有方法只转发 `ConfigPackageSheetSpecs.requiredImportHeaders`，当前类只有一个调用，可考虑在调用处直接使用目标方法。 | 可读性建议；保持实参求值次数、异常和表头校验，非业务 Bug。 |
+
+### 确认不应机械整改
+
+- 前端 [ChannelReceiptsTab.vue](../../../batch-console/src/views/observability/components/ChannelReceiptsTab.vue) 的 `applyFilter`、`resetFilter` 被模板的搜索、重置和回车事件引用，并承载草稿/已应用条件与刷新流程；旧的脚本内调用次数不能证明其无用。
+- `iconResolve.test.ts` 的非 undefined 和非 null 断言排除不同值；`lastApiMeta` 对 null 和 undefined 是独立输入边界。短断言和测试体相似本身不构成删除理由。
+- 历史 321 条短断言的名称和记录的正文片段均能在当前配对仓库找到；这是存在性检查，不证明 fixture、生产调用方、断言覆盖或源码快照整体未变，更不代表逐项审查完成。
+- Map 已有处理及动态 Map 合理保留的分类见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md)，不把 public Map 词法命中直接计为违规。
+
+**尚未完成**：原321个短断言、71个重复判空、后端110个及前端84个薄包装候选尚未逐项完成当前上下文核验；上述为本次可独立定位的结果，不将候选总数等同需整改数。未运行编译或测试；将来实施时仅对实际受影响范围做验证。
+
+## 2026-11-01：Worker 判空续改与证据重放范围
+
+`TaskDispatchExecutor` 的 `workerId` 和 `messages`、`DefaultTaskExecutionWrapper` 的 `results`、`items` 与 `tasks` 都是同一表达式内的参数或局部值；`isBlank/isEmpty` 已处理 null，移除六个重复的 `isNull`，保留认领、租约和原来的后续短路条件。`./mvnw -ntp -pl batch-worker/core -am '-Dtest=TaskDispatchExecutorTest,DefaultTaskExecutionWrapperTest,DefaultTaskExecutionWrapperClaimLeaseTest' -Dsurefire.failIfNoSpecifiedTests=false test`：三类41项通过，0失败、错误、跳过；日志 `/private/tmp/wdi-overdefense-worker-20261101.log`。此测试针对本次代码改动，不是对历史45个编号重放。
+
+用户要求历史“首红、复验待证”只指定测试类，不重复运行；当前台账提供的按主题测试载体为：
+
+| 主题 | 可指定的测试类或方法 | 局限 |
+|---|---|---|
+| 批日补跑、审批、日切 | `ConsoleBatchDayCatchUpHttpIntegrationTest`、`BatchDayCutoffMultiTenantIntegrationTest` | 两项历史业务口径仍需先裁定；不声称覆盖全部编号。 |
+| 文件束与分发 | `DispatchPipelineE2eIT#shouldDeliverEveryFile_whenBundleDispatchTaskExpandsIntoSubtasks` | 用例有真实依赖，范围限对应分发路径。 |
+| 传感器、演练计划 | `WorkflowSensorApplicationContextRestartIntegrationTest`、`DefaultDryRunPlanServiceTest` | 不自动覆盖其他超时和重试编号。 |
+| 归档血缘 | `SameJobMultiRunArchiveLineageIntegrationTest` | 跨作业共享文件历史口径仍待裁定。 |
+| 配置初始化/同步 | `TenantConfigInitCommitOutcomeIntegrationTest`、`TenantConfigBundleCompletenessIntegrationTest` | 只覆盖各自事务结果和配置包场景。 |
+| 内容脱敏 | `ContentMaskingUtilsTest` 以及按具体编号选取对应服务/HTTP 集成测试 | 工具类测试不能替代各输出通道和真实 HTTP 的证据；未对28个编号逐个映射。 |
+
+上述清单来自[25包交付锚点](../audit/backend-25-package-governance-2026-10-26.md#交付锚点)，是选择性测试载体，不是45编号的完整一对一映射。本次没有重放这些历史证据，也不将历史首红变为当前通过。
+
+## 2026-11-01：已确认候选的首批整改
+
+在后端当前工作区 `perf/local-loadtest-2026-10-31`（HEAD `0258697d`）处理本报告已明确可简化项：Kafka 名称和对象存储 marker 的重复 null/blank 判断、Pipeline 进度参数的重复 null/empty 判断保留 `isBlank`/`isEmpty` 语义及短路；配置包表头的私有薄转发移除并以局部变量承接原结果。
+
+测试只合并已证实同前提、同调用和同断言的 Workflow DAG、Readiness 用例；参数工厂用例合并时保留 ID 与 now 断言。前端 `iconResolve.test.ts` 合并重复的已知图标用例，保留非 undefined 与非 null 的两个独立断言及不同 fallback 对照；`npx vitest run src/utils/iconResolve.test.ts` 3/3 通过（`/private/tmp/wdi-overdefense-icon-20261101.log`）。未删除测试类；被删除测试名称所描述的“历史 Pipeline 已存在”“重跑未生效”并未由其原夹具分别构造，不把合并当成这些场景已有证据。
+
+定向验证：`./mvnw -ntp -pl batch-console-api,batch-orchestrator -am '-Dtest=BatchKafkaTopicNamespaceTest,NamespacedObjectStoreTest,PipelineProgressQueryServiceTest,DefaultTenantConfigPackageExcelServiceWorkbookTest,UpdateBatchDayReplayEntryStatusParamTest,WorkflowDagValidatorTest,ReadinessServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test` 成功，7 类合计41项，0失败、0错误、0跳过；日志 `/private/tmp/wdi-overdefense-target-20261101.log`。此命令按依赖编译上游模块，不等于完整 reactor 全量测试。原71处重复判空词法模式目前仍有67处、42文件；其余短断言、前后端薄包装及 Map 候选尚未逐项裁定，本批完成不等于全部整改。
 
 ## 当前核查结论
 
@@ -1016,3 +1272,706 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 最新前端1,265来源：102已审、38部分、1,125待审；新增一份Node/Docker HTTP回归，模板、核心配置、构建与代理相关入口仍按实际阅读范围标部分。后端清单6,430来源中14份共享变动待复核，不将旧证据套到新内容。
 
 `npx eslint scripts/tests/nginx-routing.test.mjs`、`npx prettier --check scripts/tests/nginx-routing.test.mjs`、`npm run check:env`、`npm run check:test-fixture-sources`均退出0；日志前缀为`/private/tmp/wdi-nginx-routing-`，分别为`eslint.log`、`prettier.log`、`env.log`和`fixture-sources.log`。未新增默认CI/发布阻断策略，专用回归由独立npm命令运行。
+
+## 2026-11-01：短断言历史候选定位索引
+
+以下仅保存 2026-10-30 筛选快照的文件和测试名称，便于逐项定位；名称和测试体可能已变化或合并。此表**不是逐项审核结论**，已核查与已整改结果以上文具体记录为准。路径分别相对后端仓库或配对前端仓库。
+
+### file-batch-system
+
+| 测试文件 | 快照中的候选测试 |
+|---|---|
+| `batch-common/src/test/java/io/github/pinpols/batch/common/config/HikariPgSessionSupportTest.java` | `shouldTruncateApplicationName_whenExceedingSixtyThreeChars` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldInsertTagBeforeExtension`、`shouldAppendTag_whenNoExtension`、`shouldReturnUnchanged_whenSinglePartition` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/CatchUpPolicyTypeTest.java` | `fromCodeOrDefault_unknownCode_returnsNone` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/ConfigLifecycleStatusTest.java` | `shouldContainFiveValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/DeadLetterReplayStatusTest.java` | `shouldContainFiveValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/JobTypeTest.java` | `shouldNotExposeWorkflowAsExecutableJobType`、`shouldProvideNonNullBatchType_whenEnumeratingEveryJobType` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/PartitionStatusTest.java` | `shouldContainNineValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/RetryPolicyTypeTest.java` | `shouldContainThreeValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/RetryScheduleStatusTest.java` | `shouldContainSixValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/TaskStatusTest.java` | `shouldContainSevenValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/enums/WorkflowJoinModeTest.java` | `fromCodeOrDefault_unknownCode_returnsAll` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/i18n/MessagesPropertiesParityTest.java` | `shouldRejectDuplicateKeysAndBlankValues` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/jdbc/JdbcMappedSqlValidatorTest.java` | `shouldNormalizeValidIdentifierToLowerCase`、`shouldQuotePgIdentifier` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/logging/LogSanitizerTest.java` | `shouldReplaceEveryUnicodeLineBreakWithUnderscore` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/page/CursorCodecTest.java` | `shouldReturnNull_whenCursorIsEmpty` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/security/CredentialEnvResolverTest.java` | `returnsNull_whenNull` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/security/DnsResolveGuardTest.java` | `shouldAllow_whenDocumentationGlobalIpv6` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/service/BatchObjectCryptoServiceTest.java` | `decryptNullBytes_shouldReturnNull`、`decryptEmptyBytes_shouldReturnEmpty`、`resolveKeyRef_fallsBackToDefault_whenSecurityMapEmpty` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/spi/task/TaskResultTest.java` | `shouldDefaultOutputToEmptyMap_whenOutputAbsent` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/stateful/StatefulBackendIdentityTest.java` | `shouldPreserveResourceCase_whenBuildingBackendIdentity` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/storage/S3ObjectStoreExceptionMappingTest.java` | `shouldReportMissing_whenKeyDoesNotExist` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/utils/ContentMaskingUtilsTest.java` | `shouldApplyTextRulesToMalformedJsonLikeInput` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/utils/CorrelationIdsTest.java` | `normalize_trimsAndKeepsSafeCharacters`、`normalize_replacesUnsafeCharactersAndControls`、`normalize_capsAtHeaderColumnLength`、`normalize_usesFallbackWhenInputBlankOrInvalid` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/utils/IdGeneratorTest.java` | `shouldReturn32HexChars_whenGeneratingTraceId`、`shouldReturn32HexChars_whenGeneratingInvocationId` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/utils/OtelTraceContextTest.java` | `shouldReturnNull_whenNoActiveSpan`、`shouldFallBackToGeneratedId_whenNoActiveSpan` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidBizDateValidatorTest.java` | `shouldTrimWhitespace_whenValidating` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidResourceCodeTest.java` | `shouldReject_whenCodeNull`、`shouldReject_whenCodeEmpty`、`shouldReject_whenCodeBlank` |
+| `batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidTenantIdTest.java` | `shouldReject_whenTenantIdNull`、`shouldReject_whenTenantIdBlank`、`shouldAccept_whenTenantIdAtMaxLength`、`shouldReject_whenTenantIdExceedsMaxLength` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/config/ConsoleOidcPropertiesTest.java` | `shouldAllowEmptySettings_whenOidcIsDisabled` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForNullPrompt`、`shouldThrowBizExceptionForBlankPrompt` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/support/BuiltinTaskTypeGuardTest.java` | `shouldAllowType_whenJobTypeNullOrBlank`、`shouldAllowBuiltinType_whenAnyGrantedRoleIsPlatformAdmin` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/infrastructure/TriggerProxyJsonContractTest.java` | `shouldReturnEmptyList_whenDownstreamRowsAreNull` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/service/WorkerCompatibilityEvaluatorTest.java` | `shouldReportOk_whenMajorOneFormatsVary` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsolePasswordHasherTest.java` | `shouldMatchFlywaySeedArgon2Hash` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/TenantScopeTest.java` | `shouldReturnTenantId_whenNonBlank` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/captcha/TencentCaptchaVerifierTest.java` | `shouldReportTencent_whenQueryingProviderName` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/param/WorkflowDefinitionWriteParamsTest.java` | `shouldRejectMissingRequiredField` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/support/WorkflowMermaidRendererTest.java` | `shouldReturnHeaderOnly_whenDetailMissing` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ReadReplicaHappyPathIntegrationTest.java` | `shouldRouteToReplica_whenTransactionReadOnly` |
+| `batch-console-api/src/test/java/io/github/pinpols/batch/console/support/cache/ConsoleQueryCacheServiceTest.java` | `keySegment_keepsShortSafeValuesReadable` |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/PipelineWorkerAtomicIsolationOptInArchTest.java` | `shouldOptInIsolationCheck_whenImportWorker`、`shouldOptInIsolationCheck_whenExportWorker`、`shouldOptInIsolationCheck_whenProcessWorker`、`shouldOptInIsolationCheck_whenDispatchWorker` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/scheduler/DryRunSchedulingPriorityTest.java` | `shouldKeepConfiguredPriority_whenFormalTask`、`shouldKeepNullPriority_whenFormalTaskHasNoPriority` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationServiceTest.java` | `shouldThrowWhenCommandIsNull` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `shouldThrowWhenTenantIdIsBlankOnStartDrain`、`shouldThrowWhenWorkerCodeIsBlankOnStartDrain`、`shouldThrowWhenTenantIdIsBlankOnForceOffline`、`shouldThrowWhenWorkerCodeIsBlankOnListClaimedTasks`、`warmup_throwsWhenTenantBlank` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnEmptyWhenDefinitionIdIsNull`、`shouldReturnEmptyWhenCurrentNodeCodeIsBlank`、`shouldReturnFalseWhenWorkflowRunIdIsNull`、`shouldReturnFalseWhenDefinitionIdIsNull`、`shouldReturnFalseWhenNodeCodeIsBlank` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/WorkflowConditionEvaluatorTest.java` | `shouldMatchEqualityWithDoubleEquals`、`shouldReturnFalseWhenPayloadKeyMissing` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/sensor/HttpPollSensorPolicyTest.java` | `matchExpr_missingPath_returnsFalseNotThrow` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/BizDateArithmeticTest.java` | `shouldReturnNull_whenNamedOffsetUnknown`、`shouldReturnEmpty_whenRangeTagUnknown`、`shouldReturnEmpty_whenBizDayCountExceedsCap` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowFanOutSupportTest.java` | `parseSpec_nullWhenItemsExprBlank` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidatorTest.java` | `shouldReportClean_whenWorkflowIdMissing` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowWaitSensorSpecValidatorTest.java` | `shouldIgnoreNonWaitNode`、`shouldRejectUnknownSensorType` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/OrchestratorGracefulShutdownTest.java` | `shouldNotBeDrainingInitially` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/BatchTopicResolverTest.java` | `shouldReturnNull_whenWorkerTypeUnsupported` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/router/DefaultWorkerRoutingPolicyTest.java` | `shouldReturnNullForNullCandidates`、`shouldReturnNullForEmptyCandidates` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultLifecycleEventMapperTest.java` | `shouldResolveEnumTargetAsState`、`shouldAllowTerminalSelfLoop` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/AdminTestDataCleanupControllerIntegrationTest.java` | `shouldRejectAmbiguousInstanceId_whenNeighborIsInSameTenant`、`shouldRejectAmbiguousInstanceId_whenNeighborIsInAnotherTenant`、`shouldRejectAmbiguousInstanceId_whenNeighborIsArchived` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java` | `assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectRetryWhenDryRunPayloadUnsafe`、`shouldRejectRetryWhenFormalPayloadClaimsDryRun`、`shouldRollbackFileRedispatchWhenParentIsPaused`、`shouldRollbackFileRedispatchWhenTaskCannotReset`、`shouldRejectFileRedispatchWhenExternalOutcomeIsUnknown`、`shouldRejectFileRedispatchWhenRecordIsNotKnownFailed`、`shouldRejectFileRedispatchWhenSingleTaskHasNoFileAssociation`、`shouldRejectRedispatchWhenPayloadTargetDiffers` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/StartupSelfCheckIntegrationTest.java` | `shouldExposeSelfCheckComponent_whenContextStarts` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultPrioritySchedulerTest.java` | `shouldReturnDefaultPriorityFiveWhenRequestIsNull`、`shouldReturnMediumBandWhenPriorityIsNull` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReturnNoneWhenValueIsNull`、`shouldReturnNoneWhenValueIsBlank`、`shouldReturnNoneWhenValueIsUnknown`、`shouldReportNoneAsNotRuntimeManaged`、`shouldReportCalendarDayAsRuntimeManaged`、`shouldReportSlidingWindowAsRuntimeManaged` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/security/RequestSignatureVerifierTest.java` | `shouldRejectRequest_whenSignatureHeaderMissing` |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/service/LaunchParamResolverTest.java` | `shouldReturnNullForNullDeadline` |
+| `batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsClosedWorldCheckIntegrationTest.java` | `shardIdentity_defaultExempted` |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/application/TriggerOutboxReleaseGovernorTest.java` | `disabled_returnsConfiguredLimitWithoutReadingLag` |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/infrastructure/TriggerGracefulShutdownTest.java` | `shouldNotBeDrainingInitially` |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/BatchTriggerApplicationIntegrationTest.java` | `contextLoads_succeeds`、`quartzScheduler_isStarted` |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldWireMisfireHandlerBean`、`shouldLoadQuartzLaunchJobForMisfireAuditPath`、`shouldNotThrowWhenHandlingMisfire` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_loopback_ipv4`、`rejects_loopback_ipv6`、`rejects_link_local_metadata_ipv4`、`rejects_link_local_metadata_ipv4_mapped_ipv6`、`rejects_private_class_a`、`rejects_private_class_c`、`rejects_any_local`、`accepts_public_literal`、`accepts_public_literal_ipv6`、`rejects_ipv6_ula_aws_metadata`、`rejects_ipv6_ula_fc00_range`、`rejects_ipv6_ula_fd_range`、`rejects_ipv6_link_local` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/integration/BatchWorkerAtomicApplicationIntegrationTest.java` | `shouldExposeApplicationContext_whenStarted` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicIsolationStartupCheckTest.java` | `noDualUseEnabled_noThrow` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/spark/SparkSubmitTaskExecutorTest.java` | `taskType_isSparkSubmit` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorHardeningTest.java` | `shouldClassifyAsDdl_whenStatementIsDoBlock`、`shouldClassifyAsDdl_whenDoBlockLowercase` |
+| `batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorTest.java` | `shouldReturnSingleStatement_whenNoSemicolon` |
+| `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskReportBatchTest.java` | `reconcilesEachResponseIdentity` |
+| `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/checkpoint/CheckpointPartitionGuardTest.java` | `nullMeansSinglePartition_allow` |
+| `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxPgIntegrationTest.java` | `claimNext_returnsEmptyWhenNothingDue` |
+| `batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/ActiveTaskLeaseRegistryTest.java` | `shouldReturnEmptySnapshotWhenNoLeases` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/DispatchTaskExecutorTest.java` | `shouldReportDispatchTaskType_whenTaskTypeQueried` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldAllowWhenNoFailuresRecorded`、`shouldIsolateFailuresByChannelKey` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelTypePolicyTest.java` | `shouldReturnCanonicalType_whenInputHasSpacesAndLowercase`、`shouldReturnEmpty_whenTypeUnknown` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchManifestSupportTest.java` | `shouldKeepNull_whenBusinessDateMissing` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/BatchWorkerDispatchApplicationIntegrationTest.java` | `shouldLoadApplicationContext_whenStarted` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchSpiEquivalenceIntegrationTest.java` | `shouldContainDispatchTaskType_whenListingRegisteredTypes` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/AckDispatchStepTest.java` | `stage_returnsAck` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/CompensateDispatchStepTest.java` | `stage_returnsCompensate` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/CompleteDispatchStepTest.java` | `stage_returnsComplete` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStepTest.java` | `stage_returnsDispatch` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/PrepareDispatchStepTest.java` | `stage_returnsPrepare` |
+| `batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/RetryDispatchStepTest.java` | `stage_returnsRetry` |
+| `batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportTaskExecutorTest.java` | `shouldReportExportTaskType_whenReadingTaskType` |
+| `batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/integration/BatchWorkerExportApplicationIntegrationTest.java` | `shouldLoadContext_whenApplicationStarts` |
+| `batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/integration/ExportSpiEquivalenceIntegrationTest.java` | `shouldRegisterExportTaskType_whenContextLoads` |
+| `batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSqlValidatorTest.java` | `validate_ignoresParameterTextOutsideSqlParameters` |
+| `batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/stage/format/GenerateCursorCodecTest.java` | `roundTrip_preservesBoolean` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/config/ImportScannerPropertiesTest.java` | `doneFileSuffix_defaultsToDotDone`、`doneFileNaming_defaultsToAppendFullName` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportTaskExecutorTest.java` | `shouldReportImportTaskType_whenReadingTaskType` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationCoercionsTest.java` | `decimalValue_returnsNull_forNonNumericText` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/integration/BatchWorkerImportApplicationIntegrationTest.java` | `shouldLoadContext_whenApplicationStarts` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/integration/ImportSpiEquivalenceIntegrationTest.java` | `shouldRegisterImportTaskType_whenContextLoads` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/FeedbackStepTest.java` | `shouldReturnStageFeedback_whenStageAccessed` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/LoadStepTest.java` | `shouldReturnLoadStage` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessRangeSliceTest.java` | `shouldSliceLosslessly_whenLastLineHasNoTrailingNewline`、`shouldSliceLosslessly_whenEmptyLinesPresent`、`shouldSliceLosslessly_whenCrlfLineEndings` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStreamEligibilityTest.java` | `shouldAllowDirectStreaming_whenTemplateMissing` |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/ValidateStepTest.java` | `shouldReturnValidateStage` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingPartitionMaintenanceTest.java` | `shouldKeepRowsUntilDeletionIsEnabled` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/ProcessTaskExecutorTest.java` | `shouldReportProcessTaskType_whenTaskTypeQueried` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/verifier/ProcessPublishedCountVerifierTest.java` | `shouldPass_whenPublishedCountPositive`、`shouldPass_whenPublishedCountIsNumericString` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/integration/ProcessSpiEquivalenceIntegrationTest.java` | `shouldContainProcessTaskType_whenListingRegisteredTypes` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/integration/ProcessStagingCleanupYamlIntegrationTest.java` | `shouldDisableStagingOrphanCleaner_whenTestProfileActive` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/CommitStepTest.java` | `shouldReturnStageCommit_whenStageAccessed` |
+| `batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/FeedbackStepTest.java` | `shouldReturnStageFeedback_whenStageAccessed` |
+| `examples/task-spi-plugin/sftp-push-executor/src/test/java/io/github/pinpols/batch/ext/sftp/SftpPushTaskExecutorTest.java` | `shouldReturnSftpPushType_whenTaskTypeQueried`、`shouldDeclareNetAndDiskCapability_whenCapabilityQueried` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/BatchPlatformClientConfigValidationTest.java` | `shouldAcceptAllDefaults` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/TaskTypeDescriptorAssemblyTest.java` | `shouldReturnNullDescriptor_whenHandlerDoesNotDeclare` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/WorkerFingerprintTest.java` | `shouldReturnCurrentJvmPid_whenReadingProcessId` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcherClaimJitterTest.java` | `shouldReturnZero_whenBaseDelayIsZero` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/builtin/support/DelimitedCodecTest.java` | `shouldParsePlainFields`、`shouldParseQuotedFieldContainingDelimiter`、`shouldYieldEmptyTrailingField`、`shouldSupportCustomDelimiter` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/idempotent/IdempotencyKeyResolverTest.java` | `shouldReturnLiteral_whenNoPlaceholder` |
+| `sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/task/SdkTaskResultTest.java` | `shouldReturnEmptyOutput_whenOutputAbsent` |
+| `sdk/typescript/tests/decide-backpressure.test.ts` | `decideBackpressure default paused=false: no resume in band` |
+| `sdk/typescript/tests/handler.test.ts` | `handler: taskFailure default errorCode = EXECUTION_FAILED` |
+| `sdk/typescript/tests/kafka-offset-policy.test.ts` | `loweredCeiling: first withhold sets the ceiling to the record offset`、`commitBlockedByWithheld: no ceiling → never blocked`、`resolveFromBeginning: defaults to false (latest), parity with the 4 other SDKs`、`resolveFromBeginning: an explicit value always wins` |
+| `sdk/typescript/tests/shared-constants-parity.test.ts` | `schema_versions_supported parity`、`worker_runtime_states parity`、`sensitive_keywords parity`、`task_statuses parity`、`report_error_codes parity` |
+
+### batch-console
+
+| 测试文件 | 快照中的候选测试 |
+|---|---|
+| `e2e/alert-outbox-ops.spec.ts` | `重试 tab 默认激活` |
+| `e2e/c-plus-coverage.spec.ts` | `actuator/health 暴露 200` |
+| `e2e/excel-import.spec.ts` | `下载配置包模板按钮可见`、`导出当前配置包按钮可见` |
+| `e2e/file-ops.spec.ts` | `默认展示运行列表 tab` |
+| `e2e/flows/01-trigger-instance.spec.ts` | `1. 查到一个可触发的 jobDefinition` |
+| `e2e/notification-management.spec.ts` | `旧 webhooks 路由重定向` |
+| `e2e/ops-diagnostic.spec.ts` | `集群诊断区块存在` |
+| `e2e/ops-shard-catalog-crud.spec.ts` | `页可达 + 新建入口可见` |
+| `e2e/ops-tenant-placement-crud.spec.ts` | `页可达 + 新建入口可见` |
+| `e2e/reports-ops.spec.ts` | `展示所有报表卡片`、`header 显示 tenantId 标签` |
+| `e2e/smoke.spec.ts` | `根路径重定向到运营概览` |
+| `src/api/adapters.test.ts` | `returns correct slice for page 2`、`returns partial last page` |
+| `src/api/atomicTaskTypes.test.ts` | `returns empty array when payload is empty` |
+| `src/api/customTaskTypes.test.ts` | `returns null for invalid JSON` |
+| `src/api/meta.test.ts` | `payload 不是对象时返回 {}(防御后端异常)` |
+| `src/api/taskHeartbeat.test.ts` | `reads percent in 0-100 range`、`treats 0-1 floats as ratios and scales up`、`rounds to 0.1`、`prefers percent over progress when both present` |
+| `src/api/workerFingerprint.test.ts` | `listWorkerFingerprints normalizes null response to empty array`、`getWorkerFingerprintSummary normalizes null response to empty array` |
+| `src/components/common/EmptyState.test.ts` | `没有操作时不渲染空的操作容器` |
+| `src/components/common/SensitiveFieldAlert.test.ts` | `handles invalid JSON string gracefully (no render)` |
+| `src/components/common/docsRegistry.test.ts` | `docKey 全为 kebab-case(避免 camelCase / snake_case 混用)`、`未知 docKey 返回空字符串(避免 iframe 加载未定义页)` |
+| `src/components/common/statusTagResolve.test.ts` | `falls back to fallback arg when value empty`、`falls back to em-dash when value empty and no fallback`、`returns info for unknown values when no local label override` |
+| `src/composables/useFormValidate.test.ts` | `required 默认 blur`、`formRef 未挂载时 validate() 返回 false 不抛` |
+| `src/composables/useOnboardingTour.test.ts` | `首次访问且无完成标记时展示引导`、`已完成引导时不再展示` |
+| `src/constants/theme.test.ts` | `defaults to dark when no user preference is stored`、`preserves stored user preference`、`migrates legacy system default to dark once` |
+| `src/directives/permission.test.ts` | `keeps element when permissions list empty` |
+| `src/stores/auth.test.ts` | `isLoggedIn is false when no token`、`hasPermission returns false when no userInfo` |
+| `src/stores/tabs.test.ts` | `returns -1 for unknown key` |
+| `src/utils/aiMessagePresentation.test.ts` | `keeps approved answer content` |
+| `src/utils/datetime.test.ts` | `handles epoch ms number`、`returns raw string for invalid date` |
+| `src/utils/errorCatalog.test.ts` | `falls back to network`、`returns undefined when nothing matches` |
+| `src/utils/formatAiUsd.test.ts` | `uses cents for zero and ordinary amounts` |
+| `src/utils/iconResolve.test.ts` | `已知图标名:返回对应 EP 图标 Component`、`未知图标名:返回 fallback(Menu)而非 undefined,保菜单可渲染` |
+| `src/utils/idempotency.test.ts` | `returns a non-empty string` |
+| `src/utils/lastApiMeta.test.ts` | `stores a valid meta object`、`sets value to null when called with undefined`、`sets value to null when called with null` |
+| `src/utils/logRedact.test.ts` | `sanitizeParams returns undefined for null/undefined` |
+| `src/utils/logger.test.ts` | `logClick writes type=click`、`keeps legitimate error messages`、`filters by keyword in name`、`filters by keyword in props`、`returns all when no filter` |
+| `src/utils/metaEnumPick.test.ts` | `returns first matching non-empty group`、`skips missing keys and returns first hit`、`skips empty arrays`、`returns [] when no key matches`、`returns [] for undefined input`、`returns [] for null input`、`returns [] when called with no keys` |
+| `src/utils/passwordGenerator.test.ts` | `throws when length < 4`、`excludes ambiguous characters (0/O/I/l/1)`、`extra point at length ≥ 12`、`caps at 4 (extreme)` |
+| `src/utils/pipelineStepSummary.test.ts` | `PARSE 步骤取 parsedCount`、`GENERATE 取 recordCount`、`未映射 stage(如 PREPARE)且 summary 含计数 → 回退优先级列表`、`已解析对象入参(非字符串)也支持`、`计数字段非数字(脏数据)→ 跳过不误显` |
+| `src/utils/queryFormOptions.test.ts` | `returns sorted unique non-empty values`、`returns empty array for empty input`、`filters out undefined picks` |
+| `src/utils/resourceCodeBuilder.test.ts` | `uppercases lower`、`keeps digits + underscores`、`empty → EMPTY`、`< 3 chars → LENGTH`、`> 30 chars → LENGTH`、`digit-leading rejected (BIZ_FORMAT requires letter first)`、`exact 30 chars boundary OK`、`accepts v-prefixed`、`accepts bare digits`、`builds without version`、`builds with version`、`normalizes biz input on the fly`、`drops bad version silently`、`empty existing → empty` |
+| `src/utils/safeHtml.test.ts` | `returns the sanitized string unchanged` |
+| `src/utils/safeJson.test.ts` | `returns empty string unchanged`、`falls back to original string on malformed JSON` |
+| `src/utils/sensitiveKeys.test.ts` | `returns empty for clean object`、`detects direct sensitive keys`、`parses JSON string input` |
+| `src/utils/structuredSummary.test.ts` | `truncates plain text summaries` |
+| `src/utils/text.test.ts` | `keeps short values unchanged`、`truncates CJK text by characters rather than bytes`、`does not split a surrogate pair` |
+| `src/utils/userErrorMessage.test.ts` | `preserves non-API client-side validation errors` |
+| `src/views/monitor/canReplayFailedWorkflowJobNode.test.ts` | `allows only a failed JOB node with a linked instance in a failed Workflow run` |
+| `src/views/monitor/workflowNodeSkipReason.test.ts` | `marks old skipped rows without a recorded reason`、`does not show skip copy for other node states` |
+| `src/views/scheduler/batchDayPresentation.test.ts` | `builds leap-year month boundaries in local time` |
+| `src/views/system/atomicRuntimeModel.test.ts` | `不可用时即使混有executor字段也不展示为真实状态` |
+| `src/views/worker/workerActions.test.ts` | `在线节点只展示下线和接管动作`、`排空中节点不再展示排空和预热`、`离线节点只允许预热` |
+| `src/views/workflow/designer/codec/mermaidExporter.test.ts` | `empty snapshot → header only` |
+
+## 2026-11-01：当前 public Map 候选逐项台账
+
+本表固定 11 月 1 日清单的 60 个返回类型词法候选及读取时源文件摘要；行号可能漂移，重载按行区分。已核查结论对应前文所列源码和调用边界；待核查不代表违规。输入参数、隐式 public 接口等不在此分母内。
+
+| 文件和行 | 方法 | SHA-256 前 12 位 | 结论 |
+|---|---|---|---|
+| [BatchKafkaProducerSupport.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/config/BatchKafkaProducerSupport.java#L36) | `stringProducerConfig` | `fd7f26eb0d1e` | 保留：传递任意 Kafka client 配置并供调用方覆盖 |
+| [RunModeSupport.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/context/RunModeSupport.java#L17) | `copyWithDefault` | `358ea291406c` | 保留：复制不定业务参数并规范化模式 |
+| [BatchRuntimeStatusEndpoint.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/diagnostics/BatchRuntimeStatusEndpoint.java#L51) | `status` | `3228b82711cf` | 保留：Actuator 现有 wire 及条件出现的诊断字段 |
+| [CursorCodec.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/page/CursorCodec.java#L45) | `decode` | `e92c60c35010` | 保留：不同分页调用方的动态排序键 |
+| [JsonUtils.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/JsonUtils.java#L91) | `toMap` | `83fb7fc5ea33` | 保留：对任意对象提供通用 JSON 转换 |
+| [SecretMasking.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java#L65) | `maskSensitiveKeys` | `ebeb1927bf06` | 保留：递归处理不定字段，重载分别提供自定义敏感键 |
+| [SecretMasking.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/SecretMasking.java#L71) | `maskSensitiveKeys` | `ebeb1927bf06` | 保留：递归处理不定字段，重载分别提供自定义敏感键 |
+| [SensitiveEvidenceMasking.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/utils/SensitiveEvidenceMasking.java#L22) | `maskMetadata` | `c1bbb6bf6836` | 保留：血缘响应中的不定 metadata 脱敏 |
+| [FileChannelConfigQueryView.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/view/FileChannelConfigQueryView.java#L26) | `toMap` | `acd8910bc2af` | 保留：Excel 导入旧值合并兼容键和缺省值 |
+| [FileTemplateConfigQueryView.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/view/FileTemplateConfigQueryView.java#L61) | `toMap` | `109914737586` | 保留：Excel 导入旧值合并兼容键和缺省值 |
+| [ConsoleJobConfigViews.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/view/ConsoleJobConfigViews.java#L42) | `toMap` | `d2ac11479f8b` | 保留：批量窗口 Excel 行按旧键和 null 语义导出 |
+| [ConsoleJobOpsSupport.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/infrastructure/ConsoleJobOpsSupport.java#L525) | `parsePayload` | `e4ddc76a4f26` | 保留：接收调用方可变业务参数 JSON |
+| [ResourceQueueRow.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/view/ResourceQueueRow.java#L43) | `toMap` | `524267332ca1` | 保留：Excel 列读取及 null 单元格契约 |
+| [ConfigPackageExcelSchema.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java#L133) | `toExportRow` | `08da296bda0a` | 保留：日历 Excel 导出行 |
+| [ConsoleMapSupport.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/support/web/ConsoleMapSupport.java#L18) | `mapOf` | `8e40cd9b97c4` | 保留：组装多类配置审计 JSON 的动态 detail |
+| [PartitionDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/PartitionDispatchService.java#L55) | `effectiveParams` | `395ed8f676da` | 保留：T1 参数传递至 T2 并构建动态任务载荷 |
+| [WorkflowNodePayloadBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java#L299) | `nodeOutput` | `0868cea66d76` | 保留：工作流表达式读取各节点动态输出 |
+| [WorkflowNodePayloadBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java#L304) | `workflowRunFields` | `0868cea66d76` | 保留：工作流表达式上下文的可选字段 |
+| [WorkflowNodePayloadBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java#L333) | `nodeOutput` | `0868cea66d76` | 保留：工作流表达式读取各节点动态输出 |
+| [WorkflowNodePayloadBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java#L338) | `workflowRunFields` | `0868cea66d76` | 保留：工作流表达式上下文的可选字段 |
+| [WorkflowNodePayloadBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowNodePayloadBuilder.java#L362) | `parsePayloadMap` | `0868cea66d76` | 保留：Workflow 作业原始动态载荷解析 |
+| [WorkflowRunExecutionSnapshot.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunExecutionSnapshot.java#L584) | `dispatchSecretBindings` | `a3fb85b85ea6` | 保留：按节点返回渠道编码索引的冻结密钥绑定 |
+| [FileGovernanceViews.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/view/FileGovernanceViews.java#L99) | `toCacheValues` | `30a1cc16740a` | 保留：序列化并消费既有延迟样本缓存结构 |
+| [FileGovernanceViews.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/view/FileGovernanceViews.java#L119) | `toCacheValues` | `30a1cc16740a` | 保留：序列化并消费既有延迟样本缓存结构 |
+| [SensorFileArrivalView.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/view/SensorFileArrivalView.java#L18) | `toProbeOutput` | `7227d388aafe` | 保留：Sensor 命中输出供动态表达式消费 |
+| [MapJsonbTypeHandler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java#L37) | `getNullableResult` | `230a48c9eec6` | 保留：MyBatis 不同结果来源的动态 JSONB 重载 |
+| [MapJsonbTypeHandler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java#L43) | `getNullableResult` | `230a48c9eec6` | 保留：MyBatis 不同结果来源的动态 JSONB 重载 |
+| [MapJsonbTypeHandler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/mybatis/MapJsonbTypeHandler.java#L48) | `getNullableResult` | `230a48c9eec6` | 保留：MyBatis 不同结果来源的动态 JSONB 重载 |
+| [DispatchChannelSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DispatchChannelSnapshotService.java#L41) | `pin` | `c084f72aa7df` | 保留：在业务参数中冻结动态渠道快照 |
+| [DispatchChannelSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DispatchChannelSnapshotService.java#L166) | `pinWorkflowReplay` | `c084f72aa7df` | 保留：在重放业务参数中应用批准的渠道快照和绑定 |
+| [DispatchSecretSnapshotResolver.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DispatchSecretSnapshotResolver.java#L34) | `pin` | `4587d4a3e29d` | 保留：在业务参数中按渠道冻结密钥版本 |
+| [FileTemplateSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/FileTemplateSnapshotService.java#L41) | `pin` | `4fcc703e3415` | 保留：业务参数中冻结模板快照 |
+| [FileTemplateSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/FileTemplateSnapshotService.java#L90) | `pinWorkflowReplay` | `4fcc703e3415` | 保留：重放业务参数中应用批准的模板快照 |
+| [PlatformFileRecordRepository.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java#L31) | `loadFileRecord` | `cc2ab89dc58e` | 保留：具名投影转成共享阶段上下文和插件既有键值契约 |
+| [PlatformFileRecordRepository.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java#L48) | `loadFileRecordByStoragePath` | `cc2ab89dc58e` | 保留：共享文件记录格式供导入与导出恢复读取 |
+| [PlatformFileTemplateRepository.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileTemplateRepository.java#L18) | `loadLatestTemplateConfig` | `6704c9fc9f92` | 保留：模板投影供解析器和插件消费现有配置键 |
+| [PlatformPipelineRunRepository.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java#L102) | `loadLatestSucceededStepOutputSummary` | `d68ebabd9f2a` | 保留：不同阶段的 JSON 输出供跳过恢复透传 |
+| [PlatformFileRecordView.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileRecordView.java#L40) | `toPluginValues` | `853b28c9f13b` | 保留：向现有 Worker 文件插件边界转换 snake_case 字段 |
+| [PlatformFileTemplateConfigView.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileTemplateConfigView.java#L61) | `toPluginValues` | `764b9f0b5bd7` | 保留：向现有 Worker 模板插件边界转换字段 |
+| [FrozenFileTemplateResolver.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/FrozenFileTemplateResolver.java#L31) | `resolve` | `ea17a46960ae` | 保留：冻结与实时来源统一为动态模板配置 |
+| [ChannelConfigMerge.java](../../batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/ChannelConfigMerge.java#L106) | `merge` | `a02cfb20e29e` | 保留：合并列和渠道 JSON 并保留插件配置契约 |
+| [FileDispatchRepository.java](../../batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/FileDispatchRepository.java#L36) | `loadFile` | `938069df6a9c` | 保留：分发准备将文件字段放入阶段插件上下文 |
+| [FileDispatchRepository.java](../../batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/FileDispatchRepository.java#L44) | `loadFile` | `938069df6a9c` | 保留：分发准备将文件字段放入阶段插件上下文 |
+| [FileDispatchRepository.java](../../batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/FileDispatchRepository.java#L52) | `loadChannel` | `938069df6a9c` | 保留：渠道配置用于合并并供派发和回执消费 |
+| [DispatchChannelConfigView.java](../../batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/mapper/DispatchChannelConfigView.java#L25) | `toPluginValues` | `76c13107e046` | 保留：渠道投影用于派发和回执插件配置 |
+| [ExportConfigValueSupport.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/config/ExportConfigValueSupport.java#L19) | `toMap` | `8b228a22660e` | 保留：导出模板的动态 JSON 或 Map 规范化 |
+| [GenericJdbcMappedExportDataPlugin.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/GenericJdbcMappedExportDataPlugin.java#L83) | `loadBatch` | `3177938e44cc` | 保留：插件查询按模板选择列并返回动态批次行 |
+| [SqlTemplateExportDataPlugin.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java#L91) | `loadBatch` | `96c18ed23cad` | 保留：实现导出插件契约并传入生成阶段 |
+| [ValidationConfigSupport.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationConfigSupport.java#L20) | `toMap` | `c278f4d42fc4` | 保留：读取 Map 或 JSON 的动态校验配置 |
+| [ValidationConfigSupport.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationConfigSupport.java#L42) | `firstMap` | `c278f4d42fc4` | 保留：按候选键提取动态规则 |
+| [ValidationConfigSupport.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationConfigSupport.java#L52) | `payloadToMap` | `c278f4d42fc4` | 保留：客户载荷供按字段名的规则求值使用 |
+| [ValidationRuleSetMerger.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationRuleSetMerger.java#L32) | `merge` | `e31799c29ad1` | 保留：合并动态字段映射和显式规则集 |
+| [ParseSupport.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ParseSupport.java#L62) | `parseHints` | `4e51523686f6` | 保留：不同格式解析器读取各自动态提示 |
+| [ParseSupport.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/format/ParseSupport.java#L76) | `readJsonObject` | `4e51523686f6` | 保留：Map 和 JSON 文本均可传入的配置边界 |
+| [TaskDispatcher.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java#L618) | `progressSnapshot` | `989784d9a66d` | 保留：续租请求携带 handler 自定义进度快照 |
+| [SdkRowResult.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/SdkRowResult.java#L63) | `toOutput` | `69342074d3c4` | 保留：转为任务结果 output 的既有字段契约 |
+| [SdkTypedParameters.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/handler/typed/SdkTypedParameters.java#L71) | `toOutputMap` | `d5aa6605663a` | 保留：将业务泛型结果转为可变结构的 output |
+| [ProgressReporter.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/ProgressReporter.java#L29) | `latest` | `84274e0c30ed` | 保留：跨线程可扩展的进度快照 |
+| [SdkTaskStoppedException.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/task/SdkTaskStoppedException.java#L24) | `breakPosition` | `46afd4757d0e` | 保留：携带 handler 定义的续跑断点并进入取消结果 |
+| [FakeBatchPlatform.java](../../sdk/java/testkit/src/main/java/io/github/pinpols/batch/sdk/testkit/FakeBatchPlatform.java#L233) | `registrations` | `2f58c33e8612` | 保留：记录接收到的注册 JSON 请求体供测试读取 |
+
+## 2026-11-01：后端薄包装历史候选逐项台账
+
+以下为 10 月 28 日 110 个词法候选，摘要为建表时当前文件内容。每个候选单独裁定，待核查不等于问题；源码变化后须重验。
+
+| 文件 | 方法 | 当前 SHA-256 前 12 位 | 结论 |
+|---|---|---|---|
+| [TokenBucketRateLimiter.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/ratelimit/TokenBucketRateLimiter.java) | `configSupplierFor` | `0b7b8be09af8` | 保留：命名并缓存限流桶配置供应器 |
+| [FilesystemObjectStore.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/storage/FilesystemObjectStore.java) | `syntheticEtag` | `25720c586bc2` | 保留：命名文件大小和时间生成的本地 ETag |
+| [TenantConfigMatrixBuilder.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigMatrixBuilder.java) | `first` | `ddaece8f2600` | 保留：空列表安全选取首项 |
+| [SqlTemplateExportSqlValidator.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSqlValidator.java) | `isParameterStart` | `edaa845aaf28` | 保留：命名 SQL 参数首字符规则 |
+| [SqlTemplateExportSqlValidator.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSqlValidator.java) | `isParameterPart` | `edaa845aaf28` | 保留：命名 SQL 参数后续字符规则 |
+| [OkHttpOrchestratorExternalHttpTransport.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/http/OkHttpOrchestratorExternalHttpTransport.java) | `sameHost` | `5d7370669615` | 保留：DNS 回调中的地址规范化比较 |
+| [DefaultWorkerRegistryService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultWorkerRegistryService.java) | `firstHeartbeat` | `c8c61cdfd7aa` | 保留：明确注册时服务端时间和忽略 Worker 时钟的约束 |
+| [MapperStatusWriteConventionTest.java](../../batch-test-support/src/test/java/io/github/pinpols/batch/common/arch/MapperStatusWriteConventionTest.java) | `withoutComments` | `38399abfb7ac` | 保留：命名检查前 XML 注释剔除步骤 |
+| [ImportRecordGovernanceService.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportRecordGovernanceService.java) | `stringValue` | `0bd63406a1d5` | 已简化：使用标准库保持空值与字符串转换语义 |
+| [TriggerStatusQueryFacade.java](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/infrastructure/TriggerStatusQueryFacade.java) | `unknown` | `2530a33ef0a9` | 保留：为未知触发状态构建具名结果 |
+| [BatchDayReplayService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java) | `failedStatuses` | `8a258c5cfe36` | 保留：命名失败重放范围 |
+| [BatchDayReplayService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java) | `isCancellable` | `8a258c5cfe36` | 保留：命名可取消状态业务判断 |
+| [WorkflowRunReplaySnapshotResolver.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/WorkflowRunReplaySnapshotResolver.java) | `readProtectedDispatchChannelSnapshots` | `443dca888f59` | 保留：区分渠道快照与模板快照的领域语义 |
+| [DefaultWorkflowDagService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java) | `stringValue` | `c71e37547f75` | 已简化：使用标准库保持空值与字符串转换语义 |
+| [PreprocessStep.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStep.java) | `hasTemplateConfigSnapshot` | `7f33ed33d5df` | 保留：命名模板快照存在条件 |
+| [ConsoleLoginService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleLoginService.java) | `invalidCredentials` | `9506606b6a60` | 保留：命名认证失败异常和错误键 |
+| [WorkflowRunExecutionSnapshot.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunExecutionSnapshot.java) | `readProtectedDispatchChannelSnapshots` | `a3fb85b85ea6` | 保留：区分渠道快照与模板快照的领域语义 |
+| [FileGovernanceArrivalGroupGuardTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceArrivalGroupGuardTest.java) | `bizDate` | `e119b8a9c69d` | 保留：测试行数据中的日期转换 |
+| [DefaultConsoleJobDefinitionApplicationService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java) | `resolveSoftRuntimeSeconds` | `04b03cc0d7c2` | 保留：命名请求值与监控默认值的选择 |
+| [TerminalNotificationDeliveryService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/TerminalNotificationDeliveryService.java) | `notification` | `5478eae0afdd` | 保留：具名构造通知目的地及其可空字段 |
+| [AlertmanagerEmitPublisher.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/governance/AlertmanagerEmitPublisher.java) | `stripTrailingSlash` | `3b4f94447486` | 保留：命名地址末尾斜线规范化 |
+| [DefaultConsoleAlertApplicationService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/infrastructure/DefaultConsoleAlertApplicationService.java) | `normalizeStatus` | `d19fb8ae1abe` | 保留：命名告警状态归一及缺省口径 |
+| [StatefulBackendGuard.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java) | `matches` | `92cf8b7b847f` | 保留：命名后端及身份同时匹配的条件 |
+| [DefaultWorkflowNodeDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowNodeDispatchService.java) | `isJobNode` | `2c2014fad378` | 保留：命名 JOB 分支判断 |
+| [DefaultWorkflowNodeDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowNodeDispatchService.java) | `isWaitNode` | `2c2014fad378` | 保留：命名 WAIT 分支判断 |
+| [DefaultRetryGovernanceService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java) | `stringValue` | `a3930e16154c` | 已简化：使用标准库保持空值与字符串转换语义 |
+| [JsonFixtureContractTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/contract/JsonFixtureContractTest.java) | `fixturesDir` | `04eb34dcd58c` | 保留：命名 SDK 契约 fixture 路径 |
+| [JsonFixtureContractTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/contract/JsonFixtureContractTest.java) | `openapiPath` | `04eb34dcd58c` | 保留：命名权威 OpenAPI 路径 |
+| [ConsoleSessionRegistry.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleSessionRegistry.java) | `sessionStateTtl` | `f0b6d998580c` | 保留：命名会话状态 TTL 及默认策略 |
+| [FileGovernanceScheduler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceScheduler.java) | `defaultText` | `8cd602fffdc5` | 保留：对空白配置使用指定回退值 |
+| [CalendarBizDateResolver.java](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/CalendarBizDateResolver.java) | `resolveCutoffTime` | `3b4e5429a8c3` | 保留：命名日历截止时间默认策略 |
+| [CalendarBizDateResolver.java](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/CalendarBizDateResolver.java) | `previousWorkday` | `3b4e5429a8c3` | 保留：明确向前滚动和诊断方向 |
+| [CalendarBizDateResolver.java](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/CalendarBizDateResolver.java) | `nextWorkday` | `3b4e5429a8c3` | 保留：明确向后滚动和诊断方向 |
+| [SmtpEmailDispatchChannelAdapterTest.java](../../batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapterTest.java) | `port` | `0cba3e27f436` | 保留：封装 SMTP 测试服务器监听端口 |
+| [ConsoleOidcAuthenticationSuccessHandler.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/rbac/ConsoleOidcAuthenticationSuccessHandler.java) | `isAscii` | `1341a4ec47e3` | 保留：命名 OIDC 身份安全字符判断 |
+| [ConsoleRateLimitFilter.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java) | `isExpensivePath` | `4f124920e7e6` | 保留：命名昂贵请求路径策略 |
+| [BatchWindowGateTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchWindowGateTest.java) | `mockWorkerSelector` | `e6c04f11f3ad` | 已简化：直接创建局部 mock，移除单次转发 |
+| [CrossDayDependencyReconciler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java) | `loadWorkflowRun` | `c63b9fc30cf3` | 保留：命名跨日依赖读取 Workflow 入口 |
+| [BatchWorkerSdkAutoConfigurationTest.java](../../sdk/java/spring/src/test/java/io/github/pinpols/batch/sdk/autoconfigure/BatchWorkerSdkAutoConfigurationTest.java) | `registeredHandlers` | `358446979ac4` | 保留：封装测试读取已注册处理器的类型转换 |
+| [QuartzMisfireApplicationRestartIntegrationTest.java](../../batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/QuartzMisfireApplicationRestartIntegrationTest.java) | `jdbcUrlWithApplicationName` | `ec1fc3e5f3c2` | 保留：命名 JDBC 连接参数拼接规则 |
+| [ImportDataQualityService.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportDataQualityService.java) | `asString` | `e6aede729991` | 已简化：使用标准库保持空值与字符串转换语义 |
+| [ConsolePushApprovalNotifier.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/support/ConsolePushApprovalNotifier.java) | `nullToDash` | `10c29a6435b9` | 保留：命名通知内容空白回退规则 |
+| [ConsolePushApprovalNotifier.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/support/ConsolePushApprovalNotifier.java) | `truncate` | `10c29a6435b9` | 保留：命名通知文本长度裁剪规则 |
+| [DefaultFileGovernanceService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultFileGovernanceService.java) | `safeUrlQuery` | `e9e6f226ee68` | 保留：命名查询参数编码与空值策略 |
+| [ConfigPackageExcelValidator.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java) | `resourceQueueExists` | `4f12b9b4cad2` | 保留：命名配置包引用校验的资源队列存在性 |
+| [DefaultConsoleKafkaLagQueryService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleKafkaLagQueryService.java) | `cacheSegment` | `d9bcfe37b2b1` | 保留：命名缓存键空过滤值回退策略 |
+| [WorkflowConditionEvaluator.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowConditionEvaluator.java) | `findAtomicOperator` | `1bc8f11251c2` | 已简化：调用点直接使用枚举方法 |
+| [RequestSigner.java](../../sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/internal/RequestSigner.java) | `upper` | `2c9cfc3848b3` | 保留：明确签名方法的空值与固定 Locale 规范化 |
+| [WorkflowReplayJobDefinitionResolverTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/replay/WorkflowReplayJobDefinitionResolverTest.java) | `snapshot` | `38ca0d6362e9` | 保留：命名测试的工作流运行快照构造 |
+| [TenantSchedulerSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/scheduler/TenantSchedulerSnapshotService.java) | `emptyBacklog` | `2ddb3214b402` | 保留：命名空积压快照并隐藏多零构造参数 |
+| [RequestSignatures.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/security/RequestSignatures.java) | `upper` | `14657130a62e` | 保留：明确签名方法的空值与固定 Locale 规范化 |
+| [AtomicRuntimeStatusService.java](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicRuntimeStatusService.java) | `isProdProfile` | `6676c3c02779` | 已简化：原调用处直接使用统一 profile 判断 |
+| [FileGovernanceStorageMaintenance.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceStorageMaintenance.java) | `sanitizeTrace` | `7ae5b9ed527a` | 保留：命名清理任务标识字符清洗规则 |
+| [DefaultWorkerSelector.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java) | `currentLoadOrZero` | `1d00baca90b4` | 保留：命名 Worker 负载缺省值 |
+| [PlatformHttpClientTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/internal/PlatformHttpClientTest.java) | `attemptedAddresses` | `e25ccd4239bd` | 保留：测试读取连接地址的不可变快照 |
+| [ReadReplicaRoutingDataSource.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/config/ReadReplicaRoutingDataSource.java) | `observeReplicaConnection` | `23fc8c36bac3` | 保留：命名副本连接代理的类型边界 |
+| [OrchestratorApprovalClient.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/approval/OrchestratorApprovalClient.java) | `hasText` | `10126f07810d` | 保留：多个校验共享非空文本判断 |
+| [OutboxEventKeyGenerator.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/engine/OutboxEventKeyGenerator.java) | `truncate` | `20402acd735d` | 保留：命名事件键最大长度约束 |
+| [ImportIngressScanner.java](../../batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java) | `isManifestMode` | `4ef9b1cd5aa2` | 保留：命名导入扫描完成文件模式 |
+| [ConsoleAuthenticationFilter.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleAuthenticationFilter.java) | `isPublicAuthPath` | `2787ed9b541d` | 保留：命名认证过滤器的公开路径策略 |
+| [JobLifecycleMetricsRecorder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/observability/JobLifecycleMetricsRecorder.java) | `resolveErrorCode` | `fe6e9cf355a1` | 保留：命名指标错误码回退规则 |
+| [RequestSignatureVerifier.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/security/RequestSignatureVerifier.java) | `hasValidSignatureShape` | `60659e510bc3` | 保留：命名签名结构校验 |
+| [DefaultResourceScheduler.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultResourceScheduler.java) | `isWaitingRetry` | `986583cbaab2` | 保留：命名重试等待条件 |
+| [DefaultDryRunPlanService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dryrun/DefaultDryRunPlanService.java) | `defaultParamsHas` | `39e79ade78f1` | 保留：命名作业默认参数存在判断 |
+| [ConsoleOidcIdentityService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleOidcIdentityService.java) | `isAscii` | `75c944069896` | 保留：命名 OIDC 身份字符集判断 |
+| [DefaultTaskExecutionWrapperTest.java](../../batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapperTest.java) | `actualReplayCapability` | `4addff71f8e6` | 保留：与声明能力对照的实际能力测试夹具 |
+| [ConsoleClusterDiagnosticService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java) | `isTerminal` | `7b0f1c0c40ed` | 保留：命名诊断中的终态分类 |
+| [TenantJobDefinitionApplySupport.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantJobDefinitionApplySupport.java) | `resolveSoftRuntime` | `a54f233a1070` | 保留：命名请求与监控默认值的选择 |
+| [QuotaReservationSupport.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/quota/QuotaReservationSupport.java) | `notApplicable` | `b1f4f3d57156` | 保留：具名构造不适用的预检结果 |
+| [TaskConsumerRoutingPolicy.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/TaskConsumerRoutingPolicy.java) | `escapeRegex` | `92b5c8f68c12` | 保留：命名主题路由正则转义 |
+| [SparkSubmitTaskExecutor.java](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/spark/SparkSubmitTaskExecutor.java) | `isLocalPath` | `56aac06fd59f` | 保留：命名本地输出路径条件 |
+| [LeaseRenewalSchedulerTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/scheduler/LeaseRenewalSchedulerTest.java) | `objectMap` | `33fe2db0a28c` | 保留：集中测试载荷类型转换并局部抑制泛型告警 |
+| [ExportRegionResolver.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/region/ExportRegionResolver.java) | `firstNonBlank` | `4cc33bd536b3` | 保留：命名区域配置的别名优先级 |
+| [ConsoleRealtimeEventHub.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeEventHub.java) | `normalizeStream` | `47a4ff78b293` | 保留：命名实时流默认名称规则 |
+| [ConsoleRealtimeEventHub.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeEventHub.java) | `normalizeFilter` | `47a4ff78b293` | 保留：命名实时流筛选条件归一规则 |
+| [PrepareStep.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java) | `defaultText` | `1cf66dc8834b` | 保留：命名导出批次文本默认值 |
+| [FileGovernanceRepository.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceRepository.java) | `defaultText` | `2ece931b7b11` | 保留：命名文件治理审计字段回退值 |
+| [ActiveTaskLeaseRegistry.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java) | `startExecution` | `f1e6261ab2c4` | 保留：封装租约执行状态的原子转换 |
+| [ActiveTaskLeaseRegistry.java](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java) | `lastConfirmedNanosValue` | `f1e6261ab2c4` | 保留：封装续租时间原子读取 |
+| [S3ExportStorage.java](../../batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/infrastructure/S3ExportStorage.java) | `digestToHex` | `e3ec201d9c9c` | 保留：命名校验摘要的十六进制表示 |
+| [SharedConstantsParityTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/contract/SharedConstantsParityTest.java) | `yamlPath` | `52ccf4af50b3` | 保留：命名多语言共享契约的权威文件 |
+| [NamespacedObjectStore.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/storage/NamespacedObjectStore.java) | `physicalMarker` | `f0ebb9a7f826` | 保留：命名分页游标到物理命名空间的转换 |
+| [NamespacedObjectStore.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/storage/NamespacedObjectStore.java) | `logicalMarker` | `f0ebb9a7f826` | 保留：命名物理分页游标到逻辑命名空间的转换 |
+| [ConsoleAiCostService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/ConsoleAiCostService.java) | `unpriced` | `399e48b0b5a1` | 保留：具名表示无定价的预留结果 |
+| [QuartzMisfireRecoveryListener.java](../../batch-trigger/src/main/java/io/github/pinpols/batch/trigger/infrastructure/QuartzMisfireRecoveryListener.java) | `isDedicatedRecoveryJob` | `366506667e70` | 保留：命名误触发恢复作业识别规则 |
+| [SqlTransformComputeSpec.java](../../batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputeSpec.java) | `values` | `e023bd74b064` | 保留：命名按指定列提取源行值的过程 |
+| [ResultVersionWriter.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/version/ResultVersionWriter.java) | `buildBusinessKey` | `b8868c529292` | 保留：命名结果版本业务身份构造 |
+| [RedisOidcAuthorizationRequestRepository.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/rbac/RedisOidcAuthorizationRequestRepository.java) | `validBrowserBinding` | `c4cc6fb570f2` | 保留：命名浏览器绑定令牌格式验证 |
+| [DefaultPartitionDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultPartitionDispatchService.java) | `buildContext` | `7b12fdfcc583` | 保留：封装关联派发上下文与分区的构造 |
+| [DefaultPartitionDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultPartitionDispatchService.java) | `initialPartitionStatus` | `7b12fdfcc583` | 保留：命名分区初始状态决策 |
+| [CapacityProfileServiceTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/capacity/CapacityProfileServiceTest.java) | `eqInt` | `d300e97aa1a6` | 保留：集中参数匹配类型转换以配合原有测试 |
+| [DatabaseQuotaRuntimeStateService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/quota/DatabaseQuotaRuntimeStateService.java) | `normalizePolicy` | `52651883e3b4` | 已简化：原分支直接承接同一枚举转换结果 |
+| [BatchTopics.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/kafka/BatchTopics.java) | `sanitizeTopicSegment` | `46320967644d` | 保留：命名 Kafka 主题片段字符规范 |
+| [DefaultSchedulePlanBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/DefaultSchedulePlanBuilder.java) | `clampMaxPartitionCount` | `d114c375582d` | 保留：命名分区数量上限及缺省规则 |
+| [FakeBatchPlatform.java](../../sdk/java/testkit/src/main/java/io/github/pinpols/batch/sdk/testkit/FakeBatchPlatform.java) | `asMap` | `2f58c33e8612` | 保留：测试平台解析可变报文的安全快照 |
+| [OrchestratorConfigInvalidationSubscriber.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/OrchestratorConfigInvalidationSubscriber.java) | `eventKey` | `acd4a64f4ba0` | 保留：命名缓存失效事件的身份键 |
+| [SqlAtomicHandlerTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/atomic/SqlAtomicHandlerTest.java) | `ctxNoSql` | `763f963534e9` | 保留：命名无 SQL 测试上下文构造 |
+| [KafkaConsumerAuthFailureTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/KafkaConsumerAuthFailureTest.java) | `mockConsumer` | `72974af1a7d7` | 保留：局部封装泛型 mock 的 unchecked 警告 |
+| [LoadStepTest.java](../../batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/LoadStepTest.java) | `mockPayload` | `84ff83f5eec5` | 已简化：直接创建局部 mock，移除单次转发 |
+| [OkHttpOrchestratorExternalHttpTransportTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/http/OkHttpOrchestratorExternalHttpTransportTest.java) | `selections` | `3a4cd12bec5b` | 保留：封装测试代理选择计数器读取 |
+| [DefaultCompensationService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java) | `firstText` | `a35391dbebc0` | 保留：命名重跑批次号优先级回退 |
+| [LaunchBatchDayService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/LaunchBatchDayService.java) | `isMissingLaunchContext` | `36983152976c` | 保留：命名启动上下文缺失判断 |
+| [LaunchBatchDayService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/LaunchBatchDayService.java) | `isIncompleteBatchDay` | `36983152976c` | 保留：命名批次日身份缺失判断 |
+| [DefaultTenantConfigPackageExcelService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java) | `requiredHeaders` | `fba6a4b428ec` | 已简化：调用点直接使用原方法 |
+| [DefaultTenantConfigPackageExcelService.java](../../batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java) | `fileNameOrDefault` | `fba6a4b428ec` | 保留：命名配置包上传文件名回退 |
+| [FileGovernanceLatencyMetrics.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceLatencyMetrics.java) | `text` | `1ef9239b20c4` | 已简化：使用标准库保持空值与字符串转换语义 |
+| [ApiKeyVerifier.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java) | `verifyCacheKey` | `edc0680a3842` | 保留：命名验证缓存的密钥摘要及租户身份 |
+| [TaskDispatcherTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcherTest.java) | `objectMap` | `1d1b6c615f57` | 保留：集中测试载荷类型转换并局部抑制泛型告警 |
+| [JsonFixtureRequestSideContractTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/contract/JsonFixtureRequestSideContractTest.java) | `fixturesDir` | `9b317fff942d` | 保留：命名 SDK 请求契约 fixture 路径 |
+| [GlobalJobAdmissionGuard.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/GlobalJobAdmissionGuard.java) | `hasHardCap` | `6e45da3ec0e8` | 保留：命名全局并发上限是否启用 |
+
+## 2026-11-01：短断言候选逐项处置台账
+
+固定 10 月 30 日的 321 项短断言语法候选；每项的源文件摘要取建表时当前内容，均已逐项给出处置结论。候选短不意味着无效或应删除。路径分别相对后端或前端仓库。
+
+| 编号 | 仓库 / 文件 | 测试名称 | 当前文件 SHA-256 前 12 位 | 结论 |
+|---|---|---|---|---|
+| B001 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/page/CursorCodecTest.java` | `shouldReturnNull_whenCursorIsEmpty` | `5e376d3789ce` | 保留：null 与空排序键编码为无游标 |
+| B002 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/web/support/WorkflowMermaidRendererTest.java` | `shouldReturnHeaderOnly_whenDetailMissing` | `7d31e8a0febc` | 保留：空 Workflow 详情的图表头输出 |
+| B003 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/idempotent/IdempotencyKeyResolverTest.java` | `shouldReturnLiteral_whenNoPlaceholder` | `f0954dc6697b` | 保留：无占位符幂等键原样返回 |
+| B004 | `file-batch-system/sdk/typescript/tests/handler.test.ts` | `handler: taskFailure default errorCode = EXECUTION_FAILED` | `b6ea7fc5c20d` | 已增强：独立断言默认错误码协议字面量 |
+| B005 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ReadReplicaHappyPathIntegrationTest.java` | `shouldRouteToReplica_whenTransactionReadOnly` | `a54f2e61b6aa` | 保留：真实只读事务路由副本，与主库写事务不同 |
+| B006 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/RetryDispatchStepTest.java` | `stage_returnsRetry` | `81d7bfa15a17` | 保留：分发重试阶段的标识路由契约 |
+| B007 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `shouldThrowWhenTenantIdIsBlankOnStartDrain` | `6a6890f9370a` | 保留：开始排空时空租户拒绝 |
+| B008 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `shouldThrowWhenWorkerCodeIsBlankOnStartDrain` | `6a6890f9370a` | 保留：开始排空时空 Worker 编码拒绝 |
+| B009 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `shouldThrowWhenTenantIdIsBlankOnForceOffline` | `6a6890f9370a` | 保留：强制下线时空租户拒绝 |
+| B010 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `shouldThrowWhenWorkerCodeIsBlankOnListClaimedTasks` | `6a6890f9370a` | 保留：查询认领任务时空 Worker 编码拒绝 |
+| B011 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkerDrainGovernanceServiceTest.java` | `warmup_throwsWhenTenantBlank` | `6a6890f9370a` | 保留：预热时空租户拒绝 |
+| B012 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/builtin/support/DelimitedCodecTest.java` | `shouldParsePlainFields` | `6e81291668c1` | 保留：分隔、引号、空尾或自定义分隔符各有边界 |
+| B013 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/builtin/support/DelimitedCodecTest.java` | `shouldParseQuotedFieldContainingDelimiter` | `6e81291668c1` | 保留：分隔、引号、空尾或自定义分隔符各有边界 |
+| B014 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/builtin/support/DelimitedCodecTest.java` | `shouldYieldEmptyTrailingField` | `6e81291668c1` | 保留：分隔、引号、空尾或自定义分隔符各有边界 |
+| B015 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/handler/builtin/support/DelimitedCodecTest.java` | `shouldSupportCustomDelimiter` | `6e81291668c1` | 保留：分隔、引号、空尾或自定义分隔符各有边界 |
+| B016 | `file-batch-system/batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskReportBatchTest.java` | `reconcilesEachResponseIdentity` | `3fa12c4bae0c` | 保留：参数化覆盖批量响应乱序、外来、重复、缺失与格式异常 |
+| B017 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/ProcessTaskExecutorTest.java` | `shouldReportProcessTaskType_whenTaskTypeQueried` | `8ef9eee25d7f` | 保留：PROCESS 执行器注册类型 |
+| B018 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectRetryWhenDryRunPayloadUnsafe` | `4ae0d6d3989a` | 保留：真实数据库演练任务非法载荷多种边界及不变状态 |
+| B019 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectRetryWhenFormalPayloadClaimsDryRun` | `4ae0d6d3989a` | 保留：正式任务被错误标为演练的相反方向 |
+| B020 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRollbackFileRedispatchWhenParentIsPaused` | `4ae0d6d3989a` | 保留：父作业暂停导致重派失败及回滚 |
+| B021 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRollbackFileRedispatchWhenTaskCannotReset` | `4ae0d6d3989a` | 保留：任务非失败状态阻止重派及回滚 |
+| B022 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectFileRedispatchWhenExternalOutcomeIsUnknown` | `4ae0d6d3989a` | 保留：任务外部结果未知时的重派阻断 |
+| B023 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectFileRedispatchWhenRecordIsNotKnownFailed` | `4ae0d6d3989a` | 保留：不同投递记录状态及未知结果的阻断 |
+| B024 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectFileRedispatchWhenSingleTaskHasNoFileAssociation` | `4ae0d6d3989a` | 保留：任务缺失文件关联时阻断 |
+| B025 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | `shouldRejectRedispatchWhenPayloadTargetDiffers` | `4ae0d6d3989a` | 保留：普通和 bundle 文件或渠道目标不一致 |
+| B026 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/ValidateStepTest.java` | `shouldReturnValidateStage` | `bc6da7e6c7f2` | 保留：IMPORT VALIDATE 阶段标识 |
+| B027 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/mq/BatchTopicResolverTest.java` | `shouldReturnNull_whenWorkerTypeUnsupported` | `124c230cc946` | 保留：未知 Worker 类型不生成主题 |
+| B028 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/WorkflowConditionEvaluatorTest.java` | `shouldMatchEqualityWithDoubleEquals` | `9108c174484f` | 保留：双等号表达式的独立兼容语法 |
+| B029 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/WorkflowConditionEvaluatorTest.java` | `shouldReturnFalseWhenPayloadKeyMissing` | `9108c174484f` | 保留：条件载荷缺失键时不匹配 |
+| B030 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/FeedbackStepTest.java` | `shouldReturnStageFeedback_whenStageAccessed` | `be24d611f98d` | 保留：PROCESS FEEDBACK 阶段标识 |
+| B031 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/BatchPlatformClientConfigValidationTest.java` | `shouldAcceptAllDefaults` | `6c3504d3219f` | 保留：必需连接配置齐全时默认时限配置应有效 |
+| B032 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowWaitSensorSpecValidatorTest.java` | `shouldIgnoreNonWaitNode` | `15e00f1b019f` | 保留：非 WAIT 节点不运行传感器校验 |
+| B033 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowWaitSensorSpecValidatorTest.java` | `shouldRejectUnknownSensorType` | `15e00f1b019f` | 保留：未知 WAIT 类型返回专属错误码 |
+| B034 | `file-batch-system/examples/task-spi-plugin/sftp-push-executor/src/test/java/io/github/pinpols/batch/ext/sftp/SftpPushTaskExecutorTest.java` | `shouldReturnSftpPushType_whenTaskTypeQueried` | `1bc0106e7f04` | 保留：扩展 SFTP 执行器注册类型 |
+| B035 | `file-batch-system/examples/task-spi-plugin/sftp-push-executor/src/test/java/io/github/pinpols/batch/ext/sftp/SftpPushTaskExecutorTest.java` | `shouldDeclareNetAndDiskCapability_whenCapabilityQueried` | `1bc0106e7f04` | 保留：SFTP 所需网络与磁盘能力 |
+| B036 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/StartupSelfCheckIntegrationTest.java` | `shouldExposeSelfCheckComponent_whenContextStarts` | `65710ad365cf` | 保留：单独定位启动自检 Bean 装配 |
+| B037 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidBizDateValidatorTest.java` | `shouldTrimWhitespace_whenValidating` | `6874e286d40a` | 保留：业务日期去除前后空白后校验 |
+| B038 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultCompensationServiceTest.java` | `shouldThrowWhenCommandIsNull` | `6812f4d2c821` | 保留：补偿请求为 null 时拒绝 |
+| B039 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ConcurrentTaskClaimIntegrationTest.java` | `assignWorker_onlyOneWorkerWins_acrossRepeatedLaunches` | `f60ad57eae7b` | 保留：真实并发认领在多个新批次重复验证唯一胜出 |
+| B040 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/BizDateArithmeticTest.java` | `shouldReturnNull_whenNamedOffsetUnknown` | `1cfd3f1558d3` | 保留：未知命名日期偏移返回 null |
+| B041 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/BizDateArithmeticTest.java` | `shouldReturnEmpty_whenRangeTagUnknown` | `1cfd3f1558d3` | 保留：未知日期范围标签返回空范围 |
+| B042 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/BizDateArithmeticTest.java` | `shouldReturnEmpty_whenBizDayCountExceedsCap` | `1cfd3f1558d3` | 保留：超限营业日范围拒绝扩张 |
+| B043 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportTaskExecutorTest.java` | `shouldReportImportTaskType_whenReadingTaskType` | `044553edd04d` | 保留：IMPORT 执行器注册类型 |
+| B044 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/AdminTestDataCleanupControllerIntegrationTest.java` | `shouldRejectAmbiguousInstanceId_whenNeighborIsInSameTenant` | `d63870c9ae14` | 保留：同租户重号时清理隔离 |
+| B045 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/AdminTestDataCleanupControllerIntegrationTest.java` | `shouldRejectAmbiguousInstanceId_whenNeighborIsInAnotherTenant` | `d63870c9ae14` | 保留：跨租户重号时清理隔离 |
+| B046 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/AdminTestDataCleanupControllerIntegrationTest.java` | `shouldRejectAmbiguousInstanceId_whenNeighborIsArchived` | `d63870c9ae14` | 保留：冷历史重号时清理隔离 |
+| B047 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/i18n/MessagesPropertiesParityTest.java` | `shouldRejectDuplicateKeysAndBlankValues` | `cf23a9b3dd11` | 保留：独立中英文资源文件的重复键及空值约束 |
+| B048 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicIsolationStartupCheckTest.java` | `noDualUseEnabled_noThrow` | `90a0df12cfd7` | 保留：无双用途执行器时自检放行 |
+| B049 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/RetryScheduleStatusTest.java` | `shouldContainSixValues` | `d3340bcde9d7` | 保留：枚举数量约束与各编码检查互补 |
+| B050 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/WorkflowJoinModeTest.java` | `fromCodeOrDefault_unknownCode_returnsAll` | `73c0de5bde7a` | 保留：未知 Join 模式的默认解析，与抛错入口不同 |
+| B051 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/service/BatchObjectCryptoServiceTest.java` | `decryptNullBytes_shouldReturnNull` | `a7b5d81bfbd0` | 保留：null 解密输入返回 null |
+| B052 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/service/BatchObjectCryptoServiceTest.java` | `decryptEmptyBytes_shouldReturnEmpty` | `a7b5d81bfbd0` | 保留：空数组解密输入返回空数组 |
+| B053 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/service/BatchObjectCryptoServiceTest.java` | `resolveKeyRef_fallsBackToDefault_whenSecurityMapEmpty` | `a7b5d81bfbd0` | 保留：安全上下文为空时选择默认密钥引用 |
+| B054 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/infrastructure/quality/ValidationCoercionsTest.java` | `decimalValue_returnsNull_forNonNumericText` | `a8dc48db19c1` | 保留：非数字输入的转换回退 |
+| B055 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/task/SdkTaskResultTest.java` | `shouldReturnEmptyOutput_whenOutputAbsent` | `03a57a6c41d7` | 保留：SDK 空输出契约 |
+| B056 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/BatchTriggerApplicationIntegrationTest.java` | `contextLoads_succeeds` | `c883e0501dd9` | 保留：触发器启动装配 Quartz 和迁移回调 |
+| B057 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/BatchTriggerApplicationIntegrationTest.java` | `quartzScheduler_isStarted` | `c883e0501dd9` | 保留：Quartz 已启动状态与装配不同 |
+| B058 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessRangeSliceTest.java` | `shouldSliceLosslessly_whenLastLineHasNoTrailingNewline` | `3947f1f65bf1` | 保留：末行、空行和 CRLF 为不同切片输入 |
+| B059 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessRangeSliceTest.java` | `shouldSliceLosslessly_whenEmptyLinesPresent` | `3947f1f65bf1` | 保留：末行、空行和 CRLF 为不同切片输入 |
+| B060 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessRangeSliceTest.java` | `shouldSliceLosslessly_whenCrlfLineEndings` | `3947f1f65bf1` | 保留：末行、空行和 CRLF 为不同切片输入 |
+| B061 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/service/WorkerCompatibilityEvaluatorTest.java` | `shouldReportOk_whenMajorOneFormatsVary` | `ca646f6a86a0` | 保留：参数化覆盖 SDK 主版本格式及前缀后缀 |
+| B062 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/OtelTraceContextTest.java` | `shouldReturnNull_whenNoActiveSpan` | `26c97c53ff6b` | 已增强：显式空上下文并恢复线程上下文 |
+| B063 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/OtelTraceContextTest.java` | `shouldFallBackToGeneratedId_whenNoActiveSpan` | `26c97c53ff6b` | 已增强：显式空上下文验证追踪号回退 |
+| B064 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidResourceCodeTest.java` | `shouldReject_whenCodeNull` | `d82262411118` | 保留：null、空串和空白输入各自受验证约束 |
+| B065 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidResourceCodeTest.java` | `shouldReject_whenCodeEmpty` | `d82262411118` | 保留：null、空串和空白输入各自受验证约束 |
+| B066 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidResourceCodeTest.java` | `shouldReject_whenCodeBlank` | `d82262411118` | 保留：null、空串和空白输入各自受验证约束 |
+| B067 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingPartitionMaintenanceTest.java` | `shouldKeepRowsUntilDeletionIsEnabled` | `074590cc5cc9` | 已增强：检查默认开关和无删除操作 |
+| B068 | `file-batch-system/batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/infrastructure/ExportTaskExecutorTest.java` | `shouldReportExportTaskType_whenReadingTaskType` | `193944a1840a` | 保留：EXPORT 执行器注册类型 |
+| B069 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/config/HikariPgSessionSupportTest.java` | `shouldTruncateApplicationName_whenExceedingSixtyThreeChars` | `d99161ecff6b` | 已增强：校验截断内容及长度 |
+| B070 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/scheduler/DryRunSchedulingPriorityTest.java` | `shouldKeepConfiguredPriority_whenFormalTask` | `a9638875be36` | 保留：正式任务显式优先级 |
+| B071 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/scheduler/DryRunSchedulingPriorityTest.java` | `shouldKeepNullPriority_whenFormalTaskHasNoPriority` | `a9638875be36` | 保留：正式任务缺省优先级 |
+| B072 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/config/ConsoleOidcPropertiesTest.java` | `shouldAllowEmptySettings_whenOidcIsDisabled` | `1f01b25a2311` | 保留：关闭 OIDC 时允许空配置 |
+| B073 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidTenantIdTest.java` | `shouldReject_whenTenantIdNull` | `0c5b75e92a48` | 保留：必填与长度边界各自独立 |
+| B074 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidTenantIdTest.java` | `shouldReject_whenTenantIdBlank` | `0c5b75e92a48` | 保留：必填与长度边界各自独立 |
+| B075 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidTenantIdTest.java` | `shouldAccept_whenTenantIdAtMaxLength` | `0c5b75e92a48` | 保留：必填与长度边界各自独立 |
+| B076 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/validation/ValidTenantIdTest.java` | `shouldReject_whenTenantIdExceedsMaxLength` | `0c5b75e92a48` | 保留：必填与长度边界各自独立 |
+| B077 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/DispatchTaskExecutorTest.java` | `shouldReportDispatchTaskType_whenTaskTypeQueried` | `2706d7128038` | 保留：DISPATCH 执行器注册类型 |
+| B078 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/captcha/TencentCaptchaVerifierTest.java` | `shouldReportTencent_whenQueryingProviderName` | `383d082af595` | 保留：腾讯验证码提供方标识 |
+| B079 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReturnNoneWhenValueIsNull` | `e92c1207c211` | 保留：空配额策略回退 NONE |
+| B080 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReturnNoneWhenValueIsBlank` | `e92c1207c211` | 保留：空白配额策略回退 NONE |
+| B081 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReturnNoneWhenValueIsUnknown` | `e92c1207c211` | 保留：未知配额策略回退 NONE |
+| B082 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReportNoneAsNotRuntimeManaged` | `e92c1207c211` | 保留：NONE 策略不由运行时托管 |
+| B083 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReportCalendarDayAsRuntimeManaged` | `e92c1207c211` | 保留：日历日配额策略由运行时托管 |
+| B084 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/quota/QuotaResetPolicyTest.java` | `shouldReportSlidingWindowAsRuntimeManaged` | `e92c1207c211` | 保留：滑动窗口配额策略由运行时托管 |
+| B085 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultPrioritySchedulerTest.java` | `shouldReturnDefaultPriorityFiveWhenRequestIsNull` | `1551e3019e08` | 保留：空调度请求的默认优先级 |
+| B086 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/scheduler/DefaultPrioritySchedulerTest.java` | `shouldReturnMediumBandWhenPriorityIsNull` | `1551e3019e08` | 保留：空优先级的默认优先级档位 |
+| B087 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/LoadStepTest.java` | `shouldReturnLoadStage` | `84ff83f5eec5` | 保留：IMPORT LOAD 阶段标识 |
+| B088 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/security/CredentialEnvResolverTest.java` | `returnsNull_whenNull` | `6767dc650826` | 保留：空凭据引用的解析结果 |
+| B089 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/CatchUpPolicyTypeTest.java` | `fromCodeOrDefault_unknownCode_returnsNone` | `f9104d818911` | 保留：未知补跑策略的默认解析 |
+| B090 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorTest.java` | `shouldReturnSingleStatement_whenNoSemicolon` | `07cfc21da3de` | 保留：无分号 SQL 不被错误拆分 |
+| B091 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchManifestSupportTest.java` | `shouldKeepNull_whenBusinessDateMissing` | `3d3b1401d5a6` | 保留：无业务日的 manifest 字段仍为 null |
+| B092 | `file-batch-system/batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/PipelineWorkerAtomicIsolationOptInArchTest.java` | `shouldOptInIsolationCheck_whenImportWorker` | `4f2ee2f001ab` | 保留：IMPORT Worker 必须注册隔离启动检查 |
+| B093 | `file-batch-system/batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/PipelineWorkerAtomicIsolationOptInArchTest.java` | `shouldOptInIsolationCheck_whenExportWorker` | `4f2ee2f001ab` | 保留：EXPORT Worker 必须注册隔离启动检查 |
+| B094 | `file-batch-system/batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/PipelineWorkerAtomicIsolationOptInArchTest.java` | `shouldOptInIsolationCheck_whenProcessWorker` | `4f2ee2f001ab` | 保留：PROCESS Worker 必须注册隔离启动检查 |
+| B095 | `file-batch-system/batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/arch/PipelineWorkerAtomicIsolationOptInArchTest.java` | `shouldOptInIsolationCheck_whenDispatchWorker` | `4f2ee2f001ab` | 保留：DISPATCH Worker 必须注册隔离启动检查 |
+| B096 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_loopback_ipv4` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B097 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_loopback_ipv6` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B098 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_link_local_metadata_ipv4` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B099 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_link_local_metadata_ipv4_mapped_ipv6` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B100 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_private_class_a` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B101 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_private_class_c` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B102 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_any_local` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B103 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `accepts_public_literal` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B104 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `accepts_public_literal_ipv6` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B105 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_ipv6_ula_aws_metadata` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B106 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_ipv6_ula_fc00_range` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B107 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_ipv6_ula_fd_range` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B108 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutorIpBlockTest.java` | `rejects_ipv6_link_local` | `fa37feaf0d22` | 保留：不同协议族、网段及公网反例 |
+| B109 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/WorkerFingerprintTest.java` | `shouldReturnCurrentJvmPid_whenReadingProcessId` | `90663e395c35` | 保留：Worker 进程号与当前 JVM 进程身份一致 |
+| B110 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/AckDispatchStepTest.java` | `stage_returnsAck` | `0d587c9aa46b` | 保留：分发 ACK 阶段标识 |
+| B111 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/DispatchSpiEquivalenceIntegrationTest.java` | `shouldContainDispatchTaskType_whenListingRegisteredTypes` | `ba6650656b87` | 保留：DISPATCH Worker 的 SPI 注册 |
+| B112 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/CompensateDispatchStepTest.java` | `stage_returnsCompensate` | `dfb2f2e5ce08` | 保留：分发 COMPENSATE 阶段标识 |
+| B113 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/TaskStatusTest.java` | `shouldContainSevenValues` | `190bbfaa9d25` | 保留：任务状态数量约束与各状态编码断言互补 |
+| B114 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/CompleteDispatchStepTest.java` | `stage_returnsComplete` | `98ffb7300a7f` | 保留：分发 COMPLETE 阶段标识 |
+| B115 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/config/ImportScannerPropertiesTest.java` | `doneFileSuffix_defaultsToDotDone` | `2e39b538462b` | 保留：导入完成文件默认后缀 |
+| B116 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/config/ImportScannerPropertiesTest.java` | `doneFileNaming_defaultsToAppendFullName` | `2e39b538462b` | 保留：导入完成文件默认命名策略 |
+| B117 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/ContentMaskingUtilsTest.java` | `shouldApplyTextRulesToMalformedJsonLikeInput` | `51b6c32ad14c` | 保留：损坏 JSON 文本中的敏感字段脱敏 |
+| B118 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/integration/BatchWorkerAtomicApplicationIntegrationTest.java` | `shouldExposeApplicationContext_whenStarted` | `3592df593af6` | 已删除：同类端口验证已覆盖上下文启动和注入 |
+| B119 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/integration/BatchWorkerDispatchApplicationIntegrationTest.java` | `shouldLoadApplicationContext_whenStarted` | `c8a42a0b4c7c` | 已删除：同类端口验证已覆盖上下文启动和注入 |
+| B120 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/support/BuiltinTaskTypeGuardTest.java` | `shouldAllowType_whenJobTypeNullOrBlank` | `90317f255af8` | 保留：内置类型入口对缺失类型的既有行为 |
+| B121 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/support/BuiltinTaskTypeGuardTest.java` | `shouldAllowBuiltinType_whenAnyGrantedRoleIsPlatformAdmin` | `90317f255af8` | 保留：多角色包含平台管理员时的授权 |
+| B122 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcherClaimJitterTest.java` | `shouldReturnZero_whenBaseDelayIsZero` | `d5f19b5c5db1` | 保留：零基础延迟下不得生成抖动 |
+| B123 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForNullPrompt` | `c5fe12376b12` | 已增强：空提示词拒绝时验证参数错误码及必填国际化 key |
+| B124 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForBlankPrompt` | `c5fe12376b12` | 已增强：空白提示词拒绝时验证参数错误码及必填国际化 key |
+| B125 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/RetryPolicyTypeTest.java` | `shouldContainThreeValues` | `4d4163c5e874` | 保留：重试策略枚举项数量约束 |
+| B126 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStreamEligibilityTest.java` | `shouldAllowDirectStreaming_whenTemplateMissing` | `ce656393c7c5` | 保留：无模板时直接流式导入 |
+| B127 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/DeadLetterReplayStatusTest.java` | `shouldContainFiveValues` | `563648867408` | 保留：死信重放状态数量约束 |
+| B128 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/integration/ImportSpiEquivalenceIntegrationTest.java` | `shouldRegisterImportTaskType_whenContextLoads` | `9ec8f7170391` | 保留：IMPORT Worker 的 SPI 注册 |
+| B129 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/OrchestratorGracefulShutdownTest.java` | `shouldNotBeDrainingInitially` | `c2e301e1e6a9` | 保留：编排器关闭协调初始非排空状态 |
+| B130 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/JobTypeTest.java` | `shouldNotExposeWorkflowAsExecutableJobType` | `577ba0414ac9` | 保留：WORKFLOW 不作为可执行 Job 类型 |
+| B131 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/JobTypeTest.java` | `shouldProvideNonNullBatchType_whenEnumeratingEveryJobType` | `577ba0414ac9` | 保留：逐枚举验证批类型映射非空 |
+| B132 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/jdbc/JdbcMappedSqlValidatorTest.java` | `shouldNormalizeValidIdentifierToLowerCase` | `cf523ed482a4` | 保留：SQL 标识符标准化 |
+| B133 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/jdbc/JdbcMappedSqlValidatorTest.java` | `shouldQuotePgIdentifier` | `cf523ed482a4` | 保留：PostgreSQL 标识符引用格式 |
+| B134 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/spi/task/TaskResultTest.java` | `shouldDefaultOutputToEmptyMap_whenOutputAbsent` | `1e3f863fb77c` | 保留：Worker 通用任务结果的空输出契约 |
+| B135 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/sensor/HttpPollSensorPolicyTest.java` | `matchExpr_missingPath_returnsFalseNotThrow` | `679e2ea9eec6` | 保留：HTTP 传感表达式缺失路径返回 false |
+| B136 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidatorTest.java` | `shouldReportClean_whenWorkflowIdMissing` | `ba75a942f4bc` | 已增强：缺失 Workflow ID 不产生错误图，且不查询节点、连线和作业 |
+| B137 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldInsertTagBeforeExtension` | `8f05cc000053` | 保留：文件扩展名前插入分片标记 |
+| B138 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldAppendTag_whenNoExtension` | `8f05cc000053` | 保留：无扩展名文件追加分片标记 |
+| B139 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldReturnUnchanged_whenSinglePartition` | `8f05cc000053` | 保留：单分片文件名不变 |
+| B140 | `file-batch-system/batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/integration/ExportSpiEquivalenceIntegrationTest.java` | `shouldRegisterExportTaskType_whenContextLoads` | `54fb45624b71` | 保留：EXPORT Worker 的 SPI 注册 |
+| B141 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/spark/SparkSubmitTaskExecutorTest.java` | `taskType_isSparkSubmit` | `fa2b1abf6088` | 保留：Spark 执行器任务类型 |
+| B142 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldWireMisfireHandlerBean` | `ab7ffc7ad343` | 保留：misfire handler 实现类型的装配契约 |
+| B143 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldLoadQuartzLaunchJobForMisfireAuditPath` | `ab7ffc7ad343` | 保留：QuartzLaunchJob 在启动上下文中的单独装配检查 |
+| B144 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldNotThrowWhenHandlingMisfire` | `ab7ffc7ad343` | 已增强：未知触发名的 misfire 调用不中断调度并记录对应触发名 |
+| B145 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/TenantScopeTest.java` | `shouldReturnTenantId_whenNonBlank` | `ceaad68afe0c` | 保留：非空租户 ID 原样返回 |
+| B146 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/verifier/ProcessPublishedCountVerifierTest.java` | `shouldPass_whenPublishedCountPositive` | `09cd8a28d4a1` | 保留：数字与数字字符串为不同输入类型 |
+| B147 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/verifier/ProcessPublishedCountVerifierTest.java` | `shouldPass_whenPublishedCountIsNumericString` | `09cd8a28d4a1` | 保留：数字与数字字符串为不同输入类型 |
+| B148 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/support/cache/ConsoleQueryCacheServiceTest.java` | `keySegment_keepsShortSafeValuesReadable` | `fc94f54ae1c7` | 保留：安全短缓存键的可读性 |
+| B149 | `file-batch-system/batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/stage/format/GenerateCursorCodecTest.java` | `roundTrip_preservesBoolean` | `e4cd42db83d8` | 保留：游标 Boolean 类型往返 |
+| B150 | `file-batch-system/sdk/typescript/tests/decide-backpressure.test.ts` | `decideBackpressure default paused=false: no resume in band` | `c76ed32647cb` | 保留：未暂停时背压区间不触发恢复 |
+| B151 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/IdGeneratorTest.java` | `shouldReturn32HexChars_whenGeneratingTraceId` | `c227afd20a8d` | 保留：一般追踪号格式契约，与明确无 Span 场景不同 |
+| B152 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/IdGeneratorTest.java` | `shouldReturn32HexChars_whenGeneratingInvocationId` | `c227afd20a8d` | 保留：调用号格式契约，与追踪号是不同入口 |
+| B153 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelTypePolicyTest.java` | `shouldReturnCanonicalType_whenInputHasSpacesAndLowercase` | `daffd532ab83` | 保留：渠道类型空格与大小写归一 |
+| B154 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelTypePolicyTest.java` | `shouldReturnEmpty_whenTypeUnknown` | `daffd532ab83` | 保留：未知渠道类型不被接受 |
+| B155 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/stateful/StatefulBackendIdentityTest.java` | `shouldPreserveResourceCase_whenBuildingBackendIdentity` | `d867dbc6a70d` | 保留：参数化验证大小写敏感后端资源身份 |
+| B156 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsolePasswordHasherTest.java` | `shouldMatchFlywaySeedArgon2Hash` | `bb7e3f7e298f` | 已更名为 `shouldMatchKnownArgon2Hash`：固定 Argon2id 样本验证；该用例不读取 Flyway 迁移 |
+| B157 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `schema_versions_supported parity` | `926060cb2022` | 保留：TS schema 版本与独立 YAML 契约一致 |
+| B158 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `worker_runtime_states parity` | `926060cb2022` | 保留：TS Worker 运行状态与独立 YAML 契约一致 |
+| B159 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `sensitive_keywords parity` | `926060cb2022` | 保留：TS 敏感词清单与独立 YAML 契约一致 |
+| B160 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `task_statuses parity` | `926060cb2022` | 保留：TS 任务状态与独立 YAML 契约一致 |
+| B161 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `report_error_codes parity` | `926060cb2022` | 保留：TS 上报错误码与独立 YAML 契约一致 |
+| B162 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/integration/BatchWorkerImportApplicationIntegrationTest.java` | `shouldLoadContext_whenApplicationStarts` | `59f99f546a77` | 已删除：同类端口验证已覆盖上下文启动和注入 |
+| B163 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/logging/LogSanitizerTest.java` | `shouldReplaceEveryUnicodeLineBreakWithUnderscore` | `a504808b2d43` | 保留：多种 Unicode 换行日志注入清理 |
+| B164 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/client/TaskTypeDescriptorAssemblyTest.java` | `shouldReturnNullDescriptor_whenHandlerDoesNotDeclare` | `d84813d775d5` | 保留：SDK handler 未声明 descriptor 的缺省值 |
+| B165 | `file-batch-system/batch-test-support/src/test/java/io/github/pinpols/batch/common/rls/RlsClosedWorldCheckIntegrationTest.java` | `shardIdentity_defaultExempted` | `5f088a3860b8` | 保留：分片身份表 RLS 默认例外配置 |
+| B166 | `file-batch-system/batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/support/ActiveTaskLeaseRegistryTest.java` | `shouldReturnEmptySnapshotWhenNoLeases` | `6384309003f6` | 保留：无租约时续租快照为空 |
+| B167 | `file-batch-system/batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/infrastructure/checkpoint/CheckpointPartitionGuardTest.java` | `nullMeansSinglePartition_allow` | `20a6d3dc5cec` | 保留：空分区数按单分区处理 |
+| B168 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/CorrelationIdsTest.java` | `normalize_trimsAndKeepsSafeCharacters` | `41f677ca52aa` | 保留：规范化、非法字符、长度或回退规则 |
+| B169 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/CorrelationIdsTest.java` | `normalize_replacesUnsafeCharactersAndControls` | `41f677ca52aa` | 保留：规范化、非法字符、长度或回退规则 |
+| B170 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/CorrelationIdsTest.java` | `normalize_capsAtHeaderColumnLength` | `41f677ca52aa` | 保留：规范化、非法字符、长度或回退规则 |
+| B171 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/utils/CorrelationIdsTest.java` | `normalize_usesFallbackWhenInputBlankOrInvalid` | `41f677ca52aa` | 保留：规范化、非法字符、长度或回退规则 |
+| B172 | `file-batch-system/sdk/typescript/tests/kafka-offset-policy.test.ts` | `loweredCeiling: first withhold sets the ceiling to the record offset` | `d196f165bac9` | 保留：首次阻止提交建立 offset 下界 |
+| B173 | `file-batch-system/sdk/typescript/tests/kafka-offset-policy.test.ts` | `commitBlockedByWithheld: no ceiling → never blocked` | `d196f165bac9` | 保留：无 offset 上界时不阻止提交 |
+| B174 | `file-batch-system/sdk/typescript/tests/kafka-offset-policy.test.ts` | `resolveFromBeginning: defaults to false (latest), parity with the 4 other SDKs` | `d196f165bac9` | 保留：Kafka 缺省从最新位置消费 |
+| B175 | `file-batch-system/sdk/typescript/tests/kafka-offset-policy.test.ts` | `resolveFromBeginning: an explicit value always wins` | `d196f165bac9` | 保留：显式 Kafka 起始策略优先于默认值 |
+| B176 | `file-batch-system/batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/sql/SqlTemplateExportSqlValidatorTest.java` | `validate_ignoresParameterTextOutsideSqlParameters` | `837e408afa03` | 保留：SQL 参数之外的相似文本不受参数校验干扰 |
+| B177 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/service/LaunchParamResolverTest.java` | `shouldReturnNullForNullDeadline` | `9b170a4af1f3` | 保留：缺失截止时间解析结果 |
+| B178 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/application/TriggerOutboxReleaseGovernorTest.java` | `disabled_returnsConfiguredLimitWithoutReadingLag` | `5d5e12952331` | 已增强：断言禁用时无 lag 读取 |
+| B179 | `file-batch-system/batch-worker/export/src/test/java/io/github/pinpols/batch/worker/exports/integration/BatchWorkerExportApplicationIntegrationTest.java` | `shouldLoadContext_whenApplicationStarts` | `5e5ba8e238e7` | 已删除：同类端口验证已覆盖上下文启动和注入 |
+| B180 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/PartitionStatusTest.java` | `shouldContainNineValues` | `c409ffac974f` | 保留：分区状态枚举数量约束 |
+| B181 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/PrepareDispatchStepTest.java` | `stage_returnsPrepare` | `ff63ff8c51ee` | 保留：分发 PREPARE 阶段标识 |
+| B182 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/storage/S3ObjectStoreExceptionMappingTest.java` | `shouldReportMissing_whenKeyDoesNotExist` | `a29c22ebfdbb` | 保留：S3 不存在与无权限错误的区别 |
+| B183 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/infrastructure/TriggerGracefulShutdownTest.java` | `shouldNotBeDrainingInitially` | `c49897f6b707` | 保留：Trigger 优雅停机初始非排空状态 |
+| B184 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/integration/ProcessSpiEquivalenceIntegrationTest.java` | `shouldContainProcessTaskType_whenListingRegisteredTypes` | `3cd79f380cd5` | 保留：PROCESS Worker 的 SPI 注册 |
+| B185 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStepTest.java` | `stage_returnsDispatch` | `7d330a4127bf` | 保留：分发 DISPATCH 阶段标识 |
+| B186 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnEmptyWhenDefinitionIdIsNull` | `752a065113d4` | 保留：缺少定义 ID 不解析后续节点 |
+| B187 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnEmptyWhenCurrentNodeCodeIsBlank` | `752a065113d4` | 保留：空节点编码不解析后续节点 |
+| B188 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnFalseWhenWorkflowRunIdIsNull` | `752a065113d4` | 保留：缺少 Workflow 运行 ID 不允许派发 |
+| B189 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnFalseWhenDefinitionIdIsNull` | `752a065113d4` | 保留：缺少定义 ID 不允许派发 |
+| B190 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/DefaultWorkflowDagServiceTest.java` | `shouldReturnFalseWhenNodeCodeIsBlank` | `752a065113d4` | 保留：空节点编码不允许派发 |
+| B191 | `file-batch-system/batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxPgIntegrationTest.java` | `claimNext_returnsEmptyWhenNothingDue` | `83910f28a209` | 保留：真实数据库无到期报告时不认领 |
+| B192 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/infrastructure/TriggerProxyJsonContractTest.java` | `shouldReturnEmptyList_whenDownstreamRowsAreNull` | `7f2044c5bd64` | 保留：下游空列表的租户过滤结果 |
+| B193 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldAllowWhenNoFailuresRecorded` | `386f4ca7ce35` | 保留：无故障的渠道熔断器初始状态 |
+| B194 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldIsolateFailuresByChannelKey` | `386f4ca7ce35` | 已增强：同时验证故障渠道已熔断和正常渠道仍放行 |
+| B195 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultLifecycleEventMapperTest.java` | `shouldResolveEnumTargetAsState` | `bfb40b8c8197` | 保留：枚举状态到目标状态的映射 |
+| B196 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultLifecycleEventMapperTest.java` | `shouldAllowTerminalSelfLoop` | `bfb40b8c8197` | 保留：终态自环幂等 |
+| B197 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/ConfigLifecycleStatusTest.java` | `shouldContainFiveValues` | `5a72fc143e66` | 保留：配置生命周期状态数量约束 |
+| B198 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/integration/ProcessStagingCleanupYamlIntegrationTest.java` | `shouldDisableStagingOrphanCleaner_whenTestProfileActive` | `15dcdec92ee6` | 保留：测试 profile 关闭 PROCESS 清理调度 |
+| B199 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/security/RequestSignatureVerifierTest.java` | `shouldRejectRequest_whenSignatureHeaderMissing` | `eabe044a51e5` | 保留：缺少签名请求头时拒绝 |
+| B200 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/router/DefaultWorkerRoutingPolicyTest.java` | `shouldReturnNullForNullCandidates` | `423801bfd418` | 保留：null Worker 候选 |
+| B201 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/router/DefaultWorkerRoutingPolicyTest.java` | `shouldReturnNullForEmptyCandidates` | `423801bfd418` | 保留：空 Worker 候选集合 |
+| B202 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/stage/CommitStepTest.java` | `shouldReturnStageCommit_whenStageAccessed` | `86e923aa9c7e` | 保留：PROCESS COMMIT 阶段标识 |
+| B203 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorHardeningTest.java` | `shouldClassifyAsDdl_whenStatementIsDoBlock` | `c758caca1909` | 保留：大写 PostgreSQL DO 块为 DDL |
+| B204 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutorHardeningTest.java` | `shouldClassifyAsDdl_whenDoBlockLowercase` | `c758caca1909` | 保留：小写 PostgreSQL DO 块为 DDL |
+| B205 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/workflow/param/WorkflowDefinitionWriteParamsTest.java` | `shouldRejectMissingRequiredField` | `31524b01e74d` | 保留：参数化检查 Workflow 写入的各必填字段 |
+| B206 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowFanOutSupportTest.java` | `parseSpec_nullWhenItemsExprBlank` | `c3c26efdd198` | 保留：空 fan-out 表达式不生成展开配置 |
+| B207 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/FeedbackStepTest.java` | `shouldReturnStageFeedback_whenStageAccessed` | `604b15ab5922` | 保留：IMPORT FEEDBACK 阶段标识 |
+| B208 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/security/DnsResolveGuardTest.java` | `shouldAllow_whenDocumentationGlobalIpv6` | `f7138dc50641` | 保留：文档用途 IPv6 的现行放行契约 |
+| F001 | `batch-console/src/utils/aiMessagePresentation.test.ts` | `keeps approved answer content` | `b8387a88bec5` | 保留：批准的 AI 回答正文应展示 |
+| F002 | `batch-console/src/utils/lastApiMeta.test.ts` | `stores a valid meta object` | `92c85329e965` | 保留：有效值、null 和 undefined 独立输入 |
+| F003 | `batch-console/src/utils/lastApiMeta.test.ts` | `sets value to null when called with undefined` | `92c85329e965` | 保留：有效值、null 和 undefined 独立输入 |
+| F004 | `batch-console/src/utils/lastApiMeta.test.ts` | `sets value to null when called with null` | `92c85329e965` | 保留：有效值、null 和 undefined 独立输入 |
+| F005 | `batch-console/src/utils/datetime.test.ts` | `handles epoch ms number` | `3a3cb1ad5298` | 已增强：保留默认格式检查并用 UTC 校验 epoch 实际值 |
+| F006 | `batch-console/src/utils/datetime.test.ts` | `returns raw string for invalid date` | `3a3cb1ad5298` | 保留：无效日期按原文回退 |
+| F007 | `batch-console/src/utils/errorCatalog.test.ts` | `falls back to network` | `f59ce4df4ec2` | 保留：网络错误与无匹配路径不同 |
+| F008 | `batch-console/src/utils/errorCatalog.test.ts` | `returns undefined when nothing matches` | `f59ce4df4ec2` | 保留：网络错误与无匹配路径不同 |
+| F009 | `batch-console/src/utils/formatAiUsd.test.ts` | `uses cents for zero and ordinary amounts` | `46db042ecd0f` | 保留：金额格式化边界 |
+| F010 | `batch-console/src/utils/queryFormOptions.test.ts` | `returns sorted unique non-empty values` | `13c48ce5ade1` | 保留：空输入、空值和去重排序不同场景 |
+| F011 | `batch-console/src/utils/queryFormOptions.test.ts` | `returns empty array for empty input` | `13c48ce5ade1` | 保留：空输入、空值和去重排序不同场景 |
+| F012 | `batch-console/src/utils/queryFormOptions.test.ts` | `filters out undefined picks` | `13c48ce5ade1` | 保留：空输入、空值和去重排序不同场景 |
+| F013 | `batch-console/src/constants/theme.test.ts` | `defaults to dark when no user preference is stored` | `b214db7a0a70` | 保留：缺省、保存值和历史迁移不同状态 |
+| F014 | `batch-console/src/constants/theme.test.ts` | `preserves stored user preference` | `b214db7a0a70` | 保留：缺省、保存值和历史迁移不同状态 |
+| F015 | `batch-console/src/constants/theme.test.ts` | `migrates legacy system default to dark once` | `b214db7a0a70` | 已更名：无标记历史 system 偏好读取回退深色，读取本身不执行迁移 |
+| F016 | `batch-console/src/utils/logRedact.test.ts` | `sanitizeParams returns undefined for null/undefined` | `ab4106a1cb6a` | 保留：null 与 undefined 参数不生成日志对象 |
+| F017 | `batch-console/e2e/alert-outbox-ops.spec.ts` | `重试 tab 默认激活` | `693423e3785b` | 保留：Outbox 初始重试 tab 状态 |
+| F018 | `batch-console/src/stores/tabs.test.ts` | `returns -1 for unknown key` | `3994cb80f664` | 保留：关闭不存在的 tab 返回 -1 |
+| F019 | `batch-console/e2e/excel-import.spec.ts` | `下载配置包模板按钮可见` | `9d85670a1912` | 保留：默认页面模板下载入口可见，独立于场景选择后下载 |
+| F020 | `batch-console/e2e/excel-import.spec.ts` | `导出当前配置包按钮可见` | `9d85670a1912` | 保留：默认身份配置包导出入口可见，与指定角色回导场景独立 |
+| F021 | `batch-console/src/api/workerFingerprint.test.ts` | `listWorkerFingerprints normalizes null response to empty array` | `1b59278f03f6` | 保留：两个接口各自的空响应契约 |
+| F022 | `batch-console/src/api/workerFingerprint.test.ts` | `getWorkerFingerprintSummary normalizes null response to empty array` | `1b59278f03f6` | 保留：两个接口各自的空响应契约 |
+| F023 | `batch-console/src/utils/iconResolve.test.ts` | `已知图标名:返回对应 EP 图标 Component` | `2ca9db934b7a` | 已合并并增强：已知图标精确解析为 Plus，未知名称回退 Menu |
+| F024 | `batch-console/src/utils/iconResolve.test.ts` | `未知图标名:返回 fallback(Menu)而非 undefined,保菜单可渲染` | `2ca9db934b7a` | 已增强：未知名称及空值均精确回退 Menu |
+| F025 | `batch-console/src/components/common/SensitiveFieldAlert.test.ts` | `handles invalid JSON string gracefully (no render)` | `ec474dc11d5e` | 保留：无效敏感字段 JSON 不渲染告警 |
+| F026 | `batch-console/src/utils/idempotency.test.ts` | `returns a non-empty string` | `083d0f89d82f` | 已增强：单次生成结果的类型和非空一致断言 |
+| F027 | `batch-console/e2e/ops-shard-catalog-crud.spec.ts` | `页可达 + 新建入口可见` | `3cebf6614a54` | 保留：串行 CRUD 前的独立分片目录入口冒烟 |
+| F028 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `uppercases lower` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F029 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `keeps digits + underscores` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F030 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `empty → EMPTY` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F031 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `< 3 chars → LENGTH` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F032 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `> 30 chars → LENGTH` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F033 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `digit-leading rejected (BIZ_FORMAT requires letter first)` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F034 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `exact 30 chars boundary OK` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F035 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `accepts v-prefixed` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F036 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `accepts bare digits` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F037 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `builds without version` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F038 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `builds with version` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F039 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `normalizes biz input on the fly` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F040 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `drops bad version silently` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F041 | `batch-console/src/utils/resourceCodeBuilder.test.ts` | `empty existing → empty` | `0cce0297aacb` | 保留：规范化、校验边界、版本或拼装不同场景 |
+| F042 | `batch-console/e2e/smoke.spec.ts` | `根路径重定向到运营概览` | `b4feddbf35cd` | 保留：根路径跳转到运维概览 |
+| F043 | `batch-console/src/utils/pipelineStepSummary.test.ts` | `PARSE 步骤取 parsedCount` | `db777d80109a` | 保留：不同阶段字段及异常输入 |
+| F044 | `batch-console/src/utils/pipelineStepSummary.test.ts` | `GENERATE 取 recordCount` | `db777d80109a` | 保留：不同阶段字段及异常输入 |
+| F045 | `batch-console/src/utils/pipelineStepSummary.test.ts` | `未映射 stage(如 PREPARE)且 summary 含计数 → 回退优先级列表` | `db777d80109a` | 保留：不同阶段字段及异常输入 |
+| F046 | `batch-console/src/utils/pipelineStepSummary.test.ts` | `已解析对象入参(非字符串)也支持` | `db777d80109a` | 保留：不同阶段字段及异常输入 |
+| F047 | `batch-console/src/utils/pipelineStepSummary.test.ts` | `计数字段非数字(脏数据)→ 跳过不误显` | `db777d80109a` | 保留：不同阶段字段及异常输入 |
+| F048 | `batch-console/src/utils/safeHtml.test.ts` | `returns the sanitized string unchanged` | `3dc117efb48b` | 已增强：清洗器返回不同文本时原样传递清洗结果 |
+| F049 | `batch-console/src/api/meta.test.ts` | `payload 不是对象时返回 {}(防御后端异常)` | `1ccdd5049e9e` | 保留：元数据枚举接口空响应回退空对象 |
+| F050 | `batch-console/src/utils/metaEnumPick.test.ts` | `returns first matching non-empty group` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F051 | `batch-console/src/utils/metaEnumPick.test.ts` | `skips missing keys and returns first hit` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F052 | `batch-console/src/utils/metaEnumPick.test.ts` | `skips empty arrays` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F053 | `batch-console/src/utils/metaEnumPick.test.ts` | `returns [] when no key matches` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F054 | `batch-console/src/utils/metaEnumPick.test.ts` | `returns [] for undefined input` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F055 | `batch-console/src/utils/metaEnumPick.test.ts` | `returns [] for null input` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F056 | `batch-console/src/utils/metaEnumPick.test.ts` | `returns [] when called with no keys` | `b775cb7392ca` | 保留：候选键、缺失输入和空分组边界 |
+| F057 | `batch-console/src/stores/auth.test.ts` | `isLoggedIn is false when no token` | `beedb463ec52` | 已更名：未设置 session 标记的登录状态 |
+| F058 | `batch-console/src/stores/auth.test.ts` | `hasPermission returns false when no userInfo` | `beedb463ec52` | 保留：缺少用户信息时无权限 |
+| F059 | `batch-console/e2e/file-ops.spec.ts` | `默认展示运行列表 tab` | `5663bc67b7cb` | 保留：流水线观测运行列表默认 tab |
+| F060 | `batch-console/src/views/monitor/workflowNodeSkipReason.test.ts` | `marks old skipped rows without a recorded reason` | `e28ec3ed77e5` | 保留：历史跳过节点缺少原因的兼容文案 |
+| F061 | `batch-console/src/views/monitor/workflowNodeSkipReason.test.ts` | `does not show skip copy for other node states` | `e28ec3ed77e5` | 保留：非跳过节点不显示跳过文案 |
+| F062 | `batch-console/src/api/atomicTaskTypes.test.ts` | `returns empty array when payload is empty` | `f9d606c29c00` | 保留：原子任务类型空列表响应 |
+| F063 | `batch-console/src/api/customTaskTypes.test.ts` | `returns null for invalid JSON` | `4bce8222129d` | 保留：自定义任务描述非法 JSON 解析回退 |
+| F064 | `batch-console/src/views/system/atomicRuntimeModel.test.ts` | `不可用时即使混有executor字段也不展示为真实状态` | `74f78eaff53a` | 保留：运行状态不可用时不误展示静态字段 |
+| F065 | `batch-console/src/views/workflow/designer/codec/mermaidExporter.test.ts` | `empty snapshot → header only` | `7ef62b26c858` | 保留：空 Workflow 图的 Mermaid 头部 |
+| F066 | `batch-console/src/utils/passwordGenerator.test.ts` | `throws when length < 4` | `de6d00da4499` | 保留：密码长度低于下限时拒绝生成 |
+| F067 | `batch-console/src/utils/passwordGenerator.test.ts` | `excludes ambiguous characters (0/O/I/l/1)` | `de6d00da4499` | 保留：密码不包含易混字符 |
+| F068 | `batch-console/src/utils/passwordGenerator.test.ts` | `extra point at length ≥ 12` | `de6d00da4499` | 已增强：比较字符类别相同的 11、12 字符密码强度 |
+| F069 | `batch-console/src/utils/passwordGenerator.test.ts` | `caps at 4 (extreme)` | `de6d00da4499` | 已增强：极长复杂密码的强度精确为上限 4 |
+| F070 | `batch-console/src/views/worker/workerActions.test.ts` | `在线节点只展示下线和接管动作` | `79bc5544a7dd` | 已更名：标题与 ONLINE 原有操作断言一致 |
+| F071 | `batch-console/src/views/worker/workerActions.test.ts` | `排空中节点不再展示排空和预热` | `79bc5544a7dd` | 保留：不同 Worker 状态对应不同操作集 |
+| F072 | `batch-console/src/views/worker/workerActions.test.ts` | `离线节点只允许预热` | `79bc5544a7dd` | 保留：不同 Worker 状态对应不同操作集 |
+| F073 | `batch-console/e2e/flows/01-trigger-instance.spec.ts` | `1. 查到一个可触发的 jobDefinition` | `ce6052a17152` | 保留：真实触发流程对作业定义存在的前置检查 |
+| F074 | `batch-console/src/api/taskHeartbeat.test.ts` | `reads percent in 0-100 range` | `7ba0db0a5c78` | 保留：比例、百分数、精度及优先级不同场景 |
+| F075 | `batch-console/src/api/taskHeartbeat.test.ts` | `treats 0-1 floats as ratios and scales up` | `7ba0db0a5c78` | 保留：比例、百分数、精度及优先级不同场景 |
+| F076 | `batch-console/src/api/taskHeartbeat.test.ts` | `rounds to 0.1` | `7ba0db0a5c78` | 保留：比例、百分数、精度及优先级不同场景 |
+| F077 | `batch-console/src/api/taskHeartbeat.test.ts` | `prefers percent over progress when both present` | `7ba0db0a5c78` | 保留：比例、百分数、精度及优先级不同场景 |
+| F078 | `batch-console/src/utils/sensitiveKeys.test.ts` | `returns empty for clean object` | `c144b2c3a67b` | 保留：无敏感字段对象的反例 |
+| F079 | `batch-console/src/utils/sensitiveKeys.test.ts` | `detects direct sensitive keys` | `c144b2c3a67b` | 保留：直接敏感字段识别 |
+| F080 | `batch-console/src/utils/sensitiveKeys.test.ts` | `parses JSON string input` | `c144b2c3a67b` | 保留：JSON 文本输入的敏感字段识别 |
+| F081 | `batch-console/src/api/adapters.test.ts` | `returns correct slice for page 2` | `97302b9898c2` | 保留：分页第二页切片 |
+| F082 | `batch-console/src/api/adapters.test.ts` | `returns partial last page` | `97302b9898c2` | 保留：分页不足一页的尾页 |
+| F083 | `batch-console/src/utils/structuredSummary.test.ts` | `truncates plain text summaries` | `5bf1d96ef232` | 保留：文本截断行为 |
+| F084 | `batch-console/e2e/reports-ops.spec.ts` | `展示所有报表卡片` | `947db579c576` | 保留：报表导出卡片总数 |
+| F085 | `batch-console/e2e/reports-ops.spec.ts` | `header 显示 tenantId 标签` | `947db579c576` | 保留：报表中心展示租户标签 |
+| F086 | `batch-console/src/utils/safeJson.test.ts` | `returns empty string unchanged` | `ecf5fe539fb7` | 保留：空文本与非法 JSON 行为不同 |
+| F087 | `batch-console/src/utils/safeJson.test.ts` | `falls back to original string on malformed JSON` | `ecf5fe539fb7` | 保留：空文本与非法 JSON 行为不同 |
+| F088 | `batch-console/e2e/c-plus-coverage.spec.ts` | `actuator/health 暴露 200` | `886f1907a8f1` | 保留：Console 服务 health 端点状态 |
+| F089 | `batch-console/src/components/common/statusTagResolve.test.ts` | `falls back to fallback arg when value empty` | `8a169b9c2830` | 保留：状态为空使用指定默认标签 |
+| F090 | `batch-console/src/components/common/statusTagResolve.test.ts` | `falls back to em-dash when value empty and no fallback` | `8a169b9c2830` | 保留：状态为空使用隐式默认标签 |
+| F091 | `batch-console/src/components/common/statusTagResolve.test.ts` | `returns info for unknown values when no local label override` | `8a169b9c2830` | 保留：未知状态的默认颜色 |
+| F092 | `batch-console/src/composables/useOnboardingTour.test.ts` | `首次访问且无完成标记时展示引导` | `acaf78e70608` | 保留：首次访问展示引导 |
+| F093 | `batch-console/src/composables/useOnboardingTour.test.ts` | `已完成引导时不再展示` | `acaf78e70608` | 保留：完成标记阻止重复展示 |
+| F094 | `batch-console/src/views/monitor/canReplayFailedWorkflowJobNode.test.ts` | `allows only a failed JOB node with a linked instance in a failed Workflow run` | `6ab6409f2d1e` | 保留：失败 Workflow 中关联作业节点可重放的正例 |
+| F095 | `batch-console/e2e/ops-diagnostic.spec.ts` | `集群诊断区块存在` | `92ac3c31a029` | 已增强：限定集群诊断卡片标题而非匹配任意诊断文案 |
+| F096 | `batch-console/src/directives/permission.test.ts` | `keeps element when permissions list empty` | `5081b134793f` | 保留：空权限列表的显式准入语义 |
+| F097 | `batch-console/src/components/common/EmptyState.test.ts` | `没有操作时不渲染空的操作容器` | `88710e9f5c5a` | 保留：无操作时空状态不生成操作容器 |
+| F098 | `batch-console/src/utils/userErrorMessage.test.ts` | `preserves non-API client-side validation errors` | `2a196371a12b` | 保留：前端本地验证异常原文 |
+| F099 | `batch-console/src/utils/logger.test.ts` | `logClick writes type=click` | `cf4674799e76` | 保留：点击日志类型 |
+| F100 | `batch-console/src/utils/logger.test.ts` | `keeps legitimate error messages` | `cf4674799e76` | 已增强：断言实际保留的错误名称 |
+| F101 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in name` | `cf4674799e76` | 已增强：断言名称关键词筛选返回的具体条目 |
+| F102 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in props` | `cf4674799e76` | 已增强：关键词只存在于属性，验证属性筛选结果 |
+| F103 | `batch-console/src/utils/logger.test.ts` | `returns all when no filter` | `cf4674799e76` | 已增强：无筛选时验证全部具体日志条目 |
+| F104 | `batch-console/src/composables/useFormValidate.test.ts` | `required 默认 blur` | `fbf2e873b8d6` | 保留：必填规则默认 blur 触发器 |
+| F105 | `batch-console/src/composables/useFormValidate.test.ts` | `formRef 未挂载时 validate() 返回 false 不抛` | `fbf2e873b8d6` | 保留：未挂载表单的安全失败 |
+| F106 | `batch-console/src/components/common/docsRegistry.test.ts` | `docKey 全为 kebab-case(避免 camelCase / snake_case 混用)` | `c5c768c197b1` | 保留：文档注册键命名规则 |
+| F107 | `batch-console/src/components/common/docsRegistry.test.ts` | `未知 docKey 返回空字符串(避免 iframe 加载未定义页)` | `c5c768c197b1` | 保留：未知文档键返回空路径 |
+| F108 | `batch-console/src/utils/text.test.ts` | `keeps short values unchanged` | `22ae23420c9d` | 保留：短文本、中文和代理对边界 |
+| F109 | `batch-console/src/utils/text.test.ts` | `truncates CJK text by characters rather than bytes` | `22ae23420c9d` | 保留：短文本、中文和代理对边界 |
+| F110 | `batch-console/src/utils/text.test.ts` | `does not split a surrogate pair` | `22ae23420c9d` | 保留：短文本、中文和代理对边界 |
+| F111 | `batch-console/e2e/ops-tenant-placement-crud.spec.ts` | `页可达 + 新建入口可见` | `59572125f679` | 保留：串行 CRUD 前的独立租户分片入口冒烟 |
+| F112 | `batch-console/src/views/scheduler/batchDayPresentation.test.ts` | `builds leap-year month boundaries in local time` | `34dac61712f4` | 保留：本地月份范围包含闰年末日 |
+| F113 | `batch-console/e2e/notification-management.spec.ts` | `旧 webhooks 路由重定向` | `6f944632a3cb` | 保留：旧 Webhook 路由兼容跳转 |

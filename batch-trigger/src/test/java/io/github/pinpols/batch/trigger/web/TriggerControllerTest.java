@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -28,7 +29,11 @@ import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
+import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
+import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -63,11 +68,13 @@ class TriggerControllerTest {
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(
+    mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(new TriggerApiApplicationService(
             triggerService,
-            triggerGracefulShutdown,
-            new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
-            apiKeyVerifier))
+            new TriggerDrainService(triggerGracefulShutdown),
+            new TriggerLaunchAdmissionService(
+                new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
+                new TriggerDrainService(triggerGracefulShutdown)),
+            new TriggerRequestPolicy(apiKeyVerifier))))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())
         .build();
@@ -133,8 +140,8 @@ class TriggerControllerTest {
     ArgumentCaptor<TriggerLaunchCommand> captor =
         ArgumentCaptor.forClass(TriggerLaunchCommand.class);
     verify(triggerService).launch(captor.capture());
-    assertThat(captor.getValue().request().getExternalEventSource()).isEqualTo("billing");
-    assertThat(captor.getValue().request().getExternalEventId()).isEqualTo("payment-17");
+    assertThat(captor.getValue().request().externalEventSource()).isEqualTo("billing");
+    assertThat(captor.getValue().request().externalEventId()).isEqualTo("payment-17");
   }
 
   @Test
@@ -170,7 +177,7 @@ class TriggerControllerTest {
   }
 
   @Test
-  @DisplayName("伪造 tenant 或 source 的 API Key EVENT 请求在业务写入前拒绝")
+  @DisplayName("伪造来源时即使处于排水状态也先拒绝授权")
   void shouldRejectExternalEventIdentityNotBoundToApiKey() throws Exception {
     TriggerApiKeyPrincipal principal =
         new TriggerApiKeyPrincipal(7L, "t1", "billing", "trigger.event", null);
@@ -179,6 +186,8 @@ class TriggerControllerTest {
             principal, null, List.of(new SimpleGrantedAuthority("ROLE_EXTERNAL_EVENT_SOURCE"))));
     when(apiKeyVerifier.authorizesExternalEvent(principal, "t1", "forged-source"))
         .thenReturn(false);
+    // 授权应先拒绝，因此排水状态桩可能不被访问。
+    lenient().when(triggerGracefulShutdown.isDraining()).thenReturn(true);
 
     mockMvc
         .perform(post("/api/triggers/launch")
@@ -198,6 +207,7 @@ class TriggerControllerTest {
         .andExpect(status().isForbidden());
 
     verify(triggerService, never()).launch(any());
+    verifyNoInteractions(triggerGracefulShutdown);
   }
 
   @Test
@@ -279,7 +289,7 @@ class TriggerControllerTest {
     verify(triggerService).launchExternalEvent(command.capture());
     assertThat(command.getValue().eventSource()).isEqualTo("billing");
     assertThat(command.getValue().idempotencyKey()).isEqualTo("idem-event-1");
-    assertThat(command.getValue().request().getExternalEventId()).isEqualTo("evt-1");
+    assertThat(command.getValue().request().externalEventId()).isEqualTo("evt-1");
   }
 
   @Test

@@ -61,7 +61,6 @@ batch:
           minRole: VIEWER
           children:
             - { title: Job 定义, path: /jobs/definitions, icon: List, minRole: VIEWER }
-            - { title: Pipeline 定义, path: /jobs/pipelines, icon: Share, minRole: VIEWER, authorities: [ROLE_ADMIN, ROLE_TENANT_ADMIN, ROLE_AUDITOR, ROLE_TENANT_USER] }
             - { title: Workflow 定义, path: /workflow/definitions, icon: Collection, minRole: VIEWER }
             - { title: Workflow 编排, path: /workflow/designer, icon: Guide, minRole: TENANT_ADMIN }
             - { title: 合并导入, path: /config/tenant-package, icon: Box, minRole: TENANT_ADMIN }
@@ -86,9 +85,9 @@ batch:
             - { title: 批次日与窗口, path: /scheduler/batch-days, icon: Calendar, minRole: VIEWER }
             - { title: 批次日重放, path: /ops/batch-day-replay, icon: RefreshRight, minRole: TENANT_ADMIN }
             - { title: 业务日历, path: /governance/calendars, icon: Calendar, minRole: TENANT_ADMIN }
-            - { title: 批次窗口, path: /governance/windows, icon: Clock, minRole: TENANT_ADMIN }
+            - { title: 批次窗口, path: /governance/windows, icon: Clock, minRole: ADMIN }
             - { title: 租户配额, path: /governance/quota, icon: Briefcase, minRole: TENANT_ADMIN }
-            - { title: 队列 & 窗口, path: /governance/queues, icon: Tools, minRole: TENANT_ADMIN }
+            - { title: 队列 & 窗口, path: /governance/queues, icon: Tools, minRole: ADMIN }
             - { title: 自定义任务类型, path: /ops/custom-task-types, icon: Grid, minRole: TENANT_ADMIN }
             - { title: Worker 指纹看板, path: /ops/worker-fingerprints, icon: Monitor, minRole: TENANT_ADMIN }
             - { title: 分片目录, path: /ops/shard-catalog, icon: Coin, minRole: ADMIN }

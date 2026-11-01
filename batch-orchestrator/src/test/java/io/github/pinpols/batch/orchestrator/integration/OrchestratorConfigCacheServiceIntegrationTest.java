@@ -8,7 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchClockConfig;
 import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorConfigCacheProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigMappers;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
@@ -72,15 +72,15 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void shouldLoadFromRepositoryAndPopulateRedis_whenCacheMisses() {
     String tenantId = "t-cache-" + System.nanoTime();
     String jobCode = "JOB-" + System.nanoTime();
-    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionView jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(jobRecord);
 
-    JobDefinitionEntity result = configCacheService.findEnabledJobDefinition(tenantId, jobCode);
+    JobDefinitionView result = configCacheService.findEnabledJobDefinition(tenantId, jobCode);
 
     assertThat(result).isNotNull();
     assertThat(result.jobCode()).isEqualTo(jobCode);
-    String redisKey = BatchRedisKeys.config(tenantId, "job-definition", jobCode);
+    String redisKey = versionedJobKey(tenantId, jobCode);
     assertThat(redisTemplate.hasKey(redisKey)).isTrue();
   }
 
@@ -89,7 +89,7 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void shouldSkipRepository_whenCacheHits() {
     String tenantId = "t-hit-" + System.nanoTime();
     String jobCode = "JOB-HIT-" + System.nanoTime();
-    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionView jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(jobRecord);
 
@@ -105,14 +105,14 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
   void shouldClearRedisKeyAndReloadFromRepository_whenEvicted() {
     String tenantId = "t-evict-" + System.nanoTime();
     String jobCode = "JOB-EVICT-" + System.nanoTime();
-    JobDefinitionEntity jobRecord = jobDefinitionRecord(tenantId, jobCode);
+    JobDefinitionView jobRecord = jobDefinitionRecord(tenantId, jobCode);
     when(jobDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true))
         .thenReturn(jobRecord);
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // populates cache
+    String redisKey = versionedJobKey(tenantId, jobCode);
     configCacheService.evictJobDefinition(tenantId, jobCode); // clears cache
 
-    String redisKey = BatchRedisKeys.config(tenantId, "job-definition", jobCode);
     assertThat(redisTemplate.hasKey(redisKey)).isFalse();
 
     configCacheService.findEnabledJobDefinition(tenantId, jobCode); // cache miss again
@@ -121,8 +121,21 @@ class OrchestratorConfigCacheServiceIntegrationTest extends AbstractIntegrationT
         .selectFirstByTenantAndCodeAndEnabled(tenantId, jobCode, true);
   }
 
-  private static JobDefinitionEntity jobDefinitionRecord(String tenantId, String jobCode) {
-    return new JobDefinitionEntity(
+  private String versionedJobKey(String tenantId, String jobCode) {
+    String wildcardKey =
+        BatchRedisKeys.configInvalidationKeyRevision(tenantId, "job-definition", "*");
+    String exactKey =
+        BatchRedisKeys.configInvalidationKeyRevision(tenantId, "job-definition", jobCode);
+    String wildcardRevision = redisTemplate.opsForValue().get(wildcardKey);
+    String exactRevision = redisTemplate.opsForValue().get(exactKey);
+    String wildcard = wildcardRevision == null ? "0" : wildcardRevision;
+    String exact = exactRevision == null ? "0" : exactRevision;
+    return BatchRedisKeys.config(tenantId, "job-definition", jobCode) + ":v2:" + wildcard + ":"
+        + exact;
+  }
+
+  private static JobDefinitionView jobDefinitionRecord(String tenantId, String jobCode) {
+    return new JobDefinitionView(
         1L,
         tenantId,
         jobCode,

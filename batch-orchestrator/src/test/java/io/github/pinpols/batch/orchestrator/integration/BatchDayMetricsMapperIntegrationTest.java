@@ -68,7 +68,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -2947,7 +2947,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
                 bizDate,
                 Instant.parse("2026-10-14T01:00:00Z"),
                 null)))
-        .isInstanceOf(ResponseStatusException.class);
+        .isInstanceOf(OperationFailure.class);
   }
 
   @Test
@@ -3128,7 +3128,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
     assertThatThrownBy(() -> externalEventExpectationService.markSatisfied(
             new ExternalEventExpectationService.SatisfactionRequest(
                 tenantId, calendarCode, workflowDefinitionId, eventCode, bizDate, requestId)))
-        .isInstanceOf(ResponseStatusException.class);
+        .isInstanceOf(OperationFailure.class);
 
     Long launchedJobInstanceId = insertJobInstance(
         tenantId, jobDefinitionId, jobCode, bizDate, "EVENT", request.getId(), "RUNNING", false);
@@ -3144,7 +3144,7 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
                 unique("other-event"),
                 bizDate,
                 requestId)))
-        .isInstanceOf(ResponseStatusException.class);
+        .isInstanceOf(OperationFailure.class);
     assertThat(externalEventExpectationService.markSatisfied(
             new ExternalEventExpectationService.SatisfactionRequest(
                 tenantId, calendarCode, workflowDefinitionId, eventCode, bizDate, requestId)))
@@ -3388,10 +3388,10 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
       assertThat(dayStatus(tenantId, calendarCode, settlementFirstDate)).isEqualTo("SETTLED");
       assertThatThrownBy(() -> externalEventExpectationService.materializeForOpenedBusinessDay(
               tenantId, calendarCode, settlementFirstDate, "Asia/Shanghai"))
-          .isInstanceOf(ResponseStatusException.class);
+          .isInstanceOf(OperationFailure.class);
       assertThatThrownBy(() -> fileGroupExpectationService.materializeForOpenedBusinessDay(
               tenantId, calendarCode, settlementFirstDate, "Asia/Shanghai"))
-          .isInstanceOf(ResponseStatusException.class);
+          .isInstanceOf(OperationFailure.class);
       Integer selectedExpectedWorkOccurrenceCount = jdbcTemplate.queryForObject(
           selectCountSql, Integer.class, tenantId, calendarCode, settlementFirstDate);
       assertThat(selectedExpectedWorkOccurrenceCount).isZero();

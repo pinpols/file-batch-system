@@ -3,10 +3,14 @@ package io.github.pinpols.batch.console.domain.rbac.support;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.exception.BizException;
@@ -14,10 +18,15 @@ import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.HashSet;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.oauth2.jwt.JwtException;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -88,6 +97,84 @@ class ConsoleJwtServiceTest {
     ConsoleJwtService svc = newService();
     assertThatThrownBy(() -> svc.issueToken("alice", "", Set.of("ROLE_ADMIN")))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("令牌过期但处于时钟容忍期时，注销后仍须拒绝认证")
+  void revoke_expiredTokenStillWithinClockSkew() {
+    properties.setJwtTtl(Duration.ofSeconds(2));
+    Set<String> revoked = new HashSet<>();
+    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+    when(store.isRevoked(anyString())).thenAnswer(invocation -> revoked.contains(invocation.getArgument(0)));
+    doAnswer(invocation -> {
+      revoked.add(invocation.getArgument(0));
+      return null;
+    }).when(store).revoke(anyString(), any(Duration.class));
+    @SuppressWarnings("unchecked")
+    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(store);
+    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+
+    await().atMost(Duration.ofSeconds(8)).until(() -> Instant.now().isAfter(token.expiresAt()));
+    assertThat(svc.authenticate(token.accessToken()).username()).isEqualTo("alice");
+    svc.revoke(token.accessToken());
+    assertThatThrownBy(() -> svc.authenticate(token.accessToken())).isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("注销存储期限覆盖令牌有效期及其时钟容忍期")
+  void revoke_ttlIncludesClockSkew() {
+    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(store);
+    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+
+    svc.revoke(token.accessToken());
+
+    ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
+    verify(store).revoke(anyString(), ttl.capture());
+    Instant acceptanceEnd = token.expiresAt().truncatedTo(ChronoUnit.SECONDS).plus(properties.getJwtClockSkew());
+    assertThat(Instant.now().plus(ttl.getValue())).isAfter(acceptanceEnd);
+  }
+
+  @Test
+  @DisplayName("零时钟容忍期按令牌自身的有效期计算撤销期限")
+  void revoke_ttlWithZeroClockSkew() {
+    properties.setJwtClockSkew(Duration.ZERO);
+    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+    @SuppressWarnings("unchecked")
+    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(store);
+    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+
+    svc.revoke(token.accessToken());
+
+    ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
+    verify(store).revoke(anyString(), ttl.capture());
+    Instant acceptanceEnd = token.expiresAt().truncatedTo(ChronoUnit.SECONDS);
+    Instant storageEnd = Instant.now().plus(ttl.getValue());
+    assertThat(storageEnd).isAfter(acceptanceEnd).isBefore(acceptanceEnd.plusSeconds(3));
+  }
+
+  @Test
+  @DisplayName("撤销存储失败时异常向调用方传播")
+  void revoke_storageFailurePropagates() {
+    ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
+    doThrow(new IllegalStateException("撤销存储不可用"))
+        .when(store).revoke(anyString(), any(Duration.class));
+    @SuppressWarnings("unchecked")
+    ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
+    when(provider.getIfAvailable()).thenReturn(store);
+    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
+
+    assertThatThrownBy(() -> svc.revoke(token.accessToken()))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessage("撤销存储不可用");
   }
 
   // ─── tokenType 门 ────────────────────────────────────────────────────

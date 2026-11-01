@@ -10,10 +10,12 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.service.failure.TechnicalFailureClassificationPort;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryAttemptParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerLaunchRecoveryRetryParam;
+import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,7 +26,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Kafka 消费有限重试耗尽后的持久恢复。
@@ -50,6 +51,7 @@ public class TriggerLaunchRecoveryService {
   private final LaunchApplicationService launchApplicationService;
   private final TriggerLaunchRecoveryProperties properties;
   private final MeterRegistry meterRegistry;
+  private final TechnicalFailureClassificationPort technicalFailureClassification;
 
   /**
    * 消费端重试耗尽时登记恢复锚点；任何解析/写库失败都只返回 false，不影响原始日志与指标路径。
@@ -96,7 +98,7 @@ public class TriggerLaunchRecoveryService {
   }
 
   private ParkOutcome handleExistingAnchor(LaunchRequest request, LaunchEnvelope incoming) {
-    TriggerLaunchRecoveryEntity existing =
+    TriggerLaunchRecoveryView existing =
         mapper.selectByIdentityForUpdate(request.tenantId(), request.requestId());
     if (EmptyChecks.isNull(existing)) {
       return ParkOutcome.UNSAFE;
@@ -133,10 +135,10 @@ public class TriggerLaunchRecoveryService {
 
   /** 单轮扫描：只处理 PENDING 且到期的记录；单条失败不影响其它记录。 */
   public int recoverDue(int limit) {
-    List<TriggerLaunchRecoveryEntity> due =
+    List<TriggerLaunchRecoveryView> due =
         mapper.selectDue(BatchDateTimeSupport.utcNow(), Math.max(1, limit));
     int recovered = 0;
-    for (TriggerLaunchRecoveryEntity row : due) {
+    for (TriggerLaunchRecoveryView row : due) {
       if (recoverOne(row)) {
         recovered++;
       }
@@ -144,7 +146,7 @@ public class TriggerLaunchRecoveryService {
     return recovered;
   }
 
-  private boolean recoverOne(TriggerLaunchRecoveryEntity row) {
+  private boolean recoverOne(TriggerLaunchRecoveryView row) {
     String tenantId = row.getTenantId();
     String requestId = row.getRequestId();
     try {
@@ -158,9 +160,9 @@ public class TriggerLaunchRecoveryService {
       counter(METRIC_RECOVERED, "outcome", "ok").increment();
       log.info("trigger launch recovery succeeded: tenantId={}, requestId={}", tenantId, requestId);
       return true;
-    } catch (ResponseStatusException ex) {
-      // 状态码不能证明请求已完成：启动后的事件预期核对等也可能返回 409。
-      return retryOrGiveUp(row, "HTTP_" + ex.getStatusCode().value());
+    } catch (OperationFailure ex) {
+      // 启动后的事件预期核对仍可能失败；保留原恢复分类和诊断代码。
+      return retryOrGiveUp(row, TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()));
     } catch (BizException ex) {
       // 业务级拒绝（jobCode 不存在/跨租等）不可靠重投恢复，直接终态并保留错误码。
       int updated = mapper.markAttempt(TriggerLaunchRecoveryAttemptParam.builder()
@@ -185,11 +187,13 @@ public class TriggerLaunchRecoveryService {
           tenantId,
           requestId,
           SwallowedExceptionLogger.summary(ex));
-      return retryOrGiveUp(row, ex.getClass().getSimpleName());
+      String errorCode = technicalFailureClassification.legacyResponseStatusDiagnostic(ex)
+          .orElseGet(() -> ex.getClass().getSimpleName());
+      return retryOrGiveUp(row, errorCode);
     }
   }
 
-  private boolean retryOrGiveUp(TriggerLaunchRecoveryEntity row, String errorCode) {
+  private boolean retryOrGiveUp(TriggerLaunchRecoveryView row, String errorCode) {
     String status = mapper.markRetryOrDead(TriggerLaunchRecoveryRetryParam.builder()
         .tenantId(row.getTenantId())
         .requestId(row.getRequestId())

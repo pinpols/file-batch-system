@@ -7,7 +7,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.config.SchedulerSnapshotProperties;
-import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
+import io.github.pinpols.batch.orchestrator.application.scheduler.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.TenantWorkerCountView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;

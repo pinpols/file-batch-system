@@ -150,22 +150,7 @@ class PreprocessRangeSliceTest {
   @DisplayName("四个分片顺序拼接后,与原始内容逐字节一致")
   void shouldConcatenatePartitionsWithoutDuplicateOrGap() throws IOException {
     String content = "L0\nL1\nL2\nL3\nL4\nL5\nL6\nL7\nL8\nL9\n";
-    byte[] data = content.getBytes(StandardCharsets.UTF_8);
-    // 逐片收集行,断言所有行恰好出现一次、顺序完整
-    int n = 4;
-    long s = data.length;
-    StringBuilder all = new StringBuilder();
-    for (int p = 1; p <= n; p++) {
-      long rawStart = s * (p - 1) / n;
-      long rawEnd = p == n ? s : s * p / n;
-      try (InputStream in = new ByteArrayInputStream(data)) {
-        in.skip(rawStart);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        ImportPreprocessObjectSource.copyPartitionRange(in, out, rawEnd - rawStart, p > 1);
-        all.append(new String(out.toByteArray(), StandardCharsets.UTF_8));
-      }
-    }
-    assertThat(all).hasToString(content);
+    assertLossless(content, 4);
   }
 
   // ---- 资格判定 gate ----

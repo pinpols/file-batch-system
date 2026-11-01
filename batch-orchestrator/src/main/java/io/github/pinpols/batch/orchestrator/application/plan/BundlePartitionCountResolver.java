@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.plan;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ShardStrategy;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
@@ -23,7 +23,7 @@ public class BundlePartitionCountResolver implements PartitionCountResolver {
 
   @Override
   public int resolve(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     if (jobDefinition == null) {
       return 0;
     }

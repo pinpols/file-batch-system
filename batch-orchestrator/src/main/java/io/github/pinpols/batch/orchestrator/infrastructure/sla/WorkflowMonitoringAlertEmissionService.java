@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowMonitoringMapper;
@@ -60,7 +60,7 @@ public class WorkflowMonitoringAlertEmissionService {
     detail.put("monitoringDeadlineAt", candidate.monitoringDeadlineAt());
     detail.put("violationReason", candidate.violation().name());
     String detailJson = JsonUtils.toJson(detail);
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId(tenantId)
         .serviceName("batch-orchestrator")
         .alertType(candidate.violation().alertType())

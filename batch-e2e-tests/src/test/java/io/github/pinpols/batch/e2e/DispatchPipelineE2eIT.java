@@ -118,7 +118,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   @Container
   @SuppressWarnings("resource")
   private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(
-          DockerImageName.parse("atmoz/sftp:alpine"))
+          DockerImageName.parse("jmcombs/sftp:alpine"))
       .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
       .withExposedPorts(22)
       .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")

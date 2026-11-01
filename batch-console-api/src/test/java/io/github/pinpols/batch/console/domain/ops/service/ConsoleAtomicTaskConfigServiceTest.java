@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,10 +14,12 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -56,8 +59,16 @@ class ConsoleAtomicTaskConfigServiceTest {
   @Spy
   private ObjectMapper objectMapper = new ObjectMapper();
 
+  @Mock
+  private TenantIdResolver tenantGuard;
+
   @InjectMocks
   private ConsoleAtomicTaskConfigService service;
+
+  @BeforeEach
+  void resolveTenant() {
+    lenient().when(tenantGuard.resolveTenant(any())).thenAnswer(call -> call.getArgument(0));
+  }
 
   @Test
   @DisplayName("合法创建:参数与类型契约匹配时写入并回读, 返回带主键的实体")

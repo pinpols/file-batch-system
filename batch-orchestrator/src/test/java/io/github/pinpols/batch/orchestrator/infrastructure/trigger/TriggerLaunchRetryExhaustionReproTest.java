@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
@@ -20,50 +22,46 @@ import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConf
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.time.LocalDate;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.Acknowledgment;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
- * 复现「Kafka 重试耗尽后的恢复」缺口（只加测试，不改主代码）。
+ * 验证 Kafka 启动消息在有限重试耗尽后的恢复处置。
  *
- * <p>命题：一个尚未落持久等待记录（{@code batch_day_waiting_launch} / 已提交 prepare）的触发请求，在消费端瞬态失败
- * 重试耗尽后，是否会失去后续执行机会。
- *
- * <p>预期（正确行为）：重试耗尽的最后一次处置必须留下可恢复锚点 —— 要么把记录重投到重试/DLQ 通道，要么把请求持久化为
- * 等待记录供周期扫描恢复。
- *
- * <p>当前实现的静态事实：生产 recoverer 只做日志 + 指标（无 KafkaTemplate、无 DAO），{@link FixedBackOff}
- * 在耗尽后不再 seek，容器直接提交 offset。因此该测试在修复前应当是**红**的。
+ * <p>recoverer 必须先成功登记原始 envelope 的持久恢复锚点，才能将记录标记为已处置；登记失败时仍需重投。
  */
-@DisplayName("复现: launch 瞬态失败在 Kafka 有限重试耗尽后失去执行机会")
+@DisplayName("启动消息重试耗尽后保留持久恢复锚点")
 class TriggerLaunchRetryExhaustionReproTest {
 
-  @Test
-  @DisplayName("重试耗尽时必须留下可恢复锚点(重投或持久等待)，否则请求永久丢失")
-  void shouldKeepDurableRecoveryAnchor_whenRetryExhausted() throws Exception {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("瞬态异常或预期核对冲突重试耗尽时必须留下持久恢复锚点")
+  void shouldKeepDurableRecoveryAnchor_whenRetryExhausted(boolean conflict) throws Exception {
     TriggerConsumerProperties properties = new TriggerConsumerProperties();
     properties.getErrorHandler().setRetryBackoffMs(0L);
     properties.getErrorHandler().setRetryAttempts(2);
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
 
     LaunchApplicationService launchService = mock(LaunchApplicationService.class);
-    when(launchService.launchFromTrustedQueue(any()))
-        .thenThrow(
-            new IllegalStateException("transient db failure; prepare transaction rolled back"));
+    RuntimeException failure = conflict
+        ? new OperationFailure(
+            Kind.CONFLICT, "event expectation conflict", new IllegalArgumentException("cause"))
+        : new IllegalStateException("transient db failure; prepare transaction rolled back");
+    when(launchService.launchFromTrustedQueue(any())).thenThrow(failure);
     OrchestratorGracefulShutdown gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
     when(gracefulShutdown.isDraining()).thenReturn(false);
 
@@ -91,9 +89,10 @@ class TriggerLaunchRetryExhaustionReproTest {
     Throwable listenerFailure = catchThrowable(() -> consumer.consume(record, ack));
     assertThat(listenerFailure)
         .as("listener 必须把瞬态失败抛回容器，交给 error handler 重试")
-        .isInstanceOf(IllegalStateException.class);
+        .isSameAs(failure);
+    verify(ack, never()).acknowledge();
 
-    // 取生产 error handler（反射，不新增/不修改生产代码）
+    // 使用实际装配的生产 error handler。
     @SuppressWarnings("unchecked")
     ObjectProvider<TriggerLaunchRecoveryService> recoveryProvider = mock(ObjectProvider.class);
     TriggerLaunchRecoveryService recoveryService = mock(TriggerLaunchRecoveryService.class);
@@ -115,23 +114,15 @@ class TriggerLaunchRetryExhaustionReproTest {
     Exception attemptFailure = (Exception) listenerFailure;
 
     // Spring Kafka 4.x: handleOne 返回 false = 仍需重投(容器 seek 后重投)，true = 已处置(跳过并提交 offset)
-    boolean firstAttemptHandled =
-        handler.handleOne(attemptFailure, record, kafkaConsumer, container);
-    boolean exhaustedAttemptHandled =
-        handler.handleOne(attemptFailure, record, kafkaConsumer, container);
+    assertThat(handler.handleOne(attemptFailure, record, kafkaConsumer, container))
+        .as("首次失败应继续重投，不能提前处置")
+        .isFalse();
+    verifyNoInteractions(recoveryService);
 
-    boolean redeliveredAtExhaustion = !exhaustedAttemptHandled;
-
-    // 静态事实：生产 recoverer 与该配置类不持有任何持久化/重投能力（只有 properties + meterRegistry）
-    List<String> declaredFieldTypes = Arrays.stream(
-            OrchestratorKafkaConsumerConfiguration.class.getDeclaredFields())
-        .map(Field::getType)
-        .map(Class::getSimpleName)
-        .toList();
-    boolean handlerCanPersistOrRepublish = declaredFieldTypes.stream()
-        .anyMatch(type -> type.contains("KafkaTemplate")
-            || type.contains("Mapper")
-            || type.contains("Repository"));
+    assertThat(handler.handleOne(attemptFailure, record, kafkaConsumer, container))
+        .as("重试耗尽后登记恢复锚点成功，才标记为已处置")
+        .isTrue();
+    verify(recoveryService).park(JsonUtils.toJson(envelope), null);
 
     double exhaustedCount = meterRegistry
         .find("batch.trigger.launch.failed.total")
@@ -139,14 +130,7 @@ class TriggerLaunchRetryExhaustionReproTest {
         .counter()
         .count();
 
-    Mockito.verify(recoveryService).park(JsonUtils.toJson(envelope), null);
-    boolean recoveryParked = true;
-    assertThat(redeliveredAtExhaustion || handlerCanPersistOrRepublish || recoveryParked)
-        .as(
-            "重试耗尽后必须留下可恢复锚点: 记录被跳过(firstHandled=%s, exhaustedHandled=%s)且 recoverer 无持久化/重投能力 →"
-                + " 未落等待记录的请求永久失去执行机会; retries_exhausted=%s, 配置类字段=%s",
-            firstAttemptHandled, exhaustedAttemptHandled, exhaustedCount, declaredFieldTypes)
-        .isTrue();
+    assertThat(exhaustedCount).isEqualTo(1.0);
   }
 
   @Test

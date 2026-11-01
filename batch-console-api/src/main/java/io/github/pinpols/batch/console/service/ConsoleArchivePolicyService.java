@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.service;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.entity.ArchivePolicyEntity;
+import io.github.pinpols.batch.console.domain.command.ArchivePolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.param.ArchivePolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConsoleArchivePolicyMapper;
@@ -37,7 +38,7 @@ public class ConsoleArchivePolicyService {
   }
 
   @Transactional
-  public void upsert(ArchivePolicyUpsertParam param) {
+  public void upsert(ArchivePolicyUpsertCommand param) {
     String resolved = tenantGuard.resolveTenant(param.tenantId());
     String normalized = param.targetTable().toLowerCase(Locale.ROOT);
     if (!VALID_TABLES.contains(normalized)) {

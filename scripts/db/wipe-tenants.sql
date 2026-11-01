@@ -31,6 +31,10 @@ DELETE FROM batch.compensation_command      WHERE tenant_id IN :tenants;
 DELETE FROM batch.approval_command          WHERE tenant_id IN :tenants;
 DELETE FROM batch.idempotency_record        WHERE tenant_id IN :tenants;
 DELETE FROM batch.dead_letter_task          WHERE tenant_id IN :tenants;
+-- 删除目标租户回执；其他审计租户的操作保留原目标，以便回查显示待确认。
+DELETE FROM batch.config_batch_target_receipt WHERE tenant_id IN :tenants;
+-- 清理审计租户的操作时，由外键级联删除该操作的其余目标回执。
+DELETE FROM batch.config_batch_operation WHERE audit_tenant_id IN :tenants;
 
 -- ── 文件相关 ────────────────────────────────────────────────────────────
 DELETE FROM batch.file_error_record         WHERE tenant_id IN :tenants;

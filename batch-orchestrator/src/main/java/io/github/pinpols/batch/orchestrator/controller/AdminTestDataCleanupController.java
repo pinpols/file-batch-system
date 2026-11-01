@@ -1,15 +1,11 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AdminTestDataCleanupService;
 import jakarta.validation.constraints.Pattern;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.env.Environment;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -31,7 +27,6 @@ public class AdminTestDataCleanupController {
   private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
   private final AdminTestDataCleanupService cleanupService;
-  private final Environment environment;
 
   @DeleteMapping
   public Map<String, Integer> cleanup(
@@ -41,7 +36,6 @@ public class AdminTestDataCleanupController {
               message =
                   "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
           String prefix) {
-    rejectProductionProfile();
     if (prefix == null || prefix.isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
@@ -56,20 +50,7 @@ public class AdminTestDataCleanupController {
               message =
                   "ids must start with a letter, be comma-separated, and contain 3-256 characters")
           String ids) {
-    rejectProductionProfile();
-    if (ids == null || ids.isBlank()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
-    }
-    List<String> tenantIds = Arrays.stream(ids.split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .toList();
-    return cleanupService.cleanupByExactTenantIds(tenantIds);
+    return cleanupService.cleanupByExactTenantIds(ids);
   }
 
-  private void rejectProductionProfile() {
-    if (BatchProfileSupport.isProductionProfile(environment)) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.admin.test_data_cleanup_prod_forbidden");
-    }
-  }
 }

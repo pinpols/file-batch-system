@@ -158,12 +158,56 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   @Override
-  public AiChatResponse chatStream(
-      AiChatRequest request,
-      String idempotencyKey,
-      ConsoleRequestMetadata metadata,
-      StreamObserver observer) {
-    return executeChat(request, metadata, observer);
+  public PreparedStream prepareStream(AiChatRequest request, String idempotencyKey) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = requestMetadataResolver.current();
+    requireRequestIdentity(metadata);
+    String requestId = EmptyChecks.isNull(metadata.requestId())
+        ? IdGenerator.newBusinessNo("ai")
+        : metadata.requestId();
+    ConsoleRequestMetadata captured = new ConsoleRequestMetadata(
+        requestId,
+        metadata.traceId(),
+        metadata.tenantId(),
+        metadata.operatorId(),
+        idempotencyKey,
+        metadata.clientIp());
+    return new PreparedStream() {
+      @Override
+      public String requestId() {
+        return captured.requestId();
+      }
+
+      @Override
+      public AiChatResponse execute(StreamObserver observer) {
+        return executeChat(request, captured, observer);
+      }
+    };
+  }
+
+  private ConsoleRequestMetadata requireRequestIdentity(ConsoleRequestMetadata metadata) {
+    if (metadata == null
+        || !Texts.hasText(metadata.tenantId())
+        || !Texts.hasText(metadata.operatorId())) {
+      throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
+    }
+    return metadata;
+  }
+
+  private void assertRequestIdentity(String tenantId, String operatorId) {
+    ConsoleRequestMetadata metadata = assertTenantIdentity(tenantId);
+    if (!Objects.equals(operatorId, metadata.operatorId())) {
+      throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
+    }
+  }
+
+  private ConsoleRequestMetadata assertTenantIdentity(String tenantId) {
+    authorizationService.assertAllowed();
+    ConsoleRequestMetadata metadata = requireRequestIdentity(requestMetadataResolver.current());
+    if (!Objects.equals(tenantId, metadata.tenantId())) {
+      throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
+    }
+    return metadata;
   }
 
   private AiChatResponse executeChat(
@@ -362,6 +406,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   @Override
   public List<ConsoleAiApplicationService.ConversationSummary> conversations(
       String tenantId, String ownerUserId, int limit) {
+    assertRequestIdentity(tenantId, ownerUserId);
     List<ConsoleAiConversationService.ConversationView> conversationViews =
         conversationService.list(tenantId, ownerUserId, limit);
     return conversationViews.stream()
@@ -372,6 +417,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   @Override
   public PageResponse<ConsoleAiApplicationService.ConversationSummary> conversationPage(
       String tenantId, String ownerUserId, String cursor, int limit) {
+    assertRequestIdentity(tenantId, ownerUserId);
     PageResponse<ConsoleAiConversationService.ConversationView> page =
         conversationService.page(tenantId, ownerUserId, cursor, limit);
     List<ConsoleAiApplicationService.ConversationSummary> conversationSummaries =
@@ -395,6 +441,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   @Override
   public List<ConsoleAiApplicationService.TurnSummary> turns(
       String tenantId, String ownerUserId, String conversationId, Long beforeTurnNo, int limit) {
+    assertRequestIdentity(tenantId, ownerUserId);
     List<ConsoleAiConversationService.TurnView> turnViews =
         conversationService.turns(tenantId, ownerUserId, conversationId, beforeTurnNo, limit);
     return turnViews.stream()
@@ -405,6 +452,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   @Override
   public ConsoleAiApplicationService.ClientTurnSummary turnByClientId(
       String tenantId, String ownerUserId, UUID clientTurnId) {
+    assertRequestIdentity(tenantId, ownerUserId);
     ConsoleAiConversationService.ClientTurnView view =
         conversationService.byClientTurnId(tenantId, ownerUserId, clientTurnId);
     String summaryConversationId = view.conversationId();
@@ -442,11 +490,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   @Override
   public void deleteConversation(String tenantId, String ownerUserId, String conversationId) {
+    assertRequestIdentity(tenantId, ownerUserId);
     conversationService.delete(tenantId, ownerUserId, conversationId);
   }
 
   @Override
   public ConsoleAiApplicationService.AiCostSummary costSummary(String tenantId, YearMonth month) {
+    assertTenantIdentity(tenantId);
     ConsoleAiCostService.CostSummary summary = costService.summary(tenantId, month);
     return new ConsoleAiApplicationService.AiCostSummary(
         summary.month(),

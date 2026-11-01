@@ -61,7 +61,7 @@ class DispatchExternalChannelIntegrationTest extends AbstractIntegrationTest {
   @TempDir
   Path tempDir;
 
-  private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("atmoz/sftp:alpine");
+  private static final DockerImageName SFTP_IMAGE = DockerImageName.parse("jmcombs/sftp:alpine");
   private static final String SFTP_USER = "batch";
   private static final String SFTP_PASSWORD = "batch-pass";
   private static final String SMTP_USER = "sender@example.com";

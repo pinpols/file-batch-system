@@ -67,9 +67,10 @@ public class ImportDataQualityService {
                 instanceof ImportPayload payload
         ? payload
         : null;
-    String normalizedPayload = context == null
+    Object rawNormalizedPayload = context == null
         ? null
-        : asString(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD));
+        : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
+    String normalizedPayload = Objects.toString(rawNormalizedPayload, null);
     List<String> schemaFieldSnapshot =
         EmptyChecks.isNull(schemaFields) ? List.of() : List.copyOf(schemaFields);
     return new ValidationSession(
@@ -139,7 +140,4 @@ public class ImportDataQualityService {
     return List.of();
   }
 
-  private String asString(Object value) {
-    return value == null ? null : String.valueOf(value);
-  }
 }

@@ -14,9 +14,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity;
+import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -70,7 +71,7 @@ class ConsoleAdminMaintenanceControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleAdminMaintenanceController(
-            stateHolder, responseFactory, requestMetadataResolver))
+            new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver), responseFactory))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();

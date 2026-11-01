@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.application.ops.command.BatchDayOperation
 import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
 import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
 import io.github.pinpols.batch.console.application.ops.query.ConsolePersistentWaitQuery;
+import io.github.pinpols.batch.console.application.ops.query.ConsoleWaitRelationshipQuery;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
@@ -22,6 +23,7 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDepend
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePersistentWaitPageResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWaitRelationshipPage;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
@@ -426,6 +428,39 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
   }
 
   @Override
+  public ConsoleWaitRelationshipPage listWaitRelationships(ConsoleWaitRelationshipQuery query) {
+    String tenantId = tenantGuard.resolveTenant(query.tenantId());
+    return downstreamFallback.callOrThrow(
+        SVC,
+        "wait-relationships-list",
+        () -> orchestratorInternalRestClient
+            .client()
+            .get()
+            .uri(builder -> {
+              UriBuilder uri = builder
+                  .path("/internal/ops/wait-relationships")
+                  .queryParam(PARAM_TENANT_ID, tenantId);
+              if (EmptyChecks.isNotNull(query.waitType()))
+                uri.queryParam("waitType", query.waitType());
+              if (EmptyChecks.isNotNull(query.waitStatus()))
+                uri.queryParam("waitStatus", query.waitStatus());
+              if (EmptyChecks.isNotNull(query.bizDateFrom()))
+                uri.queryParam("bizDateFrom", query.bizDateFrom());
+              if (EmptyChecks.isNotNull(query.bizDateTo()))
+                uri.queryParam("bizDateTo", query.bizDateTo());
+              if (EmptyChecks.isNotNull(query.cursorType()))
+                uri.queryParam("cursorType", query.cursorType());
+              if (EmptyChecks.isNotNull(query.cursorId()))
+                uri.queryParam("cursorId", query.cursorId());
+              if (EmptyChecks.isNotNull(query.pageSize()))
+                uri.queryParam("pageSize", query.pageSize());
+              return uri.build();
+            })
+            .retrieve()
+            .body(ConsoleWaitRelationshipPage.class));
+  }
+
+  @Override
   public ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query) {
     String resolved = tenantGuard.resolveTenant(query.tenantId());
     return downstreamFallback.callOrThrow(
@@ -494,7 +529,7 @@ public class DefaultConsoleOrchestratorProxyService implements ConsoleOrchestrat
     LocalDate bizDateFrom = command.bizDateFrom();
     LocalDate bizDateTo = command.bizDateTo();
     List<String> jobCodes = command.jobCodes();
-    String exportFormat = command.exportFormat();
+    String exportFormat = command.exportFormat() == null ? "BUNDLE" : command.exportFormat();
     String requestedBy = command.requestedBy();
     String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, Object> body = new LinkedHashMap<>();

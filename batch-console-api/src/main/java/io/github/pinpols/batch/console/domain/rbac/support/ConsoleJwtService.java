@@ -200,12 +200,13 @@ public class ConsoleJwtService {
   private JwtDecoder buildDecoder(SecretKey key) {
     NimbusJwtDecoder decoder =
         NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-    Duration skew = properties.getJwtClockSkew();
-    if (skew == null || skew.isNegative()) {
-      skew = Duration.ofMinutes(1);
-    }
-    decoder.setJwtValidator(new JwtTimestampValidator(skew));
+    decoder.setJwtValidator(new JwtTimestampValidator(effectiveClockSkew()));
     return decoder;
+  }
+
+  private Duration effectiveClockSkew() {
+    Duration skew = properties.getJwtClockSkew();
+    return skew == null || skew.isNegative() ? Duration.ofMinutes(1) : skew;
   }
 
   private boolean isProductionProfile() {
@@ -316,7 +317,7 @@ public class ConsoleJwtService {
   }
 
   /**
-   * P0-3:把当前 token 加入 revocation 黑名单,TTL = token 剩余生命。 调用方:登出 endpoint 拿到当前 cookie 中的 token 后传入。
+   * 把当前令牌加入撤销名单，保留至令牌的有效期及时间容忍期结束。调用方为登出接口。
    */
   // S2259 无法识别下方 EmptyChecks 对 ObjectProvider 和 JWT 过期时间的空值保护。
   @SuppressWarnings("java:S2259")
@@ -339,10 +340,13 @@ public class ConsoleJwtService {
     if (EmptyChecks.isNull(exp)) {
       return;
     }
-    long ttlSeconds = exp.getEpochSecond() - BatchDateTimeSupport.utcNow().getEpochSecond();
-    if (ttlSeconds <= 0) {
-      return; // 已过期,无需占用 Redis
+    Duration remaining = Duration.between(BatchDateTimeSupport.utcNow(), exp)
+        .plus(effectiveClockSkew());
+    if (remaining.isNegative()) {
+      return;
     }
+    // 解码器在容忍期终点仍接受令牌，秒级 TTL 需要覆盖该边界。
+    long ttlSeconds = Math.addExact(remaining.getSeconds(), 1);
     revocationStore.revoke(jti, Duration.ofSeconds(ttlSeconds));
   }
 

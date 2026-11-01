@@ -53,7 +53,7 @@ public class DataQualityRuleController {
   @PostMapping
   public CommonResponse<DataQualityRuleResponse> create(
       @RequestParam("tenantId") String tenantId, @RequestBody DataQualityRuleRequest rule) {
-    DataQualityRuleEntity entity = ruleService.create(tenantId, rule.toEntity());
+    DataQualityRuleEntity entity = ruleService.create(tenantId, rule.toCommand());
     DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
     return CommonResponse.success(response);
   }
@@ -63,7 +63,7 @@ public class DataQualityRuleController {
       @PathVariable("id") Long id,
       @RequestParam("tenantId") String tenantId,
       @RequestBody DataQualityRuleRequest rule) {
-    DataQualityRuleEntity entity = ruleService.update(tenantId, id, rule.toEntity());
+    DataQualityRuleEntity entity = ruleService.update(tenantId, id, rule.toCommand());
     DataQualityRuleResponse response = DataQualityRuleResponse.from(entity);
     return CommonResponse.success(response);
   }

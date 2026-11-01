@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ShardStrategy;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
 
   @Override
   public int resolve(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     long onlineWorkerCount = resolveOnlineWorkerCount(jobDefinition, params);
     if (onlineWorkerCount <= 0) {
       return 0;
@@ -39,7 +39,7 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
   }
 
   private long resolveOnlineWorkerCount(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params) {
+      JobDefinitionView jobDefinition, Map<String, Object> params) {
     if (jobDefinition == null || !Texts.hasText(jobDefinition.tenantId())) {
       Object onlineWorkerCount = params.get("onlineWorkerCount");
       Object legacyWorkerCount = params.get("workerCount");

@@ -20,7 +20,7 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
-import io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -32,6 +32,10 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
+import io.github.pinpols.batch.orchestrator.infrastructure.failure.SpringTechnicalFailureClassificationAdapter;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -51,7 +55,8 @@ class TriggerLaunchRecoveryServiceTest {
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     properties.setMaxAttempts(3);
     service = new TriggerLaunchRecoveryService(
-        mapper, payloadProtector, launchApplicationService, properties, new SimpleMeterRegistry());
+        mapper, payloadProtector, launchApplicationService, properties, new SimpleMeterRegistry(),
+        new SpringTechnicalFailureClassificationAdapter());
   }
 
   @Test
@@ -83,7 +88,7 @@ class TriggerLaunchRecoveryServiceTest {
   void shouldAcceptIdenticalExistingAnchor(String status) {
     LaunchEnvelope envelope = sampleEnvelope();
     String json = JsonUtils.toJson(envelope);
-    TriggerLaunchRecoveryEntity existing = row(2);
+    TriggerLaunchRecoveryView existing = row(2);
     existing.setRecoveryStatus(status);
     when(payloadProtector.protect(json)).thenReturn("new-cipher");
     when(payloadProtector.reveal("cipher")).thenReturn(json);
@@ -97,7 +102,7 @@ class TriggerLaunchRecoveryServiceTest {
   @DisplayName("相同请求 DEAD 可重排队并重置次数")
   void shouldRequeueIdenticalDeadAnchor() {
     String json = JsonUtils.toJson(sampleEnvelope());
-    TriggerLaunchRecoveryEntity existing = row(5);
+    TriggerLaunchRecoveryView existing = row(5);
     existing.setRecoveryStatus("DEAD");
     when(payloadProtector.protect(json)).thenReturn("new-cipher");
     when(payloadProtector.reveal("cipher")).thenReturn(json);
@@ -112,7 +117,7 @@ class TriggerLaunchRecoveryServiceTest {
   @DisplayName("DEAD 锚点重排队更新零行时不得报告成功")
   void shouldRejectWhenDeadRequeueMisses() {
     String json = JsonUtils.toJson(sampleEnvelope());
-    TriggerLaunchRecoveryEntity existing = row(5);
+    TriggerLaunchRecoveryView existing = row(5);
     existing.setRecoveryStatus("DEAD");
     when(payloadProtector.protect(json)).thenReturn("new-cipher");
     when(payloadProtector.reveal("cipher")).thenReturn(json);
@@ -124,7 +129,7 @@ class TriggerLaunchRecoveryServiceTest {
   @DisplayName("旧密文无法解密时不能跳过冲突或重排队")
   void shouldRejectWhenExistingCiphertextIsUnreadable() {
     String json = JsonUtils.toJson(sampleEnvelope());
-    TriggerLaunchRecoveryEntity existing = row(5);
+    TriggerLaunchRecoveryView existing = row(5);
     existing.setRecoveryStatus("DEAD");
     when(payloadProtector.protect(json)).thenReturn("new-cipher");
     when(payloadProtector.reveal("cipher")).thenThrow(new IllegalArgumentException("bad cipher"));
@@ -138,7 +143,7 @@ class TriggerLaunchRecoveryServiceTest {
   @DisplayName("不同信封不得覆盖或复活已有请求")
   void shouldRejectConflictingExistingAnchor(String status) {
     String json = JsonUtils.toJson(sampleEnvelope());
-    TriggerLaunchRecoveryEntity existing = row(5);
+    TriggerLaunchRecoveryView existing = row(5);
     existing.setRecoveryStatus(status);
     LaunchRequest different =
         sampleEnvelope().launchRequest().toBuilder().jobCode("other-job").build();
@@ -171,14 +176,18 @@ class TriggerLaunchRecoveryServiceTest {
     verify(mapper, never()).markAttempt(any());
   }
 
-  @Test
-  @DisplayName("事件预期核对冲突不能作为已完成，保留恢复重试")
-  void shouldRetry_whenEventExpectationConflicts() {
+  @ParameterizedTest
+  @CsvSource({
+    "INVALID_INPUT, HTTP_400", "NOT_FOUND, HTTP_404", "CONFLICT, HTTP_409",
+    "INVALID_CONFIGURATION, HTTP_422", "RATE_LIMITED, HTTP_429", "TEMPORARILY_UNAVAILABLE, HTTP_503"
+  })
+  @DisplayName("用例失败保留恢复重试及既有诊断代码")
+  void shouldRetry_whenOperationFails(Kind kind, String diagnosticCode) {
     when(mapper.selectDue(any(Instant.class), anyInt())).thenReturn(List.of(row(0)));
     when(payloadProtector.reveal("cipher")).thenReturn(JsonUtils.toJson(sampleEnvelope()));
     when(launchApplicationService.launchFromTrustedQueue(any()))
-        .thenThrow(new ResponseStatusException(
-            HttpStatus.CONFLICT,
+        .thenThrow(new OperationFailure(
+            kind,
             "Expected event can be satisfied only by its launched EVENT request"));
 
     assertThat(service.recoverDue(10)).isZero();
@@ -186,7 +195,37 @@ class TriggerLaunchRecoveryServiceTest {
     verify(mapper, never()).markDone(anyString(), anyString(), anyString());
     verify(mapper)
         .markRetryOrDead(
-            argThat(attempt -> "HTTP_409".equals(attempt.errorCode()) && attempt.now() != null));
+            argThat(attempt -> diagnosticCode.equals(attempt.errorCode()) && attempt.now() != null));
+  }
+
+  @Test
+  @DisplayName("遗留 HTTP 状态异常继续保留原诊断代码并退避重试")
+  void shouldRetry_whenLegacyResponseStatusIsThrown() {
+    when(mapper.selectDue(any(Instant.class), anyInt())).thenReturn(List.of(row(0)));
+    when(payloadProtector.reveal("cipher")).thenReturn(JsonUtils.toJson(sampleEnvelope()));
+    when(launchApplicationService.launchFromTrustedQueue(any()))
+        .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "legacy"));
+
+    assertThat(service.recoverDue(10)).isZero();
+
+    verify(mapper, never()).markDone(anyString(), anyString(), anyString());
+    verify(mapper).markRetryOrDead(argThat(attempt -> "HTTP_409".equals(attempt.errorCode())));
+  }
+
+  @Test
+  @DisplayName("应用失败的原因链包含旧异常时仍按应用失败类别记录")
+  void shouldKeepOperationFailureClassification_whenCauseIsLegacyStatus() {
+    when(mapper.selectDue(any(Instant.class), anyInt())).thenReturn(List.of(row(0)));
+    when(payloadProtector.reveal("cipher")).thenReturn(JsonUtils.toJson(sampleEnvelope()));
+    when(launchApplicationService.launchFromTrustedQueue(any()))
+        .thenThrow(new OperationFailure(
+            Kind.TEMPORARILY_UNAVAILABLE,
+            "operation",
+            new ResponseStatusException(HttpStatus.CONFLICT, "cause")));
+
+    assertThat(service.recoverDue(10)).isZero();
+
+    verify(mapper).markRetryOrDead(argThat(attempt -> "HTTP_503".equals(attempt.errorCode())));
   }
 
   @Test
@@ -218,8 +257,8 @@ class TriggerLaunchRecoveryServiceTest {
     verify(mapper, times(2)).markRetryOrDead(any());
   }
 
-  private static TriggerLaunchRecoveryEntity row(int attempts) {
-    TriggerLaunchRecoveryEntity entity = new TriggerLaunchRecoveryEntity();
+  private static TriggerLaunchRecoveryView row(int attempts) {
+    TriggerLaunchRecoveryView entity = new TriggerLaunchRecoveryView();
     entity.setTenantId("tenant-a");
     entity.setRequestId("req-1");
     entity.setEnvelopeCiphertext("cipher");

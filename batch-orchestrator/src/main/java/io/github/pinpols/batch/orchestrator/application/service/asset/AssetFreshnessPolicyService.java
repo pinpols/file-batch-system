@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper;
 import java.time.DateTimeException;
@@ -109,7 +109,7 @@ public class AssetFreshnessPolicyService {
     detail.put("staleAt", breach.staleAt().toString());
     detail.put("breachType", breach.breachType());
     detail.put("policyId", policy.id());
-    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
+    AlertEmitCommand alertRequest = AlertEmitCommand.builder()
         .tenantId(policy.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(breach.alertType())

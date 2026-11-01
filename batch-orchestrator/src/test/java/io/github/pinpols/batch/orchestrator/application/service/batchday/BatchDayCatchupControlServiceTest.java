@@ -30,7 +30,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 @DisplayName("批量日追平暂停的幂等与审计")
 class BatchDayCatchupControlServiceTest {
@@ -170,10 +171,11 @@ class BatchDayCatchupControlServiceTest {
 
     assertThatThrownBy(() -> service.change(new BatchDayCatchupControlService.PauseCommand(
             "t1", "CAL", "PAUSE", "ops-7", "maintenance")))
-        .isInstanceOf(ResponseStatusException.class)
+        .isInstanceOf(OperationFailure.class)
+        .hasCauseInstanceOf(DataIntegrityViolationException.class)
         .extracting(
-            exception -> ((ResponseStatusException) exception).getStatusCode().value())
-        .isEqualTo(409);
+            exception -> ((OperationFailure) exception).kind())
+        .isEqualTo(Kind.CONFLICT);
     verify(controlMapper, never())
         .insertEvent(ArgumentMatchers.any(BatchDayCatchupEventParam.class));
   }

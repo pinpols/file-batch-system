@@ -3,12 +3,15 @@ package io.github.pinpols.batch.console.domain.rbac.service;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleLoginRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthProfileResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleLoginPublicKeyResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -48,6 +51,7 @@ public class ConsoleAuthApplicationService {
 
   private final ConsoleJwtService jwtService;
   private final ConsoleLoginService loginService;
+  private final ConsoleLoginKeyPairService loginKeyPairService;
   private final ConsoleSessionRegistry sessionRegistry;
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -56,7 +60,40 @@ public class ConsoleAuthApplicationService {
   private final List<ConsoleCapabilityProvider> capabilityProviders;
 
   public ConsoleAuthTokenResponse login(ConsoleLoginRequest request) {
-    return loginService.login(request);
+    ConsoleLoginRequest resolved = resolveLoginRequest(request);
+    return loginService.login(resolved);
+  }
+
+  /** 在认证用例入口解密登录凭据，并执行加密登录策略。 */
+  private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
+    if (request == null) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
+    }
+    if (request.isEncrypted()) {
+      String plaintext = loginKeyPairService.decrypt(
+          request.getEncryptedKey(), request.getIv(), request.getCiphertext());
+      ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
+      if (decoded == null) {
+        throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
+      }
+      if (decoded.getCaptchaToken() == null) {
+        decoded.setCaptchaToken(request.getCaptchaToken());
+      }
+      return decoded;
+    }
+    if (securityProperties.getLoginEncryption().isRequired()) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_required");
+    }
+    return request;
+  }
+
+  /** 按登录加密配置提供公钥；关闭加密时拒绝该用例。 */
+  public ConsoleLoginPublicKeyResponse loginPublicKey() {
+    if (!securityProperties.getLoginEncryption().isEnabled()) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
+    }
+    return new ConsoleLoginPublicKeyResponse(
+        "RSA-OAEP-256", loginKeyPairService.publicKeyPem(), loginKeyPairService.fingerprint());
   }
 
   // S2259 无法识别 authorities(Authentication) 中 EmptyChecks 提供的空值契约。

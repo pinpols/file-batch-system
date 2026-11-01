@@ -42,8 +42,7 @@ public class WorkflowRunReplaySourceResolver {
 
   @Transactional(readOnly = true)
   public Source resolve(String tenantId, Long workflowRunId) {
-    boolean replaySourceIdentityIsInvalid = EmptyChecks.isNull(tenantId)
-        || EmptyChecks.isBlank(tenantId)
+    boolean replaySourceIdentityIsInvalid = EmptyChecks.isBlank(tenantId)
         || EmptyChecks.isNull(workflowRunId)
         || workflowRunId <= 0;
     if (replaySourceIdentityIsInvalid) {

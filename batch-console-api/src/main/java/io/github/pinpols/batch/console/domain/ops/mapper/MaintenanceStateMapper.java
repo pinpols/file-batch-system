@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
 import io.github.pinpols.batch.console.domain.ops.param.MaintenanceStateUpdateParam;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity;
+import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 

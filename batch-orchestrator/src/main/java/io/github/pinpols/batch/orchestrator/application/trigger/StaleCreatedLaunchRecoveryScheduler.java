@@ -13,8 +13,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -143,7 +143,7 @@ public class StaleCreatedLaunchRecoveryScheduler {
 
     LaunchValidationService.LaunchLoadResult validatedLaunch =
         launchValidationService.load(request);
-    JobDefinitionEntity executionDefinition = validatedLaunch.jobDefinition();
+    JobDefinitionView executionDefinition = validatedLaunch.jobDefinition();
     boolean recoveredDefinitionIdentityDoesNotMatch = EmptyChecks.isNull(executionDefinition)
         || !Objects.equals(jobInstance.getJobDefinitionId(), executionDefinition.id())
         || !Objects.equals(jobInstance.getJobDefinitionVersion(), executionDefinition.version());

@@ -419,7 +419,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
       return;
     }
     List<? extends Trigger> attachedTriggers = scheduler.getTriggersOfJob(workflowJobKey);
-    if (EmptyChecks.isNull(attachedTriggers) || EmptyChecks.isEmpty(attachedTriggers)) {
+    if (EmptyChecks.isEmpty(attachedTriggers)) {
       return;
     }
     String tenantId = sourceData.getString(QuartzLaunchJob.TENANT_ID);

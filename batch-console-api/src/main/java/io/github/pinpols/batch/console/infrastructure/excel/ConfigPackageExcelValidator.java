@@ -19,12 +19,12 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.BatchWindowRules;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
@@ -609,7 +609,7 @@ public class ConfigPackageExcelValidator {
     if (EmptyChecks.isNotNull(packageJob)) {
       return packageJob;
     }
-    JobDefinitionEntity existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    JobDefinitionView existingJob = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
     if (EmptyChecks.isNull(existingJob)) {
       issues.add("job_code does not exist for tenant: " + jobCode);
       return null;

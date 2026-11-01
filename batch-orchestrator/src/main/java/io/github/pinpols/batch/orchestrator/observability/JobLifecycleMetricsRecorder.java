@@ -3,8 +3,8 @@ package io.github.pinpols.batch.orchestrator.observability;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import java.time.Duration;
@@ -169,7 +169,7 @@ public class JobLifecycleMetricsRecorder {
     if (EmptyChecks.isNull(jobDefinitionId)) {
       return "unknown";
     }
-    JobDefinitionEntity definition = jobDefinitionMapper.selectById(jobDefinitionId);
+    JobDefinitionView definition = jobDefinitionMapper.selectById(jobDefinitionId);
     return definition == null
             || definition.jobType() == null
             || definition.jobType().isBlank()

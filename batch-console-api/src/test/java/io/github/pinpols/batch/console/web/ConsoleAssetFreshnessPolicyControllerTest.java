@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
-import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
+import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
+import io.github.pinpols.batch.console.domain.command.AssetFreshnessPolicyUpsertCommand;
 import io.github.pinpols.batch.console.service.ConsoleAssetFreshnessPolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -64,7 +64,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
   @Test
   @DisplayName("查询策略列表时, 响应返回资产编码与严重级别")
   void shouldListPolicies() throws Exception {
-    AssetFreshnessPolicyEntity entity = new AssetFreshnessPolicyEntity(
+    AssetFreshnessPolicyResponse entity = new AssetFreshnessPolicyResponse(
         1L,
         "t1",
         "JOB_A",
@@ -114,7 +114,7 @@ class ConsoleAssetFreshnessPolicyControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
     verify(policyService)
-        .upsert(AssetFreshnessPolicyUpsertParam.builder()
+        .upsert(AssetFreshnessPolicyUpsertCommand.builder()
             .tenantId("t1")
             .assetCode("JOB_A")
             .expectedByLocalTime(LocalTime.of(2, 0))

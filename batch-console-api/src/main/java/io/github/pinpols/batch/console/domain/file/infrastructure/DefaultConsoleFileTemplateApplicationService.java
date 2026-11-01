@@ -35,7 +35,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.regex.Pattern;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -56,8 +55,6 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2259")
 public class DefaultConsoleFileTemplateApplicationService
     implements ConsoleFileTemplateApplicationService {
-
-  private static final Pattern SQL_IDENTIFIER = Pattern.compile("[A-Za-z_]\\w*");
 
   private final FileTemplateConfigMapper mapper;
   private final TenantIdResolver tenantGuard;
@@ -484,6 +481,7 @@ public class DefaultConsoleFileTemplateApplicationService
       FileTemplateMappingDraftCommand command) {
     List<String> warnings = new ArrayList<>();
     List<Map<String, Object>> fieldMappings = new ArrayList<>();
+    List<Map<String, Object>> csvColumns = new ArrayList<>();
     List<String> selectedColumns = new ArrayList<>();
     for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
       if (field == null) {
@@ -501,6 +499,10 @@ public class DefaultConsoleFileTemplateApplicationService
       putIfText(mapping, "type", field.type());
       putIfText(mapping, "format", field.format());
       fieldMappings.add(mapping);
+      Map<String, Object> csvColumn = new LinkedHashMap<>();
+      csvColumn.put("header", firstText(field.header(), sourceColumn));
+      csvColumn.put("source", "detail." + sourceColumn);
+      csvColumns.add(csvColumn);
       selectedColumns.add(sourceColumn);
     }
 
@@ -514,60 +516,19 @@ public class DefaultConsoleFileTemplateApplicationService
     Map<String, Object> queryParamSchema = new LinkedHashMap<>();
     queryParamSchema.put("export_data_ref", WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
     queryParamSchema.put("sqlTemplateExport", sqlTemplateExport);
+    if (EmptyChecks.isNotEmpty(csvColumns)) {
+      // Worker 的文件列来自 csvColumns；SQL 游标列只服务分页，不应自动进入文件。
+      queryParamSchema.put("csvColumns", csvColumns);
+    }
 
     String defaultQuerySql = blankToNull(command.defaultQuerySql());
-    if (defaultQuerySql == null && Texts.hasText(command.tableName())) {
-      if (canGenerateDefaultExportSql(command, selectedColumns)) {
-        defaultQuerySql = defaultExportSql(command, selectedColumns);
-      } else {
-        warnings.add("schemaName/tableName/tenantColumn/sourceColumn 存在非 SQL 标识符,已跳过默认 SQL 生成");
-      }
-    }
     if (defaultQuerySql == null) {
-      warnings.add("未填写 defaultQuerySql/tableName,保存前需要补齐导出 SQL");
+      warnings.add("请填写实际业务导出 SQL，按 :tenantId 和 :batchNo 过滤租户及批次，并返回分页游标列");
     }
     String fieldMappingsJson = writeJson(fieldMappings);
     String queryParamSchemaJson = writeJson(queryParamSchema);
     return new FileTemplateMappingDraftResult(
         "EXPORT", fieldMappingsJson, queryParamSchemaJson, defaultQuerySql, warnings);
-  }
-
-  private String defaultExportSql(FileTemplateMappingDraftCommand command, List<String> columns) {
-    String selectColumns = columns.isEmpty() ? "id" : String.join(", ", columns);
-    boolean schemaNameIsPresent = Texts.hasText(command.schemaName());
-    String tableRef = schemaNameIsPresent
-        ? command.schemaName() + "." + command.tableName()
-        : command.tableName();
-    String tenantColumn = firstText(command.tenantColumn(), "tenant_id");
-    return "select "
-        + selectColumns
-        + " from "
-        + tableRef
-        + " where "
-        + tenantColumn
-        + " = :tenantId";
-  }
-
-  private boolean canGenerateDefaultExportSql(
-      FileTemplateMappingDraftCommand command, List<String> columns) {
-    if (Texts.hasText(command.schemaName()) && !isSqlIdentifier(command.schemaName())) {
-      return false;
-    }
-    if (!isSqlIdentifier(command.tableName())) {
-      return false;
-    }
-    if (!isSqlIdentifier(firstText(command.tenantColumn(), "tenant_id"))) {
-      return false;
-    }
-    return columns.stream().allMatch(DefaultConsoleFileTemplateApplicationService::isSqlIdentifier);
-  }
-
-  private static boolean isSqlIdentifier(String value) {
-    if (!Texts.hasText(value)) {
-      return false;
-    }
-    String normalizedValue = value.trim();
-    return SQL_IDENTIFIER.matcher(normalizedValue).matches();
   }
 
   private String writeJson(Object value) {

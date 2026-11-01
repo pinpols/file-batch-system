@@ -56,7 +56,6 @@ public final class TrailerControlRecord {
   public static TrailerControlRecord parse(
       String trailerLine, Map<String, Object> trailerTemplate) {
     if (EmptyChecks.isNull(trailerLine)
-        || EmptyChecks.isNull(trailerTemplate)
         || EmptyChecks.isEmpty(trailerTemplate)) {
       return new TrailerControlRecord(null, null);
     }

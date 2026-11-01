@@ -6,9 +6,11 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
+import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -45,6 +47,7 @@ public class ConsoleConfigCacheInvalidationService {
   private static final int SCAN_BATCH_SIZE = 500;
 
   private final ConfigInvalidationStore invalidationStore;
+  private final ConfigCacheInvalidationOutboxMapper outbox;
   private final ConsoleQueryCacheService queryCacheService;
   private final AtomicLong publishedRevision = new AtomicLong(0);
   private final Counter publishSuccessCounter;
@@ -54,8 +57,10 @@ public class ConsoleConfigCacheInvalidationService {
   public ConsoleConfigCacheInvalidationService(
       ConfigInvalidationStore invalidationStore,
       ConsoleQueryCacheService queryCacheService,
+      ConfigCacheInvalidationOutboxMapper outbox,
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.invalidationStore = invalidationStore;
+    this.outbox = outbox;
     this.queryCacheService = queryCacheService;
     MeterRegistry meterRegistry = meterRegistryProvider == null // empty-check: allow - Sonar S2259
         ? null
@@ -70,6 +75,7 @@ public class ConsoleConfigCacheInvalidationService {
   public ConsoleConfigCacheInvalidationService(
       ConfigInvalidationStore invalidationStore, ConsoleQueryCacheService queryCacheService) {
     this.invalidationStore = invalidationStore;
+    this.outbox = null;
     this.queryCacheService = queryCacheService;
     Metrics metrics = Metrics.empty();
     this.publishSuccessCounter = metrics.successCounter();
@@ -134,6 +140,17 @@ public class ConsoleConfigCacheInvalidationService {
 
   public void evictQuotaPolicies(String tenantId) {
     evictAfterCommit(tenantId, "tenant-quota-policy", "enabled-first");
+  }
+
+  /** 手动失效没有配置表写入，须先保存待投递意图。 */
+  public void evictManual(String tenantId, String type, String code) {
+    outbox.insert(tenantId, type, code);
+    if ("*".equals(code)) {
+      String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
+      evictByPatternAfterCommit(tenantId, type, code, pattern);
+    } else {
+      evictAfterCommit(tenantId, type, code);
+    }
   }
 
   /**
@@ -239,19 +256,7 @@ public class ConsoleConfigCacheInvalidationService {
 
   private void publishInvalidation(String tenantId, String type, String code) {
     try {
-      Long revision = invalidationStore.nextGlobalRevision();
-      Long keyRevision = invalidationStore.nextKeyRevision(tenantId, type, code);
-      String safeTenantId = safe(tenantId);
-      String safeType = safe(type);
-      String safeCode = safe(code);
-      long eventRevision = EmptyChecks.isNull(revision) ? 0L : revision;
-      long eventKeyRevision = EmptyChecks.isNull(keyRevision) ? 0L : keyRevision;
-      Instant occurredAt = Instant.now();
-      ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
-          safeTenantId, safeType, safeCode, eventRevision, eventKeyRevision, occurredAt);
-      invalidationStore.publish(event);
-      publishedRevision.set(event.revision());
-      increment(publishSuccessCounter);
+      publishStrict(tenantId, type, code);
     } catch (RuntimeException exception) {
       increment(publishFailureCounter);
       String sanitizedTenantId = LogSanitizer.value(tenantId);
@@ -271,6 +276,34 @@ public class ConsoleConfigCacheInvalidationService {
           LogSanitizer.value(code),
           exception);
     }
+  }
+
+  /** 严格投递供持久队列使用，失败必须传播以保留待重试记录。 */
+  public void deliver(ConfigCacheInvalidationIntent intent) {
+    String tenantId = intent.tenantId();
+    String type = intent.configType();
+    String code = intent.configCode();
+    if ("*".equals(code)) {
+      String pattern = "config:%s:%s:*".formatted(safe(tenantId), safe(type));
+      invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
+    } else {
+      invalidationStore.delete(configKey(tenantId, type, code));
+    }
+    publishStrict(tenantId, type, code);
+  }
+
+  private void publishStrict(String tenantId, String type, String code) {
+    Long keyRevision = Objects.requireNonNull(invalidationStore.nextKeyRevision(tenantId, type, code));
+    Long revision = Objects.requireNonNull(invalidationStore.nextGlobalRevision());
+    String safeTenantId = safe(tenantId);
+    String safeType = safe(type);
+    String safeCode = safe(code);
+    Instant occurredAt = Instant.now();
+    ConfigCacheInvalidationEvent event = new ConfigCacheInvalidationEvent(
+        safeTenantId, safeType, safeCode, revision, keyRevision, occurredAt);
+    invalidationStore.publish(event);
+    publishedRevision.set(event.revision());
+    increment(publishSuccessCounter);
   }
 
   private void increment(Counter counter) {

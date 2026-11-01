@@ -5,8 +5,8 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleMyWorkerQueryService;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -32,7 +32,7 @@ class ConsoleMyWorkerControllerTest {
   @Test
   @DisplayName("列表查询:先解析租户再查自托管 Worker, 返回结果按 Worker 编码回填")
   void shouldResolveTenantAndListSelfHosted_whenListingMyWorkers() {
-    WorkerRegistryEntity w = new WorkerRegistryEntity();
+    WorkerRegistryView w = new WorkerRegistryView();
     w.setWorkerCode("sdk-1");
     when(queryService.listSelfHosted("tx")).thenReturn(List.of(w));
     WorkerRegistryResponse expected = WorkerRegistryResponse.from(w);

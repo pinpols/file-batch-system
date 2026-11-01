@@ -117,3 +117,11 @@
 - 复核：对两个锁文件的 309 个 Rust 包执行 OSV `querybatch`；升级前仅 `rustls-webpki 0.103.15` 命中 RUSTSEC-2026-0382，升级后 0 命中。
 - 验证：`cd sdk/rust && cargo test` 96/96 通过；`cd examples/self-hosted-sdk/sample-tenant-worker-rust && cargo check` 通过。
 - #296 的关闭仍需跟进 PR 合入 `main` 后的下一次 Scorecard 扫描确认，本记录不提前宣称关闭。
+
+## 九、CodeQL 状态警告排查（2026-11-01）
+
+- `main` 提交 `8fa0beb7ed8335072afbdbf19df5e297739605e2` 的 CodeQL 运行 41266455001 成功，分析 2070302390 上传了 15 条结果，但 GitHub 报告 `279 relatedLocations were ignored`。这是结果展示截断警告，不代表工作流失败，也不能证明代码没有漏洞。
+- 已下载该分析的 SARIF：多条 `java/csrf-unprotected-request-type` 结果各保留 100 个相关位置。样本调用路径从只读接口经 `RlsTenantContextHolder.runWithTenant` 的 `Supplier.get()` 跨入无关业务回调，属于静态调用图可能过度近似；GitHub 上这些具体 CSRF 结果此前均已按各自证据标记误报，不据此推断其他路径安全。
+- 本地工作流候选修复为 `CODEQL_ACTION_EXTRA_OPTIONS` 的 `database interpret-results --no-group-results`，逐原因输出结果，保留现有查询集、构建模式和上传类别。`actionlint`、选项 JSON 及配置保留检查通过；本机未运行 CodeQL。
+- **尚未确认远端修复**：须在独立 CI 运行中比较原始 SARIF 的结果量、位置、指纹和既有告警状态，确保不触发 5,000 条结果截断或产生重复告警，再确认上传成功及状态页警告消失。当前远端主分支尚未应用此工作区变更，不以本地配置检查宣称问题关闭。
+- 继续核对：固定版本 CodeQL Action 的 `src/codeql.ts` 在 `database interpret-results` 命令中读取 `CODEQL_ACTION_EXTRA_OPTIONS` 对应参数；本机无 CodeQL CLI，远端公开 Java 数据库约 47 MB，对应 macOS CLI 完整包约 984 MB，尚未完成本地重放。最近一次主分支分析仍为 2070302390，警告未消除。

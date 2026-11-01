@@ -4,9 +4,9 @@ import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.dto.ReplayExecutionGuard;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import java.util.Map;
 
 /**
@@ -23,16 +23,16 @@ public interface LaunchValidationService {
 
   record LaunchLoadResult(
       TriggerRequestEntity triggerRequest,
-      JobDefinitionEntity jobDefinition,
-      WorkflowDefinitionEntity workflowDefinition,
+      JobDefinitionView jobDefinition,
+      WorkflowDefinitionView workflowDefinition,
       String workflowCalendarCode,
       JobInstanceEntity existingInstance, // 非空表示重复请求
       WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {
 
     public LaunchLoadResult(
         TriggerRequestEntity triggerRequest,
-        JobDefinitionEntity jobDefinition,
-        WorkflowDefinitionEntity workflowDefinition,
+        JobDefinitionView jobDefinition,
+        WorkflowDefinitionView workflowDefinition,
         String workflowCalendarCode,
         JobInstanceEntity existingInstance) {
       this(
@@ -46,8 +46,8 @@ public interface LaunchValidationService {
 
     public LaunchLoadResult(
         TriggerRequestEntity triggerRequest,
-        JobDefinitionEntity jobDefinition,
-        WorkflowDefinitionEntity workflowDefinition,
+        JobDefinitionView jobDefinition,
+        WorkflowDefinitionView workflowDefinition,
         JobInstanceEntity existingInstance) {
       this(
           triggerRequest,

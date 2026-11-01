@@ -15,16 +15,16 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.ExpectedWorkOccurrenceOverride;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -141,7 +141,7 @@ public class BatchDaySettleScheduler {
   private void recoverFailedCatchUps() {
     List<BatchDayInstanceEntity> failedDays =
         batchDayInstanceMapper.selectFailedDaysNeedingCatchUp(FAILED_CATCH_UP_RECOVERY_LIMIT);
-    if (EmptyChecks.isNull(failedDays) || EmptyChecks.isEmpty(failedDays)) return;
+    if (EmptyChecks.isEmpty(failedDays)) return;
     Instant now = dateTimeSupport.nowInstant();
     for (BatchDayInstanceEntity failedDay : failedDays) {
       if (EmptyChecks.isNull(failedDay) || !Texts.hasText(failedDay.tenantId())) continue;
@@ -363,7 +363,7 @@ public class BatchDaySettleScheduler {
     List<ExpectedWorkOccurrenceOverride> overdue =
         expectedWorkOccurrenceMapper.selectDueExpectedWithoutMissingAlert(
             expectedWorkOccurrenceDueExpectedWithoutMissingAlertQuery);
-    if (EmptyChecks.isNull(overdue) || EmptyChecks.isEmpty(overdue)) {
+    if (EmptyChecks.isEmpty(overdue)) {
       return;
     }
     for (ExpectedWorkOccurrenceOverride occurrence : overdue) {
@@ -388,7 +388,7 @@ public class BatchDaySettleScheduler {
       detail.put("dueAt", occurrence.dueAt().toString());
       detail.put("triggerRequestId", occurrence.triggerRequestId());
       String detailJson = JsonUtils.toJson(detail);
-      AlertEmitRequest missingInputAlert = AlertEmitRequest.builder()
+      AlertEmitCommand missingInputAlert = AlertEmitCommand.builder()
           .tenantId(batchDay.tenantId())
           .serviceName("batch-orchestrator")
           .alertType("BATCH_EXPECTED_WORK_MISSING")
@@ -442,9 +442,9 @@ public class BatchDaySettleScheduler {
           triggerRequestMapper.selectCatchUpRootByDedupKey(batchDay.tenantId(), dedupKey);
       TriggerRequestEntity request = existing;
       if (request == null) {
-        JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+        JobDefinitionView jobDefinition = configCacheService.findEnabledJobDefinition(
             batchDay.tenantId(), candidate.getJobCode());
-        WorkflowDefinitionEntity workflow =
+        WorkflowDefinitionView workflow =
             EmptyChecks.isNull(jobDefinition) || EmptyChecks.isNull(jobDefinition.id())
                 ? null
                 : workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(

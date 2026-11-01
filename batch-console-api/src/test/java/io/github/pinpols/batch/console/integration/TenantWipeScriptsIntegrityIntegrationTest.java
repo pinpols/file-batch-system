@@ -118,6 +118,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     insertResourceTag("ta", "JOB", jobCode);
     insertResourceTag("ta", "WORKFLOW", workflowCode);
     seedRuntimeReferences("ta", jobCode, workflowCode);
+    ConfigBatchFixture configBatch = seedConfigBatchOperations(keepTenant, "ta");
 
     ExecResult result = runScript("wipe-tenants.sql");
 
@@ -128,6 +129,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     assertThat(count(SELECT_JOB_DEFINITION_FOR_TENANT_COUNT_SQL)).isZero();
     assertThat(count(SELECT_WORKFLOW_DEFINITION_FOR_TENANT_COUNT_SQL)).isZero();
     assertThat(count(SELECT_RESOURCE_TAG_FOR_TENANT_COUNT_SQL)).isZero();
+    assertConfigBatchCleanup(configBatch, keepTenant, "ta");
   }
 
   @Test
@@ -147,6 +149,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
     insertResourceTag(disposableTenant, "JOB", wipeJobCode);
     insertResourceTag(disposableTenant, "WORKFLOW", wipeWorkflowCode);
     seedRuntimeReferences(disposableTenant, wipeJobCode, wipeWorkflowCode);
+    ConfigBatchFixture configBatch = seedConfigBatchOperations("ta", disposableTenant);
 
     ExecResult result = runScript("wipe-non-system-tenants.sql");
 
@@ -166,6 +169,7 @@ class TenantWipeScriptsIntegrityIntegrationTest {
         .isZero();
     assertThat(count(SELECT_WORKFLOW_DEFINITION_BY_TENANT_COUNT_SQL, disposableTenant))
         .isZero();
+    assertConfigBatchCleanup(configBatch, "ta", disposableTenant);
   }
 
   @Test
@@ -244,6 +248,57 @@ class TenantWipeScriptsIntegrityIntegrationTest {
         """;
 
     jdbc.update(insertTenantSql, tenant, tenant);
+  }
+
+  private record ConfigBatchFixture(String keptOperationId, String removedOperationId) {}
+
+  private static ConfigBatchFixture seedConfigBatchOperations(String keptTenant, String removedTenant) {
+    String insertOperationSql = """
+        insert into batch.config_batch_operation
+          (audit_tenant_id, operation_id, request_identity_hash, operation_kind,
+           targets_json, response_metadata_json)
+        values (?, ?, ?, 'TENANT_COPY', jsonb_build_array(?, ?), '{}'::jsonb)
+        """;
+    String insertReceiptSql = """
+        insert into batch.config_batch_target_receipt
+          (audit_tenant_id, operation_id, target_ordinal, tenant_id, result_json)
+        values (?, ?, ?, ?, jsonb_build_object('tenantId', cast(? as text), 'success', true))
+        """;
+    String keptOperationId = UUID.randomUUID().toString();
+    String removedOperationId = UUID.randomUUID().toString();
+    jdbc.update(insertOperationSql, keptTenant, keptOperationId, unique("request"),
+        removedTenant, keptTenant);
+    jdbc.update(insertOperationSql, removedTenant, removedOperationId, unique("request"),
+        removedTenant, keptTenant);
+    jdbc.update(insertReceiptSql, keptTenant, keptOperationId, 0, removedTenant, removedTenant);
+    jdbc.update(insertReceiptSql, keptTenant, keptOperationId, 1, keptTenant, keptTenant);
+    jdbc.update(insertReceiptSql, removedTenant, removedOperationId, 1, keptTenant, keptTenant);
+    return new ConfigBatchFixture(keptOperationId, removedOperationId);
+  }
+
+  private static void assertConfigBatchCleanup(
+      ConfigBatchFixture fixture, String keptTenant, String removedTenant) {
+    String selectOperationSql = """
+        select count(*) from batch.config_batch_operation
+         where audit_tenant_id = ? and operation_id = ?
+        """;
+    String selectTargetSql = """
+        select targets_json ->> ? from batch.config_batch_operation
+         where audit_tenant_id = ? and operation_id = ?
+        """;
+    String selectReceiptSql = """
+        select count(*) from batch.config_batch_target_receipt
+         where audit_tenant_id = ? and operation_id = ? and target_ordinal = ?
+        """;
+    assertThat(count(selectOperationSql, keptTenant, fixture.keptOperationId())).isOne();
+    assertThat(jdbc.queryForObject(selectTargetSql, String.class, 0, keptTenant,
+        fixture.keptOperationId())).isEqualTo(removedTenant);
+    assertThat(jdbc.queryForObject(selectTargetSql, String.class, 1, keptTenant,
+        fixture.keptOperationId())).isEqualTo(keptTenant);
+    assertThat(count(selectReceiptSql, keptTenant, fixture.keptOperationId(), 0)).isZero();
+    assertThat(count(selectReceiptSql, keptTenant, fixture.keptOperationId(), 1)).isOne();
+    assertThat(count(selectOperationSql, removedTenant, fixture.removedOperationId())).isZero();
+    assertThat(count(selectReceiptSql, removedTenant, fixture.removedOperationId(), 1)).isZero();
   }
 
   private static void insertJob(String tenant, String jobCode) {

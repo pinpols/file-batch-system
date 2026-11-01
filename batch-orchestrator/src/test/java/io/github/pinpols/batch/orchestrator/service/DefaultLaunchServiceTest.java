@@ -42,11 +42,11 @@ import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDi
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CustomTaskTypeRegistryMapper;
@@ -221,7 +221,7 @@ class DefaultLaunchServiceTest {
     triggerRequest.setId(100L);
     triggerRequest.setDedupKey("dedup-001");
 
-    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    JobDefinitionView jobDefinition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, jobDefinition, null, "BIZ_CAL", null);
 
@@ -468,7 +468,7 @@ class DefaultLaunchServiceTest {
         "trace-bundle-invalid",
         Map.of());
     TriggerRequestEntity triggerRequest = acceptedTriggerRequest(request);
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(501L)
         .tenantId("t1")
         .jobCode("BUNDLE_JOB")
@@ -503,7 +503,7 @@ class DefaultLaunchServiceTest {
     TriggerRequestEntity triggerRequest = acceptedTriggerRequest(request);
     triggerRequest.setId(987L);
     triggerRequest.setDedupKey("dedup-foreign-file");
-    JobDefinitionEntity definition = jobDefinition("BIZ_CAL");
+    JobDefinitionView definition = jobDefinition("BIZ_CAL");
     when(launchValidationService.load(request))
         .thenReturn(new LaunchValidationService.LaunchLoadResult(
             triggerRequest, definition, null, "BIZ_CAL", null));
@@ -548,7 +548,7 @@ class DefaultLaunchServiceTest {
     triggerRequest.setId(101L);
     triggerRequest.setDedupKey("dedup-002");
 
-    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    JobDefinitionView jobDefinition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, jobDefinition, null, "BIZ_CAL", null);
 
@@ -630,7 +630,7 @@ class DefaultLaunchServiceTest {
     triggerRequest.setDedupKey("dedup-003");
     triggerRequest.setTriggerType(TriggerType.EVENT.code());
 
-    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    JobDefinitionView jobDefinition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, jobDefinition, null, "BIZ_CAL", null);
 
@@ -716,7 +716,7 @@ class DefaultLaunchServiceTest {
     triggerRequest.setDedupKey("dedup-004");
     triggerRequest.setTriggerType(TriggerType.EVENT.code());
 
-    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    JobDefinitionView jobDefinition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, jobDefinition, null, "BIZ_CAL", null);
 
@@ -801,7 +801,7 @@ class DefaultLaunchServiceTest {
     TriggerRequestEntity triggerRequest = acceptedTriggerRequest(request);
     triggerRequest.setId(104L);
     triggerRequest.setDedupKey("dedup-dispatch-reject");
-    JobDefinitionEntity jobDefinition = jobDefinition("BIZ_CAL");
+    JobDefinitionView jobDefinition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, jobDefinition, null, "BIZ_CAL", null);
     BusinessCalendarEntity calendar = new BusinessCalendarEntity(
@@ -933,7 +933,7 @@ class DefaultLaunchServiceTest {
         .build();
     TriggerRequestEntity triggerRequest = acceptedTriggerRequest(request);
     triggerRequest.setDedupKey("template-rejected");
-    JobDefinitionEntity definition = jobDefinition("BIZ_CAL");
+    JobDefinitionView definition = jobDefinition("BIZ_CAL");
     LaunchValidationService.LaunchLoadResult loaded = new LaunchValidationService.LaunchLoadResult(
         triggerRequest, definition, null, "BIZ_CAL", null);
     when(launchValidationService.load(request)).thenReturn(loaded);
@@ -992,7 +992,7 @@ class DefaultLaunchServiceTest {
     LaunchValidationService.WorkflowReplayExecutionBinding replayBinding =
         new LaunchValidationService.WorkflowReplayExecutionBinding(
             701L, 900L, "IMPORT_NODE", executionGuard, protectedTemplates, Map.of(), Map.of());
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(501L)
         .tenantId("t1")
         .jobCode("IMPORT_JOB")
@@ -1119,8 +1119,8 @@ class DefaultLaunchServiceTest {
     return original;
   }
 
-  private JobDefinitionEntity jobDefinition(String calendarCode) {
-    return new JobDefinitionEntity(
+  private JobDefinitionView jobDefinition(String calendarCode) {
+    return new JobDefinitionView(
         11L,
         "t1",
         "IMPORT_JOB",

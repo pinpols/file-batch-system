@@ -12,10 +12,11 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.infrastructure.cron.QuartzCronPreviewService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateEntity;
+import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -67,7 +68,8 @@ class ConsoleSystemControllerTest {
     BatchDateTimeSupport dateTimeSupport = new BatchDateTimeSupport(fixedClock, timezoneProvider);
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleSystemController(
-            stateHolder, new QuartzCronPreviewService(timezoneProvider, dateTimeSupport)))
+            new ConsoleMaintenanceApplicationService(stateHolder, requestMetadataResolver),
+            new QuartzCronPreviewService(timezoneProvider, dateTimeSupport)))
         .setControllerAdvice(exceptionHandler)
         .build();
   }

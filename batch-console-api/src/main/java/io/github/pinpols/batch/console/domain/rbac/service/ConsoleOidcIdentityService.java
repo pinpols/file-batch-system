@@ -6,11 +6,11 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsoleOidcProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ConsoleOidcIdentityRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
-import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleOidcIdentityEntity;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleOidcIdentityMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleOidcIdentityInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.view.ConsoleOidcIdentityView;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -86,7 +86,7 @@ public class ConsoleOidcIdentityService {
     }
   }
 
-  private ConsoleOidcIdentityResponse toResponse(ConsoleOidcIdentityEntity entity) {
+  private ConsoleOidcIdentityResponse toResponse(ConsoleOidcIdentityView entity) {
     return new ConsoleOidcIdentityResponse(
         entity.getId(),
         entity.getTenantId(),

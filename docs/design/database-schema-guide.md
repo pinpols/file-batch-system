@@ -179,6 +179,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `console_operation_audit`、`approval_command`、`compensation_command`、`compensation_checkpoint` | 管理操作、审批和补偿执行审计；[V362](../../db/migration/V362__index_catch_up_latest_approval.sql) 为补跑列表按租户、请求查询最新审批建立部分索引；[V368](../../db/migration/V368__preserve_approval_submission_reason.sql) 分别保留原提交原因和审批决定原因，供同键对账使用（仅空库部署） |
 | `config_release`、`config_approval`、`config_change_log`、`config_sync_log` | 配置发布版本、审批、变更审计和同步记录 |
 | `config_sync_target_receipt` | [V345](../../db/migration/V345__persist_config_sync_target_receipts.sql) 的逐目标配置导入提交回执；与目标配置同事务保存，聚合审计补录只能据此核对，不得再次导入 |
+| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功 |
 | `system_parameter`、`batch_runtime_default_parameter` | 系统参数和运行参数基线 |
 | `api_key`、`secret_version` | API 凭据元数据及密钥版本；不存放可直接使用的明文密钥 |
 | `alert_event`、`alert_routing_config` | 告警事件及路由配置；V357 保存新关闭意图的时刻、原因及公平轮询尝试水位，最终渠道回执另由 `alert_notification_receipt` 保存 |
@@ -208,6 +209,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `job_monitoring_policy`、`job_monitoring_alert_claim` | 作业监控策略和告警认领/去重控制；策略语义见 [SLA 与质量设计](./sla-and-quality.md) |
 | `batch_day_replay_preview_token` | 批量日重放 Preview/Apply 的短期并发与确认令牌，不是业务幂等键 |
 | `tenant_configuration_revision` | 租户配置发布修订栅栏，阻止旧版本配置写入覆盖较新修订 |
+| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交，由 Console 投递后删除；不表示各实例均已应用 |
 | `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记及可配置任务类型 |
 | `biz_table_schema` | Import Worker 启动时覆盖写入业务库 `biz` schema 快照；当前仓库未接入 Console 基于该快照校验目标表或列的读取链路。读取元数据失败保留旧快照，不能保证快照代表当前业务库；消费与去留待核实。 |
@@ -222,7 +224,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 - 维护单例定义在 [V215](../../db/migration/V215__create_console_maintenance_state.sql)，固定只有 `id=1`；`affected_services` 当前仅用于公告展示，不据此动态路由。
 - 使用率表定义在 [V216](../../db/migration/V216__create_console_usage_daily.sql)，主键包含统计日和租户/指标维度，按 `stat_date` 月分区并启用强制 RLS。该表是 best-effort 派生统计，不做 archive 镜像，也不能用作审计、计费或审批证据。
 - AI 附件元数据和对象清理队列定义在 [V219](../../db/migration/V219__console_ai_image_attachments.sql)；数据库不保存附件字节。批量开户操作记录定义在 [V220](../../db/migration/V220__console_user_batch_provisioning.sql)，外部 OIDC 身份映射定义在 [V222](../../db/migration/V222__console_oidc_external_identity.sql)。
-- 作业监控策略及告警认领控制分别定义在 [V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)；重放预览令牌定义在 [V230](../../db/migration/V230__batch_day_replay_preview_token.sql)；租户配置修订栅栏定义在 [V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)。
+- 作业监控策略及告警认领控制分别定义在 [V224](../../db/migration/V224__job_monitoring_policy_and_alert_claim.sql)；重放预览令牌定义在 [V230](../../db/migration/V230__batch_day_replay_preview_token.sql)；租户配置修订栅栏定义在 [V232](../../db/migration/V232__tenant_configuration_revision_fence.sql)，配置缓存失效意图定义在 [V372](../../db/migration/V372__persist_config_cache_invalidation.sql)。
 - 告警升级通知 Outbox 定义在 [V214](../../db/migration/V214__alert_escalation_notification_outbox.sql)，与告警升级状态一同持久化，通知投递可重试；详细投递语义见[运行手册](../runbook/alert-escalation.md)。
 
 ### 3.7 归档和 Quartz

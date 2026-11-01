@@ -6,9 +6,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ExternalEventExpectationDefinitionUpsertParam;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExternalEventExpectationDefinitionMapper;
@@ -24,10 +24,10 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.web.server.ResponseStatusException;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 @DisplayName("外部事件预期满足：请求状态和事件身份必须精确关联")
 @ExtendWith(MockitoExtension.class)
@@ -72,7 +72,7 @@ class ExternalEventExpectationServiceTest {
   @DisplayName("只允许 LAUNCHED 且 eventCode 完全匹配的 EVENT 请求结清预期项")
   void shouldMarksOnlyMatchingLaunchedEventSatisfied() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             99L, "tenant-a", "IMPORT", "Import", "DAG", 1, true, 11L, "CALENDAR_A"));
     TriggerRequestEntity request = request("LAUNCHED", "PAYMENT_CLOSED");
     when(triggerRequestMapper.selectByTenantAndRequestId("tenant-a", "request-a"))
@@ -115,12 +115,12 @@ class ExternalEventExpectationServiceTest {
   @DisplayName("定义停用后仍允许对应的已启动 EVENT 请求结清既有预期")
   void shouldMarkExistingExpectationSatisfiedAfterWorkflowIsDisabled() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             99L, "tenant-a", "IMPORT", "Import", "DAG", 1, true, 11L, "CALENDAR_A"));
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, true))
         .thenReturn(null);
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, false))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             99L, "tenant-a", "IMPORT", "Import", "DAG", 1, false, 11L, "CALENDAR_A"));
     when(triggerRequestMapper.selectByTenantAndRequestId("tenant-a", "request-a"))
         .thenReturn(request("LAUNCHED", "PAYMENT_CLOSED"));
@@ -164,9 +164,9 @@ class ExternalEventExpectationServiceTest {
         .thenReturn(request("LAUNCHED", "ACCOUNT_CLOSED"));
 
     assertThatThrownBy(() -> service.markSatisfied(satisfaction("PAYMENT_CLOSED")))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.CONFLICT);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.CONFLICT);
 
     verify(workflowDefinitionMapper, Mockito.never())
         .selectByTenantAndIdAndEnabled("tenant-a", 99L, false);
@@ -189,7 +189,7 @@ class ExternalEventExpectationServiceTest {
   @DisplayName("新建外部事件预期仍要求 Workflow 处于启用状态")
   void shouldRejectExpectationConfigurationForDisabledWorkflow() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             99L, "tenant-a", "IMPORT", "Import", "DAG", 1, true, 11L, "CALENDAR_A"));
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 99L, true))
         .thenReturn(null);
@@ -203,9 +203,9 @@ class ExternalEventExpectationServiceTest {
                 LocalTime.of(9, 0),
                 LocalTime.of(10, 0),
                 true)))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.UNPROCESSABLE_CONTENT);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.INVALID_CONFIGURATION);
 
     Mockito.verify(definitionMapper, Mockito.never())
         .upsert(ExternalEventExpectationDefinitionUpsertParam.builder()
@@ -226,9 +226,9 @@ class ExternalEventExpectationServiceTest {
         .thenReturn(request("LAUNCHED", "PAYMENT_CLOSED"));
 
     assertThatThrownBy(() -> service.markSatisfied(satisfaction("ACCOUNT_CLOSED")))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.CONFLICT);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.CONFLICT);
 
     verify(occurrenceMapper, Mockito.never())
         .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
@@ -259,9 +259,9 @@ class ExternalEventExpectationServiceTest {
                 "PAYMENT_CLOSED",
                 LocalDate.of(2026, 10, 14),
                 "request-a")))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.CONFLICT);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.CONFLICT);
 
     verify(occurrenceMapper, Mockito.never())
         .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
@@ -285,9 +285,9 @@ class ExternalEventExpectationServiceTest {
         .thenReturn(request("ACCEPTED", "PAYMENT_CLOSED"));
 
     assertThatThrownBy(() -> service.markSatisfied(satisfaction("PAYMENT_CLOSED")))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting(error -> ((ResponseStatusException) error).getStatusCode())
-        .isEqualTo(HttpStatus.CONFLICT);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.CONFLICT);
 
     verify(occurrenceMapper, Mockito.never())
         .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()

@@ -19,7 +19,6 @@ import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -36,6 +35,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.RenewLeaseParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateTaskStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobExecutionLogQuery;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -557,7 +557,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     JobPartitionEntity partition = EmptyChecks.isNull(task.getJobPartitionId())
         ? null
         : jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-    JobDefinitionEntity definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
+    JobDefinitionView definition = jobDefinitionMapper.selectById(instance.getJobDefinitionId());
     Map<String, Object> instanceSnapshot = parseInstanceSnapshot(instance);
     Map<String, Object> executionPolicy = executionPolicySnapshot(instanceSnapshot);
     boolean hasExecutionPolicySnapshot = instanceSnapshot.containsKey("executionPolicy");

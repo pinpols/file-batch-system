@@ -9,8 +9,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.RerunJobDefinitionResolver;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -132,7 +132,7 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
       when(jobInstances.selectById(tenant, sourceJobId)).thenReturn(source);
       RerunJobDefinitionResolver resolver =
           new RerunJobDefinitionResolver(jobInstances, workflowRunMapper);
-      JobDefinitionEntity latestDefinition = JobDefinitionEntity.builder()
+      JobDefinitionView latestDefinition = JobDefinitionView.builder()
           .id(jobDefinitionId)
           .tenantId(tenant)
           .jobCode(jobCode)
@@ -275,7 +275,7 @@ class WorkflowRunRerunSnapshotIntegrationTest extends AbstractIntegrationTest {
       when(jobInstances.selectById(tenant, sourceJobId)).thenReturn(source);
       RerunJobDefinitionResolver resolver =
           new RerunJobDefinitionResolver(jobInstances, workflowRunMapper);
-      JobDefinitionEntity latestDefinition = JobDefinitionEntity.builder()
+      JobDefinitionView latestDefinition = JobDefinitionView.builder()
           .id(jobDefinitionId)
           .tenantId(tenant)
           .jobCode(jobCode)

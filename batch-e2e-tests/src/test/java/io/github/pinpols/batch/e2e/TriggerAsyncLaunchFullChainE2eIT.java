@@ -25,6 +25,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -224,7 +225,9 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     request.setParams(Map.of("fileFormatType", "JSON"));
     triggerService()
         .launch(
-            new TriggerLaunchCommand(request, seed.dedupKey(), seed.requestId(), "tr-fullchain"));
+            new TriggerLaunchCommand(
+                TriggerCommandInputMapper.toInput(request),
+                seed.dedupKey(), seed.requestId(), "tr-fullchain"));
 
     // 2) trigger outbox relay 真发 Kafka，orchestrator consumer 真消费并创建实例。
     await()
@@ -296,7 +299,8 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
       request.setParams(Map.of("fileFormatType", "JSON"));
       triggerService()
           .launch(new TriggerLaunchCommand(
-              request, seed.dedupKey(), seed.requestId(), "r24-namespace-isolation"));
+              TriggerCommandInputMapper.toInput(request),
+              seed.dedupKey(), seed.requestId(), "r24-namespace-isolation"));
 
       await()
           .atMost(Duration.ofSeconds(60))

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.console.mapper.ConfigBatchOperationMapper">
+
+    <select id="setTenantContext" resultType="string" flushCache="true" useCache="false">
+        SELECT set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+
+    <resultMap id="ConfigBatchOperationRowMap"
+               type="io.github.pinpols.batch.console.domain.config.view.ConfigBatchOperationRow">
+        <constructor>
+            <arg column="audit_tenant_id" javaType="java.lang.String"/>
+            <arg column="operation_id" javaType="java.lang.String"/>
+            <arg column="request_identity_hash" javaType="java.lang.String"/>
+            <arg column="operation_kind" javaType="java.lang.String"/>
+            <arg column="targets_json" javaType="java.lang.String"/>
+            <arg column="response_metadata_json" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertOperation">
+        INSERT INTO batch.config_batch_operation
+            (audit_tenant_id, operation_id, request_identity_hash, operation_kind,
+             targets_json, response_metadata_json)
+        VALUES (#{auditTenantId}, #{operationId}, #{requestIdentityHash}, #{operationKind},
+                #{targetsJson,jdbcType=VARCHAR}::jsonb,
+                #{responseMetadataJson,jdbcType=VARCHAR}::jsonb)
+        ON CONFLICT (request_identity_hash) DO NOTHING
+    </insert>
+
+    <select id="selectOperation" resultMap="ConfigBatchOperationRowMap">
+        SELECT audit_tenant_id, operation_id, request_identity_hash, operation_kind,
+               targets_json::text AS targets_json,
+               response_metadata_json::text AS response_metadata_json
+          FROM batch.config_batch_operation
+         WHERE audit_tenant_id = #{auditTenantId}
+           AND request_identity_hash = #{requestIdentityHash}
+    </select>
+
+    <insert id="insertReceipt">
+        INSERT INTO batch.config_batch_target_receipt
+            (audit_tenant_id, operation_id, target_ordinal, tenant_id, result_json)
+        VALUES (#{auditTenantId}, #{operationId}, #{targetOrdinal}, #{tenantId},
+                #{resultJson,jdbcType=VARCHAR}::jsonb)
+    </insert>
+
+    <select id="selectReceipt" resultType="string">
+        SELECT result_json::text
+          FROM batch.config_batch_target_receipt
+         WHERE audit_tenant_id = #{auditTenantId}
+           AND operation_id = #{operationId}
+           AND target_ordinal = #{targetOrdinal}
+           AND tenant_id = #{tenantId}
+    </select>
+</mapper>

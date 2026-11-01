@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
-import io.github.pinpols.batch.orchestrator.controller.response.SchedulerSnapshotResponse;
+import io.github.pinpols.batch.orchestrator.application.scheduler.SchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.controller.response.TenantSchedulerSnapshotResponse;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantSchedulerSnapshotEntity;
 import java.util.List;

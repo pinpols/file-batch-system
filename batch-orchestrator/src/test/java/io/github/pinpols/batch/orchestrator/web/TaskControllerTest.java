@@ -83,9 +83,9 @@ class TaskControllerTest {
             new ObjectMapper(),
             new BundleBatchClaimProperties(),
             new SimpleMeterRegistry(),
-            new TaskReportRetryExecutor(taskOutcomeService));
-    mockMvc = MockMvcBuilders.standaloneSetup(
-            new TaskController(taskControllerApplicationService, tenantActionRateLimiter))
+            new TaskReportRetryExecutor(taskOutcomeService),
+            tenantActionRateLimiter);
+    mockMvc = MockMvcBuilders.standaloneSetup(new TaskController(taskControllerApplicationService))
         .setControllerAdvice(OrchestratorApiExceptionHandler.forStandaloneTest())
         .build();
   }

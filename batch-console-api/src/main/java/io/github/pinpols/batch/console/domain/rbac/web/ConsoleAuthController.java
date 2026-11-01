@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.observability.SseTicketService;
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.ChangeOwnPasswordRequest;
@@ -15,7 +14,6 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
@@ -49,7 +47,6 @@ public class ConsoleAuthController {
   private final SseTicketService sseTicketService;
   private final ConsoleSecurityProperties securityProperties;
   private final ConsoleJwtService jwtService;
-  private final ConsoleLoginKeyPairService loginKeyPairService;
   private final ConsoleUserAccountService userAccountService;
   private final ConsoleTokenCookieWriter tokenCookieWriter;
 
@@ -73,34 +70,9 @@ public class ConsoleAuthController {
       recordParams = false)
   public CommonResponse<ConsoleAuthTokenResponse> login(
       @RequestBody ConsoleLoginRequest request, HttpServletResponse response) {
-    ConsoleLoginRequest resolved = resolveLoginRequest(request);
-    ConsoleAuthTokenResponse body = authApplicationService.login(resolved);
+    ConsoleAuthTokenResponse body = authApplicationService.login(request);
     tokenCookieWriter.write(body, response);
     return responseFactory.success(body.withoutToken());
-  }
-
-  private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
-    if (request == null) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
-    }
-    boolean required = securityProperties.getLoginEncryption().isRequired();
-    if (request.isEncrypted()) {
-      String plaintext = loginKeyPairService.decrypt(
-          request.getEncryptedKey(), request.getIv(), request.getCiphertext());
-      ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
-      if (decoded == null) {
-        throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
-      }
-      // captchaToken 非机密、不进加密块,从外层请求带过来(解密后的 body 不含它)。
-      if (decoded.getCaptchaToken() == null) {
-        decoded.setCaptchaToken(request.getCaptchaToken());
-      }
-      return decoded;
-    }
-    if (required) {
-      throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_required");
-    }
-    return request;
   }
 
   /**
@@ -109,14 +81,7 @@ public class ConsoleAuthController {
    */
   @GetMapping("/public-key")
   public CommonResponse<ConsoleLoginPublicKeyResponse> publicKey() {
-    if (!securityProperties.getLoginEncryption().isEnabled()) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.auth.encryption_unavailable");
-    }
-    String publicKeyPem = loginKeyPairService.publicKeyPem();
-    String fingerprint = loginKeyPairService.fingerprint();
-    ConsoleLoginPublicKeyResponse response =
-        new ConsoleLoginPublicKeyResponse("RSA-OAEP-256", publicKeyPem, fingerprint);
-    return responseFactory.success(response);
+    return responseFactory.success(authApplicationService.loginPublicKey());
   }
 
   /** 为当前已认证用户签发 JWT。 */

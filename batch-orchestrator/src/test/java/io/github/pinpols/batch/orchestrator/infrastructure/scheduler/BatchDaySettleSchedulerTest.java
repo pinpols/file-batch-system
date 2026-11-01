@@ -23,11 +23,11 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Alert
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.BatchDayInstanceMetrics;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -284,14 +284,14 @@ class BatchDaySettleSchedulerTest {
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
     when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(501L)
             .tenantId("t1")
             .jobCode("FAILED_JOB")
             .build());
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
             "t1", 501L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
     when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
         .thenReturn(null);
@@ -330,14 +330,14 @@ class BatchDaySettleSchedulerTest {
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
     when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(501L)
             .tenantId("t1")
             .jobCode("FAILED_JOB")
             .build());
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
             "t1", 501L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
     when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
         .thenReturn(null);
@@ -393,13 +393,13 @@ class BatchDaySettleSchedulerTest {
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
     when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(501L)
             .tenantId("t1")
             .jobCode("FAILED_JOB")
             .build());
-    WorkflowDefinitionEntity current = currentWorkflowExists
-        ? new WorkflowDefinitionEntity(
+    WorkflowDefinitionView current = currentWorkflowExists
+        ? new WorkflowDefinitionView(
             802L, "t1", "WF_NEW", "new", "SINGLE_JOB", 1, true, 501L, null)
         : null;
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
@@ -495,14 +495,14 @@ class BatchDaySettleSchedulerTest {
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar);
     when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(501L)
             .tenantId("t1")
             .jobCode("FAILED_JOB")
             .build());
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
             "t1", 501L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             801L, "t1", "WF_FAILED_JOB", "Failed job", "SINGLE_JOB", 1, true, 501L, null));
     when(triggerRequestMapper.selectCatchUpRootByDedupKey(eq("t1"), anyString()))
         .thenReturn(null);
@@ -534,7 +534,7 @@ class BatchDaySettleSchedulerTest {
         .thenReturn(List.of(failedJob));
     when(configCacheService.findEnabledBusinessCalendar("t1", "CAL")).thenReturn(calendar("AUTO"));
     when(configCacheService.findEnabledJobDefinition("t1", "FAILED_JOB"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(501L)
             .tenantId("t1")
             .jobCode("FAILED_JOB")

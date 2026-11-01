@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressClaimView;
 import io.github.pinpols.batch.orchestrator.domain.view.PipelineProgressStageView;
 import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache;
-import io.github.pinpols.batch.orchestrator.infrastructure.progress.PipelineStageProgressCache.PipelineSnapshot;
 import io.github.pinpols.batch.orchestrator.mapper.PipelineProgressClaimMapper;
+import java.time.Instant;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,7 +20,7 @@ public class PipelineProgressReadService {
   private final PipelineStageProgressCache cache;
 
   @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-  public List<PipelineSnapshot> snapshot(String tenantId, Long pipelineInstanceId) {
+  public List<PipelineProgressItem> snapshot(String tenantId, Long pipelineInstanceId) {
     mapper.setTenantContext(tenantId);
     List<PipelineProgressClaimView> claims = mapper.selectLiveClaims(tenantId, pipelineInstanceId);
     if (EmptyChecks.isEmpty(claims)) {
@@ -28,6 +28,20 @@ public class PipelineProgressReadService {
     }
     List<PipelineProgressStageView> stages =
         mapper.selectRunningStages(tenantId, pipelineInstanceId);
-    return cache.snapshotByPipeline(tenantId, pipelineInstanceId, claims, stages);
+    return cache.snapshotByPipeline(tenantId, pipelineInstanceId, claims, stages).stream()
+        .map(snapshot -> new PipelineProgressItem(
+            snapshot.stageCode(),
+            snapshot.rowsProcessed(),
+            snapshot.totalRowsHint(),
+            snapshot.heartbeatAt(),
+            snapshot.stepRunIds()))
+        .toList();
   }
+
+  public record PipelineProgressItem(
+      String stageCode,
+      Long rowsProcessed,
+      Long totalRowsHint,
+      Instant heartbeatAt,
+      List<Long> stepRunIds) {}
 }

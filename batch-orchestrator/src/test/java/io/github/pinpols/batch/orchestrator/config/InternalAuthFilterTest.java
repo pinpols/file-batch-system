@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
-import io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity;
+import io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate;
 import io.github.pinpols.batch.orchestrator.auth.ApiKeyVerifier;
 import jakarta.servlet.FilterChain;
 import java.util.Optional;
@@ -51,7 +51,7 @@ class InternalAuthFilterTest {
     // /internal/workers/* + /internal/tasks/* 现在走 verifyWithScope(worker.execute)
     when(verifier.verifyWithScope("raw-key", "tx", "worker.execute"))
         .thenReturn(
-            Optional.of(new ApiKeyEntity(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
+            Optional.of(new ApiKeyCandidate(1L, "tx", "n", "*", true, null, "h", "s", "pbkdf2")));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     BatchMdc.put(StructuredLogField.TENANT_ID, "outer-tenant");
@@ -123,7 +123,7 @@ class InternalAuthFilterTest {
     req.addHeader(CommonConstants.BATCH_TENANT_ID_HEADER, "tx");
     when(verifier.verifyWithAnyScope("raw-key", "tx", "worker.read", "worker.execute"))
         .thenReturn(Optional.of(
-            new ApiKeyEntity(1L, "tx", "n", "worker.read", true, null, "h", "s", "pbkdf2")));
+            new ApiKeyCandidate(1L, "tx", "n", "worker.read", true, null, "h", "s", "pbkdf2")));
 
     MockHttpServletResponse resp = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);

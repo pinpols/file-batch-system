@@ -616,7 +616,7 @@ run_mixed_pressure() {
     local sampler_pid=""
   fi
 
-  # Gatling SLO 失败后仍继续采集终态证据；待采样器和异步执行链路稳定后，再向调用方返回原始退出码。
+  # 普通混压在 Gatling 失败后仍采集终态；严格容量画像则保留现场并及时返回失败。
   if (
     cd "$LOAD_DIR"
     mvn gatling:test \
@@ -655,6 +655,12 @@ run_mixed_pressure() {
 
   if [[ -n "$sampler_pid" ]]; then
     wait "$sampler_pid" || true
+  fi
+
+  if [[ "$gatling_rc" -ne 0 && "$WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL" == "1" ]]; then
+    SKIP_AUTO_CLEANUP=1
+    echo "==> mixed: Gatling failed (exit=${gatling_rc}); preserving run data without waiting for the capacity target" >&2
+    return "$gatling_rc"
   fi
 
   wait_run_terminal mixed || return 1

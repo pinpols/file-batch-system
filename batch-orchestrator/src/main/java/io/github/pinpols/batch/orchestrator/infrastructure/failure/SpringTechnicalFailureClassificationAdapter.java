@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.application.service.failure.Technica
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.sql.SQLTransientException;
+import java.util.Optional;
 import java.util.concurrent.TimeoutException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -16,11 +17,20 @@ import org.springframework.dao.QueryTimeoutException;
 import org.springframework.dao.TransientDataAccessException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.server.ResponseStatusException;
 
 /** JDBC、Spring DAO 与 HTTP 客户端异常的基础设施分类适配器。 */
 @Component
 public class SpringTechnicalFailureClassificationAdapter
     implements TechnicalFailureClassificationPort {
+
+  @Override
+  public Optional<String> legacyResponseStatusDiagnostic(Throwable throwable) {
+    if (throwable instanceof ResponseStatusException statusException) {
+      return Optional.of("HTTP_" + statusException.getStatusCode().value());
+    }
+    return Optional.empty();
+  }
 
   @Override
   public FailureClass classify(Throwable throwable) {

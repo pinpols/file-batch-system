@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.config.JobDependencyWaitProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobDependencyWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.TenantDirectoryMapper;
@@ -58,7 +58,7 @@ public class JobDependencyWaitingLaunchReconciler {
       return;
     }
     List<String> tenantIds = tenantDirectoryMapper.selectRunnableTenantIds();
-    if (EmptyChecks.isNull(tenantIds) || EmptyChecks.isEmpty(tenantIds)) {
+    if (EmptyChecks.isEmpty(tenantIds)) {
       return;
     }
     for (String tenantId : tenantIds) {
@@ -201,7 +201,7 @@ public class JobDependencyWaitingLaunchReconciler {
     if (!EmptyChecks.isBlank(triggerRequest.getParentNodeCode())) {
       detail.put("nodeCode", triggerRequest.getParentNodeCode());
     }
-    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
+    AlertEmitCommand alertRequest = AlertEmitCommand.builder()
         .tenantId(tenantId)
         .serviceName("batch-orchestrator")
         .alertType("BATCH_JOB_DEPENDENCY_WAIT_TIMEOUT")
