@@ -28,8 +28,6 @@ import io.github.pinpols.batch.console.domain.observability.application.ConsoleR
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;

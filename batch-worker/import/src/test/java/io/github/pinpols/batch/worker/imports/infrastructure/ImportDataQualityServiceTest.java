@@ -23,9 +23,11 @@ class ImportDataQualityServiceTest {
     ImportJobContext context = new ImportJobContext();
 
     assertThat(service.beginValidation(null, 0, List.of()).normalizedPayload()).isNull();
-    assertThat(service.beginValidation(context, 0, List.of()).normalizedPayload()).isNull();
+    assertThat(service.beginValidation(context, 0, List.of()).normalizedPayload())
+        .isNull();
 
     context.getAttributes().put(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD, 42);
-    assertThat(service.beginValidation(context, 1, List.of()).normalizedPayload()).isEqualTo("42");
+    assertThat(service.beginValidation(context, 1, List.of()).normalizedPayload())
+        .isEqualTo("42");
   }
 }

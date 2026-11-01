@@ -23,6 +23,7 @@ public class ImportEventArrivalController {
         notification == null ? null : notification.getTenantId(),
         notification == null ? null : notification.getBucket(),
         notification == null ? null : notification.getObjectKey());
-    return CommonResponse.success(new ImportEventArrivalResponse(result.triggered(), result.reason()));
+    return CommonResponse.success(
+        new ImportEventArrivalResponse(result.triggered(), result.reason()));
   }
 }

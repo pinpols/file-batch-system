@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.console.support.cache;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.redis.core.Cursor;
