@@ -80,8 +80,7 @@ public class JobDependencyWaitingLaunchService {
         && !List.of("WAITING", "RELEASED", "CANCELLED").contains(status)) {
       throw new IllegalArgumentException("Unsupported job dependency wait status");
     }
-    String normalizedJobCode =
-        EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
+    String normalizedJobCode = EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
     int pageSize = Math.max(1, Math.min(limit, 200));
     return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
       TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
@@ -411,9 +410,7 @@ public class JobDependencyWaitingLaunchService {
     BusinessCalendarEntity calendar = EmptyChecks.isBlank(calendarCode)
         ? null
         : businessCalendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
-    boolean missingCalendar = EmptyChecks.isNotNull(calendarCode)
-        && EmptyChecks.isNotBlank(calendarCode)
-        && EmptyChecks.isNull(calendar);
+    boolean missingCalendar = EmptyChecks.isNotBlank(calendarCode) && EmptyChecks.isNull(calendar);
     return rules.stream()
         .map(rule -> {
           if (!JobDependencyRule.PREVIOUS_BIZ_DAY.equals(rule.bizDateAlignment())) {
@@ -464,8 +461,7 @@ public class JobDependencyWaitingLaunchService {
   }
 
   private List<DependencySnapshot> decodeDependencies(String json, LocalDate downstreamBizDate) {
-    if (EmptyChecks.isBlank(json)
-        || EmptyChecks.isNull(downstreamBizDate)) {
+    if (EmptyChecks.isBlank(json) || EmptyChecks.isNull(downstreamBizDate)) {
       return List.of();
     }
     try {
@@ -496,8 +492,8 @@ public class JobDependencyWaitingLaunchService {
     }
     Object rawError = values.get("resolutionError");
     String resolutionError = rawError instanceof String text ? text : null;
-    boolean legacyResolutionErrorNeedsDecoding = EmptyChecks.isNotNull(rawError)
-        && (EmptyChecks.isBlank(resolutionError));
+    boolean legacyResolutionErrorNeedsDecoding =
+        EmptyChecks.isNotNull(rawError) && EmptyChecks.isBlank(resolutionError);
     if (legacyResolutionErrorNeedsDecoding) {
       throw new IllegalArgumentException(INVALID_DEPENDENCY_SNAPSHOT);
     }

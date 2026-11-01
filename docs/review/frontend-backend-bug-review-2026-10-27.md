@@ -42,7 +42,7 @@
 
 **原始目标**：完成本地可执行的配置导入、缓存失效和在途任务；事务、锁、租约与副作用；SQL 状态、租户隔离、归档恢复；配置复制与作业包未知结果、跨账号权限、浏览器真实后端操作及告警最终收件验证。分别记录当前源码、实测层级、未验证和目标环境依赖，不以独立测试结果推断完整链路。
 
-**工作区与授权**：后端 `/Users/dengchao/Downloads/file-batch-system`、前端 `/Users/dengchao/Downloads/batch-console` 开始时均为 `perf/local-loadtest-2026-10-31`；审查期间两仓当前分支被重命名为 `fix/bug-fixes`，HEAD 和工作区路径未变，既有未提交改动保留。隔离 Testcontainers 和本地测试接收端用于本轮验证；本机现有共享 Compose 与其数据不作为写入目标。未发送外部通知。
+**工作区与授权**：后端 `file-batch-system`、前端 `batch-console` 开始时均为 `perf/local-loadtest-2026-10-31`；审查期间两仓当前分支被重命名为 `fix/bug-fixes`，HEAD 和工作区路径未变，既有未提交改动保留。隔离 Testcontainers 和本地测试接收端用于本轮验证；本机现有共享 Compose 与其数据不作为写入目标。未发送外部通知。
 
 **环境重建后的角色用例复验**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigCacheInvalidationOutboxIntegrationTest#shouldRequireTableGrantsAndPolicy_whenDeliveryRoleClaims' -Dsurefire.failIfNoSpecifiedTests=false test`：隔离 PostgreSQL 等真实依赖启动，指定方法 1 项通过、0 失败、0 错误、0 跳过，exit 0；日志 `/private/tmp/wdi-outbox-role-method-20261101.log`。该结果只覆盖该方法的表授权、RLS 策略和领取边界，不代表分角色部署的整条链路已验收。
 
@@ -122,7 +122,7 @@
 
 ## 2026-11-01：短断言、薄包装与 Map 候选复核续记
 
-两仓分别位于 `/Users/dengchao/Downloads/file-batch-system` 和 `/Users/dengchao/Downloads/batch-console`；开始时为 `perf/local-loadtest-2026-10-31`，审查中同一 HEAD 上重命名为 `fix/bug-fixes`，保留已有未提交改动。原始分母是短断言 321 项、后端薄包装 110 项和 public Map 返回值 60 项，逐编号或逐方法结论仍以本报告相应台账为准，不外推到清单以外的测试、Map 入参和接口。
+两仓分别位于 `file-batch-system` 和 `batch-console`；开始时为 `perf/local-loadtest-2026-10-31`，审查中同一 HEAD 上重命名为 `fix/bug-fixes`，保留已有未提交改动。原始分母是短断言 321 项、后端薄包装 110 项和 public Map 返回值 60 项，逐编号或逐方法结论仍以本报告相应台账为准，不外推到清单以外的测试、Map 入参和接口。
 
 - 后端短断言 B001–B104 对照当前方法、输入、断言和相邻测试逐项复核，涉及 54 个文件的摘要均与台账快照一致；99 项保留，5 项保留先前增强。B105–B208 对照当前方法及相关上下文，四个已删除的 Worker 上下文非空用例仍由对应真实启动与注册端口测试覆盖。B123/B124 补验证参数错误码及必填国际化 key；B136 补充空 Workflow ID 时节点、连线及作业 Mapper 无调用；B144 补充 misfire 日志中的实际触发名；B156 更正固定哈希样本的说明和名称，避免误称实时读取迁移；B194 同时验证故障渠道熔断和正常渠道放行。B143 的必填 Bean 注入在同类测试中虽会先执行，仍保留其独立装配检查以支持单独运行和定位。相关受影响类已随下述定向命令通过。
 - 前端短断言 F001–F113 对照当前断言与相邻场景复核；F015 更名为准确描述的只读回退，F023/F024 验证实际 Plus/Menu 组件，F068/F069 精确验证密码强度边界与上限，F100–F103 验证具体日志及仅在属性中出现的筛选词。`npx vitest run src/utils/iconResolve.test.ts src/utils/passwordGenerator.test.ts src/utils/logger.test.ts src/constants/theme.test.ts`：4 文件 40 项通过，日志 `/private/tmp/wdi-short-assertion-fe-final-20261101.log`；四个文件的 Prettier 检查和差异空白检查通过。未运行浏览器 E2E。
@@ -208,6 +208,34 @@
 补充逐组核对：`resourceCodeBuilder.test.ts` 的短断言分别约束规范化、长度和首字符边界、版本后缀与资源码拼装；`metaEnumPick.test.ts` 区分未匹配、缺失输入、空数组和无候选键；`taskHeartbeat.test.ts` 区分百分数、比例换算、四舍五入和字段优先级。`HttpTaskExecutorIpBlockTest` 中的地址覆盖不同协议族、网段及公网反例，不能只因断言形式相同删除。这些结论依据对应完整测试类及其输入与断言，未据此推断其余短断言已完成核查。
 
 另核对 `DelimitedCodecTest` 的普通字段、引号中分隔符、末尾空字段和自定义分隔符；`QuotaResetPolicyTest` 的空值、空白、未知配置和不同策略托管状态；`ValidTenantIdTest`、`ValidResourceCodeTest` 的 null、空白及长度边界；以及前端 `text.test.ts`、`safeJson.test.ts`、`theme.test.ts`、`lastApiMeta.test.ts` 的字符截断、JSON 输入、主题迁移和缺省值边界。各自测试不同输入或状态，保留；本次没有因其断言短而合并或删除。
+
+## 2026-10-31：补跑日方法拆分以通过 NCSS
+
+`d23a51483` 的 pr-gate 里，`DefaultConsoleJobApprovalService.catchUpBatchDay` 的 NCSS 为 60，达到 PMD `NcssCount` 方法阈值。请求作业码的清洗抽到 `sanitizedRequestedJobCodes`。空列表仍返回 null；非空时仍过滤空白、按 128 截断并去重。`request.getJobCodes()` 仍只调用一次。同一提交刷新 `docs/stats/java-readability-inventory.md`，行数变化来自本分支已经落地的判空收敛。
+
+验证：`batch-console-api`、`batch-orchestrator`、`batch-trigger`、`batch-worker/process`、`batch-worker/export` 及 reactor 依赖的 `pmd:check` 通过。`DefaultConsoleJobApprovalServiceWorkflowTest` 14 项通过。未改 SQL、接口或迁移。
+
+## 2026-10-31：检查通过后复用的访问器只取一次
+
+接收方和字段不是同一表达式时，判空仍然保留。本轮只处理检查通过后还会再次调用同一 getter 的 16 个生产文件：先确认接收方，再绑定字段，后续使用这份局部变量。空请求、空集合和失败分支仍按原顺序返回，不提前调用被短路的 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 297 项、0 失败。覆盖 `CalendarBizDateResolverTest` 9、`DefaultTriggerServiceTest` 32、`DefaultTaskCreationServiceTest` 25、`WorkflowRunReplayPreviewServiceTest` 40、`ChildJobLaunchSupportTest` 5、`DefaultPartitionDispatchServiceTest` 14、`DefaultPartitionLifecycleServiceTest` 19、`DefaultTaskAssignmentServiceTest` 30、`TaskOutcomeDagProgressorTest` 2、`TaskOutcomeSummaryBuilderTest` 8、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunReportLockTest` 2、`SqlTemplateExportSqlValidatorTest` 41、`SqlTransformComputeSqlValidatorTest` 25、`ConsoleFilePipelineProgressBridgeTest` 10、`WorkflowDagValidatorTest` 24。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
+## 2026-10-31：同一取值的重复判空再收敛
+
+上一节只处理简单标识符。本轮处理同一 getter 或访问器被判空两次的 20 处：先取一次局部变量，再交给 `isBlank` 或 `isEmpty`。通过检查后还会使用该值时，后续也用这份局部变量。`WorkflowRunExecutionSnapshot.from`、启动请求校验、`quartzIdentity` 和冻结图 `nodes()` 仍先确认接收方非空，再调用 getter。`quartzIdentity` 的租户标识仍只按 null 拒绝，空白字符串保持原口径。
+
+另外 10 处已经是同一简单值或已绑定 getter 的 `isNotNull(x) && isNotBlank(x)`、`isNotNull(x) && !isBlank(x)`，收成 `isNotBlank(x)`。接收方和字段不是同一表达式的组合保持原样。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。定向测试合计 291 项、0 失败；`PlatformHttpClientTest` 另有 1 项跳过。覆盖 `NamespacedObjectStoreTest` 3、`QuartzLaunchJobTest` 12、`TriggerSchedulerFacadeTest` 25、`PlatformHttpClientTest` 15、`BatchDayReplayServiceTest` 31、`DefaultPartitionLifecycleServiceTest` 19、`NodePartitionProgressCalculatorTest` 3、`DefaultWorkflowRunLaunchServiceReplayTest` 11、`WorkflowRunExecutionSnapshotTest` 11、`DefaultLaunchValidationServiceTest` 16、`DefaultWorkerRegistryServiceTest` 35、`JobDependencyWaitingLaunchServiceTest` 69、`BatchManifestTest` 9、`DefaultConsoleJobApprovalServiceWorkflowTest` 14、`ConsoleSelfServiceJobServiceTest` 5、`WorkflowExecutionGraphAssemblerTest` 9、`TenantConfigPackageRowProjectionsMonitoringPolicyTest` 4。同名 Worker Core 的 `DefaultWorkerRegistryServiceTest` 7 项也通过，该类未改。未跑全 reactor 测试，未跑增量 Sonar，也未改 SQL、接口或迁移。
+
+## 2026-10-31：简单变量重复判空收敛
+
+2026-10-28 扫描列出的 71 处 `EmptyChecks.isNull(x) || isBlank/isEmpty(x)` 都是同一简单标识符。`isBlank` 与 `isEmpty` 的各重载已经把 null 视为空，两段判断结果相同。现只保留后一段调用。null 集合仍在进入 `size()` 或 `stream()` 之前返回，短路顺序保持。
+
+本轮改动落在当前 `main` 的 45 个生产文件。方法调用形式仍会求值两次，包括 `request.traceId()`、`request.getJobCodes()`、`run.getTenantId()` 与 `node.getNodeCode()`，本轮未改。一次调用的私有薄包装和前端包装候选仍按原记录保留。
+
+验证：触及文件定向 Spotless 通过。`EmptyChecksTest`、`SdkTaskContextTest`、`TaskDispatchExecutorTest`、`PipelineProgressQueryServiceTest` 合计 25 项通过（batch-common 3、Java SDK 13、Worker Core 6、Console 3）。随后 Trigger、Orchestrator、Import、Export、Process、Dispatch 生产编译通过。未跑全 reactor 测试，也未改 SQL、接口或迁移。
 
 ## 2026-10-30：批量日补跑根请求修复复核
 
@@ -530,7 +558,7 @@
 
 ## 2026-11-01：测试与规约候选续核
 
-核对基线：后端 `/Users/dengchao/Downloads/file-batch-system` 的 `perf/local-loadtest-2026-10-31`，HEAD `0258697d14229e9da1bddb547943acf9d2481338`，治理台账有既有未提交修改；前端配对仓库 `main`，HEAD `e44c3b2d29e29805d95a48bafc167e8d5725129d`。只读代码并在本报告留记录，未修改业务或测试代码。
+核对基线：后端仓库的 `perf/local-loadtest-2026-10-31`，HEAD `0258697d14229e9da1bddb547943acf9d2481338`，治理台账有既有未提交修改；前端配对仓库 `main`，HEAD `e44c3b2d29e29805d95a48bafc167e8d5725129d`。只读代码并在本报告留记录，未修改业务或测试代码。
 
 ### 确认可以提出的规约整改
 

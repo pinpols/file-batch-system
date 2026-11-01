@@ -202,10 +202,14 @@ final class TaskOutcomeSummaryBuilder {
 
   @SuppressWarnings("unchecked")
   private static Map<String, Object> extractOutputs(JobPartitionEntity partition) {
-    if (EmptyChecks.isNull(partition) || EmptyChecks.isBlank(partition.getOutputSummary())) {
+    if (EmptyChecks.isNull(partition)) {
       return null;
     }
-    Object parsed = JsonUtils.fromJson(partition.getOutputSummary(), Object.class);
+    String outputSummary = partition.getOutputSummary();
+    if (EmptyChecks.isBlank(outputSummary)) {
+      return null;
+    }
+    Object parsed = JsonUtils.fromJson(outputSummary, Object.class);
     if (!(parsed instanceof Map<?, ?> summary)) {
       return null;
     }

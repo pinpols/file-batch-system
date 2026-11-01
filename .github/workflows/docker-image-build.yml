@@ -1,4 +1,4 @@
-name: docker-image-build
+name: Backend / Build container image
 
 on:
   workflow_dispatch:
@@ -28,6 +28,7 @@ concurrency:
 
 jobs:
   build:
+    name: Build backend container image
     runs-on: ubuntu-latest
     timeout-minutes: 30
     outputs:
@@ -59,7 +60,7 @@ jobs:
 
       - name: Build application and operations images
         id: bake
-        uses: docker/bake-action@018cb6412ab401ebaa809aa5f85966b74628600f # v7
+        uses: docker/bake-action@59cb1203cd42bcefd40a1b6d73b589e48c86040e # v7
         with:
           files: |
             docker-bake.hcl
@@ -92,7 +93,7 @@ jobs:
 
       - name: Upload backend image set
         if: inputs.publish
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: backend-image-set-${{ github.sha }}
           path: build/release/backend-image-set.json

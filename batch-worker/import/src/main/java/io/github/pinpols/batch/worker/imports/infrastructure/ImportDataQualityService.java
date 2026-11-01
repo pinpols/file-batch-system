@@ -67,7 +67,7 @@ public class ImportDataQualityService {
                 instanceof ImportPayload payload
         ? payload
         : null;
-    Object rawNormalizedPayload = context == null
+    Object rawNormalizedPayload = EmptyChecks.isNull(context)
         ? null
         : context.getAttributes().get(PipelineRuntimeKeys.IMPORT_NORMALIZED_PAYLOAD);
     String normalizedPayload = Objects.toString(rawNormalizedPayload, null);
@@ -139,5 +139,4 @@ public class ImportDataQualityService {
     }
     return List.of();
   }
-
 }

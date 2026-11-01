@@ -399,19 +399,30 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     Instant leaseExpireAt = renewalTime.plusSeconds(leaseDurationSeconds);
     List<RenewLeaseBatchItem> sqlItems = new ArrayList<>(items.size());
     for (LeaseRenewCommand item : items) {
-      boolean leaseRenewItemIsIncomplete = EmptyChecks.isNull(item)
-          || EmptyChecks.isBlank(item.tenantId())
-          || EmptyChecks.isNull(item.taskId())
-          || EmptyChecks.isBlank(item.workerCode())
-          || EmptyChecks.isBlank(item.partitionInvocationId());
-      if (leaseRenewItemIsIncomplete) {
+      if (EmptyChecks.isNull(item)) {
+        continue;
+      }
+      String tenantId = item.tenantId();
+      if (EmptyChecks.isBlank(tenantId)) {
+        continue;
+      }
+      Long taskId = item.taskId();
+      if (EmptyChecks.isNull(taskId)) {
+        continue;
+      }
+      String workerCode = item.workerCode();
+      if (EmptyChecks.isBlank(workerCode)) {
+        continue;
+      }
+      String invocationId = item.partitionInvocationId();
+      if (EmptyChecks.isBlank(invocationId)) {
         continue;
       }
       sqlItems.add(RenewLeaseBatchItem.builder()
-          .tenantId(item.tenantId())
-          .taskId(item.taskId())
-          .workerCode(item.workerCode())
-          .invocationId(item.partitionInvocationId())
+          .tenantId(tenantId)
+          .taskId(taskId)
+          .workerCode(workerCode)
+          .invocationId(invocationId)
           .build());
     }
     Map<String, RenewLeaseBatchRow> renewedByKey = new HashMap<>();
@@ -687,11 +698,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> parseInstanceSnapshot(JobInstanceEntity instance) {
-    if (EmptyChecks.isNull(instance) || EmptyChecks.isBlank(instance.getParamsSnapshot())) {
+    if (EmptyChecks.isNull(instance)) {
+      return Map.of();
+    }
+    String paramsSnapshot = instance.getParamsSnapshot();
+    if (EmptyChecks.isBlank(paramsSnapshot)) {
       return Map.of();
     }
     try {
-      Object parsed = JsonUtils.fromJson(instance.getParamsSnapshot(), Object.class);
+      Object parsed = JsonUtils.fromJson(paramsSnapshot, Object.class);
       if (parsed instanceof Map<?, ?> snapshot) {
         return (Map<String, Object>) snapshot;
       }
@@ -718,11 +733,15 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> parsePartitionSnapshot(JobPartitionEntity partition) {
-    if (EmptyChecks.isNull(partition) || EmptyChecks.isBlank(partition.getInputSnapshot())) {
+    if (EmptyChecks.isNull(partition)) {
+      return Map.of();
+    }
+    String inputSnapshot = partition.getInputSnapshot();
+    if (EmptyChecks.isBlank(inputSnapshot)) {
       return Map.of();
     }
     try {
-      Object parsed = JsonUtils.fromJson(partition.getInputSnapshot(), Object.class);
+      Object parsed = JsonUtils.fromJson(inputSnapshot, Object.class);
       if (parsed instanceof Map<?, ?> snapshot) {
         return (Map<String, Object>) snapshot;
       }
@@ -853,10 +872,13 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     JobPartitionEntity partition =
         jobPartitionMapper.selectById(tenantId, task.getJobPartitionId());
-    if (EmptyChecks.isNull(partition) || EmptyChecks.isBlank(partition.getWorkerGroup())) {
+    if (EmptyChecks.isNull(partition)) {
       return new ClaimEval(true, partition);
     }
     String partitionWorkerGroup = partition.getWorkerGroup();
+    if (EmptyChecks.isBlank(partitionWorkerGroup)) {
+      return new ClaimEval(true, partition);
+    }
     String registeredWorkerGroup = workerRegistry.workerGroup();
     boolean sameWorkerGroup = partitionWorkerGroup.equalsIgnoreCase(registeredWorkerGroup);
     return new ClaimEval(sameWorkerGroup, partition);

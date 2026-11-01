@@ -36,6 +36,7 @@ import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -107,6 +108,7 @@ import org.springframework.test.context.jdbc.Sql;
 class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static ConfigurableApplicationContext triggerContext;
 
   private static TriggerService triggerService() {
@@ -214,13 +216,13 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
 
     // 1) 准备 job_definition；fixture 预置的 trigger_request 先删掉，让真实 trigger service 创建。
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(deleteTriggerRequestSql, TENANT, seed.requestId());
 
     TriggerLaunchRequest request = new TriggerLaunchRequest();
     request.setTenantId(TENANT);
     request.setWorkflowDefinitionId(seed.workflowDefinitionId());
-    request.setBizDate(LocalDate.of(2026, 4, 30));
+    request.setBizDate(BIZ_DATE);
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("fileFormatType", "JSON"));
     triggerService()
@@ -280,7 +282,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
         ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(deleteTriggerRequestSql, TENANT, seed.requestId());
 
     try (KafkaConsumer<String, String> legacyConsumer =
@@ -294,7 +296,7 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
       TriggerLaunchRequest request = new TriggerLaunchRequest();
       request.setTenantId(TENANT);
       request.setWorkflowDefinitionId(seed.workflowDefinitionId());
-      request.setBizDate(LocalDate.of(2026, 10, 22));
+      request.setBizDate(BIZ_DATE);
       request.setTriggerType(TriggerType.API);
       request.setParams(Map.of("fileFormatType", "JSON"));
       triggerService()
@@ -557,13 +559,13 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
          where tenant_id = ? and request_id = ? and publish_status = 'PUBLISHED'
         """;
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", triggerType);
+        jdbcTemplate, TENANT, "IMPORT", "import", triggerType, BIZ_DATE);
     String requestId = seed.requestId();
     String dedupKey = seed.dedupKey();
     jdbcTemplate.update(deleteSeedRequestSql, TENANT, requestId);
     long uniqueSuffix = System.nanoTime();
     String customerNo = "R31" + Long.toUnsignedString(uniqueSuffix);
-    LocalDate businessDate = LocalDate.of(2026, 4, 30);
+    LocalDate businessDate = BIZ_DATE;
     Map<String, Object> customer = Map.of(
         "customerNo",
         customerNo,

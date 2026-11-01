@@ -505,5 +505,4 @@ public class ImportRecordGovernanceService {
     ErrorSinkType sinkType = DictEnum.fromCode(ErrorSinkType.class, skipProperties.errorSinkType());
     return sinkType == null ? ErrorSinkType.BOTH : sinkType;
   }
-
 }

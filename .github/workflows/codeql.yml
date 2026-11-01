@@ -1,4 +1,4 @@
-name: codeql
+name: Backend / CodeQL security analysis
 
 # 真 SAST(污点流分析):捕 SQLi / 反序列化 / SSRF / 路径注入等 PMD/SpotBugs 抓不到的问题。
 # GitHub 官方免费,结果直接进 Security tab。
@@ -51,7 +51,7 @@ jobs:
           head-sha: ${{ github.sha }}
 
   analyze:
-    name: Analyze (java)
+    name: CodeQL Java security analysis
     needs: scope
     if: github.event_name != 'pull_request' || needs.scope.outputs.docs-only != 'true'
     runs-on: ubuntu-latest

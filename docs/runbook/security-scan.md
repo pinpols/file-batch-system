@@ -69,7 +69,7 @@ gh api 'repos/pinpols/file-batch-system/code-scanning/alerts?state=open&ref=refs
 
 ## GitHub 平台安全能力
 
-仓库内扫描脚本之外，公共仓库应同时启用 GitHub Secret Scanning、Push Protection、Dependabot security updates 和 Private Vulnerability Reporting。non-provider patterns 与 validity checks 仅在当前 GitHub 计划和仓库能力支持时启用；不可用时由现有 Gitleaks/CodeQL 和人工响应补位。平台设置是运行事实，不能只凭文档、workflow 或 `dependabot.yml` 推断已开启。
+仓库内扫描脚本之外，公共仓库应同时启用 GitHub Secret Scanning、Push Protection、Dependabot alerts 和 Private Vulnerability Reporting；Dependabot 自动安全修复 PR 关闭，由维护者处理告警。non-provider patterns 与 validity checks 仅在当前 GitHub 计划和仓库能力支持时启用；不可用时由现有 Gitleaks/CodeQL 和人工响应补位。平台设置是运行事实，不能只凭文档、workflow 或 `dependabot.yml` 推断已开启。
 
 OpenSSF Scorecard 由 `.github/workflows/scorecard.yml` 在 main 推送、每周计划和手动触发时运行，SARIF 上传到 Code Scanning。它只用于发现分支保护、Action 固定、依赖更新和安全响应等治理漂移：低分或单项发现不会直接阻断 PR，扫描执行失败仍应修复，具体风险仍按可利用性和项目边界人工复核。
 

@@ -23,8 +23,7 @@ public class AlertNotificationReceiptService {
     for (AlertmanagerAlert alert : payload.safeAlerts()) {
       String fingerprint = alert.label("fingerprint");
       String alertTenant = alert.label("tenant");
-      if (!tenantId.equals(alertTenant)
-          || EmptyChecks.isBlank(fingerprint)) {
+      if (!tenantId.equals(alertTenant) || EmptyChecks.isBlank(fingerprint)) {
         continue;
       }
       AlertNotificationReceiptCommand command = new AlertNotificationReceiptCommand(

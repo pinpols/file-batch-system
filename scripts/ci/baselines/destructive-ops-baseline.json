@@ -151,6 +151,7 @@
   "scripts/ci/check-openapi-breaking.sh|filesystem-remove": 1,
   "scripts/ci/check-postgres-client-fallback.sh|filesystem-remove": 1,
   "scripts/ci/check-shell-scripts.sh|filesystem-remove": 1,
+  "scripts/ci/install-upstream-modules.sh|filesystem-remove": 1,
   "scripts/ci/run-full-regression.sh|filesystem-remove": 6,
   "scripts/ci/run-sdk-happy-eyeballs-gate.sh|filesystem-remove": 1,
   "scripts/ci/run-sdk-live-transport-gate.sh|filesystem-remove": 2,

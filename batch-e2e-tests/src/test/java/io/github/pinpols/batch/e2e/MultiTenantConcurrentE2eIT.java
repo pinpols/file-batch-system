@@ -19,6 +19,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -70,6 +71,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("多租户并发端到端: 两租户栅栏对齐后同时触发导入任务, 校验实例, 任务, 事件, 错误明细与配额峰值均按租户隔离, 且双方任务终态均为成功")
 class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String T1 = "t1";
   private static final String T2 = "t2";
 
@@ -135,11 +137,11 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     // 发起前先为两个租户准备种子数据，避免 fixture 中出现数据库争用。
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     // 种子数据按租户隔离，因此 t2 使用独立的 dedup_key 命名空间。
     LaunchSeed t2Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, T2, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, T2, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     CountDownLatch barrier = new CountDownLatch(2);
     ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -170,7 +172,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         launchService.launch(new LaunchRequest(
             T1,
             t1Seed.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             t1Seed.requestId(),
             "e2e-tr-mt-t1",
@@ -202,7 +204,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
         launchService.launch(new LaunchRequest(
             T2,
             t2Seed.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             t2Seed.requestId(),
             "e2e-tr-mt-t2",
@@ -336,14 +338,14 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
 
     seedTenantTemplates(T2);
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     LaunchSeed t2Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, T2, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, T2, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     launchService.launch(new LaunchRequest(
         T1,
         t1Seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         t1Seed.requestId(),
         "e2e-tr-mt-iso-t1",
@@ -352,7 +354,7 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         T2,
         t2Seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         t2Seed.requestId(),
         "e2e-tr-mt-iso-t2",
@@ -387,12 +389,12 @@ class MultiTenantConcurrentE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed t1Seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, T1, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     launchService.launch(new LaunchRequest(
         T1,
         t1Seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         t1Seed.requestId(),
         "e2e-tr-mt-outbox",

@@ -63,5 +63,4 @@ public record FileGovernanceLatencyMetrics(
   private static List<Map<String, Object>> samples(Object value) {
     return value instanceof List<?> list ? (List<Map<String, Object>>) list : List.of();
   }
-
 }

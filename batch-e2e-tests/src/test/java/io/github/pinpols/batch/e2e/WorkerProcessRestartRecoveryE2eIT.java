@@ -35,6 +35,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -109,7 +110,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @DisplayName("Worker 进程重启恢复端到端:派发 worker 被杀后以同消费组重启,重新注册并恢复消费,派发任务最终成功")
 class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
 
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String JAVA_BIN =
       Path.of(System.getProperty("java.home"), "bin", "java").toString();
   private static final long WORKER_START_TIMEOUT_SECONDS = 180L;

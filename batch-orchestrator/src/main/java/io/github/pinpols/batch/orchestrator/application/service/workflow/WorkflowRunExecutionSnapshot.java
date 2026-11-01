@@ -50,13 +50,15 @@ public record WorkflowRunExecutionSnapshot(
   public record SystemPipelineIdentity(String code, Integer version) {}
 
   public static WorkflowRunExecutionSnapshot from(WorkflowRunEntity run) {
-    if (EmptyChecks.isNull(run)
-        || EmptyChecks.isNull(run.getExecutionSnapshot())
-        || EmptyChecks.isBlank(run.getExecutionSnapshot())) {
+    if (EmptyChecks.isNull(run)) {
+      return null;
+    }
+    String executionSnapshot = run.getExecutionSnapshot();
+    if (EmptyChecks.isBlank(executionSnapshot)) {
       return null;
     }
     Map<String, Object> raw =
-        JsonUtils.fromJson(run.getExecutionSnapshot(), new TypeReference<Map<String, Object>>() {});
+        JsonUtils.fromJson(executionSnapshot, new TypeReference<Map<String, Object>>() {});
     Integer schemaVersion = number(raw.get("schemaVersion"));
     // Schema v1 只保存了启动标识，并未冻结图结构。旧运行仍走
     // 旧定义读取路径，不能把 v1 的空图当成权威快照。
@@ -142,17 +144,15 @@ public record WorkflowRunExecutionSnapshot(
     if (workflowDefinitionIdentityIsInvalid) {
       throw invalidSnapshot();
     }
-    boolean runTenantIsInvalid =
-        EmptyChecks.isNull(run.getTenantId()) || EmptyChecks.isBlank(run.getTenantId());
+    boolean runTenantIsInvalid = EmptyChecks.isBlank(run.getTenantId());
     if (runTenantIsInvalid) {
       throw invalidSnapshot();
     }
     if (EmptyChecks.isEmpty(nodes)) {
       throw invalidSnapshot();
     }
-    boolean nodeCodeIsMissing = nodes.stream()
-        .anyMatch(node ->
-            EmptyChecks.isNull(node.getNodeCode()) || EmptyChecks.isBlank(node.getNodeCode()));
+    boolean nodeCodeIsMissing =
+        nodes.stream().anyMatch(node -> EmptyChecks.isBlank(node.getNodeCode()));
     if (nodeCodeIsMissing) {
       throw invalidSnapshot();
     }
@@ -458,21 +458,20 @@ public record WorkflowRunExecutionSnapshot(
       if (Boolean.FALSE.equals(edge.getEnabled())) {
         continue;
       }
+      String fromNodeCode = edge.getFromNodeCode();
+      String toNodeCode = edge.getToNodeCode();
       boolean enabledEdgeIdentityIsInvalid =
           !run.getWorkflowDefinitionId().equals(edge.getWorkflowDefinitionId())
               || !run.getTenantId().equals(edge.getTenantId())
-              || EmptyChecks.isNull(edge.getFromNodeCode())
-              || EmptyChecks.isBlank(edge.getFromNodeCode())
-              || EmptyChecks.isNull(edge.getToNodeCode())
-              || EmptyChecks.isBlank(edge.getToNodeCode());
+              || EmptyChecks.isBlank(fromNodeCode)
+              || EmptyChecks.isBlank(toNodeCode);
       if (enabledEdgeIdentityIsInvalid) {
         throw invalidSnapshot();
       }
-      if (!isBoundaryCode(edge.getFromNodeCode())
-          && !nodesByCode.containsKey(edge.getFromNodeCode())) {
+      if (!isBoundaryCode(fromNodeCode) && !nodesByCode.containsKey(fromNodeCode)) {
         throw invalidSnapshot();
       }
-      if (!isBoundaryCode(edge.getToNodeCode()) && !nodesByCode.containsKey(edge.getToNodeCode())) {
+      if (!isBoundaryCode(toNodeCode) && !nodesByCode.containsKey(toNodeCode)) {
         throw invalidSnapshot();
       }
     }

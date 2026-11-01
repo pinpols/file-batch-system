@@ -47,7 +47,7 @@ public final class NamespacedObjectStore implements BatchObjectStore {
     delegate.deleteMany(
         bucket,
         keys.stream()
-            .filter(key -> EmptyChecks.isNotNull(key) && !EmptyChecks.isBlank(key))
+            .filter(key -> EmptyChecks.isNotBlank(key))
             .map(this::physicalKey)
             .toList());
   }

@@ -43,8 +43,8 @@ public class BatchDayCatchupPreviewService {
   private final BatchDayScanProperties batchDayScanProperties;
 
   public BatchDayCatchupPreview preview(String tenantId, String calendarCode) {
-    boolean calendarScopeIsIncomplete = EmptyChecks.isBlank(tenantId)
-        || EmptyChecks.isBlank(calendarCode);
+    boolean calendarScopeIsIncomplete =
+        EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(calendarCode);
     if (calendarScopeIsIncomplete) {
       throw new IllegalArgumentException("tenantId and calendarCode are required");
     }
@@ -56,8 +56,8 @@ public class BatchDayCatchupPreviewService {
 
   public BatchDayHistoricalGapInventory inventoryHistoricalGaps(
       String tenantId, String calendarCode, LocalDate fromDate, LocalDate throughDate) {
-    boolean calendarScopeIsIncomplete = EmptyChecks.isBlank(tenantId)
-        || EmptyChecks.isBlank(calendarCode);
+    boolean calendarScopeIsIncomplete =
+        EmptyChecks.isBlank(tenantId) || EmptyChecks.isBlank(calendarCode);
     if (calendarScopeIsIncomplete) {
       throw new IllegalArgumentException("tenantId and calendarCode are required");
     }

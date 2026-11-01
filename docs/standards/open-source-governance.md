@@ -21,7 +21,7 @@
 | 密钥防护 | 启用 Secret Scanning 和 Push Protection；non-provider patterns、validity checks 在当前仓库能力不可用时保持关闭，平台支持后再启用 | GitHub Security Settings |
 | 依赖治理 | Dependabot alerts 持续发现；自动版本/安全修复 PR 关闭；季度计划任务生成一次跨生态盘点，由维护者建立一张集中 PR | [季度依赖集中治理](../runbook/quarterly-dependency-governance.md) |
 | 主干保护 | 必须经 PR、required checks、讨论解决；只允许 squash；不保留永久 bypass actor | GitHub `main protection` ruleset |
-| CodeQL | PR 必须稳定产生 `Analyze (java)` 状态；纯文档可由范围探测安全跳过重分析。只有该 workflow 已在 main 生效后，才能把此状态加入 required checks，避免 PR 永久等待 | GitHub ruleset + [`codeql.yml`](../../.github/workflows/codeql.yml) |
+| CodeQL | PR 必须稳定产生 `CodeQL Java security analysis` 状态；纯文档可由范围探测安全跳过重分析。只有该 workflow 已在 main 生效后，才能把此状态加入 required checks，避免 PR 永久等待 | GitHub ruleset + [`codeql.yml`](../../.github/workflows/codeql.yml) |
 | Action 供应链 | 外部 Action 固定 40 位 commit SHA，尾部保留版本注释 | [`../runbook/ci.md`](../runbook/ci.md) + [`check-github-action-pinning.py`](../../scripts/ci/check-github-action-pinning.py) |
 | Scorecard | 每周及 main 推送生成 SARIF；只用于治理漂移和整改排序，不按总分阻断 PR | [`scorecard.yml`](../../.github/workflows/scorecard.yml) |
 

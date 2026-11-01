@@ -1,4 +1,4 @@
-name: prepare-platform-release
+name: Platform / Prepare release manifest
 
 on:
   workflow_dispatch:
@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   prepare-release:
+    name: Prepare platform release manifest
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

@@ -26,6 +26,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -61,6 +62,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("独立 Console JVM 在通知接收提交后强杀,持久认领自然到期恢复")
 class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String GROUP = "batch-console-workflow-terminal-notifications";
   private static final Map<String, JsonNode> ACCEPTED = new ConcurrentHashMap<>();
   private static final ConcurrentLinkedQueue<Attempt> ATTEMPTS = new ConcurrentLinkedQueue<>();
@@ -150,7 +152,7 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
           """;
 
     var seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customer = "CRASH" + Long.toUnsignedString(System.nanoTime());
     String content = JsonUtils.toJson(List.of(Map.of(
         "customerNo",
@@ -184,7 +186,7 @@ class WorkflowTerminalNotificationProcessRecoveryE2eIT extends AbstractIntegrati
           .launch(new LaunchRequest(
               TENANT,
               seed.workflowDefinitionId(),
-              LocalDate.of(2026, 1, 15),
+              BIZ_DATE,
               TriggerType.API,
               seed.requestId(),
               "r32-console-crash",

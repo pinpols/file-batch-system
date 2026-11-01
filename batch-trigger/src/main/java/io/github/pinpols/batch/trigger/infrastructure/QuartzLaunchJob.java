@@ -120,12 +120,13 @@ public class QuartzLaunchJob implements Job {
     descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
     descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
     descriptor.setEnabled(true);
-    boolean workflowIdentityIsIncomplete = EmptyChecks.isNull(descriptor.getWorkflowDefinitionId())
-        || descriptor.getWorkflowDefinitionId() <= 0
-        || EmptyChecks.isNull(descriptor.getTenantId())
-        || EmptyChecks.isBlank(descriptor.getTenantId())
-        || EmptyChecks.isNull(descriptor.getWorkflowCode())
-        || EmptyChecks.isBlank(descriptor.getWorkflowCode());
+    Long workflowDefinitionId = descriptor.getWorkflowDefinitionId();
+    String tenantId = descriptor.getTenantId();
+    String workflowCode = descriptor.getWorkflowCode();
+    boolean workflowIdentityIsIncomplete = EmptyChecks.isNull(workflowDefinitionId)
+        || workflowDefinitionId <= 0
+        || EmptyChecks.isBlank(tenantId)
+        || EmptyChecks.isBlank(workflowCode);
     if (workflowIdentityIsIncomplete) {
       throw new JobExecutionException(
           "scheduled Quartz task requires an explicit tenant and Workflow identity", false);

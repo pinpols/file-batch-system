@@ -82,8 +82,8 @@ public class TaskDispatchExecutor {
   /** 批量执行的逐项结果版本。Kafka 批量 consumer 需要知道是哪条消息失败，才能只 DLQ 毒丸消息，而不是把同 poll 的正常任务一起送进 DLQ。 */
   public List<BatchItemExecution> executeBatchDetailed(
       List<TaskDispatchMessage> messages, String workerId) {
-    boolean batchExecutionRequestIsIncomplete = EmptyChecks.isEmpty(messages)
-        || EmptyChecks.isBlank(workerId);
+    boolean batchExecutionRequestIsIncomplete =
+        EmptyChecks.isEmpty(messages) || EmptyChecks.isBlank(workerId);
     if (batchExecutionRequestIsIncomplete) {
       return List.of();
     }

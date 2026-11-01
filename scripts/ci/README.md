@@ -156,12 +156,14 @@ artifact、却放过仓库快照漂移。
 显式传 `--reuse-generated`。AGPL、SSPL、BUSL、CPAL、EUPL、Commons Clause、Elastic、
 PolyForm、无 Classpath Exception 的纯 GPL 及未知许可证均阻断。
 
+测试报告汇总查询当前 run 的 artifact 名称，处理下载 Action 在仅匹配一个 artifact 时直接解压到目标根目录的行为；多个 artifact 仍按各自目录归属。仅当实际 artifact 与成功作业的预期名称一致且存在测试 XML 时才满足缺报告检查，缺失仍阻断。
+
 ## `daily-validation-change-gate.py`
 
-判断定时触发对应的北京时间运行日是否包含代码/配置变更，Markdown、RST、`LICENSE` 和 `NOTICE` 不触发验证。日期按最近一次 cron 计划时间推导，因此定时任务延迟到午夜后启动仍检查原计划日；手动 dispatch 按当前北京时间日期处理，并可勾选 `force` 绕过变更条件。本地运行可设 `VALIDATION_DAY` 固定检查日期、`VALIDATION_EVENT=schedule` 与 `VALIDATION_SCHEDULE='31 13 * * *'`模拟定时触发，或设 `FORCE_VALIDATION=true` 强制运行；脚本不接受 `--force` 参数。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 仅写入 `$GITHUB_OUTPUT` 供 workflow 路由。
+查询 main 上最近一次实际执行并成功的 sim + strict 对应提交，与当前提交比较代码和配置；跳过的运行不作为成功基线，最近一次验证失败或找不到可用基线时重新验证。Markdown、RST、`LICENSE` 和 `NOTICE` 的变更不单独触发验证。历史查询失败时明确失败；当前提交与基线无法证明祖先关系时保守执行。手动可设 `FORCE_VALIDATION=true` 强制运行，无需查询历史；日期用于记录计划验证日。非强制本地运行需要设置 `GITHUB_REPOSITORY` 并使用已认证的 `gh`。所有人类可见的结果使用共享 `gate-result.sh` 状态、错误码和原因格式，`should_run/reason` 写入 `$GITHUB_OUTPUT` 供 workflow 路由。
 
 ```bash
-python3 scripts/ci/daily-validation-change-gate.py
+GITHUB_REPOSITORY=pinpols/file-batch-system python3 scripts/ci/daily-validation-change-gate.py
 FORCE_VALIDATION=true python3 scripts/ci/daily-validation-change-gate.py
 ```
 
@@ -357,7 +359,7 @@ bash scripts/ci/run-staging-live-smoke.sh
 
 PR / Full Gate 的各 Java shard 在现有测试后生成 JaCoCo XML，并由 `check-diff-coverage.py` 校验本 shard 变更可执行行覆盖率不低于 80%。PR 的编排、Trigger、PROCESS、DISPATCH、IMPORT、EXPORT 和 Console API 分片通过 `run-pr-coverage-integration.sh` 追加经验证的真实业务集成场景；Console API 分片也运行配置包和配置定义的定向 Testcontainers 集成测试。Full Gate 仍执行各模块完整单测与集成测试。这样保留覆盖率门槛，同时避免将所有慢速集成测试重复塞入 PR。每周或手动 Full Gate 通过 `run-critical-mutation.sh` 对文件状态机和生命周期映射器运行 PIT，不扩展到全仓。
 
-PR 的编排集成场景拆为 `a` / `a-extra`，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。PR 的 Trigger 与 PROCESS/DISPATCH 测试也拆为单测及集成两片，由 `unit-it-b1` 汇合两片状态与覆盖率。Full CI 将编排耗时类按 `scripts/ci/test-shards/full-orchestrator-heavy.txt` 拆出，合并两片 JaCoCo 执行数据后保留完整覆盖率门槛；业务提交恢复场景也按方法拆片。实际总耗时仍受 runner 排队影响。
+PR 的编排集成场景拆为 `a` / `a-extra`；`JobNodeDispatchIntegrationTest` 独立运行在 `a-extra`，CompensationFailureRecovery 与 BatchDayWaitingLaunchReference 集成类也分配到该片，以减轻主片长尾，Console 拆为 `b2-console` / `b2-console-extra` 并行执行；`unit-it-a` 和 `unit-it-b2` 分别要求两片成功并按行合并 JaCoCo 覆盖率，报告缺失即失败。`check-diff-coverage.py --extra-report MODULE=XML` 只接受已选择模块的现存报告，不改变 80% 门槛。拆分耗时以远端实际运行结果为准。PR 的 Trigger 与 PROCESS/DISPATCH 测试也拆为单测及集成两片，由 `unit-it-b1` 汇合两片状态与覆盖率。Full CI 将编排耗时类按 `scripts/ci/test-shards/full-orchestrator-heavy.txt` 拆出，合并两片 JaCoCo 执行数据后保留完整覆盖率门槛；业务提交恢复场景也按方法拆片。实际总耗时仍受 runner 排队影响。
 
 PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
 
@@ -655,9 +657,9 @@ bash scripts/ci/check-version-alignment.sh
 
 ## `check-e2e-run-completeness.sh`
 
-e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本要求每个类有唯一报告且至少一个用例实际执行；全类跳过或空报告失败，部分跳过仍单独保留报告。与 `check-e2e-shard-coverage.sh`（静态校验漏项、失效项及重复类）互补；PR 和 Full CI 运行其正反例 `test_e2e_shard_coverage.py`。 Full CI 的编排长类分片复用同一运行报告检查，防止个别选定类未执行。
+e2e 运行侧闭环守护。`-Dsurefire.failIfNoSpecifiedTests=false` 会把「shard 清单列了某 `*E2eIT`、但因路径/改名没被选中」静默吞成绿色。本脚本要求每个类有唯一报告且至少一个用例实际执行；全类跳过或空报告失败，部分跳过仍单独保留报告。与 `check-e2e-shard-coverage.sh`（静态校验漏项、失效项及重复类）互补；PR 和 Full CI 运行其正反例 `test_e2e_shard_coverage.py`。 Full CI 的编排长类分片复用同一运行报告检查，防止个别选定类未执行；正反例还要求 Push 进程恢复与启动崩溃恢复分属不同分片，避免两段长等待串行。
 
-当选择器包含 `类名#方法一+方法二` 时，静态守卫核对该类全部测试方法各分配一次；运行侧读取 Surefire XML，逐方法要求集合完全一致且无失败或跳过。方法选择仅支持不带通配符的明确名称，无法识别源码测试时失败关闭。对应正反例由 PR 和 Full CI 执行。
+当选择器包含 `类名#方法一+方法二` 时，静态守卫核对该类全部测试方法各分配一次；运行侧读取 Surefire XML，逐方法要求集合完全一致且无失败或跳过；支持带参数签名和参数化调用序号，拒绝重复、未知格式和不连续序号。它不能从报告推断参数源预期的总调用次数；方法选择仅支持不带通配符的明确名称，无法识别源码测试时失败关闭。对应正反例由 PR 和 Full CI 执行。
 
 ```bash
 bash scripts/ci/check-e2e-run-completeness.sh "<逗号分隔类名>" <surefire-reports-dir>
@@ -687,8 +689,8 @@ python3 scripts/ci/check-java-governance-test-coverage.py --verify-reports
 ## `install-upstream-modules.sh`
 
 将 E2E / staging 所需的上游 Maven 模块安装到 `~/.m2`，避免测试模块重复向 Maven Central 请求内部模块 POM。它保持 `batch-e2e-tests`
-排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的子构建中生成，不依赖上游预构建产物。对 Maven Central 的临时 5xx / 传输失败使用 Maven
-强制更新、传输层重试和最多三轮退避重试，避免依赖下载瞬时失败被误报为 E2E 业务失败。
+排除和 `-DskipTests` 约束不变，并跳过上游应用的 Spring Boot executable jar repackage：E2E 使用模块普通 jar；需要 `-exec.jar` 的重启恢复场景会在测试自己的离线子构建中生成；安装入口先通过 `spring-boot:help` 解析打包插件依赖，避免全新缓存因跳过 repackage 而缺包。对 Maven Central 的临时 5xx / 传输失败使用 Maven
+强制更新、传输层重试和最多三轮退避重试。重试前删除没有 jar/pom 的 `*.lastUpdated`，避免 Maven 用本地否定缓存跳过后续下载。依赖下载瞬时失败不应当成 E2E 业务失败。 `python3 -m unittest scripts.ci.tests.test_install_upstream_modules` 覆盖安装与预热的成功及失败重试。
 
 ```bash
 bash scripts/ci/install-upstream-modules.sh
@@ -998,7 +1000,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [collect-flaky.py](collect-flaky.py) | 汇总 Surefire 与 Failsafe 报告中的不稳定测试。 |
 | [collect-flaky.sh](collect-flaky.sh) | surefire/failsafe flaky 汇总薄封装。 |
 | [compare-sbom.py](compare-sbom.py) | 比较两份 CycloneDX SBOM 的依赖语义，忽略跨环境的不稳定展示字段。 |
-| [daily-validation-change-gate.py](daily-validation-change-gate.py) | 仅在北京时间当天存在代码或配置变更时运行 nightly 仿真验证。 |
+| [daily-validation-change-gate.py](daily-validation-change-gate.py) | 按最近成功验证提交检测代码或配置变更。 |
 | [detect-change-scope.py](detect-change-scope.py) | 分类变更文件并输出本地与 CI 门禁的执行范围。 |
 | [feature_switch_registry.py](feature_switch_registry.py) | 提供功能开关注册表的加载与解析能力。 |
 | [install-upstream-modules.sh](install-upstream-modules.sh) | 安装 E2E 与治理测试依赖的上游 Maven 模块。 |

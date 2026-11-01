@@ -1,4 +1,4 @@
-name: pr-gate
+name: Backend / Pull request gate
 
 # PR 合入门禁：按变更范围运行静态检查、测试分片和安全扫描；E2E 在 Full CI
 # 的 main/每周回归中执行，另可通过 staging-gate 手动复验。路由以本 workflow 和 runbook 为准。
@@ -93,6 +93,7 @@ jobs:
   # 与供应链和 Java 静态质量分路并发，末尾继续汇总本路所有独立失败。
   # ===========================================================================
   static-policy:
+    name: PR checks / policy and configuration
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -203,7 +204,7 @@ jobs:
 
       - name: Set up Python for LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version-file: .python-version
 
@@ -273,6 +274,7 @@ jobs:
             scripts/ci/tests/test_pr_coverage_integration.py \
             scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py
 
@@ -641,6 +643,7 @@ jobs:
   # 只在 Maven、镜像、Compose、Helm 或 Trivy 白名单输入变化时做重扫描。
   # ===========================================================================
   static-supply-chain:
+    name: PR checks / supply chain security
     needs: changes
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
@@ -727,6 +730,7 @@ jobs:
   # Job 1c: static-java-quality — 编译、PMD 与 Spotless
   # ===========================================================================
   static-java-quality:
+    name: PR checks / Java code quality
     needs: changes
     if: |
       (needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true') &&
@@ -844,7 +848,7 @@ jobs:
           test -f ci-coverage/a-main/batch-orchestrator/target/site/jacoco/jacoco.xml
 
       - name: Upload primary coverage reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-a-coverage-main
           path: ci-coverage/a-main/
@@ -853,7 +857,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-a-reports
           path: |
@@ -882,7 +886,7 @@ jobs:
       - name: Generate orchestrator coverage report
         run: ./mvnw jacoco:report -pl batch-orchestrator -B
       - name: Upload orchestrator coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-a-coverage-extra
           path: batch-orchestrator/target/site/jacoco/jacoco.xml
@@ -890,7 +894,7 @@ jobs:
           retention-days: 1
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-a-extra-reports
           path: '**/target/surefire-reports/**'
@@ -927,13 +931,13 @@ jobs:
           persist-credentials: false
       - name: Download primary coverage reports
         if: needs.changes.outputs.unit-a-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-a-coverage-main
           path: ci-coverage/a-main-download
       - name: Download extra orchestrator coverage
         if: needs.changes.outputs.unit-a-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-a-coverage-extra
           path: ci-coverage/a-extra
@@ -999,7 +1003,7 @@ jobs:
             cp "$report" "ci-coverage/b1-main/$report"
           done
       - name: Upload primary coverage reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-b1-coverage-main
           path: ci-coverage/b1-main/
@@ -1008,7 +1012,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-b1-main-reports
           path: |
@@ -1046,7 +1050,7 @@ jobs:
             cp "$report" "ci-coverage/b1-extra/$report"
           done
       - name: Upload integration coverage reports
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-b1-coverage-extra
           path: ci-coverage/b1-extra/
@@ -1054,7 +1058,7 @@ jobs:
           retention-days: 1
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-b1-extra-reports
           path: '**/target/surefire-reports/**'
@@ -1091,13 +1095,13 @@ jobs:
           persist-credentials: false
       - name: Download primary coverage reports
         if: needs.changes.outputs.unit-b1-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-b1-coverage-main
           path: ci-coverage/b1-main
       - name: Download integration coverage reports
         if: needs.changes.outputs.unit-b1-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-b1-coverage-extra
           path: ci-coverage/b1-extra
@@ -1167,7 +1171,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-b2-workers-reports
           path: |
@@ -1224,7 +1228,7 @@ jobs:
         run: ./mvnw jacoco:report -pl batch-console-api -B
 
       - name: Upload Console coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-console-coverage-main
           path: batch-console-api/target/site/jacoco/jacoco.xml
@@ -1233,7 +1237,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-b2-console-reports
           path: |
@@ -1263,7 +1267,7 @@ jobs:
       - name: Generate Console coverage report
         run: ./mvnw jacoco:report -pl batch-console-api -B
       - name: Upload Console coverage report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-console-coverage-extra
           path: batch-console-api/target/site/jacoco/jacoco.xml
@@ -1271,7 +1275,7 @@ jobs:
           retention-days: 1
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-unit-it-b2-console-extra-reports
           path: '**/target/surefire-reports/**'
@@ -1281,6 +1285,7 @@ jobs:
   # Java 架构/约定守卫独立执行，不与业务 unit/IT 混合；失败仍汇入稳定 required context。
   # ==========================================================================
   java-governance:
+    name: PR tests / Java architecture and conventions
     needs: changes
     if: |
       (needs.changes.outputs.unit-required == 'true' || needs.changes.outputs.ci == 'true') &&
@@ -1311,7 +1316,7 @@ jobs:
 
       - name: Upload Java governance reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-java-governance-reports
           path: '**/target/surefire-reports/**'
@@ -1357,13 +1362,13 @@ jobs:
           persist-credentials: false
       - name: Download main Console coverage
         if: needs.changes.outputs.unit-b2-console-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-console-coverage-main
           path: batch-console-api/target/site/jacoco
       - name: Download extra Console coverage
         if: needs.changes.outputs.unit-b2-console-required == 'true'
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: pr-console-coverage-extra
           path: .coverage/console-extra
@@ -1382,24 +1387,31 @@ jobs:
     needs: [unit-it-a-main, unit-it-a-extra, unit-it-b1, unit-it-b1-main, unit-it-b1-extra, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Download test reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: pr-gate-*-reports
           path: build/ci-test-reports
       - name: Summarize test results and job states
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           mkdir -p build/ci-quality
           printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
-          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports \
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > build/ci-quality/artifact-names.txt
+          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports --artifact-names build/ci-quality/artifact-names.txt \
+            --artifact-pattern 'pr-gate-*-reports' \
             --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
             --expect-artifact unit-it-a-main=pr-gate-unit-it-a-reports \
             --expect-artifact unit-it-a-extra=pr-gate-unit-it-a-extra-reports \
@@ -1411,7 +1423,7 @@ jobs:
             --expect-artifact java-governance=pr-gate-java-governance-reports \
             --markdown build/ci-quality/summary.md
       - name: Upload consolidated test report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: pr-gate-test-summary
           path: build/ci-quality/

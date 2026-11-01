@@ -1,4 +1,4 @@
-name: staging-gate
+name: Backend / Staging gate and isolated E2E tests
 
 # 全量 E2E（含 regression）的手动回归 workflow；不执行 staging 集群部署。
 # main 代码变更由 full-ci-gate 执行同一 E2E 清单；无变更时不额外每日重复跑。
@@ -28,6 +28,7 @@ concurrency:
 jobs:
   # Java 架构/约定守卫与 E2E 并发，保证手动全量回归也覆盖治理测试。
   java-governance:
+    name: Staging tests / Java architecture and conventions
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -54,7 +55,7 @@ jobs:
 
       - name: Upload Java governance reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-gate-java-governance-reports
           path: '**/target/surefire-reports/**'
@@ -72,16 +73,17 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     strategy:
       fail-fast: false
+      max-parallel: 16
       matrix:
         shard:
           - id: 1
-            label: "158s baseline"
+            label: "worker restart, import failure and tenancy"
             tests: >-
               WorkerProcessRestartRecoveryE2eIT,
               ImportFailureE2eIT,
               FullChainTenantPropagationE2eIT
           - id: 2
-            label: "179s baseline"
+            label: "atomic pipelines, replay and deduplication"
             tests: >-
               DeadLetterApprovalReplayE2eIT,
               AtomicSeedStrictVerifyE2eIT,
@@ -90,7 +92,7 @@ jobs:
               DedupJobLaunchE2eIT,
               ImportToExportDeliveryE2eIT
           - id: 3
-            label: "177s baseline"
+            label: "process, trigger, dispatch and outbox"
             tests: >-
               ProcessPipelineE2eIT,
               TriggerAsyncLaunchFullChainE2eIT,
@@ -98,7 +100,7 @@ jobs:
               OutboxForwarderRetryE2eIT,
               SensorWaitFixtureE2eIT
           - id: 4
-            label: "176s baseline"
+            label: "import, export, atomic and worker drain"
             tests: >-
               AtomicMixedScenarioE2eIT,
               ImportPipelineE2eIT,
@@ -106,7 +108,7 @@ jobs:
               ExportPipelineE2eIT,
               OutboxPollMarginsYamlE2eIT
           - id: 5
-            label: "159s baseline"
+            label: "pipeline failures, outbox and SDK delivery"
             tests: >-
               ExportStorageFailureE2eIT,
               ExportFailurePipelineE2eIT,
@@ -114,7 +116,7 @@ jobs:
               OutboxForwarderE2eIT,
               SdkAgainstStubOrchestratorE2eIT
           - id: 6
-            label: "148s baseline"
+            label: "export content, tenancy, dispatch and atomic load"
             tests: >-
               ExportContentVerificationE2eIT,
               MultiTenantConcurrentE2eIT,
@@ -125,9 +127,9 @@ jobs:
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldRecoverWhenReportAcknowledgementIsLostAfterCommitAndWorkerRestarts+shouldResumeImportCheckpointAfterWorkerProcessIsKilled+shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect+shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
           - id: 8
-            label: "workflow catch-up and approval"
+            label: "workflow catch-up and approval 1"
             tests: >-
-              WorkflowOccurrenceCatchUpApprovalE2eIT
+              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldConsumePinnedVersion_whenUpstreamVersionPromoted+triggerApiAdmissionRacingBatchDaySettlementShouldConverge+consoleManualAdmissionRacingBatchDaySettlementShouldConverge+dstHolidayQuartzMisfire_completesWorkerBeforeBatchDaySettlement+triggerRestart_resumesBoundedTwoDayCoverageBeforeBatchDaySettlement+manualMisfireApprovalRacingSettlement_completesWorkerBeforeBatchDaySettlement+shouldReconcileAndContinueManualBatchAfterRealApprovalResponseLoss+shouldBlockPersistedBusinessDay_whenDstCutoffOccurrencePending+rejectedManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight+duplicateQuartzMisfireCallbacks_createOneRootRunAndBusinessEffect+expiredManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+approvalOfConsoleCatchUp_reconcilesAndLaunchesWorkflowNode+shouldConvergeCoverage_whenPublicationAndSettlementRace+scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking
           - id: 9
             label: "stale report fence"
             tests: >-
@@ -147,7 +149,6 @@ jobs:
           - id: 12
             label: "launch and replay recovery"
             tests: >-
-              JobPushProcessRecoveryE2eIT,
               LaunchProcessCrashRecoveryE2eIT,
               ReadinessHandoverE2eIT,
               ReplayAdmissionRecoveryE2eIT
@@ -157,26 +158,28 @@ jobs:
               ApprovalSourceReconciliationE2eIT,
               JobSlaAlertmanagerIdentityE2eIT,
               TriggerLaunchRecoveryE2eIT,
-              WorkflowTerminalNotificationE2eIT
+              WorkflowTerminalNotificationE2eIT,
+              JobPushProcessRecoveryE2eIT
           - id: 14
             label: "export and SDK recovery"
             tests: >-
               ExportPartitionContentE2eIT,
               SdkOrdinaryLeaseRecoveryE2eIT
           - id: 15
-            label: "terminal process recovery"
+            label: "terminal recovery and workflow catch-up"
             tests: >-
-              WorkflowTerminalNotificationProcessRecoveryE2eIT
+              WorkflowTerminalNotificationProcessRecoveryE2eIT,
+              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldReconcileBatchDayAutoAfterConsoleProcessCrash+workflowRerunAdmissionRacingBatchDaySettlementShouldConverge+externalEventApiAdmissionRacingBatchDaySettlementShouldConverge+shouldApproveRestartedMisfire_whenConsoleAuthenticated+shouldExposeAuthoritativeAudit_whenEmptyDaySettled+shouldReconcileBatchDayAutoAfterRealTriggerResponseIsDropped+cutoffScheduledFire_completesWorkerBeforeBatchDaySettlement+triggerRestart_recoversOccurrenceCoverageBeforeBatchDaySettlement+cutoffCompositeWorkflow_waitsForBothWorkerJobsBeforeBatchDaySettlement+externalEventApi_fansOutToWorkersAndReportsTargetResults+disabledWorkflow_autoMisfireReconcilesToWorkerBusinessSuccess+crossDayDependencyWait_recoversRootPayloadAndCompletesImportBusinessEffect+consoleManualTrigger_preservesExplicitBizDateThroughWorkerAndSettlement+shouldConvergeCoverage_whenConfigurationAndSettlementRace+shouldPreserveSnapshotsAndObligations_whenDefinitionsChangeAfterOpen+settlementFirstScheduledQuartzCallback_doesNotReviveSkippedOccurrence
           - id: 16
-            label: "recovery methods 2"
+            label: "dispatch and object storage recovery"
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldNotDuplicateDispatchSideEffect_whenWorkerIsReclaimedAfterDelivery+shouldNotRedeliverAfterWorkerCrash_whenApiPushAcceptedBeforeOutcomePersisted+shouldReuseOssObjectsAfterReclaim_whenReportWasLostAfterManifestCommit+shouldNotUploadAfterWorkerCrash_whenOssObjectCommittedBeforeAcknowledgement+shouldNotRedeliverAfterWorkerCrash_whenSmtpAcceptedMessageBeforeOutcomePersisted
           - id: 17
-            label: "recovery methods 3"
+            label: "atomic HTTP, shell and Spark recovery"
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldDeduplicateAtomicHttpSideEffect_whenWorkerIsReclaimedAfterDelivery+shouldStopAtomicReplayAfterNonIdempotentSideEffect_whenWorkerIsReclaimed+shouldStopAtomicShellReplay_whenWorkerCrashesAfterFilesystemSideEffect+shouldStopAtomicSparkReplay_whenWorkerCrashesAfterSparkOutputCommit+shouldStopAtomicSparkReplay_whenWorkerJvmCrashesDuringActiveSparkAction
           - id: 18
-            label: "recovery methods 4"
+            label: "atomic database and export recovery"
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldStopAtomicSqlReplay_whenWorkerCrashesAfterDatabaseCommit+shouldStopAtomicStoredProcReplay_whenWorkerCrashesAfterDatabaseCommit+shouldReuseExportArtifactAfterReclaimOnReplacementWorker_withoutDuplicateFileRecord
           - id: 19
@@ -202,7 +205,7 @@ jobs:
 
       - name: Setup Python for Spark recovery scenarios
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.12'
 
@@ -254,7 +257,7 @@ jobs:
 
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-gate-e2e-shard-${{ matrix.shard.id }}-reports
           path: |
@@ -267,31 +270,38 @@ jobs:
     needs: [java-governance, e2e-shard-full]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
       - name: Download test reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: staging-gate-*-reports
           path: build/ci-test-reports
       - name: Summarize test results and job states
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           mkdir -p build/ci-quality
           printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
-          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports \
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > build/ci-quality/artifact-names.txt
+          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports --artifact-names build/ci-quality/artifact-names.txt \
+            --artifact-pattern 'staging-gate-*-reports' \
             --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
             --expect-artifact java-governance=staging-gate-java-governance-reports \
             --expect-e2e-workflow .github/workflows/staging-gate.yml \
             --expect-e2e-job e2e-shard-full --expect-e2e-prefix staging-gate \
             --markdown build/ci-quality/summary.md
       - name: Upload consolidated test report
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: staging-gate-test-summary
           path: build/ci-quality/

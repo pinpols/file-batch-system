@@ -38,5 +38,4 @@ class BatchWorkerDispatchApplicationIntegrationTest extends AbstractIntegrationT
             applicationContext.getBean(AbstractWorkerLoop.class).ensureStarted().getPort())
         .isEqualTo(boundPort);
   }
-
 }

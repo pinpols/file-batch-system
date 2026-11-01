@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
@@ -76,9 +78,9 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     // 用户校验规则：要求所有行 total_amount >= 1000（本批数据是 30/7，所以会失败）
     Map<String, Object> validationRule = Map.of(
         "name",
@@ -91,12 +93,12 @@ class ProcessFailurePipelineE2eIT extends AbstractIntegrationTest {
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of(validationRule));
 
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-process-validate-fail",

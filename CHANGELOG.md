@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
+
 ### Fixed
 
 - SQL 模板导出映射保存用户选择的列顺序与文件表头，分页内部字段不再被当作默认导出列；无法确定批次关联时提示填写实际过滤 SQL，不再生成缺少批次条件的默认查询。
@@ -15,6 +19,8 @@
 - 控制台认证过滤器不再把下游异常误判为 JWT 错误；JWT 撤销记录保留至实际过期容忍窗口结束，避免注销后在容忍期内重新通过认证。
 
 - 调度配置缓存按租户、类型和配置版本区分回填，并隔离事务快照与失效竞态，避免已完成失效的旧读取污染后续请求；Redis 失效发布故障后的持久恢复仍待补齐。
+
+- 出箱故障注入清理 `DROP TRIGGER` 与轮询器写锁冲突时按死锁重试，避免 40P01 把已提交的恢复用例打成错误。
 
 - Sim 租户配置场景：WORKFLOW 与 ALL 场景模板断言补充 `workflow_monitoring_policy` sheet（#1265 起由 `ConfigPackageSheetSpecs` 正式纳入 WORKFLOW 场景）；stage2e checkpoint 崩溃场景按 `<行号>:<文件摘要>` 格式解析 LOAD `position_marker`，修复 marker 解析 `ValueError`。
 

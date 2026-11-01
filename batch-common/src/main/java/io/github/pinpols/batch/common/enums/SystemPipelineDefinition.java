@@ -15,8 +15,7 @@ public record SystemPipelineDefinition(String code, int semanticVersion, List<St
     }
     stages = List.copyOf(stages);
     if (EmptyChecks.isEmpty(stages)
-        || stages.stream()
-            .anyMatch(stage -> EmptyChecks.isBlank(stage))) {
+        || stages.stream().anyMatch(stage -> EmptyChecks.isBlank(stage))) {
       throw new IllegalArgumentException("system pipeline stages must be non-empty");
     }
   }

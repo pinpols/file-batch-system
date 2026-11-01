@@ -186,5 +186,4 @@ class BatchWindowGateTest {
         false,
         true);
   }
-
 }

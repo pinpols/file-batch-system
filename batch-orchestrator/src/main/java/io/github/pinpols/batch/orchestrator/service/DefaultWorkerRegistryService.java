@@ -404,9 +404,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     // 否则回落 defaultStatus(register/heartbeat 默认 ONLINE)/ currentStatus。
     // 防非枚举值(如 "RUNNING")直写违反 ck_worker_registry_status CHECK → 500
     // (契约 fixtures 01/03-06:请求 status=RUNNING → 存储/响应 ONLINE)。
-    boolean requestedRegistryStatusIsValid = EmptyChecks.isNotNull(requestedStatus)
-        && !EmptyChecks.isBlank(requestedStatus)
-        && isValidRegistryStatus(requestedStatus);
+    boolean requestedRegistryStatusIsValid =
+        EmptyChecks.isNotBlank(requestedStatus) && isValidRegistryStatus(requestedStatus);
     if (requestedRegistryStatusIsValid) {
       return requestedStatus;
     }

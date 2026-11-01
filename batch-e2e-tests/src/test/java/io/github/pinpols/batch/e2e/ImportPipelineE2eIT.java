@@ -39,6 +39,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -100,6 +101,8 @@ import org.springframework.test.context.jdbc.Sql;
 class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  // 导入多场景共享未截止业务日，并保留各场景之间的相对日期。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -165,7 +168,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
                       """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -180,7 +183,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-import",
@@ -241,7 +244,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         order by customer_no
         """;
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(updateJobSql, TENANT, seed.jobCode());
     jdbcTemplate.update(updateTemplateSql, TENANT);
     String firstCustomer = "CKPTA" + Long.toUnsignedString(System.nanoTime());
@@ -285,7 +288,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-import-checkpoint-retry",
@@ -324,7 +327,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         select count(*) from biz.customer_account where tenant_id = ? and customer_no = ?
         """;
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "LOST" + Long.toUnsignedString(System.nanoTime());
     AtomicBoolean injected = new AtomicBoolean();
     doAnswer(invocation -> {
@@ -347,7 +350,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-import-missing-validated",
@@ -407,7 +410,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "UNKNOWN" + Long.toUnsignedString(System.nanoTime());
     jdbcTemplate.update(updateJobDefinitionSql, TENANT, seed.jobCode());
 
@@ -430,7 +433,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-import-unknown-outcome",
@@ -505,8 +508,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
-    LocalDate bizDate = LocalDate.of(2026, 1, 16);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+    LocalDate bizDate = BIZ_DATE.plusDays(1);
     String dryRunRequestId = "e2e-dry-" + Long.toUnsignedString(System.nanoTime());
     String formalRequestId = "e2e-formal-" + Long.toUnsignedString(System.nanoTime());
     String dryRunCustomerNo = "DRY" + Long.toUnsignedString(System.nanoTime());
@@ -629,8 +632,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
-    LocalDate bizDate = LocalDate.of(2026, 1, 18);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+    LocalDate bizDate = BIZ_DATE.plusDays(3);
     String requestId = "e2e-dispatch-redelivery-" + Long.toUnsignedString(System.nanoTime());
     String customerNo = "REDELIVERY" + Long.toUnsignedString(System.nanoTime());
     insertWorkflowTriggerRequest(seed.workflowDefinitionId(), bizDate, requestId, false);
@@ -754,8 +757,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
-    LocalDate bizDate = LocalDate.of(2026, 1, 17);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
+    LocalDate bizDate = BIZ_DATE.plusDays(2);
     String dryRunRequestId = "e2e-dry-retry-" + Long.toUnsignedString(System.nanoTime());
     String formalRequestId = "e2e-formal-retry-" + Long.toUnsignedString(System.nanoTime());
     String dryRunCustomerNo = "DRYRETRY" + Long.toUnsignedString(System.nanoTime());
@@ -946,8 +949,11 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(fileSnapshotSql, String.class, TENANT, validFileId);
     String missingBefore =
         jdbcTemplate.queryForObject(fileSnapshotSql, String.class, TENANT, missingFileId);
-    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import");
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import", TriggerType.EVENT)
+            .shardStrategy("DYNAMIC")
+            .bizDate(BIZ_DATE));
     jdbcTemplate.update(enableDryRunSql, TENANT, seed.requestId());
     Map<String, Object> params = Map.of(
         "bundleFiles",
@@ -957,7 +963,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(BIZ_DATE)
         .triggerType(TriggerType.EVENT)
         .requestId(seed.requestId())
         .traceId("e2e-existing-file-dry-run")
@@ -1008,8 +1014,11 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     String prefix = "BNDL" + Long.toUnsignedString(System.nanoTime()) + "-";
     long first = insertBundleInput(prefix + "A", 10);
     long second = insertBundleInput(prefix + "B", 15);
-    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import");
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import", TriggerType.EVENT)
+            .shardStrategy("DYNAMIC")
+            .bizDate(BIZ_DATE));
     Map<String, Object> params = Map.of(
         "bundleFiles",
         List.of(
@@ -1019,7 +1028,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.EVENT,
         seed.requestId(),
         "e2e-tr-bundle-import",
@@ -1117,9 +1126,12 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
     String requiredFileSet = prefixA + ".json," + prefixB + ".json";
     String fileGroupCode = "E2E_FILE_GROUP_" + suffixText;
     String workflowCalendar = "e2e_calendar";
-    LocalDate bizDate = LocalDate.of(2030, 1, 1).plusDays(Long.remainderUnsigned(suffix, 3000));
-    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import");
+    LocalDate bizDate = BIZ_DATE.plusDays(366 + Long.remainderUnsigned(suffix, 3000));
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "BUNDLE_IMPORT", "import", TriggerType.EVENT)
+            .shardStrategy("DYNAMIC")
+            .bizDate(BIZ_DATE));
     jdbcTemplate.update(updateTriggerRequestSql, TENANT, seed.requestId());
     jdbcTemplate.update(insertBatchDayInstanceSql, TENANT, workflowCalendar, bizDate);
 
@@ -1220,7 +1232,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
                 file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
                 storage_bucket, storage_path, source_type, file_status, biz_date, trace_id
             ) values (?, ?, 'CUSTOMER', 'INPUT', ?, ?, 'json', 'JSON', 'UTF-8', 'application/json',
-                      ?, 'NONE', 'S3', ?, ?, 'SYSTEM', 'RECEIVED', date '2026-01-15', ?)
+                      ?, 'NONE', 'S3', ?, ?, 'SYSTEM', 'RECEIVED', ?, ?)
             returning id
             """;
 
@@ -1243,6 +1255,7 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
         content.length,
         s3Bucket(),
         key,
+        BIZ_DATE,
         "e2e-tr-bundle-import");
     assertThat(fileId).isNotNull();
     return fileId;

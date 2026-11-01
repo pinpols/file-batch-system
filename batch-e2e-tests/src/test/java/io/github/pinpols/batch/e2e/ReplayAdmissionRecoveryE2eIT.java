@@ -21,6 +21,7 @@ import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayRep
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -57,7 +58,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("重放预览到真实 Kafka 和 IMPORT：指定范围、冻结原配置与受理后恢复")
 class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
-  private static final LocalDate DAY = LocalDate.of(2026, 1, 15);
+  private static final LocalDate DAY = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   private final JdbcTemplate jdbc;
 
@@ -171,7 +172,7 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     var job = jdbc.queryForMap(selectStatementSql2, TENANT, rerun);
     assertThat(job.get("job_definition_version")).isEqualTo(1);
     assertThat(job.get("parent_instance_id")).isEqualTo(selected.jobId());
-    assertThat(job.get("biz_date").toString()).isEqualTo("2026-01-15");
+    assertThat(job.get("biz_date").toString()).isEqualTo(DAY.toString());
     assertThat(job.get("instance_status")).isEqualTo("SUCCESS");
     assertThat(jobCount(selected.jobCode())).isEqualTo(2);
     assertThat(jobCount(unselected.jobCode())).isEqualTo(1);
@@ -229,7 +230,7 @@ class ReplayAdmissionRecoveryE2eIT extends AbstractIntegrationTest {
     """;
 
     var seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, DAY);
     String customer = prefix + Long.toUnsignedString(System.nanoTime());
     jdbc.update(updateJobDefinitionSql, parameters(customer), TENANT, seed.jobCode());
     var request = LaunchRequest.builder()

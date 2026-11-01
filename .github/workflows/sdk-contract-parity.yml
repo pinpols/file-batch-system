@@ -1,4 +1,4 @@
-name: sdk-contract-parity
+name: SDK / Contract and transport checks
 
 # Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ (future Go/TS/Rust BYO SDKs)
 # ↔ shared-constants/fixtures stay in lockstep. Each language runs an independent
@@ -100,7 +100,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up JDK 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: '21'
@@ -114,7 +114,7 @@ jobs:
             test
       - name: Upload Java SDK test log
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-java-reports
           path: build/sdk-test-reports/
@@ -137,7 +137,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: ${{ matrix.python-version }}
       - name: Set up uv
@@ -150,7 +150,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" python-constants -- uv run --locked pytest tests/test_shared_constants_parity.py -v
       - name: Upload Python SDK test logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-python-${{ matrix.python-version }}-reports
           path: build/sdk-test-reports/
@@ -173,7 +173,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: ${{ matrix.node-version }}
       - name: Install TypeScript toolchain
@@ -188,7 +188,7 @@ jobs:
         run: bash scripts/ci/capture-sdk-test.sh typescript-contract -- node --test --experimental-strip-types 'sdk/typescript/tests/**/*.test.ts'
       - name: Upload TypeScript SDK test log
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-typescript-${{ matrix.node-version }}-reports
           path: build/sdk-test-reports/
@@ -218,7 +218,7 @@ jobs:
         run: go vet ./... && bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" go-contract -- go test -v ./...
       - name: Upload Go SDK test log
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-go-${{ matrix.go-version }}-reports
           path: build/sdk-test-reports/
@@ -265,7 +265,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/scripts/ci/capture-sdk-test.sh" rust-http -- cargo test --features http
       - name: Upload Rust SDK test logs
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-rust-reports
           path: build/sdk-test-reports/
@@ -342,21 +342,21 @@ jobs:
           persist-credentials: false
 
       - name: Set up JDK 21
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: '21'
           cache: maven
 
       - name: Set up Python
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.14'
           cache: pip
           cache-dependency-path: sdk/python/pyproject.toml
 
       - name: Set up Node
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
 
@@ -431,7 +431,7 @@ jobs:
 
       - name: Upload SDK live transport test log
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-live-reports
           path: build/sdk-test-reports/
@@ -455,7 +455,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Download SDK test logs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: sdk-test-*-reports
           path: build/sdk-test-logs
@@ -470,7 +470,7 @@ jobs:
             --jobs-json build/sdk-test-summary/jobs.json --output build/sdk-test-summary
       - name: Upload SDK consolidated report
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sdk-test-summary
           path: build/sdk-test-summary/

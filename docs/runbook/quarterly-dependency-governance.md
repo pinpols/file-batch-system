@@ -6,6 +6,7 @@
 
 ## 自动化边界
 
+- `.github/renovate.json` 设置 `enabled: false`，禁止 Renovate 为本仓自动创建 PR。
 - `.github/dependabot.yml` 保留生态和忽略规则，但 `open-pull-requests-limit: 0`，不会创建版本更新 PR。
 - 仓库级 Dependabot security updates 关闭自动修复 PR；Dependabot alerts、Dependency Graph、CodeQL、Trivy 和 Scorecard 继续提供发现证据。
 - `quarterly-dependency-review.yml` 在每年 1、4、7、10 月首日生成 Maven、TypeScript、Python、Rust 和安全告警盘点，上传 90 天 artifact，并写入 Actions Summary。

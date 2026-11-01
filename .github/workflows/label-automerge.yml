@@ -1,4 +1,4 @@
-name: Label auto-merge
+name: Backend / Label-based auto-merge
 
 # 给同仓库 PR 打 `automerge` 标签后，登记 GitHub 原生 auto-merge。
 #
@@ -31,6 +31,7 @@ concurrency:
 
 jobs:
   enable-auto-merge:
+    name: Enable approved label-based merge
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.draft == false &&

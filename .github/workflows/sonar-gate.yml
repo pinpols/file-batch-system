@@ -1,4 +1,4 @@
-name: SonarQube CI
+name: Backend / SonarQube quality gate
 
 # 独立于 Full Gate 运行，不阻塞主干门禁；完整 Git 历史用于 30 天新代码基线。
 # 夜间只在最近 24 小时有相关代码/构建变更时扫描。
@@ -52,7 +52,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Java
-        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6
         with:
           distribution: temurin
           java-version: '21'
@@ -118,7 +118,7 @@ jobs:
 
       - name: Upload Sonar report
         if: always() && steps.nightly.outputs.skip != 'true'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sonar-report-${{ github.run_id }}
           path: reports/sonar/*/sonar-report.*

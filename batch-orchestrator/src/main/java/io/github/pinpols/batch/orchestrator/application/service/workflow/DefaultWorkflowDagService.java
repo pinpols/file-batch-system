@@ -359,8 +359,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       return WorkflowDagService.super.cascadeSkipDownstreamForRun(
           run, fromNodeCode, sourcePayloadJson);
     }
-    if (EmptyChecks.isNull(run.getId())
-        || EmptyChecks.isBlank(fromNodeCode)) {
+    if (EmptyChecks.isNull(run.getId()) || EmptyChecks.isBlank(fromNodeCode)) {
       return List.of();
     }
     Deque<String> queue = new ArrayDeque<>();
@@ -374,8 +373,8 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
       for (WorkflowEdgeEntity edge : snapshot.outgoing(current)) {
         String target = edge.getToNodeCode();
-        boolean targetNodeIsMissingOrTerminal = EmptyChecks.isBlank(target)
-            || WorkflowNodeCode.END.code().equalsIgnoreCase(target);
+        boolean targetNodeIsMissingOrTerminal =
+            EmptyChecks.isBlank(target) || WorkflowNodeCode.END.code().equalsIgnoreCase(target);
         if (targetNodeIsMissingOrTerminal) {
           continue;
         }

@@ -169,57 +169,45 @@ final class TriggerExternalEventService {
     if (EmptyChecks.isNull(command)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    ExternalEventLaunchInput requestForValidation = command.request();
-    if (EmptyChecks.isNull(requestForValidation)
-        || EmptyChecks.isBlank(requestForValidation.tenantId())
-        || EmptyChecks.isBlank(command.eventSource())) {
+    ExternalEventLaunchInput request = command.request();
+    if (EmptyChecks.isNull(request) || EmptyChecks.isBlank(request.tenantId())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String eventSourceForLength = command.eventSource();
-    String trimmedEventSourceForLength = eventSourceForLength.trim();
-    if (trimmedEventSourceForLength.length() > 128) {
+    String eventSource = command.eventSource();
+    if (EmptyChecks.isBlank(eventSource)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.externalEventCode())) {
+    String trimmedEventSource = eventSource.trim();
+    if (trimmedEventSource.length() > 128) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventCodeForLength = requestForValidation.externalEventCode();
-    String trimmedExternalEventCode = externalEventCodeForLength.trim();
+    String externalEventCode = request.externalEventCode();
+    if (EmptyChecks.isBlank(externalEventCode)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
+    }
+    String trimmedExternalEventCode = externalEventCode.trim();
     if (trimmedExternalEventCode.length() > 128) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    if (EmptyChecks.isBlank(requestForValidation.externalEventId())) {
+    String externalEventId = request.externalEventId();
+    if (EmptyChecks.isBlank(externalEventId)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String externalEventIdForLength = requestForValidation.externalEventId();
-    String trimmedExternalEventId = externalEventIdForLength.trim();
+    String trimmedExternalEventId = externalEventId.trim();
     if (trimmedExternalEventId.length() > 256) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     boolean externalEventRequestIdentityIsIncomplete =
-        EmptyChecks.isNull(requestForValidation.bizDate())
+        EmptyChecks.isNull(request.bizDate())
             || EmptyChecks.isBlank(command.idempotencyKey())
             || EmptyChecks.isBlank(command.requestId())
             || EmptyChecks.isBlank(command.traceId());
     if (externalEventRequestIdentityIsIncomplete) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    String eventSource = command.eventSource();
-    String normalizedEventSource = eventSource.trim();
-    if (!eventSource.equals(normalizedEventSource)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
-    }
-    ExternalEventLaunchInput request = command.request();
-    String externalEventCode = request.externalEventCode();
-    String normalizedExternalEventCode = externalEventCode.trim();
-    if (!externalEventCode.equals(normalizedExternalEventCode)) {
-      throw BizException.of(
-          ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
-    }
-    String externalEventId = request.externalEventId();
-    String normalizedExternalEventId = externalEventId.trim();
-    if (!externalEventId.equals(normalizedExternalEventId)) {
+    if (!eventSource.equals(trimmedEventSource)
+        || !externalEventCode.equals(trimmedExternalEventCode)
+        || !externalEventId.equals(trimmedExternalEventId)) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT, "error.trigger.external_event_identity_invalid");
     }

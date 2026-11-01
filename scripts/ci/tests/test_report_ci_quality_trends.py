@@ -30,6 +30,41 @@ class CiQualityTrendReportTest(unittest.TestCase):
             self.assertEqual(1, report["artifacts"]["pr-gate-unit-it-a-reports"]["failures"])
             self.assertEqual(2.5, report["e2eShards"]["3"]["durationSeconds"])
 
+    def test_single_download_keeps_actual_artifact_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "module").mkdir()
+            (root / "module" / "TEST-Demo.xml").write_text(
+                '<testsuite tests="1" failures="0" errors="0" skipped="0"/>', encoding="utf-8")
+            report = MODULE.parse_reports(root, ["pr-gate-java-governance-reports"])
+            self.assertIn("pr-gate-java-governance-reports", report["artifacts"])
+            self.assertEqual([], MODULE.missing_artifacts(
+                {"governance": "success"}, report["artifacts"],
+                {"governance": "pr-gate-java-governance-reports"}))
+            self.assertEqual(["governance: pr-gate-other-reports"], MODULE.missing_artifacts(
+                {"governance": "success"}, report["artifacts"],
+                {"governance": "pr-gate-other-reports"}))
+
+    def test_single_flattened_e2e_report_retains_shard(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "TEST-SampleE2eIT.xml").write_text(
+                '<testsuite name="SampleE2eIT" tests="1" failures="0" errors="0" skipped="0" time="1"/>',
+                encoding="utf-8")
+            report = MODULE.parse_reports(root, ["full-ci-e2e-shard-7-reports"])
+            self.assertEqual(1, report["e2eShards"]["7"]["tests"])
+
+    def test_multiple_downloads_keep_each_artifact_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in ["pr-gate-a-reports", "pr-gate-b-reports"]:
+                target = root / name
+                target.mkdir()
+                (target / "TEST-Demo.xml").write_text(
+                    '<testsuite tests="1" failures="0" errors="0" skipped="0"/>', encoding="utf-8")
+            report = MODULE.parse_reports(root, ["pr-gate-a-reports", "pr-gate-b-reports"])
+            self.assertEqual({"pr-gate-a-reports", "pr-gate-b-reports"}, set(report["artifacts"]))
+
     def test_reports_job_status_even_if_no_artifact_exists(self):
         with tempfile.TemporaryDirectory() as directory:
             jobs = Path(directory) / "jobs.json"

@@ -17,6 +17,8 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -39,6 +41,9 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("四分片导出产物完整性")
 class ExportPartitionContentE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+  private static final String ACCOUNTING_PERIOD =
+      BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
 
   private final WorkflowRunLaunchService launchService;
 
@@ -73,14 +78,14 @@ class ExportPartitionContentE2eIT extends AbstractIntegrationTest {
         insert into biz.settlement_batch
           (tenant_id, batch_no, biz_date, accounting_period, batch_status,
            total_record_count, total_amount, currency)
-        values (?, ?, date '2026-01-15', '202601', 'READY', 40, 0, 'CNY') returning id
+        values (?, ?, ?, ?, 'READY', 40, 0, 'CNY') returning id
         """;
     final String insertDetailsSql = """
         insert into biz.settlement_detail
           (tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
            gross_amount, fee_amount, net_amount, currency, settlement_status)
         select ?, ?, 'E2E-PART-' || lpad(n::text, 3, '0'), 'C-' || n,
-               date '2026-01-15', '202601', 100, 5, 95, 'CNY', 'READY'
+               ?, ?, 100, 5, 95, 'CNY', 'READY'
         from generate_series(1, 40) n
         """;
     final String updateTemplateSql = """
@@ -102,25 +107,33 @@ class ExportPartitionContentE2eIT extends AbstractIntegrationTest {
         """;
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId = businessJdbc.queryForObject(insertBatchSql, Long.class, TENANT, batchNo);
-    businessJdbc.update(insertDetailsSql, TENANT, batchId);
+    Long batchId = businessJdbc.queryForObject(
+        insertBatchSql, Long.class, TENANT, batchNo, BIZ_DATE, ACCOUNTING_PERIOD);
+    businessJdbc.update(insertDetailsSql, TENANT, batchId, BIZ_DATE, ACCOUNTING_PERIOD);
     assertThat(jdbcTemplate.update(updateTemplateSql, TENANT)).isEqualTo(1);
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
                 jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
-            .shardStrategy("STATIC"));
+            .shardStrategy("STATIC")
+            .bizDate(BIZ_DATE));
     Map<String, Object> params = Map.of(
-        "batchNo", batchNo,
-        "templateCode", "EXP-SETTLEMENT-JSON",
-        "bizDate", "2026-01-15",
-        "bizType", "SETTLEMENT",
-        "fileCode", "e2e-partition-export",
-        "partitionCount", 4);
+        "batchNo",
+        batchNo,
+        "templateCode",
+        "EXP-SETTLEMENT-JSON",
+        "bizDate",
+        BIZ_DATE.toString(),
+        "bizType",
+        "SETTLEMENT",
+        "fileCode",
+        "e2e-partition-export",
+        "partitionCount",
+        4);
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-partition-export",

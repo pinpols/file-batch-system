@@ -1159,15 +1159,14 @@ public class BatchDayReplayService {
 
   private Map<Long, String> loadVersionBusinessKeys(
       BatchDayReplaySubmitCommand command, String scope) {
+    List<Long> versionIds = command.versionIds();
     boolean outputReplaySelectionIsInvalid =
-        !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope)
-            || EmptyChecks.isNull(command.versionIds())
-            || EmptyChecks.isEmpty(command.versionIds());
+        !BatchDayReplayScope.OUTPUTS_ONLY.code().equals(scope) || EmptyChecks.isEmpty(versionIds);
     if (outputReplaySelectionIsInvalid) {
       return Map.of();
     }
     List<ResultVersionEntity> versions =
-        resultVersionMapper.selectByIds(command.tenantId(), command.versionIds());
+        resultVersionMapper.selectByIds(command.tenantId(), versionIds);
     Map<Long, String> businessKeys = new HashMap<>(versions.size() * 2);
     for (ResultVersionEntity version : versions) {
       businessKeys.put(version.id(), version.businessKey());
