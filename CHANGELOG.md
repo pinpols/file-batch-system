@@ -10,6 +10,8 @@
 
 ### Changed
 
+- Java SDK 的幂等存储扩展点将 `SdkIdempotencyEntity` 更名为 `SdkIdempotencySnapshot`，`SdkIdempotencyStore.find` / `record` 签名随之变化；既有自定义实现需要迁移，本次不提供旧接口兼容。
+
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
@@ -18,7 +20,7 @@
 
 - 控制台认证过滤器不再把下游异常误判为 JWT 错误；JWT 撤销记录保留至实际过期容忍窗口结束，避免注销后在容忍期内重新通过认证。
 
-- 调度配置缓存按租户、类型和配置版本区分回填，并隔离事务快照与失效竞态，避免已完成失效的旧读取污染后续请求；Redis 失效发布故障后的持久恢复仍待补齐。
+- 调度配置缓存按租户、类型和配置版本区分回填，并隔离事务快照与失效竞态；配置变更同事务记录失效意图，由 Console 重试投递。目标环境及故障恢复全链路验收仍待完成。
 
 - 出箱故障注入清理 `DROP TRIGGER` 与轮询器写锁冲突时按死锁重试，避免 40P01 把已提交的恢复用例打成错误。
 
