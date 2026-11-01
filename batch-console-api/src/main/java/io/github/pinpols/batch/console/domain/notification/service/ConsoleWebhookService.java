@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.console.config.WebhookRelayProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookDeliveryLogEntity;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
@@ -31,6 +32,7 @@ public class ConsoleWebhookService {
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private final TenantIdResolver tenantGuard;
   private final CallbackUrlValidator callbackUrlValidator;
+  private final WebhookRelayProperties relayProperties;
 
   public List<WebhookSubscriptionEntity> listSubscriptions(String tenantId) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
@@ -51,6 +53,12 @@ public class ConsoleWebhookService {
     subscriptionRepository.findByTenantAndName(resolved, command.name()).ifPresent(existing -> {
       throw BizException.of(ResultCode.CONFLICT, "error.webhook.subscription_exists");
     });
+    // 订阅数直接放大 relay 轮询与投递量；未设上限时租户用户可无界创建。
+    if (subscriptionRepository.countByTenant(resolved)
+        >= relayProperties.getMaxSubscriptionsPerTenant()) {
+      throw BizException.of(
+          ResultCode.INVALID_ARGUMENT, "error.webhook.subscription_limit_exceeded");
+    }
     String name = command.name();
     String callbackUrl = command.callbackUrl();
     String normalizedEventTypes = normalizeEventTypes(command.eventTypes());

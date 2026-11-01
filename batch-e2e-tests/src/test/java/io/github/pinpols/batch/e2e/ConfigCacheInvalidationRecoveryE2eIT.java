@@ -53,33 +53,23 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @DisplayName("配置提交后缓存失效发布故障的持久恢复")
 class ConfigCacheInvalidationRecoveryE2eIT extends AbstractIntegrationTest {
 
-  private final ConsoleTenantConfigInitApplicationService initService;
-
-  private final ConsoleConfigSyncApplicationService syncService;
-
-  private final OrchestratorConfigCacheService cache;
-
-  private final OrchestratorConfigInvalidationSubscriber subscriber;
-
-  private final StringRedisTemplate redis;
-
-  private final JdbcTemplate jdbc;
+  @Autowired
+  private ConsoleTenantConfigInitApplicationService initService;
 
   @Autowired
-  ConfigCacheInvalidationRecoveryE2eIT(
-      ConsoleTenantConfigInitApplicationService initService,
-      ConsoleConfigSyncApplicationService syncService,
-      OrchestratorConfigCacheService cache,
-      OrchestratorConfigInvalidationSubscriber subscriber,
-      StringRedisTemplate redis,
-      JdbcTemplate jdbc) {
-    this.initService = initService;
-    this.syncService = syncService;
-    this.cache = cache;
-    this.subscriber = subscriber;
-    this.redis = redis;
-    this.jdbc = jdbc;
-  }
+  private ConsoleConfigSyncApplicationService syncService;
+
+  @Autowired
+  private OrchestratorConfigCacheService cache;
+
+  @Autowired
+  private OrchestratorConfigInvalidationSubscriber subscriber;
+
+  @Autowired
+  private StringRedisTemplate redis;
+
+  @Autowired
+  private JdbcTemplate jdbc;
 
   @MockitoBean
   private ImportWorkerLoop importWorkerLoop;

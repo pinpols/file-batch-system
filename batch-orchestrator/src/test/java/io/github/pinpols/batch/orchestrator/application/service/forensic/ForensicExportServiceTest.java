@@ -69,6 +69,24 @@ class ForensicExportServiceTest {
   }
 
   @Test
+  @DisplayName("兼容历史格式参数，仍生成 ZIP 取证包")
+  void shouldAcceptLegacyFormats_whenExporting() throws IOException {
+    for (String format : List.of("JSON", "CSV")) {
+      ForensicExportResponse response = service.export(ForensicExportRequest.builder()
+          .tenantId("t1")
+          .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+          .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
+          .exportFormat(format)
+          .requestedBy("ops")
+          .build());
+      assertThat(response.status()).isEqualTo("COMPLETED");
+      try (ZipFile zip = new ZipFile(response.storagePath())) {
+        assertThat(zip.getEntry("manifest.json")).isNotNull();
+      }
+    }
+  }
+
+  @Test
   @DisplayName("导出成功时生成含清单与业务数据的压缩包, 并给出摘要与文件大小")
   void shouldProduceZipBundleWithManifestAndSha256() throws IOException {
     JobInstanceEntity instance = new JobInstanceEntity();
