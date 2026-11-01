@@ -6,7 +6,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -42,7 +41,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -1624,21 +1623,49 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
         .withSchedule(
             SimpleScheduleBuilder.simpleSchedule().withIntervalInSeconds(60).withRepeatCount(0))
         .build();
-    doThrow(new IllegalStateException("injected coverage persistence failure"))
-        .when(mapper)
-        .recordCoverage(ArgumentMatchers.argThat(parameters -> parameters != null
-            && Objects.equals(parameters.tenantId(), tenantId)
-            && Objects.equals(parameters.workflowDefinitionId(), workflowDefinitionId)
-            && Objects.equals(parameters.scheduleVersion(), 6)
-            && parameters.calendarCode() == null
-            && parameters.coverageFrom() != null
-            && parameters.coverageThrough() != null
-            && parameters.completedAt() != null));
-
-    assertThatThrownBy(() -> planner.materialize(
-            descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessage("injected coverage persistence failure");
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String triggerName = "test_fail_coverage_" + suffix;
+    String functionName = "test_fail_coverage_fn_" + suffix;
+    String escapedTenantId = tenantId.replace("'", "''");
+    final String createFunctionSql =
+        """
+        create function batch.%s() returns trigger language plpgsql as $fn$
+        begin
+          if new.tenant_id = '%s' and new.workflow_definition_id = %d
+              and new.schedule_version = 6 and new.calendar_code is null then
+            if not exists (
+                select 1 from batch.scheduled_occurrence
+                where tenant_id = new.tenant_id and workflow_definition_id = new.workflow_definition_id
+                  and schedule_version = new.schedule_version
+            ) then
+              raise exception 'occurrence missing before coverage failure';
+            end if;
+            raise exception 'injected coverage persistence failure';
+          end if;
+          return new;
+        end; $fn$
+        """.formatted(functionName, escapedTenantId, workflowDefinitionId);
+    final String createTriggerSql = """
+        create trigger %s before insert on batch.scheduled_occurrence_coverage
+        for each row execute function batch.%s()
+        """.formatted(triggerName, functionName);
+    final String dropTriggerSql = """
+        drop trigger if exists %s on batch.scheduled_occurrence_coverage
+        """.formatted(triggerName);
+    final String dropFunctionSql = """
+        drop function if exists batch.%s()
+        """.formatted(functionName);
+    try {
+      jdbcTemplate.execute(createFunctionSql);
+      jdbcTemplate.execute(createTriggerSql);
+      assertThatThrownBy(() -> planner.materialize(
+              descriptor, QuartzScheduledFireEnumerator.fireTimeSource(quartzTrigger), now))
+          .isInstanceOf(RuntimeException.class)
+          .hasStackTraceContaining("injected coverage persistence failure");
+    } finally {
+      jdbcTemplate.execute(dropTriggerSql);
+      jdbcTemplate.execute(dropFunctionSql);
+    }
 
     Long selectedScheduledOccurrenceCount = jdbcTemplate.queryForObject(
         selectCountSql, Long.class, tenantId, workflowDefinitionId, Timestamp.from(fireTime));
