@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
@@ -14,11 +16,9 @@ import java.time.Instant;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 按租户隔离并记录审计的自动批次日补扫暂停/恢复控制。 */
 @Service
@@ -57,10 +57,8 @@ public class BatchDayCatchupControlService {
       if (!isCatchupControlCalendarReferenceViolation(exception)) {
         throw exception;
       }
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT,
-          "Business calendar changed while updating catch-up control",
-          exception);
+      throw new OperationFailure(
+          Kind.CONFLICT, "Business calendar changed while updating catch-up control", exception);
     }
   }
 
@@ -107,8 +105,8 @@ public class BatchDayCatchupControlService {
               .build();
       int updated = controlMapper.updatePauseState(batchDayCatchupPauseStateParam);
       if (updated != 1) {
-        throw new ResponseStatusException(
-            HttpStatus.CONFLICT, "Batch-day catch-up control changed concurrently");
+        throw new OperationFailure(
+            Kind.CONFLICT, "Batch-day catch-up control changed concurrently");
       }
       BatchDayCatchupEventParam batchDayCatchupEventParam = BatchDayCatchupEventParam.builder()
           .tenantId(tenantId)
@@ -126,8 +124,7 @@ public class BatchDayCatchupControlService {
   private void ensureEnabledCalendar(String tenantId, String calendarCode) {
     if (EmptyChecks.isNull(
         calendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true))) {
-      throw new ResponseStatusException(
-          HttpStatus.NOT_FOUND, "Enabled business calendar was not found");
+      throw new OperationFailure(Kind.NOT_FOUND, "Enabled business calendar was not found");
     }
   }
 

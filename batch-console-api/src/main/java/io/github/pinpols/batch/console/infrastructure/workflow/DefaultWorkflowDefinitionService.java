@@ -8,10 +8,10 @@ import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
@@ -399,7 +399,7 @@ public class DefaultWorkflowDefinitionService implements WorkflowDefinitionServi
       return null;
     }
     String jobCode = requestedJobCode.trim();
-    JobDefinitionEntity upstream = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    JobDefinitionView upstream = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
     if (EmptyChecks.isNull(upstream)) {
       throw BizException.of(
           ResultCode.NOT_FOUND, "error.workflow.schedule_dependency_job_not_found", jobCode);

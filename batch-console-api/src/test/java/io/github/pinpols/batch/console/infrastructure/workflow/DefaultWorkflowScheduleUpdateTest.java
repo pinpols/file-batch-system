@@ -13,11 +13,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowScheduleUpdateRequest;
@@ -258,8 +258,8 @@ class DefaultWorkflowScheduleUpdateTest {
     return entity;
   }
 
-  private static JobDefinitionEntity jobDefinition(Long id, String jobCode) {
-    JobDefinitionEntity entity = new JobDefinitionEntity();
+  private static JobDefinitionView jobDefinition(Long id, String jobCode) {
+    JobDefinitionView entity = new JobDefinitionView();
     entity.setId(id);
     entity.setJobCode(jobCode);
     return entity;

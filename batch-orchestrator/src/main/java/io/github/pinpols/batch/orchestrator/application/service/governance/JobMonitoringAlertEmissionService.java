@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.query.JobMonitoringRecheckQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.JobMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
@@ -96,7 +96,7 @@ public class JobMonitoringAlertEmissionService {
     }
 
     String detailJson = JsonUtils.toJson(detail);
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId(candidate.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(violation.alertType())

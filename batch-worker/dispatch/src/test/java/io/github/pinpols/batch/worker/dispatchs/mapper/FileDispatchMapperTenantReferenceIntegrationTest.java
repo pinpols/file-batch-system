@@ -71,7 +71,7 @@ class FileDispatchMapperTenantReferenceIntegrationTest {
   private static final String SFTP_USER = "batch";
   private static final String SFTP_PASSWORD = "batch-pass";
   private static final GenericContainer<?> SFTP_SERVER = new GenericContainer<>(
-          DockerImageName.parse("atmoz/sftp:alpine"))
+          DockerImageName.parse("jmcombs/sftp:alpine"))
       .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
       .withExposedPorts(22)
       .withCommand(SFTP_USER + ":" + SFTP_PASSWORD + ":::upload")

@@ -11,8 +11,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.dryrun.JdbcDryRunSqlProbe;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.time.LocalDate;
@@ -64,8 +64,8 @@ class DefaultDryRunPlanServiceTest {
   @Test
   @DisplayName("Job 预检不要求由 Workflow 所有的日程字段")
   void shouldValidateJob_whenScheduleOwnedByWorkflow() {
-    JobDefinitionEntity job =
-        JobDefinitionEntity.builder().id(1L).tenantId("t1").jobCode("JOB_A").build();
+    JobDefinitionView job =
+        JobDefinitionView.builder().id(1L).tenantId("t1").jobCode("JOB_A").build();
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(job);
     DryRunPlanRequest request = DryRunPlanRequest.builder()
         .tenantId("t1")
@@ -84,13 +84,13 @@ class DefaultDryRunPlanServiceTest {
   @Test
   @DisplayName("同名 Workflow 不会成为 Job 预检隐式目标")
   void shouldIgnoreWorkflow_whenCodeMatchesUnrelatedJob() {
-    JobDefinitionEntity job = JobDefinitionEntity.builder()
+    JobDefinitionView job = JobDefinitionView.builder()
         .id(1L)
         .tenantId("t1")
         .jobCode("JOB_A")
         .scheduleType("MANUAL")
         .build();
-    WorkflowDefinitionEntity unrelatedWorkflow = new WorkflowDefinitionEntity(
+    WorkflowDefinitionView unrelatedWorkflow = new WorkflowDefinitionView(
         99L, "t1", "JOB_A", "Unrelated workflow", "DAG", 1, true, null, "calendar_a");
     when(configCache.findEnabledJobDefinition("t1", "JOB_A")).thenReturn(job);
     when(configCache.findEnabledWorkflowDefinition("t1", "JOB_A")).thenReturn(unrelatedWorkflow);
@@ -111,7 +111,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("Job 残留 cron 字段不会被声明为 Workflow 日程已验证")
   void shouldSkipScheduleValidation_whenOnlyJobTargetProvided() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(1L)
             .tenantId("t1")
             .jobCode("JOB_A")
@@ -136,7 +136,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("Job 的残留日程表达式不参与独立 Job 参数预检")
   void shouldIgnoreJobSchedule_whenPreflightingJobParameters() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(1L)
             .tenantId("t1")
             .jobCode("JOB_A")
@@ -173,7 +173,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("生成调度计划时给出分区数量等汇总信息")
   void shouldEmitScheduleSummary_whenPlanBuilt() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(1L)
             .tenantId("t1")
             .jobCode("JOB_A")
@@ -209,7 +209,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("执行级试运行继承计划能力并给出执行侧汇总提示")
   void shouldInheritPlanAndEmitExecutionSummary_whenLevelThree() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+        .thenReturn(JobDefinitionView.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
@@ -237,7 +237,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("参数模板声明必填但未提供时给出参数缺失提示")
   void shouldRequireParams_whenSchemaDeclaresRequired() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(1L)
             .scheduleType("MANUAL")
             .paramSchema(Map.of("required", List.of("targetTable")))
@@ -256,7 +256,7 @@ class DefaultDryRunPlanServiceTest {
   // ── S1: dry-run SQL 探针分号堆叠拒绝 ──────────────────────────────────────
   private DryRunPlanResult probeExecutionSql(String sql) {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+        .thenReturn(JobDefinitionView.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
@@ -315,7 +315,7 @@ class DefaultDryRunPlanServiceTest {
   // ── S3: dry-run endpoint reachability 探针 SSRF 出口守卫 ─────────────────────
   private DryRunPlanResult probeExecutionEndpoint(String callbackUrl) {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+        .thenReturn(JobDefinitionView.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());
@@ -356,7 +356,7 @@ class DefaultDryRunPlanServiceTest {
   @DisplayName("单个地址被拦截后继续探测其余地址并如实汇总")
   void shouldContinueProbing_whenOneEndpointBlocked() {
     when(configCache.findEnabledJobDefinition("t1", "JOB_A"))
-        .thenReturn(JobDefinitionEntity.builder().id(1L).scheduleType("MANUAL").build());
+        .thenReturn(JobDefinitionView.builder().id(1L).scheduleType("MANUAL").build());
     SchedulePlan plan = new SchedulePlan();
     plan.setPartitionCount(1);
     plan.getPartitions().add(new SchedulePlan.PartitionPlan());

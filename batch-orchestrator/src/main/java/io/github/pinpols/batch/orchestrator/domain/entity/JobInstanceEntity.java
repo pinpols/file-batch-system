@@ -20,10 +20,6 @@ public class JobInstanceEntity implements Stateful {
   private String tenantId;
   private Long jobDefinitionId;
   private Long triggerRequestId;
-  /** 查询投影：TriggerRequest 所属的 WorkflowRun；不对应 job_instance 持久化列。 */
-  private Long parentWorkflowRunId;
-  /** 查询投影：TriggerRequest 所属的 Workflow 节点；不对应 job_instance 持久化列。 */
-  private String parentNodeCode;
 
   private String jobCode;
   private String instanceNo;

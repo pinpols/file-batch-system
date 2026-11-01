@@ -10,7 +10,7 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.sdk.client.BatchPlatformClientConfig;
 import io.github.pinpols.batch.sdk.idempotent.Idempotent;
-import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyEntity;
+import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencySnapshot;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotencyStore;
 import io.github.pinpols.batch.sdk.idempotent.SdkIdempotentHandler;
 import io.github.pinpols.batch.sdk.internal.PlatformHttpClient;
@@ -263,7 +263,7 @@ class TaskDispatcherAutoWrapTest {
 
   /** 记录调用的 fake store(可预置命中结果)。 */
   static final class RecordingStore implements SdkIdempotencyStore {
-    final Map<String, SdkIdempotencyEntity> map = new HashMap<>();
+    final Map<String, SdkIdempotencySnapshot> map = new HashMap<>();
     final Set<String> placeholders = new HashSet<>();
     final AtomicInteger findCalls = new AtomicInteger();
     final AtomicInteger recordCalls = new AtomicInteger();
@@ -278,13 +278,13 @@ class TaskDispatcherAutoWrapTest {
     }
 
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public Optional<SdkIdempotencySnapshot> find(String key) {
       findCalls.incrementAndGet();
       return Optional.ofNullable(map.get(key));
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
+    public void record(String key, SdkIdempotencySnapshot entity, long ttlMillis) {
       recordCalls.incrementAndGet();
       map.put(key, entity);
       placeholders.remove(key);

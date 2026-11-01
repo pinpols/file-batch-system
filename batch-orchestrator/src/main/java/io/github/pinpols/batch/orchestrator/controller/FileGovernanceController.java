@@ -1,12 +1,11 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceLatencyResponse;
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileUploadSessionResponse;
 import io.github.pinpols.batch.orchestrator.domain.command.ArrivalGroupGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.FileUploadSessionCommand;
-import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
-import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -30,7 +29,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class FileGovernanceController {
 
   private final FileGovernanceService fileGovernanceService;
-  private final FileGovernanceScheduler fileGovernanceScheduler;
 
   @PostMapping("/{fileId}/archive")
   public FileOperationResponse archive(
@@ -99,8 +97,8 @@ public class FileGovernanceController {
   }
 
   @GetMapping("/governance/latency-metrics")
-  public FileGovernanceLatencyMetrics latencyMetrics(@RequestParam String tenantId) {
-    return fileGovernanceScheduler.loadLatencyMetrics(tenantId);
+  public FileGovernanceLatencyResponse latencyMetrics(@RequestParam String tenantId) {
+    return fileGovernanceService.loadLatencyMetrics(tenantId);
   }
 
   private FileGovernanceCommand toCommand(Long fileId, FileOperationRequest request) {

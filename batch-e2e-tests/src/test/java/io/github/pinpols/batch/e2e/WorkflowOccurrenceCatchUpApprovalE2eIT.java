@@ -741,7 +741,7 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       assertThat(forwarded.get()).isGreaterThanOrEqualTo(1);
       assertThat(dropped.get()).isGreaterThanOrEqualTo(1);
       String selectRequestSql =
-          "select request_id from batch.trigger_request where tenant_id = ? and dedup_key = ?";
+          "select request_id from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is null";
       var requestIds = jdbcTemplate.queryForList(selectRequestSql, String.class, TENANT, sourceKey);
       assertThat(requestIds).hasSize(1);
       String triggerRequest = requestIds.getFirst();
@@ -797,12 +797,32 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
           .isEqualTo(triggerRequest);
       assertThat(dropped.get()).isEqualTo(beforeReplay);
       String countRequestSql =
-          "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ?";
+          "select count(*) from batch.trigger_request where tenant_id = ? and dedup_key = ? and parent_workflow_run_id is null";
       String countOutboxSql =
           "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
       Integer requestCount =
           jdbcTemplate.queryForObject(countRequestSql, Integer.class, TENANT, sourceKey);
       assertThat(requestCount).isEqualTo(1);
+      String selectChildRequestsSql = """
+          select child.parent_node_code, child.dedup_key, child.job_code, child.trigger_type
+          from batch.trigger_request child
+          join batch.workflow_run run on run.tenant_id = child.tenant_id
+                                    and run.id = child.parent_workflow_run_id
+          join batch.trigger_request root on root.tenant_id = run.tenant_id
+                                         and root.id = run.trigger_request_id
+          where root.tenant_id = ? and root.request_id = ?
+            and root.parent_workflow_run_id is null
+          """;
+      await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+        List<Map<String, Object>> children =
+            jdbcTemplate.queryForList(selectChildRequestsSql, TENANT, triggerRequest);
+        assertThat(children).hasSize(1);
+        assertThat(children.getFirst())
+            .containsEntry("parent_node_code", "JOB")
+            .containsEntry("dedup_key", sourceKey)
+            .containsEntry("job_code", seed.jobCode())
+            .containsEntry("trigger_type", "EVENT");
+      });
       Integer outboxCount =
           jdbcTemplate.queryForObject(countOutboxSql, Integer.class, TENANT, triggerRequest);
       assertThat(outboxCount).isEqualTo(1);
@@ -1894,8 +1914,9 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
   @DisplayName("计划触发先接纳时结算等待同一业务日围栏并保留 occurrence")
   void scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking(ScheduledAdmissionEntry entry)
       throws Exception {
+    // 允许 Quartz 观察记录的外键检查，同时阻塞接纳流程的 FOR SHARE。
     final String selectIdSql = """
-            select id from batch.workflow_definition where tenant_id = ? and id = ? for update
+            select id from batch.workflow_definition where tenant_id = ? and id = ? for no key update
         """;
 
     final String insertBusinessCalendarSql = """

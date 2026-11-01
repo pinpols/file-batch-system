@@ -115,7 +115,7 @@ OutboxRetryScheduler 扫 event_outbox_retry
 | `batch.outbox.publish.failed.total` | outbox_event | rate > 0.1/s |
 | `batch.outbox.giveup.total` | outbox_event / trigger_outbox_event | > 0（任何 GIVE_UP 都告警） |
 | `batch.trigger.launch.consumed.total` | trigger_outbox_event 消费侧 | rate < 预期定时器触发数 |
-| `batch.trigger.launch.deduped.total` | TriggerLaunchConsumer | rate 突增 = 上游重投异常 |
+| `batch.trigger.launch.failed.total`（`reason="http_409"`） | TriggerLaunchConsumer | 预期核对等冲突须重试；检查失败原因及持久恢复锚点 |
 | `batch.trigger.launch.kafka.queue.age` | TriggerLaunchConsumer | p95 > 30s 持续 10min；检查 consumer lag、分区数和实例数 |
 | `batch.trigger.launch.consume.duration` | TriggerLaunchConsumer | 与 queue age 联合判断是消费端处理慢还是 Kafka 排队 |
 

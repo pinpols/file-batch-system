@@ -7,4 +7,7 @@ public interface ConsoleRealtimeSubscriptionPort {
 
   SseEmitter subscribe(
       String tenantId, String stream, String eventType, String cursor, Long heartbeatMillis);
+
+  /** 订阅未交给 HTTP 容器时显式释放连接资源；重复调用安全。 */
+  void close(SseEmitter emitter);
 }

@@ -11,5 +11,9 @@ public interface ConsoleJobBundleApplicationService {
 
   ConsoleJobBundleResultResponse create(JobBundleCreateRequest request);
 
+  ConsoleJobBundleResultResponse create(JobBundleCreateRequest request, String requestHash);
+
   ConsoleJobBundleResultResponse importBundle(JobBundleImportRequest request);
+
+  ConsoleJobBundleResultResponse importBundle(JobBundleImportRequest request, String requestHash);
 }

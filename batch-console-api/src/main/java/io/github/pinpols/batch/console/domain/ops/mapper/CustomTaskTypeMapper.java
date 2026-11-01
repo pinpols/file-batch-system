@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.mapper;
 
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -8,10 +8,10 @@ import org.apache.ibatis.annotations.Param;
 public interface CustomTaskTypeMapper {
 
   /** 按租户列 ACTIVE 自定义 taskType，last_declared_at 倒序（最近上报在前）。 */
-  List<CustomTaskTypeEntity> selectActiveByTenant(@Param("tenantId") String tenantId);
+  List<CustomTaskTypeView> selectActiveByTenant(@Param("tenantId") String tenantId);
 
   long countActiveByTenant(@Param("tenantId") String tenantId);
 
-  CustomTaskTypeEntity selectByTenantAndCode(
+  CustomTaskTypeView selectByTenantAndCode(
       @Param("tenantId") String tenantId, @Param("taskTypeCode") String taskTypeCode);
 }

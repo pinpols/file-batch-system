@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.domain.ops.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import java.time.Instant;
 import lombok.Builder;
 
@@ -19,7 +19,7 @@ public record CustomTaskTypeResponse(
     Instant firstDeclaredAt,
     Instant lastDeclaredAt) {
 
-  public static CustomTaskTypeResponse from(CustomTaskTypeEntity entity) {
+  public static CustomTaskTypeResponse from(CustomTaskTypeView entity) {
     return CustomTaskTypeResponse.builder()
         .id(entity.getId())
         .tenantId(entity.getTenantId())

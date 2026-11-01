@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.config.ConfigInvalidationStore;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.support.cache.RedisKeyUtils;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
@@ -22,7 +23,7 @@ public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
   @Override
   public boolean delete(String key) {
     Boolean deleted = redisTemplate.delete(key);
-    return Boolean.TRUE.equals(deleted);
+    return Objects.requireNonNull(deleted, "Redis delete did not execute");
   }
 
   @Override
@@ -44,8 +45,9 @@ public class RedisConfigInvalidationStore implements ConfigInvalidationStore {
 
   @Override
   public void publish(ConfigCacheInvalidationEvent event) {
-    redisTemplate.convertAndSend(
+    Long receivers = redisTemplate.convertAndSend(
         redisNamespace.channel(ConsoleConfigCacheInvalidationService.INVALIDATION_CHANNEL),
         JsonUtils.toJson(event));
+    Objects.requireNonNull(receivers, "Redis publish did not execute");
   }
 }

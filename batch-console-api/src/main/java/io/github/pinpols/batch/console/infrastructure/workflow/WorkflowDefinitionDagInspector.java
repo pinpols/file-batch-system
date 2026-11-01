@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.infrastructure.workflow;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDefinitionService.DagValidationResult;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -86,7 +86,7 @@ public final class WorkflowDefinitionDagInspector {
             null));
         continue;
       }
-      JobDefinitionEntity jobDefinition = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+      JobDefinitionView jobDefinition = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
       if (EmptyChecks.isNull(jobDefinition)) {
         findings.add(DagValidationResult.Finding.error(
             "JOB_REF_NOT_FOUND",

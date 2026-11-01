@@ -3,6 +3,8 @@ package io.github.pinpols.batch.e2e;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -10,7 +12,15 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigSyncApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.FileChannelSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigSyncImportResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
 import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.e2e.config.E2eBusinessDataSourceConfiguration;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxPublisher;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.BatchMqTopicsProperties;
@@ -19,21 +29,28 @@ import io.github.pinpols.batch.orchestrator.domain.query.OutboxEventQuery;
 import io.github.pinpols.batch.orchestrator.mapper.OutboxEventMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -49,7 +66,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 /**
  * Worker 进程重启恢复 E2E 测试：验证 Dispatch Worker 进程重启后， 重新注册并恢复消费 Kafka 派发消息，完成文件分发任务。
@@ -58,7 +78,11 @@ import org.springframework.test.annotation.DirtiesContext;
  * 等待任务成功。
  */
 @E2eSpringBootTest(
-    classes = E2eOrchestratorApplication.class,
+    classes = {
+      E2eOrchestratorApplication.class,
+      E2eBusinessDataSourceConfiguration.class,
+      RuntimeConfigImportDispatchE2eIT.ConsoleConfig.class
+    },
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.sla.enabled=false",
@@ -92,29 +116,224 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+
+  private final ConsoleConfigSyncApplicationService configSyncService;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final OutboxPublisher outboxPublisher;
+
+  private final OutboxEventMapper outboxEventMapper;
+
+  private final BatchMqTopicsProperties batchMqTopicsProperties;
+  private final String kafkaBootstrapServers;
+  private final String internalSecret;
+  private final int localServerPort;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
+  WorkerProcessRestartRecoveryE2eIT(
+      WorkflowRunLaunchService launchService,
+      ConsoleConfigSyncApplicationService configSyncService,
+      JdbcTemplate jdbcTemplate,
+      OutboxPublisher outboxPublisher,
+      OutboxEventMapper outboxEventMapper,
+      BatchMqTopicsProperties batchMqTopicsProperties,
+      @Value("${spring.kafka.bootstrap-servers}") String kafkaBootstrapServers,
+      @Value("${batch.security.internal-secret}") String internalSecret,
+      @LocalServerPort int localServerPort) {
+    this.launchService = launchService;
+    this.configSyncService = configSyncService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outboxPublisher = outboxPublisher;
+    this.outboxEventMapper = outboxEventMapper;
+    this.batchMqTopicsProperties = batchMqTopicsProperties;
+    this.kafkaBootstrapServers = kafkaBootstrapServers;
+    this.internalSecret = internalSecret;
+    this.localServerPort = localServerPort;
+  }
 
-  @Autowired
-  private OutboxPublisher outboxPublisher;
+  @Test
+  @DisplayName("独立派发 Worker 在途请求期间导入新渠道，原请求仍完成于旧地址")
+  void shouldCompleteInFlightDispatchWhenChannelIsImported() throws Exception {
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String tenantId = "t-flight-" + suffix;
+    String workerCode = "flight-dispatch-" + suffix;
+    String consumerGroup = "batch-worker-dispatch-flight-" + suffix;
+    String channelCode = "flight-" + suffix;
+    String externalRequestId = "flight-request-" + suffix;
+    CountDownLatch received = new CountDownLatch(1);
+    CountDownLatch releaseResponse = new CountDownLatch(1);
+    AtomicInteger oldRequests = new AtomicInteger();
+    AtomicInteger newRequests = new AtomicInteger();
+    AtomicReference<String> requestBody = new AtomicReference<>();
+    ExecutorService receiverExecutor = Executors.newCachedThreadPool();
+    HttpServer receiver = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    receiver.setExecutor(receiverExecutor);
+    receiver.createContext("/old", exchange -> {
+      try {
+        requestBody.set(
+            new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        oldRequests.incrementAndGet();
+        received.countDown();
+        if (!releaseResponse.await(90, TimeUnit.SECONDS)) {
+          exchange.sendResponseHeaders(503, -1);
+          return;
+        }
+        exchange.sendResponseHeaders(200, -1);
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+      } finally {
+        exchange.close();
+      }
+    });
+    receiver.createContext("/new", exchange -> {
+      try {
+        newRequests.incrementAndGet();
+        exchange.sendResponseHeaders(200, -1);
+      } finally {
+        exchange.close();
+      }
+    });
+    receiver.start();
+    Process worker = null;
+    try {
+      String baseUrl = "http://127.0.0.1:" + receiver.getAddress().getPort();
+      String oldEndpoint = baseUrl + "/old";
+      String newEndpoint = baseUrl + "/new";
+      String insertChannel = """
+          insert into batch.file_channel_config (
+              tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+              config_json, receipt_policy, timeout_seconds, enabled
+          ) values (?, ?, '在途派发渠道', 'API_PUSH', ?, 'NONE',
+              jsonb_build_object('target_endpoint', ?, 'channel_type', 'API_PUSH',
+                  'channel_code', ?), 'NONE', 60, true)
+          """;
+      jdbcTemplate.update(
+          insertChannel, tenantId, channelCode, oldEndpoint, oldEndpoint, channelCode);
+      Path sourceFile = Files.createTempFile("flight-dispatch-", ".txt");
+      try {
+        Files.writeString(sourceFile, "dispatch-" + suffix);
+        Long fileId = seedDispatchFile(tenantId, sourceFile, suffix);
+        LaunchSeed seed = seedDispatchJob(tenantId, "dispatch", TriggerType.API, suffix);
+        Path workerLog = Files.createTempFile("flight-dispatch-worker-", ".log");
+        try {
+          worker = startDispatchWorker(tenantId, workerCode, consumerGroup, workerLog, true);
+          awaitLogContains(workerLog, "Started BatchWorkerDispatchApplication");
+          awaitWorkerOnlineInRegistry(tenantId, workerCode);
+          Map<String, Object> params = Map.of(
+              "fileId",
+              fileId.toString(),
+              "channelCode",
+              channelCode,
+              "externalRequestId",
+              externalRequestId,
+              "ackRequired",
+              false);
+          launchService.launch(new LaunchRequest(
+              tenantId,
+              seed.workflowDefinitionId(),
+              BIZ_DATE,
+              TriggerType.API,
+              seed.requestId(),
+              "flight-trace-" + suffix,
+              params));
+          publishPendingOutbox(tenantId);
+          assertThat(received.await(120, TimeUnit.SECONDS))
+              .as("旧接收端已收到真实 Worker 请求")
+              .isTrue();
+          JsonNode receivedPayload = JsonUtils.fromJson(requestBody.get(), JsonNode.class);
+          assertThat(receivedPayload.path("tenantId").asText()).isEqualTo(tenantId);
+          assertThat(receivedPayload.path("externalRequestId").asText())
+              .isEqualTo(externalRequestId);
 
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
+          FileChannelSpec changed = new FileChannelSpec();
+          changed.setChannelCode(channelCode);
+          changed.setChannelName("在途派发渠道");
+          changed.setChannelType("API_PUSH");
+          changed.setTargetEndpoint(newEndpoint);
+          changed.setAuthType("NONE");
+          changed.setConfigJson(JsonUtils.toJson(Map.of(
+              "target_endpoint",
+              newEndpoint,
+              "channel_type",
+              "API_PUSH",
+              "channel_code",
+              channelCode)));
+          changed.setReceiptPolicy("NONE");
+          changed.setTimeoutSeconds(60);
+          changed.setEnabled(true);
+          ConfigSyncBundlePayload bundle = new ConfigSyncBundlePayload();
+          bundle.setFileChannels(List.of(changed));
+          ConfigSyncImportRequest request = new ConfigSyncImportRequest();
+          request.setTenantId(tenantId);
+          request.setSourceEnv("source-" + suffix);
+          request.setTargetEnv("integration-test");
+          request.setTargetTenantIds(List.of(tenantId));
+          request.setMode(InitMode.UPSERT);
+          request.setBundle(bundle);
+          RequestContextHolder.setRequestAttributes(
+              new ServletRequestAttributes(new MockHttpServletRequest()));
+          try {
+            ConfigSyncImportResponse response = configSyncService.importBundle(request);
+            assertThat(response.result().failureTenants()).isZero();
+            assertThat(response.result().results())
+                .singleElement()
+                .satisfies(result -> assertThat(result.fileChannels().updated()).isOne());
+            String endpointSql = """
+                select target_endpoint from batch.file_channel_config
+                where tenant_id = ? and channel_code = ?
+                """;
+            String storedEndpoint =
+                jdbcTemplate.queryForObject(endpointSql, String.class, tenantId, channelCode);
+            assertThat(storedEndpoint).isEqualTo(newEndpoint);
+            String receiptSql = """
+                select result_json::text from batch.config_sync_target_receipt
+                where audit_tenant_id = ? and log_id = ? and tenant_id = ?
+                """;
+            String receiptJson = jdbcTemplate.queryForObject(
+                receiptSql, String.class, tenantId, response.syncLogId(), tenantId);
+            TenantInitResult receipt =
+                JsonUtils.fromJsonStrict(receiptJson, TenantInitResult.class);
+            assertThat(receipt.tenantId()).isEqualTo(tenantId);
+            assertThat(receipt.success()).isTrue();
+            assertThat(receipt.fileChannels().updated()).isOne();
+          } finally {
+            RequestContextHolder.resetRequestAttributes();
+          }
 
-  @Autowired
-  private BatchMqTopicsProperties batchMqTopicsProperties;
-
-  @Value("${spring.kafka.bootstrap-servers}")
-  private String kafkaBootstrapServers;
-
-  @Value("${batch.security.internal-secret}")
-  private String internalSecret;
-
-  @LocalServerPort
-  private int localServerPort;
+          releaseResponse.countDown();
+          String taskStatusSql = """
+              select t.task_status from batch.job_task t
+              join batch.job_instance ji on ji.tenant_id = t.tenant_id and ji.id = t.job_instance_id
+              where ji.tenant_id = ? and ji.dedup_key = ?
+              """;
+          await()
+              .atMost(Duration.ofSeconds(120))
+              .pollInterval(Duration.ofMillis(200))
+              .untilAsserted(() -> {
+                String status = jdbcTemplate.queryForObject(
+                    taskStatusSql, String.class, tenantId, seed.dedupKey());
+                assertThat(status).isEqualTo("SUCCESS");
+              });
+          assertThat(oldRequests).hasValue(1);
+          assertThat(newRequests).hasValue(0);
+        } finally {
+          releaseResponse.countDown();
+          stopProcess(worker);
+          worker = null;
+          Files.deleteIfExists(workerLog);
+        }
+      } finally {
+        Files.deleteIfExists(sourceFile);
+      }
+    } finally {
+      releaseResponse.countDown();
+      stopProcess(worker);
+      receiver.stop(0);
+      receiverExecutor.shutdownNow();
+    }
+  }
 
   @Test
   @DisplayName("派发 worker 进程重启后继续消费:新进程重新注册上线,派发任务成功且目标目录产出文件")
@@ -447,8 +666,18 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private Process startDispatchWorker(
       String tenantId, String workerCode, String consumerGroupId, Path logFile)
       throws IOException, InterruptedException {
+    return startDispatchWorker(tenantId, workerCode, consumerGroupId, logFile, false);
+  }
+
+  private Process startDispatchWorker(
+      String tenantId,
+      String workerCode,
+      String consumerGroupId,
+      Path logFile,
+      boolean holdResponse)
+      throws IOException, InterruptedException {
     Path workerExecJar = locateWorkerExecJar();
-    List<String> command = List.of(
+    List<String> command = new ArrayList<>(List.of(
         JAVA_BIN,
         "-jar",
         workerExecJar.toString(),
@@ -480,7 +709,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
         "--batch.worker.dispatch.circuit-breaker.enabled=false",
         "--batch.worker.dispatch.health.enabled=false",
         "--batch.worker.dispatch.receipt-poll.enabled=false",
-        "--batch.worker.lease.renew-interval-millis=1000");
+        "--batch.worker.lease.renew-interval-millis=1000"));
+    if (holdResponse) {
+      command.add("--batch.worker.dispatch.http-channel.read-timeout-millis=120000");
+      command.add("--batch.worker.dispatch.http-channel.call-timeout-millis=120000");
+    }
     ProcessBuilder builder = new ProcessBuilder(command);
     builder.redirectErrorStream(true);
     builder.redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));

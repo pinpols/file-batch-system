@@ -20,11 +20,11 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Retry
 import io.github.pinpols.batch.orchestrator.config.RetryGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -480,9 +480,9 @@ class DefaultRetryGovernanceServiceTest {
     return j;
   }
 
-  private static JobDefinitionEntity jobDefinitionWithPolicy(
+  private static JobDefinitionView jobDefinitionWithPolicy(
       Long id, String retryPolicy, int maxRetry) {
-    return new JobDefinitionEntity(
+    return new JobDefinitionView(
         id,
         null,
         null,

@@ -103,6 +103,22 @@ class ConsoleOidcIdentityConstraintsIntegrationTest extends AbstractIntegrationT
         .isEmpty();
   }
 
+  @Test
+  @DisplayName("身份查询联表返回账号名称且不跨租户")
+  void shouldMapIdentityViewWithAccountNameWithinTenant() {
+    insertIdentity(tenantId, accountId, "subject-view");
+
+    var identities = identityMapper.findByTenant(tenantId);
+    assertThat(identities).hasSize(1);
+    assertThat(identities.getFirst().getUsername()).isEqualTo(username);
+    assertThat(identities.getFirst().getSubject()).isEqualTo("subject-view");
+    assertThat(identityMapper.findByAccountAndTenant(accountId, tenantId))
+        .get()
+        .satisfies(identity -> assertThat(identity.getUsername()).isEqualTo(username));
+    assertThat(identityMapper.findByAccountAndTenant(accountId, otherTenantId)).isEmpty();
+    assertThat(identityMapper.findByTenant(otherTenantId)).isEmpty();
+  }
+
   private void insertTenant(String id) {
     String insertTenantSql = """
         insert into batch.tenant (tenant_id, tenant_name, status, created_by)

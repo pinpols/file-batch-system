@@ -20,4 +20,8 @@ public interface ConsoleTenantConfigInitApplicationService {
    */
   TenantConfigBatchInitResponse batchInit(
       TenantConfigBatchInitRequest request, String operator, String batchOperationId);
+
+  /** 使用已登记的操作身份执行，并记录每个目标的事务结果。 */
+  TenantConfigBatchInitResponse batchInit(
+      TenantConfigBatchInitRequest request, String operator, ConfigBatchOperationContext context);
 }

@@ -13,6 +13,8 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
@@ -30,9 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.http.HttpStatus;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 守护 launch 入口的租户级限流:
@@ -88,9 +88,9 @@ class LaunchApplicationServiceTest {
     when(rateLimiter.tryConsume("ta", RateLimitAction.LAUNCH)).thenReturn(false);
 
     assertThatThrownBy(() -> service.launch(req))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting("statusCode")
-        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.RATE_LIMITED);
 
     verify(launchService, never()).launch(any());
   }
@@ -165,9 +165,9 @@ class LaunchApplicationServiceTest {
         "ta", "j", LocalDate.now(), TriggerType.API, "req-job", "trace-job", Map.of());
 
     assertThatThrownBy(() -> service.launch(jobTarget))
-        .isInstanceOf(ResponseStatusException.class)
-        .extracting("statusCode")
-        .isEqualTo(HttpStatus.BAD_REQUEST);
+        .isInstanceOf(OperationFailure.class)
+        .extracting(error -> ((OperationFailure) error).kind())
+        .isEqualTo(Kind.INVALID_INPUT);
 
     verify(rateLimiter, never()).tryConsume(anyString(), any());
     verify(launchService, never()).launch(any());
@@ -201,7 +201,7 @@ class LaunchApplicationServiceTest {
     LaunchRequest req = request("tenant-X");
     when(rateLimiter.tryConsume("tenant-X", RateLimitAction.LAUNCH)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.launch(req)).isInstanceOf(ResponseStatusException.class);
+    assertThatThrownBy(() -> service.launch(req)).isInstanceOf(OperationFailure.class);
     verify(rateLimiter).tryConsume("tenant-X", RateLimitAction.LAUNCH);
   }
 }

@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
 import io.github.pinpols.batch.console.application.contract.response.BusinessTenantPlacementResponse;
-import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
+import io.github.pinpols.batch.console.domain.command.BusinessTenantPlacementUpsertCommand;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleBusinessTenantPlacementService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -58,12 +58,12 @@ public class ConsoleBusinessTenantPlacementController {
       targetTenantParam = "#request.tenantId")
   public CommonResponse<Void> upsert(@Valid @RequestBody UpsertTenantPlacementRequest request) {
     String operator = requestMetadataResolver.current().operatorId();
-    BusinessTenantPlacementUpsertParam upsertParam = BusinessTenantPlacementUpsertParam.builder()
+    BusinessTenantPlacementUpsertCommand command = BusinessTenantPlacementUpsertCommand.builder()
         .tenantId(request.tenantId())
         .placementKey(request.placementKey())
         .operator(operator)
         .build();
-    placementService.upsert(upsertParam);
+    placementService.upsert(command);
     return responseFactory.success(null);
   }
 

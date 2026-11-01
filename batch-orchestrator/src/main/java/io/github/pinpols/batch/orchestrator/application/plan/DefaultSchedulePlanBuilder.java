@@ -8,8 +8,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.model.WorkerRouteModel;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -48,8 +48,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
   @Override
   public SchedulePlan build(SchedulePlanCommand command) {
-    JobDefinitionEntity jobDefinition = resolveExecutionDefinition(command);
-    WorkflowDefinitionEntity workflowDefinition =
+    JobDefinitionView jobDefinition = resolveExecutionDefinition(command);
+    WorkflowDefinitionView workflowDefinition =
         configCacheService.findEnabledWorkflowDefinition(command.tenantId(), command.jobCode());
     Map<String, Object> planParams = mergePlanParams(jobDefinition, command.params());
 
@@ -143,8 +143,8 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     return route;
   }
 
-  private JobDefinitionEntity resolveExecutionDefinition(SchedulePlanCommand command) {
-    JobDefinitionEntity jobDefinition = command.executionDefinition();
+  private JobDefinitionView resolveExecutionDefinition(SchedulePlanCommand command) {
+    JobDefinitionView jobDefinition = command.executionDefinition();
     if (EmptyChecks.isNull(jobDefinition)) {
       jobDefinition =
           configCacheService.findEnabledJobDefinition(command.tenantId(), command.jobCode());
@@ -163,7 +163,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   /** 解析分区任务的 worker 类型:束作业投射到交付类型,非束/未知作业保持原 job_type 字面量。 */
-  private static String resolveDefaultWorkerType(JobDefinitionEntity jobDefinition) {
+  private static String resolveDefaultWorkerType(JobDefinitionView jobDefinition) {
     if (jobDefinition == null) {
       return null;
     }
@@ -172,7 +172,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   private Map<String, Object> mergePlanParams(
-      JobDefinitionEntity jobDefinition, Map<String, Object> runtimeParams) {
+      JobDefinitionView jobDefinition, Map<String, Object> runtimeParams) {
     Map<String, Object> merged = new LinkedHashMap<>();
     if (jobDefinition != null && jobDefinition.defaultParams() != null) {
       merged.putAll(jobDefinition.defaultParams());
@@ -183,7 +183,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
     return merged;
   }
 
-  private int resolvePartitionCount(JobDefinitionEntity jobDefinition, Map<String, Object> params) {
+  private int resolvePartitionCount(JobDefinitionView jobDefinition, Map<String, Object> params) {
     ShardStrategy shardStrategy = jobDefinition == null
         ? ShardStrategy.NONE
         : ShardStrategy.fromCode(jobDefinition.shardStrategy());
@@ -227,7 +227,7 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
    * 当所有解析器均返回 {@code 0} 时，回退为 {@code 1}。
    */
   private int resolveDynamicPartitionCount(
-      JobDefinitionEntity jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
+      JobDefinitionView jobDefinition, Map<String, Object> params, ShardStrategy shardStrategy) {
     Integer winnerCount = null;
     String winnerName = null;
     for (PartitionCountResolver resolver : dynamicResolvers) {

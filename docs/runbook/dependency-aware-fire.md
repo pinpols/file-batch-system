@@ -56,6 +56,12 @@ orchestrator 可通过 `batch.asset_freshness_policy` 配置 JOB asset 的 `expe
 
 这个告警不改变 trigger readiness 语义,也不把旧结果标为可消费。下游能否 fire 仍只由 `EFFECTIVE asset_partition` 决定。
 
+## 等待关系排查
+
+Console 的 `GET /api/console/ops/wait-relationships` 由 ADMIN、AUDITOR、TENANT_ADMIN 按授权租户读取跨日历、作业依赖、readiness 和 Workflow 容量等待的安全摘要，不返回启动载荷。可按等待类型、状态及业务日期筛选；接口按来源类型及不可变 ID 遍历，每页最多 100 条。`hasMore` 为真时，使用返回的 `nextCursorType` 和字符串 `nextCursorId` 继续查询，并保持筛选条件不变。不要把跨页读取视为数据库一致性快照：遍历期间新增、删除或状态变化可能改变结果，排查时应重新查询确认。
+
+日历和作业的依赖取自首次持久化快照，readiness 使用该等待记录保留的原作业编码；边表示记录声明的原始依赖，不证明每条上游当前仍未就绪。作业的业务日对齐与解析错误以快照字段为准。容量准入等待表示容量原因，并无可推断的上游作业边。关系接口仅返回已知快照字段和原因代码；异常、未知字段或超限快照置空并标记 `dependencySnapshotValid=false`，不暴露原文。损坏快照不能视为无依赖，也不得由界面推断出缺失关系。
+
 ## 配置
 
 | 键 | 默认 | 说明 |

@@ -3,11 +3,12 @@ package io.github.pinpols.batch.orchestrator.application.service.workflow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowEdgeMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -304,6 +305,7 @@ class WorkflowGraphValidatorTest {
   void shouldReportClean_whenWorkflowIdMissing() {
     var result = validator.validate(null);
     assertThat(result.hasErrors()).isFalse();
+    verifyNoInteractions(nodeMapper, edgeMapper, jobDefMapper);
   }
 
   // ── V5 / V8 / V12 / V15 ─────────────────────────────────────────────────
@@ -561,9 +563,9 @@ class WorkflowGraphValidatorTest {
     return e;
   }
 
-  private static JobDefinitionEntity jobDef(
+  private static JobDefinitionView jobDef(
       String code, String type, String calendarCode, String timezone) {
-    return JobDefinitionEntity.builder()
+    return JobDefinitionView.builder()
         .id(1L)
         .jobCode(code)
         .jobType(type)

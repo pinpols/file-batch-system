@@ -19,7 +19,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -28,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplayFailureParam;
 import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplaySuccessParam;
 import io.github.pinpols.batch.orchestrator.domain.query.RetryScheduleQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -666,7 +666,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());
     }
-    JobDefinitionEntity jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
+    JobDefinitionView jobDefinitionRecord = jobDefinitionMapper.selectById(jobDefinitionId);
     if (jobDefinitionRecord == null) {
       return new RetryPolicyPlan(
           RetryPolicyType.FIXED.code(), governance.retry().getDefaultMaxRetryCount());

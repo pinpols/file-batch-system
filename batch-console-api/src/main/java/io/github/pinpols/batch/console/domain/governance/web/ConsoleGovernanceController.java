@@ -1,8 +1,7 @@
 package io.github.pinpols.batch.console.domain.governance.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
-import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterPolicy;
+import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -11,7 +10,6 @@ import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -37,8 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleGovernanceController {
 
-  private final ConsoleSystemParameterService parameterService;
-  private final ConsoleGovernanceParameterPolicy governancePolicy;
+  private final ConsoleGovernanceParameterService governanceService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
   private final TenantIdResolver tenantGuard;
@@ -47,12 +44,7 @@ public class ConsoleGovernanceController {
   @GetMapping
   public CommonResponse<Map<String, String>> list(@RequestParam("tenantId") String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    Map<String, String> result = new LinkedHashMap<>();
-    Map<String, String> defaultValues = governancePolicy.defaultValues();
-    defaultValues.forEach((key, defaultValue) -> {
-      String effectiveValue = parameterService.getValue(resolved, key).orElse(defaultValue);
-      result.put(key, effectiveValue);
-    });
+    Map<String, String> result = governanceService.list(resolved);
     return responseFactory.success(result);
   }
 
@@ -63,12 +55,8 @@ public class ConsoleGovernanceController {
       @RequestParam("tenantId") String tenantId, @Valid @RequestBody UpdateGovernanceParam param) {
     // 同 list 走 tenantGuard 校验:不能直接信前端 tenantId,需做格式 / 存在性校验。
     String resolved = tenantGuard.resolveTenant(tenantId);
-    if (!governancePolicy.isGovernanceKey(param.key())) {
-      return responseFactory.success(null);
-    }
     String operator = requestMetadataResolver.current().operatorId();
-    parameterService.upsert(
-        resolved, param.key(), param.value(), governancePolicy.description(param.key()), operator);
+    governanceService.update(resolved, param.key(), param.value(), operator);
     return responseFactory.success(null);
   }
 
@@ -78,7 +66,7 @@ public class ConsoleGovernanceController {
   public CommonResponse<Void> reset(
       @RequestParam("tenantId") String tenantId, @RequestParam("key") @NotBlank String key) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    parameterService.delete(resolved, key);
+    governanceService.reset(resolved, key);
     return responseFactory.success(null);
   }
 

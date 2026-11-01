@@ -5,9 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.job.entity.PendingCatchUpEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.PendingCatchUpMapper;
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
+import io.github.pinpols.batch.console.domain.job.view.PendingCatchUpView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +48,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .pageRequest(new PageRequest(1, 10))
         .build();
 
-    List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
+    List<PendingCatchUpView> rows = pendingCatchUpMapper.selectByQuery(query);
     long total = pendingCatchUpMapper.countByQuery(query);
 
     assertThat(rows).hasSize(2);
@@ -85,7 +85,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .pageRequest(new PageRequest(1, 10))
         .build();
 
-    List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
+    List<PendingCatchUpView> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
     assertThat(rows.get(0).getWorkflowCode()).isEqualTo("WF_PAYROLL_DAILY");
     assertThat(pendingCatchUpMapper.countByQuery(query)).isEqualTo(1);
@@ -105,7 +105,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .pageRequest(new PageRequest(1, 10))
         .build();
 
-    List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
+    List<PendingCatchUpView> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(rows).hasSize(1);
     assertThat(rows.get(0).getWorkflowCode()).isEqualTo("WF_JOB_A");
   }
@@ -132,10 +132,10 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .tenantId(tenantId)
         .pageRequest(new PageRequest(1, 2))
         .build();
-    List<PendingCatchUpEntity> rows = pendingCatchUpMapper.selectByQuery(query);
+    List<PendingCatchUpView> rows = pendingCatchUpMapper.selectByQuery(query);
     assertThat(pendingCatchUpMapper.countByQuery(query)).isEqualTo(2);
     assertThat(rows)
-        .extracting(PendingCatchUpEntity::getWorkflowCode)
+        .extracting(PendingCatchUpView::getWorkflowCode)
         .containsExactly("WF_NEW", "WF_OLD");
     assertThat(rows.getFirst().getApprovalNo()).isEqualTo("new");
     assertThat(rows.getFirst().getApprovalStatus()).isEqualTo("PENDING");
@@ -164,7 +164,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .tenantId(tenantId)
         .pageRequest(new PageRequest(1, 1))
         .build();
-    List<PendingCatchUpEntity> first = pendingCatchUpMapper.selectByQuery(firstQuery);
+    List<PendingCatchUpView> first = pendingCatchUpMapper.selectByQuery(firstQuery);
     assertThat(first).hasSize(1);
     assertThat(first.getFirst().getWorkflowCode()).isEqualTo("WF_LAST");
     assertThat(first.getFirst().getApprovalNo()).isEqualTo("new");
@@ -173,7 +173,7 @@ class ConsolePendingCatchUpQueryIntegrationTest extends AbstractIntegrationTest 
         .pageRequest(new PageRequest(1, 1))
         .cursorId(first.getFirst().getId())
         .build();
-    List<PendingCatchUpEntity> second = pendingCatchUpMapper.selectByQuery(secondQuery);
+    List<PendingCatchUpView> second = pendingCatchUpMapper.selectByQuery(secondQuery);
     assertThat(second).hasSize(1);
     assertThat(second.getFirst().getWorkflowCode()).isEqualTo("WF_FIRST");
     assertThat(second.getFirst().getApprovalNo()).isNull();

@@ -7,8 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
@@ -20,7 +21,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import org.springframework.web.server.ResponseStatusException;
 
 @DisplayName("逐日文件预期登记校验租户作业日历，并以稳定文件组身份幂等写入")
 class ExpectedWorkRegistrationServiceTest {
@@ -35,7 +35,7 @@ class ExpectedWorkRegistrationServiceTest {
     occurrenceMapper = mock(ExpectedWorkOccurrenceMapper.class);
     workflowDefinitionMapper = mock(WorkflowDefinitionMapper.class);
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 91L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             91L, "tenant-a", "WF_IMPORT", "Import", "DAG", 1, true, 11L, "CAL_A"));
     batchDayInstanceMapper = mock(BatchDayInstanceMapper.class);
     PlatformTransactionManager transactionManager = mock(PlatformTransactionManager.class);
@@ -74,11 +74,13 @@ class ExpectedWorkRegistrationServiceTest {
   @Test
   void shouldRejectExpectationForDifferentJobCalendar() {
     when(workflowDefinitionMapper.selectByTenantAndIdAndEnabled("tenant-a", 91L, true))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             91L, "tenant-a", "WF_IMPORT", "Import", "DAG", 1, true, 11L, "OTHER_CALENDAR"));
 
     assertThatThrownBy(() -> service.register(request()))
-        .isInstanceOf(ResponseStatusException.class);
+        .isInstanceOf(OperationFailure.class)
+        .satisfies(error -> assertThat(((OperationFailure) error).kind())
+            .isEqualTo(OperationFailure.Kind.INVALID_CONFIGURATION));
   }
 
   @DisplayName("拒绝早于预期时间的截止时间")

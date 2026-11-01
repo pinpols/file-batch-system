@@ -5,10 +5,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
+import io.github.pinpols.batch.console.infrastructure.config.TenantConfigPackageProjectionTestSupport;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -122,6 +124,65 @@ class JobMonitoringPolicyMapperIntegrationTest {
   }
 
   @Test
+  @DisplayName("作业聚合查询保留关联 Workflow、依赖规则和监控策略并隔离租户")
+  void shouldMapJobDefinitionAggregateWithinTenant() {
+    String fixtures = """
+        INSERT INTO batch.job_definition(id, tenant_id, job_code, job_name, schedule_type)
+        VALUES (98, 'tenant-projection', 'JOB_DOWN', 'Downstream', 'MANUAL'),
+               (99, 'tenant-projection', 'JOB_LEGACY', 'Legacy', 'MANUAL');
+        UPDATE batch.job_definition SET depends_on_job_code = 'LEGACY_UP' WHERE id = 99;
+        INSERT INTO batch.workflow_definition(id, tenant_id, single_job_definition_id)
+        VALUES (998, 'tenant-projection', 98);
+        INSERT INTO batch.job_dependency
+          (tenant_id, downstream_job_code, upstream_job_code, dependency_order, biz_date_alignment)
+        VALUES ('tenant-projection', 'JOB_DOWN', 'JOB_A', 1, 'SAME_DAY'),
+               ('tenant-projection', 'JOB_DOWN', 'JOB_B', 2, 'PREVIOUS_BIZ_DAY');
+        """;
+    jdbcTemplate.execute(fixtures);
+    JobMonitoringPolicyUpsertParam policy = JobMonitoringPolicyUpsertParam.builder()
+        .tenantId("tenant-projection")
+        .jobDefinitionId(98L)
+        .softRuntimeSeconds(120)
+        .softRuntimeSeverity("ERROR")
+        .startGraceSeconds(45)
+        .startGraceSeverity("WARN")
+        .completionDeadlineLocalTime(null)
+        .completionDeadlineDayOffset(0)
+        .dependencyCompletionWindowSeconds(90)
+        .completionDeadlineSeverity("WARN")
+        .updatedBy("operator")
+        .build();
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      JobDefinitionMapper mapper = session.getMapper(JobDefinitionMapper.class);
+      mapper.upsertJobMonitoringPolicy(policy);
+      JobDefinitionView row = mapper.selectById("tenant-projection", 98L);
+      assertThat(row.getDefaultWorkflowDefinitionId()).isEqualTo(998L);
+      assertThat(row.getDependsOnJobCodes()).containsExactly("JOB_A", "JOB_B");
+      assertThat(row.getJobDependencyRules())
+          .containsExactly(
+              new JobDependencyRuleView("JOB_A", "SAME_DAY"),
+              new JobDependencyRuleView("JOB_B", "PREVIOUS_BIZ_DAY"));
+      Map<String, Object> exported = TenantConfigPackageProjectionTestSupport.jobRow(row);
+      assertThat(exported.get("depends_on_job_codes")).isEqualTo("JOB_A,JOB_B");
+      assertThat(exported.get("depends_on_biz_date_alignments"))
+          .isEqualTo("SAME_DAY,PREVIOUS_BIZ_DAY");
+      JobDefinitionView legacy = mapper.selectById("tenant-projection", 99L);
+      Map<String, Object> legacyExport = TenantConfigPackageProjectionTestSupport.jobRow(legacy);
+      assertThat(legacyExport.get("depends_on_job_codes")).isEqualTo("LEGACY_UP");
+      assertThat(legacyExport.get("depends_on_biz_date_alignments")).isEqualTo("SAME_DAY");
+      assertThat(row.getSoftRuntimeSeconds()).isEqualTo(120);
+      assertThat(row.getSoftRuntimeSeverity()).isEqualTo("ERROR");
+      assertThat(row.getStartGraceSeconds()).isEqualTo(45);
+      assertThat(row.getDependencyCompletionWindowSeconds()).isEqualTo(90);
+      assertThat(mapper
+              .selectByUniqueKey("tenant-projection", "JOB_DOWN")
+              .getDefaultWorkflowDefinitionId())
+          .isEqualTo(998L);
+      assertThat(mapper.selectById("other-tenant", 98L)).isNull();
+    }
+  }
+
+  @Test
   @DisplayName("运行与启动规则独立生效，严重级别编辑不重置任一规则时钟")
   void shouldKeepRuntimeAndStartActivationTimesIndependent() {
     String insertDefinitionSql = """
@@ -223,18 +284,16 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .pageRequest(page)
           .build();
       long eligibilityCount = mapper.countByQuery(eligibility);
-      List<JobDefinitionEntity> configured = mapper.selectByQuery(eligibility);
+      List<JobDefinitionView> configured = mapper.selectByQuery(eligibility);
       long runtimeCount = mapper.countByQuery(runtimeOnly);
-      List<JobDefinitionEntity> runtime = mapper.selectByQuery(runtimeOnly);
+      List<JobDefinitionView> runtime = mapper.selectByQuery(runtimeOnly);
       assertThat(eligibilityCount).isOne();
       assertThat(configured)
-          .extracting(JobDefinitionEntity::getJobCode)
+          .extracting(JobDefinitionView::getJobCode)
           .containsExactly("CONFIGURED");
       assertThat(configured.getFirst().getCompletionDeadlineEnabled()).isTrue();
       assertThat(runtimeCount).isOne();
-      assertThat(runtime)
-          .extracting(JobDefinitionEntity::getJobCode)
-          .containsExactly("RUNTIME_ONLY");
+      assertThat(runtime).extracting(JobDefinitionView::getJobCode).containsExactly("RUNTIME_ONLY");
     }
   }
 

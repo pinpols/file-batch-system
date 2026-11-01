@@ -4,29 +4,18 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.dto.ScheduledOccurrenceCatchUpResponse;
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.enums.TriggerType;
-import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
-import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
-import io.github.pinpols.batch.trigger.config.TriggerApiAdmissionGuard;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
-import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
-import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
-import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import io.github.pinpols.batch.trigger.web.request.ExternalEventLaunchRequest;
 import io.github.pinpols.batch.trigger.web.request.ScheduledOccurrenceCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerCatchUpRequest;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import jakarta.validation.Valid;
-import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -47,10 +36,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class TriggerController {
 
-  private final TriggerService triggerService;
-  private final TriggerGracefulShutdown gracefulShutdown;
-  private final TriggerApiAdmissionGuard apiAdmissionGuard;
-  private final TriggerApiKeyVerifier apiKeyVerifier;
+  private final TriggerApiApplicationService applicationService;
 
   @PostMapping("/launch")
   public CommonResponse<LaunchResponse> launch(
@@ -60,23 +46,13 @@ public class TriggerController {
       @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
           String traceId,
       @Valid @RequestBody TriggerLaunchRequest request) {
-    TriggerApiKeyPrincipal externalSource = externalEventSourcePrincipal();
-    boolean externalSourceIsNotAuthorizedForEvent = EmptyChecks.isNotNull(externalSource)
-        && (request.getTriggerType() != TriggerType.EVENT
-            || !apiKeyVerifier.authorizesExternalEvent(
-                externalSource, request.getTenantId(), request.getExternalEventSource()));
-    if (externalSourceIsNotAuthorizedForEvent) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
-    }
-    if (gracefulShutdown.isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
-    }
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    TriggerLaunchCommand launchCommand =
-        new TriggerLaunchCommand(request, idempotencyKey, finalRequestId, finalTraceId);
-    return executeAdmittedLaunch(() -> triggerService.launch(launchCommand));
+    LaunchResponse result = applicationService.launch(
+        externalEventSourcePrincipal(),
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        traceId);
+    return CommonResponse.success(result);
   }
 
   @PostMapping("/events")
@@ -87,34 +63,21 @@ public class TriggerController {
       @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
           String traceId,
       @Valid @RequestBody ExternalEventLaunchRequest request) {
-    TriggerApiKeyPrincipal source = externalEventSourcePrincipal();
-    if (EmptyChecks.isNull(source)
-        || !apiKeyVerifier.authorizesExternalEvent(
-            source, request.getTenantId(), source.keyName())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
-    }
-    if (gracefulShutdown.isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
-    }
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("event") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
-        request, source.keyName(), idempotencyKey, finalRequestId, finalTraceId);
-    return executeAdmittedLaunch(() -> triggerService.launchExternalEvent(command));
+    ExternalEventLaunchResponse result = applicationService.launchEvent(
+        externalEventSourcePrincipal(),
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        traceId);
+    return CommonResponse.success(result);
   }
 
   @GetMapping("/events/status")
   public CommonResponse<ExternalEventLaunchStatus> externalEventStatus(
       @RequestParam String tenantId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    TriggerApiKeyPrincipal source = externalEventSourcePrincipal();
-    if (EmptyChecks.isNull(source)
-        || !apiKeyVerifier.authorizesExternalEvent(source, tenantId, source.keyName())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
-    }
-    ExternalEventLaunchStatus status =
-        triggerService.findExternalEventStatus(tenantId, source.keyName(), idempotencyKey);
+    ExternalEventLaunchStatus status = applicationService.externalEventStatus(
+        externalEventSourcePrincipal(), tenantId, idempotencyKey);
     return CommonResponse.success(status);
   }
 
@@ -126,15 +89,9 @@ public class TriggerController {
       @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
           String traceId,
       @Valid @RequestBody ScheduledOccurrenceCatchUpRequest request) {
-    if (gracefulShutdown.isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
-    }
-    String finalRequestId =
-        EmptyChecks.isBlank(requestId) ? IdGenerator.newBusinessNo("req") : requestId;
-    String finalTraceId = EmptyChecks.isBlank(traceId) ? IdGenerator.newTraceId() : traceId;
-    ScheduledOccurrenceCatchUpCommand command = new ScheduledOccurrenceCatchUpCommand(
-        request, idempotencyKey, finalRequestId, finalTraceId);
-    return executeAdmittedLaunch(() -> triggerService.catchUpRejectedOccurrence(command));
+    ScheduledOccurrenceCatchUpResponse result = applicationService.catchUpRejectedOccurrence(
+        TriggerCommandInputMapper.toInput(request), idempotencyKey, requestId, traceId);
+    return CommonResponse.success(result);
   }
 
   /**
@@ -146,28 +103,9 @@ public class TriggerController {
   public CommonResponse<TriggerLaunchStatus> launchStatus(
       @RequestParam String tenantId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    TriggerApiKeyPrincipal externalSource = externalEventSourcePrincipal();
-    if (EmptyChecks.isNull(externalSource)) {
-      return CommonResponse.success(triggerService.findLaunchStatus(tenantId, idempotencyKey));
-    }
-    if (!apiKeyVerifier.authorizesExternalEvent(
-        externalSource, tenantId, externalSource.keyName())) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.trigger.external_event_source_forbidden");
-    }
     TriggerLaunchStatus launchStatus =
-        triggerService.findLaunchStatus(tenantId, idempotencyKey, externalSource.keyName());
+        applicationService.launchStatus(externalEventSourcePrincipal(), tenantId, idempotencyKey);
     return CommonResponse.success(launchStatus);
-  }
-
-  /** 排队期间可能进入排水，必须在获得准入许可后、业务写入前再次检查。 */
-  private <T> CommonResponse<T> executeAdmittedLaunch(Supplier<T> action) {
-    return apiAdmissionGuard.execute(() -> {
-      if (gracefulShutdown.isDraining()) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
-      }
-      T result = action.get();
-      return CommonResponse.success(result);
-    });
   }
 
   private static TriggerApiKeyPrincipal externalEventSourcePrincipal() {
@@ -183,15 +121,12 @@ public class TriggerController {
   public CommonResponse<LaunchResponse> approveCatchUp(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody TriggerCatchUpRequest request) {
-    if (gracefulShutdown.isDraining()) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.draining");
-    }
     PendingCatchUpApprovalCommand command = new PendingCatchUpApprovalCommand();
     command.setTenantId(request.getTenantId());
     command.setRequestId(request.getRequestId());
     command.setPendingId(request.getPendingId());
     command.setReason(request.getReason());
     command.setIdempotencyKey(idempotencyKey);
-    return CommonResponse.success(triggerService.approvePendingCatchUp(command));
+    return CommonResponse.success(applicationService.approveCatchUp(command));
   }
 }

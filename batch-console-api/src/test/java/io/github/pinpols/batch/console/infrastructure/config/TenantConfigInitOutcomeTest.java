@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -14,6 +16,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.TransactionSystemException;
@@ -73,6 +77,74 @@ class TenantConfigInitOutcomeTest {
     assertThat(result.successTenants()).isOne();
     assertThat(result.failureTenants()).isOne();
     assertThat(result.results()).extracting(TenantInitResult::success).containsExactly(false, true);
+  }
+
+  @Test
+  @DisplayName("可恢复操作保留重复目标顺序，明确回滚后记录失败并继续")
+  void shouldRecordKnownRollbackAndPreserveDuplicateTargetOrder() {
+    TenantConfigBatchInitRequest request = request();
+    request.setTargetTenantIds(List.of("first", "second", "first"));
+    ConfigBatchOperationContext context = new ConfigBatchOperationContext("audit", "operation");
+    TenantInitResult success =
+        TenantInitResult.builder().tenantId("first").success(true).build();
+    TenantInitResult failed = TenantInitResult.failed("second", "处理失败");
+    when(executor.executeRecoverable("first", request, "admin", context, 0)).thenReturn(success);
+    when(executor.executeRecoverable("second", request, "admin", context, 1)).thenReturn(failed);
+    when(executor.executeRecoverable("first", request, "admin", context, 2)).thenReturn(success);
+    DefaultConsoleTenantConfigInitApplicationService service =
+        new DefaultConsoleTenantConfigInitApplicationService(executor);
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", context);
+
+    assertThat(response.batchOperationId()).isEqualTo("operation");
+    assertThat(response.results())
+        .extracting(TenantInitResult::tenantId)
+        .containsExactly("first", "second", "first");
+    assertThat(response.successTenants()).isEqualTo(2);
+    assertThat(response.failureTenants()).isEqualTo(1);
+    InOrder calls = inOrder(executor);
+    calls.verify(executor).executeRecoverable("first", request, "admin", context, 0);
+    calls.verify(executor).executeRecoverable("second", request, "admin", context, 1);
+    calls.verify(executor).recordRolledBack(context, 1, "second", failed);
+    calls.verify(executor).executeRecoverable("first", request, "admin", context, 2);
+  }
+
+  @Test
+  @DisplayName("严格包已回滚才记录失败，提交确认异常不记录失败或继续")
+  void shouldRecordStrictRollbackButStopOnUnknownCommit() {
+    TenantConfigBatchInitRequest request = request();
+    ConfigBatchOperationContext context = new ConfigBatchOperationContext("audit", "operation");
+    TransactionSystemException failure = new TransactionSystemException("commit outcome unknown");
+    when(executor.executeRecoverable("first", request, "admin", context, 0))
+        .thenThrow(new StrictBundleAbortedException("strict bundle aborted"));
+    when(executor.executeRecoverable("second", request, "admin", context, 1)).thenThrow(failure);
+    DefaultConsoleTenantConfigInitApplicationService service =
+        new DefaultConsoleTenantConfigInitApplicationService(executor);
+
+    assertThatThrownBy(() -> service.batchInit(request, "admin", context)).isSameAs(failure);
+
+    verify(executor).recordRolledBack(eq(context), eq(0), eq("first"), any());
+    verify(executor, never()).recordRolledBack(eq(context), eq(1), eq("second"), any());
+  }
+
+  @Test
+  @DisplayName("预览仍使用原事务路径且不写逐目标回执")
+  void shouldKeepDryRunReadOnly_whenOperationContextProvided() {
+    TenantConfigBatchInitRequest request = request();
+    request.setDryRun(true);
+    ConfigBatchOperationContext context = new ConfigBatchOperationContext("audit", "operation");
+    when(executor.execute(any(), eq(request), eq("admin"), eq(true))).thenAnswer(invocation -> {
+      String tenantId = invocation.getArgument(0);
+      return TenantInitResult.builder().tenantId(tenantId).success(true).build();
+    });
+    DefaultConsoleTenantConfigInitApplicationService service =
+        new DefaultConsoleTenantConfigInitApplicationService(executor);
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", context);
+
+    assertThat(response.dryRun()).isTrue();
+    verify(executor, never()).executeRecoverable(any(), any(), any(), any(), anyInt());
+    verify(executor, never()).recordRolledBack(any(), anyInt(), any(), any());
   }
 
   @ParameterizedTest

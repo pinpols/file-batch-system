@@ -7,7 +7,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.List;
 import java.util.Map;
@@ -37,7 +37,7 @@ class FrozenSchedulePlanDefinitionTest {
   @Test
   @DisplayName("已选择的定义决定分区和路由,不再查询当前作业定义")
   void shouldBuildFromSelectedDefinition_whenExecutionVersionIsFrozen() {
-    JobDefinitionEntity frozen = definition("ta", "JOB_A");
+    JobDefinitionView frozen = definition("ta", "JOB_A");
     SchedulePlan plan =
         builder.build(new SchedulePlanCommand("ta", "JOB_A", "2026-01-15", Map.of(), frozen));
 
@@ -60,8 +60,8 @@ class FrozenSchedulePlanDefinitionTest {
     verify(cache, never()).findEnabledJobDefinition(anyString(), anyString());
   }
 
-  private static JobDefinitionEntity definition(String tenant, String job) {
-    return JobDefinitionEntity.builder()
+  private static JobDefinitionView definition(String tenant, String job) {
+    return JobDefinitionView.builder()
         .id(10L)
         .tenantId(tenant)
         .jobCode(job)

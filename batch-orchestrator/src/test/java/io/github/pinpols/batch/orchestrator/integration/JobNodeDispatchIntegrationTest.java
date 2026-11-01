@@ -20,6 +20,8 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySnapshotResolver;
@@ -35,7 +37,6 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.TenantQuotaPolicyEntity;
@@ -43,6 +44,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidPa
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
@@ -101,14 +103,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * 集成测试：工作流 DAG 中的 JOB 节点类型。
@@ -357,10 +357,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           assertThat(selectReplayStatusResult4).isEqualTo("SUCCEEDED");
           releaseStale.countDown();
           assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
-              .hasCauseInstanceOf(ResponseStatusException.class)
-              .satisfies(
-                  error -> assertThat(((ResponseStatusException) error.getCause()).getStatusCode())
-                      .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+              .hasCauseInstanceOf(OperationFailure.class)
+              .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
+                  .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
         } finally {
           releaseStale.countDown();
           releaseReceipt.countDown();
@@ -493,10 +492,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
             assertThat(winnerCreated.await(20, TimeUnit.SECONDS)).isTrue();
             releaseRollback.countDown();
             assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
-                .hasCauseInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> assertThat(
-                        ((ResponseStatusException) error.getCause()).getStatusCode())
-                    .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+                .hasCauseInstanceOf(OperationFailure.class)
+                .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
+                    .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
           } finally {
             releaseRollback.countDown();
             releaseWinner.countDown();
@@ -650,10 +648,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
             assertThat(stale.get(20, TimeUnit.SECONDS)).isNotNull();
           } else {
             assertThatThrownBy(() -> stale.get(20, TimeUnit.SECONDS))
-                .hasCauseInstanceOf(ResponseStatusException.class)
-                .satisfies(error -> assertThat(
-                        ((ResponseStatusException) error.getCause()).getStatusCode())
-                    .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE));
+                .hasCauseInstanceOf(OperationFailure.class)
+                .satisfies(error -> assertThat(((OperationFailure) error.getCause()).kind())
+                    .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
           }
         } finally {
           releaseOldRead.countDown();
@@ -714,8 +711,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
           LaunchRequest current = invocation.getArgument(0);
           Object response = invocation.callRealMethod();
           if (seed.requestId().equals(current.requestId()) && attempts.getAndIncrement() == 0) {
-            throw new ResponseStatusException(
-                HttpStatus.CONFLICT, "simulated post-launch conflict");
+            throw new OperationFailure(Kind.CONFLICT, "simulated post-launch conflict");
           }
           return response;
         })
@@ -1082,7 +1078,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     String wrapperCode = "RETIRED_WRAPPER_" + System.nanoTime();
     jdbcTemplate.update(updateRequestTargetSql, wrapperCode, testTenantId, seed.requestId());
     String traceId = "trace-retired-wrapper-" + System.nanoTime();
-    JobDefinitionEntity retiredWrapper = JobDefinitionEntity.builder()
+    JobDefinitionView retiredWrapper = JobDefinitionView.builder()
         .tenantId(testTenantId)
         .jobCode(wrapperCode)
         .jobType("WORKFLOW")
@@ -1091,10 +1087,14 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     // V270 禁止把 WORKFLOW 写入 job_definition。生产查找先读 Redis。
     // 不能在共享 spy 上临时打桩：调度线程同时调用该 spy，Mockito 打桩不是线程安全的，
     // 桩一旦被抢走就会走真实查找并得到 definition_not_found。
-    String cacheKey = BatchRedisKeys.config(testTenantId, "job-definition", wrapperCode);
+    String versions = orchestratorRedisSupport.configInvalidationVersions(
+        testTenantId, "job-definition", wrapperCode);
+    assertThat(versions).isNotNull();
+    String cacheKey =
+        BatchRedisKeys.config(testTenantId, "job-definition", wrapperCode) + ":v2:" + versions;
     orchestratorRedisSupport.setJson(cacheKey, retiredWrapper, Duration.ofMinutes(5));
     try {
-      JobDefinitionEntity cachedWrapper =
+      JobDefinitionView cachedWrapper =
           configCacheService.findEnabledJobDefinition(testTenantId, wrapperCode);
       assertThat(cachedWrapper).isNotNull();
       assertThat(cachedWrapper.jobType()).isEqualTo("WORKFLOW");

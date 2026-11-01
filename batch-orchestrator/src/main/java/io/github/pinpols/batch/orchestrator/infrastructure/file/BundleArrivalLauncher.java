@@ -15,9 +15,9 @@ import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceTransitionStatusByGenerationParam;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ExpectedWorkOccurrenceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -266,9 +266,8 @@ public class BundleArrivalLauncher {
 
   private LaunchOutcome launchCandidate(
       String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
-    WorkflowDefinitionEntity workflow =
-        workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-            tenantId, candidate.bundleWorkflowCode(), true);
+    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+        tenantId, candidate.bundleWorkflowCode(), true);
     if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
       throw new IllegalStateException("bundle target has no enabled managed Workflow: tenantId="
           + tenantId
@@ -414,7 +413,7 @@ public class BundleArrivalLauncher {
 
   private void markExpectedWorkSatisfied(
       String tenantId,
-      WorkflowDefinitionEntity workflow,
+      WorkflowDefinitionView workflow,
       String fileGroupCode,
       BundleLaunchCandidate candidate,
       String requestId,

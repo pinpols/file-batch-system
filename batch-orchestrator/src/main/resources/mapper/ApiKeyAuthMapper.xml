@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.auth.ApiKeyAuthMapper">
 
-    <resultMap id="apiKeyRecordMap" type="io.github.pinpols.batch.orchestrator.auth.ApiKeyEntity">
+    <resultMap id="apiKeyRecordMap" type="io.github.pinpols.batch.orchestrator.auth.ApiKeyCandidate">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>

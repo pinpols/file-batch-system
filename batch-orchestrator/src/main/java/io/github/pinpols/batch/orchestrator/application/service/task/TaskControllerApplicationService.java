@@ -9,6 +9,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
@@ -56,12 +60,14 @@ public class TaskControllerApplicationService {
   private final BundleBatchClaimProperties batchClaimProperties;
   private final MeterRegistry meterRegistry;
   private final TaskReportRetryExecutor reportRetryExecutor;
+  private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @Timed(
       value = "batch.task.claim.duration",
       description = "Worker task claim latency on orchestrator",
       histogram = true)
   public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
+    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
     JobTaskEntity task =
         taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId());
     if (EmptyChecks.isNull(task)) {
@@ -78,6 +84,7 @@ public class TaskControllerApplicationService {
 
   public void markNonIdempotentExecutionStarted(
       Long taskId, TaskNonIdempotentStartCommand request) {
+    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
     if (!taskExecutionService.markNonIdempotentExecutionStarted(
         request.tenantId(), taskId, request.workerId(), request.partitionInvocationId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
@@ -94,6 +101,11 @@ public class TaskControllerApplicationService {
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝(保护 orchestrator)。
    */
   public TaskClaimBatchResult claimBatch(TaskClaimBatchCommand request) {
+    return claimBatch(null, request);
+  }
+
+  public TaskClaimBatchResult claimBatch(String admissionTenantId, TaskClaimBatchCommand request) {
+    enforceRateLimit(admissionTenantId, RateLimitAction.TASK_CLAIM);
     List<TaskClaimItemCommand> items =
         EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
             ? List.of()
@@ -143,6 +155,7 @@ public class TaskControllerApplicationService {
   }
 
   public void report(Long taskId, TaskExecutionReportCommand request) {
+    enforceRateLimit(request.tenantId(), RateLimitAction.TASK_REPORT);
     reportRetryExecutor.report(taskId, request);
   }
 
@@ -161,6 +174,12 @@ public class TaskControllerApplicationService {
    * <p>批大小受 {@link BundleBatchClaimProperties#effectiveBatchSize()} 守卫,超限直接拒绝。
    */
   public TaskReportBatchResult reportBatch(TaskReportBatchCommand request) {
+    return reportBatch(null, request);
+  }
+
+  public TaskReportBatchResult reportBatch(
+      String admissionTenantId, TaskReportBatchCommand request) {
+    enforceRateLimit(admissionTenantId, RateLimitAction.TASK_REPORT);
     List<TaskExecutionReportCommand> items =
         EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())
             ? List.of()
@@ -308,5 +327,11 @@ public class TaskControllerApplicationService {
         && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
         && EmptyChecks.isNotNull(workerId)
         && workerId.equals(task.getAssignedWorkerCode());
+  }
+
+  private void enforceRateLimit(String tenantId, RateLimitAction action) {
+    if (!tenantActionRateLimiter.tryConsume(tenantId, action)) {
+      throw new OperationFailure(Kind.RATE_LIMITED, "rate limit exceeded: " + action);
+    }
   }
 }

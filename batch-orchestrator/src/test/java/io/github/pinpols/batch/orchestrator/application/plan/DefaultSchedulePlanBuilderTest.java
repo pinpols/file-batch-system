@@ -12,8 +12,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.config.PersistenceGranularityProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.WorkerRegistryMapper;
 import java.util.List;
@@ -258,7 +258,7 @@ class DefaultSchedulePlanBuilderTest {
   @Test
   @DisplayName("计划优先级继承作业定义中的配置")
   void shouldInheritPriorityFromJobDefinition() {
-    JobDefinitionEntity jobDef = jobDef("NONE", 8, null);
+    JobDefinitionView jobDef = jobDef("NONE", 8, null);
     when(configCacheService.findEnabledJobDefinition(anyString(), anyString())).thenReturn(jobDef);
     when(configCacheService.findEnabledWorkflowDefinition(any(), any())).thenReturn(null);
 
@@ -441,13 +441,13 @@ class DefaultSchedulePlanBuilderTest {
     return new SchedulePlanCommand("t1", "JOB_001", "2026-01-01", params);
   }
 
-  private static JobDefinitionEntity bundleJobDef(String shardStrategy, int priority) {
+  private static JobDefinitionView bundleJobDef(String shardStrategy, int priority) {
     return bundleJobDef(shardStrategy, priority, "BUNDLE_IMPORT");
   }
 
-  private static JobDefinitionEntity bundleJobDef(
+  private static JobDefinitionView bundleJobDef(
       String shardStrategy, int priority, String jobType) {
-    return new JobDefinitionEntity(
+    return new JobDefinitionView(
         1L,
         "t1",
         "JOB_001",
@@ -478,9 +478,9 @@ class DefaultSchedulePlanBuilderTest {
         null);
   }
 
-  private static JobDefinitionEntity jobDef(
+  private static JobDefinitionView jobDef(
       String shardStrategy, int priority, Map<String, Object> defaultParams) {
-    return new JobDefinitionEntity(
+    return new JobDefinitionView(
         1L,
         "t1",
         "JOB_001",

@@ -13,8 +13,8 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -224,7 +224,7 @@ public class WorkflowRunReplaySnapshotResolver {
     }
     Map<String, Object> frozenDefinitions = readMap(sourceExecutionSnapshot.get("jobDefinitions"));
     for (Map.Entry<String, Object> entry : selectedDefinitions.entrySet()) {
-      JobDefinitionEntity definition = readDefinition(entry.getValue());
+      JobDefinitionView definition = readDefinition(entry.getValue());
       boolean replayDefinitionIdentityIsInvalid = !tenantId.equals(definition.tenantId())
           || EmptyChecks.isNull(definition.id())
           || EmptyChecks.isBlank(definition.jobCode())
@@ -327,10 +327,10 @@ public class WorkflowRunReplaySnapshotResolver {
     return source.containsKey(key) ? readMap(source.get(key)) : Map.of();
   }
 
-  private JobDefinitionEntity readDefinition(Object value) {
+  private JobDefinitionView readDefinition(Object value) {
     try {
       String json = JsonUtils.toJson(value);
-      JobDefinitionEntity definition = JsonUtils.fromJson(json, JobDefinitionEntity.class);
+      JobDefinitionView definition = JsonUtils.fromJson(json, JobDefinitionView.class);
       if (EmptyChecks.isNull(definition)) {
         throw invalidSnapshot();
       }

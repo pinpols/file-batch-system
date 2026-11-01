@@ -3,7 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -55,10 +55,10 @@ public class JobSlaScheduler {
       return;
     }
     violationCount.set(jobMonitoringMapper.countSlaViolationCandidates());
-    List<JobInstanceEntity> candidates =
+    List<JobSlaCandidate> candidates =
         jobMonitoringMapper.selectSlaViolationCandidates(governance.sla().getBatchSize());
     Instant now = BatchDateTimeSupport.utcNow();
-    for (JobInstanceEntity candidate : candidates) {
+    for (JobSlaCandidate candidate : candidates) {
       if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
         continue;
       }
@@ -89,14 +89,14 @@ public class JobSlaScheduler {
     }
     Instant escalationBefore = now.minusSeconds(delaySeconds);
     escalationCount.set(jobMonitoringMapper.countSlaEscalationCandidates(escalationBefore));
-    List<JobInstanceEntity> escalations = jobMonitoringMapper.selectSlaEscalationCandidates(
+    List<JobSlaCandidate> escalations = jobMonitoringMapper.selectSlaEscalationCandidates(
         escalationBefore, governance.sla().getBatchSize());
     if (escalations == null || escalations.isEmpty()) {
       return;
     }
     String severity = governance.sla().getEscalationSeverity();
     String resolvedSeverity = severity == null || severity.isBlank() ? "ERROR" : severity;
-    for (JobInstanceEntity candidate : escalations) {
+    for (JobSlaCandidate candidate : escalations) {
       if (candidate == null || candidate.getId() == null || candidate.getTenantId() == null) {
         continue;
       }

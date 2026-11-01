@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.audit.mapper;
 
-import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiMonthlyUsageEntity;
 import io.github.pinpols.batch.console.domain.audit.param.ConsoleAiMonthlyUsageSettleParam;
+import io.github.pinpols.batch.console.domain.audit.view.ConsoleAiMonthlyUsageView;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -36,6 +36,6 @@ public interface ConsoleAiMonthlyUsageMapper {
       @Param("billingMonth") LocalDate billingMonth,
       @Param("cutoff") OffsetDateTime cutoff);
 
-  ConsoleAiMonthlyUsageEntity find(
+  ConsoleAiMonthlyUsageView find(
       @Param("tenantId") String tenantId, @Param("billingMonth") LocalDate billingMonth);
 }

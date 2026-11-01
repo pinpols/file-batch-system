@@ -130,7 +130,7 @@ class ControllerResponseMappingTest {
         rule.getCreatedAt(),
         rule.getUpdatedAt());
     assertSameJson(rule, request);
-    assertThat(request.toEntity()).isEqualTo(rule);
+    assertSameJson(rule, request.toCommand());
 
     ResultVersionEntity version = ResultVersionEntity.builder()
         .id(6L)

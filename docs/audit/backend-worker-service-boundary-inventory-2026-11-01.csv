@@ -1,0 +1,32 @@
+生产文件,复核状态,职责与入口证据
+batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicRuntimeStatusService.java,已核职责与入口,snapshot 汇总配置与可选数据源方言，诊断读取入口，无 HTTP 业务编排
+batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicTaskConsumer.java,已核职责与入口,消息消费器接线并委托 AbstractTaskConsumer / TaskDispatchExecutor；Import 额外按配置选择租户范围
+batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicWorkerLoop.java,已核职责与入口,Worker 类型/能力注入与定时心跳入口，注册和心跳委托 AbstractWorkerLoop
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/application/TaskDispatchExecutor.java,待人工复核,
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultHeartbeatService.java,已核职责与入口,beat 聚合负载、续租与排水指令；由 WorkerLoop 心跳调用
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,待人工复核,
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerLifecycleManager.java,待人工复核,
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultWorkerRegistryService.java,已核职责与入口,register/renew/deactivate/updateStatus 经 WorkerRegistryClient 与 Orchestrator 交互
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/HeartbeatService.java,已核职责与入口,Worker 心跳接口；由 AbstractWorkerLoop 调用
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/WorkerSelfRegistrationService.java,已核职责与入口,Worker 注册与状态接口，由生命周期和心跳实现使用
+batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelGateway.java,待人工复核,
+batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelHealthService.java,待人工复核,
+batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/runtime/DispatchTaskConsumer.java,已核职责与入口,消息消费器接线并委托 AbstractTaskConsumer / TaskDispatchExecutor；Import 额外按配置选择租户范围
+batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/runtime/DispatchWorkerLoop.java,已核职责与入口,Worker 类型/能力注入与定时心跳入口，注册和心跳委托 AbstractWorkerLoop
+batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DefaultDispatchStageExecutor.java,待人工复核,
+batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/runtime/ExportTaskConsumer.java,已核职责与入口,消息消费器接线并委托 AbstractTaskConsumer / TaskDispatchExecutor；Import 额外按配置选择租户范围
+batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/runtime/ExportWorkerLoop.java,已核职责与入口,Worker 类型/能力注入与定时心跳入口，注册和心跳委托 AbstractWorkerLoop
+batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/DefaultExportStageExecutor.java,待人工复核,
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportDataQualityService.java,待人工复核,
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportRecordGovernanceService.java,待人工复核,
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportEventArrivalService.java,已核职责与入口,onArrival 判定开关/合并并发通知并调用 scanner；HTTP 适配由 Controller 完成
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java,待人工复核,
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportTaskConsumer.java,已核职责与入口,消息消费器接线并委托 AbstractTaskConsumer / TaskDispatchExecutor；Import 额外按配置选择租户范围
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportWorkerLoop.java,已核职责与入口,Worker 类型/能力注入与定时心跳入口，注册和心跳委托 AbstractWorkerLoop
+batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/DefaultImportStageExecutor.java,待人工复核,
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingBusinessCleanupService.java,已核职责与入口,业务库清理入口为候选绑定租户上下文并委派事务组件
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingBusinessCleanupTransaction.java,待人工复核,
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingGenerationCleanupFence.java,待人工复核,
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/runtime/ProcessTaskConsumer.java,已核职责与入口,消息消费器接线并委托 AbstractTaskConsumer / TaskDispatchExecutor；Import 额外按配置选择租户范围
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/runtime/ProcessWorkerLoop.java,已核职责与入口,Worker 类型/能力注入与定时心跳入口，注册和心跳委托 AbstractWorkerLoop
+batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/stage/DefaultProcessStageExecutor.java,待人工复核,

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncImportRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.BatchWindowSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.ResourceQueueSpec;
 import io.github.pinpols.batch.console.domain.job.infrastructure.BatchDayCatchUpOperationStore;
@@ -29,6 +30,7 @@ import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
@@ -103,12 +105,19 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
   private ConfigSyncImportExecutor importExecutor;
 
   @MockitoSpyBean
+  private TenantConfigInitApplyHandlers initApplyHandlers;
+
+  @MockitoSpyBean
   private OrchestratorApprovalClient approvalClient;
 
   private final List<Fixture> ownedFixtures = new ArrayList<>();
 
   @AfterEach
   void removeOwnedFixtures() {
+    String deleteBatchReceiptsSql =
+        "delete from batch.config_batch_target_receipt where audit_tenant_id = ?";
+    String deleteBatchOperationsSql =
+        "delete from batch.config_batch_operation where audit_tenant_id = ?";
     String deleteReceiptsSql =
         "delete from batch.config_sync_target_receipt where audit_tenant_id = ?";
     String deleteAuditSql = "delete from batch.config_sync_log where tenant_id = ?";
@@ -128,10 +137,15 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     String deleteWorkflowsSql = """
         delete from batch.workflow_definition where tenant_id = ?
         """;
+    String deleteRevisionSql =
+        "delete from batch.tenant_configuration_revision where tenant_id = ?";
+    String deleteIdempotencySql = "delete from batch.idempotency_record where tenant_id = ?";
     String deleteTenantSql = "delete from batch.tenant where tenant_id = ?";
     String deleteOperationAuditSql =
         "delete from batch.console_operation_audit where tenant_id = ? and action = ?";
     for (Fixture fixture : ownedFixtures) {
+      jdbc.update(deleteBatchReceiptsSql, fixture.auditTenant());
+      jdbc.update(deleteBatchOperationsSql, fixture.auditTenant());
       jdbc.update(deleteOperationAuditSql, fixture.auditTenant(), "batch_day.catch_up_reconcile");
       jdbc.update(deleteOperationAuditSql, fixture.auditTenant(), "batch_day.catch_up_continue");
       jdbc.update(deleteReceiptsSql, fixture.auditTenant());
@@ -144,6 +158,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
         jdbc.update(deleteNodesSql, tenant);
         jdbc.update(deleteVersionsSql, tenant);
         jdbc.update(deleteWorkflowsSql, tenant);
+        jdbc.update(deleteRevisionSql, tenant);
+        jdbc.update(deleteIdempotencySql, tenant);
         jdbc.update(deleteTenantSql, tenant);
       }
     }
@@ -1172,6 +1188,317 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
         countWrittenTargetsSql, Integer.class, fixture.targets().getFirst());
     List<Integer> boundary = List.of(response.getStatus().value(), committedTargets);
     assertThat(boundary).containsExactly(400, 0);
+  }
+
+  @Test
+  @DisplayName("严格作业包回滚已写配置后，原键回查返回已确认失败回执")
+  void shouldRecoverConfirmedStrictRollbackAfterTargetWrite() throws Exception {
+    Fixture fixture = fixture();
+    String target = fixture.targets().getFirst();
+    String queueSql = """
+        select count(*) from batch.resource_queue
+        where tenant_id = ? and queue_code = 'sync_receipt_queue'
+        """;
+    String windowSql = """
+        select count(*) from batch.batch_window
+        where tenant_id = ? and window_code = 'invalid_window'
+        """;
+    Integer initialQueues = jdbc.queryForObject(queueSql, Integer.class, target);
+    assertThat(initialQueues).isZero();
+    BatchWindowSpec invalidWindow = new BatchWindowSpec();
+    invalidWindow.setWindowCode("invalid_window");
+    invalidWindow.setWindowName("invalid window");
+    invalidWindow.setTimezone("UTC");
+    invalidWindow.setStartTime("02:00");
+    invalidWindow.setEndTime("01:00");
+    invalidWindow.setAllowCrossDay(false);
+    fixture.request().getBundle().setBatchWindows(List.of(invalidWindow));
+    AtomicInteger queuesBeforeRollback = new AtomicInteger(-1);
+    doAnswer(invocation -> {
+          Object result = invocation.callRealMethod();
+          TenantConfigInitApplyHandlers.ApplyContext context = invocation.getArgument(1);
+          if (target.equals(context.tenantId())) {
+            Integer count = jdbc.queryForObject(queueSql, Integer.class, target);
+            queuesBeforeRollback.set(count);
+          }
+          return result;
+        })
+        .when(initApplyHandlers)
+        .applyResourceQueues(any(), any());
+    WebTestClient client = client();
+    Auth admin = authenticate(client, fixture.auditTenant(), "ROLE_ADMIN");
+    String key = "strict-recovery-" + UUID.randomUUID();
+    Map<String, Object> request = Map.of(
+        "tenantId", fixture.auditTenant(),
+        "targetTenantIds", List.of(target),
+        "bundle", fixture.request().getBundle());
+
+    JsonNode original =
+        responseData(post(client, admin, "/api/console/jobs/bundle/import", key, request));
+    JsonNode originalResult = original.path("result");
+    JsonNode results = originalResult.path("results");
+    assertThat(originalResult.path("successTenants").asInt()).isZero();
+    assertThat(originalResult.path("failureTenants").asInt()).isEqualTo(1);
+    assertThat(results).hasSize(1);
+    JsonNode failure = results.get(0);
+    assertThat(failure.path("tenantId").asText()).isEqualTo(target);
+    assertThat(failure.path("success").asBoolean()).isFalse();
+    assertThat(failure.path("errorMessage").asText()).isNotBlank();
+    assertThat(queuesBeforeRollback.get()).isEqualTo(1);
+    Integer committedQueues = jdbc.queryForObject(queueSql, Integer.class, target);
+    Integer committedWindows = jdbc.queryForObject(windowSql, Integer.class, target);
+    assertThat(committedQueues).isZero();
+    assertThat(committedWindows).isZero();
+
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    assertThat(recovered.path("operationId").asText())
+        .isEqualTo(originalResult.path("batchOperationId").asText());
+    assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
+    JsonNode targets = recovered.path("targets");
+    assertThat(targets).hasSize(1);
+    assertThat(targets.get(0).path("tenantId").asText()).isEqualTo(target);
+    assertThat(targets.get(0).path("status").asText()).isEqualTo("COMPLETE");
+    assertThat(targets.get(0).path("result")).isEqualTo(failure);
+    assertThat(targets.get(0).path("result").path("success").asBoolean()).isFalse();
+  }
+
+  @Test
+  @DisplayName("作业包按原键回查重复目标顺序，未确认回执保持未知且不会重复写入")
+  void shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets() throws Exception {
+    Fixture fixture = fixture();
+    WebTestClient client = client();
+    Auth admin = authenticate(client, fixture.auditTenant(), "ROLE_ADMIN");
+    String key = "bundle-recovery-" + UUID.randomUUID();
+    String uri = "/api/console/jobs/bundle/import";
+    String first = fixture.targets().getFirst();
+    String second = fixture.targets().getLast();
+    List<String> orderedTargets = List.of(first, second, first);
+    Map<String, Object> request = Map.of(
+        "tenantId",
+        fixture.auditTenant(),
+        "targetTenantIds",
+        orderedTargets,
+        "mode",
+        "UPSERT",
+        "bundle",
+        fixture.request().getBundle());
+
+    JsonNode original = responseData(post(client, admin, uri, key, request));
+    JsonNode originalResults = original.path("result").path("results");
+    String operationId = original.path("result").path("batchOperationId").asText();
+    assertThat(operationId).isNotBlank();
+    assertThat(originalResults).hasSize(3);
+    assertThat(original.path("result").path("successTenants").asInt()).isEqualTo(3);
+    assertThat(original.path("result").path("failureTenants").asInt()).isZero();
+    for (JsonNode item : originalResults) {
+      assertThat(item.path("success").asBoolean()).isTrue();
+      assertThat(item.path("resourceQueues").path("failed").asInt()).isZero();
+    }
+    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(1).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(2).path("resourceQueues").path("updated").asInt())
+        .isEqualTo(1);
+    String queueSql = """
+        select queue_name from batch.resource_queue
+        where tenant_id = ? and queue_code = 'sync_receipt_queue'
+        """;
+    for (String tenant : fixture.targets()) {
+      String queueName = jdbc.queryForObject(queueSql, String.class, tenant);
+      assertThat(queueName).isEqualTo("sync receipt queue");
+    }
+    List<Long> revisions = targetRevisions(fixture);
+    assertThat(revisions.getFirst()).isGreaterThan(revisions.getLast());
+
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
+    assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
+    assertThat(recovered
+            .path("responseMetadata")
+            .path("summary")
+            .path("resourceQueues")
+            .asInt())
+        .isEqualTo(1);
+    assertRecoveredTargets(recovered, originalResults, orderedTargets);
+    JsonNode reread = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    assertThat(reread).isEqualTo(recovered);
+    post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
+    assertThat(targetRevisions(fixture)).containsExactlyElementsOf(revisions);
+
+    Auth reader = authenticate(client, fixture.auditTenant(), "ROLE_TENANT_ADMIN");
+    batchOperationStatus(client, reader, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key)
+        .expectStatus()
+        .isForbidden();
+    batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key + "-wrong")
+        .expectStatus()
+        .isNotFound();
+    batchOperationStatus(client, admin, first, "JOB_BUNDLE_IMPORT", key)
+        .expectStatus()
+        .isNotFound();
+    Auth otherHeader = authenticate(client, first, "ROLE_ADMIN");
+    batchOperationStatus(client, otherHeader, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key)
+        .expectStatus()
+        .isNotFound();
+
+    // 仅模拟某条已登记回执缺失；真实目标事务仍已提交，不能将它解释为业务回滚。
+    String removeReceiptSql = """
+        delete from batch.config_batch_target_receipt
+        where audit_tenant_id = ? and operation_id = ? and target_ordinal = ?
+        """;
+    assertThat(jdbc.update(removeReceiptSql, fixture.auditTenant(), operationId, 1))
+        .isEqualTo(1);
+    JsonNode incomplete = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    assertThat(incomplete.path("status").asText()).isEqualTo("UNKNOWN");
+    assertThat(incomplete.path("targets").get(1).path("status").asText()).isEqualTo("UNKNOWN");
+    assertThat(incomplete.path("targets").get(1).path("result").isNull()).isTrue();
+    assertThat(incomplete.path("targets").get(0).path("result")).isEqualTo(originalResults.get(0));
+    assertThat(incomplete.path("targets").get(2).path("result")).isEqualTo(originalResults.get(2));
+    assertThat(targetRevisions(fixture)).containsExactlyElementsOf(revisions);
+  }
+
+  @Test
+  @DisplayName("认证租户复制使用真实源队列，原键回查不重新写入目标")
+  void shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites() throws Exception {
+    Fixture fixture = fixture();
+    String insertSourceSql = """
+        insert into batch.resource_queue (tenant_id, queue_code, queue_name, queue_type)
+        values (?, 'source_recovery_queue', 'source recovery queue', 'MIXED')
+        """;
+    jdbc.update(insertSourceSql, fixture.auditTenant());
+    WebTestClient client = client();
+    Auth admin = authenticate(client, fixture.auditTenant(), "ROLE_ADMIN");
+    String key = "copy-recovery-" + UUID.randomUUID();
+    String uri = "/api/console/config/tenant-copy";
+    Map<String, Object> request = Map.of(
+        "sourceTenantId", fixture.auditTenant(),
+        "targetTenantIds", fixture.targets(),
+        "configTypes", List.of("RESOURCE_QUEUE"),
+        "mode", "UPSERT");
+
+    JsonNode original = responseData(post(client, admin, uri, key, request));
+    String operationId = original.path("batchOperationId").asText();
+    assertThat(operationId).isNotBlank();
+    assertThat(original.path("successTenants").asInt()).isEqualTo(2);
+    assertThat(original.path("failureTenants").asInt()).isZero();
+    JsonNode originalResults = original.path("results");
+    assertThat(originalResults).hasSize(2);
+    for (JsonNode item : originalResults) {
+      assertThat(item.path("success").asBoolean()).isTrue();
+      assertThat(item.path("resourceQueues").path("created").asInt()).isEqualTo(1);
+      assertThat(item.path("resourceQueues").path("failed").asInt()).isZero();
+    }
+    String queueSql = """
+        select queue_name from batch.resource_queue
+        where tenant_id = ? and queue_code = 'source_recovery_queue'
+        """;
+    for (String tenant : fixture.targets()) {
+      String queueName = jdbc.queryForObject(queueSql, String.class, tenant);
+      assertThat(queueName).isEqualTo("source recovery queue");
+    }
+    List<Long> revisions = targetRevisions(fixture);
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "TENANT_COPY", key));
+    assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
+    assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
+    assertRecoveredTargets(recovered, original.path("results"), fixture.targets());
+    assertThat(responseData(
+            batchOperationStatus(client, admin, fixture.auditTenant(), "TENANT_COPY", key)))
+        .isEqualTo(recovered);
+    post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
+    assertThat(targetRevisions(fixture)).containsExactlyElementsOf(revisions);
+  }
+
+  @Test
+  @DisplayName("作业包创建的原键回查返回原操作和目标结果")
+  void shouldRecoverAuthenticatedJobBundleCreate() throws Exception {
+    Fixture fixture = fixture();
+    WebTestClient client = client();
+    Auth admin = authenticate(client, fixture.auditTenant(), "ROLE_ADMIN");
+    String key = "create-recovery-" + UUID.randomUUID();
+    String uri = "/api/console/jobs/bundle/create";
+    Map<String, Object> request =
+        Map.of("tenantId", fixture.auditTenant(), "bundle", fixture.request().getBundle());
+    JsonNode original = responseData(post(client, admin, uri, key, request));
+    String operationId = original.path("result").path("batchOperationId").asText();
+    assertThat(operationId).isNotBlank();
+    JsonNode originalResult = original.path("result");
+    assertThat(originalResult.path("successTenants").asInt()).isEqualTo(1);
+    assertThat(originalResult.path("failureTenants").asInt()).isZero();
+    JsonNode originalResults = originalResult.path("results");
+    assertThat(originalResults).hasSize(1);
+    assertThat(originalResults.get(0).path("success").asBoolean()).isTrue();
+    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(0).path("resourceQueues").path("failed").asInt())
+        .isZero();
+    String queueSql = """
+        select queue_name from batch.resource_queue
+        where tenant_id = ? and queue_code = 'sync_receipt_queue'
+        """;
+    String queueName = jdbc.queryForObject(queueSql, String.class, fixture.auditTenant());
+    assertThat(queueName).isEqualTo("sync receipt queue");
+    String revisionSql =
+        "select revision from batch.tenant_configuration_revision where tenant_id = ?";
+    Long revision = jdbc.queryForObject(revisionSql, Long.class, fixture.auditTenant());
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key));
+    assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
+    assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
+    assertRecoveredTargets(
+        recovered, original.path("result").path("results"), List.of(fixture.auditTenant()));
+    assertThat(responseData(
+            batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key)))
+        .isEqualTo(recovered);
+    post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
+    assertThat(jdbc.queryForObject(revisionSql, Long.class, fixture.auditTenant()))
+        .isEqualTo(revision);
+  }
+
+  private JsonNode responseData(WebTestClient.ResponseSpec response) throws Exception {
+    String body =
+        response.expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+    return objectMapper.readTree(body).path("data");
+  }
+
+  private void assertRecoveredTargets(
+      JsonNode recovered, JsonNode original, List<String> expected) {
+    JsonNode targets = recovered.path("targets");
+    assertThat(targets).hasSize(expected.size());
+    assertThat(original).hasSize(expected.size());
+    for (int ordinal = 0; ordinal < expected.size(); ordinal++) {
+      JsonNode target = targets.get(ordinal);
+      assertThat(target.path("ordinal").asInt()).isEqualTo(ordinal);
+      assertThat(target.path("tenantId").asText()).isEqualTo(expected.get(ordinal));
+      assertThat(target.path("status").asText()).isEqualTo("COMPLETE");
+      assertThat(target.path("result")).isEqualTo(original.get(ordinal));
+    }
+  }
+
+  private List<Long> targetRevisions(Fixture fixture) {
+    String revisionSql =
+        "select revision from batch.tenant_configuration_revision where tenant_id = ?";
+    return fixture.targets().stream()
+        .map(tenant -> jdbc.queryForObject(revisionSql, Long.class, tenant))
+        .toList();
+  }
+
+  private WebTestClient.ResponseSpec batchOperationStatus(
+      WebTestClient client, Auth auth, String auditTenantId, String operationKind, String key) {
+    return client
+        .get()
+        .uri(uri -> uri.path("/api/console/config/batch-operation")
+            .queryParam("auditTenantId", auditTenantId)
+            .queryParam("operationKind", operationKind)
+            .build())
+        .cookie("batch_console_token", auth.jwt())
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, auth.tenant())
+        .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, key)
+        .exchange();
   }
 
   private Fixture fixture() {

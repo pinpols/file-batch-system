@@ -30,16 +30,16 @@ public interface SdkIdempotencyStore {
    * @param key 解析后的幂等键
    * @return 已记录结果(命中)/ 空(未命中,需执行)
    */
-  Optional<SdkIdempotencyEntity> find(String key);
+  Optional<SdkIdempotencySnapshot> find(String key);
 
   /**
    * 记录一次成功执行结果。
    *
    * @param key 解析后的幂等键
-   * @param entity 结果快照(message + output)
+   * @param snapshot 结果快照(message + output)
    * @param ttlMillis 存活毫秒({@code <= 0} = 永久),由实现决定如何使用
    */
-  void record(String key, SdkIdempotencyEntity entity, long ttlMillis);
+  void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis);
 
   /**
    * 释放未回填成功结果的执行中占位。业务失败或抛异常时调用,让平台重派后可重新抢占。已回填成功结果的 key 应保持不动。
@@ -56,12 +56,12 @@ public interface SdkIdempotencyStore {
     }
 
     @Override
-    public Optional<SdkIdempotencyEntity> find(String key) {
+    public Optional<SdkIdempotencySnapshot> find(String key) {
       return Optional.empty();
     }
 
     @Override
-    public void record(String key, SdkIdempotencyEntity entity, long ttlMillis) {
+    public void record(String key, SdkIdempotencySnapshot snapshot, long ttlMillis) {
       // 无操作
     }
 

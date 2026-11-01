@@ -20,12 +20,10 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Locale;
-import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -34,7 +32,6 @@ import java.util.concurrent.ThreadPoolExecutor.AbortPolicy;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Stream;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import lombok.extern.slf4j.Slf4j;
@@ -347,19 +344,7 @@ public class WebhookDispatcher {
   }
 
   private boolean matches(String configuredEventTypes, String eventType) {
-    if (configuredEventTypes == null || configuredEventTypes.isBlank()) {
-      return false;
-    }
-    if ("*".equals(configuredEventTypes.trim())) {
-      return true;
-    }
-    Stream<String> configuredEventTypeTokens = Arrays.stream(configuredEventTypes.split(","));
-    Stream<String> trimmedEventTypes = configuredEventTypeTokens.map(String::trim);
-    Stream<String> nonBlankEventTypes =
-        trimmedEventTypes.filter(value -> !EmptyChecks.isBlank(Objects.requireNonNull(value)));
-    Stream<String> normalizedEventTypes =
-        nonBlankEventTypes.map(value -> value.toUpperCase(Locale.ROOT));
-    return normalizedEventTypes.anyMatch(value -> value.equals(eventType));
+    return SubscriptionRuleDispatchPolicy.eventTypeMatches(configuredEventTypes, eventType);
   }
 
   private String normalizeEventType(String eventType) {

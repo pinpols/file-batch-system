@@ -4,6 +4,10 @@
 
 | 文档 | 范围 |
 |---|---|
+| [后端 Controller / Service / Entity 边界复核](backend-controller-service-entity-boundary-review-2026-11-01.md) | bug-fixes 工作树的控制层与实体边界复核、Service 清单、阶段性定向及容器测试；2026-11-01 暂停，后续改动与完整验证未完成 |
+| [Console Controller 边界清单](console-controller-boundary-inventory-2026-11-01.csv) | Console 97 个 Controller 的职责复核与证据边界；整改及验证进度以边界复核记录为准 |
+| [后端 Entity 边界清单](backend-entity-boundary-inventory-2026-11-01.csv) | 101 个基线 Entity 的表行、投影和混合字段分类；迁移项待验证 |
+| [Worker Service 边界清单](backend-worker-service-boundary-inventory-2026-11-01.csv) | 31 个 Worker Service 候选的职责与入口复核进度 |
 | [后端 25 工作包全仓治理进度](backend-25-package-governance-2026-10-26.md) | 当前开发工作树 25 包及 6 项补充的实际静态/定向证据、已修项、未验范围与下一步；不继承历史清单的完成状态 |
 | [后端治理问题证据复核索引](backend-25-package-bug-evidence-index-2026-10-29.md) | 台账内问题编号和人工复核状态快照；区分独立缺陷、补证、修复回归及待核项 |
 | [后端代码规约与仓库卫生复扫](backend-code-convention-hygiene-scan-2026-10-26.md) | 当前 `fix/wdi-current` 动态工作树；PMD 4 处、判空 18 处、Spotless 1 文件，Javadoc 守卫与规范冲突；补查非 CI 的 Service 职责、测试 Mock/失败断言及真实 Mapper 验证缺口 |

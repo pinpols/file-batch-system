@@ -109,6 +109,7 @@ class DispatchChannelCircuitBreakerTest {
   void shouldIsolateFailuresByChannelKey() {
     triggerOpen("ch-bad");
 
+    assertThat(circuitBreaker.allow("ch-bad")).isFalse();
     // 其他渠道不受影响。
     assertThat(circuitBreaker.allow("ch-good")).isTrue();
   }

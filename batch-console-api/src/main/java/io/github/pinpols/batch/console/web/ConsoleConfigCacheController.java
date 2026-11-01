@@ -41,7 +41,7 @@ public class ConsoleConfigCacheController {
   @PostMapping("/evict-job-definition")
   public CommonResponse<CacheEvictionResponse> evictJobDefinition(
       @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
-    cacheInvalidationService.evictJobDefinition(tenantId, jobCode);
+    cacheInvalidationService.evictManual(tenantId, "job-definition", jobCode);
     return responseFactory.success(
         new CacheEvictionResponse("job-definition:" + tenantId + ":" + jobCode));
   }
@@ -49,7 +49,7 @@ public class ConsoleConfigCacheController {
   @PostMapping("/evict-all-job-definitions")
   public CommonResponse<CacheEvictionResponse> evictAllJobDefinitions(
       @RequestParam("tenantId") String tenantId) {
-    cacheInvalidationService.evictAllJobDefinitions(tenantId);
+    cacheInvalidationService.evictManual(tenantId, "job-definition", "*");
     return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":*"));
   }
 
@@ -57,7 +57,7 @@ public class ConsoleConfigCacheController {
   public CommonResponse<CacheEvictionResponse> evictWorkflowDefinition(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("workflowCode") String workflowCode) {
-    cacheInvalidationService.evictWorkflowDefinition(tenantId, workflowCode);
+    cacheInvalidationService.evictManual(tenantId, "workflow-definition", workflowCode);
     return responseFactory.success(
         new CacheEvictionResponse("workflow-definition:" + tenantId + ":" + workflowCode));
   }
@@ -66,7 +66,7 @@ public class ConsoleConfigCacheController {
   public CommonResponse<CacheEvictionResponse> evictBusinessCalendar(
       @RequestParam("tenantId") String tenantId,
       @RequestParam("calendarCode") String calendarCode) {
-    cacheInvalidationService.evictBusinessCalendar(tenantId, calendarCode);
+    cacheInvalidationService.evictManual(tenantId, "business-calendar", calendarCode);
     return responseFactory.success(
         new CacheEvictionResponse("business-calendar:" + tenantId + ":" + calendarCode));
   }
@@ -74,7 +74,7 @@ public class ConsoleConfigCacheController {
   @PostMapping("/evict-batch-window")
   public CommonResponse<CacheEvictionResponse> evictBatchWindow(
       @RequestParam("tenantId") String tenantId, @RequestParam("windowCode") String windowCode) {
-    cacheInvalidationService.evictBatchWindow(tenantId, windowCode);
+    cacheInvalidationService.evictManual(tenantId, "batch-window", windowCode);
     return responseFactory.success(
         new CacheEvictionResponse("batch-window:" + tenantId + ":" + windowCode));
   }
@@ -82,7 +82,7 @@ public class ConsoleConfigCacheController {
   @PostMapping("/evict-quota-policies")
   public CommonResponse<CacheEvictionResponse> evictQuotaPolicies(
       @RequestParam("tenantId") String tenantId) {
-    cacheInvalidationService.evictQuotaPolicies(tenantId);
+    cacheInvalidationService.evictManual(tenantId, "tenant-quota-policy", "enabled-first");
     return responseFactory.success(
         new CacheEvictionResponse("tenant-quota-policy:" + tenantId + ":enabled-first"));
   }

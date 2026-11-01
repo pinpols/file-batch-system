@@ -11,9 +11,9 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import java.time.Instant;
@@ -45,7 +45,7 @@ class JobSlaViolationProcessorTest {
   @DisplayName("截止时间超限时记录 DEADLINE_EXCEEDED 并写审计和告警")
   void shouldRecordDeadlineViolation() {
     Instant now = Instant.parse("2026-10-11T12:00:00Z");
-    JobInstanceEntity candidate = candidate();
+    JobSlaCandidate candidate = candidate();
     candidate.setDeadlineAt(now.minusSeconds(90));
     when(jobMonitoringMapper.markSlaAlerted("tenant-a", 42L, now)).thenReturn(1);
     when(jobMonitoringMapper.selectSlaViolationCandidate("tenant-a", 42L)).thenReturn(candidate);
@@ -62,7 +62,7 @@ class JobSlaViolationProcessorTest {
     assertThat(alertExtra).containsEntry("violationReason", "DEADLINE_EXCEEDED");
     assertThat(logs.getAllValues().get(1).getMessage()).isEqualTo("SLA_ALERTED_AT_UPDATED");
 
-    ArgumentCaptor<AlertEmitRequest> alert = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> alert = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(alert.capture());
     assertThat(alert.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION");
     assertThat(alert.getValue().title()).isEqualTo("job SLA violated: DEADLINE_EXCEEDED");
@@ -79,7 +79,7 @@ class JobSlaViolationProcessorTest {
   @DisplayName("运行时长超出预期时记录 EXPECTED_DURATION_EXCEEDED")
   void shouldRecordExpectedDurationViolation() {
     Instant now = Instant.parse("2026-10-11T12:00:00Z");
-    JobInstanceEntity candidate = candidate();
+    JobSlaCandidate candidate = candidate();
     candidate.setStartedAt(now.minusSeconds(120));
     candidate.setExecutionStartedAt(now.minusSeconds(90));
     candidate.setExpectedDurationSeconds(60);
@@ -88,7 +88,7 @@ class JobSlaViolationProcessorTest {
 
     assertThat(processor.process(candidate, now)).isTrue();
 
-    ArgumentCaptor<AlertEmitRequest> alert = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> alert = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(alert.capture());
     Map<String, Object> detail =
         JsonUtils.fromJson(alert.getValue().detailJson(), new TypeReference<>() {});
@@ -101,7 +101,7 @@ class JobSlaViolationProcessorTest {
   void shouldMeasureTerminalDeadlineOverrunAtFinishedAt() {
     Instant now = Instant.parse("2026-10-11T12:00:00Z");
     Instant finishedAt = now.minusSeconds(20);
-    JobInstanceEntity candidate = candidate();
+    JobSlaCandidate candidate = candidate();
     candidate.setInstanceStatus("SUCCESS");
     candidate.setFinishedAt(finishedAt);
     candidate.setDeadlineAt(now.minusSeconds(80));
@@ -110,7 +110,7 @@ class JobSlaViolationProcessorTest {
 
     assertThat(processor.process(candidate, now)).isTrue();
 
-    ArgumentCaptor<AlertEmitRequest> emitted = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> emitted = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(emitted.capture());
     Map<String, Object> detail =
         JsonUtils.fromJson(emitted.getValue().detailJson(), new TypeReference<>() {});
@@ -126,7 +126,7 @@ class JobSlaViolationProcessorTest {
   void shouldMeasureTerminalRuntimeOverrunAtFinishedAt() {
     Instant now = Instant.parse("2026-10-11T12:00:00Z");
     Instant finishedAt = now.minusSeconds(30);
-    JobInstanceEntity candidate = candidate();
+    JobSlaCandidate candidate = candidate();
     candidate.setInstanceStatus("FAILED");
     candidate.setExecutionStartedAt(now.minusSeconds(180));
     candidate.setExpectedDurationSeconds(60);
@@ -136,7 +136,7 @@ class JobSlaViolationProcessorTest {
 
     assertThat(processor.process(candidate, now)).isTrue();
 
-    ArgumentCaptor<AlertEmitRequest> emitted = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> emitted = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(emitted.capture());
     Map<String, Object> detail =
         JsonUtils.fromJson(emitted.getValue().detailJson(), new TypeReference<>() {});
@@ -169,14 +169,14 @@ class JobSlaViolationProcessorTest {
   @DisplayName("升级事件使用事务内锁定的当前 Job 状态与配置严重级别")
   void shouldBuildEscalationFromLockedCurrentJob() {
     Instant now = Instant.parse("2026-10-11T12:00:00Z");
-    JobInstanceEntity current = candidate();
+    JobSlaCandidate current = candidate();
     current.setInstanceStatus("READY");
     current.setSlaAlertedAt(now.minusSeconds(900));
     when(jobMonitoringMapper.selectSlaEscalationCandidateForUpdate(
             "tenant-a", 42L, now.minusSeconds(300)))
         .thenReturn(current);
     assertThat(processor.processEscalation(candidate(), now, 300, "ERROR")).isTrue();
-    ArgumentCaptor<AlertEmitRequest> emitted = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> emitted = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(emitted.capture());
     assertThat(emitted.getValue().alertType()).isEqualTo("JOB_SLA_VIOLATION_ESCALATED");
     assertThat(emitted.getValue().severity()).isEqualTo("ERROR");
@@ -190,8 +190,8 @@ class JobSlaViolationProcessorTest {
         .containsEntry("nodeCode", "IMPORT_NODE");
   }
 
-  private static JobInstanceEntity candidate() {
-    JobInstanceEntity candidate = new JobInstanceEntity();
+  private static JobSlaCandidate candidate() {
+    JobSlaCandidate candidate = new JobSlaCandidate();
     candidate.setTenantId("tenant-a");
     candidate.setId(42L);
     candidate.setInstanceNo("INST-42");

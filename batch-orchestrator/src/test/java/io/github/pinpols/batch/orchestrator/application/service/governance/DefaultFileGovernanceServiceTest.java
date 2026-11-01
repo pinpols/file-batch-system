@@ -35,6 +35,7 @@ import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.File
 import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.TemplateSecurityRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceArrivalViews;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
@@ -91,6 +92,9 @@ class DefaultFileGovernanceServiceTest {
   @Mock
   private FileGroupExpectationService fileGroupExpectationService;
 
+  @Mock
+  private FileGovernanceScheduler fileGovernanceScheduler;
+
   private final FileGovernanceProperties fileGovernanceProperties = new FileGovernanceProperties();
   private final BatchSecurityProperties batchSecurityProperties = new BatchSecurityProperties();
 
@@ -109,7 +113,8 @@ class DefaultFileGovernanceServiceTest {
         s3GovernanceStorage,
         batchSecurityProperties,
         fileGovernanceCommitService,
-        fileGroupExpectationService);
+        fileGroupExpectationService,
+        fileGovernanceScheduler);
   }
 
   // ── validateCommand / validateArrivalGroupCommand ────────────────────────

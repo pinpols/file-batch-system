@@ -7,7 +7,7 @@
        PipelineProgressEntity 是 record(Java 16+),MyBatis 通过 canonical constructor 装配,
        resultMap 把 snake_case 列名映射到 record 参数名。
     -->
-    <resultMap id="pipelineProgressResult" type="io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity">
+    <resultMap id="pipelineProgressResult" type="io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity">
         <constructor>
             <idArg column="id"                   javaType="java.lang.Long"/>
             <arg   column="tenant_id"            javaType="java.lang.String"/>

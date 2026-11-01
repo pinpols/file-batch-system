@@ -54,8 +54,8 @@ import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
@@ -86,7 +86,7 @@ public class TenantConfigPackageRowProjections {
   private final WorkflowEdgeMapper workflowEdgeMapper;
 
   List<Map<String, Object>> toJobRows(
-      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
+      List<JobDefinitionView> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(e -> {
           Map<String, Object> m = new LinkedHashMap<>();
@@ -125,8 +125,8 @@ public class TenantConfigPackageRowProjections {
         .collect(Collectors.toList());
   }
 
-  private String dependencyBizDateAlignments(JobDefinitionEntity entity) {
-    List<JobDependencyRuleResponse> dependencyRules = entity.getJobDependencyRules();
+  private String dependencyBizDateAlignments(JobDefinitionView entity) {
+    List<JobDependencyRuleView> dependencyRules = entity.getJobDependencyRules();
     if (EmptyChecks.isEmpty(dependencyRules)) {
       return Texts.hasText(entity.getDependsOnJobCode()) ? "SAME_DAY" : null;
     }
@@ -136,7 +136,7 @@ public class TenantConfigPackageRowProjections {
   }
 
   List<Map<String, Object>> toJobMonitoringPolicyRows(
-      List<JobDefinitionEntity> entities, boolean includePlatformFields) {
+      List<JobDefinitionView> entities, boolean includePlatformFields) {
     return entities.stream()
         .map(entity -> {
           Map<String, Object> row = new LinkedHashMap<>();

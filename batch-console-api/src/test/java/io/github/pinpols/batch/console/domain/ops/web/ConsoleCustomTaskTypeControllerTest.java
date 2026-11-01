@@ -7,8 +7,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -31,8 +31,8 @@ class ConsoleCustomTaskTypeControllerTest {
   @InjectMocks
   private ConsoleCustomTaskTypeController controller;
 
-  private CustomTaskTypeEntity entity(String code) {
-    CustomTaskTypeEntity e = new CustomTaskTypeEntity();
+  private CustomTaskTypeView entity(String code) {
+    CustomTaskTypeView e = new CustomTaskTypeView();
     e.setTaskTypeCode(code);
     e.setStatus("ACTIVE");
     return e;
@@ -41,7 +41,7 @@ class ConsoleCustomTaskTypeControllerTest {
   @Test
   @DisplayName("列表查询:先解析租户再查有效类型, 返回结果按任务类型编码回填")
   void shouldResolveTenantAndListActive_whenListingCustomTaskTypes() {
-    CustomTaskTypeEntity e = entity("tenant_tx_import");
+    CustomTaskTypeView e = entity("tenant_tx_import");
     when(queryService.listActive("tx")).thenReturn(List.of(e));
     CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
     when(responseFactory.success(List.of(expected)))
@@ -67,7 +67,7 @@ class ConsoleCustomTaskTypeControllerTest {
   @Test
   @DisplayName("详情命中:按租户与类型返回记录, 任务类型编码与入参一致")
   void shouldReturnEntity_whenDetailFound() {
-    CustomTaskTypeEntity e = entity("tenant_tx_import");
+    CustomTaskTypeView e = entity("tenant_tx_import");
     when(queryService.detail("tx", "tenant_tx_import")).thenReturn(e);
     CustomTaskTypeResponse expected = CustomTaskTypeResponse.from(e);
     when(responseFactory.success(expected)).thenReturn(CommonResponse.success(expected));

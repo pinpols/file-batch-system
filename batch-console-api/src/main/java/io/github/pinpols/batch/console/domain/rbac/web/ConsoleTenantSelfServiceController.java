@@ -3,21 +3,14 @@ package io.github.pinpols.batch.console.domain.rbac.web;
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
-import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
+import io.github.pinpols.batch.console.domain.rbac.application.ConsoleTenantSelfServiceApplicationService;
+import io.github.pinpols.batch.console.domain.rbac.application.contract.request.QuotaChangeRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
@@ -38,37 +31,21 @@ import org.springframework.web.bind.annotation.RestController;
 @Idempotent
 public class ConsoleTenantSelfServiceController {
 
-  private final ConsoleQuotaPolicyApplicationService quotaPolicyService;
-  private final ConsoleSystemParameterService parameterService;
+  private final ConsoleTenantSelfServiceApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
-  private final ConsoleTenantGuard tenantGuard;
-  private final BatchDateTimeSupport dateTimeSupport;
 
   /** 查看当前租户配额策略。 */
   @GetMapping("/quota")
   public CommonResponse<PageResponse<QuotaPolicyResponse>> quota(
       @RequestParam("tenantId") String tenantId) {
-    return responseFactory.success(quotaPolicyService.listAll(tenantId, 1, 100));
+    return responseFactory.success(applicationService.quota(tenantId));
   }
 
   /** 查看租户配额用量摘要（从系统参数读取运行时统计）。 */
   @GetMapping("/usage")
   public CommonResponse<ConsoleTenantUsageSummaryResponse> usage(
       @RequestParam("tenantId") String tenantId) {
-    String resolved = tenantGuard.resolveTenant(tenantId);
-    // 历史 wire：系统参数缺失时对应键不出现（record 用 @JsonInclude(NON_NULL) 省略 null 保持一致）。
-    Optional<String> runningJobsValue =
-        parameterService.getValue(resolved, "tenant.usage.running-jobs");
-    String runningJobs = runningJobsValue.orElse(null);
-    Optional<String> dailyTriggersValue =
-        parameterService.getValue(resolved, "tenant.usage.daily-triggers");
-    String dailyTriggers = dailyTriggersValue.orElse(null);
-    Optional<String> fileCountValue =
-        parameterService.getValue(resolved, "tenant.usage.file-count");
-    String fileCount = fileCountValue.orElse(null);
-    return responseFactory.success(
-        new ConsoleTenantUsageSummaryResponse(runningJobs, dailyTriggers, fileCount));
+    return responseFactory.success(applicationService.usage(tenantId));
   }
 
   /** 提交配额扩容申请（记录为系统参数，等待管理员审批）。 */
@@ -78,18 +55,7 @@ public class ConsoleTenantSelfServiceController {
           String idempotencyKey,
       @RequestParam("tenantId") String tenantId,
       @Valid @RequestBody QuotaChangeRequest request) {
-    String operator = requestMetadataResolver.current().operatorId();
-    String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
-    String requestValue = String.format(
-        "{\"field\":\"%s\",\"requestedValue\":%d,\"reason\":\"%s\",\"operator\":\"%s\"}",
-        request.field(), request.requestedValue(), request.reason(), operator);
-    parameterService.upsert(
-        tenantId, requestKey, requestValue, "Quota change request from " + operator, operator);
+    String requestKey = applicationService.requestQuotaChange(tenantId, request);
     return responseFactory.success(requestKey);
   }
-
-  record QuotaChangeRequest(
-      @NotBlank @Size(max = 64) String field,
-      @Min(1) int requestedValue,
-      @Size(max = 512) String reason) {}
 }

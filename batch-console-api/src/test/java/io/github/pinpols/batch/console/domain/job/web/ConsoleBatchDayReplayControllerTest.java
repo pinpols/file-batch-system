@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -16,13 +17,17 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchDayReplayApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
+import java.util.Set;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +35,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -58,9 +66,59 @@ class ConsoleBatchDayReplayControllerTest {
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
-            orchestratorProxy, responseFactory, requestMetadataResolver))
+            orchestratorProxy,
+            new ConsoleBatchDayReplayApprovalService(orchestratorProxy),
+            responseFactory,
+            requestMetadataResolver))
         .setControllerAdvice(exceptionHandler)
         .build();
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
+  }
+
+  @Test
+  @DisplayName("两类审批忽略伪造审批人，重复提交仍使用当前认证主体")
+  void shouldUseAuthenticatedApproverForBothPathsAndRetries() throws Exception {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            principal, "token", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    when(orchestratorProxy.replayOperationApprove(55L, "t1", "alice"))
+        .thenReturn(CommonResponse.success(null));
+    when(orchestratorProxy.batchDayReplayApprove(66L, "t1", "alice"))
+        .thenReturn(CommonResponse.success(null));
+
+    for (int i = 0; i < 2; i++) {
+      mockMvc
+          .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+              .param("tenantId", "t1")
+              .param("approver", "forged")
+              .header("Idempotency-Key", "idem-approve"))
+          .andExpect(status().isOk());
+    }
+    mockMvc
+        .perform(post("/api/console/ops/batch-day-replay/sessions/66/approve")
+            .param("tenantId", "t1")
+            .param("approver", "forged")
+            .header("Idempotency-Key", "idem-session"))
+        .andExpect(status().isOk());
+    verify(orchestratorProxy, times(2)).replayOperationApprove(55L, "t1", "alice");
+    verify(orchestratorProxy).batchDayReplayApprove(66L, "t1", "alice");
+  }
+
+  @Test
+  @DisplayName("无认证主体时拒绝审批且不调用编排层")
+  void shouldRejectApprovalWithoutAuthenticatedPrincipal() throws Exception {
+    mockMvc
+        .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+            .param("tenantId", "t1")
+            .param("approver", "forged")
+            .header("Idempotency-Key", "idem-approve"))
+        .andExpect(status().isUnauthorized());
+    verify(orchestratorProxy, never()).replayOperationApprove(any(), any(), any());
   }
 
   @Test

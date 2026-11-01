@@ -17,13 +17,13 @@ x-sim-runtime-env: &sim-runtime-env
 
 services:
   sftp:
-    image: atmoz/sftp:${SFTP_IMAGE_TAG:-alpine}
+    image: jmcombs/sftp:${SFTP_IMAGE_TAG:-alpine}
     container_name: ${SFTP_CONTAINER:-batch-sim-sftp}
     restart: unless-stopped
     environment:
       <<: *sim-runtime-env
     # 3 个 tenant 各一账号(对齐 ta/tb/tc channel_config config_json.username/password)。
-    # atmoz/sftp 命令格式:user:pass:uid:gid:dir1,dir2(5 段,GID 空表 fallback)。
+    # SFTP 命令格式:user:pass:uid:gid:dir1,dir2(5 段,GID 空表 fallback)。
     # 每个账号 chroot 到 /home/<user>,业务文件投到 /home/<user>/inbound(对齐 remotePath)。
     command: >-
       ta:ta_pass_123:1001::inbound,outbound

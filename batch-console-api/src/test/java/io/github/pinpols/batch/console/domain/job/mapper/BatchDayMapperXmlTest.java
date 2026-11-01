@@ -67,6 +67,16 @@ class BatchDayMapperXmlTest {
             "failedJobCount",
             "inFlightJobCount",
             "catchupCount"));
+    assertConstructorColumns(
+        configuration,
+        "scheduledOccurrenceFireViewResultMap",
+        List.of(
+            "workflowDefinitionId",
+            "scheduledFireTime",
+            "fireInstanceId",
+            "refireCount",
+            "actualFireTime",
+            "fireKind"));
   }
 
   private static void assertConstructorColumns(

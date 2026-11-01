@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 
 /** 告警事件发送服务。 负责向外部告警通道（短信、邮件、Webhook 等）推送任务执行异常或阈值超标的告警通知。 实现类须保证发送失败时记录日志并不抛出异常，以免影响主流程。 */
 public interface AlertEventService {
 
-  void emit(AlertEmitRequest request);
+  void emit(AlertEmitCommand request);
 
   /**
    * 对超过 ack-SLA 仍未确认的 OPEN 告警执行一次升级 sweep:逐条把 {@code escalation_tier} +1 并放大可见度。

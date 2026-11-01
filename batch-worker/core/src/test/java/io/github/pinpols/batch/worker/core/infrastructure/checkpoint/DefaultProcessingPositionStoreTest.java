@@ -6,7 +6,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import io.github.pinpols.batch.worker.core.domain.PipelineProgressEntity;
+import io.github.pinpols.batch.worker.core.domain.entity.PipelineProgressEntity;
 import io.github.pinpols.batch.worker.core.mapper.PipelineProgressMapper;
 import io.github.pinpols.batch.worker.core.param.PipelineProgressAdvanceParam;
 import io.micrometer.core.instrument.MeterRegistry;

@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelUploadResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleExcelDownloadResponse;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.io.IOException;
@@ -59,7 +60,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> export(
       @RequestParam(required = false) String tenantId) {
-    return tenantConfigExcelService.exportPackage(tenantId);
+    return ConsoleExcelDownloadResponse.from(tenantConfigExcelService.exportPackage(tenantId));
   }
 
   /**
@@ -70,7 +71,7 @@ public class ConsoleTenantConfigPackageExcelController {
   @GetMapping("/template")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> template() {
-    return tenantConfigExcelService.downloadTemplate();
+    return ConsoleExcelDownloadResponse.from(tenantConfigExcelService.downloadTemplate());
   }
 
   /** 下载按场景投影的空白模板；ALL 表示全部租户业务场景，不包含平台资源配置。 */
@@ -78,7 +79,8 @@ public class ConsoleTenantConfigPackageExcelController {
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public ResponseEntity<StreamingResponseBody> scenarioTemplate(
       @RequestParam("scenarios") List<String> scenarios) {
-    return tenantConfigExcelService.downloadScenarioTemplate(scenarios);
+    return ConsoleExcelDownloadResponse.from(
+        tenantConfigExcelService.downloadScenarioTemplate(scenarios));
   }
 
   /** 下载带示例数据的场景化配置包模板。 */
@@ -87,7 +89,8 @@ public class ConsoleTenantConfigPackageExcelController {
   public ResponseEntity<StreamingResponseBody> sampleTemplate(
       @RequestParam(value = "scenario", required = false) String scenario,
       @RequestParam(value = "scenarios", required = false) List<String> scenarios) {
-    return tenantConfigExcelService.downloadSampleTemplate(scenario, scenarios);
+    return ConsoleExcelDownloadResponse.from(
+        tenantConfigExcelService.downloadSampleTemplate(scenario, scenarios));
   }
 
   /** 返回配置 Sheet 的必填、类型、枚举、默认留空行为和填写示例，供 Console 页面直接展示。 */
@@ -153,7 +156,8 @@ public class ConsoleTenantConfigPackageExcelController {
   @GetMapping("/preview/{uploadToken}/workbook")
   @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public ResponseEntity<StreamingResponseBody> previewWorkbook(@PathVariable String uploadToken) {
-    return tenantConfigExcelService.downloadPreviewWorkbook(uploadToken);
+    return ConsoleExcelDownloadResponse.from(
+        tenantConfigExcelService.downloadPreviewWorkbook(uploadToken));
   }
 
   /**

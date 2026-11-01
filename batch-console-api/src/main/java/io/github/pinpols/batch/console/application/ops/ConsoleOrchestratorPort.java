@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.application.ops.command.BatchDayOperation
 import io.github.pinpols.batch.console.application.ops.command.CalendarDependencyActionCommand;
 import io.github.pinpols.batch.console.application.ops.command.ForensicExportCommand;
 import io.github.pinpols.batch.console.application.ops.query.ConsolePersistentWaitQuery;
+import io.github.pinpols.batch.console.application.ops.query.ConsoleWaitRelationshipQuery;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayCatchupPreviewResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayHistoricalGapInventoryResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleBatchDayOperateResponse;
@@ -18,6 +19,7 @@ import io.github.pinpols.batch.console.application.ops.response.ConsoleJobDepend
 import io.github.pinpols.batch.console.application.ops.response.ConsolePartitionActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsolePersistentWaitPageResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleRetryFailedPartitionsResponse;
+import io.github.pinpols.batch.console.application.ops.response.ConsoleWaitRelationshipPage;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunActionResponse;
 import io.github.pinpols.batch.console.application.ops.response.ConsoleWorkflowRunSkipNodeResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
@@ -120,6 +122,8 @@ public interface ConsoleOrchestratorPort {
       String tenantId, String waitStatus, String jobCode, int limit);
 
   ConsolePersistentWaitPageResponse listPersistentWaits(ConsolePersistentWaitQuery query);
+
+  ConsoleWaitRelationshipPage listWaitRelationships(ConsoleWaitRelationshipQuery query);
 
   ConsoleCalendarDependencyWaitResponse requestCalendarDependencyWaitAction(
       CalendarDependencyActionCommand command);

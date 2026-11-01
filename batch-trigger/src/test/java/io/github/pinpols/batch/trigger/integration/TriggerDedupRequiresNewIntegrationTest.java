@@ -9,6 +9,7 @@ import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.LocalDate;
 import java.time.Month;
@@ -193,7 +194,8 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());
-    return new TriggerLaunchCommand(request, dedupKey, requestId, "trace-dedup");
+    return new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), dedupKey, requestId, "trace-dedup");
   }
 
   @TestConfiguration(proxyBeanMethods = false)

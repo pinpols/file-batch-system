@@ -32,11 +32,11 @@ import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDi
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateInstanceProgressParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics.Phase;
@@ -246,7 +246,7 @@ public class DefaultLaunchService implements LaunchService {
       Map<String, Object> effectiveParams,
       String traceId,
       PreparedLaunch prepared,
-      JobDefinitionEntity executionDefinition) {
+      JobDefinitionView executionDefinition) {
     try {
       PartitionDispatchService.DispatchRequest dispatchRequest =
           new PartitionDispatchService.DispatchRequest(

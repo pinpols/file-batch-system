@@ -10,7 +10,7 @@
         on conflict (tenant_id, request_id) do nothing
     </insert>
 
-    <select id="selectByIdentityForUpdate" resultType="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity">
+    <select id="selectByIdentityForUpdate" resultType="io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView">
         select tenant_id as tenantId, request_id as requestId,
                envelope_ciphertext as envelopeCiphertext, trace_id as traceId,
                attempts, recovery_generation as recoveryGeneration,
@@ -28,7 +28,7 @@
     </update>
 
     <select id="selectDue"
-            resultType="io.github.pinpols.batch.orchestrator.domain.entity.TriggerLaunchRecoveryEntity">
+            resultType="io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView">
         select tenant_id    as tenantId,
                request_id   as requestId,
                envelope_ciphertext as envelopeCiphertext,

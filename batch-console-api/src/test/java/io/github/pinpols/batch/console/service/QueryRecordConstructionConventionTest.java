@@ -2,14 +2,27 @@ package io.github.pinpols.batch.console.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.sun.source.tree.ClassTree;
+import com.sun.source.tree.Tree;
+import com.sun.source.tree.VariableTree;
+import com.sun.source.util.JavacTask;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.lang.model.element.Modifier;
+import javax.tools.Diagnostic;
+import javax.tools.DiagnosticCollector;
+import javax.tools.JavaCompiler;
+import javax.tools.JavaFileObject;
+import javax.tools.StandardJavaFileManager;
+import javax.tools.ToolProvider;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -67,9 +80,10 @@ class QueryRecordConstructionConventionTest {
     List<String> violations = new ArrayList<>();
     List<Path> sources = versionableJavaSources(REPO_ROOT);
     assertThat(sources).as("Git 源码枚举必须覆盖实际仓库，不能以空清单通过").hasSizeGreaterThan(100);
+    Map<String, Integer> recordFields = queryRecordFieldCounts(sources);
     for (Path source : sources) {
       if (!isWhitelisted(source)) {
-        scanFile(source, violations);
+        scanFile(source, violations, recordFields);
       }
     }
 
@@ -87,11 +101,16 @@ class QueryRecordConstructionConventionTest {
   }
 
   private static void scanFile(Path file, List<String> violations) throws IOException {
+    scanFile(file, violations, Map.of());
+  }
+
+  private static void scanFile(
+      Path file, List<String> violations, Map<String, Integer> recordFields) throws IOException {
     String src = Files.readString(file);
     Matcher m = INLINE_NEW_QUERY.matcher(src);
     while (m.find()) {
       String queryType = m.group(1);
-      if (isOwnRecordFactory(file, src, queryType)) {
+      if (isOwnRecordFactory(file, src, queryType) || recordFields.getOrDefault(queryType, 5) < 5) {
         continue;
       }
       String args = m.group(2);
@@ -110,6 +129,40 @@ class QueryRecordConstructionConventionTest {
             + " null 占位 ...)");
       }
     }
+  }
+
+  private static Map<String, Integer> queryRecordFieldCounts(List<Path> sources)
+      throws IOException {
+    List<Path> queryFiles = sources.stream()
+        .filter(path -> path.getFileName().toString().endsWith("Query.java"))
+        .toList();
+    JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
+    if (compiler == null) {
+      throw new IOException("JDK 编译器不可用，无法检查查询记录字段");
+    }
+    DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
+    Map<String, Integer> counts = new HashMap<>();
+    try (StandardJavaFileManager files =
+        compiler.getStandardFileManager(diagnostics, null, StandardCharsets.UTF_8)) {
+      Iterable<? extends JavaFileObject> units = files.getJavaFileObjectsFromPaths(queryFiles);
+      JavacTask task = (JavacTask)
+          compiler.getTask(null, files, diagnostics, List.of("-proc:none"), null, units);
+      for (var unit : task.parse()) {
+        for (Tree declaration : unit.getTypeDecls()) {
+          if (declaration instanceof ClassTree record && record.getKind() == Tree.Kind.RECORD) {
+            int count = (int) record.getMembers().stream()
+                .filter(member -> member instanceof VariableTree variable
+                    && !variable.getModifiers().getFlags().contains(Modifier.STATIC))
+                .count();
+            counts.merge(record.getSimpleName().toString(), count, Math::max);
+          }
+        }
+      }
+    }
+    if (diagnostics.getDiagnostics().stream().anyMatch(d -> d.getKind() == Diagnostic.Kind.ERROR)) {
+      throw new IOException("查询记录源码解析失败，无法安全判定字段数量");
+    }
+    return counts;
   }
 
   private static List<Path> versionableJavaSources(Path root)
@@ -170,6 +223,31 @@ class QueryRecordConstructionConventionTest {
     List<String> otherRecordViolations = new ArrayList<>();
     scanFile(ownFactory, otherRecordViolations);
     assertThat(otherRecordViolations).hasSize(1);
+  }
+
+  @Test
+  @DisplayName("四字段记录不误报，五字段和未知类型仍拦截多个空占位")
+  void shouldApplyFieldThresholdWithoutExemptingUnknownQueries(@TempDir Path root)
+      throws IOException {
+    Path shortQuery = root.resolve("ShortQuery.java");
+    Path longQuery = root.resolve("LongQuery.java");
+    Files.writeString(shortQuery, "record ShortQuery(String a, String b, String c, String d) {}");
+    Files.writeString(
+        longQuery, "record LongQuery(String a, String b, String c, String d, String e) {}");
+    Map<String, Integer> fields = queryRecordFieldCounts(List.of(shortQuery, longQuery));
+    Path caller = root.resolve("Caller.java");
+    Files.writeString(
+        caller,
+        "class Caller { void call() { "
+            + "new " + "ShortQuery(null, null, null, null); "
+            + "new " + "LongQuery(null, null, null, null, null); "
+            + "new " + "UnknownQuery(null, null); } }");
+    List<String> violations = new ArrayList<>();
+    scanFile(caller, violations, fields);
+    assertThat(violations)
+        .hasSize(2)
+        .anyMatch(v -> v.contains("LongQuery"))
+        .anyMatch(v -> v.contains("UnknownQuery"));
   }
 
   @Test

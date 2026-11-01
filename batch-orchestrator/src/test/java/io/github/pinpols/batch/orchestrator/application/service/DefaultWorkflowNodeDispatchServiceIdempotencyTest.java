@@ -23,8 +23,8 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodePayloadBuilder;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeTerminalFinalizer;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDependencyWaitingLaunchMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -132,7 +132,7 @@ class DefaultWorkflowNodeDispatchServiceIdempotencyTest {
         batchDayInstanceMapper,
         workflowDefinitionMapper);
     when(workflowDefinitionMapper.selectById(5L))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             5L, "t1", "FLOW", "Flow", "COMPOSITE", 1, true, null, "CAL"));
     when(workflowRunMapper.selectByTenantAndIdForUpdate("t1", 10L)).thenAnswer(invocation -> {
       WorkflowRunEntity current = new WorkflowRunEntity();

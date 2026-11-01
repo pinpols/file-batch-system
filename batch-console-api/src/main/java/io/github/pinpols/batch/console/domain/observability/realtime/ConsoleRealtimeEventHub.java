@@ -120,6 +120,16 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     return subscribe(tenantId, stream, null, null, heartbeatMillis);
   }
 
+  @Override
+  public void close(SseEmitter emitter) {
+    for (Subscription subscription : subscriptions) {
+      if (subscription.emitter == emitter) {
+        close(subscription);
+        return;
+      }
+    }
+  }
+
   public void publishAfterCommit(ConsoleSseEvent event) {
     if (TransactionSynchronizationManager.isSynchronizationActive()) {
       TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {

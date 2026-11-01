@@ -2,7 +2,7 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserBatchOperationMapper">
 
-    <resultMap id="operationMap" type="io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserBatchOperationEntity">
+    <resultMap id="operationMap" type="io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperationView">
         <id column="operation_id" property="operationId"
             typeHandler="io.github.pinpols.batch.console.config.PostgresUuidTypeHandler"/>
         <result column="request_id" property="requestId"

@@ -9,10 +9,10 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
+import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CronExpressionAdapter;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -46,23 +46,23 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
 
   @Override
   public LaunchRequest fromApiRequest(TriggerLaunchCommand command) {
-    TriggerLaunchRequest request = command.request();
+    TriggerLaunchInput request = command.request();
     // V94: API/MANUAL 触发的 data_interval 由调用方显式提供, 没传则 null (worker 走 bizDate 回退)
     LaunchRequest.LaunchRequestBuilder launchRequestBuilder = LaunchRequest.builder();
-    launchRequestBuilder.tenantId(request.getTenantId());
-    launchRequestBuilder.bizDate(request.getBizDate());
+    launchRequestBuilder.tenantId(request.tenantId());
+    launchRequestBuilder.bizDate(request.bizDate());
     TriggerType triggerType = resolveTriggerType(command);
     launchRequestBuilder.triggerType(triggerType);
     launchRequestBuilder.requestId(command.requestId());
     launchRequestBuilder.traceId(command.traceId());
-    launchRequestBuilder.params(request.getParams());
-    launchRequestBuilder.dataIntervalStart(request.getDataIntervalStart());
-    launchRequestBuilder.dataIntervalEnd(request.getDataIntervalEnd());
-    launchRequestBuilder.dryRun(Boolean.TRUE.equals(request.getDryRun()));
-    launchRequestBuilder.workflowDefinitionId(request.getWorkflowDefinitionId());
-    launchRequestBuilder.externalEventCode(request.getExternalEventCode());
-    launchRequestBuilder.externalEventSource(request.getExternalEventSource());
-    launchRequestBuilder.externalEventId(request.getExternalEventId());
+    launchRequestBuilder.params(request.params());
+    launchRequestBuilder.dataIntervalStart(request.dataIntervalStart());
+    launchRequestBuilder.dataIntervalEnd(request.dataIntervalEnd());
+    launchRequestBuilder.dryRun(Boolean.TRUE.equals(request.dryRun()));
+    launchRequestBuilder.workflowDefinitionId(request.workflowDefinitionId());
+    launchRequestBuilder.externalEventCode(request.externalEventCode());
+    launchRequestBuilder.externalEventSource(request.externalEventSource());
+    launchRequestBuilder.externalEventId(request.externalEventId());
     return launchRequestBuilder.build();
   }
 
@@ -201,8 +201,8 @@ public class DefaultLaunchAdapterService implements LaunchAdapterService {
   @Override
   public TriggerType resolveTriggerType(TriggerLaunchCommand command) {
     // API 触发不要求调用方传 triggerType，null 时默认 API 以简化客户端接入
-    return EmptyChecks.isNull(command.request().getTriggerType())
+    return EmptyChecks.isNull(command.request().triggerType())
         ? TriggerType.API
-        : command.request().getTriggerType();
+        : command.request().triggerType();
   }
 }

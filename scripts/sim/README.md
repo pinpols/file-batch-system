@@ -31,7 +31,7 @@
 **已经完整**,不用我重新写。
 
 模拟器额外补的容器:
-- `batch-sim-sftp`(atmoz/sftp):3 个账户 ta/tb/tc 共享同一容器,各 chroot 到 `/home/<user>/`;网络服务名仍为 `sftp`
+- `batch-sim-sftp`(jmcombs/sftp):3 个账户 ta/tb/tc 共享同一容器,各 chroot 到 `/home/<user>/`;网络服务名仍为 `sftp`;镜像支持 amd64/arm64
 - `batch-sim-mockserver`(mockserver/mockserver):3 个 HTTP stub(`/tb/callback`, `/tb/ingest`, `/tc/ingest`);网络服务名仍为 `mockserver`
 
 容器内文件校验使用 `SFTP_CONTAINER`，默认值为 `batch-sim-sftp`；若自定义 Compose 实际容器名，需让 Compose 创建或复用该名称并在运行前覆盖变量，不要把网络服务名 `sftp` 用作 `docker exec` 目标。

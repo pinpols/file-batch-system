@@ -3,15 +3,19 @@ package io.github.pinpols.batch.console.infrastructure.config;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Nullables;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.InitMode;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.JobDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.TenantInitResult;
+import io.github.pinpols.batch.console.domain.config.param.ConfigBatchTargetReceiptInsertParam;
 import io.github.pinpols.batch.console.infrastructure.config.DefaultConsoleTenantConfigInitApplicationService.StrictBundleAbortedException;
 import io.github.pinpols.batch.console.infrastructure.config.TenantConfigInitApplyHandlers.ApplyContext;
+import io.github.pinpols.batch.console.mapper.ConfigBatchOperationMapper;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -35,11 +39,51 @@ class TenantConfigInitTenantExecutor {
 
   private final TenantConfigInitApplyHandlers applyHandlers;
   private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+  private final ConfigBatchOperationMapper operationMapper;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   TenantInitResult execute(
       String tenantId, TenantConfigBatchInitRequest request, String operator, boolean dryRun) {
     return applyWithinTransaction(tenantId, request, operator, dryRun);
+  }
+
+  /** 成功结果与目标变更共同提交；返回失败时事务由执行逻辑标记回滚。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  TenantInitResult executeRecoverable(
+      String tenantId,
+      TenantConfigBatchInitRequest request,
+      String operator,
+      ConfigBatchOperationContext context,
+      int targetOrdinal) {
+    TenantInitResult result = applyWithinTransaction(tenantId, request, operator, false);
+    if (result.success()) {
+      insertReceipt(context, targetOrdinal, tenantId, result);
+    }
+    return result;
+  }
+
+  /** 目标事务确认回滚后，独立保存失败结果。 */
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
+  void recordRolledBack(
+      ConfigBatchOperationContext context,
+      int targetOrdinal,
+      String tenantId,
+      TenantInitResult result) {
+    insertReceipt(context, targetOrdinal, tenantId, result);
+  }
+
+  private void insertReceipt(
+      ConfigBatchOperationContext context,
+      int targetOrdinal,
+      String tenantId,
+      TenantInitResult result) {
+    operationMapper.setTenantContext(tenantId);
+    String resultJson = JsonUtils.toJson(result);
+    ConfigBatchTargetReceiptInsertParam params = new ConfigBatchTargetReceiptInsertParam(
+        context.auditTenantId(), context.operationId(), targetOrdinal, tenantId, resultJson);
+    if (operationMapper.insertReceipt(params) != 1) {
+      throw new IllegalStateException("目标配置回执写入失败");
+    }
   }
 
   TenantInitResult applyWithinTransaction(

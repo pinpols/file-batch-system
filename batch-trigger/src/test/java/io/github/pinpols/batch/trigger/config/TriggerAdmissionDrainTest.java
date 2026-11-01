@@ -12,8 +12,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerDrainAdapter;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerDrainState;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
+import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
+import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
+import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.web.TriggerApiExceptionHandler;
 import io.github.pinpols.batch.trigger.web.TriggerController;
@@ -63,7 +68,12 @@ class TriggerAdmissionDrainTest {
       when(verifier.authorizesExternalEvent(principal, "t1", "billing")).thenReturn(true);
     }
     MockMvc mvc = MockMvcBuilders.standaloneSetup(
-            new TriggerController(service, shutdown, admission, verifier))
+            new TriggerController(new TriggerApiApplicationService(
+                service,
+                new TriggerDrainService(new TriggerDrainAdapter(shutdown)),
+                new TriggerLaunchAdmissionService(
+                    admission, new TriggerDrainService(new TriggerDrainAdapter(shutdown))),
+                new TriggerRequestPolicy(verifier))))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())
         .build();

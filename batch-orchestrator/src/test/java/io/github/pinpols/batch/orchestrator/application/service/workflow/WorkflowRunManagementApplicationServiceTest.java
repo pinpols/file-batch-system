@@ -16,7 +16,7 @@ import io.github.pinpols.batch.orchestrator.application.engine.WorkflowTerminalO
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
@@ -125,7 +125,7 @@ class WorkflowRunManagementApplicationServiceTest {
     assertThat(update.getValue().getSkipReasonCode()).isEqualTo("OPERATOR_SKIPPED");
     assertThat(update.getValue().getSkipReason()).isEqualTo("approved bypass");
 
-    ArgumentCaptor<AlertEmitRequest> emittedAlert = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> emittedAlert = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertService).emit(emittedAlert.capture());
     Map<String, Object> alertDetail =
         JsonUtils.fromJson(emittedAlert.getValue().detailJson(), new TypeReference<>() {});

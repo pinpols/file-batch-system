@@ -1,21 +1,15 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
-import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleAdminTestDataApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import jakarta.annotation.PostConstruct;
 import jakarta.validation.constraints.Pattern;
-import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -32,18 +26,18 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>ROLE_ADMIN 才能调
- *   <li>prefix 强制 `^[a-zA-Z][a-zA-Z0-9_-]{2,32}$` 正则:必须字母开头、3-33 字符、只能字母数字下划线连字符。 禁止
- *       `'`/`;`/`%`/`_`/`\` 等 SQL 通配符 + 防注入。**不接受空 prefix** —— 防止删全库
+ *   <li>prefix 强制 `^[a-zA-Z][a-zA-Z0-9-]{2,32}$` 正则:必须字母开头、3-33 字符，只能使用字母、数字和连字符；拒绝 SQL
+ *       通配符字符且不接受空值，避免误删全库
  *   <li>**只匹配 `prefix-...`** (prefix + 连字符)而不是 `prefix...`,避免误删合法资源(如 prefix='test' 不会误删 `tester`
  *       这种正常用户)
  *   <li>清理路径覆盖 11 张业务表(含关联子表),按 FK 反向 DELETE,跑在 service 的 @Transactional 里要么全成要么全回滚
  * </ul>
  *
- * <p>事务边界在 orchestrator 内部接口对应的服务中，本 Controller 仅负责入口校验 + 委派。
+ * <p>生产环境策略与精确 tenantId 解析由应用服务负责；实际级联清理和事务边界在 orchestrator 服务中。
+ * 本 Controller 仅负责 HTTP 参数校验、权限注解、审计和响应封装。
  *
  * <p>典型使用:`DELETE /api/console/admin/test-data?prefix=e2e` 或 `?prefix=test-suite-A`。
  */
-@Slf4j
 @RestController
 @Validated
 @RequestMapping("/api/console/admin/test-data")
@@ -55,21 +49,8 @@ public class ConsoleAdminTestDataController {
   // 改用 hyphen 作为分隔(本就是文档示例: `e2e-suite-A`)。
   private static final String PREFIX_PATTERN = "^[a-zA-Z][a-zA-Z0-9-]{2,32}$";
 
-  private final ConsoleOrchestratorPort orchestratorProxyService;
+  private final ConsoleAdminTestDataApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
-  private final Environment environment;
-
-  /**
-   * 启动 fail-fast:prod profile 直接拒绝实例化此 controller(双保险);非 prod 仅 ROLE_ADMIN 可调。 若运维需要在生产 emergency
-   * 清理,请走 SOP + DBA 直连,不要打开此端点。
-   */
-  @PostConstruct
-  void validateProfile() {
-    if (BatchProfileSupport.isProductionProfile(environment)) {
-      throw new IllegalStateException(
-          "ConsoleAdminTestDataController must not be enabled in production profiles - remove the active production profile or use dev/test/local");
-    }
-  }
 
   /**
    * 按 prefix 批量级联清理测试数据。返回 map 列出每张表删了多少行。
@@ -89,10 +70,9 @@ public class ConsoleAdminTestDataController {
                   "prefix must start with a letter, contain 3-33 characters, and use only letters, digits, or hyphens (underscore is forbidden because it is a single-character SQL LIKE wildcard)")
           String prefix) {
     if (prefix == null || prefix.isBlank()) {
-      // Spring validation 已拦,这里再硬挡一次,防止反射调用绕过 @Pattern
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
-    Map<String, Integer> result = orchestratorProxyService.adminTestDataCleanupByPrefix(prefix);
+    Map<String, Integer> result = applicationService.cleanupByPrefix(prefix);
     return responseFactory.success(result);
   }
 
@@ -118,12 +98,7 @@ public class ConsoleAdminTestDataController {
     if (ids == null || ids.isBlank()) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
-    List<String> tenantIds = Arrays.stream(ids.split(","))
-        .map(String::trim)
-        .filter(s -> !s.isEmpty())
-        .toList();
-    Map<String, Integer> result =
-        orchestratorProxyService.adminTestDataCleanupByExactTenantIds(tenantIds);
+    Map<String, Integer> result = applicationService.cleanupByExactIds(ids);
     return responseFactory.success(result);
   }
 }

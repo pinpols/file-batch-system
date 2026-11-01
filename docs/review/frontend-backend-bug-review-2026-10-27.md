@@ -1,8 +1,140 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-11-01：本地关键边界与前后端联验续查
+
+**后续串行复验（覆盖下方对应的历史待验状态）**：修复复制弹窗租户切换和作业包迟到响应后，`npx vitest run --maxWorkers=2 src/utils/configBatchRecovery.test.ts src/api/configBatchRecovery.test.ts src/api/configBatchMutationKeys.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts` 共 5 个文件、109 项通过，日志 `/private/tmp/wdi-config-batch-frontend-retest-20261101.log`。前述真实 HTTP 回查暴露的 JSON 序列化问题修复后，`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigBatchOperationRecoveryServiceTest,ConsoleConfigBatchRecoveryControllerTest,ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false test` 共 18 项通过，包含 4 项真实认证 HTTP 和隔离 PostgreSQL 用例，日志 `/private/tmp/wdi-config-batch-http-fixed-20261101.log`。这些结果不等同于网络断连后的真实浏览器联验。
+
+**补充静态检查**：当前前端源码 `npm run typecheck`、`npm run check:i18n`、`npm run gen:api:check`、`npm run check:docs` 及本批受影响文件 ESLint 均通过；后端文档结构和脚本治理检查通过。脚本治理首次发现实际触发观察记录的两个 SQL 未列入索引，补充 `scripts/db/README.md` 后重跑通过。两仓的工作区和暂存区 `git diff --check` 均通过。
+
+**后端受影响类串行复验**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigBatchOperationMapperIntegrationTest,ConsoleIdempotencyRequestIdentityTest,ConsoleIdempotencyInterceptorTest,TenantConfigInitOutcomeTest,DefaultConsoleTenantConfigInitApplicationServiceTest,ConfigBatchOperationRecoveryServiceTest,ConsoleConfigBatchRecoveryControllerTest,ConsoleTenantConfigInitValidationTest,DefaultConsoleTenantConfigCopyServiceTest,DefaultConsoleJobBundleApplicationServiceTest,ConsoleJobBundleControllerTest,TenantWipeScriptsIntegrityIntegrationTest,ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 1：114 项中 110 项通过、4 项错误、0 断言失败、0 跳过。4 项均属 `ConfigSyncAuditRecoveryIntegrationTest`，首个错误为隔离 PostgreSQL 容器等待启动超时，Spring 上下文未能初始化，业务未执行；剩余 3 项受上下文失败阈值影响。其余包括真实数据库 Mapper 5 项和租户清理脚本 3 项通过；日志 `/private/tmp/wdi-console-target-full-20261101.log`。这次失败不能覆盖同一 4 项此前成功的记录，也不能称本轮全部通过。
+
+超时的 4 项随后以 `./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 单独重跑，4 项通过，日志 `/private/tmp/wdi-http-four-retry-20261101.log`；此前 114 项整批命令仍记录为失败。
+
+**边界与新增测试状态**：双独立 Orchestrator 进程缓存失效及独立 Worker 请求在途时导入渠道配置的测试已通过，证据见下。浏览器探针已补容器匿名卷清理和断连断言，运行结果见下。仅针对实际复现或确定的契约缺陷修复；复制弹窗跨标签账号切换候选尚无该路径复现，不据此添加生产防御。
+
+**真实浏览器首次尝试**：使用当前源码构建的 Console 可执行包、专属 PostgreSQL/Valkey 与前端快照执行探针，空库迁移成功、Console 就绪且匿名请求返回 401；页面提交和断连阶段探针报错，未取得恢复结果，退出 1。脱敏记录 `/private/tmp/wdi-browser-recovery-run-20261101.log`，本次隔离进程和容器按 owner 清理；具体原因仍在定位，不能作为业务或浏览器联验通过。构建命令 `./mvnw -ntp -pl batch-console-api,batch-worker/dispatch -am -Dmaven.test.skip=true package` 成功，该命令跳过测试。
+
+**真实浏览器第二次尝试**：修复临时 Vite 字体目录白名单并增加阶段诊断后，探针在导入弹窗选择目标租户时超时，尚未提交；日志 `/private/tmp/wdi-browser-recovery-retry-20261101.log`。该次 Vite 日志有依赖优化引起页面重载，但不能据此断定它就是选择超时的原因。测试夹具已增加导航观察与失败诊断，待重新验证；尚无浏览器端原键回查通过证据。
+
+**真实浏览器第三次尝试**：已观测到开发服务器触发主页面重载；重载后探针尝试再次打开导入弹窗时，已有弹窗仍存在而点击超时，尚未发送业务请求。日志 `/private/tmp/wdi-browser-recovery-retry2-20261101.log`；本轮不能证明或否定业务恢复能力，临时夹具待修正。
+
+**真实浏览器最终重跑通过（快照边界）**：修正多选框的实际聚焦、标签选择和目标确认后，`python3 /private/tmp/wdi-browser-recovery-draft/runner.py` 退出 0；真实 Chromium 登录、CSRF、两个目标正式导入，拦截到后端成功及数据库写入后丢弃浏览器响应，刷新页面以原键只读回查，核对页面未知提示、完成提示、逐目标结果、原请求完成标记、配置及修订号，未重复写入。日志 `/private/tmp/wdi-browser-recovery-retry4-20261101.log`；仅清理本轮 owner 资源。此为作业包导入本地链路，不代表租户复制已做同等浏览器断连复验或目标环境验收。运行期间另一任务恢复对共享前端工作树的改动：浏览器使用临时前端副本和此前构建的 Console JAR，隔离库实际迁移至新增 V375；这不是两个仓库最新源码的原子快照，不能外推为最新整仓联验。
+
+**端到端测试编译问题**：双进程用例首次编译因该模块没有 Lombok 而失败，已改用现有 SLF4J 依赖；第二次暴露现有 SDK 测试将列表传给字符串类型的清理服务参数，已按当前服务契约传入单个租户字符串。两次均未运行目标用例，原日志分别为 `/private/tmp/wdi-two-orchestrators-20261101.log` 和 `/private/tmp/wdi-two-orchestrators-retry-20261101.log`；修正后的定向验证结果另记。
+
+**独立进程缓存联验通过**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=RuntimeConfigImportCacheE2eIT#shouldInvalidateIndependentOrchestratorCachesForImportedTenant' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 0，1 项通过。两个不同 Orchestrator JVM 各自预热两个租户缓存，正式导入后核对数据库及目标回执、两进程失效事件、新配置读取和另一租户原值。日志 `/private/tmp/wdi-two-orchestrators-retry2-20261101.log`。本测试采用 120 秒本地缓存和 1 小时对账间隔以隔离自然过期/周期对账，使用测试安全旁路；不代表生产参数、鉴权、混版或目标环境验证。
+
+**独立 Worker 在途导入联验通过**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=WorkerProcessRestartRecoveryE2eIT#shouldCompleteInFlightDispatchWhenChannelIsImported+shouldContinueDispatching_whenWorkerProcessRestarted' -Dsurefire.failIfNoSpecifiedTests=false -Dtestcontainers.reuse.enable=false test` 退出 0，2 项通过。独立 Dispatch Worker 的旧地址请求被真实接收后，测试执行正式导入并确认新地址及目标回执，再放行旧请求，核对任务成功和新地址未收到旧请求；原有进程重启用例同时通过。日志 `/private/tmp/wdi-worker-inflight-target-20261101.log`。导入通过应用服务执行，此项不覆盖 Console HTTP 鉴权或目标部署环境。
+
+**原键回查整改进行中**：已为租户复制及作业包创建、导入接入按原 HTTP 身份登记和逐目标回执；成功回执与目标写入同事务，缺失项保持未知，重复目标按序号区分。前端在正式提交前保存原键，支持同账号、原请求租户及同标签页刷新后的只读回查；用户可确认停止跟踪，该操作不改变服务端结果。历史请求、无键操作、试运行、跨标签页及服务端未登记的请求不保证可回查。当前不保存原请求正文，不自动续跑未确认目标；混合新旧版本、独立角色完整部署及目标环境未验证。
+
+**本批验证与未完成项**：前端 `npx vitest run --maxWorkers=2 src/utils/configBatchRecovery.test.ts src/api/configBatchRecovery.test.ts src/api/configBatchMutationKeys.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts`：5 个文件、94 项通过（`/private/tmp/wdi-config-batch-frontend-final-20261101.log`）；前端 i18n、文档与 API 生成一致性检查通过。首批后端定向运行中，真实 PostgreSQL Mapper 事务及普通角色隔离 5 项通过；另有 1 项纯单测因 Mockito 缺少空回执桩报错，补齐后 `ConfigBatchOperationRecoveryServiceTest` 5 项通过。随后包含真实认证 HTTP 三个新用例的重跑失败：隔离 PostgreSQL 启动超时，三项均未进入业务；同次运行后段出现多个 class 缺失，同时有其他 Maven 进程使用同一项目和 `target` 目录，不能把该次失败或既有单项通过作为当前完整结果。日志分别为 `/private/tmp/wdi-config-batch-recovery-target-20261101.log`、`/private/tmp/wdi-config-batch-service-rerun-20261101.log`、`/private/tmp/wdi-config-batch-recovery-full-target-20261101.log`。待其他任务结束并稳定源码后，应串行重跑受影响类及真实认证用例，再以新版制品运行已准备的真实 HTTP 响应断连回查探针；当前尚无该修复的真实浏览器与后端联验结论。
+
+本批最终前端类型检查因资源竞争由本任务终止，exit 143；补充“停止跟踪”前的类型检查曾通过，但不代表最终源码已复验。停止时误将另一前端任务的 `vue-tsc` 进程识别为本任务进程并发送 SIGTERM，该检查被中断，未修改其文件；随后已停止本任务自己的重复类型检查。两任务的类型检查均需各自复验。
+
+并发期间，工作树索引新增了本批 V373、回查代码和其他任务的 V374 等新文件；本任务未执行暂存，保持观察到的索引状态，不据此推断用户希望提交。其他任务仍在修改和构建同一工作树时，不重新使用共享 Maven `target` 或覆盖其文件。
+
+**租户重置衔接待验**：两份租户重置 SQL 已补删除被清理目标租户的 V373 回执，并删除被清理审计租户的操作及其级联回执；未被清理的审计操作保留原目标列表，已删回执的目标仍为未知。`TenantWipeScriptsIntegrityIntegrationTest` 已补相应隔离数据库案例，但尚未运行。脚本需要已应用 V373 且执行账号具备跨租户清理权限，不曾在共享数据库执行。混版期间旧实例不会登记新回执，旧实例仍处理写请求时不能承诺原键恢复覆盖所有请求。
+
+**前端续核待整改**：复制抽屉的同步 watcher 在租户 store 更新、localStorage 尚未写入时读取请求租户，可能错误显示租户不一致并隐藏待查记录；需保持旧结果同步失效，待 store 写入完成后刷新列表并补真实 setter 顺序的组件回归。作业包页面处理回查和提交的迟到响应时，未再次比较实际请求租户头；跨标签切换后的影响以及成功后本地记录清理失败的提示需补针对性复核和修复。保存原键与拦截器读取租户头之间的跨标签交错尚未复现；该拦截器为同步执行，不能按普通异步微任务竞态认定为现有 Bug。上述事项因配对前端工作树正由另一任务使用，尚未修改或验证。
+
+**并行任务暂停后的复验进展**：复制弹窗用真实 Pinia setter 的切租户用例首红（1 项失败，日志 `/private/tmp/wdi-copy-tenant-switch-red-20261101.log`）；作业包用例模拟另一标签切换请求租户后，旧成功响应错误清除原记录，首红 1 项（`/private/tmp/wdi-job-recovery-late-tenant-first-red-20261101.log`）。两个修复已写入，修复后测试尚待运行。后端 4 条真实认证 HTTP/隔离 PostgreSQL 用例已进入业务，但全部失败：实际响应把 Jackson 2 的 JSON 节点按普通对象输出；原目标写入和已知回滚已发生，首次原始响应的重复目标更新计数为 1，失败位于回查结果或摘要。日志 `/private/tmp/wdi-config-batch-http-retry-20261101.log`。已将响应边界改为目标回执 record 和普通元数据对象；需修正相关测试并重跑后才能称为修复通过。另一标签切换账号时复制弹窗的迟到响应目前只有源码候选，尚无该具体路径的真实浏览器复现。
+
+**原始目标**：完成本地可执行的配置导入、缓存失效和在途任务；事务、锁、租约与副作用；SQL 状态、租户隔离、归档恢复；配置复制与作业包未知结果、跨账号权限、浏览器真实后端操作及告警最终收件验证。分别记录当前源码、实测层级、未验证和目标环境依赖，不以独立测试结果推断完整链路。
+
+**工作区与授权**：后端 `file-batch-system`、前端 `batch-console` 开始时均为 `perf/local-loadtest-2026-10-31`；审查期间两仓当前分支被重命名为 `fix/bug-fixes`，HEAD 和工作区路径未变，既有未提交改动保留。隔离 Testcontainers 和本地测试接收端用于本轮验证；本机现有共享 Compose 与其数据不作为写入目标。未发送外部通知。
+
+**环境重建后的角色用例复验**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigCacheInvalidationOutboxIntegrationTest#shouldRequireTableGrantsAndPolicy_whenDeliveryRoleClaims' -Dsurefire.failIfNoSpecifiedTests=false test`：隔离 PostgreSQL 等真实依赖启动，指定方法 1 项通过、0 失败、0 错误、0 跳过，exit 0；日志 `/private/tmp/wdi-outbox-role-method-20261101.log`。该结果只覆盖该方法的表授权、RLS 策略和领取边界，不代表分角色部署的整条链路已验收。
+
+**待业务决定**：共享文件多作业归档的回看口径（首次、逐作业快照或最新状态），以及显式补跑作业的请求日历与历史冻结日历归属，均不预设答案、不按 Bug 修改。两项分别需要业务方裁定；其他验证继续。
+
+**隔离数据库定向验证 PASS**：`./mvnw -ntp -pl batch-orchestrator -am '-Dtest=WorkflowArchiveIntegrityIntegrationTest#shouldSerializeWorkflowNodeAttachmentAgainstJobInstanceDelete+shouldRetainHotTreeAndRollbackColdNodesWhenRootCopyFails+shouldAcceptMatchingColdCopiesWhenRetryingArchive,ArchiveColdStorageIntegrationTest#shouldSerializeCompensationAssociationWithArchive+shouldNotLoseCommittedStepUpdateDuringArchive+shouldRetainHotTree_whenLogReferencesForeignTenantInstance,MultiTenantIsolationIntegrationTest#shouldNotEnforceTimeout_whenLastRunningTaskWasReclaimedAfterScan+shouldNotExposeJobInstanceAcrossTenants+shouldRejectForgedCrossTenantWorkflowAssociation' -Dsurefire.failIfNoSpecifiedTests=false test`：9 项通过，0 失败、0 错误、0 跳过；PostgreSQL 17.11 隔离容器从空库应用 371 个 Flyway 迁移。覆盖归档并发锁、复制失败回滚和重试、跨租户保护及租约回收后的旧超时候选；不代表全部事务或目标环境通过。完整日志 `logs/verification/local-boundaries-2026-11-01/archive-lock-isolation.log`。
+
+**前端提示 PASS，恢复仍未完成**：配置复制、作业包导入和创建向导的正式请求遇网络中断、5xx 或冲突时提示结果可能未知并要求核对目标；明确 400 和预演不误提示。两个组件测试文件 61 项通过，定向 ESLint、i18n、`npm run check:docs` 和最后一次 `npm run typecheck` 通过。该提示不保存原请求或支持跨刷新回查，不能称为持久回执恢复；同版真实浏览器与后端待执行。
+
+**缓存失效竞态首红（历史）**：`OrchestratorConfigCacheRefillRaceIntegrationTest#shouldNotRefillOldDefinitionAfterInvalidation` 在隔离真实 Redis 和受控 Mapper 下固定旧读取→失效→旧读取回填，后续读期望“新配置”实际得到“旧配置”；1 项失败、0 错误、0 跳过，Maven exit 1，首红日志 `/private/tmp/config-cache-refill-race-first-20261101.log`。该首红确认缓存层交错缺陷；后续补充了下述真实 PostgreSQL 配置导入联合验证。相同源码模式涉及作业、Workflow、日历、窗口、配额及本地正负缓存；后续已实现局部修复并完成下述定向验证；Cluster 键槽、混合版本及容量边界仍须分别验证。
+
+**失效发布故障首红及后续验证**：修复前源码中 Console 在配置提交后先删除旧键，再推进 Redis 全局和键版本并广播；异常只记录日志/指标，ConfigSync receipt 对账不补发失效，也不覆盖直接初始化、复制、Excel 及常规编辑。全局版本推进后键版本失败、或 Redis 整段不可用期间提交后恢复，可能使旧 v2 值继续命中；首轮定向注入因测试 JDBC 使用未规范化大写策略码查询不到行而失败，未到恢复断言，日志 `/private/tmp/config-invalidation-key-failure-first-20261101.log`。夹具修正后已取得有效首红：真实 PG/Redis 的配置导入和成功回执均已确认，定向注入一次配额 key revision 写入失败，全局版本 1→2、键版本 1→1；真实 subscriber 对账后 30 秒仍读取旧配额 10，而数据库新值为 20。1 项因 Awaitility 超时报错、exit 1，日志 `/private/tmp/config-invalidation-key-failure-rerun-20261101.log`；另在专属非复用 Valkey 容器暂停期间实际提交导入和成功回执，恢复后清本地缓存，全局/配额版本均 1→1，30 秒仍读旧值 10（预期 20）；1 项 Awaitility 超时报错、exit 1，日志 `/private/tmp/config-invalidation-outage-first-20261101.log`。测试确认自有容器已解除暂停并恢复读取。两类故障均已复现；后续持久队列的同 JVM 真实 PG/Valkey 恢复用例已通过，见下文。旧实例兼容与目标环境仍需核查。
+
+**事务缓存定向首红**：`OrchestratorConfigCacheServiceTest` 的事务隔离与活跃事务回源场景 5 项失败、0 错误、0 跳过，显示 RR/Serializable 仍会读缓存，READ COMMITTED 事务的旧正值和旧缺失仍可回填本地缓存；日志 `/private/tmp/config-cache-transaction-first-20261101.log`。这属于受控单测；真实 PostgreSQL/MyBatis 会话交错的联合用例随后已通过，见下文。Workflow 重放预览及启动存在明确的固定快照调用路径，性能与故障恢复边界仍需另验。
+
+**状态契约及 SDK 恢复局部 PASS**：本轮 `LeaseParentLifecycleSqlContractTest`、`CapacityProfileMapperXmlTest#shouldMatchJobLifecycle_whenClassifyingCapacityProfiles`、`JobInstanceStatusSqlContractTest` 共 6 项通过，属于 Mapper XML 与状态枚举集合对照；`SdkOrdinaryLeaseRecoveryE2eIT` 的 3 个指定方法通过，覆盖隔离独立进程提交后强杀、已提交报告响应断连及幂等任务经 Outbox/Kafka 恢复。日志 `logs/verification/local-boundaries-2026-11-01/sdk-dispatch-status.log`；这不是所有 Mapper/真实供应商验收。独立 Dispatch 的本地 API_PUSH 接收持久化后崩溃用例也通过：重领后收敛为 UNKNOWN，接收台账仅一条；执行 JAR 与当前编译输出的 Dispatch 136、worker-core 204、common 417 个 class 逐项一致。完整命令：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=LeaseParentLifecycleSqlContractTest,CapacityProfileMapperXmlTest#shouldMatchJobLifecycle_whenClassifyingCapacityProfiles,JobInstanceStatusSqlContractTest,SdkOrdinaryLeaseRecoveryE2eIT#shouldBlockUnsafeEffectAfterSdkProcessIsKilled+shouldRecoverSdkReportAfterCommittedResponseIsDisconnected+shouldRecoverSafeEffectThroughProductionOutboxAndKafka,WorkerReportLostAfterBusinessCommitE2eIT#shouldNotRedeliverAfterWorkerCrash_whenApiPushAcceptedBeforeOutcomePersisted' -Dsurefire.failIfNoSpecifiedTests=false test`，SQL 6 项和 E2E 4 项通过，exit 0。
+
+**缓存修复定向单测 PASS**：`./mvnw -ntp -pl batch-orchestrator -am '-Dtest=OrchestratorConfigCacheServiceTest,OrchestratorRedisSupportRevisionTest,OrchestratorConfigInvalidationSubscriberTest' -Dsurefire.failIfNoSpecifiedTests=false test`：当前源码 35 项通过、0 失败/错误/跳过；日志 `/private/tmp/config-cache-unit-final-20261101.log`（此前 34 项日志 `/private/tmp/config-cache-unit-fixed-20261101.log`）。局部修复为按租户/类型的通配和精确版本区分共享缓存、本地失效代次保护回填、显式固定快照事务直接查库及禁止活跃事务回源污染缓存，并对已确认的 Redis 命令超时作降级。该结果不证明真实 PG 并发、双实例/Worker 联合、Redis 故障期间提交后的恢复、key revision 部分失败、版本回退、混合旧实例或性能；上述边界仍开放。
+
+**未知结果恢复的现状和约束**：ConfigSync 在目标提交同一事务中写目标回执，并以原请求键建立审计身份；复制与作业包旧入口没有复用该身份。复制会重新读取源配置，故新请求可能对应不同快照；ConfigSync 当前也不在服务端保存完整导入正文。可靠的原键对账需明确操作类型和键命名空间，防止污染既有同步日志或跨入口键冲突；仅所有目标都有收据时可确认终态，缺收据仍为未知。自动补跑还需要保护原始快照并围栏在途请求，不能依据找不到状态就自动换键重发。此段为当前源码核查和待实施设计约束，非已完成恢复。
+
+**持久失效测试首次环境失败与重试**：`./mvnw -ntp -pl batch-console-api -am -Dtest=ConfigCacheInvalidationOutboxIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test` 在专属 Testcontainers Kafka 启动时等待 `RECOVERY → RUNNING` 超时，3 项均为上下文初始化错误，未执行业务断言；exit 1，首错日志 `/private/tmp/config-outbox-isolation-20261101.log`。此前同类旧版源码 3 项通过不覆盖本次测试隔离改动。随后按受影响的三个类进行单次串行重试，同机专属 Kafka 启动成功，当前版本 `ConfigCacheInvalidationOutboxIntegrationTest` 3 项通过、0 失败/错误/跳过；两类 Redis E2E 随后也通过，整体命令 exit 0，日志 `/private/tmp/config-invalidation-three-target-retry-20261101.log`。未清理用户的共享服务或将环境失败归因于业务逻辑。
+
+**持久失效本地定向复验 PASS**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=ConfigCacheInvalidationOutboxIntegrationTest,ConfigCacheInvalidationRecoveryE2eIT,ConfigInvalidationReconcileOrderingE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0；真实 PostgreSQL 的队列事务和领取隔离 3 项、真实 PG/Valkey 的局部版本写入失败与 Redis 暂停恢复 2 项、广播丢失与对账交错 1 项，合计 6 项通过、0 失败/错误/跳过。日志 `/private/tmp/config-invalidation-three-target-retry-20261101.log`；故障容器已解除暂停。该验证为隔离依赖及同 JVM 服务/订阅器，不覆盖独立进程、分角色部署、Redis 已确认后的数据回退、混版或吞吐容量。
+
+**独立主库角色授权工具 PASS**：新增 `scripts/db/config-cache-invalidation-role.sql`，由 DBA 显式指定既有可信角色和 grant/revoke，不创建账号、不授权 PUBLIC，也不更改已有 schema、V232 或其他业务权限；重复执行和冲突检查均在同一事务内。`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigCacheInvalidationRoleSqlIntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0，隔离 PostgreSQL 空库执行全部 372 项 Flyway 迁移，2 项通过、0 失败/错误/跳过，覆盖含空格和引号角色、权限与 RLS 隔离、重复授权/撤销以及非法参数和策略冲突。日志 `/private/tmp/wdi-config-role-sql-target-rename-20261101.log`；`check-script-governance.py`、文档结构和差异空白检查通过。此为脚本和数据库局部验证，未对共享或目标数据库执行授权，Spring 分账号部署及原有 V232 函数权限仍待验证。
+
+**持久失效运行成本**：当前 V372 对受保护配置表变更写入待投递记录，成功提交后既有立即失效和 relay 后续投递可能各推进一次版本并发布事件。重复投递是现有实现事实，是否影响吞吐和资源尚未测量，不能推断性能瓶颈；也不为消除此重复引入未经验证的确认协议。
+
+**持久失效独立数据库角色验证**：V372 默认只对 Flyway 执行账号建立策略，而 Console primary 账号可独立配置。隔离 PostgreSQL 空库执行真实 372 项迁移后，以独立 LOGIN、NOSUPERUSER、NOBYPASSRLS 账号和真实 MyBatis Mapper 验证：仅有表权限但无专属 RLS 策略时 `lockNext()` 返回空；授予可信角色专属策略后可领取、认领和确认，普通角色仍不可见；手动写入另需 INSERT 与序列 USAGE。探针退出 0，日志 `/private/tmp/wdi-config-role-20261101-ZtHfBk/run.log`，专属容器已清理。新增的同类 JUnit 仍未运行；该探针不证明 Spring 分账号部署或 V232 等既有函数权限已配置。当前未修改生产授权，不能以默认同账号的通过结果覆盖分角色部署。
+
+**作业包提交后响应丢失已复现**：使用当前 Console 可执行 JAR、独立 PostgreSQL/Valkey 和真实登录、CSRF，经本机代理转发真实 Job Bundle 导入；代理在收到服务端 200 和完整结果后关闭客户端连接。两个目标的提交由原始响应和数据库独立核对：相同原键再次提交返回 409、两目标 revision 未变化；换新键再次提交时两目标 revision 均增加。`python3 /private/tmp/wdi_loss_runner.py` exit 0；探针及 SQL、日志保留于 `logs/verification/local-boundaries-2026-11-01/job-bundle-response-loss/`，探针 SHA-256 为 `ce4ed444f1a3b1af5ac4bb2b656ae28db989daa615a936ce2ad51dce9f2c8171`。4 次此前尝试分别停在文件存储配置、PG 初始化 stderr 缺失、内部密钥配置和临时探针命名冲突；均未提交业务，首错保留于 `/private/tmp/wdi-loss-run-{yy04qev6,sqo336rc,krp_gj0w,bno79i7_}/`。本轮仅证实这个实际 HTTP 丢响应路径及现有键行为，不代表原键回查已实现、浏览器通过或部分目标事务异常已复现；专属容器与进程已清理。
+
+**未知结果恢复的未定方案**：Job Bundle 和租户复制原键回查接口及持久恢复尚未实现。两条针对未定接口的新增测试草稿未执行、不会证明真实网络断连，已备份至 `/tmp/wdi-unimplemented-recovery-tests.patch` 后从测试类移出，原有测试内容保留。随后针对现有作业包导入的真实响应丢失用例执行单方法测试，但专属 Kafka 启动超时，测试上下文未完成、业务断言未执行，首错 `/private/tmp/wdi-response-loss-20261101.log`；本轮新增的未验证测试已另行备份并从工作区移出。复制预览只能核对当前数据，不能证明原请求的逐项目标结果。
+
+**前端 E2E 类型检查边界**：`npx tsc --noEmit -p e2e/tsconfig.json` 失败，首错为已有测试缺 Node 类型；显式加入 Node 类型后仍有其他存量 E2E 类型或路径错误。仅针对 `closure-recovery-real.spec.ts` 及其依赖用临时配置补 Node 与路径别名检查通过，不代表全 E2E 类型通过；真实浏览器执行仍待完成。
+
+**真实浏览器隔离环境，执行中**：当前源码以 `./mvnw -ntp -pl batch-console-api -am -DskipTests package` 打包成功（测试跳过，不计为测试通过），仅用于专属 PG/Valkey、Console 与 Vite 的浏览器验证；不会复用本机共享 Compose。隔离库已迁移至 V371，Console 关闭安全旁路且匿名 `/api/console/auth/me` 返回 401；原浏览器用例首轮因缺少项目版本 Chromium 未进入测试，首错 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original.log`，已在私有临时目录安装对应浏览器。原有 ConfigSync 用例随后进入业务，两个目标提交和回执断言执行后，页面等待同步日志标签超时；当时 Vite 正在依赖优化并重载，环境因素是待验证候选，尚未排除页面问题。该轮日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original-retry.log`，现正单例复验；测试独占租户和故障触发器清理计数均为 0；本次 Console/Vite 进程已退出、19880/15175 无监听、专属标签容器为 0。首错与通过日志检查无测试口令后已复制到忽略目录 `logs/verification/local-boundaries-2026-11-01/`。
+
+**跨账号会话风险，修复中**：真实浏览器 trace 显示登录页在 logout 204 后再次执行兜底 logout，两次复用同一自动幂等键而出现 409；自动键未包含会话身份，快速跨账号切换存在错误复用风险。另有旧配置页请求在登出后返回 401 并触发 token 刷新；旧会话 401 在账号切换后仍发起刷新已由受控测试先红（`/private/tmp/wdi-session-stale-first-20261101.log`）。现针对 logout 停止自动注入幂等键，并让请求捕获会话代次、阻止旧错误刷新/重试/提示；`interceptors.integration.test.ts` 与 `auth.test.ts` 共 43 项通过，目标 ESLint 通过。真实浏览器进一步复现跨标签页 Cookie 竞态：旧标签页的 logout 204 被延迟，新标签页成功登录且 `/auth/me` 返回 200，释放旧响应后新会话变为 401；首红 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-cookie-first.log`。内存代次本身不能阻止浏览器处理 Set-Cookie；当前版本已以同源 Web Locks 协调密码登录/登出/换发，并以 Chromium 双标签验证该复现时序。旧标签、无锁/非安全上下文、OIDC 回调和超时后响应仍未覆盖；refresh 等其他写 Cookie 路径尚未完整验证。本轮仅使用隔离账号与数据。
+
+**认证追踪续项**：后端 `/auth/token` 成功响应不返回 accessToken，前端此前却要求该字段，真实形态单测先红 `/private/tmp/wdi-refresh-cookie-first-20261101.log`；修复应按解包后的成功响应判断，不能向浏览器脚本泄露 token。登录页挂载时无条件 logout 会使另一已登录标签失效，组件测试先红 `/private/tmp/wdi-login-page-logout-first-20261101.log`，已移除该历史兜底；失效 Cookie 公开登录先有过滤器测试，现也已通过隔离 Chromium 真实登录专项。当前认证、登录页、维护和降级等 6 个受影响测试文件合计 66 项通过，日志 `/private/tmp/wdi-auth-final-66-20261101.log`；最终 `npm run typecheck` 也已通过（`/private/tmp/wdi-auth-final-typecheck-20261101.log`）。
+
+**第二次隔离浏览器环境首错**：Console 启动时遗漏 `BATCH_PLATFORM_DB_*`，错误尝试默认 `localhost:15432` 并因空密码认证失败，未完成认证或执行 SQL；浏览器因此收到 502，未进入业务。原日志 `/private/tmp/wdi-auth-lock-20261101-eNQEbt/playwright.log`。随后确认独立启用的 read-replica 使用独立配置，通用数据源变量不能覆盖其默认地址；第二次进程启动日志仍出现该默认目标。已停进程、核对并禁用该功能，重启时所有 DB/Redis/存储指向专属目标或不可达端口，实际建立 TCP 连接仅见专属 PG 61073，匿名请求返回 401。浏览器专项结束后测试租户及故障触发器均为 0，专属 Console/Vite 已退出、19880/15175 无监听、专属标签容器为 0。不得把本次写成全程未尝试共享地址。
+
+**跨标签 Cookie 协调，待浏览器复验**：对当前版本同源页面的密码登录、登出和换发请求使用 Web Locks 排队，锁等待支持超时和取消，不抢占持锁请求；旧登录加密迟到和排队期间会话变化均有受控首红。当前源码的 8 个受影响前端测试文件 74 项、ESLint 和 typecheck 通过，日志 `/private/tmp/wdi-auth-lock-snapshot-final-20261101.log`、`/private/tmp/wdi-auth-lock-snapshot-typecheck-20261101.log`。无 Locks/非安全上下文沿用原行为，旧标签、未参与客户端、OIDC 回调与超时后迟到响应均不能视为已覆盖；隔离 Chromium 已通过两个专项：真实旧登出响应扣留时新标签登录排队并最终保持新账号，以及失效 HttpOnly Cookie 下不自动登出并成功登录；日志 `/private/tmp/wdi-auth-lock-20261101-eNQEbt/playwright-final.log`。该结果不覆盖旧标签/OIDC/其他浏览器或无 API 环境。标准语义见 [Web Locks 规范](https://www.w3.org/TR/web-locks/)，适配边界见前端浏览器支持文档。
+
+**跨标签复现数据库范围**：临时认证复现环境迁移时读取到了正在编写、尚未稳定的 V372；它仅作为旧 Console JAR 的隔离认证复现数据，不构成迁移成功或同版后端验证。最终迁移验证必须在 V372 稳定后使用全新隔离库重建。
+
+**跨标签身份状态候选**：浏览器 Cookie 在同一存储分区共享，但当前 `authSession.ts` 代次按页面内存保存。一个标签切账号后，另一个标签可能继续展示旧 profile/权限，而请求使用新 Cookie；隔离 Chromium 双标签已实测旧页显示 admin、同页 `/auth/me` 实际为 auditor；正常关闭引导后从旧页面真实登出，会将新标签 auditor 会话从 200 变为 401。日志 `/private/tmp/wdi-cross-account-20261101-F5zWmQ/playwright-second.log`；首轮因引导遮罩未能完成操作的日志亦保留。该轮使用先前 Console JAR 与尚未稳定的 V372 临时库，仅证明认证身份错配，不构成当前后端或迁移验收；本轮 fixture 租户及故障触发器均清理为 0，专属进程、端口和标签容器已退出。需核对跨标签共享代次、休眠恢复与在途请求，不把锁串行或单页账号切换视为该问题已解决。
+
+**跨标签当前版本浏览器局部 PASS**：前端共享会话代次、恢复时身份复核和旧登出确认拦截，相关受影响前端测试 89 项、typecheck 和目标 ESLint 通过。当前版本使用同版 Console JAR、专属 PG/Valkey 和 Chromium 验证：首轮 3 项中认证锁及失效 Cookie 登录 2 项通过，跨标签项在认证断言前被延迟新手引导遮挡；只修正引导等待并重跑该项，1 项通过。该项核对旧 admin 确认框打开后 auditor 登录、旧页及 `/auth/me` 变为 auditor，确认旧框不发送 logout 且 auditor 会话仍有效。测试源码两次间只改引导等待，后端和前端业务源码摘要一致；首错与复验分别见 `logs/verification/local-boundaries-2026-11-01/current-auth-playwright-first.log`、`current-auth-playwright-retry.log`，fixture 租户及故障触发器均清理为 0。未协调的旧标签/客户端、OIDC、超时迟到响应和其他业务确认框不在本次通过范围；补充源码复核：配置发布、租户复制和作业包页面已监听主体或权限变化并使旧操作代次失效；不能仅凭局部确认函数推断这些页面会以新身份提交。文件重派、归档和到达确认等其他操作仍需实际双账号时序验证，尚未证实越权写入，未据此添加防御。
+
+**JWT 撤销容忍期已复现，修复中**：真实签发/解码器与受控撤销存储测试证实普通 token 的撤销 TTL 少覆盖 clock skew，且过 exp 但仍在容忍期的 token 注销后仍可认证；日志 `logs/verification/local-boundaries-2026-11-01/auth-first-red.log`。已令撤销 TTL 覆盖实际接受窗口并保留存储异常传播；首红方法及新增边界 6 项通过，两类完整回归共 36 项通过；真实 Redis 和多节点时钟仍未验证。
+
+**认证过滤器异常已复现，修复中**：有效 Cookie 的 `filterChain.doFilter` 与鉴权共用 `catch(Exception)`；受控负例证实下游异常逸出时公开路径执行两次、私有路径吞掉异常并误处理为鉴权失败。适用范围限未被下游框架处理的异常；首红日志 `logs/verification/local-boundaries-2026-11-01/auth-first-red.log`，已将下游调用移出认证异常捕获；首红方法及新增边界 6 项通过，两类完整回归共 36 项通过。
+
+**认证相关类完整定向回归 PASS**：`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConsoleAuthenticationFilterTest,ConsoleJwtServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0；过滤器 16 项、JWT 20 项均通过，日志 `logs/verification/local-boundaries-2026-11-01/auth-classes.log`。无撤销 store、无 jti 沿用原兼容行为，极端 skew 配置及真实 Redis/多节点时钟不在通过范围。
+
+**认证响应类型校正**：生成 OpenAPI 类型保留可选 `accessToken` 供旧客户端兼容，当前后端 Cookie 响应不返回它。已删除前端内部错误必填字段和未被生产调用方消费的 token 返回值；相关 9 个测试文件 84 项、ESLint 和 typecheck 通过，日志 `/private/tmp/wdi-auth-wire-final-suite-20261101.log`、`/private/tmp/wdi-auth-wire-final-typecheck-20261101.log`。最近两项浏览器通过先于该内部类型变更，未在此变更后重跑。
+
+**ConfigSync 真实浏览器局部 PASS**：隔离浏览器与关闭安全旁路的同版 Console、独占 PostgreSQL/Valkey 联验，`closure-recovery-real.spec.ts` 原有“真实 ConfigSync 核对”单例 1/1 通过：真实登录与 CSRF、真实 HTTP 导入和受控审计故障后，两个目标及回执提交，浏览器核对转 SUCCESS，刷新及数据库回读无重复。首次导入由 `page.request` 发起，不是页面按钮；日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-original-direct.log`。此前经仪表盘导航的两次超时保留，不据此认定根因；页面按钮与跨账号专项最终 1/1 通过（43.2 秒）：页面提交两个独占目标、预设审计故障后回读两个目标及回执，页面切换 auditor/admin 验证写入口权限和原待核查隔离，刷新后按同键核对至 SUCCESS，数据库无重复；网络哨兵仅允许该请求的预期 500。最终日志 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-page-fifth.log`。首次选择器遮挡及第三轮 logout 409 / 旧请求 401 首错分别保留于 `/private/tmp/wdi-closure-20261101-wXMNeR/playwright-page-first.log` 和 `playwright-page-third.log`。该浏览器结果产生于移除登录页预清理之前，最后源码版本需重跑；证据限此隔离环境和 ConfigSync 场景，不能外推旧复制/作业包持久恢复或所有账号并发路径。
+
+**CI 分片静态检查 PASS**：五个新增 E2E 已登记到 Full CI 与 Staging 的独立分片；`bash scripts/ci/check-e2e-shard-coverage.sh` 验证两份清单覆盖当前 54 个类、无漂移，`actionlint .github/workflows/full-ci-gate.yml .github/workflows/staging-gate.yml` 退出 0。该结果不代表 E2E 实际通过或远端 CI 已执行。
+
+**隔离 Redis 复验局部 PASS**：上述联合 reactor 中 `OrchestratorConfigCacheRefillRaceIntegrationTest` 与 `OrchestratorConfigCacheServiceIntegrationTest` 各 3 项、合计 6 项通过，覆盖已复现的迟到旧读取及缓存基础路径；后三个跨服务 E2E 仍未结束。缓存键与事务语义已同步至 [配置治理运行手册](../runbook/config-governance.md)，其中明确 Redis 故障、旧实例和性能限制。
+
+**配置导入与缓存本地联合 PASS**：`RuntimeConfigImportCacheE2eIT` 4 项通过、0 失败/错误/跳过；真实 PG/Redis 下核对配置同步与目标回执、同 JVM 两份独立缓存和订阅器、固定快照事务及 READ COMMITTED/MyBatis 的旧正值/旧缺失，含只读 REQUIRES_NEW 与外层事务恢复。日志 `/private/tmp/config-runtime-joined-20261101.log`。这是修复后结果；不等同两个独立进程或 Redis 故障恢复验收；Dispatch 结果见下。
+
+**真实 Alertmanager 本地联合 PASS**：`AlertmanagerDeliveryChainE2eIT` 1 项通过、0 失败/错误/跳过。隔离 PostgreSQL 中经真实 Orchestrator 告警服务提交，异步发布到真实 Alertmanager，再经真实 Console HTTP 到本地 Webhook；接收端先返 503 后成功，验证同阶段幂等键、发生及关闭后的恢复通知和数据库回执。应用共进程装配且租户权限为测试替身、本地接收端非真实供应商；不代表生产权限、独立部署或外部供应商验收。日志 `/private/tmp/config-runtime-joined-20261101.log`，配置 E2E 结果另见本节。
+
+**修正测试装配后联合 PASS**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=OrchestratorConfigCacheRefillRaceIntegrationTest,OrchestratorConfigCacheServiceIntegrationTest,RuntimeConfigImportCacheE2eIT,RuntimeConfigImportDispatchE2eIT,AlertmanagerDeliveryChainE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test` exit 0、BUILD SUCCESS；真实 Redis 6 项和三类 E2E 共 6 项全部通过，0 失败/错误/跳过。Dispatch 场景先冻结旧渠道，再实际导入新配置并核对回执，最后由真实 Worker 在旧 LOCAL 目录投递而新目录无信封；使用隔离 PG/Redis/Kafka、同 JVM Worker 和手动驱动出箱，非独立进程或外部渠道。日志 `/private/tmp/config-runtime-joined-20261101.log`。
+
+**验证快照说明**：SDK/SQL reactor 启动后，`OrchestratorRedisSupport.java` 的 import 顺序和日志换行曾被调整；本批复用格式调整前的类文件，已核对仅为空白与 import 顺序变化。后续格式检查及相关验证应按最终源码重核，不将格式调整后的源码误称为本批重新编译。
+
+**首次运行失败记录**：`./mvnw -ntp -pl batch-e2e-tests -am '-Dtest=RuntimeConfigImportCacheE2eIT,RuntimeConfigImportDispatchE2eIT,AlertmanagerDeliveryChainE2eIT' -Dsurefire.failIfNoSpecifiedTests=false test`；原始日志 `/private/tmp/wdi-local-boundary-e2e-20261101.log`。首个告警用例 FAIL：复用测试应用时无关的 Import Worker 在就绪事件自注册读超时；双缓存用例 FAIL：MOCK Web 环境未绑定 Worker 端口。Dispatch 用例 FAIL：测试专用 Console 扫描漏掉 `DownstreamFallback`。三类均是测试应用装配问题，业务断言尚未执行，整个命令 exit 1；随后修正测试装配并按下述联合 reactor 定向复验通过，首错不直接归因于生产逻辑。
+
+## 2026-11-01：短断言、薄包装与 Map 候选复核续记
+
+两仓分别位于 `file-batch-system` 和 `batch-console`；开始时为 `perf/local-loadtest-2026-10-31`，审查中同一 HEAD 上重命名为 `fix/bug-fixes`，保留已有未提交改动。原始分母是短断言 321 项、后端薄包装 110 项和 public Map 返回值 60 项，逐编号或逐方法结论仍以本报告相应台账为准，不外推到清单以外的测试、Map 入参和接口。
+
+- 后端短断言 B001–B104 对照当前方法、输入、断言和相邻测试逐项复核，涉及 54 个文件的摘要均与台账快照一致；99 项保留，5 项保留先前增强。B105–B208 对照当前方法及相关上下文，四个已删除的 Worker 上下文非空用例仍由对应真实启动与注册端口测试覆盖。B123/B124 补验证参数错误码及必填国际化 key；B136 补充空 Workflow ID 时节点、连线及作业 Mapper 无调用；B144 补充 misfire 日志中的实际触发名；B156 更正固定哈希样本的说明和名称，避免误称实时读取迁移；B194 同时验证故障渠道熔断和正常渠道放行。B143 的必填 Bean 注入在同类测试中虽会先执行，仍保留其独立装配检查以支持单独运行和定位。相关受影响类已随下述定向命令通过。
+- 前端短断言 F001–F113 对照当前断言与相邻场景复核；F015 更名为准确描述的只读回退，F023/F024 验证实际 Plus/Menu 组件，F068/F069 精确验证密码强度边界与上限，F100–F103 验证具体日志及仅在属性中出现的筛选词。`npx vitest run src/utils/iconResolve.test.ts src/utils/passwordGenerator.test.ts src/utils/logger.test.ts src/constants/theme.test.ts`：4 文件 40 项通过，日志 `/private/tmp/wdi-short-assertion-fe-final-20261101.log`；四个文件的 Prettier 检查和差异空白检查通过。未运行浏览器 E2E。
+- 60 项 public Map 返回值的当前文件摘要与台账一致，逐项对照方法实现及已记录的调用边界；保留动态参数、插件和 JSON/Excel 既有契约，不因词法形式强行改为对象。110 项后端薄包装已逐方法对照当前实现和调用位置：原有 9 项已简化，本轮再移除 2 项纯转发，其余 99 项保留；生产 profile 判断和配额策略转换保留原求值分支及回退语义。受影响类已随下述定向命令通过。
+
+后端受影响类验证：`./mvnw -ntp -pl batch-console-api,batch-orchestrator,batch-trigger,batch-worker/atomic,batch-worker/dispatch -am '-Dtest=ConsoleAiPromptGuardTest,ConsolePasswordHasherTest,WorkflowGraphValidatorTest,MisfireHandlerIntegrationTest,DispatchChannelCircuitBreakerTest,AtomicRuntimeStatusServiceTest,DatabaseQuotaRuntimeStateServiceTest' -Dsurefire.failIfNoSpecifiedTests=false test`，exit 0，7 类合计 98 项通过，0 失败、0 错误、0 跳过；日志 `/private/tmp/wdi-candidate-final-targeted-20261101.log`。其中 misfire 测试使用隔离 Testcontainers，其他为受控单测；编译依赖模块不代表运行了全部模块测试。
+
+台账的 SHA-256 仍是原建表快照，并非本轮修改后的摘要；本轮增强和更名会使对应文件摘要变化。候选结论为源码/测试设计判断；只有明确列出并完成的运行命令才是执行证据。
+
 ## 2026-11-01：候选逐项台账与验证进度
 
-两仓均在 `perf/local-loadtest-2026-10-31` 工作区。原 321 个短断言候选已按[逐项台账](#2026-11-01短断言候选逐项处置台账)记录处理：304 项保留，10 项增强，4 项删除，1 项合并，2 项更名；此分母包含先前批次的改动，不代表全工程所有测试。原 110 个后端薄包装和清单生成器列出的 60 个 public Map 返回候选也已逐项登记；Map 入参、隐式 public 和清单之外的其他形式不在该分母内。下方各批“未完成”描述为当时状态，以本节及各台账为当前进度。
+两仓在原 `perf/local-loadtest-2026-10-31` 工作区继续，当前分支名为 `fix/bug-fixes`。原 321 个短断言候选已按[逐项台账](#2026-11-01短断言候选逐项处置台账)记录处理：290 项保留，22 项增强，4 项删除，1 项合并并增强，4 项更名；此分母包含先前批次的改动，不代表全工程所有测试。原 110 个后端薄包装和清单生成器列出的 60 个 public Map 返回候选也已逐项登记；Map 入参、隐式 public 和清单之外的其他形式不在该分母内。下方各批“未完成”描述为当时状态，以本节及各台账为当前进度。
 
 本轮另将 TypeScript SDK 默认错误码断言改用独立协议字面量；前端时间戳测试补 UTC 精确值，HTML 清洗测试验证清洗器输出而非仅验证恒等 mock，认证状态测试更名以反映 session 标记。诊断页 E2E 的集群区块断言限定于集群卡片标题并使用现有国际化来源；E2E 用例列表可加载、对应组件测试通过，真实后端浏览器执行尚未完成。
 
@@ -19,7 +151,7 @@
 
 ## 2026-11-01：薄包装清单续核
 
-后端原始 110 个词法候选按[逐项台账](#2026-11-01后端薄包装历史候选逐项台账)核对当前方法及直接用途：9 项已简化，其余 101 项因具名业务判断、必要的格式转换、边界封装或测试夹具而保留。新增简化 `BatchWindowGateTest.mockWorkerSelector` 和 `LoadStepTest.mockPayload`，并将 5 个仅做可空字符串转换的单次包装替换为 `Objects.toString(value, null)`；输入只求值一次，空值与非空值语义保持不变。该结论仅覆盖原始 110 项。
+后端原始 110 个词法候选按[逐项台账](#2026-11-01后端薄包装历史候选逐项台账)核对当前方法及直接用途：11 项已简化，其余 99 项因具名业务判断、必要的格式转换、边界封装或测试夹具而保留。新增简化 `BatchWindowGateTest.mockWorkerSelector` 和 `LoadStepTest.mockPayload`，并将 5 个仅做可空字符串转换的单次包装替换为 `Objects.toString(value, null)`；输入只求值一次，空值与非空值语义保持不变。该结论仅覆盖原始 110 项。
 
 `./mvnw -ntp -pl batch-orchestrator,batch-worker/import -am '-Dtest=BatchWindowGateTest,LoadStepTest' -Dsurefire.failIfNoSpecifiedTests=false test`：分别 4 项、18 项通过，0 失败、0 错误、0 跳过。Map 60 项当前逐方法结论见[Map 台账](#2026-11-01当前-public-map-候选逐项台账)，结论仅针对列出的返回类型候选，输入参数、隐式 public 等不在分母内。短断言当前结果以文首和逐项台账为准。
 
@@ -1484,7 +1616,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | [WorkflowReplayJobDefinitionResolverTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/replay/WorkflowReplayJobDefinitionResolverTest.java) | `snapshot` | `38ca0d6362e9` | 保留：命名测试的工作流运行快照构造 |
 | [TenantSchedulerSnapshotService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/scheduler/TenantSchedulerSnapshotService.java) | `emptyBacklog` | `2ddb3214b402` | 保留：命名空积压快照并隐藏多零构造参数 |
 | [RequestSignatures.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/security/RequestSignatures.java) | `upper` | `14657130a62e` | 保留：明确签名方法的空值与固定 Locale 规范化 |
-| [AtomicRuntimeStatusService.java](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicRuntimeStatusService.java) | `isProdProfile` | `6676c3c02779` | 保留：命名原子运行态的生产环境判断 |
+| [AtomicRuntimeStatusService.java](../../batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicRuntimeStatusService.java) | `isProdProfile` | `6676c3c02779` | 已简化：原调用处直接使用统一 profile 判断 |
 | [FileGovernanceStorageMaintenance.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/FileGovernanceStorageMaintenance.java) | `sanitizeTrace` | `7ae5b9ed527a` | 保留：命名清理任务标识字符清洗规则 |
 | [DefaultWorkerSelector.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultWorkerSelector.java) | `currentLoadOrZero` | `1d00baca90b4` | 保留：命名 Worker 负载缺省值 |
 | [PlatformHttpClientTest.java](../../sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/internal/PlatformHttpClientTest.java) | `attemptedAddresses` | `e25ccd4239bd` | 保留：测试读取连接地址的不可变快照 |
@@ -1524,7 +1656,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | [DefaultPartitionDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultPartitionDispatchService.java) | `buildContext` | `7b12fdfcc583` | 保留：封装关联派发上下文与分区的构造 |
 | [DefaultPartitionDispatchService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultPartitionDispatchService.java) | `initialPartitionStatus` | `7b12fdfcc583` | 保留：命名分区初始状态决策 |
 | [CapacityProfileServiceTest.java](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/capacity/CapacityProfileServiceTest.java) | `eqInt` | `d300e97aa1a6` | 保留：集中参数匹配类型转换以配合原有测试 |
-| [DatabaseQuotaRuntimeStateService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/quota/DatabaseQuotaRuntimeStateService.java) | `normalizePolicy` | `52651883e3b4` | 保留：命名配额策略归一与未知值回退 |
+| [DatabaseQuotaRuntimeStateService.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/quota/DatabaseQuotaRuntimeStateService.java) | `normalizePolicy` | `52651883e3b4` | 已简化：原分支直接承接同一枚举转换结果 |
 | [BatchTopics.java](../../batch-common/src/main/java/io/github/pinpols/batch/common/kafka/BatchTopics.java) | `sanitizeTopicSegment` | `46320967644d` | 保留：命名 Kafka 主题片段字符规范 |
 | [DefaultSchedulePlanBuilder.java](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/DefaultSchedulePlanBuilder.java) | `clampMaxPartitionCount` | `d114c375582d` | 保留：命名分区数量上限及缺省规则 |
 | [FakeBatchPlatform.java](../../sdk/java/testkit/src/main/java/io/github/pinpols/batch/sdk/testkit/FakeBatchPlatform.java) | `asMap` | `2f58c33e8612` | 保留：测试平台解析可变报文的安全快照 |
@@ -1672,8 +1804,8 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | B120 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/support/BuiltinTaskTypeGuardTest.java` | `shouldAllowType_whenJobTypeNullOrBlank` | `90317f255af8` | 保留：内置类型入口对缺失类型的既有行为 |
 | B121 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/job/support/BuiltinTaskTypeGuardTest.java` | `shouldAllowBuiltinType_whenAnyGrantedRoleIsPlatformAdmin` | `90317f255af8` | 保留：多角色包含平台管理员时的授权 |
 | B122 | `file-batch-system/sdk/java/core/src/test/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcherClaimJitterTest.java` | `shouldReturnZero_whenBaseDelayIsZero` | `d5f19b5c5db1` | 保留：零基础延迟下不得生成抖动 |
-| B123 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForNullPrompt` | `c5fe12376b12` | 保留：空 AI 提示词拒绝 |
-| B124 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForBlankPrompt` | `c5fe12376b12` | 保留：空白 AI 提示词拒绝 |
+| B123 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForNullPrompt` | `c5fe12376b12` | 已增强：空提示词拒绝时验证参数错误码及必填国际化 key |
+| B124 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/audit/service/ConsoleAiPromptGuardTest.java` | `shouldThrowBizExceptionForBlankPrompt` | `c5fe12376b12` | 已增强：空白提示词拒绝时验证参数错误码及必填国际化 key |
 | B125 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/RetryPolicyTypeTest.java` | `shouldContainThreeValues` | `4d4163c5e874` | 保留：重试策略枚举项数量约束 |
 | B126 | `file-batch-system/batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/stage/PreprocessStreamEligibilityTest.java` | `shouldAllowDirectStreaming_whenTemplateMissing` | `ce656393c7c5` | 保留：无模板时直接流式导入 |
 | B127 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/DeadLetterReplayStatusTest.java` | `shouldContainFiveValues` | `563648867408` | 保留：死信重放状态数量约束 |
@@ -1685,7 +1817,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | B133 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/jdbc/JdbcMappedSqlValidatorTest.java` | `shouldQuotePgIdentifier` | `cf523ed482a4` | 保留：PostgreSQL 标识符引用格式 |
 | B134 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/spi/task/TaskResultTest.java` | `shouldDefaultOutputToEmptyMap_whenOutputAbsent` | `1e3f863fb77c` | 保留：Worker 通用任务结果的空输出契约 |
 | B135 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/sensor/HttpPollSensorPolicyTest.java` | `matchExpr_missingPath_returnsFalseNotThrow` | `679e2ea9eec6` | 保留：HTTP 传感表达式缺失路径返回 false |
-| B136 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidatorTest.java` | `shouldReportClean_whenWorkflowIdMissing` | `ba75a942f4bc` | 保留：缺失 Workflow ID 不产生错误图 |
+| B136 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidatorTest.java` | `shouldReportClean_whenWorkflowIdMissing` | `ba75a942f4bc` | 已增强：缺失 Workflow ID 不产生错误图，且不查询节点、连线和作业 |
 | B137 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldInsertTagBeforeExtension` | `8f05cc000053` | 保留：文件扩展名前插入分片标记 |
 | B138 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldAppendTag_whenNoExtension` | `8f05cc000053` | 保留：无扩展名文件追加分片标记 |
 | B139 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/constants/BatchFileConstantsPartitionTagTest.java` | `shouldReturnUnchanged_whenSinglePartition` | `8f05cc000053` | 保留：单分片文件名不变 |
@@ -1693,7 +1825,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | B141 | `file-batch-system/batch-worker/atomic/src/test/java/io/github/pinpols/batch/worker/atomic/spark/SparkSubmitTaskExecutorTest.java` | `taskType_isSparkSubmit` | `fa2b1abf6088` | 保留：Spark 执行器任务类型 |
 | B142 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldWireMisfireHandlerBean` | `ab7ffc7ad343` | 保留：misfire handler 实现类型的装配契约 |
 | B143 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldLoadQuartzLaunchJobForMisfireAuditPath` | `ab7ffc7ad343` | 保留：QuartzLaunchJob 在启动上下文中的单独装配检查 |
-| B144 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldNotThrowWhenHandlingMisfire` | `ab7ffc7ad343` | 保留：未知触发名的 misfire 调用不中断调度 |
+| B144 | `file-batch-system/batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/MisfireHandlerIntegrationTest.java` | `shouldNotThrowWhenHandlingMisfire` | `ab7ffc7ad343` | 已增强：未知触发名的 misfire 调用不中断调度并记录对应触发名 |
 | B145 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/TenantScopeTest.java` | `shouldReturnTenantId_whenNonBlank` | `ceaad68afe0c` | 保留：非空租户 ID 原样返回 |
 | B146 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/verifier/ProcessPublishedCountVerifierTest.java` | `shouldPass_whenPublishedCountPositive` | `09cd8a28d4a1` | 保留：数字与数字字符串为不同输入类型 |
 | B147 | `file-batch-system/batch-worker/process/src/test/java/io/github/pinpols/batch/worker/processes/infrastructure/verifier/ProcessPublishedCountVerifierTest.java` | `shouldPass_whenPublishedCountIsNumericString` | `09cd8a28d4a1` | 保留：数字与数字字符串为不同输入类型 |
@@ -1705,7 +1837,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | B153 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelTypePolicyTest.java` | `shouldReturnCanonicalType_whenInputHasSpacesAndLowercase` | `daffd532ab83` | 保留：渠道类型空格与大小写归一 |
 | B154 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelTypePolicyTest.java` | `shouldReturnEmpty_whenTypeUnknown` | `daffd532ab83` | 保留：未知渠道类型不被接受 |
 | B155 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/stateful/StatefulBackendIdentityTest.java` | `shouldPreserveResourceCase_whenBuildingBackendIdentity` | `d867dbc6a70d` | 保留：参数化验证大小写敏感后端资源身份 |
-| B156 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsolePasswordHasherTest.java` | `shouldMatchFlywaySeedArgon2Hash` | `bb7e3f7e298f` | 保留：登录密码验证兼容 Flyway 种子哈希 |
+| B156 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/rbac/support/ConsolePasswordHasherTest.java` | `shouldMatchFlywaySeedArgon2Hash` | `bb7e3f7e298f` | 已更名为 `shouldMatchKnownArgon2Hash`：固定 Argon2id 样本验证；该用例不读取 Flyway 迁移 |
 | B157 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `schema_versions_supported parity` | `926060cb2022` | 保留：TS schema 版本与独立 YAML 契约一致 |
 | B158 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `worker_runtime_states parity` | `926060cb2022` | 保留：TS Worker 运行状态与独立 YAML 契约一致 |
 | B159 | `file-batch-system/sdk/typescript/tests/shared-constants-parity.test.ts` | `sensitive_keywords parity` | `926060cb2022` | 保留：TS 敏感词清单与独立 YAML 契约一致 |
@@ -1743,7 +1875,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | B191 | `file-batch-system/batch-worker/core/src/test/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxPgIntegrationTest.java` | `claimNext_returnsEmptyWhenNothingDue` | `83910f28a209` | 保留：真实数据库无到期报告时不认领 |
 | B192 | `file-batch-system/batch-console-api/src/test/java/io/github/pinpols/batch/console/domain/ops/infrastructure/TriggerProxyJsonContractTest.java` | `shouldReturnEmptyList_whenDownstreamRowsAreNull` | `7f2044c5bd64` | 保留：下游空列表的租户过滤结果 |
 | B193 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldAllowWhenNoFailuresRecorded` | `386f4ca7ce35` | 保留：无故障的渠道熔断器初始状态 |
-| B194 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldIsolateFailuresByChannelKey` | `386f4ca7ce35` | 保留：渠道间熔断状态隔离 |
+| B194 | `file-batch-system/batch-worker/dispatch/src/test/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/DispatchChannelCircuitBreakerTest.java` | `shouldIsolateFailuresByChannelKey` | `386f4ca7ce35` | 已增强：同时验证故障渠道已熔断和正常渠道仍放行 |
 | B195 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultLifecycleEventMapperTest.java` | `shouldResolveEnumTargetAsState` | `bfb40b8c8197` | 保留：枚举状态到目标状态的映射 |
 | B196 | `file-batch-system/batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/statemachine/DefaultLifecycleEventMapperTest.java` | `shouldAllowTerminalSelfLoop` | `bfb40b8c8197` | 保留：终态自环幂等 |
 | B197 | `file-batch-system/batch-common/src/test/java/io/github/pinpols/batch/common/enums/ConfigLifecycleStatusTest.java` | `shouldContainFiveValues` | `5a72fc143e66` | 保留：配置生命周期状态数量约束 |
@@ -1772,7 +1904,7 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | F012 | `batch-console/src/utils/queryFormOptions.test.ts` | `filters out undefined picks` | `13c48ce5ade1` | 保留：空输入、空值和去重排序不同场景 |
 | F013 | `batch-console/src/constants/theme.test.ts` | `defaults to dark when no user preference is stored` | `b214db7a0a70` | 保留：缺省、保存值和历史迁移不同状态 |
 | F014 | `batch-console/src/constants/theme.test.ts` | `preserves stored user preference` | `b214db7a0a70` | 保留：缺省、保存值和历史迁移不同状态 |
-| F015 | `batch-console/src/constants/theme.test.ts` | `migrates legacy system default to dark once` | `b214db7a0a70` | 保留：缺省、保存值和历史迁移不同状态 |
+| F015 | `batch-console/src/constants/theme.test.ts` | `migrates legacy system default to dark once` | `b214db7a0a70` | 已更名：无标记历史 system 偏好读取回退深色，读取本身不执行迁移 |
 | F016 | `batch-console/src/utils/logRedact.test.ts` | `sanitizeParams returns undefined for null/undefined` | `ab4106a1cb6a` | 保留：null 与 undefined 参数不生成日志对象 |
 | F017 | `batch-console/e2e/alert-outbox-ops.spec.ts` | `重试 tab 默认激活` | `693423e3785b` | 保留：Outbox 初始重试 tab 状态 |
 | F018 | `batch-console/src/stores/tabs.test.ts` | `returns -1 for unknown key` | `3994cb80f664` | 保留：关闭不存在的 tab 返回 -1 |
@@ -1780,8 +1912,8 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | F020 | `batch-console/e2e/excel-import.spec.ts` | `导出当前配置包按钮可见` | `9d85670a1912` | 保留：默认身份配置包导出入口可见，与指定角色回导场景独立 |
 | F021 | `batch-console/src/api/workerFingerprint.test.ts` | `listWorkerFingerprints normalizes null response to empty array` | `1b59278f03f6` | 保留：两个接口各自的空响应契约 |
 | F022 | `batch-console/src/api/workerFingerprint.test.ts` | `getWorkerFingerprintSummary normalizes null response to empty array` | `1b59278f03f6` | 保留：两个接口各自的空响应契约 |
-| F023 | `batch-console/src/utils/iconResolve.test.ts` | `已知图标名:返回对应 EP 图标 Component` | `2ca9db934b7a` | 已合并：已知图标非 undefined 与非 null 均保留 |
-| F024 | `batch-console/src/utils/iconResolve.test.ts` | `未知图标名:返回 fallback(Menu)而非 undefined,保菜单可渲染` | `2ca9db934b7a` | 保留：未知图标回退 |
+| F023 | `batch-console/src/utils/iconResolve.test.ts` | `已知图标名:返回对应 EP 图标 Component` | `2ca9db934b7a` | 已合并并增强：已知图标精确解析为 Plus，未知名称回退 Menu |
+| F024 | `batch-console/src/utils/iconResolve.test.ts` | `未知图标名:返回 fallback(Menu)而非 undefined,保菜单可渲染` | `2ca9db934b7a` | 已增强：未知名称及空值均精确回退 Menu |
 | F025 | `batch-console/src/components/common/SensitiveFieldAlert.test.ts` | `handles invalid JSON string gracefully (no render)` | `ec474dc11d5e` | 保留：无效敏感字段 JSON 不渲染告警 |
 | F026 | `batch-console/src/utils/idempotency.test.ts` | `returns a non-empty string` | `083d0f89d82f` | 已增强：单次生成结果的类型和非空一致断言 |
 | F027 | `batch-console/e2e/ops-shard-catalog-crud.spec.ts` | `页可达 + 新建入口可见` | `3cebf6614a54` | 保留：串行 CRUD 前的独立分片目录入口冒烟 |
@@ -1825,8 +1957,8 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | F065 | `batch-console/src/views/workflow/designer/codec/mermaidExporter.test.ts` | `empty snapshot → header only` | `7ef62b26c858` | 保留：空 Workflow 图的 Mermaid 头部 |
 | F066 | `batch-console/src/utils/passwordGenerator.test.ts` | `throws when length < 4` | `de6d00da4499` | 保留：密码长度低于下限时拒绝生成 |
 | F067 | `batch-console/src/utils/passwordGenerator.test.ts` | `excludes ambiguous characters (0/O/I/l/1)` | `de6d00da4499` | 保留：密码不包含易混字符 |
-| F068 | `batch-console/src/utils/passwordGenerator.test.ts` | `extra point at length ≥ 12` | `de6d00da4499` | 保留：12 字符密码的强度加分边界 |
-| F069 | `batch-console/src/utils/passwordGenerator.test.ts` | `caps at 4 (extreme)` | `de6d00da4499` | 保留：极长复杂密码强度上限 |
+| F068 | `batch-console/src/utils/passwordGenerator.test.ts` | `extra point at length ≥ 12` | `de6d00da4499` | 已增强：比较字符类别相同的 11、12 字符密码强度 |
+| F069 | `batch-console/src/utils/passwordGenerator.test.ts` | `caps at 4 (extreme)` | `de6d00da4499` | 已增强：极长复杂密码的强度精确为上限 4 |
 | F070 | `batch-console/src/views/worker/workerActions.test.ts` | `在线节点只展示下线和接管动作` | `79bc5544a7dd` | 已更名：标题与 ONLINE 原有操作断言一致 |
 | F071 | `batch-console/src/views/worker/workerActions.test.ts` | `排空中节点不再展示排空和预热` | `79bc5544a7dd` | 保留：不同 Worker 状态对应不同操作集 |
 | F072 | `batch-console/src/views/worker/workerActions.test.ts` | `离线节点只允许预热` | `79bc5544a7dd` | 保留：不同 Worker 状态对应不同操作集 |
@@ -1857,10 +1989,10 @@ Nginx上游Host/转发端口与OIDC、访问日志中的查询数据、SSE/上�
 | F097 | `batch-console/src/components/common/EmptyState.test.ts` | `没有操作时不渲染空的操作容器` | `88710e9f5c5a` | 保留：无操作时空状态不生成操作容器 |
 | F098 | `batch-console/src/utils/userErrorMessage.test.ts` | `preserves non-API client-side validation errors` | `2a196371a12b` | 保留：前端本地验证异常原文 |
 | F099 | `batch-console/src/utils/logger.test.ts` | `logClick writes type=click` | `cf4674799e76` | 保留：点击日志类型 |
-| F100 | `batch-console/src/utils/logger.test.ts` | `keeps legitimate error messages` | `cf4674799e76` | 保留：真实错误不被噪声过滤 |
-| F101 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in name` | `cf4674799e76` | 保留：日志名称关键词过滤 |
-| F102 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in props` | `cf4674799e76` | 保留：日志属性关键词过滤 |
-| F103 | `batch-console/src/utils/logger.test.ts` | `returns all when no filter` | `cf4674799e76` | 保留：无过滤条件时返回全部日志 |
+| F100 | `batch-console/src/utils/logger.test.ts` | `keeps legitimate error messages` | `cf4674799e76` | 已增强：断言实际保留的错误名称 |
+| F101 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in name` | `cf4674799e76` | 已增强：断言名称关键词筛选返回的具体条目 |
+| F102 | `batch-console/src/utils/logger.test.ts` | `filters by keyword in props` | `cf4674799e76` | 已增强：关键词只存在于属性，验证属性筛选结果 |
+| F103 | `batch-console/src/utils/logger.test.ts` | `returns all when no filter` | `cf4674799e76` | 已增强：无筛选时验证全部具体日志条目 |
 | F104 | `batch-console/src/composables/useFormValidate.test.ts` | `required 默认 blur` | `fbf2e873b8d6` | 保留：必填规则默认 blur 触发器 |
 | F105 | `batch-console/src/composables/useFormValidate.test.ts` | `formRef 未挂载时 validate() 返回 false 不抛` | `fbf2e873b8d6` | 保留：未挂载表单的安全失败 |
 | F106 | `batch-console/src/components/common/docsRegistry.test.ts` | `docKey 全为 kebab-case(避免 camelCase / snake_case 混用)` | `c5c768c197b1` | 保留：文档注册键命名规则 |

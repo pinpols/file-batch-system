@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.List;
@@ -108,17 +108,16 @@ class DispatchSecretBindingMapperIntegrationTest {
     try (SqlSession session = sqlSessionFactory.openSession()) {
       DispatchSecretBindingMapper mapper = session.getMapper(DispatchSecretBindingMapper.class);
 
-      List<DispatchSecretBindingEntity> bindings =
+      List<DispatchSecretBindingView> bindings =
           mapper.selectCurrentByChannels("tenant-a", List.of("CH_CURRENT", "CH_UNAVAILABLE"));
 
       assertThat(bindings)
           .containsExactlyInAnyOrder(
-              new DispatchSecretBindingEntity("CH_CURRENT", "dispatch/current", 102L, 2),
-              new DispatchSecretBindingEntity(
-                  "CH_UNAVAILABLE", "dispatch/unavailable", null, null));
+              new DispatchSecretBindingView("CH_CURRENT", "dispatch/current", 102L, 2),
+              new DispatchSecretBindingView("CH_UNAVAILABLE", "dispatch/unavailable", null, null));
       assertThat(mapper.selectCurrentByChannels("tenant-b", List.of("CH_CURRENT")))
           .containsExactly(
-              new DispatchSecretBindingEntity("CH_CURRENT", "dispatch/current", 201L, 1));
+              new DispatchSecretBindingView("CH_CURRENT", "dispatch/current", 201L, 1));
     }
   }
 }

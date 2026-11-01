@@ -1,8 +1,6 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.common.utils.IdGenerator;
-import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
-import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.ManualReplayApplicationService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -15,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class RecoveryController {
 
-  private final RetryGovernanceService retryGovernanceService;
+  private final ManualReplayApplicationService manualReplayApplicationService;
 
   /**
    * 任务重放（按 job_task 粒度重排队）。
@@ -26,9 +24,7 @@ public class RecoveryController {
   public RecoveryResponse replayTask(
       @PathVariable Long taskId, @RequestBody TaskReplayRequest request) {
     String tenantId = request == null ? null : request.tenantId();
-    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "task", taskId);
-    retryGovernanceService.retryTask(tenantId, taskId, eventKey);
-    String operationNo = IdGenerator.newBusinessNo("rpl");
+    String operationNo = manualReplayApplicationService.replayTask(tenantId, taskId);
     return new RecoveryResponse(operationNo);
   }
 
@@ -41,9 +37,7 @@ public class RecoveryController {
   public RecoveryResponse replayPartition(
       @PathVariable Long partitionId, @RequestBody PartitionReplayRequest request) {
     String tenantId = request == null ? null : request.tenantId();
-    String eventKey = OutboxEventKeyGenerator.forManualReplay(tenantId, "partition", partitionId);
-    retryGovernanceService.retryPartition(tenantId, partitionId, eventKey);
-    String operationNo = IdGenerator.newBusinessNo("rpl");
+    String operationNo = manualReplayApplicationService.replayPartition(tenantId, partitionId);
     return new RecoveryResponse(operationNo);
   }
 

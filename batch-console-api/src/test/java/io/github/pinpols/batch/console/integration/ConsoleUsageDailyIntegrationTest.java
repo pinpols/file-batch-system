@@ -4,14 +4,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper;
-import io.github.pinpols.batch.console.domain.observability.mapper.ConsoleUsageDailyMapper.DailyUsageRow;
 import io.github.pinpols.batch.console.domain.observability.query.ConsoleUsageDailySummaryQuery;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageDailyRecorder;
 import io.github.pinpols.batch.console.domain.observability.service.ConsoleUsageSummaryService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -107,14 +108,14 @@ class ConsoleUsageDailyIntegrationTest extends AbstractIntegrationTest {
     }
 
     LocalDate statDate = baseTime.atZone(timezoneProvider.defaultZone()).toLocalDate();
-    List<DailyUsageRow> rows =
+    List<ConsoleUsageSummaryResponse> rows =
         summaryService.query(tenantId, statDate, statDate, "operation.job.run", null);
 
     assertThat(rows).singleElement().satisfies(row -> {
       assertThat(row.eventCount()).isEqualTo((long) workers * recordsPerWorker);
       assertThat(row.successCount()).isEqualTo(64L);
       assertThat(row.failureCount()).isEqualTo(32L);
-      assertThat(row.lastSeenAt().toInstant())
+      assertThat(OffsetDateTime.parse(row.lastSeenAt()).toInstant())
           .isEqualTo(baseTime.plusSeconds((long) workers * recordsPerWorker - 1));
     });
   }

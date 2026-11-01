@@ -15,11 +15,11 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.realtime.ConsoleRealtimeEventPort;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
@@ -262,7 +262,7 @@ class WorkflowDefinitionMutationValidationTest {
   @Test
   @DisplayName("受管单作业 Workflow 允许修改固定 JOB 节点的执行窗口")
   void fullUpdate_allowsWindowOverrideOnManagedJobNode() {
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setJobCode("job_7");
     job.setEnabled(true);
     when(jobDefinitionMapper.selectByUniqueKey(TENANT, "job_7")).thenReturn(job);

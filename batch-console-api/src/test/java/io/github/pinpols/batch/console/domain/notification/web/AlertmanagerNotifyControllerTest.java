@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -177,8 +178,13 @@ class AlertmanagerNotifyControllerTest {
   @Test
   @DisplayName("接入开关关闭时以服务不可用拒绝, 不调用投递服务")
   void shouldReject_whenEndpointDisabled() {
-    properties.setEnabled(false);
     properties.setBearerToken("s3cr3t");
+    doThrow(BizException.of(
+            ResultCode.SERVICE_UNAVAILABLE,
+            "error.common.unauthorized_detail",
+            "am-notify disabled"))
+        .when(notifyService)
+        .assertEnabled();
 
     assertThatThrownBy(() -> controller.receive("Bearer s3cr3t", "batch-default", payload()))
         .isInstanceOf(BizException.class)

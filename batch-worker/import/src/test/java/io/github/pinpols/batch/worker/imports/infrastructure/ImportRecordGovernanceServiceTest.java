@@ -16,7 +16,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
-import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
+import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.infrastructure.ImportRecordGovernanceService.BadRecordCommand;
@@ -214,8 +214,7 @@ class ImportRecordGovernanceServiceTest {
     assertThat(ctx.getAttributes()).containsEntry("lastErrorMessage", "msg-1");
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecordEntity> bad =
-        (List<ImportBadRecordEntity>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
     assertThat(bad.get(0).skipped()).isTrue();
     assertThat(bad.get(0).stageCode()).isEqualTo("PARSE");
@@ -477,7 +476,7 @@ class ImportRecordGovernanceServiceTest {
     ctx.getAttributes()
         .put(
             "badRecords",
-            new ArrayList<>(List.of(new ImportBadRecordEntity(
+            new ArrayList<>(List.of(new ImportBadRecord(
                 1L, "PARSE", "E", "m", null, false, "CONTINUE", null, null, null))));
 
     service.finalizeErrorOutput(ctx);
@@ -508,10 +507,9 @@ class ImportRecordGovernanceServiceTest {
             .build());
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecordEntity> bad =
-        (List<ImportBadRecordEntity>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
-    assertThat(bad.get(0)).isInstanceOf(ImportBadRecordEntity.class);
+    assertThat(bad.get(0)).isInstanceOf(ImportBadRecord.class);
   }
 
   private Long toLongAnswer(Object value) {

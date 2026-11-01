@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -114,8 +114,8 @@ class LaunchBatchDayServiceTest {
     return new LaunchRequest("ta", jobCode, bizDate, type, "req-1", "trace", Map.of());
   }
 
-  private JobDefinitionEntity jobDef(String calendarCode) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView jobDef(String calendarCode) {
+    return JobDefinitionView.builder()
         .id(1L)
         .tenantId("ta")
         .jobCode("j1")

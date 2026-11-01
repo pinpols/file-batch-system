@@ -20,13 +20,13 @@ import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenance
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.support.BuiltinTaskTypeGuard;
 import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentGuard;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -106,17 +106,19 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     request.setCompletionDeadlineEnabled(true);
     request.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
 
-    AtomicReference<JobDefinitionEntity> inserted = new AtomicReference<>();
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(null);
     doAnswer(invocation -> {
           JobDefinitionEntity entity = invocation.getArgument(0);
           entity.setId(41L);
-          inserted.set(entity);
           return 1;
         })
         .when(jobDefinitionMapper)
         .insert(any(JobDefinitionEntity.class));
-    when(jobDefinitionMapper.selectById("tenant-a", 41L)).thenAnswer(invocation -> inserted.get());
+    JobDefinitionView stored = copyEntity("JOB_DAILY");
+    stored.setSoftRuntimeSeconds(1200);
+    stored.setStartGraceSeconds(300);
+    stored.setCompletionDeadlineLocalTime(LocalTime.of(4, 0));
+    when(jobDefinitionMapper.selectById("tenant-a", 41L)).thenReturn(stored);
 
     var response = service.create(request);
 
@@ -138,7 +140,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @DisplayName("更新依赖作业时保留未提交阈值并显式关闭完成截止时间")
   void shouldPreserveDependencyPolicy_whenUpdatingJob() {
     stubTenantAndOperator();
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setId(51L);
     existing.setTenantId("tenant-a");
     existing.setJobCode("JOB_CHILD");
@@ -158,7 +160,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     existing.setParamSchema("{\"type\":\"string\"}");
     existing.setPriority(4);
     existing.setEnabled(true);
-    JobDefinitionEntity upstream = new JobDefinitionEntity();
+    JobDefinitionView upstream = new JobDefinitionView();
     upstream.setTenantId("tenant-a");
     upstream.setJobCode("JOB_PARENT");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_PARENT")).thenReturn(upstream);
@@ -195,7 +197,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @DisplayName("更新作业时持久化 executionHandler、paramSchema 和 priority")
   void shouldPersistEditableExecutionFields_whenUpdatingJob() {
     stubTenantAndOperator();
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setId(53L);
     existing.setTenantId("tenant-a");
     existing.setJobCode("JOB_EDITABLE");
@@ -227,7 +229,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @Test
   @DisplayName("Job 更新入口拒绝修改由关联 Workflow 管理的调度字段")
   void shouldRejectScheduleMutation_whenUpdatingJob() {
-    JobDefinitionEntity existing = new JobDefinitionEntity();
+    JobDefinitionView existing = new JobDefinitionView();
     existing.setId(52L);
     existing.setTenantId("tenant-a");
     existing.setJobCode("JOB_SCHEDULED");
@@ -261,16 +263,17 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
 
     assertThat(request.isScheduledMonitoringConfiguredCorrectly()).isTrue();
     stubTenantAndOperator();
-    AtomicReference<JobDefinitionEntity> inserted = new AtomicReference<>();
     doAnswer(invocation -> {
           JobDefinitionEntity entity = invocation.getArgument(0);
           entity.setId(42L);
-          inserted.set(entity);
           return 1;
         })
         .when(jobDefinitionMapper)
         .insert(any(JobDefinitionEntity.class));
-    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenAnswer(invocation -> inserted.get());
+    JobDefinitionView stored = copyEntity("JOB_MANUAL");
+    stored.setStartGraceSeconds(60);
+    stored.setDependencyCompletionWindowSeconds(120);
+    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(stored);
 
     var response = service.create(request);
     assertThat(response.startGraceSeconds()).isEqualTo(60);
@@ -286,7 +289,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @DisplayName("复制作业时同步复制监控策略并使新作业缓存失效")
   void shouldCopyMonitoringPolicy_whenCopyingJob() {
     stubTenantAndOperator();
-    JobDefinitionEntity copied = copyEntity("JOB_COPY");
+    JobDefinitionView copied = copyEntity("JOB_COPY");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY")).thenReturn(null, copied);
     when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
     when(jobDefinitionMapper.selectById("tenant-a", 61L)).thenReturn(copied);
@@ -303,7 +306,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   void shouldResolveRoutingForTenantCopy() {
     stubTenantAndOperator();
     when(resourceAssignmentGuard.shouldResolveRoutingForCopy()).thenReturn(true);
-    JobDefinitionEntity copied = copyEntity("JOB_COPY_ROUTE");
+    JobDefinitionView copied = copyEntity("JOB_COPY_ROUTE");
     copied.setQueueCode("queue_a");
     copied.setWorkerGroup("IMPORT");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_ROUTE"))
@@ -330,7 +333,7 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   @DisplayName("复制并覆盖作业时保留策略字段并应用基础定义覆盖")
   void shouldPreserveMonitoringPolicy_whenCopyingWithOverrides() {
     stubTenantAndOperator();
-    JobDefinitionEntity copied = copyEntity("JOB_COPY_OVERRIDE");
+    JobDefinitionView copied = copyEntity("JOB_COPY_OVERRIDE");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_OVERRIDE"))
         .thenReturn(null, copied);
     when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
@@ -354,8 +357,8 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY_OVERRIDE");
   }
 
-  private static JobDefinitionEntity copyEntity(String jobCode) {
-    JobDefinitionEntity entity = new JobDefinitionEntity();
+  private static JobDefinitionView copyEntity(String jobCode) {
+    JobDefinitionView entity = new JobDefinitionView();
     entity.setId(61L);
     entity.setTenantId("tenant-a");
     entity.setJobCode(jobCode);

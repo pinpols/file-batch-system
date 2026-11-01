@@ -17,7 +17,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
@@ -56,7 +56,7 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
   void shouldProjectMonitoringPolicyColumns() {
     TenantConfigPackageRowProjections projections = new TenantConfigPackageRowProjections(
         mock(WorkflowNodeMapper.class), mock(WorkflowEdgeMapper.class));
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setTenantId("tenant-a");
     job.setJobCode("JOB_DAILY");
     job.setSoftRuntimeSeconds(1200);
@@ -126,7 +126,7 @@ class TenantConfigPackageRowProjectionsMonitoringPolicyTest {
     TenantConfigPackageRowProjections projections =
         new TenantConfigPackageRowProjections(nodeMapper, mock(WorkflowEdgeMapper.class));
 
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setDefaultParams("{\"password\":\"job-secret\",\"region\":\"west\"}");
     assertThat(projections.toJobRows(List.of(job), true))
         .singleElement()

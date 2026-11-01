@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CalendarDependencyManualActionParam;
 import io.github.pinpols.batch.orchestrator.mapper.CalendarDependencyWaitMapper;
@@ -13,11 +15,9 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Locale;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 面向 Console 的持久化日历依赖等待只读查询和审计决策请求。 */
 @Service
@@ -76,8 +76,7 @@ public class CalendarDependencyWaitGovernanceService {
         command.tenantId(), normalizedCalendarCode, command.bizDate());
     if (EmptyChecks.isNull(wait)
         || !CalendarDependencyWaitEntity.STATUS_WAITING.equals(wait.waitStatus())) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Calendar dependency wait is no longer actionable");
+      throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait is no longer actionable");
     }
     if (EmptyChecks.isNotNull(wait.manualAction())) {
       boolean manualWaitResolutionIsUnchanged = wait.manualAction().equals(action)
@@ -86,8 +85,7 @@ public class CalendarDependencyWaitGovernanceService {
       if (manualWaitResolutionIsUnchanged) {
         return wait;
       }
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "A manual action is already pending for this wait");
+      throw new OperationFailure(Kind.CONFLICT, "A manual action is already pending for this wait");
     }
     CalendarDependencyManualActionParam calendarDependencyManualActionParam =
         CalendarDependencyManualActionParam.builder()
@@ -100,8 +98,7 @@ public class CalendarDependencyWaitGovernanceService {
             .build();
     int updated = waitMapper.requestManualAction(calendarDependencyManualActionParam);
     if (updated != 1) {
-      throw new ResponseStatusException(
-          HttpStatus.CONFLICT, "Calendar dependency wait changed concurrently");
+      throw new OperationFailure(Kind.CONFLICT, "Calendar dependency wait changed concurrently");
     }
     return waitMapper.selectByTenantCalendarBizDate(
         command.tenantId(), normalizedCalendarCode, command.bizDate());

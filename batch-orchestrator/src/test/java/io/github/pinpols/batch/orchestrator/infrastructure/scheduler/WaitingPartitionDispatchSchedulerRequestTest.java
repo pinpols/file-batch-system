@@ -3,11 +3,11 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,7 +36,7 @@ class WaitingPartitionDispatchSchedulerRequestTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskType("DISPATCH");
 
-    JobDefinitionEntity definition = JobDefinitionEntity.builder()
+    JobDefinitionView definition = JobDefinitionView.builder()
         .id(1L)
         .tenantId("ta")
         .jobCode("dispatch-job")

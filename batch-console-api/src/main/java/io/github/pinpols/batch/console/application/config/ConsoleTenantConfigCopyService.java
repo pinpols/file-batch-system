@@ -33,6 +33,13 @@ public interface ConsoleTenantConfigCopyService {
   TenantConfigBatchInitResponse copy(
       TenantConfigCopyRequest request, String operator, String batchOperationId);
 
+  /** 使用原请求身份登记逐目标回执；空身份沿用原有入口。 */
+  TenantConfigBatchInitResponse copy(
+      TenantConfigCopyRequest request,
+      String operator,
+      String batchOperationId,
+      String requestHash);
+
   /** 将源租户配置包复制到目标租户前，提供只读差异预览。 */
   TenantConfigDiffPreviewResponse preview(TenantConfigPreviewRequest request);
 

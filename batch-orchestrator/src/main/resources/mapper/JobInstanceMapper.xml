@@ -60,8 +60,6 @@
         <result column="tenant_id" property="tenantId"/>
         <result column="job_definition_id" property="jobDefinitionId"/>
         <result column="trigger_request_id" property="triggerRequestId"/>
-        <result column="parent_workflow_run_id" property="parentWorkflowRunId"/>
-        <result column="parent_node_code" property="parentNodeCode"/>
         <result column="job_code" property="jobCode"/>
         <result column="instance_no" property="instanceNo"/>
         <result column="biz_date" property="bizDate"/>

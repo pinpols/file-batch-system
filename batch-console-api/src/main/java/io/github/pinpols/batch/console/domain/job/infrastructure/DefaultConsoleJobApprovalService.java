@@ -20,12 +20,12 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.B
 import io.github.pinpols.batch.console.domain.job.application.contract.response.BatchDayCatchUpRequestStatusResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpItemResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayCatchUpResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
@@ -455,7 +455,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
   }
 
   private Long resolveManagedWorkflowId(String tenantId, String jobCode) {
-    JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
+    JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(tenantId, jobCode);
     if (EmptyChecks.isNull(job)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }

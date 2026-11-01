@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,9 +19,9 @@ public class WorkflowReplayJobDefinitionResolver {
 
   private final WorkflowRunMapper workflowRunMapper;
 
-  public JobDefinitionEntity resolve(WorkflowReplayJobDefinitionRequest request) {
+  public JobDefinitionView resolve(WorkflowReplayJobDefinitionRequest request) {
     validateRequest(request);
-    JobDefinitionEntity sourceDefinition =
+    JobDefinitionView sourceDefinition =
         request.sourceSnapshot().jobDefinitions().get(request.nodeCode());
     validateDefinition(sourceDefinition, request.tenantId(), request.jobCode());
     return switch (request.policy()) {
@@ -38,8 +38,8 @@ public class WorkflowReplayJobDefinitionResolver {
     };
   }
 
-  private JobDefinitionEntity resolveSpecified(
-      String tenantId, String jobCode, JobDefinitionEntity sourceDefinition, Integer version) {
+  private JobDefinitionView resolveSpecified(
+      String tenantId, String jobCode, JobDefinitionView sourceDefinition, Integer version) {
     if (EmptyChecks.isNull(version) || version <= 0) {
       throw invalidPolicy();
     }
@@ -50,7 +50,7 @@ public class WorkflowReplayJobDefinitionResolver {
     if (EmptyChecks.isNull(historicalSnapshot) || !tenantId.equals(historicalRun.getTenantId())) {
       throw unavailableVersion();
     }
-    List<JobDefinitionEntity> matches = historicalSnapshot.jobDefinitions().values().stream()
+    List<JobDefinitionView> matches = historicalSnapshot.jobDefinitions().values().stream()
         .filter(definition -> sourceDefinition.id().equals(definition.id()))
         .filter(definition -> jobCode.equals(definition.jobCode()))
         .filter(definition -> version.equals(definition.version()))
@@ -78,8 +78,8 @@ public class WorkflowReplayJobDefinitionResolver {
     }
   }
 
-  private JobDefinitionEntity validateAndReturn(
-      JobDefinitionEntity definition, String tenantId, String jobCode, Long sourceDefinitionId) {
+  private JobDefinitionView validateAndReturn(
+      JobDefinitionView definition, String tenantId, String jobCode, Long sourceDefinitionId) {
     validateDefinition(definition, tenantId, jobCode);
     if (!sourceDefinitionId.equals(definition.id())) {
       throw unavailableVersion();
@@ -87,7 +87,7 @@ public class WorkflowReplayJobDefinitionResolver {
     return definition;
   }
 
-  private void validateDefinition(JobDefinitionEntity definition, String tenantId, String jobCode) {
+  private void validateDefinition(JobDefinitionView definition, String tenantId, String jobCode) {
     boolean definitionMatchesReplayRequest = EmptyChecks.isNotNull(definition)
         && tenantId.equals(definition.tenantId())
         && jobCode.equals(definition.jobCode())

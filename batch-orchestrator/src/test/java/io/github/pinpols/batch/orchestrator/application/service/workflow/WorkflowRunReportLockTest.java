@@ -7,7 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeMapper;
@@ -58,7 +58,7 @@ class WorkflowRunReportLockTest {
   void shouldAcquireBatchDayFence_whenLockingWorkflowRun() {
     WorkflowRunEntity workflowRun = workflowRun();
     WorkflowRunEntity lockedRun = workflowRun();
-    WorkflowDefinitionEntity definition = workflowDefinition();
+    WorkflowDefinitionView definition = workflowDefinition();
     when(workflowRunMapper.selectByNodeJobInstanceId(TENANT_ID, JOB_INSTANCE_ID))
         .thenReturn(workflowRun);
     when(workflowDefinitionMapper.selectById(WORKFLOW_DEFINITION_ID)).thenReturn(definition);
@@ -100,8 +100,8 @@ class WorkflowRunReportLockTest {
     return workflowRun;
   }
 
-  private WorkflowDefinitionEntity workflowDefinition() {
-    return new WorkflowDefinitionEntity(
+  private WorkflowDefinitionView workflowDefinition() {
+    return new WorkflowDefinitionView(
         WORKFLOW_DEFINITION_ID,
         TENANT_ID,
         "workflow-a",

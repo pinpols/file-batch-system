@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -10,13 +10,13 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface JobDefinitionMapper {
 
-  JobDefinitionEntity selectFirstByTenantAndCodeAndEnabled(
+  JobDefinitionView selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,
       @Param("jobCode") String jobCode,
       @Param("enabled") Boolean enabled);
 
-  List<JobDefinitionEntity> selectByTenantAndEnabled(
+  List<JobDefinitionView> selectByTenantAndEnabled(
       @Param("tenantId") String tenantId, @Param("enabled") Boolean enabled);
 
-  JobDefinitionEntity selectById(@Param("id") Long id);
+  JobDefinitionView selectById(@Param("id") Long id);
 }

@@ -5,6 +5,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayCatchupControlService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayCatchupPreviewService;
 import io.github.pinpols.batch.orchestrator.application.service.calendar.CalendarDependencyWaitGovernanceService;
@@ -51,7 +53,6 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /**
  * ADR-023 Stage 5-6 — 多日历联动端到端 IT。
@@ -694,9 +695,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
           .isInstanceOf(ExecutionException.class)
           .satisfies(failure -> {
             Throwable cause = ((ExecutionException) failure).getCause();
-            assertThat(cause).isInstanceOf(ResponseStatusException.class);
-            assertThat(((ResponseStatusException) cause).getStatusCode().value())
-                .isEqualTo(409);
+            assertThat(cause).isInstanceOf(OperationFailure.class);
+            assertThat(((OperationFailure) cause).kind()).isEqualTo(Kind.CONFLICT);
           });
       Integer selectedBatchDayCatchupControlCount =
           jdbcTemplate.queryForObject(selectCountSql2, Integer.class, TENANT, calendarCode);

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,6 +17,9 @@ import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
@@ -60,6 +64,9 @@ class DefaultWorkerRegistryServiceTest {
   private WorkerRegistryMapper mapper;
 
   @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
+
+  @Mock
   private CustomTaskTypeRegistryMapper customTaskTypeRegistryMapper;
 
   @Mock
@@ -73,12 +80,16 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient()
+        .when(tenantActionRateLimiter.tryConsume(anyString(), eq(RateLimitAction.WORKER_REGISTER)))
+        .thenReturn(true);
     service = new DefaultWorkerRegistryService(
         mapper,
         customTaskTypeRegistryMapper,
         progressCache,
         systemParameterMapper,
-        workerRegistryProperties);
+        workerRegistryProperties,
+        tenantActionRateLimiter);
   }
 
   private WorkerHeartbeatDto dto(String status) {
@@ -199,6 +210,20 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   // ===== register 幂等 upsert =====
+
+  @Test
+  @DisplayName("register:租户限流拒绝时在读取或写入注册表前返回 429")
+  void shouldRejectRegistrationBeforePersistence_whenTenantRateLimitDenied() {
+    when(tenantActionRateLimiter.tryConsume("ta", RateLimitAction.WORKER_REGISTER))
+        .thenReturn(false);
+
+    assertThatThrownBy(() -> service.register(dto(null)))
+        .isInstanceOf(OperationFailure.class)
+        .satisfies(error -> assertThat(((OperationFailure) error).kind())
+            .isEqualTo(OperationFailure.Kind.RATE_LIMITED));
+
+    verify(mapper, never()).selectByTenantAndWorkerCode("ta", "w1");
+  }
 
   @Test
   @DisplayName("register: 新 worker → insert + 重读")

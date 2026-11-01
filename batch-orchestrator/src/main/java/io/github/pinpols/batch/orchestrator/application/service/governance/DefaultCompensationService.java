@@ -32,18 +32,18 @@ import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.DeadLetterTaskMarkReplaySuccessParam;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.query.JobTaskQuery;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
@@ -1014,12 +1014,12 @@ public class DefaultCompensationService implements CompensationService {
 
   private CompensationLaunchResult launchCompensation(CompensationLaunchRequest request) {
     boolean replayEntry = request.replaySessionId() != null && request.replayEntryId() != null;
-    JobDefinitionEntity job = configCacheService.findEnabledJobDefinition(
+    JobDefinitionView job = configCacheService.findEnabledJobDefinition(
         request.target().tenantId(), request.target().jobCode());
     if (EmptyChecks.isNull(job) || EmptyChecks.isNull(job.id())) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
     }
-    WorkflowDefinitionEntity workflow = configCacheService.findEnabledSingleJobWorkflowDefinition(
+    WorkflowDefinitionView workflow = configCacheService.findEnabledSingleJobWorkflowDefinition(
         request.target().tenantId(), job.id());
     if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.single_job_definition_not_found");

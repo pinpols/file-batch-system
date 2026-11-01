@@ -22,11 +22,11 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayWaitingLaunchEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayWaitingLaunchMapper;
@@ -231,7 +231,7 @@ class BatchDayGateServiceTest {
         service.evaluateAndApply(request, loaded, Map.of(), "trace-1");
 
     assertThat(decision.type()).isEqualTo(BatchDayGateService.GateDecisionType.REJECT);
-    ArgumentCaptor<AlertEmitRequest> alert = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> alert = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(alert.capture());
     Map<String, Object> detail =
         JsonUtils.fromJson(alert.getValue().detailJson(), new TypeReference<>() {});
@@ -409,8 +409,8 @@ class BatchDayGateServiceTest {
     verify(jobInstanceMapper, never()).countNonTerminalByJobGroupAndBizDate(any(), any(), any());
   }
 
-  private JobDefinitionEntity jobWithGroup(String scope, String groupCode) {
-    return new JobDefinitionEntity(
+  private JobDefinitionView jobWithGroup(String scope, String groupCode) {
+    return new JobDefinitionView(
         1L,
         "t1",
         "JOB",
@@ -443,8 +443,8 @@ class BatchDayGateServiceTest {
         groupCode);
   }
 
-  private JobDefinitionEntity job(String scope) {
-    return new JobDefinitionEntity(
+  private JobDefinitionView job(String scope) {
+    return new JobDefinitionView(
         1L,
         "t1",
         "JOB",

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.web;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
@@ -22,6 +23,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleSummaryResponse;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
+import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;
 import org.assertj.core.api.Assertions;
@@ -72,7 +74,9 @@ class ConsoleJobBundleControllerTest {
   @Test
   @DisplayName("创建请求转发到应用服务, 捕获到的租户与报文一致")
   void shouldForwardCreate_whenRequestValid() throws Exception {
-    when(applicationService.create(any(JobBundleCreateRequest.class)))
+    String hash = ConsoleIdempotencyRequestIdentity.requestHash(
+        null, "POST", "/api/console/jobs/bundle/create", "k1");
+    when(applicationService.create(any(JobBundleCreateRequest.class), eq(hash)))
         .thenReturn(new ConsoleJobBundleResultResponse(
             "t1",
             ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
@@ -86,7 +90,7 @@ class ConsoleJobBundleControllerTest {
         .andExpect(jsonPath("$.code").value("SUCCESS"));
     ArgumentCaptor<JobBundleCreateRequest> captor =
         ArgumentCaptor.forClass(JobBundleCreateRequest.class);
-    verify(applicationService).create(captor.capture());
+    verify(applicationService).create(captor.capture(), eq(hash));
     JobBundleCreateRequest req = captor.getValue();
     Assertions.assertThat(req.getTenantId()).isEqualTo("t1");
   }
@@ -129,7 +133,9 @@ class ConsoleJobBundleControllerTest {
   @Test
   @DisplayName("导入请求转发到应用服务, 回包汇总目标租户数量")
   void shouldForwardImport_whenRequestValid() throws Exception {
-    when(applicationService.importBundle(any(JobBundleImportRequest.class)))
+    String hash = ConsoleIdempotencyRequestIdentity.requestHash(
+        null, "POST", "/api/console/jobs/bundle/import", "k1");
+    when(applicationService.importBundle(any(JobBundleImportRequest.class), eq(hash)))
         .thenReturn(new ConsoleJobBundleResultResponse(
             "t1",
             ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
@@ -143,6 +149,24 @@ class ConsoleJobBundleControllerTest {
                     "{\"tenantId\":\"t1\",\"targetTenantIds\":[\"t1\",\"t2\"],\"mode\":\"UPSERT\",\"bundle\":{}}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.data.result.totalTenants").value(2));
-    verify(applicationService).importBundle(any(JobBundleImportRequest.class));
+    verify(applicationService).importBundle(any(JobBundleImportRequest.class), eq(hash));
+  }
+
+  @Test
+  @DisplayName("无幂等键的开发旁路继续使用原入口")
+  void shouldUseOriginalEntry_whenKeyIsAbsent() throws Exception {
+    when(applicationService.create(any(JobBundleCreateRequest.class)))
+        .thenReturn(new ConsoleJobBundleResultResponse(
+            "t1",
+            ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
+            new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
+
+    mockMvc
+        .perform(post("/api/console/jobs/bundle/create")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"bundle\":{}}"))
+        .andExpect(status().isOk());
+
+    verify(applicationService).create(any(JobBundleCreateRequest.class));
   }
 }

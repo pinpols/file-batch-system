@@ -3,8 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.service.task;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +20,7 @@ public interface PartitionDispatchService {
       LaunchRequest request,
       Map<String, Object> effectiveParams,
       String traceId,
-      JobDefinitionEntity executionDefinition) {}
+      JobDefinitionView executionDefinition) {}
 
   // T1 产物：T1 事务写库后得到的实体引用，T2 据此创建分区和任务
   record DispatchRuntime(
@@ -60,7 +60,7 @@ public interface PartitionDispatchService {
       return requestContext.traceId();
     }
 
-    public JobDefinitionEntity executionDefinition() {
+    public JobDefinitionView executionDefinition() {
       return requestContext.executionDefinition();
     }
 

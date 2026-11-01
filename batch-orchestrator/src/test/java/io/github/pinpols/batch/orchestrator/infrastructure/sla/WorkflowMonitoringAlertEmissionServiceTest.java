@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate.Violation;
@@ -55,10 +55,10 @@ class WorkflowMonitoringAlertEmissionServiceTest {
 
     assertThat(service.emitOnce(candidate)).isTrue();
 
-    ArgumentCaptor<AlertEmitRequest> requestCaptor =
-        ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> requestCaptor =
+        ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(requestCaptor.capture());
-    AlertEmitRequest request = requestCaptor.getValue();
+    AlertEmitCommand request = requestCaptor.getValue();
     assertThat(request.alertType()).isEqualTo(alertType);
     assertThat(request.tenantId()).isEqualTo("tenant-a");
     assertThat(request.resourceKey()).isEqualTo("workflow_run:21");

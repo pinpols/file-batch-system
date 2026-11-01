@@ -17,6 +17,7 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
 import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -41,6 +42,7 @@ import org.quartz.JobExecutionException;
 import org.quartz.JobKey;
 import org.quartz.Scheduler;
 import org.quartz.Trigger;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("Quartz 触发入口 misfire 决策:按漂移时长与补跑策略分派人工审批、自动补跑、降级或未就绪重试")
@@ -111,6 +113,42 @@ class QuartzLaunchJobTest {
   }
 
   @Test
+  @DisplayName("记录计划身份与实际回调时刻，重试保留各自 fire 身份")
+  void shouldRecordActualQuartzFireForReadinessRetry() throws Exception {
+    Instant planned = Instant.parse("2026-03-27T00:00:00Z");
+    Instant actual = Instant.parse("2026-03-27T00:05:00Z");
+    JobDataMap data = jobDataMap(CatchUpPolicyType.AUTO.code(), 2);
+    data.put(QuartzLaunchJob.READINESS_ORIGINAL_FIRE_TIME, planned.toEpochMilli());
+    data.put(QuartzLaunchJob.READINESS_TRIGGER_TYPE, TriggerType.CATCH_UP.name());
+    when(context.getMergedJobDataMap()).thenReturn(data);
+    when(context.getFireTime()).thenReturn(Date.from(actual));
+    when(context.getFireInstanceId()).thenReturn("fire-retry-1");
+    when(context.getRefireCount()).thenReturn(2);
+
+    job.execute(context);
+
+    verify(occurrenceRecorder)
+        .recordActualFire(new ScheduledOccurrenceFireParam(
+            "t1", 71L, planned, "fire-retry-1", 2, actual, "READINESS_RETRY"));
+  }
+
+  @Test
+  @DisplayName("实际触发观察写入失败不阻断原有调度")
+  void shouldContinueSchedulingWhenActualFireObservationFails() throws Exception {
+    when(context.getMergedJobDataMap()).thenReturn(jobDataMap(CatchUpPolicyType.NONE.code(), 2));
+    Instant planned = Instant.parse("2026-03-27T00:00:00Z");
+    when(context.getScheduledFireTime()).thenReturn(Date.from(planned));
+    when(context.getFireTime()).thenReturn(Date.from(planned.plusSeconds(1)));
+    doThrow(new DataAccessResourceFailureException("unavailable"))
+        .when(occurrenceRecorder)
+        .recordActualFire(any());
+
+    job.execute(context);
+
+    verify(triggerService).launchScheduled(any());
+  }
+
+  @Test
   @DisplayName("MANUAL_APPROVAL 策略发生 misfire 时只登记待审批补跑,不直接启动并由人工确认")
   void shouldCreatePendingCatchUpWhenManualApprovalPolicyMisfires() throws Exception {
     when(context.getMergedJobDataMap())
@@ -120,6 +158,15 @@ class QuartzLaunchJobTest {
     when(context.getFireTime()).thenReturn(Date.from(Instant.parse("2026-03-27T00:10:00Z")));
 
     job.execute(context);
+
+    ArgumentCaptor<ScheduledOccurrenceFireParam> fireCaptor =
+        ArgumentCaptor.forClass(ScheduledOccurrenceFireParam.class);
+    verify(occurrenceRecorder).recordActualFire(fireCaptor.capture());
+    assertThat(fireCaptor.getValue().fireKind()).isEqualTo("MISFIRE_APPROVAL");
+    assertThat(fireCaptor.getValue().scheduledFireTime())
+        .isEqualTo(Instant.parse("2026-03-27T00:00:00Z"));
+    assertThat(fireCaptor.getValue().actualFireTime())
+        .isEqualTo(Instant.parse("2026-03-27T00:10:00Z"));
 
     ArgumentCaptor<ScheduledTriggerCommand> captor =
         ArgumentCaptor.forClass(ScheduledTriggerCommand.class);

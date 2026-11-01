@@ -14,8 +14,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.orchestrator.application.engine.JobTerminalOutboxService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.observability.JobLifecycleMetrics;
@@ -92,7 +92,7 @@ class JobInstanceTerminalStatusApplicationServiceTest {
     instance.setJobDefinitionId(200L);
     when(jobInstanceMapper.selectById("ta", 100L)).thenReturn(instance);
     when(jobDefinitionMapper.selectById(200L))
-        .thenReturn(JobDefinitionEntity.builder().jobType("IMPORT").build());
+        .thenReturn(JobDefinitionView.builder().jobType("IMPORT").build());
 
     TransactionSynchronizationManager.initSynchronization();
     try {

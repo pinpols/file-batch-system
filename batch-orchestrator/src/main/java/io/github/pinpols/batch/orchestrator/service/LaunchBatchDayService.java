@@ -12,11 +12,11 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
@@ -67,7 +67,7 @@ public class LaunchBatchDayService {
    */
   void upsertBatchDayInstance(
       LaunchRequest request,
-      JobDefinitionEntity jobDefinition,
+      JobDefinitionView jobDefinition,
       String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
@@ -110,7 +110,7 @@ public class LaunchBatchDayService {
    */
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
-      JobDefinitionEntity jobDefinition,
+      JobDefinitionView jobDefinition,
       String calendarCode,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
@@ -134,7 +134,7 @@ public class LaunchBatchDayService {
   /** 供定向服务测试和 Workflow 引入前调用方使用的兼容重载。 */
   public void doUpsertBatchDayInstance(
       LaunchRequest request,
-      JobDefinitionEntity jobDefinition,
+      JobDefinitionView jobDefinition,
       Map<String, Object> effectiveParams,
       Instant batchDaySlaDeadlineAt) {
     doUpsertBatchDayInstance(
@@ -420,7 +420,7 @@ public class LaunchBatchDayService {
     return calendar.lateArrivalToleranceMin();
   }
 
-  private boolean isMissingLaunchContext(LaunchRequest request, JobDefinitionEntity jobDefinition) {
+  private boolean isMissingLaunchContext(LaunchRequest request, JobDefinitionView jobDefinition) {
     return request == null || request.bizDate() == null || jobDefinition == null;
   }
 
@@ -574,7 +574,7 @@ public class LaunchBatchDayService {
         + request.jobCode()
         + ":"
         + (request.bizDate() == null ? "" : request.bizDate());
-    AlertEmitRequest emitRequest = AlertEmitRequest.builder()
+    AlertEmitCommand emitRequest = AlertEmitCommand.builder()
         .tenantId(request.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(alertType)

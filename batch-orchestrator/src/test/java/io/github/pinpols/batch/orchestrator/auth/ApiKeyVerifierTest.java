@@ -60,23 +60,24 @@ class ApiKeyVerifierTest {
   private static final String RAW_KEY = "bk_AAAA-secret-token";
   private static final String PREFIX = RAW_KEY.substring(0, ApiKeyVerifier.KEY_PREFIX_LEN);
 
-  private static ApiKeyEntity legacyRow(long id, String tenant, String scopes, String rawKey) {
+  private static ApiKeyCandidate legacyRow(long id, String tenant, String scopes, String rawKey) {
     String hash = ApiKeyHasher.legacySha256Hex(rawKey);
-    return new ApiKeyEntity(id, tenant, "kn", scopes, true, null, hash, null, "sha256");
+    return new ApiKeyCandidate(id, tenant, "kn", scopes, true, null, hash, null, "sha256");
   }
 
-  private static ApiKeyEntity pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
+  private static ApiKeyCandidate pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
     ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(rawKey);
-    return new ApiKeyEntity(id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
+    return new ApiKeyCandidate(
+        id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
   }
 
   @Test
   @DisplayName("按密钥前缀与租户查到新版加盐派生哈希候选行且摘要比对一致时放行")
   void shouldMatchSaltedHashRow_whenPrefixAndTenantHit() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
-    Optional<ApiKeyEntity> result = verifier.verify(RAW_KEY, "tx");
+    Optional<ApiKeyCandidate> result = verifier.verify(RAW_KEY, "tx");
 
     assertThat(result).contains(rec);
     verify(mapper).findActiveCandidatesByPrefixAndTenant(PREFIX, "tx");
@@ -85,10 +86,10 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("旧版摘要哈希候选行比对一致时放行并同步触发一次哈希升级改写")
   void shouldMatchLegacyHashRowAndTriggerUpgrade_whenHashMatches() {
-    ApiKeyEntity legacy = legacyRow(42L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate legacy = legacyRow(42L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(legacy));
 
-    Optional<ApiKeyEntity> result = verifier.verify(RAW_KEY, "tx");
+    Optional<ApiKeyCandidate> result = verifier.verify(RAW_KEY, "tx");
 
     assertThat(result).contains(legacy);
     // 触发了 upgrade(同步在测试里执行,@Async 无 spring proxy)
@@ -99,7 +100,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("候选行使用新版加盐派生哈希时不触发哈希升级改写")
   void shouldNotUpgradeHash_whenRowUsesSaltedHash() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     verifier.verify(RAW_KEY, "tx");
@@ -132,7 +133,7 @@ class ApiKeyVerifierTest {
   @DisplayName("候选行存在但摘要比对不一致时拒绝放行,且不写最近使用时间,不触发升级")
   void shouldReturnEmpty_whenCandidateHashMismatches() {
     // 候选行存在但 hash 是另一 key 的 — 不应放行,也不触发 touch / upgrade
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
 
@@ -171,7 +172,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("密钥作用域不含所需作用域时拒绝放行")
   void shouldRejectKey_whenRequiredScopeMissing() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "read.only", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "read.only", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isEmpty();
@@ -180,7 +181,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("密钥作用域为通配符时任意所需作用域都放行")
   void shouldAcceptKey_whenScopeIsWildcard() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
@@ -189,7 +190,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("密钥作用域串含所需作用域时放行")
   void shouldAcceptKey_whenScopeListContainsRequiredScope() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "read, worker.execute", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "read, worker.execute", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     assertThat(verifier.verifyWithScope(RAW_KEY, "tx", "worker.execute")).isPresent();
@@ -198,7 +199,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("只读密钥命中任一所需读类作用域时放行,但不满足纯执行作用域")
   void shouldAcceptReadOnlyKey_whenAnyRequestedScopeMatches() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "worker.read", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "worker.read", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     // 只读 key 命中读 scope（read 或 execute 任一即可）
@@ -213,7 +214,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("执行类密钥覆盖读作用域时同样放行")
   void shouldAcceptExecuteKey_whenReadScopeIsCovered() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "worker.execute", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "worker.execute", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(anyString(), anyString()))
         .thenReturn(List.of(rec));
     // execute 是 read 的超集：可写者必可读
@@ -255,7 +256,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("同一密钥在同一租户内二次校验命中缓存,不再查询候选行")
   void shouldSkipCandidateLookup_whenSameKeyVerifiedTwice() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
@@ -269,7 +270,7 @@ class ApiKeyVerifierTest {
   @DisplayName("比对失败的校验结果不进入缓存,每次校验都重新查询候选行")
   void shouldQueryCandidatesTwice_whenVerificationFails() {
     // 候选行 hash 属于另一 key → 每次都进慢路径,失败不缓存。
-    ApiKeyEntity other = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
+    ApiKeyCandidate other = pbkdf2Row(1L, "tx", "*", "bk_OTHER-secret");
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(other));
 
     assertThat(verifier.verify(RAW_KEY, "tx")).isEmpty();
@@ -281,7 +282,7 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("缓存条目超过存活时长被逐出后,重新查询候选行比对")
   void shouldQueryCandidatesAgain_whenCacheEntryExpires() {
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     assertThat(verifier.verify(RAW_KEY, "tx")).contains(rec);
@@ -295,8 +296,8 @@ class ApiKeyVerifierTest {
   @Test
   @DisplayName("不同租户使用同一密钥时各自缓存互不串用")
   void shouldKeepSeparateCacheEntries_whenTenantsDiffer() {
-    ApiKeyEntity a = pbkdf2Row(1L, "ta", "*", RAW_KEY);
-    ApiKeyEntity b = pbkdf2Row(2L, "tb", "*", RAW_KEY);
+    ApiKeyCandidate a = pbkdf2Row(1L, "ta", "*", RAW_KEY);
+    ApiKeyCandidate b = pbkdf2Row(2L, "tb", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "ta")).thenReturn(List.of(a));
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tb")).thenReturn(List.of(b));
 
@@ -312,7 +313,7 @@ class ApiKeyVerifierTest {
   void shouldRejectKey_whenCachedEntryExpired() {
     // key 在 fakeClock 的 30s 后自然过期
     ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(RAW_KEY);
-    ApiKeyEntity shortLived = new ApiKeyEntity(
+    ApiKeyCandidate shortLived = new ApiKeyCandidate(
         9L, "tx", "kn", "*", true, Instant.EPOCH.plusSeconds(30), sh.hash(), sh.salt(), "pbkdf2");
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx"))
         .thenReturn(List.of(shortLived))
@@ -405,7 +406,7 @@ class ApiKeyVerifierTest {
     ApiKeyVerifier metered = new ApiKeyVerifier(mapper, fakeTicker, fakeClock, registry);
     metered.bindCacheMetrics();
 
-    ApiKeyEntity rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
+    ApiKeyCandidate rec = pbkdf2Row(1L, "tx", "*", RAW_KEY);
     when(mapper.findActiveCandidatesByPrefixAndTenant(PREFIX, "tx")).thenReturn(List.of(rec));
 
     metered.verify(RAW_KEY, "tx"); // miss → 入缓存

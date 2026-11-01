@@ -3,8 +3,8 @@ package io.github.pinpols.batch.trigger.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -22,12 +22,12 @@ class TriggerManagementControllerTest {
   private TriggerRegistrationService registrationService;
 
   @Mock
-  private TriggerGracefulShutdown gracefulShutdown;
+  private TriggerDrainService drainService;
 
   @Test
   @DisplayName("组合 Workflow 暂停结果返回 Workflow 身份并委托 Workflow 调度操作")
   void shouldPauseWorkflowByWorkflowCode() {
-    var response = new TriggerManagementController(registrationService, gracefulShutdown)
+    var response = new TriggerManagementController(registrationService, drainService)
         .pauseWorkflow("tenant-a", "FLOW_A");
 
     assertThat(response.data().tenantId()).isEqualTo("tenant-a");

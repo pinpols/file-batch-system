@@ -9,7 +9,7 @@ import static org.mockito.Mockito.verify;
 
 import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
-import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
+import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import java.io.InputStream;
 import java.time.Instant;
 import java.util.List;
@@ -27,7 +27,7 @@ class ImportErrorOutputStorageTest {
     properties.setBucket("bucket");
     BatchObjectStore objectStore = mock(BatchObjectStore.class);
     ImportErrorOutputStorage storage = new ImportErrorOutputStorage(properties, objectStore);
-    ImportBadRecordEntity badRecord = new ImportBadRecordEntity(
+    ImportBadRecord badRecord = new ImportBadRecord(
         1L, "PARSE", "E1", "invalid", Map.of("id", 1), false, null, Instant.now(), null, null);
 
     String objectKey = storage.writeErrorOutput("tenant-A", "42", List.of(badRecord));

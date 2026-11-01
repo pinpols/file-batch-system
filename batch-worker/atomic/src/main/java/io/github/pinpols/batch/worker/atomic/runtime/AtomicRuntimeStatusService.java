@@ -75,7 +75,7 @@ public class AtomicRuntimeStatusService {
     String source;
     if (environment.containsProperty(HttpExecutorProdDefaults.PROP_ENFORCE_ALLOWLIST)) {
       source = "explicit";
-    } else if (isProdProfile()) {
+    } else if (BatchProfileSupport.isProductionProfile(environment)) {
       // 生产类 profile 下未显式配置 → HttpExecutorProdDefaults 已隐式翻 true。
       source = "prod-default";
     } else {
@@ -108,10 +108,6 @@ public class AtomicRuntimeStatusService {
           SwallowedExceptionLogger.summary(ex));
       return "unknown";
     }
-  }
-
-  private boolean isProdProfile() {
-    return BatchProfileSupport.isProductionProfile(environment);
   }
 
   private static int safeSize(Collection<?> c) {

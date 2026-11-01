@@ -6,12 +6,15 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.console.application.contract.request.auth.AiChatRequest;
-import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService.PreparedStream;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiImageApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiImageApplicationService.ConsoleAiCapabilities;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStreamRegistry;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStreamRegistry.Registration;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -28,10 +31,8 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.CancellationException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.SynchronousQueue;
@@ -39,7 +40,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.i18n.LocaleContextHolder;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
@@ -72,9 +72,8 @@ public class ConsoleAiController {
   private final ConsoleAiAuthorizationService authorizationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
   private final ConsoleAiProperties aiProperties;
-  private final ConsoleAiAttachmentUseCase attachmentService;
-  private final ObjectProvider<ConsoleAiClients> chatClientsProvider;
-  private final Map<String, ActiveStream> activeStreams = new ConcurrentHashMap<>();
+  private final ConsoleAiImageApplicationService imageService;
+  private final ConsoleAiStreamRegistry streamRegistry;
   private final ExecutorService streamExecutor =
       new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
         Thread thread = new Thread(runnable, "console-ai-stream");
@@ -88,19 +87,9 @@ public class ConsoleAiController {
   }
 
   @GetMapping("/capabilities")
-  public CommonResponse<AiCapabilities> capabilities() {
+  public CommonResponse<ConsoleAiCapabilities> capabilities() {
     authorizationService.assertAllowed();
-    ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
-    boolean imageInput = attachmentService.available()
-        && EmptyChecks.isNotNull(clients)
-        && EmptyChecks.isNotNull(clients.primary())
-        && clients.primary().imageInput();
-    AiCapabilities capabilities = new AiCapabilities(
-        imageInput,
-        imageInput ? aiProperties.getImage().getMaxImages() : 0,
-        imageInput ? aiProperties.getImage().getMaxFileBytes() : 0,
-        imageInput ? aiProperties.getImage().getMaxTotalBytes() : 0);
-    return responseFactory.success(capabilities);
+    return responseFactory.success(imageService.capabilities());
   }
 
   @PostMapping(value = "/attachments", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -110,22 +99,8 @@ public class ConsoleAiController {
       @RequestParam("file") MultipartFile file)
       throws IOException {
     authorizationService.assertAllowed();
-    ConsoleAiClients clients = chatClientsProvider.getIfAvailable();
-    boolean primaryClientCannotAcceptImages = EmptyChecks.isNull(clients)
-        || EmptyChecks.isNull(clients.primary())
-        || !clients.primary().imageInput();
-    if (primaryClientCannotAcceptImages) {
-      throw BizException.of(ResultCode.FORBIDDEN, "error.ai.assistant_not_configured");
-    }
-    if (file.getSize() < 1 || file.getSize() > aiProperties.getImage().getMaxFileBytes()) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.ai.image_invalid");
-    }
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    byte[] fileContent = file.getBytes();
     ConsoleAiAttachmentUseCase.AttachmentView attachment =
-        attachmentService.upload(tenantId, operatorId, clientAttachmentId, fileContent);
+        imageService.upload(clientAttachmentId, file);
     return responseFactory.success(attachment);
   }
 
@@ -133,20 +108,14 @@ public class ConsoleAiController {
   public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> attachmentStatus(
       @PathVariable UUID clientAttachmentId) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String tenantId = metadata.tenantId();
-    String operatorId = metadata.operatorId();
-    ConsoleAiAttachmentUseCase.AttachmentView attachment =
-        attachmentService.status(tenantId, operatorId, clientAttachmentId);
+    ConsoleAiAttachmentUseCase.AttachmentView attachment = imageService.status(clientAttachmentId);
     return responseFactory.success(attachment);
   }
 
   @GetMapping("/attachments/{id}/content")
   public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    ConsoleAiAttachmentUseCase.ImageContent image =
-        attachmentService.content(metadata.tenantId(), metadata.operatorId(), id);
+    ConsoleAiAttachmentUseCase.ImageContent image = imageService.content(id);
     ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
     responseBuilder.cacheControl(CacheControl.noStore());
     responseBuilder.header("X-Content-Type-Options", "nosniff");
@@ -160,39 +129,24 @@ public class ConsoleAiController {
   @DeleteMapping("/attachments/{id}")
   public CommonResponse<Void> deleteAttachment(@PathVariable UUID id) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    attachmentService.deleteDraft(metadata.tenantId(), metadata.operatorId(), id);
+    imageService.deleteDraft(id);
     return responseFactory.success(null);
   }
-
-  public record AiCapabilities(
-      boolean imageInput, int maxImages, int maxImageBytes, long maxTotalBytes) {}
 
   @PostMapping(value = "/chat/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
   public SseEmitter chatStream(
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
       @Valid @RequestBody AiChatRequest request) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    String requestId = EmptyChecks.isNull(metadata.requestId())
-        ? IdGenerator.newBusinessNo("ai")
-        : metadata.requestId();
-    ConsoleRequestMetadata streamMetadata = new ConsoleRequestMetadata(
-        requestId,
-        metadata.traceId(),
-        metadata.tenantId(),
-        metadata.operatorId(),
-        idempotencyKey,
-        metadata.clientIp());
+    PreparedStream prepared = applicationService.prepareStream(request, idempotencyKey);
+    String requestId = prepared.requestId();
     Locale requestLocale = LocaleContextHolder.getLocale();
     long configuredRequestTimeoutMillis = aiProperties.getRequestTimeout().toMillis();
     long minimumRequestTimeoutMillis = Math.max(1, configuredRequestTimeoutMillis);
     long timeout = minimumRequestTimeoutMillis + 10_000;
     SseEmitter emitter = new SseEmitter(timeout);
-    ActiveStream active = new ActiveStream(metadata.tenantId(), metadata.operatorId(), emitter);
-    if (EmptyChecks.isNotNull(activeStreams.putIfAbsent(requestId, active))) {
-      throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
-    }
+    ActiveStream active = new ActiveStream(emitter);
+    Registration registration = streamRegistry.register(requestId, active::cancel);
     emitter.onTimeout(active::cancel);
     emitter.onError(error -> active.cancel());
     emitter.onCompletion(active::cancel);
@@ -201,8 +155,7 @@ public class ConsoleAiController {
         LocaleContextHolder.setLocale(requestLocale);
         try {
           active.send("started", Map.of("requestId", requestId));
-          AiChatResponse result =
-              applicationService.chatStream(request, idempotencyKey, streamMetadata, active);
+          AiChatResponse result = prepared.execute(active);
           if (!active.isCancelled()) {
             active.send("completed", result);
           }
@@ -222,12 +175,12 @@ public class ConsoleAiController {
         } finally {
           LocaleContextHolder.resetLocaleContext();
           active.finish();
-          activeStreams.remove(requestId, active);
+          streamRegistry.remove(requestId, registration);
           emitter.complete();
         }
       });
     } catch (RejectedExecutionException exception) {
-      activeStreams.remove(requestId, active);
+      streamRegistry.remove(requestId, registration);
       throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.ai.assistant_not_configured");
     }
     return emitter;
@@ -236,30 +189,18 @@ public class ConsoleAiController {
   @PostMapping("/chat/stream/{requestId}/cancel")
   public CommonResponse<Void> cancelChatStream(@PathVariable String requestId) {
     authorizationService.assertAllowed();
-    ConsoleRequestMetadata metadata = metadataResolver.current();
-    ActiveStream active = activeStreams.get(requestId);
-    boolean activeStreamOwnerDoesNotMatch = EmptyChecks.isNull(active)
-        || !Objects.equals(active.tenantId, metadata.tenantId())
-        || !Objects.equals(active.operatorId, metadata.operatorId());
-    if (activeStreamOwnerDoesNotMatch) {
-      throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
-    }
-    active.cancel();
+    streamRegistry.cancel(requestId);
     return responseFactory.success(null);
   }
 
   private static final class ActiveStream implements ConsoleAiApplicationService.StreamObserver {
-    private final String tenantId;
-    private final String operatorId;
     private final SseEmitter emitter;
     private final Sinks.Empty<Void> cancellation = Sinks.empty();
     private final AtomicBoolean cancelled = new AtomicBoolean();
     private final AtomicBoolean emitted = new AtomicBoolean();
     private final AtomicBoolean finished = new AtomicBoolean();
 
-    private ActiveStream(String tenantId, String operatorId, SseEmitter emitter) {
-      this.tenantId = tenantId;
-      this.operatorId = operatorId;
+    private ActiveStream(SseEmitter emitter) {
       this.emitter = emitter;
     }
 

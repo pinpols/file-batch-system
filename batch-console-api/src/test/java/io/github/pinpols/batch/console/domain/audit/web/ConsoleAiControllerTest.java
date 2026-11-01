@@ -18,10 +18,10 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
-import io.github.pinpols.batch.console.config.ConsoleAiClients;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiApplicationService;
-import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiAttachmentUseCase;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiImageApplicationService;
+import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStreamRegistry;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
@@ -71,8 +70,9 @@ class ConsoleAiControllerTest {
             mock(ConsoleAiAuthorizationService.class),
             requestMetadataResolver,
             new ConsoleAiProperties(),
-            mock(ConsoleAiAttachmentUseCase.class),
-            new StaticListableBeanFactory().getBeanProvider(ConsoleAiClients.class)))
+            mock(ConsoleAiImageApplicationService.class),
+            new ConsoleAiStreamRegistry(
+                mock(ConsoleAiAuthorizationService.class), requestMetadataResolver)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
@@ -131,14 +131,18 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("流式应答按增量与结束事件推送完整答案")
   void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
+    ConsoleAiApplicationService.PreparedStream prepared =
+        mock(ConsoleAiApplicationService.PreparedStream.class);
+    when(prepared.requestId()).thenReturn("req-stream");
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata(
             "req-stream", "trace-stream", "t1", "operator-a", null, null));
+    when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
     AiChatResponse chatResponse = new AiChatResponse();
     chatResponse.setRequestId("req-stream");
     chatResponse.setAnswer("hello world");
-    when(applicationService.chatStream(any(), anyString(), any(), any())).thenAnswer(invocation -> {
-      ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(3);
+    when(prepared.execute(any())).thenAnswer(invocation -> {
+      ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
       observer.onDelta("hello ");
       observer.onDelta("world");
       return chatResponse;
@@ -171,12 +175,16 @@ class ConsoleAiControllerTest {
   void shouldRejectCrossOperatorCancellation() throws Exception {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
+    ConsoleAiApplicationService.PreparedStream prepared =
+        mock(ConsoleAiApplicationService.PreparedStream.class);
+    when(prepared.requestId()).thenReturn("req-stream");
     when(requestMetadataResolver.current())
         .thenReturn(
             new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
+    when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
-    when(applicationService.chatStream(any(), anyString(), any(), any())).thenAnswer(invocation -> {
+    when(prepared.execute(any())).thenAnswer(invocation -> {
       entered.countDown();
       release.await(2, TimeUnit.SECONDS);
       return new AiChatResponse();

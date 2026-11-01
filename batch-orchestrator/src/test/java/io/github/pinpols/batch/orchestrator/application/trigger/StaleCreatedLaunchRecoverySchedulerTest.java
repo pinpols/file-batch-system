@@ -15,8 +15,8 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionDispatchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -44,7 +44,7 @@ class StaleCreatedLaunchRecoverySchedulerTest {
   void setUpFrozenDefinition() {
     when(launchValidationService.load(any())).thenAnswer(invocation -> {
       LaunchRequest request = invocation.getArgument(0);
-      JobDefinitionEntity definition = JobDefinitionEntity.builder()
+      JobDefinitionView definition = JobDefinitionView.builder()
           .id(1L)
           .tenantId(request.tenantId())
           .jobCode(request.jobCode())

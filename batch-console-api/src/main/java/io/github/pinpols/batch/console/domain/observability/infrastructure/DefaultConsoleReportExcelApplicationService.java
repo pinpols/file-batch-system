@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.application.contract.query.OutboxDelivery
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -50,12 +51,7 @@ import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.streaming.SXSSFWorkbook;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 /**
  * {@link io.github.pinpols.batch.console.application.ConsoleReportExcelApplicationService} 的默认实现：
@@ -72,8 +68,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportConfigReleases(
-      ConfigReleaseQueryRequest request) {
+  public ExcelDownload exportConfigReleases(ConfigReleaseQueryRequest request) {
     List<ConsoleConfigReleaseResponse> rows = configApplicationService.configReleases(request);
     return exportRows(
         "config_releases",
@@ -84,8 +79,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportSecretVersions(
-      SecretVersionQueryRequest request) {
+  public ExcelDownload exportSecretVersions(SecretVersionQueryRequest request) {
     List<ConsoleSecretVersionResponse> rows = configApplicationService.secretVersions(request);
     return exportRows(
         "secret_versions",
@@ -96,8 +90,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportConfigChangeLogs(
-      ConfigChangeLogQueryRequest request) {
+  public ExcelDownload exportConfigChangeLogs(ConfigChangeLogQueryRequest request) {
     List<ConsoleConfigChangeLogResponse> rows = configApplicationService.configChangeLogs(request);
     return exportRows(
         "config_change_logs",
@@ -108,7 +101,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportAuditLogs(AuditLogQueryRequest request) {
+  public ExcelDownload exportAuditLogs(AuditLogQueryRequest request) {
     PageResponse<ConsoleAuditLogResponse> page = queryApplicationService.auditLogs(request);
     List<ConsoleAuditLogResponse> rows = page.items();
     return exportRows(
@@ -116,7 +109,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshot(String tenantId) {
+  public ExcelDownload exportSchedulerSnapshot(String tenantId) {
     ConsoleSchedulerSnapshotResponse snapshot = orchestratorPort.schedulerSnapshot(tenantId);
     List<ConsoleSchedulerSnapshotResponse.PolicySnapshot> rows =
         EmptyChecks.isNull(snapshot) ? List.of() : snapshot.policies();
@@ -129,8 +122,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportSchedulerSnapshotHistory(
-      String tenantId, int limit) {
+  public ExcelDownload exportSchedulerSnapshotHistory(String tenantId, int limit) {
     List<ConsoleSchedulerSnapshotHistoryResponse> rows =
         orchestratorPort.schedulerSnapshotHistory(tenantId, limit);
     return exportRows(
@@ -142,15 +134,14 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportWorkers(WorkerRegistryQueryRequest request) {
+  public ExcelDownload exportWorkers(WorkerRegistryQueryRequest request) {
     PageResponse<ConsoleWorkerRegistryResponse> page = queryApplicationService.workers(request);
     List<ConsoleWorkerRegistryResponse> rows = page.items();
     return exportRows("workers", "workers", "workers", rows, ConsoleWorkerRegistryResponse.class);
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportOutboxRetries(
-      OutboxRetryLogQueryRequest request) {
+  public ExcelDownload exportOutboxRetries(OutboxRetryLogQueryRequest request) {
     PageResponse<ConsoleOutboxRetryLogResponse> page =
         queryApplicationService.outboxRetries(request);
     List<ConsoleOutboxRetryLogResponse> rows = page.items();
@@ -163,8 +154,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ResponseEntity<StreamingResponseBody> exportOutboxDeliveries(
-      OutboxDeliveryLogQueryRequest request) {
+  public ExcelDownload exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request) {
     PageResponse<ConsoleOutboxDeliveryLogResponse> page =
         queryApplicationService.outboxDeliveries(request);
     List<ConsoleOutboxDeliveryLogResponse> rows = page.items();
@@ -176,18 +166,12 @@ public class DefaultConsoleReportExcelApplicationService
         ConsoleOutboxDeliveryLogResponse.class);
   }
 
-  private <T> ResponseEntity<StreamingResponseBody> exportRows(
+  private <T> ExcelDownload exportRows(
       String sheetName, String filePrefix, String title, List<T> rows, Class<T> rowType) {
     // R2-P1-9: workbook 直接写到响应流，不缓 byte[]。
-    StreamingResponseBody body = out -> writeWorkbookTo(out, sheetName, title, rows, rowType);
     String fileName = filePrefix + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    String contentDispositionHeader =
-        ContentDisposition.attachment().filename(fileName).build().toString();
-    return ResponseEntity.ok()
-        .header(HttpHeaders.CONTENT_DISPOSITION, contentDispositionHeader)
-        .contentType(MediaType.parseMediaType(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
-        .body(body);
+    return new ExcelDownload(
+        fileName, out -> writeWorkbookTo(out, sheetName, title, rows, rowType));
   }
 
   /**

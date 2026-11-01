@@ -40,6 +40,7 @@ import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpser
 import io.github.pinpols.batch.console.domain.job.support.BatchWindowRules;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
@@ -426,7 +427,7 @@ public class TenantConfigPackageExcelApplyService {
 
   private boolean applyJob(Map<String, String> row, ApplyContext ctx) {
     String jobCode = normalize(row.get(COL_JOB_CODE));
-    JobDefinitionEntity existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
+    JobDefinitionView existing = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
     if (EmptyChecks.isNull(existing)) {
       insertJob(row, ctx, jobCode);
       return true;
@@ -507,7 +508,7 @@ public class TenantConfigPackageExcelApplyService {
   }
 
   private void updateJob(
-      Map<String, String> row, ApplyContext ctx, String jobCode, JobDefinitionEntity existing) {
+      Map<String, String> row, ApplyContext ctx, String jobCode, JobDefinitionView existing) {
     JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
     param.setTenantId(ctx.tenantId());
     param.setJobCode(jobCode);
@@ -552,7 +553,7 @@ public class TenantConfigPackageExcelApplyService {
 
   private void updateDefaultParams(
       Map<String, String> row,
-      JobDefinitionEntity existing,
+      JobDefinitionView existing,
       JobDefinitionMaintenanceUpdateParam param) {
     String requestedDefaultParams = normalize(row.get(COL_DEFAULT_PARAMS));
     String defaultParams =
@@ -594,7 +595,7 @@ public class TenantConfigPackageExcelApplyService {
   private void applyJobMonitoringPolicies(List<Map<String, String>> rows, ApplyContext ctx) {
     for (Map<String, String> row : rows) {
       String jobCode = normalize(row.get(COL_JOB_CODE));
-      JobDefinitionEntity job = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
+      JobDefinitionView job = jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), jobCode);
       if (EmptyChecks.isNull(job)) {
         throw invalidParsedRow(
             JOB_MONITORING_POLICY_SHEET, List.of("job_code does not exist for tenant: " + jobCode));
@@ -740,7 +741,7 @@ public class TenantConfigPackageExcelApplyService {
     return EmptyChecks.isNull(parsed) ? 0 : parsed;
   }
 
-  private int parseStartGraceSeconds(String value, JobDefinitionEntity job) {
+  private int parseStartGraceSeconds(String value, JobDefinitionView job) {
     Integer configured = parseInteger(value);
     if (EmptyChecks.isNotNull(configured)) {
       return configured;
@@ -877,7 +878,7 @@ public class TenantConfigPackageExcelApplyService {
       String sourceVersionText = normalize(row.get(COL_VERSION));
       int sourceVersion = Integer.parseInt(sourceVersionText);
       String singleJobCode = normalize(row.get(COL_SINGLE_JOB_CODE));
-      JobDefinitionEntity singleJob = Texts.hasText(singleJobCode)
+      JobDefinitionView singleJob = Texts.hasText(singleJobCode)
           ? jobDefinitionMapper.selectByUniqueKey(ctx.tenantId(), singleJobCode)
           : null;
       if (Texts.hasText(singleJobCode) && EmptyChecks.isNull(singleJob)) {
@@ -999,7 +1000,7 @@ public class TenantConfigPackageExcelApplyService {
       WorkflowDefinitionUpsertParam defParam,
       Map<String, String> row,
       WorkflowDefinitionEntity existing,
-      JobDefinitionEntity singleJob,
+      JobDefinitionView singleJob,
       String operatorId) {
     String currentWorkflowName = EmptyChecks.isNull(existing) ? null : existing.getWorkflowName();
     String workflowName = mergeText(row, COL_WORKFLOW_NAME, currentWorkflowName);

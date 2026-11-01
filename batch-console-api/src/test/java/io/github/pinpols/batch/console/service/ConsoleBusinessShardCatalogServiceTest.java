@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
 import io.github.pinpols.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
@@ -47,7 +48,7 @@ class ConsoleBusinessShardCatalogServiceTest {
   @Test
   @DisplayName("写入分片目录时, 入参原样交给仓储")
   void shouldDelegateUpsert_whenSavingCatalogRow() {
-    BusinessShardCatalogUpsertParam p = BusinessShardCatalogUpsertParam.builder()
+    BusinessShardCatalogUpsertCommand p = BusinessShardCatalogUpsertCommand.builder()
         .placementKey("shard-1")
         .host("db-1")
         .port(5432)
@@ -56,7 +57,15 @@ class ConsoleBusinessShardCatalogServiceTest {
         .operator("ops:bob")
         .build();
     service.upsert(p);
-    verify(catalogMapper).upsert(p);
+    verify(catalogMapper)
+        .upsert(BusinessShardCatalogUpsertParam.builder()
+            .placementKey("shard-1")
+            .host("db-1")
+            .port(5432)
+            .dbName("batch_business")
+            .enabled(true)
+            .operator("ops:bob")
+            .build());
   }
 
   @Test

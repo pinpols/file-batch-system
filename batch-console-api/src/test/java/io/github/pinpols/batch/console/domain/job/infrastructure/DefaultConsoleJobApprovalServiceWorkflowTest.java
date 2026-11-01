@@ -16,11 +16,11 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.application.workflow.ManagedJobWorkflowReferencePort;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayCatchUpRequest;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
 import io.github.pinpols.batch.console.shared.command.ApprovalSubmitContext;
@@ -257,8 +257,8 @@ class DefaultConsoleJobApprovalServiceWorkflowTest {
         .thenReturn(activeCalendar("MANUAL_APPROVAL"));
     when(operations.hasText("JOB_A")).thenReturn(true);
     when(operations.submitApproval(any())).thenReturn("approval-1");
-    JobDefinitionEntity enabled = jobWithWorkflow(42L);
-    JobDefinitionEntity disabled = jobWithWorkflow(42L);
+    JobDefinitionView enabled = jobWithWorkflow(42L);
+    JobDefinitionView disabled = jobWithWorkflow(42L);
     disabled.setEnabled(false);
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_A")).thenReturn(enabled, disabled);
 
@@ -418,8 +418,8 @@ class DefaultConsoleJobApprovalServiceWorkflowTest {
     return request;
   }
 
-  private JobDefinitionEntity jobWithWorkflow(Long workflowDefinitionId) {
-    JobDefinitionEntity job = new JobDefinitionEntity();
+  private JobDefinitionView jobWithWorkflow(Long workflowDefinitionId) {
+    JobDefinitionView job = new JobDefinitionView();
     job.setTenantId("tenant-a");
     job.setId(501L);
     job.setJobCode("JOB_A");

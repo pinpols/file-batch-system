@@ -20,7 +20,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.Orchestrato
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.NodeAction;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowManagementResults.RunAction;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
@@ -271,7 +271,7 @@ public class WorkflowRunManagementApplicationService {
         "bizDate",
         EmptyChecks.isNull(run.getBizDate()) ? null : run.getBizDate().toString());
     detail.put("operatorId", operatorId);
-    AlertEmitRequest alertRequest = AlertEmitRequest.builder()
+    AlertEmitCommand alertRequest = AlertEmitCommand.builder()
         .tenantId(run.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType("WORKFLOW_NODE_MANUAL_SKIP")

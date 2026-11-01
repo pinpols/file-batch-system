@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.CustomTaskTypeResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQueryService;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -38,7 +38,7 @@ public class ConsoleCustomTaskTypeController {
   @GetMapping
   public CommonResponse<List<CustomTaskTypeResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    List<CustomTaskTypeEntity> activeTaskTypes = queryService.listActive(tenantId);
+    List<CustomTaskTypeView> activeTaskTypes = queryService.listActive(tenantId);
     List<CustomTaskTypeResponse> responses =
         activeTaskTypes.stream().map(CustomTaskTypeResponse::from).toList();
     return responseFactory.success(responses);
@@ -59,7 +59,7 @@ public class ConsoleCustomTaskTypeController {
   public CommonResponse<CustomTaskTypeResponse> detail(
       @PathVariable("taskTypeCode") String taskTypeCode,
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    CustomTaskTypeEntity taskType = queryService.detail(tenantId, taskTypeCode);
+    CustomTaskTypeView taskType = queryService.detail(tenantId, taskTypeCode);
     CustomTaskTypeResponse response = CustomTaskTypeResponse.from(taskType);
     return responseFactory.success(response);
   }

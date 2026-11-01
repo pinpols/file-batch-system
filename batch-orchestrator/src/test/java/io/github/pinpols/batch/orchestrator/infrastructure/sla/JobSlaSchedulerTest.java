@@ -17,7 +17,7 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.SlaGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -96,7 +96,7 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("单个候选的持久化处理未成功时不重复处理其他副作用")
   void shouldSkipCandidateWhenMarkSlaAlertedReturnZero() {
-    JobInstanceEntity candidate =
+    JobSlaCandidate candidate =
         slaCandidate("t1", 1L, BatchDateTimeSupport.utcNow().minusSeconds(60));
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(1L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
@@ -111,7 +111,7 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("候选已超过截止时间时标记成功并写入两条执行日志,同时发送一次告警")
   void shouldLogAndEmitAlertWhenDeadlineExceeded() {
-    JobInstanceEntity candidate =
+    JobSlaCandidate candidate =
         slaCandidate("t1", 2L, BatchDateTimeSupport.utcNow().minusSeconds(3600));
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(1L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(candidate));
@@ -125,7 +125,7 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("无截止时间但实际运行时长超过预期耗时上限的候选同样写两条日志并发一次告警")
   void shouldLogAndEmitAlertForExpectedDurationViolation() {
-    JobInstanceEntity candidate = new JobInstanceEntity();
+    JobSlaCandidate candidate = new JobSlaCandidate();
     candidate.setTenantId("t1");
     candidate.setId(3L);
     candidate.setInstanceNo("INST-003");
@@ -149,8 +149,8 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("多个违规候选逐个处理,每个候选各产生两条日志与一次告警")
   void shouldProcessMultipleCandidates() {
-    JobInstanceEntity c1 = slaCandidate("t1", 10L, BatchDateTimeSupport.utcNow().minusSeconds(100));
-    JobInstanceEntity c2 = slaCandidate("t1", 11L, BatchDateTimeSupport.utcNow().minusSeconds(200));
+    JobSlaCandidate c1 = slaCandidate("t1", 10L, BatchDateTimeSupport.utcNow().minusSeconds(100));
+    JobSlaCandidate c2 = slaCandidate("t1", 11L, BatchDateTimeSupport.utcNow().minusSeconds(200));
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(2L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(c1, c2));
     when(violationProcessor.process(any(), any())).thenReturn(true);
@@ -163,12 +163,12 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("跨租户 SLA 违约候选逐个在所属租户上下文内处理")
   void shouldProcessViolationUnderCandidateTenantContext() {
-    JobInstanceEntity c1 = slaCandidate("t1", 31L, BatchDateTimeSupport.utcNow());
-    JobInstanceEntity c2 = slaCandidate("t2", 32L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate c1 = slaCandidate("t1", 31L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate c2 = slaCandidate("t2", 32L, BatchDateTimeSupport.utcNow());
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(2L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of(c1, c2));
     doAnswer(invocation -> {
-          JobInstanceEntity candidate = invocation.getArgument(0);
+          JobSlaCandidate candidate = invocation.getArgument(0);
           assertThat(RlsTenantContextHolder.get()).isEqualTo(candidate.getTenantId());
           return true;
         })
@@ -183,8 +183,8 @@ class JobSlaSchedulerTest {
   @Test
   @DisplayName("单个候选事务失败时继续处理本批其他候选")
   void shouldContinueAfterCandidatePersistenceFailure() {
-    JobInstanceEntity failed = slaCandidate("t1", 20L, BatchDateTimeSupport.utcNow());
-    JobInstanceEntity healthy = slaCandidate("t1", 21L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate failed = slaCandidate("t1", 20L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate healthy = slaCandidate("t1", 21L, BatchDateTimeSupport.utcNow());
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(2L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt()))
         .thenReturn(List.of(failed, healthy));
@@ -206,7 +206,7 @@ class JobSlaSchedulerTest {
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(0L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
 
-    JobInstanceEntity stale = slaCandidate("t1", 99L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate stale = slaCandidate("t1", 99L, BatchDateTimeSupport.utcNow());
     stale.setSlaAlertedAt(BatchDateTimeSupport.utcNow().minusSeconds(900));
     when(jobMonitoringMapper.countSlaEscalationCandidates(any())).thenReturn(1L);
     when(jobMonitoringMapper.selectSlaEscalationCandidates(any(), anyInt()))
@@ -224,13 +224,13 @@ class JobSlaSchedulerTest {
     properties.setEscalationSeverity("ERROR");
     when(jobMonitoringMapper.countSlaViolationCandidates()).thenReturn(0L);
     when(jobMonitoringMapper.selectSlaViolationCandidates(anyInt())).thenReturn(List.of());
-    JobInstanceEntity stale = slaCandidate("t2", 100L, BatchDateTimeSupport.utcNow());
+    JobSlaCandidate stale = slaCandidate("t2", 100L, BatchDateTimeSupport.utcNow());
     stale.setSlaAlertedAt(BatchDateTimeSupport.utcNow().minusSeconds(900));
     when(jobMonitoringMapper.countSlaEscalationCandidates(any())).thenReturn(1L);
     when(jobMonitoringMapper.selectSlaEscalationCandidates(any(), anyInt()))
         .thenReturn(List.of(stale));
     doAnswer(invocation -> {
-          JobInstanceEntity request = invocation.getArgument(0);
+          JobSlaCandidate request = invocation.getArgument(0);
           assertThat(RlsTenantContextHolder.get()).isEqualTo(request.getTenantId());
           return true;
         })
@@ -257,8 +257,8 @@ class JobSlaSchedulerTest {
 
   // ── helpers ───────────────────────────────────────────────────────────────
 
-  private static JobInstanceEntity slaCandidate(String tenantId, Long id, Instant deadlineAt) {
-    JobInstanceEntity e = new JobInstanceEntity();
+  private static JobSlaCandidate slaCandidate(String tenantId, Long id, Instant deadlineAt) {
+    JobSlaCandidate e = new JobSlaCandidate();
     e.setTenantId(tenantId);
     e.setId(id);
     e.setInstanceNo("INST-" + id);

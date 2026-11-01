@@ -7,37 +7,35 @@ import io.github.pinpols.batch.console.application.contract.query.OutboxDelivery
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 
 /** 控制台报表 Excel 导出应用服务：将各类查询结果汇总为可下载的 Excel 流。 */
 public interface ConsoleReportExcelApplicationService {
 
   /** 导出配置发布单列表。 */
-  ResponseEntity<StreamingResponseBody> exportConfigReleases(ConfigReleaseQueryRequest request);
+  ExcelDownload exportConfigReleases(ConfigReleaseQueryRequest request);
 
   /** 导出密钥版本列表。 */
-  ResponseEntity<StreamingResponseBody> exportSecretVersions(SecretVersionQueryRequest request);
+  ExcelDownload exportSecretVersions(SecretVersionQueryRequest request);
 
   /** 导出配置变更日志。 */
-  ResponseEntity<StreamingResponseBody> exportConfigChangeLogs(ConfigChangeLogQueryRequest request);
+  ExcelDownload exportConfigChangeLogs(ConfigChangeLogQueryRequest request);
 
   /** 导出审计日志。 */
-  ResponseEntity<StreamingResponseBody> exportAuditLogs(AuditLogQueryRequest request);
+  ExcelDownload exportAuditLogs(AuditLogQueryRequest request);
 
   /** 导出当前调度快照。 */
-  ResponseEntity<StreamingResponseBody> exportSchedulerSnapshot(String tenantId);
+  ExcelDownload exportSchedulerSnapshot(String tenantId);
 
   /** 导出调度快照历史。 */
-  ResponseEntity<StreamingResponseBody> exportSchedulerSnapshotHistory(String tenantId, int limit);
+  ExcelDownload exportSchedulerSnapshotHistory(String tenantId, int limit);
 
   /** 导出 Worker 注册信息。 */
-  ResponseEntity<StreamingResponseBody> exportWorkers(WorkerRegistryQueryRequest request);
+  ExcelDownload exportWorkers(WorkerRegistryQueryRequest request);
 
   /** 导出 Outbox 重试日志。 */
-  ResponseEntity<StreamingResponseBody> exportOutboxRetries(OutboxRetryLogQueryRequest request);
+  ExcelDownload exportOutboxRetries(OutboxRetryLogQueryRequest request);
 
   /** 导出 Outbox 投递日志。 */
-  ResponseEntity<StreamingResponseBody> exportOutboxDeliveries(
-      OutboxDeliveryLogQueryRequest request);
+  ExcelDownload exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request);
 }

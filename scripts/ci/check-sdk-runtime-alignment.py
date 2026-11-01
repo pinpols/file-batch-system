@@ -60,7 +60,7 @@ if FRONTEND.is_dir():
     )
     require(frontend_node_baseline == node_baseline, "frontend and backend Node execution baselines must match")
     frontend_docker_node = re.search(
-        r"^FROM node:(24\.\d+\.\d+)-alpine\d+\.\d+@sha256:[0-9a-f]{64} AS build$",
+        r"^FROM[ \t]+(?:--platform=\S+[ \t]+)?node:(24\.\d+\.\d+)-alpine\d+\.\d+@sha256:[0-9a-f]{64} AS build$",
         read(FRONTEND / "Dockerfile"),
         re.M,
     )

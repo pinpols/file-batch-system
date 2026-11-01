@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.command.ArchivePolicyUpsertCommand;
 import io.github.pinpols.batch.console.domain.entity.ArchivePolicyEntity;
-import io.github.pinpols.batch.console.domain.param.ArchivePolicyUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleArchivePolicyService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -103,7 +103,7 @@ class ConsoleArchivePolicyControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.code").value("SUCCESS"));
 
-    ArchivePolicyUpsertParam expected = ArchivePolicyUpsertParam.builder()
+    ArchivePolicyUpsertCommand expected = ArchivePolicyUpsertCommand.builder()
         .tenantId("t1")
         .targetTable("job_instance")
         .retentionDays(90)

@@ -16,7 +16,6 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
-import io.github.pinpols.batch.console.domain.job.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
@@ -24,6 +23,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobStepInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobExecutionLogQuery;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
+import io.github.pinpols.batch.console.domain.job.view.JobStepInstanceView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.util.List;
@@ -197,7 +197,7 @@ class ConsoleJobExecutionLogQueryTest {
   @DisplayName("步骤结果摘要返回前递归脱敏敏感字段")
   void jobStepInstance_masksSensitiveValuesInResultSummary() {
     when(tenantGuard.resolveTenant("t1")).thenReturn("t1");
-    JobStepInstanceEntity step = new JobStepInstanceEntity();
+    JobStepInstanceView step = new JobStepInstanceView();
     step.setId(10L);
     step.setTenantId("t1");
     step.setResultSummary("{\"credential\":\"step-secret\",\"rowsProcessed\":5}");

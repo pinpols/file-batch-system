@@ -139,6 +139,27 @@ class ConsoleIdempotencyInterceptorTest {
   }
 
   @Test
+  @DisplayName("拦截器保留原请求租户、方法、路径和幂等键生成的存储身份")
+  void shouldPreserveStoredIdentity_whenRequestHeadersContainWhitespace() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("post", "/api/console/jobs/demo");
+    request.addHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER, " tenant-a ");
+    request.addHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, " post-key ");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    String redisKey = "console:idempotency:tenant-a:POST:/api/console/jobs/demo:post-key";
+    String durableKey =
+        "console-http:010493ad175a6509900c17679d2a3563f623c5488e766e9b950da7d9681e3d99";
+    when(store.setIfAbsent(eq(redisKey), anyString(), eq(Duration.ofSeconds(30))))
+        .thenReturn(true);
+
+    assertThat(interceptor.preHandle(request, response, idempotentHandler)).isTrue();
+
+    verify(store).get(redisKey);
+    verify(durableStore).isCompleted("tenant-a", durableKey);
+    assertThat(request.getAttribute("console.idempotency.redisKey")).isEqualTo(redisKey);
+    assertThat(request.getAttribute("console.idempotency.durableKey")).isEqualTo(durableKey);
+  }
+
+  @Test
   @DisplayName("缓存记录已过期但持久化记录显示完成时,请求返回 409")
   void shouldRejectRequest_whenDurableRecordMarksCompletion() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/console/jobs/demo");

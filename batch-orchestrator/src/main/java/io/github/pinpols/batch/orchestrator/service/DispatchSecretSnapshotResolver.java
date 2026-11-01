@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
-import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,7 +54,7 @@ public class DispatchSecretSnapshotResolver {
 
     Map<String, Object> pinned = new LinkedHashMap<>(trustedParams);
     Map<String, Object> bindings = new LinkedHashMap<>();
-    for (DispatchSecretBindingEntity binding :
+    for (DispatchSecretBindingView binding :
         bindingMapper.selectCurrentByChannels(tenantId, new ArrayList<>(channelCodes))) {
       if (EmptyChecks.isNull(binding.secretVersionId())
           || EmptyChecks.isNull(binding.versionNo())) {

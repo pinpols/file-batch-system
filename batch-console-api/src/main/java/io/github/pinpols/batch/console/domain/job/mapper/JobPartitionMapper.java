@@ -1,12 +1,12 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
-import io.github.pinpols.batch.console.domain.job.entity.JobPartitionEntity;
 import io.github.pinpols.batch.console.domain.job.query.JobPartitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.JobPartitionView;
 import java.util.List;
 
 public interface JobPartitionMapper {
 
-  List<JobPartitionEntity> selectByQuery(JobPartitionQuery query);
+  List<JobPartitionView> selectByQuery(JobPartitionQuery query);
 
   long countByQuery(JobPartitionQuery query);
 }

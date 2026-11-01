@@ -14,7 +14,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.orchestrator.mapper.AssetFreshnessPolicyMapper;
 import java.time.Clock;
@@ -61,7 +61,7 @@ class AssetFreshnessPolicyServiceTest {
     int emitted = service.scanDuePolicies(10);
 
     assertThat(emitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(captor.capture());
     assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_MISSING");
     assertThat(captor.getValue().severity()).isEqualTo("WARN");
@@ -77,7 +77,7 @@ class AssetFreshnessPolicyServiceTest {
             "t1", "JOB_A", LocalDate.of(2026, Month.JUNE, 30)))
         .thenReturn(false);
     doAnswer(invocation -> {
-          AlertEmitRequest request = invocation.getArgument(0);
+          AlertEmitCommand request = invocation.getArgument(0);
           assertThat(RlsTenantContextHolder.get()).isEqualTo(request.tenantId());
           return null;
         })
@@ -101,7 +101,7 @@ class AssetFreshnessPolicyServiceTest {
     int emitted = service.scanDuePolicies(10);
 
     assertThat(emitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(captor.capture());
     assertThat(captor.getValue().alertType()).isEqualTo("ASSET_FRESHNESS_STALE");
     assertThat(captor.getValue().severity()).isEqualTo("ERROR");
@@ -170,9 +170,9 @@ class AssetFreshnessPolicyServiceTest {
     // 通过 UPSERT 合并记录，不会创建重复告警。
     assertThat(firstEmitted).isEqualTo(1);
     assertThat(secondEmitted).isEqualTo(1);
-    ArgumentCaptor<AlertEmitRequest> captor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> captor = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService, times(2)).emit(captor.capture());
-    List<AlertEmitRequest> emissions = captor.getAllValues();
+    List<AlertEmitCommand> emissions = captor.getAllValues();
     String firstKey = emissions.get(0).resourceKey();
     String secondKey = emissions.get(1).resourceKey();
     assertThat(firstKey).isEqualTo(secondKey);

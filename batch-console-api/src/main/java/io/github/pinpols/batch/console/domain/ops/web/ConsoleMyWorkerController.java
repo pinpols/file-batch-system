@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleMyWorkerQueryService;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import java.util.List;
@@ -35,7 +35,7 @@ public class ConsoleMyWorkerController {
   @GetMapping
   public CommonResponse<List<WorkerRegistryResponse>> list(
       @RequestParam(value = "tenantId", required = false) String tenantId) {
-    List<WorkerRegistryEntity> workers = queryService.listSelfHosted(tenantId);
+    List<WorkerRegistryView> workers = queryService.listSelfHosted(tenantId);
     List<WorkerRegistryResponse> responses =
         workers.stream().map(WorkerRegistryResponse::from).toList();
     return responseFactory.success(responses);

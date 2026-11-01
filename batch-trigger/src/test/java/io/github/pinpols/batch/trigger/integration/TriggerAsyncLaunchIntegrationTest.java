@@ -18,6 +18,7 @@ import io.github.pinpols.batch.trigger.config.TriggerKafkaProducerConfiguration;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.mapper.TriggerOutboxEventMapper;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Duration;
 import java.time.Instant;
@@ -123,7 +124,10 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
   void happyPath_writesOutboxAndPublishesToKafka() {
     String requestId = "req-happy-" + UUID.randomUUID();
     LaunchResponse response = triggerService.launch(new TriggerLaunchCommand(
-        buildRequest(tenantId, "JOB_HAPPY"), "idem-" + requestId, requestId, "trace-happy"));
+        TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_HAPPY")),
+        "idem-" + requestId,
+        requestId,
+        "trace-happy"));
 
     // 1) trigger_request + trigger_outbox_event 同事务都被写入
     assertThat(response.instanceNo()).isEqualTo(requestId);
@@ -158,10 +162,16 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     String requestId = "req-dup-" + UUID.randomUUID();
     String idem = "idem-" + requestId;
 
-    LaunchResponse first = triggerService.launch(
-        new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-1"));
-    LaunchResponse second = triggerService.launch(
-        new TriggerLaunchCommand(buildRequest(tenantId, "JOB_DUP"), idem, requestId, "tr-2"));
+    LaunchResponse first = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
+        idem,
+        requestId,
+        "tr-1"));
+    LaunchResponse second = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
+        idem,
+        requestId,
+        "tr-2"));
 
     // 第二次返回与第一次同 requestId(走 dedup return existing)
     assertThat(first.instanceNo()).isEqualTo(requestId);

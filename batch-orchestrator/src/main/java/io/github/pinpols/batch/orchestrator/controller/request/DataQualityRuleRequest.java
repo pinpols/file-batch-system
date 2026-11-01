@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.orchestrator.controller.request;
 
-import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
+import io.github.pinpols.batch.orchestrator.domain.command.DataQualityRuleWriteCommand;
 import java.time.Instant;
 
 /** 创建或替换数据质量规则的 HTTP 写入契约。 */
@@ -19,21 +19,21 @@ public record DataQualityRuleRequest(
     Instant createdAt,
     Instant updatedAt) {
 
-  public DataQualityRuleEntity toEntity() {
-    DataQualityRuleEntity entity = new DataQualityRuleEntity();
-    entity.setId(id);
-    entity.setTenantId(tenantId);
-    entity.setRuleCode(ruleCode);
-    entity.setRuleName(ruleName);
-    entity.setRuleType(ruleType);
-    entity.setScopeBusinessKey(scopeBusinessKey);
-    entity.setExpression(expression);
-    entity.setThresholdJson(thresholdJson);
-    entity.setSeverity(severity);
-    entity.setEnabled(enabled);
-    entity.setDescription(description);
-    entity.setCreatedAt(createdAt);
-    entity.setUpdatedAt(updatedAt);
-    return entity;
+  public DataQualityRuleWriteCommand toCommand() {
+    return DataQualityRuleWriteCommand.builder()
+        .id(id)
+        .tenantId(tenantId)
+        .ruleCode(ruleCode)
+        .ruleName(ruleName)
+        .ruleType(ruleType)
+        .scopeBusinessKey(scopeBusinessKey)
+        .expression(expression)
+        .thresholdJson(thresholdJson)
+        .severity(severity)
+        .enabled(enabled)
+        .description(description)
+        .createdAt(createdAt)
+        .updatedAt(updatedAt)
+        .build();
   }
 }

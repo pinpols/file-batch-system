@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
+import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -39,8 +39,7 @@ public class ImportErrorOutputStorage {
   private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
 
-  public String writeErrorOutput(
-      String tenantId, String fileId, List<ImportBadRecordEntity> badRecords) {
+  public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
     boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
         || !Texts.hasText(fileId)
         || badRecords == null
@@ -59,7 +58,7 @@ public class ImportErrorOutputStorage {
     try {
       spool = PrivateTempFiles.createTempFile("import-error-", ".jsonl");
       try (BufferedWriter writer = Files.newBufferedWriter(spool, StandardCharsets.UTF_8)) {
-        for (ImportBadRecordEntity badRecord : badRecords) {
+        for (ImportBadRecord badRecord : badRecords) {
           String badRecordJson = JsonUtils.toJson(badRecord);
           writer.write(badRecordJson);
           writer.write('\n');

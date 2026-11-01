@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.job.application.contract.response
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 
 public record ConsoleScheduledOccurrenceResponse(
     Long workflowDefinitionId,
@@ -12,4 +13,5 @@ public record ConsoleScheduledOccurrenceResponse(
     LocalDate bizDate,
     String occurrenceStatus,
     String requestId,
-    String lastRejectionReason) {}
+    String lastRejectionReason,
+    List<ConsoleScheduledOccurrenceFireResponse> actualFires) {}

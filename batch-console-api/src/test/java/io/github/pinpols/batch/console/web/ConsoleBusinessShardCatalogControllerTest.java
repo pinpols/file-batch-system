@@ -12,8 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
-import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
 import io.github.pinpols.batch.console.service.ConsoleBusinessShardCatalogService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -85,7 +85,7 @@ class ConsoleBusinessShardCatalogControllerTest {
             .content("{\"placementKey\":\"shard-1\",\"host\":\"db-1\",\"port\":5432,"
                 + "\"dbName\":\"batch_business\",\"enabled\":true}"))
         .andExpect(status().isOk());
-    verify(service).upsert(any(BusinessShardCatalogUpsertParam.class));
+    verify(service).upsert(any(BusinessShardCatalogUpsertCommand.class));
   }
 
   @Test

@@ -26,7 +26,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Orchest
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.config.CrossDayDependencyReconcileProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
@@ -201,7 +201,7 @@ class CrossDayDependencyReconcilerTest {
     reconciler.scheduledReconcile();
 
     verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService, atLeastOnce()).emit(any(AlertEmitRequest.class));
+    verify(alertEventService, atLeastOnce()).emit(any(AlertEmitCommand.class));
     verify(dispatchService, never()).dispatchNode(any(), any(), any(), any(), any());
   }
 
@@ -227,7 +227,7 @@ class CrossDayDependencyReconcilerTest {
 
     verify(nodeRunMapper)
         .updateStatus(argThat(param -> "WAITING_DEPENDENCY".equals(param.getExpectedStatus())));
-    verify(alertEventService, never()).emit(any(AlertEmitRequest.class));
+    verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
   }
 
   @Test
@@ -272,7 +272,7 @@ class CrossDayDependencyReconcilerTest {
     reconciler.scheduledReconcile();
 
     verify(nodeRunMapper, never()).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService, never()).emit(any(AlertEmitRequest.class));
+    verify(alertEventService, never()).emit(any(AlertEmitCommand.class));
   }
 
   @Test
@@ -323,7 +323,7 @@ class CrossDayDependencyReconcilerTest {
     reconciler.scheduledReconcile();
 
     verify(nodeRunMapper).updateStatus(any(UpdateNodeRunStatusParam.class));
-    verify(alertEventService).emit(any(AlertEmitRequest.class));
+    verify(alertEventService).emit(any(AlertEmitCommand.class));
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────

@@ -15,7 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.config.CrossDayDependencyReconcileProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateNodeRunStatusParam;
@@ -209,7 +209,7 @@ public class CrossDayDependencyReconciler {
     detail.put("reason", reason);
     String resourceKey =
         workflowRun.getTenantId() + ":" + workflowRun.getId() + ":" + nodeRun.getNodeCode();
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId(workflowRun.getTenantId())
         .serviceName("batch-orchestrator")
         .alertType(ALERT_TYPE_TIMEOUT)

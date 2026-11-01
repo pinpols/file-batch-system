@@ -7,6 +7,7 @@ import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpser
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionCodeNameView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -14,13 +15,13 @@ public interface JobDefinitionMapper {
 
   String setTenantContext(@Param("tenantId") String tenantId);
 
-  List<JobDefinitionEntity> selectByQuery(JobDefinitionQuery query);
+  List<JobDefinitionView> selectByQuery(JobDefinitionQuery query);
 
   long countByQuery(JobDefinitionQuery query);
 
-  JobDefinitionEntity selectByUniqueKey(String tenantId, String jobCode);
+  JobDefinitionView selectByUniqueKey(String tenantId, String jobCode);
 
-  JobDefinitionEntity selectById(String tenantId, Long id);
+  JobDefinitionView selectById(String tenantId, Long id);
 
   int insert(JobDefinitionEntity entity);
 

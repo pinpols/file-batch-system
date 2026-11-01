@@ -1,14 +1,13 @@
 package io.github.pinpols.batch.trigger.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService.TriggerDrainStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown.TriggerDrainStatus;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -21,7 +20,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TriggerStatusController {
 
   private final TriggerStatusQueryService triggerStatusQueryService;
-  private final TriggerGracefulShutdown gracefulShutdown;
+  private final TriggerDrainService drainService;
 
   @GetMapping("/list")
   public CommonResponse<List<TriggerStatusInfo>> list(
@@ -37,7 +36,7 @@ public class TriggerStatusController {
   }
 
   @GetMapping("/drain/status")
-  public CommonResponse<TriggerDrainStatus> drainStatus() throws SchedulerException {
-    return CommonResponse.success(gracefulShutdown.status());
+  public CommonResponse<TriggerDrainStatus> drainStatus() {
+    return CommonResponse.success(drainService.status());
   }
 }

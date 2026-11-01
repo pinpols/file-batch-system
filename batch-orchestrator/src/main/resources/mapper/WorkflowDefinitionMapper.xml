@@ -2,13 +2,13 @@
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper">
     <!--
-      WorkflowDefinitionEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数，
+      WorkflowDefinitionView 是 java record（不可变），用 <constructor> 显式映射构造器参数，
       参数顺序必须与 record canonical constructor 完全一致：
         (id, tenantId, workflowCode, workflowName, workflowType, version, enabled, singleJobDefinitionId, calendarCode)
       列名按 V4 DDL。
     -->
     <resultMap id="workflowDefinitionMap"
-               type="io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity">
+               type="io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
             <arg column="tenant_id" javaType="java.lang.String"/>

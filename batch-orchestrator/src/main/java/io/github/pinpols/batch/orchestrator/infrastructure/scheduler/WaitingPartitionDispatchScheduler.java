@@ -13,7 +13,6 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -21,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanCur
 import io.github.pinpols.batch.orchestrator.domain.query.WaitingPartitionScanQuery;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.ArrayList;
@@ -239,7 +239,7 @@ public class WaitingPartitionDispatchScheduler {
       log.debug("skip partitionId={}: job_instance missing", partition.getId());
       return null;
     }
-    JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+    JobDefinitionView jobDefinition = configCacheService.findEnabledJobDefinition(
         jobInstance.getTenantId(), jobInstance.getJobCode());
     ResourceSchedulingRequest schedulingRequest =
         buildRequest(jobInstance, partition, task, jobDefinition);
@@ -289,7 +289,7 @@ public class WaitingPartitionDispatchScheduler {
       JobInstanceEntity jobInstance,
       JobPartitionEntity partition,
       JobTaskEntity task,
-      JobDefinitionEntity jobDefinition) {
+      JobDefinitionView jobDefinition) {
     ResourceSchedulingRequest request = new ResourceSchedulingRequest();
     request.setTenantId(jobInstance.getTenantId());
     request.setJobCode(jobInstance.getJobCode());

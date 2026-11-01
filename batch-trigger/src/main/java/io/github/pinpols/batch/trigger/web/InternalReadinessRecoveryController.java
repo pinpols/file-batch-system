@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.trigger.web;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessRecoveryService;
-import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessRecoveryService.RecoveryLaunchOutcome;
+import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService;
+import io.github.pinpols.batch.trigger.service.readiness.ReadinessRecoveryService.RecoveryLaunchOutcome;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;

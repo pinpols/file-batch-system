@@ -40,7 +40,7 @@ class SftpStrictHostKeyIntegrationTest {
   @DisplayName("非默认端口连接使用原始主机名匹配公钥，错误公钥必须拒绝")
   void shouldVerifyOriginalHostnameAndRejectWrongKey() throws Exception {
     try (GenericContainer<?> server = new GenericContainer<>(
-            DockerImageName.parse("atmoz/sftp:alpine"))
+            DockerImageName.parse("jmcombs/sftp:alpine"))
         .withLabel(TestContainerLabels.OWNER, TestContainerLabels.OWNER_VALUE)
         .withExposedPorts(22)
         .withCommand("batch:test-pass:::upload")

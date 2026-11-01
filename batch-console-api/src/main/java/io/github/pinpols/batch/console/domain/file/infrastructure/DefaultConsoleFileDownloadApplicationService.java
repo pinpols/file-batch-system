@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.storage.ObjectNotFoundException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
 import io.github.pinpols.batch.console.domain.file.mapper.FileErrorRecordMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileRecordMapper;
@@ -25,11 +26,6 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import software.amazon.awssdk.services.s3.model.S3Exception;
 
@@ -68,8 +64,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final OrchestratorApprovalClient approvalClient;
 
   @Override
-  public ResponseEntity<InputStreamResource> download(
-      String tenantId, Long fileId, String approvalId) {
+  public FileDownloadArtifact download(String tenantId, Long fileId, String approvalId) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     FileRecordStorageView fileRecord =
         fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
@@ -108,21 +103,8 @@ public class DefaultConsoleFileDownloadApplicationService
       InputStream payload = batchSecurityProperties.isBypassMode()
           ? inputStream
           : cryptoService.decryptIfNeeded(inputStream);
-      InputStreamResource resource = new InputStreamResource(payload) {
-        @Override
-        public long contentLength() {
-          return -1;
-        }
-      };
-      ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
-      ContentDisposition contentDisposition = ContentDisposition.attachment()
-          .filename(EmptyChecks.isNull(fileName) ? objectName : fileName)
-          .build();
-      String contentDispositionHeader = contentDisposition.toString();
-      responseBuilder.header(HttpHeaders.CONTENT_DISPOSITION, contentDispositionHeader);
-      MediaType mediaType = MediaType.parseMediaType(contentType);
-      responseBuilder.contentType(mediaType);
-      return responseBuilder.body(resource);
+      return new FileDownloadArtifact(
+          payload, EmptyChecks.isNull(fileName) ? objectName : fileName, contentType, true);
     } catch (ObjectNotFoundException exception) {
       // 存储中对象不存在(NoSuchKey,常见于 ingress 导入文件处理后已被消费)→ 404 优雅提示,
       // 不是 500 系统错误(操作员点下载得到的应是"内容已失效"而非崩溃)。
@@ -137,8 +119,7 @@ public class DefaultConsoleFileDownloadApplicationService
   }
 
   @Override
-  public ResponseEntity<InputStreamResource> exportFileErrors(
-      String tenantId, Long fileId, String errorStage) {
+  public FileDownloadArtifact exportFileErrors(String tenantId, Long fileId, String errorStage) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     FileErrorRecordQuery query =
         FileErrorRecordQuery.ofFileAndStage(effectiveTenant, fileId, errorStage);
@@ -170,14 +151,8 @@ public class DefaultConsoleFileDownloadApplicationService
     }
     String csvText = csv.toString();
     byte[] bytes = csvText.getBytes(StandardCharsets.UTF_8);
-    InputStreamResource resource = new InputStreamResource(new ByteArrayInputStream(bytes));
     String filename = "file-errors-" + fileId + ".csv";
-    return ResponseEntity.ok()
-        .header(
-            HttpHeaders.CONTENT_DISPOSITION,
-            ContentDisposition.attachment().filename(filename).build().toString())
-        .contentType(MediaType.parseMediaType("text/csv"))
-        .body(resource);
+    return new FileDownloadArtifact(new ByteArrayInputStream(bytes), filename, "text/csv", false);
   }
 
   private static String escape(String value) {

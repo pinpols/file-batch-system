@@ -33,13 +33,13 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.CrossDa
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.controller.WorkflowRunReplayController;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationStartParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
@@ -723,7 +723,7 @@ class WorkflowRunReplayPreviewServiceTest {
         .thenReturn(definition("IMPORT", 4));
     when(fileTemplateSnapshots.captureForWorkflowReplay(
             ArgumentMatchers.eq(TENANT),
-            ArgumentMatchers.any(JobDefinitionEntity.class),
+            ArgumentMatchers.any(JobDefinitionView.class),
             ArgumentMatchers.anyMap(),
             ArgumentMatchers.eq(ConfigVersionPolicy.USE_LATEST_CONFIG),
             ArgumentMatchers.isNull()))
@@ -971,7 +971,7 @@ class WorkflowRunReplayPreviewServiceTest {
     run.setId(RUN_ID);
     run.setTenantId(TENANT);
     run.setBizDate(LocalDate.of(2026, 10, 20));
-    JobDefinitionEntity definition = definition(jobType, 2);
+    JobDefinitionView definition = definition(jobType, 2);
     List<WorkflowNodeEntity> nodes = List.of(
         node("START", "START"), node("FIRST", "JOB"), node("SECOND", "JOB"), node("END", "END"));
     List<WorkflowEdgeEntity> edges =
@@ -995,8 +995,8 @@ class WorkflowRunReplayPreviewServiceTest {
     return new Source(run, snapshot, "protected-source-params", rootParams);
   }
 
-  private JobDefinitionEntity definition(String jobType, int version) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView definition(String jobType, int version) {
+    return JobDefinitionView.builder()
         .id(101L)
         .tenantId(TENANT)
         .jobCode(JOB_CODE)

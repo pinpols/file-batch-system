@@ -177,7 +177,8 @@ jobs:
             scripts/ci/tests/test_report_ci_quality_trends.py \
             scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
-            scripts/ci/tests/test_report_sdk_test_summary.py
+            scripts/ci/tests/test_report_sdk_test_summary.py \
+            scripts/ci/tests/test_check_sdk_runtime_alignment.py
 
       - name: Verify module dependency boundaries
         shell: bash
@@ -1020,6 +1021,14 @@ jobs:
             label: "filesystem storage backend"
             tests: >-
               FilesystemBackendPipelineE2eIT
+          - id: 20
+            label: "configuration and alert delivery boundaries"
+            tests: >-
+              AlertmanagerDeliveryChainE2eIT,
+              ConfigCacheInvalidationRecoveryE2eIT,
+              ConfigInvalidationReconcileOrderingE2eIT,
+              RuntimeConfigImportCacheE2eIT,
+              RuntimeConfigImportDispatchE2eIT
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7

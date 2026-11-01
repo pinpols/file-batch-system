@@ -12,7 +12,7 @@ import io.github.pinpols.batch.common.enums.DispatchTaskKeys;
 import io.github.pinpols.batch.common.enums.JobType;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.orchestrator.domain.entity.DispatchSecretBindingEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.DispatchSecretBindingView;
 import io.github.pinpols.batch.orchestrator.mapper.DispatchSecretBindingMapper;
 import java.util.List;
 import java.util.Map;
@@ -34,7 +34,7 @@ class DispatchSecretSnapshotResolverTest {
   void pinsCurrentVersion_whenDispatchInstanceCreated() {
     DispatchSecretSnapshotResolver resolver = resolver();
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
-        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", 42L, 3)));
+        .thenReturn(List.of(new DispatchSecretBindingView("CH1", "dispatch/key", 42L, 3)));
 
     Map<String, Object> result =
         resolver.pin("t1", JobType.DISPATCH.code(), Map.of("channelCode", "CH1"));
@@ -51,7 +51,7 @@ class DispatchSecretSnapshotResolverTest {
   @DisplayName("文件束分发为各分区渠道固定凭据版本")
   void pinsCurrentVersion_whenBundleDispatchInstanceCreated() {
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
-        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", 42L, 3)));
+        .thenReturn(List.of(new DispatchSecretBindingView("CH1", "dispatch/key", 42L, 3)));
     Map<String, Object> params =
         Map.of("bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")));
 
@@ -70,8 +70,8 @@ class DispatchSecretSnapshotResolverTest {
   void pinsEachChannelVersion_whenBundleHasMultipleTargets() {
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1", "CH2")))
         .thenReturn(List.of(
-            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
-            new DispatchSecretBindingEntity("CH2", "key/two", 51L, 4)));
+            new DispatchSecretBindingView("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingView("CH2", "key/two", 51L, 4)));
     Map<String, Object> params = Map.of(
         "bundleFiles",
         List.of(
@@ -92,7 +92,7 @@ class DispatchSecretSnapshotResolverTest {
   @DisplayName("文件束只查询有效分区的渠道密钥，不把业务元数据当渠道")
   void ignoresUnrelatedTargetRef_whenBundleDispatch() {
     when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
-        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3)));
+        .thenReturn(List.of(new DispatchSecretBindingView("CH1", "key/one", 42L, 3)));
     Map<String, Object> params = Map.of(
         "bundleFiles", List.of(Map.of("sourceFileId", 1, "targetRef", "CH1")),
         "metadata", Map.of("targetRef", "business-value"));
@@ -111,8 +111,8 @@ class DispatchSecretSnapshotResolverTest {
   void shouldIgnoreUnavailableUnselectedChannel_whenExplicitTargetIsValid() {
     when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
         .thenReturn(List.of(
-            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
-            new DispatchSecretBindingEntity("OTHER", "key/other", null, null)));
+            new DispatchSecretBindingView("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingView("OTHER", "key/other", null, null)));
     Map<String, Object> params =
         Map.of("channelCode", "CH1", "metadata", Map.of("targetRef", "OTHER"));
 
@@ -128,7 +128,7 @@ class DispatchSecretSnapshotResolverTest {
   @DisplayName("没有明确渠道时未解析候选仍失败关闭")
   void shouldRejectUnavailableCandidate_whenNoExplicitTargetExists() {
     when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
-        .thenReturn(List.of(new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+        .thenReturn(List.of(new DispatchSecretBindingView("CH2", "key/two", null, null)));
     Map<String, Object> params = Map.of("metadata", Map.of("targetRef", "CH2"));
 
     assertThatThrownBy(() -> resolver().pin("t1", JobType.DISPATCH.code(), params))
@@ -142,8 +142,8 @@ class DispatchSecretSnapshotResolverTest {
   void shouldRejectUnavailableBundleTarget_whenAnotherChannelIsValid() {
     when(bindingMapper.selectCurrentByChannels(eq("t1"), anyList()))
         .thenReturn(List.of(
-            new DispatchSecretBindingEntity("CH1", "key/one", 42L, 3),
-            new DispatchSecretBindingEntity("CH2", "key/two", null, null)));
+            new DispatchSecretBindingView("CH1", "key/one", 42L, 3),
+            new DispatchSecretBindingView("CH2", "key/two", null, null)));
     Map<String, Object> params = Map.of(
         "bundleFiles",
         List.of(
@@ -163,7 +163,7 @@ class DispatchSecretSnapshotResolverTest {
     String jobType = JobType.DISPATCH.code();
     Map<String, Object> params = Map.of("channelCode", "CH1");
     when(bindingMapper.selectCurrentByChannels("t1", List.of("CH1")))
-        .thenReturn(List.of(new DispatchSecretBindingEntity("CH1", "dispatch/key", null, null)));
+        .thenReturn(List.of(new DispatchSecretBindingView("CH1", "dispatch/key", null, null)));
 
     assertThatThrownBy(() -> resolver.pin("t1", jobType, params))
         .isInstanceOf(BizException.class)

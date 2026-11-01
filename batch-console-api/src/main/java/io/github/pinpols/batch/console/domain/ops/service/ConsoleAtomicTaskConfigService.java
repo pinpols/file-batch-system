@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.ops.dto.AtomicTaskTypeSchema.Param
 import io.github.pinpols.batch.console.domain.ops.entity.AtomicTaskConfigEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.AtomicTaskConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreateParam;
+import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -45,19 +46,21 @@ public class ConsoleAtomicTaskConfigService {
   private final AtomicTaskConfigMapper mapper;
   private final ConsoleAtomicTaskTypeSchemaService schemaService;
   private final ObjectMapper objectMapper;
+  private final TenantIdResolver tenantGuard;
 
   /** 列出本租户某 taskType 已保存的所有配置(created_at 倒序)。 */
   public List<AtomicTaskConfigEntity> listByTaskType(String tenantId, String taskType) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     String normalizedType = requireTaskType(taskType);
     // 不存在的 taskType 直接 fail-fast,避免让 FE 误以为"空列表 = 没数据"
     locateSchema(normalizedType);
-    return mapper.selectByTenantAndTaskType(tenantId, normalizedType);
+    return mapper.selectByTenantAndTaskType(resolvedTenantId, normalizedType);
   }
 
   /**
    * 创建一条 atomic 节点配置。docs/agent-baseline.md §Java #4:@Transactional 在 Service。
    *
-   * @param tenantId 已经 ConsoleTenantGuard.resolveTenant 解析过的 tenantId
+   * @param tenantId 请求的目标租户，由本服务解析并校验
    * @param taskType 内置原子 taskType
    * @param name 同租户同 taskType 内唯一的配置名(本方法不做长度截断,DB VARCHAR(128) 回退)
    * @param parameters 节点参数(key 必须落 schema)
@@ -71,6 +74,7 @@ public class ConsoleAtomicTaskConfigService {
       String name,
       Map<String, Object> parameters,
       String createdBy) {
+    String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     String normalizedType = requireTaskType(taskType);
     String normalizedName = requireName(name);
     AtomicTaskTypeSchema schema = locateSchema(normalizedType);
@@ -106,7 +110,7 @@ public class ConsoleAtomicTaskConfigService {
     }
 
     AtomicTaskConfigCreateParam param = new AtomicTaskConfigCreateParam();
-    param.setTenantId(tenantId);
+    param.setTenantId(resolvedTenantId);
     param.setTaskType(normalizedType);
     param.setName(normalizedName);
     param.setParametersJson(parametersJson);
@@ -115,12 +119,12 @@ public class ConsoleAtomicTaskConfigService {
 
     log.info(
         "atomic_task_config created tenant={} taskType={} name={} id={}",
-        tenantId,
+        resolvedTenantId,
         normalizedType,
         normalizedName,
         param.getId());
 
-    AtomicTaskConfigEntity persisted = mapper.selectByTenantAndId(tenantId, param.getId());
+    AtomicTaskConfigEntity persisted = mapper.selectByTenantAndId(resolvedTenantId, param.getId());
     if (persisted == null) {
       // 极少触发(刚 INSERT 同事务读不到 = 数据源故障),给出明确诊断而不是 NPE
       throw BizException.of(

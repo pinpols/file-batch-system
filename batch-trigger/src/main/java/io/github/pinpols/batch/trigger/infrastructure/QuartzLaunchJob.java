@@ -11,6 +11,7 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.MisfireHandler;
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
 import io.github.pinpols.batch.trigger.infrastructure.readiness.ReadinessWaitHandoverClient;
 import io.github.pinpols.batch.trigger.service.ScheduledOccurrenceRecorder;
 import io.github.pinpols.batch.trigger.service.TriggerService;
@@ -34,7 +35,9 @@ import org.quartz.SchedulerException;
 import org.quartz.SimpleScheduleBuilder;
 import org.quartz.Trigger;
 import org.quartz.TriggerBuilder;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 
 /**
  * Quartz Job 执行入口：从 {@link JobDataMap} 重建 {@link TriggerDescriptor}， 根据 drift（{@code actualFireTime
@@ -90,33 +93,7 @@ public class QuartzLaunchJob implements Job {
   @Override
   public void execute(JobExecutionContext context) throws JobExecutionException {
     JobDataMap jobDataMap = context.getMergedJobDataMap();
-    TriggerDescriptor descriptor = new TriggerDescriptor();
-    descriptor.setTenantId(jobDataMap.getString(TENANT_ID));
-    descriptor.setJobCode(jobDataMap.getString(JOB_CODE));
-    if (jobDataMap.containsKey(WORKFLOW_DEFINITION_ID)) {
-      descriptor.setWorkflowDefinitionId(jobDataMap.getLongValue(WORKFLOW_DEFINITION_ID));
-    }
-    descriptor.setWorkflowCode(jobDataMap.getString(WORKFLOW_CODE));
-    if (jobDataMap.containsKey(WORKFLOW_VERSION)) {
-      descriptor.setWorkflowVersion(jobDataMap.getIntValue(WORKFLOW_VERSION));
-    }
-    descriptor.setJobDefinitionVersion(resolveDefinitionVersion(jobDataMap));
-    descriptor.setScheduleType(jobDataMap.getString(SCHEDULE_TYPE));
-    descriptor.setScheduleExpression(jobDataMap.getString(SCHEDULE_EXPRESSION));
-    descriptor.setTimezone(jobDataMap.getString(TIMEZONE));
-    descriptor.setTriggerMode(jobDataMap.getString(TRIGGER_MODE));
-    descriptor.setCalendarCode(jobDataMap.getString(CALENDAR_CODE));
-    descriptor.setDependsOnJobCode(jobDataMap.getString(DEPENDS_ON_JOB_CODE));
-    Object dependencyCodes = jobDataMap.get(DEPENDS_ON_JOB_CODES);
-    if (dependencyCodes instanceof List<?> codes) {
-      descriptor.setDependsOnJobCodes(codes.stream()
-          .filter(String.class::isInstance)
-          .map(String.class::cast)
-          .toList());
-    }
-    descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
-    descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
-    descriptor.setEnabled(true);
+    TriggerDescriptor descriptor = descriptorFrom(jobDataMap);
     Long workflowDefinitionId = descriptor.getWorkflowDefinitionId();
     String tenantId = descriptor.getTenantId();
     String workflowCode = descriptor.getWorkflowCode();
@@ -133,6 +110,33 @@ public class QuartzLaunchJob implements Job {
     boolean readinessRetry = jobDataMap.containsKey(READINESS_ORIGINAL_FIRE_TIME);
     boolean shouldOpenMisfireApproval =
         !readinessRetry && requiresManualApproval(descriptor, scheduledFireTime, actualFireTime);
+    TriggerType triggerType = readinessRetry
+        ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
+        : shouldOpenMisfireApproval
+            ? TriggerType.CATCH_UP
+            : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
+    String fireKind = readinessRetry
+        ? "READINESS_RETRY"
+        : shouldOpenMisfireApproval
+            ? "MISFIRE_APPROVAL"
+            : triggerType == TriggerType.CATCH_UP ? "CATCH_UP" : "SCHEDULED";
+    try {
+      occurrenceRecorder.recordActualFire(new ScheduledOccurrenceFireParam(
+          descriptor.getTenantId(),
+          descriptor.getWorkflowDefinitionId(),
+          scheduledFireTime,
+          context.getFireInstanceId(),
+          context.getRefireCount(),
+          actualFireTime,
+          fireKind));
+    } catch (DataAccessException | TransactionException e) {
+      // 观察记录不可用时不改变调度结果；界面需将缺失视为未知。
+      log.warn(
+          "failed to record Quartz fire observation: tenantId={}, workflowDefinitionId={}",
+          descriptor.getTenantId(),
+          descriptor.getWorkflowDefinitionId(),
+          e);
+    }
     if (shouldOpenMisfireApproval) {
       misfireHandler.handle(TriggerSchedulerFacade.quartzIdentity(descriptor));
       String catchUpBusinessNo = IdGenerator.newBusinessNo("quartz");
@@ -142,9 +146,6 @@ public class QuartzLaunchJob implements Job {
       triggerService.createPendingCatchUp(catchUpCommand);
       return;
     }
-    TriggerType triggerType = readinessRetry
-        ? TriggerType.valueOf(jobDataMap.getString(READINESS_TRIGGER_TYPE))
-        : resolveTriggerType(descriptor, scheduledFireTime, actualFireTime);
     try {
       String businessNo = IdGenerator.newBusinessNo("quartz");
       String traceId = IdGenerator.newTraceId();
@@ -174,6 +175,37 @@ public class QuartzLaunchJob implements Job {
           new ReadinessFireTiming(scheduledFireTime, actualFireTime, triggerType);
       handleReadinessWait(context, descriptor, fireTiming, e);
     }
+  }
+
+  private TriggerDescriptor descriptorFrom(JobDataMap jobDataMap) {
+    TriggerDescriptor descriptor = new TriggerDescriptor();
+    descriptor.setTenantId(jobDataMap.getString(TENANT_ID));
+    descriptor.setJobCode(jobDataMap.getString(JOB_CODE));
+    if (jobDataMap.containsKey(WORKFLOW_DEFINITION_ID)) {
+      descriptor.setWorkflowDefinitionId(jobDataMap.getLongValue(WORKFLOW_DEFINITION_ID));
+    }
+    descriptor.setWorkflowCode(jobDataMap.getString(WORKFLOW_CODE));
+    if (jobDataMap.containsKey(WORKFLOW_VERSION)) {
+      descriptor.setWorkflowVersion(jobDataMap.getIntValue(WORKFLOW_VERSION));
+    }
+    descriptor.setJobDefinitionVersion(resolveDefinitionVersion(jobDataMap));
+    descriptor.setScheduleType(jobDataMap.getString(SCHEDULE_TYPE));
+    descriptor.setScheduleExpression(jobDataMap.getString(SCHEDULE_EXPRESSION));
+    descriptor.setTimezone(jobDataMap.getString(TIMEZONE));
+    descriptor.setTriggerMode(jobDataMap.getString(TRIGGER_MODE));
+    descriptor.setCalendarCode(jobDataMap.getString(CALENDAR_CODE));
+    descriptor.setDependsOnJobCode(jobDataMap.getString(DEPENDS_ON_JOB_CODE));
+    Object dependencyCodes = jobDataMap.get(DEPENDS_ON_JOB_CODES);
+    if (dependencyCodes instanceof List<?> codes) {
+      descriptor.setDependsOnJobCodes(codes.stream()
+          .filter(String.class::isInstance)
+          .map(String.class::cast)
+          .toList());
+    }
+    descriptor.setCatchUpPolicy(jobDataMap.getString(CATCH_UP_POLICY));
+    descriptor.setCatchUpMaxDays(resolveCatchUpMaxDays(jobDataMap));
+    descriptor.setEnabled(true);
+    return descriptor;
   }
 
   private void handleReadinessWait(

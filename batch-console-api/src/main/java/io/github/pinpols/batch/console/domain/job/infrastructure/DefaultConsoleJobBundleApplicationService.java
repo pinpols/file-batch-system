@@ -1,7 +1,13 @@
 package io.github.pinpols.batch.console.domain.job.infrastructure;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
@@ -29,6 +35,8 @@ public class DefaultConsoleJobBundleApplicationService
   private final ConsoleTenantConfigCopyService tenantConfigCopyService;
   private final ConsoleTenantConfigInitApplicationService initApplicationService;
   private final ConsoleRequestMetadataResolver metadataResolver;
+  private final ConsoleConfigBatchOperationService operationService;
+  private final ObjectMapper objectMapper;
 
   @Override
   public ConsoleJobBundleExportResponse exportBundle(String tenantId, String jobCode) {
@@ -44,6 +52,11 @@ public class DefaultConsoleJobBundleApplicationService
 
   @Override
   public ConsoleJobBundleResultResponse create(JobBundleCreateRequest request) {
+    return create(request, null);
+  }
+
+  @Override
+  public ConsoleJobBundleResultResponse create(JobBundleCreateRequest request, String requestHash) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     TenantConfigBatchInitRequest initRequest = toInitRequest(request.getBundle());
     initRequest.setTargetTenantIds(List.of(tenantId));
@@ -54,15 +67,24 @@ public class DefaultConsoleJobBundleApplicationService
     String operator = operator();
     UUID operationId = UUID.randomUUID();
     String operationIdText = operationId.toString();
-    TenantConfigBatchInitResponse response =
-        initApplicationService.batchInit(initRequest, operator, operationIdText);
     ConsoleJobBundleSummaryResponse summary =
         ConsoleJobBundleSummaryResponse.from(request.getBundle());
+    TenantConfigBatchInitResponse response = executeBatch(
+        initRequest,
+        operator,
+        new BatchOperationIdentity(tenantId, operationIdText, requestHash, "JOB_BUNDLE_CREATE"),
+        summary);
     return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
 
   @Override
   public ConsoleJobBundleResultResponse importBundle(JobBundleImportRequest request) {
+    return importBundle(request, null);
+  }
+
+  @Override
+  public ConsoleJobBundleResultResponse importBundle(
+      JobBundleImportRequest request, String requestHash) {
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     TenantConfigBatchInitRequest initRequest = toInitRequest(request.getBundle());
     initRequest.setTargetTenantIds(request.getTargetTenantIds());
@@ -73,12 +95,44 @@ public class DefaultConsoleJobBundleApplicationService
     String operator = operator();
     UUID operationId = UUID.randomUUID();
     String operationIdText = operationId.toString();
-    TenantConfigBatchInitResponse response =
-        initApplicationService.batchInit(initRequest, operator, operationIdText);
     ConsoleJobBundleSummaryResponse summary =
         ConsoleJobBundleSummaryResponse.from(request.getBundle());
+    TenantConfigBatchInitResponse response = executeBatch(
+        initRequest,
+        operator,
+        new BatchOperationIdentity(tenantId, operationIdText, requestHash, "JOB_BUNDLE_IMPORT"),
+        summary);
     return new ConsoleJobBundleResultResponse(tenantId, summary, response);
   }
+
+  private TenantConfigBatchInitResponse executeBatch(
+      TenantConfigBatchInitRequest request,
+      String operator,
+      BatchOperationIdentity identity,
+      ConsoleJobBundleSummaryResponse summary) {
+    if (EmptyChecks.isNull(identity.requestHash()) || request.isDryRun()) {
+      return initApplicationService.batchInit(request, operator, identity.operationId());
+    }
+    List<String> targets = request.getTargetTenantIds();
+    if (EmptyChecks.isEmpty(targets) || targets.stream().anyMatch(EmptyChecks::isBlank)) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    }
+    ObjectNode responseMetadata = objectMapper.createObjectNode();
+    responseMetadata.put("tenantId", identity.tenantId());
+    responseMetadata.set("summary", objectMapper.valueToTree(summary));
+    ConfigBatchOperationRequest operation = new ConfigBatchOperationRequest(
+        identity.tenantId(),
+        identity.operationId(),
+        identity.requestHash(),
+        identity.kind(),
+        targets,
+        responseMetadata);
+    ConfigBatchOperationContext context = operationService.begin(operation);
+    return initApplicationService.batchInit(request, operator, context);
+  }
+
+  private record BatchOperationIdentity(
+      String tenantId, String operationId, String requestHash, String kind) {}
 
   private TenantConfigBatchInitRequest toInitRequest(ConfigSyncBundlePayload bundle) {
     if (bundle == null) {

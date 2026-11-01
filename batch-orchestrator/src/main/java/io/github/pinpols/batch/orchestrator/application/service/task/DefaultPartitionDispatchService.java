@@ -24,7 +24,6 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.GlobalJobAdmis
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowNodeDispatchService;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -33,6 +32,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningP
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceAdmissionAction;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.statemachine.LifecycleEventMapper;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.github.pinpols.batch.orchestrator.observability.LaunchPhaseMetrics;
@@ -156,7 +156,7 @@ public class DefaultPartitionDispatchService implements PartitionDispatchService
       Map<String, Object> effectiveParams,
       String traceId,
       JobInstanceEntity jobInstance,
-      JobDefinitionEntity executionDefinition) {
+      JobDefinitionView executionDefinition) {
     if (EmptyChecks.isNull(executionDefinition)) {
       throw new IllegalStateException("Partition dispatch requires the admitted Job definition");
     }

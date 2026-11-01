@@ -12,6 +12,10 @@ import io.github.pinpols.batch.common.security.SensitiveDataValidator;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
@@ -56,10 +60,15 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
   private final PipelineStageProgressCache pipelineStageProgressCache;
   private final SystemParameterMapper systemParameterMapper;
   private final WorkerRegistryProperties workerRegistryProperties;
+  private final TenantActionRateLimiter tenantActionRateLimiter;
 
   @Override
   @Transactional
   public WorkerRegistryEntity register(WorkerHeartbeatDto request) {
+    if (!tenantActionRateLimiter.tryConsume(
+        EmptyChecks.isNull(request) ? null : request.tenantId(), RateLimitAction.WORKER_REGISTER)) {
+      throw new OperationFailure(Kind.RATE_LIMITED, "worker register rate limit exceeded");
+    }
     rejectMissingWorkerGroup(request);
     rejectUnsupportedProtocolVersion(request);
     rejectOutdatedSdkVersion(request);

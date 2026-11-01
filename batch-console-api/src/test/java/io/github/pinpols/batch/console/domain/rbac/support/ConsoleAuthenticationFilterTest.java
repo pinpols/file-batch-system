@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -17,13 +18,17 @@ import io.github.pinpols.batch.console.application.observability.SseTicketServic
 import io.github.pinpols.batch.console.config.ConsoleSecurityProperties;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -114,6 +119,29 @@ class ConsoleAuthenticationFilterTest {
 
     verify(chain).doFilter(request, response);
     verify(jwtService).authenticate("valid-jwt");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"/api/console/auth/login", "/api/console/jobs"})
+  @DisplayName("有效令牌的下游异常应原样传播且过滤链只执行一次")
+  void filter_propagatesDownstreamFailureWithoutRepeatingChain(String path) throws Exception {
+    ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
+    when(jwtService.authenticate("valid-jwt")).thenReturn(principal);
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+    request.setCookies(new Cookie("batch_console_token", "valid-jwt"));
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    AtomicInteger calls = new AtomicInteger();
+    FilterChain chain = (req, res) -> {
+      calls.incrementAndGet();
+      throw new ServletException("下游处理失败");
+    };
+
+    assertThatThrownBy(() -> filter.doFilterInternal(request, response, chain))
+        .isInstanceOf(ServletException.class)
+        .hasMessage("下游处理失败");
+    assertThat(calls).hasValue(1);
+    verifyNoInteractions(responseWriter);
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
   }
 
   @Test

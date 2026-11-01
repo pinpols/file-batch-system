@@ -2,7 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.archive;
 
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.view.ArchiveIntegrityCandidateSummary;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -36,7 +36,7 @@ public class ArchiveIntegrityAlertService {
       detail.put("cutoff", cutoff);
       detail.put("action", "manual-integrity-review-required");
 
-      AlertEmitRequest request = AlertEmitRequest.builder()
+      AlertEmitCommand request = AlertEmitCommand.builder()
           .tenantId(summary.tenantId())
           .serviceName("batch-orchestrator")
           .alertType(ALERT_TYPE)

@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.job.entity.JobPartitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobPartitionQuery;
+import io.github.pinpols.batch.console.domain.job.view.JobPartitionView;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Date;
 import java.time.LocalDate;
@@ -71,15 +71,15 @@ class JobPartitionErrorReasonMapperIntegrationTest extends AbstractIntegrationTe
 
     // act
     JobPartitionQuery query = JobPartitionQuery.forJobInstance(tenantId, jobInstanceId);
-    List<JobPartitionEntity> rows = jobPartitionMapper.selectByQuery(query);
+    List<JobPartitionView> rows = jobPartitionMapper.selectByQuery(query);
 
     // assert
-    JobPartitionEntity failed =
+    JobPartitionView failed =
         rows.stream().filter(r -> r.getId().equals(failedPartition)).findFirst().orElseThrow();
     assertThat(failed.getErrorCode()).isEqualTo("DOWNSTREAM_5XX");
     assertThat(failed.getErrorMessage()).isEqualTo("下游 502");
 
-    JobPartitionEntity success = rows.stream()
+    JobPartitionView success = rows.stream()
         .filter(r -> r.getId().equals(successPartition))
         .findFirst()
         .orElseThrow();

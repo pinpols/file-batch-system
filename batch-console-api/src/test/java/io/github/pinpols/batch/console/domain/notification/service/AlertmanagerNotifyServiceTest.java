@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
@@ -12,6 +13,8 @@ import static org.mockito.Mockito.when;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerAlert;
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.AlertmanagerWebhookPayload;
@@ -75,6 +78,18 @@ class AlertmanagerNotifyServiceTest {
         new AlertmanagerAlertRenderer(),
         meterRegistry,
         receiptService);
+  }
+
+  @Test
+  @DisplayName("接入关闭时应用服务直接拒绝投递且不查询渠道")
+  void shouldRejectDirectDeliveryWhenDisabled() {
+    properties.setEnabled(false);
+    AlertmanagerWebhookPayload alertPayload = payload("batch-sla");
+    assertThatThrownBy(() -> service.deliver("batch-sla", alertPayload))
+        .isInstanceOf(BizException.class)
+        .satisfies(exception -> assertThat(((BizException) exception).getCode())
+            .isEqualTo(ResultCode.SERVICE_UNAVAILABLE));
+    verify(channelMapper, never()).selectByCode(anyString(), anyString());
   }
 
   @Test

@@ -6,7 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.same;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -16,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
@@ -79,6 +82,9 @@ class TaskControllerApplicationServiceTest {
   @Mock
   private TaskOutcomeService taskOutcomeService;
 
+  @Mock
+  private TenantActionRateLimiter tenantActionRateLimiter;
+
   private TaskControllerApplicationService service;
 
   private final BundleBatchClaimProperties batchClaimProperties = new BundleBatchClaimProperties();
@@ -86,12 +92,16 @@ class TaskControllerApplicationServiceTest {
 
   @BeforeEach
   void setUp() {
+    lenient()
+        .when(tenantActionRateLimiter.tryConsume(nullable(String.class), any()))
+        .thenReturn(true);
     service = new TaskControllerApplicationService(
         taskExecutionService,
         new ObjectMapper(),
         batchClaimProperties,
         meterRegistry,
-        new TaskReportRetryExecutor(taskOutcomeService));
+        new TaskReportRetryExecutor(taskOutcomeService),
+        tenantActionRateLimiter);
   }
 
   // ===== claim =====

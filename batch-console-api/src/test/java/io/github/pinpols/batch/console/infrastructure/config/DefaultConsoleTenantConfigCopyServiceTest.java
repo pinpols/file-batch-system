@@ -4,14 +4,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
@@ -23,8 +28,6 @@ import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
-import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -33,6 +36,8 @@ import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
@@ -66,6 +71,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   private TenantQuotaPolicyMapper tenantQuotaPolicyMapper;
   private AlertRoutingConfigMapper alertRoutingConfigMapper;
   private ConsoleTenantConfigInitApplicationService initService;
+  private ConsoleConfigBatchOperationService operationService;
   private DefaultConsoleTenantConfigCopyService service;
 
   @BeforeEach
@@ -83,6 +89,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     tenantQuotaPolicyMapper = mock(TenantQuotaPolicyMapper.class);
     alertRoutingConfigMapper = mock(AlertRoutingConfigMapper.class);
     initService = mock(ConsoleTenantConfigInitApplicationService.class);
+    operationService = mock(ConsoleConfigBatchOperationService.class);
     service = new DefaultConsoleTenantConfigCopyService(
         jobDefinitionMapper,
         workflowDefinitionMapper,
@@ -97,7 +104,9 @@ class DefaultConsoleTenantConfigCopyServiceTest {
         tenantQuotaPolicyMapper,
         alertRoutingConfigMapper,
         initService,
-        new TenantConfigReferenceResolver());
+        new TenantConfigReferenceResolver(),
+        operationService,
+        new ObjectMapper());
   }
 
   @Test
@@ -186,6 +195,66 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   @Test
+  @DisplayName("带原请求身份的复制先登记目标，再使用登记结果执行")
+  void shouldExecuteWithRegisteredContext_whenCopyHasRequestIdentity() {
+    stubExplicitReferenceBundle();
+    TenantConfigCopyRequest request = copyRequest();
+    request.setTargetTenantIds(List.of("tb", "tc", "tb"));
+    ConfigBatchOperationContext context = new ConfigBatchOperationContext("ta", "op-1");
+    when(operationService.begin(any(ConfigBatchOperationRequest.class))).thenReturn(context);
+    when(initService.batchInit(any(TenantConfigBatchInitRequest.class), eq("admin"), eq(context)))
+        .thenReturn(new TenantConfigBatchInitResponse("op-1", 3, 3, 0, false, List.of()));
+
+    TenantConfigBatchInitResponse response = service.copy(request, "admin", "op-1", "key-hash");
+
+    ArgumentCaptor<ConfigBatchOperationRequest> operation =
+        ArgumentCaptor.forClass(ConfigBatchOperationRequest.class);
+    verify(operationService).begin(operation.capture());
+    assertThat(operation.getValue().auditTenantId()).isEqualTo("ta");
+    assertThat(operation.getValue().operationId()).isEqualTo("op-1");
+    assertThat(operation.getValue().requestIdentityHash()).isEqualTo("key-hash");
+    assertThat(operation.getValue().operationKind()).isEqualTo("TENANT_COPY");
+    assertThat(operation.getValue().targets()).containsExactly("tb", "tc", "tb");
+    ArgumentCaptor<TenantConfigBatchInitRequest> delegated =
+        ArgumentCaptor.forClass(TenantConfigBatchInitRequest.class);
+    verify(initService).batchInit(delegated.capture(), eq("admin"), eq(context));
+    assertThat(delegated.getValue().getTargetTenantIds()).containsExactly("tb", "tc", "tb");
+    assertThat(response.batchOperationId()).isEqualTo("op-1");
+  }
+
+  @Test
+  @DisplayName("原请求登记冲突时不执行目标配置")
+  void shouldNotExecuteTargets_whenRequestRegistrationConflicts() {
+    stubExplicitReferenceBundle();
+    TenantConfigCopyRequest request = copyRequest();
+    BizException conflict = BizException.of(ResultCode.CONFLICT, ResultCode.CONFLICT.detailKey());
+    when(operationService.begin(any(ConfigBatchOperationRequest.class))).thenThrow(conflict);
+
+    assertThatThrownBy(() -> service.copy(request, "admin", "op-1", "key-hash")).isSameAs(conflict);
+
+    verifyNoInteractions(initService);
+  }
+
+  @Test
+  @DisplayName("带原请求身份的预览仍使用旧入口，不登记操作")
+  void shouldKeepDryRunOnOriginalPath_whenCopyHasRequestIdentity() {
+    stubExplicitReferenceBundle();
+    TenantConfigCopyRequest request = copyRequest();
+    request.setDryRun(true);
+    when(initService.batchInit(any(TenantConfigBatchInitRequest.class), eq("admin"), eq("op-1")))
+        .thenReturn(new TenantConfigBatchInitResponse("op-1", 1, 1, 0, true, List.of()));
+
+    TenantConfigBatchInitResponse response = service.copy(request, "admin", "op-1", "key-hash");
+
+    assertThat(response.dryRun()).isTrue();
+    verifyNoInteractions(operationService);
+    ArgumentCaptor<TenantConfigBatchInitRequest> delegated =
+        ArgumentCaptor.forClass(TenantConfigBatchInitRequest.class);
+    verify(initService).batchInit(delegated.capture(), eq("admin"), eq("op-1"));
+    assertThat(delegated.getValue().isDryRun()).isTrue();
+  }
+
+  @Test
   @DisplayName("构建作业复制包时忽略缺少编码的无关依赖配置")
   void shouldIgnoreUncodedConfigRows_whenBuildingJobBundle() {
     stubExplicitReferenceBundle();
@@ -239,6 +308,14 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     verifyNoInteractions(jobDefinitionMapper, initService);
   }
 
+  private TenantConfigCopyRequest copyRequest() {
+    TenantConfigCopyRequest request = new TenantConfigCopyRequest();
+    request.setSourceTenantId("ta");
+    request.setTargetTenantIds(List.of("tb"));
+    request.setJobCodes(List.of("JOB_A"));
+    return request;
+  }
+
   private static BatchWindowRow batchWindowRow(String windowCode, Boolean enabled) {
     return new BatchWindowRow(
         null,
@@ -268,7 +345,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
   }
 
   private void stubExplicitReferenceBundle() {
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(101L);
     job.setJobCode("JOB_A");
     job.setBizType("PAYROLL");
@@ -278,8 +355,8 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     job.setTriggerMode("SCHEDULED");
     job.setDependsOnJobCode("UPSTREAM_A");
     job.setJobDependencyRules(List.of(
-        new JobDependencyRuleResponse("UPSTREAM_A", "SAME_DAY"),
-        new JobDependencyRuleResponse("UPSTREAM_B", "PREVIOUS_BIZ_DAY")));
+        new JobDependencyRuleView("UPSTREAM_A", "SAME_DAY"),
+        new JobDependencyRuleView("UPSTREAM_B", "PREVIOUS_BIZ_DAY")));
     job.setQueueCode("q1");
     job.setWindowCode("nightly");
     job.setCalendarCode("cn");

@@ -12,10 +12,11 @@
 | 备份、恢复与灾备演练 | [backup](backup/README.md) | 备份与破坏性恢复分别确认目标，不以本地演练替代生产灾备证据 |
 | 到期实例、工作流、Outbox 与死信清理 | [使用场景](sql-script-usage-scenarios.md)及本页 SQL 索引 | 依照保留、审计、租户及外键约束执行，不能将清理当作通用修复 |
 | 业务库初始化与 RLS | [business](business/README.md) | 与平台 Flyway 分开；目标库、角色与租户隔离显式指定 |
+| 配置缓存失效队列角色授权 | [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) | 平台库 DBA 显式指定已有可信 Console 主库角色；只调整该角色的 V372 队列权限和专属策略 |
 | 分区迁移演练 | [partition-migration](partition-migration/README.md) | 属于人工演练资产，不直接放入正式 migration 路径执行 |
 | 测试与压测种子 | [test-seed](test-seed/README.md)、[load-test-seed](load-test-seed/README.md) | 仅隔离测试目标；共享 SIM 场景输入在根 test-data |
 
-SQL 文件本轮不迁移、不改正文。若后续单独整理本目录的平铺 SQL，需同时验证读取器、相对 include、构建资源、容器挂载及测试；不把目录整理与迁移脚本内容改写混成一次操作。
+SQL 文件维持现有路径。若后续单独整理本目录的平铺 SQL，需同时验证读取器、相对 include、构建资源、容器挂载及测试；不把目录整理与迁移脚本内容改写混成一次操作。
 
 这里收纳非 Flyway 的数据库维护脚本：业务库样例、测试种子、压测种子、清理、备份恢复和分区迁移演练。
 
@@ -29,6 +30,33 @@ SQL 文件本轮不迁移、不改正文。若后续单独整理本目录的平�
 - [partition-migration/](./partition-migration/)：大表分区迁移演练 SQL。
 
 平台正式结构变更只维护在 [db/migration/](../../db/migration/)；本目录脚本用于环境准备、演练和一次性维护。
+
+租户重置脚本 [wipe-tenants.sql](wipe-tenants.sql) 和 [wipe-non-system-tenants.sql](wipe-non-system-tenants.sql) 面向已执行 V373 的平台库，会删除被清理目标租户的配置批操作回执，并删除被清理审计租户的操作及其级联回执。其他审计租户的操作和目标列表保留；其中缺失回执的目标只能按结果未知核对，不能判定为失败或完成。执行账号须具备两表的跨租户删除权限并能处理其强制行级隔离策略；普通租户角色可能看不到全部待清理记录。执行前仍须核对目标库、租户清单和备份。
+
+### 租户清理与触发观察记录的确认和恢复
+
+这三个入口默认只预览，不删除。先停止相关写方，核对数据库和具备跨租读取权限的运维角色，执行并验证可恢复备份；预览时输出候选租户，以及删除审计操作级联影响保留租户的回执、保留审计操作因目标清理而变为 UNKNOWN 的回执。跨租户读取不足会漏算影响，因此两个租户清理脚本要求超级用户或 BYPASSRLS 运维角色；只在已确认的目标库使用，不自动授予权限。保留租户若引用待删父实例则拒绝，先核对并由业务处置。非系统清理仅处理预览时仍在租户表中的目标，不自动清理无主孤儿；预览与删除是两次执行，删除前重新计算并锁定租户表，目标集合有变化将拒绝。
+
+```sh
+# 指定目标；action 省略即预览。确认值必须与预览打印的排序结果完全一致。
+psql -X -v ON_ERROR_STOP=1 -v tenant_ids=ta,tb,tc -f scripts/db/wipe-tenants.sql
+psql -X -v ON_ERROR_STOP=1 -v tenant_ids=ta,tb,tc -v action=delete \
+  -v confirm_database=目标数据库 -v confirm_targets=ta,tb,tc -v confirm_backup=verified \
+  -f scripts/db/wipe-tenants.sql
+# 非系统目标以预览打印的逗号分隔列表为准；无目标时为 <none>。
+psql -X -v ON_ERROR_STOP=1 -f scripts/db/wipe-non-system-tenants.sql
+psql -X -v ON_ERROR_STOP=1 -v action=delete -v confirm_database=目标数据库 \
+  -v confirm_targets=预览目标列表 -v confirm_backup=verified -f scripts/db/wipe-non-system-tenants.sql
+# 触发观察清理同样先预览，删除时重复确认租户和截止时刻。
+psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_size=1000 \
+  -f scripts/db/cleanup-scheduled-occurrence-fire-retention.sql
+psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_size=1000 \
+  -v action=delete -v confirm_database=目标数据库 -v confirm_tenant=租户 \
+  -v confirm_cutoff=截止时间 -v confirm_batch_size=1000 -v confirm_backup=verified \
+  -f scripts/db/cleanup-scheduled-occurrence-fire-retention.sql
+```
+
+`confirm_backup=verified` 是操作员的显式确认，并不能证明备份可用；删除已提交后不能用事务回滚，需停止写方并按 [备份恢复流程](backup/README.md) 在隔离环境验证后恢复。恢复范围须同时包含配置批操作及其回执，否则无法凭当前配置还原原结果。预览不锁定未来写入，必须在相同参数下重新预览并停止写方后执行；有未知结果时先人工核对，不能用新键重新发起整个批次。
 
 ## 常用入口
 
@@ -77,9 +105,12 @@ SQL 文件本轮不迁移、不改正文。若后续单独整理本目录的平�
 | [cleanup-job-execution-log.sql](cleanup-job-execution-log.sql) | 清理 job_execution_log 执行日志表,避免无限累积压死 INSERT 写入与 console 查询。 |
 | [cleanup-orphan-general-job.sql](cleanup-orphan-general-job.sql) | 清理两类"永远跑不动"的异常数据： |
 | [cleanup-outbox-events.sql](cleanup-outbox-events.sql) | 清理 outbox_event 及其 delivery/retry 子行的历史记录，避免无限膨胀拖慢 OutboxPollScheduler 的 SELECT。 |
+| [cleanup-scheduled-occurrence-fire-retention.sql](cleanup-scheduled-occurrence-fire-retention.sql) | 按指定租户、截止时刻和批次日状态预览或清理实际触发观察记录。 |
 | [cleanup-success-instances.sql](cleanup-success-instances.sql) | 直接清理历史成功的 job_instance 及其级联数据（本脚本不复制冷表）。和 cleanup-historical-failures.sql 互补： |
 | [cleanup-trigger-outbox-events.sql](cleanup-trigger-outbox-events.sql) | 清理 trigger_outbox_event 表的历史事件,避免无限膨胀拖慢 TriggerOutboxRelay 扫描。 |
 | [cleanup-workflow-runs.sql](cleanup-workflow-runs.sql) | 归档 workflow_run + workflow_node_run。和 cleanup-success-instances.sql 互补： |
+| [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) | 为显式指定的可信 Console 主库角色授予或撤销 V372 缓存失效队列权限和专属 RLS 策略。 |
+| [scheduled-occurrence-fire-roles.sql](scheduled-occurrence-fire-roles.sql) | 为指定的 Trigger 与 Console 主库角色授予或撤销实际触发观察记录表权限。 |
 | [inspect/schema-capacity.sql](inspect/schema-capacity.sql) | 只读检查数据库结构容量，支持 Docker 容器和宿主机上的 psql 环境。 |
 | [inspect/select-data-quality-evidence.sql](inspect/select-data-quality-evidence.sql) | 按精确租户/Job实例只读回查热表与归档表DQ执行证据；用于归档后诊断与恢复核对，不执行数据恢复写入。 |
 | [inspect/schema-governance.sql](inspect/schema-governance.sql) | 只读数据库结构治理画像。 |

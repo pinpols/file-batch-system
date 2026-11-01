@@ -24,21 +24,23 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService.SatisfactionRequest;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySnapshotResolver;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowDagService.DagNodeResolution;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
@@ -59,12 +61,10 @@ import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 /** 为显式 Workflow Trigger 目标创建根 Workflow Run，并派发入口节点。 */
 @Service
@@ -172,7 +172,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       requireCapacityReplayAuthorization(request, capacitySnapshot, replayOperation);
       effectiveRequest = capacitySnapshot.effectiveRequest();
     }
-    WorkflowDefinitionEntity definition = null;
+    WorkflowDefinitionView definition = null;
     boolean approvedReplay = EmptyChecks.isNotNull(replayOperation)
         && ReplayOperationType.WORKFLOW_RUN.code().equals(replayOperation.operationType());
     if (EmptyChecks.isNull(existing) && !approvedReplay) {
@@ -258,7 +258,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   }
 
   private String resolveWorkflowCalendarCode(
-      WorkflowRunEntity run, WorkflowDefinitionEntity definition) {
+      WorkflowRunEntity run, WorkflowDefinitionView definition) {
     WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
     if (EmptyChecks.isNotNull(snapshot)) {
       String calendarCode = snapshot.workflowCalendarCode();
@@ -298,7 +298,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
    * 分区创建也会验证文件归属，但此时根运行已经提交。
    */
   private void validateBundleFileReferences(
-      LaunchRequest request, WorkflowNodeEntity node, JobDefinitionEntity job) {
+      LaunchRequest request, WorkflowNodeEntity node, JobDefinitionView job) {
     JobType jobType = DictEnum.fromCode(JobType.class, job.jobType());
     boolean nodeCannotProvideBundleJob = !Boolean.TRUE.equals(node.getEnabled())
         || EmptyChecks.isNull(jobType)
@@ -331,8 +331,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     }
   }
 
-  private WorkflowDefinitionEntity loadAdmissibleDefinition(LaunchRequest request) {
-    WorkflowDefinitionEntity enabled = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
+  private WorkflowDefinitionView loadAdmissibleDefinition(LaunchRequest request) {
+    WorkflowDefinitionView enabled = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
         request.tenantId(), request.workflowDefinitionId(), true);
     if (EmptyChecks.isNotNull(enabled)) {
       return enabled;
@@ -354,7 +354,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
   /** 定时 Quartz 触发固定使用已同步到 JobDataMap 的 Workflow 版本。 */
   private boolean scheduledWorkflowVersionMatches(
-      LaunchRequest request, WorkflowDefinitionEntity definition) {
+      LaunchRequest request, WorkflowDefinitionView definition) {
     Object rawVersion =
         EmptyChecks.isNull(request.params()) ? null : request.params().get("workflowVersion");
     if (EmptyChecks.isNull(rawVersion)) {
@@ -373,7 +373,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       LaunchRequest request,
       LaunchRequest originalRequest,
       TriggerRequestEntity triggerRequest,
-      WorkflowDefinitionEntity definition,
+      WorkflowDefinitionView definition,
       String traceId,
       WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot,
       WorkflowLaunchWaitSnapshot capacitySnapshot) {}
@@ -397,7 +397,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     LaunchRequest request = preparation.request();
     LaunchRequest deferredRequest = preparation.originalRequest();
     TriggerRequestEntity triggerRequest = preparation.triggerRequest();
-    WorkflowDefinitionEntity definition = preparation.definition();
+    WorkflowDefinitionView definition = preparation.definition();
     String traceId = preparation.traceId();
     WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = preparation.replaySnapshot();
     WorkflowLaunchWaitSnapshot capacitySnapshot = preparation.capacitySnapshot();
@@ -426,7 +426,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         if (pendingRequestDoesNotMatchLaunch) {
           throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
         }
-        WorkflowDefinitionEntity transactionDefinition = definition;
+        WorkflowDefinitionView transactionDefinition = definition;
         List<DagNodeResolution> initialNodes;
         if (EmptyChecks.isNotNull(capacitySnapshot)) {
           // 请求锁持续持有到根运行插入；等待终态不得被迟到恢复复活。
@@ -616,7 +616,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
   private String buildExecutionSnapshot(
       LaunchRequest request,
-      WorkflowDefinitionEntity definition,
+      WorkflowDefinitionView definition,
       List<DagNodeResolution> initialNodes) {
     List<WorkflowNodeEntity> nodes =
         workflowNodeMapper.selectByWorkflowDefinitionId(definition.id());
@@ -628,7 +628,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
           || EmptyChecks.isNull(node.getRelatedJobCode())) {
         continue;
       }
-      JobDefinitionEntity job =
+      JobDefinitionView job =
           configCacheService.findEnabledJobDefinition(request.tenantId(), node.getRelatedJobCode());
       if (EmptyChecks.isNull(job)) {
         reject(request);
@@ -724,9 +724,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       if (EmptyChecks.isNull(run)) {
         reject(request);
       } else {
-        throw new ResponseStatusException(
-            HttpStatus.SERVICE_UNAVAILABLE,
-            "workflow launch is in progress; retry the same request");
+        throw new OperationFailure(
+            Kind.TEMPORARILY_UNAVAILABLE, "workflow launch is in progress; retry the same request");
       }
     });
   }

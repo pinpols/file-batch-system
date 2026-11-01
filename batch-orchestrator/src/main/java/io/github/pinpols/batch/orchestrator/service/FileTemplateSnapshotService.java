@@ -15,8 +15,8 @@ import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.WorkflowReplayExecutionBinding;
@@ -39,7 +39,7 @@ public class FileTemplateSnapshotService {
   private final SecretPayloadProtector protector;
 
   public Map<String, Object> pin(
-      LaunchRequest request, JobDefinitionEntity definition, Map<String, Object> parameters) {
+      LaunchRequest request, JobDefinitionView definition, Map<String, Object> parameters) {
     Map<String, Object> pinned = new LinkedHashMap<>(parameters);
     pinned.remove(FrozenFileTemplateSnapshot.PAYLOAD_KEY);
     pinned.remove(FrozenFileTemplateSnapshot.COLLECTION_KEY);
@@ -89,7 +89,7 @@ public class FileTemplateSnapshotService {
   /** 只应用与当前已批准重放节点绑定的模板快照。 */
   public Map<String, Object> pinWorkflowReplay(
       LaunchRequest request,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       Map<String, Object> parameters,
       WorkflowReplayExecutionBinding binding) {
     Map<String, Object> pinned = new LinkedHashMap<>(parameters);
@@ -133,7 +133,7 @@ public class FileTemplateSnapshotService {
    */
   public ReplayTemplateSelection captureForWorkflowReplay(
       String tenantId,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       Map<String, Object> effectiveParams,
       ConfigVersionPolicy policy,
       Map<?, ?> originalEffectiveParams) {
@@ -228,7 +228,7 @@ public class FileTemplateSnapshotService {
   }
 
   private Map<?, ?> sourceParameters(
-      LaunchRequest request, JobDefinitionEntity definition, Map<String, Object> parameters) {
+      LaunchRequest request, JobDefinitionView definition, Map<String, Object> parameters) {
     JobInstanceEntity source;
     try {
       String sourceIdText = String.valueOf(parameters.get("parentInstanceId"));
@@ -324,7 +324,7 @@ public class FileTemplateSnapshotService {
 
   private void validateReplayBinding(
       LaunchRequest request,
-      JobDefinitionEntity definition,
+      JobDefinitionView definition,
       Map<String, Object> parameters,
       WorkflowReplayExecutionBinding binding) {
     ReplayExecutionGuard guard = EmptyChecks.isNull(binding) ? null : binding.executionGuard();

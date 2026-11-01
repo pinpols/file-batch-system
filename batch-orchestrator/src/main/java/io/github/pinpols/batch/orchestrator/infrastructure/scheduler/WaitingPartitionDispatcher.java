@@ -17,7 +17,6 @@ import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceSchedu
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
 import io.github.pinpols.batch.orchestrator.application.service.task.PartitionLifecycleService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.OrchestratorWorkflowMappers;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
@@ -25,6 +24,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.MarkInstanceRunningPara
 import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningParam;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingDecision;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -80,7 +80,7 @@ class WaitingPartitionDispatcher {
         currentInstance.getTenantId(), RateLimitAction.DISPATCH_RELEASE)) {
       return;
     }
-    JobDefinitionEntity jobDefinition = configCacheService.findEnabledJobDefinition(
+    JobDefinitionView jobDefinition = configCacheService.findEnabledJobDefinition(
         currentInstance.getTenantId(), currentInstance.getJobCode());
     ResourceSchedulingRequest request = WaitingPartitionDispatchScheduler.buildRequest(
         currentInstance, partition, task, jobDefinition);

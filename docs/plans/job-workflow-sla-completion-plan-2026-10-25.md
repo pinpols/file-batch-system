@@ -164,3 +164,7 @@
 - 首红证据：真实 PostgreSQL Mapper 回归曾在期望补报两条历史终态实例时返回空候选，记录于 `/tmp/codex-active-goal-sla-terminal-red-20261026.log`。修复后验证命令 `./mvnw -o -ntp -l /tmp/codex-active-goal-sla-terminal-green2-20261026.log -pl batch-orchestrator -am '-Dtest=JobMonitoringMapperIntegrationTest,JobSlaViolationProcessorTest,JobSlaSchedulerRecoveryIntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false -DskipTests=false test` 通过：47 项通过、0 失败、0 错误、0 跳过，其中 Mapper PostgreSQL 集成 22 项、处理器单测 7 项、扫描恢复集成 18 项；Flyway 从空库执行 V1–V358。
 - 事件与可用性静态复核确认 Import 到达端点缺少扫描结果/新鲜度/登记时延指标，且事件开关与扫描器总开关不一致时会误报触发成功；服务级 5xx 规则之外尚无用户访问路径黑盒、通用 HTTP 延迟告警或量化 SLO。新增 OBS-ENV-05/06 跟踪，目标环境依赖 target、栈外监控、Kafka 部分 Broker 阈值及 Docker/Helm 端到端通知验收仍开放。
 - 本批 47 项是定向验证，不代表全仓测试或目标环境告警验收；本轮事件/可用性盘点仅静态审查，未运行 promtool、未启动监控栈、未注入故障、未验证真实收件渠道。
+
+## 2026-11-01：隔离 Alertmanager 投递补证
+
+`AlertmanagerDeliveryChainE2eIT` 通过：真实 Orchestrator 告警服务提交后经真实 Alertmanager、Console HTTP 到本地 Webhook；接收端先失败再成功，发生和恢复均核对数据库回执。应用共进程装配，权限使用测试替身；独立部署、实际通知供应商、目标环境及完整 SLA 检测链仍未验收。命令、日志和边界见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。

@@ -1,6 +1,8 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxCleanupResponse;
 import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxOpsApplicationService;
+import io.github.pinpols.batch.orchestrator.application.service.governance.OutboxRepublishResponse;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;

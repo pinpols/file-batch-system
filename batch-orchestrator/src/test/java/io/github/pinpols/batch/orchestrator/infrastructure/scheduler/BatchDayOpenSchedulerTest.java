@@ -15,7 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.service.batchday.Externa
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayScanProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
@@ -441,7 +441,7 @@ class BatchDayOpenSchedulerTest {
 
     scheduler.openDueBatchDays(now);
 
-    ArgumentCaptor<AlertEmitRequest> alertCaptor = ArgumentCaptor.forClass(AlertEmitRequest.class);
+    ArgumentCaptor<AlertEmitCommand> alertCaptor = ArgumentCaptor.forClass(AlertEmitCommand.class);
     verify(alertEventService).emit(alertCaptor.capture());
     assertThat(alertCaptor.getValue().alertType())
         .isEqualTo("BATCH_CALENDAR_DEPENDENCY_WAIT_TIMEOUT");

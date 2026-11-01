@@ -43,9 +43,7 @@ import io.github.pinpols.batch.console.domain.file.application.contract.response
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileSummaryResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileTemplateResponse;
 import io.github.pinpols.batch.console.domain.file.application.progress.PipelineProgressResponse.Pipeline;
-import io.github.pinpols.batch.console.domain.file.entity.FileArrivalGroupEntity;
 import io.github.pinpols.batch.console.domain.file.entity.FileErrorRecordEntity;
-import io.github.pinpols.batch.console.domain.file.entity.FileRecordEntity;
 import io.github.pinpols.batch.console.domain.file.query.FileArrivalGroupQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileDispatchRecordQuery;
@@ -55,6 +53,7 @@ import io.github.pinpols.batch.console.domain.file.query.FilePipelineStepRunQuer
 import io.github.pinpols.batch.console.domain.file.query.FileRecordQuery;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
 import io.github.pinpols.batch.console.domain.file.support.ConsoleFileQueryMappers;
+import io.github.pinpols.batch.console.domain.file.view.FileArrivalGroupView;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileDispatchRecordQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FilePipelineExecutionView;
@@ -64,6 +63,7 @@ import io.github.pinpols.batch.console.domain.file.view.FilePipelineQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FilePipelineStepRunQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordStorageView;
 import io.github.pinpols.batch.console.domain.file.view.FileRecordSummaryView;
+import io.github.pinpols.batch.console.domain.file.view.FileRecordView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
 import io.github.pinpols.batch.console.shared.progress.PipelineStepProgressSnapshot;
@@ -144,9 +144,9 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         .pageRequest(pageRequest)
         .cursorId(cursorId)
         .build();
-    List<FileRecordEntity> rows = fileMappers.fileRecordMapper.selectByQuery(query);
+    List<FileRecordView> rows = fileMappers.fileRecordMapper.selectByQuery(query);
     if (cursorMode) {
-      return cursorPage(pageRequest, rows, this::toFileRecordResponse, FileRecordEntity::getId);
+      return cursorPage(pageRequest, rows, this::toFileRecordResponse, FileRecordView::getId);
     }
     long total = fileMappers.fileRecordMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileRecordResponse);
@@ -401,7 +401,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     String requiredTenantId = TenantScope.requireTenant(resolvedTenantId);
     FileArrivalGroupQuery query = FileArrivalGroupQuery.ofState(
         requiredTenantId, request.getFileGroupCode(), request.getArrivalState(), pageRequest);
-    List<FileArrivalGroupEntity> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(query);
+    List<FileArrivalGroupView> rows = fileMappers.fileArrivalGroupMapper.selectByQuery(query);
     long total = fileMappers.fileArrivalGroupMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toFileArrivalGroupResponse);
   }
@@ -510,7 +510,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
         tenantId, templateCode);
   }
 
-  private ConsoleFileRecordResponse toFileRecordResponse(FileRecordEntity entity) {
+  private ConsoleFileRecordResponse toFileRecordResponse(FileRecordView entity) {
     Long id = entity.getId();
     String tenantId = display(entity.getTenantId());
     String bizType = display(entity.getBizType());
@@ -722,8 +722,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
-  private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(
-      FileArrivalGroupEntity entity) {
+  private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(FileArrivalGroupView entity) {
     String tenantId = display(entity.getTenantId());
     String fileGroupCode = display(entity.getFileGroupCode());
     String waitFileGroupMode = display(entity.getWaitFileGroupMode());

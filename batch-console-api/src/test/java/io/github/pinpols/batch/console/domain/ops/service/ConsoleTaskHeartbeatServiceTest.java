@@ -8,8 +8,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
-import io.github.pinpols.batch.console.domain.ops.entity.JobTaskHeartbeatEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
+import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -27,11 +27,11 @@ class ConsoleTaskHeartbeatServiceTest {
   private final ObjectMapper objectMapper = new ObjectMapper();
 
   private ConsoleTaskHeartbeatService service() {
-    return new ConsoleTaskHeartbeatService(jobTaskMapper, objectMapper);
+    return new ConsoleTaskHeartbeatService(jobTaskMapper, objectMapper, tenantId -> tenantId);
   }
 
-  private JobTaskHeartbeatEntity entity(String details, Boolean cancel) {
-    JobTaskHeartbeatEntity e = new JobTaskHeartbeatEntity();
+  private JobTaskHeartbeatView heartbeat(String details, Boolean cancel) {
+    JobTaskHeartbeatView e = new JobTaskHeartbeatView();
     e.setId(42L);
     e.setTenantId("tx");
     e.setTaskStatus("RUNNING");
@@ -45,7 +45,7 @@ class ConsoleTaskHeartbeatServiceTest {
   @DisplayName("明细映射:心跳明细解析为结构化节点, 任务标识与状态原样回填")
   void shouldParseJsonDetails_whenReadingHeartbeat() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L))
-        .thenReturn(entity("{\"processed\":1200,\"total\":5000}", false));
+        .thenReturn(heartbeat("{\"processed\":1200,\"total\":5000}", false));
 
     TaskHeartbeatDetailsResponse resp = service().getHeartbeatDetails("tx", 42L);
 
@@ -59,7 +59,7 @@ class ConsoleTaskHeartbeatServiceTest {
   @Test
   @DisplayName("空明细:明细为空时返回空值, 取消标记按未请求处理")
   void shouldReturnNullDetails_whenHeartbeatDetailsNull() {
-    when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L)).thenReturn(entity(null, null));
+    when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L)).thenReturn(heartbeat(null, null));
 
     TaskHeartbeatDetailsResponse resp = service().getHeartbeatDetails("tx", 42L);
 
@@ -71,7 +71,7 @@ class ConsoleTaskHeartbeatServiceTest {
   @DisplayName("非法明细:内容无法解析时降级为空值, 不抛异常")
   void shouldDegradeToNull_whenHeartbeatDetailsMalformed() {
     when(jobTaskMapper.selectHeartbeatByTenantAndId("tx", 42L))
-        .thenReturn(entity("{not-json", false));
+        .thenReturn(heartbeat("{not-json", false));
 
     assertThat(service().getHeartbeatDetails("tx", 42L).details()).isNull();
   }

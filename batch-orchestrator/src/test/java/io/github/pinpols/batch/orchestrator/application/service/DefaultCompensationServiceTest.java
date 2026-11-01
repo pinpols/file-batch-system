@@ -35,15 +35,15 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignm
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.CompensationCommandEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateCompensationStatusParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.orchestrator.mapper.CompensationCommandMapper;
@@ -829,7 +829,7 @@ class DefaultCompensationServiceTest {
         .thenAnswer(call -> accepted.get());
 
     when(configCacheService.findEnabledJobDefinition("t1", jobCode))
-        .thenReturn(JobDefinitionEntity.builder()
+        .thenReturn(JobDefinitionView.builder()
             .id(jobId)
             .tenantId("t1")
             .jobCode(jobCode)
@@ -838,7 +838,7 @@ class DefaultCompensationServiceTest {
             .enabled(true)
             .build());
     when(configCacheService.findEnabledSingleJobWorkflowDefinition("t1", jobId))
-        .thenReturn(new WorkflowDefinitionEntity(
+        .thenReturn(new WorkflowDefinitionView(
             jobId + 100,
             "t1",
             "WF_" + jobCode,

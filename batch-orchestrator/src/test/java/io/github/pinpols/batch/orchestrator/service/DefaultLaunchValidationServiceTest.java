@@ -18,9 +18,9 @@ import io.github.pinpols.batch.common.persistence.entity.TriggerRequestEntity;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -161,7 +161,7 @@ class DefaultLaunchValidationServiceTest {
   void shouldRejectJobRootLaunchWithoutParentWorkflowContext() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
-    JobDefinitionEntity jobDef = jobDefinitionEntity(JobType.GENERAL.code());
+    JobDefinitionView jobDef = jobDefinitionEntity(JobType.GENERAL.code());
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(trig, null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
@@ -178,7 +178,7 @@ class DefaultLaunchValidationServiceTest {
   void shouldRejectRetiredWorkflowJobWrapper() {
     LaunchRequest req = validRequest();
     TriggerRequestEntity trig = triggerRequestEntity();
-    JobDefinitionEntity jobDef = jobDefinitionEntity("WORKFLOW");
+    JobDefinitionView jobDef = jobDefinitionEntity("WORKFLOW");
     when(triggerRequestMapper.selectLaunchPersistenceContext("ta", "req-001"))
         .thenReturn(persistenceContext(trig, null));
     when(configCacheService.findEnabledJobDefinition("ta", "job_ok")).thenReturn(jobDef);
@@ -503,8 +503,8 @@ class DefaultLaunchValidationServiceTest {
     return context;
   }
 
-  private JobDefinitionEntity jobDefinitionEntity(String jobType) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView jobDefinitionEntity(String jobType) {
+    return JobDefinitionView.builder()
         .id(1L)
         .tenantId("ta")
         .jobCode("job_ok")

@@ -1,0 +1,102 @@
+基线生产文件,当前结论,证据或当前去向
+batch-common/src/main/java/io/github/pinpols/batch/common/i18n/AbstractLocalizedErrorEntity.java,抽象基类,通用错误字段载体，非表行
+batch-common/src/main/java/io/github/pinpols/batch/common/model/AuditableEntity.java,抽象基类,公共审计字段载体，非表行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/AlertEventEntity.java,表行,AlertEventMapper 以该类型插入及更新告警行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/BusinessTenantPlacementEntity.java,表行,BusinessTenantPlacementMapper 与 Console Mapper 均映射租户分片表行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/TriggerMisfirePendingEntity.java,表行,TriggerMisfirePendingMapper 以该类型插入并读取待审行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/TriggerOutboxEventEntity.java,表行,TriggerOutboxEventMapper 以该类型插入并读取 outbox 行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/TriggerRequestEntity.java,表行,Trigger 与 Orchestrator Mapper 均以该类型写入及读取请求行
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/WorkflowMonitoringPolicyEntity.java,表行,WorkflowMonitoringPolicyMapper 以该类型 upsert 并读取单表策略
+batch-common/src/main/java/io/github/pinpols/batch/common/persistence/entity/WorkflowRunEntity.java,表行,WorkflowRunMapper 以该类型插入及读取工作流运行行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/entity/ConsoleAiAttachmentEntity.java,表行,ConsoleAiAttachmentMapper 以该类型插入与查询附件表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/entity/ConsoleAiAuditLogEntity.java,表行,ConsoleAiAuditLogMapper 写入完整审计实体，查询为同表脱敏列
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/entity/ConsoleAiConversationEntity.java,表行,ConsoleAiConversationMapper 以该类型插入及读取会话行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/entity/ConsoleAiTurnEntity.java,表行,ConsoleAiConversationMapper 以该类型插入及读取消息行，JOIN 用于归属约束
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/ArchivePolicyEntity.java,表行,ConsoleArchivePolicyMapper 读取 archive_policy 表行并以参数更新
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/AssetFreshnessPolicyEntity.java,表行,ConsoleAssetFreshnessPolicyMapper 读取 freshness 策略业务列和时间列
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/BusinessShardCatalogEntity.java,表行,ConsoleBusinessShardCatalogMapper 读取 biz 分片目录表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/ConfigChangeLogEntity.java,表行,ConfigChangeLogMapper 查询 config_change_log 表行，插入使用参数对象
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/ConfigReleaseEntity.java,表行,ConfigReleaseMapper 查询 config_release 表行，位于 domain/entity
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/entity/MaintenanceStateEntity.java,表行,MaintenanceStateMapper 读取 console_maintenance_state 表全部业务字段
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/entity/FileErrorRecordEntity.java,表行,FileErrorRecordMapper 查询单表文件错误记录
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/governance/entity/DeadLetterTaskEntity.java,表行,DeadLetterTaskMapper select * 读取 dead_letter_task 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/JobDefinitionEntity.java,表行，拆分待验证,联表查询字段移入 JobDefinitionView；写入仍由 Entity 承担
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/JobExecutionLogEntity.java,表行,JobExecutionLogMapper 查询 V7 job_execution_log 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/JobInstanceEntity.java,表行,JobInstanceMapper 从 job_instance 读取，扩展列见 V13 V73 V173 V354
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/entity/AlertEscalationNotificationOutboxEntity.java,表行,AlertEscalationNotificationOutboxMapper 用实体插入和读取 outbox 行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/entity/ConsolePushApprovalNotificationEntity.java,表行,ConsolePushApprovalNotificationMapper 用实体插入通知表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/entity/ConsolePushSubscriptionEntity.java,表行,ConsolePushSubscriptionMapper 读写同一订阅表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/entity/WebhookDeliveryLogEntity.java,表行,ConsoleWebhookDeliveryLogMapper 读取及更新投递日志表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/entity/WebhookSubscriptionEntity.java,表行,ConsoleWebhookSubscriptionMapper 读取及更新订阅表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/entity/SystemParameterEntity.java,表行,ConsoleSystemParameterMapper 读写 system_parameter
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/ApprovalCommandEntity.java,表行,ApprovalCommandMapper select * 读取 approval_command 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/AtomicTaskConfigEntity.java,表行,AtomicTaskConfigMapper 查询 atomic_task_config 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/RetryScheduleEntity.java,表行,RetryScheduleMapper select * 读取 retry_schedule 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/ApiKeyEntity.java,表行,ConsoleApiKeyMapper 读取 API key 表行，鉴权候选已另命名
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/ConsoleUserAccountEntity.java,表行,ConsoleUserAccountMapper 读取用户表业务字段；OIDC JOIN 返回账户字段
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/ResourceTagEntity.java,表行,ConsoleResourceTagMapper 读取及写入 resource_tag 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/SecretVersionEntity.java,表行,SecretVersionMapper 查询 V22 secret_version 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/entity/WorkflowDefinitionEntity.java,表行,WorkflowDefinitionMapper 查询 workflow_definition 表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/entity/WorkflowDefinitionVersionEntity.java,表行,WorkflowDefinitionVersionMapper 读取并写入工作流版本快照表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/entity/WorkflowEdgeEntity.java,表行,WorkflowEdgeMapper 查询 e.*，关联表仅用于过滤
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/entity/WorkflowNodeEntity.java,表行,WorkflowNodeMapper 查询 n.*，关联表仅用于过滤
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/entity/WorkflowNodeRunEntity.java,表行,WorkflowNodeRunMapper 查询 n.*，关联表仅用于过滤
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ApprovalCommandEntity.java,表行,ApprovalCommandMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/AssetFreshnessPolicyEntity.java,表行,Orchestrator 查询 V187 策略表业务列；非聚合或联表模型
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayCatchupControlEntity.java,表行,V259 控制表七列与 Mapper 的读映射一致
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayInstanceEntity.java,表行,BatchDayInstanceMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayOperationAuditEntity.java,表行,BatchDayOperationAuditMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplayEntryEntity.java,表行,BatchDayReplayEntryMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplayPreviewTokenEntity.java,表行,BatchDayReplayPreviewTokenMapper 使用此类型插入和查询凭证行
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayReplaySessionEntity.java,表行,BatchDayReplaySessionMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchDayWaitingLaunchEntity.java,表行,BatchDayWaitingLaunchMapper 以该类型插入与读取等待记录
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BatchWindowEntity.java,表行,BatchWindowMapper 读取同一批量窗口表的业务列
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/BusinessCalendarEntity.java,表行,BusinessCalendarMapper 读取业务日历表业务列，非跨表聚合
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/CalendarDependencyEntity.java,表行,CalendarDependencyMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/CalendarDependencyWaitEntity.java,表行,CalendarDependencyWaitMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/CompensationCommandEntity.java,表行,CompensationCommandMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/CustomTaskTypeRegistryEntity.java,表行,完整对应 custom_task_type_registry 的业务列及创建更新时间
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/DataQualityCheckEntity.java,表行,DataQualityCheckMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/DataQualityRuleEntity.java,表行,DataQualityRuleMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/DeadLetterTaskEntity.java,表行,DeadLetterTaskMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/DisasterDayOverrideEntity.java,表行,DisasterDayOverrideMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/DispatchSecretBindingEntity.java,查询投影，已迁移，待验证,已迁移至 orchestrator/domain/view/DispatchSecretBindingView.java
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/EventDeliveryLogEntity.java,表行,EventDeliveryLogMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/EventOutboxRetryEntity.java,表行,EventOutboxRetryMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ForensicExportLogEntity.java,表行,ForensicExportLogMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDefinitionEntity.java,查询投影，已迁移，待验证,已迁移至 orchestrator/domain/view/JobDefinitionView.java；保留执行字段及旧缓存 JSON
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobDependencyWaitingLaunchEntity.java,表行,JobDependencyWaitingLaunchMapper 以该类型插入与读取等待记录
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobExecutionLogEntity.java,表行,JobExecutionLogMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobInstanceEntity.java,表行，拆分待验证,SLA 的关联查询列移入 JobSlaCandidate，表行保留
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobPartitionEntity.java,表行,JobPartitionMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobStepInstanceEntity.java,表行,JobStepInstanceMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/JobTaskEntity.java,表行,JobTaskMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/OutboxEventEntity.java,表行,OutboxEventMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/QuotaRuntimeStateEntity.java,表行,QuotaRuntimeStateMapper 以该类型插入与读取配额运行状态
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ReadinessWaitEntity.java,表行,ReadinessWaitMapper 以该类型插入与读取等待记录
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ReplayOperationEntity.java,表行,ReplayOperationMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ReplayOperationPreviewTokenEntity.java,表行,ReplayOperationPreviewTokenMapper 以该类型插入并读取令牌行
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResourceQueueEntity.java,表行,Orchestrator 只读资源队列表业务列，Mapper 以该类型读同一表
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/ResultVersionEntity.java,表行,ResultVersionMapper 以该类型插入和读取结果版本行
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/RetryScheduleEntity.java,表行,RetryScheduleMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/TenantQuotaPolicyEntity.java,表行,Orchestrator 只读租户配额策略表业务列，非跨表聚合
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/TenantSchedulerSnapshotEntity.java,表行,TenantSchedulerSnapshotMapper 以该类型插入并读取快照表行
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/TriggerLaunchRecoveryEntity.java,查询投影，已迁移，待验证,已迁移至 orchestrator/domain/view/TriggerLaunchRecoveryView.java
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkerRegistryEntity.java,表行,WorkerRegistryMapper 使用该实体执行插入并读取对应单表行；相关 JOIN 用于过滤或一致性守卫
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowDefinitionEntity.java,查询投影，已迁移，待验证,已迁移至 orchestrator/domain/view/WorkflowDefinitionView.java，保留九字段及旧缓存 JSON
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowEdgeEntity.java,表行,WorkflowEdgeMapper 读取 workflow_edge 记录
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowNodeEntity.java,表行,WorkflowNodeMapper 读取 workflow_node 对应的配置列
+batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/domain/entity/WorkflowNodeRunEntity.java,表行,WorkflowNodeRunMapper 以该类型插入及读取节点运行行
+batch-trigger/src/main/java/io/github/pinpols/batch/trigger/domain/entity/ExternalEventDeliveryEntity.java,表行,ExternalEventDeliveryMapper 用实体插入及读取事件投递表行
+batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/domain/entity/PipelineProgressEntity.java,表行,PipelineProgressMapper 读取 pipeline_progress 完整续跑位点表行
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/JobTaskHeartbeatEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/view/JobTaskHeartbeatView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/CustomTaskTypeEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/view/CustomTaskTypeView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/entity/WorkerRegistryEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/ops/view/WorkerRegistryView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/entity/ConsoleAiMonthlyUsageEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/view/ConsoleAiMonthlyUsageView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/entity/FileArrivalGroupEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/view/FileArrivalGroupView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/JobPartitionEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/view/JobPartitionView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/PendingCatchUpEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/view/PendingCatchUpView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/ConsoleOidcIdentityEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/view/ConsoleOidcIdentityView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/entity/FileRecordEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/view/FileRecordView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/entity/JobStepInstanceEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/view/JobStepInstanceView.java
+batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/entity/ConsoleUserBatchOperationEntity.java,查询投影，已迁移，待验证,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/view/ConsoleUserBatchOperationView.java

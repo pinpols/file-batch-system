@@ -29,7 +29,7 @@ BEGIN
                    'batch_day_replay_session', 'batch_day_replay_entry', 'batch_day_replay_preview_token',
                    'batch_day_open_cursor', 'batch_day_catchup_control_event',
                    'calendar_dependency_wait', 'job_dependency_waiting_launch',
-                   'scheduled_occurrence', 'scheduled_occurrence_coverage',
+                   'scheduled_occurrence', 'scheduled_occurrence_coverage', 'scheduled_occurrence_fire',
                    'scheduled_occurrence_supersession_history', 'scheduled_occurrence_catch_up_audit',
                    'expected_work_occurrence', 'trigger_request_idempotency_alias',
                    'console_push_job_delivery',

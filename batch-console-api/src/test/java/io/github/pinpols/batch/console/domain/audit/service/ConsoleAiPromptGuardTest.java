@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.AiPromptCategory;
 import io.github.pinpols.batch.common.enums.AiPromptDecision;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.ConsoleAiProperties;
 import io.github.pinpols.batch.console.domain.audit.support.AiPromptGateResult;
@@ -46,13 +47,21 @@ class ConsoleAiPromptGuardTest {
   @Test
   @DisplayName("提示词为空值时按业务异常拒绝")
   void shouldThrowBizExceptionForNullPrompt() {
-    assertThatThrownBy(() -> guard.check(null)).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> guard.check(null))
+        .isInstanceOfSatisfying(BizException.class, exception -> {
+          assertThat(exception.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(exception.getMessageKey()).isEqualTo("error.prompt.required");
+        });
   }
 
   @Test
   @DisplayName("提示词仅含空白字符时按业务异常拒绝")
   void shouldThrowBizExceptionForBlankPrompt() {
-    assertThatThrownBy(() -> guard.check("   ")).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> guard.check("   "))
+        .isInstanceOfSatisfying(BizException.class, exception -> {
+          assertThat(exception.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(exception.getMessageKey()).isEqualTo("error.prompt.required");
+        });
   }
 
   // --- max length ---

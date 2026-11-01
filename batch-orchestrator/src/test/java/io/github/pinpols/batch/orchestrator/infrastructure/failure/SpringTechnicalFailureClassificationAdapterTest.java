@@ -3,19 +3,34 @@ package io.github.pinpols.batch.orchestrator.infrastructure.failure;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.FailureClass;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import java.sql.SQLException;
 import java.sql.SQLTimeoutException;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.server.ResponseStatusException;
 
 @DisplayName("技术异常分类适配器: 隔离 JDBC, Spring DAO 与 HTTP 客户端异常")
 class SpringTechnicalFailureClassificationAdapterTest {
 
   private final SpringTechnicalFailureClassificationAdapter adapter =
       new SpringTechnicalFailureClassificationAdapter();
+
+  @Test
+  @DisplayName("旧状态异常保留诊断代码，不穿透应用失败或普通异常的原因链")
+  void shouldClassifyOnlyTopLevelLegacyResponseStatus() {
+    ResponseStatusException legacy = new ResponseStatusException(HttpStatus.CONFLICT, "legacy");
+    assertThat(adapter.legacyResponseStatusDiagnostic(legacy)).contains("HTTP_409");
+    assertThat(adapter.legacyResponseStatusDiagnostic(new OperationFailure(
+            OperationFailure.Kind.TEMPORARILY_UNAVAILABLE, "operation", legacy)))
+        .isEmpty();
+    assertThat(adapter.legacyResponseStatusDiagnostic(new IllegalStateException("wrapped", legacy)))
+        .isEmpty();
+  }
 
   @Test
   @DisplayName("超时,网络与乐观锁冲突分别归一为超时或基础设施失败")

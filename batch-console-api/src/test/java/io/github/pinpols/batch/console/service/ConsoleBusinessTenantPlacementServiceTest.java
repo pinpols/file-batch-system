@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BusinessRoutingProperties;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.BusinessTenantPlacementEntity;
+import io.github.pinpols.batch.console.domain.command.BusinessTenantPlacementUpsertCommand;
 import io.github.pinpols.batch.console.domain.param.BusinessTenantPlacementUpsertParam;
 import io.github.pinpols.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
 import io.github.pinpols.batch.console.mapper.ConsoleBusinessTenantPlacementMapper;
@@ -33,8 +34,8 @@ class ConsoleBusinessTenantPlacementServiceTest {
         placementMapper, shardCatalogMapper, new BusinessRoutingProperties());
   }
 
-  private static BusinessTenantPlacementUpsertParam param(String key) {
-    return BusinessTenantPlacementUpsertParam.builder()
+  private static BusinessTenantPlacementUpsertCommand command(String key) {
+    return BusinessTenantPlacementUpsertCommand.builder()
         .tenantId("t-1")
         .placementKey(key)
         .operator("ops:alice")
@@ -60,9 +61,10 @@ class ConsoleBusinessTenantPlacementServiceTest {
   @DisplayName("启用分片目录为空时, 放置写入不做额外校验直接落库")
   void upsertShouldProceed_whenNoCatalogOrShardsConfigured() {
     when(shardCatalogMapper.findEnabledKeys()).thenReturn(List.of());
-    BusinessTenantPlacementUpsertParam p = param("shard-1");
+    BusinessTenantPlacementUpsertCommand p = command("shard-1");
     service().upsert(p);
-    verify(placementMapper).upsert(p);
+    verify(placementMapper)
+        .upsert(new BusinessTenantPlacementUpsertParam("t-1", "shard-1", "ops:alice"));
   }
 
   @Test
@@ -70,16 +72,18 @@ class ConsoleBusinessTenantPlacementServiceTest {
   void shouldAcceptPlacementKey_whenKeyInCatalog() {
     when(shardCatalogMapper.findEnabledKeys())
         .thenReturn(List.of("shard-0", "shard-1", "silo-big"));
-    BusinessTenantPlacementUpsertParam p = param("silo-big");
+    BusinessTenantPlacementUpsertCommand p = command("silo-big");
     service().upsert(p);
-    verify(placementMapper).upsert(p);
+    verify(placementMapper)
+        .upsert(new BusinessTenantPlacementUpsertParam("t-1", "silo-big", "ops:alice"));
   }
 
   @Test
   @DisplayName("放置键不在启用分片目录内时, 抛业务异常拒绝写入")
   void shouldRejectPlacementKey_whenKeyNotInCatalog() {
     when(shardCatalogMapper.findEnabledKeys()).thenReturn(List.of("shard-0", "shard-1"));
-    assertThatThrownBy(() -> service().upsert(param("silo-typo"))).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> service().upsert(command("silo-typo")))
+        .isInstanceOf(BizException.class);
   }
 
   @Test

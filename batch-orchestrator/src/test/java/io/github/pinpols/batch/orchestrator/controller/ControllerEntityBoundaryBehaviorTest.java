@@ -7,8 +7,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
 import io.github.pinpols.batch.orchestrator.application.service.dq.DataQualityRuleApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.WorkerDrainGovernanceService;
@@ -19,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.application.service.version.ResultVe
 import io.github.pinpols.batch.orchestrator.controller.request.DataQualityRuleRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerDrainRequest;
 import io.github.pinpols.batch.orchestrator.controller.request.WorkerTenantRequest;
+import io.github.pinpols.batch.orchestrator.domain.command.DataQualityRuleWriteCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.DataQualityRuleEntity;
@@ -79,8 +78,9 @@ class ControllerEntityBoundaryBehaviorTest {
 
     when(ruleService.listEnabledByBusinessKey("tenant", "job:")).thenReturn(List.of(entity));
     when(ruleService.get("tenant", 3L)).thenReturn(entity);
-    when(ruleService.create(eq("tenant"), any(DataQualityRuleEntity.class))).thenReturn(entity);
-    when(ruleService.update(eq("tenant"), eq(3L), any(DataQualityRuleEntity.class)))
+    when(ruleService.create(eq("tenant"), any(DataQualityRuleWriteCommand.class)))
+        .thenReturn(entity);
+    when(ruleService.update(eq("tenant"), eq(3L), any(DataQualityRuleWriteCommand.class)))
         .thenReturn(entity);
 
     assertThat(controller.list("tenant", "job:").data()).extracting("id").containsExactly(3L);
@@ -125,16 +125,13 @@ class ControllerEntityBoundaryBehaviorTest {
 
     WorkerRegistryServerService registryService = mock(WorkerRegistryServerService.class);
     WorkerDrainGovernanceService governanceService = mock(WorkerDrainGovernanceService.class);
-    TenantActionRateLimiter rateLimiter = mock(TenantActionRateLimiter.class);
-    WorkerController workerController =
-        new WorkerController(registryService, governanceService, rateLimiter);
+    WorkerController workerController = new WorkerController(registryService, governanceService);
     HttpServletRequest httpRequest = mock(HttpServletRequest.class);
     WorkerRegistryEntity worker = worker();
     WorkerHeartbeatDto heartbeat =
         WorkerHeartbeatDto.builder().tenantId("tenant").status("ONLINE").build();
     WorkerTenantRequest tenantRequest = new WorkerTenantRequest("tenant");
 
-    when(rateLimiter.tryConsume("tenant", RateLimitAction.WORKER_REGISTER)).thenReturn(true);
     when(registryService.register(any(WorkerHeartbeatDto.class))).thenReturn(worker);
     when(registryService.updateStatus("tenant", "worker", "ONLINE")).thenReturn(worker);
     when(governanceService.startDrain("tenant", "worker", 30)).thenReturn(worker);

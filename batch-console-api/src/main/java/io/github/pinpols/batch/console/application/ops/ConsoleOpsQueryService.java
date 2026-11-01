@@ -37,20 +37,21 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDaySummaryResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayWindowResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleRetryScheduleResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleScheduledOccurrenceFireResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleScheduledOccurrenceResponse;
-import io.github.pinpols.batch.console.domain.job.entity.PendingCatchUpEntity;
 import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
 import io.github.pinpols.batch.console.domain.job.query.PendingCatchUpQuery;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceFireView;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.PendingCatchUpView;
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertEventQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventQuery;
 import io.github.pinpols.batch.console.domain.ops.entity.ApprovalCommandEntity;
 import io.github.pinpols.batch.console.domain.ops.entity.RetryScheduleEntity;
-import io.github.pinpols.batch.console.domain.ops.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.console.domain.ops.query.ApprovalCommandQuery;
 import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogCountQuery;
 import io.github.pinpols.batch.console.domain.ops.query.OutboxDeliveryLogQuery;
@@ -59,6 +60,7 @@ import io.github.pinpols.batch.console.domain.ops.query.RetryScheduleQuery;
 import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
 import io.github.pinpols.batch.console.domain.ops.view.OutboxDeliveryLogRow;
 import io.github.pinpols.batch.console.domain.ops.view.OutboxRetryLogRow;
+import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
 import io.github.pinpols.batch.console.domain.query.AuditLogQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
@@ -72,7 +74,10 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -298,10 +303,10 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     Long cursorId = decodeCursorId(request.getCursor());
     PendingCatchUpQuery query = new PendingCatchUpQuery(
         tenantId, workflowCode, requestId, bizDate, keyword, pageRequest, cursorId);
-    List<PendingCatchUpEntity> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
+    List<PendingCatchUpView> rows = opsMappers.pendingCatchUpMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
-          pageRequest, rows, this::toPendingCatchUpResponse, PendingCatchUpEntity::getId);
+          pageRequest, rows, this::toPendingCatchUpResponse, PendingCatchUpView::getId);
     }
     long total = opsMappers.pendingCatchUpMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toPendingCatchUpResponse);
@@ -315,7 +320,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String workerGroup = request.getWorkerGroup();
     String status = request.getStatus();
     WorkerRegistryQuery query = new WorkerRegistryQuery(tenantId, workerGroup, status, pageRequest);
-    List<WorkerRegistryEntity> rows = opsMappers.workerRegistryMapper.selectByQuery(query);
+    List<WorkerRegistryView> rows = opsMappers.workerRegistryMapper.selectByQuery(query);
     long total = opsMappers.workerRegistryMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toWorkerRegistryResponse);
   }
@@ -593,13 +598,32 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         resolveLateArrivalWindowClosesAt(tenantId, calendarCode, cutoffAt);
     List<ConsoleBatchDaySummaryResponse> jobs =
         loadBatchDaySummaries(tenantId, calendarCode, bizDate);
-    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences =
-        opsMappers
-            .batchDayMapper
-            .selectScheduledOccurrences(tenantId, calendarCode, bizDate)
-            .stream()
-            .map(this::toScheduledOccurrenceResponse)
-            .toList();
+    List<BatchDayScheduledOccurrenceView> occurrences =
+        opsMappers.batchDayMapper.selectScheduledOccurrences(tenantId, calendarCode, bizDate);
+    Map<OccurrenceKey, List<ConsoleScheduledOccurrenceFireResponse>> firesByOccurrence =
+        new HashMap<>();
+    if (EmptyChecks.isNotEmpty(occurrences)) {
+      opsMappers.batchDayMapper.setTenantContext(tenantId);
+      for (BatchDayScheduledOccurrenceFireView fire :
+          opsMappers.batchDayMapper.selectScheduledOccurrenceFires(
+              tenantId, calendarCode, bizDate)) {
+        OccurrenceKey key =
+            new OccurrenceKey(fire.workflowDefinitionId(), fire.scheduledFireTime());
+        firesByOccurrence
+            .computeIfAbsent(key, ignored -> new ArrayList<>())
+            .add(new ConsoleScheduledOccurrenceFireResponse(
+                fire.fireInstanceId(), fire.refireCount(), fire.actualFireTime(), fire.fireKind()));
+      }
+    }
+    List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences = occurrences.stream()
+        .map(occurrence -> {
+          OccurrenceKey key =
+              new OccurrenceKey(occurrence.workflowDefinitionId(), occurrence.scheduledFireTime());
+          List<ConsoleScheduledOccurrenceFireResponse> fires =
+              firesByOccurrence.getOrDefault(key, List.of());
+          return toScheduledOccurrenceResponse(occurrence, fires);
+        })
+        .toList();
     return new ConsoleBatchDayWindowResponse(
         bizDate,
         hasBatchDay ? row.dayStatus() : null,
@@ -641,8 +665,11 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         catchupCount);
   }
 
+  private record OccurrenceKey(Long workflowDefinitionId, Instant scheduledFireTime) {}
+
   private ConsoleScheduledOccurrenceResponse toScheduledOccurrenceResponse(
-      BatchDayScheduledOccurrenceView occurrence) {
+      BatchDayScheduledOccurrenceView occurrence,
+      List<ConsoleScheduledOccurrenceFireResponse> fires) {
     return new ConsoleScheduledOccurrenceResponse(
         occurrence.workflowDefinitionId(),
         occurrence.workflowCode(),
@@ -652,7 +679,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         occurrence.bizDate(),
         occurrence.occurrenceStatus(),
         occurrence.requestId(),
-        occurrence.lastRejectionReason());
+        occurrence.lastRejectionReason(),
+        fires);
   }
 
   private Integer intValue(Number value) {
@@ -776,7 +804,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         .build();
   }
 
-  private ConsolePendingCatchUpResponse toPendingCatchUpResponse(PendingCatchUpEntity entity) {
+  private ConsolePendingCatchUpResponse toPendingCatchUpResponse(PendingCatchUpView entity) {
     String tenantId = display(entity.getTenantId());
     String requestId = display(entity.getRequestId());
     String workflowCode = display(entity.getWorkflowCode());
@@ -797,7 +825,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         .build();
   }
 
-  private ConsoleWorkerRegistryResponse toWorkerRegistryResponse(WorkerRegistryEntity entity) {
+  private ConsoleWorkerRegistryResponse toWorkerRegistryResponse(WorkerRegistryView entity) {
     String tenantId = display(entity.getTenantId());
     String workerCode = display(entity.getWorkerCode());
     String workerGroup = display(entity.getWorkerGroup());

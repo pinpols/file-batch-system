@@ -108,11 +108,12 @@ public class ConsoleWebhookService {
   public List<WebhookDeliveryLogEntity> deliveryLogs(
       String tenantId, Long subscriptionId, int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
+    int effectiveLimit = Math.min(Math.max(limit, 1), 200);
     deliveryLogRepository.bindTenant(resolved);
     if (subscriptionId != null) {
-      return deliveryLogRepository.findBySubscription(resolved, subscriptionId, limit);
+      return deliveryLogRepository.findBySubscription(resolved, subscriptionId, effectiveLimit);
     }
-    return deliveryLogRepository.findRecentByTenant(resolved, limit);
+    return deliveryLogRepository.findRecentByTenant(resolved, effectiveLimit);
   }
 
   /** 查询指定租户下所有启用的订阅（供 dispatcher 使用）。 */

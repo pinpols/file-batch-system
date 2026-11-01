@@ -17,8 +17,8 @@ import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.FileTemplateSnapshotMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.service.LaunchValidationService.WorkflowReplayExecutionBinding;
@@ -334,8 +334,8 @@ class FileTemplateSnapshotServiceTest {
     return source;
   }
 
-  private JobDefinitionEntity definition(String type) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView definition(String type) {
+    return JobDefinitionView.builder()
         .id(7L)
         .tenantId("tenant-a")
         .jobCode("FILE_JOB")

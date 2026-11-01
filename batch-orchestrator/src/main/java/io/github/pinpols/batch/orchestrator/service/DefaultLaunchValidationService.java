@@ -12,10 +12,10 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunExecutionSnapshot;
 import io.github.pinpols.batch.orchestrator.domain.context.TriggerLaunchPersistenceContext;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.TriggerRequestIsValidParentWorkflowNodeLaunchParam;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerRequestMapper;
@@ -68,7 +68,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
     boolean parentNodeLaunch = hasParentWorkflowNodeContext(triggerRequest);
     ParentWorkflowJobSnapshot parentJobSnapshot =
         parentNodeLaunch ? loadJobDefinitionFromWorkflowSnapshot(request, triggerRequest) : null;
-    JobDefinitionEntity jobDefinition =
+    JobDefinitionView jobDefinition =
         EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.jobDefinition();
     String workflowCalendarCode =
         EmptyChecks.isNull(parentJobSnapshot) ? null : parentJobSnapshot.workflowCalendarCode();
@@ -183,7 +183,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       rejectInvalidExecutionSnapshot(request, triggerRequest);
     }
     WorkflowNodeEntity node = snapshot.node(triggerRequest.getParentNodeCode());
-    JobDefinitionEntity definition = snapshot.jobDefinition(triggerRequest.getParentNodeCode());
+    JobDefinitionView definition = snapshot.jobDefinition(triggerRequest.getParentNodeCode());
     if (EmptyChecks.isNull(node)) {
       rejectInvalidExecutionSnapshot(request, triggerRequest);
     }
@@ -230,7 +230,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
   }
 
   private record ParentWorkflowJobSnapshot(
-      JobDefinitionEntity jobDefinition,
+      JobDefinitionView jobDefinition,
       String workflowCalendarCode,
       WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {}
 

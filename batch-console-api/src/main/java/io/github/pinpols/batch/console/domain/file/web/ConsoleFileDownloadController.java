@@ -1,9 +1,14 @@
 package io.github.pinpols.batch.console.domain.file.web;
 
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import jakarta.validation.constraints.NotNull;
+import java.io.IOException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -27,7 +32,7 @@ public class ConsoleFileDownloadController {
       @PathVariable Long fileId,
       @RequestParam @NotNull String tenantId,
       @RequestParam(required = false) String approvalId) {
-    return applicationService.download(tenantId, fileId, approvalId);
+    return toResponse(applicationService.download(tenantId, fileId, approvalId));
   }
 
   /** 导出文件错误记录为 CSV。 */
@@ -36,6 +41,35 @@ public class ConsoleFileDownloadController {
       @PathVariable Long fileId,
       @RequestParam @NotNull String tenantId,
       @RequestParam(required = false) String errorStage) {
-    return applicationService.exportFileErrors(tenantId, fileId, errorStage);
+    return toResponse(applicationService.exportFileErrors(tenantId, fileId, errorStage));
+  }
+
+  private ResponseEntity<InputStreamResource> toResponse(FileDownloadArtifact artifact) {
+    try {
+      InputStreamResource resource = artifact.unknownLength()
+          ? new InputStreamResource(artifact.content()) {
+            @Override
+            public long contentLength() {
+              return -1;
+            }
+          }
+          : new InputStreamResource(artifact.content());
+      String disposition =
+          ContentDisposition.attachment().filename(artifact.fileName()).build().toString();
+      return ResponseEntity.ok()
+          .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
+          .contentType(MediaType.parseMediaType(artifact.contentType()))
+          .body(resource);
+    } catch (RuntimeException failure) {
+      try {
+        artifact.content().close();
+      } catch (IOException closeFailure) {
+        failure.addSuppressed(closeFailure);
+      }
+      if (artifact.unknownLength()) {
+        throw new IllegalStateException("failed to open download stream", failure);
+      }
+      throw failure;
+    }
   }
 }

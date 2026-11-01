@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
+import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;

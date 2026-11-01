@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.sla.JobSlaViolationProcessor;
 import io.github.pinpols.batch.orchestrator.mapper.JobMonitoringMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -85,7 +85,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     String tenantId = "sla-recovery-" + UUID.randomUUID().toString().replace("-", "");
     long definitionId = insertDefinition(tenantId);
     long instanceId = insertOverdueInstance(tenantId, definitionId);
-    JobInstanceEntity candidate = new JobInstanceEntity();
+    JobSlaCandidate candidate = new JobSlaCandidate();
     candidate.setId(instanceId);
     candidate.setTenantId(tenantId);
     candidate.setInstanceNo("SLA_RECOVERY_INSTANCE_" + tenantId);
@@ -138,7 +138,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     String tenantId = "sla-race-" + UUID.randomUUID().toString().replace("-", "");
     long definitionId = insertDefinition(tenantId);
     long instanceId = insertOverdueInstance(tenantId, definitionId);
-    JobInstanceEntity candidate = new JobInstanceEntity();
+    JobSlaCandidate candidate = new JobSlaCandidate();
     candidate.setId(instanceId);
     candidate.setTenantId(tenantId);
     candidate.setInstanceNo("SLA_RACE_INSTANCE_" + tenantId);
@@ -179,7 +179,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     long definition = insertDefinition(tenant);
     long id = insertOverdueInstance(tenant, definition);
     try {
-      JobInstanceEntity candidate = monitoring.selectSlaViolationCandidates(100).stream()
+      JobSlaCandidate candidate = monitoring.selectSlaViolationCandidates(100).stream()
           .filter(row -> tenant.equals(row.getTenantId()) && row.getId().equals(id))
           .findFirst()
           .orElseThrow();
@@ -211,13 +211,13 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     long definition = insertDefinition(tenant);
     long id = insertOverdueInstance(tenant, definition);
     try {
-      JobInstanceEntity original = monitoring.selectSlaViolationCandidates(100).stream()
+      JobSlaCandidate original = monitoring.selectSlaViolationCandidates(100).stream()
           .filter(row -> tenant.equals(row.getTenantId()) && row.getId().equals(id))
           .findFirst()
           .orElseThrow();
       jdbcTemplate.update(updateJobInstanceSql, tenant, id);
       assertThat(monitoring.selectSlaViolationCandidates(100))
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .doesNotContain(id);
       assertThat(monitoring.countSlaViolationCandidates()).isZero();
       assertThat(violationProcessor.process(original, Instant.now())).isFalse();
@@ -227,7 +227,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
       // 写入持久化的根 Workflow 请求和子 Job 请求夹具，但不派发 Job。
       jdbcTemplate.update(updateJobInstanceSql2, tenant, id);
       assertThat(monitoring.selectSlaEscalationCandidates(Instant.now(), 100))
-          .extracting(JobInstanceEntity::getId)
+          .extracting(JobSlaCandidate::getId)
           .doesNotContain(id);
       assertThat(monitoring.countSlaEscalationCandidates(Instant.now())).isZero();
     } finally {
@@ -247,7 +247,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     long definition = insertDefinition(tenant);
     long id = insertOverdueInstance(tenant, definition);
     try {
-      JobInstanceEntity observed = monitoring.selectSlaViolationCandidates(100).stream()
+      JobSlaCandidate observed = monitoring.selectSlaViolationCandidates(100).stream()
           .filter(row -> tenant.equals(row.getTenantId()))
           .findFirst()
           .orElseThrow();
@@ -282,7 +282,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     CountDownLatch releaseCommit = new CountDownLatch(1);
     String application = "sla_wait_" + Long.toUnsignedString(System.nanoTime());
     try (ExecutorService executor = Executors.newFixedThreadPool(2)) {
-      JobInstanceEntity observed = monitoring.selectSlaViolationCandidates(100).stream()
+      JobSlaCandidate observed = monitoring.selectSlaViolationCandidates(100).stream()
           .filter(row -> tenant.equals(row.getTenantId()))
           .findFirst()
           .orElseThrow();
@@ -352,7 +352,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     long id = insertOverdueInstance(tenant, definition);
     try {
       jdbcTemplate.update(updateJobInstanceSql, tenant, id);
-      JobInstanceEntity observed =
+      JobSlaCandidate observed =
           monitoring.selectSlaEscalationCandidates(Instant.now(), 100).stream()
               .filter(row -> tenant.equals(row.getTenantId()))
               .findFirst()
@@ -397,7 +397,7 @@ class JobSlaSchedulerRecoveryIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(deleteJobDefinitionSql, tenant);
   }
 
-  private boolean processAfter(CountDownLatch start, JobInstanceEntity candidate) throws Exception {
+  private boolean processAfter(CountDownLatch start, JobSlaCandidate candidate) throws Exception {
     start.await();
     return violationProcessor.process(candidate, Instant.now());
   }

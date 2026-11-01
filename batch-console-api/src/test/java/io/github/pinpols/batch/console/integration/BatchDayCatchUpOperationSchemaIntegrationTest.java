@@ -14,7 +14,6 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.ops.ConsoleJobOperationsPort;
 import io.github.pinpols.batch.console.application.workflow.ManagedJobWorkflowReferencePort;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayCatchUpRequest;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.infrastructure.BatchDayCatchUpOperationStore;
 import io.github.pinpols.batch.console.domain.job.infrastructure.BatchDayCatchUpReconciliation;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobApprovalService;
@@ -26,6 +25,7 @@ import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperation
 import io.github.pinpols.batch.console.domain.job.param.BatchDayCatchUpOperationTransition;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayCatchUpOperation;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient;
 import io.github.pinpols.batch.console.shared.approval.OrchestratorApprovalClient.ApprovalSubmitCommand;
 import io.github.pinpols.batch.console.shared.client.TriggerInternalRestClient;
@@ -557,7 +557,7 @@ class BatchDayCatchUpOperationSchemaIntegrationTest extends AbstractIntegrationT
     when(calendars.selectActiveByTenantAndCalendarCode(tenant, "CAL"))
         .thenReturn(new ActiveCalendarRow(
             1L, tenant, "CAL", null, null, "MANUAL_APPROVAL", null, null, null));
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(1L);
     job.setEnabled(true);
     job.setDefaultWorkflowDefinitionId(10L);
@@ -622,7 +622,7 @@ class BatchDayCatchUpOperationSchemaIntegrationTest extends AbstractIntegrationT
     when(batchDays.selectFailedJobCodes(tenant, "CAL", date))
         .thenReturn(List.of("JOB_A"))
         .thenReturn(List.of("JOB_B"));
-    JobDefinitionEntity job = new JobDefinitionEntity();
+    JobDefinitionView job = new JobDefinitionView();
     job.setId(1L);
     job.setEnabled(true);
     job.setDefaultWorkflowDefinitionId(10L);

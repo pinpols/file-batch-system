@@ -91,8 +91,9 @@ public class WorkflowExecutionPushService {
     Runnable close = () -> {
       if (released.compareAndSet(false, true)) release(key, attached);
     };
+    SseEmitter emitter = null;
     try {
-      SseEmitter emitter = streams.subscribe(key.tenantId(), stream(key.runId()), null, null, null);
+      emitter = streams.subscribe(key.tenantId(), stream(key.runId()), null, null, null);
       emitter.onCompletion(close);
       emitter.onTimeout(close);
       emitter.onError(error -> close.run());
@@ -101,6 +102,13 @@ public class WorkflowExecutionPushService {
           key.tenantId(), stream(key.runId()), "workflow-execution-progress", initial);
       return emitter;
     } catch (RuntimeException failure) {
+      if (EmptyChecks.isNotNull(emitter)) {
+        try {
+          streams.close(emitter);
+        } catch (RuntimeException cleanupFailure) {
+          failure.addSuppressed(cleanupFailure);
+        }
+      }
       close.run();
       throw failure;
     }

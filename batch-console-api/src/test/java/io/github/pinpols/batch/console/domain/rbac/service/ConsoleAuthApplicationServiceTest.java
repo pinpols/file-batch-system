@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -17,6 +18,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.request.
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthProfileResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -32,6 +34,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -46,6 +49,9 @@ class ConsoleAuthApplicationServiceTest {
 
   @Mock
   private ConsoleLoginService loginService;
+
+  @Mock
+  private ConsoleLoginKeyPairService loginKeyPairService;
 
   @Mock
   private ConsoleSessionRegistry sessionRegistry;
@@ -68,6 +74,7 @@ class ConsoleAuthApplicationServiceTest {
     service = new ConsoleAuthApplicationService(
         jwtService,
         loginService,
+        loginKeyPairService,
         sessionRegistry,
         securityProperties,
         requestMetadataResolver,
@@ -90,6 +97,44 @@ class ConsoleAuthApplicationServiceTest {
 
     assertThat(result).isSameAs(response);
     verify(loginService).login(request);
+  }
+
+  @Test
+  @DisplayName("要求加密时直接调用登录应用入口也拒绝明文，且不执行账号登录")
+  void login_rejectsPlaintextWhenEncryptionRequired() {
+    securityProperties.getLoginEncryption().setRequired(true);
+    ConsoleLoginRequest request = new ConsoleLoginRequest();
+    request.setUsername("admin");
+    request.setPassword("pass");
+
+    assertThatThrownBy(() -> service.login(request))
+        .isInstanceOf(BizException.class)
+        .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
+            .isEqualTo("error.auth.encryption_required"));
+    verify(loginService, never()).login(any());
+  }
+
+  @Test
+  @DisplayName("加密登录先解密再携带外层验证码调用账号登录")
+  void login_decryptsAndPreservesOuterCaptcha() {
+    securityProperties.getLoginEncryption().setRequired(true);
+    ConsoleLoginRequest request = new ConsoleLoginRequest();
+    request.setEncryptedKey("encrypted-key");
+    request.setIv("iv");
+    request.setCiphertext("ciphertext");
+    request.setCaptchaToken("captcha");
+    when(loginKeyPairService.decrypt("encrypted-key", "iv", "ciphertext"))
+        .thenReturn("{\"username\":\"alice\",\"password\":\"secret\"}");
+    ConsoleAuthTokenResponse response = stubTokenResponse();
+    when(loginService.login(any())).thenReturn(response);
+
+    assertThat(service.login(request)).isSameAs(response);
+    ArgumentCaptor<ConsoleLoginRequest> resolved =
+        ArgumentCaptor.forClass(ConsoleLoginRequest.class);
+    verify(loginService).login(resolved.capture());
+    assertThat(resolved.getValue().getUsername()).isEqualTo("alice");
+    assertThat(resolved.getValue().getPassword()).isEqualTo("secret");
+    assertThat(resolved.getValue().getCaptchaToken()).isEqualTo("captcha");
   }
 
   @Test

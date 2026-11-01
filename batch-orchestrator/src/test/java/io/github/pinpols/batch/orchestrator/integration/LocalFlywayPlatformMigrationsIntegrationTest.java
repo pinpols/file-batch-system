@@ -132,7 +132,11 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
       String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
       Set<String> before =
           new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
-      flyway.migrate();
+      Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("371")
+          .load()
+          .migrate();
       Set<String> after =
           new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
       Set<String> removed = new TreeSet<>(before);

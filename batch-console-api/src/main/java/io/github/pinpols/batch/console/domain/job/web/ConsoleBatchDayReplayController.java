@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.application.contract.response.ConsoleReplayOperationResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchDayReplayApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayReplayEntryResponse;
@@ -42,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleBatchDayReplayController {
 
   private final ConsoleOrchestratorPort orchestratorProxy;
+  private final ConsoleBatchDayReplayApprovalService approvalService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleRequestMetadataResolver metadataResolver;
 
@@ -130,7 +132,7 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
     return responseFactory.forwardOrchestrator(
-        orchestratorProxy.replayOperationApprove(operationId, tenantId, approver));
+        approvalService.approveOperation(operationId, tenantId));
   }
 
   @PostMapping("/operations/{operationId}/cancel")
@@ -172,7 +174,7 @@ public class ConsoleBatchDayReplayController {
       @RequestParam(value = "tenantId", required = false) String tenantId,
       @RequestParam("approver") String approver) {
     CommonResponse<ConsoleBatchDayReplaySessionResponse> resp =
-        orchestratorProxy.batchDayReplayApprove(sessionId, tenantId, approver);
+        approvalService.approveSession(sessionId, tenantId);
     return responseFactory.forwardOrchestrator(resp);
   }
 

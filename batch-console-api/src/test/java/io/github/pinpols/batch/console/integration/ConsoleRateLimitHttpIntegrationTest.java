@@ -6,7 +6,9 @@ import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
+import io.github.pinpols.batch.console.domain.file.application.FileDownloadArtifact;
 import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
@@ -17,12 +19,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.server.LocalServerPort;
-import org.springframework.core.io.InputStreamResource;
-import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.reactive.JdkClientHttpConnector;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.reactive.server.WebTestClient;
-import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
 @SpringBootTest(
     classes = BatchConsoleApiApplication.class,
@@ -65,9 +64,8 @@ class ConsoleRateLimitHttpIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("昂贵报表接口: 同一用户一分钟内第二次请求返回 429")
   void shouldRateLimitExpensiveReportThroughHttpFilterChain() {
-    StreamingResponseBody body = output -> output.write("report".getBytes());
     when(reportExcelApplicationService.exportConfigReleases(any()))
-        .thenReturn(ResponseEntity.ok(body));
+        .thenReturn(new ExcelDownload("report.xlsx", output -> output.write("report".getBytes())));
 
     String username = "rate-expensive-user";
     exchangeReport(username).expectStatus().isOk();
@@ -82,8 +80,11 @@ class ConsoleRateLimitHttpIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("文件下载接口: 同一用户一分钟内第二次请求返回 429")
   void shouldRateLimitFileDownloadThroughHttpFilterChain() {
     when(fileDownloadApplicationService.download(anyString(), any(), any()))
-        .thenAnswer(invocation -> ResponseEntity.ok(
-            new InputStreamResource(new ByteArrayInputStream("file".getBytes()))));
+        .thenAnswer(invocation -> new FileDownloadArtifact(
+            new ByteArrayInputStream("file".getBytes()),
+            "file.bin",
+            "application/octet-stream",
+            true));
 
     String username = "rate-file-user";
     exchangeFile(username).expectStatus().isOk();

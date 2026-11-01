@@ -9,8 +9,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.common.dto.ResponseMeta;
+import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
+import io.github.pinpols.batch.console.domain.ops.application.ConsoleAdminTestDataApplicationService;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
@@ -23,7 +26,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.env.Environment;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
@@ -34,12 +36,12 @@ import org.springframework.validation.beanvalidation.LocalValidatorFactoryBean;
  * <p>覆盖:
  *
  * <ul>
- *   <li>prod profile fail-fast — controller 实例化即拒
+ *   <li>prod profile 由应用服务拒绝，且不触达编排层
  *   <li>prefix 正则校验 — 非法字符 / 空 / 过短全 400
  *   <li>合法请求只转发给 orchestrator proxy，console 不再直接写运行态表
  * </ul>
  */
-@DisplayName("测试数据清理接口:生产环境拒绝启用, 非法前缀拦截, 合法请求只转发编排层")
+@DisplayName("测试数据清理接口:生产环境拒绝调用, 非法前缀拦截, 合法请求只转发编排层")
 @ExtendWith(MockitoExtension.class)
 class ConsoleAdminTestDataControllerTest {
 
@@ -59,14 +61,13 @@ class ConsoleAdminTestDataControllerTest {
     ConsoleResponseFactory responseFactory = new ConsoleResponseFactory(requestMetadataResolver);
     ConsoleApiExceptionHandler exceptionHandler =
         ConsoleApiExceptionHandler.forStandaloneTest(responseFactory);
-    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
 
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
+    ConsoleAdminTestDataApplicationService applicationService =
+        new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
     ConsoleAdminTestDataController controller =
-        new ConsoleAdminTestDataController(orchestratorProxyService, responseFactory, environment);
-    // PostConstruct 在 standalone setup 下不会自动跑;此处显式调一次走非 prod 路径(test profile)
-    ReflectionTestUtils.invokeMethod(controller, "validateProfile");
+        new ConsoleAdminTestDataController(applicationService, responseFactory);
     mockMvc = MockMvcBuilders.standaloneSetup(controller)
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
@@ -74,15 +75,16 @@ class ConsoleAdminTestDataControllerTest {
   }
 
   @Test
-  @DisplayName("生产环境守卫:以生产配置启用时构造即抛出状态异常, 并给出拒绝原因")
-  void shouldRejectInProductionProfileAtConstruction() {
+  @DisplayName("生产环境守卫:应用服务拒绝清理且不调用编排层")
+  void shouldRejectCleanupInProductionProfile() {
     when(environment.getActiveProfiles()).thenReturn(new String[] {"prod"});
-    ConsoleResponseFactory rf = new ConsoleResponseFactory(requestMetadataResolver);
-    ConsoleAdminTestDataController prodCtl =
-        new ConsoleAdminTestDataController(orchestratorProxyService, rf, environment);
-    assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(prodCtl, "validateProfile"))
-        .isInstanceOf(IllegalStateException.class)
-        .hasMessageContaining("must not be enabled in production profiles");
+    ConsoleAdminTestDataApplicationService applicationService =
+        new ConsoleAdminTestDataApplicationService(orchestratorProxyService, environment);
+    assertThatThrownBy(() -> applicationService.cleanupByPrefix("e2e"))
+        .isInstanceOf(BizException.class)
+        .extracting(exception -> ((BizException) exception).getCode())
+        .isEqualTo(ResultCode.FORBIDDEN);
+    verify(orchestratorProxyService, never()).adminTestDataCleanupByPrefix("e2e");
   }
 
   @Test
@@ -90,8 +92,7 @@ class ConsoleAdminTestDataControllerTest {
   void shouldRejectBlankPrefixAtMethodGuard() throws Exception {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    // controller 内部 if (prefix.isBlank()) 回退,@Pattern 在 standalone MockMvc 不触发
-    // (MethodValidationPostProcessor 需要 Spring context),所以这里走方法内 guard
+    // standalone MockMvc 不启用 MethodValidationPostProcessor；直接断言应用服务的入口策略。
     mockMvc
         .perform(delete("/api/console/admin/test-data").param("prefix", "   "))
         .andExpect(status().isBadRequest())
@@ -102,6 +103,7 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("前缀清理:合法前缀按表计数回填成功响应, 并转发编排层")
   void shouldForwardValidPrefixCleanupToOrchestrator() throws Exception {
+    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     when(orchestratorProxyService.adminTestDataCleanupByPrefix("e2e"))
         .thenReturn(Map.of("job_definition", 1, "workflow_definition", 1));
     when(requestMetadataResolver.responseMeta())
@@ -118,6 +120,7 @@ class ConsoleAdminTestDataControllerTest {
   @Test
   @DisplayName("精确清理:逗号分隔的标识列表解析后转发, 并回填清理计数")
   void shouldForwardExactIdsCleanupToOrchestrator() throws Exception {
+    when(environment.getActiveProfiles()).thenReturn(new String[] {"test"});
     when(orchestratorProxyService.adminTestDataCleanupByExactTenantIds(List.of("td", "te")))
         .thenReturn(Map.of("tenant", 2));
     when(requestMetadataResolver.responseMeta())

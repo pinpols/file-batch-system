@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.application.observability.ConsoleSystemParameterService;
 import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterPolicy;
+import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
@@ -58,8 +59,8 @@ class ConsoleGovernanceControllerTest {
     validator.afterPropertiesSet();
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleGovernanceController(
-            parameterService,
-            new ConsoleGovernanceParameterPolicy(),
+            new ConsoleGovernanceParameterService(
+                parameterService, new ConsoleGovernanceParameterPolicy()),
             responseFactory,
             requestMetadataResolver,
             tenantGuard))

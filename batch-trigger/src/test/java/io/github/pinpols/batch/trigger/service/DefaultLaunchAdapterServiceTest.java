@@ -12,6 +12,7 @@ import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.CronExpressionAdapter;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
+import io.github.pinpols.batch.trigger.web.TriggerCommandInputMapper;
 import io.github.pinpols.batch.trigger.web.request.TriggerLaunchRequest;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -43,8 +44,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "api"));
 
-    LaunchRequest launchRequest = service.fromApiRequest(
-        new TriggerLaunchCommand(request, "idem-001", "req-001", "trace-001"));
+    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "idem-001", "req-001", "trace-001"));
 
     assertThat(launchRequest.tenantId()).isEqualTo("t1");
     assertThat(launchRequest.jobCode()).isNull();
@@ -65,8 +66,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
 
-    LaunchRequest launchRequest =
-        service.fromApiRequest(new TriggerLaunchCommand(request, "idem-wf", "req-wf", "trace-wf"));
+    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "idem-wf", "req-wf", "trace-wf"));
 
     assertThat(launchRequest.workflowDefinitionId()).isEqualTo(71L);
     assertThat(launchRequest.jobCode()).isNull();
@@ -82,8 +83,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setTriggerType(TriggerType.EVENT);
     request.setExternalEventCode("PAYMENT_CLOSED");
 
-    LaunchRequest launchRequest = service.fromApiRequest(
-        new TriggerLaunchCommand(request, "event-idem", "event-req", "event-trace"));
+    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "event-idem", "event-req", "event-trace"));
 
     assertThat(launchRequest.triggerType()).isEqualTo(TriggerType.EVENT);
     assertThat(launchRequest.externalEventCode()).isEqualTo("PAYMENT_CLOSED");
@@ -230,8 +231,8 @@ class DefaultLaunchAdapterServiceTest {
     request.setDataIntervalStart(Instant.parse("2026-03-27T14:30:00Z"));
     request.setDataIntervalEnd(Instant.parse("2026-03-27T14:35:00Z"));
 
-    LaunchRequest launchRequest = service.fromApiRequest(
-        new TriggerLaunchCommand(request, "idem-api", "req-api", "trace-api"));
+    LaunchRequest launchRequest = service.fromApiRequest(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "idem-api", "req-api", "trace-api"));
 
     assertThat(launchRequest.dataIntervalStart()).isEqualTo(Instant.parse("2026-03-27T14:30:00Z"));
     assertThat(launchRequest.dataIntervalEnd()).isEqualTo(Instant.parse("2026-03-27T14:35:00Z"));

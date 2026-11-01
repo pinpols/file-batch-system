@@ -11,9 +11,9 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.LinkedHashMap;
@@ -35,7 +35,7 @@ class RerunJobDefinitionResolverTest {
   private WorkflowRunMapper workflowRuns;
   private RerunJobDefinitionResolver resolver;
   private JobInstanceEntity source;
-  private JobDefinitionEntity latest;
+  private JobDefinitionView latest;
 
   @BeforeEach
   void setUp() {
@@ -58,7 +58,7 @@ class RerunJobDefinitionResolverTest {
     when(workflowRuns.selectByNodeJobInstanceId(TENANT, SOURCE_INSTANCE_ID))
         .thenReturn(runWithDefinition(1, "queue-v1", "timeout-v1"));
 
-    JobDefinitionEntity selected = resolver.resolve(request(Map.of()), JOB_CODE, latest);
+    JobDefinitionView selected = resolver.resolve(request(Map.of()), JOB_CODE, latest);
 
     assertDefinition(selected, 1, "queue-v1", "timeout-v1");
     assertThat(selected.defaultParams()).containsEntry("source", "v1");
@@ -67,7 +67,7 @@ class RerunJobDefinitionResolverTest {
   @Test
   @DisplayName("USE_LATEST_CONFIG 选择当前定义但仍校验源实例租户与作业身份")
   void shouldResolveLatestDefinitionAfterValidatingSourceInstance() {
-    JobDefinitionEntity selected = resolver.resolve(
+    JobDefinitionView selected = resolver.resolve(
         request(Map.of("_rerunConfigVersionPolicy", "USE_LATEST_CONFIG")), JOB_CODE, latest);
 
     assertThat(selected).isSameAs(latest);
@@ -80,7 +80,7 @@ class RerunJobDefinitionResolverTest {
     when(workflowRuns.selectLatestJobDefinitionSnapshot(TENANT, JOB_DEFINITION_ID, JOB_CODE, 1))
         .thenReturn(runWithDefinition(1, "queue-v1", "timeout-v1"));
 
-    JobDefinitionEntity selected = resolver.resolve(
+    JobDefinitionView selected = resolver.resolve(
         request(
             Map.of("_rerunConfigVersionPolicy", "USE_SPECIFIED_VERSION", "_rerunConfigVersion", 1)),
         JOB_CODE,
@@ -153,8 +153,8 @@ class RerunJobDefinitionResolverTest {
         .build();
   }
 
-  private JobDefinitionEntity definition(int version, String queue, String timeout) {
-    return JobDefinitionEntity.builder()
+  private JobDefinitionView definition(int version, String queue, String timeout) {
+    return JobDefinitionView.builder()
         .id(JOB_DEFINITION_ID)
         .tenantId(TENANT)
         .jobCode(JOB_CODE)
@@ -176,7 +176,7 @@ class RerunJobDefinitionResolverTest {
     node.setNodeType(WorkflowNodeType.JOB.code());
     node.setRelatedJobCode(JOB_CODE);
     node.setEnabled(true);
-    JobDefinitionEntity definition = definition(version, queue, executionHandler);
+    JobDefinitionView definition = definition(version, queue, executionHandler);
     Map<String, Object> jobMetadata = Map.of(
         "jobDefinitionId", JOB_DEFINITION_ID,
         "jobCode", JOB_CODE,
@@ -209,7 +209,7 @@ class RerunJobDefinitionResolverTest {
   }
 
   private void assertDefinition(
-      JobDefinitionEntity actual, int version, String queue, String executionHandler) {
+      JobDefinitionView actual, int version, String queue, String executionHandler) {
     assertThat(actual.version()).isEqualTo(version);
     assertThat(actual.queueCode()).isEqualTo(queue);
     assertThat(actual.executionHandler()).isEqualTo(executionHandler);

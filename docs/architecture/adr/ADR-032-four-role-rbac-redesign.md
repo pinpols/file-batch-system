@@ -4,6 +4,8 @@
 - **日期**:2026-05-21
 - **影响**:`batch-console-api` 权限模型 / 数据库现存账号 / 前端权限指令
 
+> 当前权限以[控制台侧边栏菜单与角色矩阵](../../design/console-sidebar-menu-tree.md)和对应 Controller 为准。下文队列和调度窗口下放租户管理员的表述保留历史决策：现行独立队列及批次窗口管理均仅对 `ROLE_ADMIN` 开放；队列属于平台资源，参见[租户作业配置简化方案](../../plans/tenant-job-configuration-simplification-plan-2026-10-09.md)。
+
 ## 背景
 
 历史角色矩阵(5 档,平铺):

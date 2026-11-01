@@ -16,9 +16,12 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryProperties;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
+import io.github.pinpols.batch.orchestrator.infrastructure.failure.SpringTechnicalFailureClassificationAdapter;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -37,9 +40,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.server.ResponseStatusException;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
@@ -104,7 +105,12 @@ class TriggerLaunchRecoveryIdentityIntegrationTest extends AbstractIntegrationTe
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     properties.setMaxAttempts(3);
     TriggerLaunchRecoveryService recovering = new TriggerLaunchRecoveryService(
-        mapper, protector, launch, properties, new SimpleMeterRegistry());
+        mapper,
+        protector,
+        launch,
+        properties,
+        new SimpleMeterRegistry(),
+        new SpringTechnicalFailureClassificationAdapter());
     try {
       try (var pool = Executors.newSingleThreadExecutor()) {
         var first = pool.submit(() -> recovering.recoverDue(10));
@@ -152,7 +158,12 @@ class TriggerLaunchRecoveryIdentityIntegrationTest extends AbstractIntegrationTe
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     properties.setMaxAttempts(3);
     TriggerLaunchRecoveryService recovering = new TriggerLaunchRecoveryService(
-        mapper, protector, launch, properties, new SimpleMeterRegistry());
+        mapper,
+        protector,
+        launch,
+        properties,
+        new SimpleMeterRegistry(),
+        new SpringTechnicalFailureClassificationAdapter());
     try {
       try (var pool = Executors.newSingleThreadExecutor()) {
         var first = pool.submit(() -> recovering.recoverDue(10));
@@ -206,7 +217,12 @@ class TriggerLaunchRecoveryIdentityIntegrationTest extends AbstractIntegrationTe
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     properties.setMaxAttempts(3);
     TriggerLaunchRecoveryService recovering = new TriggerLaunchRecoveryService(
-        mapper, protector, launch, properties, new SimpleMeterRegistry());
+        mapper,
+        protector,
+        launch,
+        properties,
+        new SimpleMeterRegistry(),
+        new SpringTechnicalFailureClassificationAdapter());
     try (var pool = Executors.newSingleThreadExecutor()) {
       var successful = pool.submit(() -> recovering.recoverDue(10));
       try {
@@ -233,11 +249,16 @@ class TriggerLaunchRecoveryIdentityIntegrationTest extends AbstractIntegrationTe
     String original = envelope(tenant, "request", "job-a");
     LaunchApplicationService launch = mock(LaunchApplicationService.class);
     when(launch.launchFromTrustedQueue(any()))
-        .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT, "event expectation conflict"))
+        .thenThrow(new OperationFailure(Kind.CONFLICT, "event expectation conflict"))
         .thenReturn(null);
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     TriggerLaunchRecoveryService recovering = new TriggerLaunchRecoveryService(
-        mapper, protector, launch, properties, new SimpleMeterRegistry());
+        mapper,
+        protector,
+        launch,
+        properties,
+        new SimpleMeterRegistry(),
+        new SpringTechnicalFailureClassificationAdapter());
     assertThat(service.park(original, "trace")).isTrue();
 
     assertThat(recovering.recoverDue(10)).isZero();

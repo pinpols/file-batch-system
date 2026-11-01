@@ -22,17 +22,18 @@ import io.github.pinpols.batch.console.domain.job.application.contract.response.
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobPartitionResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobStepInstanceResponse;
-import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.JobDependencyRuleResponse;
 import io.github.pinpols.batch.console.domain.job.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
-import io.github.pinpols.batch.console.domain.job.entity.JobPartitionEntity;
-import io.github.pinpols.batch.console.domain.job.entity.JobStepInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.query.JobExecutionLogQuery;
 import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import io.github.pinpols.batch.console.domain.job.query.JobPartitionQuery;
 import io.github.pinpols.batch.console.domain.job.query.JobStepInstanceQuery;
 import io.github.pinpols.batch.console.domain.job.support.ConsoleJobQueryMappers;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobPartitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobStepInstanceView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -77,7 +78,7 @@ public class ConsoleJobQueryService {
         request.getMonitoringCategory(),
         Boolean.TRUE.equals(request.getIncludeDisabled()) ? null : request.getEnabled(),
         pageRequest);
-    List<JobDefinitionEntity> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
+    List<JobDefinitionView> rows = jobMappers.jobDefinitionMapper.selectByQuery(query);
     long total = jobMappers.jobDefinitionMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobDefinitionResponse);
   }
@@ -234,10 +235,10 @@ public class ConsoleJobQueryService {
     Long cursorId = decodeCursorId(request.getCursor());
     JobStepInstanceQuery query = new JobStepInstanceQuery(
         tenantId, jobInstanceId, jobPartitionId, stepCode, stepStatus, pageRequest, cursorId);
-    List<JobStepInstanceEntity> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
+    List<JobStepInstanceView> rows = jobMappers.jobStepInstanceMapper.selectByQuery(query);
     if (cursorMode) {
       return cursorPage(
-          pageRequest, rows, this::toJobStepInstanceResponse, JobStepInstanceEntity::getId);
+          pageRequest, rows, this::toJobStepInstanceResponse, JobStepInstanceView::getId);
     }
     long total = jobMappers.jobStepInstanceMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobStepInstanceResponse);
@@ -245,9 +246,8 @@ public class ConsoleJobQueryService {
 
   public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
     String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
-    JobStepInstanceEntity entity =
-        jobMappers.jobStepInstanceMapper.selectById(resolvedTenantId, id);
-    JobStepInstanceEntity existingStep = requireNotNull(entity, "job step instance not found");
+    JobStepInstanceView entity = jobMappers.jobStepInstanceMapper.selectById(resolvedTenantId, id);
+    JobStepInstanceView existingStep = requireNotNull(entity, "job step instance not found");
     return toJobStepInstanceResponse(existingStep);
   }
 
@@ -263,15 +263,15 @@ public class ConsoleJobQueryService {
     Long cursorId = decodeCursorId(request.getCursor());
     JobPartitionQuery query = new JobPartitionQuery(
         tenantId, jobInstanceId, partitionStatus, pageRequest, cursorId, cursorMode);
-    List<JobPartitionEntity> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
+    List<JobPartitionView> rows = jobMappers.jobPartitionMapper.selectByQuery(query);
     if (cursorMode) {
-      return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionEntity::getId);
+      return cursorPage(pageRequest, rows, this::toJobPartitionResponse, JobPartitionView::getId);
     }
     long total = jobMappers.jobPartitionMapper.countByQuery(query);
     return page(pageRequest, total, rows, this::toJobPartitionResponse);
   }
 
-  private ConsoleJobPartitionResponse toJobPartitionResponse(JobPartitionEntity entity) {
+  private ConsoleJobPartitionResponse toJobPartitionResponse(JobPartitionView entity) {
     Long id = entity.getId();
     String tenantId = display(entity.getTenantId());
     Long jobInstanceId = entity.getJobInstanceId();
@@ -306,7 +306,7 @@ public class ConsoleJobQueryService {
         .build();
   }
 
-  private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionEntity entity) {
+  private ConsoleJobDefinitionResponse toJobDefinitionResponse(JobDefinitionView entity) {
     String maskedDefaultParams = SecretMasking.maskSensitiveJson(entity.getDefaultParams());
     ConsoleJobDefinitionResponse response = ConsoleJobDefinitionResponse.builder()
         .id(entity.getId())
@@ -320,7 +320,10 @@ public class ConsoleJobQueryService {
         .jobDependencyRules(
             EmptyChecks.isNull(entity.getJobDependencyRules())
                 ? List.of()
-                : entity.getJobDependencyRules())
+                : entity.getJobDependencyRules().stream()
+                    .map(rule -> new JobDependencyRuleResponse(
+                        rule.upstreamJobCode(), rule.bizDateAlignment()))
+                    .toList())
         .jobName(display(entity.getJobName()))
         .jobType(display(entity.getJobType()))
         .bizType(display(entity.getBizType()))
@@ -424,7 +427,7 @@ public class ConsoleJobQueryService {
         .build();
   }
 
-  private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceEntity entity) {
+  private ConsoleJobStepInstanceResponse toJobStepInstanceResponse(JobStepInstanceView entity) {
     String errorMessage = localizedErrorRenderer.render(entity);
     Long id = entity.getId();
     String tenantId = display(entity.getTenantId());

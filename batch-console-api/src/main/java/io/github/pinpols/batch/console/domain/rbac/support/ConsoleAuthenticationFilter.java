@@ -138,8 +138,6 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         try {
           ConsolePrincipal principal = jwtService.authenticate(bearerToken);
           setAuthentication(principal, bearerToken);
-          filterChain.doFilter(request, response);
-          return;
         } catch (Exception exception) {
           SwallowedExceptionLogger.warn(
               ConsoleAuthenticationFilter.class, "catch:Exception", exception);
@@ -166,6 +164,8 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
               CommonErrorMessages.INVALID_CONSOLE_JWT);
           return;
         }
+        filterChain.doFilter(request, response);
+        return;
       }
 
       if (batchSecurityProperties.isBypassMode()) {

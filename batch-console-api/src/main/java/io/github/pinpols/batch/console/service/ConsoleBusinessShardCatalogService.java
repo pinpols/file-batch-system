@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.service;
 
+import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
 import io.github.pinpols.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
@@ -30,7 +31,18 @@ public class ConsoleBusinessShardCatalogService {
   }
 
   @Transactional
-  public void upsert(BusinessShardCatalogUpsertParam param) {
+  public void upsert(BusinessShardCatalogUpsertCommand command) {
+    BusinessShardCatalogUpsertParam param = BusinessShardCatalogUpsertParam.builder()
+        .placementKey(command.placementKey())
+        .host(command.host())
+        .port(command.port())
+        .dbName(command.dbName())
+        .secretRef(command.secretRef())
+        .poolMaxSize(command.poolMaxSize())
+        .enabled(command.enabled())
+        .description(command.description())
+        .operator(command.operator())
+        .build();
     catalogMapper.upsert(param);
   }
 

@@ -92,14 +92,22 @@ public class ConsoleProgressSnapshotPublisher {
           attached.timer.cancel(false);
       }
     };
+    SseEmitter emitter = null;
     try {
-      SseEmitter emitter = subscriptions.subscribe(tenant, stream, null, null, null);
+      emitter = subscriptions.subscribe(tenant, stream, null, null, null);
       emitter.onCompletion(close);
       emitter.onTimeout(close);
       emitter.onError(error -> close.run());
       events.publishChanged(tenant, stream, event, initial);
       return emitter;
     } catch (RuntimeException failure) {
+      if (EmptyChecks.isNotNull(emitter)) {
+        try {
+          subscriptions.close(emitter);
+        } catch (RuntimeException cleanupFailure) {
+          failure.addSuppressed(cleanupFailure);
+        }
+      }
       close.run();
       throw failure;
     }

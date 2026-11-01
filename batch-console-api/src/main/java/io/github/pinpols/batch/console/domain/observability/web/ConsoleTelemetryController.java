@@ -3,8 +3,8 @@ package io.github.pinpols.batch.console.domain.observability.web;
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleTelemetryService;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest;
 import io.github.pinpols.batch.console.domain.observability.application.contract.request.FrontendTelemetryRequest.Event;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
@@ -13,7 +13,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -25,7 +24,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequestMapping("/api/console/telemetry")
 @RequiredArgsConstructor
-@Slf4j
 public class ConsoleTelemetryController {
 
   private static final int MAX_PROPS_BYTES_PER_EVENT = 8 * 1024;
@@ -34,36 +32,13 @@ public class ConsoleTelemetryController {
   private static final int MAX_PROPS_LIST_ITEMS = 100;
 
   private final ConsoleResponseFactory responseFactory;
+  private final ConsoleTelemetryService telemetryService;
 
   @PostMapping("/events")
   public CommonResponse<Void> receiveEvents(@RequestBody @Valid FrontendTelemetryRequest request) {
     validateProps(request);
-    for (Event event : request.events()) {
-      // 保留聚合诊断信息，不输出调用方控制的事件文本或页面值。
-      int propsKeys = EmptyChecks.isNull(event.props()) ? 0 : event.props().size();
-      if ("error".equals(event.type())) {
-        log.error(
-            "[frontend:error] telemetry event received nameLength={} pagePresent={} propsKeys={}",
-            event.name().length(),
-            EmptyChecks.isNotBlank(event.page()),
-            propsKeys);
-      } else {
-        log.info(
-            "[frontend] telemetry event received type={} nameLength={} pagePresent={} propsKeys={}",
-            safeEventType(event.type()),
-            event.name().length(),
-            EmptyChecks.isNotBlank(event.page()),
-            propsKeys);
-      }
-    }
+    telemetryService.receive(request);
     return responseFactory.success(null);
-  }
-
-  private static String safeEventType(String eventType) {
-    return switch (eventType) {
-      case "route", "click", "api", "error" -> eventType;
-      default -> "custom";
-    };
   }
 
   private void validateProps(FrontendTelemetryRequest request) {

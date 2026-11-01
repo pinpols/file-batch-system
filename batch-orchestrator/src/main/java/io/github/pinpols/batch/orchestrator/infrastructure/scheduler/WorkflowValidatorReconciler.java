@@ -7,8 +7,8 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Alert
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult;
 import io.github.pinpols.batch.orchestrator.config.WorkflowValidatorReconcileProperties;
-import io.github.pinpols.batch.orchestrator.controller.request.AlertEmitRequest;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.util.LinkedHashMap;
@@ -48,13 +48,13 @@ public class WorkflowValidatorReconciler {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;
     }
-    List<WorkflowDefinitionEntity> enabled =
+    List<WorkflowDefinitionView> enabled =
         workflowDefinitionMapper.selectAllEnabled(properties.getBatchSize());
     if (enabled == null || enabled.isEmpty()) {
       return;
     }
     int invalidCount = 0;
-    for (WorkflowDefinitionEntity wf : enabled) {
+    for (WorkflowDefinitionView wf : enabled) {
       if (wf == null || wf.id() == null) continue;
       String tenantId = wf.tenantId();
       if (tenantId == null || tenantId.isBlank()) {
@@ -85,7 +85,7 @@ public class WorkflowValidatorReconciler {
     }
   }
 
-  private boolean validateAndEmitInTenant(WorkflowDefinitionEntity workflow) {
+  private boolean validateAndEmitInTenant(WorkflowDefinitionView workflow) {
     WorkflowValidationResult result = validator.validate(workflow.id());
     if (result.hasErrors()) {
       emitInvalid(workflow, result);
@@ -94,13 +94,13 @@ public class WorkflowValidatorReconciler {
     return false;
   }
 
-  private void emitInvalid(WorkflowDefinitionEntity wf, WorkflowValidationResult result) {
+  private void emitInvalid(WorkflowDefinitionView wf, WorkflowValidationResult result) {
     Map<String, Object> detail = new LinkedHashMap<>();
     detail.put("workflowDefinitionId", wf.id());
     detail.put("workflowCode", wf.workflowCode());
     detail.put("errors", result.errors());
     detail.put("warnings", result.warnings());
-    AlertEmitRequest request = AlertEmitRequest.builder()
+    AlertEmitCommand request = AlertEmitCommand.builder()
         .tenantId(wf.tenantId())
         .serviceName("batch-orchestrator")
         .alertType(ALERT_TYPE)

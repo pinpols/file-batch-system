@@ -22,7 +22,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepos
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.imports.config.ImportSkipProperties;
-import io.github.pinpols.batch.worker.imports.domain.ImportBadRecordEntity;
+import io.github.pinpols.batch.worker.imports.domain.ImportBadRecord;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportStage;
 import io.github.pinpols.batch.worker.imports.stage.ImportRuntimeKeys;
@@ -176,7 +176,7 @@ public class ImportRecordGovernanceService {
         && DryRunGuard.fromAttributes(context.getAttributes()).isDryRun()) {
       return;
     }
-    List<ImportBadRecordEntity> badRecords = badRecords(context);
+    List<ImportBadRecord> badRecords = badRecords(context);
     if (badRecords.isEmpty()) {
       return;
     }
@@ -192,7 +192,7 @@ public class ImportRecordGovernanceService {
     ErrorSinkType sinkType = resolveErrorSinkType();
     if (sinkType == ErrorSinkType.ERROR_FILE || sinkType == ErrorSinkType.BOTH) {
       ErrorMaskingPolicy masking = errorMaskingPolicy(attrs);
-      List<ImportBadRecordEntity> outputRecords = masking.enabled()
+      List<ImportBadRecord> outputRecords = masking.enabled()
           ? badRecords.stream()
               .map(record -> maskBadRecord(record, masking.ruleSet()))
               .toList()
@@ -289,7 +289,7 @@ public class ImportRecordGovernanceService {
     Map<String, Object> attrs = context.getAttributes();
     String badRecordStage = EmptyChecks.isNull(stage) ? null : stage.name();
     String badRecordSkipActionCode = resolveSkipAction().code();
-    ImportBadRecordEntity badRecord = new ImportBadRecordEntity(
+    ImportBadRecord badRecord = new ImportBadRecord(
         recordNo,
         badRecordStage,
         errorCode,
@@ -300,7 +300,7 @@ public class ImportRecordGovernanceService {
         null,
         sourceRowNum,
         sourceColumn);
-    List<ImportBadRecordEntity> recordedBadRecords = badRecords(context);
+    List<ImportBadRecord> recordedBadRecords = badRecords(context);
     recordedBadRecords.add(badRecord);
 
     if (skipped) {
@@ -335,7 +335,7 @@ public class ImportRecordGovernanceService {
   }
 
   /** 内存计数先保留，持久审计按原安全开关脱敏；写失败仍阻止后续完成元数据。 */
-  private void persistBadRecordAudit(BadRecordContext brc, ImportBadRecordEntity badRecord) {
+  private void persistBadRecordAudit(BadRecordContext brc, ImportBadRecord badRecord) {
     ImportJobContext context = brc.context();
     ImportStage stage = brc.stage();
     Long recordNo = brc.recordNo();
@@ -403,8 +403,8 @@ public class ImportRecordGovernanceService {
     return new ErrorMaskingPolicy(errorLineMask, maskingRuleSet);
   }
 
-  private ImportBadRecordEntity maskBadRecord(ImportBadRecordEntity record, String ruleSet) {
-    return ImportBadRecordEntity.builder()
+  private ImportBadRecord maskBadRecord(ImportBadRecord record, String ruleSet) {
+    return ImportBadRecord.builder()
         .recordNo(record.recordNo())
         .stageCode(record.stageCode())
         .errorCode(record.errorCode())
@@ -419,24 +419,24 @@ public class ImportRecordGovernanceService {
   }
 
   @SuppressWarnings("unchecked")
-  private List<ImportBadRecordEntity> badRecords(ImportJobContext context) {
+  private List<ImportBadRecord> badRecords(ImportJobContext context) {
     Object existing = context.getAttributes().get(BAD_RECORDS_KEY);
     if (existing instanceof List<?> list) {
-      // 校验所有元素都是 ImportBadRecordEntity;若是则返回原 list 引用(可变),
+      // 校验所有元素都是 ImportBadRecord;若是则返回原 list 引用(可变),
       // 以便后续 recordBadRecord 的 add 可见。此处若返回防御性拷贝,会静默丢掉
       // 第 2 条及之后的坏记录。
       boolean allMatch = true;
       for (Object item : list) {
-        if (!(item instanceof ImportBadRecordEntity)) {
+        if (!(item instanceof ImportBadRecord)) {
           allMatch = false;
           break;
         }
       }
       if (allMatch) {
-        return (List<ImportBadRecordEntity>) existing;
+        return (List<ImportBadRecord>) existing;
       }
     }
-    List<ImportBadRecordEntity> created = new ArrayList<>();
+    List<ImportBadRecord> created = new ArrayList<>();
     context.getAttributes().put(BAD_RECORDS_KEY, created);
     return created;
   }

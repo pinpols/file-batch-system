@@ -28,13 +28,13 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpInput;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.github.pinpols.batch.trigger.web.request.ScheduledOccurrenceCatchUpRequest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -80,25 +80,25 @@ final class TriggerScheduledRecoveryService {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(command.request())) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    ScheduledOccurrenceCatchUpRequest request = command.request();
-    boolean requiredCatchUpFieldsAreMissing = EmptyChecks.isBlank(request.getTenantId())
-        || EmptyChecks.isNull(request.getWorkflowDefinitionId())
-        || EmptyChecks.isNull(request.getScheduledFireTime())
-        || EmptyChecks.isNull(request.getBizDate())
-        || EmptyChecks.isBlank(request.getReason())
-        || EmptyChecks.isBlank(request.getRequestedBy())
+    ScheduledOccurrenceCatchUpInput request = command.request();
+    boolean requiredCatchUpFieldsAreMissing = EmptyChecks.isBlank(request.tenantId())
+        || EmptyChecks.isNull(request.workflowDefinitionId())
+        || EmptyChecks.isNull(request.scheduledFireTime())
+        || EmptyChecks.isNull(request.bizDate())
+        || EmptyChecks.isBlank(request.reason())
+        || EmptyChecks.isBlank(request.requestedBy())
         || EmptyChecks.isBlank(command.idempotencyKey())
         || EmptyChecks.isBlank(command.requestId())
         || EmptyChecks.isBlank(command.traceId());
     if (requiredCatchUpFieldsAreMissing) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    admissionRules.assertTenantActive(request.getTenantId());
-    String reason = request.getReason().trim();
-    String requestedBy = request.getRequestedBy().trim();
-    Instant scheduledFireTime = request.getScheduledFireTime();
+    admissionRules.assertTenantActive(request.tenantId());
+    String reason = request.reason().trim();
+    String requestedBy = request.requestedBy().trim();
+    Instant scheduledFireTime = request.scheduledFireTime();
     TriggerDescriptor descriptor = triggerDefinitionLoader.loadByWorkflowDefinitionId(
-        request.getTenantId(), request.getWorkflowDefinitionId());
+        request.tenantId(), request.workflowDefinitionId());
     if (EmptyChecks.isNull(descriptor) || !descriptor.isWorkflowEnabled()) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
     }
@@ -108,7 +108,7 @@ final class TriggerScheduledRecoveryService {
           ResultCode.STATE_CONFLICT, "error.trigger.occurrence_catch_up_disabled");
     }
     String dedupKey = "scheduled-occurrence-catch-up:"
-        + request.getWorkflowDefinitionId()
+        + request.workflowDefinitionId()
         + ":"
         + scheduledFireTime.toEpochMilli();
     Map<String, Object> params = new LinkedHashMap<>();
@@ -122,9 +122,9 @@ final class TriggerScheduledRecoveryService {
     params.put("requestedBy", requestedBy);
     params.put("reason", reason);
     LaunchRequest launchRequest = LaunchRequest.builder()
-        .tenantId(request.getTenantId())
-        .workflowDefinitionId(request.getWorkflowDefinitionId())
-        .bizDate(request.getBizDate())
+        .tenantId(request.tenantId())
+        .workflowDefinitionId(request.workflowDefinitionId())
+        .bizDate(request.bizDate())
         .triggerType(TriggerType.CATCH_UP)
         .requestId(command.requestId())
         .traceId(command.traceId())
@@ -134,19 +134,16 @@ final class TriggerScheduledRecoveryService {
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     return tx.execute(ignored -> {
       triggerRequestMapper.acquireBatchDaySettlementFence(
-          request.getTenantId(), request.getWorkflowDefinitionId(), null, request.getBizDate());
+          request.tenantId(), request.workflowDefinitionId(), null, request.bizDate());
       String occurrenceStatus = occurrenceRecorder.lockAndReadStatus(
-          request.getTenantId(),
-          request.getWorkflowDefinitionId(),
-          scheduledFireTime,
-          request.getBizDate());
+          request.tenantId(), request.workflowDefinitionId(), scheduledFireTime, request.bizDate());
       if (ScheduledOccurrenceStatus.REQUESTED.code().equals(occurrenceStatus)
           || ScheduledOccurrenceStatus.MISFIRE_PENDING.code().equals(occurrenceStatus)) {
         String acceptedRequestId = occurrenceRecorder.catchUpRequestId(
-            request.getTenantId(), request.getWorkflowDefinitionId(), scheduledFireTime);
+            request.tenantId(), request.workflowDefinitionId(), scheduledFireTime);
         if (EmptyChecks.isNotBlank(acceptedRequestId)) {
           TriggerRequestEntity accepted = triggerRequestMapper.selectByTenantAndRequestId(
-              request.getTenantId(), acceptedRequestId);
+              request.tenantId(), acceptedRequestId);
           return occurrenceCatchUpResponse(accepted.getRequestId(), occurrenceStatus);
         }
       }
@@ -154,7 +151,7 @@ final class TriggerScheduledRecoveryService {
         throw BizException.of(ResultCode.STATE_CONFLICT, "error.trigger.occurrence_not_rejected");
       }
       TriggerRequestEntity existing =
-          triggerRequestMapper.selectByTenantAndDedupKey(request.getTenantId(), dedupKey);
+          triggerRequestMapper.selectByTenantAndDedupKey(request.tenantId(), dedupKey);
       if (EmptyChecks.isNotNull(existing)) {
         return occurrenceCatchUpResponse(existing.getRequestId(), occurrenceStatus);
       }
@@ -163,8 +160,8 @@ final class TriggerScheduledRecoveryService {
       triggerRequestMapper.insert(accepted);
       if (catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL) {
         TriggerMisfirePendingEntity pending = new TriggerMisfirePendingEntity();
-        pending.setTenantId(request.getTenantId());
-        pending.setWorkflowDefinitionId(request.getWorkflowDefinitionId());
+        pending.setTenantId(request.tenantId());
+        pending.setWorkflowDefinitionId(request.workflowDefinitionId());
         pending.setJobCode(descriptor.getJobCode());
         pending.setScheduledFireTime(scheduledFireTime);
         Duration pendingRetention =
@@ -173,7 +170,7 @@ final class TriggerScheduledRecoveryService {
         pending.setExpiresAt(pendingExpiresAt);
         if (triggerMisfirePendingMapper.insertPending(pending) == 0) {
           pending = triggerMisfirePendingMapper.selectBySchedule(
-              request.getTenantId(), request.getWorkflowDefinitionId(), scheduledFireTime);
+              request.tenantId(), request.workflowDefinitionId(), scheduledFireTime);
         }
         Guard.requireFound(pending, "misfire pending occurrence not found");
         triggerMisfirePendingMapper.linkCatchUpRequest(pending.getId(), accepted.getId());

@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlan;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanBuilder;
 import io.github.pinpols.batch.orchestrator.application.plan.SchedulePlanCommand;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.http.OrchestratorOutboundTransport;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import java.util.ArrayList;
@@ -69,7 +69,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   private DryRunPlanResult validateConfig(DryRunPlanRequest request) {
     List<DryRunFinding> findings = new ArrayList<>();
     Map<String, Object> summary = new LinkedHashMap<>();
-    JobDefinitionEntity jobDef = loadJobDefinition(request, findings);
+    JobDefinitionView jobDef = loadJobDefinition(request, findings);
     summary.put("validationScope", "JOB");
     summary.put("workflowValidated", false);
     if (EmptyChecks.isNull(jobDef)) {
@@ -84,7 +84,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   }
 
   private void validateJobParams(
-      JobDefinitionEntity job, DryRunPlanRequest request, List<DryRunFinding> findings) {
+      JobDefinitionView job, DryRunPlanRequest request, List<DryRunFinding> findings) {
     Map<String, Object> schema = job.paramSchema();
     Map<String, Object> provided =
         EmptyChecks.isNull(request.params()) ? Map.of() : new LinkedHashMap<>(request.params());
@@ -113,7 +113,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
     }
   }
 
-  private boolean defaultParamsHas(JobDefinitionEntity job, String name) {
+  private boolean defaultParamsHas(JobDefinitionView job, String name) {
     return EmptyChecks.isNotNull(job.defaultParams()) && job.defaultParams().containsKey(name);
   }
 
@@ -126,7 +126,7 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
           DryRunFinding.error("BIZDATE_MISSING", "schedule", "bizDate is required for L2", null));
       return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
     }
-    JobDefinitionEntity jobDef = loadJobDefinition(request, findings);
+    JobDefinitionView jobDef = loadJobDefinition(request, findings);
     if (EmptyChecks.isNull(jobDef)) {
       return DryRunPlanResult.of(DryRunLevel.SCHEDULE_PLAN, findings, summary);
     }
@@ -188,9 +188,9 @@ public class DefaultDryRunPlanService implements DryRunPlanService {
   }
 
   // ── helpers ─────────────────────────────────────────────────────────────
-  private JobDefinitionEntity loadJobDefinition(
+  private JobDefinitionView loadJobDefinition(
       DryRunPlanRequest request, List<DryRunFinding> findings) {
-    JobDefinitionEntity jobDef =
+    JobDefinitionView jobDef =
         configCacheService.findEnabledJobDefinition(request.tenantId(), request.jobCode());
     if (EmptyChecks.isNull(jobDef)) {
       findings.add(DryRunFinding.error(

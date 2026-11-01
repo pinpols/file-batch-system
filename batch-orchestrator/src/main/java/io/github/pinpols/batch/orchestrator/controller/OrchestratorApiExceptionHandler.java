@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.web.AbstractApiExceptionHandler;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterOrphanSourceException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.TransientDataAccessException;
@@ -80,6 +81,30 @@ public class OrchestratorApiExceptionHandler extends AbstractApiExceptionHandler
     CommonResponse<Void> failureBody =
         CommonResponse.failure(ResultCode.SERVICE_UNAVAILABLE, message);
     return response.body(failureBody);
+  }
+
+  /** 用例失败按既有内部 HTTP 契约转换。 */
+  @ExceptionHandler(OperationFailure.class)
+  public ResponseEntity<CommonResponse<Void>> handleOperationFailure(OperationFailure exception) {
+    HttpStatus status =
+        switch (exception.kind()) {
+          case INVALID_INPUT -> HttpStatus.BAD_REQUEST;
+          case NOT_FOUND -> HttpStatus.NOT_FOUND;
+          case CONFLICT -> HttpStatus.CONFLICT;
+          case INVALID_CONFIGURATION -> HttpStatus.UNPROCESSABLE_CONTENT;
+          case RATE_LIMITED -> HttpStatus.TOO_MANY_REQUESTS;
+          case TEMPORARILY_UNAVAILABLE -> HttpStatus.SERVICE_UNAVAILABLE;
+        };
+    ResultCode code =
+        switch (exception.kind()) {
+          case INVALID_INPUT -> ResultCode.INVALID_ARGUMENT;
+          case NOT_FOUND -> ResultCode.NOT_FOUND;
+          case CONFLICT -> ResultCode.CONFLICT;
+          case RATE_LIMITED -> ResultCode.RATE_LIMITED;
+          case INVALID_CONFIGURATION, TEMPORARILY_UNAVAILABLE -> ResultCode.SYSTEM_ERROR;
+        };
+    String message = resolveCommonCode(code, code.label());
+    return ResponseEntity.status(status).body(CommonResponse.failure(code, message));
   }
 
   /** orchestrator 特有：把 Spring 的 ResponseStatusException 映射回 CommonResponse。 */

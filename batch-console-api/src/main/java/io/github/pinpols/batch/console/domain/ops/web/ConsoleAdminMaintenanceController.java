@@ -1,18 +1,13 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.system.UpdateMaintenanceRequest;
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
+import io.github.pinpols.batch.console.application.observability.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
-import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
-import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.validation.Valid;
-import java.time.Instant;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,15 +32,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class ConsoleAdminMaintenanceController {
 
-  private final MaintenanceStateHolder stateHolder;
+  private final ConsoleMaintenanceApplicationService maintenanceService;
   private final ConsoleResponseFactory responseFactory;
-  private final ConsoleRequestMetadataResolver requestMetadataResolver;
 
   @GetMapping("/maintenance")
   public CommonResponse<MaintenanceStatusResponse> get() {
-    MaintenanceStateHolder.MaintenanceState state = stateHolder.current();
-    MaintenanceStatusResponse response = toResponse(state);
-    return responseFactory.success(response);
+    return responseFactory.success(maintenanceService.status());
   }
 
   @PutMapping("/maintenance")
@@ -55,31 +47,6 @@ public class ConsoleAdminMaintenanceController {
       aggregateId = "'maintenance'")
   public CommonResponse<MaintenanceStatusResponse> update(
       @Valid @RequestBody UpdateMaintenanceRequest request) {
-    List<String> affected =
-        request.getAffectedServices() == null ? List.of() : request.getAffectedServices();
-    MaintenanceState next = new MaintenanceState(
-        request.isEnabled(),
-        request.isReadOnly(),
-        request.getMessage(),
-        request.getEtaAt(),
-        request.getStartsAt(),
-        affected);
-    MaintenanceState applied =
-        stateHolder.update(next, requestMetadataResolver.current().operatorId());
-    return responseFactory.success(toResponse(applied));
-  }
-
-  private static MaintenanceStatusResponse toResponse(MaintenanceState state) {
-    MaintenanceStatusResponse response = new MaintenanceStatusResponse(
-        state.enabled(),
-        state.readOnly(),
-        state.message(),
-        state.etaAt() != null ? state.etaAt().toString() : null,
-        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
-        state.active(Instant.now()),
-        state.affectedServices(),
-        state.version(),
-        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
-    return response;
+    return responseFactory.success(maintenanceService.update(request));
   }
 }

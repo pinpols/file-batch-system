@@ -1,13 +1,10 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
-import io.github.pinpols.batch.common.enums.ResultCode;
-import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportRequest;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportResponse;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportService;
-import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
 import java.util.List;
@@ -60,25 +57,17 @@ public class ForensicExportController {
   @GetMapping("/export/{exportId}/download")
   public ResponseEntity<FileSystemResource> download(
       @PathVariable String exportId, @RequestParam("tenantId") String tenantId) throws IOException {
-    ForensicExportLogEntity log = forensicExportService.findLog(tenantId, exportId);
-    if (log == null) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
-    }
-    if (!"COMPLETED".equals(log.status()) || log.storagePath() == null) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.forensic.export_not_ready");
-    }
-    Path file = Path.of(log.storagePath());
-    if (!Files.exists(file)) {
-      throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_file_missing");
-    }
+    ForensicExportService.FileDownloadArtifact artifact =
+        forensicExportService.loadDownloadArtifact(tenantId, exportId);
+    Path file = artifact.path();
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    headers.add("X-Forensic-Sha256", log.sha256() == null ? "" : log.sha256());
+    headers.add(
+        "X-Forensic-Sha256", EmptyChecks.isNull(artifact.sha256()) ? "" : artifact.sha256());
     ResponseEntity.BodyBuilder responseBuilder =
         ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_OCTET_STREAM);
-    long contentLength = Files.size(file);
     FileSystemResource resource = new FileSystemResource(file);
-    return responseBuilder.contentLength(contentLength).body(resource);
+    return responseBuilder.contentLength(artifact.contentLength()).body(resource);
   }
 
   /** 内部 API request body（不暴露给业务方）。 */

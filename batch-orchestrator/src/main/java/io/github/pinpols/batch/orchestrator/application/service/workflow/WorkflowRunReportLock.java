@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowDefinitionMapper;
 import java.time.LocalDate;
@@ -58,7 +58,7 @@ public final class WorkflowRunReportLock {
       }
     }
     Long workflowDefinitionId = workflowRun.getWorkflowDefinitionId();
-    WorkflowDefinitionEntity workflowDefinition =
+    WorkflowDefinitionView workflowDefinition =
         workflowDefinitionMapper.selectById(workflowDefinitionId);
     if (EmptyChecks.isNull(workflowDefinition)) {
       return null;

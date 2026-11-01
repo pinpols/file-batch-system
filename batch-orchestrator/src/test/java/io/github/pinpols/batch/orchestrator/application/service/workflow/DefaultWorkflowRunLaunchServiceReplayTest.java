@@ -22,11 +22,11 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RelatedFileReferenceValidator;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowRunReplaySnapshotResolver;
-import io.github.pinpols.batch.orchestrator.domain.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
-import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
+import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
@@ -398,7 +398,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
   void shouldPreserveBundleParameterPrecedence_whenValidatingFileBeforeRun(
       String nodeParams, boolean rootOverrides, long expectedFileId) {
     TriggerRequestEntity accepted = acceptedTriggerRequest();
-    WorkflowDefinitionEntity definition = new WorkflowDefinitionEntity(
+    WorkflowDefinitionView definition = new WorkflowDefinitionView(
         81L, TENANT, "BUNDLE_WORKFLOW", "Bundle workflow", "DAG", 1, true, null, "CALENDAR");
     WorkflowNodeEntity node = new WorkflowNodeEntity();
     node.setNodeCode("IMPORT_FILES");
@@ -408,7 +408,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     node.setNodeParams(nodeParams);
     Map<String, Object> defaultParams =
         Map.of("bundleFiles", List.of(Map.of("sourceFileId", 11L, "templateCode", "TEMPLATE")));
-    JobDefinitionEntity job = JobDefinitionEntity.builder()
+    JobDefinitionView job = JobDefinitionView.builder()
         .id(700L)
         .tenantId(TENANT)
         .jobCode("BUNDLE_A")

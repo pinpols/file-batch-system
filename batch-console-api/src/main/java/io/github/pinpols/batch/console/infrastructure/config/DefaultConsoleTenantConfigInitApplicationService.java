@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
@@ -35,6 +36,20 @@ public class DefaultConsoleTenantConfigInitApplicationService
   @Override
   public TenantConfigBatchInitResponse batchInit(
       TenantConfigBatchInitRequest request, String operator, String batchOperationId) {
+    return batchInit(request, operator, batchOperationId, null);
+  }
+
+  @Override
+  public TenantConfigBatchInitResponse batchInit(
+      TenantConfigBatchInitRequest request, String operator, ConfigBatchOperationContext context) {
+    return batchInit(request, operator, context.operationId(), context);
+  }
+
+  private TenantConfigBatchInitResponse batchInit(
+      TenantConfigBatchInitRequest request,
+      String operator,
+      String batchOperationId,
+      ConfigBatchOperationContext context) {
     List<String> targetTenantIds = request.getTargetTenantIds();
     // 在首个租户事务开始前校验全部目标，避免参数错误发生在其他租户已提交之后。
     boolean invalidTargets = EmptyChecks.isEmpty(targetTenantIds)
@@ -47,17 +62,19 @@ public class DefaultConsoleTenantConfigInitApplicationService
     int successCount = 0;
     int failureCount = 0;
 
-    for (String tenantId : targetTenantIds) {
+    for (int ordinal = 0; ordinal < targetTenantIds.size(); ordinal++) {
+      String tenantId = targetTenantIds.get(ordinal);
+      int targetOrdinal = ordinal;
+      TenantInitResult result;
       // 只有明确回滚才能记为失败；事务提交或连接异常可能发生在提交成功后，必须停止并向上传播。
       try {
-        TenantInitResult result = RlsTenantContextHolder.runWithTenant(
-            tenantId, () -> tenantExecutor.execute(tenantId, request, operator, dryRun));
-        results.add(result);
-        if (result.success()) {
-          successCount++;
-        } else {
-          failureCount++;
-        }
+        result = RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+          if (EmptyChecks.isNull(context) || dryRun) {
+            return tenantExecutor.execute(tenantId, request, operator, dryRun);
+          }
+          return tenantExecutor.executeRecoverable(
+              tenantId, request, operator, context, targetOrdinal);
+        });
       } catch (StrictBundleAbortedException ex) {
         // strict=true 且任一 spec failed → @Transactional 已回滚,组装 failed 结果让前端看到原因
         log.warn(
@@ -66,7 +83,19 @@ public class DefaultConsoleTenantConfigInitApplicationService
             LogSanitizer.value(batchOperationId),
             SwallowedExceptionLogger.summary(ex));
         String failureMessage = TenantConfigFailureMessages.forFailure(ex);
-        results.add(TenantInitResult.failed(tenantId, failureMessage));
+        result = TenantInitResult.failed(tenantId, failureMessage);
+      }
+      if (EmptyChecks.isNotNull(context) && !dryRun && !result.success()) {
+        TenantInitResult rolledBackResult = result;
+        RlsTenantContextHolder.runWithTenant(tenantId, () -> {
+          tenantExecutor.recordRolledBack(context, targetOrdinal, tenantId, rolledBackResult);
+          return null;
+        });
+      }
+      results.add(result);
+      if (result.success()) {
+        successCount++;
+      } else {
         failureCount++;
       }
     }

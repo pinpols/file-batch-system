@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.ops.service;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
-import io.github.pinpols.batch.console.domain.ops.entity.CustomTaskTypeEntity;
 import io.github.pinpols.batch.console.domain.ops.mapper.CustomTaskTypeMapper;
+import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
@@ -19,7 +19,7 @@ public class ConsoleCustomTaskTypeQueryService {
   private final CustomTaskTypeMapper mapper;
   private final TenantIdResolver tenantGuard;
 
-  public List<CustomTaskTypeEntity> listActive(String tenantId) {
+  public List<CustomTaskTypeView> listActive(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return mapper.selectActiveByTenant(resolved);
   }
@@ -29,9 +29,9 @@ public class ConsoleCustomTaskTypeQueryService {
     return mapper.countActiveByTenant(resolved);
   }
 
-  public CustomTaskTypeEntity detail(String tenantId, String taskTypeCode) {
+  public CustomTaskTypeView detail(String tenantId, String taskTypeCode) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    CustomTaskTypeEntity entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
+    CustomTaskTypeView entity = mapper.selectByTenantAndCode(resolved, taskTypeCode);
     if (entity == null) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskTypeCode);
     }

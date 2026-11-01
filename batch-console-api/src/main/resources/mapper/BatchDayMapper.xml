@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
     <resultMap id="batchDayViewResultMap"
                type="io.github.pinpols.batch.console.domain.job.view.BatchDayView">
         <constructor>
@@ -17,6 +20,17 @@
             <arg column="failedJobCount" javaType="java.lang.Long"/>
             <arg column="inFlightJobCount" javaType="java.lang.Long"/>
             <arg column="frozen" javaType="java.lang.Boolean"/>
+        </constructor>
+    </resultMap>
+    <resultMap id="scheduledOccurrenceFireViewResultMap"
+               type="io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceFireView">
+        <constructor>
+            <arg column="workflowDefinitionId" javaType="java.lang.Long"/>
+            <arg column="scheduledFireTime" javaType="java.time.Instant"/>
+            <arg column="fireInstanceId" javaType="java.lang.String"/>
+            <arg column="refireCount" javaType="java.lang.Integer"/>
+            <arg column="actualFireTime" javaType="java.time.Instant"/>
+            <arg column="fireKind" javaType="java.lang.String"/>
         </constructor>
     </resultMap>
     <resultMap id="scheduledOccurrenceViewResultMap"
@@ -167,6 +181,24 @@
           and occurrence.biz_date = #{bizDate}
         order by occurrence.scheduled_fire_time desc,
                  occurrence.workflow_definition_id asc
+    </select>
+
+    <select id="selectScheduledOccurrenceFires" resultMap="scheduledOccurrenceFireViewResultMap">
+        select fire.workflow_definition_id as "workflowDefinitionId",
+               fire.scheduled_fire_time as "scheduledFireTime",
+               fire.fire_instance_id as "fireInstanceId",
+               fire.refire_count as "refireCount",
+               fire.actual_fire_time as "actualFireTime",
+               fire.fire_kind as "fireKind"
+        from batch.scheduled_occurrence_fire fire
+        join batch.scheduled_occurrence occurrence
+          on occurrence.tenant_id = fire.tenant_id
+         and occurrence.workflow_definition_id = fire.workflow_definition_id
+         and occurrence.scheduled_fire_time = fire.scheduled_fire_time
+        where occurrence.tenant_id = #{tenantId}
+          and occurrence.calendar_code = #{calendarCode}
+          and occurrence.biz_date = #{bizDate}
+        order by fire.actual_fire_time, fire.id
     </select>
 
     <select id="selectJobSummaries" resultMap="batchDayJobSummaryViewResultMap">

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.WaitRelationshipMapper">
+    <select id="setTenantContext" resultType="string">
+        select set_config('app.tenant_id', #{tenantId}, true)
+    </select>
+    <resultMap id="waitRelationship" type="io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow">
+        <id property="id" column="id_text"/>
+        <result property="waitType" column="wait_type"/>
+        <result property="tenantId" column="tenant_id"/>
+        <result property="subjectCode" column="subject_code"/>
+        <result property="bizDate" column="biz_date"/>
+        <result property="waitStatus" column="wait_status"/>
+        <result property="dependencySnapshot" column="dependency_snapshot"/>
+        <result property="reason" column="reason"/>
+        <result property="updatedAt" column="updated_at"/>
+        <result property="requestId" column="request_id"/>
+    </resultMap>
+    <select id="selectPage" resultMap="waitRelationship">
+        select waits.*, waits.id::text as id_text from (
+            select c.id, 'CALENDAR'::text as wait_type, c.tenant_id,
+                   c.calendar_code as subject_code, c.biz_date, c.wait_status,
+                   c.dependency_snapshot::text as dependency_snapshot,
+                   c.blocked_reason as reason, c.updated_at, null::text as request_id
+              from batch.calendar_dependency_wait c where c.tenant_id = #{query.tenantId}
+            union all
+            select j.id, 'JOB'::text, j.tenant_id, j.job_code, j.biz_date, j.wait_status,
+                   j.dependency_snapshot::text, j.last_not_ready_reason, j.updated_at, j.request_id
+              from batch.job_dependency_waiting_launch j where j.tenant_id = #{query.tenantId}
+            union all
+            select r.id, 'READINESS'::text, r.tenant_id, r.workflow_code, r.biz_date, r.wait_status,
+                   r.depends_on_job_codes, r.last_error_code, r.updated_at, r.request_id
+              from batch.readiness_wait r where r.tenant_id = #{query.tenantId}
+            union all
+            select w.id, 'CAPACITY_ADMISSION'::text, w.tenant_id, d.workflow_code, w.biz_date,
+                   w.wait_status, null::text, 'CAPACITY_LIMIT'::text, w.updated_at, w.request_id
+              from batch.workflow_launch_wait w
+              join batch.workflow_definition d on d.tenant_id = w.tenant_id and d.id = w.workflow_definition_id
+             where w.tenant_id = #{query.tenantId}
+        ) waits
+        where 1 = 1
+        <if test="query.waitType != null and query.waitType != ''">and wait_type = #{query.waitType}</if>
+        <if test="query.waitStatus != null and query.waitStatus != ''">and wait_status = #{query.waitStatus}</if>
+        <if test="query.bizDateFrom != null">and biz_date &gt;= #{query.bizDateFrom}</if>
+        <if test="query.bizDateTo != null">and biz_date &lt;= #{query.bizDateTo}</if>
+        <if test="query.cursorType != null">
+            and (wait_type collate "C", id) &gt; (cast(#{query.cursorType} as text) collate "C", cast(#{query.cursorId} as bigint))
+        </if>
+        order by wait_type collate "C", id
+        limit #{limit}
+    </select>
+</mapper>

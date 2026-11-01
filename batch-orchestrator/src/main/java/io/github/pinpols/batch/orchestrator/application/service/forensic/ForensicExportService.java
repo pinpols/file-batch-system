@@ -86,10 +86,25 @@ public class ForensicExportService {
   private final BatchDateTimeSupport dateTimeSupport;
   private final ForensicExportLogTransactionService transactionService;
 
-  /** 查询 forensic export 日志 — Controller 不直调 Mapper(分层约束)。 */
-  public ForensicExportLogEntity findLog(String tenantId, String exportId) {
-    return forensicExportLogMapper.selectByExportId(tenantId, exportId);
+  /** 校验导出已完成且文件存在，返回 HTTP 下载适配所需的文件元数据。 */
+  public FileDownloadArtifact loadDownloadArtifact(String tenantId, String exportId)
+      throws IOException {
+    ForensicExportLogEntity exportLog =
+        forensicExportLogMapper.selectByExportId(tenantId, exportId);
+    if (EmptyChecks.isNull(exportLog)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
+    }
+    if (!"COMPLETED".equals(exportLog.status()) || EmptyChecks.isNull(exportLog.storagePath())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.forensic.export_not_ready");
+    }
+    Path file = Path.of(exportLog.storagePath());
+    if (!Files.exists(file)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_file_missing");
+    }
+    return new FileDownloadArtifact(file, exportLog.sha256(), Files.size(file));
   }
+
+  public record FileDownloadArtifact(Path path, String sha256, long contentLength) {}
 
   /** v0.1 同步打包：插 PROCESSING → 落盘 + sha256 → markCompleted；失败时 markFailed 后 rethrow。 */
   public ForensicExportResponse export(ForensicExportRequest request) {
