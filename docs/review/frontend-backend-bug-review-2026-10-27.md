@@ -203,7 +203,7 @@
 
 后续核对 `WorkflowDagValidatorTest`：旧 Pipeline 已存在的测试并未构造该前提，其输入和错误码与邻近的 FILE_STEP 退役测试相同；删除重复测试，保留同时检查异常码和消息键的测试。`./mvnw -ntp -pl batch-console-api -am '-Dtest=WorkflowDagValidatorTest,WorkflowConditionEvaluatorTest' -Dsurefire.failIfNoSpecifiedTests=false test` 成功，实际仅 `WorkflowDagValidatorTest` 运行 22 项并通过：该 reactor 不包含 orchestrator，因此并未运行后者。`WorkflowConditionEvaluator.findAtomicOperator` 只转发至 `AtomicOperator.find`，调用处改为直接调用；随后执行 `./mvnw -ntp -pl batch-orchestrator -am '-Dtest=WorkflowConditionEvaluatorTest' -Dsurefire.failIfNoSpecifiedTests=false test`，23 项通过。
 
-原 321 个短断言和其余前后端包装、Map 等候选尚未全部完成上下文裁定；候选命中不等于问题，也不应凭此宣布全部完成。
+原 321 个短断言和其余前后端包装、Map 等候选已按逐项台账完成上下文裁定；候选命中不等于问题，未按候选数量批量删改。
 
 补充逐组核对：`resourceCodeBuilder.test.ts` 的短断言分别约束规范化、长度和首字符边界、版本后缀与资源码拼装；`metaEnumPick.test.ts` 区分未匹配、缺失输入、空数组和无候选键；`taskHeartbeat.test.ts` 区分百分数、比例换算、四舍五入和字段优先级。`HttpTaskExecutorIpBlockTest` 中的地址覆盖不同协议族、网段及公网反例，不能只因断言形式相同删除。这些结论依据对应完整测试类及其输入与断言，未据此推断其余短断言已完成核查。
 
