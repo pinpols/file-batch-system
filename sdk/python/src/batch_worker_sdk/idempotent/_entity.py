@@ -1,4 +1,4 @@
-"""幂等记录快照(对齐 Java ``SdkIdempotencyEntity``)。
+"""幂等记录快照(对齐 Java ``SdkIdempotencySnapshot``)。
 
 命中时框架据此重建一个「成功」的 :class:`SdkTaskResult` 返回(不重跑业务)。
 只存成功结果的 ``message`` + ``output``(去重语义针对成功执行;失败本就该
