@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.application;
+package io.github.pinpols.batch.console.application.observability;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.contract.request.system.UpdateMaintenanceRequest;

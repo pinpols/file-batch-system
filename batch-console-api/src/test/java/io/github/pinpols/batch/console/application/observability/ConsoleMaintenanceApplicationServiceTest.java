@@ -1,4 +1,4 @@
-package io.github.pinpols.batch.console.domain.observability.application;
+package io.github.pinpols.batch.console.application.observability;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;

@@ -15,7 +15,7 @@ import io.github.pinpols.batch.common.dto.ResponseMeta;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.console.config.ConsoleMaintenanceProperties;
 import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleMaintenanceApplicationService;
+import io.github.pinpols.batch.console.application.observability.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.ops.mapper.MaintenanceStateMapper;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
