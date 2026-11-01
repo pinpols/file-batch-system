@@ -177,7 +177,8 @@ jobs:
             scripts/ci/tests/test_report_ci_quality_trends.py \
             scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
-            scripts/ci/tests/test_report_sdk_test_summary.py
+            scripts/ci/tests/test_report_sdk_test_summary.py \
+            scripts/ci/tests/test_check_sdk_runtime_alignment.py
 
       - name: Verify module dependency boundaries
         shell: bash

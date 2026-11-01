@@ -21,7 +21,7 @@
 | 方向 | 守护 |
 |---|---|
 | 应用与架构 | `check-application-governance.py`、`check-dependency-boundaries.py`、`check-direct-client-boundaries.py`、`check-infrastructure-abstraction-boundaries.py`、`check-no-enable-preview.sh` |
-| SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵） |
+| SDK 配置 | `check-sdk-config-env-parity.py`（Java/Python env 工厂和五语言 live transport 前缀）、`check-sdk-runtime-alignment.py`（仓库 Node 入口、SDK/前端声明与 CI 版本矩阵；Docker 构建镜像允许 `--platform`，仍须固定 Node 版本和 digest；回归测试 `test_check_sdk_runtime_alignment.py` 属于 Full CI 守卫测试组） |
 | SDK 双栈 | `run-sdk-happy-eyeballs-gate.sh`（五语言真实 loopback socket 单栈/双栈/黑洞矩阵） |
 | 文档与变更 | `check-docs-structure.py`、`check-doc-timestamp-policy.py`、`check-code-doc-references.py`、`check-terminology-doc-sync.py`、`check-changelog-sync.py`、`check-loc-snapshot.py`、`check-readiness-doc-sync.py`、`check-slo-sli-catalog.py`、`check-comment-language.py` |
 | 脚本与仓库 | `check-shell-scripts.sh`、`check-shell-linux-portability.py`、`check-script-governance.py`、`check-destructive-ops-governance.py`（删除类命令增量基线）、`check-governance-baseline-expansion.py`（治理基线扩张的限期审批）、`check-repository-hygiene.py`、`check-env-file-shell-safety.py`、`check-hardcoded-runtime-config.sh`（含 BE 验收端口及观测脚本 Console/Orchestrator 地址来源）、`check-utf8-encoding.py`（全仓 UTF-8 字节扫描）、`check-testcontainers-reuse-label.py`（Testcontainers 复用容器清理谓词）、`check-github-action-pinning.py`（外部 Action 固定 40 位 SHA并保留版本注释）、`check-soft-gate-governance.py`（报告/忽略模式责任与期限） |

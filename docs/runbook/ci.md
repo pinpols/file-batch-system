@@ -97,6 +97,7 @@ CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main �
 - **CodeQL 分层执行**：PR 使用 Java `build-mode: none` 和默认高精度查询缩短 required check；main push 和每周定时运行保留手工全量编译与 `security-extended`，继续覆盖构建生成代码、精确依赖和扩展热点。仓库若引入 Kotlin，必须先恢复构建模式再合入。
 - **非测试 job 不准备 Testcontainers**：静态检查、安全扫描和 CodeQL 通过 `cache-testcontainers: false` 跳过容器镜像恢复；单元/集成/E2E 仍保留镜像缓存。
 - **门禁结果行统一**:本地 hook 与 CI 统一输出 `状态 | code | gate | group | mode | exit_code | action`；跳过时再输出 `reason`。单步中串行运行多个阻断检查时，每项都必须通过共享 `gate_run` 输出独立结果；具体诊断信息可保留各检查器原有内容。
+- **SDK 运行时对齐**：Full Gate 校验 SDK 与配对前端 Node 版本及镜像 digest；支持 Docker `FROM --platform=...`，其正反例在现有 CI 质量守卫测试组执行。
 - **静态门禁失败统一汇总**：PR 将 policy、supply-chain、Java quality 三路并行执行，各路在末尾汇总自身失败，再由稳定的 `static-checks` required context 聚合；Full Gate 仍在单个 `static-checks` 中汇总。checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 执行完所有独立检查后汇总失败；依赖前置产物的步骤在其生成失败时停止该步骤，其他门禁继续执行。
 - **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
 - **核心术语枚举必须同步**：修改实例、工作流、节点、分片、步骤、任务状态，或调度类型、触发来源、节点类型、运行模式 enum 时，运行 `python3 scripts/ci/check-terminology-doc-sync.py --write`；PR / Full Gate 的只读检查会阻断旧值表。
