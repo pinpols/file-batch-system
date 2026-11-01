@@ -28,6 +28,8 @@ import io.github.pinpols.batch.console.domain.observability.application.ConsoleR
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleApprovalApplicationService;
 import io.github.pinpols.batch.console.domain.ops.application.ConsoleWorkerApplicationService;
 import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.io.ByteArrayInputStream;
 import java.nio.charset.StandardCharsets;
@@ -297,8 +299,14 @@ class ConsoleHttpIntegrationTest extends AbstractIntegrationTest {
         mock(ConsoleAiApplicationService.PreparedStream.class);
     when(prepared.requestId()).thenReturn("req-1");
     when(aiApplicationService.prepareStream(any(), anyString())).thenReturn(prepared);
-    when(aiStreamRegistry.register(anyString(), any()))
-        .thenReturn(mock(ConsoleAiStreamRegistry.Registration.class));
+    ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
+    when(resolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-1", "trace-1", "tenant-a", "operator", null, null));
+    ConsoleAiStreamRegistry registry =
+        new ConsoleAiStreamRegistry(aiAuthorizationService, resolver);
+    ConsoleAiStreamRegistry.Registration registration = registry.register("req-1", () -> {});
+    when(aiStreamRegistry.register(anyString(), any())).thenReturn(registration);
     when(prepared.execute(any())).thenAnswer(invocation -> {
       ConsoleAiApplicationService.StreamObserver observer = invocation.getArgument(0);
       observer.onDelta("ok");
