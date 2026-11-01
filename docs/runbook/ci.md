@@ -152,7 +152,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | Console API | B2 Console |
 | Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
-`unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，`JobNodeDispatchIntegrationTest` 以独立 Maven 调用放在编排补充片；Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
+`unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，`JobNodeDispatchIntegrationTest` 以独立 Maven 调用放在编排补充片，CompensationFailureRecovery 与 BatchDayWaitingLaunchReference 集成类也由补充片运行；Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
 
 更改 `scripts/ci/run-pr-coverage-integration.sh` 或 `scripts/ci/check-diff-coverage.py` 时，范围探测会启动四个测试范围，确保执行器和覆盖率汇总的变更得到真实 CI 验证；其他不影响业务测试的 CI 改动仍不启动 Maven 单测。
 
