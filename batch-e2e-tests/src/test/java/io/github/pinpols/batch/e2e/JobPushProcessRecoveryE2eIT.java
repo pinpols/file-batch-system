@@ -28,6 +28,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.LinkedHashMap;
@@ -68,6 +69,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("Job Push 独立 Console 强杀后自然到期保留 UNKNOWN，不自动重投")
 class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String USER = "r32-push-process-user";
   private static final CountDownLatch RECEIVED = new CountDownLatch(1);
   private static final CountDownLatch RELEASE_RESPONSE = new CountDownLatch(1);
@@ -168,7 +170,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
     // 共享旧版 E2E Job 夹具使用 t1，但不会创建对应的租户登记行。
     int registered = jdbc.update(insertTenantSql, TENANT, TENANT);
     var seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customer = "PUSH" + Long.toUnsignedString(System.nanoTime());
     String content = JsonUtils.toJson(List.of(Map.of(
         "customerNo",
@@ -207,7 +209,7 @@ class JobPushProcessRecoveryE2eIT extends AbstractIntegrationTest {
           .launch(new LaunchRequest(
               TENANT,
               seed.workflowDefinitionId(),
-              LocalDate.of(2026, 1, 15),
+              BIZ_DATE,
               TriggerType.API,
               seed.requestId(),
               "r32-push-process",

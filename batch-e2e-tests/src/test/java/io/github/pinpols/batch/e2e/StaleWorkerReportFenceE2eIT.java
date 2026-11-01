@@ -37,6 +37,7 @@ import java.nio.file.Path;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -73,7 +74,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final String WORKER = "r15-stale-report-worker";
   private static final String TEST_PRESIGN_SECRET = "test-only-" + "x".repeat(48);
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
   private static final int R15_CONCURRENT_REPORT_COUNT = 16;
 
@@ -1561,7 +1562,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     """;
 
     E2eScenarioFixture.LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "IMPORT", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(
         insertWorkerRegistrySql, TENANT, WORKER, Timestamp.from(BatchDateTimeSupport.utcNow()));
     launchService.launch(new LaunchRequest(

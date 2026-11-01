@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import fnmatch
 import json
 import os
 import re
@@ -33,7 +34,7 @@ def failure_category(text: str) -> str:
     return "other"
 
 
-def parse_reports(root: Path) -> dict[str, object]:
+def parse_reports(root: Path, artifact_names: list[str] | None = None) -> dict[str, object]:
     totals = Counter()
     categories = Counter()
     e2e = Counter()
@@ -47,7 +48,8 @@ def parse_reports(root: Path) -> dict[str, object]:
         errors = int(float(suite.attrib.get("errors", "0")))
         skipped = int(float(suite.attrib.get("skipped", "0")))
         components = path.relative_to(root).parts
-        artifact = components[0] if len(components) > 1 else "(root)"
+        artifact = (artifact_names[0] if artifact_names and len(artifact_names) == 1
+                    else components[0] if len(components) > 1 else "(root)")
         artifact_totals = artifacts.setdefault(artifact, Counter())
         artifact_totals.update(reports=1, tests=tests, failures=failures, errors=errors, skipped=skipped)
         artifact_totals["durationSeconds"] += float(suite.attrib.get("time", "0"))
@@ -64,7 +66,7 @@ def parse_reports(root: Path) -> dict[str, object]:
                 successfulSuites=int(not failed and not all_skipped),
                 tests=tests,
             )
-            for component in path.relative_to(root).parts:
+            for component in (artifact, *path.relative_to(root).parts):
                 match = re.fullmatch(r"(?:full-ci|staging-gate)-e2e-shard-(\d+)-reports", component)
                 if match:
                     shard = e2e_shards.setdefault(match.group(1), Counter())
@@ -230,6 +232,8 @@ def markdown(report: dict[str, object]) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--reports-root", type=Path, required=True)
+    parser.add_argument("--artifact-names", type=Path)
+    parser.add_argument("--artifact-pattern")
     parser.add_argument("--workflow-runs-json", type=Path)
     parser.add_argument("--jobs-json", type=Path)
     parser.add_argument("--expect-artifact", action="append", default=[], metavar="JOB=ARTIFACT")
@@ -239,9 +243,15 @@ def main() -> int:
     parser.add_argument("--json", type=Path, required=True)
     parser.add_argument("--markdown", type=Path, required=True)
     args = parser.parse_args()
+    if bool(args.artifact_names) != bool(args.artifact_pattern):
+        parser.error("artifact-names 与 artifact-pattern 必须同时提供")
+    artifact_names = None
+    if args.artifact_names:
+        artifact_names = [name for name in args.artifact_names.read_text(encoding="utf-8").splitlines()
+                          if fnmatch.fnmatchcase(name, args.artifact_pattern)]
     report = {
         "generatedAt": dt.datetime.now(dt.UTC).isoformat(),
-        "tests": parse_reports(args.reports_root),
+        "tests": parse_reports(args.reports_root, artifact_names),
         "workflow": parse_workflow_runs(args.workflow_runs_json),
         "jobs": parse_job_results(args.jobs_json),
         "source": source_counts(),

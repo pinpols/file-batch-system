@@ -41,6 +41,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -101,7 +102,8 @@ import org.springframework.web.util.UriComponentsBuilder;
 class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
-  private static final LocalDate BIZ_DATE = LocalDate.of(2026, 1, 15);
+  // 手工跳过用例使用未截止业务日，避免长跑时被结算调度关闭。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final LocalDate WORKFLOW_REPLAY_BIZ_DATE = LocalDate.of(2099, 1, 15);
   private static final String INTERNAL_SECRET = "self-service-e2e-internal-secret-32chars";
   private static final String JAVA_BIN =
@@ -2158,7 +2160,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
   void shouldSkipFailedJobNodeThroughAuthenticatedConsoleAndPersistAudit() throws Exception {
     String suffix = UUID.randomUUID().toString().replace("-", "");
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String requestId = "manual-skip-" + suffix;
     Map<String, Object> failedImportParams = Map.of(
         "fileFormatType", "JSON",
@@ -2357,7 +2359,7 @@ class SelfServiceJobCompensationHttpE2eIT extends AbstractIntegrationTest {
       String suffixWithSeparators = generatedSuffix.toString();
       String suffix = suffixWithSeparators.replace("-", "");
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+          jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
       int sensorPort = sensorEndpoint.getAddress().getPort();
       String sensorUrl = "http://127.0.0.1:" + sensorPort + "/sensor";
       Map<String, Object> sensorSpecification =

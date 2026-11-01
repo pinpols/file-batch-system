@@ -24,6 +24,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,8 @@ import org.springframework.transaction.TransactionSystemException;
 class OutboxForwarderE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  // 多个恢复场景共享业务日，避免后台结算提前关闭测试数据。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -144,12 +147,12 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
             """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "TXLOSS" + Long.toUnsignedString(System.nanoTime());
     LaunchRequest request = new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-launch-commit-loss",
@@ -207,8 +210,8 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
       final String dropTriggerSql = """
           drop trigger if exists e2e_abort_launch_connection on batch.%s\
           """.formatted(table);
-      jdbcTemplate.execute(dropTriggerSql);
-      jdbcTemplate.execute(dropFunctionSql);
+      executeCleanupSql(dropTriggerSql);
+      executeCleanupSql(dropFunctionSql);
     }
 
     String recoveredRunId = launchService.launch(request).instanceNo();
@@ -317,7 +320,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "ACKLOSS" + Long.toUnsignedString(System.nanoTime());
     long gateKey = System.nanoTime();
     Map<Long, AtomicInteger> claimAttempts = new ConcurrentHashMap<>();
@@ -368,7 +371,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
         launchService.launch(new LaunchRequest(
             TENANT,
             seed.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             seed.requestId(),
             "e2e-outbox-ack-loss",
@@ -472,9 +475,41 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
           jdbcTemplate.queryForObject(selectCountSql3, Integer.class, TENANT, seed.requestId());
       assertThat(selectedWorkflowRunCount).isEqualTo(1);
     } finally {
-      jdbcTemplate.execute(dropTriggerSql);
-      jdbcTemplate.execute(dropFunctionSql);
+      executeCleanupSql(dropTriggerSql);
+      executeCleanupSql(dropFunctionSql);
     }
+  }
+
+  /**
+   * 清理用的 DROP TRIGGER 需要 AccessExclusiveLock，会和仍在写 outbox 的轮询器死锁（40P01）。
+   * 只重试这次清理，不改变故障注入本身。
+   */
+  private void executeCleanupSql(String sql) {
+    DataAccessException lastFailure = null;
+    for (int attempt = 1; attempt <= 5; attempt++) {
+      try {
+        jdbcTemplate.execute(sql);
+        return;
+      } catch (DataAccessException exception) {
+        lastFailure = exception;
+        boolean retryableDeadlock = attempt < 5 && isDeadlock(exception);
+        if (!retryableDeadlock) {
+          throw exception;
+        }
+        try {
+          Thread.sleep(200L * attempt);
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+          throw exception;
+        }
+      }
+    }
+    throw lastFailure;
+  }
+
+  private static boolean isDeadlock(Throwable failure) {
+    Throwable cause = NestedExceptionUtils.getMostSpecificCause(failure);
+    return cause instanceof PSQLException sql && "40P01".equals(sql.getSQLState());
   }
 
   private List<Integer> blockedOutboxUpdatePids(int gatePid) {
@@ -497,7 +532,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
                       """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -518,7 +553,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-outbox-fwd",

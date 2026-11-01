@@ -8,7 +8,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
+
 ### Fixed
+
+- 出箱故障注入清理 `DROP TRIGGER` 与轮询器写锁冲突时按死锁重试，避免 40P01 把已提交的恢复用例打成错误。
 
 - Sim 租户配置场景：WORKFLOW 与 ALL 场景模板断言补充 `workflow_monitoring_policy` sheet（#1265 起由 `ConfigPackageSheetSpecs` 正式纳入 WORKFLOW 场景）；stage2e checkpoint 崩溃场景按 `<行号>:<文件摘要>` 格式解析 LOAD `position_marker`，修复 marker 解析 `ValueError`。
 

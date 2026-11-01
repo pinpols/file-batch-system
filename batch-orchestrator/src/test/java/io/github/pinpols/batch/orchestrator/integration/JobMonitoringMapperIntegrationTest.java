@@ -829,6 +829,9 @@ class JobMonitoringMapperIntegrationTest {
 
     long runningId = insertInstance(
         tenant, runningDefinitionId, "RUNNING", Instant.now().minusSeconds(120), null, null, false);
+    final String selectBizDateSql = "select biz_date from batch.job_instance where id = ?";
+    LocalDate runningBizDate =
+        jdbcTemplate.queryForObject(selectBizDateSql, LocalDate.class, runningId);
     attachWorkflowContext(tenant, runningId, 84L, "RUNNING_NODE");
     long notStartedId = insertInstance(
         tenant,
@@ -885,7 +888,7 @@ class JobMonitoringMapperIntegrationTest {
           .filteredOn(row -> row.jobInstanceId().equals(runningId))
           .singleElement()
           .extracting(JobMonitoringAlertCandidate::bizDate)
-          .isEqualTo(LocalDate.now());
+          .isEqualTo(runningBizDate);
       assertThat(mapper.selectRunningTooLong(100))
           .filteredOn(row -> row.jobInstanceId().equals(runningId))
           .singleElement()

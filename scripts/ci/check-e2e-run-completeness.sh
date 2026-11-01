@@ -58,9 +58,22 @@ for selector in selectors.split(","):
     expected = methods.split("+")
     if not all(name_pattern.fullmatch(method) for method in expected) or len(expected) != len(set(expected)):
         sys.exit(f"❌ 非法或重复的方法选择: {selector}")
-    actual = [case.get("name") for case in cases]
-    if len(actual) != len(set(actual)) or set(actual) != set(expected):
+    actual = [case.get("name", "") for case in cases]
+    parsed = [re.fullmatch(r"([A-Za-z_$][A-Za-z0-9_$]*)(?:\(([^()]*)\))?(?:\[([1-9][0-9]*)\])?", name) for name in actual]
+    if len(actual) != len(set(actual)) or any(match is None for match in parsed):
+        sys.exit(f"❌ 方法报告包含重复或无法识别的用例: {cls}; actual={actual}")
+    groups = {}
+    for match in parsed:
+        groups.setdefault(match.group(1), []).append((match.group(2), match.group(3)))
+    if set(groups) != set(expected):
         sys.exit(f"❌ 方法报告与选择不一致: {cls}; expected={expected}; actual={actual}")
+    for method, variants in groups.items():
+        if len(variants) > 1 and (any(index is None for _, index in variants)
+                                  or len({signature for signature, _ in variants}) != 1):
+            sys.exit(f"❌ 方法报告含非参数化重复: {cls}#{method}; actual={actual}")
+        indexes = sorted(int(index) for _, index in variants if index is not None)
+        if indexes and indexes != list(range(1, len(indexes) + 1)):
+            sys.exit(f"❌ 参数化用例序号不连续: {cls}#{method}; actual={actual}")
     if any(case.find("skipped") is not None for case in cases):
         sys.exit(f"❌ 所选方法存在跳过: {cls}")
 if not seen:

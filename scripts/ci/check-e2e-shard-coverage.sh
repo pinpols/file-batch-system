@@ -84,7 +84,13 @@ for cls, groups in selection.items():
         sys.exit(f"❌ 找不到唯一测试源码: {cls}")
     source = files[0].read_text(encoding="utf-8")
     annotations = re.findall(r"^\s*@(Test|ParameterizedTest|RepeatedTest|TestFactory)\b", source, re.M)
-    methods = re.findall(r'@Test\s+@DisplayName\([^\n]*\)\s+void\s+(\w+)\s*\(', source)
+    methods = re.findall(
+        r"^\s*@(Test|ParameterizedTest)(?:\([^\n]*\))?[ \t]*\n"
+        r"(?:[ \t]*@[^\n]+\n)*[ \t]*void\s+(\w+)\s*\(",
+        source,
+        re.M,
+    )
+    methods = [name for _, name in methods]
     if len(methods) != len(annotations) or len(set(methods)) != len(methods):
         sys.exit(f"❌ 无法完整识别测试方法，拒绝方法分片: {cls}")
     selected = [method for group in groups for method in group.split("+")]

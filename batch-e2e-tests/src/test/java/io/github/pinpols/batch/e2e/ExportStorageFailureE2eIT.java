@@ -15,6 +15,8 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -59,6 +61,9 @@ import org.springframework.test.context.jdbc.Sql;
 class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
+  private static final String ACCOUNTING_PERIOD =
+      BIZ_DATE.format(DateTimeFormatter.ofPattern("yyyyMM"));
   private static final String BATCH_NO = "E2E-EXPORT-MINIO-FAIL-1";
 
   @DynamicPropertySource
@@ -87,14 +92,14 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
             insert into biz.settlement_batch (
                 tenant_id, batch_no, biz_date, accounting_period, batch_status,
                 total_record_count, total_amount, currency
-            ) values (?, ?, date '2026-01-15', '202601', 'READY', 1, 0, 'CNY')
+            ) values (?, ?, ?, ?, 'READY', 1, 0, 'CNY')
             returning id
             """;
     final String insertSettlementDetailSql = """
         insert into biz.settlement_detail (
             tenant_id, batch_id, settlement_no, customer_no, biz_date, accounting_period,
             gross_amount, fee_amount, net_amount, currency, settlement_status
-        ) values (?, ?, ?, ?, date '2026-01-15', '202601', 10.00, 1.00, 9.00, 'CNY', 'READY')
+        ) values (?, ?, ?, ?, ?, ?, 10.00, 1.00, 9.00, 'CNY', 'READY')
         """;
 
     final String selectCountSql = """
@@ -106,29 +111,37 @@ class ExportStorageFailureE2eIT extends AbstractIntegrationTest {
                       """;
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
-    Long batchId =
-        businessJdbc.queryForObject(insertSettlementBatchSql, Long.class, TENANT, BATCH_NO);
+    Long batchId = businessJdbc.queryForObject(
+        insertSettlementBatchSql, Long.class, TENANT, BATCH_NO, BIZ_DATE, ACCOUNTING_PERIOD);
     assertThat(batchId).isNotNull();
 
-    businessJdbc.update(insertSettlementDetailSql, TENANT, batchId, "E2E-MF-001", "C-MF-1");
+    businessJdbc.update(
+        insertSettlementDetailSql,
+        TENANT,
+        batchId,
+        "E2E-MF-001",
+        "C-MF-1",
+        BIZ_DATE,
+        ACCOUNTING_PERIOD);
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
                 jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API)
             .retryPolicy("FIXED")
-            .retryMaxCount(2));
+            .retryMaxCount(2)
+            .bizDate(BIZ_DATE));
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", BATCH_NO);
     params.put("templateCode", "EXP-CUSTOMER-JSON");
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-export-objectStore-fail");
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-export-objectStore-fail",

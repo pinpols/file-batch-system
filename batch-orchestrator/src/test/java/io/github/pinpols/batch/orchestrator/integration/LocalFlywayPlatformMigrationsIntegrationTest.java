@@ -10,8 +10,10 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.Statement;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -712,21 +714,29 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
   private static void assertFreshSchemaManifest(
       JdbcTemplate jdbc, String manifestPath, String manifestDescription) throws Exception {
     // PostgreSQL 会按会话时区呈现 timestamptz 分区边界，快照须与迁移会话一致。
+    // V172/V173/V216 用 CURRENT_DATE 滑动创建固定数量的月分区。跨月后表名和边界会变，
+    // 但对象数量不变，所以清单按这次会话的当前月改写成相对偏移再哈希。
     jdbc.execute("SET TIME ZONE 'Asia/Shanghai'");
+    LocalDate catalogDate = jdbc.queryForObject(
+        "SELECT CURRENT_DATE", (rs, rowNum) -> rs.getObject(1, LocalDate.class));
     String manifestQuery = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, manifestDescription);
     Map<String, List<String>> objectsByType = new TreeMap<>();
     jdbc.query(manifestQuery, resultSet -> {
       String objectType = resultSet.getString("object_type");
       String canonicalObject = resultSet.getString("canonical_object");
-      objectsByType.computeIfAbsent(objectType, ignored -> new ArrayList<>()).add(canonicalObject);
+      objectsByType
+          .computeIfAbsent(objectType, ignored -> new ArrayList<>())
+          .add(RollingMonthCatalogNormalizer.normalize(canonicalObject, catalogDate));
     });
     assertThat(objectsByType)
         .as("fresh database catalog manifest must include schema objects")
         .isNotEmpty();
     List<String> actual = new ArrayList<>();
     for (Map.Entry<String, List<String>> entry : objectsByType.entrySet()) {
+      List<String> normalizedObjects = new ArrayList<>(entry.getValue());
+      Collections.sort(normalizedObjects);
       byte[] categoryContent =
-          (String.join("\n", entry.getValue()) + "\n").getBytes(StandardCharsets.UTF_8);
+          (String.join("\n", normalizedObjects) + "\n").getBytes(StandardCharsets.UTF_8);
       String digest =
           HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(categoryContent));
       actual.add(entry.getKey() + "\t" + entry.getValue().size() + "\t" + digest);

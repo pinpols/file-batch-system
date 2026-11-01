@@ -175,6 +175,7 @@ jobs:
             scripts/ci/tests/test_pr_coverage_integration.py \
             scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py
 
@@ -247,7 +248,7 @@ jobs:
 
       - name: Upload direct config key access inventory
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: direct-config-key-access
           path: build/config-key-access.json
@@ -488,7 +489,7 @@ jobs:
             --path sdk/java/core --path sdk/java/spring --path sdk/java/testkit
 
       - name: Upload orchestrator coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-a-main-coverage
           path: batch-orchestrator/target/jacoco.exec
@@ -497,7 +498,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-a-main-reports
           path: |
@@ -530,7 +531,7 @@ jobs:
       - name: Verify selected orchestrator classes ran
         run: bash scripts/ci/check-e2e-run-completeness.sh "$(paste -sd, scripts/ci/test-shards/full-orchestrator-heavy.txt)" batch-orchestrator/target/surefire-reports
       - name: Upload orchestrator coverage data
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-a-heavy-coverage
           path: batch-orchestrator/target/jacoco.exec
@@ -538,7 +539,7 @@ jobs:
           retention-days: 1
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-a-heavy-reports
           path: '**/target/surefire-reports/**'
@@ -566,12 +567,12 @@ jobs:
       - name: Build orchestrator classes for coverage
         run: ./mvnw install -pl batch-orchestrator -am -DskipTests -Dspotless.check.skip=true -Dpmd.skip=true -B
       - name: Download main coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: full-ci-a-main-coverage
           path: batch-orchestrator/target/ci-jacoco-shards/main
       - name: Download heavy coverage data
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: full-ci-a-heavy-coverage
           path: batch-orchestrator/target/ci-jacoco-shards/heavy
@@ -640,7 +641,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b1-reports
           path: |
@@ -699,7 +700,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b2-workers-reports
           path: |
@@ -755,7 +756,7 @@ jobs:
 
       - name: Upload Surefire Reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-unit-it-b2-console-reports
           path: |
@@ -793,7 +794,7 @@ jobs:
 
       - name: Upload Java governance reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-java-governance-reports
           path: '**/target/surefire-reports/**'
@@ -851,7 +852,7 @@ jobs:
 
       - name: Upload SBOM
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: sbom-cyclonedx
           path: target/bom.json
@@ -893,7 +894,7 @@ jobs:
   # ===========================================================================
   # Job 3: e2e shard matrix。原六片保留历史基线；新增场景独立分片，避免集中形成长尾。
   #
-  # 分组证据见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md。
+  # 历史基线见 docs/verifications/ci-gate-runtime-optimization-2026-10-07.md；近期分片证据见 docs/plans/todo-master.md。
   # ===========================================================================
   e2e-shard:
     name: 'E2E ${{ matrix.shard.id }} / ${{ matrix.shard.label }}'
@@ -903,6 +904,7 @@ jobs:
       TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE: /var/run/docker.sock
     strategy:
       fail-fast: false
+      max-parallel: 16
       matrix:
         shard:
           - id: 1
@@ -956,9 +958,9 @@ jobs:
             tests: >-
               WorkerReportLostAfterBusinessCommitE2eIT#shouldRecoverWhenReportAcknowledgementIsLostAfterCommitAndWorkerRestarts+shouldResumeImportCheckpointAfterWorkerProcessIsKilled+shouldCompleteReclaimedAttemptOnReplacementWorker_withoutDuplicateBusinessEffect
           - id: 8
-            label: "workflow catch-up and approval"
+            label: "workflow catch-up and approval 1"
             tests: >-
-              WorkflowOccurrenceCatchUpApprovalE2eIT
+              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldConsumePinnedVersion_whenUpstreamVersionPromoted+triggerApiAdmissionRacingBatchDaySettlementShouldConverge+consoleManualAdmissionRacingBatchDaySettlementShouldConverge+dstHolidayQuartzMisfire_completesWorkerBeforeBatchDaySettlement+triggerRestart_resumesBoundedTwoDayCoverageBeforeBatchDaySettlement+manualMisfireApprovalRacingSettlement_completesWorkerBeforeBatchDaySettlement+shouldReconcileAndContinueManualBatchAfterRealApprovalResponseLoss+shouldBlockPersistedBusinessDay_whenDstCutoffOccurrencePending+rejectedManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight+duplicateQuartzMisfireCallbacks_createOneRootRunAndBusinessEffect+expiredManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+approvalOfConsoleCatchUp_reconcilesAndLaunchesWorkflowNode+shouldConvergeCoverage_whenPublicationAndSettlementRace+scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking
           - id: 9
             label: "stale report fence"
             tests: >-
@@ -978,7 +980,6 @@ jobs:
           - id: 12
             label: "launch and replay recovery"
             tests: >-
-              JobPushProcessRecoveryE2eIT,
               LaunchProcessCrashRecoveryE2eIT,
               ReadinessHandoverE2eIT,
               ReplayAdmissionRecoveryE2eIT
@@ -988,16 +989,19 @@ jobs:
               ApprovalSourceReconciliationE2eIT,
               JobSlaAlertmanagerIdentityE2eIT,
               TriggerLaunchRecoveryE2eIT,
-              WorkflowTerminalNotificationE2eIT
+              WorkflowTerminalNotificationE2eIT,
+              JobPushProcessRecoveryE2eIT
           - id: 14
-            label: "export and SDK recovery"
+            label: "export, SDK and process recovery"
             tests: >-
               ExportPartitionContentE2eIT,
-              SdkOrdinaryLeaseRecoveryE2eIT
+              SdkOrdinaryLeaseRecoveryE2eIT,
+              WorkerReportLostAfterBusinessCommitE2eIT#shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
           - id: 15
-            label: "terminal process recovery"
+            label: "terminal recovery and workflow catch-up"
             tests: >-
-              WorkflowTerminalNotificationProcessRecoveryE2eIT
+              WorkflowTerminalNotificationProcessRecoveryE2eIT,
+              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldReconcileBatchDayAutoAfterConsoleProcessCrash+workflowRerunAdmissionRacingBatchDaySettlementShouldConverge+externalEventApiAdmissionRacingBatchDaySettlementShouldConverge+shouldApproveRestartedMisfire_whenConsoleAuthenticated+shouldExposeAuthoritativeAudit_whenEmptyDaySettled+shouldReconcileBatchDayAutoAfterRealTriggerResponseIsDropped+cutoffScheduledFire_completesWorkerBeforeBatchDaySettlement+triggerRestart_recoversOccurrenceCoverageBeforeBatchDaySettlement+cutoffCompositeWorkflow_waitsForBothWorkerJobsBeforeBatchDaySettlement+externalEventApi_fansOutToWorkersAndReportsTargetResults+disabledWorkflow_autoMisfireReconcilesToWorkerBusinessSuccess+crossDayDependencyWait_recoversRootPayloadAndCompletesImportBusinessEffect+consoleManualTrigger_preservesExplicitBizDateThroughWorkerAndSettlement+shouldConvergeCoverage_whenConfigurationAndSettlementRace+shouldPreserveSnapshotsAndObligations_whenDefinitionsChangeAfterOpen+settlementFirstScheduledQuartzCallback_doesNotReviveSkippedOccurrence
           - id: 16
             label: "recovery methods 2"
             tests: >-
@@ -1014,10 +1018,6 @@ jobs:
             label: "filesystem storage backend"
             tests: >-
               FilesystemBackendPipelineE2eIT
-          - id: 20
-            label: "process commit recovery"
-            tests: >-
-              WorkerReportLostAfterBusinessCommitE2eIT#shouldReuseProcessCommitAfterReclaim_withoutDuplicateBusinessEffect+shouldReplayProcessPublish_whenCommitResponseIsLostAfterDatabaseCommit
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -1029,7 +1029,7 @@ jobs:
 
       - name: Setup Python for Spark recovery scenarios
         if: (contains(matrix.shard.tests, 'shouldStopAtomicSparkReplay') || matrix.shard.tests == 'WorkerReportLostAfterBusinessCommitE2eIT')
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version: '3.12'
 
@@ -1072,7 +1072,7 @@ jobs:
 
       - name: Upload catch-up child-process diagnostics
         if: failure() && contains(matrix.shard.tests, 'WorkflowOccurrenceCatchUpApprovalE2eIT')
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-catchup-process-diagnostics-${{ matrix.shard.id }}
           path: logs/verification/backend25-2026-10-30/batchday-process/*.log
@@ -1081,7 +1081,7 @@ jobs:
 
       - name: Upload E2E shard ${{ matrix.shard.id }} reports
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-e2e-shard-${{ matrix.shard.id }}-reports
           path: |
@@ -1112,7 +1112,7 @@ jobs:
 
       - name: Upload scheduled test quality evidence
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: scheduled-test-quality-evidence
           path: |
@@ -1137,7 +1137,7 @@ jobs:
           persist-credentials: false
 
       - name: Download test reports
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: full-ci-*-reports
           path: build/ci-test-reports
@@ -1151,10 +1151,13 @@ jobs:
         run: |
           mkdir -p build/ci-quality
           printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > build/ci-quality/artifact-names.txt
           gh api "repos/${REPO}/actions/workflows/full-ci-gate.yml/runs?per_page=30" \
             > build/ci-quality/workflow-runs.json
           python3 scripts/ci/report-ci-quality-trends.py \
-            --reports-root build/ci-test-reports \
+            --reports-root build/ci-test-reports --artifact-names build/ci-quality/artifact-names.txt \
+            --artifact-pattern 'full-ci-*-reports' \
             --workflow-runs-json build/ci-quality/workflow-runs.json \
             --jobs-json build/ci-quality/jobs.json \
             --expect-artifact unit-it-a-main=full-ci-unit-it-a-main-reports \
@@ -1169,7 +1172,7 @@ jobs:
             --markdown build/ci-quality/summary.md
 
       - name: Upload CI quality trend
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: full-ci-quality-trend
           path: build/ci-quality/**

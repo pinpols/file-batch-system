@@ -25,6 +25,7 @@ import java.net.http.HttpResponse;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +61,7 @@ import org.springframework.test.context.jdbc.Sql;
 class WorkerDrainE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String WORKER_CODE = "e2e-import-drain-1";
   private static final HttpClient HTTP_CLIENT = HttpClient.newHttpClient();
 
@@ -227,7 +229,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
         """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -248,7 +250,7 @@ class WorkerDrainE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-worker-drain",

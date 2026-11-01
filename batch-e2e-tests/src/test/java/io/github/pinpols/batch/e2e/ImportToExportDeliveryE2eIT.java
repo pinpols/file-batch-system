@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -97,6 +98,8 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
         and file_category = 'OUTPUT' order by id desc limit 1\
         """;
 
+    // 交付链跨越多次运行，使用未到截止时间的业务日避免中途被结算。
+    LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).plusDays(1);
     String unique = "JOURNEY" + Long.toUnsignedString(System.nanoTime());
     String customerNo = "C-" + unique;
     String customerName = "Journey " + unique;
@@ -116,11 +119,11 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
     importParams.put("content", JsonUtils.toJson(List.of(customer)));
 
     LaunchSeed importSeed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, bizDate);
     launchService.launch(new LaunchRequest(
         TENANT,
         importSeed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        bizDate,
         TriggerType.API,
         importSeed.requestId(),
         "e2e-tr-import-export-import",
@@ -146,17 +149,22 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
 
     try (ConfigurableApplicationContext exportWorker = startExportWorker()) {
       LaunchSeed exportSeed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+          jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, bizDate);
       Map<String, Object> exportParams = Map.of(
-          "batchNo", unique,
-          "templateCode", "EXP-CUSTOMER-JSON",
-          "bizDate", "2026-01-15",
-          "bizType", "CUSTOMER",
-          "fileCode", "e2e-journey-" + unique);
+          "batchNo",
+          unique,
+          "templateCode",
+          "EXP-CUSTOMER-JSON",
+          "bizDate",
+          bizDate.toString(),
+          "bizType",
+          "CUSTOMER",
+          "fileCode",
+          "e2e-journey-" + unique);
       launchService.launch(new LaunchRequest(
           TENANT,
           exportSeed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          bizDate,
           TriggerType.API,
           exportSeed.requestId(),
           "e2e-tr-import-export-export",
@@ -179,11 +187,12 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       assertThat(exportedContent).doesNotContain("C-E2E");
       assertThat(exportWorker.isActive()).isTrue();
 
-      dispatchExportedFile(outputFileId, unique);
+      dispatchExportedFile(outputFileId, unique, bizDate);
     }
   }
 
-  private void dispatchExportedFile(Long fileId, String unique) throws Exception {
+  private void dispatchExportedFile(Long fileId, String unique, LocalDate bizDate)
+      throws Exception {
     final String insertFileChannelConfigSql = """
         insert into batch.file_channel_config (
             tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
@@ -217,7 +226,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date,
             dedup_key, request_status, trace_id, dry_run
-        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', ?, false)
+        ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', ?, false)
         """;
 
     String channelCode = "journey-local-" + unique;
@@ -237,7 +246,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
 
     try (ConfigurableApplicationContext dispatchWorker = startDispatchWorker()) {
       LaunchSeed dispatchSeed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, bizDate);
       String externalRequestId = "journey-" + unique;
       Map<String, Object> dispatchParams = Map.of(
           "fileId",
@@ -257,7 +266,7 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           dispatchSeed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          bizDate,
           TriggerType.API,
           dispatchSeed.requestId(),
           "e2e-tr-import-export-dispatch",
@@ -289,12 +298,13 @@ class ImportToExportDeliveryE2eIT extends AbstractIntegrationTest {
           retryRequestId,
           TriggerType.API.code(),
           dispatchSeed.workflowDefinitionId(),
+          bizDate,
           retryDedupKey,
           "e2e-tr-import-export-dispatch-retry");
       launchService.launch(new LaunchRequest(
           TENANT,
           dispatchSeed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          bizDate,
           TriggerType.API,
           retryRequestId,
           "e2e-tr-import-export-dispatch-retry",

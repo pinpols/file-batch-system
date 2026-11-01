@@ -132,7 +132,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | **范围探测** | ✅ 有 — `scripts/ci/detect-change-scope.py` 按 changed files 决定 | ❌ 永远 full reactor |
 | **单元测试路由** | 四个保守分片信号；公共边界全跑，叶子模块只跑所属分片 | 永远全跑 |
 | **Maven 范围** | 每个被选分片先用 `install -DskipTests -am` 构建依赖，再只测试本分片模块；PR unit 分片按编译后的类名排除 `*IntegrationTest`，但不排除 `*IT` | 固定分片并发执行；编排长类按清单独立运行并合并 JaCoCo 执行数据后检查覆盖率，目标模块执行 unit + IT |
-| **E2E suite** | 不运行，由合入后门禁回退 | 当前 49 个测试类拆为 20 个并发 shard；恢复长类按方法分片，filesystem 后端独立片显式启用对应配置；新增分片耗时待 CI 验证 |
+| **E2E suite** | 不运行，由合入后门禁回退 | Full 和 Staging 的 49 个测试类分别拆为 19 个 shard，E2E 矩阵最多同时运行 16 片；Push 进程恢复与启动崩溃恢复分别执行，Workflow 补跑和恢复长类按方法分片，filesystem 后端独立片显式启用对应配置；分片耗时和排队情况待 CI 验证 |
 | **Hadolint / Trivy SBOM 与配置扫描** | ❌ 不跑 | ✅ 跑 |
 | **文本 UTF-8 编码** | PR 相对目标分支扫描变更文本 | 全仓扫描 |
 | **测试约定（`@DisplayName` + 方法命名）** | 相对 `docs/governance/test-conventions-baseline.txt` 只拦**新增**缺口（中文 `@DisplayName` 类级/方法级；方法名只接受 `shouldXxx_whenYyy` / `方法名_条件_预期`，禁用形状直接失败） | 同一份基线全量复核 |
@@ -152,7 +152,7 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | Console API | B2 Console |
 | Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
-`unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
+`unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，`JobNodeDispatchIntegrationTest` 以独立 Maven 调用放在编排补充片；Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
 
 更改 `scripts/ci/run-pr-coverage-integration.sh` 或 `scripts/ci/check-diff-coverage.py` 时，范围探测会启动四个测试范围，确保执行器和覆盖率汇总的变更得到真实 CI 验证；其他不影响业务测试的 CI 改动仍不启动 Maven 单测。
 
@@ -220,7 +220,7 @@ SDK 五语言契约矩阵。
 > 约定/架构守护（`*ArchTest`、`*ConventionTest`，如 `RepositoryMapReturnConventionTest`、`PositionalArgsConventionTest`）
 > 由 PR / Full / Staging 的 `java-governance` job 独立执行，业务 unit/IT 显式排除这两类后缀。
 > `check-java-governance-test-coverage.py --verify-reports` 要求每个源码类都产生 Surefire XML，零用例或漏跑会阻断。
-> E2E 静态与运行完整性守卫的正反例由 `PR_E2E_SHARD_COVERAGE_TEST` 在 Java/CI 域触发，`FULL_E2E_SHARD_COVERAGE_TEST` 在 Full Gate 执行；方法分片还核对每个指定方法的报告与跳过状态。
+> E2E 静态与运行完整性守卫的正反例由 `PR_E2E_SHARD_COVERAGE_TEST` 在 Java/CI 域触发，`FULL_E2E_SHARD_COVERAGE_TEST` 在 Full Gate 执行；方法分片还核对每个指定方法的报告与跳过状态；参数化调用检查报告中序号连续，但不推断参数源预期总次数。
 > `MapperStatusWriteConventionTest` 扫描各应用模块的 Mapper XML，禁止普通 `UPDATE SET` 与 `ON CONFLICT ... DO UPDATE SET` 固定写入状态字面量；使用 `bash scripts/ci/run-java-governance-tests.sh` 执行。它不审查 `WHERE` / `SELECT` 的业务状态集合，共享生命周期还需 Mapper 契约测试，专项业务筛选由专项测试维护。
 > `ServiceEntryGuardArchTest` 按入口语义验证核心服务入口 fail-safe 行为；Orchestrator `ControllerPersistenceBoundaryArchTest` 与 Console `LayerBoundaryArchTest` 分别禁止 Controller/Web 直连 Mapper/Repository；Orchestrator 与 Console 的 `EntityModelNamingArchTest` 强制领域 `entity` 包只含 `XxxEntity`；`EntityApiBoundaryArchTest` 强制 Orchestrator 与 Console HTTP 方法签名不暴露 Entity，零豁免。Controller/Service/Entity 分层规范见 `docs/coding-conventions.md` §4.1.1、§6.3、§8.2.10。执行入口：`bash scripts/ci/run-java-governance-tests.sh`。
 > `PositionalArgsConventionTest` 还守护已治理 Query 不回退为多 `null` 位置构造，并确保状态型参数对象不重新暴露通用 Builder 或公共全参构造器；语义上是否应纳入受控工厂集合仍由代码审查决定。
@@ -433,17 +433,19 @@ make ops-compensate     # 触发补偿
 
 ---
 
+测试报告汇总会读取当前 run 的 artifact 名称：单个 artifact 被下载 Action 展开到根目录时，仍使用实际名称归属报告；多 artifact 使用各自目录。成功作业缺少对应测试报告仍会失败。
+
 ## 依赖更新配置
 
-仓库同时保留 `.github/renovate.json` 与 `.github/dependabot.yml` 配置。配置文件存在不等于对应 GitHub App 已启用；实际 PR 行为还取决于组织/仓库安装状态。
+仓库通过 `.github/renovate.json` 禁用 Renovate，并通过 `.github/dependabot.yml` 禁用 Dependabot 版本更新 PR。平台安全更新设置另行控制。
 
 | 配置 | 声明的行为 |
 |---|---|
-| Renovate (`.github/renovate.json`) | Maven patch 与 GitHub Actions 规则声明 automerge；Maven minor/major 不自动合并；Spring Boot 父 POM 不自动合并并配置 reviewer |
+| Renovate (`.github/renovate.json`) | `enabled: false`；即使启用 Renovate App 也不由其处理本仓依赖或创建 PR |
 | Dependabot (`.github/dependabot.yml`) | Maven、GitHub Actions、Docker 更新周期为季度，版本 PR 数上限为 0；安全更新由仓库级设置控制 |
 | `quarterly-dependency-review` | 生成依赖盘点 artifact 与 Actions Summary，不自动创建 PR |
 
-不得仅凭配置推断 Renovate App 正在运行或 PR 会自动合并；执行状态应通过最近一次 bot PR/run 和仓库 App 设置确认。季度依赖盘点的操作步骤见[季度依赖集中治理](./quarterly-dependency-governance.md)。
+实际安装状态和平台级设置仍需通过仓库 App 设置核实。季度依赖盘点的操作步骤见[季度依赖集中治理](./quarterly-dependency-governance.md)。
 
 ---
 
@@ -539,7 +541,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 - 最近 PR 运行约 9:02：环境 44 秒、编译 289 秒、分析 136 秒、上传 7 秒。
 - PR 改为 Java no-build + 默认高精度查询，且不再准备 Maven/JDK 构建环境；main/定时/手工仍使用 manual build + `security-extended`，在线连续 10 次运行后更新本节实测数据。
 
-完整样本、运行链接和回退标准见 [CI 门禁耗时分析与优化记录](../verifications/ci-gate-runtime-optimization-2026-10-07.md)。
+历史样本和回退标准见 [CI 门禁耗时分析与优化记录](../verifications/ci-gate-runtime-optimization-2026-10-07.md)；2026-11-01 分片样本和待验证结果见 [待办主记录](../plans/todo-master.md)。
 
 ---
 

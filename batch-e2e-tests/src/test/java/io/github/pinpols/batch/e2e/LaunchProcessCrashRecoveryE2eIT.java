@@ -27,6 +27,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -139,11 +140,11 @@ class LaunchProcessCrashRecoveryE2eIT extends AbstractIntegrationTest {
     assertThat(parentListener).isNotNull();
     parentListener.stop();
     await().atMost(Duration.ofSeconds(15)).until(() -> !parentListener.isRunning());
+    LocalDate bizDate = LocalDate.now(ZoneOffset.UTC).plusDays(1L + window.ordinal());
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, "t1", "IMPORT", "import", TriggerType.API);
+        jdbc, "t1", "IMPORT", "import", TriggerType.API, bizDate);
     jdbc.update(deleteTriggerRequestSql, seed.requestId());
     String customer = "JVMLOSS" + Long.toUnsignedString(System.nanoTime());
-    LocalDate bizDate = LocalDate.of(2026, 1, 15).plusDays(window.ordinal());
     String group = "r22-launch-" + seed.requestId();
     long lockKey = System.nanoTime();
     boolean publisherCrash = window == CrashWindow.PUBLISHER_AFTER_ACCEPTANCE;

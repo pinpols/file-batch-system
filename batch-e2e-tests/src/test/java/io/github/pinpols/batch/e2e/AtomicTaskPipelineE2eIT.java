@@ -29,6 +29,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -76,6 +77,8 @@ import org.springframework.test.util.AopTestUtils;
 class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  // 多用例共享业务日，避免真实结算调度在长跑期间关闭它。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Test
   @DisplayName("SQL 原子任务结果经过报告保存为 Workflow 节点输出")
@@ -88,11 +91,11 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
         where ji.tenant_id = ? and ji.dedup_key = ?
         """;
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-atomic-output",
@@ -242,7 +245,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     server.start();
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
       assertThat(jdbcTemplate.update(configureTimeoutSql, TENANT, seed.jobCode()))
           .isOne();
       Map<String, Object> params = new LinkedHashMap<>();
@@ -252,7 +255,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-hard-timeout-start",
@@ -323,7 +326,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           new E2eScenarioFixture.LaunchPreparationSpec(
                   jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API)
-              .dryRun(true));
+              .dryRun(true)
+              .bizDate(BIZ_DATE));
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/dry-run");
@@ -333,7 +337,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(LaunchRequest.builder()
           .tenantId(TENANT)
           .workflowDefinitionId(seed.workflowDefinitionId())
-          .bizDate(LocalDate.of(2026, 1, 15))
+          .bizDate(BIZ_DATE)
           .triggerType(TriggerType.API)
           .requestId(seed.requestId())
           .traceId("e2e-tr-atomic-http-dry-run")
@@ -390,7 +394,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
           new E2eScenarioFixture.LaunchPreparationSpec(
                   jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API)
-              .dryRun(true));
+              .dryRun(true)
+              .bizDate(BIZ_DATE));
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/retry-dry-run");
@@ -398,7 +403,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(LaunchRequest.builder()
           .tenantId(TENANT)
           .workflowDefinitionId(seed.workflowDefinitionId())
-          .bizDate(LocalDate.of(2026, 1, 15))
+          .bizDate(BIZ_DATE)
           .triggerType(TriggerType.API)
           .requestId(seed.requestId())
           .traceId("e2e-retry-dry-run")
@@ -497,7 +502,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     server.start();
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
       params.put("url", "http://127.0.0.1:" + server.getAddress().getPort() + "/redelivery");
@@ -505,7 +510,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-atomic-redelivery",
@@ -631,7 +636,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     server.start();
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
       jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
@@ -642,7 +647,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-atomic-post-outcome-unknown",
@@ -766,7 +771,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
     server.start();
     try {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
       jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("taskType", "http");
@@ -776,7 +781,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-atomic-retry-redelivery",
@@ -880,12 +885,12 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
                       """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-atomic",

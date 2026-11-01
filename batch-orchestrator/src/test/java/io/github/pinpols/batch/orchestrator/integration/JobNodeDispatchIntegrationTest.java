@@ -14,6 +14,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
+import io.github.pinpols.batch.common.redis.BatchRedisKeys;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -43,6 +44,7 @@ import io.github.pinpols.batch.orchestrator.domain.param.WorkflowRunMarkRunningP
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowLaunchWaitClaim;
 import io.github.pinpols.batch.orchestrator.domain.scheduling.ResourceSchedulingRequest;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorConfigCacheService;
+import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDayWaitingReleaseScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitReconciler;
@@ -759,6 +761,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   @MockitoSpyBean
   private OrchestratorConfigCacheService configCacheService;
 
+  private final OrchestratorRedisSupport orchestratorRedisSupport;
+
   @MockitoSpyBean
   private ResourceScheduler resourceScheduler;
 
@@ -798,7 +802,8 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       JdbcTemplate jdbcTemplate,
       BatchDaySettleScheduler batchDaySettleScheduler,
       BatchDayInstanceMapper batchDayInstanceMapper,
-      WorkflowRunManagementApplicationService workflowRunManagementApplicationService) {
+      WorkflowRunManagementApplicationService workflowRunManagementApplicationService,
+      OrchestratorRedisSupport orchestratorRedisSupport) {
     this.launchWaitReconciler = launchWaitReconciler;
     this.batchDayWaitingReleaseScheduler = batchDayWaitingReleaseScheduler;
     this.platformTransactionManager = platformTransactionManager;
@@ -818,6 +823,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     this.batchDaySettleScheduler = batchDaySettleScheduler;
     this.batchDayInstanceMapper = batchDayInstanceMapper;
     this.workflowRunManagementApplicationService = workflowRunManagementApplicationService;
+    this.orchestratorRedisSupport = orchestratorRedisSupport;
   }
 
   @Test
@@ -1082,37 +1088,47 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         .jobType("WORKFLOW")
         .enabled(true)
         .build();
-    Mockito.doReturn(retiredWrapper)
-        .when(configCacheService)
-        .findEnabledJobDefinition(testTenantId, wrapperCode);
+    // V270 禁止把 WORKFLOW 写入 job_definition。生产查找先读 Redis。
+    // 不能在共享 spy 上临时打桩：调度线程同时调用该 spy，Mockito 打桩不是线程安全的，
+    // 桩一旦被抢走就会走真实查找并得到 definition_not_found。
+    String cacheKey = BatchRedisKeys.config(testTenantId, "job-definition", wrapperCode);
+    orchestratorRedisSupport.setJson(cacheKey, retiredWrapper, Duration.ofMinutes(5));
+    try {
+      JobDefinitionEntity cachedWrapper =
+          configCacheService.findEnabledJobDefinition(testTenantId, wrapperCode);
+      assertThat(cachedWrapper).isNotNull();
+      assertThat(cachedWrapper.jobType()).isEqualTo("WORKFLOW");
 
-    LaunchRequest request = LaunchRequest.builder()
-        .tenantId(testTenantId)
-        .jobCode(wrapperCode)
-        .bizDate(BIZ_DATE)
-        .triggerType(TriggerType.API)
-        .requestId(seed.requestId())
-        .traceId(traceId)
-        .params(Map.of("legacyTarget", wrapperCode))
-        .build();
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(testTenantId)
+          .jobCode(wrapperCode)
+          .bizDate(BIZ_DATE)
+          .triggerType(TriggerType.API)
+          .requestId(seed.requestId())
+          .traceId(traceId)
+          .params(Map.of("legacyTarget", wrapperCode))
+          .build();
 
-    assertThatThrownBy(() -> launchService.launch(request))
-        .isInstanceOf(BizException.class)
-        .extracting("messageKey")
-        .isEqualTo("error.workflow.wrapper_job_retired");
+      assertThatThrownBy(() -> launchService.launch(request))
+          .isInstanceOf(BizException.class)
+          .extracting("messageKey")
+          .isEqualTo("error.workflow.wrapper_job_retired");
 
-    String selectedRequestStatus = jdbcTemplate.queryForObject(
-        selectRequestStatusSql, String.class, testTenantId, seed.requestId());
-    assertThat(selectedRequestStatus).isEqualTo("REJECTED");
-    Long selectedWorkflowRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, testTenantId, testTenantId, seed.requestId());
-    assertThat(selectedWorkflowRunCount).isZero();
-    Long selectedJobInstanceCount = jdbcTemplate.queryForObject(
-        selectCountSql2, Long.class, testTenantId, testTenantId, seed.requestId());
-    assertThat(selectedJobInstanceCount).isZero();
-    Long selectedOutboxEventCount =
-        jdbcTemplate.queryForObject(selectCountSql3, Long.class, testTenantId, traceId);
-    assertThat(selectedOutboxEventCount).isZero();
+      String selectedRequestStatus = jdbcTemplate.queryForObject(
+          selectRequestStatusSql, String.class, testTenantId, seed.requestId());
+      assertThat(selectedRequestStatus).isEqualTo("REJECTED");
+      Long selectedWorkflowRunCount = jdbcTemplate.queryForObject(
+          selectCountSql, Long.class, testTenantId, testTenantId, seed.requestId());
+      assertThat(selectedWorkflowRunCount).isZero();
+      Long selectedJobInstanceCount = jdbcTemplate.queryForObject(
+          selectCountSql2, Long.class, testTenantId, testTenantId, seed.requestId());
+      assertThat(selectedJobInstanceCount).isZero();
+      Long selectedOutboxEventCount =
+          jdbcTemplate.queryForObject(selectCountSql3, Long.class, testTenantId, traceId);
+      assertThat(selectedOutboxEventCount).isZero();
+    } finally {
+      configCacheService.evictJobDefinition(testTenantId, wrapperCode);
+    }
   }
 
   // ── helpers ──────────────────────────────────────────────────────────────
