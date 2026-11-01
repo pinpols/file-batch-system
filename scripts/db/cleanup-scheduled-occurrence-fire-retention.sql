@@ -1,5 +1,7 @@
 -- 用途：预览或清理指定租户、截止时刻前且所属批次日已 SETTLED 的实际触发观察记录。
 -- 用法：psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=时间 -v batch_size=1000 -f scripts/db/cleanup-scheduled-occurrence-fire-retention.sql
+-- 破坏性操作：仅对经授权的目标平台库执行；实际删除后不能由脚本撤销。
+-- 删除前必须核对预览范围及已验证备份；误删时按 scripts/db/README.md 的恢复流程处理。
 -- 默认 preview；删除须显式确认数据库、租户、截止时间、批次大小及已验证备份。每次最多 10000 条。
 \set ON_ERROR_STOP on
 \if :{?tenant_id}

@@ -1,5 +1,7 @@
 -- 用途：预览或清理非系统租户；默认只预览，不删除无租户登记的孤儿数据。
 -- 用法：psql -X -v ON_ERROR_STOP=1 -f scripts/db/wipe-non-system-tenants.sql
+-- 破坏性操作：仅对经授权的目标平台库执行；删除会影响非系统租户及关联回执，不能由脚本撤销。
+-- 删除前必须核对预览目标及跨租户影响；误删时按 scripts/db/README.md 从已验证备份恢复。
 -- 删除前停止写方、验证备份恢复，并按 README 显式确认数据库、预览目标及备份。
 -- 白名单：system、default、default-tenant、ta、tb、tc、tx。
 
