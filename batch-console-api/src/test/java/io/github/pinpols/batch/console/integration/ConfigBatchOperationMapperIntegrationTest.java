@@ -72,8 +72,8 @@ class ConfigBatchOperationMapperIntegrationTest {
     configuration.addMapper(ConfigBatchOperationMapper.class);
     String resource = "mapper/ConfigBatchOperationMapper.xml";
     try (InputStream input = Resources.getResourceAsStream(resource)) {
-      XMLMapperBuilder builder = new XMLMapperBuilder(
-          input, configuration, resource, configuration.getSqlFragments());
+      XMLMapperBuilder builder =
+          new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments());
       builder.parse();
     }
     sessions = new SqlSessionFactoryBuilder().build(configuration);
@@ -100,13 +100,17 @@ class ConfigBatchOperationMapperIntegrationTest {
       session.commit();
     }
     assertThat(queueCount(fixture.targetA(), "committed")).isOne();
-    assertThat(JSON.readTree(readReceipt(fixture, 0, fixture.targetA())).path("marker").asText())
+    assertThat(JSON.readTree(readReceipt(fixture, 0, fixture.targetA()))
+            .path("marker")
+            .asText())
         .isEqualTo("first");
 
     try (SqlSession session = sessions.openSession(false)) {
       insertQueue(session, fixture.targetA(), "receipt-failed");
-      ConfigBatchTargetReceiptInsertParam duplicate = receipt(fixture, 0, fixture.targetA(), "again");
-      assertThatThrownBy(() -> mapper(session).insertReceipt(duplicate)).isInstanceOf(RuntimeException.class);
+      ConfigBatchTargetReceiptInsertParam duplicate =
+          receipt(fixture, 0, fixture.targetA(), "again");
+      assertThatThrownBy(() -> mapper(session).insertReceipt(duplicate))
+          .isInstanceOf(RuntimeException.class);
       session.rollback();
     }
     assertThat(queueCount(fixture.targetA(), "receipt-failed")).isZero();
@@ -120,9 +124,12 @@ class ConfigBatchOperationMapperIntegrationTest {
     register(fixture);
     try (SqlSession session = sessions.openSession(false)) {
       ConfigBatchOperationMapper mapper = mapper(session);
-      assertThat(mapper.insertReceipt(receipt(fixture, 0, fixture.targetA(), "first"))).isOne();
-      assertThat(mapper.insertReceipt(receipt(fixture, 1, fixture.targetB(), "second"))).isOne();
-      assertThat(mapper.insertReceipt(receipt(fixture, 2, fixture.targetA(), "third"))).isOne();
+      assertThat(mapper.insertReceipt(receipt(fixture, 0, fixture.targetA(), "first")))
+          .isOne();
+      assertThat(mapper.insertReceipt(receipt(fixture, 1, fixture.targetB(), "second")))
+          .isOne();
+      assertThat(mapper.insertReceipt(receipt(fixture, 2, fixture.targetA(), "third")))
+          .isOne();
       session.commit();
     }
     ConfigBatchOperationRow operation;
@@ -130,7 +137,8 @@ class ConfigBatchOperationMapperIntegrationTest {
       operation = mapper(session).selectOperation(fixture.audit(), fixture.identity());
     }
     JsonNode targets = JSON.readTree(operation.targetsJson());
-    assertThat(List.of(targets.get(0).asText(), targets.get(1).asText(), targets.get(2).asText()))
+    assertThat(List.of(
+            targets.get(0).asText(), targets.get(1).asText(), targets.get(2).asText()))
         .containsExactly(fixture.targetA(), fixture.targetB(), fixture.targetA());
     List<String> markers = List.of(
         JSON.readTree(readReceipt(fixture, 0, fixture.targetA())).path("marker").asText(),
@@ -154,11 +162,14 @@ class ConfigBatchOperationMapperIntegrationTest {
     }
     try (SqlSession session = restrictedSession(fixture.targetA())) {
       ConfigBatchOperationMapper mapper = mapper(session);
-      String first = mapper.selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA());
+      String first =
+          mapper.selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA());
       mapper.setTenantContext(fixture.targetB());
-      String second = mapper.selectReceipt(fixture.audit(), fixture.operation(), 1, fixture.targetB());
+      String second =
+          mapper.selectReceipt(fixture.audit(), fixture.operation(), 1, fixture.targetB());
       mapper.setTenantContext(fixture.targetA());
-      String third = mapper.selectReceipt(fixture.audit(), fixture.operation(), 2, fixture.targetA());
+      String third =
+          mapper.selectReceipt(fixture.audit(), fixture.operation(), 2, fixture.targetA());
       assertThat(JSON.readTree(first).path("marker").asText()).isEqualTo("first");
       assertThat(JSON.readTree(second).path("marker").asText()).isEqualTo("second");
       assertThat(JSON.readTree(third).path("marker").asText()).isEqualTo("third");
@@ -171,8 +182,12 @@ class ConfigBatchOperationMapperIntegrationTest {
     Fixture fixture = fixture();
     register(fixture);
     ConfigBatchOperationInsertParam duplicate = new ConfigBatchOperationInsertParam(
-        "other-" + fixture.audit(), UUID.randomUUID().toString(), fixture.identity(), "COPY",
-        "[]", "{}");
+        "other-" + fixture.audit(),
+        UUID.randomUUID().toString(),
+        fixture.identity(),
+        "COPY",
+        "[]",
+        "{}");
     ConfigBatchOperationInsertParam distinct = new ConfigBatchOperationInsertParam(
         "other-" + fixture.audit(), UUID.randomUUID().toString(), identity(), "COPY", "[]", "{}");
     try (SqlSession session = sessions.openSession(false)) {
@@ -185,8 +200,10 @@ class ConfigBatchOperationMapperIntegrationTest {
       ConfigBatchOperationRow original =
           mapper(session).selectOperation(fixture.audit(), fixture.identity());
       assertThat(original.operationId()).isEqualTo(fixture.operation());
-      assertThat(mapper(session).selectOperation(duplicate.auditTenantId(), fixture.identity())).isNull();
-      assertThat(mapper(session).selectOperation(distinct.auditTenantId(), distinct.requestIdentityHash()))
+      assertThat(mapper(session).selectOperation(duplicate.auditTenantId(), fixture.identity()))
+          .isNull();
+      assertThat(mapper(session)
+              .selectOperation(distinct.auditTenantId(), distinct.requestIdentityHash()))
           .isNotNull();
     }
   }
@@ -205,25 +222,33 @@ class ConfigBatchOperationMapperIntegrationTest {
       ConfigBatchOperationRow visible =
           mapper(session).selectOperation(fixture.audit(), fixture.identity());
       assertThat(visible).isNotNull();
-      assertThat(mapper(session).selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA()))
+      assertThat(mapper(session)
+              .selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA()))
           .isNull();
     }
     try (SqlSession session = restrictedSession(fixture.targetA())) {
-      assertThat(mapper(session).selectOperation(fixture.audit(), fixture.identity())).isNull();
-      String visible = mapper(session)
-          .selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA());
+      assertThat(mapper(session).selectOperation(fixture.audit(), fixture.identity()))
+          .isNull();
+      String visible =
+          mapper(session).selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA());
       assertThat(JSON.readTree(visible).path("marker").asText()).isEqualTo("visible");
-      int inserted = mapper(session).insertReceipt(receipt(fixture, 2, fixture.targetA(), "allowed"));
+      int inserted =
+          mapper(session).insertReceipt(receipt(fixture, 2, fixture.targetA(), "allowed"));
       assertThat(inserted).isOne();
       session.commit();
     }
-    assertThat(JSON.readTree(readReceipt(fixture, 2, fixture.targetA())).path("marker").asText())
+    assertThat(JSON.readTree(readReceipt(fixture, 2, fixture.targetA()))
+            .path("marker")
+            .asText())
         .isEqualTo("allowed");
     try (SqlSession session = restrictedSession(fixture.targetB())) {
-      assertThat(mapper(session).selectOperation(fixture.audit(), fixture.identity())).isNull();
-      assertThat(mapper(session).selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA()))
+      assertThat(mapper(session).selectOperation(fixture.audit(), fixture.identity()))
           .isNull();
-      ConfigBatchTargetReceiptInsertParam wrongTenant = receipt(fixture, 1, fixture.targetA(), "denied");
+      assertThat(mapper(session)
+              .selectReceipt(fixture.audit(), fixture.operation(), 0, fixture.targetA()))
+          .isNull();
+      ConfigBatchTargetReceiptInsertParam wrongTenant =
+          receipt(fixture, 1, fixture.targetA(), "denied");
       assertThatThrownBy(() -> mapper(session).insertReceipt(wrongTenant))
           .isInstanceOf(RuntimeException.class);
       session.rollback();
@@ -246,8 +271,8 @@ class ConfigBatchOperationMapperIntegrationTest {
 
   private static Fixture fixture() {
     String suffix = UUID.randomUUID().toString().replace("-", "");
-    return new Fixture("audit-" + suffix, "a-" + suffix, "b-" + suffix,
-        UUID.randomUUID().toString(), identity());
+    return new Fixture(
+        "audit-" + suffix, "a-" + suffix, "b-" + suffix, UUID.randomUUID().toString(), identity());
   }
 
   private static String identity() {
@@ -255,8 +280,8 @@ class ConfigBatchOperationMapperIntegrationTest {
   }
 
   private static ConfigBatchOperationInsertParam operation(Fixture fixture) {
-    String targets = "[\"%s\",\"%s\",\"%s\"]"
-        .formatted(fixture.targetA(), fixture.targetB(), fixture.targetA());
+    String targets =
+        "[\"%s\",\"%s\",\"%s\"]".formatted(fixture.targetA(), fixture.targetB(), fixture.targetA());
     return new ConfigBatchOperationInsertParam(
         fixture.audit(), fixture.operation(), fixture.identity(), "COPY", targets, "{}");
   }
@@ -316,5 +341,6 @@ class ConfigBatchOperationMapperIntegrationTest {
     return jdbc.queryForObject(sql, Integer.class, tenant, code);
   }
 
-  private record Fixture(String audit, String targetA, String targetB, String operation, String identity) {}
+  private record Fixture(
+      String audit, String targetA, String targetB, String operation, String identity) {}
 }

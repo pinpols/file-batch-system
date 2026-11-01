@@ -64,8 +64,7 @@ public class DefaultConsoleFileDownloadApplicationService
   private final OrchestratorApprovalClient approvalClient;
 
   @Override
-  public FileDownloadArtifact download(
-      String tenantId, Long fileId, String approvalId) {
+  public FileDownloadArtifact download(String tenantId, Long fileId, String approvalId) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     FileRecordStorageView fileRecord =
         fileRecordMapper.selectFileRecordById(effectiveTenant, fileId);
@@ -120,8 +119,7 @@ public class DefaultConsoleFileDownloadApplicationService
   }
 
   @Override
-  public FileDownloadArtifact exportFileErrors(
-      String tenantId, Long fileId, String errorStage) {
+  public FileDownloadArtifact exportFileErrors(String tenantId, Long fileId, String errorStage) {
     String effectiveTenant = tenantGuard.resolveTenant(tenantId);
     FileErrorRecordQuery query =
         FileErrorRecordQuery.ofFileAndStage(effectiveTenant, fileId, errorStage);

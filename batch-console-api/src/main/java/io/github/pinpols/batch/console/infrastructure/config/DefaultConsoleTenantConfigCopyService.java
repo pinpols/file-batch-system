@@ -9,11 +9,11 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
-import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationContext;
 import io.github.pinpols.batch.console.application.config.ConfigBatchOperationRequest;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigBatchOperationService;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigCopyService;
+import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ConfigSyncBundlePayload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.AlertRoutingSpec;
@@ -154,7 +154,10 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
 
   @Override
   public TenantConfigBatchInitResponse copy(
-      TenantConfigCopyRequest request, String operator, String batchOperationId, String requestHash) {
+      TenantConfigCopyRequest request,
+      String operator,
+      String batchOperationId,
+      String requestHash) {
     // 复制会剥离环境端点与凭据，禁止把处理后的包回写源租户。
     if (EmptyChecks.isNotEmpty(request.getTargetTenantIds())
         && request.getTargetTenantIds().contains(request.getSourceTenantId())) {
@@ -185,7 +188,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         dryRunForLog,
         batchOperationIdForLog);
 
-    if (requestHash == null || request.isDryRun()) {
+    if (EmptyChecks.isNull(requestHash) || request.isDryRun()) {
       return initService.batchInit(initRequest, operator, batchOperationId);
     }
     List<String> targets = request.getTargetTenantIds();
@@ -193,8 +196,12 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
     ConfigBatchOperationRequest operation = new ConfigBatchOperationRequest(
-        request.getSourceTenantId(), batchOperationId, requestHash, "TENANT_COPY",
-        targets, objectMapper.createObjectNode());
+        request.getSourceTenantId(),
+        batchOperationId,
+        requestHash,
+        "TENANT_COPY",
+        targets,
+        objectMapper.createObjectNode());
     ConfigBatchOperationContext context = operationRecoveryService.begin(operation);
     return initService.batchInit(initRequest, operator, context);
   }

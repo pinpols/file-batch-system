@@ -93,8 +93,8 @@ class ConsoleForensicControllerTest {
     when(requestMetadataResolver.current())
         .thenReturn(new ConsoleRequestMetadata(
             "req-1", "trace-1", "t1", "authenticated-admin", "k1", "127.0.0.1"));
-    when(proxy.requestForensicExport(ArgumentMatchers.argThat(command -> command != null
-            && command.exportFormat() == null)))
+    when(proxy.requestForensicExport(
+            ArgumentMatchers.argThat(command -> command != null && command.exportFormat() == null)))
         .thenReturn(new ConsoleForensicExportResponse("fx-001", "READY", null, null, null, null));
     mockMvc
         .perform(post("/api/console/forensic/export")
@@ -104,8 +104,10 @@ class ConsoleForensicControllerTest {
                 {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19"}
                 """))
         .andExpect(status().isOk());
-    verify(proxy).requestForensicExport(ArgumentMatchers.argThat(command -> command != null
-        && command.exportFormat() == null && "authenticated-admin".equals(command.requestedBy())));
+    verify(proxy)
+        .requestForensicExport(ArgumentMatchers.argThat(command -> command != null
+            && command.exportFormat() == null
+            && "authenticated-admin".equals(command.requestedBy())));
   }
 
   @Test

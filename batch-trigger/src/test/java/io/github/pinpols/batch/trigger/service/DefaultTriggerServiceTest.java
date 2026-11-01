@@ -155,9 +155,8 @@ class DefaultTriggerServiceTest {
   @Test
   @DisplayName("手工触发缺少幂等键时以 MISSING_IDEMPOTENCY_KEY 直接拒绝")
   void shouldRejectBlankIdempotencyKey() {
-    assertThatThrownBy(() ->
-            service.launch(new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(validRequest()),
-                " ", "req-001", "trace-001")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(validRequest()), " ", "req-001", "trace-001")))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.MISSING_IDEMPOTENCY_KEY);
@@ -168,9 +167,8 @@ class DefaultTriggerServiceTest {
   void shouldRejectMissingOrJobLaunchTarget() {
     TriggerLaunchRequest missing = validRequest();
     missing.setWorkflowDefinitionId(null);
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(missing),
-                "idem-missing-target", "req-1", "trace-1")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(missing), "idem-missing-target", "req-1", "trace-1")))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getMessageKey())
@@ -178,9 +176,8 @@ class DefaultTriggerServiceTest {
 
     TriggerLaunchRequest jobRoot = validRequest();
     jobRoot.setWorkflowDefinitionId(null);
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(jobRoot),
-                "idem-job-target", "req-job", "trace-job")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(jobRoot), "idem-job-target", "req-job", "trace-job")))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getMessageKey())
@@ -188,9 +185,11 @@ class DefaultTriggerServiceTest {
 
     TriggerLaunchRequest forgedParent = validRequest();
     forgedParent.setParams(Map.of("_parentWorkflowRunId", 900L, "_parentNodeCode", "FORGED"));
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(forgedParent),
-                "idem-parent", "req-parent", "trace-parent")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(forgedParent),
+            "idem-parent",
+            "req-parent",
+            "trace-parent")))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getMessageKey())
@@ -207,9 +206,11 @@ class DefaultTriggerServiceTest {
     TriggerLaunchRequest request = validRequest();
     when(triggerRequestMapper.existsEnabledWorkflowDefinition("t1", 71L)).thenReturn(false);
 
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-                "idem-foreign-workflow", "req-foreign", "trace")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request),
+            "idem-foreign-workflow",
+            "req-foreign",
+            "trace")))
         .isInstanceOfSatisfying(
             BizException.class,
             exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.NOT_FOUND));
@@ -224,8 +225,8 @@ class DefaultTriggerServiceTest {
   void shouldKeepManualCatchUpEventTimeSeparateFromDataInterval() {
     TriggerLaunchRequest input = validRequest();
     input.setTriggerType(TriggerType.CATCH_UP);
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(input), "manual-cu", "manual-cu", "manual-trace");
+    TriggerLaunchCommand command = new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(input), "manual-cu", "manual-cu", "manual-trace");
     LaunchRequest request = LaunchRequest.builder()
         .tenantId("t1")
         .workflowDefinitionId(71L)
@@ -262,8 +263,8 @@ class DefaultTriggerServiceTest {
   @Test
   @DisplayName("幂等键命中已有请求时复用其 traceId 返回,不再落库也不发 outbox")
   void shouldShortCircuitWhenDedupRequestAlreadyExists() {
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(validRequest()), "idem-001", "req-001", "trace-001");
+    TriggerLaunchCommand command = new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(validRequest()), "idem-001", "req-001", "trace-001");
     LaunchRequest launchRequest = new LaunchRequest(
         "t1",
         "IMPORT_JOB",
@@ -297,9 +298,8 @@ class DefaultTriggerServiceTest {
     request.setExternalEventCode("PAYMENT_CLOSED");
     request.setExternalEventSource("billing");
     request.setExternalEventId("close-2026-01");
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-            "event-idem", "event-request", "event-trace");
+    TriggerLaunchCommand command = new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "event-idem", "event-request", "event-trace");
     LaunchRequest launchRequest = LaunchRequest.builder()
         .tenantId("t1")
         .jobCode("IMPORT_JOB")
@@ -334,7 +334,10 @@ class DefaultTriggerServiceTest {
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     ExternalEventLaunchCommand command = new ExternalEventLaunchCommand(
         TriggerCommandInputMapper.toInput(request),
-            "billing", "idem-event-rls", "request-event-rls", "trace-event-rls");
+        "billing",
+        "idem-event-rls",
+        "request-event-rls",
+        "trace-event-rls");
     when(triggerRequestMapper.selectEnabledExternalEventWorkflowTargets("t1", "PAYMENT_SETTLED"))
         .thenReturn(List.of());
 
@@ -378,9 +381,11 @@ class DefaultTriggerServiceTest {
     TriggerLaunchRequest request = validRequest();
     request.setExternalEventCode(" ");
 
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-                "event-idem", "event-request", "event-trace")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request),
+            "event-idem",
+            "event-request",
+            "event-trace")))
         .isInstanceOf(BizException.class)
         .extracting("code")
         .isEqualTo(ResultCode.INVALID_ARGUMENT);
@@ -812,9 +817,11 @@ class DefaultTriggerServiceTest {
   void launch_suspendedTenant_throwsBizException() {
     when(tenantStatusMapper.selectStatus("t1")).thenReturn("SUSPENDED");
 
-    assertThatThrownBy(() -> service.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(validRequest()),
-                "idem-susp", "req-susp", "trace-susp")))
+    assertThatThrownBy(() -> service.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(validRequest()),
+            "idem-susp",
+            "req-susp",
+            "trace-susp")))
         .isInstanceOfSatisfying(BizException.class, failure -> {
           assertThat(failure.getCode()).isEqualTo(ResultCode.TENANT_SUSPENDED);
           assertThat(failure.getMessageKey()).isEqualTo("error.trigger.tenant_suspended");

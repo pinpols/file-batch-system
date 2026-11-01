@@ -9,6 +9,8 @@ public final class TenantConfigPackageProjectionTestSupport {
   private TenantConfigPackageProjectionTestSupport() {}
 
   public static Map<String, Object> jobRow(JobDefinitionView view) {
-    return new TenantConfigPackageRowProjections(null, null).toJobRows(List.of(view), false).getFirst();
+    return new TenantConfigPackageRowProjections(null, null)
+        .toJobRows(List.of(view), false)
+        .getFirst();
   }
 }

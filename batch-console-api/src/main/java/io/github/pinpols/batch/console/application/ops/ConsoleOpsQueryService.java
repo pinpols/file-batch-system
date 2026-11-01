@@ -602,12 +602,15 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         opsMappers.batchDayMapper.selectScheduledOccurrences(tenantId, calendarCode, bizDate);
     Map<OccurrenceKey, List<ConsoleScheduledOccurrenceFireResponse>> firesByOccurrence =
         new HashMap<>();
-    if (!occurrences.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(occurrences)) {
       opsMappers.batchDayMapper.setTenantContext(tenantId);
       for (BatchDayScheduledOccurrenceFireView fire :
-          opsMappers.batchDayMapper.selectScheduledOccurrenceFires(tenantId, calendarCode, bizDate)) {
-        OccurrenceKey key = new OccurrenceKey(fire.workflowDefinitionId(), fire.scheduledFireTime());
-        firesByOccurrence.computeIfAbsent(key, ignored -> new ArrayList<>())
+          opsMappers.batchDayMapper.selectScheduledOccurrenceFires(
+              tenantId, calendarCode, bizDate)) {
+        OccurrenceKey key =
+            new OccurrenceKey(fire.workflowDefinitionId(), fire.scheduledFireTime());
+        firesByOccurrence
+            .computeIfAbsent(key, ignored -> new ArrayList<>())
             .add(new ConsoleScheduledOccurrenceFireResponse(
                 fire.fireInstanceId(), fire.refireCount(), fire.actualFireTime(), fire.fireKind()));
       }
@@ -616,7 +619,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         .map(occurrence -> toScheduledOccurrenceResponse(
             occurrence,
             firesByOccurrence.getOrDefault(
-                new OccurrenceKey(occurrence.workflowDefinitionId(), occurrence.scheduledFireTime()),
+                new OccurrenceKey(
+                    occurrence.workflowDefinitionId(), occurrence.scheduledFireTime()),
                 List.of())))
         .toList();
     return new ConsoleBatchDayWindowResponse(
@@ -663,7 +667,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
   private record OccurrenceKey(Long workflowDefinitionId, Instant scheduledFireTime) {}
 
   private ConsoleScheduledOccurrenceResponse toScheduledOccurrenceResponse(
-      BatchDayScheduledOccurrenceView occurrence, List<ConsoleScheduledOccurrenceFireResponse> fires) {
+      BatchDayScheduledOccurrenceView occurrence,
+      List<ConsoleScheduledOccurrenceFireResponse> fires) {
     return new ConsoleScheduledOccurrenceResponse(
         occurrence.workflowDefinitionId(),
         occurrence.workflowCode(),

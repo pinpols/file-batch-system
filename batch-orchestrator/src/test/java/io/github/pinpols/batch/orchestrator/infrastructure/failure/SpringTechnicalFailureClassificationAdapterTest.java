@@ -26,7 +26,8 @@ class SpringTechnicalFailureClassificationAdapterTest {
     ResponseStatusException legacy = new ResponseStatusException(HttpStatus.CONFLICT, "legacy");
     assertThat(adapter.legacyResponseStatusDiagnostic(legacy)).contains("HTTP_409");
     assertThat(adapter.legacyResponseStatusDiagnostic(new OperationFailure(
-        OperationFailure.Kind.TEMPORARILY_UNAVAILABLE, "operation", legacy))).isEmpty();
+            OperationFailure.Kind.TEMPORARILY_UNAVAILABLE, "operation", legacy)))
+        .isEmpty();
     assertThat(adapter.legacyResponseStatusDiagnostic(new IllegalStateException("wrapped", legacy)))
         .isEmpty();
   }

@@ -403,7 +403,7 @@ public class WorkflowGraphValidator {
         // V4 已经报；这里跳过 V5/V12
         continue;
       }
-      JobDefinitionView refJobDef = refNode.getRelatedJobCode() == null
+      JobDefinitionView refJobDef = EmptyChecks.isNull(refNode.getRelatedJobCode())
           ? null
           : jobDefByCode.get(refNode.getRelatedJobCode());
       if (refJobDef == null) {

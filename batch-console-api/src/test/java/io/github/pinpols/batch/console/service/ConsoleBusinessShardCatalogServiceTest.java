@@ -4,9 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
 import io.github.pinpols.batch.console.domain.param.BusinessShardCatalogUpsertParam;
-import io.github.pinpols.batch.console.domain.command.BusinessShardCatalogUpsertCommand;
 import io.github.pinpols.batch.console.mapper.ConsoleBusinessShardCatalogMapper;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
@@ -57,14 +57,15 @@ class ConsoleBusinessShardCatalogServiceTest {
         .operator("ops:bob")
         .build();
     service.upsert(p);
-    verify(catalogMapper).upsert(BusinessShardCatalogUpsertParam.builder()
-        .placementKey("shard-1")
-        .host("db-1")
-        .port(5432)
-        .dbName("batch_business")
-        .enabled(true)
-        .operator("ops:bob")
-        .build());
+    verify(catalogMapper)
+        .upsert(BusinessShardCatalogUpsertParam.builder()
+            .placementKey("shard-1")
+            .host("db-1")
+            .port(5432)
+            .dbName("batch_business")
+            .enabled(true)
+            .operator("ops:bob")
+            .build());
   }
 
   @Test

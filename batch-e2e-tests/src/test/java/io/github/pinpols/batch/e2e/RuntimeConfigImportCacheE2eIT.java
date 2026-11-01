@@ -217,7 +217,8 @@ class RuntimeConfigImportCacheE2eIT extends AbstractIntegrationTest {
       seed.setTargetTenantIds(List.of(tenant));
       seed.setStrict(true);
       seed.setJobDefinitions(List.of(initialJob));
-      assertThat(initService.batchInit(seed, "integration-test", "seed-" + tenant).failureTenants())
+      assertThat(
+              initService.batchInit(seed, "integration-test", "seed-" + tenant).failureTenants())
           .isZero();
     }
 
@@ -325,8 +326,16 @@ class RuntimeConfigImportCacheE2eIT extends AbstractIntegrationTest {
       double secondApplied = second.metric(eventMetric, appliedTag);
       log.info(
           "配置导入失效事件：进程={} 端口={} 事件数={}->{} 日志={}；进程={} 端口={} 事件数={}->{} 日志={}",
-          first.process().pid(), first.port(), firstEvents, firstApplied, first.log(),
-          second.process().pid(), second.port(), secondEvents, secondApplied, second.log());
+          first.process().pid(),
+          first.port(),
+          firstEvents,
+          firstApplied,
+          first.log(),
+          second.process().pid(),
+          second.port(),
+          secondEvents,
+          secondApplied,
+          second.log());
     }
   }
 
@@ -542,9 +551,11 @@ class RuntimeConfigImportCacheE2eIT extends AbstractIntegrationTest {
         .start();
     OrchestratorChild child = new OrchestratorChild(process, port, log);
     try {
-      await().atMost(Duration.ofSeconds(120)).until(() ->
-          Files.readString(log).contains("Started E2eReportRecoveryOrchestratorApplication")
-              || !process.isAlive());
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .until(() ->
+              Files.readString(log).contains("Started E2eReportRecoveryOrchestratorApplication")
+                  || !process.isAlive());
       assertThat(process.isAlive()).as("调度子进程启动日志：%s", log).isTrue();
       return child;
     } catch (Exception | AssertionError failure) {
@@ -561,23 +572,30 @@ class RuntimeConfigImportCacheE2eIT extends AbstractIntegrationTest {
       if (body == null) {
         builder.GET();
       } else {
-        builder.header("Content-Type", "application/json")
+        builder
+            .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body));
       }
       HttpResponse<String> response =
           HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-      assertThat(response.statusCode()).as("进程 %s 的响应，日志：%s", process.pid(), log)
+      assertThat(response.statusCode())
+          .as("进程 %s 的响应，日志：%s", process.pid(), log)
           .isEqualTo(200);
       return JsonUtils.fromJsonStrict(response.body(), JsonNode.class);
     }
 
     int priority(String tenantId, String jobCode) throws Exception {
       String body = JsonUtils.toJson(Map.of(
-          "tenantId", tenantId,
-          "jobCode", jobCode,
-          "bizDate", "2026-11-02",
-          "level", "SCHEDULE_PLAN",
-          "params", Map.of()));
+          "tenantId",
+          tenantId,
+          "jobCode",
+          jobCode,
+          "bizDate",
+          "2026-11-02",
+          "level",
+          "SCHEDULE_PLAN",
+          "params",
+          Map.of()));
       JsonNode data = request("/internal/orchestrator/dry-run/plan", body).path("data");
       assertThat(data.path("success").asBoolean())
           .as("调度计划响应：%s，进程日志：%s", data, log)

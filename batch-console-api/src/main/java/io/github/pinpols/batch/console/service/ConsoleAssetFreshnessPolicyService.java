@@ -9,9 +9,9 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.application.contract.response.AssetFreshnessPolicyResponse;
 import io.github.pinpols.batch.console.domain.command.AssetFreshnessPolicyUpsertCommand;
+import io.github.pinpols.batch.console.domain.entity.AssetFreshnessPolicyEntity;
 import io.github.pinpols.batch.console.domain.param.AssetFreshnessPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.mapper.ConsoleAssetFreshnessPolicyMapper;
@@ -47,7 +47,8 @@ public class ConsoleAssetFreshnessPolicyService {
     long total = mapper.countByTenant(resolved, normalizedAssetCode, enabled);
     List<AssetFreshnessPolicyEntity> items =
         mapper.findByTenant(resolved, normalizedAssetCode, enabled, page);
-    List<AssetFreshnessPolicyResponse> responses = items.stream().map(this::toResponse).toList();
+    List<AssetFreshnessPolicyResponse> responses =
+        items.stream().map(this::toResponse).toList();
     return new PageResponse<>(total, page.pageNo(), page.pageSize(), responses);
   }
 

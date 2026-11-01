@@ -33,6 +33,31 @@ SQL 文件维持现有路径。若后续单独整理本目录的平铺 SQL，需
 
 租户重置脚本 [wipe-tenants.sql](wipe-tenants.sql) 和 [wipe-non-system-tenants.sql](wipe-non-system-tenants.sql) 面向已执行 V373 的平台库，会删除被清理目标租户的配置批操作回执，并删除被清理审计租户的操作及其级联回执。其他审计租户的操作和目标列表保留；其中缺失回执的目标只能按结果未知核对，不能判定为失败或完成。执行账号须具备两表的跨租户删除权限并能处理其强制行级隔离策略；普通租户角色可能看不到全部待清理记录。执行前仍须核对目标库、租户清单和备份。
 
+### 租户清理与触发观察记录的确认和恢复
+
+这三个入口默认只预览，不删除。先停止相关写方，核对数据库和具备跨租读取权限的运维角色，执行并验证可恢复备份；预览时输出候选租户，以及删除审计操作级联影响保留租户的回执、保留审计操作因目标清理而变为 UNKNOWN 的回执。跨租户读取不足会漏算影响，因此两个租户清理脚本要求超级用户或 BYPASSRLS 运维角色；只在已确认的目标库使用，不自动授予权限。保留租户若引用待删父实例则拒绝，先核对并由业务处置。非系统清理仅处理预览时仍在租户表中的目标，不自动清理无主孤儿；预览与删除是两次执行，删除前重新计算并锁定租户表，目标集合有变化将拒绝。
+
+```sh
+# 指定目标；action 省略即预览。确认值必须与预览打印的排序结果完全一致。
+psql -X -v ON_ERROR_STOP=1 -v tenant_ids=ta,tb,tc -f scripts/db/wipe-tenants.sql
+psql -X -v ON_ERROR_STOP=1 -v tenant_ids=ta,tb,tc -v action=delete \
+  -v confirm_database=目标数据库 -v confirm_targets=ta,tb,tc -v confirm_backup=verified \
+  -f scripts/db/wipe-tenants.sql
+# 非系统目标以预览打印的逗号分隔列表为准；无目标时为 <none>。
+psql -X -v ON_ERROR_STOP=1 -f scripts/db/wipe-non-system-tenants.sql
+psql -X -v ON_ERROR_STOP=1 -v action=delete -v confirm_database=目标数据库 \
+  -v confirm_targets=预览目标列表 -v confirm_backup=verified -f scripts/db/wipe-non-system-tenants.sql
+# 触发观察清理同样先预览，删除时重复确认租户和截止时刻。
+psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_size=1000 \
+  -f scripts/db/cleanup-scheduled-occurrence-fire-retention.sql
+psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_size=1000 \
+  -v action=delete -v confirm_database=目标数据库 -v confirm_tenant=租户 \
+  -v confirm_cutoff=截止时间 -v confirm_batch_size=1000 -v confirm_backup=verified \
+  -f scripts/db/cleanup-scheduled-occurrence-fire-retention.sql
+```
+
+`confirm_backup=verified` 是操作员的显式确认，并不能证明备份可用；删除已提交后不能用事务回滚，需停止写方并按 [备份恢复流程](backup/README.md) 在隔离环境验证后恢复。恢复范围须同时包含配置批操作及其回执，否则无法凭当前配置还原原结果。预览不锁定未来写入，必须在相同参数下重新预览并停止写方后执行；有未知结果时先人工核对，不能用新键重新发起整个批次。
+
 ## 常用入口
 
 1. 本地联调先看 [docs/runbook/local-development.md](../../docs/runbook/local-development.md)。

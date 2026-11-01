@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
 import jakarta.annotation.PreDestroy;
 import java.util.UUID;
@@ -39,7 +40,7 @@ public class ConfigCacheInvalidationRelay {
 
   @EventListener(ApplicationReadyEvent.class)
   public synchronized void start() {
-    if (scheduler != null || stopping.get()) {
+    if (EmptyChecks.isNotNull(scheduler) || stopping.get()) {
       return;
     }
     scheduler = Executors.newSingleThreadScheduledExecutor(
@@ -61,12 +62,12 @@ public class ConfigCacheInvalidationRelay {
       String token = UUID.randomUUID().toString();
       ConfigCacheInvalidationIntent intent = transactions.execute(status -> {
         ConfigCacheInvalidationIntent next = outbox.lockNext();
-        if (next != null) {
+        if (EmptyChecks.isNotNull(next)) {
           outbox.claim(next.id(), next.tenantId(), token);
         }
         return next;
       });
-      if (intent == null) {
+      if (EmptyChecks.isNull(intent)) {
         return;
       }
       try {
@@ -91,7 +92,7 @@ public class ConfigCacheInvalidationRelay {
   @PreDestroy
   public synchronized void stop() {
     stopping.set(true);
-    if (scheduler != null) {
+    if (EmptyChecks.isNotNull(scheduler)) {
       scheduler.shutdown();
       try {
         if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {

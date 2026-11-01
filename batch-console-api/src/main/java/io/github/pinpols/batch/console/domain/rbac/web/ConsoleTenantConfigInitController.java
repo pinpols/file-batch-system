@@ -15,8 +15,8 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
-import io.github.pinpols.batch.console.support.web.Idempotent;
 import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
+import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -83,7 +83,8 @@ public class ConsoleTenantConfigInitController {
     String tenantHeader = servletRequest.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     String requestHash = ConsoleIdempotencyRequestIdentity.requestHash(
         tenantHeader, servletRequest.getMethod(), servletRequest.getRequestURI(), idempotencyKey);
-    return responseFactory.success(copyService.copy(request, operator, batchOperationId, requestHash));
+    return responseFactory.success(
+        copyService.copy(request, operator, batchOperationId, requestHash));
   }
 
   /** 跨租户复制前预览 add/update/delete-candidate 和影响面，不执行写库。 */

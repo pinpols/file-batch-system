@@ -30,7 +30,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
-/** 用真实 PostgreSQL 校验两类持久等待的参数绑定、分页与租户筛选。 */
+/** 用真实 PostgreSQL 校验四类持久等待的参数绑定、分页与租户筛选。 */
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
 @DisplayName("持久等待 Mapper 的真实查询语义")

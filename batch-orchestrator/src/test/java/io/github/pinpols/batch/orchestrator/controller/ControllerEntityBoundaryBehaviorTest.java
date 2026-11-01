@@ -78,7 +78,8 @@ class ControllerEntityBoundaryBehaviorTest {
 
     when(ruleService.listEnabledByBusinessKey("tenant", "job:")).thenReturn(List.of(entity));
     when(ruleService.get("tenant", 3L)).thenReturn(entity);
-    when(ruleService.create(eq("tenant"), any(DataQualityRuleWriteCommand.class))).thenReturn(entity);
+    when(ruleService.create(eq("tenant"), any(DataQualityRuleWriteCommand.class)))
+        .thenReturn(entity);
     when(ruleService.update(eq("tenant"), eq(3L), any(DataQualityRuleWriteCommand.class)))
         .thenReturn(entity);
 
@@ -124,8 +125,7 @@ class ControllerEntityBoundaryBehaviorTest {
 
     WorkerRegistryServerService registryService = mock(WorkerRegistryServerService.class);
     WorkerDrainGovernanceService governanceService = mock(WorkerDrainGovernanceService.class);
-    WorkerController workerController =
-        new WorkerController(registryService, governanceService);
+    WorkerController workerController = new WorkerController(registryService, governanceService);
     HttpServletRequest httpRequest = mock(HttpServletRequest.class);
     WorkerRegistryEntity worker = worker();
     WorkerHeartbeatDto heartbeat =

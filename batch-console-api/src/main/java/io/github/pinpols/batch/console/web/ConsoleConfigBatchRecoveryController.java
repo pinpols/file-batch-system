@@ -41,12 +41,14 @@ public class ConsoleConfigBatchRecoveryController {
     if (!Texts.hasText(idempotencyKey)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
-    String originalPath = switch (operationKind) {
-      case "TENANT_COPY" -> "/api/console/config/tenant-copy";
-      case "JOB_BUNDLE_CREATE" -> "/api/console/jobs/bundle/create";
-      case "JOB_BUNDLE_IMPORT" -> "/api/console/jobs/bundle/import";
-      default -> throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
-    };
+    String originalPath =
+        switch (operationKind) {
+          case "TENANT_COPY" -> "/api/console/config/tenant-copy";
+          case "JOB_BUNDLE_CREATE" -> "/api/console/jobs/bundle/create";
+          case "JOB_BUNDLE_IMPORT" -> "/api/console/jobs/bundle/import";
+          default ->
+            throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+        };
     String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     String originalUri = request.getContextPath() + originalPath;
     String hash = ConsoleIdempotencyRequestIdentity.requestHash(

@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExpectedWorkRegistrationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
@@ -68,7 +69,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,

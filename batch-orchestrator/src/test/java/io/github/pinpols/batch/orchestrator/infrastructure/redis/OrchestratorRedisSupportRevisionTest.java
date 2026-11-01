@@ -49,7 +49,8 @@ class OrchestratorRedisSupportRevisionTest {
     WorkflowDefinitionView cached = support.getJson("workflow-cache", WorkflowDefinitionView.class);
 
     assertThat(cached)
-        .isEqualTo(new WorkflowDefinitionView(17L, "t1", "WF1", "Name", "STANDARD", 2, true, 41L, "CN"));
+        .isEqualTo(
+            new WorkflowDefinitionView(17L, "t1", "WF1", "Name", "STANDARD", 2, true, 41L, "CN"));
   }
 
   @Test

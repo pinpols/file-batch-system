@@ -38,7 +38,9 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 @DisplayName("数据质量规则持久化和内部接口")
 class DataQualityRulePersistenceIntegrationTest {
 
-  @Container private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
+  @Container
+  private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
+
   private static SqlSessionFactory sessions;
 
   @BeforeAll
@@ -58,7 +60,8 @@ class DataQualityRulePersistenceIntegrationTest {
     Configuration config =
         new Configuration(new Environment("dq-rule", new JdbcTransactionFactory(), source));
     try (var input = Resources.getResourceAsStream("mapper/DataQualityRuleMapper.xml")) {
-      new XMLMapperBuilder(input, config, "mapper/DataQualityRuleMapper.xml", config.getSqlFragments())
+      new XMLMapperBuilder(
+              input, config, "mapper/DataQualityRuleMapper.xml", config.getSqlFragments())
           .parse();
     }
     sessions = new SqlSessionFactoryBuilder().build(config);
@@ -86,7 +89,9 @@ class DataQualityRulePersistenceIntegrationTest {
           .andExpect(jsonPath("$.data.enabled").value(true))
           .andExpect(jsonPath("$.data.createdAt").isNotEmpty())
           .andExpect(jsonPath("$.data.updatedAt").isNotEmpty())
-          .andReturn().getResponse().getContentAsString();
+          .andReturn()
+          .getResponse()
+          .getContentAsString();
       long id = new ObjectMapper().readTree(createJson).path("data").path("id").asLong();
       String update = """
           {"tenantId":"tenant-a","ruleCode":"CHANGED","ruleName":"updated name",
@@ -95,18 +100,21 @@ class DataQualityRulePersistenceIntegrationTest {
           """;
       mvc.perform(put("/internal/orchestrator/dq/rules/{id}", id)
               .param("tenantId", "tenant-b")
-              .contentType(MediaType.APPLICATION_JSON).content(update))
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(update))
           .andExpect(status().isNotFound())
           .andExpect(jsonPath("$.code").value("NOT_FOUND"));
       mvc.perform(put("/internal/orchestrator/dq/rules/{id}", id + 1000)
               .param("tenantId", "tenant-a")
-              .contentType(MediaType.APPLICATION_JSON).content(update))
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(update))
           .andExpect(status().isNotFound());
       DataQualityRuleEntity unchanged = mapper.selectById(id, "tenant-a");
       assertThat(unchanged.getRuleName()).isEqualTo("original name");
       mvc.perform(put("/internal/orchestrator/dq/rules/{id}", id)
               .param("tenantId", "tenant-a")
-              .contentType(MediaType.APPLICATION_JSON).content(update))
+              .contentType(MediaType.APPLICATION_JSON)
+              .content(update))
           .andExpect(status().isOk())
           .andExpect(jsonPath("$.data.ruleCode").value("ORIGINAL"))
           .andExpect(jsonPath("$.data.ruleName").value("updated name"))

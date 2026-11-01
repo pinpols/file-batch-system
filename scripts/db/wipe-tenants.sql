@@ -1,27 +1,93 @@
--- DANGER: 批量删除租户及关联数据。执行前必须核对数据库、备份和目标租户清单。
--- =====================================================================
--- wipe-tenants.sql
--- 清空指定租户在 batch schema 下的全部运行态 + 配置态数据，用于前端跑一轮
--- 干净的 "tenant-init + Excel 导入" 验证。
---
--- 用法：
---   1. 先停 workers / trigger / orchestrator（或 drain 模式），避免删除过程中
---      有新写入进来踩 FK 空洞。
---   2. 改下面 :tenants 的值（默认 'ta','tb','tc'），可按需裁剪。
---   3. docker exec -i batch-postgres psql -U batch_user -d batch_platform \
---        -v ON_ERROR_STOP=1 < scripts/db/wipe-tenants.sql
---   4. 清完后：从前端登录对应账号，走 POST /api/console/config/tenant-init
---      重新初始化，再用 *-tenant-config-package-test.xlsx 导入验证各种场景。
---
--- 顺序：runtime → config → tenant (FK 依赖由深到浅)。
--- 所有 DELETE 都是幂等的——重复跑不会报错。
--- =====================================================================
+-- 用途：预览或清理明确列出的租户及关联数据；默认只预览。
+-- 用法：psql -X -v ON_ERROR_STOP=1 -v tenant_ids=ta,tb,tc -f scripts/db/wipe-tenants.sql
+-- 删除前停止写方、验证备份恢复，并按 README 显式确认数据库、预览目标及备份。
+-- 保留租户引用待删除父实例时拒绝操作；重复目标按去重、排序后确认。
 
 \set ON_ERROR_STOP on
-\set tenants '(''ta'',''tb'',''tc'')'
 
+\if :{?action}
+\else
+  \set action preview
+\endif
+SELECT (:'action' IN ('preview', 'delete')) AS action_valid,
+       (:'action' = 'delete') AS perform_delete \gset
+\if :action_valid
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'action 只能是 preview 或 delete'; END $$;
+\endif
 BEGIN;
+SELECT (rolsuper OR rolbypassrls) AS can_inspect_all_tenants
+  FROM pg_roles WHERE rolname = current_user \gset
+\if :can_inspect_all_tenants
+\else
+  DO $$ BEGIN RAISE EXCEPTION '需使用可跨租户检查 RLS 的数据库运维角色'; END $$;
+\endif
+\if :perform_delete
+  LOCK TABLE batch.tenant IN SHARE MODE;
+\endif
 
+\if :{?tenant_ids}
+\else
+  DO $$ BEGIN RAISE EXCEPTION '必须通过 tenant_ids 指定逗号分隔的目标租户'; END $$;
+\endif
+CREATE TEMP TABLE wipe_target_tenants (tenant_id text PRIMARY KEY);
+INSERT INTO wipe_target_tenants
+SELECT DISTINCT trim(value) FROM unnest(string_to_array(:'tenant_ids', ',')) value;
+SELECT count(*) > 0 AND bool_and(tenant_id <> '') AS targets_valid FROM wipe_target_tenants \gset
+\if :targets_valid
+\else
+  DO $$ BEGIN RAISE EXCEPTION 'tenant_ids 不得为空或含空项'; END $$;
+\endif
+\set tenants '(SELECT tenant_id FROM wipe_target_tenants)'
+
+SELECT COALESCE(string_agg(tenant_id, ',' ORDER BY tenant_id), '<none>') AS target_scope
+  FROM wipe_target_tenants \gset
+\echo '目标数据库和待清理租户（请核对）：'
+SELECT current_database() AS target_database, :'target_scope' AS target_tenants;
+\echo '跨租户影响：待删审计操作级联删除保留租户的回执：'
+SELECT receipt.audit_tenant_id, receipt.tenant_id AS affected_tenant_id, count(*) AS receipt_count
+  FROM batch.config_batch_target_receipt receipt
+ WHERE receipt.audit_tenant_id IN (SELECT tenant_id FROM wipe_target_tenants)
+   AND receipt.tenant_id NOT IN (SELECT tenant_id FROM wipe_target_tenants)
+ GROUP BY receipt.audit_tenant_id, receipt.tenant_id ORDER BY 1, 2;
+\echo '跨租户影响：保留审计操作中待删目标的回执将缺失并显示 UNKNOWN：'
+SELECT receipt.audit_tenant_id, receipt.tenant_id AS affected_tenant_id, count(*) AS receipt_count
+  FROM batch.config_batch_target_receipt receipt
+ WHERE receipt.audit_tenant_id NOT IN (SELECT tenant_id FROM wipe_target_tenants)
+   AND receipt.tenant_id IN (SELECT tenant_id FROM wipe_target_tenants)
+ GROUP BY receipt.audit_tenant_id, receipt.tenant_id ORDER BY 1, 2;
+SELECT count(*) AS cross_tenant_parent_references
+  FROM batch.job_instance child JOIN batch.job_instance parent ON child.parent_instance_id = parent.id
+ WHERE parent.tenant_id IN (SELECT tenant_id FROM wipe_target_tenants)
+   AND child.tenant_id NOT IN (SELECT tenant_id FROM wipe_target_tenants);
+\if :perform_delete
+  \if :{?confirm_database}
+  \else
+    DO $$ BEGIN RAISE EXCEPTION '删除需确认 confirm_database'; END $$;
+  \endif
+  \if :{?confirm_targets}
+  \else
+    DO $$ BEGIN RAISE EXCEPTION '删除需确认 confirm_targets'; END $$;
+  \endif
+  \if :{?confirm_backup}
+  \else
+    DO $$ BEGIN RAISE EXCEPTION '删除需确认已验证备份 confirm_backup=verified'; END $$;
+  \endif
+  SELECT current_database() = :'confirm_database' AND :'target_scope' = :'confirm_targets'
+     AND :'confirm_backup' = 'verified' AS confirmed,
+     NOT EXISTS (
+       SELECT 1 FROM batch.job_instance child JOIN batch.job_instance parent ON child.parent_instance_id = parent.id
+        WHERE parent.tenant_id IN (SELECT tenant_id FROM wipe_target_tenants)
+          AND child.tenant_id NOT IN (SELECT tenant_id FROM wipe_target_tenants)
+     ) AS parent_references_safe \gset
+  \if :confirmed
+  \else
+    DO $$ BEGIN RAISE EXCEPTION '数据库、目标租户或备份确认不匹配'; END $$;
+  \endif
+  \if :parent_references_safe
+  \else
+    DO $$ BEGIN RAISE EXCEPTION '保留租户仍引用待删父实例，请先按恢复流程处理'; END $$;
+  \endif
 -- ── 运行态：事件 / 出站 / 重试 / 补偿 / 审批 ────────────────────────────
 DELETE FROM batch.event_delivery_log        WHERE tenant_id IN :tenants;
 DELETE FROM batch.event_outbox_retry        WHERE tenant_id IN :tenants;
@@ -148,3 +214,8 @@ UNION ALL SELECT 'file_record',    count(*) FROM batch.file_record         WHERE
 UNION ALL SELECT 'worker_registry',count(*) FROM batch.worker_registry    WHERE tenant_id IN ('ta','tb','tc')
 UNION ALL SELECT 'tenant',         count(*) FROM batch.tenant              WHERE tenant_id IN ('ta','tb','tc');
 -- DANGER: 批量删除租户及关联数据。执行前必须核对数据库、备份和目标租户清单。
+
+\else
+  ROLLBACK;
+  \echo '预览完成，未删除任何数据。'
+\endif

@@ -18,8 +18,8 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.request.
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthProfileResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleUserAccount;
@@ -34,8 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
 import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -129,7 +129,8 @@ class ConsoleAuthApplicationServiceTest {
     when(loginService.login(any())).thenReturn(response);
 
     assertThat(service.login(request)).isSameAs(response);
-    ArgumentCaptor<ConsoleLoginRequest> resolved = ArgumentCaptor.forClass(ConsoleLoginRequest.class);
+    ArgumentCaptor<ConsoleLoginRequest> resolved =
+        ArgumentCaptor.forClass(ConsoleLoginRequest.class);
     verify(loginService).login(resolved.capture());
     assertThat(resolved.getValue().getUsername()).isEqualTo("alice");
     assertThat(resolved.getValue().getPassword()).isEqualTo("secret");

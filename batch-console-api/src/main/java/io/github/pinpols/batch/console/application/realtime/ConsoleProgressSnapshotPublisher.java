@@ -101,7 +101,7 @@ public class ConsoleProgressSnapshotPublisher {
       events.publishChanged(tenant, stream, event, initial);
       return emitter;
     } catch (RuntimeException failure) {
-      if (emitter != null) {
+      if (EmptyChecks.isNotNull(emitter)) {
         try {
           subscriptions.close(emitter);
         } catch (RuntimeException cleanupFailure) {

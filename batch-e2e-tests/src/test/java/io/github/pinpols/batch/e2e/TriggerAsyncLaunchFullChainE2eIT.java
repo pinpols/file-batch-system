@@ -226,10 +226,11 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("fileFormatType", "JSON"));
     triggerService()
-        .launch(
-            new TriggerLaunchCommand(
-                TriggerCommandInputMapper.toInput(request),
-                seed.dedupKey(), seed.requestId(), "tr-fullchain"));
+        .launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request),
+            seed.dedupKey(),
+            seed.requestId(),
+            "tr-fullchain"));
 
     // 2) trigger outbox relay 真发 Kafka，orchestrator consumer 真消费并创建实例。
     await()
@@ -302,7 +303,9 @@ class TriggerAsyncLaunchFullChainE2eIT extends AbstractIntegrationTest {
       triggerService()
           .launch(new TriggerLaunchCommand(
               TriggerCommandInputMapper.toInput(request),
-              seed.dedupKey(), seed.requestId(), "r24-namespace-isolation"));
+              seed.dedupKey(),
+              seed.requestId(),
+              "r24-namespace-isolation"));
 
       await()
           .atMost(Duration.ofSeconds(60))

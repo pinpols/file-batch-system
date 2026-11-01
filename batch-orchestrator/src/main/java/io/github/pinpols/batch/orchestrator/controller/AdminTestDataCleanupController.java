@@ -52,5 +52,4 @@ public class AdminTestDataCleanupController {
           String ids) {
     return cleanupService.cleanupByExactTenantIds(ids);
   }
-
 }

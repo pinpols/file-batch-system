@@ -266,9 +266,8 @@ public class BundleArrivalLauncher {
 
   private LaunchOutcome launchCandidate(
       String tenantId, String fileGroupCode, BundleLaunchCandidate candidate) {
-    WorkflowDefinitionView workflow =
-        workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
-            tenantId, candidate.bundleWorkflowCode(), true);
+    WorkflowDefinitionView workflow = workflowDefinitionMapper.selectFirstByTenantAndCodeAndEnabled(
+        tenantId, candidate.bundleWorkflowCode(), true);
     if (EmptyChecks.isNull(workflow) || EmptyChecks.isNull(workflow.id())) {
       throw new IllegalStateException("bundle target has no enabled managed Workflow: tenantId="
           + tenantId

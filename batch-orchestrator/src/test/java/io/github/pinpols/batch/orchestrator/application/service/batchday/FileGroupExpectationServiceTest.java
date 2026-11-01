@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.query.FileGroupExpectationDefinition;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
@@ -26,7 +27,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 @DisplayName("文件组预期按 Workflow 身份配置与物化")
 @ExtendWith(MockitoExtension.class)

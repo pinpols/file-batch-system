@@ -161,7 +161,8 @@ class ConsoleJobBundleControllerTest {
             ConsoleJobBundleSummaryResponse.from(new ConfigSyncBundlePayload()),
             new TenantConfigBatchInitResponse("op-1", 1, 1, 0, false, List.of())));
 
-    mockMvc.perform(post("/api/console/jobs/bundle/create")
+    mockMvc
+        .perform(post("/api/console/jobs/bundle/create")
             .contentType(APPLICATION_JSON)
             .content("{\"tenantId\":\"t1\",\"bundle\":{}}"))
         .andExpect(status().isOk());

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelApplyResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
@@ -20,8 +20,7 @@ public interface TenantConfigPackageExcelService {
 
   ExcelDownload downloadScenarioTemplate(List<String> scenarios);
 
-  ExcelDownload downloadSampleTemplate(
-      String scenario, List<String> scenarios);
+  ExcelDownload downloadSampleTemplate(String scenario, List<String> scenarios);
 
   TenantConfigPackageExcelGuideResponse guide();
 

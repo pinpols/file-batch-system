@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.support.cache;
 
 import io.github.pinpols.batch.common.redis.BatchRedisNamespace;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.data.redis.core.Cursor;
@@ -80,7 +81,7 @@ public final class RedisKeyUtils {
 
   private static long deleteBatch(StringRedisTemplate redisTemplate, List<String> keys) {
     Long n = redisTemplate.delete(keys);
-    if (n == null) {
+    if (EmptyChecks.isNull(n)) {
       throw new IllegalStateException("Redis batch delete did not execute");
     }
     return n;

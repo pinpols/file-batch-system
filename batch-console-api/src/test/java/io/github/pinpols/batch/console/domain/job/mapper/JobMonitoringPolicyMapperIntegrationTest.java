@@ -158,9 +158,10 @@ class JobMonitoringPolicyMapperIntegrationTest {
       JobDefinitionView row = mapper.selectById("tenant-projection", 98L);
       assertThat(row.getDefaultWorkflowDefinitionId()).isEqualTo(998L);
       assertThat(row.getDependsOnJobCodes()).containsExactly("JOB_A", "JOB_B");
-      assertThat(row.getJobDependencyRules()).containsExactly(
-          new JobDependencyRuleView("JOB_A", "SAME_DAY"),
-          new JobDependencyRuleView("JOB_B", "PREVIOUS_BIZ_DAY"));
+      assertThat(row.getJobDependencyRules())
+          .containsExactly(
+              new JobDependencyRuleView("JOB_A", "SAME_DAY"),
+              new JobDependencyRuleView("JOB_B", "PREVIOUS_BIZ_DAY"));
       Map<String, Object> exported = TenantConfigPackageProjectionTestSupport.jobRow(row);
       assertThat(exported.get("depends_on_job_codes")).isEqualTo("JOB_A,JOB_B");
       assertThat(exported.get("depends_on_biz_date_alignments"))
@@ -173,7 +174,8 @@ class JobMonitoringPolicyMapperIntegrationTest {
       assertThat(row.getSoftRuntimeSeverity()).isEqualTo("ERROR");
       assertThat(row.getStartGraceSeconds()).isEqualTo(45);
       assertThat(row.getDependencyCompletionWindowSeconds()).isEqualTo(90);
-      assertThat(mapper.selectByUniqueKey("tenant-projection", "JOB_DOWN")
+      assertThat(mapper
+              .selectByUniqueKey("tenant-projection", "JOB_DOWN")
               .getDefaultWorkflowDefinitionId())
           .isEqualTo(998L);
       assertThat(mapper.selectById("other-tenant", 98L)).isNull();
@@ -291,9 +293,7 @@ class JobMonitoringPolicyMapperIntegrationTest {
           .containsExactly("CONFIGURED");
       assertThat(configured.getFirst().getCompletionDeadlineEnabled()).isTrue();
       assertThat(runtimeCount).isOne();
-      assertThat(runtime)
-          .extracting(JobDefinitionView::getJobCode)
-          .containsExactly("RUNTIME_ONLY");
+      assertThat(runtime).extracting(JobDefinitionView::getJobCode).containsExactly("RUNTIME_ONLY");
     }
   }
 

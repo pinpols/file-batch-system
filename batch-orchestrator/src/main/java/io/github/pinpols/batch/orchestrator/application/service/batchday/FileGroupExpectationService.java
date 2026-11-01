@@ -4,6 +4,8 @@ import io.github.pinpols.batch.common.jdbc.JdbcExceptionSupport;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
 import io.github.pinpols.batch.orchestrator.domain.param.FileGroupExpectationDefinitionUpsertParam;
@@ -27,8 +29,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /** 配置周期性文件组，并在每个业务日开启时生成其预期记录。 */
 @Service
@@ -61,7 +61,8 @@ public class FileGroupExpectationService {
     } catch (DataIntegrityViolationException failure) {
       if (JdbcExceptionSupport.isForeignKeyConstraintViolation(
           failure, "fk_file_group_expectation_workflow_calendar")) {
-        throw new OperationFailure(Kind.CONFLICT,
+        throw new OperationFailure(
+            Kind.CONFLICT,
             "Workflow calendar changed while configuring the file-group expectation",
             failure);
       }
@@ -106,14 +107,16 @@ public class FileGroupExpectationService {
         List<FileGroupUploadTarget> groupTargets =
             definitionMapper.selectEnabledUploadTargetsByGroup(tenantId, fileGroupCode);
         if (groupTargets.size() != 1) {
-          throw new OperationFailure(Kind.INVALID_CONFIGURATION,
+          throw new OperationFailure(
+              Kind.INVALID_CONFIGURATION,
               "File group must map to exactly one enabled Workflow before manual upload");
         }
         FileGroupUploadTarget target = groupTargets.get(0);
         boolean exactTargetMatches = target.workflowDefinitionId().equals(workflowDefinitionId)
             && target.calendarCode().equals(calendarCode);
         if (!exactTargetMatches) {
-          throw new OperationFailure(Kind.INVALID_CONFIGURATION,
+          throw new OperationFailure(
+              Kind.INVALID_CONFIGURATION,
               "Manual upload target does not match the enabled file-group binding");
         }
         return target;
@@ -128,7 +131,8 @@ public class FileGroupExpectationService {
       WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
           request.tenantId(), request.workflowDefinitionId(), true);
       if (EmptyChecks.isNull(workflow) || !request.calendarCode().equals(workflow.calendarCode())) {
-        throw new OperationFailure(Kind.INVALID_CONFIGURATION,
+        throw new OperationFailure(
+            Kind.INVALID_CONFIGURATION,
             "File-group expectation calendar must match the workflow calendar");
       }
       FileGroupExpectationDefinitionUpsertParam fileGroupExpectationDefinitionUpsertParam =
@@ -184,8 +188,8 @@ public class FileGroupExpectationService {
     BatchDayInstanceEntity batchDay =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
     if (EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus())) {
-      throw new OperationFailure(Kind.CONFLICT,
-          "Cannot materialize a file-group expectation for a terminal batch day");
+      throw new OperationFailure(
+          Kind.CONFLICT, "Cannot materialize a file-group expectation for a terminal batch day");
     }
     ZoneId zone = ZoneId.of(timezoneSnapshot);
     int materialized = 0;

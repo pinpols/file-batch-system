@@ -105,21 +105,26 @@ class ConsoleJwtServiceTest {
     properties.setJwtTtl(Duration.ofSeconds(2));
     Set<String> revoked = new HashSet<>();
     ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
-    when(store.isRevoked(anyString())).thenAnswer(invocation -> revoked.contains(invocation.getArgument(0)));
+    when(store.isRevoked(anyString()))
+        .thenAnswer(invocation -> revoked.contains(invocation.getArgument(0)));
     doAnswer(invocation -> {
-      revoked.add(invocation.getArgument(0));
-      return null;
-    }).when(store).revoke(anyString(), any(Duration.class));
+          revoked.add(invocation.getArgument(0));
+          return null;
+        })
+        .when(store)
+        .revoke(anyString(), any(Duration.class));
     @SuppressWarnings("unchecked")
     ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleJwtService svc =
+        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
     ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
     await().atMost(Duration.ofSeconds(8)).until(() -> Instant.now().isAfter(token.expiresAt()));
     assertThat(svc.authenticate(token.accessToken()).username()).isEqualTo("alice");
     svc.revoke(token.accessToken());
-    assertThatThrownBy(() -> svc.authenticate(token.accessToken())).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> svc.authenticate(token.accessToken()))
+        .isInstanceOf(BizException.class);
   }
 
   @Test
@@ -129,14 +134,16 @@ class ConsoleJwtServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleJwtService svc =
+        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
     ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
     svc.revoke(token.accessToken());
 
     ArgumentCaptor<Duration> ttl = ArgumentCaptor.forClass(Duration.class);
     verify(store).revoke(anyString(), ttl.capture());
-    Instant acceptanceEnd = token.expiresAt().truncatedTo(ChronoUnit.SECONDS).plus(properties.getJwtClockSkew());
+    Instant acceptanceEnd =
+        token.expiresAt().truncatedTo(ChronoUnit.SECONDS).plus(properties.getJwtClockSkew());
     assertThat(Instant.now().plus(ttl.getValue())).isAfter(acceptanceEnd);
   }
 
@@ -148,7 +155,8 @@ class ConsoleJwtServiceTest {
     @SuppressWarnings("unchecked")
     ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleJwtService svc =
+        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
     ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
     svc.revoke(token.accessToken());
@@ -165,11 +173,13 @@ class ConsoleJwtServiceTest {
   void revoke_storageFailurePropagates() {
     ConsoleTokenRevocationStore store = mock(ConsoleTokenRevocationStore.class);
     doThrow(new IllegalStateException("撤销存储不可用"))
-        .when(store).revoke(anyString(), any(Duration.class));
+        .when(store)
+        .revoke(anyString(), any(Duration.class));
     @SuppressWarnings("unchecked")
     ObjectProvider<ConsoleTokenRevocationStore> provider = mock(ObjectProvider.class);
     when(provider.getIfAvailable()).thenReturn(store);
-    ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment, provider);
+    ConsoleJwtService svc =
+        new ConsoleJwtService(properties, sessionRegistry, environment, provider);
     ConsoleAuthTokenResponse token = svc.issueToken("alice", "t1", Set.of("ROLE_ADMIN"));
 
     assertThatThrownBy(() -> svc.revoke(token.accessToken()))

@@ -49,21 +49,21 @@ class ConsoleOpsTenantAuthorizationTest {
 
   @Test
   @DisplayName("租户管理员不能通过服务入口查询或创建其他租户数据")
-  void rejectOtherTenantBeforeAccessingMappers() {
+  void shouldRejectOtherTenantBeforeAccessingMappers() {
     authenticate("tenant-a", "ROLE_TENANT_ADMIN");
     var config = configService();
     var heartbeat = heartbeatService();
 
     assertForbidden(() -> config.listByTaskType("tenant-b", "sql"));
-    assertForbidden(() -> config.create(
-        "tenant-b", "sql", "daily", Map.of("sql", "select 1"), "alice"));
+    assertForbidden(
+        () -> config.create("tenant-b", "sql", "daily", Map.of("sql", "select 1"), "alice"));
     assertForbidden(() -> heartbeat.getHeartbeatDetails("tenant-b", 42L));
     verifyNoInteractions(configMapper, taskMapper);
   }
 
   @Test
   @DisplayName("租户管理员访问本租户时使用解析后的租户查询和写入")
-  void allowOwnTenantAndUseResolvedTenantForAllPersistence() {
+  void shouldAllowOwnTenantAndUseResolvedTenantForAllPersistence() {
     authenticate("tenant-a", "ROLE_TENANT_ADMIN");
     var config = configService();
     var heartbeat = heartbeatService();
@@ -90,7 +90,7 @@ class ConsoleOpsTenantAuthorizationTest {
 
   @Test
   @DisplayName("平台管理员可通过服务入口访问明确指定的目标租户")
-  void allowGlobalAdministratorToAccessSpecifiedTenant() {
+  void shouldAllowGlobalAdministratorToAccessSpecifiedTenant() {
     authenticate("system", "ROLE_ADMIN");
     when(taskMapper.selectHeartbeatByTenantAndId("tenant-b", 42L))
         .thenReturn(new JobTaskHeartbeatView());

@@ -30,9 +30,6 @@ import java.security.DigestOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -92,11 +89,12 @@ public class ForensicExportService {
   /** 校验导出已完成且文件存在，返回 HTTP 下载适配所需的文件元数据。 */
   public FileDownloadArtifact loadDownloadArtifact(String tenantId, String exportId)
       throws IOException {
-    ForensicExportLogEntity exportLog = forensicExportLogMapper.selectByExportId(tenantId, exportId);
-    if (exportLog == null) {
+    ForensicExportLogEntity exportLog =
+        forensicExportLogMapper.selectByExportId(tenantId, exportId);
+    if (EmptyChecks.isNull(exportLog)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.forensic.export_not_found");
     }
-    if (!"COMPLETED".equals(exportLog.status()) || exportLog.storagePath() == null) {
+    if (!"COMPLETED".equals(exportLog.status()) || EmptyChecks.isNull(exportLog.storagePath())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.forensic.export_not_ready");
     }
     Path file = Path.of(exportLog.storagePath());

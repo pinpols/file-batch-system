@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.trigger.web;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpInput;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
@@ -12,7 +13,7 @@ public final class TriggerCommandInputMapper {
   private TriggerCommandInputMapper() {}
 
   public static TriggerLaunchInput toInput(TriggerLaunchRequest request) {
-    if (request == null) {
+    if (EmptyChecks.isNull(request)) {
       return null;
     }
     return TriggerLaunchInput.builder()
@@ -31,7 +32,7 @@ public final class TriggerCommandInputMapper {
   }
 
   public static ExternalEventLaunchInput toInput(ExternalEventLaunchRequest request) {
-    if (request == null) {
+    if (EmptyChecks.isNull(request)) {
       return null;
     }
     return ExternalEventLaunchInput.builder()
@@ -47,7 +48,7 @@ public final class TriggerCommandInputMapper {
   }
 
   public static ScheduledOccurrenceCatchUpInput toInput(ScheduledOccurrenceCatchUpRequest request) {
-    if (request == null) {
+    if (EmptyChecks.isNull(request)) {
       return null;
     }
     return ScheduledOccurrenceCatchUpInput.builder()

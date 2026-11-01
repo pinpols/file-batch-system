@@ -180,8 +180,11 @@ class AlertmanagerNotifyControllerTest {
   void shouldReject_whenEndpointDisabled() {
     properties.setBearerToken("s3cr3t");
     doThrow(BizException.of(
-            ResultCode.SERVICE_UNAVAILABLE, "error.common.unauthorized_detail", "am-notify disabled"))
-        .when(notifyService).assertEnabled();
+            ResultCode.SERVICE_UNAVAILABLE,
+            "error.common.unauthorized_detail",
+            "am-notify disabled"))
+        .when(notifyService)
+        .assertEnabled();
 
     assertThatThrownBy(() -> controller.receive("Bearer s3cr3t", "batch-default", payload()))
         .isInstanceOf(BizException.class)

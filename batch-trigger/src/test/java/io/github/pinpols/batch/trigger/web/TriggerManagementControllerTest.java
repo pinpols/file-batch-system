@@ -3,8 +3,8 @@ package io.github.pinpols.batch.trigger.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
-import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;

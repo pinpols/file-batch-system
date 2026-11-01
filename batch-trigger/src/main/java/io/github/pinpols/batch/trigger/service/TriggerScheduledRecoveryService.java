@@ -28,13 +28,13 @@ import io.github.pinpols.batch.trigger.config.TriggerRuntimeProperties;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpCommand;
+import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpInput;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.mapper.TriggerMisfirePendingMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
 import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.ScheduledOccurrenceObservation;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
-import io.github.pinpols.batch.trigger.domain.command.ScheduledOccurrenceCatchUpInput;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -136,10 +136,7 @@ final class TriggerScheduledRecoveryService {
       triggerRequestMapper.acquireBatchDaySettlementFence(
           request.tenantId(), request.workflowDefinitionId(), null, request.bizDate());
       String occurrenceStatus = occurrenceRecorder.lockAndReadStatus(
-          request.tenantId(),
-          request.workflowDefinitionId(),
-          scheduledFireTime,
-          request.bizDate());
+          request.tenantId(), request.workflowDefinitionId(), scheduledFireTime, request.bizDate());
       if (ScheduledOccurrenceStatus.REQUESTED.code().equals(occurrenceStatus)
           || ScheduledOccurrenceStatus.MISFIRE_PENDING.code().equals(occurrenceStatus)) {
         String acceptedRequestId = occurrenceRecorder.catchUpRequestId(

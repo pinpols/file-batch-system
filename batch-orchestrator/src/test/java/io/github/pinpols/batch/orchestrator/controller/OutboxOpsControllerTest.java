@@ -21,8 +21,11 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("内部 Outbox 清理接口保护保留天数")
 class OutboxOpsControllerTest {
 
-  @Mock private OutboxEventMapper outboxMapper;
-  @Mock private JobExecutionLogMapper logMapper;
+  @Mock
+  private OutboxEventMapper outboxMapper;
+
+  @Mock
+  private JobExecutionLogMapper logMapper;
 
   @ParameterizedTest
   @CsvSource({"0, false", "-1, false", "0, true", "-1, true"})

@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.param.ExpectedWorkOccurrenceInsertIfAbsentParam;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayInstanceMapper;
@@ -14,8 +16,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionCallback;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /** 在文件到达前登记文件组预期，使空日结算能发现缺失文件。 */
 @Service
@@ -52,8 +52,8 @@ public class ExpectedWorkRegistrationService {
       WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
           request.tenantId(), request.workflowDefinitionId(), true);
       if (EmptyChecks.isNull(workflow) || !request.calendarCode().equals(workflow.calendarCode())) {
-        throw new OperationFailure(Kind.INVALID_CONFIGURATION,
-            "Expected work calendar must match the workflow calendar");
+        throw new OperationFailure(
+            Kind.INVALID_CONFIGURATION, "Expected work calendar must match the workflow calendar");
       }
       ExpectedWorkOccurrenceInsertIfAbsentParam expectedWorkOccurrenceInsertIfAbsentParam =
           ExpectedWorkOccurrenceInsertIfAbsentParam.builder()

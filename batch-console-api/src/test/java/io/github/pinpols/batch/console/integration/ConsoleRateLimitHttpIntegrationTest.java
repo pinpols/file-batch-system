@@ -81,7 +81,10 @@ class ConsoleRateLimitHttpIntegrationTest extends AbstractIntegrationTest {
   void shouldRateLimitFileDownloadThroughHttpFilterChain() {
     when(fileDownloadApplicationService.download(anyString(), any(), any()))
         .thenAnswer(invocation -> new FileDownloadArtifact(
-            new ByteArrayInputStream("file".getBytes()), "file.bin", "application/octet-stream", true));
+            new ByteArrayInputStream("file".getBytes()),
+            "file.bin",
+            "application/octet-stream",
+            true));
 
     String username = "rate-file-user";
     exchangeFile(username).expectStatus().isOk();

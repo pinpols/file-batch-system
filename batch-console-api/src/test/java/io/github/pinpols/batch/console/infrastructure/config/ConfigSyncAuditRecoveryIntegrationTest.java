@@ -137,7 +137,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     String deleteWorkflowsSql = """
         delete from batch.workflow_definition where tenant_id = ?
         """;
-    String deleteRevisionSql = "delete from batch.tenant_configuration_revision where tenant_id = ?";
+    String deleteRevisionSql =
+        "delete from batch.tenant_configuration_revision where tenant_id = ?";
     String deleteIdempotencySql = "delete from batch.idempotency_record where tenant_id = ?";
     String deleteTenantSql = "delete from batch.tenant where tenant_id = ?";
     String deleteOperationAuditSql =
@@ -1232,8 +1233,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
         "targetTenantIds", List.of(target),
         "bundle", fixture.request().getBundle());
 
-    JsonNode original = responseData(post(
-        client, admin, "/api/console/jobs/bundle/import", key, request));
+    JsonNode original =
+        responseData(post(client, admin, "/api/console/jobs/bundle/import", key, request));
     JsonNode originalResult = original.path("result");
     JsonNode results = originalResult.path("results");
     assertThat(originalResult.path("successTenants").asInt()).isZero();
@@ -1249,8 +1250,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     assertThat(committedQueues).isZero();
     assertThat(committedWindows).isZero();
 
-    JsonNode recovered = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
     assertThat(recovered.path("operationId").asText())
         .isEqualTo(originalResult.path("batchOperationId").asText());
     assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
@@ -1274,10 +1275,14 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     String second = fixture.targets().getLast();
     List<String> orderedTargets = List.of(first, second, first);
     Map<String, Object> request = Map.of(
-        "tenantId", fixture.auditTenant(),
-        "targetTenantIds", orderedTargets,
-        "mode", "UPSERT",
-        "bundle", fixture.request().getBundle());
+        "tenantId",
+        fixture.auditTenant(),
+        "targetTenantIds",
+        orderedTargets,
+        "mode",
+        "UPSERT",
+        "bundle",
+        fixture.request().getBundle());
 
     JsonNode original = responseData(post(client, admin, uri, key, request));
     JsonNode originalResults = original.path("result").path("results");
@@ -1290,9 +1295,12 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
       assertThat(item.path("success").asBoolean()).isTrue();
       assertThat(item.path("resourceQueues").path("failed").asInt()).isZero();
     }
-    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt()).isEqualTo(1);
-    assertThat(originalResults.get(1).path("resourceQueues").path("created").asInt()).isEqualTo(1);
-    assertThat(originalResults.get(2).path("resourceQueues").path("updated").asInt()).isEqualTo(1);
+    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(1).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(2).path("resourceQueues").path("updated").asInt())
+        .isEqualTo(1);
     String queueSql = """
         select queue_name from batch.resource_queue
         where tenant_id = ? and queue_code = 'sync_receipt_queue'
@@ -1304,38 +1312,47 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     List<Long> revisions = targetRevisions(fixture);
     assertThat(revisions.getFirst()).isGreaterThan(revisions.getLast());
 
-    JsonNode recovered = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
     assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
     assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
-    assertThat(recovered.path("responseMetadata").path("summary").path("resourceQueues").asInt())
+    assertThat(recovered
+            .path("responseMetadata")
+            .path("summary")
+            .path("resourceQueues")
+            .asInt())
         .isEqualTo(1);
     assertRecoveredTargets(recovered, originalResults, orderedTargets);
-    JsonNode reread = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    JsonNode reread = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
     assertThat(reread).isEqualTo(recovered);
     post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
     assertThat(targetRevisions(fixture)).containsExactlyElementsOf(revisions);
 
     Auth reader = authenticate(client, fixture.auditTenant(), "ROLE_TENANT_ADMIN");
     batchOperationStatus(client, reader, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key)
-        .expectStatus().isForbidden();
+        .expectStatus()
+        .isForbidden();
     batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key + "-wrong")
-        .expectStatus().isNotFound();
+        .expectStatus()
+        .isNotFound();
     batchOperationStatus(client, admin, first, "JOB_BUNDLE_IMPORT", key)
-        .expectStatus().isNotFound();
+        .expectStatus()
+        .isNotFound();
     Auth otherHeader = authenticate(client, first, "ROLE_ADMIN");
     batchOperationStatus(client, otherHeader, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key)
-        .expectStatus().isNotFound();
+        .expectStatus()
+        .isNotFound();
 
     // 仅模拟某条已登记回执缺失；真实目标事务仍已提交，不能将它解释为业务回滚。
     String removeReceiptSql = """
         delete from batch.config_batch_target_receipt
         where audit_tenant_id = ? and operation_id = ? and target_ordinal = ?
         """;
-    assertThat(jdbc.update(removeReceiptSql, fixture.auditTenant(), operationId, 1)).isEqualTo(1);
-    JsonNode incomplete = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
+    assertThat(jdbc.update(removeReceiptSql, fixture.auditTenant(), operationId, 1))
+        .isEqualTo(1);
+    JsonNode incomplete = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_IMPORT", key));
     assertThat(incomplete.path("status").asText()).isEqualTo("UNKNOWN");
     assertThat(incomplete.path("targets").get(1).path("status").asText()).isEqualTo("UNKNOWN");
     assertThat(incomplete.path("targets").get(1).path("result").isNull()).isTrue();
@@ -1384,13 +1401,14 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
       assertThat(queueName).isEqualTo("source recovery queue");
     }
     List<Long> revisions = targetRevisions(fixture);
-    JsonNode recovered = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "TENANT_COPY", key));
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "TENANT_COPY", key));
     assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
     assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
     assertRecoveredTargets(recovered, original.path("results"), fixture.targets());
-    assertThat(responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "TENANT_COPY", key))).isEqualTo(recovered);
+    assertThat(responseData(
+            batchOperationStatus(client, admin, fixture.auditTenant(), "TENANT_COPY", key)))
+        .isEqualTo(recovered);
     post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
     assertThat(targetRevisions(fixture)).containsExactlyElementsOf(revisions);
   }
@@ -1403,8 +1421,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     Auth admin = authenticate(client, fixture.auditTenant(), "ROLE_ADMIN");
     String key = "create-recovery-" + UUID.randomUUID();
     String uri = "/api/console/jobs/bundle/create";
-    Map<String, Object> request = Map.of(
-        "tenantId", fixture.auditTenant(), "bundle", fixture.request().getBundle());
+    Map<String, Object> request =
+        Map.of("tenantId", fixture.auditTenant(), "bundle", fixture.request().getBundle());
     JsonNode original = responseData(post(client, admin, uri, key, request));
     String operationId = original.path("result").path("batchOperationId").asText();
     assertThat(operationId).isNotBlank();
@@ -1414,35 +1432,41 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
     JsonNode originalResults = originalResult.path("results");
     assertThat(originalResults).hasSize(1);
     assertThat(originalResults.get(0).path("success").asBoolean()).isTrue();
-    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt()).isEqualTo(1);
-    assertThat(originalResults.get(0).path("resourceQueues").path("failed").asInt()).isZero();
+    assertThat(originalResults.get(0).path("resourceQueues").path("created").asInt())
+        .isEqualTo(1);
+    assertThat(originalResults.get(0).path("resourceQueues").path("failed").asInt())
+        .isZero();
     String queueSql = """
         select queue_name from batch.resource_queue
         where tenant_id = ? and queue_code = 'sync_receipt_queue'
         """;
     String queueName = jdbc.queryForObject(queueSql, String.class, fixture.auditTenant());
     assertThat(queueName).isEqualTo("sync receipt queue");
-    String revisionSql = "select revision from batch.tenant_configuration_revision where tenant_id = ?";
+    String revisionSql =
+        "select revision from batch.tenant_configuration_revision where tenant_id = ?";
     Long revision = jdbc.queryForObject(revisionSql, Long.class, fixture.auditTenant());
-    JsonNode recovered = responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key));
+    JsonNode recovered = responseData(
+        batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key));
     assertThat(recovered.path("operationId").asText()).isEqualTo(operationId);
     assertThat(recovered.path("status").asText()).isEqualTo("COMPLETE");
-    assertRecoveredTargets(recovered, original.path("result").path("results"),
-        List.of(fixture.auditTenant()));
-    assertThat(responseData(batchOperationStatus(
-        client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key))).isEqualTo(recovered);
+    assertRecoveredTargets(
+        recovered, original.path("result").path("results"), List.of(fixture.auditTenant()));
+    assertThat(responseData(
+            batchOperationStatus(client, admin, fixture.auditTenant(), "JOB_BUNDLE_CREATE", key)))
+        .isEqualTo(recovered);
     post(client, admin, uri, key, request).expectStatus().isEqualTo(409);
-    assertThat(jdbc.queryForObject(revisionSql, Long.class, fixture.auditTenant())).isEqualTo(revision);
+    assertThat(jdbc.queryForObject(revisionSql, Long.class, fixture.auditTenant()))
+        .isEqualTo(revision);
   }
 
   private JsonNode responseData(WebTestClient.ResponseSpec response) throws Exception {
-    String body = response.expectStatus().isOk().expectBody(String.class)
-        .returnResult().getResponseBody();
+    String body =
+        response.expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
     return objectMapper.readTree(body).path("data");
   }
 
-  private void assertRecoveredTargets(JsonNode recovered, JsonNode original, List<String> expected) {
+  private void assertRecoveredTargets(
+      JsonNode recovered, JsonNode original, List<String> expected) {
     JsonNode targets = recovered.path("targets");
     assertThat(targets).hasSize(expected.size());
     assertThat(original).hasSize(expected.size());
@@ -1456,7 +1480,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
   }
 
   private List<Long> targetRevisions(Fixture fixture) {
-    String revisionSql = "select revision from batch.tenant_configuration_revision where tenant_id = ?";
+    String revisionSql =
+        "select revision from batch.tenant_configuration_revision where tenant_id = ?";
     return fixture.targets().stream()
         .map(tenant -> jdbc.queryForObject(revisionSql, Long.class, tenant))
         .toList();
@@ -1464,7 +1489,8 @@ class ConfigSyncAuditRecoveryIntegrationTest extends AbstractIntegrationTest {
 
   private WebTestClient.ResponseSpec batchOperationStatus(
       WebTestClient client, Auth auth, String auditTenantId, String operationKind, String key) {
-    return client.get()
+    return client
+        .get()
         .uri(uri -> uri.path("/api/console/config/batch-operation")
             .queryParam("auditTenantId", auditTenantId)
             .queryParam("operationKind", operationKind)

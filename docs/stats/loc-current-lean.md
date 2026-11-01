@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `38e4fecd7` + 当前工作区改动。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `c1f0e799b` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,204 | 795,864 | 416,453 | 52.3% |
+| 6,204 | 796,700 | 416,617 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,833 | 392,080 | 210,418 | 53.7% |
-| prod | 3,472 | 321,076 | 153,375 | 47.8% |
-| script | 721 | 63,896 | 40,286 | 63.0% |
+| test | 1,833 | 392,658 | 210,507 | 53.6% |
+| prod | 3,472 | 321,185 | 153,391 | 47.8% |
+| script | 721 | 64,045 | 40,345 | 63.0% |
 | config | 68 | 10,269 | 7,678 | 74.8% |
 | infra-config | 34 | 6,107 | 4,465 | 73.1% |
 | sql | 76 | 2,436 | 231 | 9.5% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,675 | 621,755 | 328,537 | 52.8% |
+| Java | 4,675 | 622,442 | 328,642 | 52.8% |
 | Shell | 217 | 35,828 | 28,335 | 79.1% |
 | Python | 329 | 48,659 | 26,208 | 53.9% |
 | YAML | 109 | 14,938 | 11,585 | 77.6% |
@@ -31,7 +31,7 @@
 | TypeScript | 38 | 6,824 | 3,259 | 47.8% |
 | Rust | 24 | 8,967 | 3,074 | 34.3% |
 | Properties | 5 | 3,177 | 2,637 | 83.0% |
-| SQL | 542 | 16,847 | 1,920 | 11.4% |
+| SQL | 542 | 16,996 | 1,979 | 11.6% |
 | Go | 35 | 7,479 | 1,384 | 18.5% |
 | TOML | 8 | 352 | 231 | 65.6% |
 
@@ -43,7 +43,7 @@
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,064 | 2,617 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,925 | 2,583 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,697 | 1,767 |
-| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,790 | 1,459 |
+| `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,798 | 1,459 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,916 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |

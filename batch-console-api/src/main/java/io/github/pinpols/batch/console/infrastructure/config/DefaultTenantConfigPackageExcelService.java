@@ -12,9 +12,9 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.PrivateTempFiles;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelApplyResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelGuideResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse;
@@ -186,8 +186,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             .map(BatchWindowRow::toMap)
             .toList();
     JobDefinitionQuery jobDefinitionQuery = JobDefinitionQuery.ofTenant(tid, null);
-    List<JobDefinitionView> jobDefinitions =
-        jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
+    List<JobDefinitionView> jobDefinitions = jobDefinitionMapper.selectByQuery(jobDefinitionQuery);
     List<Map<String, Object>> jobs =
         rowProjections.toJobRows(jobDefinitions, includePlatformFields);
     List<Map<String, Object>> jobMonitoringPolicies =
@@ -307,8 +306,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   }
 
   @Override
-  public ExcelDownload downloadSampleTemplate(
-      String scenario, List<String> scenarios) {
+  public ExcelDownload downloadSampleTemplate(String scenario, List<String> scenarios) {
     List<String> rawScenarios = EmptyChecks.isNotEmpty(scenarios)
         ? scenarios
         : EmptyChecks.isNotBlank(scenario) ? List.of(scenario) : List.of();

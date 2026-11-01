@@ -399,8 +399,7 @@ class BatchDaySettleSchedulerTest {
             .jobCode("FAILED_JOB")
             .build());
     WorkflowDefinitionView current = currentWorkflowExists
-        ? new WorkflowDefinitionView(
-            802L, "t1", "WF_NEW", "new", "SINGLE_JOB", 1, true, 501L, null)
+        ? new WorkflowDefinitionView(802L, "t1", "WF_NEW", "new", "SINGLE_JOB", 1, true, 501L, null)
         : null;
     when(workflowDefinitionMapper.selectFirstByTenantAndSingleJobDefinitionIdAndEnabled(
             "t1", 501L, true))

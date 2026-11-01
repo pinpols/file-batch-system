@@ -9,6 +9,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
+import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskCancelCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
@@ -27,8 +31,6 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
-import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -37,8 +39,6 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
  * Worker 任务控制应用服务，处理 Worker 侧发起的任务认领（Claim）、结果上报（Report）和租约续期（Renew）请求。
@@ -177,7 +177,8 @@ public class TaskControllerApplicationService {
     return reportBatch(null, request);
   }
 
-  public TaskReportBatchResult reportBatch(String admissionTenantId, TaskReportBatchCommand request) {
+  public TaskReportBatchResult reportBatch(
+      String admissionTenantId, TaskReportBatchCommand request) {
     enforceRateLimit(admissionTenantId, RateLimitAction.TASK_REPORT);
     List<TaskExecutionReportCommand> items =
         EmptyChecks.isNull(request) || EmptyChecks.isNull(request.items())

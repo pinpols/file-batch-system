@@ -206,7 +206,7 @@ public class ConsoleJwtService {
 
   private Duration effectiveClockSkew() {
     Duration skew = properties.getJwtClockSkew();
-    return skew == null || skew.isNegative() ? Duration.ofMinutes(1) : skew;
+    return EmptyChecks.isNull(skew) || skew.isNegative() ? Duration.ofMinutes(1) : skew;
   }
 
   private boolean isProductionProfile() {
@@ -340,8 +340,8 @@ public class ConsoleJwtService {
     if (EmptyChecks.isNull(exp)) {
       return;
     }
-    Duration remaining = Duration.between(BatchDateTimeSupport.utcNow(), exp)
-        .plus(effectiveClockSkew());
+    Duration remaining =
+        Duration.between(BatchDateTimeSupport.utcNow(), exp).plus(effectiveClockSkew());
     if (remaining.isNegative()) {
       return;
     }

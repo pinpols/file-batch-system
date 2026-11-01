@@ -73,7 +73,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("配额写入与意图同事务提交，回滚不保留意图")
-  void quotaChangesRecordOnlyCommittedIntents() {
+  void shouldRecordOnlyCommittedIntentsForQuotaChanges() {
     String insert = """
         insert into batch.tenant_quota_policy (tenant_id, policy_code, max_running_jobs_per_tenant)
         values (?, 'quota', 10)
@@ -100,7 +100,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("过期领取被重领后，旧令牌不能确认或释放")
-  void expiredClaimCannotAcknowledgeNewClaim() {
+  void shouldRejectExpiredClaimForNewClaim() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
     String prioritizeSql = """
         update batch.config_cache_invalidation_outbox set next_attempt_at = '-infinity'
@@ -138,7 +138,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
 
   @Test
   @DisplayName("普通无绕过权限角色不能读取其他租户的失效意图")
-  void ordinaryRoleCannotReadPendingIntents() {
+  void shouldHidePendingIntentsFromOrdinaryRole() {
     outbox.insert(tenant, "tenant-quota-policy", "enabled-first");
     String role = "config_cache_test_" + UUID.randomUUID().toString().replace("-", "");
     String createRoleSql = "create role %s nologin nosuperuser nobypassrls".formatted(role);

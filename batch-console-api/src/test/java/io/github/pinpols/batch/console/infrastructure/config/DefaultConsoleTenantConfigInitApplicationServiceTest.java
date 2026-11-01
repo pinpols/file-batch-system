@@ -445,8 +445,7 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   void batchInit_skipsJobDefinitionWhenExistsInSkipMode() {
     TenantConfigBatchInitRequest request = requestWithJobDef("job-1", List.of("t1"));
     request.setMode(InitMode.SKIP_EXISTING);
-    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1"))
-        .thenReturn(new JobDefinitionView());
+    when(jobDefinitionMapper.selectByUniqueKey("t1", "job-1")).thenReturn(new JobDefinitionView());
 
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
 

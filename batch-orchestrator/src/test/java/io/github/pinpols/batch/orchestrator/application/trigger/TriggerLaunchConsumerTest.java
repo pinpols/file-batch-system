@@ -170,8 +170,8 @@ class TriggerLaunchConsumerTest {
 
     assertThatThrownBy(() -> consumer.consume(consumerRecord(envelope), ack))
         .isInstanceOf(OperationFailure.class)
-        .satisfies(error -> assertThat(((OperationFailure) error).kind())
-            .isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
+        .satisfies(error ->
+            assertThat(((OperationFailure) error).kind()).isEqualTo(Kind.TEMPORARILY_UNAVAILABLE));
     verify(ack, never()).acknowledge();
     assertThat(failed("http_503")).isEqualTo(1.0);
   }

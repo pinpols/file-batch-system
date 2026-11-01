@@ -7,6 +7,5 @@ public interface ConsoleFileDownloadApplicationService {
   FileDownloadArtifact download(String tenantId, Long fileId, String approvalId);
 
   /** 导出指定文件的错误记录为 CSV。 */
-  FileDownloadArtifact exportFileErrors(
-      String tenantId, Long fileId, String errorStage);
+  FileDownloadArtifact exportFileErrors(String tenantId, Long fileId, String errorStage);
 }

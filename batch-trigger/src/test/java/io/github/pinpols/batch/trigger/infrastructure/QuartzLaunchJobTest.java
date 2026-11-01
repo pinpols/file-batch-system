@@ -127,8 +127,9 @@ class QuartzLaunchJobTest {
 
     job.execute(context);
 
-    verify(occurrenceRecorder).recordActualFire(new ScheduledOccurrenceFireParam(
-        "t1", 71L, planned, "fire-retry-1", 2, actual, "READINESS_RETRY"));
+    verify(occurrenceRecorder)
+        .recordActualFire(new ScheduledOccurrenceFireParam(
+            "t1", 71L, planned, "fire-retry-1", 2, actual, "READINESS_RETRY"));
   }
 
   @Test
@@ -139,7 +140,8 @@ class QuartzLaunchJobTest {
     when(context.getScheduledFireTime()).thenReturn(Date.from(planned));
     when(context.getFireTime()).thenReturn(Date.from(planned.plusSeconds(1)));
     doThrow(new DataAccessResourceFailureException("unavailable"))
-        .when(occurrenceRecorder).recordActualFire(any());
+        .when(occurrenceRecorder)
+        .recordActualFire(any());
 
     job.execute(context);
 

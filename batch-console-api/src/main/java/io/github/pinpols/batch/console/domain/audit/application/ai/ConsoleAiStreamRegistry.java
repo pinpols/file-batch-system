@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.audit.application.ai;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
@@ -23,8 +24,9 @@ public class ConsoleAiStreamRegistry {
   public Registration register(String requestId, Runnable cancel) {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata identity = currentIdentity();
-    Registration registration = new Registration(identity.tenantId(), identity.operatorId(), cancel);
-    if (streams.putIfAbsent(requestId, registration) != null) {
+    Registration registration =
+        new Registration(identity.tenantId(), identity.operatorId(), cancel);
+    if (EmptyChecks.isNotNull(streams.putIfAbsent(requestId, registration))) {
       throw BizException.of(ResultCode.CONFLICT, "error.common.state_conflict");
     }
     return registration;
@@ -34,7 +36,7 @@ public class ConsoleAiStreamRegistry {
     authorizationService.assertAllowed();
     ConsoleRequestMetadata identity = currentIdentity();
     Registration registration = streams.get(requestId);
-    if (registration == null
+    if (EmptyChecks.isNull(registration)
         || !Objects.equals(registration.tenantId, identity.tenantId())
         || !Objects.equals(registration.operatorId, identity.operatorId())) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
@@ -44,7 +46,7 @@ public class ConsoleAiStreamRegistry {
 
   private ConsoleRequestMetadata currentIdentity() {
     ConsoleRequestMetadata metadata = metadataResolver.current();
-    if (metadata == null
+    if (EmptyChecks.isNull(metadata)
         || !Texts.hasText(metadata.tenantId())
         || !Texts.hasText(metadata.operatorId())) {
       throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());

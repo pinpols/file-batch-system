@@ -5,13 +5,13 @@ import io.github.pinpols.batch.common.dto.LaunchResponse;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
  * 任务启动应用服务，区分同步 HTTP 入口与已持久化的 Kafka 队列入口。
@@ -30,7 +30,8 @@ public class LaunchApplicationService {
 
   public LaunchResponse launch(LaunchRequest request) {
     if (EmptyChecks.isNull(request) || EmptyChecks.isNull(request.workflowDefinitionId())) {
-      throw new OperationFailure(Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
+      throw new OperationFailure(
+          Kind.INVALID_INPUT, "top-level launch requires an explicit Workflow target");
     }
     boolean allowed =
         tenantActionRateLimiter.tryConsume(request.tenantId(), RateLimitAction.LAUNCH);

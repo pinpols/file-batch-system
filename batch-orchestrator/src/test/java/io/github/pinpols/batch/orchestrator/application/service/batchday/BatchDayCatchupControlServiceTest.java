@@ -11,6 +11,8 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
@@ -30,8 +32,6 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.SimpleTransactionStatus;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 @DisplayName("批量日追平暂停的幂等与审计")
 class BatchDayCatchupControlServiceTest {
@@ -173,8 +173,7 @@ class BatchDayCatchupControlServiceTest {
             "t1", "CAL", "PAUSE", "ops-7", "maintenance")))
         .isInstanceOf(OperationFailure.class)
         .hasCauseInstanceOf(DataIntegrityViolationException.class)
-        .extracting(
-            exception -> ((OperationFailure) exception).kind())
+        .extracting(exception -> ((OperationFailure) exception).kind())
         .isEqualTo(Kind.CONFLICT);
     verify(controlMapper, never())
         .insertEvent(ArgumentMatchers.any(BatchDayCatchupEventParam.class));

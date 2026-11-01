@@ -12,7 +12,6 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
@@ -21,6 +20,7 @@ import io.github.pinpols.batch.console.application.contract.query.OutboxDelivery
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -68,8 +68,7 @@ public class DefaultConsoleReportExcelApplicationService
   private final BatchDateTimeSupport dateTimeSupport;
 
   @Override
-  public ExcelDownload exportConfigReleases(
-      ConfigReleaseQueryRequest request) {
+  public ExcelDownload exportConfigReleases(ConfigReleaseQueryRequest request) {
     List<ConsoleConfigReleaseResponse> rows = configApplicationService.configReleases(request);
     return exportRows(
         "config_releases",
@@ -80,8 +79,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ExcelDownload exportSecretVersions(
-      SecretVersionQueryRequest request) {
+  public ExcelDownload exportSecretVersions(SecretVersionQueryRequest request) {
     List<ConsoleSecretVersionResponse> rows = configApplicationService.secretVersions(request);
     return exportRows(
         "secret_versions",
@@ -92,8 +90,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ExcelDownload exportConfigChangeLogs(
-      ConfigChangeLogQueryRequest request) {
+  public ExcelDownload exportConfigChangeLogs(ConfigChangeLogQueryRequest request) {
     List<ConsoleConfigChangeLogResponse> rows = configApplicationService.configChangeLogs(request);
     return exportRows(
         "config_change_logs",
@@ -125,8 +122,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ExcelDownload exportSchedulerSnapshotHistory(
-      String tenantId, int limit) {
+  public ExcelDownload exportSchedulerSnapshotHistory(String tenantId, int limit) {
     List<ConsoleSchedulerSnapshotHistoryResponse> rows =
         orchestratorPort.schedulerSnapshotHistory(tenantId, limit);
     return exportRows(
@@ -145,8 +141,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ExcelDownload exportOutboxRetries(
-      OutboxRetryLogQueryRequest request) {
+  public ExcelDownload exportOutboxRetries(OutboxRetryLogQueryRequest request) {
     PageResponse<ConsoleOutboxRetryLogResponse> page =
         queryApplicationService.outboxRetries(request);
     List<ConsoleOutboxRetryLogResponse> rows = page.items();
@@ -159,8 +154,7 @@ public class DefaultConsoleReportExcelApplicationService
   }
 
   @Override
-  public ExcelDownload exportOutboxDeliveries(
-      OutboxDeliveryLogQueryRequest request) {
+  public ExcelDownload exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request) {
     PageResponse<ConsoleOutboxDeliveryLogResponse> page =
         queryApplicationService.outboxDeliveries(request);
     List<ConsoleOutboxDeliveryLogResponse> rows = page.items();
@@ -176,7 +170,8 @@ public class DefaultConsoleReportExcelApplicationService
       String sheetName, String filePrefix, String title, List<T> rows, Class<T> rowType) {
     // R2-P1-9: workbook 直接写到响应流，不缓 byte[]。
     String fileName = filePrefix + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    return new ExcelDownload(fileName, out -> writeWorkbookTo(out, sheetName, title, rows, rowType));
+    return new ExcelDownload(
+        fileName, out -> writeWorkbookTo(out, sheetName, title, rows, rowType));
   }
 
   /**

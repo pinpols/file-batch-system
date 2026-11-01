@@ -14,8 +14,8 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchFailureDiagnostics;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
@@ -27,8 +27,8 @@ import io.micrometer.core.instrument.Timer;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Set;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
@@ -59,6 +59,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Slf4j
 public class TriggerLaunchConsumer {
   private static final String REASON_KEY = "reason";
+  private static final String TENANT_TAG = "tenant";
 
   private static final String METRIC_CONSUMED = "batch.trigger.launch.consumed.total";
   private static final String METRIC_FAILED = "batch.trigger.launch.failed.total";
@@ -157,19 +158,23 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           EmptyChecks.isNull(response) ? null : response.instanceNo());
-      counter(METRIC_CONSUMED, "tenant", tenantTag, "outcome", "ok").increment();
+      counter(METRIC_CONSUMED, TENANT_TAG, tenantTag, "outcome", "ok").increment();
       ack.acknowledge();
     } catch (OperationFailure ex) {
       if (ex.kind() == OperationFailure.Kind.RATE_LIMITED) {
         log.warn(
             "TriggerLaunchConsumer was rate limited; pausing the partition before redelivery: tenantId={} requestId={} backoffMs={}",
-            tenantId, request.requestId(), rateLimitBackoff.toMillis());
-        counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "rate_limited").increment();
+            tenantId,
+            request.requestId(),
+            rateLimitBackoff.toMillis());
+        counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, "rate_limited")
+            .increment();
         ack.nack(rateLimitBackoff);
         return;
       }
-      String reason = TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()).toLowerCase(Locale.ROOT);
-      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, reason).increment();
+      String reason =
+          TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()).toLowerCase(Locale.ROOT);
+      counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, reason).increment();
       throw ex;
     } catch (ResponseStatusException ex) {
       if (ex.getStatusCode().value() == 429) {
@@ -178,7 +183,8 @@ public class TriggerLaunchConsumer {
             tenantId,
             request.requestId(),
             rateLimitBackoff.toMillis());
-        counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "rate_limited").increment();
+        counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, "rate_limited")
+            .increment();
         // 429 是容量反压，不是有限次数后可以丢弃的失败。显式 nack 会回退当前 offset 并暂停该
         // partition；正常返回可绕开 DefaultErrorHandler 的重试耗尽 recoverer。
         ack.nack(rateLimitBackoff);
@@ -186,7 +192,7 @@ public class TriggerLaunchConsumer {
       }
       counter(
               METRIC_FAILED,
-              "tenant",
+              TENANT_TAG,
               tenantTag,
               REASON_KEY,
               "http_" + ex.getStatusCode().value())
@@ -201,7 +207,7 @@ public class TriggerLaunchConsumer {
           request.requestId(),
           ex.getCode(),
           SwallowedExceptionLogger.summary(ex));
-      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "business").increment();
+      counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, "business").increment();
       ack.acknowledge();
     } catch (RuntimeException ex) {
       log.error(
@@ -209,7 +215,7 @@ public class TriggerLaunchConsumer {
           tenantId,
           request.requestId(),
           ex);
-      counter(METRIC_FAILED, "tenant", tenantTag, REASON_KEY, "runtime").increment();
+      counter(METRIC_FAILED, TENANT_TAG, tenantTag, REASON_KEY, "runtime").increment();
       throw ex;
     } finally {
       consumeSample.stop(consumeTimer);

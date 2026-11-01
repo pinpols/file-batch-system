@@ -114,8 +114,7 @@ class DispatchSecretBindingMapperIntegrationTest {
       assertThat(bindings)
           .containsExactlyInAnyOrder(
               new DispatchSecretBindingView("CH_CURRENT", "dispatch/current", 102L, 2),
-              new DispatchSecretBindingView(
-                  "CH_UNAVAILABLE", "dispatch/unavailable", null, null));
+              new DispatchSecretBindingView("CH_UNAVAILABLE", "dispatch/unavailable", null, null));
       assertThat(mapper.selectCurrentByChannels("tenant-b", List.of("CH_CURRENT")))
           .containsExactly(
               new DispatchSecretBindingView("CH_CURRENT", "dispatch/current", 201L, 1));

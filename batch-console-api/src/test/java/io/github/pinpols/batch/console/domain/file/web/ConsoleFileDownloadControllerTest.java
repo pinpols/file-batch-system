@@ -7,8 +7,8 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileDownloadApplicationService;
@@ -22,9 +22,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
-import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
@@ -54,12 +54,16 @@ class ConsoleFileDownloadControllerTest {
   void shouldReturn200WithStreamWhenDownloadSucceeds() throws Exception {
     when(applicationService.download(anyString(), anyLong(), any()))
         .thenReturn(new FileDownloadArtifact(
-            new ByteArrayInputStream("data".getBytes()), "test.csv", "application/octet-stream", true));
+            new ByteArrayInputStream("data".getBytes()),
+            "test.csv",
+            "application/octet-stream",
+            true));
 
     mockMvc
         .perform(get("/api/console/files/1/download").param("tenantId", "t1"))
         .andExpect(status().isOk())
-        .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"test.csv\""))
+        .andExpect(
+            header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"test.csv\""))
         .andExpect(
             header().string(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_OCTET_STREAM_VALUE));
   }
@@ -69,7 +73,10 @@ class ConsoleFileDownloadControllerTest {
   void shouldKeepDownloadLengthUnknown() throws Exception {
     when(applicationService.download("t1", 1L, null))
         .thenReturn(new FileDownloadArtifact(
-            new ByteArrayInputStream("data".getBytes()), "test.csv", "application/octet-stream", true));
+            new ByteArrayInputStream("data".getBytes()),
+            "test.csv",
+            "application/octet-stream",
+            true));
     ResponseEntity<InputStreamResource> response =
         new ConsoleFileDownloadController(applicationService).download(1L, "t1", null);
     assertThat(response.getBody().contentLength()).isEqualTo(-1);
@@ -81,11 +88,16 @@ class ConsoleFileDownloadControllerTest {
   void shouldReturnCsvExport() throws Exception {
     when(applicationService.exportFileErrors("t1", 1L, null))
         .thenReturn(new FileDownloadArtifact(
-            new ByteArrayInputStream("header\nrow\n".getBytes()), "file-errors-1.csv", "text/csv", false));
-    mockMvc.perform(get("/api/console/files/1/errors/export").param("tenantId", "t1"))
+            new ByteArrayInputStream("header\nrow\n".getBytes()),
+            "file-errors-1.csv",
+            "text/csv",
+            false));
+    mockMvc
+        .perform(get("/api/console/files/1/errors/export").param("tenantId", "t1"))
         .andExpect(status().isOk())
         .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "text/csv"))
-        .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"file-errors-1.csv\""))
+        .andExpect(header()
+            .string(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"file-errors-1.csv\""))
         .andExpect(content().string("header\nrow\n"));
   }
 
@@ -102,7 +114,8 @@ class ConsoleFileDownloadControllerTest {
     };
     when(applicationService.download("t1", 1L, null))
         .thenReturn(new FileDownloadArtifact(stream, "file.bin", "invalid/type/extra", true));
-    ConsoleFileDownloadController controller = new ConsoleFileDownloadController(applicationService);
+    ConsoleFileDownloadController controller =
+        new ConsoleFileDownloadController(applicationService);
     assertThatThrownBy(() -> controller.download(1L, "t1", null))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("failed to open download stream");

@@ -10,11 +10,15 @@
 
 ### Changed
 
+- 两个租户清理脚本和触发观察记录清理脚本默认预览；执行删除须确认目标数据库、清理范围和已验证备份，操作前应停止写方并按运行手册核对影响。
+
 - Java SDK 的幂等存储扩展点将 `SdkIdempotencyEntity` 更名为 `SdkIdempotencySnapshot`，`SdkIdempotencyStore.find` / `record` 签名随之变化；既有自定义实现需要迁移，本次不提供旧接口兼容。
 
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+
+- 修正租户配置包设计文档的当前完整模板数量：11 个数据 sheet（8 个业务定义和 3 个可选基础依赖），辅助 sheet 另计。
 
 - SQL 模板导出映射保存用户选择的列顺序与文件表头，分页内部字段不再被当作默认导出列；无法确定批次关联时提示填写实际过滤 SQL，不再生成缺少批次条件的默认查询。
 

@@ -121,9 +121,7 @@ class TriggerLaunchRecoveryMapperIntegrationTest extends AbstractIntegrationTest
         mapper.selectDue(BatchDateTimeSupport.utcNow(), 50).stream()
             .filter(entity -> tenantId.equals(entity.getTenantId()))
             .toList();
-    assertThat(due)
-        .extracting(TriggerLaunchRecoveryView::getRequestId)
-        .containsExactly("req-due");
+    assertThat(due).extracting(TriggerLaunchRecoveryView::getRequestId).containsExactly("req-due");
     assertThat(due.getFirst().getEnvelopeCiphertext()).isEqualTo("c1");
   }
 

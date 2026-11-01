@@ -9,13 +9,14 @@ import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBo
 
 /** Excel 应用结果到 HTTP 流式下载的适配。 */
 public final class ConsoleExcelDownloadResponse {
-  private static final MediaType EXCEL = MediaType.parseMediaType(
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  private static final MediaType EXCEL =
+      MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
   private ConsoleExcelDownloadResponse() {}
 
   public static ResponseEntity<StreamingResponseBody> from(ExcelDownload download) {
-    String disposition = ContentDisposition.attachment().filename(download.fileName()).build().toString();
+    String disposition =
+        ContentDisposition.attachment().filename(download.fileName()).build().toString();
     StreamingResponseBody body = download.writer()::writeTo;
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, disposition)

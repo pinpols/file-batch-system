@@ -25,15 +25,15 @@ import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchTarget;
 import io.github.pinpols.batch.trigger.domain.ExternalEventTargetStatus;
+import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
-import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
-import io.github.pinpols.batch.trigger.service.TriggerService;
-import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
-import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
 import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
+import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
+import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
+import io.github.pinpols.batch.trigger.service.TriggerService;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -68,13 +68,14 @@ class TriggerControllerTest {
 
   @BeforeEach
   void setUp() {
-    mockMvc = MockMvcBuilders.standaloneSetup(new TriggerController(new TriggerApiApplicationService(
-            triggerService,
-            new TriggerDrainService(triggerGracefulShutdown),
-            new TriggerLaunchAdmissionService(
-                new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
-                new TriggerDrainService(triggerGracefulShutdown)),
-            new TriggerRequestPolicy(apiKeyVerifier))))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new TriggerController(new TriggerApiApplicationService(
+                triggerService,
+                new TriggerDrainService(triggerGracefulShutdown),
+                new TriggerLaunchAdmissionService(
+                    new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
+                    new TriggerDrainService(triggerGracefulShutdown)),
+                new TriggerRequestPolicy(apiKeyVerifier))))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())
         .build();

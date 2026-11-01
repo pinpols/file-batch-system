@@ -251,9 +251,11 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "closed-day-api-regression"));
 
-    assertThatThrownBy(() -> triggerService.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-                requestId, requestId, "trace-" + requestId)))
+    assertThatThrownBy(() -> triggerService.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request),
+            requestId,
+            requestId,
+            "trace-" + requestId)))
         .isInstanceOfSatisfying(BizException.class, failure -> {
           assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT);
           assertThat(failure.getMessageKey()).isEqualTo("error.trigger.batch_day_closed");
@@ -289,8 +291,8 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of("source", "integration"));
 
-    TriggerLaunchCommand command =
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), "idem-001", "req-001", "trace-001");
+    TriggerLaunchCommand command = new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "idem-001", "req-001", "trace-001");
 
     triggerService.launch(command);
     triggerService.launch(command);
@@ -325,23 +327,21 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setTriggerType(TriggerType.CATCH_UP);
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "original"));
     String key = "catchup-identity-" + UUID.randomUUID();
-    var original = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-original", "trace-original"));
-    var same =
-        triggerService.launch(new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-            key, "req-retry", "trace-retry"));
+    var original = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), key, "req-original", "trace-original"));
+    var same = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), key, "req-retry", "trace-retry"));
     assertThat(same.instanceNo()).isEqualTo(original.instanceNo());
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "different"));
-    assertThatThrownBy(() -> triggerService.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-                key, "req-different", "trace-different")))
+    assertThatThrownBy(() -> triggerService.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request), key, "req-different", "trace-different")))
         .isInstanceOfSatisfying(
             BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT));
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "original"));
     request.setWorkflowDefinitionId(insertWorkflowDefinition("catchup-identity-b"));
-    assertThatThrownBy(() -> triggerService.launch(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-other", "trace-other")))
+    assertThatThrownBy(() -> triggerService.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request), key, "req-other", "trace-other")))
         .isInstanceOfSatisfying(
             BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT));
@@ -361,21 +361,21 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setTriggerType(TriggerType.CATCH_UP);
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "original"));
     String key = "catchup-verify-" + UUID.randomUUID();
-    var original = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-verified", "trace-original"));
-    var verified = triggerService.verifyCatchUpSubmission(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query"));
+    var original = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), key, "req-verified", "trace-original"));
+    var verified = triggerService.verifyCatchUpSubmission(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query"));
     assertThat(verified.instanceNo()).isEqualTo(original.instanceNo());
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "changed"));
-    assertThatThrownBy(() -> triggerService.verifyCatchUpSubmission(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query")))
+    assertThatThrownBy(() -> triggerService.verifyCatchUpSubmission(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query")))
         .isInstanceOfSatisfying(
             BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.STATE_CONFLICT));
     request.setParams(Map.of("jobCode", "JOB_A", "reason", "original"));
     request.setTenantId("t2");
-    assertThatThrownBy(() -> triggerService.verifyCatchUpSubmission(
-            new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query")))
+    assertThatThrownBy(() -> triggerService.verifyCatchUpSubmission(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request), key, "req-query", "trace-query")))
         .isInstanceOf(BizException.class);
     String countSql =
         "select count(*) from batch.trigger_outbox_event where tenant_id = ? and request_id = ?";
@@ -395,8 +395,8 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     String key = "catchup-role-" + suffix;
     String requestId = "req-role-" + suffix;
-    triggerService.launch(new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-        key, requestId, "trace-role"));
+    triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), key, requestId, "trace-role"));
     var expected = LaunchRequest.builder()
         .tenantId("t1")
         .workflowDefinitionId(request.getWorkflowDefinitionId())
@@ -451,9 +451,8 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setParams(Map.of("jobCode", "J".repeat(128)));
     String key = "K".repeat(128) + ":" + "J".repeat(128);
     String requestId = "oversized-" + UUID.randomUUID();
-    assertThatThrownBy(
-            () -> triggerService.launch(new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-                key, requestId, "trace")))
+    assertThatThrownBy(() -> triggerService.launch(new TriggerLaunchCommand(
+            TriggerCommandInputMapper.toInput(request), key, requestId, "trace")))
         .satisfies(failure ->
             assertThat(JdbcExceptionSupport.hasSqlState(failure, "22001")).isTrue());
     String countSql =
@@ -474,10 +473,10 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     String exactLimitKey = "s".repeat(127) + ":" + "J".repeat(128);
     String hashedKey =
         "batchday-auto-f54ccaccb19d2335f49108453d0af28fda45c959737b15b75a86e6e0176ace01";
-    var first = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), exactLimitKey, "req-key-limit", "trace"));
-    var second = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), hashedKey, "req-key-hash", "trace"));
+    var first = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), exactLimitKey, "req-key-limit", "trace"));
+    var second = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), hashedKey, "req-key-hash", "trace"));
     assertThat(first.instanceNo()).isEqualTo("req-key-limit");
     assertThat(second.instanceNo()).isEqualTo("req-key-hash");
     String countSql =
@@ -1332,8 +1331,8 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setExternalEventId(eventId);
     request.setBizDate(bizDate);
     request.setParams(Map.of("event", "payload"));
-    return new ExternalEventLaunchCommand(TriggerCommandInputMapper.toInput(request),
-        "billing", idempotencyKey, requestId, traceId);
+    return new ExternalEventLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), "billing", idempotencyKey, requestId, traceId);
   }
 
   private TriggerLaunchCommand externalEventCommand(
@@ -1351,8 +1350,11 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setExternalEventCode("PAYMENT_SETTLED");
     request.setExternalEventSource(source);
     request.setExternalEventId(eventId);
-    return new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-        idempotencyKey, requestId, "trace-" + requestId);
+    return new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        "trace-" + requestId);
   }
 
   private LaunchResponse launchExternalEvent(
@@ -1371,9 +1373,11 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
     request.setExternalEventSource(identity[0]);
     request.setExternalEventId(identity[1]);
     request.setParams(Map.of("sourceEventIdentity", sourceEventIdentity));
-    return triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-            idempotencyKey, requestId, "trace-" + requestId));
+    return triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        "trace-" + requestId));
   }
 
   private Long insertWorkflowDefinition(String workflowCode) {
@@ -1423,9 +1427,11 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
       request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
       request.setTriggerType(TriggerType.API);
 
-      triggerService.launch(
-          new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request),
-              "idem-direct-workflow", "req-direct-wf", "trace-wf"));
+      triggerService.launch(new TriggerLaunchCommand(
+          TriggerCommandInputMapper.toInput(request),
+          "idem-direct-workflow",
+          "req-direct-wf",
+          "trace-wf"));
 
       Map<String, Object> target = jdbcTemplate.queryForMap(selectJobCodeSql);
       assertThat(target.get("job_code")).isNull();
@@ -1675,7 +1681,9 @@ class TriggerServiceIntegrationTest extends AbstractIntegrationTest {
       rerunRequest.setParams(Map.of("rerunReason", "approved closed-day rerun"));
       LaunchResponse rerunResponse = triggerService.launch(new TriggerLaunchCommand(
           TriggerCommandInputMapper.toInput(rerunRequest),
-              "idem-closed-rerun", "req-closed-rerun", "trace-closed-rerun"));
+          "idem-closed-rerun",
+          "req-closed-rerun",
+          "trace-closed-rerun"));
       assertThat(rerunResponse.instanceNo()).isEqualTo("req-closed-rerun");
       assertThat(rerunResponse.traceId()).isEqualTo("trace-closed-rerun");
       Map<String, Object> rerunTriggerRequest =

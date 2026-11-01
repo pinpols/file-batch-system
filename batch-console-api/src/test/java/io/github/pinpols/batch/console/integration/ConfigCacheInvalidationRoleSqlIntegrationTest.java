@@ -63,8 +63,8 @@ class ConfigCacheInvalidationRoleSqlIntegrationTest {
     String neighbor = "wdi_neighbor_" + suffix;
     createRole(role);
     createRole(neighbor);
-    String grantSchemaSql = "GRANT USAGE ON SCHEMA batch TO " + quoteIdentifier(role)
-        + ", " + quoteIdentifier(neighbor);
+    String grantSchemaSql = "GRANT USAGE ON SCHEMA batch TO " + quoteIdentifier(role) + ", "
+        + quoteIdentifier(neighbor);
     String grantNeighborSelectSql =
         "GRANT SELECT ON batch.config_cache_invalidation_outbox TO " + quoteIdentifier(neighbor);
     String neighborPolicySql = "CREATE POLICY " + quoteIdentifier("neighbor_" + suffix)
@@ -146,8 +146,8 @@ class ConfigCacheInvalidationRoleSqlIntegrationTest {
     createRole(role);
     createRole(neighbor);
     createRole(withoutSchema);
-    String grantSchemaSql = "GRANT USAGE ON SCHEMA batch TO " + quoteIdentifier(role)
-        + ", " + quoteIdentifier(neighbor);
+    String grantSchemaSql = "GRANT USAGE ON SCHEMA batch TO " + quoteIdentifier(role) + ", "
+        + quoteIdentifier(neighbor);
     jdbc.execute(grantSchemaSql);
 
     ExecResult missingRole = runScript(null, "grant");
@@ -195,7 +195,8 @@ class ConfigCacheInvalidationRoleSqlIntegrationTest {
   }
 
   private static void createRole(String role) {
-    String createRoleSql = "CREATE ROLE " + quoteIdentifier(role) + " NOLOGIN NOSUPERUSER NOBYPASSRLS";
+    String createRoleSql =
+        "CREATE ROLE " + quoteIdentifier(role) + " NOLOGIN NOSUPERUSER NOBYPASSRLS";
     jdbc.execute(createRoleSql);
   }
 
@@ -232,8 +233,12 @@ class ConfigCacheInvalidationRoleSqlIntegrationTest {
       command.add("action=" + action);
     }
     command.addAll(List.of(
-        "-U", POSTGRES.getUsername(), "-d", POSTGRES.getDatabaseName(),
-        "-f", "/tmp/config-cache-invalidation-role.sql"));
+        "-U",
+        POSTGRES.getUsername(),
+        "-d",
+        POSTGRES.getDatabaseName(),
+        "-f",
+        "/tmp/config-cache-invalidation-role.sql"));
     return POSTGRES.execInContainer(command.toArray(String[]::new));
   }
 }

@@ -50,7 +50,8 @@ public class ConsoleEventCatalogService {
   }
 
   private ConsoleEventTopicResponse topic(String name, String constantName, Locale locale) {
-    String description = messageSource.getMessage("event.topic." + constantName, null, name, locale);
+    String description =
+        messageSource.getMessage("event.topic." + constantName, null, name, locale);
     return new ConsoleEventTopicResponse(topicNamespace.topic(name), description);
   }
 }

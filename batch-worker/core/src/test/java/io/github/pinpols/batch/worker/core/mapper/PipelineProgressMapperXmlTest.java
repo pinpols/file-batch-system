@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 class PipelineProgressMapperXmlTest {
 
   @Test
-  void mapsPipelineProgressToExistingEntity() throws Exception {
+  @DisplayName("流水线进度结果映射及查询语句可正确解析")
+  void shouldMapPipelineProgressToExistingEntity() throws Exception {
     String resource = "mapper/PipelineProgressMapper.xml";
     Configuration configuration = new Configuration();
     try (InputStream stream =

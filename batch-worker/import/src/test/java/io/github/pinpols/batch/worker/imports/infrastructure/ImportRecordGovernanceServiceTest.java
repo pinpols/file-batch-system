@@ -214,8 +214,7 @@ class ImportRecordGovernanceServiceTest {
     assertThat(ctx.getAttributes()).containsEntry("lastErrorMessage", "msg-1");
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecord> bad =
-        (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
     assertThat(bad.get(0).skipped()).isTrue();
     assertThat(bad.get(0).stageCode()).isEqualTo("PARSE");
@@ -508,8 +507,7 @@ class ImportRecordGovernanceServiceTest {
             .build());
 
     @SuppressWarnings("unchecked")
-    List<ImportBadRecord> bad =
-        (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
+    List<ImportBadRecord> bad = (List<ImportBadRecord>) ctx.getAttributes().get("badRecords");
     assertThat(bad).hasSize(1);
     assertThat(bad.get(0)).isInstanceOf(ImportBadRecord.class);
   }

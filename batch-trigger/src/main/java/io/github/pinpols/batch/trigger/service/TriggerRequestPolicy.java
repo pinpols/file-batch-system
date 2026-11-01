@@ -3,6 +3,7 @@ package io.github.pinpols.batch.trigger.service;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 import lombok.RequiredArgsConstructor;
@@ -20,7 +21,7 @@ public class TriggerRequestPolicy {
       TriggerType triggerType,
       String tenantId,
       String externalEventSource) {
-    if (principal != null
+    if (EmptyChecks.isNotNull(principal)
         && (triggerType != TriggerType.EVENT
             || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, externalEventSource))) {
       throw forbidden();
@@ -29,13 +30,15 @@ public class TriggerRequestPolicy {
 
   public void authorizeExternalEvent(
       TriggerApiKeyPrincipal principal, String tenantId, String eventSource) {
-    if (principal == null || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, eventSource)) {
+    if (EmptyChecks.isNull(principal)
+        || !apiKeyVerifier.authorizesExternalEvent(principal, tenantId, eventSource)) {
       throw forbidden();
     }
   }
 
   public void authorizeExternalEvent(TriggerApiKeyPrincipal principal, String tenantId) {
-    authorizeExternalEvent(principal, tenantId, principal == null ? null : principal.keyName());
+    authorizeExternalEvent(
+        principal, tenantId, EmptyChecks.isNull(principal) ? null : principal.keyName());
   }
 
   private static BizException forbidden() {

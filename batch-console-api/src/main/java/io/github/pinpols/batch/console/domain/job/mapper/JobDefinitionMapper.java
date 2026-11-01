@@ -6,8 +6,8 @@ import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenance
 import io.github.pinpols.batch.console.domain.job.param.JobMonitoringPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionCodeNameView;
-import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

@@ -21,8 +21,8 @@ import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentG
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService;
+import io.github.pinpols.batch.console.domain.workflow.application.WorkflowDesignLockService.LockHolder;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionFullUpdateRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;

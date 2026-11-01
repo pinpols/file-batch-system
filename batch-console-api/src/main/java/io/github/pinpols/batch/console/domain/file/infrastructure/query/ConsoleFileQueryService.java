@@ -722,8 +722,7 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
-  private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(
-      FileArrivalGroupView entity) {
+  private ConsoleFileArrivalGroupResponse toFileArrivalGroupResponse(FileArrivalGroupView entity) {
     String tenantId = display(entity.getTenantId());
     String fileGroupCode = display(entity.getFileGroupCode());
     String waitFileGroupMode = display(entity.getWaitFileGroupMode());

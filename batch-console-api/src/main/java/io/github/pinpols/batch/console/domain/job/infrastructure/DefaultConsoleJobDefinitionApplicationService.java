@@ -133,10 +133,9 @@ public class DefaultConsoleJobDefinitionApplicationService
         Boolean.FALSE.equals(request.getCompletionDeadlineEnabled())
             ? null
             : request.getCompletionDeadlineLocalTime();
-    int completionDeadlineDayOffset =
-        EmptyChecks.isNull(completionDeadlineLocalTime)
-            ? 0
-            : valueOrZero(request.getCompletionDeadlineDayOffset());
+    int completionDeadlineDayOffset = EmptyChecks.isNull(completionDeadlineLocalTime)
+        ? 0
+        : valueOrZero(request.getCompletionDeadlineDayOffset());
     entity.setExecutionHandler(request.getExecutionHandler());
     entity.setParamSchema(request.getParamSchema());
     String defaultParams = resolveDefaultParams(request.getDefaultParams(), null);
@@ -161,13 +160,13 @@ public class DefaultConsoleJobDefinitionApplicationService
         .startGraceSeverity(severityOrWarn(request.getStartGraceSeverity()))
         .completionDeadlineLocalTime(completionDeadlineLocalTime)
         .completionDeadlineDayOffset(completionDeadlineDayOffset)
-        .dependencyCompletionWindowSeconds(valueOrZero(request.getDependencyCompletionWindowSeconds()))
+        .dependencyCompletionWindowSeconds(
+            valueOrZero(request.getDependencyCompletionWindowSeconds()))
         .completionDeadlineSeverity(severityOrWarn(request.getCompletionDeadlineSeverity()))
         .updatedBy(operator)
         .build();
     saveMonitoringPolicy(tenantId, monitoringPolicy);
-    JobDefinitionView createdDefinition =
-        jobDefinitionMapper.selectById(tenantId, entity.getId());
+    JobDefinitionView createdDefinition = jobDefinitionMapper.selectById(tenantId, entity.getId());
     return toResponse(createdDefinition);
   }
 
@@ -377,7 +376,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     saveMonitoringPolicy(tenantId, monitoringPolicy);
   }
 
-  private void saveMonitoringPolicy(String tenantId, JobMonitoringPolicyUpsertParam monitoringPolicy) {
+  private void saveMonitoringPolicy(
+      String tenantId, JobMonitoringPolicyUpsertParam monitoringPolicy) {
     jobDefinitionMapper.upsertJobMonitoringPolicy(monitoringPolicy);
     // 监控策略属于 jobDefinition 聚合，写后必须失效 orchestrator 读热点的配置缓存。
     cacheInvalidationService.evictAllJobDefinitions(tenantId);
@@ -485,8 +485,7 @@ public class DefaultConsoleJobDefinitionApplicationService
       jobDefinitionMapper.clearPhysicalResourceAssignment(resolved, newJobCode, operator);
     }
     JobDefinitionView selectedCopy = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
-    JobDefinitionView copied =
-        Guard.requireFound(selectedCopy, "source job definition not found");
+    JobDefinitionView copied = Guard.requireFound(selectedCopy, "source job definition not found");
     List<JobDependencyRuleRequest> sourceDependencyRules = resolveExistingDependencyRules(source);
     replaceDependencyRules(resolved, newJobCode, sourceDependencyRules);
     cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
@@ -524,8 +523,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     }
     JobDefinitionView selectedCopy =
         jobDefinitionMapper.selectByUniqueKey(resolved, request.getNewJobCode());
-    JobDefinitionView copied =
-        Guard.requireFound(selectedCopy, "source job definition not found");
+    JobDefinitionView copied = Guard.requireFound(selectedCopy, "source job definition not found");
     String newJobCode = request.getNewJobCode();
     List<JobDependencyRuleRequest> sourceDependencyRules = resolveExistingDependencyRules(source);
     replaceDependencyRules(resolved, newJobCode, sourceDependencyRules);
@@ -764,7 +762,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     if (EmptyChecks.isNotNull(entity.getJobDependencyRules())
         && EmptyChecks.isNotEmpty(entity.getJobDependencyRules())) {
       return entity.getJobDependencyRules().stream()
-          .map(rule -> new JobDependencyRuleResponse(rule.upstreamJobCode(), rule.bizDateAlignment()))
+          .map(rule ->
+              new JobDependencyRuleResponse(rule.upstreamJobCode(), rule.bizDateAlignment()))
           .toList();
     }
     List<String> existingDependencyCodes = resolveExistingDependencies(entity);

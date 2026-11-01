@@ -18,10 +18,10 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchTarget;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
+import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity;
 import io.github.pinpols.batch.trigger.mapper.ExternalEventDeliveryMapper;
 import io.github.pinpols.batch.trigger.mapper.TriggerRequestMapper;
-import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -197,11 +197,10 @@ final class TriggerExternalEventService {
     if (trimmedExternalEventId.length() > 256) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    boolean externalEventRequestIdentityIsIncomplete =
-        EmptyChecks.isNull(request.bizDate())
-            || EmptyChecks.isBlank(command.idempotencyKey())
-            || EmptyChecks.isBlank(command.requestId())
-            || EmptyChecks.isBlank(command.traceId());
+    boolean externalEventRequestIdentityIsIncomplete = EmptyChecks.isNull(request.bizDate())
+        || EmptyChecks.isBlank(command.idempotencyKey())
+        || EmptyChecks.isBlank(command.requestId())
+        || EmptyChecks.isBlank(command.traceId());
     if (externalEventRequestIdentityIsIncomplete) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }

@@ -5,8 +5,8 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
+import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
@@ -195,10 +195,7 @@ public class ConsoleConfigCacheInvalidationService {
     evict.run();
   }
 
-  /**
-   * SCAN-based pattern 删除：走 {@link RedisKeyUtils#scanAndDelete} 通用工具，异常被工具层捕获并抑制避免影响 afterCommit
-   * 钩子流程；残余 key 走 TTL（5min）自然清理。
-   */
+  /** 通过失效存储执行严格的 SCAN 模式删除；本方法记录异常并返回失败，避免异常影响 afterCommit 钩子流程。 */
   private boolean scanAndDelete(String pattern) {
     try {
       long deleted = invalidationStore.scanAndDelete(pattern, SCAN_BATCH_SIZE);
@@ -293,7 +290,8 @@ public class ConsoleConfigCacheInvalidationService {
   }
 
   private void publishStrict(String tenantId, String type, String code) {
-    Long keyRevision = Objects.requireNonNull(invalidationStore.nextKeyRevision(tenantId, type, code));
+    Long keyRevision =
+        Objects.requireNonNull(invalidationStore.nextKeyRevision(tenantId, type, code));
     Long revision = Objects.requireNonNull(invalidationStore.nextGlobalRevision());
     String safeTenantId = safe(tenantId);
     String safeType = safe(type);

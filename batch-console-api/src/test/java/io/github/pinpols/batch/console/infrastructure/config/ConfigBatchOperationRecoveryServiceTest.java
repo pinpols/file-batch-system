@@ -79,7 +79,8 @@ class ConfigBatchOperationRecoveryServiceTest {
     ConfigBatchOperationInsertParam inserted = captor.getValue();
     assertThat(inserted.requestIdentityHash()).isEqualTo(IDENTITY);
     assertThat(inserted.operationKind()).isEqualTo(KIND);
-    assertThat(json.readTree(inserted.targetsJson())).isEqualTo(json.readTree("[\"A\",\"B\",\"A\"]"));
+    assertThat(json.readTree(inserted.targetsJson()))
+        .isEqualTo(json.readTree("[\"A\",\"B\",\"A\"]"));
     assertThat(json.readTree(inserted.responseMetadataJson())).isEqualTo(metadata);
     verify(mapper).setTenantContext(AUDIT);
   }
@@ -98,11 +99,19 @@ class ConfigBatchOperationRecoveryServiceTest {
     assertThat(response.operationKind()).isEqualTo(KIND);
     assertThat(response.responseMetadata()).isEqualTo(Map.of("jobs", 1));
     assertThat(response.status()).isEqualTo(Status.COMPLETE);
-    assertThat(response.targets()).containsExactly(
-        new Target(0, "A", Status.COMPLETE, firstResult()),
-        new Target(1, "B", Status.COMPLETE, TenantInitResult.builder()
-            .tenantId("B").success(false).errorMessage("配置导入失败").build()),
-        new Target(2, "A", Status.COMPLETE, thirdResult()));
+    assertThat(response.targets())
+        .containsExactly(
+            new Target(0, "A", Status.COMPLETE, firstResult()),
+            new Target(
+                1,
+                "B",
+                Status.COMPLETE,
+                TenantInitResult.builder()
+                    .tenantId("B")
+                    .success(false)
+                    .errorMessage("配置导入失败")
+                    .build()),
+            new Target(2, "A", Status.COMPLETE, thirdResult()));
     InOrder calls = inOrder(mapper);
     calls.verify(mapper).setTenantContext(AUDIT);
     calls.verify(mapper).selectOperation(AUDIT, IDENTITY);
@@ -125,10 +134,11 @@ class ConfigBatchOperationRecoveryServiceTest {
     ConfigBatchOperationRecoveryResponse response = service().find(AUDIT, IDENTITY, KIND);
 
     assertThat(response.status()).isEqualTo(Status.UNKNOWN);
-    assertThat(response.targets()).containsExactly(
-        new Target(0, "A", Status.COMPLETE, firstResult()),
-        new Target(1, "B", Status.UNKNOWN, null),
-        new Target(2, "A", Status.COMPLETE, thirdResult()));
+    assertThat(response.targets())
+        .containsExactly(
+            new Target(0, "A", Status.COMPLETE, firstResult()),
+            new Target(1, "B", Status.UNKNOWN, null),
+            new Target(2, "A", Status.COMPLETE, thirdResult()));
     verify(mapper).selectReceipt(AUDIT, OPERATION, 1, "B");
   }
 
@@ -142,7 +152,8 @@ class ConfigBatchOperationRecoveryServiceTest {
 
     assertThatThrownBy(() -> service().begin(request))
         .isInstanceOfSatisfying(
-            BizException.class, exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.CONFLICT));
+            BizException.class,
+            exception -> assertThat(exception.getCode()).isEqualTo(ResultCode.CONFLICT));
 
     verify(mapper).insertOperation(any());
     verify(mapper, never()).insertReceipt(any());
@@ -160,29 +171,38 @@ class ConfigBatchOperationRecoveryServiceTest {
     ConfigBatchOperationRecoveryResponse response = service().find(AUDIT, IDENTITY, KIND);
 
     assertThat(response.status()).isEqualTo(Status.UNKNOWN);
-    assertThat(response.targets()).containsExactly(
-        new Target(0, "A", Status.COMPLETE, firstResult()),
-        new Target(1, "B", Status.UNKNOWN, null),
-        new Target(2, "A", Status.COMPLETE, thirdResult()));
+    assertThat(response.targets())
+        .containsExactly(
+            new Target(0, "A", Status.COMPLETE, firstResult()),
+            new Target(1, "B", Status.UNKNOWN, null),
+            new Target(2, "A", Status.COMPLETE, thirdResult()));
   }
 
   private TenantInitResult firstResult() {
     ItemDetail detail = new ItemDetail("queue", "CREATED", null);
     ItemStats queues = new ItemStats(1, 0, 0, 0, 0, List.of(detail));
-    return TenantInitResult.builder().tenantId("A").success(true).resourceQueues(queues).build();
+    return TenantInitResult.builder()
+        .tenantId("A")
+        .success(true)
+        .resourceQueues(queues)
+        .build();
   }
 
   private TenantInitResult thirdResult() {
     ItemDetail detail = new ItemDetail("queue", "UPDATED", null);
     ItemStats queues = new ItemStats(0, 1, 0, 0, 0, List.of(detail));
-    return TenantInitResult.builder().tenantId("A").success(true).resourceQueues(queues).build();
+    return TenantInitResult.builder()
+        .tenantId("A")
+        .success(true)
+        .resourceQueues(queues)
+        .build();
   }
 
   @Test
   @DisplayName("原操作不存在或类型不符时拒绝回查，且不读取目标回执")
   void shouldRejectMissingOrDifferentOperationBeforeLoadingReceipts() {
-    ConfigBatchOperationRow row = new ConfigBatchOperationRow(
-        AUDIT, OPERATION, IDENTITY, "TENANT_COPY", "[]", "{}");
+    ConfigBatchOperationRow row =
+        new ConfigBatchOperationRow(AUDIT, OPERATION, IDENTITY, "TENANT_COPY", "[]", "{}");
     when(mapper.selectOperation(AUDIT, IDENTITY)).thenReturn(null, row);
 
     for (int attempt = 0; attempt < 2; attempt++) {

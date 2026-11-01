@@ -1,9 +1,10 @@
 package io.github.pinpols.batch.orchestrator.application.service.governance;
 
-import io.github.pinpols.batch.orchestrator.infrastructure.admin.AdminTestDataCleanupRepository;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.infrastructure.admin.AdminTestDataCleanupRepository;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -33,9 +34,9 @@ public class AdminTestDataCleanupService {
     rejectProductionProfile();
     List<String> tenantIds = Arrays.stream(ids.split(","))
         .map(String::trim)
-        .filter(value -> !value.isEmpty())
+        .filter(value -> EmptyChecks.isNotEmpty(value))
         .toList();
-    if (tenantIds.isEmpty()) {
+    if (EmptyChecks.isEmpty(tenantIds)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.required");
     }
     return repository.cleanupByExactTenantIds(tenantIds);

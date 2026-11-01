@@ -20,6 +20,7 @@ public interface ConsoleAiApplicationService {
 
   interface PreparedStream {
     String requestId();
+
     AiChatResponse execute(StreamObserver observer);
   }
 

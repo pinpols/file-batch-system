@@ -108,7 +108,8 @@ class ConsoleQueryProjectionMapperIntegrationTest {
         "mapper/FileRecordMapper.xml",
         "mapper/ConsoleUserBatchOperationMapper.xml")) {
       try (InputStream input = Resources.getResourceAsStream(resource)) {
-        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments())
+            .parse();
       }
     }
     sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -163,14 +164,18 @@ class ConsoleQueryProjectionMapperIntegrationTest {
   void shouldMapArrivalGroupAndFileListWithinTenant() {
     try (SqlSession session = sessionFactory.openSession()) {
       FileArrivalGroupMapper groups = session.getMapper(FileArrivalGroupMapper.class);
-      var query = FileArrivalGroupQuery.ofState("tenant-a", "GROUP_A", null, new PageRequest(1, 10));
+      var query =
+          FileArrivalGroupQuery.ofState("tenant-a", "GROUP_A", null, new PageRequest(1, 10));
       var rows = groups.selectByQuery(query);
       assertThat(rows).hasSize(1);
       assertThat(rows.getFirst().getArrivedCount()).isEqualTo(2L);
       assertThat(rows.getFirst().getWaitingCount()).isEqualTo(2L);
 
       FileRecordMapper files = session.getMapper(FileRecordMapper.class);
-      var fileQuery = FileRecordQuery.builder().tenantId("tenant-a").pageRequest(new PageRequest(1, 10)).build();
+      var fileQuery = FileRecordQuery.builder()
+          .tenantId("tenant-a")
+          .pageRequest(new PageRequest(1, 10))
+          .build();
       var records = files.selectByQuery(fileQuery);
       assertThat(records).extracting(row -> row.getFileName()).containsExactly("b.csv", "a.csv");
       assertThat(records).extracting(row -> row.getTenantId()).containsOnly("tenant-a");
@@ -181,14 +186,17 @@ class ConsoleQueryProjectionMapperIntegrationTest {
   @DisplayName("开户批次投影仅供原操作人和目标租户查询")
   void shouldMapProvisioningOperationWithActorAndTenantScope() {
     try (SqlSession session = sessionFactory.openSession()) {
-      ConsoleUserBatchOperationMapper mapper = session.getMapper(ConsoleUserBatchOperationMapper.class);
+      ConsoleUserBatchOperationMapper mapper =
+          session.getMapper(ConsoleUserBatchOperationMapper.class);
       var row = mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-a");
       assertThat(row.getRequestId()).isEqualTo(REQUEST_ID);
       assertThat(row.getAccountCount()).isEqualTo(2);
       assertThat(mapper.selectByRequestId(REQUEST_ID, "operator-a", "tenant-b").getOperationId())
           .isEqualTo(OPERATION_ID);
-      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-b", "tenant-a")).isNull();
-      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-c")).isNull();
+      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-b", "tenant-a"))
+          .isNull();
+      assertThat(mapper.selectByOperationId(OPERATION_ID, "operator-a", "tenant-c"))
+          .isNull();
     }
   }
 }

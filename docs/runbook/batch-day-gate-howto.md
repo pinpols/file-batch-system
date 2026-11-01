@@ -130,7 +130,7 @@ SELECT tenant_id, request_id, released_at, released_by
 
 批次日窗口的 `scheduledFireTime` 是原计划触发身份；`actualFires` 是 Quartz 实际回调的观察记录，每次回调或 refire 独立记录实际时间和类型，readiness 重试沿用原计划身份。自动补跑、待审批误触发和 readiness 重试均可区分；人工补跑是独立请求，不会伪装成 Quartz 回调。历史记录未回填，且观察写入失败只告警、不阻断调度，因此空数组表示暂无观察数据，不证明没有触发。该能力需要数据库应用 V374 迁移后启用。
 
-实际触发记录按租户严格隔离。使用独立数据库角色时，平台库管理员可按 `scripts/db/scheduled-occurrence-fire-roles.sql` 的用法分别配置 Trigger 写入和 Console 读取权限；调用方必须在事务内绑定租户。删除 Workflow 定义时其实际触发记录随之级联删除，开发环境 sim reset 也会清理此表。当前没有自动保留任务：经授权的运维人员可使用 `scripts/db/cleanup-scheduled-occurrence-fire-retention.sql` 指定租户、截止时间及批次大小，先 `action=preview` 审核，再按需要执行 `action=delete`；脚本仅处理所属批次日已结算的记录，每次最多 10000 条。未关联批次日的观察不在该脚本清理范围，应单独排查。清理后空数组仍不证明没有触发。
+实际触发记录按租户严格隔离。使用独立数据库角色时，平台库管理员可按 `scripts/db/scheduled-occurrence-fire-roles.sql` 的用法分别配置 Trigger 写入和 Console 读取权限；调用方必须在事务内绑定租户。删除 Workflow 定义时其实际触发记录随之级联删除，开发环境 sim reset 也会清理此表。当前没有自动保留任务：经授权的运维人员可使用 `scripts/db/cleanup-scheduled-occurrence-fire-retention.sql` 指定租户、截止时间及批次大小，默认预览并审核，再按需要以 `action=delete` 执行；删除必须确认数据库、租户、截止时间、批次大小及已验证备份，具体参数和恢复流程见[数据库脚本手册](../../scripts/db/README.md#租户清理与触发观察记录的确认和恢复)。脚本仅处理所属批次日已结算的记录，每次最多 10000 条。未关联批次日的观察不在该脚本清理范围，应单独排查。清理后空数组仍不证明没有触发。
 
 预览只返回本次候选的数量及实际触发时间范围，不保留候选清单；预览事务结束后锁即释放。删除时会重新选择符合条件的记录，并跳过当时已锁定的行，因此即使参数相同，并发写入或锁状态变化也可能使删除的具体记录与预览不同。需要按固定记录清单审批时，不能把该预览结果当作后续删除的精确清单。
 

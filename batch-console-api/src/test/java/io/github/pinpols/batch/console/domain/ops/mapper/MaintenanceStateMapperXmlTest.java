@@ -13,7 +13,8 @@ import org.junit.jupiter.api.Test;
 class MaintenanceStateMapperXmlTest {
 
   @Test
-  void mapsMaintenanceStateToExistingEntity() throws Exception {
+  @DisplayName("维护状态结果映射及查询语句可正确解析")
+  void shouldMapMaintenanceStateToExistingEntity() throws Exception {
     String resource = "mapper/MaintenanceStateMapper.xml";
     Configuration configuration = new Configuration();
     try (InputStream stream =

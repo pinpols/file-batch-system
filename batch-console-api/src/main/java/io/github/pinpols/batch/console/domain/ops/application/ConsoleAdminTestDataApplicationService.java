@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.ops.application;
 import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.ops.ConsoleOrchestratorPort;
 import java.util.Arrays;
 import java.util.List;
@@ -11,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
-/** Application boundary for guarded test-data cleanup requests. */
+/** 在应用入口保护测试数据清理请求。 */
 @Service
 @RequiredArgsConstructor
 public class ConsoleAdminTestDataApplicationService {
@@ -28,7 +29,7 @@ public class ConsoleAdminTestDataApplicationService {
     assertCleanupAllowed();
     List<String> tenantIds = Arrays.stream(ids.split(","))
         .map(String::trim)
-        .filter(tenantId -> !tenantId.isEmpty())
+        .filter(tenantId -> EmptyChecks.isNotEmpty(tenantId))
         .toList();
     return orchestratorPort.adminTestDataCleanupByExactTenantIds(tenantIds);
   }

@@ -26,7 +26,8 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("数据质量规则更新接口")
 class DataQualityRuleUpdateControllerTest {
 
-  @Mock private DataQualityRuleMapper mapper;
+  @Mock
+  private DataQualityRuleMapper mapper;
 
   @ParameterizedTest
   @CsvSource({"tenant-a, 999", "tenant-b, 42"})
@@ -46,7 +47,8 @@ class DataQualityRuleUpdateControllerTest {
         .andExpect(status().isNotFound())
         .andExpect(jsonPath("$.code").value("NOT_FOUND"));
 
-    ArgumentCaptor<DataQualityRuleEntity> rule = ArgumentCaptor.forClass(DataQualityRuleEntity.class);
+    ArgumentCaptor<DataQualityRuleEntity> rule =
+        ArgumentCaptor.forClass(DataQualityRuleEntity.class);
     verify(mapper).update(rule.capture());
     assertThat(rule.getValue().getTenantId()).isEqualTo(tenantId);
     assertThat(rule.getValue().getId()).isEqualTo(id);

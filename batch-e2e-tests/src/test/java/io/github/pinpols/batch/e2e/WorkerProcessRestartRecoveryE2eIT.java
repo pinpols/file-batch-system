@@ -43,10 +43,10 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -162,7 +162,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
     receiver.setExecutor(receiverExecutor);
     receiver.createContext("/old", exchange -> {
       try {
-        requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        requestBody.set(
+            new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         oldRequests.incrementAndGet();
         received.countDown();
         if (!releaseResponse.await(90, TimeUnit.SECONDS)) {
@@ -198,7 +199,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
               jsonb_build_object('target_endpoint', ?, 'channel_type', 'API_PUSH',
                   'channel_code', ?), 'NONE', 60, true)
           """;
-      jdbcTemplate.update(insertChannel, tenantId, channelCode, oldEndpoint, oldEndpoint, channelCode);
+      jdbcTemplate.update(
+          insertChannel, tenantId, channelCode, oldEndpoint, oldEndpoint, channelCode);
       Path sourceFile = Files.createTempFile("flight-dispatch-", ".txt");
       try {
         Files.writeString(sourceFile, "dispatch-" + suffix);
@@ -210,17 +212,30 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
           awaitLogContains(workerLog, "Started BatchWorkerDispatchApplication");
           awaitWorkerOnlineInRegistry(tenantId, workerCode);
           Map<String, Object> params = Map.of(
-              "fileId", fileId.toString(), "channelCode", channelCode,
-              "externalRequestId", externalRequestId, "ackRequired", false);
+              "fileId",
+              fileId.toString(),
+              "channelCode",
+              channelCode,
+              "externalRequestId",
+              externalRequestId,
+              "ackRequired",
+              false);
           launchService.launch(new LaunchRequest(
-              tenantId, seed.workflowDefinitionId(), BIZ_DATE, TriggerType.API,
-              seed.requestId(), "flight-trace-" + suffix, params));
+              tenantId,
+              seed.workflowDefinitionId(),
+              BIZ_DATE,
+              TriggerType.API,
+              seed.requestId(),
+              "flight-trace-" + suffix,
+              params));
           publishPendingOutbox(tenantId);
           assertThat(received.await(120, TimeUnit.SECONDS))
-              .as("旧接收端已收到真实 Worker 请求").isTrue();
+              .as("旧接收端已收到真实 Worker 请求")
+              .isTrue();
           JsonNode receivedPayload = JsonUtils.fromJson(requestBody.get(), JsonNode.class);
           assertThat(receivedPayload.path("tenantId").asText()).isEqualTo(tenantId);
-          assertThat(receivedPayload.path("externalRequestId").asText()).isEqualTo(externalRequestId);
+          assertThat(receivedPayload.path("externalRequestId").asText())
+              .isEqualTo(externalRequestId);
 
           FileChannelSpec changed = new FileChannelSpec();
           changed.setChannelCode(channelCode);
@@ -229,8 +244,12 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
           changed.setTargetEndpoint(newEndpoint);
           changed.setAuthType("NONE");
           changed.setConfigJson(JsonUtils.toJson(Map.of(
-              "target_endpoint", newEndpoint, "channel_type", "API_PUSH",
-              "channel_code", channelCode)));
+              "target_endpoint",
+              newEndpoint,
+              "channel_type",
+              "API_PUSH",
+              "channel_code",
+              channelCode)));
           changed.setReceiptPolicy("NONE");
           changed.setTimeoutSeconds(60);
           changed.setEnabled(true);
@@ -248,14 +267,15 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
           try {
             ConfigSyncImportResponse response = configSyncService.importBundle(request);
             assertThat(response.result().failureTenants()).isZero();
-            assertThat(response.result().results()).singleElement()
+            assertThat(response.result().results())
+                .singleElement()
                 .satisfies(result -> assertThat(result.fileChannels().updated()).isOne());
             String endpointSql = """
                 select target_endpoint from batch.file_channel_config
                 where tenant_id = ? and channel_code = ?
                 """;
-            String storedEndpoint = jdbcTemplate.queryForObject(
-                endpointSql, String.class, tenantId, channelCode);
+            String storedEndpoint =
+                jdbcTemplate.queryForObject(endpointSql, String.class, tenantId, channelCode);
             assertThat(storedEndpoint).isEqualTo(newEndpoint);
             String receiptSql = """
                 select result_json::text from batch.config_sync_target_receipt
@@ -263,7 +283,8 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
                 """;
             String receiptJson = jdbcTemplate.queryForObject(
                 receiptSql, String.class, tenantId, response.syncLogId(), tenantId);
-            TenantInitResult receipt = JsonUtils.fromJsonStrict(receiptJson, TenantInitResult.class);
+            TenantInitResult receipt =
+                JsonUtils.fromJsonStrict(receiptJson, TenantInitResult.class);
             assertThat(receipt.tenantId()).isEqualTo(tenantId);
             assertThat(receipt.success()).isTrue();
             assertThat(receipt.fileChannels().updated()).isOne();
@@ -277,7 +298,9 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
               join batch.job_instance ji on ji.tenant_id = t.tenant_id and ji.id = t.job_instance_id
               where ji.tenant_id = ? and ji.dedup_key = ?
               """;
-          await().atMost(Duration.ofSeconds(120)).pollInterval(Duration.ofMillis(200))
+          await()
+              .atMost(Duration.ofSeconds(120))
+              .pollInterval(Duration.ofMillis(200))
               .untilAsserted(() -> {
                 String status = jdbcTemplate.queryForObject(
                     taskStatusSql, String.class, tenantId, seed.dedupKey());
@@ -637,7 +660,11 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   private Process startDispatchWorker(
-      String tenantId, String workerCode, String consumerGroupId, Path logFile, boolean holdResponse)
+      String tenantId,
+      String workerCode,
+      String consumerGroupId,
+      Path logFile,
+      boolean holdResponse)
       throws IOException, InterruptedException {
     Path workerExecJar = holdResponse
         ? findLatestExecJar(projectRoot().resolve("batch-worker/dispatch/target"))

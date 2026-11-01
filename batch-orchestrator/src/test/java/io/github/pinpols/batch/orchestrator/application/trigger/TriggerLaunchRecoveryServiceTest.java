@@ -19,8 +19,11 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.domain.view.TriggerLaunchRecoveryView;
+import io.github.pinpols.batch.orchestrator.infrastructure.failure.SpringTechnicalFailureClassificationAdapter;
 import io.github.pinpols.batch.orchestrator.mapper.TriggerLaunchRecoveryMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Instant;
@@ -31,11 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 import org.junit.jupiter.params.provider.CsvSource;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
-import io.github.pinpols.batch.orchestrator.infrastructure.failure.SpringTechnicalFailureClassificationAdapter;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -55,7 +55,11 @@ class TriggerLaunchRecoveryServiceTest {
     TriggerLaunchRecoveryProperties properties = new TriggerLaunchRecoveryProperties();
     properties.setMaxAttempts(3);
     service = new TriggerLaunchRecoveryService(
-        mapper, payloadProtector, launchApplicationService, properties, new SimpleMeterRegistry(),
+        mapper,
+        payloadProtector,
+        launchApplicationService,
+        properties,
+        new SimpleMeterRegistry(),
         new SpringTechnicalFailureClassificationAdapter());
   }
 
@@ -187,15 +191,14 @@ class TriggerLaunchRecoveryServiceTest {
     when(payloadProtector.reveal("cipher")).thenReturn(JsonUtils.toJson(sampleEnvelope()));
     when(launchApplicationService.launchFromTrustedQueue(any()))
         .thenThrow(new OperationFailure(
-            kind,
-            "Expected event can be satisfied only by its launched EVENT request"));
+            kind, "Expected event can be satisfied only by its launched EVENT request"));
 
     assertThat(service.recoverDue(10)).isZero();
 
     verify(mapper, never()).markDone(anyString(), anyString(), anyString());
     verify(mapper)
-        .markRetryOrDead(
-            argThat(attempt -> diagnosticCode.equals(attempt.errorCode()) && attempt.now() != null));
+        .markRetryOrDead(argThat(
+            attempt -> diagnosticCode.equals(attempt.errorCode()) && attempt.now() != null));
   }
 
   @Test

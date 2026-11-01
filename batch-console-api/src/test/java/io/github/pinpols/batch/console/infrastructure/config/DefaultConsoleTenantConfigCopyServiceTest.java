@@ -28,7 +28,6 @@ import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
-import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -38,6 +37,7 @@ import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.Bat
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import io.github.pinpols.batch.console.domain.job.view.JobDependencyRuleView;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
@@ -230,8 +230,7 @@ class DefaultConsoleTenantConfigCopyServiceTest {
     BizException conflict = BizException.of(ResultCode.CONFLICT, ResultCode.CONFLICT.detailKey());
     when(operationService.begin(any(ConfigBatchOperationRequest.class))).thenThrow(conflict);
 
-    assertThatThrownBy(() -> service.copy(request, "admin", "op-1", "key-hash"))
-        .isSameAs(conflict);
+    assertThatThrownBy(() -> service.copy(request, "admin", "op-1", "key-hash")).isSameAs(conflict);
 
     verifyNoInteractions(initService);
   }

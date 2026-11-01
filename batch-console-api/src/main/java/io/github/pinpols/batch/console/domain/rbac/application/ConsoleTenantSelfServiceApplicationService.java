@@ -29,9 +29,12 @@ public class ConsoleTenantSelfServiceApplicationService {
 
   public ConsoleTenantUsageSummaryResponse usage(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String runningJobs = parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null);
-    String dailyTriggers = parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null);
-    String fileCount = parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null);
+    String runningJobs =
+        parameterService.getValue(resolved, "tenant.usage.running-jobs").orElse(null);
+    String dailyTriggers =
+        parameterService.getValue(resolved, "tenant.usage.daily-triggers").orElse(null);
+    String fileCount =
+        parameterService.getValue(resolved, "tenant.usage.file-count").orElse(null);
     return new ConsoleTenantUsageSummaryResponse(runningJobs, dailyTriggers, fileCount);
   }
 
@@ -39,11 +42,19 @@ public class ConsoleTenantSelfServiceApplicationService {
     String operator = metadataResolver.current().operatorId();
     String requestKey = "tenant.quota-request." + dateTimeSupport.currentEpochMillis();
     QuotaRequestPayload payload = new QuotaRequestPayload(
-        request.field(), request.requestedValue(), String.valueOf(request.reason()), String.valueOf(operator));
+        request.field(),
+        request.requestedValue(),
+        String.valueOf(request.reason()),
+        String.valueOf(operator));
     parameterService.upsert(
-        tenantId, requestKey, JsonUtils.toJson(payload), "Quota change request from " + operator, operator);
+        tenantId,
+        requestKey,
+        JsonUtils.toJson(payload),
+        "Quota change request from " + operator,
+        operator);
     return requestKey;
   }
 
-  private record QuotaRequestPayload(String field, int requestedValue, String reason, String operator) {}
+  private record QuotaRequestPayload(
+      String field, int requestedValue, String reason, String operator) {}
 }

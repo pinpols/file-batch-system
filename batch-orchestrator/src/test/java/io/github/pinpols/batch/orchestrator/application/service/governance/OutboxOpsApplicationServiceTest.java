@@ -26,8 +26,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("Outbox 清理保留天数在应用服务入口生效")
 class OutboxOpsApplicationServiceTest {
 
-  @Mock private OutboxEventMapper outboxMapper;
-  @Mock private JobExecutionLogMapper logMapper;
+  @Mock
+  private OutboxEventMapper outboxMapper;
+
+  @Mock
+  private JobExecutionLogMapper logMapper;
 
   @ParameterizedTest
   @CsvSource({"0, false", "-1, false", "0, true", "-1, true"})
@@ -36,7 +39,8 @@ class OutboxOpsApplicationServiceTest {
     OutboxOpsApplicationService service = new OutboxOpsApplicationService(outboxMapper, logMapper);
 
     assertThatThrownBy(() -> service.cleanup("tenant-a", retainDays, dryRun, "operator", "reason"))
-        .isInstanceOfSatisfying(BizException.class,
+        .isInstanceOfSatisfying(
+            BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
     verifyNoInteractions(outboxMapper, logMapper);
   }
@@ -48,7 +52,8 @@ class OutboxOpsApplicationServiceTest {
     OutboxOpsApplicationService service = new OutboxOpsApplicationService(outboxMapper, logMapper);
 
     assertThatThrownBy(() -> service.cleanup("tenant-a", retainDays))
-        .isInstanceOfSatisfying(BizException.class,
+        .isInstanceOfSatisfying(
+            BizException.class,
             failure -> assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT));
     verifyNoInteractions(outboxMapper, logMapper);
   }

@@ -31,11 +31,15 @@ class ConsoleAiImageApplicationServiceTest {
     ConsoleAiAttachmentUseCase attachments = mock(ConsoleAiAttachmentUseCase.class);
     ConsoleAiAuthorizationService authorization = mock(ConsoleAiAuthorizationService.class);
     doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
-        .when(authorization).assertAllowed();
+        .when(authorization)
+        .assertAllowed();
     StaticListableBeanFactory factory = new StaticListableBeanFactory();
     ConsoleAiImageApplicationService service = new ConsoleAiImageApplicationService(
-        attachments, new ConsoleAiProperties(), factory.getBeanProvider(ConsoleAiClients.class),
-        mock(ConsoleRequestMetadataResolver.class), authorization);
+        attachments,
+        new ConsoleAiProperties(),
+        factory.getBeanProvider(ConsoleAiClients.class),
+        mock(ConsoleRequestMetadataResolver.class),
+        authorization);
     assertThatThrownBy(service::capabilities).isInstanceOf(BizException.class);
     MockMultipartFile file = new MockMultipartFile("file", new byte[] {1});
     UUID clientId = UUID.randomUUID();
@@ -53,15 +57,18 @@ class ConsoleAiImageApplicationServiceTest {
     ConsoleAiProperties properties = new ConsoleAiProperties();
     StaticListableBeanFactory factory = new StaticListableBeanFactory();
     ConsoleAiImageApplicationService service = new ConsoleAiImageApplicationService(
-        attachments, properties, factory.getBeanProvider(ConsoleAiClients.class),
-        mock(ConsoleRequestMetadataResolver.class), mock(ConsoleAiAuthorizationService.class));
+        attachments,
+        properties,
+        factory.getBeanProvider(ConsoleAiClients.class),
+        mock(ConsoleRequestMetadataResolver.class),
+        mock(ConsoleAiAuthorizationService.class));
     assertThat(service.capabilities().imageInput()).isFalse();
     MockMultipartFile file = new MockMultipartFile("file", new byte[] {1});
     UUID clientId = UUID.randomUUID();
     assertThatThrownBy(() -> service.upload(clientId, file))
         .isInstanceOf(BizException.class)
-        .satisfies(exception -> assertThat(((BizException) exception).getCode())
-            .isEqualTo(ResultCode.FORBIDDEN));
+        .satisfies(exception ->
+            assertThat(((BizException) exception).getCode()).isEqualTo(ResultCode.FORBIDDEN));
     verify(attachments, never()).upload(anyString(), anyString(), any(), any());
   }
 
@@ -72,12 +79,16 @@ class ConsoleAiImageApplicationServiceTest {
     ConsoleAiProperties properties = new ConsoleAiProperties();
     properties.getImage().setMaxFileBytes(1);
     StaticListableBeanFactory factory = new StaticListableBeanFactory();
-    factory.addBean("clients", new ConsoleAiClients(
-        new ConsoleAiClients.ProviderClient("test", null, true), null));
+    factory.addBean(
+        "clients",
+        new ConsoleAiClients(new ConsoleAiClients.ProviderClient("test", null, true), null));
     when(attachments.available()).thenReturn(true);
     ConsoleAiImageApplicationService service = new ConsoleAiImageApplicationService(
-        attachments, properties, factory.getBeanProvider(ConsoleAiClients.class),
-        mock(ConsoleRequestMetadataResolver.class), mock(ConsoleAiAuthorizationService.class));
+        attachments,
+        properties,
+        factory.getBeanProvider(ConsoleAiClients.class),
+        mock(ConsoleRequestMetadataResolver.class),
+        mock(ConsoleAiAuthorizationService.class));
     assertThat(service.capabilities().maxImageBytes()).isEqualTo(1);
     MockMultipartFile file = new MockMultipartFile("file", new byte[] {1, 2});
     UUID clientId = UUID.randomUUID();
@@ -93,13 +104,18 @@ class ConsoleAiImageApplicationServiceTest {
   void shouldForwardValidImageWithRequestIdentity() throws Exception {
     ConsoleAiAttachmentUseCase attachments = mock(ConsoleAiAttachmentUseCase.class);
     ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
-    when(resolver.current()).thenReturn(
-        new ConsoleRequestMetadata("request", "trace", "tenant", "user", "key", "127.0.0.1"));
+    when(resolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("request", "trace", "tenant", "user", "key", "127.0.0.1"));
     StaticListableBeanFactory factory = new StaticListableBeanFactory();
-    factory.addBean("clients", new ConsoleAiClients(
-        new ConsoleAiClients.ProviderClient("test", null, true), null));
+    factory.addBean(
+        "clients",
+        new ConsoleAiClients(new ConsoleAiClients.ProviderClient("test", null, true), null));
     ConsoleAiImageApplicationService service = new ConsoleAiImageApplicationService(
-        attachments, new ConsoleAiProperties(), factory.getBeanProvider(ConsoleAiClients.class), resolver,
+        attachments,
+        new ConsoleAiProperties(),
+        factory.getBeanProvider(ConsoleAiClients.class),
+        resolver,
         mock(ConsoleAiAuthorizationService.class));
     UUID clientId = UUID.randomUUID();
     MockMultipartFile file = new MockMultipartFile("file", new byte[] {1, 2});

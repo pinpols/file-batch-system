@@ -196,7 +196,8 @@ class DefaultConsoleAiApplicationServiceTest {
   @DisplayName("应用入口拒绝未授权流式请求，不进入模型执行")
   void shouldRejectStreamPreparationWithoutAuthorization() {
     doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
-        .when(authorizationService).assertAllowed();
+        .when(authorizationService)
+        .assertAllowed();
     AiChatRequest request = request("tenant-1", "查询失败作业");
     assertThatThrownBy(() -> service.prepareStream(request, "idem"))
         .isInstanceOf(BizException.class);
@@ -450,17 +451,19 @@ class DefaultConsoleAiApplicationServiceTest {
 
     Thread requestThread = Thread.currentThread();
     doAnswer(invocation -> {
-      assertThat(Thread.currentThread()).isSameAs(requestThread);
-      return null;
-    }).when(authorizationService).assertAllowed();
+          assertThat(Thread.currentThread()).isSameAs(requestThread);
+          return null;
+        })
+        .when(authorizationService)
+        .assertAllowed();
     when(requestMetadataResolver.current()).thenAnswer(invocation -> {
       assertThat(Thread.currentThread()).isSameAs(requestThread);
       return meta("tenant-1", "req-stream", "trace-1");
     });
     ConsoleAiApplicationService.PreparedStream prepared =
         service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1");
-    AiChatResponse response = CompletableFuture.supplyAsync(() -> prepared.execute(observer))
-        .get(10, TimeUnit.SECONDS);
+    AiChatResponse response =
+        CompletableFuture.supplyAsync(() -> prepared.execute(observer)).get(10, TimeUnit.SECONDS);
 
     assertThat(deltas).containsExactly("hello ", "world");
     assertThat(response.getAnswer()).contains("hello world");
@@ -518,8 +521,8 @@ class DefaultConsoleAiApplicationServiceTest {
         };
 
     when(requestMetadataResolver.current()).thenReturn(meta("tenant-1", "req-stream", "trace-1"));
-    AiChatResponse response = service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1")
-        .execute(observer);
+    AiChatResponse response =
+        service.prepareStream(request("tenant-1", "查询失败作业"), "idem-1").execute(observer);
 
     assertThat(cancelled.get()).isTrue();
     assertThat(response.getPromptDecision()).isEqualTo(AiPromptDecision.FAILED.code());

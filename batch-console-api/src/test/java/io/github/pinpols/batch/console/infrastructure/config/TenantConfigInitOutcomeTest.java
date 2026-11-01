@@ -85,7 +85,8 @@ class TenantConfigInitOutcomeTest {
     TenantConfigBatchInitRequest request = request();
     request.setTargetTenantIds(List.of("first", "second", "first"));
     ConfigBatchOperationContext context = new ConfigBatchOperationContext("audit", "operation");
-    TenantInitResult success = TenantInitResult.builder().tenantId("first").success(true).build();
+    TenantInitResult success =
+        TenantInitResult.builder().tenantId("first").success(true).build();
     TenantInitResult failed = TenantInitResult.failed("second", "处理失败");
     when(executor.executeRecoverable("first", request, "admin", context, 0)).thenReturn(success);
     when(executor.executeRecoverable("second", request, "admin", context, 1)).thenReturn(failed);
@@ -96,7 +97,8 @@ class TenantConfigInitOutcomeTest {
     TenantConfigBatchInitResponse response = service.batchInit(request, "admin", context);
 
     assertThat(response.batchOperationId()).isEqualTo("operation");
-    assertThat(response.results()).extracting(TenantInitResult::tenantId)
+    assertThat(response.results())
+        .extracting(TenantInitResult::tenantId)
         .containsExactly("first", "second", "first");
     assertThat(response.successTenants()).isEqualTo(2);
     assertThat(response.failureTenants()).isEqualTo(1);

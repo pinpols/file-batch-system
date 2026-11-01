@@ -61,12 +61,15 @@ class WorkerRegistryMapperIntegrationTest {
         """;
     jdbc.update(insertSql);
 
-    Environment environment = new Environment("worker-registry", new JdbcTransactionFactory(), dataSource);
+    Environment environment =
+        new Environment("worker-registry", new JdbcTransactionFactory(), dataSource);
     Configuration configuration = new Configuration(environment);
     configuration.setMapUnderscoreToCamelCase(false);
-    for (String resource : List.of("mapper/CommonFragments.xml", "mapper/WorkerRegistryMapper.xml")) {
+    for (String resource :
+        List.of("mapper/CommonFragments.xml", "mapper/WorkerRegistryMapper.xml")) {
       try (InputStream input = Resources.getResourceAsStream(resource)) {
-        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments()).parse();
+        new XMLMapperBuilder(input, configuration, resource, configuration.getSqlFragments())
+            .parse();
       }
     }
     sessionFactory = new SqlSessionFactoryBuilder().build(configuration);
@@ -89,7 +92,8 @@ class WorkerRegistryMapperIntegrationTest {
       assertThat(response.currentLoad()).isEqualTo(3);
       assertThat(response.maxConcurrent()).isEqualTo(8);
 
-      WorkerRegistryQuery query = new WorkerRegistryQuery("tenant-a", null, null, new PageRequest(1, 10));
+      WorkerRegistryQuery query =
+          new WorkerRegistryQuery("tenant-a", null, null, new PageRequest(1, 10));
       assertThat(mapper.selectByQuery(query))
           .extracting(WorkerRegistryView::getTenantId)
           .containsOnly("tenant-a");

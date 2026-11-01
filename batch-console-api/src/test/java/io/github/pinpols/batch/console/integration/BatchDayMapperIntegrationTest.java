@@ -492,15 +492,30 @@ class BatchDayMapperIntegrationTest extends AbstractIntegrationTest {
            refire_count, actual_fire_time, fire_kind)
         values (?, ?, ?, ?, ?, ?, ?)
         """;
-    jdbcTemplate.update(insertFire, tenantId, rejected.workflowDefinitionId(),
-        Timestamp.from(fireTime), "first", 0, Timestamp.from(fireTime.plusSeconds(4)), "SCHEDULED");
-    jdbcTemplate.update(insertFire, tenantId, rejected.workflowDefinitionId(),
-        Timestamp.from(fireTime), "retry", 0, Timestamp.from(fireTime.plusSeconds(60)), "READINESS_RETRY");
+    jdbcTemplate.update(
+        insertFire,
+        tenantId,
+        rejected.workflowDefinitionId(),
+        Timestamp.from(fireTime),
+        "first",
+        0,
+        Timestamp.from(fireTime.plusSeconds(4)),
+        "SCHEDULED");
+    jdbcTemplate.update(
+        insertFire,
+        tenantId,
+        rejected.workflowDefinitionId(),
+        Timestamp.from(fireTime),
+        "retry",
+        0,
+        Timestamp.from(fireTime.plusSeconds(60)),
+        "READINESS_RETRY");
     var fires = mapper.selectScheduledOccurrenceFires(tenantId, calendarCode, bizDate);
     assertThat(fires).hasSize(2);
     assertThat(fires.getFirst().actualFireTime()).isEqualTo(fireTime.plusSeconds(4));
     assertThat(fires.getLast().fireKind()).isEqualTo("READINESS_RETRY");
-    assertThat(mapper.selectScheduledOccurrenceFires(otherTenantId, calendarCode, bizDate)).isEmpty();
+    assertThat(mapper.selectScheduledOccurrenceFires(otherTenantId, calendarCode, bizDate))
+        .isEmpty();
   }
 
   private void insertScheduledOccurrence(

@@ -80,7 +80,8 @@ class ConsoleConfigBatchRecoveryControllerTest {
     ConfigBatchOperationRecoveryResponse response = response(kind);
     when(service.find(AUDIT, expectedHash, kind)).thenReturn(response);
 
-    mockMvc.perform(get(ENDPOINT)
+    mockMvc
+        .perform(get(ENDPOINT)
             .param("auditTenantId", AUDIT)
             .param("operationKind", kind)
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, " " + HEADER_TENANT + " ")
@@ -98,9 +99,10 @@ class ConsoleConfigBatchRecoveryControllerTest {
   private static Stream<Arguments> originalWritePaths() {
     // 摘要预期由原请求身份字节独立计算，避免测试直接调用被测摘要实现。
     return Stream.of(
-        Arguments.of("TENANT_COPY",
-            "ac6257230d89c3c69793451af2623bfbcf3f87d2f34359363814b65b9d910d19"),
-        Arguments.of("JOB_BUNDLE_CREATE",
+        Arguments.of(
+            "TENANT_COPY", "ac6257230d89c3c69793451af2623bfbcf3f87d2f34359363814b65b9d910d19"),
+        Arguments.of(
+            "JOB_BUNDLE_CREATE",
             "8655278ba244712df057c9b01d6a497ac0a47c50d4bb3ec0aa0f0306f4843a3c"),
         Arguments.of("JOB_BUNDLE_IMPORT", IMPORT_HASH));
   }
@@ -111,7 +113,8 @@ class ConsoleConfigBatchRecoveryControllerTest {
     String hash = "82e08e687b3672104be58d2d6be447abe8fdd4a7b64841265a1b74ed3d59c8d2";
     when(service.find(AUDIT, hash, "JOB_BUNDLE_IMPORT")).thenReturn(response("JOB_BUNDLE_IMPORT"));
 
-    mockMvc.perform(get("/console" + ENDPOINT)
+    mockMvc
+        .perform(get("/console" + ENDPOINT)
             .contextPath("/console")
             .param("auditTenantId", AUDIT)
             .param("operationKind", "JOB_BUNDLE_IMPORT")
@@ -135,9 +138,11 @@ class ConsoleConfigBatchRecoveryControllerTest {
   @DisplayName("租户守卫拒绝时不查询原批次")
   void shouldStopBeforeLookupWhenTenantGuardRejects() throws Exception {
     doThrow(new AccessDeniedException("tenant denied"))
-        .when(tenantGuard).assertTenantAllowed(AUDIT);
+        .when(tenantGuard)
+        .assertTenantAllowed(AUDIT);
 
-    mockMvc.perform(get(ENDPOINT)
+    mockMvc
+        .perform(get(ENDPOINT)
             .param("auditTenantId", AUDIT)
             .param("operationKind", "JOB_BUNDLE_IMPORT")
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, HEADER_TENANT)
@@ -153,7 +158,8 @@ class ConsoleConfigBatchRecoveryControllerTest {
     when(service.find(AUDIT, IMPORT_HASH, "JOB_BUNDLE_IMPORT"))
         .thenThrow(BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey()));
     for (int attempt = 0; attempt < 2; attempt++) {
-      mockMvc.perform(get(ENDPOINT)
+      mockMvc
+          .perform(get(ENDPOINT)
               .param("auditTenantId", AUDIT)
               .param("operationKind", "JOB_BUNDLE_IMPORT")
               .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, HEADER_TENANT)
@@ -166,19 +172,22 @@ class ConsoleConfigBatchRecoveryControllerTest {
   @Test
   @DisplayName("未知操作类型和空原键返回参数错误且不查询")
   void shouldRejectInvalidKindAndBlankKey() throws Exception {
-    mockMvc.perform(get(ENDPOINT)
+    mockMvc
+        .perform(get(ENDPOINT)
             .param("auditTenantId", AUDIT)
             .param("operationKind", "INVALID")
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, HEADER_TENANT)
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, KEY))
         .andExpect(status().isBadRequest());
-    mockMvc.perform(get(ENDPOINT)
+    mockMvc
+        .perform(get(ENDPOINT)
             .param("auditTenantId", AUDIT)
             .param("operationKind", "JOB_BUNDLE_IMPORT")
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, HEADER_TENANT)
             .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, " "))
         .andExpect(status().isBadRequest());
-    mockMvc.perform(get(ENDPOINT)
+    mockMvc
+        .perform(get(ENDPOINT)
             .param("auditTenantId", AUDIT)
             .param("operationKind", "JOB_BUNDLE_IMPORT")
             .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, HEADER_TENANT))

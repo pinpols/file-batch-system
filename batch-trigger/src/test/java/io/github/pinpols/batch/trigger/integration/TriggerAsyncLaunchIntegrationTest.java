@@ -125,7 +125,9 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     String requestId = "req-happy-" + UUID.randomUUID();
     LaunchResponse response = triggerService.launch(new TriggerLaunchCommand(
         TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_HAPPY")),
-            "idem-" + requestId, requestId, "trace-happy"));
+        "idem-" + requestId,
+        requestId,
+        "trace-happy"));
 
     // 1) trigger_request + trigger_outbox_event 同事务都被写入
     assertThat(response.instanceNo()).isEqualTo(requestId);
@@ -160,12 +162,16 @@ class TriggerAsyncLaunchIntegrationTest extends AbstractIntegrationTest {
     String requestId = "req-dup-" + UUID.randomUUID();
     String idem = "idem-" + requestId;
 
-    LaunchResponse first = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
-            idem, requestId, "tr-1"));
-    LaunchResponse second = triggerService.launch(
-        new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
-            idem, requestId, "tr-2"));
+    LaunchResponse first = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
+        idem,
+        requestId,
+        "tr-1"));
+    LaunchResponse second = triggerService.launch(new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(buildRequest(tenantId, "JOB_DUP")),
+        idem,
+        requestId,
+        "tr-2"));
 
     // 第二次返回与第一次同 requestId(走 dedup return existing)
     assertThat(first.instanceNo()).isEqualTo(requestId);

@@ -24,11 +24,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("租户自助应用服务：配额申请的安全序列化")
 class ConsoleTenantSelfServiceApplicationServiceTest {
-  @Mock private ConsoleQuotaPolicyApplicationService quotaService;
-  @Mock private ConsoleSystemParameterService parameterService;
-  @Mock private ConsoleTenantGuard tenantGuard;
-  @Mock private BatchDateTimeSupport timeSupport;
-  @Mock private ConsoleRequestMetadataResolver metadataResolver;
+  @Mock
+  private ConsoleQuotaPolicyApplicationService quotaService;
+
+  @Mock
+  private ConsoleSystemParameterService parameterService;
+
+  @Mock
+  private ConsoleTenantGuard tenantGuard;
+
+  @Mock
+  private BatchDateTimeSupport timeSupport;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
 
   @Test
   @DisplayName("引号、反斜线和换行在存储的 JSON 中保持原值")
@@ -36,16 +45,23 @@ class ConsoleTenantSelfServiceApplicationServiceTest {
     when(timeSupport.currentEpochMillis()).thenReturn(123L);
     QuotaChangeRequest request = new QuotaChangeRequest("jobs\"\\", 12, "line1\nline2\\\"quoted");
     String operator = "user\"\\name";
-    when(metadataResolver.current()).thenReturn(
-        new ConsoleRequestMetadata("request", "trace", "tenant-a", operator, null, null));
-    ConsoleTenantSelfServiceApplicationService service = new ConsoleTenantSelfServiceApplicationService(
-        quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
+    when(metadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("request", "trace", "tenant-a", operator, null, null));
+    ConsoleTenantSelfServiceApplicationService service =
+        new ConsoleTenantSelfServiceApplicationService(
+            quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
     String key = service.requestQuotaChange("tenant-a", request);
 
     assertThat(key).isEqualTo("tenant.quota-request.123");
     ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-    verify(parameterService).upsert(
-        eq("tenant-a"), eq(key), payload.capture(), eq("Quota change request from " + operator), eq(operator));
+    verify(parameterService)
+        .upsert(
+            eq("tenant-a"),
+            eq(key),
+            payload.capture(),
+            eq("Quota change request from " + operator),
+            eq(operator));
     JsonNode json = new ObjectMapper().readTree(payload.getValue());
     assertThat(json.get("field").asText()).isEqualTo(request.field());
     assertThat(json.get("requestedValue").asInt()).isEqualTo(12);
@@ -57,15 +73,20 @@ class ConsoleTenantSelfServiceApplicationServiceTest {
   @DisplayName("缺省原因仍按历史格式保存为字符串 null")
   void shouldPreserveMissingReasonRepresentation() throws Exception {
     when(timeSupport.currentEpochMillis()).thenReturn(124L);
-    when(metadataResolver.current()).thenReturn(
-        new ConsoleRequestMetadata("request", "trace", "tenant-a", "user", null, null));
-    ConsoleTenantSelfServiceApplicationService service = new ConsoleTenantSelfServiceApplicationService(
-        quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
+    when(metadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata("request", "trace", "tenant-a", "user", null, null));
+    ConsoleTenantSelfServiceApplicationService service =
+        new ConsoleTenantSelfServiceApplicationService(
+            quotaService, parameterService, tenantGuard, timeSupport, metadataResolver);
     service.requestQuotaChange("tenant-a", new QuotaChangeRequest("jobs", 1, null));
     ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-    verify(parameterService).upsert(
-        eq("tenant-a"), eq("tenant.quota-request.124"), payload.capture(),
-        eq("Quota change request from user"), eq("user"));
+    verify(parameterService)
+        .upsert(
+            eq("tenant-a"),
+            eq("tenant.quota-request.124"),
+            payload.capture(),
+            eq("Quota change request from user"),
+            eq("user"));
     assertThat(new ObjectMapper().readTree(payload.getValue()).get("reason").asText())
         .isEqualTo("null");
   }

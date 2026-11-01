@@ -173,7 +173,8 @@ final class TenantJobDefinitionApplySupport {
     int startGraceSeconds =
         resolveStartGrace(spec.getScheduleType(), dependsOnJobCode, spec.getStartGraceSeconds());
     LocalTime completionDeadlineLocalTime = spec.getCompletionDeadlineLocalTime();
-    int dependencyCompletionWindowSeconds = valueOrZero(spec.getDependencyCompletionWindowSeconds());
+    int dependencyCompletionWindowSeconds =
+        valueOrZero(spec.getDependencyCompletionWindowSeconds());
     int completionDeadlineDayOffset = EmptyChecks.isNull(spec.getCompletionDeadlineLocalTime())
         ? 0
         : valueOrZero(spec.getCompletionDeadlineDayOffset());
@@ -200,7 +201,8 @@ final class TenantJobDefinitionApplySupport {
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
     replaceJobDependencyRules(tenantId, spec.getJobCode(), dependencyRules);
-    validateMonitoringCompletionMode(completionDeadlineLocalTime, dependencyCompletionWindowSeconds);
+    validateMonitoringCompletionMode(
+        completionDeadlineLocalTime, dependencyCompletionWindowSeconds);
     JobMonitoringPolicyUpsertParam monitoringPolicy = JobMonitoringPolicyUpsertParam.builder()
         .tenantId(tenantId)
         .jobDefinitionId(entity.getId())

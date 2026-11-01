@@ -10,8 +10,8 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleAuthTokenResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleLoginPublicKeyResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
-import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginKeyPairService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleLoginService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleMenuRegistry;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSessionRegistry;
@@ -66,17 +66,17 @@ public class ConsoleAuthApplicationService {
 
   /** 在认证用例入口解密登录凭据，并执行加密登录策略。 */
   private ConsoleLoginRequest resolveLoginRequest(ConsoleLoginRequest request) {
-    if (request == null) {
+    if (EmptyChecks.isNull(request)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.auth.invalid_credentials");
     }
     if (request.isEncrypted()) {
       String plaintext = loginKeyPairService.decrypt(
           request.getEncryptedKey(), request.getIv(), request.getCiphertext());
       ConsoleLoginRequest decoded = JsonUtils.fromJson(plaintext, ConsoleLoginRequest.class);
-      if (decoded == null) {
+      if (EmptyChecks.isNull(decoded)) {
         throw BizException.of(ResultCode.UNAUTHORIZED, "error.auth.encryption_failed");
       }
-      if (decoded.getCaptchaToken() == null) {
+      if (EmptyChecks.isNull(decoded.getCaptchaToken())) {
         decoded.setCaptchaToken(request.getCaptchaToken());
       }
       return decoded;

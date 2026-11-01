@@ -71,7 +71,8 @@ class ConsoleAiControllerTest {
             requestMetadataResolver,
             new ConsoleAiProperties(),
             mock(ConsoleAiImageApplicationService.class),
-            new ConsoleAiStreamRegistry(mock(ConsoleAiAuthorizationService.class), requestMetadataResolver)))
+            new ConsoleAiStreamRegistry(
+                mock(ConsoleAiAuthorizationService.class), requestMetadataResolver)))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
@@ -130,10 +131,12 @@ class ConsoleAiControllerTest {
   @Test
   @DisplayName("流式应答按增量与结束事件推送完整答案")
   void shouldStreamDeltasAndFinalAuditedAnswer() throws Exception {
-    ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+    ConsoleAiApplicationService.PreparedStream prepared =
+        mock(ConsoleAiApplicationService.PreparedStream.class);
     when(prepared.requestId()).thenReturn("req-stream");
-    when(requestMetadataResolver.current()).thenReturn(
-        new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "operator-a", null, null));
+    when(requestMetadataResolver.current())
+        .thenReturn(new ConsoleRequestMetadata(
+            "req-stream", "trace-stream", "t1", "operator-a", null, null));
     when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
     AiChatResponse chatResponse = new AiChatResponse();
     chatResponse.setRequestId("req-stream");
@@ -172,10 +175,12 @@ class ConsoleAiControllerTest {
   void shouldRejectCrossOperatorCancellation() throws Exception {
     when(requestMetadataResolver.responseMeta())
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
-    ConsoleAiApplicationService.PreparedStream prepared = mock(ConsoleAiApplicationService.PreparedStream.class);
+    ConsoleAiApplicationService.PreparedStream prepared =
+        mock(ConsoleAiApplicationService.PreparedStream.class);
     when(prepared.requestId()).thenReturn("req-stream");
-    when(requestMetadataResolver.current()).thenReturn(
-        new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
+    when(requestMetadataResolver.current())
+        .thenReturn(
+            new ConsoleRequestMetadata("req-stream", "trace-stream", "t1", "owner", null, null));
     when(applicationService.prepareStream(any(), anyString())).thenReturn(prepared);
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);

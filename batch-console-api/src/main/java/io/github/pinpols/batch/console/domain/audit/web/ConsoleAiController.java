@@ -108,16 +108,14 @@ public class ConsoleAiController {
   public CommonResponse<ConsoleAiAttachmentUseCase.AttachmentView> attachmentStatus(
       @PathVariable UUID clientAttachmentId) {
     authorizationService.assertAllowed();
-    ConsoleAiAttachmentUseCase.AttachmentView attachment =
-        imageService.status(clientAttachmentId);
+    ConsoleAiAttachmentUseCase.AttachmentView attachment = imageService.status(clientAttachmentId);
     return responseFactory.success(attachment);
   }
 
   @GetMapping("/attachments/{id}/content")
   public ResponseEntity<byte[]> attachmentContent(@PathVariable UUID id) {
     authorizationService.assertAllowed();
-    ConsoleAiAttachmentUseCase.ImageContent image =
-        imageService.content(id);
+    ConsoleAiAttachmentUseCase.ImageContent image = imageService.content(id);
     ResponseEntity.BodyBuilder responseBuilder = ResponseEntity.ok();
     responseBuilder.cacheControl(CacheControl.noStore());
     responseBuilder.header("X-Content-Type-Options", "nosniff");
@@ -157,8 +155,7 @@ public class ConsoleAiController {
         LocaleContextHolder.setLocale(requestLocale);
         try {
           active.send("started", Map.of("requestId", requestId));
-          AiChatResponse result =
-              prepared.execute(active);
+          AiChatResponse result = prepared.execute(active);
           if (!active.isCancelled()) {
             active.send("completed", result);
           }

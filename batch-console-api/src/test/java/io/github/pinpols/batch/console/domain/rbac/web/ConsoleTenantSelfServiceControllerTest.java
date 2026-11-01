@@ -49,8 +49,8 @@ class ConsoleTenantSelfServiceControllerTest {
     LocalValidatorFactoryBean validator = new LocalValidatorFactoryBean();
     validator.afterPropertiesSet();
 
-    mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleTenantSelfServiceController(
-            applicationService, responseFactory))
+    mockMvc = MockMvcBuilders.standaloneSetup(
+            new ConsoleTenantSelfServiceController(applicationService, responseFactory))
         .setControllerAdvice(exceptionHandler)
         .setValidator(validator)
         .build();
@@ -61,8 +61,7 @@ class ConsoleTenantSelfServiceControllerTest {
   void shouldReturnQuota() throws Exception {
     QuotaPolicyResponse policy =
         new QuotaPolicyResponse(1L, "t1", "max-jobs", 100, 0, 0, 1, true, null, null, null);
-    when(applicationService.quota("t1"))
-        .thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
+    when(applicationService.quota("t1")).thenReturn(new PageResponse<>(1, 1, 100, List.of(policy)));
 
     mockMvc
         .perform(get("/api/console/tenants/quota").param("tenantId", "t1"))

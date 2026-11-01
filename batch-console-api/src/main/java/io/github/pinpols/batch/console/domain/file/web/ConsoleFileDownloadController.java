@@ -54,7 +54,8 @@ public class ConsoleFileDownloadController {
             }
           }
           : new InputStreamResource(artifact.content());
-      String disposition = ContentDisposition.attachment().filename(artifact.fileName()).build().toString();
+      String disposition =
+          ContentDisposition.attachment().filename(artifact.fileName()).build().toString();
       return ResponseEntity.ok()
           .header(HttpHeaders.CONTENT_DISPOSITION, disposition)
           .contentType(MediaType.parseMediaType(artifact.contentType()))

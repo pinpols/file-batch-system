@@ -34,18 +34,32 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @DisplayName("作业包原请求结果恢复登记")
 class DefaultConsoleJobBundleApplicationServiceTest {
 
-  @Mock private TenantIdResolver tenantGuard;
-  @Mock private ConsoleTenantConfigCopyService copyService;
-  @Mock private ConsoleTenantConfigInitApplicationService initService;
-  @Mock private ConsoleRequestMetadataResolver metadataResolver;
-  @Mock private ConsoleConfigBatchOperationService operationService;
+  @Mock
+  private TenantIdResolver tenantGuard;
+
+  @Mock
+  private ConsoleTenantConfigCopyService copyService;
+
+  @Mock
+  private ConsoleTenantConfigInitApplicationService initService;
+
+  @Mock
+  private ConsoleRequestMetadataResolver metadataResolver;
+
+  @Mock
+  private ConsoleConfigBatchOperationService operationService;
 
   private DefaultConsoleJobBundleApplicationService service;
 
   @BeforeEach
   void setUp() {
     service = new DefaultConsoleJobBundleApplicationService(
-        tenantGuard, copyService, initService, metadataResolver, operationService, new ObjectMapper());
+        tenantGuard,
+        copyService,
+        initService,
+        metadataResolver,
+        operationService,
+        new ObjectMapper());
   }
 
   @Test
@@ -61,7 +75,8 @@ class DefaultConsoleJobBundleApplicationServiceTest {
     when(initService.batchInit(any(), eq("admin"), any(ConfigBatchOperationContext.class)))
         .thenAnswer(invocation -> {
           ConfigBatchOperationContext context = invocation.getArgument(2);
-          return new TenantConfigBatchInitResponse(context.operationId(), 3, 3, 0, false, List.of());
+          return new TenantConfigBatchInitResponse(
+              context.operationId(), 3, 3, 0, false, List.of());
         });
 
     var response = service.importBundle(request, "request-hash");
@@ -75,7 +90,9 @@ class DefaultConsoleJobBundleApplicationServiceTest {
     assertThat(operation.operationKind()).isEqualTo("JOB_BUNDLE_IMPORT");
     assertThat(operation.targets()).containsExactly("target-a", "target-b", "target-a");
     assertThat(operation.responseMetadata().path("tenantId").asText()).isEqualTo("source");
-    assertThat(operation.responseMetadata().path("summary").path("jobDefinitions").asInt()).isZero();
+    assertThat(
+            operation.responseMetadata().path("summary").path("jobDefinitions").asInt())
+        .isZero();
     assertThat(response.result().batchOperationId()).isEqualTo(operation.operationId());
   }
 
@@ -90,8 +107,7 @@ class DefaultConsoleJobBundleApplicationServiceTest {
         .isInstanceOf(BizException.class);
 
     verify(operationService, never()).begin(any());
-    verify(initService, never())
-        .batchInit(any(), any(), any(ConfigBatchOperationContext.class));
+    verify(initService, never()).batchInit(any(), any(), any(ConfigBatchOperationContext.class));
   }
 
   @Test

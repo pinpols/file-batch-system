@@ -2,11 +2,14 @@ package io.github.pinpols.batch.console.support.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+@DisplayName("控制台原请求幂等身份计算")
 class ConsoleIdempotencyRequestIdentityTest {
 
   @Test
+  @DisplayName("请求身份含首尾空白时保留既有存储键")
   void shouldMatchExistingKeys_whenRequestIdentityContainsWhitespace() {
     String tenant = " tenant-a ";
     String method = "post";
@@ -23,6 +26,7 @@ class ConsoleIdempotencyRequestIdentityTest {
   }
 
   @Test
+  @DisplayName("租户头为空时保持既有 UTF-8 摘要")
   void shouldMatchExistingUtf8Digest_whenTenantHeaderIsBlank() {
     assertThat(ConsoleIdempotencyRequestIdentity.tenantId(null)).isEqualTo("_");
     assertThat(ConsoleIdempotencyRequestIdentity.tenantId("\u2003")).isEqualTo("_");
@@ -33,6 +37,7 @@ class ConsoleIdempotencyRequestIdentityTest {
   }
 
   @Test
+  @DisplayName("回查身份使用原请求方法、路径及租户")
   void shouldUseOriginalMethodAndUri_whenCalculatingRecoveryIdentity() {
     String original = ConsoleIdempotencyRequestIdentity.durableKey(
         "tenant-a", "POST", "/api/console/jobs/demo", "post-key");

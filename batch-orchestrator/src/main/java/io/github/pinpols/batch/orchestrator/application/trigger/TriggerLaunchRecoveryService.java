@@ -187,7 +187,8 @@ public class TriggerLaunchRecoveryService {
           tenantId,
           requestId,
           SwallowedExceptionLogger.summary(ex));
-      String errorCode = technicalFailureClassification.legacyResponseStatusDiagnostic(ex)
+      String errorCode = technicalFailureClassification
+          .legacyResponseStatusDiagnostic(ex)
           .orElseGet(() -> ex.getClass().getSimpleName());
       return retryOrGiveUp(row, errorCode);
     }

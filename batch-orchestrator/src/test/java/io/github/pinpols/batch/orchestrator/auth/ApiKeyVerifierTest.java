@@ -67,7 +67,8 @@ class ApiKeyVerifierTest {
 
   private static ApiKeyCandidate pbkdf2Row(long id, String tenant, String scopes, String rawKey) {
     ApiKeyHasher.SaltedHash sh = ApiKeyHasher.hashWithSaltKdf(rawKey);
-    return new ApiKeyCandidate(id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
+    return new ApiKeyCandidate(
+        id, tenant, "kn", scopes, true, null, sh.hash(), sh.salt(), "pbkdf2");
   }
 
   @Test

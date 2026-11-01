@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.controller;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportRequest;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportResponse;
 import io.github.pinpols.batch.orchestrator.application.service.forensic.ForensicExportService;
@@ -61,7 +62,8 @@ public class ForensicExportController {
     Path file = artifact.path();
     HttpHeaders headers = new HttpHeaders();
     headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + exportId + ".zip\"");
-    headers.add("X-Forensic-Sha256", artifact.sha256() == null ? "" : artifact.sha256());
+    headers.add(
+        "X-Forensic-Sha256", EmptyChecks.isNull(artifact.sha256()) ? "" : artifact.sha256());
     ResponseEntity.BodyBuilder responseBuilder =
         ResponseEntity.ok().headers(headers).contentType(MediaType.APPLICATION_OCTET_STREAM);
     FileSystemResource resource = new FileSystemResource(file);

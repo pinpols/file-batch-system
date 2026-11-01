@@ -123,8 +123,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
     when(fileErrorRecordMapper.selectByQuery(any())).thenReturn(List.of(error));
 
     var response = service.exportFileErrors("t1", 100L, null);
-    String csv =
-        new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
+    String csv = new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
 
     assertThat(csv).contains(",\"first\rsecond\",");
   }
@@ -139,8 +138,7 @@ class DefaultConsoleFileDownloadApplicationServiceTest {
     when(fileErrorRecordMapper.selectByQuery(any())).thenReturn(List.of(error));
 
     var response = service.exportFileErrors("t1", 100L, null);
-    String csv =
-        new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
+    String csv = new String(response.content().readAllBytes(), StandardCharsets.UTF_8);
 
     assertThat(csv).contains(",\"a,\"\"b\"\"\nc\",");
   }

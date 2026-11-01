@@ -24,6 +24,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.plan.BundlePlanParams;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService.SatisfactionRequest;
@@ -63,8 +65,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /** 为显式 Workflow Trigger 目标创建根 Workflow Run，并派发入口节点。 */
 @Service
@@ -724,8 +724,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       if (EmptyChecks.isNull(run)) {
         reject(request);
       } else {
-        throw new OperationFailure(Kind.TEMPORARILY_UNAVAILABLE,
-            "workflow launch is in progress; retry the same request");
+        throw new OperationFailure(
+            Kind.TEMPORARILY_UNAVAILABLE, "workflow launch is in progress; retry the same request");
       }
     });
   }

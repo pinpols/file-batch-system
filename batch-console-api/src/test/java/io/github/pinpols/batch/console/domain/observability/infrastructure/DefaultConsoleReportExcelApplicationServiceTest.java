@@ -85,9 +85,7 @@ class DefaultConsoleReportExcelApplicationServiceTest {
     when(orchestratorPort.schedulerSnapshotHistory("tenant-a", 10)).thenReturn(List.of());
 
     assertThat(service.exportSchedulerSnapshot("tenant-a").fileName()).endsWith(".xlsx");
-    assertThat(service
-            .exportSchedulerSnapshotHistory("tenant-a", 10)
-            .fileName())
+    assertThat(service.exportSchedulerSnapshotHistory("tenant-a", 10).fileName())
         .endsWith(".xlsx");
 
     verify(orchestratorPort).schedulerSnapshot("tenant-a");

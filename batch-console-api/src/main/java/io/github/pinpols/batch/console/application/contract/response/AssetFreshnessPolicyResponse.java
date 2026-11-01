@@ -18,6 +18,4 @@ public record AssetFreshnessPolicyResponse(
     String severity,
     Boolean enabled,
     Instant createdAt,
-    Instant updatedAt) {
-
-}
+    Instant updatedAt) {}

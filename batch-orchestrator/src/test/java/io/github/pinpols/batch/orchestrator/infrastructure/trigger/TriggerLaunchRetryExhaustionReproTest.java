@@ -16,6 +16,8 @@ import io.github.pinpols.batch.common.kafka.BatchKafkaTopicNamespace;
 import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.task.LaunchApplicationService;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
@@ -36,8 +38,6 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.Acknowledgment;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /**
  * 验证 Kafka 启动消息在有限重试耗尽后的恢复处置。
@@ -87,9 +87,7 @@ class TriggerLaunchRetryExhaustionReproTest {
 
     Acknowledgment ack = mock(Acknowledgment.class);
     Throwable listenerFailure = catchThrowable(() -> consumer.consume(record, ack));
-    assertThat(listenerFailure)
-        .as("listener 必须把瞬态失败抛回容器，交给 error handler 重试")
-        .isSameAs(failure);
+    assertThat(listenerFailure).as("listener 必须把瞬态失败抛回容器，交给 error handler 重试").isSameAs(failure);
     verify(ack, never()).acknowledge();
 
     // 使用实际装配的生产 error handler。

@@ -15,6 +15,4 @@ public record ConsoleUsageSummaryResponse(
     long eventCount,
     long successCount,
     long failureCount,
-    String lastSeenAt) {
-
-}
+    String lastSeenAt) {}

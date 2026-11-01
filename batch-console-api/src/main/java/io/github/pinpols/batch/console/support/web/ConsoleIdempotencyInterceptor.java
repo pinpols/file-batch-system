@@ -171,10 +171,10 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
     String tenantHeader = request.getHeader(CommonConstants.DEFAULT_TENANT_ID_HEADER);
     String tenantId = ConsoleIdempotencyRequestIdentity.tenantId(tenantHeader);
     String requestUri = request.getRequestURI();
-    String redisKey =
-        ConsoleIdempotencyRequestIdentity.redisKey(tenantHeader, method, requestUri, idempotencyKey);
-    String durableKey =
-        ConsoleIdempotencyRequestIdentity.durableKey(tenantHeader, method, requestUri, idempotencyKey);
+    String redisKey = ConsoleIdempotencyRequestIdentity.redisKey(
+        tenantHeader, method, requestUri, idempotencyKey);
+    String durableKey = ConsoleIdempotencyRequestIdentity.durableKey(
+        tenantHeader, method, requestUri, idempotencyKey);
 
     String existing = readRedisState(redisKey, idempotencyKey, response);
     if (EmptyChecks.isNull(existing)

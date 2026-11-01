@@ -194,7 +194,8 @@ class TriggerDedupRequiresNewIntegrationTest extends AbstractIntegrationTest {
     request.setBizDate(LocalDate.of(2026, Month.MARCH, 27));
     request.setTriggerType(TriggerType.API);
     request.setParams(Map.of());
-    return new TriggerLaunchCommand(TriggerCommandInputMapper.toInput(request), dedupKey, requestId, "trace-dedup");
+    return new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(request), dedupKey, requestId, "trace-dedup");
   }
 
   @TestConfiguration(proxyBeanMethods = false)

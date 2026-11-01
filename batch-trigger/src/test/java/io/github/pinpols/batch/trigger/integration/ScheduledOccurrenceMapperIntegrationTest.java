@@ -12,8 +12,8 @@ import static org.mockito.Mockito.mock;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.BatchTriggerApplication;
-import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceFireParam;
+import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceInsertPlannedWithStatusParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceReadinessWaitParam;
 import io.github.pinpols.batch.trigger.domain.param.ScheduledOccurrenceRecordClosedBatchDayRejectionParam;
@@ -109,13 +109,22 @@ class ScheduledOccurrenceMapperIntegrationTest extends AbstractIntegrationTest {
     var first = new ScheduledOccurrenceFireParam(
         tenantId, workflowDefinitionId, planned, "fire-1", 0, planned.plusSeconds(2), "SCHEDULED");
     var retry = new ScheduledOccurrenceFireParam(
-        tenantId, workflowDefinitionId, planned, "fire-1", 1, planned.plusSeconds(7), "READINESS_RETRY");
+        tenantId,
+        workflowDefinitionId,
+        planned,
+        "fire-1",
+        1,
+        planned.plusSeconds(7),
+        "READINESS_RETRY");
     assertThat(mapper.insertActualFire(first)).isEqualTo(1);
     assertThat(mapper.insertActualFire(first)).isZero();
     assertThat(mapper.insertActualFire(retry)).isEqualTo(1);
     Long count = jdbcTemplate.queryForObject(
         "select count(*) from batch.scheduled_occurrence_fire where tenant_id = ? and workflow_definition_id = ? and scheduled_fire_time = ?",
-        Long.class, tenantId, workflowDefinitionId, java.sql.Timestamp.from(planned));
+        Long.class,
+        tenantId,
+        workflowDefinitionId,
+        java.sql.Timestamp.from(planned));
     assertThat(count).isEqualTo(2L);
   }
 

@@ -23,8 +23,9 @@ public class ConsoleMaintenanceApplicationService {
   }
 
   public MaintenanceStatusResponse update(UpdateMaintenanceRequest request) {
-    List<String> affected =
-        request.getAffectedServices() == null ? List.of() : request.getAffectedServices();
+    List<String> affected = EmptyChecks.isNull(request.getAffectedServices())
+        ? List.of()
+        : request.getAffectedServices();
     MaintenanceState next = new MaintenanceState(
         request.isEnabled(),
         request.isReadOnly(),
@@ -42,7 +43,7 @@ public class ConsoleMaintenanceApplicationService {
         state.enabled(),
         state.readOnly(),
         state.message(),
-        state.etaAt() != null ? state.etaAt().toString() : null,
+        EmptyChecks.isNotNull(state.etaAt()) ? state.etaAt().toString() : null,
         EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
         state.active(Instant.now()),
         state.affectedServices(),

@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.observability.application;
 
-import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQueryRequest;
@@ -8,6 +7,7 @@ import io.github.pinpols.batch.console.application.contract.query.OutboxDelivery
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
 
 /** 控制台报表 Excel 导出应用服务：将各类查询结果汇总为可下载的 Excel 流。 */
 public interface ConsoleReportExcelApplicationService {
@@ -37,6 +37,5 @@ public interface ConsoleReportExcelApplicationService {
   ExcelDownload exportOutboxRetries(OutboxRetryLogQueryRequest request);
 
   /** 导出 Outbox 投递日志。 */
-  ExcelDownload exportOutboxDeliveries(
-      OutboxDeliveryLogQueryRequest request);
+  ExcelDownload exportOutboxDeliveries(OutboxDeliveryLogQueryRequest request);
 }

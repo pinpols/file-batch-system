@@ -58,9 +58,8 @@ class ImportEventArrivalControllerTest {
     ImportScannerProperties properties = new ImportScannerProperties();
     properties.setEnabled(false);
     properties.getEventArrival().setEnabled(true);
-    ImportEventArrivalController controller =
-        new ImportEventArrivalController(
-            new ImportEventArrivalService(importIngressScanner, properties, meterRegistry));
+    ImportEventArrivalController controller = new ImportEventArrivalController(
+        new ImportEventArrivalService(importIngressScanner, properties, meterRegistry));
 
     CommonResponse<ImportEventArrivalResponse> response = controller.objectArrival(null);
 
@@ -107,9 +106,13 @@ class ImportEventArrivalControllerTest {
   @DisplayName("扫描失败后释放在途标记，后续通知可以再次触发")
   void shouldAllowNextNotification_whenScanFails() {
     ImportEventArrivalController controller = controller(true);
-    doThrow(new IllegalStateException("scan failed")).doNothing().when(importIngressScanner).scan();
+    doThrow(new IllegalStateException("scan failed"))
+        .doNothing()
+        .when(importIngressScanner)
+        .scan();
 
-    assertThatThrownBy(() -> controller.objectArrival(null)).isInstanceOf(IllegalStateException.class);
+    assertThatThrownBy(() -> controller.objectArrival(null))
+        .isInstanceOf(IllegalStateException.class);
     assertThat(controller.objectArrival(null).data().triggered()).isTrue();
     verify(importIngressScanner, times(2)).scan();
   }
@@ -120,12 +123,14 @@ class ImportEventArrivalControllerTest {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
     doAnswer(invocation -> {
-      entered.countDown();
-      if (!release.await(5, TimeUnit.SECONDS)) {
-        throw new IllegalStateException("scan was not released");
-      }
-      return null;
-    }).when(importIngressScanner).scan();
+          entered.countDown();
+          if (!release.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("scan was not released");
+          }
+          return null;
+        })
+        .when(importIngressScanner)
+        .scan();
     ImportEventArrivalController controller = controller(true);
     try (var executor = Executors.newSingleThreadExecutor()) {
       var first = executor.submit(() -> controller.objectArrival(null));

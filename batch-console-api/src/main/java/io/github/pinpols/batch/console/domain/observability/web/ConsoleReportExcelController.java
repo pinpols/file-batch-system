@@ -72,7 +72,8 @@ public class ConsoleReportExcelController {
   public ResponseEntity<StreamingResponseBody> schedulerHistory(
       @RequestParam("tenantId") String tenantId,
       @RequestParam(value = "limit", defaultValue = "20") int limit) {
-    return ConsoleExcelDownloadResponse.from(applicationService.exportSchedulerSnapshotHistory(tenantId, limit));
+    return ConsoleExcelDownloadResponse.from(
+        applicationService.exportSchedulerSnapshotHistory(tenantId, limit));
   }
 
   /** 导出 Worker 列表 Excel。 */

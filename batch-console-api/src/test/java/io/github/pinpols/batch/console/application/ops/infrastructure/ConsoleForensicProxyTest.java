@@ -37,13 +37,19 @@ class ConsoleForensicProxyTest {
     when(fallback.callOrThrow(eq("orchestrator"), eq("forensic-export-request"), any()))
         .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(2)).get());
     DefaultConsoleOrchestratorProxyService service = new DefaultConsoleOrchestratorProxyService(
-        internal, tenantGuard, mock(ConsoleRealtimeEventPort.class), fallback, mock(ConsoleQueryCacheService.class));
-    server.expect(requestTo("http://orchestrator.test/internal/forensic/export"))
+        internal,
+        tenantGuard,
+        mock(ConsoleRealtimeEventPort.class),
+        fallback,
+        mock(ConsoleQueryCacheService.class));
+    server
+        .expect(requestTo("http://orchestrator.test/internal/forensic/export"))
         .andExpect(content().json("""
             {"tenantId":"t1","bizDateFrom":"2026-05-19","bizDateTo":"2026-05-19",
              "jobCodes":null,"exportFormat":"BUNDLE","requestedBy":"admin"}
             """))
-        .andRespond(withSuccess("{\"exportId\":\"fx-001\",\"status\":\"READY\"}", MediaType.APPLICATION_JSON));
+        .andRespond(withSuccess(
+            "{\"exportId\":\"fx-001\",\"status\":\"READY\"}", MediaType.APPLICATION_JSON));
     LocalDate date = LocalDate.parse("2026-05-19");
     service.requestForensicExport(new ForensicExportCommand("t1", date, date, null, null, "admin"));
     server.verify();

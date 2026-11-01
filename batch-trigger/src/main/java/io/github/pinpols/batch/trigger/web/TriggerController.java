@@ -48,7 +48,10 @@ public class TriggerController {
       @Valid @RequestBody TriggerLaunchRequest request) {
     LaunchResponse result = applicationService.launch(
         externalEventSourcePrincipal(),
-        TriggerCommandInputMapper.toInput(request), idempotencyKey, requestId, traceId);
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        traceId);
     return CommonResponse.success(result);
   }
 
@@ -62,7 +65,10 @@ public class TriggerController {
       @Valid @RequestBody ExternalEventLaunchRequest request) {
     ExternalEventLaunchResponse result = applicationService.launchEvent(
         externalEventSourcePrincipal(),
-        TriggerCommandInputMapper.toInput(request), idempotencyKey, requestId, traceId);
+        TriggerCommandInputMapper.toInput(request),
+        idempotencyKey,
+        requestId,
+        traceId);
     return CommonResponse.success(result);
   }
 
@@ -70,8 +76,8 @@ public class TriggerController {
   public CommonResponse<ExternalEventLaunchStatus> externalEventStatus(
       @RequestParam String tenantId,
       @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey) {
-    ExternalEventLaunchStatus status =
-        applicationService.externalEventStatus(externalEventSourcePrincipal(), tenantId, idempotencyKey);
+    ExternalEventLaunchStatus status = applicationService.externalEventStatus(
+        externalEventSourcePrincipal(), tenantId, idempotencyKey);
     return CommonResponse.success(status);
   }
 

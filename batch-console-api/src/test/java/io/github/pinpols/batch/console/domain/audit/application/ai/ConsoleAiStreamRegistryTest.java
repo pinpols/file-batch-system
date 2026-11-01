@@ -22,13 +22,12 @@ class ConsoleAiStreamRegistryTest {
   void shouldEnforceAuthorizationAtApplicationEntry() {
     ConsoleAiAuthorizationService authorization = mock(ConsoleAiAuthorizationService.class);
     doThrow(BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey()))
-        .when(authorization).assertAllowed();
+        .when(authorization)
+        .assertAllowed();
     ConsoleAiStreamRegistry registry =
         new ConsoleAiStreamRegistry(authorization, mock(ConsoleRequestMetadataResolver.class));
-    assertThatThrownBy(() -> registry.register("r", () -> {}))
-        .isInstanceOf(BizException.class);
-    assertThatThrownBy(() -> registry.cancel("r"))
-        .isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> registry.register("r", () -> {})).isInstanceOf(BizException.class);
+    assertThatThrownBy(() -> registry.cancel("r")).isInstanceOf(BizException.class);
   }
 
   @Test
@@ -36,18 +35,19 @@ class ConsoleAiStreamRegistryTest {
   void shouldEnforceConflictAndOwnership() {
     ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
     when(resolver.current()).thenReturn(identity("tenant", "user"));
-    ConsoleAiStreamRegistry registry = new ConsoleAiStreamRegistry(mock(ConsoleAiAuthorizationService.class), resolver);
+    ConsoleAiStreamRegistry registry =
+        new ConsoleAiStreamRegistry(mock(ConsoleAiAuthorizationService.class), resolver);
     AtomicBoolean cancelled = new AtomicBoolean();
     registry.register("request", () -> cancelled.set(true));
     assertThatThrownBy(() -> registry.register("request", () -> {}))
         .isInstanceOf(BizException.class)
-        .satisfies(exception -> assertThat(((BizException) exception).getCode())
-            .isEqualTo(ResultCode.CONFLICT));
+        .satisfies(exception ->
+            assertThat(((BizException) exception).getCode()).isEqualTo(ResultCode.CONFLICT));
     when(resolver.current()).thenReturn(identity("tenant", "other"));
     assertThatThrownBy(() -> registry.cancel("request"))
         .isInstanceOf(BizException.class)
-        .satisfies(exception -> assertThat(((BizException) exception).getCode())
-            .isEqualTo(ResultCode.NOT_FOUND));
+        .satisfies(exception ->
+            assertThat(((BizException) exception).getCode()).isEqualTo(ResultCode.NOT_FOUND));
     assertThat(cancelled).isFalse();
     when(resolver.current()).thenReturn(identity("tenant", "user"));
     registry.cancel("request");
@@ -59,7 +59,8 @@ class ConsoleAiStreamRegistryTest {
   void shouldNotRemoveReplacementOnLateCleanup() {
     ConsoleRequestMetadataResolver resolver = mock(ConsoleRequestMetadataResolver.class);
     when(resolver.current()).thenReturn(identity("t", "u"));
-    ConsoleAiStreamRegistry registry = new ConsoleAiStreamRegistry(mock(ConsoleAiAuthorizationService.class), resolver);
+    ConsoleAiStreamRegistry registry =
+        new ConsoleAiStreamRegistry(mock(ConsoleAiAuthorizationService.class), resolver);
     ConsoleAiStreamRegistry.Registration old = registry.register("request", () -> {});
     registry.remove("request", old);
     AtomicBoolean cancelled = new AtomicBoolean();

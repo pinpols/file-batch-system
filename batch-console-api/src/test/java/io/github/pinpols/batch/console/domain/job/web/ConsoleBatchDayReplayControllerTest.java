@@ -21,10 +21,10 @@ import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchDayRep
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplayRangeRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchDayReplaySubmitRequest;
 import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -66,8 +66,10 @@ class ConsoleBatchDayReplayControllerTest {
         .thenReturn(new ResponseMeta("req-1", "trace-1", BatchDateTimeSupport.utcNow()));
 
     mockMvc = MockMvcBuilders.standaloneSetup(new ConsoleBatchDayReplayController(
-            orchestratorProxy, new ConsoleBatchDayReplayApprovalService(orchestratorProxy),
-            responseFactory, requestMetadataResolver))
+            orchestratorProxy,
+            new ConsoleBatchDayReplayApprovalService(orchestratorProxy),
+            responseFactory,
+            requestMetadataResolver))
         .setControllerAdvice(exceptionHandler)
         .build();
   }
@@ -81,21 +83,26 @@ class ConsoleBatchDayReplayControllerTest {
   @DisplayName("两类审批忽略伪造审批人，重复提交仍使用当前认证主体")
   void shouldUseAuthenticatedApproverForBothPathsAndRetries() throws Exception {
     ConsolePrincipal principal = new ConsolePrincipal("alice", "t1", Set.of("ROLE_ADMIN"));
-    SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
-        principal, "token", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(
+            principal, "token", List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
     when(orchestratorProxy.replayOperationApprove(55L, "t1", "alice"))
         .thenReturn(CommonResponse.success(null));
     when(orchestratorProxy.batchDayReplayApprove(66L, "t1", "alice"))
         .thenReturn(CommonResponse.success(null));
 
     for (int i = 0; i < 2; i++) {
-      mockMvc.perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
-              .param("tenantId", "t1").param("approver", "forged")
+      mockMvc
+          .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+              .param("tenantId", "t1")
+              .param("approver", "forged")
               .header("Idempotency-Key", "idem-approve"))
           .andExpect(status().isOk());
     }
-    mockMvc.perform(post("/api/console/ops/batch-day-replay/sessions/66/approve")
-            .param("tenantId", "t1").param("approver", "forged")
+    mockMvc
+        .perform(post("/api/console/ops/batch-day-replay/sessions/66/approve")
+            .param("tenantId", "t1")
+            .param("approver", "forged")
             .header("Idempotency-Key", "idem-session"))
         .andExpect(status().isOk());
     verify(orchestratorProxy, times(2)).replayOperationApprove(55L, "t1", "alice");
@@ -105,8 +112,10 @@ class ConsoleBatchDayReplayControllerTest {
   @Test
   @DisplayName("无认证主体时拒绝审批且不调用编排层")
   void shouldRejectApprovalWithoutAuthenticatedPrincipal() throws Exception {
-    mockMvc.perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
-            .param("tenantId", "t1").param("approver", "forged")
+    mockMvc
+        .perform(post("/api/console/ops/batch-day-replay/operations/55/approve")
+            .param("tenantId", "t1")
+            .param("approver", "forged")
             .header("Idempotency-Key", "idem-approve"))
         .andExpect(status().isUnauthorized());
     verify(orchestratorProxy, never()).replayOperationApprove(any(), any(), any());

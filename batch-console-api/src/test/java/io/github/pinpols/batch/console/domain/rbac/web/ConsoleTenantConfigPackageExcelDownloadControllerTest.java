@@ -22,9 +22,10 @@ class ConsoleTenantConfigPackageExcelDownloadControllerTest {
   @DisplayName("五类下载保留文件名、Excel 类型和流式内容")
   void shouldAdaptEachDownloadToTheSameHttpContract() throws Exception {
     TenantConfigPackageExcelService service = mock(TenantConfigPackageExcelService.class);
-    ConsoleTenantConfigPackageExcelController controller = new ConsoleTenantConfigPackageExcelController(
-        service, mock(ConsoleResponseFactory.class));
-    ExcelDownload download = new ExcelDownload("config.xlsx", out -> out.write("data".getBytes(StandardCharsets.UTF_8)));
+    ConsoleTenantConfigPackageExcelController controller =
+        new ConsoleTenantConfigPackageExcelController(service, mock(ConsoleResponseFactory.class));
+    ExcelDownload download =
+        new ExcelDownload("config.xlsx", out -> out.write("data".getBytes(StandardCharsets.UTF_8)));
     when(service.exportPackage("t1")).thenReturn(download);
     when(service.downloadTemplate()).thenReturn(download);
     when(service.downloadScenarioTemplate(List.of("one"))).thenReturn(download);
@@ -32,8 +33,11 @@ class ConsoleTenantConfigPackageExcelDownloadControllerTest {
     when(service.downloadPreviewWorkbook("token")).thenReturn(download);
 
     List<ResponseEntity<StreamingResponseBody>> responses = List.of(
-        controller.export("t1"), controller.template(), controller.scenarioTemplate(List.of("one")),
-        controller.sampleTemplate("one", List.of("two")), controller.previewWorkbook("token"));
+        controller.export("t1"),
+        controller.template(),
+        controller.scenarioTemplate(List.of("one")),
+        controller.sampleTemplate("one", List.of("two")),
+        controller.previewWorkbook("token"));
     for (ResponseEntity<StreamingResponseBody> response : responses) {
       assertThat(response.getStatusCode().value()).isEqualTo(200);
       assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))

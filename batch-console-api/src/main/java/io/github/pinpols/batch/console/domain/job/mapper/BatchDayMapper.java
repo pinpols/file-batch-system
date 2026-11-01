@@ -2,8 +2,8 @@ package io.github.pinpols.batch.console.domain.job.mapper;
 
 import io.github.pinpols.batch.console.domain.job.query.BatchDayQuery;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayJobSummaryView;
-import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceFireView;
+import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayView;
 import java.time.LocalDate;
 import java.util.List;

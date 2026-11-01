@@ -5,10 +5,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.WorkerHeartbeatDto;
@@ -17,9 +17,10 @@ import io.github.pinpols.batch.common.dto.WorkerTaskTypeDescriptorDto;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
-import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.config.WorkerRegistryProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkerRegistryEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.CustomTaskTypeUpsertParam;
 import io.github.pinpols.batch.orchestrator.domain.param.TouchHeartbeatParam;
@@ -38,7 +39,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 
 /**
  * 守护 worker 注册表关键不变量:
@@ -80,7 +80,8 @@ class DefaultWorkerRegistryServiceTest {
 
   @BeforeEach
   void setUp() {
-    lenient().when(tenantActionRateLimiter.tryConsume(anyString(), eq(RateLimitAction.WORKER_REGISTER)))
+    lenient()
+        .when(tenantActionRateLimiter.tryConsume(anyString(), eq(RateLimitAction.WORKER_REGISTER)))
         .thenReturn(true);
     service = new DefaultWorkerRegistryService(
         mapper,

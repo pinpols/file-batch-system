@@ -39,8 +39,7 @@ public class ImportErrorOutputStorage {
   private final S3StorageProperties s3StorageProperties;
   private final BatchObjectStore objectStore;
 
-  public String writeErrorOutput(
-      String tenantId, String fileId, List<ImportBadRecord> badRecords) {
+  public String writeErrorOutput(String tenantId, String fileId, List<ImportBadRecord> badRecords) {
     boolean errorOutputInputIsIncomplete = !Texts.hasText(tenantId)
         || !Texts.hasText(fileId)
         || badRecords == null

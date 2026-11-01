@@ -23,25 +23,31 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 @DisplayName("Readiness 恢复 HTTP 入口拒绝不完整身份")
 class InternalReadinessRecoveryControllerTest {
 
-  @Mock private TriggerDefinitionLoader definitionLoader;
-  @Mock private TriggerService triggerService;
+  @Mock
+  private TriggerDefinitionLoader definitionLoader;
+
+  @Mock
+  private TriggerService triggerService;
 
   @ParameterizedTest
-  @ValueSource(strings = {
-    "{\"workflowDefinitionId\":1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
-    "{\"tenantId\":\"  \",\"workflowDefinitionId\":1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
-    "{\"tenantId\":\"tenant-a\",\"workflowDefinitionId\":0,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
-    "{\"tenantId\":\"tenant-a\",\"workflowDefinitionId\":-1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}"
-  })
+  @ValueSource(
+      strings = {
+        "{\"workflowDefinitionId\":1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
+        "{\"tenantId\":\"  \",\"workflowDefinitionId\":1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
+        "{\"tenantId\":\"tenant-a\",\"workflowDefinitionId\":0,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}",
+        "{\"tenantId\":\"tenant-a\",\"workflowDefinitionId\":-1,\"scheduledFireTime\":\"2026-10-26T00:00:00Z\"}"
+      })
   @DisplayName("缺失租户或非正 Workflow 标识返回 400 和 INVALID_REQUEST")
   void shouldMapInvalidIdentityToBadRequest(String body) throws Exception {
-    ReadinessRecoveryService service = new ReadinessRecoveryService(definitionLoader, triggerService);
+    ReadinessRecoveryService service =
+        new ReadinessRecoveryService(definitionLoader, triggerService);
     MockMvc mvc = MockMvcBuilders.standaloneSetup(new InternalReadinessRecoveryController(service))
         .setMessageConverters(new JacksonJsonHttpMessageConverter())
         .build();
 
     mvc.perform(post("/internal/trigger/readiness-waits/recover")
-            .contentType(MediaType.APPLICATION_JSON).content(body))
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(body))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.outcome").value("INVALID_REQUEST"));
     verifyNoInteractions(definitionLoader, triggerService);

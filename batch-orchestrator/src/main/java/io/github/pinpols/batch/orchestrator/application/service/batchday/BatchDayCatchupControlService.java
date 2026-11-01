@@ -5,6 +5,8 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
+import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
@@ -17,8 +19,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
-import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 
 /** 按租户隔离并记录审计的自动批次日补扫暂停/恢复控制。 */
 @Service
@@ -57,9 +57,8 @@ public class BatchDayCatchupControlService {
       if (!isCatchupControlCalendarReferenceViolation(exception)) {
         throw exception;
       }
-      throw new OperationFailure(Kind.CONFLICT,
-          "Business calendar changed while updating catch-up control",
-          exception);
+      throw new OperationFailure(
+          Kind.CONFLICT, "Business calendar changed while updating catch-up control", exception);
     }
   }
 
@@ -106,7 +105,8 @@ public class BatchDayCatchupControlService {
               .build();
       int updated = controlMapper.updatePauseState(batchDayCatchupPauseStateParam);
       if (updated != 1) {
-        throw new OperationFailure(Kind.CONFLICT, "Batch-day catch-up control changed concurrently");
+        throw new OperationFailure(
+            Kind.CONFLICT, "Batch-day catch-up control changed concurrently");
       }
       BatchDayCatchupEventParam batchDayCatchupEventParam = BatchDayCatchupEventParam.builder()
           .tenantId(tenantId)

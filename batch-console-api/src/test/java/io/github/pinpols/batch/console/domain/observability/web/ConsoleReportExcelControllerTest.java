@@ -10,8 +10,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import io.github.pinpols.batch.console.application.contract.response.ExcelDownload;
+import io.github.pinpols.batch.console.domain.observability.application.ConsoleReportExcelApplicationService;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -43,10 +43,10 @@ class ConsoleReportExcelControllerTest {
     byte[] configBytes = "config-releases".getBytes(StandardCharsets.UTF_8);
     byte[] snapshotBytes = "scheduler-snapshot".getBytes(StandardCharsets.UTF_8);
     ExcelDownload configBody = new ExcelDownload("config.xlsx", out -> out.write(configBytes));
-    ExcelDownload snapshotBody = new ExcelDownload("snapshot.xlsx", out -> out.write(snapshotBytes));
+    ExcelDownload snapshotBody =
+        new ExcelDownload("snapshot.xlsx", out -> out.write(snapshotBytes));
     when(reportService.exportConfigReleases(any())).thenReturn(configBody);
-    when(reportService.exportSchedulerSnapshot(anyString()))
-        .thenReturn(snapshotBody);
+    when(reportService.exportSchedulerSnapshot(anyString())).thenReturn(snapshotBody);
 
     // R2-P1-9: StreamingResponseBody 走 Spring async dispatch，MockMvc 需要先抓 async result
     // 再走 asyncDispatch 才能渲染响应体；否则 content() 为空。
@@ -58,7 +58,10 @@ class ConsoleReportExcelControllerTest {
         .perform(asyncDispatch(configResult))
         .andExpect(status().isOk())
         .andExpect(header().string("Content-Disposition", "attachment; filename=\"config.xlsx\""))
-        .andExpect(header().string("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .andExpect(header()
+            .string(
+                "Content-Type",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
         .andExpect(content().bytes(configBytes));
 
     var snapshotResult = mockMvc

@@ -246,8 +246,7 @@ public class ConsoleJobQueryService {
 
   public ConsoleJobStepInstanceResponse jobStepInstance(String tenantId, Long id) {
     String resolvedTenantId = resolveTenant(tenantGuard, tenantId);
-    JobStepInstanceView entity =
-        jobMappers.jobStepInstanceMapper.selectById(resolvedTenantId, id);
+    JobStepInstanceView entity = jobMappers.jobStepInstanceMapper.selectById(resolvedTenantId, id);
     JobStepInstanceView existingStep = requireNotNull(entity, "job step instance not found");
     return toJobStepInstanceResponse(existingStep);
   }
@@ -322,7 +321,8 @@ public class ConsoleJobQueryService {
             EmptyChecks.isNull(entity.getJobDependencyRules())
                 ? List.of()
                 : entity.getJobDependencyRules().stream()
-                    .map(rule -> new JobDependencyRuleResponse(rule.upstreamJobCode(), rule.bizDateAlignment()))
+                    .map(rule -> new JobDependencyRuleResponse(
+                        rule.upstreamJobCode(), rule.bizDateAlignment()))
                     .toList())
         .jobName(display(entity.getJobName()))
         .jobType(display(entity.getJobType()))

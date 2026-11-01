@@ -33,7 +33,8 @@ class ManualReplayApplicationServiceTest {
   void shouldPropagateRetryFailure() {
     ManualReplayApplicationService service = new ManualReplayApplicationService(retryService);
     doThrow(new IllegalStateException("failed"))
-        .when(retryService).retryTask("t1", 5L, "t1:replay-task:5");
+        .when(retryService)
+        .retryTask("t1", 5L, "t1:replay-task:5");
     assertThatThrownBy(() -> service.replayTask("t1", 5L))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("failed");

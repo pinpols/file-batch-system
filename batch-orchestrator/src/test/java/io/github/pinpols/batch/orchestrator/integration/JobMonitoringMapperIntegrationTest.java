@@ -963,12 +963,11 @@ class JobMonitoringMapperIntegrationTest {
             assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
             assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
           });
-      assertThat(mapper.selectSlaViolationCandidate(tenant, instanceId))
-          .satisfies(row -> {
-            assertThat(row.getTenantId()).isEqualTo(tenant);
-            assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
-            assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
-          });
+      assertThat(mapper.selectSlaViolationCandidate(tenant, instanceId)).satisfies(row -> {
+        assertThat(row.getTenantId()).isEqualTo(tenant);
+        assertThat(row.getParentWorkflowRunId()).isEqualTo(89L);
+        assertThat(row.getParentNodeCode()).isEqualTo("SLA_NODE");
+      });
       assertThat(mapper.selectSlaViolationCandidate(controlTenant, instanceId)).isNull();
     }
 
