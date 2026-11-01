@@ -64,9 +64,7 @@ public class TenantConfigPackageExcelApplyAuthorization {
 
   private static boolean hasValues(List<Map<String, String>> rows, Set<String> fields) {
     return rows.stream()
-        .anyMatch(row -> fields.stream()
-            .map(row::get)
-            .anyMatch(value -> EmptyChecks.isNotNull(value) && EmptyChecks.isNotEmpty(value)));
+        .anyMatch(row -> fields.stream().map(row::get).anyMatch(EmptyChecks::isNotEmpty));
   }
 
   private static BizException forbidden() {
