@@ -8,7 +8,6 @@ import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
-import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -37,7 +36,7 @@ public class TriggerStatusController {
   }
 
   @GetMapping("/drain/status")
-  public CommonResponse<TriggerDrainStatus> drainStatus() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> drainStatus() {
     return CommonResponse.success(drainService.status());
   }
 }

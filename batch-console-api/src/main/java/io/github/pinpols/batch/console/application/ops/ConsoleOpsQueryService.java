@@ -616,12 +616,13 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
       }
     }
     List<ConsoleScheduledOccurrenceResponse> scheduledOccurrences = occurrences.stream()
-        .map(occurrence -> toScheduledOccurrenceResponse(
-            occurrence,
-            firesByOccurrence.getOrDefault(
-                new OccurrenceKey(
-                    occurrence.workflowDefinitionId(), occurrence.scheduledFireTime()),
-                List.of())))
+        .map(occurrence -> {
+          OccurrenceKey key =
+              new OccurrenceKey(occurrence.workflowDefinitionId(), occurrence.scheduledFireTime());
+          List<ConsoleScheduledOccurrenceFireResponse> fires =
+              firesByOccurrence.getOrDefault(key, List.of());
+          return toScheduledOccurrenceResponse(occurrence, fires);
+        })
         .toList();
     return new ConsoleBatchDayWindowResponse(
         bizDate,

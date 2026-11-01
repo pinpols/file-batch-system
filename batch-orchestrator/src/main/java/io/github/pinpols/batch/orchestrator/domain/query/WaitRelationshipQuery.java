@@ -26,6 +26,18 @@ public record WaitRelationshipQuery(
 
     String cursorId,
     @Min(1) @Max(100) Integer pageSize) {
+  public static WaitRelationshipQuery all(
+      String tenantId, String cursorType, String cursorId, Integer pageSize) {
+    return new WaitRelationshipQuery(
+        tenantId, null, null, null, null, cursorType, cursorId, pageSize);
+  }
+
+  public static WaitRelationshipQuery byType(
+      String tenantId, String waitType, String cursorType, String cursorId, Integer pageSize) {
+    return new WaitRelationshipQuery(
+        tenantId, waitType, null, null, null, cursorType, cursorId, pageSize);
+  }
+
   @AssertTrue(message = "cursor type and positive 64-bit cursor ID must be supplied together")
   public boolean isCursorValid() {
     if (EmptyChecks.isNull(cursorType) && EmptyChecks.isNull(cursorId)) return true;

@@ -39,15 +39,21 @@ public class ConsoleMaintenanceApplicationService {
   }
 
   private static MaintenanceStatusResponse toResponse(MaintenanceState state) {
+    String etaAt = EmptyChecks.isNotNull(state.etaAt()) ? state.etaAt().toString() : null;
+    String startsAt =
+        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString();
+    String updatedAt =
+        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString();
+    boolean active = state.active(Instant.now());
     return new MaintenanceStatusResponse(
         state.enabled(),
         state.readOnly(),
         state.message(),
-        EmptyChecks.isNotNull(state.etaAt()) ? state.etaAt().toString() : null,
-        EmptyChecks.isNull(state.startsAt()) ? null : state.startsAt().toString(),
-        state.active(Instant.now()),
+        etaAt,
+        startsAt,
+        active,
         state.affectedServices(),
         state.version(),
-        EmptyChecks.isNull(state.updatedAt()) ? null : state.updatedAt().toString());
+        updatedAt);
   }
 }

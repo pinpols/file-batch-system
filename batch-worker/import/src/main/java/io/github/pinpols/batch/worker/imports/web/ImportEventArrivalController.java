@@ -24,7 +24,8 @@ public class ImportEventArrivalController {
         EmptyChecks.isNull(notification) ? null : notification.getTenantId(),
         EmptyChecks.isNull(notification) ? null : notification.getBucket(),
         EmptyChecks.isNull(notification) ? null : notification.getObjectKey());
-    return CommonResponse.success(
-        new ImportEventArrivalResponse(result.triggered(), result.reason()));
+    ImportEventArrivalResponse response =
+        new ImportEventArrivalResponse(result.triggered(), result.reason());
+    return CommonResponse.success(response);
   }
 }

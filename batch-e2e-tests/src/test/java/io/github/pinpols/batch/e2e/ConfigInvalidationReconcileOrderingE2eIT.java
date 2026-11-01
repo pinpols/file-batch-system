@@ -36,23 +36,33 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
     properties = "batch.orchestrator.config-cache.local-positive-ttl-millis=120000")
 @DisplayName("配置缓存对账与修订号推进顺序")
 class ConfigInvalidationReconcileOrderingE2eIT extends AbstractIntegrationTest {
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService initService;
+  private final ConsoleTenantConfigInitApplicationService initService;
+
+  private final ConsoleConfigCacheInvalidationService invalidation;
+
+  private final ConfigCacheInvalidationRelay relay;
+
+  private final OrchestratorConfigCacheService cache;
+
+  private final OrchestratorConfigInvalidationSubscriber subscriber;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private ConsoleConfigCacheInvalidationService invalidation;
-
-  @Autowired
-  private ConfigCacheInvalidationRelay relay;
-
-  @Autowired
-  private OrchestratorConfigCacheService cache;
-
-  @Autowired
-  private OrchestratorConfigInvalidationSubscriber subscriber;
-
-  @Autowired
-  private JdbcTemplate jdbc;
+  ConfigInvalidationReconcileOrderingE2eIT(
+      ConsoleTenantConfigInitApplicationService initService,
+      ConsoleConfigCacheInvalidationService invalidation,
+      ConfigCacheInvalidationRelay relay,
+      OrchestratorConfigCacheService cache,
+      OrchestratorConfigInvalidationSubscriber subscriber,
+      JdbcTemplate jdbc) {
+    this.initService = initService;
+    this.invalidation = invalidation;
+    this.relay = relay;
+    this.cache = cache;
+    this.subscriber = subscriber;
+    this.jdbc = jdbc;
+  }
 
   @MockitoBean
   private ImportWorkerLoop importWorkerLoop;

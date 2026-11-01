@@ -162,7 +162,8 @@ public class TriggerLaunchRecoveryService {
       return true;
     } catch (OperationFailure ex) {
       // 启动后的事件预期核对仍可能失败；保留原恢复分类和诊断代码。
-      return retryOrGiveUp(row, TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind()));
+      String recoveryCode = TriggerLaunchFailureDiagnostics.recoveryCode(ex.kind());
+      return retryOrGiveUp(row, recoveryCode);
     } catch (BizException ex) {
       // 业务级拒绝（jobCode 不存在/跨租等）不可靠重投恢复，直接终态并保留错误码。
       int updated = mapper.markAttempt(TriggerLaunchRecoveryAttemptParam.builder()

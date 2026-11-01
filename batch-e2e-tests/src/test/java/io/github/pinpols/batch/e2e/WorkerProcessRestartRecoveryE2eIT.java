@@ -116,32 +116,42 @@ class WorkerProcessRestartRecoveryE2eIT extends AbstractIntegrationTest {
   private static final long WORKER_START_TIMEOUT_SECONDS = 180L;
   private static final long WORKER_BUILD_TIMEOUT_MINUTES = 10L;
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+
+  private final ConsoleConfigSyncApplicationService configSyncService;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final OutboxPublisher outboxPublisher;
+
+  private final OutboxEventMapper outboxEventMapper;
+
+  private final BatchMqTopicsProperties batchMqTopicsProperties;
+  private final String kafkaBootstrapServers;
+  private final String internalSecret;
+  private final int localServerPort;
 
   @Autowired
-  private ConsoleConfigSyncApplicationService configSyncService;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private OutboxPublisher outboxPublisher;
-
-  @Autowired
-  private OutboxEventMapper outboxEventMapper;
-
-  @Autowired
-  private BatchMqTopicsProperties batchMqTopicsProperties;
-
-  @Value("${spring.kafka.bootstrap-servers}")
-  private String kafkaBootstrapServers;
-
-  @Value("${batch.security.internal-secret}")
-  private String internalSecret;
-
-  @LocalServerPort
-  private int localServerPort;
+  WorkerProcessRestartRecoveryE2eIT(
+      WorkflowRunLaunchService launchService,
+      ConsoleConfigSyncApplicationService configSyncService,
+      JdbcTemplate jdbcTemplate,
+      OutboxPublisher outboxPublisher,
+      OutboxEventMapper outboxEventMapper,
+      BatchMqTopicsProperties batchMqTopicsProperties,
+      @Value("${spring.kafka.bootstrap-servers}") String kafkaBootstrapServers,
+      @Value("${batch.security.internal-secret}") String internalSecret,
+      @LocalServerPort int localServerPort) {
+    this.launchService = launchService;
+    this.configSyncService = configSyncService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outboxPublisher = outboxPublisher;
+    this.outboxEventMapper = outboxEventMapper;
+    this.batchMqTopicsProperties = batchMqTopicsProperties;
+    this.kafkaBootstrapServers = kafkaBootstrapServers;
+    this.internalSecret = internalSecret;
+    this.localServerPort = localServerPort;
+  }
 
   @Test
   @DisplayName("独立派发 Worker 在途请求期间导入新渠道，原请求仍完成于旧地址")

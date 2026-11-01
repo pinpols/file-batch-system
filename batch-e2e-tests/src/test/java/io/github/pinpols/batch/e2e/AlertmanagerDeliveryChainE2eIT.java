@@ -60,17 +60,25 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
   private static HttpServer receiver;
   private static String previousPrivateNetworkOverride;
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+
+  private final AlertEventService alerts;
+
+  private final ConsoleAlertApplicationService consoleAlerts;
+
+  private final ObjectMapper objectMapper;
 
   @Autowired
-  private AlertEventService alerts;
-
-  @Autowired
-  private ConsoleAlertApplicationService consoleAlerts;
-
-  @Autowired
-  private ObjectMapper objectMapper;
+  AlertmanagerDeliveryChainE2eIT(
+      JdbcTemplate jdbc,
+      AlertEventService alerts,
+      ConsoleAlertApplicationService consoleAlerts,
+      ObjectMapper objectMapper) {
+    this.jdbc = jdbc;
+    this.alerts = alerts;
+    this.consoleAlerts = consoleAlerts;
+    this.objectMapper = objectMapper;
+  }
 
   @MockitoBean
   private ImportWorkerLoop importWorkerLoop;

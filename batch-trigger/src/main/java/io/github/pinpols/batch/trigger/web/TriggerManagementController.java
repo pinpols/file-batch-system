@@ -7,7 +7,6 @@ import io.github.pinpols.batch.trigger.domain.TriggerDrainService.TriggerDrainSt
 import io.github.pinpols.batch.trigger.domain.TriggerRegistrationService;
 import io.github.pinpols.batch.trigger.domain.TriggerSchedulerStatus;
 import lombok.RequiredArgsConstructor;
-import org.quartz.SchedulerException;
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -83,12 +82,12 @@ public class TriggerManagementController {
   }
 
   @PostMapping("/drain/enable")
-  public CommonResponse<TriggerDrainStatus> enableDrain() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> enableDrain() {
     return CommonResponse.success(drainService.enable());
   }
 
   @PostMapping("/drain/disable")
-  public CommonResponse<TriggerDrainStatus> disableDrain() throws SchedulerException {
+  public CommonResponse<TriggerDrainStatus> disableDrain() {
     return CommonResponse.success(drainService.disable());
   }
 }

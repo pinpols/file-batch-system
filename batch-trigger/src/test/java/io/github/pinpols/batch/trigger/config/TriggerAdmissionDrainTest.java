@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.auth.TriggerApiKeyVerifier;
 import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerDrainAdapter;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerDrainState;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
@@ -69,8 +70,9 @@ class TriggerAdmissionDrainTest {
     MockMvc mvc = MockMvcBuilders.standaloneSetup(
             new TriggerController(new TriggerApiApplicationService(
                 service,
-                new TriggerDrainService(shutdown),
-                new TriggerLaunchAdmissionService(admission, new TriggerDrainService(shutdown)),
+                new TriggerDrainService(new TriggerDrainAdapter(shutdown)),
+                new TriggerLaunchAdmissionService(
+                    admission, new TriggerDrainService(new TriggerDrainAdapter(shutdown))),
                 new TriggerRequestPolicy(verifier))))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())

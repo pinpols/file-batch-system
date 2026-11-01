@@ -25,11 +25,14 @@ public class ConsoleEventCatalogController {
 
   @GetMapping("/event-types")
   public CommonResponse<List<ConsoleEventTypeResponse>> eventTypes() {
-    return responseFactory.success(catalogService.eventTypes(LocaleContextHolder.getLocale()));
+    List<ConsoleEventTypeResponse> eventTypes =
+        catalogService.eventTypes(LocaleContextHolder.getLocale());
+    return responseFactory.success(eventTypes);
   }
 
   @GetMapping("/topics")
   public CommonResponse<List<ConsoleEventTopicResponse>> topics() {
-    return responseFactory.success(catalogService.topics(LocaleContextHolder.getLocale()));
+    List<ConsoleEventTopicResponse> topics = catalogService.topics(LocaleContextHolder.getLocale());
+    return responseFactory.success(topics);
   }
 }

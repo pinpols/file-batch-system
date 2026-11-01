@@ -30,8 +30,7 @@ class WaitRelationshipReadServiceTest {
   @Test
   @DisplayName("存在后续记录时返回最后可见游标")
   void shouldReturnLastVisibleKeyOnlyWhenMoreRowsExist() {
-    WaitRelationshipQuery query =
-        new WaitRelationshipQuery("tenant-a", null, null, null, null, null, null, 2);
+    WaitRelationshipQuery query = WaitRelationshipQuery.all("tenant-a", null, null, 2);
     WaitRelationshipRow first = row("CALENDAR", "1");
     WaitRelationshipRow second = row("JOB", "9007199254740993");
     WaitRelationshipRow third = row("READINESS", "8");
@@ -47,8 +46,7 @@ class WaitRelationshipReadServiceTest {
   @Test
   @DisplayName("到达末页不返回后续游标")
   void shouldNotPromiseAContinuationAtEnd() {
-    WaitRelationshipQuery query =
-        new WaitRelationshipQuery("tenant-a", "JOB", null, null, null, "JOB", "2", null);
+    WaitRelationshipQuery query = WaitRelationshipQuery.byType("tenant-a", "JOB", "JOB", "2", null);
     when(mapper.selectPage(query, 101)).thenReturn(List.of(row("JOB", "3")));
     var page = service.list(query);
     assertThat(page.hasMore()).isFalse();

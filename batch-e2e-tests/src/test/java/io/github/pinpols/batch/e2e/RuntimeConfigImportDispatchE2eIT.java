@@ -101,17 +101,25 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+
+  private final ConsoleConfigSyncApplicationService syncService;
+
+  private final E2eOutboxPublishSupport outbox;
+
+  private final JdbcTemplate jdbc;
 
   @Autowired
-  private ConsoleConfigSyncApplicationService syncService;
-
-  @Autowired
-  private E2eOutboxPublishSupport outbox;
-
-  @Autowired
-  private JdbcTemplate jdbc;
+  RuntimeConfigImportDispatchE2eIT(
+      WorkflowRunLaunchService launchService,
+      ConsoleConfigSyncApplicationService syncService,
+      E2eOutboxPublishSupport outbox,
+      JdbcTemplate jdbc) {
+    this.launchService = launchService;
+    this.syncService = syncService;
+    this.outbox = outbox;
+    this.jdbc = jdbc;
+  }
 
   @TempDir
   private Path tempDir;

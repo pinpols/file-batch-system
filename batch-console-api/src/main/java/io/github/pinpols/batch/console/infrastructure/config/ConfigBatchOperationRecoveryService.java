@@ -81,12 +81,9 @@ public class ConfigBatchOperationRecoveryService implements ConsoleConfigBatchOp
       }
       targets.add(new Target(ordinal, tenantId, targetStatus, receipt));
     }
+    Map<String, Object> responseMetadata = readMetadata(operation.responseMetadataJson());
     return new ConfigBatchOperationRecoveryResponse(
-        operation.operationId(),
-        operation.operationKind(),
-        readMetadata(operation.responseMetadataJson()),
-        status,
-        targets);
+        operation.operationId(), operation.operationKind(), responseMetadata, status, targets);
   }
 
   private String writeJson(Object value) {

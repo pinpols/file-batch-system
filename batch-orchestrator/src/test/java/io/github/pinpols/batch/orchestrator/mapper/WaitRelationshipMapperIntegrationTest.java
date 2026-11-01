@@ -7,6 +7,7 @@ import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.sql.Connection;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -81,10 +82,9 @@ class WaitRelationshipMapperIntegrationTest {
         mapper.setTenantContext(tenant);
         String cursorType = null;
         String cursorId = null;
-        java.util.List<WaitRelationshipRow> all = new java.util.ArrayList<>();
+        List<WaitRelationshipRow> all = new ArrayList<>();
         while (true) {
-          WaitRelationshipQuery query =
-              new WaitRelationshipQuery(tenant, null, null, null, null, cursorType, cursorId, 1);
+          WaitRelationshipQuery query = WaitRelationshipQuery.all(tenant, cursorType, cursorId, 1);
           List<WaitRelationshipRow> page = mapper.selectPage(query, 1);
           if (page.isEmpty()) break;
           WaitRelationshipRow row = page.get(0);

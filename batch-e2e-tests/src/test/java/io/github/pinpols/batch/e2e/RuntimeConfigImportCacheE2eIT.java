@@ -79,42 +79,57 @@ class RuntimeConfigImportCacheE2eIT extends AbstractIntegrationTest {
   private static final HttpClient HTTP =
       HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
 
-  @Autowired
-  private ConsoleTenantConfigInitApplicationService initService;
+  private final ConsoleTenantConfigInitApplicationService initService;
+
+  private final ConsoleConfigSyncApplicationService syncService;
+
+  private final OrchestratorConfigCacheService firstCache;
+
+  private final OrchestratorRedisSupport redisSupport;
+
+  private final OrchestratorConfigMappers configMappers;
+
+  private final OrchestratorConfigCacheProperties cacheProperties;
+
+  private final BatchRedisNamespace namespace;
+
+  private final StringRedisTemplate redis;
+
+  private final JdbcTemplate jdbc;
+
+  private final ApplicationContext context;
+
+  private final PlatformTransactionManager transactionManager;
+
+  private final DataSource platformDataSource;
 
   @Autowired
-  private ConsoleConfigSyncApplicationService syncService;
-
-  @Autowired
-  private OrchestratorConfigCacheService firstCache;
-
-  @Autowired
-  private OrchestratorRedisSupport redisSupport;
-
-  @Autowired
-  private OrchestratorConfigMappers configMappers;
-
-  @Autowired
-  private OrchestratorConfigCacheProperties cacheProperties;
-
-  @Autowired
-  private BatchRedisNamespace namespace;
-
-  @Autowired
-  private StringRedisTemplate redis;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  private ApplicationContext context;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
-
-  @Autowired
-  @Qualifier("dataSource")
-  private DataSource platformDataSource;
+  RuntimeConfigImportCacheE2eIT(
+      ConsoleTenantConfigInitApplicationService initService,
+      ConsoleConfigSyncApplicationService syncService,
+      OrchestratorConfigCacheService firstCache,
+      OrchestratorRedisSupport redisSupport,
+      OrchestratorConfigMappers configMappers,
+      OrchestratorConfigCacheProperties cacheProperties,
+      BatchRedisNamespace namespace,
+      StringRedisTemplate redis,
+      JdbcTemplate jdbc,
+      ApplicationContext context,
+      PlatformTransactionManager transactionManager,
+      @Qualifier("dataSource") DataSource platformDataSource) {
+    this.initService = initService;
+    this.syncService = syncService;
+    this.firstCache = firstCache;
+    this.redisSupport = redisSupport;
+    this.configMappers = configMappers;
+    this.cacheProperties = cacheProperties;
+    this.namespace = namespace;
+    this.redis = redis;
+    this.jdbc = jdbc;
+    this.context = context;
+    this.transactionManager = transactionManager;
+    this.platformDataSource = platformDataSource;
+  }
 
   @MockitoBean
   private ImportWorkerLoop importWorkerLoop;

@@ -125,7 +125,7 @@ flowchart LR
 | `trigger_outbox_event` | Trigger 事务 Outbox，和平台 `outbox_event` 分开；V297以 `(tenant_id,request_id)` `NO ACTION` FK保护来源请求，应用仍负责同事务创建、payload 身份和业务状态校验；[V361](../../db/migration/V361__trigger_outbox_claim_fence.sql) 用领取 token 防止超时回收后旧投递者回写新领取，归档表同步镜像字段 |
 | `trigger_request_idempotency_alias` | 将不同 HTTP 幂等键映射到已接纳的 EVENT TriggerRequest；见 [V278](../../db/migration/V278__trigger_request_idempotency_alias.sql) |
 | `scheduled_occurrence` | Workflow 计划 fire 的唯一 occurrence 台账和终态；请求号通过 V295 同租户 `NO ACTION` 外键关联原请求；见 [V261](../../db/migration/V261__scheduled_occurrence_ledger.sql)、[V295](../../db/migration/V295__protect_scheduled_expected_request_references.sql) |
-| `scheduled_occurrence_fire` | [V374](../../db/migration/V374__record_quartz_actual_fires.sql) 逐次记录 Quartz 实际回调及重试身份；不同于计划 occurrence 或启动成功，历史缺失和记录失败不回填，以租户隔离。留存清理仅覆盖指定租户、截止时间前且批次日已结算的记录 |
+| `scheduled_occurrence_fire` | [V374](../../db/migration/V374__record_quartz_actual_fires.sql) 逐次记录 Quartz 实际回调及重试身份；不同于计划 occurrence 或启动成功，历史缺失和记录失败不回填，以租户隔离。未实现自动过期或归档；授权清理仅覆盖指定租户、截止时间前且批次日已结算的记录，Workflow 删除可级联清理 |
 | `scheduled_occurrence_coverage` | 记录 occurrence 扫描覆盖水位与配置代际；见 [V262](../../db/migration/V262__scheduled_occurrence_coverage.sql) |
 | `scheduled_occurrence_catch_up_audit` | 审计人工补跑的 occurrence 决策；见 [V274](../../db/migration/V274__audit_scheduled_occurrence_catch_up.sql) |
 | `scheduled_occurrence_supersession_history` | 保留旧计划 occurrence 被新计划替代的历史；见 [V272](../../db/migration/V272__scheduled_occurrence_supersession_history.sql) |
@@ -180,7 +180,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `console_operation_audit`、`approval_command`、`compensation_command`、`compensation_checkpoint` | 管理操作、审批和补偿执行审计；[V362](../../db/migration/V362__index_catch_up_latest_approval.sql) 为补跑列表按租户、请求查询最新审批建立部分索引；[V368](../../db/migration/V368__preserve_approval_submission_reason.sql) 分别保留原提交原因和审批决定原因，供同键对账使用（仅空库部署） |
 | `config_release`、`config_approval`、`config_change_log`、`config_sync_log` | 配置发布版本、审批、变更审计和同步记录 |
 | `config_sync_target_receipt` | [V345](../../db/migration/V345__persist_config_sync_target_receipts.sql) 的逐目标配置导入提交回执；与目标配置同事务保存，聚合审计补录只能据此核对，不得再次导入 |
-| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功 |
+| `config_batch_operation`、`config_batch_target_receipt` | [V373](../../db/migration/V373__persist_config_batch_operation_receipts.sql) 保存配置复制和作业包操作的原请求身份摘要、目标顺序及逐项确认结果；操作登记以审计租户隔离，目标回执以目标租户隔离。成功回执与目标变更同事务，已确认回滚的失败结果另行登记；重复目标按原序号区分，不保存配置请求正文，也不以回执齐全代替逐项成功；当前无自动过期或归档，暂按租户清理边界保留，双租户级联和回查限制见[配置治理手册](../runbook/config-governance.md#配置同步响应丢失与原请求恢复) |
 | `system_parameter`、`batch_runtime_default_parameter` | 系统参数和运行参数基线 |
 | `api_key`、`secret_version` | API 凭据元数据及密钥版本；不存放可直接使用的明文密钥 |
 | `alert_event`、`alert_routing_config` | 告警事件及路由配置；V357 保存新关闭意图的时刻、原因及公平轮询尝试水位，最终渠道回执另由 `alert_notification_receipt` 保存 |
@@ -210,7 +210,7 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | `job_monitoring_policy`、`job_monitoring_alert_claim` | 作业监控策略和告警认领/去重控制；策略语义见 [SLA 与质量设计](./sla-and-quality.md) |
 | `batch_day_replay_preview_token` | 批量日重放 Preview/Apply 的短期并发与确认令牌，不是业务幂等键 |
 | `tenant_configuration_revision` | 租户配置发布修订栅栏，阻止旧版本配置写入覆盖较新修订 |
-| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交，由 Console 投递后删除；不表示各实例均已应用 |
+| `config_cache_invalidation_outbox` | [V372](../../db/migration/V372__persist_config_cache_invalidation.sql) 配置缓存失效意图，随配置变更提交；Console 投递成功并确认后删除，失败保留重试，不归档且不表示各实例均已应用 |
 | `forensic_export_log` | 取证导出元数据 |
 | `step_registry`、`atomic_task_config`、`custom_task_type_registry` | Worker 能力登记及可配置任务类型 |
 | `biz_table_schema` | Import Worker 启动时覆盖写入业务库 `biz` schema 快照；当前仓库未接入 Console 基于该快照校验目标表或列的读取链路。读取元数据失败保留旧快照，不能保证快照代表当前业务库；消费与去留待核实。 |

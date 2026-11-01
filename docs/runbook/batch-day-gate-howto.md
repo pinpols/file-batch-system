@@ -132,7 +132,7 @@ SELECT tenant_id, request_id, released_at, released_by
 
 实际触发记录按租户严格隔离。使用独立数据库角色时，平台库管理员可按 `scripts/db/scheduled-occurrence-fire-roles.sql` 的用法分别配置 Trigger 写入和 Console 读取权限；调用方必须在事务内绑定租户。删除 Workflow 定义时其实际触发记录随之级联删除，开发环境 sim reset 也会清理此表。当前没有自动保留任务：经授权的运维人员可使用 `scripts/db/cleanup-scheduled-occurrence-fire-retention.sql` 指定租户、截止时间及批次大小，默认预览并审核，再按需要以 `action=delete` 执行；删除必须确认数据库、租户、截止时间、批次大小及已验证备份，具体参数和恢复流程见[数据库脚本手册](../../scripts/db/README.md#租户清理与触发观察记录的确认和恢复)。脚本仅处理所属批次日已结算的记录，每次最多 10000 条。未关联批次日的观察不在该脚本清理范围，应单独排查。清理后空数组仍不证明没有触发。
 
-预览只返回本次候选的数量及实际触发时间范围，不保留候选清单；预览事务结束后锁即释放。删除时会重新选择符合条件的记录，并跳过当时已锁定的行，因此即使参数相同，并发写入或锁状态变化也可能使删除的具体记录与预览不同。需要按固定记录清单审批时，不能把该预览结果当作后续删除的精确清单。
+当前没有实际触发观察记录的自动过期或归档；无法仅凭空数组推断历史未触发，记录可能因 Workflow 删除级联或经授权清理而消失。预览只返回本次候选的数量及实际触发时间范围，不保留候选清单；预览事务结束后锁即释放。删除时会重新选择符合条件的记录，并跳过当时已锁定的行，因此即使参数相同，并发写入或锁状态变化也可能使删除的具体记录与预览不同。需要按固定记录清单审批时，不能把该预览结果当作后续删除的精确清单。
 
 `FILE_GROUP` 作业用 `/internal/file-group-expectations` 配置每日预期；外部事件作业用 `/internal/event-expectations` 配置 `eventCode`、预期本地时间和可选同日截止时间。业务日首次开启时生成逐日 `EXPECTED` 项。事件消费方发起 EVENT 触发时必须在 Trigger 请求中传入同一 `externalEventCode`；系统会将其持久化到对应 `trigger_request`。请求达到 `LAUNCHED` 后，消费方调用 `/internal/event-expectations/satisfied` 并携带原 `triggerRequestId` 和 `eventCode`；服务校验请求与预期事件编码一致，避免同一作业的另一个事件误满足该项，重复调用幂等。未到事件仍阻止自动结算，即使超过 due 时间也不会自动忽略。启用的 EVENT/MIXED 作业若没有任何逐日预期规则，日历继续失败关闭；不要仅凭 `job_instance` 为零推断当天无工作。
 

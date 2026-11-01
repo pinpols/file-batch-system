@@ -29,6 +29,7 @@ import io.github.pinpols.batch.trigger.domain.TriggerDrainService;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
+import io.github.pinpols.batch.trigger.infrastructure.TriggerDrainAdapter;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerGracefulShutdown;
 import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
@@ -71,10 +72,10 @@ class TriggerControllerTest {
     mockMvc = MockMvcBuilders.standaloneSetup(
             new TriggerController(new TriggerApiApplicationService(
                 triggerService,
-                new TriggerDrainService(triggerGracefulShutdown),
+                new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown)),
                 new TriggerLaunchAdmissionService(
                     new TriggerApiAdmissionGuard(new TriggerRuntimeProperties()),
-                    new TriggerDrainService(triggerGracefulShutdown)),
+                    new TriggerDrainService(new TriggerDrainAdapter(triggerGracefulShutdown))),
                 new TriggerRequestPolicy(apiKeyVerifier))))
         .setControllerAdvice(TriggerApiExceptionHandler.forStandaloneTest())
         .setMessageConverters(new JacksonJsonHttpMessageConverter())

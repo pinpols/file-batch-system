@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.orchestrator.domain.query.WaitRelationshipRow;
+import java.time.LocalDate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -56,7 +57,7 @@ class WaitRelationshipSanitizerTest {
   private static WaitRelationshipRow row(String type, String snapshot) {
     WaitRelationshipRow row = new WaitRelationshipRow();
     row.setWaitType(type);
-    row.setBizDate(java.time.LocalDate.of(2026, 10, 26));
+    row.setBizDate(LocalDate.of(2026, 10, 26));
     row.setDependencySnapshot(snapshot);
     return row;
   }

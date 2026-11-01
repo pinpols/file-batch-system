@@ -26,18 +26,25 @@ import org.springframework.transaction.support.TransactionTemplate;
 @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @DisplayName("配置缓存失效意图的事务和领取栅栏")
 class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTest {
-  @Autowired
-  private ConfigCacheInvalidationRelay relay;
+  private final ConfigCacheInvalidationRelay relay;
+
+  private final ConfigCacheInvalidationOutboxMapper outbox;
+
+  private final JdbcTemplate jdbc;
+
+  private final PlatformTransactionManager manager;
 
   @Autowired
-  private ConfigCacheInvalidationOutboxMapper outbox;
-
-  @Autowired
-  private JdbcTemplate jdbc;
-
-  @Autowired
-  @Qualifier("transactionManager")
-  private PlatformTransactionManager manager;
+  ConfigCacheInvalidationOutboxIntegrationTest(
+      ConfigCacheInvalidationRelay relay,
+      ConfigCacheInvalidationOutboxMapper outbox,
+      JdbcTemplate jdbc,
+      @Qualifier("transactionManager") PlatformTransactionManager manager) {
+    this.relay = relay;
+    this.outbox = outbox;
+    this.jdbc = jdbc;
+    this.manager = manager;
+  }
 
   private String tenant;
   private String createdRole;
