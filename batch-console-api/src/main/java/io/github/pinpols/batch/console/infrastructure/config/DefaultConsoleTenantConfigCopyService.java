@@ -188,7 +188,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
         dryRunForLog,
         batchOperationIdForLog);
 
-    if (requestHash == null || request.isDryRun()) {
+    if (EmptyChecks.isNull(requestHash) || request.isDryRun()) {
       return initService.batchInit(initRequest, operator, batchOperationId);
     }
     List<String> targets = request.getTargetTenantIds();

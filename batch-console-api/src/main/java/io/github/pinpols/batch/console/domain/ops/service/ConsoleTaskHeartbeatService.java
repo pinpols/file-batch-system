@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.JobTaskMapper;
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
@@ -33,7 +34,7 @@ public class ConsoleTaskHeartbeatService {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     JobTaskHeartbeatView heartbeat =
         jobTaskMapper.selectHeartbeatByTenantAndId(resolvedTenantId, taskId);
-    if (heartbeat == null) {
+    if (EmptyChecks.isNull(heartbeat)) {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey(), taskId);
     }
     Long heartbeatTaskId = heartbeat.getId();

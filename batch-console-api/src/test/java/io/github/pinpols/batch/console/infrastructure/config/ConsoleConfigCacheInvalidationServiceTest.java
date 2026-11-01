@@ -173,7 +173,7 @@ class ConsoleConfigCacheInvalidationServiceTest {
 
   @Test
   @DisplayName("严格投递中发布命令未执行时，不能视为成功")
-  void strictDeliveryRejectsNullPublishResult() {
+  void shouldRejectNullPublishResultInStrictDelivery() {
     when(redisTemplate.convertAndSend(anyString(), anyString())).thenReturn(null);
     ConfigCacheInvalidationIntent intent =
         new ConfigCacheInvalidationIntent(1L, "t1", "job-definition", "job1");
@@ -182,7 +182,7 @@ class ConsoleConfigCacheInvalidationServiceTest {
 
   @Test
   @DisplayName("严格投递中扫描删除未执行时，不能视为成功")
-  void strictDeliveryRejectsNullBatchDeleteResult() {
+  void shouldRejectNullBatchDeleteResultInStrictDelivery() {
     @SuppressWarnings("unchecked")
     Cursor<String> cursor = mock(Cursor.class);
     when(cursor.hasNext()).thenReturn(true, false);
@@ -196,7 +196,7 @@ class ConsoleConfigCacheInvalidationServiceTest {
 
   @Test
   @DisplayName("发布命令成功但没有订阅者时，严格投递仍可确认")
-  void strictDeliveryAcceptsZeroSubscribers() {
+  void shouldAcceptZeroSubscribersInStrictDelivery() {
     ConfigCacheInvalidationIntent intent =
         new ConfigCacheInvalidationIntent(1L, "t1", "job-definition", "job1");
     service.deliver(intent);

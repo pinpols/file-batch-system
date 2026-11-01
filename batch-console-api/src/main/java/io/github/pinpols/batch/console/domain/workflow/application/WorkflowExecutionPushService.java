@@ -102,7 +102,7 @@ public class WorkflowExecutionPushService {
           key.tenantId(), stream(key.runId()), "workflow-execution-progress", initial);
       return emitter;
     } catch (RuntimeException failure) {
-      if (emitter != null) {
+      if (EmptyChecks.isNotNull(emitter)) {
         try {
           streams.close(emitter);
         } catch (RuntimeException cleanupFailure) {

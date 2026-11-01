@@ -206,7 +206,7 @@ public class ConsoleJwtService {
 
   private Duration effectiveClockSkew() {
     Duration skew = properties.getJwtClockSkew();
-    return skew == null || skew.isNegative() ? Duration.ofMinutes(1) : skew;
+    return EmptyChecks.isNull(skew) || skew.isNegative() ? Duration.ofMinutes(1) : skew;
   }
 
   private boolean isProductionProfile() {

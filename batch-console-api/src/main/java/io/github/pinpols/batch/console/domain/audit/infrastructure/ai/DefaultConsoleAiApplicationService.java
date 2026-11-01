@@ -186,7 +186,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
   }
 
   private ConsoleRequestMetadata requireRequestIdentity(ConsoleRequestMetadata metadata) {
-    if (metadata == null
+    if (EmptyChecks.isNull(metadata)
         || !Texts.hasText(metadata.tenantId())
         || !Texts.hasText(metadata.operatorId())) {
       throw BizException.of(ResultCode.FORBIDDEN, ResultCode.FORBIDDEN.detailKey());
