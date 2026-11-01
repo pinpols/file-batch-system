@@ -1,5 +1,7 @@
 # GitHub Actions 工作流索引
 
+
+Actions 展示名按 `Backend /`、`SDK /`、`Platform /` 区分职责；工作流文件路径、job ID 与 Ruleset 必需检查名保持稳定。
 本页登记本仓库全部工作流的用途、触发条件与执行边界；具体路径过滤、输入、权限和 job 以链接的 YAML 为准。排障和本地复现见 [CI 运行手册](../../docs/runbook/ci.md)，检查器用法见 [CI 脚本索引](../../scripts/ci/README.md)，复用步骤见 [共享 Actions](../actions/README.md)。新增、改名或删除工作流必须同步本索引，由脚本治理守卫检查实际跳转和用途。
 
 ## 合入与主干检查

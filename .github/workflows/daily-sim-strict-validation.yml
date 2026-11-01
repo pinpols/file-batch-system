@@ -1,4 +1,4 @@
-name: daily-sim-strict-validation
+name: Backend / Daily simulation and strict validation
 
 on:
   schedule:
@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   detect-changes:
+    name: Detect daily changes
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.gate.outputs.should_run }}
@@ -40,6 +41,7 @@ jobs:
         run: python3 scripts/ci/daily-validation-change-gate.py
 
   sim-and-strict:
+    name: Run simulation and strict validation
     needs: detect-changes
     if: needs.detect-changes.outputs.should_run == 'true'
     runs-on: ubuntu-latest

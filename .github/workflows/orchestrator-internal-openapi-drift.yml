@@ -1,4 +1,4 @@
-name: orchestrator-internal-openapi-drift
+name: Backend / Orchestrator OpenAPI drift report
 
 # =============================================================================
 # 评审 R5:docs/api/orchestrator-internal.openapi.yaml ↔ 真实 orchestrator internal

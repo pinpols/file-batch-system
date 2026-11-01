@@ -1,4 +1,4 @@
-name: Dispatch full-ci for schema manifest fix
+name: Backend / Dispatch Full CI for schema manifest review
 
 # 一次性辅助：云代理令牌只有 actions:read，不能直接 workflow_dispatch。
 # 其他 PR 的 head 分支不匹配时 job 跳过。

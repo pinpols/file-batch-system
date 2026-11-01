@@ -1,4 +1,4 @@
-name: sdk-python
+name: SDK / Python lint and tests
 
 # Python SDK (sdk/python/) CI.
 #

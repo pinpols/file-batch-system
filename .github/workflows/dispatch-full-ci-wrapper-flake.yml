@@ -1,4 +1,4 @@
-name: Dispatch full-ci for wrapper flake
+name: Backend / Dispatch Full CI for wrapper recovery review
 
 # 一次性辅助，只为让同仓 GITHUB_TOKEN 对 wrapper 缓存修复分支发出 workflow_dispatch。
 # 云代理令牌只有 actions:read，不能直接触发 full-ci-gate。

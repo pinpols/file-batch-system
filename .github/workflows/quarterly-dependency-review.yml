@@ -1,4 +1,4 @@
-name: Quarterly dependency review
+name: Backend / Quarterly dependency inventory
 
 on:
   schedule:

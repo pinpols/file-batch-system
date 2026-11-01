@@ -1,4 +1,4 @@
-name: sdk-release-validation
+name: SDK / Release validation and publishing
 
 # ===========================================================================
 # 多语言 BYO SDK 发布校验工作流(release validation)

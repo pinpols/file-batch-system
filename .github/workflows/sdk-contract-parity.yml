@@ -1,4 +1,4 @@
-name: sdk-contract-parity
+name: SDK / Contract and transport checks
 
 # Lane P (drift guard): enforce Java SDK ↔ Python SDK ↔ (future Go/TS/Rust BYO SDKs)
 # ↔ shared-constants/fixtures stay in lockstep. Each language runs an independent

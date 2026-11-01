@@ -35,6 +35,8 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 >
 > `staging-gate` 仍存在，但当前仅由手动事件触发；名称不代表它会部署到 staging 集群。其职责是 GitHub-hosted runner 上的独立全量 E2E 与 Java 治理复验。
 
+Actions 页面以 `Backend / ...`、`SDK / ...` 和 `Platform / ...` 标识工作流用途；本文 `pr-gate` 等名称指对应的 workflow 文件标识。Ruleset 必需检查名称保持不变，E2E 分片显示测试业务范围而非历史耗时。
+
 其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
@@ -61,7 +63,7 @@ CI 版本基线与运行结果分开记录。每次核验 Full Gate、CodeQL 或
 
 OpenSSF Scorecard 是 main/定时的供应链治理报告，不属于 PR required checks，也不以总分决定合并。其 workflow 失败表示扫描链路本身需要修复；SARIF 中的发现按 [`../standards/open-source-governance.md`](../standards/open-source-governance.md) 分级治理。外部 Action 必须固定 40 位 SHA；季度依赖盘点只生成 artifact 与 Actions Summary，由维护者需要时建立一张人工 PR 并核对 release、变更说明和所需权限。
 
-CodeQL 的 `Analyze (java)` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
+CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main 生效、并确认纯文档 PR 也会创建该检查后，才能加入 ruleset required checks。配置顺序必须是先合 workflow、用代码变更和纯文档 PR 各验证一次，再更新 ruleset；反向操作会使被 `paths-ignore` 跳过的 PR 永久等待。
 
 运行环境约束：
 
@@ -567,7 +569,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 
 ### CodeQL 构建模式
 
-- PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `Analyze (java)` 检查。
+- PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `CodeQL Java security analysis` 检查。
 - main push、schedule：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
 - SARIF 由 `github/codeql-action/analyze` 原生上传。同一 job 内不得针对同一 tool/category 再调用 `upload-sarif` 重试；GitHub 会将后续调用判定为重复上传。上传故障通过重新运行 job 处理。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。

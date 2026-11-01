@@ -1,4 +1,4 @@
-name: sdk-orchestrator-e2e
+name: SDK / Orchestrator end-to-end tests
 
 # =============================================================================
 # BYO SDK 样例 worker × 真 orchestrator 端到端(相关 main 变更 / 手动，非 required check)
