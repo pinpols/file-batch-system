@@ -24,11 +24,11 @@ run_group() {
 
 case "$shard" in
   a)
-    run_group batch-orchestrator 'JobNodeDispatchIntegrationTest'
     run_group batch-orchestrator 'CompensationFailureRecoveryIntegrationTest,WaitingLaunchIdentityIntegrationTest,JobLaunchToFinishLifecycleIntegrationTest,PartitionJoinPromotionIntegrationTest,WorkflowRunResumeRecoveryIntegrationTest'
     run_group batch-orchestrator 'FileGovernanceStaleSweepIntegrationTest,WorkflowFrozenPartitionPlanIntegrationTest,CrossDayDependencyReconcilerIntegrationTest,JobTypeOutboxChainIntegrationTest,ConcurrentTaskFinishIntegrationTest,BatchDayWaitingLaunchReferenceIntegrationTest,WorkflowReplayApprovalDecisionIntegrationTest'
     ;;
   a-extra)
+    run_group batch-orchestrator 'JobNodeDispatchIntegrationTest'
     run_group batch-orchestrator 'JobRetryFlowIntegrationTest,ConcurrentTaskClaimIntegrationTest,TriggerLaunchRecoveryIdentityIntegrationTest'
     run_group batch-orchestrator 'ArchiveColdStorageIntegrationTest,JobMonitoringAlertEmissionRecoveryIntegrationTest,FileErrorRecordIntegrationTest,JobTerminalOutboxIntegrationTest'
     run_group batch-orchestrator 'CountContinuityOutboxIntegrationTest,JobSlaSchedulerRecoveryIntegrationTest,FileTemplateSnapshotCaptureIntegrationTest,OutboxPublishIntegrationTest,FileArrivalGroupBacklogIntegrationTest'

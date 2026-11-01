@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
 
   // 与 ImportPipelineE2eIT 等已通过的 IT 对齐;E2E 的 worker/seed 体系默认覆盖此租户
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -92,7 +94,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -113,7 +115,7 @@ class FullChainTenantPropagationE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-tenant-propagation",

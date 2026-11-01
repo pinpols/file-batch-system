@@ -19,6 +19,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -42,6 +43,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -109,7 +111,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
                       """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+        jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
 
     // 把执行器协议写进 job_definition.default_params(生产形态:管理员配好,调度只给 jobCode)
     jdbcTemplate.update(updateJobDefinitionSql, defaultParamsJson, TENANT, seed.jobCode());
@@ -117,7 +119,7 @@ class AtomicSeedStrictVerifyE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-atomic-seed",

@@ -13,6 +13,8 @@ import java.util.regex.Pattern;
 final class RollingMonthCatalogNormalizer {
 
   private static final int WINDOW_MONTHS = 40;
+  private static final Pattern ROLLING_PARTITION = Pattern.compile(
+      "(?:outbox_event_p_|job_instance_p_)\\d{4}_\\d{2}|console_usage_daily_\\d{6}");
   private static final Pattern MONTH_BOUNDARY = Pattern.compile(
       "(?<!\\d)(\\d{4})-(\\d{2})-01(?: 00:00:00(?:\\.0+)?(?:\\+08(?::00)?|\\+0800))?");
   private static final Pattern YEAR_MONTH_UNDERSCORE =
@@ -23,6 +25,9 @@ final class RollingMonthCatalogNormalizer {
   private RollingMonthCatalogNormalizer() {}
 
   static String normalize(String canonical, LocalDate catalogDate) {
+    if (!ROLLING_PARTITION.matcher(canonical).find()) {
+      return canonical;
+    }
     YearMonth currentMonth = YearMonth.from(catalogDate);
     String normalized = replaceMonthTokens(canonical, MONTH_BOUNDARY, currentMonth);
     normalized = replaceMonthTokens(normalized, YEAR_MONTH_UNDERSCORE, currentMonth);

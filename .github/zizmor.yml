@@ -1,4 +1,4 @@
-# zizmor 配置:外部 Action 统一固定完整 commit SHA，版本升级由 Dependabot 提 PR。
+# zizmor 配置:外部 Action 统一固定完整 commit SHA，版本升级由维护者集中审查。
 rules:
   unpinned-uses:
     config:

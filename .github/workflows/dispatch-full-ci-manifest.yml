@@ -1,7 +1,6 @@
 name: Dispatch full-ci for schema manifest fix
 
 # 一次性辅助：云代理令牌只有 actions:read，不能直接 workflow_dispatch。
-# 本文件停在 cursor/dispatch-full-ci-manifest-387a，不合并进 main。
 # 其他 PR 的 head 分支不匹配时 job 跳过。
 
 on:

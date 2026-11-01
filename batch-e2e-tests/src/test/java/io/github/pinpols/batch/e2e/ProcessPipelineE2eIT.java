@@ -37,6 +37,8 @@ import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,10 +94,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String CUSTOM_PLUGIN_CODE = "e2eProcessCompute";
   // d60c9ad4 起 updateHighWaterMarkOut 加 numeric CAS 守护(value 必须匹配 ^-?[0-9]+(\.[0-9]+)?$),
-  // 否则静默 no-op 防御非数字回报。测试 watermark 用 YYYYMMDD 数字形式,语义对齐 bizDate=2026-01-15。
-  private static final String CUSTOM_PLUGIN_WATERMARK = "20260115";
+  // 否则静默 no-op 防御非数字回报。测试 watermark 使用与业务日对应的 YYYYMMDD 数字形式。
+  private static final String CUSTOM_PLUGIN_WATERMARK =
+      BIZ_DATE.format(DateTimeFormatter.BASIC_ISO_DATE);
 
   private final WorkflowRunLaunchService launchService;
   private final JdbcTemplate jdbcTemplate;
@@ -146,11 +150,11 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   @DisplayName("内置转换主链路成功:五个阶段全部成功,目标表行数与金额正确,暂存区清空,水位推进到预期值")
   void wap_sqlTransform_publishesTargetAndCleansStaging() throws Exception {
     final String selectCountSql2 = """
-        select count(*)::int from biz.process_account_summary where biz_date = date '2026-01-15'\
+        select count(*)::int from biz.process_account_summary where biz_date = ?\
         """;
     final String selectTotalAmountSql = """
         select total_amount::text from biz.process_account_summary where account_id='A'\s\
-        and biz_date = date '2026-01-15'\
+        and biz_date = ?\
         """;
     final String selectCountSql3 = """
         select count(*)::int from batch.process_staging
@@ -172,19 +176,19 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
 
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-process-wap",
@@ -204,9 +208,10 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
         });
 
     // Target 表写入正确
-    Integer selectedCount = businessJdbc.queryForObject(selectCountSql2, Integer.class);
+    Integer selectedCount = businessJdbc.queryForObject(selectCountSql2, Integer.class, BIZ_DATE);
     assertThat(selectedCount).isEqualTo(2);
-    String selectedTotalAmount = businessJdbc.queryForObject(selectTotalAmountSql, String.class);
+    String selectedTotalAmount =
+        businessJdbc.queryForObject(selectTotalAmountSql, String.class, BIZ_DATE);
     assertThat(selectedTotalAmount).isEqualTo("30.00");
 
     // staging 在 FEEDBACK 已清空
@@ -230,11 +235,11 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   @DisplayName("PROCESS 派发消息重复投递时,生产认领栅栏阻止流水线和业务副作用重复执行")
   void shouldExecuteProcessSideEffectsOnce_whenDispatchMessageIsRedelivered() throws Exception {
     final String selectCountSql2 = """
-        select count(*)::int from biz.process_account_summary where biz_date = date '2026-01-15'\
+        select count(*)::int from biz.process_account_summary where biz_date = ?\
         """;
     final String selectTotalAmountSql = """
         select total_amount::text from biz.process_account_summary where account_id='A'\s\
-        and biz_date = date '2026-01-15'\
+        and biz_date = ?\
         """;
     final String selectCountSql3 = """
         select count(*)::int from batch.process_staging
@@ -263,18 +268,18 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
 
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-process-redelivery",
@@ -319,9 +324,10 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
           assertThat(outcome.get("high_water_mark_out")).isEqualTo("3");
         });
 
-    Integer selectedCount = businessJdbc.queryForObject(selectCountSql2, Integer.class);
+    Integer selectedCount = businessJdbc.queryForObject(selectCountSql2, Integer.class, BIZ_DATE);
     assertThat(selectedCount).isEqualTo(2);
-    String selectedTotalAmount = businessJdbc.queryForObject(selectTotalAmountSql, String.class);
+    String selectedTotalAmount =
+        businessJdbc.queryForObject(selectTotalAmountSql, String.class, BIZ_DATE);
     assertThat(selectedTotalAmount).isEqualTo("30.00");
     Integer selectedCountRead2 = businessJdbc.queryForObject(selectCountSql3, Integer.class);
     assertThat(selectedCountRead2).isZero();
@@ -392,20 +398,20 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-process-archive-cleanup",
-        Map.of("bizDate", "2026-01-15")));
+        Map.of("bizDate", BIZ_DATE.toString())));
     e2eOutboxPublishSupport.publishAllPending(TENANT);
 
     await()
@@ -479,7 +485,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     """;
     final String selectTotalAmountSql = """
               select total_amount::text from biz.process_account_summary
-              where tenant_id = ? and account_id = 'A' and biz_date = date '2026-01-15'
+              where tenant_id = ? and account_id = 'A' and biz_date = ?
               """;
 
     final String updateJobDefinitionSql = """
@@ -576,9 +582,9 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
         .when(taskControllerApplicationService)
         .claim(any(Long.class), any(TaskClaimCommand.class));
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
     jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
@@ -601,11 +607,11 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-process-retry-" + suffix,
-          Map.of("bizDate", "2026-01-15")));
+          Map.of("bizDate", BIZ_DATE.toString())));
       Long taskId = jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, seed.dedupKey());
       observedRetryTaskId.set(taskId);
       e2eOutboxPublishSupport.publishAllPending(TENANT);
@@ -739,7 +745,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
       Integer selectedCountRead5 = businessJdbc.queryForObject(selectCountSql3, Integer.class);
       assertThat(selectedCountRead5).isEqualTo(2);
       String selectedTotalAmount =
-          businessJdbc.queryForObject(selectTotalAmountSql, String.class, TENANT);
+          businessJdbc.queryForObject(selectTotalAmountSql, String.class, TENANT, BIZ_DATE);
       assertThat(selectedTotalAmount).isEqualTo("30.00");
       assertThat(loadProcessOutcome(seed.dedupKey()))
           .containsEntry("task_status", "SUCCESS")
@@ -770,11 +776,11 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
         """;
     final String selectCountSql4 = """
               select count(*)::int from biz.process_account_summary
-              where tenant_id = ? and account_id = 'A' and biz_date = date '2026-01-15'
+              where tenant_id = ? and account_id = 'A' and biz_date = ?
               """;
     final String selectTotalAmountSql = """
               select total_amount::text from biz.process_account_summary
-              where tenant_id = ? and account_id = 'B' and biz_date = date '2026-01-15'
+              where tenant_id = ? and account_id = 'B' and biz_date = ?
               """;
 
     final String updateJobDefinitionSql = """
@@ -892,9 +898,10 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
                 jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API)
-            .shardStrategy("DYNAMIC"));
+            .shardStrategy("DYNAMIC")
+            .bizDate(BIZ_DATE));
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configurePartitionedSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode());
     jdbcTemplate.update(updateJobDefinitionSql, TENANT, seed.jobCode());
@@ -920,12 +927,12 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-process-manual-retry-" + suffix,
           Map.of(
-              "bizDate", "2026-01-15",
+              "bizDate", BIZ_DATE.toString(),
               "estimatedItemCount", 2,
               "targetItemsPerPartition", 1)));
       List<Long> taskIds =
@@ -1047,7 +1054,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
           businessJdbc.queryForObject(selectCountSql2, Integer.class, TENANT, retriedGenerationId);
       assertThat(selectedCountRead4).isZero();
       Integer selectedCountRead5 =
-          businessJdbc.queryForObject(selectCountSql4, Integer.class, TENANT);
+          businessJdbc.queryForObject(selectCountSql4, Integer.class, TENANT, BIZ_DATE);
       assertThat(selectedCountRead5).isEqualTo(1);
       String selectedInstanceStatusRead2 = jdbcTemplate.queryForObject(
           selectInstanceStatusSql2, String.class, TENANT, seed.dedupKey());
@@ -1098,7 +1105,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
             assertThat(selectedRunStatusRead3).isEqualTo("SUCCESS");
           });
       String selectedTotalAmount =
-          businessJdbc.queryForObject(selectTotalAmountSql, String.class, TENANT);
+          businessJdbc.queryForObject(selectTotalAmountSql, String.class, TENANT, BIZ_DATE);
       assertThat(selectedTotalAmount).isEqualTo("7.00");
     } finally {
       final String dropTriggerSql = """
@@ -1130,7 +1137,7 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
 
     JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API);
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
     ProcessE2eFixture.configureCustomPluginJobParameters(
         jdbcTemplate,
@@ -1141,13 +1148,13 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
         "{\"processedCount\":1}");
 
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
     params.put("bizType", "SETTLEMENT_SUMMARY");
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-process-custom",
@@ -1202,18 +1209,19 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
                 jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API)
-            .dryRun(true));
+            .dryRun(true)
+            .bizDate(BIZ_DATE));
     ProcessE2eFixture.cleanProcessRows(businessJdbc);
-    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
     ProcessE2eFixture.configureSqlTransformJobParameters(
         jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
 
     Map<String, Object> params = new LinkedHashMap<>();
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
     launchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("e2e-tr-process-dry-run")

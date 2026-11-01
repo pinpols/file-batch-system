@@ -12,6 +12,7 @@ import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -54,6 +55,7 @@ import org.springframework.test.context.jdbc.Sql;
 class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -72,17 +74,17 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
             request_status, trace_id
-        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup2')
+        ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', 'e2e-trace-dedup2')
         """;
     final String selectCountSql = """
         select count(*) from batch.workflow_run
-        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and run_status in ('CREATED', 'RUNNING') and dry_run = false
         """;
 
     // Seed: job_definition + workflow_definition + first trigger_request
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     // Insert a second trigger_request that shares the same dedup_key but uses a different
     // request_id
@@ -93,13 +95,14 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         requestId2,
         TriggerType.API.code(),
         seed.workflowDefinitionId(),
+        BIZ_DATE,
         seed.dedupKey());
 
     // 只让重试时间到期；状态和完成结果仍由生产投递服务提供。
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dedup-seq-1",
@@ -109,14 +112,14 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         requestId2,
         "e2e-tr-dedup-seq-2",
         Map.of()));
 
     Long activeRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
     assertThat(activeRunCount).isEqualTo(1L);
     assertThat(requestStatus(seed.workflowDefinitionId(), seed.dedupKey()))
         .containsExactlyInAnyOrder("PROCESSING", "LAUNCHED");
@@ -134,11 +137,11 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         insert into batch.trigger_request (
             tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key,
             request_status, trace_id
-        ) values (?, ?, ?, ?, date '2026-01-15', ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
+        ) values (?, ?, ?, ?, ?, ?, 'ACCEPTED', 'e2e-trace-dedup-c2')
         """;
     final String selectCountSql = """
         select count(*) from batch.workflow_run
-        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and run_status in ('CREATED', 'RUNNING') and dry_run = false
         """;
     final String selectRequestStatusSql = """
@@ -149,7 +152,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
     // 准备数据：创建 job_definition、workflow_definition，以及共享同一 dedup_key 的两条 trigger_requests。
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     String requestId2 = "e2e-req2-" + Long.toUnsignedString(System.nanoTime());
     jdbcTemplate.update(
@@ -158,6 +161,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
         requestId2,
         TriggerType.API.code(),
         seed.workflowDefinitionId(),
+        BIZ_DATE,
         seed.dedupKey());
 
     CountDownLatch barrier = new CountDownLatch(2);
@@ -178,7 +182,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
           launchService.launch(new LaunchRequest(
               TENANT,
               seed.workflowDefinitionId(),
-              LocalDate.of(2026, 1, 15),
+              BIZ_DATE,
               TriggerType.API,
               seed.requestId(),
               "e2e-tr-dedup-con-1",
@@ -201,7 +205,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
           launchService.launch(new LaunchRequest(
               TENANT,
               seed.workflowDefinitionId(),
-              LocalDate.of(2026, 1, 15),
+              BIZ_DATE,
               TriggerType.API,
               requestId2,
               "e2e-tr-dedup-con-2",
@@ -224,7 +228,7 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
 
     // 必须存在活跃的 WorkflowRun 记录。
     Long activeRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId());
+        selectCountSql, Long.class, TENANT, seed.workflowDefinitionId(), BIZ_DATE);
     assertThat(activeRunCount).isEqualTo(1L);
 
     // 一条请求已启动，另一条仍在等待容量。
@@ -247,11 +251,11 @@ class DedupJobLaunchE2eIT extends AbstractIntegrationTest {
   private void assertWaitingCount(Long workflowDefinitionId, long expected) {
     final String selectWaitingCountSql = """
         select count(*) from batch.workflow_launch_wait
-        where tenant_id = ? and workflow_definition_id = ? and biz_date = date '2026-01-15'
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
           and dry_run = false and wait_status = 'WAITING'
         """;
     Long waitingCount = jdbcTemplate.queryForObject(
-        selectWaitingCountSql, Long.class, TENANT, workflowDefinitionId);
+        selectWaitingCountSql, Long.class, TENANT, workflowDefinitionId, BIZ_DATE);
     assertThat(waitingCount).isEqualTo(expected);
   }
 }

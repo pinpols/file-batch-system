@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -65,7 +67,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
             ) values (
                 ?, 'e2e-dis-fail', 'OUTPUT', 'OUTPUT', 'e2e-fail.json', 'e2e-fail.json', 'json',
                 'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
-                ?, 'SYSTEM', 'GENERATED', date '2026-01-15', 'e2e-dis-fail-trace'
+                ?, 'SYSTEM', 'GENERATED', ?, 'e2e-dis-fail-trace'
             ) returning id
             """;
     final String selectNodeSql = """
@@ -80,11 +82,12 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
     """;
 
     String path = "/tmp/e2e-dispatch-fail-" + System.nanoTime() + ".json";
-    Long fileId = jdbcTemplate.queryForObject(insertFileRecordSql, Long.class, TENANT, path);
+    Long fileId =
+        jdbcTemplate.queryForObject(insertFileRecordSql, Long.class, TENANT, path, BIZ_DATE);
     assertThat(fileId).isNotNull();
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -99,7 +102,7 @@ class DispatchFailurePipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dispatch-fail",

@@ -36,6 +36,15 @@ class RollingMonthCatalogNormalizerTest {
   }
 
   @Test
+  @DisplayName("非滚动分区对象的固定日期不随当前月份变化")
+  void shouldKeepFixedDatesInUnrelatedObjects() {
+    String catalog = "CHECK effective_date >= DATE '2026-10-01'";
+
+    assertThat(RollingMonthCatalogNormalizer.normalize(catalog, LocalDate.of(2026, 11, 1)))
+        .isEqualTo(catalog);
+  }
+
+  @Test
   @DisplayName("窗口外的日期和普通数量不被改写")
   void shouldLeaveUnrelatedCatalogText_whenTokensFallOutsideWindow() {
     String catalog = "COLUMN\t4979\tnote 1999_01 and 199901 and 123456";

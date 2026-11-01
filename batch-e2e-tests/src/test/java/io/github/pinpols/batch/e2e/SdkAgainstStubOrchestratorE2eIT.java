@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.e2e;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
@@ -25,8 +26,10 @@ import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -34,6 +37,7 @@ import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterAll;
@@ -211,13 +215,14 @@ class SdkAgainstStubOrchestratorE2eIT {
                 "sourceBatch", selected.output().get("sourceBatch")));
       }
     };
+    String groupId = "r17-pinned-cross-day-group";
     BatchPlatformClientConfig cfg = BatchPlatformClientConfig.builder()
         .baseUrl(stub.baseUrl())
         .tenantId(TENANT)
         .workerCode("r17-worker")
         .kafkaBootstrap(KAFKA.getBootstrapServers())
         .kafkaTopicPattern(TOPIC_PATTERN)
-        .kafkaGroupId("r17-pinned-cross-day-group")
+        .kafkaGroupId(groupId)
         .heartbeatInterval(Duration.ofSeconds(30))
         .leaseRenewInterval(Duration.ofSeconds(30))
         .kafkaPollInterval(Duration.ofMillis(100))
@@ -227,7 +232,24 @@ class SdkAgainstStubOrchestratorE2eIT {
         BatchPlatformClient.builder(cfg).register(consumer).build();
     client.start();
     try {
-      Thread.sleep(3_000);
+      try (Admin admin = Admin.create(
+          Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, KAFKA.getBootstrapServers()))) {
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+          try {
+            var groups =
+                admin.describeConsumerGroups(List.of(groupId)).all().get(5, TimeUnit.SECONDS);
+            boolean assigned = groups.get(groupId).members().stream()
+                .anyMatch(member -> member.assignment().topicPartitions().stream()
+                    .anyMatch(partition -> TOPIC.equals(partition.topic())));
+            assertThat(assigned).isTrue();
+          } catch (ExecutionException missing) {
+            if (missing.getCause() instanceof GroupIdNotFoundException) {
+              throw new AssertionError("waiting for SDK consumer group registration", missing);
+            }
+            throw missing;
+          }
+        });
+      }
       var msg = TaskDispatchMessageBuilder.dispatch("r17_cross_day_consumer")
           .tenantId(TENANT)
           .taskId(taskId)

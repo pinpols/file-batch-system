@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -47,6 +48,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
 
   private static final Logger log = LoggerFactory.getLogger(AtomicTaskLoadE2eIT.class);
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final int TASK_COUNT = 15;
 
   @Autowired
@@ -66,7 +68,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
     long launchStart = System.nanoTime();
     for (int i = 0; i < TASK_COUNT; i++) {
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API);
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
       dedupKeys.add(seed.dedupKey());
 
       Map<String, Object> params = new LinkedHashMap<>();
@@ -76,7 +78,7 @@ class AtomicTaskLoadE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-atomic-load-" + i,

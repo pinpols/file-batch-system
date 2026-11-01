@@ -20,6 +20,18 @@ class E2eShardCoverageTest(unittest.TestCase):
                 self.assertIn('"$TESTS" == "FilesystemBackendPipelineE2eIT"', workflow)
                 self.assertIn('-Dbatch.test.storage.backend=filesystem', workflow)
 
+    def test_long_process_recoveries_run_in_separate_shards(self):
+        root = Path(__file__).resolve().parents[3]
+        for name in ("full-ci-gate.yml", "staging-gate.yml"):
+            with self.subTest(workflow=name):
+                workflow = (root / ".github/workflows" / name).read_text(encoding="utf-8")
+                shards = workflow.split("          - id: ")[1:]
+                push = [shard for shard in shards if "JobPushProcessRecoveryE2eIT" in shard]
+                launch = [shard for shard in shards if "LaunchProcessCrashRecoveryE2eIT" in shard]
+                self.assertEqual(1, len(push))
+                self.assertEqual(1, len(launch))
+                self.assertNotEqual(push[0], launch[0])
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
@@ -60,6 +72,21 @@ class E2eShardCoverageTest(unittest.TestCase):
         result = self.run_guard("  AlphaE2eIT\n", "  AlphaE2eIT,\n  BetaE2eIT\n")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("BetaE2eIT", result.stdout)
+
+    def test_parameterized_method_shards_are_checked_for_missing_and_duplicates(self):
+        source = self.root / "batch-e2e-tests/src/test/java/AlphaE2eIT.java"
+        source.write_text(
+            'class AlphaE2eIT {\n@Test\n@DisplayName("一")\nvoid first() {}\n'
+            '@ParameterizedTest(name = "{0}")\n@EnumSource(Mode.class)\n'
+            '@DisplayName("二")\nvoid second(Mode mode) {}\n}\n',
+            encoding="utf-8",
+        )
+        complete = "  AlphaE2eIT#first,\n  AlphaE2eIT#second,\n  BetaE2eIT\n"
+        self.assertEqual(self.run_guard(complete, complete).returncode, 0)
+        missing = "  AlphaE2eIT#first,\n  BetaE2eIT\n"
+        self.assertNotEqual(self.run_guard(missing, complete).returncode, 0)
+        duplicate = "  AlphaE2eIT#first+second,\n  AlphaE2eIT#second,\n  BetaE2eIT\n"
+        self.assertNotEqual(self.run_guard(duplicate, complete).returncode, 0)
 
     def test_method_shards_cover_each_method_once(self):
         source = self.root / "batch-e2e-tests/src/test/java/AlphaE2eIT.java"

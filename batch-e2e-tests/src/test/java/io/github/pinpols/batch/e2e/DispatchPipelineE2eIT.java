@@ -50,6 +50,7 @@ import java.nio.file.StandardOpenOption;
 import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -112,6 +113,8 @@ import org.testcontainers.utility.DockerImageName;
 class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  // 多个派发用例共享业务日，避免长跑期间被真实结算任务关闭。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final String SFTP_USER = "batch";
   private static final String SFTP_PASSWORD = "batch-pass";
 
@@ -234,7 +237,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     Long fileId =
         insertGeneratedFile("no-target-" + suffix, "file.json", "/tmp/" + suffix, requestId);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", fileId.toString());
     params.put("metadata", Map.of("channelCode", channelCode));
@@ -243,7 +246,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-no-target-" + suffix,
@@ -308,7 +311,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     Long fileId =
         insertGeneratedFile("frozen-" + suffix, "frozen.json", "/tmp/" + suffix, requestId);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", fileId.toString());
     params.put("channelCode", channelCode);
@@ -318,7 +321,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-frozen-" + suffix,
@@ -357,7 +360,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     assertThat(fileId).isNotNull();
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -371,7 +374,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dispatch",
@@ -439,7 +442,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         "/tmp/e2e-dispatch-redelivery-" + suffix + ".json",
         "e2e-dis-redelivery-trace-" + suffix);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -452,7 +455,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dispatch-redelivery-" + suffix,
@@ -623,7 +626,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
           "http://127.0.0.1:" + server.getAddress().getPort() + "/dispatch",
           channelCode);
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
       jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 1, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("fileId", String.valueOf(fileId));
@@ -636,7 +639,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-dispatch-timeout-" + suffix,
@@ -826,7 +829,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
           "api-push-source-" + suffix);
       jdbcTemplate.update(insertChannelSql, TENANT, channelCode, endpoint, apiKey, authorization);
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
       jdbcTemplate.update(updateRetryPolicySql, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("fileId", fileId.toString());
@@ -838,7 +841,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
       LaunchRequest launchRequest = new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "api-push-unknown-" + suffix,
@@ -909,7 +912,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         "oss-file-" + suffix, fileName, source.toString(), "oss-source-" + suffix);
     jdbcTemplate.update(insertChannelSql, TENANT, channelCode, endpoint, bucket, prefix, fileName);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(updateRetryPolicySql, TENANT, seed.jobCode());
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", fileId.toString());
@@ -934,7 +937,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "oss-unknown-" + suffix,
@@ -1007,7 +1010,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         "local-source-" + suffix);
     jdbcTemplate.update(insertChannelSql, TENANT, channelCode, target.toString());
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(updateRetryPolicySql, TENANT, seed.jobCode());
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", fileId.toString());
@@ -1020,7 +1023,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "local-unknown-" + suffix,
@@ -1143,7 +1146,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         fileName);
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     jdbcTemplate.update(updateJobDefinitionSql, "FIXED", 3, TENANT, seed.jobCode());
 
     Map<String, Object> params = new LinkedHashMap<>();
@@ -1157,7 +1160,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-dispatch-sftp-" + suffix,
@@ -1291,7 +1294,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
           smtpServer.port());
 
       LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
       jdbcTemplate.update(updateJobRetrySql, "FIXED", 3, TENANT, seed.jobCode());
       Map<String, Object> params = new LinkedHashMap<>();
       params.put("fileId", String.valueOf(fileId));
@@ -1304,7 +1307,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
       launchService.launch(new LaunchRequest(
           TENANT,
           seed.workflowDefinitionId(),
-          LocalDate.of(2026, 1, 15),
+          BIZ_DATE,
           TriggerType.API,
           seed.requestId(),
           "e2e-tr-smtp-" + suffix,
@@ -1382,7 +1385,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
                 jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API)
-            .dryRun(true));
+            .dryRun(true)
+            .bizDate(BIZ_DATE));
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
@@ -1396,7 +1400,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(LaunchRequest.builder()
         .tenantId(TENANT)
         .workflowDefinitionId(seed.workflowDefinitionId())
-        .bizDate(LocalDate.of(2026, 1, 15))
+        .bizDate(BIZ_DATE)
         .triggerType(TriggerType.API)
         .requestId(seed.requestId())
         .traceId("e2e-tr-dispatch-dry-run-" + suffix)
@@ -1503,7 +1507,8 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         "redispatch-" + channelCode, "redispatch.json", "/tmp/" + channelCode, channelCode);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
         new E2eScenarioFixture.LaunchPreparationSpec(
-            jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API));
+                jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API)
+            .bizDate(BIZ_DATE));
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileId", String.valueOf(fileId));
     params.put("channelCode", channelCode);
@@ -1512,7 +1517,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "redispatch-" + channelCode,
@@ -1634,8 +1639,11 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         "/tmp/e2e-bundle-dispatch-" + System.nanoTime() + "-2.json",
         "e2e-bundle-dis-trace-2");
 
-    LaunchSeed seed = E2eScenarioFixture.prepareBundleLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "dispatch");
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        new E2eScenarioFixture.LaunchPreparationSpec(
+                jdbcTemplate, TENANT, "BUNDLE_DISPATCH", "dispatch", TriggerType.EVENT)
+            .shardStrategy("DYNAMIC")
+            .bizDate(BIZ_DATE));
 
     Map<String, Object> params = new LinkedHashMap<>();
     // 冲突的通用及束字段不能覆盖每个分区的文件与渠道绑定。
@@ -1655,7 +1663,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.EVENT,
         seed.requestId(),
         "e2e-tr-bundle-dispatch",
@@ -1806,7 +1814,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         ) values (
             ?, ?, 'OUTPUT', 'OUTPUT', ?, ?, 'json',
             'JSON', 'UTF-8', 'application/json', 32, 'NONE', 'LOCAL',
-            ?, 'SYSTEM', 'GENERATED', date '2026-01-15', ?
+            ?, 'SYSTEM', 'GENERATED', ?, ?
         ) returning id
         """;
 
@@ -1818,6 +1826,7 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         fileName,
         fileName,
         storagePath,
+        BIZ_DATE,
         traceId);
   }
 }

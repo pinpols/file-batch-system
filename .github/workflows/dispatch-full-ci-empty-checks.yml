@@ -2,7 +2,6 @@ name: Dispatch full-ci for empty-checks
 
 # 一次性辅助，只为让同仓 GITHUB_TOKEN 对 empty-checks 分支发出 workflow_dispatch。
 # 云代理令牌只有 actions:read，不能直接触发 full-ci-gate。
-# 本文件停在 cursor/dispatch-full-ci-1280-387a，不合并进 main。
 # 其他 PR 的 head 分支不匹配时 job 跳过，避免每次合入都再跑一遍全量门禁。
 
 on:

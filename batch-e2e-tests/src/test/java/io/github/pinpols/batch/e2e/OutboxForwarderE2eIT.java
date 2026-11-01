@@ -24,6 +24,7 @@ import java.sql.Connection;
 import java.sql.DriverManager;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +79,8 @@ import org.springframework.transaction.TransactionSystemException;
 class OutboxForwarderE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  // 多个恢复场景共享业务日，避免后台结算提前关闭测试数据。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -144,12 +147,12 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
             """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "TXLOSS" + Long.toUnsignedString(System.nanoTime());
     LaunchRequest request = new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-launch-commit-loss",
@@ -317,7 +320,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customerNo = "ACKLOSS" + Long.toUnsignedString(System.nanoTime());
     long gateKey = System.nanoTime();
     Map<Long, AtomicInteger> claimAttempts = new ConcurrentHashMap<>();
@@ -368,7 +371,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
         launchService.launch(new LaunchRequest(
             TENANT,
             seed.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             seed.requestId(),
             "e2e-outbox-ack-loss",
@@ -529,7 +532,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
                       """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbcTemplate, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("fileFormatType", "JSON");
@@ -550,7 +553,7 @@ class OutboxForwarderE2eIT extends AbstractIntegrationTest {
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-outbox-fwd",

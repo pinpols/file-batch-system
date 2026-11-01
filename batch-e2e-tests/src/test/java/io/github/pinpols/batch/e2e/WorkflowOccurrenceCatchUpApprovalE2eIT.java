@@ -6789,13 +6789,27 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     Scheduler restartedScheduler = triggerContext.getBean(Scheduler.class);
     assertThat(restartedScheduler.getMetaData().isJobStoreSupportsPersistence()).isTrue();
     if ("MISFIRE_PENDING".equals(occurrenceStatusBeforeRestart)) {
-      assertThat(
-              triggerContext.getBean(TriggerDefinitionLoader.class).loadPendingMisfireDefinitions())
-          .extracting(TriggerDescriptor::getWorkflowDefinitionId)
-          .contains(seed.workflowDefinitionId());
-      AopTestUtils.<TriggerReconciler>getTargetObject(
-              triggerContext.getBean(TriggerReconciler.class))
-          .reconcile();
+      boolean stillPending =
+          triggerContext
+              .getBean(TriggerDefinitionLoader.class)
+              .loadPendingMisfireDefinitions()
+              .stream()
+              .map(TriggerDescriptor::getWorkflowDefinitionId)
+              .anyMatch(seed.workflowDefinitionId()::equals);
+      if (stillPending) {
+        AopTestUtils.<TriggerReconciler>getTargetObject(
+                triggerContext.getBean(TriggerReconciler.class))
+            .reconcile();
+      } else {
+        // 重启后的自动对账可能已在查询定义前处理这条 occurrence。
+        String occurrenceStatusAfterRestart = jdbcTemplate.queryForObject(
+            selectOccurrenceStatusSql,
+            String.class,
+            TENANT,
+            seed.workflowDefinitionId(),
+            Timestamp.from(expectedFireTime));
+        assertThat(occurrenceStatusAfterRestart).isEqualTo("REQUESTED");
+      }
     }
     restartedScheduler.start();
     await()

@@ -273,6 +273,7 @@ jobs:
             scripts/ci/tests/test_pr_coverage_integration.py \
             scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py
 
@@ -1382,6 +1383,9 @@ jobs:
     needs: [unit-it-a-main, unit-it-a-extra, unit-it-b1, unit-it-b1-main, unit-it-b1-extra, unit-it-b2-workers, unit-it-b2-console, unit-it-b2-console-extra, java-governance]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -1395,11 +1399,15 @@ jobs:
       - name: Summarize test results and job states
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           mkdir -p build/ci-quality
           printf '%s' "$JOB_RESULTS" > build/ci-quality/jobs.json
-          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports \
+          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .name' > build/ci-quality/artifact-names.txt
+          python3 scripts/ci/report-ci-quality-trends.py --reports-root build/ci-test-reports --artifact-names build/ci-quality/artifact-names.txt \
+            --artifact-pattern 'pr-gate-*-reports' \
             --jobs-json build/ci-quality/jobs.json --json build/ci-quality/metrics.json \
             --expect-artifact unit-it-a-main=pr-gate-unit-it-a-reports \
             --expect-artifact unit-it-a-extra=pr-gate-unit-it-a-extra-reports \

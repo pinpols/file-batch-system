@@ -14,6 +14,7 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
@@ -43,6 +44,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
 
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -66,20 +68,20 @@ class ExportFailurePipelineE2eIT extends AbstractIntegrationTest {
     """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API);
+        jdbcTemplate, TENANT, "EXPORT", "export", TriggerType.API, BIZ_DATE);
 
     Map<String, Object> params = new LinkedHashMap<>();
     params.put("batchNo", "E2E-FAIL-BATCH-001");
     // Non-existent template — export worker fails at template resolution
     params.put("templateCode", "EXP-TEMPLATE-DOES-NOT-EXIST");
-    params.put("bizDate", "2026-01-15");
+    params.put("bizDate", BIZ_DATE.toString());
     params.put("bizType", "SETTLEMENT");
     params.put("fileCode", "e2e-export-fail-file");
 
     launchService.launch(new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "e2e-tr-export-fail",

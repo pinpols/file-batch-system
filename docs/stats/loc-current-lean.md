@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `2c2d20a26`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `698eed25a`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,092 | 785,483 | 409,973 | 52.2% |
+| 6,093 | 785,854 | 410,187 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,791 | 384,466 | 205,435 | 53.4% |
+| test | 1,792 | 384,805 | 205,620 | 53.4% |
 | prod | 3,405 | 318,599 | 152,009 | 47.7% |
-| script | 718 | 63,616 | 40,165 | 63.1% |
+| script | 718 | 63,648 | 40,194 | 63.2% |
 | config | 68 | 10,259 | 7,668 | 74.7% |
 | infra-config | 34 | 6,107 | 4,465 | 73.1% |
 | sql | 76 | 2,436 | 231 | 9.5% |
@@ -23,9 +23,9 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,570 | 612,085 | 322,394 | 52.7% |
-| Shell | 217 | 35,800 | 28,309 | 79.1% |
-| Python | 328 | 48,409 | 26,031 | 53.8% |
+| Java | 4,570 | 612,303 | 322,492 | 52.7% |
+| Shell | 217 | 35,822 | 28,330 | 79.1% |
+| Python | 329 | 48,540 | 26,126 | 53.8% |
 | YAML | 109 | 14,929 | 11,576 | 77.5% |
 | XML | 219 | 30,829 | 9,210 | 29.9% |
 | TypeScript | 38 | 6,824 | 3,259 | 47.8% |
@@ -39,12 +39,12 @@
 
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,773 | 3,260 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,787 | 3,264 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,064 | 2,615 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,925 | 2,583 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,697 | 1,767 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,772 | 1,457 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,914 | 1,388 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,916 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,576 | 1,316 |
@@ -53,7 +53,7 @@
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,409 | 1,293 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,152 | 1,125 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,399 | 1,034 |
-| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,039 | 1,013 |
+| `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,040 | 1,014 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ArchiveColdStorageIntegrationTest.java` | test | Java | 1,887 | 917 |

@@ -23,6 +23,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,6 +64,7 @@ import org.springframework.test.context.jdbc.Sql;
 @DisplayName("真实 DAG 终态到业务通知:子 Job 成功但根失败,RERUN 独立身份及接收后响应丢失")
 class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private static final Map<String, JsonNode> ACCEPTED = new ConcurrentHashMap<>();
   private static final ConcurrentLinkedQueue<JsonNode> ATTEMPTS = new ConcurrentLinkedQueue<>();
   private static final AtomicBoolean DROP_FIRST_RESPONSE = new AtomicBoolean(true);
@@ -182,7 +184,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
     final String insertTriggerRequestSql = """
         insert into batch.trigger_request
           (tenant_id,request_id,trigger_type,workflow_definition_id,biz_date,dedup_key,request_status,trace_id,dry_run)
-        values (?, ?, 'RERUN', ?, '2026-01-15', ?, 'ACCEPTED', 'r32-rerun', false)
+        values (?, ?, 'RERUN', ?, ?, ?, 'ACCEPTED', 'r32-rerun', false)
         """;
     final String selectCountSql7 = """
         select count(*) from biz.customer_account where tenant_id=? and customer_no=?
@@ -202,9 +204,9 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
           """;
 
     LaunchSeed first = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     LaunchSeed second = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     String customer = "NOTIFY" + Long.toUnsignedString(System.nanoTime());
     configureJob(
         first,
@@ -239,7 +241,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .launch(new LaunchRequest(
             TENANT,
             first.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             first.requestId(),
             "r32-original",
@@ -263,12 +265,17 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
 
     String rerunRequest = "r32-rerun-" + System.nanoTime();
     jdbc.update(
-        insertTriggerRequestSql, TENANT, rerunRequest, first.workflowDefinitionId(), rerunRequest);
+        insertTriggerRequestSql,
+        TENANT,
+        rerunRequest,
+        first.workflowDefinitionId(),
+        BIZ_DATE,
+        rerunRequest);
     String rerun = launch
         .launch(new LaunchRequest(
             TENANT,
             first.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.RERUN,
             rerunRequest,
             "r32-rerun",
@@ -284,7 +291,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
     assertThat(workflowNotifications).hasSize(2).allSatisfy(body -> {
       assertThat(body.path("eventType").asText()).isEqualTo("WORKFLOW_FAILED");
       assertThat(body.path("data").path("runStatus").asText()).isEqualTo("FAILED");
-      assertThat(body.path("data").path("bizDate").asText()).isEqualTo("2026-01-15");
+      assertThat(body.path("data").path("bizDate").asText()).isEqualTo(BIZ_DATE.toString());
     });
     assertThat(workflowNotifications.stream()
             .map(b -> b.path("data").path("workflowRunId").asLong())
@@ -434,7 +441,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         """;
 
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "IMPORT", "import", TriggerType.API);
+        jdbc, TENANT, "IMPORT", "import", TriggerType.API, BIZ_DATE);
     configureJob(seed, "this is not valid JSON");
     configureManualSkipWaitDag(seed);
 
@@ -456,7 +463,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
         .launch(new LaunchRequest(
             TENANT,
             seed.workflowDefinitionId(),
-            LocalDate.of(2026, 1, 15),
+            BIZ_DATE,
             TriggerType.API,
             seed.requestId(),
             "r29-manual-skip-" + suffix,
@@ -520,7 +527,8 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
               .allSatisfy(body -> {
                 assertThat(body.path("data").path("workflowRunId").asLong()).isEqualTo(runId);
                 assertThat(body.path("data").path("runStatus").asText()).isEqualTo("SUCCESS");
-                assertThat(body.path("data").path("bizDate").asText()).isEqualTo("2026-01-15");
+                assertThat(body.path("data").path("bizDate").asText())
+                    .isEqualTo(BIZ_DATE.toString());
               });
         });
     Integer selectedWorkflowNodeRunCount =
@@ -545,7 +553,7 @@ class WorkflowTerminalNotificationE2eIT extends AbstractIntegrationTest {
           for (JsonNode body : notifications) {
             assertThat(body.path("data").path("jobInstanceId").asLong()).isPositive();
             assertThat(body.path("data").path("terminalVersion").asLong()).isPositive();
-            assertThat(body.path("data").path("bizDate").asText()).isEqualTo("2026-01-15");
+            assertThat(body.path("data").path("bizDate").asText()).isEqualTo(BIZ_DATE.toString());
             for (String table : List.of("webhook_delivery_log", "notification_delivery_log")) {
               final String selectDeliveryStatusSql = """
                   select delivery_status from batch.%s where tenant_id=? and terminal_event_key=?\

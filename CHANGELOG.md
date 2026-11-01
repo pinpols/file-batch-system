@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
+
 ### Fixed
 
 - 出箱故障注入清理 `DROP TRIGGER` 与轮询器写锁冲突时按死锁重试，避免 40P01 把已提交的恢复用例打成错误。

@@ -2,7 +2,6 @@ name: Dispatch full-ci for wrapper flake
 
 # 一次性辅助，只为让同仓 GITHUB_TOKEN 对 wrapper 缓存修复分支发出 workflow_dispatch。
 # 云代理令牌只有 actions:read，不能直接触发 full-ci-gate。
-# 本文件停在 cursor/dispatch-full-ci-1281-f836，不合并进 main。
 # 其他 PR 的 head 分支不匹配时 job 跳过，避免每次合入都再跑一遍全量门禁。
 
 # 分支前进后再次 synchronize 会再发一次，目标始终是该分支当前 head。

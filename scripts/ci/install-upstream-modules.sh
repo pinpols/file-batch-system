@@ -5,6 +5,7 @@ set -euo pipefail
 
 # Maven Central 的临时 5xx 不应让完整 E2E 门禁在依赖安装阶段直接失败。
 # 保持与 full/staging 原步骤相同的 reactor 范围，只对下载失败做有限重试。
+# 恢复用例离线打包 worker 前需预先解析 Spring Boot 插件依赖。
 # 解析失败会留下没有 jar/pom 的 *.lastUpdated。不删掉的话下一轮会在本地否定缓存上立刻失败，不再访问 Central。
 attempts=3
 
@@ -31,7 +32,8 @@ for attempt in $(seq 1 "$attempts"); do
       -pl '!batch-e2e-tests' \
       -B \
       -Dmaven.wagon.http.retryHandler.count=5 \
-      -Dmaven.wagon.http.retryHandler.requestSentEnabled=true; then
+      -Dmaven.wagon.http.retryHandler.requestSentEnabled=true &&
+      ./mvnw -B -q -ntp -pl batch-worker/dispatch spring-boot:help; then
     exit 0
   fi
 

@@ -30,6 +30,17 @@ class E2eMethodCompletenessTest(unittest.TestCase):
         result = self.check("RoutingTest#alpha+beta", [("alpha", ""), ("beta", "")])
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_parameterized_reports_preserve_all_selected_methods(self):
+        cases = [("alpha(Mode)[1]", ""), ("alpha(Mode)[2]", ""), ("beta(Path)", "")]
+        result = self.check("RoutingTest#alpha+beta", cases)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertNotEqual(self.check("RoutingTest#alpha+beta", cases[:2]).returncode, 0)
+        self.assertNotEqual(self.check("RoutingTest#alpha", cases).returncode, 0)
+        self.assertNotEqual(self.check("RoutingTest#alpha", [cases[0], cases[0]]).returncode, 0)
+        self.assertNotEqual(self.check("RoutingTest#alpha", [("alpha(Mode)[2]", "")]).returncode, 0)
+        self.assertNotEqual(self.check("RoutingTest#alpha", [("alpha", ""), ("alpha(Path)", "")]).returncode, 0)
+        self.assertNotEqual(self.check("RoutingTest#alpha", [("alpha(Mode)[1]", "<skipped/>")]).returncode, 0)
+
     def test_rejects_missing_method(self):
         result = self.check("RoutingTest#alpha+beta", [("alpha", "")])
         self.assertNotEqual(result.returncode, 0)
