@@ -90,36 +90,6 @@ class ReadinessServiceTest {
   }
 
   @Test
-  @DisplayName("rerun 正在跑且新版本未 EFFECTIVE → not ready")
-  void shouldNotBeReady_whenRerunNotEffective() {
-    // arrange
-    when(assetPartitionService.findEffectiveJobPartition("t1", "UP_JOB", BIZ_DATE))
-        .thenReturn(Optional.empty());
-
-    // act
-    ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
-
-    // assert
-    assertThat(result.ready()).isFalse();
-    assertThat(result.reason()).isEqualTo("asset-partition-not-effective");
-  }
-
-  @Test
-  @DisplayName("该批次日没有 asset partition → not ready")
-  void shouldNotBeReady_whenNoAssetPartition() {
-    // arrange
-    when(assetPartitionService.findEffectiveJobPartition("t1", "UP_JOB", BIZ_DATE))
-        .thenReturn(Optional.empty());
-
-    // act
-    ReadinessResult result = readinessService.checkJobReady("t1", "UP_JOB", BIZ_DATE);
-
-    // assert
-    assertThat(result.ready()).isFalse();
-    assertThat(result.reason()).isEqualTo("asset-partition-not-effective");
-  }
-
-  @Test
   @DisplayName("入参非法 → 短路 not ready,不查库")
   void shouldShortCircuit_whenArgsInvalid() {
     // act

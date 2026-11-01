@@ -72,7 +72,7 @@ public class WorkflowConditionEvaluator {
   }
 
   private boolean evaluateAtomicExpression(String expression, Map<String, Object> payload) {
-    AtomicOperator operator = findAtomicOperator(expression);
+    AtomicOperator operator = AtomicOperator.find(expression);
     if (operator == null) {
       Object value = resolveLeftOperand(expression, payload);
       return isTruthy(value);
@@ -319,10 +319,6 @@ public class WorkflowConditionEvaluator {
       }
     }
     return null;
-  }
-
-  private AtomicOperator findAtomicOperator(String expression) {
-    return AtomicOperator.find(expression);
   }
 
   private boolean isTruthy(Object value) {

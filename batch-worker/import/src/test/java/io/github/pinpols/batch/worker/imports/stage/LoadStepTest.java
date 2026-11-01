@@ -379,7 +379,7 @@ class LoadStepTest {
   void shouldBuildLoadContext_withImportPayloadFields() throws Exception {
     Path validated = writeNdjson(List.of(row("C1")));
     ImportJobContext ctx = streamingContext(validated, null);
-    ImportPayload payload = mockPayload();
+    ImportPayload payload = mock(ImportPayload.class);
     when(payload.batchNo()).thenReturn("BATCH-42");
     when(payload.bizType()).thenReturn("CUST");
     when(payload.templateCode()).thenReturn("T1");
@@ -412,10 +412,6 @@ class LoadStepTest {
   }
 
   // ── helpers ──
-
-  private ImportPayload mockPayload() {
-    return mock(ImportPayload.class);
-  }
 
   private ImportJobContext baseContext() {
     ImportJobContext ctx = new ImportJobContext();

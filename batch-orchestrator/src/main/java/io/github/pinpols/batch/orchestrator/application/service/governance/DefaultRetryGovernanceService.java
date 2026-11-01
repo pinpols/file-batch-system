@@ -37,6 +37,7 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
@@ -683,7 +684,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
   private RetryPolicyPlan resolveRetryPolicy(JobInstanceEntity jobInstance) {
     Map<String, Object> snapshot = executionPolicySnapshot(jobInstance);
     if (EmptyChecks.isNotNull(snapshot)) {
-      String retryPolicy = stringValue(snapshot.get("retryPolicy"));
+      Object retryPolicyValue = snapshot.get("retryPolicy");
+      String retryPolicy = Objects.toString(retryPolicyValue, null);
       Integer retryMaxCount = integerValue(snapshot.get("retryMaxCount"));
       String resolvedRetryPolicy =
           Texts.hasText(retryPolicy) ? retryPolicy : RetryPolicyType.FIXED.code();
@@ -716,10 +718,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
           malformedSnapshot);
       return null;
     }
-  }
-
-  private String stringValue(Object value) {
-    return EmptyChecks.isNull(value) ? null : String.valueOf(value);
   }
 
   private Integer integerValue(Object value) {

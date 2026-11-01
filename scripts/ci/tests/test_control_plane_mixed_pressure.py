@@ -16,7 +16,7 @@ SIMULATION = ROOT / 'load-tests/src/test/java/io/github/pinpols/batch/loadtest/s
 
 
 class MixedPressureWorkflowArgumentsTest(unittest.TestCase):
-    def run_mixed(self, *, failed_job='', modules='process,dispatch,atomic,trigger', gatling_exit=0):
+    def run_mixed(self, *, failed_job='', modules='process,dispatch,atomic,trigger', gatling_exit=0, abort_on_failure='0'):
         function = re.search(r'(?ms)^run_mixed_pressure\(\) \{.*?^\}', BENCHMARK.read_text()).group()
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -27,6 +27,7 @@ class MixedPressureWorkflowArgumentsTest(unittest.TestCase):
             (root / 'process.json').write_text('{"bizDate":"2026-10-18"}')
             shell = r'''
 set -euo pipefail
+trap 'printf "cleanup-skip:%s\n" "${SKIP_AUTO_CLEANUP:-0}" >> "$CALLS"' EXIT
 csv_contains() { [[ ",$2," == *",$1,"* ]]; }
 resolve_single_job_workflow_id() {
   printf 'resolve:%s:%s\n' "$1" "$2" >> "$CALLS"
@@ -64,6 +65,7 @@ assert_run_success() { printf 'success:%s\n' "$1" >> "$CALLS"; }
                 'DISPATCH_FILE_IDS_CSV': '1,2', 'WRITE_P95_MS': '500', 'MAX_ERROR_PCT': '0',
                 'CALLS': str(root / 'calls.txt'), 'MVN_ARGS': str(root / 'mvn-args.txt'),
                 'FAILED_JOB': failed_job, 'GATLING_EXIT': str(gatling_exit),
+                'WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL': abort_on_failure,
             }
             result = subprocess.run(['bash', '-c', shell + function + '\nrun_mixed_pressure\n'],
                                     text=True, capture_output=True, env=environment)
@@ -91,7 +93,14 @@ assert_run_success() { printf 'success:%s\n' "$1" >> "$CALLS"; }
         self.assertIn('-Dcontrol.process.workflowDefinitionId=101', args)
         self.assertEqual([c for c in calls if c.startswith('resolve:')], ['resolve:tenant-a:lt_process_sql_job'])
 
-    def test_gatling_failure_keeps_its_exit_after_business_result_collection(self):
+    def test_gatling_failure_returns_without_waiting_for_impossible_target(self):
+        result, _, calls = self.run_mixed(gatling_exit=9, abort_on_failure='1')
+        self.assertEqual(result.returncode, 9, result.stderr)
+        self.assertNotIn('terminal:mixed', calls)
+        self.assertNotIn('success:mixed', calls)
+        self.assertIn('cleanup-skip:1', calls)
+
+    def test_generic_gatling_failure_still_collects_business_results(self):
         result, _, calls = self.run_mixed(gatling_exit=9)
         self.assertEqual(result.returncode, 9, result.stderr)
         self.assertIn('terminal:mixed', calls)

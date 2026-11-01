@@ -52,5 +52,5 @@ test("handler: taskFailure uses errorCode (not errorClass)", () => {
 
 test("handler: taskFailure default errorCode = EXECUTION_FAILED", () => {
   const r = taskFailure();
-  assert.equal(r.errorCode, ErrorCode.EXECUTION_FAILED);
+  assert.equal(r.errorCode, "EXECUTION_FAILED");
 });

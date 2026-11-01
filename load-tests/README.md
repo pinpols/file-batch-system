@@ -370,6 +370,7 @@ CAPACITY_PG_STATEMENTS_PROFILE_ENABLED=1 \
 
 P2 容量与多租户公平性 fixture 会自包含创建所需的 Atomic 作业定义，不依赖可选的演示 seed；准备完成后
 脚本会核验作业类型、worker group 和启用状态，fixture 不完整时在发压前失败，避免生成入口成功但终态无效的报告。
+严格 P2 画像的 Gatling 失败时会保留运行数据并返回原始失败码，不再等待全部预期请求达到终态；这不表示已受理请求完成，后续须先核对并排空再清理。普通混压仍按原有逻辑等待并采集终态。
 异常轮次排空 Kafka 后使用 `RUN_ID=<profile-run-id>-10w bash load-tests/scripts/cleanup-worker-load-data.sh`
 统一清理；该入口会先清控制面引用，再清通用平台和业务 fixture，不要手工颠倒 SQL 顺序。
 

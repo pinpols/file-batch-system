@@ -74,6 +74,7 @@ class BatchWindowGateTest {
     doReturn(ResourceCheck.allow()).when(dispatchAdmissionLimiter).check(any(), any());
     DownstreamAdmissionGuard downstreamAdmissionGuard = mock(DownstreamAdmissionGuard.class);
     doReturn(ResourceCheck.allow()).when(downstreamAdmissionGuard).check(any());
+    WorkerSelector workerSelector = mock(WorkerSelector.class);
 
     scheduler = new DefaultResourceScheduler(
         queueManager,
@@ -81,7 +82,7 @@ class BatchWindowGateTest {
         partThrottle,
         dispatchAdmissionLimiter,
         downstreamAdmissionGuard,
-        mockWorkerSelector(),
+        workerSelector,
         prioritySched,
         configCacheService,
         mock(JobInstanceMapper.class),
@@ -184,9 +185,5 @@ class BatchWindowGateTest {
         outOfWindowAction,
         false,
         true);
-  }
-
-  private static WorkerSelector mockWorkerSelector() {
-    return mock(WorkerSelector.class);
   }
 }
