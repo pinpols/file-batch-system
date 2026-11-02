@@ -588,3 +588,5 @@ bash scripts/ci/run-flaky-quarantine.sh
 `check-openapi-breaking.sh` 依 ADR-048 和整合计划 I6/R35 精确登记 `POST /api/console/workflow-runs/{id}/skip-node` 新增必填 query `reason`。这是已批准的真实收紧，前后端必须同步部署；不是工具误报。登记只匹配该方法、路径、位置、参数名和差异种类，其他新增必填参数仍失败。定向正反例入口：`python3 -m unittest scripts/ci/tests/test_openapi_skip_reason_cutover.py`。
 
 2026-10-31 用户批准本次切换保留请求限制并接受不兼容：作业定义创建和更新的 `priority` 为 1–9；出箱投递查询 `eventType` 最长 64、`targetTopic` 最长 256，出箱重试查询 `eventType` 最长 64；Workflow 定义创建和完整更新的节点 `nodeName` 必填。其中部分是补录既有服务或数据库约束，其他会收紧旧请求。门禁只登记这 9 条具体差异，前后端需按同一契约同步交付；旧客户端须先适配。合入 main 后，这些差异不再属于对 main 的增量，可在后续门禁维护中移除登记。使用 CI 固定版本 oasdiff 运行 `python3 -m unittest scripts/ci/tests/test_openapi_approved_request_constraints.py`，验证授权项与相邻未授权项。
+
+2026-11-02 用户要求修复 Workflow 文本长度存量问题：定义创建与完整更新的节点名称上限为 256 个 Unicode 码点，边条件上限为 1024 个 Unicode 码点。数据库列原有限长，但 PostgreSQL 对超限部分全为空格的输入可能截断后保存；本次请求校验会拒绝此类超长原始值，属于真实收紧，旧调用方须先适配。门禁仅登记这两个端点和两个字段的四项具体差异，其他端点、字段或长度仍须阻断；正反例继续使用上述测试，前后端需同步交付。

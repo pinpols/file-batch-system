@@ -28,8 +28,9 @@ def fixture(method, path, kind, value, field):
                                                        'schema': {'type': 'string'}})
     else:
         schema = {'type': 'object', 'properties': {field: {'type': 'integer'}}}
-        if kind == 'node':
-            schema = {'type': 'object', 'properties': {'nodes': {'type': 'array', 'items': {
+        if kind in ('node', 'node-max-length', 'edge-max-length'):
+            collection = 'edges' if kind == 'edge-max-length' else 'nodes'
+            schema = {'type': 'object', 'properties': {collection: {'type': 'array', 'items': {
                 'type': 'object', 'properties': {field: {'type': 'string'}}}}}}
             if path.endswith('/full'):
                 schema = {'type': 'object', 'properties': {'definition': schema}}
@@ -42,10 +43,15 @@ def fixture(method, path, kind, value, field):
         target['parameters'][-1]['schema']['maxLength'] = value
     else:
         schema = target['requestBody']['content']['application/json']['schema']
-        if kind == 'node':
+        if kind in ('node', 'node-max-length', 'edge-max-length'):
             if path.endswith('/full'):
                 schema = schema['properties']['definition']
-            schema['properties']['nodes']['items']['required'] = [field]
+            collection = 'edges' if kind == 'edge-max-length' else 'nodes'
+            item = schema['properties'][collection]['items']
+            if kind == 'node':
+                item['required'] = [field]
+            else:
+                item['properties'][field]['maxLength'] = value
         else:
             schema['properties'][field][kind] = value
     return base, changed
@@ -85,6 +91,10 @@ class ApprovedRequestConstraintsTest(unittest.TestCase):
             ('get', '/api/console/queries/outbox-retries', 'query', 64, 'eventType'),
             ('post', '/api/console/workflow-definitions', 'node', None, 'nodeName'),
             ('put', '/api/console/workflow-definitions/{id}/full', 'node', None, 'nodeName'),
+            ('post', '/api/console/workflow-definitions', 'node-max-length', 256, 'nodeName'),
+            ('post', '/api/console/workflow-definitions', 'edge-max-length', 1024, 'conditionExpr'),
+            ('put', '/api/console/workflow-definitions/{id}/full', 'node-max-length', 256, 'nodeName'),
+            ('put', '/api/console/workflow-definitions/{id}/full', 'edge-max-length', 1024, 'conditionExpr'),
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -100,6 +110,12 @@ class ApprovedRequestConstraintsTest(unittest.TestCase):
             ('get', '/api/console/queries/outbox-retries', 'query', 256, 'targetTopic'),
             ('post', '/api/console/workflow-definitions', 'node', None, 'other'),
             ('post', '/api/console/workflow-definitions-extra', 'node', None, 'nodeName'),
+            ('post', '/api/console/workflow-definitions', 'node-max-length', 255, 'nodeName'),
+            ('put', '/api/console/workflow-definitions/{id}/full', 'edge-max-length', 1023, 'conditionExpr'),
+            ('post', '/api/console/workflow-definitions', 'node-max-length', 256, 'other'),
+            ('put', '/api/console/workflow-definitions', 'node-max-length', 256, 'nodeName'),
+            ('post', '/api/console/workflow-definitions-extra', 'edge-max-length', 1024, 'conditionExpr'),
+            ('put', '/api/console/workflow-definitions/{id}/full', 'node-max-length', 256, 'other'),
         ]
         for case in cases:
             with self.subTest(case=case):
@@ -110,6 +126,10 @@ class ApprovedRequestConstraintsTest(unittest.TestCase):
                                'priority', target=INTERNAL)
         self.assertEqual(1, result.returncode, result.stdout + result.stderr)
         self.assertIn('[request-property-max-set]', result.stdout)
+        result = self.run_gate('post', '/api/console/workflow-definitions', 'node-max-length',
+                               256, 'nodeName', target=INTERNAL)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertIn('[request-property-max-length-set]', result.stdout)
 
 
 if __name__ == '__main__':

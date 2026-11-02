@@ -95,7 +95,8 @@ for spec in "${SPECS[@]}"; do
   # PATCH /{id}/enabled。仅忽略下列精确路径，其他端点移除仍须阻断。
   # AI 对话已由调用方切换到 SSE，用户明确要求不保留旧 JSON 路由。
   if [[ "$spec" == "docs/api/console-api.openapi.yaml" ]]; then
-    # 2026-10-31 用户批准以下请求限制及不兼容切换；精确匹配方法、路径、字段、数值和差异种类。
+    # 用户批准的 2026-10-31 契约切换与 2026-11-02 Workflow 文本长度修复：
+    # 精确匹配方法、路径、字段、数值和差异种类。
     # 本次前后端应同步交付；其他收紧仍由门禁阻断。
     while IFS= read -r approved_change; do
       grep -F "$approved_change" "$raw_diff_tmp" >> "$clarification_ignore_tmp" || true
@@ -109,6 +110,10 @@ in API GET /api/console/queries/outbox-deliveries for the `query` request parame
 in API GET /api/console/queries/outbox-retries for the `query` request parameter `eventType`, the maxLength was set to `64` [request-parameter-max-length-set].
 in API POST /api/console/workflow-definitions the request property `nodes/items/nodeName` became required [request-property-became-required].
 in API PUT /api/console/workflow-definitions/{id}/full the request property `definition/nodes/items/nodeName` became required [request-property-became-required].
+in API POST /api/console/workflow-definitions the `nodes/items/nodeName` request property's maxLength was set to `256` [request-property-max-length-set].
+in API POST /api/console/workflow-definitions the `edges/items/conditionExpr` request property's maxLength was set to `1024` [request-property-max-length-set].
+in API PUT /api/console/workflow-definitions/{id}/full the `definition/nodes/items/nodeName` request property's maxLength was set to `256` [request-property-max-length-set].
+in API PUT /api/console/workflow-definitions/{id}/full the `definition/edges/items/conditionExpr` request property's maxLength was set to `1024` [request-property-max-length-set].
 APPROVED_REQUEST_CONSTRAINTS
     printf '%s\n' \
       'POST /api/console/ai/chat api path removed without deprecation' \
