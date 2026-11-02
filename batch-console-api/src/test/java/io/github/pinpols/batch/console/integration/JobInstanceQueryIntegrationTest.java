@@ -108,6 +108,47 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @Transactional
+  @DisplayName("精确作业编码在分页前过滤相似编码并保持租户隔离，旧模糊查询兼容")
+  void shouldFilterExactJobCodeBeforePagination_withoutChangingFuzzySearch() {
+    String tenantId = "job-exact-" + UUID.randomUUID();
+    String otherTenant = "job-exact-" + UUID.randomUUID();
+    insertJobInstance(tenantId, "JOB_A", "SUCCESS", "exact-1", "trace-1");
+    insertJobInstance(tenantId, "JOB_A", "SUCCESS", "exact-2", "trace-2");
+    insertJobInstance(tenantId, "JOB_AB", "SUCCESS", "prefix", "trace-3");
+    insertJobInstance(tenantId, "JOBXA", "SUCCESS", "wildcard", "trace-4");
+    insertJobInstance(otherTenant, "JOB_A", "SUCCESS", "other-tenant", "trace-5");
+
+    JobInstanceQuery first = JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .jobCode("UNRELATED")
+        .exactJobCode("JOB_A")
+        .pageRequest(new PageRequest(1, 1))
+        .build();
+    JobInstanceQuery second = JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .exactJobCode("JOB_A")
+        .pageRequest(new PageRequest(2, 1))
+        .build();
+    List<JobInstanceEntity> firstPage = jobInstanceMapper.selectByQuery(first);
+    List<JobInstanceEntity> secondPage = jobInstanceMapper.selectByQuery(second);
+    long count = jobInstanceMapper.countByQuery(first);
+    assertThat(count).isEqualTo(2);
+    assertThat(firstPage).extracting(JobInstanceEntity::getInstanceNo).containsExactly("exact-2");
+    assertThat(secondPage).extracting(JobInstanceEntity::getInstanceNo).containsExactly("exact-1");
+
+    JobInstanceQuery fuzzy = JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .jobCode("JOB_A")
+        .pageRequest(new PageRequest(1, 10))
+        .build();
+    List<JobInstanceEntity> fuzzyRows = jobInstanceMapper.selectByQuery(fuzzy);
+    assertThat(fuzzyRows)
+        .extracting(JobInstanceEntity::getInstanceNo)
+        .containsExactlyInAnyOrder("exact-1", "exact-2", "prefix", "wildcard");
+  }
+
+  @Test
   @DisplayName("按链路标识过滤: 只命中唯一标识对应的一条实例")
   void shouldQueryJobInstancesByTraceId() {
     String tenantId = "t-trace-" + BatchDateTimeSupport.utcEpochMillis();

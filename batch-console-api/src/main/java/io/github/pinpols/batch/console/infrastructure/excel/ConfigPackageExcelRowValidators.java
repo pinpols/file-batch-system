@@ -6,6 +6,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_CODE;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_NAME;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CHANNEL_TYPE;
+import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONDITION_EXPR;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_CONFIG_JSON;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_BIZ_DATE_ALIGNMENTS;
 import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.COL_DEPENDS_ON_JOB_CODE;
@@ -65,6 +66,7 @@ import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateSecurityFlagsView;
+import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowTextLimits;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -371,6 +373,8 @@ final class ConfigPackageExcelRowValidators {
     requireField(ri, wfVersion, COL_WORKFLOW_VERSION);
     requireField(ri, nodeCode, COL_NODE_CODE);
     requireField(ri, normalize(row.get(COL_NODE_NAME)), COL_NODE_NAME);
+    validateWorkflowTextLength(
+        row.get(COL_NODE_NAME), COL_NODE_NAME, WorkflowTextLimits.NODE_NAME, ri);
     requiredEnum(normalizeEnum(row.get(COL_NODE_TYPE)), COL_NODE_TYPE, NODE_TYPES, ri);
     optionalEnum(normalizeEnum(row.get(COL_RETRY_POLICY)), "retry_policy", RETRY_POLICIES, ri);
     validateJsonField(row.get(COL_NODE_PARAMS), COL_NODE_PARAMS, false, ri);
@@ -400,6 +404,8 @@ final class ConfigPackageExcelRowValidators {
     requireField(ri, fromNode, COL_FROM_NODE_CODE);
     requireField(ri, toNode, COL_TO_NODE_CODE);
     requiredEnum(normalizeEnum(row.get(COL_EDGE_TYPE)), COL_EDGE_TYPE, EDGE_TYPES, ri);
+    validateWorkflowTextLength(
+        row.get(COL_CONDITION_EXPR), COL_CONDITION_EXPR, WorkflowTextLimits.CONDITION_EXPR, ri);
     String wfKey = wfCode + KEY_SEP_COLON + wfVersion;
     boolean hasWorkflowIdentity = hasText(wfCode) && hasText(wfVersion);
     boolean referencesMissingWorkflowDefinition = hasWorkflowIdentity && !wfKeys.contains(wfKey);
@@ -410,6 +416,14 @@ final class ConfigPackageExcelRowValidators {
     if (hasWorkflowIdentity) {
       requireNodeRef(fromNode, wfKey, nodeKeys, "from_node_code", ri);
       requireNodeRef(toNode, wfKey, nodeKeys, "to_node_code", ri);
+    }
+  }
+
+  private static void validateWorkflowTextLength(
+      String value, String field, int maxCodePoints, List<String> issues) {
+    String normalized = normalize(value);
+    if (WorkflowTextLimits.exceeds(normalized, maxCodePoints)) {
+      issues.add(field + " too long (max " + maxCodePoints + " characters)");
     }
   }
 

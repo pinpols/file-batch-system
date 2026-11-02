@@ -1,15 +1,21 @@
 package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.constants.CommonConstants;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
+import io.github.pinpols.batch.console.application.config.TenantConfigPackageExcelService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec.EdgeSpec;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest.WorkflowDefinitionSpec.NodeSpec;
+import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore;
+import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImportStore.PackageExcelSession;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -18,6 +24,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -34,13 +41,19 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
   private static final String OTHER_TENANT = "int-wf-tb";
 
   private final ConsoleTenantConfigInitApplicationService initService;
+  private final TenantConfigPackageExcelService excelService;
+  private final TenantConfigPackageExcelImportStore excelStore;
 
   private String prefix;
 
   @Autowired
   WorkflowJobReferenceAdmissionIntegrationTest(
-      ConsoleTenantConfigInitApplicationService initService) {
+      ConsoleTenantConfigInitApplicationService initService,
+      TenantConfigPackageExcelService excelService,
+      TenantConfigPackageExcelImportStore excelStore) {
     this.initService = initService;
+    this.excelService = excelService;
+    this.excelStore = excelStore;
   }
 
   @BeforeEach
@@ -315,6 +328,209 @@ class WorkflowJobReferenceAdmissionIntegrationTest extends AbstractMutationInteg
     assertThat(response.results().getFirst().workflowDefinitions().created()).isZero();
     assertThat(definitionCount()).isZero();
     assertThat(nodeCount()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("超长节点和边在正式导入及演练逐项失败且不落库")
+  void shouldRejectOverlongImportedGraphWithoutPartialWrites(boolean dryRun) {
+    WorkflowDefinitionSpec spec = workflowWithTexts("😀".repeat(257), "😀".repeat(1025));
+    TenantConfigBatchInitRequest request = workflowRequest(spec, dryRun);
+
+    TenantConfigBatchInitResponse response = initService.batchInit(request, "ref-admin", prefix);
+
+    assertThat(response.results().getFirst().workflowDefinitions().failed()).isOne();
+    assertThat(definitionCount()).isZero();
+    assertThat(nodeCount()).isZero();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"NODE", "EDGE"})
+  @DisplayName("创建和完整更新接口拒绝超长文本且保留旧图")
+  void shouldRejectOverlongTextsAtCreateAndFullUpdate(String invalidField) {
+    Long id = create("http_old", "valid", false, 200);
+    String invalid = body("http_new", "valid", false);
+    if ("NODE".equals(invalidField)) {
+      invalid =
+          invalid.replace("\"nodeName\":\"Start\"", "\"nodeName\":\"" + "😀".repeat(257) + "\"");
+    } else {
+      invalid = invalid.replace(
+          "\"edgeType\":\"SUCCESS\"",
+          "\"edgeType\":\"SUCCESS\",\"conditionExpr\":\"" + "😀".repeat(1025) + "\"");
+    }
+    client
+        .post()
+        .uri("/api/console/workflow-definitions")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(invalid)
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("VALIDATION_ERROR");
+    client
+        .put()
+        .uri("/api/console/workflow-definitions/{id}/full", id)
+        .header("X-Console-User", "ref-admin")
+        .header("X-Console-Roles", "ROLE_ADMIN")
+        .header(CommonConstants.DEFAULT_TENANT_ID_HEADER, TENANT)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\"expectedVersion\":1,\"definition\":" + invalid + "}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("VALIDATION_ERROR");
+    assertThat(definitionCount()).isOne();
+    assertThat(nodeCount()).isEqualTo(3);
+  }
+
+  @Test
+  @DisplayName("PostgreSQL 接受 Unicode 码点边界，跳过既存图时不校验未应用的值")
+  void shouldPersistUnicodeBoundariesAndSkipExistingGraph() {
+    WorkflowDefinitionSpec spec = workflowWithTexts("😀".repeat(256), "😀".repeat(1024));
+    TenantConfigBatchInitRequest request = workflowRequest(spec, false);
+    TenantConfigBatchInitResponse created = initService.batchInit(request, "ref-admin", prefix);
+    assertThat(created.results().getFirst().workflowDefinitions().created()).isOne();
+
+    Map<String, Object> lengths = jdbcTemplate.queryForMap("""
+        select char_length(n.node_name) as node_length, char_length(e.condition_expr) as edge_length
+        from batch.workflow_definition d
+        join batch.workflow_node n on n.workflow_definition_id = d.id and n.node_code = 'start'
+        join batch.workflow_edge e on e.workflow_definition_id = d.id
+        where d.tenant_id = ? and d.workflow_code = ?
+        """, TENANT, spec.getWorkflowCode());
+    assertThat(lengths).containsEntry("node_length", 256).containsEntry("edge_length", 1024);
+
+    spec.getNodes().getFirst().setNodeName("😀".repeat(257));
+    spec.getEdges().getFirst().setConditionExpr("😀".repeat(1025));
+    TenantConfigBatchInitResponse skipped = initService.batchInit(request, "ref-admin", prefix);
+    assertThat(skipped.results().getFirst().workflowDefinitions().skipped()).isOne();
+    assertThat(definitionCount()).isOne();
+  }
+
+  @ParameterizedTest
+  @CsvSource({"false,NODE", "false,EDGE", "true,NODE", "true,EDGE"})
+  @DisplayName("Excel 新建和更新均在预览及提交时拒绝超长文本")
+  void shouldRejectOverlongExcelForCreateAndUpdate(boolean existing, String invalidField) {
+    WorkflowDefinitionSpec spec = workflowWithTexts("Start", "true");
+    if (existing) {
+      TenantConfigBatchInitResponse seeded =
+          initService.batchInit(workflowRequest(spec, false), "ref-admin", prefix);
+      assertThat(seeded.results().getFirst().workflowDefinitions().created()).isOne();
+    }
+    String name = "NODE".equals(invalidField) ? "😀".repeat(257) : "Start";
+    String expression = "EDGE".equals(invalidField) ? "😀".repeat(1025) : "true";
+    Map<String, String> definition = Map.of(
+        "workflow_code",
+        spec.getWorkflowCode(),
+        "workflow_name",
+        "Length boundary",
+        "workflow_type",
+        "DAG",
+        "version",
+        "1");
+    Map<String, String> start = Map.of(
+        "workflow_code",
+        spec.getWorkflowCode(),
+        "workflow_version",
+        "1",
+        "node_code",
+        "start",
+        "node_name",
+        name,
+        "node_type",
+        "START");
+    Map<String, String> end = Map.of(
+        "workflow_code",
+        spec.getWorkflowCode(),
+        "workflow_version",
+        "1",
+        "node_code",
+        "end",
+        "node_name",
+        "End",
+        "node_type",
+        "END");
+    Map<String, String> edge = Map.of(
+        "workflow_code",
+        spec.getWorkflowCode(),
+        "workflow_version",
+        "1",
+        "from_node_code",
+        "start",
+        "to_node_code",
+        "end",
+        "edge_type",
+        "SUCCESS",
+        "condition_expr",
+        expression);
+    PackageExcelSession session = new PackageExcelSession(
+        "workflow.xlsx",
+        TENANT,
+        Instant.now(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(),
+        List.of(definition),
+        List.of(start, end),
+        List.of(edge));
+    String token = excelStore.save(session);
+    try {
+      var preview = excelService.preview(token);
+      assertThat(preview.errorRows())
+          .anyMatch(row -> row.messages().stream()
+              .anyMatch(message -> message.contains(
+                  "NODE".equals(invalidField) ? "node_name too long" : "condition_expr too long")));
+      TenantConfigPackageExcelApplyRequest request = new TenantConfigPackageExcelApplyRequest();
+      request.setPreviewToken(preview.previewToken());
+      assertThatThrownBy(() -> excelService.apply(token, request))
+          .hasMessage("error.excel.invalid_rows");
+      assertThat(definitionCount()).isEqualTo(existing ? 1 : 0);
+      assertThat(nodeCount()).isEqualTo(existing ? 2 : 0);
+    } finally {
+      excelStore.remove(token);
+    }
+  }
+
+  private WorkflowDefinitionSpec workflowWithTexts(String nodeName, String condition) {
+    WorkflowDefinitionSpec spec = new WorkflowDefinitionSpec();
+    spec.setWorkflowCode(prefix + "_length");
+    spec.setWorkflowName("Length boundary");
+    spec.setWorkflowType("DAG");
+    spec.setEnabled(false);
+    NodeSpec start = new NodeSpec();
+    start.setNodeCode("start");
+    start.setNodeName(nodeName);
+    start.setNodeType("START");
+    NodeSpec end = new NodeSpec();
+    end.setNodeCode("end");
+    end.setNodeName("End");
+    end.setNodeType("END");
+    spec.setNodes(List.of(start, end));
+    EdgeSpec edge = new EdgeSpec();
+    edge.setFromNodeCode("start");
+    edge.setToNodeCode("end");
+    edge.setEdgeType("SUCCESS");
+    edge.setConditionExpr(condition);
+    spec.setEdges(List.of(edge));
+    return spec;
+  }
+
+  private TenantConfigBatchInitRequest workflowRequest(
+      WorkflowDefinitionSpec spec, boolean dryRun) {
+    TenantConfigBatchInitRequest request = new TenantConfigBatchInitRequest();
+    request.setTargetTenantIds(List.of(TENANT));
+    request.setDryRun(dryRun);
+    request.setWorkflowDefinitions(List.of(spec));
+    return request;
   }
 
   @Test

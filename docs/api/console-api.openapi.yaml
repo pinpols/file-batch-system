@@ -5212,6 +5212,12 @@ paths:
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/JobCodeFilter'
+        - name: exactJobCode
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Filter by exact job code; takes precedence over the partial jobCode filter.
         - $ref: '#/components/parameters/InstanceStatusFilter'
         - $ref: '#/components/parameters/StartDateFilter'
         - $ref: '#/components/parameters/EndDateFilter'
@@ -13668,6 +13674,8 @@ components:
           type: string
         nodeName:
           type: string
+          maxLength: 256
+          description: Maximum 256 Unicode code points, matching PostgreSQL character length.
         nodeType:
           type: string
         relatedJobCode:
@@ -13711,6 +13719,8 @@ components:
           type: string
         conditionExpr:
           type: string
+          maxLength: 1024
+          description: Maximum 1024 Unicode code points, matching PostgreSQL character length.
         enabled:
           type: boolean
       required: [fromNodeCode, toNodeCode]
@@ -19987,7 +19997,9 @@ components:
       type: object
       properties:
         nodeCode: { type: string }
-        nodeName: { type: string }
+        nodeName:
+          type: string
+          description: Maximum 256 Unicode code points for an applied item; skipped existing items are not validated.
         nodeType: { type: string }
         relatedJobCode: { type: string }
         workerGroup: { type: string }
@@ -20018,7 +20030,9 @@ components:
         fromNodeCode: { type: string }
         toNodeCode: { type: string }
         edgeType: { type: string }
-        conditionExpr: { type: string }
+        conditionExpr:
+          type: string
+          description: Maximum 1024 Unicode code points for an applied item; skipped existing items are not validated.
         enabled: { type: boolean, nullable: true }
 
     FileChannelSpec:

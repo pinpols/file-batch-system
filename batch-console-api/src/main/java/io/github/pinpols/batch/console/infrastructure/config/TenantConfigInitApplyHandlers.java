@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse.ItemStatsAccumulator;
 import io.github.pinpols.batch.console.domain.job.support.BusinessCalendarTimezone;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.ActiveCalendarRow;
+import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowTextLimits;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -258,8 +259,17 @@ public class TenantConfigInitApplyHandlers {
         spec -> {
           if (EmptyChecks.isNotNull(spec.getNodes())) {
             for (WorkflowDefinitionSpec.NodeSpec node : spec.getNodes()) {
-              if (EmptyChecks.isNull(node.getNodeName())) {
+              if (EmptyChecks.isNull(node.getNodeName())
+                  || WorkflowTextLimits.exceeds(node.getNodeName(), WorkflowTextLimits.NODE_NAME)) {
                 throw new IllegalArgumentException("error.common.invalid_argument");
+              }
+            }
+            if (EmptyChecks.isNotNull(spec.getEdges())) {
+              for (WorkflowDefinitionSpec.EdgeSpec edge : spec.getEdges()) {
+                if (WorkflowTextLimits.exceeds(
+                    edge.getConditionExpr(), WorkflowTextLimits.CONDITION_EXPR)) {
+                  throw new IllegalArgumentException("error.common.invalid_argument");
+                }
               }
             }
           }

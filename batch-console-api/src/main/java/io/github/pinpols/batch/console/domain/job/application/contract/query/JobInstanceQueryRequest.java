@@ -10,6 +10,9 @@ public class JobInstanceQueryRequest extends PageQueryRequest {
 
   private String tenantId;
   private String jobCode;
+  /** 精确作业编码；有值时优先于 jobCode 模糊筛选。 */
+  private String exactJobCode;
+
   private String instanceNo;
   private String instanceStatus;
   private String bizDate;

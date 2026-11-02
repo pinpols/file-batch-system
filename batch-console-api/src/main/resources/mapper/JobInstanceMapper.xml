@@ -69,9 +69,14 @@
                  租户过滤永远在前(line above),cursor 谓词绝不能影响租户隔离 -->
             and id &lt; #{cursorId}
         </if>
-        <if test="jobCode != null and jobCode != ''">
-            and job_code like concat('%', #{jobCode}, '%')
-        </if>
+        <choose>
+            <when test="exactJobCode != null and exactJobCode != ''">
+                and job_code = #{exactJobCode}
+            </when>
+            <when test="jobCode != null and jobCode != ''">
+                and job_code like concat('%', #{jobCode}, '%')
+            </when>
+        </choose>
         <choose>
             <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
                 and instance_status in
@@ -136,9 +141,14 @@
         select count(1)
         from batch.job_instance
         where tenant_id = #{tenantId}
-        <if test="jobCode != null and jobCode != ''">
-            and job_code like concat('%', #{jobCode}, '%')
-        </if>
+        <choose>
+            <when test="exactJobCode != null and exactJobCode != ''">
+                and job_code = #{exactJobCode}
+            </when>
+            <when test="jobCode != null and jobCode != ''">
+                and job_code like concat('%', #{jobCode}, '%')
+            </when>
+        </choose>
         <choose>
             <when test="instanceStatuses != null and instanceStatuses.size() &gt; 0">
                 and instance_status in

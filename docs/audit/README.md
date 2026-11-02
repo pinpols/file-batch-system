@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [批量调度系统架构适配性评估](architecture-suitability-assessment-2026-11-02.md) | 统一运行、事件可靠性、Worker 隔离、多租户、扩缩容与观测的静态评估；不代表生产或容量验收 |
 | [后端 Controller / Service / Entity 边界复核](backend-controller-service-entity-boundary-review-2026-11-01.md) | bug-fixes 工作树的控制层与实体边界复核、Service 清单、阶段性定向及容器测试；2026-11-01 暂停，后续改动与完整验证未完成 |
 | [Console Controller 边界清单](console-controller-boundary-inventory-2026-11-01.csv) | Console 97 个 Controller 的职责复核与证据边界；整改及验证进度以边界复核记录为准 |
 | [后端 Entity 边界清单](backend-entity-boundary-inventory-2026-11-01.csv) | 101 个基线 Entity 的表行、投影和混合字段分类；迁移项待验证 |

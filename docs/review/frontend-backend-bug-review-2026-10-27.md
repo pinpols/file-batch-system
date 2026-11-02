@@ -1,5 +1,540 @@
 # 前后端 Bug 审查与验证汇总（2026-10-27）
 
+## 2026-11-02：表单与页面文案治理进度
+
+另据 `batch-console/src/router/index.ts` 中直接懒加载的 Vue 组件盘点，涉及 68 个桌面及 13 个移动视图文件；这只统计该文件中的直接导入，不包含嵌套组件或其他动态路由，不能视为全部页面及文案的完整清单。各页具体状态仍需逐项核查。
+
+补充路由口径：按同一文件的直接懒加载字面路由统计，共 84 条，指向上述 81 个唯一 Vue 文件（桌面 71 条、移动 13 条）；同一页面可能对应多个入口，仍不包含动态路由和嵌套组件。作业及 Workflow 运行详情、Worker 详情、审批两页签等尚缺明确的完整页面状态证据，不能继承列表页的核查结论。
+
+前后端均在已有工作区的 `codex/closure-review` 分支处理。前端按实际组件盘点，`src/views` 中 58 个 Vue 文件包含 74 个 Element Plus 表单，`src/components` 中另有 8 个文件包含 8 个；移动页面及自定义表单还需单独检查。该盘点不是逐页视觉审查结果，全部表单及页面文案尚未核查完毕。
+
+本批调整租户复制、初始化、新建和批量新建表单的标签布局、字段分组或宽度；复制及初始化的配置类型使用本地化名称，传输值不变。同步精简租户配置、实现选择和删除后果等提示，中英文键保持对应。租户复制页面曾在 1280×900 深色浏览器中检查并执行真实复制结果回查；该截图和操作仅覆盖复制表单及所测场景，不能代替其他表单、主题、视口或全部文案的审查。剩余页面应逐项检查视觉布局、文案和实际交互，再按受影响范围验证。
+
+前端执行 `npm run typecheck`、`npm run check:i18n`、四个改动组件的 ESLint 检查，以及租户相关四个测试文件（68 项）均通过；`E2E_BASE_URL=http://127.0.0.1:5178 npm run test:e2e:visual` 的 1 项登录页基线通过，不覆盖本批表单。默认端口下的首次视觉基线启动被中断后使用独立端口重跑。后端文档结构、日期策略和代码引用检查通过。
+
+续查补充：配置发布、文件模板与渠道、作业包导入、配额、资产新鲜度、API Key、系统参数、账户及通知配置等紧凑表单调整为顶部标签；通知规则的渠道字段实际使用编码，界面文案由“渠道 ID”改为“渠道编码”。作业包导入和配额等提示去除不必要的实现术语。上述续改有源码检查及定向组件测试，但未完成对应表单浏览器截图、主题、窄屏和键盘复核；静态表单清单不含所有自定义表单，也不能作为全站文案逐项审查完成的证据。
+
+续改后执行 `npx vitest run --maxWorkers=2` 对租户复制、初始化、通知规则、配置发布、文件模板及作业包六个测试文件复验，共 152 项通过；改动 Vue 文件的 ESLint、`npm run check:i18n` 和 `git diff --check` 通过。类型检查在本轮续改期间通过，但未覆盖随后增加的仅文案调整；全站视觉审查与完整测试未运行。
+
+再次续查：移动端 14 个 Vue 页面完成源码级用户可见静态文本和输入控件扫描，调整补跑请求标识、链路标识与工作流类型展示，并为执行日志搜索添加可访问名称。公共组件内 8 个 Element Plus 表单及常用录入助手完成源码核对：重试策略复用现有翻译，链路 ID 粘贴入口改为可聚焦按钮；编码向导说明与实际五个域选项对齐。`MWorkflowViewer.context.test.ts` 和 `operationsToolkit.test.ts` 共 9 项通过；i18n 和改动组件 ESLint 检查通过。上述源码扫描及单测不代表浏览器视觉、键盘操作或所有状态验收。
+
+隔离组件预览在中文深色主题下检查了租户新建、批量新建、初始化和复制抽屉的 1280×900 与 390×900 视口，可见控件未横向溢出；复制抽屉在窄屏的底部按钮占三行。该预览拦截全部 API，不代表真实服务或其他主题、语言、状态通过。预览发现链路 ID 粘贴按钮的 Enter 和空格被 Tooltip 拦截；修复后通过 Tab 聚焦及 Enter、空格、鼠标操作复核，模拟剪贴板均读取一次、正确填值且未提交表单。桌面作业、工作流、文件和配置页面的 51 个 Vue 文件完成静态文本与固定属性扫描；调度、治理、运维页面做了枚举展示命中检查。两者仍不能代表全量文案逐项审读或浏览器验收。
+
+根据视觉反馈再次调整租户复制抽屉：租户选择在宽屏并列、窄屏纵向排列，去除重复的卡片边框，以分隔线组织内容；三个独立对比工具移至预览选项附近，固定底栏保留取消、试运行和正式复制。各工具继续使用原有请求和权限条件。内置浏览器隔离预览核对了深色中文桌面及中英文 390×900 窄屏；桌面源和目标字段的标签顶点相同、输入框顶点相同。预览拦截 API，未重新执行真实服务写入；不同权限、结果、错误和其他主题仍需单独核对。
+
+本轮继续用隔离组件预览复核表单：英文业务日历和批次窗口的固定宽度标签曾换行并侵入下一行，改为顶部标签后在桌面及 390×900 窄屏检查，窗口时间输入与底栏可见。资源队列的三个容量输入由逐行改为响应式排列，复测发现末项受通用样式影响下移 8px，修正后桌面三项输入框及标签的顶点分别一致；英文 390×900 下两项同排、第三项换行。预览仅使用样例和拦截的 API，不代表真实后端、其他状态或全站视觉验收。同时根据后端枚举补齐队列、窗口和日历的中英文显示，列表中实际读取到点策略的列改用对应名称；已有接口值不变。
+
+新建租户、新建账户、通知渠道和通知规则抽屉在焦点切换时会提前触发必填错误；已将焦点设置移到抽屉打开完成后，并清除打开过程产生的校验状态。隔离浏览器复核四处首次打开，通知规则还验证关闭重开及空提交；新增组件回归覆盖四个入口的焦点、初始状态及空提交校验。登录页视觉基线复跑 1 项通过，该基线不覆盖上述抽屉。
+
+本轮定向复测：`NotificationTenantFormFocus`、`NotificationChannelsTab`、`NotificationRulesTab`、`governanceListFilters`、`JobMonitoringFields` 共 5 个测试文件、20 项通过；`GovernanceEditors`、`QueueConfigWindowPreview`、`QueueConfigHolidays` 共 3 个文件、11 项通过。首次命令同时指定的 `QueueConfig.test.ts` 实际不存在，Vitest 未执行该路径，已改为上述实际存在的治理测试文件；不得将不存在的路径计为通过。
+
+继续复核工作流依赖、文件上传和等待治理：工作流依赖的两个选择框曾相差 9px，修复后顶点一致；其固定宽度弹窗在 390px 视口裁切，调整后完整可见。文件上传弹窗原宽 620px，在 390px 视口裁切右侧，调整后上传字段及底栏可见。共享编码组件在窄屏压缩业务名称输入，已改为分行并补可访问名称。批次日摘要窄屏由两列改为单列，桌面仍为两列；历史缺口按钮及等待关系搜索按钮与相邻日期控件已对齐，持久等待空态不再被过大行高拉开。上述检查使用隔离数据和拦截 API，不构成实际业务写入验证。批次日治理、等待关系图和展示辅助三文件 17 项通过；文件列表及模板相关测试 17 项通过。
+
+API Key 界面新增空权限使用通配范围的提示，以及后端已有的 `worker.read`、`worker.execute` 选项；账户列表的启用状态与角色名称使用已有词条，未知状态或角色保留明确的回退显示。相关组件及角色测试 11 项通过；未真实创建密钥。文件渠道的认证、回执等枚举补齐真实后端取值的中英文文案，模拟 `PASSWORD`、`SYNC` 已在中英文界面核对。隔离文件预览曾出现一次 ResizeObserver 警告，尚未确认真实应用是否复现。
+
+续查配置及调度：配置发布版本对比在 390px 视口裁切，现已适配窄屏并在隔离预览核对版本选择与按钮；导入向导英文长选项改为换行，桌面及窄屏可见。批次窗口窄屏筛选标签及状态摘要不再逐字挤压，单次补跑弹窗不再裁切；相关预览未提交业务操作。自助配额申请先用组件测试复现 `12abc` 和 `12.9` 被截断成 `12` 提交，随后要求完整正整数；非法值不提交、合法值保持原语义。自助配额、重跑、补偿和触发器申请初始页面均在 390px 隔离预览检查，未执行真实申请。
+
+本轮继续检查监控、运维和工作流表单：通知重投弹窗及工作流列表弹窗调整窄屏宽度，通知事件、等级及工作流选项补充中英文显示，保留原有传输值。批次重放的范围选项在英文窄屏原先被裁切，已调整选项排列；结果版本筛选框与查询按钮的顶边由错位调整为一致，桌面实测均为 121.14px。下表记录实际查看的初始状态；均使用隔离夹具，未执行真实写入，其他状态、主题及真实服务仍待核查。
+
+通知与用量相关定向测试 `npx vitest run --maxWorkers=2 src/views/system/components/NotificationTerminalDeliveriesTab.test.ts src/views/system/components/NotificationRoutePreview.test.ts src/views/observability/usageSummary.test.ts` 共 3 个文件、8 项通过。组件测试及上述隔离预览不构成完整浏览器或真实服务验收。
+
+批次重放与工作流网关定向测试 `npx vitest run --maxWorkers=2 src/views/ops/BatchDayReplay.test.ts src/views/workflow/designer/inspector/GatewayNodeForm.test.ts` 共 2 个文件、12 项通过；国际化检查 `npm run check:i18n` 和类型检查 `npm run typecheck` 通过。
+
+
+继续核查系统、作业、文件及公共工具表单：维护设置恢复时间的默认值和上限由占位文字改为持续提示，日期控件与表单等宽；作业向导窄屏改为顶部标签，步骤显示保留当前步骤说明，桌面步骤长标题行距调整；作业包导入弹窗适配窄屏并允许模式选项换行。文件模板及渠道校验信息改为中英文可读字段名，校验规则和提交值不变。隔离预览中曾看到枚举代码，补齐夹具元数据后确认显示正常，未据此修改生产枚举。以上未执行真实写入；公共 Cron 预览请求因本地服务未连接失败，未验证服务端结果。
+
+文件模板定向测试 `npx vitest run --maxWorkers=2 src/views/file-center/FileTemplateList.context.test.ts` 19 项通过；文件表单和维护设置的目标 ESLint、`npm run check:i18n` 通过。上述结果只覆盖运行命令及本轮记录的状态。
+
+工作流批量触发弹窗在英文 390px 原固定宽度裁切，现按视口限制宽度并复拍确认表格区域及底栏可见，未发起触发；`npx vitest run --maxWorkers=2 src/components/workflow/WorkflowBulkTriggerDialog.test.ts` 3 项及该组件 ESLint 通过。作业向导/导入相关 `npx vitest run --maxWorkers=2 src/views/job/JobBundleContextRisks.test.ts` 63 项及两个受影响 Vue 文件 ESLint 通过；后续向导步骤和真实导入未验证。
+
+治理表单续查：新建窗口的起止时间、假日的业务日期与其他输入控件宽度统一；队列、窗口和日历的必填提示使用本地化字段名，配额相关英文提示和搜索占位去除内部属性名。英文 390px 隔离预览复核窗口、假日和配额初始状态，未执行提交。`npx vitest run --maxWorkers=2 src/views/governance/QueueConfig.validation.test.ts src/views/governance/QueueConfigWindowPreview.test.ts src/views/governance/QueueConfigHolidays.test.ts` 3 文件 12 项通过，涉及文件 ESLint 与国际化检查通过。
+
+工作流监控策略和试运行弹窗在窄屏原固定宽度裁切；现分别采用响应式宽度，前者根据空间排列规则控件，后者将表单标签上置并在窄屏纵向排列 L1/L2/L3。隔离预览复核工作流监控英文桌面及 390px 初始状态，以及试运行英文 390px 三个档位与条件日期；未保存策略或发起试运行。`npx vitest run --maxWorkers=2 src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 6 项、`npx vitest run --maxWorkers=2 src/components/dialogs/DryRunPlanDialog.test.ts` 5 项及各组件 ESLint 通过。告警路由编辑功能当前关闭，编辑表单不可达，未记为已验证。
+
+配置同步预览中，目标 JSON 工具栏被面板裁切，现调整容器布局；目标租户占位改为实际多选提示，未选时仍使用当前租户。原子任务参数表单窄屏标签改为上置，保留桌面布局；我的账户仅查看初始状态，未输入凭据。`npx vitest run --maxWorkers=2 src/views/system/components/ConfigSyncTab.test.ts` 27 项、两个受影响组件 ESLint 与国际化检查通过；均未执行真实提交。
+
+视觉基线 `E2E_BASE_URL=http://127.0.0.1:5246 npm run test:e2e:visual` 1 项通过，该测试仅覆盖中文深色登录入口，不覆盖本批表单。
+
+身份绑定抽屉因标签已置顶却保留旧左缩进，操作按钮与字段错位；移除缩进并调整窄屏空态行高，英文桌面及 390px 隔离预览复核，组件 ESLint 通过。资源标签的新建抽屉仅通过夹具直接打开，未核实父页面入口。工作流列表英文筛选占位改为用户可读文案，校验摘要避免单复数错误，级别复用本地化并在未知值时回退；英文 390px 隔离预览查看运行弹窗及模拟校验结果，未触发工作流。工作流列表定向 ESLint、国际化检查和 `npx vitest run --maxWorkers=2 src/components/table/ListPageQueryBar.test.ts` 2 项通过。
+
+初始化租户页面窄屏标签上置，租户编码提示支持长词换行并去除重复建议；初始密码要求改为持续可见说明，区分前端要求的至少 12 位和混合字符建议。英文 390px 隔离预览复核初始表单与说明；登录页另查看空值、服务不可达及单点失败夹具状态，未输入凭据或提交。`npx vitest run --maxWorkers=2 src/components/common/TenantIdInput.test.ts src/views/login/Login.test.ts` 2 文件 3 项、涉及文件 ESLint 与国际化检查通过。
+
+非 `<el-form>` 页面续查：作业实例英文 390px 批量结果弹窗原固定宽度裁切，现适配视口并通过隔离内存响应复拍；`npx vitest run --maxWorkers=2 src/views/monitor/JobInstanceList.test.ts` 10 项及目标 ESLint 通过，未执行真实重试。工作流运行列表英文窄屏筛选初始状态已看，搜索占位改为可读文案。文件到达组英文桌面及窄屏查看筛选与样例表格；流水线观测英文窄屏查看四个页签筛选和空态，确认操作及非空详情仍待查。
+
+移动文件筛选原使用后端不存在的 `PROCESSING` / `COMPLETED` 状态，现使用后端 `fileStatus` 字典，并补全中英文状态名称；英文 390px 模拟数据下选择 Loaded 后列表从 2 条变为 1 条。日志的 Trace ID 占位说明精确匹配。`npx vitest run --maxWorkers=2 src/views-mobile/MFileList.filter.test.ts` 1 项通过，目标 ESLint 与国际化检查通过；筛选结果为隔离夹具，不代表真实后端验收。
+
+上述续改后的当前工作区再次执行 `npm run typecheck` 和 `npm run check:i18n` 均通过；`E2E_BASE_URL=http://127.0.0.1:5246 npm run test:e2e:visual` 1 项通过，仍仅覆盖中文深色登录入口。报告更新后执行文档结构、日期策略及代码文档引用检查均通过；这些检查不等同于全站视觉或真实业务验收。
+
+本轮复核租户复制与审计筛选：复制类型原桌面英文长标签换行导致对齐不整齐，网格改为自适应列宽，英文桌面及中英文 390px 已复拍；隔离差异详情的配置类型和动作改用中英文名称，未知值回退原值。英文 390px 使用模拟源、目标及预览响应查看详情，未真实复制；矩阵及错误状态待查。`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts` 38 项、相关 ESLint 与国际化检查通过。
+
+业务审计与操作审计依据各自 SQL 区分操作人 ID 部分匹配和精确匹配，统一 Trace ID 等筛选文字；英文 390px 隔离空态复拍可读。`npm run check:i18n` 及词条 ESLint 通过，真实查询和数据结果未验证。
+
+移动页续查：英文 390px 在完整移动布局夹具下查看作业及 Worker 非空卡片和搜索，Worker 三个操作按钮在窄屏改为按空间换行，避免英文动作文字挤成两行；此前缺移动布局包装导致的浅色按钮低对比属于夹具问题，不作为生产缺陷。移动告警搜索明确说明只搜索已加载记录；当前页无匹配但还有后续页时保留加载入口，分页场景由定向测试覆盖。页面样例和定向测试使用模拟数据，未操作真实告警、作业或 Worker；预览服务日志有一次 Worker GET 经代理失败（502），不能称所有请求均被拦截，真实后端未验证。
+
+文件状态展示续查发现桌面和移动颜色表仍引用后端不存在的旧状态，现根据后端实际 11 项更新共享类型和颜色映射，移动端复用同一映射并对未知值回退中性。`npx vitest run --maxWorkers=2 src/components/common/statusTagResolve.test.ts src/views-mobile/MFileList.filter.test.ts` 2 文件 16 项及相关 ESLint 通过；未改变后端状态或接口值。
+
+移动告警加载后续页失败时，原实现仍提前递增页码，下一次重试会跳过失败页；已在请求成功后推进页码。定向测试先复现请求页序 `[1, 2, 3]`，修复后验证 `[1, 2, 2]` 和第二页结果。`npx vitest run --maxWorkers=2 src/views-mobile/MAlerts.search.test.ts src/views-mobile/MFileList.filter.test.ts src/components/common/statusTagResolve.test.ts` 3 文件 18 项与相关 ESLint 通过；告警结果及分页均为测试夹具。
+
+续查共享状态调用方：作业关联文件表改用共享文件状态展示，已知状态使用本地化名称与对应颜色，未知值仍回退原值；移动文件页在元数据字典缺失时从已有共享状态映射取得可选项，字典可用时仍以服务端为准。两项均先用测试复现；`npx vitest run --maxWorkers=2 src/views-mobile/MFileList.filter.test.ts src/views/job/components/JobRelatedFilesTab.status.test.ts src/views/job/components/JobRelatedFilesTab.test.ts src/components/common/statusTagResolve.test.ts` 4 文件 22 项及目标 ESLint 通过，真实后端和对应状态颜色的视觉验收未执行。
+
+租户复制差异原因由后端返回四种固定英文，本轮只对已确认原文精确翻译，其他原因保留原文。组件测试新增四种已知原因和未知值回退，先红后修；`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts` 43 项及目标 ESLint、国际化检查通过。中文桌面隔离预览已复核四条已知原因的翻译及未知原因原样回退；未执行真实复制。
+
+移动审批的分页失败重试与告警页存在同样的跳页问题；修复为成功后推进页码，`npx vitest run --maxWorkers=2 src/views-mobile/MApprovals.pagination.test.ts` 1 项和目标 ESLint 通过，测试复现失败后的请求页序由 `[1, 2, 3]` 修正为 `[1, 2, 2]`。英文 390px 审批初始卡片及搜索为模拟数据，未提交审批。
+
+移动补跑列表根据实际查询关联的审批状态展示和统计待审：后端查询固定返回 `requestStatus=ACCEPTED`，原页面按请求状态的 PENDING 统计导致待审为零。现优先展示审批状态，旧记录缺审批号时显示只读原因；窄屏日期不再拆断。英文 390px 用真实字段形态的夹具复拍，未提交；`npx vitest run --maxWorkers=2 src/views-mobile/MApprovals.pagination.test.ts src/views-mobile/MCatchUp.status.test.ts` 2 文件 3 项、目标 ESLint 和国际化检查通过。
+
+租户列表筛选依据后端 `keyword` 同时匹配租户 ID 与名称的实际行为更新文案，中文 390px 复拍可读；触发器列表英文窄屏查看筛选及行按钮，未执行状态变更。相关 ESLint 和国际化检查通过。
+
+事件目录默认目录视图原将请求失败显示为无数据，且刷新失败可能误提示成功；现显示失败及重试，并保留失败反馈。`npx vitest run --maxWorkers=2 src/views/observability/EventCatalog.error.test.ts src/views/observability/eventCatalogPresentation.test.ts` 2 文件 6 项及目标 ESLint 通过；英文 390px 模拟失败态已查看，隔离预览计数一次 Enter 产生一次表单提交。Outbox 英文窄屏仅查看筛选和空态，夹具曾提示阻断写请求；非空及真实服务状态未验证。
+
+本批汇总复验：`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts src/views-mobile/MAlerts.search.test.ts src/views-mobile/MApprovals.pagination.test.ts src/views-mobile/MCatchUp.status.test.ts src/views-mobile/MFileList.filter.test.ts src/views/job/components/JobRelatedFilesTab.status.test.ts src/components/common/statusTagResolve.test.ts src/views/observability/EventCatalog.error.test.ts` 8 文件 69 项通过；`npm run check:i18n`、`npm run check:docs`、前后端 `git diff --check` 通过。首次 `npm run typecheck` 在 `MCatchUp.vue` 报状态字段可能为 null；展示函数参数类型补充 null 后重跑通过，该修正不改变运行逻辑。`E2E_BASE_URL=http://127.0.0.1:5246 npm run test:e2e:visual` 1 项通过，仅覆盖中文深色登录页。
+
+工作流定义图在隔离浏览器中复现黑色节点遮住文字：SVG 安全净化移除 Mermaid 内嵌样式，而定义图未提供替代样式。移动端及桌面组件现使用项目可信样式恢复节点、文本和连线，未改变净化规则；英文浅色桌面、英文浅色及中文深色 390px 移动预览已复拍，移动样例节点可打开详情。桌面通过预览夹具捕获实际导出 Blob，核对节点填充和描边、连线描边、文字居中属性；未验证真实服务数据及所有图形类型。`npx vitest run --maxWorkers=2 src/utils/trustedMermaidSvg.test.ts src/views-mobile/MWorkflowViewer.context.test.ts src/views-mobile/MOutbox.test.ts` 3 文件 19 项及桌面组件 ESLint 通过。
+
+移动 Outbox 的固定分段筛选在英文 390px 裁切，改为下拉并使用后端实际重试状态字典；策略缺失时不显示分隔符。移动下拉浮层挂载到 body 后无法继承局部主题变量，暗色下回退为黑字；现回退全局主题色。Outbox 深色英文、浅色中文及移动文件筛选深色英文的隔离预览已复核。夹具第一次路由错误导致一次代理 GET 502，未发生真实写入；真实服务及其他状态未验证。
+
+链路诊断窄屏筛选与说明原被压入同一行，已调整为响应式分行；血缘范围文字不再使用数字指标的大字号。两页中英文可读文案及后端已知范围、缺口名称已补齐，未知值保留原文。英文 390px 链路样例和中文 390px 血缘样例由隔离预览复核；`npx vitest run --maxWorkers=2 src/views/observability/TraceDiagnostic.test.ts src/views/observability/LineageEvidence.test.ts src/views/observability/LineageRelationExplorer.test.ts` 3 文件 13 项及目标 ESLint、国际化检查通过，未验证真实服务。
+
+配置导入向导上传会话原在租户切换后保留，可能在新上下文中仍对原上传租户应用；切换时现清理会话并使在途上传、预览与确认回调失效，已发出的服务端应用请求不可撤回。`npx vitest run --maxWorkers=2 src/views/config/TenantPackageImportWizard.test.ts` 7 项及目标 ESLint、类型、国际化、API 漂移检查通过；中文 390px 预览及英文 390px 应用阻塞态使用隔离数据，未真实上传或应用。报表导出界面中文卡片、租户标识和错误提示改为用户可读文案，不影响导出接口。
+
+本批最终复验：`npx vitest run --maxWorkers=2 src/views/config/TenantPackageImportWizard.test.ts src/views/observability/TraceDiagnostic.test.ts src/views/observability/LineageEvidence.test.ts src/views/observability/LineageRelationExplorer.test.ts src/views-mobile/MOutbox.test.ts src/views-mobile/MWorkflowViewer.context.test.ts src/utils/trustedMermaidSvg.test.ts` 7 文件 39 项通过；`npm run typecheck`、`npm run check:i18n` 通过。`E2E_BASE_URL=http://127.0.0.1:5246 npm run test:e2e:visual` 1 项通过，该基线仅覆盖中文深色登录页，不覆盖本批工作流图、导入或链路页面。
+
+继续检查对齐：租户复制的对比工具原与标签横排，按钮左边界偏离其他表单控件；现将标签置于按钮上方，按钮与其他控件左侧对齐。隔离预览复核了深色中文桌面和英文 390px，未连接真实服务或执行复制。`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts` 43 项、该组件 ESLint 通过；`E2E_BASE_URL=http://127.0.0.1:5384 npm run test:e2e:visual` 1 项通过，仅覆盖登录页。
+
+通知管理使用隔离样例复核了中文浅色桌面与 390px 的渠道、规则编辑抽屉，以及窄屏路由模拟的作业事件条件与结果空态；未发现明确对齐问题，未修改代码。该检查未连接真实服务，英文、深色、完整键盘路径及其他状态仍待查。
+
+作业定义向导英文桌面的执行策略和触发步骤中，长标签换行与下一行重叠；现调整标签列宽并允许标签按内容撑高。英文桌面复拍及英文 390×844 第 3–6 步检查未见重叠或横向裁切；第 4 步非法 JSON 显示错误并阻止继续。工作流和告警路由的中英文提示去除内部表名。隔离预览未提交，热更新时部分 GET 因代理被禁止而失败；`npx vitest run --maxWorkers=2 src/views/job/JobBundleContextRisks.test.ts` 63 项、目标 ESLint 和 `npm run check:i18n` 通过。
+
+工作流图继续复核时发现净化后失败边与跨日边的虚线丢失，桌面节点带 Mermaid 渲染前缀的 ID 也未被点击处理识别。三个图组件补回虚线样式，桌面按实际渲染 ID 匹配节点；隔离浏览器样例中普通、失败、跨日边分别为实线、虚线、虚线，实际桌面导出 SVG 保持同样线型，点击节点可打开对应详情。`npx vitest run src/views/workflow/WorkflowMermaidViewer.test.ts src/components/workflow/WorkflowMiniDag.test.ts src/utils/trustedMermaidSvg.test.ts src/utils/crossDayMermaid.test.ts` 4 文件 14 项通过。未连接真实后端或验证其他图形类型。
+
+本次最终联合复验：`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts src/views/workflow/WorkflowMermaidViewer.test.ts src/components/workflow/WorkflowMiniDag.test.ts src/utils/trustedMermaidSvg.test.ts src/utils/crossDayMermaid.test.ts` 6 文件 120 项通过；上述受影响 Vue 文件及新增测试的 ESLint、两仓 `git diff --check` 通过。
+
+有依赖数据的等待关系图在英文 390px 下将拓扑容器撑出视口，连带裁切说明与工具栏；现限制网格列宽并保留图形区域自身滚动，工具换行后也与首行左对齐。模拟两条依赖的桌面和窄屏预览已查看；窄屏组件宽度及滚动宽度由 `342 / 1216px` 调整为 `342 / 342px`，图内可单独滚动。`npx vitest run --maxWorkers=2 src/views/scheduler/components/dependency-waits/WaitRelationshipGraph.test.ts src/views/scheduler/waitRelationshipGraph.test.ts src/components/workflow/WorkflowMiniDag.test.ts` 3 文件 18 项及两个组件 ESLint 通过；`E2E_BASE_URL=http://127.0.0.1:5386 npm run test:e2e:visual` 1 项通过，视觉基线仅覆盖登录页。
+
+作业列表快速创建和编辑抽屉在英文桌面与 390×844 使用隔离样例检查；筛选及表单占位从内部字段名改为用户可读文案，过长的无队列提示简化。`npm run check:i18n` 和两语言文件 ESLint 通过；未连接真实服务或提交。
+
+作业触发弹窗原多行参数输入区仅显示两行，现按类型精简说明并调整输入高度；英文 390px 已复核示例和按钮，输入非法 JSON 后弹窗保留并显示错误。克隆确认弹窗也已查看，未确认操作。`npx vitest run --maxWorkers=2 src/views/job/JobBundleContextRisks.test.ts` 63 项、类型、国际化及目标 ESLint 通过；视觉基线 1 项仅覆盖登录页。
+
+新建文件模板时，两个 JSON 字段自动填入空对象导致映射助手默认禁用；现仅对这两个字段保留空值，手动输入 `{}` 或已有配置时仍禁止草案覆盖。英文隔离预览检查了导入窄屏及导出桌面草案的本地生成和应用，未保存；`npx vitest run --maxWorkers=2 src/views/file-center/FileTemplateList.context.test.ts src/views/file-center/MappingDraftAssistant.test.ts src/components/common/JsonTextareaInput.test.ts` 3 文件 34 项及目标 ESLint 通过。草案响应为夹具，不证明真实服务生成结果。
+
+智能助手输入框补充可访问名称、审计筛选文案去除内部字段名。共享游标分页在英文窄屏原将页大小截断，现允许换行并复核智能助手审计及文件列表；后者文件 ID 与链路 ID 的提示按后端精确匹配语义修正。中文桌面、中英文 390px 隔离预览未连接真实服务；曾出现一次 ResizeObserver 警告，尚未确认真实应用是否复现。`npx vitest run --maxWorkers=2 src/views/file-center/FileList.arrival.test.ts src/composables/useAiChatSession.test.ts` 2 文件 28 项、国际化与目标 ESLint 通过，登录视觉基线 1 项通过。
+
+本批最终联合复验：`npx vitest run --maxWorkers=2 src/views/file-center/FileTemplateList.context.test.ts src/views/file-center/MappingDraftAssistant.test.ts src/components/common/JsonTextareaInput.test.ts src/views/job/JobBundleContextRisks.test.ts src/views/file-center/FileList.arrival.test.ts src/composables/useAiChatSession.test.ts src/views/scheduler/components/dependency-waits/WaitRelationshipGraph.test.ts src/views/scheduler/waitRelationshipGraph.test.ts src/components/workflow/WorkflowMiniDag.test.ts` 9 文件 143 项通过；`npm run check:i18n`、`npm run typecheck` 与两仓 `git diff --check` 通过。
+
+告警路由目前仅供历史审计，原空态提示新增及自动分发，与实际功能不符；已调整中英文空态和搜索提示。隔离预览覆盖中文桌面及 390px 空态、英文 390px 空态和一条只读记录，未启用不可达的编辑器；`npx vitest run --maxWorkers=2 src/views/observability/AlertRoutingPanel.contract.test.ts` 1 项、国际化和两语言 ESLint 通过。预览出现一次 ResizeObserver 警告，真实应用是否复现尚未确认。
+
+报表中心隔离预览检查了中文和英文 390px 趋势与导出页面及中文搜索；搜索框补充可访问名称，下载按钮标明各自报表名称，趋势图为每日数值提供可访问文本，切换按钮暴露当前状态。中文说明和工作节点文案同步精简。未真实下载、复制或访问服务；目标 ESLint 通过，登录视觉基线 1 项通过，仅覆盖登录页。
+
+文件到达组按后端查询核对：`arrived_count` 是文件记录总数，等待、超时及触发计数是其子集，原百分比会重复计数；现显示记录数和子集数，同租户、同组编码的多状态行按组去重，并将 `WAITING_ARRIVAL` 纳入等待组。组状态可交叉，当前查询不提供应到分母，相关说明已同步前端使用指南。中文 390px 隔离样例验证等待状态与无匹配筛选，英文 390px 核对双列摘要及完整状态；未连真实服务。`npx vitest run --maxWorkers=2 src/views/file-center/arrivalGroupPresentation.test.ts src/components/common/statusTagResolve.test.ts` 2 文件 15 项、目标 ESLint、国际化和文档检查通过；新增断言曾先复现等待数及组数错误。
+
+审批中心英文窄屏状态分段原裁切“已拒绝”，现改为两列并验证可选择。补跑列表明确区分请求状态，详情分别显示请求状态与可空的审批状态，缺失时显示横线；相关中英文提示去除内部字段名。英文 390px 隔离样例检查了状态筛选、审批弹窗和 `ACCEPTED` / `PENDING` 详情，未提交；`npx vitest run --maxWorkers=2 src/views/approvals/ActionContextRisks.test.ts src/views/approvals/components/CatchUpApprovalsTab.test.ts` 2 文件 34 项、类型、国际化及目标 ESLint 通过。初次测试命令误含不存在的测试路径，已用上述实际路径复跑。
+
+工作节点管理的英文状态筛选原被固定宽度裁切，现让状态名完整显示并在窄屏换行；渠道详情窄屏由两列改为单列，避免类型和超时时间逐字折行，桌面仍保留两列。筛选占位与已知状态改为用户可读名称，未知状态保留原值。隔离样例检查了英文桌面和 390px 筛选、已认领任务与渠道详情，未执行写入；夹具阻断 SSE 及热更新后的代理请求，不能作为真实服务错误结论。`npx vitest run --maxWorkers=2 src/views/worker/OperationalContextRisks.test.ts src/views/worker/workerActions.test.ts src/components/common/statusTagResolve.test.ts` 3 文件 31 项、目标 ESLint 和国际化检查通过，登录视觉基线 1 项通过。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views/file-center/arrivalGroupPresentation.test.ts src/components/common/statusTagResolve.test.ts src/views/approvals/ActionContextRisks.test.ts src/views/approvals/components/CatchUpApprovalsTab.test.ts src/views/observability/AlertRoutingPanel.contract.test.ts` 5 文件 50 项通过；`npm run check:i18n` 和 `npm run typecheck` 通过。该范围不包括全部页面。
+
+加入工作节点后的最终联合复验：`npx vitest run --maxWorkers=2 src/views/file-center/arrivalGroupPresentation.test.ts src/components/common/statusTagResolve.test.ts src/views/approvals/ActionContextRisks.test.ts src/views/approvals/components/CatchUpApprovalsTab.test.ts src/views/observability/AlertRoutingPanel.contract.test.ts src/views/worker/OperationalContextRisks.test.ts src/views/worker/workerActions.test.ts` 7 文件 67 项通过；国际化及两仓 `git diff --check` 通过。
+
+配置发布新建抽屉曾因表单与抽屉抢焦点而在打开时立即显示必填错误；现待抽屉打开后聚焦首字段，离开空字段时仍正常校验。发布详情窄屏由两列改为单列并按用户时区显示发布时间；英文 390px 隔离预览检查了初始焦点、离开字段的错误提示及详情，未保存。`npx vitest run --maxWorkers=2 src/views/config/ConfigReleaseList.test.ts` 17 项与目标 ESLint 通过。
+
+作业实例与工作流运行详情的状态使用已有本地化和未知值回退；实例时间及工作流运行信息在窄屏由两列改为单列。英文 390px 隔离样例复拍了状态、时间和链路 ID；诊断抽屉仅确认可打开，夹具提示遮挡了视觉检查。`npx vitest run --maxWorkers=2 src/views/monitor/MonitorContextRisks.test.ts src/components/common/statusTagResolve.test.ts src/views/monitor/workflowNodeExecution.test.ts` 3 文件 31 项、目标 ESLint、类型和国际化检查通过；未连接真实服务。
+
+告警列表窄屏卡片的正文与操作原相互挤压，现分行排列；列表加载失败原误显示无匹配告警，现保留已有数据并提示失败。确认、静默及关闭文案依实际状态和 Alertmanager 桥接行为修正，前端可观测性使用指南同步。英文桌面、390px 正常及模拟失败态通过隔离预览检查，未执行写入；`npx vitest run --maxWorkers=2 src/views/observability/AlertList.error.test.ts src/views/monitor/MonitorContextRisks.test.ts` 2 文件 16 项、目标 ESLint、类型、国际化及文档检查通过。视觉基线仅覆盖登录页。
+
+作业定义详情及共享向导汇总的描述表在英文 390px 原将长编码和日期拆成多行，现按视口在窄屏使用单列、桌面保留两列；调度操作按钮在窄屏换行。隔离样例检查了详情的基本、调度、资源、触发、文件、工作流、告警及向导汇总，未提交；`npx vitest run --maxWorkers=2 src/views/job/JobBundleContextRisks.test.ts src/views/job/components/JobRelatedFilesTab.status.test.ts` 2 文件 64 项及目标 ESLint 通过。
+
+精确查询兼容边界：现有联合发布文档要求前后端同一版本集合，但 Compose 晋级未保证后端先于前端启动，浏览器中已加载的页面也不会自动同步切换。旧 Console 不支持 `exactJobCode`；兼容回退的 `jobCode` 仍是模糊查询，不能证明精确结果、计数或分页正确。该功能的上线需要先更新并核验全部后端副本，再启用依赖该条件的新前端；混版及回滚期间的结果尚未验证。
+
+作业详情及实例详情的最近运行原使用 `jobCode` 模糊条件后取首页，可能混入相似编码、使正确记录被挤出。后端新增可选 `exactJobCode`，列表和计数均在分页前精确过滤，保留原模糊条件；同参数并传时精确条件优先。前端各单作业入口与“查看全部”使用精确条件，列表清晰标注精确模式、修改编码后回到模糊搜索；租户与详情不一致时提示切回，不静默切换。切换作业期间的详情和懒加载旧响应不再覆盖当前内容，已发出的操作不能撤回。API 协议、发布说明和前端使用指南已更新，OpenAPI 类型由仓库工具生成。
+
+`./mvnw -pl batch-console-api -am -Dtest=JobInstanceMapperXmlTest,JobInstanceQueryIntegrationTest -Dsurefire.failIfNoSpecifiedTests=false test` 10 项通过，包含隔离 Testcontainers PostgreSQL 17.11 的相似编码、下划线、租户隔离、分页、双参数优先级和旧模糊查询；日志 `/private/tmp/codex-job-instance-exact-precedence-20261102.log`。前端 `npx vitest run --maxWorkers=2 src/views/job/JobDefinitionDetail.context.test.ts src/api/queries/instances.test.ts src/views/monitor/JobInstanceList.test.ts src/composables/useInstanceNoSearch.test.ts src/views/job/components/MiniCreateTimezone.test.ts src/components/dialogs/DryRunPlanDialog.test.ts src/views/job/JobBundleContextRisks.test.ts` 7 文件 102 项、类型、国际化、生成类型一致性和相关 ESLint 通过；OpenAPI 路径检查 439 项通过。独立源码复核未发现该范围内新增具体缺陷，未做真实前后端联合浏览器验收。
+
+详情主刷新失败时原会使运行页签在途请求失效并可能误显示空态，首次加载失败也会误报作业不存在；现保留同一作业的已有详情和在途页签数据，并显示失败及重试。新增回归先复现失败，修复后 `npx vitest run --maxWorkers=2 src/views/job/JobDefinitionDetail.context.test.ts src/views/job/JobBundleContextRisks.test.ts` 2 文件 75 项、类型、国际化及目标 ESLint 通过；失败期间保留的数据可能不是最新，已写入使用指南。未做真实后端故障注入。
+
+本批最终联合复验：`npx vitest run --maxWorkers=2 src/views/job/JobDefinitionDetail.context.test.ts src/api/queries/instances.test.ts src/views/monitor/JobInstanceList.test.ts src/composables/useInstanceNoSearch.test.ts src/views/job/components/MiniCreateTimezone.test.ts src/components/dialogs/DryRunPlanDialog.test.ts src/views/job/JobBundleContextRisks.test.ts src/views/config/ConfigReleaseList.test.ts src/views/observability/AlertList.error.test.ts src/views/monitor/MonitorContextRisks.test.ts` 10 文件 138 项通过；`npm run gen:api:check`、`npm run typecheck` 和 `npm run check:i18n` 通过。
+
+工作流运行列表英文 390px 隔离样例中，定义 ID 列标题原被截断；现加宽该列，复拍显示完整标题、状态与详情入口。`npx vitest run --maxWorkers=2 src/views/monitor/MonitorContextRisks.test.ts` 15 项及该页面 ESLint 通过；视觉基线 1 项仅覆盖登录页。实时连接票据被隔离夹具拒绝，真实服务、筛选结果及其他状态未验证。
+
+原子任务配置的 SQL 和 HTTP 请求体输入改为多行，保存配置选择框补充可访问名称。英文深色 390px 隔离样例查看 SQL、Shell、HTTP；SQL 和 HTTP 请求体的多行输入在预览中保留换行。`npx vitest run --maxWorkers=2 src/views/system/AtomicTaskTypeCenter.timeout.test.ts src/views/system/atomicTaskConfigDraft.test.ts` 2 文件 7 项、目标 ESLint 和登录视觉基线 1 项通过。未逐项操作存储过程执行器，也未连接服务或保存。
+
+文件流水线的投递与错误记录页签原在查询失败时显示空数据，刷新也可能误提示成功；现显示失败和重试，已有记录时保留并提示可能过期，切换页签后的迟到响应不会覆盖当前总数。英文 390px 隔离样例复核了两个页签的首次失败；英文桌面和窄屏查看了运行列表有数据状态，已有数据后失败仅有组件测试证据。`npx vitest run --maxWorkers=2 src/views/file-center/FilePipelineObservability.error.test.ts src/api/filePipelineQuery.test.ts` 2 文件 13 项、类型、国际化、目标 ESLint 通过；登录视觉基线 1 项不覆盖流水线。可观测性使用指南已更新；未连接真实后端或验证进度流。
+
+作业步骤页输入非法实例 ID 原会变成无条件查询；现提示有效的正整数范围并禁止该查询，清空后恢复，超出 JavaScript 安全整数但处于后端 Long 范围的编号保留十进制原文。步骤编码与类型在窄屏调整排列并支持查看完整值；分区表窄屏取消固定操作列，避免遮住分区键查看入口。英文深色桌面与 390px 隔离预览复核了步骤页和分区页，以及完整分区键弹层，未连接真实后端。`npx vitest run src/views/monitor/JobStepInstanceList.test.ts src/api/jobStepInstances.test.ts src/views/monitor/workflowNodeExecution.test.ts` 3 文件 11 项及目标 ESLint 通过。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views/monitor/JobStepInstanceList.test.ts src/api/jobStepInstances.test.ts src/views/monitor/workflowNodeExecution.test.ts src/views/file-center/FilePipelineObservability.error.test.ts src/api/filePipelineQuery.test.ts src/views/system/AtomicTaskTypeCenter.timeout.test.ts src/views/system/atomicTaskConfigDraft.test.ts src/views/monitor/MonitorContextRisks.test.ts` 8 文件 46 项通过；`npm run typecheck`、`npm run check:i18n` 及两仓 `git diff --check` 通过。
+
+继续检查对齐：工作流定义详情的长编码、名称和时间在窄屏双栏中被挤碎，现按视口改为窄屏单栏、桌面双栏，详情时间与列表使用相同显示时区。英文深色隔离预览检查了 390×844 和桌面详情，以及窄屏调度的 Cron、固定频率和手动状态；未保存调度配置。身份绑定表格的用户名列由过窄调整为最小 160px，英文深色桌面样例中标题可完整显示；其他列仍可横向滚动。预览使用合成数据并拦截写请求，不代表真实服务验证。
+
+继续检查页面失败状态：配额列表加载失败时现显示错误及重试，刷新失败不再提示成功；容量画像某些时间段加载失败时保留总览、提示趋势不完整，失败时间段显示为缺失而不是零。容量趋势缺失的回归测试先复现原有零值，再验证修复；容量画像使用指南同步说明。`npx vitest run --maxWorkers=2 src/views/ops/CapacityProfile.test.ts src/views/ops/capacityProfilePresentation.test.ts src/views/governance/QuotaPanel.test.ts src/utils/datetime.test.ts` 4 文件 29 项通过；目标 ESLint 和国际化检查通过。上述页面尚未进行真实后端故障注入。
+
+身份绑定列表加载失败不再同时显示“没有绑定”；绑定或解绑请求失败且回查不可用时提示结果未知，回查期间切换租户则不展示旧操作结果。`npx vitest run src/views/system/components/OidcIdentityBindingsDrawer.test.ts` 5 项及对应 ESLint 通过；错误态和有数据表格通过英文桌面深色隔离样例检查，未操作真实身份数据。
+
+本批类型检查首轮发现新增容量画像测试样例缺少生成契约中的必填字段；补全样例后 `npm run typecheck` 重跑通过。联合运行容量画像、配额、身份绑定及日期格式 5 个测试文件共 34 项通过；国际化、前端文档检查、后端文档结构、日期策略、引用检查及相关文件的 `git diff --check` 通过。
+
+再次复看租户复制：中文深色隔离样例的 1280×800、390×844 初始表单、对比工具和合成差异预览未发现需再修的明确错位，本次未修改复制组件；不代表真实数据及全部状态已验证。批次窗口中文桌面已有跨天窗口编辑样例也未发现明确对齐问题，未保存。触发器列表英文 390px 的固定操作列遮挡工作流编码，现仅在窄屏取消固定，桌面仍固定；隔离样例复核了筛选和横向滚动，`npx eslint src/views/system/TriggerList.vue` 与该文件 `git diff --check` 通过，真实服务及其他语言未验证。
+
+移动执行日志续查：首次请求失败原显示无日志，加载更多失败会清空已有记录；切换租户后的迟到响应也会覆盖当前列表。现显示持久错误和重试入口，翻页失败保留已加载记录并在列表末尾重试同一页，切换查询或租户时清空旧结果并拒绝旧响应。三个组件回归分别先复现失败，再通过；中文深色 390×844 隔离样例复核了首次失败、翻页失败及两次重试恢复，未连接真实服务。
+
+资产新鲜度策略的必填提示与“作业编码”字段统一，编辑图标增加包含作业编码的可访问名称；英文深色 390×844 隔离样例复核编辑抽屉，未保存。业务日历中文字段的补跑术语与后端协议统一，文案修改后未重新截图。`npx vitest run --maxWorkers=2 src/views-mobile/MExecutionLog.test.ts src/views/ops/AssetFreshnessPolicies.test.ts` 两文件 6 项、相关 ESLint、国际化和前端文档检查通过。新增的无障碍测试首轮类型检查暴露测试 API 用法错误，修正后 `npm run typecheck` 重跑通过。
+
+工作流设计器的条件状态补查：英文深色 280px 网关检查覆盖两个入边、两个出边和 N_OF 数量条件；Start/End 节点输入 257 字符后显示 256 字符上限错误。依赖新增弹窗的 CONDITION 表达式在英文桌面和 390×844 样例中未发现字段及底栏错位。均为隔离组件数据，未保存或连接后端。
+
+依赖等待三个页签查询失败时原会同时展示错误和空表；现隐藏对应空表，持久化页签也隐藏分页，刷新后重新展示结果。`npx vitest run src/views/scheduler/components/DependencyWaitPanel.test.ts` 3 项先复现后通过，目标 ESLint 和前端文档检查通过。英文深色 390×844 隔离样例检查了日历失败及刷新恢复和作业首次失败；作业刷新浏览器操作超时，未记作通过。夹具曾误将依赖快照构造成对象产生类型警告，不能据此推断真实接口异常。
+
+Webhook 编辑原允许修改名称，但前后端更新契约不接收该字段；现保留创建时填写，编辑时禁用名称，避免修改静默丢失。投递日志弹窗宽度适配窄屏。英文深色 390×844 隔离样例检查了编辑抽屉和投递日志，未保存或连接真实服务；`npx vitest run src/views/system/components/NotificationWebhooksTab.test.ts` 7 项、目标 ESLint 和前端文档检查通过。现有使用指南同步记录名称的修改限制。
+
+工作流设计器边属性在英文深色 280px 夹具中，长编码产生的表达式校验提示曾覆盖下一字段；现让错误提示参与布局，复核显示错误底部与下一字段分离，输入有效表达式后错误消失。`npx vitest run --maxWorkers=2 src/views/workflow/designer/inspector/EdgeInspector.test.ts src/views/workflow/designer/inspector/JobNodeForm.test.ts` 2 文件 28 项及目标 ESLint 通过；未保存或连接真实服务。
+
+移动作业列表首屏查询失败原会显示无实例，自动翻页失败没有可见重试，切换租户或状态后迟到的旧结果也可能覆盖或追加到当前列表。现分别显示首屏和列表末尾重试，保留已加载记录并重试原游标；新查询丢弃旧范围的迟到响应。SLA 筛选在加载或失败时不显示虚假的零条，游标滚动列表去除始终显示第一页的文案。五个定向测试覆盖失败恢复和请求乱序；中文深色 390×844 隔离样例复核首屏、翻页失败及重试恢复，未连接真实服务。对应运行与审批使用指南已同步。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views-mobile/MJobInstances.error.test.ts src/views/scheduler/components/DependencyWaitPanel.test.ts src/views/system/components/NotificationWebhooksTab.test.ts src/views/workflow/designer/inspector/EdgeInspector.test.ts src/views/workflow/designer/inspector/JobNodeForm.test.ts` 5 文件 43 项、`npm run typecheck`、`npm run check:i18n`、`npm run check:docs`、目标 ESLint 和两仓相关文件 `git diff --check` 通过。
+
+移动工作节点页原有状态操作与桌面规则不一致，且确认排空期间切换租户后会向新租户提交旧节点编码；定向测试先复现该请求。现复用同一 Worker 状态规则和写权限/维护冻结判断，接管须确认并说明节点退役；确认后重新核对租户、账号、权限和节点状态。列表失败时提示重试，已有数据标明可能过期并禁用操作，旧租户的迟到列表不会覆盖当前列表。英文深色 390×844 隔离样例检查了首屏失败重试、三种节点状态、接管确认和只读角色禁用，未确认接管或连接真实服务；运行与审批指南同步更新。
+
+文件详情英文深色 390×844 长名称样例原被双栏挤碎，现窄屏单栏、1280×800 桌面保留双栏。批次日治理英文 390×844 历史缺口日期输入左侧原不一致，改为窄屏标签上置和等宽；确认弹窗从约 195px 调整为 358px，1280×800 桌面筛选保持并排。上述均为隔离样例、未提交写操作；文件预览因夹具未注册 `DatetimeColumn` 有组件解析警告，批次日夹具有未配置路由警告，不将其作为生产问题或完整构建证据。
+
+原子任务配置的预览与复制原把存储过程列表和 HTTP 对象展示为字符串，而保存会解析为数组或对象；现复用保存的参数归一结果，无效值显示提示并禁止复制。类型错误提示同时涵盖数字和 JSON 的填写要求。三个回归先复现后通过；英文深色 390×844 存储过程隔离样例检查了合法数组和非法列表，未保存或连接真实服务。作业与流程使用指南已同步。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views-mobile/MWorkers.context.test.ts src/views/worker/workerActions.test.ts src/views/file-center/FileList.arrival.test.ts src/views/scheduler/components/BatchDayGovernanceDrawer.test.ts src/views/scheduler/batchDayGovernance.test.ts src/views/system/AtomicTaskTypeCenter.timeout.test.ts src/views/system/atomicTaskConfigDraft.test.ts` 7 文件 31 项通过；`npm run typecheck`、`npm run check:i18n`、`npm run check:docs`、目标 ESLint 和两仓相关文件 `git diff --check` 通过。文件列表原有测试不验证详情布局，该项以隔离浏览器复核为证。
+
+移动补跑审批查询失败原显示无申请，切换租户时旧列表可能迟到覆盖，已发出的审批返回后也会在新租户误显示旧结果；现提供失败重试、过期数据提示，维护冻结及查询不可用时禁用审批，并按租户和登录上下文隔离列表与操作结果。已发出的请求不能撤销。中文深色 390×844 隔离样例检查首次失败重试、待审批及历史只读记录、维护冻结和只读角色，未提交；对应运行与审批使用指南已更新。
+
+工作流设计器作业节点将“关联 Job / jobCode”等字段和必填提示改为用户可读的作业编码文案。英文深色 280px 隔离样例同时展示名称过长和未选择作业错误，未覆盖下一字段；长编码依赖状态因浏览器导航超时未验证。`npx vitest run --maxWorkers=2 src/views/workflow/designer/inspector/JobNodeForm.test.ts` 21 项、国际化和目标 ESLint 通过；未连接真实服务。
+
+批次日范围重放预览的每日状态改为中英文可读名称，未知状态仍显示原值，候选数量列不再误标为进度；切换试运行时隐藏不适用的结果策略，与单日表单一致。两个新场景先复现失败；`npx vitest run src/views/ops/BatchDayReplay.test.ts` 15 项、目标 ESLint 和国际化检查通过。英文深色 390×844 隔离样例复核了模拟预览及试运行条件字段，未提交或连接真实服务。预览过程中出现 ResizeObserver 和热更新后模拟数据类型警告，不能据此推断真实服务问题。
+
+作业监控策略的旧编辑抽屉原在切换租户后仍可向新租户发送旧作业 ID；现随租户、账号或写权限变化关闭旧编辑，迟到保存结果不覆盖新上下文，已发送请求仍需核对原租户。编辑按钮名称包含作业编码。英文深色 390×844 隔离样例中，长编码曾将抽屉关闭按钮挤出视口、固定操作列遮挡表头；现标题可换行并在窄屏取消固定操作列，复核 CRON 的绝对/相对完成时限及依赖作业相对时限。`npx vitest run src/views/observability/JobMonitoringPolicies.context.test.ts` 6 项及目标 ESLint 通过，使用指南已同步；未连接真实后端或保存。预览出现 ResizeObserver 警告，真实应用是否复现尚未确认。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views-mobile/MCatchUp.context.test.ts src/views-mobile/MCatchUp.status.test.ts src/views-mobile/MWorkers.context.test.ts src/views/ops/BatchDayReplay.test.ts src/views/workflow/designer/inspector/JobNodeForm.test.ts src/views/observability/JobMonitoringPolicies.context.test.ts` 6 文件 56 项通过；`npm run typecheck`、`npm run check:i18n`、`npm run check:docs`、目标 ESLint 及相关 `git diff --check` 通过。并行修改期间的类型检查曾因测试中的模拟未知状态超出生成类型失败，明确类型转换后重跑通过。
+
+文件格式的高级选项原使用不可键盘聚焦的链接，现使用按钮并暴露展开状态；中英文 390px 隔离样例检查了 Tab 聚焦、Enter 展开、空格收起及分隔/固定宽格式条件。定向测试 2 文件 23 项和目标 ESLint 通过；仅核查格式组件，未覆盖完整抽屉或真实后端。
+
+账号重置弹窗固定 480px 时在 390px 视口裁掉右侧及关闭按钮，现随视口收缩；英文深色模拟长账号在 390×844 与 1280×800 下复核，未输入或提交密码。该页面目标 ESLint 和 `git diff --check` 通过，账号创建、编辑及真实服务不在本次证据范围。
+
+作业向导新建时，作业编码和类型原未绑定表单校验字段，导致必填规则不能执行；现仅为可编辑状态绑定。窄屏日历与窗口输入框原被新建按钮挤窄，已改为纵向排列，并去掉按钮文字与图标重复的加号。英文深色 390×844 隔离样例复核了第一步错误提示及第二步 Manual/Cron 排列；最后精简的占位文案未能复拍，未覆盖其余步骤或真实提交。新增两项校验测试先失败、修复后通过。
+
+移动审批首次查询失败原显示空列表，切换租户或筛选后旧响应可能覆盖当前列表，拒绝确认期间切租户可能向新租户提交旧审批；现区分查询失败、统计失败和空结果，提供重试，并使过期请求及确认不作用于新上下文；只读角色和维护冻结时禁用操作。统计失败不隐藏已加载的列表。相关运行与审批使用指南已更新；已发出的请求不能撤销。中文深色 390×844 隔离样例复核了首次失败、重试后列表、统计失败及只读角色按钮禁用；未连接真实服务或提交审批。
+
+本批定向联合复验：`npx vitest run --maxWorkers=2 src/views-mobile/MApprovals.context.test.ts src/views-mobile/MApprovals.pagination.test.ts src/views/file-center/FileTemplateFormatFields.test.ts src/views/file-center/FileTemplateList.context.test.ts src/views/job/components/JobConfigBasicForm.validation.test.ts src/views/job/components/JobConfigBasicForm.contract.test.ts src/views/job/JobBundleContextRisks.test.ts` 7 文件、100 项通过；受影响文件 ESLint、`npm run check:i18n` 和 `npm run check:docs` 通过。这些结果不代表全部表单或完整业务验收。
+
+再次复看租户复制初始表单：本人复看中文深色桌面及 390px 隔离样例，另在 1280×800 和 390×844 复拍中，字段与配置类型网格未发现明确错位；目标租户实际必填但缺少标记，现与源租户一致显示必填星号，校验和提交行为不变。`npx vitest run --maxWorkers=2 src/views/system/components/TenantCopyConfigDialog.test.ts` 43 项及组件 ESLint 通过；未复核所有主题、结果及权限状态，未执行真实复制。
+
+类型复核首次发现公共复制组件将可聚焦 SVG 元素误标为仅 HTMLElement，已按 `tabbable` 返回类型修正声明，未改变运行逻辑。重跑 `npm run typecheck` 通过；`npx vitest run --maxWorkers=2 src/components/common/CopyableText.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts` 2 文件、62 项及相应 ESLint 通过。
+
+账户密码表单空提交时，校验提示原采用绝对定位，与下一字段标签间距过小；现让提示参与布局，保留原校验规则。英文深色隔离样例在桌面及 390px 查看了空提交，调整后复拍 390px 错误与下一字段的间距；未输入真实密码或调用服务。`npx eslint src/views/system/MyAccount.vue` 和该文件 `git diff --check` 通过，其他语言及提交状态未复核。
+
+批量账号导入预览的桌面校验原因原被截断且无法查看，现允许完整换行；390px 长用户名原挤压行号，现用户名和租户换行而行号保持单行。英文深色模拟两行的预览及行编辑初始状态修前、修后实拍，相关文件 ESLint 和 `git diff --check` 通过；未真实上传或保存，其他主题待查。
+
+项目视觉门禁 `E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过；该基线只覆盖中文深色登录页，不覆盖上述表单。隔离服务已停止。
+
+资产新鲜度策略表单的时间和数值控件原短于其他字段，现统一为表单宽度；过期宽限按秒提交，表单标签补明单位，列表仍按原有方式格式化。英文桌面及 390px 编辑隔离样例复拍，控件右边线一致；中文 390px 新建和英文新建核对单位，英文窄屏检查空作业编码提示。`npx vitest run --maxWorkers=2 src/views/ops/AssetFreshnessPolicies.test.ts` 3 项、相关 ESLint 和国际化检查通过；未真实保存或连接服务。
+
+工作流监控策略已配置、长编码及只读状态的隔离预览未能加载，不能计为视觉复核；`npx vitest run --maxWorkers=2 src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 6 项通过仅作组件测试证据。
+
+本批联合检查：`npx vitest run --maxWorkers=2 src/views/ops/AssetFreshnessPolicies.test.ts src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 2 文件、9 项通过；三个改动页面及中英文词条的 ESLint、`npm run check:i18n`、`npm run check:docs` 和相关 `git diff --check` 通过。后端统一报告对应文档结构、日期和代码路径引用检查通过。
+
+工作流监控策略预览恢复后，英文深色模拟已配置策略、长编码桌面及 390px 可见；说明框原与首项标签紧贴，现补足间距，窄屏滚动到底部可见关闭和保存按钮。只读状态的字段禁用且无保存按钮，模拟读取失败显示重试且保存禁用。`npx vitest run --maxWorkers=2 src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 6 项及目标 ESLint 通过；未真实保存。
+
+账户页的说明改为面向用户的账号确认和修改密码描述，英文密码占位明确混合字符是强度建议；移动审批卡片将插值后顺序错误的“由 提交 用户”改为“提交人 用户”，英文对应 `Submitted by`。本批文案依据源码和先前隔离预览调整，修改后的浏览器复拍待查。`npx vitest run --maxWorkers=2 src/views-mobile/MApprovals.context.test.ts src/views-mobile/MApprovals.pagination.test.ts src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 3 文件、16 项及相关 ESLint、国际化检查通过。
+
+系统参数抽屉的错误提示改为参与布局，避免紧贴下一字段；新建时输入非法键、取消后编辑合法参数原会保留旧错误，现打开新建和编辑时清除旧校验。新增 `SystemParameterList.validation.test.ts` 使用真实 Element Plus 表单复现该路径，修前失败、修后通过；英文深色桌面及 390px 隔离样例复拍错误和编辑状态，未真实保存。该新增测试文件目前未跟踪，交付时需一并纳入。
+
+租户放置分片键的非法格式提示原单独占据表单行，长文案行距过大且距离输入框较远；现移至字段下方并设置告警语义。英文深色桌面新建/编辑及 390px 非法键隔离样例复拍，保存仍禁用；未真实提交。预览夹具未注册埋点指令产生警告，不能视作生产错误。`npx vitest run --maxWorkers=2 src/views/ops/TenantPlacementList.test.ts` 1 项及目标 ESLint 通过；错误与输入的无障碍关联仍待进一步验证。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/views/system/SystemParameterList.validation.test.ts src/views/ops/TenantPlacementList.test.ts src/views-mobile/MApprovals.context.test.ts src/views-mobile/MApprovals.pagination.test.ts src/components/workflow/WorkflowMonitoringPolicyDialog.test.ts` 5 文件、18 项通过；相关 ESLint、`npm run typecheck`、`npm run check:i18n`、`npm run check:docs` 及已跟踪文件 `git diff --check` 通过；后端文档结构、日期和代码路径引用检查通过。`E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页；临时服务已停止。
+
+批次窗口创建表单的错误提示改为参与布局，避免紧贴下一标签；时间范围箭头与输入框对齐。英文深色桌面和 390×844 空提交隔离预览修前、修后复拍；`npx vitest run --maxWorkers=2 src/views/job/components/MiniCreateTimezone.test.ts` 8 项、组件 ESLint 通过。未验证其他语言、时间输入和成功提交。
+
+自助重跑和补偿的实例选项原直接显示状态代码，现复用共享状态组件显示中英文名称，未知状态保留原值；补偿提示去掉内部类型和服务器实现术语。新增 `SelfServiceInstanceStatus.test.ts` 覆盖两种申请的中英文和未知状态回退，4 项通过；`SensitiveTenantActions.test.ts` 与 `statusTagResolve.test.ts` 共 19 项通过。新测试文件目前未跟踪；本项尚未做浏览器复拍或真实申请。
+
+分片目录编辑抽屉的端口和连接池控件原短于其他输入，现局部设为等宽；英文深色模拟管理员桌面编辑测得字段均为 520px，390×844 复拍边线及底栏。`npx vitest run --maxWorkers=2 src/views/ops/ShardCatalogList.test.ts` 1 项、组件 ESLint 通过；未真实保存，本次未覆盖新建和错误态，隔离夹具缺少埋点指令产生警告。
+
+租户批量新建表单的空提交错误改为参与布局，避免紧贴下一字段；源租户说明明确留空不复制配置，无可用源时显示实际空态，密码说明补明至少 12 位并将强度作为建议。英文深色桌面及 390×844 隔离样例查看空错误、长名称源选择和两种初始化模式，未输入密码或真实创建；密码提示在错误态按现有规则隐藏。`npx vitest run --maxWorkers=2 src/views/system/components/TenantBatchCreateDialog.test.ts` 1 项通过。夹具预扫描有 PWA 虚拟模块警告，最终预览正常，中文和真实服务未复核。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/views/system/components/SelfServiceInstanceStatus.test.ts src/views/system/components/SensitiveTenantActions.test.ts src/components/common/statusTagResolve.test.ts src/views/job/components/MiniCreateTimezone.test.ts src/views/ops/ShardCatalogList.test.ts` 5 文件、32 项通过；租户批量新建定向 1 项通过。`npm run typecheck`、`npm run check:i18n`、`npm run check:docs`、相关 ESLint 及后端文档结构、日期和代码引用检查通过；项目视觉基线 `E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，只覆盖登录页，临时服务已停止。
+
+自助补偿和重跑在 390px 英文长标签原会换行错位，现改为顶部标签；实例选项中的共享状态标签受全局下拉样式影响原分行且圆点错位，已局部恢复同行显示。补偿在作业和业务日已选后改提示“选择目标实例”，中文作业编码标签同步统一。中文补偿及英文重跑的模拟候选在深色 390px 复拍，已知状态显示本地化名称，未知值原样显示；未发送申请或连接真实后端。
+
+日历快捷创建空提交错误原紧贴下一字段，现让错误提示参与布局；英文深色桌面及 390×844 模拟空提交复拍，底栏可见。`npx vitest run --maxWorkers=2 src/views/job/components/MiniCreateTimezone.test.ts` 8 项和组件 ESLint 通过，未创建日历或核查其他语言。
+
+取证导出窄屏日期输入由固定宽度改为与其他字段等宽；已确认的 PROCESSING、COMPLETED、FAILED 使用中英文名称，未知状态保留原值。英文深色 390px 日期逆序错误态修前后复拍；`npx vitest run --maxWorkers=2 src/views/ops/OpsDiagnostic.test.ts` 23 项覆盖状态及未知值，成功结果修后浏览器复拍未完成，未真实导出。夹具依赖预扫描有 PWA 虚拟模块警告，最终加载成功。
+
+租户初始化的英文配置类型网格改为自适应列宽，与复制表单一致；共享 JSON 输入框为解析错误增加中英文前缀并保留浏览器原始定位信息，调整长错误行距。初始化表单非空错误显示详细提示，空值保留必填提示，避免重复。此前非对象 JSON 或纯空格可能通过校验并进入请求或引发解析错误；现拒绝数组、null、字符串、数字及纯空格，对象按原内容提交。相关失败场景先复现、修复后通过；英文深色桌面及 390px 隔离预览复核语法、非对象和空值提示，未真实初始化。使用指南 `batch-console/docs/user-guide/platform-governance.md` 已同步对象要求；新增 `TenantInitConfigDialog.validation.test.ts` 尚未跟踪。浏览器原生错误详情仍可能为英文，预览依赖扫描/热更新产生过夹具警告。
+
+本批阶段性联合测试 `npx vitest run --maxWorkers=2 src/views/system/components/SelfServiceInstanceStatus.test.ts src/views/system/components/SensitiveTenantActions.test.ts src/components/common/statusTagResolve.test.ts src/views/job/components/MiniCreateTimezone.test.ts src/views/ops/OpsDiagnostic.test.ts src/components/common/JsonTextareaInput.test.ts src/views/system/components/TenantInitConfigDialog.validation.test.ts src/views/system/components/TenantInitConfigDialog.test.ts src/views/system/components/ConfigSyncTab.test.ts src/views/file-center/FileTemplateList.context.test.ts src/views/job/components/JobConfigBasicForm.validation.test.ts src/views/job/components/JobConfigBasicForm.contract.test.ts` 12 文件、139 项通过；之后新增纯空格修正，最终 `npx vitest run --maxWorkers=2 src/components/common/JsonTextareaInput.test.ts src/views/system/components/TenantInitConfigDialog.validation.test.ts src/views/system/components/TenantInitConfigDialog.test.ts` 3 文件、33 项通过。首次类型检查发现新增双语测试的 locale 类型错误，修正后 `npm run typecheck` 通过；相关 ESLint、国际化、前端文档及后端文档结构、日期和代码路径检查通过。项目视觉基线 `E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页。
+
+文件上传选择文件组后的业务日期控件原短于其他字段，现局部设为等宽；英文深色桌面修后测得控件均为 548px，390px 复拍条件项及滚动底栏；模拟文件组加载失败显示错误。`npx vitest run --maxWorkers=2 src/views/file-center/FileList.arrival.test.ts` 2 项及目标 ESLint 通过，测试不证明上传链路，未选择文件或真实上传；夹具有 PWA、自动导入组件和 ResizeObserver 警告，不能外推生产。
+
+资源队列快捷编辑器在英文深色桌面和 390×844 隔离新建样例中，容量输入对齐，最大整数可见，滚动底栏可达；本次未改该组件，父页面空提交和真实保存未验证。密钥配置详情使用模拟引用在英文深色 390px 查看，长引用及 JSON 可见，未执行密钥操作；夹具缺少路由注入并出现临时翻译警告，不能视为生产环境验证。
+
+运行总览的完成和等待统计卡原不可筛选却暴露按钮语义；现仅可筛选卡具有按钮、焦点及按下状态，支持空格切换。`npx vitest run --maxWorkers=2 src/views/runs/RunsOverview.test.ts` 2 项通过；该测试文件尚未跟踪，交付时需纳入。英文深色 390px 模拟预览验证 Running 卡空格切换、筛选和焦点。列表夹具为空，不代表非空详情或真实服务通过。
+
+补充盘点（当时快照）：直接懒加载路由为 84 条、81 个唯一视图（桌面 68、移动 13），不含动态嵌套；当时报告尚无明确页面级浏览器证据的候选包括 `/ops/summary`、`/runs` 非空明细、`/m/ops/summary`、`/m/jobs/:id` 和 `/m/workflow/run/:id`。后续已补充这些页面的模拟预览，具体状态见下文；子组件或列表证据不能外推整页。该快照的 views/views-mobile/components 共 258 个 Vue 文件，其中 `ErrorDetailsText.vue` 和 `FileTemplateFormatFields.vue` 未跟踪，交付快照需包含。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/views/runs/RunsOverview.test.ts src/views/file-center/FileList.arrival.test.ts src/views/governance/GovernanceEditors.test.ts` 3 文件、6 项通过；相关 ESLint、`git diff --check`、后端文档结构/日期/代码路径引用检查通过。`E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页；服务已停止。
+
+本批 `npm run typecheck` 首次失败：`src/views-mobile/MExecutionLog.vue:22` 的键盘事件处理参数窄于组件事件联合类型。该文件在检查期间由并行任务更新，另有类型检查进程运行；本批未覆盖其改动，需在并行修改结束后重新核对及验证，不能计为通过。
+
+维护兜底页是独立路由，原本没有挂载只在常规布局运行的维护状态轮询，因此页面声称自动恢复但实际不会自动回跳。现复用现有 `useMaintenancePolling`，同时让长公告和受影响服务名称在窄屏换行；中英文提示不再写死错误的 30 秒。新增未跟踪 `MaintenancePage.polling.test.ts` 先失败、修后通过，覆盖轮询、恢复回跳和卸载停止；英文深色 390px 隔离样例复拍长公告。预览禁网络导致模拟请求失败 toast，不代表生产现象；真实维护环境未验证。`batch-console/docs/engineering/maintenance-degradation.md` 已更新。
+
+移动作业详情的详情及步骤请求失败原分别误显示不存在或无步骤，现内联提示并可重试；步骤重试保留已加载详情。中文深色 390px 模拟步骤失败、重试及长编码已复拍，长步骤现可换行且状态可见；详情首屏失败仅组件测试覆盖，未连接真实服务。新增回归先红后绿，`MJobInstanceDetail.test.ts` 16 项通过，运行与审批使用指南已同步。
+
+运维概览切租户时，旧汇总、趋势及扩展报告迟到会覆盖当前租户数据；现按现有请求作用域隔离，切换时清空旧值并在扩展面板打开时重载，时间范围切换也拒绝旧趋势。3 个场景先红后绿，未跟踪 `useOpsSummary.context.test.ts` 7 项通过；英文深色桌面及 390px 模拟 KPI、摘要失败状态已复核。预览屏蔽 SSE 导致断连和错误 toast，不代表生产；未连接真实服务。可观测性使用指南已同步。
+
+配置同步的预览和应用原允许数组、null、字符串及数字作为配置 JSON 根值；现仅接受对象，四类非对象场景先红后绿；英文桌面配置类型网格调整以容纳长标签。英文深色 390px 隔离预览复核非对象和语法错误、操作区；`ConfigSyncTab.test.ts` 31 项通过，未真实应用，导入使用指南已同步。夹具预扫描的 PWA 模块警告不代表生产构建问题。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/views/MaintenancePage.polling.test.ts src/composables/useMaintenancePolling.test.ts src/views-mobile/MJobInstanceDetail.test.ts src/views/ops/composables/useOpsSummary.context.test.ts src/views/system/components/ConfigSyncTab.test.ts` 5 文件、57 项通过；并行任务调整移动执行日志事件类型后，`npm run typecheck` 重跑通过，关闭了上一批类型失败记录。国际化、相关 ESLint、前端文档及后端文档结构/日期/代码引用检查通过；`E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页。
+
+维护恢复补充浏览器复核：隔离路由及内存状态返回先维护中、后恢复，真实组件自动轮询后跳转到模拟原路径；未修改真实维护配置或调用真实服务。预览路由未注册空路径产生夹具警告，不代表生产路由。文档不可用、404 和移动端桌面功能提示也在英文深色 390px 初始状态查看，未操作恢复或导航按钮。
+
+运行总览的作业和工作流栏加载失败原显示空记录，现分别显示错误和重试；切租户后旧请求也可能覆盖新租户列表及统计，现复用租户请求作用域并立即清理旧值。失败和延迟响应均先复现再修复。英文深色桌面及 390px 模拟非空记录、长编码、详情链接与单栏失败重试已检查；未真实跳转详情或连接真实服务。`RunsOverview.context.test.ts`、`RunsOverview.loadError.test.ts` 两个新增测试未跟踪，交付时需纳入；运行与审批指南已同步。
+
+工作流进度首屏请求失败且无快照时原同时显示保留快照与空态，现显示失败和重试；已有快照时保留内容及过期提示。中文深色 390px 隔离样例复核失败状态及稳定渲染后的 DAG；初始蓝块为渲染中间态、夹具 offline 状态不符合生产枚举，均未据此修改产品。未连接真实服务，运行与审批指南已同步。
+
+API Key 列表英文停用状态原显示中文、详情显示布尔值；现列表与详情复用本地化状态标签，创建表单错误提示参与布局。英文深色 390px 模拟停用记录详情已复核，未创建或写入真实密钥；预览夹具缺少 DatetimeColumn 注册，该区域不计入真实应用验证。新增 `ApiKeyList.status.test.ts` 未跟踪。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/views/runs/RunsOverview.context.test.ts src/views/runs/RunsOverview.loadError.test.ts src/views/runs/RunsOverview.test.ts src/components/workflow/WorkflowExecutionPanel.test.ts src/views-mobile/MWorkflowRunProgress.test.ts src/composables/useWorkflowExecutionProgress.test.ts src/views/system/ApiKeyList.status.test.ts src/views/system/ApiKeyList.scopeHint.test.ts src/views/MaintenancePage.polling.test.ts src/composables/useMaintenancePolling.test.ts` 10 文件、21 项通过；类型、国际化、相关 ESLint、前端文档与后端文档结构/日期/代码引用检查通过。项目视觉基线 `E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页，服务已停止。
+
+本批核查与整改：通知渠道和规则的英文 390px 抽屉中，连续校验提示距下一字段仅 2px；标准抽屉表单现让错误提示参与排版，样例间距为 16px，桌面渠道错误态也已复看。隔离预览阻断真实请求和写入，其他抽屉状态仍须分别核查。
+
+工作流版本对比的长节点编码原会撑开窄屏双栏；现窄屏上下排列并允许长编码换行，同时限制表格列宽。桌面及 390px 非空长编码使用模拟数据复看，比较逻辑未改；未连接真实服务。移动运维汇总请求失败原显示“暂无数据”，现明确显示失败及重试，并缩小错误区留白；390px 中文非空和失败状态使用模拟数据复看，未验证真实服务及完整导航。失败后重试恢复指标的测试先红后绿，移动运维行为已同步至可观测性使用指南。
+
+共享错误详情原在列表内将错误码和消息直接连在一起，完整详情却含空格；现两处一致。测试先复现失败后修正，中文深色 390px 隔离预览检查了截断、键盘打开完整内容及 Escape 关闭并恢复焦点。`ErrorDetailsText.vue` 和 `ErrorDetailsText.test.ts` 目前均未跟踪，交付快照需纳入；预览未连接真实服务。
+
+本批联合验证：`npx vitest run --maxWorkers=2 src/components/common/ErrorDetailsText.test.ts src/components/common/CopyableText.test.ts src/views-mobile/MOpsSummary.context.test.ts src/views/system/components/NotificationChannelsTab.test.ts src/views/system/components/NotificationRulesTab.test.ts src/views/system/components/NotificationTenantFormFocus.test.ts src/views/workflow/designer/diff/diffAlgorithm.test.ts` 7 文件、52 项通过；类型、国际化、相关 ESLint、前端文档及差异格式检查通过。项目视觉基线 `E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录页，不能替代上述页面的视觉回归。
+
+移动工作流运行页选中长节点编码时，原文本会伸出 390px 视口；现允许选中区域换行。中文浅色隔离样例复核了非空 DAG、节点选择、长编码及失败/重连态，长编码右边界由约 593px 收至 370px；未连接真实服务或验证详情跳转和重试恢复。`npx vitest run --maxWorkers=2 src/views-mobile/MWorkflowRunProgress.test.ts src/components/workflow/WorkflowExecutionPanel.test.ts src/composables/useWorkflowExecutionProgress.test.ts` 3 文件、8 项通过；相关 ESLint 和差异格式检查通过。夹具缺少作业详情路由并在调整视口时出现一次 ResizeObserver 提示，尚无生产复现证据。
+
+配额策略新建抽屉在英文深色桌面及 390×844 隔离样例中检查了空提交的必填提示、数值字段和底栏，未发现明显错位；未填写有效值、保存或连接真实服务。夹具未加载生产 PWA 插件，预扫描出现模块警告，不作为产品构建结果。
+
+文件渠道编辑表单在英文深色桌面和 390px 隔离样例中检查了长编码、字段和 JSON 错误；原来输入已提示无效时保存仍会发送请求。后端要求非空配置为 JSON 对象，现保存前校验语法及对象根类型，空白沿用原有处理；语法错误和数组、null、数字、字符串场景先红后绿，空值与有效对象也有定向覆盖。`npx vitest run --maxWorkers=2 src/views/file-center/FileTemplateList.context.test.ts src/components/common/JsonTextareaInput.test.ts` 2 文件、42 项通过，目标 ESLint 和国际化检查通过。浏览器复核为模拟请求，未连接真实服务；文件导入使用指南已同步。`src/locales/fileTemplateList.zh-CN.ts` 和 `src/locales/fileTemplateList.en-US.ts` 均为既有未跟踪文件，本次新增的中英文提示需随文件一同交付。
+
+本批最终联合复验：`npx vitest run --maxWorkers=2 src/views/file-center/FileTemplateList.context.test.ts src/components/common/JsonTextareaInput.test.ts src/views-mobile/MWorkflowRunProgress.test.ts src/components/workflow/WorkflowExecutionPanel.test.ts src/composables/useWorkflowExecutionProgress.test.ts` 5 文件、50 项通过；类型、国际化、受影响文件 ESLint、前端文档和后端文档结构、日期、路径引用检查通过。
+
+配置导入错误表的展开编辑区原受宽表裁切，390px 下保存按钮超出视口，单条错误时表体高度也不足以展示输入区；现按表格可视宽度布局展开区并提高错误表最小高度。英文深色隔离样例在桌面和 390px 复看，横向滚动表格后错误提示、输入及按钮仍可见；未连接真实服务或保存。`npx vitest run --maxWorkers=2 src/views/config/TenantPackageImportWizard.test.ts` 7 项通过，目标 ESLint 与差异格式检查通过。
+
+分片目录表单原只以短暂通用提示反馈空字段及非法分片键；现分别在字段旁显示错误，修正后即时消失，重新打开表单清除旧错误，原提交校验条件保持不变。英文深色隔离样例检查桌面及 390px 空提交和长键错误；未连接真实服务或执行有效值保存。`npx vitest run --maxWorkers=2 src/views/ops/ShardCatalogList.test.ts` 1 项通过，该新增测试尚未跟踪；相关 ESLint 与差异格式检查通过。
+
+移动 Worker 页英文深色 390px 隔离样例检查非空、长编码、长分组、首屏失败及离线筛选，未发现明显横向溢出；未连接真实服务，节点操作为只读权限且未执行。上述隔离预览可能产生未加载生产插件或指令的夹具警告，不作为产品构建结果。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views/config/TenantPackageImportWizard.test.ts src/views/ops/ShardCatalogList.test.ts` 2 文件、8 项通过；类型、国际化、相关 ESLint、差异格式及后端文档结构、日期和代码路径引用检查通过。
+
+移动文件列表原未展示加载失败：首屏失败误显示空列表，后续页失败没有反馈。现显示失败和重试，保留已加载记录并重试失败页；新增未跟踪 `MFileList.error.test.ts` 两个场景先红后绿。英文深色 390px 隔离样例复核首屏失败、重试及长文件名，后续页失败仅组件测试覆盖；未连接真实服务。文件使用指南已同步。
+
+资源标签新建保存失败时原会关闭抽屉并清空输入；现失败保留键值，成功后关闭。新增未跟踪 `TagResourceTab.save.test.ts` 先红后绿；英文深色 390px 隔离样例复核长键值与模拟失败，未连接真实服务。平台治理指南已同步。
+
+工作流依赖弹窗使用内存 DAG 检查中文及英文 390px 的长节点、条件输入和操作按钮，并模拟条件依赖创建；未见明确错位。未连接真实服务或保存设计，重复依赖和循环依赖错误状态仍待核查。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views-mobile/MFileList.error.test.ts src/views-mobile/MFileList.filter.test.ts src/views/system/components/TagResourceTab.save.test.ts src/views/system/components/tagResourceIdentity.test.ts` 4 文件、12 项通过；类型、相关 ESLint、前端文档、差异格式及后端文档结构、日期和代码引用检查通过。
+
+移动 Outbox 原在查询失败后显示空列表和零条摘要；现显示失败与重试，加载或失败时隐藏摘要，切换租户清除错误状态。失败后重试成功场景先红后绿，`npx vitest run --maxWorkers=2 src/views-mobile/MOutbox.test.ts` 11 项通过。英文深色 390px 隔离样例复核模拟失败、重试及非空长编码，未连接真实服务；可观测性指南已同步。
+
+批次窗口快捷创建使用英文深色 390px 隔离样例检查了长名称、无效编码、时间缺失、跨天输入及模拟保存失败，未发现明显错位，失败时输入保留；未连接真实服务或验证完整时间规则。
+
+审计文件 ID 筛选原转换为 JavaScript 数字，Long 最大值会舍入、非数字成为 NaN 并被当成无筛选、数字 0 也被请求包装器省略。现页面保留去除首尾空格后的输入文本，包装器保留 0；后端按字符串解析 Long 并拒绝无效值。上述场景先红后绿，英文及中文深色 390px 隔离样例检查了筛选与失败状态；未连接真实服务。`AuditList.fileId.test.ts` 为新增未跟踪文件；可观测性指南已同步。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/api/observabilityQueries.test.ts src/views/observability/AuditList.fileId.test.ts src/views-mobile/MOutbox.test.ts` 3 文件、19 项通过；类型、相关 ESLint、前端文档、差异格式及后端文档结构、日期和代码路径引用检查通过。
+
+配置发布版本对比原在未选择版本 B 时显示 `0`；现显示选择提示并保持比较禁用，选中后仍按原 ID 比较，回归测试先红后绿。英文深色桌面及 390px 隔离样例检查两版本模拟比较、长路径和未选择状态；未连接真实服务。
+
+移动工作流定义页节点详情的长作业编码和 Worker 组原会挤压标签并溢出，现可在 390px 内换行；有效 ID 加载失败时增加重试，无效 ID 保持原提示。新增失败后重试及无效 ID 回归先红后绿，中文深色 390px 隔离样例复核长编码和模拟恢复；未连接真实服务。运行与审批指南已同步。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views/config/ConfigReleaseList.test.ts src/views-mobile/MWorkflowViewer.context.test.ts` 2 文件、25 项通过；类型、相关 ESLint、前端文档、差异格式及后端文档结构、日期和代码引用检查通过。
+
+移动告警列表原在首屏失败时显示暂无告警、翻页失败时仅短暂提示；现明确显示失败和重试，翻页失败保留记录并重试同一页。新增首屏及翻页失败断言先红后绿，`MAlerts.search.test.ts` 为未跟踪文件；英文深色 390px 隔离样例复核失败、重试和长告警，未连接真实服务。可观测性指南已同步。
+
+作业向导第 2 步的错误提示原紧贴下一字段，现参与正常布局；英文长错误在 390px 换行后与下一项保持 18px 间距。英文深色桌面及 390px 隔离样例检查了 CRON、长关联编码和连续错误；未连接真实服务或保存。`npx vitest run --maxWorkers=2 src/views/job/JobBundleContextRisks.test.ts` 63 项通过。
+
+队列新建原对缺失必填字段仅显示短暂提示；现将编码和类型错误保留在对应字段旁，修正后清除，提交校验条件不变。英文深色 390px 隔离样例检查空提交、修正及模拟保存失败；未连接真实服务。`QueueConfig.validation.test.ts` 为既有未跟踪测试，本次扩展需一并交付。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/views/governance/QueueConfig.validation.test.ts src/views/governance/GovernanceEditors.test.ts src/views-mobile/MAlerts.search.test.ts src/views/job/JobBundleContextRisks.test.ts` 4 文件、72 项通过；类型、相关 ESLint、前端文档、差异格式及后端文档结构、日期和代码引用检查通过。
+
+自助配额申请在英文 390px 空提交时，长标签被挤成两行并紧贴下一字段；现采用顶部标签并让错误提示参与布局，模拟样例中连续错误到下一字段均为 18px。`npx vitest run --maxWorkers=2 src/views/system/components/SelfServiceQuotaChangeTab.validation.test.ts` 3 项通过，类型、相关 ESLint 和差异格式检查通过；未连接真实服务或执行有效提交。
+
+覆盖对账：当前 `src/views`、`src/views-mobile`、`src/components` 中有 66 个 Vue 文件包含 82 个 `<el-form>` 标签，均已登记到下表，且每个文件至少有一种隔离预览；文件级预览不代表每个表单实例、角色或主要状态均已检查。13 个直接懒加载移动视图也都有至少一种页面级浏览器样例。后续已补查移动审批提交人文案、作业详情首屏失败及模拟重试恢复；工作流运行的重试恢复和详情跳转也已用隔离路由检查，真实服务保存及实际权限操作不由模拟预览证明。
+
+桌面路由对账：当前直接懒加载桌面路由 71 条、68 个唯一视图；报告原未找到明确整页预览记录的 10 个候选，现均补充了至少一种隔离页面样例，结果及边界如下。无记录不等于确认此前从未查看，单个样例也不代表全状态验收。
+
+暂停时的整页台账：
+
+| 路由 | 本次证据及未完成项 |
+| --- | --- |
+| `/ops/custom-task-types` | 英文深色桌面空/非空及详情、390px 非空；窄屏首列额外遮挡未确认。 |
+| `/ops/worker-fingerprints` | 英文深色桌面空/非空、390px 非空；摘要成功时指纹分组被隐藏、失败时误显示空态的问题已修复，长构建标识可换行。新增未跟踪 `WorkerFingerprintBoard.summary.test.ts` 先失败后通过，3 项通过；相关 ESLint 和差异格式检查通过。真实服务未验证，可观测性使用指南待同步。 |
+| `/workers/my-workers` | 英文深色桌面空/非空、390px 非空；禁网夹具的元数据请求产生提示，不能外推生产。 |
+| `/scheduler/snapshot` | 英文深色桌面及 390px 模拟非空策略和摘要；夹具缺少路由元数据、日期列组件和真实依赖等待数据，对应内容未验证。 |
+| `/scheduler/batch-days` | 英文深色桌面及 390px 模拟批次日日历；窄屏网格可内部横向滚动至周末；真实服务未验证。 |
+| `/system/users` | 英文深色桌面及 390px 模拟账号与权限；登录详情已按现有断点在窄屏改为单列，桌面保留两列，目标 ESLint 和差异格式检查通过。本次修改后全局 typecheck 尚未运行。 |
+| `/system/tags`、`/config/management`、`/observability/queries`、`/self-service` | 英文 390px 模拟管理员初始空态；自助配额入口及其抽屉已查看。标签管理桌面还查看了标签搜索切换，配置管理桌面查看了 Secrets 切换。非空数据、实际权限和真实写入未验证；预览路由元数据和组件注册缺失已在夹具修正，不能作为产品问题。 |
+
+用户要求停止后未继续审查或修改业务代码；后续如恢复，应先复核当前工作区，再完成上述未验证项及适用检查，不将隔离预览和局部测试作为全站或真实环境验收。
+
+工作区交付边界：当前前端有 10 个未跟踪生产源文件被现有代码引用，包括 `ErrorDetailsText.vue`、`FileTemplateFormatFields.vue`、文件上传及校验工具、作业及工作流表单校验工具，以及 4 个拆分的中英文词条文件。它们当前位于工作树，但不会出现在仅跟踪文件的 diff 中；后续交付必须一并核对和纳入。未跟踪测试另按实际改动检查；本次未暂存或提交。
+
+视觉基线复验：`E2E_BASE_URL=http://127.0.0.1:5710 npm run test:e2e:visual` 1 项通过，仅覆盖登录入口；本次临时服务已停止。
+
+补充隔离预览：中文深色 390px 移动审批卡片的“提交人”及姓名显示正常；移动作业详情首屏模拟失败后可重试并显示实例及空步骤。英文深色 390px 通知路由模拟结果中，长规则、渠道和订阅名称可截断并查看完整内容。均未连接真实服务或执行写操作，且不代表其他状态已验证。
+
+继续补查：英文深色 390px 用量统计展示两条模拟记录、趋势图和长字段，选择版本后摘要及列表同步筛选；结果版本治理只读模拟两条结果并查看详情，长字段正常换行。其固定操作列原遮挡窄屏状态列，现仅窄屏取消固定；390px 复拍可见状态列和横向滚动后的详情操作，1024px 操作列仍固定。中文深色 390px 移动工作流运行模拟首屏失败、重试恢复后点击作业实例，抵达隔离内存路由；不代表生产路由守卫或真实服务联验。
+
+结果版本治理定向验证：`npx vitest run --maxWorkers=2 src/views/ops/components/ResultVersionGovernancePanel.test.ts` 1 项、目标 ESLint 与差异格式检查通过；固定列布局由上述隔离页面复拍确认。
+
+移动工作流路由补充：源码中，已登录且判定为移动端并未指定 `desktop=1` 时，守卫会将该作业实例路径映射到移动详情；本次没有在生产路由和真实认证下实测。`npx vitest run --maxWorkers=2 src/router/mobileWorkflowRouting.test.ts src/views-mobile/MWorkflowRunProgress.test.ts src/components/workflow/WorkflowExecutionPanel.test.ts src/composables/useWorkflowExecutionProgress.test.ts` 4 文件、10 项通过，但路由测试未断言此作业实例映射，不能替代实测。
+
+工具结果态补查：英文深色 390px 的 CRON 模拟结果原把日期从中间拆行，现每个时间整体换行；文件名结果标签原被长值挤成三行，现窄屏上下排列，长文件名可查看完整内容并用 Escape 关闭。两处均以隔离内存结果复拍，非法 CRON 提示也已查看；未连接真实服务。共享 CRON 输入也用于作业表单，相关作业测试已复验，其他调用场景尚未单独复拍。
+
+本批联合复验：`npx vitest run --maxWorkers=2 src/api/system.test.ts src/views/job/JobBundleContextRisks.test.ts` 2 文件、64 项通过；类型、相关 ESLint、前端文档、差异格式及后端文档结构、日期和代码路径引用检查通过。测试未自动验证 CSS，布局证据来自上述模拟页面复拍。
+
+### 表单逐文件检查台账
+
+以下由当前源码中的 `<el-form>` 清点，包含桌面页面及公共组件；动态组件和自定义表单另查。状态只表示实际证据，空项不代表有缺陷。
+
+| 前端文件 | 表单数 | 浏览器核查状态 |
+| --- | ---: | --- |
+| `src/views/config/ConfigReleaseList.vue` | 2 | 隔离预览：中文窄屏版本对比初始状态；英文桌面及 390px 未选择版本、模拟比较及长路径，新建焦点及必填错误、详情样例；真实保存及其他状态待查 |
+| `src/views/config/TenantPackageImportWizard.vue` | 1 | 隔离预览：英文桌面及窄屏上传、错误行展开及横向滚动，中文 390px 预览、英文 390px 应用阻塞；真实上传/保存/应用及其他状态待查 |
+| `src/views/file-center/FileList.vue` | 1 | 隔离预览：英文桌面及 390px 文件组上传条件和底栏、模拟目标加载失败；另有详情长名称；未真实上传，其他状态待查 |
+| `src/views/file-center/FileTemplateList.vue` | 2 | 隔离预览：模板、渠道新建及渠道列中英文；英文桌面及 390px 渠道长编码与 JSON 错误，英文 390px 模板编辑初始状态，导入窄屏及导出桌面映射草案的模拟生成与应用；格式子组件中英文 390px 高级项键盘交互；真实保存及其他状态待查 |
+| `src/views/governance/GovernanceCalendarEditor.vue` | 1 | 隔离预览：英文深色桌面和 390px 编辑、中文深色 390px 新建；未保存，其他状态待查 |
+| `src/views/governance/GovernanceQueueEditor.vue` | 1 | 隔离预览：英文深色桌面及 390px 新建容量、大整数、底栏；父页面空提交、修正和模拟失败；真实保存及其他状态待查 |
+| `src/views/governance/QueueConfig.vue` | 2 | 隔离预览：英文 390px 队列新建空提交、修正和模拟保存失败，以及新建窗口及假日初始状态；中文桌面已有跨天窗口编辑及时间预览；真实提交及其他状态待查 |
+| `src/views/governance/QuotaPanel.vue` | 1 | 隔离预览：英文深色桌面及 390px 新建空提交、中文桌面编辑和失败态；有效值保存及其他状态待查 |
+| `src/views/job/JobDefinitionList.vue` | 3 | 隔离预览：英文桌面及 390px 快速创建和编辑抽屉，英文 390px 作业包导入弹窗与滚动底栏；未提交，其他状态待查 |
+| `src/views/job/JobDefinitionWizard.vue` | 1 | 隔离预览：英文桌面第 1–5 步、英文 390px 第 1–6 步；第 2 步长编码和连续错误、第 4 步非法 JSON 阻止继续；真实提交及其他状态待查 |
+| `src/views/job/components/CalendarMiniCreateDrawer.vue` | 1 | 隔离预览：英文深色桌面及 390px 空提交，中文深色 390px 空提交与非法编码错误，错误到下一标签间距均为 16px；有效提交及其他状态待查 |
+| `src/views/job/components/WindowMiniCreateDrawer.vue` | 1 | 隔离预览：英文深色桌面及 390px 空提交、时间输入、跨天开关及模拟保存失败；其他语言、真实提交及完整时间规则待查 |
+| `src/views/login/Login.vue` | 1 | 隔离预览：英文 390px 初始、空值校验、服务不可达及单点失败；未登录，其他状态待查 |
+| `src/views/observability/AlertRoutingPanel.vue` | 1 | 隔离预览：中文桌面及 390px 空态、英文 390px 空态与只读记录；运行时关闭编辑，其他状态待查 |
+| `src/views/observability/JobMonitoringPolicies.vue` | 1 | 隔离预览：英文 390px 编辑初始、长标题和 CRON/依赖作业条件；未保存，其他状态待查 |
+| `src/views/observability/UsageSummary.vue` | 1 | 隔离预览：英文 390px 筛选、空态、模拟非空趋势及版本筛选；真实服务及其他状态待查 |
+| `src/views/ops/AssetFreshnessPolicies.vue` | 1 | 隔离预览：英文桌面及 390px 编辑、新建单位与必填提示；中文 390px 新建单位；未保存，其他状态待查 |
+| `src/views/ops/BatchDayReplay.vue` | 2 | 隔离预览：英文 390px 新建及日期范围重放初始、模拟范围预览和试运行条件字段；提交及其他状态待查 |
+| `src/views/ops/OpsDiagnostic.vue` | 1 | 隔离预览：英文 390px 初始与日期逆序错误；成功结果状态修后复拍待查，未真实导出 |
+| `src/views/ops/ShardCatalogList.vue` | 1 | 隔离预览：英文桌面及 390px 新建初始和空提交、长键错误，深色编辑对齐；有效保存及其他状态待查 |
+| `src/views/ops/TenantPlacementList.vue` | 1 | 隔离预览：英文深色桌面新建/编辑及 390px 非法键；未提交，其他状态待查 |
+| `src/views/ops/components/ResultVersionGovernancePanel.vue` | 1 | 隔离预览：中文桌面筛选对齐、英文桌面及 390px 只读模拟结果、详情和横向滚动；真实服务及其他状态待查 |
+| `src/views/scheduler/BatchDayWindow.vue` | 2 | 隔离预览：中文窄屏补跑抽屉及单次补跑弹窗、桌面摘要；提交和其他状态待查 |
+| `src/views/scheduler/components/BatchDayGovernanceDrawer.vue` | 3 | 隔离预览：桌面摘要及查询，英文 390px 操作确认、原因输入和缺口结果；未提交，其他状态待查 |
+| `src/views/scheduler/components/DependencyWaitPanel.vue` | 3 | 隔离预览：窄屏持久等待筛选与空态，英文 390px 日历失败及恢复、作业失败；其他状态和作业重试待查 |
+| `src/views/scheduler/components/dependency-waits/WaitRelationshipGraph.vue` | 1 | 隔离预览：桌面空态和筛选，以及英文桌面、390px 两条依赖数据图与明细；真实服务及其他状态待查 |
+| `src/views/setup/InitialTenantSetup.vue` | 1 | 隔离预览：英文 390px 初始表单与说明；未输入凭据或提交，其他状态待查 |
+| `src/views/system/AiChat.vue` | 1 | 隔离预览：中文深色桌面、中英文 390px 会话和审计空态；未发送消息，真实服务及其他状态待查 |
+| `src/views/system/ApiKeyList.vue` | 1 | 隔离预览：新建、权限及英文 390px 停用详情；真实密钥创建和其他状态待查 |
+| `src/views/system/AtomicTaskTypeCenter.vue` | 2 | 隔离预览：英文桌面及 390px 表单，英文窄屏 SQL、Shell、HTTP 输入及预览，存储过程合法数组及非法列表；提交与其他状态待查 |
+| `src/views/system/MaintenanceSettings.vue` | 1 | 隔离预览：英文 390px 日期输入及恢复时间提示；提交和其他状态待查 |
+| `src/views/system/MyAccount.vue` | 1 | 隔离预览：英文深色桌面及 390px 空提交校验，390px 修后复拍；未输入凭据或提交，其他状态待查 |
+| `src/views/system/SystemParameterList.vue` | 1 | 隔离预览：英文深色桌面及 390px 新建错误、关闭后编辑；未保存，其他状态待查 |
+| `src/views/system/UserAccountList.vue` | 3 | 隔离预览：新建、编辑及重置初始状态；英文深色 390px 与桌面长账号重置弹窗；未输入密码或提交，其他状态待查 |
+| `src/views/system/UserBatchProvisioningDialog.vue` | 1 | 隔离预览：英文深色桌面及 390px 模拟两行预览和行编辑初始；真实上传、保存及其他状态待查 |
+| `src/views/system/components/ConfigSyncTab.vue` | 2 | 隔离预览：英文桌面网格、390px 非对象与语法错误；真实提交和其他状态待查 |
+| `src/views/system/components/NotificationChannelsTab.vue` | 1 | 隔离预览：首次打开、焦点与空提交；中文浅色桌面及 390px 编辑抽屉；英文桌面及 390px 连续错误提示；其他状态待查 |
+| `src/views/system/components/NotificationRoutePreview.vue` | 1 | 隔离预览：英文 390px 初始状态及事件选择、模拟规则和订阅结果与长名称；真实服务及其他状态待查 |
+| `src/views/system/components/NotificationRulesTab.vue` | 1 | 隔离预览：首次打开、焦点与空提交；中文浅色桌面及 390px 编辑抽屉；英文 390px 连续错误提示；其他状态待查 |
+| `src/views/system/components/NotificationTerminalDeliveriesTab.vue` | 1 | 隔离预览：中文 390px 重投弹窗初始状态；未提交，其他状态待查 |
+| `src/views/system/components/NotificationWebhooksTab.vue` | 1 | 隔离预览：英文桌面及 390px 新建初始抽屉，英文 390px 编辑及投递日志；提交和其他状态待查 |
+| `src/views/system/components/OidcIdentityBindingsDrawer.vue` | 1 | 隔离预览：英文桌面及 390px 初始空态、英文桌面样例表格；未写入，其他状态待查 |
+| `src/views/system/components/SelfServiceCompensationTab.vue` | 1 | 隔离预览：中文 390px 模拟实例候选及提示；提交和其他状态待查 |
+| `src/views/system/components/SelfServiceQuotaChangeTab.vue` | 1 | 隔离预览：中文窄屏初始状态、英文深色 390px 空提交及连续错误；提交由组件测试覆盖，真实服务待查 |
+| `src/views/system/components/SelfServiceRerunTab.vue` | 1 | 隔离预览：英文 390px 模拟实例候选与状态；提交和其他状态待查 |
+| `src/views/system/components/SelfServiceTriggerPauseTab.vue` | 1 | 隔离预览：英文窄屏初始状态；提交和其他状态待查 |
+| `src/views/system/components/TagResourceTab.vue` | 1 | 隔离预览：英文 390px 新建长键值和模拟保存失败；未验证父页面入口、真实提交及其他状态 |
+| `src/views/system/components/TenantBatchCreateDialog.vue` | 1 | 隔离预览：英文深色桌面及 390px 空错误、源选择和两种初始化模式；真实创建、中文及其他状态待查 |
+| `src/views/system/components/TenantCopyConfigDialog.vue` | 1 | 隔离预览：桌面中文、窄屏中英文；其余状态待查 |
+| `src/views/system/components/TenantFormDialog.vue` | 1 | 隔离预览：桌面及窄屏样例；其余状态待查 |
+| `src/views/system/components/TenantInitConfigDialog.vue` | 1 | 隔离预览：英文桌面及 390px 网格、语法、非对象和空值提示；真实初始化及其他状态待查 |
+| `src/views/workflow/WorkflowDefinitionList.vue` | 2 | 隔离预览：英文 390px 筛选、运行弹窗、模拟校验结果、调度条件状态和详情，桌面详情；未运行或保存，其他状态待查 |
+| `src/views/workflow/designer/inspector/DependencyCreateDialog.vue` | 1 | 隔离预览：中文桌面、英文窄屏初始状态，英文桌面及 390px CONDITION 表达式与内存依赖创建；真实保存、重复和循环错误状态待查 |
+| `src/views/workflow/designer/inspector/EdgeInspector.vue` | 1 | 隔离预览：英文 280px 初始、长编码条件表达式错误及改正；其他状态待查 |
+| `src/views/workflow/designer/inspector/EndNodeForm.vue` | 1 | 隔离预览：英文 280px 初始表单及 257 字符名称错误；其他状态待查 |
+| `src/views/workflow/designer/inspector/GatewayNodeForm.vue` | 1 | 隔离预览：英文 280px 初始、分支和汇聚及 N_OF 数量条件；其他状态待查 |
+| `src/views/workflow/designer/inspector/JobNodeForm.vue` | 1 | 隔离预览：英文 280px 初始、名称过长与缺少作业错误；长编码依赖状态及其他状态待查 |
+| `src/views/workflow/designer/inspector/StartNodeForm.vue` | 1 | 隔离预览：英文 280px 初始表单及 257 字符名称错误；其他状态待查 |
+| `src/components/dialogs/DryRunPlanDialog.vue` | 1 | 隔离预览：英文 390px L1/L2/L3 及条件业务日期；未运行试算，结果及其他状态待查 |
+| `src/components/table/ListPageQueryBar.vue` | 1 | 工作流列表英文 390px 筛选栏隔离预览；其他调用页面与状态待查 |
+| `src/components/tools/CronToolPanel.vue` | 1 | 隔离预览：英文 390px 初始、模拟三次运行时间及非法表达式；真实服务及其他状态待查 |
+| `src/components/tools/FileNamePreviewPanel.vue` | 1 | 隔离预览：英文 390px 初始、模拟长文件名结果及完整查看；真实服务及其他状态待查 |
+| `src/components/tools/RetryTimelinePanel.vue` | 1 | 隔离预览：英文 390px 初始表单与时间线；其他状态待查 |
+| `src/components/tools/TimezoneConverterPanel.vue` | 1 | 隔离预览：英文 390px 初始表单与转换结果；其他状态待查 |
+| `src/components/workflow/WorkflowBulkTriggerDialog.vue` | 1 | 隔离预览：英文 390px 初始弹窗、样例表格与底栏；提交及其他状态待查 |
+| `src/components/workflow/WorkflowMonitoringPolicyDialog.vue` | 1 | 隔离预览：英文桌面及 390px 已配置、长编码和底栏，另核对只读及读取失败；未保存，其他状态待查 |
+
+### 非 `<el-form>` 输入组件候选清单
+
+静态识别模板中含原生输入或常见 Element 输入控件、但不含 `<el-form>` 的文件。命中不等于独立表单或存在缺陷；其中部分已在前文或其他页面复核。动态组件、封装控件和未列出的标签仍需沿路由与调用方补查。
+
+**src/views：39 个文件**
+
+- `src/views/approvals/components/CatchUpApprovalsTab.vue`
+- `src/views/approvals/components/GeneralApprovalsTab.vue`
+- `src/views/file-center/ArrivalGroupList.vue`
+- `src/views/file-center/FilePipelineObservability.vue`
+- `src/views/file-center/FileTemplateFormatFields.vue`
+- `src/views/file-center/MappingDraftAssistant.vue`
+- `src/views/governance/components/GovernanceFilterBar.vue`
+- `src/views/job/components/JobConfigBasicForm.vue`
+- `src/views/job/components/JobDefinitionTaxonomyFilters.vue`
+- `src/views/job/components/JobMonitoringFields.vue`
+- `src/views/log/ExecutionLog.vue`
+- `src/views/monitor/JobInstanceDetail.vue`
+- `src/views/monitor/JobInstanceList.vue`
+- `src/views/monitor/JobStepInstanceList.vue`
+- `src/views/monitor/WorkflowRunDetail.vue`
+- `src/views/monitor/WorkflowRunList.vue`
+- `src/views/observability/AuditList.vue`
+- `src/views/observability/EventCatalog.vue`
+- `src/views/observability/LineageEvidence.vue`
+- `src/views/observability/LineageRelationExplorer.vue`
+- `src/views/observability/OperationAuditList.vue`
+- `src/views/observability/OutboxList.vue`
+- `src/views/observability/TraceDiagnostic.vue`
+- `src/views/observability/components/ChannelReceiptsTab.vue`
+- `src/views/observability/components/DeadLettersTab.vue`
+- `src/views/observability/components/ExecutionLogsTab.vue`
+- `src/views/observability/components/RetriesTab.vue`
+- `src/views/ops/CapacityProfile.vue`
+- `src/views/ops/components/OpsExtraPanel.vue`
+- `src/views/ops/components/TenantDailyProgress.vue`
+- `src/views/reports/ReportExportHub.vue`
+- `src/views/scheduler/BatchDayList.vue`
+- `src/views/system/TenantList.vue`
+- `src/views/system/TriggerList.vue`
+- `src/views/system/UserRole.vue`
+- `src/views/system/components/NotificationDeliveryLogsTab.vue`
+- `src/views/system/components/TagSearchTab.vue`
+- `src/views/worker/WorkerManagement.vue`
+- `src/views/workflow/designer/toolbar/NodeSearchBox.vue`
+
+**src/views-mobile：1 个文件**
+
+- `src/views-mobile/MExecutionLog.vue`
+
+**src/components：16 个文件**
+
+- `src/components/common/AiAssistantLauncher.vue`
+- `src/components/common/AiImageAttachmentPicker.vue`
+- `src/components/common/AiTextAttachmentPicker.vue`
+- `src/components/common/CodeNameBuilder.vue`
+- `src/components/common/CommandPalette.vue`
+- `src/components/common/CronExprInput.vue`
+- `src/components/common/DateRangePresetPicker.vue`
+- `src/components/common/InstantPicker.vue`
+- `src/components/common/InstantRangePicker.vue`
+- `src/components/common/JsonTextareaInput.vue`
+- `src/components/common/MetaSelect.vue`
+- `src/components/common/ProPagination.vue`
+- `src/components/common/StrongPasswordInput.vue`
+- `src/components/common/TenantIdInput.vue`
+- `src/components/common/TenantSelect.vue`
+- `src/components/common/TraceIdInput.vue`
+
+## 2026-11-02：租户复制未知结果的真实浏览器验证
+
+后端基线 `fb7ec82a05bb3c3d722afe243e2db22a656e1730`，前端基线 `26bd888157e616da3acf11b11ed028ed4a04c7d3`；验证前后两仓均无未提交源码变更。`./mvnw -ntp -pl batch-console-api -am -Dmaven.test.skip=true package` 成功，测试跳过；日志 `/private/tmp/closure-main-console-build.log`。
+
+执行 `python3 /private/tmp/wdi-tenant-copy-browser-draft/runner.py`：真实 Chromium 登录、认证和 CSRF；在专属 PostgreSQL 和 Valkey 中将源租户 `RESOURCE_QUEUE` 复制到两个目标，在确认真实服务端提交及两个目标回执后中断浏览器响应，刷新后使用原请求键回查。页面结果、目标队列和数据库修订一致，回查没有产生第二次写请求。最终通过日志 `/private/tmp/closure-tenant-copy-browser-retry9.log`，专属进程和容器已清理。该结果仅覆盖同一登录会话、该配置类型和本地隔离服务，不外推所有配置类型、跨账号、目标部署或混版场景。
+
+首次因本机缺少对应 Chromium 未进入登录；随后若干次因临时探针混淆两个下拉选项或复选框定位超时，均未提交复制请求，保留 `/private/tmp/closure-tenant-copy-browser.log` 和 `/private/tmp/closure-tenant-copy-browser-retry*.log`。最终测试针对各自关联的下拉列表定位。此前作业包浏览器验证与本次租户复制验证属于不同运行快照，不能合称单次全链路验收。
+
 ## 2026-11-01：本地关键边界与前后端联验续查
 
 **后续串行复验（覆盖下方对应的历史待验状态）**：修复复制弹窗租户切换和作业包迟到响应后，`npx vitest run --maxWorkers=2 src/utils/configBatchRecovery.test.ts src/api/configBatchRecovery.test.ts src/api/configBatchMutationKeys.test.ts src/views/system/components/TenantCopyConfigDialog.test.ts src/views/job/JobBundleContextRisks.test.ts` 共 5 个文件、109 项通过，日志 `/private/tmp/wdi-config-batch-frontend-retest-20261101.log`。前述真实 HTTP 回查暴露的 JSON 序列化问题修复后，`./mvnw -ntp -pl batch-console-api -am '-Dtest=ConfigBatchOperationRecoveryServiceTest,ConsoleConfigBatchRecoveryControllerTest,ConfigSyncAuditRecoveryIntegrationTest#shouldRecoverAuthenticatedJobBundleImportWithRepeatedTargets+shouldRecoverAuthenticatedTenantCopyWithoutRepeatingTargetWrites+shouldRecoverAuthenticatedJobBundleCreate+shouldRecoverConfirmedStrictRollbackAfterTargetWrite' -Dsurefire.failIfNoSpecifiedTests=false test` 共 18 项通过，包含 4 项真实认证 HTTP 和隔离 PostgreSQL 用例，日志 `/private/tmp/wdi-config-batch-http-fixed-20261101.log`。这些结果不等同于网络断连后的真实浏览器联验。

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -18,6 +19,36 @@ import org.junit.jupiter.api.Test;
 
 @DisplayName("作业实例查询语句的状态过滤口径: 各筛选保留自身业务语义的状态集合")
 class JobInstanceMapperXmlTest {
+
+  @Test
+  @DisplayName("精确作业编码同时约束列表与计数，模糊查询仍保留原语义")
+  void shouldFilterExactJobCodeInListAndCount_withoutChangingFuzzyQuery() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+    Map<String, Object> exact = Map.of(
+        "tenantId",
+        "tenant-a",
+        "exactJobCode",
+        "JOB_A",
+        "jobCode",
+        "UNRELATED",
+        "pageRequest",
+        new PageRequest(1, 2));
+    Map<String, Object> fuzzy =
+        Map.of("tenantId", "tenant-a", "jobCode", "JOB_A", "pageRequest", new PageRequest(1, 2));
+    for (String statement : new String[] {"selectByQuery", "countByQuery"}) {
+      var mapped =
+          configuration.getMappedStatement(JobInstanceMapper.class.getName() + "." + statement);
+      String exactSql =
+          mapped.getBoundSql(exact).getSql().replaceAll("\\s+", " ").toLowerCase();
+      String fuzzySql =
+          mapped.getBoundSql(fuzzy).getSql().replaceAll("\\s+", " ").toLowerCase();
+      assertThat(exactSql).as(statement + " 精确作业编码").contains("job_code = ?");
+      assertThat(exactSql).as(statement + " 精确筛选优先").doesNotContain("job_code like");
+      assertThat(fuzzySql).as(statement + " 原模糊作业编码").contains("job_code like");
+    }
+  }
 
   @Test
   @DisplayName("超期筛选保留自身业务口径的状态集合, 并包含部分失败状态")
