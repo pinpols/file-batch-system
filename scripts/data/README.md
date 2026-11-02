@@ -9,8 +9,26 @@
 - `init-tenant-kafka-acl.sh`：按租户初始化 Kafka ACL。
 - `init-minio.sh`：初始化 S3 兼容对象存储 bucket 和基础策略。
 - `load-system-test-data.sh`：加载系统测试数据。
+- `init-coverage-tenants.py`：本地 ta/tb/tc 覆盖租户预检及受控初始化；见下方保护边界。
 
 `sql/` 下是这些入口使用的辅助 SQL。正式 schema 变更请放在 [../../db/migration/](../../db/migration/)。
+
+## 本地覆盖租户初始化
+
+`scripts/data/init-coverage-tenants.py` 仅接受显式 loopback Console 地址。默认检查 ta/tb/tc 不存在及目标包哈希，真实认证模式需登录，可能产生认证审计记录；不创建租户或导入配置。`--apply` 才逐个创建 tenant、上传对应 `coverage-examples`、预览、导出空配置检查和应用。配置落盘会创建作业、工作流及其他配置；示例运行仍需对应 Worker、业务端点、表与 manifest，并不保证业务作业可执行。
+
+示例（用自己的仓库外路径，勿提交凭据和回执）：
+
+```bash
+python3 scripts/data/init-coverage-tenants.py --base-url http://127.0.0.1:18080 \
+  --operator coverage-init --receipt /private/tmp/coverage-receipt.json --allow-local-bypass
+```
+
+受控执行时追加 `--apply --credentials-file /private/tmp/coverage-credentials.json --acknowledge-insert-only-limitation`；实际地址与文件由操作者指定。脚本生成三组不同的随机强密码及 `ta-admin`、`tb-admin`、`tc-admin`，凭据文件以 0600 创建，已存在不会覆盖；可选 `--prompt-password` 分别隐藏输入密码。回执记录本机地址、操作者、文件哈希、阶段、请求键和统计，不含密码、Cookie 或预览令牌。回执和凭据需要妥善保管，不能提交仓库。`--allow-local-bypass` 仅明确允许本机匿名 bypass，不代表权限已验收。
+
+**当前接口的限制：**预览未给出新增/更新分类；导出排除软删除数据，导入 upsert 可恢复或覆盖同名软删除项。预览版本令牌能阻断预览之后的配置变化，但不能证明预览前不存在隐蔽项，也不能证明同一地址始终连接同一数据库。执行前必须人工核对目标库及软删除数据、排除并发写入；此脚本不能提供事务内绝不覆盖的保证。实际回执出现更新或行数不一致时停止并保留未知状态，不声称回滚已提交数据。
+
+脚本只认领有本次回执且 ID、操作者一致的租户，其他既有租户立即停止。创建或应用阶段响应丢失时不重发、不自动认领，需人工核对；不执行跨租户清理。正常已完成阶段可使用相同回执和凭据续跑；包、操作者或地址变化会被拒绝。
 
 ## 外部环境
 
@@ -26,6 +44,7 @@
 
 | 文件 | 用途 / 调用归属 |
 |---|---|
+| [init-coverage-tenants.py](init-coverage-tenants.py) | 本地覆盖租户预检、创建和配置包导入；当前接口不保证事务内仅新增。 |
 | [init-kafka-topics.sh](init-kafka-topics.sh) | 初始化 Kafka topics。 |
 | [init-minio.sh](init-minio.sh) | 初始化 S3 兼容对象存储 bucket。 |
 | [init-tenant-kafka-acl.sh](init-tenant-kafka-acl.sh) | ADR-035 Phase 3:per-tenant Kafka SASL/SCRAM 用户 + ACL。 |

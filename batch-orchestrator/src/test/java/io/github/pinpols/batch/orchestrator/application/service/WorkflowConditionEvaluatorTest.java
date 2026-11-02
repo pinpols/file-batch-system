@@ -38,6 +38,13 @@ class WorkflowConditionEvaluatorTest {
         .hasMessageContaining("condition_expr_blank");
   }
 
+  @Test
+  @DisplayName("覆盖包条件分支按输入值分别命中或跳过")
+  void shouldEvaluateCoveragePackageCondition_whenInputDiffers() {
+    assertThat(evaluator.matches("proceed == true", "{\"proceed\":true}")).isTrue();
+    assertThat(evaluator.matches("proceed == true", "{\"proceed\":false}")).isFalse();
+  }
+
   // --- equality ---
 
   @Test

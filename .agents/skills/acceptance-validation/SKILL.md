@@ -1,6 +1,6 @@
 ---
 name: acceptance-validation
-description: 用户要求执行后端验收、完整本地验证、真实数据严格校验或诊断验收结果时使用。遵循仓库 runbook，并按验证层级报告证据。
+description: 用户要求执行后端验收、三租户作业与 Workflow 覆盖包验证、完整本地验证、真实数据严格校验或诊断验收结果时使用。遵循仓库 runbook，并按验证层级报告证据。
 ---
 
 # 验收验证
@@ -30,3 +30,5 @@ description: 用户要求执行后端验收、完整本地验证、真实数据�
 ## 当前文档与脚本的方法补充
 
 执行多阶段验收、核对脚本总结果或追运行产物身份时，按需读取[验收入口、结果与证据归属](references/execution-evidence.md)。只加载相关方法，不把文档列出的操作自动加入执行范围。
+
+使用 ta/tb/tc 覆盖示例检查 Job、Workflow、Worker 或三租户导入时，读取[三租户覆盖包与真实执行](references/tenant-coverage-packages.md)。配置、隔离导入和真实运行分别留证，不把 SIM 默认样本当作覆盖示例。
