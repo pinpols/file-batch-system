@@ -1,12 +1,31 @@
 # Docker Compose 部署基线
 
-仓库现在提供两种 Docker 使用方式：
+仓库提供以下 Compose 资产：
 
 - `docker-compose.yml`：本地基础依赖
 - `deploy/docker/compose/app.yml`：应用容器部署
 - `deploy/docker/compose/observability.yml`：可选观测栈叠加层
 
 该 Compose 全栈定义面向本地开发和隔离测试，不是生产拓扑模板。需要部署到非本机 Docker 网络时，必须显式覆盖外部数据库、Kafka、Valkey、对象存储和服务间地址；生产 Kubernetes 部署使用 Helm 基础 chart、`helm/values-prod.yaml` 安全策略和站点私有 values，不要把仓库中的本地服务名当作生产地址。
+
+## 本地 Compose 配置视图
+
+下图对应仓库中的基础 Compose 与 `app.yml` 组合，是本地开发和隔离测试的**配置示意**，不表示当前机器已启动全部服务。`apps` profile 控制应用容器，`replica` profile 提供可选副本；默认 `scripts/docker/up-apps.sh` 会选择两者。前端、观测栈及其他 HA 叠加层分别配置，不由下图推断已启动。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":45,"rankSpacing":55}}}%%
+flowchart TB
+  H["本机访问方 / 单独启动的前端"] -->|"默认回环地址"| A["应用容器 · apps profile<br/>Console API / Trigger / Orchestrator / 五类 Worker"]
+  subgraph NET["本地 Compose 网络"]
+    A -->|"按配置访问"| PG[("PostgreSQL primary<br/>平台库 / 业务库")]
+    A --> K["Kafka"]
+    A --> V["Valkey"]
+    A --> S["MinIO"]
+    PG -. "replica profile" .-> RE[("PostgreSQL replica")]
+  end
+```
+
+图中应用容器为汇总展示，连线表示按各服务职责和配置访问，不表示每个服务都访问全部依赖；具体通信见[模块结构与运行链路](../architecture/project-structure.md)。图中平台库与业务库是不同数据库；本地默认地址可指向同一 PostgreSQL 服务，不代表生产也必须共用实例。部署 overlay 的镜像来源、外部依赖与网络见本文后续章节；Helm 及未来发布路线与此视图分开。
 
 建议按环境选择对应的 env 文件：
 
@@ -60,6 +79,7 @@
 - `batch-worker-export`
 - `batch-worker-process`
 - `batch-worker-dispatch`
+- `batch-worker-atomic`
 - `batch-console-api`
 
 默认宿主机端口：

@@ -26,6 +26,41 @@
 5. **平台 PG/Redis/Kafka/MinIO**：基础设施故障与攻击都可能表现为超时、重复和乱序；正确性不能只依赖单次网络成功。
 6. **源码/PR → CI → 制品 → 部署**：PR 检查、Action 固定、依赖扫描、SBOM、签名和 provenance 构成供应链，不把本机构建当作发布证明。
 
+### 租户与执行信任边界图
+
+本图表示逻辑信任边界，不是所有连接或实际网络拓扑。具体访问路径和启用的隔离由 Worker 类型、配置和部署环境决定；跨租户查询仍需相应授权与审计。
+
+**访问与租户边界**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":46,"rankSpacing":86}}}%%
+flowchart LR
+  U["浏览器 / 调用方"] -->|"身份凭据"| C["Console API<br/>认证 · 授权 · 租户守卫"]
+  C -->|"内部认证 / 租户校验"| O["Trigger / Orchestrator<br/>接纳与状态协调"]
+  C -->|"授权查询与配置"| PG[("平台 PostgreSQL<br/>运行事实及租户约束")]
+  O -->|"请求及运行状态"| PG
+  C -->|"受控附件访问"| AI["AI 附件 bucket"]
+```
+
+**执行与数据边界**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":48,"rankSpacing":90}}}%%
+flowchart LR
+  DISP["Orchestrator<br/>任务派发"] -->|"Outbox"| K["Kafka<br/>通知不等于授权"]
+  K --> W["Worker<br/>平台 / 租户自托管 SDK"]
+  W -->|"内部认证 / 租户 API key"| API["Orchestrator · 任务 API<br/>CLAIM · 续租 · REPORT"]
+  API --> PG[("平台 PostgreSQL<br/>运行状态")]
+  W -->|"平台 Worker<br/>按租户设置"| R["事务级<br/>app.tenant_id"]
+  R --> BP[("业务 PostgreSQL<br/>RLS · 最小权限角色")]
+  W -->|"平台 Worker<br/>文件域权限"| BF["业务文件 bucket"]
+  W -->|"平台 Worker<br/>渠道合同"| X["外部交付渠道"]
+```
+
+图中的任务派发与任务 API 是同一个 Orchestrator 服务的不同职责；Worker 访问路径按类型、权限和配置生效，并不表示每类 Worker 都访问所有依赖。
+
+租户身份由服务端认证和授权确定；RLS 上下文使用数据库事务变量，不存放在 Redis。平台 Worker 只在各自受权的路径访问业务数据与平台文件元数据；自托管 Worker 通过协议接入，不获得平台库全局写权限。ATOMIC 的受控执行器需要独立身份、网络策略和部署隔离。不同业务文件与 AI 附件 bucket 属于逻辑隔离；它们可以复用客户端及存储集群，**独立 bucket 不等于独立物理故障域**。具体访问和凭据见[业务分片路由](../runbook/biz-tenant-routing.md)与[存储域边界](../runbook/object-storage-s3-backends.md)。
+
 ## 攻击者与失效假设
 
 - 未认证互联网调用者、合法但恶意的租户用户、凭据泄漏后的调用者；

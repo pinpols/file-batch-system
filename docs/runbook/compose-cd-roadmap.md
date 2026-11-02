@@ -307,7 +307,9 @@ flowchart TB
 - **Observability**：指标、trace、日志和告警覆盖应用与数据平面。
 - **GitOps**：Argo CD 只部署已经构建并通过治理的 immutable digest；不在集群内构建应用。
 
-## 13. 最终生产发布拓扑
+## 13. 目标生产发布拓扑（规划）
+
+下图表示目标发布流程，不代表当前 staging 主机已接入或 production 晋级已实现；具体阶段状态以本文开头和实际工作流为准。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%

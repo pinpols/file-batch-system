@@ -64,7 +64,7 @@ sequenceDiagram
   O->>DB: 幂等准备 WorkflowRun
 ```
 
-**收益**：trigger 重启不丢已 fire 的 launch（Quartz fire 后第一时间落 outbox，relay 重启续传）；orchestrator 短暂宕机不阻塞 trigger Quartz worker thread。
+**收益与边界**：请求与 Outbox 同事务提交后，Trigger 或 relay 重启可继续处理持久化的待投递记录；Orchestrator 短暂不可达时，Trigger 不必同步等待其完成调度。投递与消费仍受数据库和消息保留、重试预算及消费者处理结果约束；重试耗尽可能进入 GIVE_UP，不可恢复消息可被拒绝并确认，必须通过告警和恢复流程处理，不能据此承诺任意故障下都不丢消息或业务副作用恰好一次。
 
 **消息载荷**：`LaunchEnvelope` JSON `{ launchRequest, dedupKey, sourceFireTime, envelopeVersion }`，headers 携带 `X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`。
 
@@ -107,13 +107,12 @@ flowchart TB
 
 ## 1.6 观测栈 — Metrics / Traces / Logs 三件套
 
-主图省略了观测链路，因为每个 service 节点都向 OTel Collector 上报，画进主图会变意大利面。
-单独画一张图说明：所有进程怎么把可观测信号送出去 + 运营怎么从 Grafana 一站排障。
+主图省略了观测链路。下图区分指标抓取与日志、链路导出：Prometheus 抓取应用指标；配置启用 OTLP 后，应用向 Collector 导出日志与链路。当前默认关闭 OTLP 导出，实际启用范围和数据送达以目标环境配置及验证为准。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  A["控制服务 + 五类 Worker"] -->|"Trace / Log"| OT["OpenTelemetry Collector"]
+  A["控制服务 + 五类 Worker"] -->|"启用 OTLP 时：Trace / Log"| OT["OpenTelemetry Collector"]
   OT --> T["Tempo · Trace"]
   OT --> L["Loki · Log"]
   OT -. "可选兼容后端" .-> J["Jaeger"]
@@ -237,16 +236,16 @@ flowchart TB
 
 | 模块 | 扩缩特点 | 为什么 |
 |---|---|---|
-| **console-api** | 完全无状态，纯横向扩 | BFF 层，请求间无依赖；HPA 按 CPU + HTTP QPS |
+| **console-api** | 可部署多个副本；SSE 连接绑定实例，断线后可在回放窗口内恢复 | Helm 提供可选 CPU HPA；Redis 回放有限，游标过期时需重新获取状态 |
 | **trigger** | 横向扩靠 Quartz cluster lock 内部协调；辅助调度走 ShedLock JDBC | 同 cron 触发的多实例靠 `QRTZ_LOCKS` 排他抢占，应用层不感知 |
-| **orchestrator** | 横向扩靠 Outbox 动态分片 + ShedLock；StatefulSet 部署 | 多实例并行处理不同 outbox shard；ShedLock 保证调度类任务全集群单实例执行 |
-| **worker-***  | 横向扩靠 Kafka consumer group rebalance + lease | 实例数 ≤ Kafka partition 数；超过 = 多余实例空闲；KEDA 按 lag 自动扩缩 |
+| **orchestrator** | Helm 使用 StatefulSet；Outbox 支持静态或动态分片 | 自动扩缩要求 dynamic 分片，并按环境配置 HPA 或 KEDA；调度锁和 CAS 共同维护各自边界 |
+| **worker-***  | 横向扩靠 Kafka consumer group rebalance + lease | 单个 consumer group 在单个 topic 上的并行消费受分区数约束；KEDA 按部署配置启用 |
 
-### 三个扩缩硬上限（红色虚线）
+### 扩缩时共同核对的容量与依赖
 
-1. **PG `max_connections`**：所有模块总连接数上限。N 实例 × 单实例 pool ≤ PG max_connections（生产 500-1000，加 PgBouncer 可放大）
-2. **Kafka partition 数**：限制 worker 并发上限。partition=10 → 最多 10 个 worker 实例消费同一 topic；超出空跑
-3. **Redis 高可用**：orchestrator 的 ShedLock / 限流 / 配额 / SSE replay 全靠 Redis；单点 Redis 挂 ≈ orchestrator 协调失效（trigger 走 PG，不受影响）
+1. **PG `max_connections`**：结合所有模块连接池、管理连接和预留容量定容；PgBouncer 的配置和事务模式需单独验证。
+2. **Kafka partition 数**：约束同一 consumer group 对同一 topic 的并行消费；不同 topic、group 和进程内执行并发需分别核算。
+3. **Redis 与锁后端**：按环境核对限流、配额、SSE 回放及 ShedLock 的实际配置；Redis 不可用时的影响取决于各能力的降级策略，不能将全部协调等同于单一 Redis 锁。
 
 ### 详细文档
 
@@ -351,6 +350,30 @@ flowchart LR
 
 > 详细 SQL 模板与运行回路见 [`../design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5；ExecutionMode.INCREMENTAL 水位回路见 §7.8。
 
+### 2.5 ATOMIC — 独立任务执行
+
+ATOMIC 使用独立 Worker 和 `BatchTaskExecutor` SPI，不经过文件 Pipeline。下图是典型执行路径；实际执行器是否注册，以及目标、凭据和安全策略，以配置和部署为准。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":42},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  O["Orchestrator · Task Outbox"] --> K["Kafka · 任务派发"]
+  K --> C["Worker · CLAIM 认领"]
+  C --> P["检查租约与取消条件<br/>重放请求按需校验能力"]
+  P --> S["按 taskType 选择执行器"]
+  S --> M["不能安全重放时<br/>确认执行开始标记"]
+  M --> E["执行器调用"]
+  E --> T["租约有效时报告结果<br/>REPORT · Orchestrator"]
+```
+
+图中为各步骤条件满足的主线，并非每个任务都能执行到最后：
+
+- 未成功认领或无法确认当前租约时不进入业务执行。执行前收到取消请求，或重放请求缺少能力守卫、与冻结能力合同不符时，也不调用执行器。
+- `DefaultStepExecutionAdapter` 按类型查找已注册执行器，找不到时返回 `NO_EXECUTOR`。对不能安全重放的执行器，在调用前确认执行开始标记；标记无法确认时返回 `EXTERNAL_OUTCOME_UNKNOWN`，本次不调用执行器。成功、失败和取消结果在租约仍有效时按报告流程处理。
+- 运行中租约丢失后，旧执行者停止回报；执行已发生但外部结果不确定时，需要核对下游事实，不能盲目重投。详见[回报丢失与租约恢复](../runbook/troubleshooting-decision-tree.md#执行后回报丢失与租约恢复)。
+
+执行器包含 SQL、存储过程、HTTP、Shell 等；Spark Submit 为按配置启用的可选执行器。启用范围、目标白名单和生产隔离要求见 [Atomic Worker 生产隔离基线](../runbook/atomic-worker-production-isolation.md)。
+
 ---
 
 ## 3. 配置如何驱动执行
@@ -386,6 +409,8 @@ flowchart TB
 ## 4. 跟着任务走一遍（三类全程）
 
 下列示例聚焦JOB节点内部；完整入口均先接纳对应Workflow，再按节点创建JobInstance。示例耗时、ID和记录数是历史场景数据，不代表当前容量或验收结果。
+
+本节的三个样例分别是 EXPORT、IMPORT 和 DISPATCH；PROCESS 的五阶段见第 2.4 节、staging 与水位回路见第 7.9.2 节；ATOMIC 的独立任务执行见第 2.5 节。
 
 下面三个例子都来自 2026-04-25 真实跑通的 instance，`pipeline_step_run` 的耗时是真实数据。
 当前顶层 Trigger 契约以受管单作业 Workflow 的 `workflowDefinitionId` 为目标；示例中的 JobCode 只标识执行内容，不作为根触发字段。
@@ -634,7 +659,7 @@ sequenceDiagram
   end
 ```
 
-业务事务一旦 commit，事件就一定在 outbox 里；Kafka 暂挂、producer 重启、网络分区，业务不阻塞，最差只是延迟。
+同一事务成功提交时，状态与对应 Outbox 记录共同持久化；Kafka 短时不可用时 relay 可在配置的重试与保留边界内恢复投递。重试耗尽、消息过期、消费者拒绝及下游副作用仍需告警、人工处置或明确的恢复合同，不能概括为所有故障都仅造成延迟。
 
 ### 7.2 publish_status 状态机
 

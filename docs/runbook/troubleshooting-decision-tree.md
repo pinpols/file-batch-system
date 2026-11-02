@@ -170,6 +170,54 @@ SELECT * FROM batch.dead_letter_task
 
 先在 Console 的死信列表核对来源任务、错误原因和外部副作用状态，再提交 `DLQ_REPLAY` 审批申请，由独立管理员批准后执行。若任务为 `EXTERNAL_OUTCOME_UNKNOWN`，必须确认外部动作未执行并提交证据引用；批准后只允许一次性恢复。已执行或仍无法确认时保持阻塞。
 
+### 执行后回报丢失与租约恢复
+
+下图按发生顺序展示可能的故障边界，不表示所有分支都会自动执行，也不改变 DLQ、重放或人工确认的既有合同。
+
+```mermaid
+%%{init: {"sequence":{"mirrorActors":false}}}%%
+sequenceDiagram
+  participant W as Worker
+  participant O as Orchestrator
+  participant P as 平台数据库
+  participant E as 业务库 / 文件 / 外部渠道
+  participant R as 可选 REPORT Outbox
+  participant H as 运维 / 下游确认
+  W->>O: CLAIM 任务
+  O->>P: 接纳认领并确定 invocation / lease
+  O-->>W: 当前 invocation / lease 与执行配置
+  opt 执行器声明为不可安全重放
+    W->>O: 声明即将开始非幂等操作
+    O->>P: 校验执行身份并记录开始证据
+    O-->>W: 确认后才允许执行
+  end
+  W->>E: 执行业务操作
+  Note over W,E: 外部副作用与平台 REPORT 非同一分布式事务
+  alt Worker 获取到业务结果，但 REPORT 失败或响应丢失
+    W--x O: REPORT 未确认（请求或响应异常）
+    opt 已启用 REPORT Outbox 且写入成功
+      W->>R: 保存原 invocation 的结果
+      R->>O: 按退避策略重投同一 REPORT
+      O->>P: 按执行身份和状态裁决结果
+      Note over R,O: 仅补报已获得的结果，不重新执行副作用
+    end
+  else 执行中断或进程崩溃，外部结果尚不明确
+    Note over W,E: 副作用可能已发生，不能仅凭超时判断失败
+  end
+  opt 当前租约到期并满足回收条件
+    O->>P: 按状态、版本和执行身份回收或记录未知结果
+    Note over O,P: 围栏阻止失效 invocation 推进平台状态<br/>不能撤销外部已发生的副作用
+    W-->>O: 旧 invocation 迟到 REPORT
+    O-->>W: 身份或状态不再有效时拒绝
+  end
+  opt 外部结果不明确或需要确认
+    H->>E: 对账外部结果及稳定幂等凭据
+    Note over H,O: 对已执行、确认未执行和仍未知分别处置<br/>仅在现有合同允许且条件满足时执行受控恢复
+  end
+```
+
+REPORT Outbox 默认关闭；启用后仍有重试次数、持久介质与执行身份的边界，不能将其当作业务提交的原子证明。已记录的非幂等执行在租约到期后按 `EXTERNAL_OUTCOME_UNKNOWN` 处理，已执行或无法确认时不能自动重做。其它可恢复路径仍需遵守各执行器的幂等、状态和重放合同。具体配置和历史适用性见 [Worker REPORT Outbox](../architecture/adr/ADR-015-worker-side-outbox.md)、[Replay 范围与身份](../architecture/adr/ADR-049-replay-operation-scopes.md)。
+
 运维脚本只读列出候选项：
 
 ```bash
