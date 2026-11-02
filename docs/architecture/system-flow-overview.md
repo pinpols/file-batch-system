@@ -64,7 +64,7 @@ sequenceDiagram
   O->>DB: 幂等准备 WorkflowRun
 ```
 
-**收益**：trigger 重启不丢已 fire 的 launch（Quartz fire 后第一时间落 outbox，relay 重启续传）；orchestrator 短暂宕机不阻塞 trigger Quartz worker thread。
+**收益与边界**：请求与 Outbox 同事务提交后，Trigger 或 relay 重启可继续处理持久化的待投递记录；Orchestrator 短暂不可达时，Trigger 不必同步等待其完成调度。投递与消费仍受数据库和消息保留、重试预算及消费者处理结果约束；重试耗尽可能进入 GIVE_UP，不可恢复消息可被拒绝并确认，必须通过告警和恢复流程处理，不能据此承诺任意故障下都不丢消息或业务副作用恰好一次。
 
 **消息载荷**：`LaunchEnvelope` JSON `{ launchRequest, dedupKey, sourceFireTime, envelopeVersion }`，headers 携带 `X-Trace-Id` / `X-Tenant-Id` / `X-Envelope-Version`。
 
@@ -72,28 +72,28 @@ sequenceDiagram
 
 ## 1.5 运营视角 — console-api 的五个支线
 
-主图聚焦「一条任务的生命周期」，console-api（BFF）只在主图体现「人工 launch」这一跳。
-以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
+主图聚焦一条任务的生命周期。以下按操作拆开展示 Console API 的配置、查询、运行发起、补偿、实时监控和 AI 入口。
 
-> **注意**：本节的图**只画 console-api 视角**，所有边都从 `USER` 起。这不代表系统是前台驱动 ——
-> 定时任务由 Trigger 自动发起，人工/API/事件入口按各自契约接纳，实际占比取决于租户负载。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
+> 这些图只展示 Console 相关路径。定时任务仍由 Trigger 自动发起；人工、API 和事件入口按各自契约接纳请求。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  U["Console 前端"] --> C["Console API · 认证 / 租户 / 授权"]
-  C --> CFG["配置用例"] --> DB[("平台 PostgreSQL")]
-  C --> Q["运行查询"] --> DB
-  C --> RT["SSE 事件桥"]
-  RT <--> R["Redis Pub/Sub + 重放缓冲"]
-  RT --> U
-  C --> L["运行发起"] --> T["Trigger"]
-  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
-  C --> AI["AI 只读工具 / 会话"]
+flowchart LR
+  U["Console 前端"] --> C["Console API<br/>认证 / 租户 / 授权"]
+  C --> CFG["配置"] --> DB[("平台库")]
+  C --> Q["查询"] --> DB
+  C --> AI["AI 会话与只读工具"]
   AI --> DB
-  AI --> P["受控模型服务"]
+  AI --> M["受控模型服务"]
   AI --> A["独立附件存储"]
+  C --> RT["SSE 事件桥"]
+  RT <--> R["Redis 消息与回放"]
+  RT --> U
+  C --> L["发起"] --> T["Trigger"]
+  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
 ```
+
+各入口均经过 Console 的认证、租户与授权边界；SSE 回放受实际配置和缓冲窗口约束。
 
 ### 关键约束
 
@@ -107,13 +107,12 @@ flowchart TB
 
 ## 1.6 观测栈 — Metrics / Traces / Logs 三件套
 
-主图省略了观测链路，因为每个 service 节点都向 OTel Collector 上报，画进主图会变意大利面。
-单独画一张图说明：所有进程怎么把可观测信号送出去 + 运营怎么从 Grafana 一站排障。
+主图省略了观测链路。下图区分指标抓取与日志、链路导出：Prometheus 抓取应用指标；配置启用 OTLP 后，应用向 Collector 导出日志与链路。当前默认关闭 OTLP 导出，实际启用范围和数据送达以目标环境配置及验证为准。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  A["控制服务 + 五类 Worker"] -->|"Trace / Log"| OT["OpenTelemetry Collector"]
+  A["控制服务 + 五类 Worker"] -->|"启用 OTLP 时：Trace / Log"| OT["OpenTelemetry Collector"]
   OT --> T["Tempo · Trace"]
   OT --> L["Loki · Log"]
   OT -. "可选兼容后端" .-> J["Jaeger"]
@@ -163,49 +162,53 @@ flowchart TB
 
 主图省略了 DLQ，因为是**异常旁路**，不在 happy-path 主链上。但生产环境必跑，独立画。
 
-DLQ 在本系统里**走两条互补轨**：
-- **Kafka 隔离轨**：worker 处理失败的"毒丸消息"立即转发到 `batch.task.dead-letter` topic 隔离，
-  防止毒丸阻塞主派发队列（`DeadLetterPublisher`），运维侧用 Kafka 工具消费查看
-- **DB 落盘轨**：orchestrator 把 retry 耗尽的失败任务 INSERT `dead_letter_task` 表，
-  console 可查询 + 调 `POST /api/console/jobs/dead-letters/replay` 触发重放
-  （`DefaultRetryGovernanceService`）
+DLQ 有两条独立路径：Kafka 隔离不可恢复的消息，数据库记录业务任务的死信。两者不互相写入，也不能把 Kafka 消息死信视为数据库重放记录。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  W["Worker"] -->|"无法解析 / 毒消息"| DP["DeadLetterPublisher"] --> KDL["Kafka DLQ"]
-  W -->|"执行失败 REPORT"| O["Orchestrator"]
-  O --> RS[("retry_schedule")]
-  RS -->|"到期 / 允许重试"| O
-  O -->|"耗尽或不可重试"| DL[("dead_letter_task")]
-  C["Console 审批"] -->|"受控重放请求"| O
-  DL -. "原始失败证据" .-> O
-  O -->|"新运行 / 尝试 + 来源关联"| TX[("运行状态 + Outbox")]
-  TX --> R["Outbox Relay"] --> K["Kafka · task dispatch"] --> W
+  W["Worker"] -->|"毒消息"| P["DLQ 发布器"] --> K["Kafka DLQ"]
+  W -->|"失败报告"| O["Orchestrator"]
+  O -->|"可重试"| R[("retry_schedule")]
+  R -->|"到期重试"| O
+  O -->|"无法重试"| D[("dead_letter_task")]
+  C["Console 重放 / 审批"] --> O
+  D -. "失败证据" .-> O
+  O -->|"分区重排"| B[("派发 Outbox")]
+  B --> REL["Outbox Relay"] --> DIS["Kafka 派发"] --> W
+  O -->|"核实未知结果"| T["Trigger<br/>创建新根请求"]
 ```
+
+图中分别表示普通分区重排和经核实的未知外部结果路径；不是每条死信都满足任一路径的准入条件。执行结果需继续查看新尝试或新根运行。
 
 ### `dead_letter_task.replay_status` 状态机
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+  direction TB
   [*] --> NEW: 创建死信
-  NEW --> REPLAYING: 审批并开始重放
-  NEW --> GIVE_UP: 放弃
-  REPLAYING --> SUCCESS: 重放成功
-  REPLAYING --> FAILED: 重放失败
-  FAILED --> NEW: 再次提交处理
-  FAILED --> GIVE_UP: 放弃
+  NEW --> REPLAYING: 允许重放
+  NEW --> GIVE_UP: 自动预算耗尽
+  REPLAYING --> SUCCESS: 已受理
+  REPLAYING --> FAILED: 重排失败
+  REPLAYING --> GIVE_UP: 源失效
+  FAILED --> REPLAYING: 符合条件再试
+  FAILED --> GIVE_UP: 自动预算耗尽
   SUCCESS --> [*]
   GIVE_UP --> [*]
 ```
 
+`FAILED` 可在满足条件时直接再次进入 `REPLAYING`；自动重放预算耗尽时 `NEW` 或 `FAILED` 也可能转为 `GIVE_UP`。`SUCCESS` 表示重放请求已受理，不能单独证明后续业务执行成功。
+
 ### 关键约束
 
 - **两轨独立**：Kafka 隔离轨（`DeadLetterPublisher → batch.task.dead-letter`）与 DB 落盘轨（`dead_letter_task` 表）**互不依赖**。前者纯 Kafka 隔离避免阻塞，后者支持业务侧重放治理。
-- **重放幂等**：`markReplaying` 用乐观锁（`replay_status='NEW' AND id=?`），避免并发 replay；重放写新 `outbox_event(eventType=REPLAY)`，复用主链 publish 路径，**不绕过状态机**。
-- **GIVE_UP 是终态**：人工标记后不再 replay，需重置回 NEW 才能再走重放路径。
-- **source_type 决定重放粒度**：可重放 task / partition / instance / pipeline_instance / file_dispatch / mq_message 6 类，由 `RetryGovernanceService` 路由分发。
+- **重放并发控制**：`markReplaying` 按租户、记录 ID 和当前状态比较并更新，避免并发重放。普通分区重排写入任务派发 Outbox；受控的未知外部结果处置创建带来源关联的新根运行请求。
+- **GIVE_UP 不再自动重放**：源缺失、运行已关闭或自动重放预算耗尽等情况可进入该状态；不得直接修改数据库状态绕过受控恢复。
+- **重放粒度**：当前死信重放支持 `JOB_PARTITION`，不支持的来源类型会被拒绝；外部结果未知时须先核实并按审批路径处理。具体边界见[补偿与清理手册](../runbook/compensation-cleanup.md#dlq-补偿提交边界)。
+
+实现与契约参考：[Worker 死信发布](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java)、[重试与死信治理](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java)、[补偿命令](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java)和[Console API 协议](../api/console-api-protocol.md)。相关回归入口见[死信审批重放 E2E](../../batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DeadLetterApprovalReplayE2eIT.java) 与[重试执行边界集成测试](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java)；这些测试入口不代表本次重跑结果。
 
 ---
 
@@ -237,16 +240,16 @@ flowchart TB
 
 | 模块 | 扩缩特点 | 为什么 |
 |---|---|---|
-| **console-api** | 完全无状态，纯横向扩 | BFF 层，请求间无依赖；HPA 按 CPU + HTTP QPS |
+| **console-api** | 可部署多个副本；SSE 连接绑定实例，断线后可在回放窗口内恢复 | Helm 提供可选 CPU HPA；Redis 回放有限，游标过期时需重新获取状态 |
 | **trigger** | 横向扩靠 Quartz cluster lock 内部协调；辅助调度走 ShedLock JDBC | 同 cron 触发的多实例靠 `QRTZ_LOCKS` 排他抢占，应用层不感知 |
-| **orchestrator** | 横向扩靠 Outbox 动态分片 + ShedLock；StatefulSet 部署 | 多实例并行处理不同 outbox shard；ShedLock 保证调度类任务全集群单实例执行 |
-| **worker-***  | 横向扩靠 Kafka consumer group rebalance + lease | 实例数 ≤ Kafka partition 数；超过 = 多余实例空闲；KEDA 按 lag 自动扩缩 |
+| **orchestrator** | Helm 使用 StatefulSet；Outbox 支持静态或动态分片 | 自动扩缩要求 dynamic 分片，并按环境配置 HPA 或 KEDA；调度锁和 CAS 共同维护各自边界 |
+| **worker-***  | 横向扩靠 Kafka consumer group rebalance + lease | 单个 consumer group 在单个 topic 上的并行消费受分区数约束；KEDA 按部署配置启用 |
 
-### 三个扩缩硬上限（红色虚线）
+### 扩缩时共同核对的容量与依赖
 
-1. **PG `max_connections`**：所有模块总连接数上限。N 实例 × 单实例 pool ≤ PG max_connections（生产 500-1000，加 PgBouncer 可放大）
-2. **Kafka partition 数**：限制 worker 并发上限。partition=10 → 最多 10 个 worker 实例消费同一 topic；超出空跑
-3. **Redis 高可用**：orchestrator 的 ShedLock / 限流 / 配额 / SSE replay 全靠 Redis；单点 Redis 挂 ≈ orchestrator 协调失效（trigger 走 PG，不受影响）
+1. **PG `max_connections`**：结合所有模块连接池、管理连接和预留容量定容；PgBouncer 的配置和事务模式需单独验证。
+2. **Kafka partition 数**：约束同一 consumer group 对同一 topic 的并行消费；不同 topic、group 和进程内执行并发需分别核算。
+3. **Redis 与锁后端**：按环境核对限流、配额、SSE 回放及 ShedLock 的实际配置；Redis 不可用时的影响取决于各能力的降级策略，不能将全部协调等同于单一 Redis 锁。
 
 ### 详细文档
 
@@ -351,6 +354,30 @@ flowchart LR
 
 > 详细 SQL 模板与运行回路见 [`../design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5；ExecutionMode.INCREMENTAL 水位回路见 §7.8。
 
+### 2.5 ATOMIC — 独立任务执行
+
+ATOMIC 使用独立 Worker 和 `BatchTaskExecutor` SPI，不经过文件 Pipeline。下图是典型执行路径；实际执行器是否注册，以及目标、凭据和安全策略，以配置和部署为准。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":42},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  O["Orchestrator · Task Outbox"] --> K["Kafka · 任务派发"]
+  K --> C["Worker · CLAIM 认领"]
+  C --> P["检查租约与取消条件<br/>重放请求按需校验能力"]
+  P --> S["按 taskType 选择执行器"]
+  S --> M["不能安全重放时<br/>确认执行开始标记"]
+  M --> E["执行器调用"]
+  E --> T["租约有效时报告结果<br/>REPORT · Orchestrator"]
+```
+
+图中为各步骤条件满足的主线，并非每个任务都能执行到最后：
+
+- 未成功认领或无法确认当前租约时不进入业务执行。执行前收到取消请求，或重放请求缺少能力守卫、与冻结能力合同不符时，也不调用执行器。
+- `DefaultStepExecutionAdapter` 按类型查找已注册执行器，找不到时返回 `NO_EXECUTOR`。对不能安全重放的执行器，在调用前确认执行开始标记；标记无法确认时返回 `EXTERNAL_OUTCOME_UNKNOWN`，本次不调用执行器。成功、失败和取消结果在租约仍有效时按报告流程处理。
+- 运行中租约丢失后，旧执行者停止回报；执行已发生但外部结果不确定时，需要核对下游事实，不能盲目重投。详见[回报丢失与租约恢复](../runbook/troubleshooting-decision-tree.md#执行后回报丢失与租约恢复)。
+
+执行器包含 SQL、存储过程、HTTP、Shell 等；Spark Submit 为按配置启用的可选执行器。启用范围、目标白名单和生产隔离要求见 [Atomic Worker 生产隔离基线](../runbook/atomic-worker-production-isolation.md)。
+
 ---
 
 ## 3. 配置如何驱动执行
@@ -386,6 +413,8 @@ flowchart TB
 ## 4. 跟着任务走一遍（三类全程）
 
 下列示例聚焦JOB节点内部；完整入口均先接纳对应Workflow，再按节点创建JobInstance。示例耗时、ID和记录数是历史场景数据，不代表当前容量或验收结果。
+
+本节的三个样例分别是 EXPORT、IMPORT 和 DISPATCH；PROCESS 的五阶段见第 2.4 节、staging 与水位回路见第 7.9.2 节；ATOMIC 的独立任务执行见第 2.5 节。
 
 下面三个例子都来自 2026-04-25 真实跑通的 instance，`pipeline_step_run` 的耗时是真实数据。
 当前顶层 Trigger 契约以受管单作业 Workflow 的 `workflowDefinitionId` 为目标；示例中的 JobCode 只标识执行内容，不作为根触发字段。
@@ -634,7 +663,7 @@ sequenceDiagram
   end
 ```
 
-业务事务一旦 commit，事件就一定在 outbox 里；Kafka 暂挂、producer 重启、网络分区，业务不阻塞，最差只是延迟。
+同一事务成功提交时，状态与对应 Outbox 记录共同持久化；Kafka 短时不可用时 relay 可在配置的重试与保留边界内恢复投递。重试耗尽、消息过期、消费者拒绝及下游副作用仍需告警、人工处置或明确的恢复合同，不能概括为所有故障都仅造成延迟。
 
 ### 7.2 publish_status 状态机
 

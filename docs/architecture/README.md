@@ -6,6 +6,20 @@
 
 Workflow 新根与系统 Pipeline 的实施范围见[整合方案](../plans/workflow-daily-integration-plan-2026-10-14.md)。本目录按当前开发分支代码更新；历史表/列或辅助实现保留不代表仍是新部署入口，也不代表正式验收全部完成。
 
+## 架构图导航
+
+文档站通过“后端 → 架构”进入本页。以下链接指向各领域的权威原文，图随文档站重新构建更新；图示描述设计和配置边界，不能据此推断目标环境实际部署或验收状态。
+
+| 查看内容 | 图与位置 | 说明 |
+|---|---|---|
+| 模块与数据 | [模块结构图](project-structure.md#模块结构图) | 运行主链、数据访问及共享模块依赖 |
+| 核心模型与状态 | [核心模型](core-model.md)的 3.1、4.2.1 节 | 实例层级及 WorkflowRun、NodeRun、Partition、Task 的典型状态路径，非穷举 |
+| 安全边界 | [租户与执行信任边界图](security-model.md#租户与执行信任边界图) | 身份、租户、执行与数据访问边界 |
+| 执行与恢复 | [执行后回报丢失与租约恢复](../runbook/troubleshooting-decision-tree.md#执行后回报丢失与租约恢复) | 外部副作用结果未知、租约和回报恢复 |
+| 本地部署 | [本地 Compose 配置视图](../runbook/docker-deployment.md#本地-compose-配置视图) | 本地开发配置示意，不代表当前运行状态 |
+| 系统流程 | [系统流程总览](system-flow-overview.md) | 主链、观测、编排和各 Worker 流程 |
+| 部署规划 | [Compose CD → Kubernetes GitOps 路线](../runbook/compose-cd-roadmap.md)第 13 节 | 目标发布拓扑，属于规划而非当前部署证明 |
+
 ## 文件清单（编号即推荐阅读顺序）
 
 | # | 文件 | 作用 | 何时看 |

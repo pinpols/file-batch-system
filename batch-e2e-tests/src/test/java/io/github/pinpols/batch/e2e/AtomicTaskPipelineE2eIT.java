@@ -5,6 +5,8 @@ import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -23,6 +25,9 @@ import io.github.pinpols.batch.orchestrator.application.service.workflow.Workflo
 import io.github.pinpols.batch.orchestrator.infrastructure.timeout.JobInstanceTimeoutEnforcer;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicTaskConsumer;
+import io.github.pinpols.batch.worker.atomic.runtime.AtomicWorkerLoop;
+import io.github.pinpols.batch.worker.core.application.TaskDispatchExecutor;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
@@ -33,16 +38,22 @@ import java.time.ZoneOffset;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
@@ -127,19 +138,26 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
 
   private final JobInstanceMapper jobInstanceMapper;
 
+  private final ApplicationContext applicationContext;
+
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
+
+  @MockitoSpyBean
+  private TaskDispatchExecutor taskDispatchExecutor;
 
   @Autowired
   AtomicTaskPipelineE2eIT(
       RetryGovernanceService retryGovernanceService,
       KafkaTemplate<String, String> kafkaTemplate,
       JobInstanceTimeoutEnforcer jobInstanceTimeoutEnforcer,
-      JobInstanceMapper jobInstanceMapper) {
+      JobInstanceMapper jobInstanceMapper,
+      ApplicationContext applicationContext) {
     this.retryGovernanceService = retryGovernanceService;
     this.kafkaTemplate = kafkaTemplate;
     this.jobInstanceTimeoutEnforcer = jobInstanceTimeoutEnforcer;
     this.jobInstanceMapper = jobInstanceMapper;
+    this.applicationContext = applicationContext;
   }
 
   @Test
@@ -821,7 +839,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           .pollInterval(Duration.ofMillis(200))
           .untilAsserted(() -> {
             assertThat(receivedRequests).hasValue(1);
-            assertThat(claimAttempts).hasValue(1);
+            assertThat(claimAttempts.get()).isGreaterThanOrEqualTo(1);
             String selectedTaskStatus =
                 jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId);
             assertThat(selectedTaskStatus).isEqualTo("FAILED");
@@ -839,6 +857,8 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       TaskDispatchMessage retryDispatch =
           JsonUtils.fromJson(retryPayload, TaskDispatchMessage.class);
       assertThat(retryDispatch).isNotNull();
+      assertThat(retryDispatch.taskId()).isEqualTo(taskId);
+      assertThat(retryDispatch.selectedWorkerId()).isNotBlank();
       observedTaskId.set(taskId);
       e2eOutboxPublishSupport.publishAllPending(TENANT);
       await()
@@ -858,14 +878,99 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           BatchTopics.TASK_DISPATCH_ATOMIC, retryDispatch.selectedWorkerId());
       String retryKey = TENANT + ":" + retryDispatch.jobCode() + ":" + retryDispatch.instanceNo()
           + ":task:" + retryDispatch.taskId();
-      kafkaTemplate.send(retryTopic, retryKey, retryPayload).get();
+      String workerId =
+          applicationContext.getBean(AtomicWorkerLoop.class).ensureStarted().getWorkerId();
+      assertThat(workerId).isEqualTo(retryDispatch.selectedWorkerId());
+      AtomicTaskConsumer atomicConsumer = applicationContext.getBean(AtomicTaskConsumer.class);
+      var listener = applicationContext
+          .getBean(KafkaListenerEndpointRegistry.class)
+          .getListenerContainer(atomicConsumer.listenerId());
+      assertThat(listener).isNotNull();
+      assertThat(listener.getContainerProperties().getGroupId())
+          .isEqualTo(atomicConsumer.consumerGroupId());
+
+      String firstTrace = seed.requestId() + "-retry-probe-1";
+      String secondTrace = seed.requestId() + "-retry-probe-2";
+      Map<String, Boolean> probeClaimsRejected = new ConcurrentHashMap<>();
+      doAnswer(invocation -> {
+            TaskDispatchMessage message = invocation.getArgument(0);
+            String observedWorker = invocation.getArgument(1);
+            Object result = invocation.callRealMethod();
+            if (firstTrace.equals(message.traceId()) || secondTrace.equals(message.traceId())) {
+              boolean rejected = taskId.equals(message.taskId())
+                  && workerId.equals(observedWorker)
+                  && result == null;
+              probeClaimsRejected.merge(
+                  message.traceId(), rejected, (left, right) -> left && right);
+            }
+            return result;
+          })
+          .when(taskDispatchExecutor)
+          .execute(any(TaskDispatchMessage.class), any(String.class));
+
+      // 模拟 Kafka 至少一次投递多出一条消息，固定次数不能作为重投消费栅栏。
       kafkaTemplate.send(retryTopic, retryKey, retryPayload).get();
       await()
           .atMost(Duration.ofSeconds(30))
-          .untilAsserted(
-              () -> assertThat(claimAttempts).hasValue(attemptsBeforeExplicitRedelivery + 2));
+          .untilAsserted(() -> assertThat(claimAttempts.get())
+              .isGreaterThanOrEqualTo(attemptsBeforeExplicitRedelivery + 1));
+
+      // 两条原消息保持字节不变；探针只替换 traceId，以识别每次实际认领结果。
+      RecordMetadata firstOriginal =
+          kafkaTemplate.send(retryTopic, retryKey, retryPayload).get().getRecordMetadata();
+      RecordMetadata secondOriginal =
+          kafkaTemplate.send(retryTopic, retryKey, retryPayload).get().getRecordMetadata();
+      ObjectMapper mapper = new ObjectMapper();
+      ObjectNode probe = (ObjectNode) mapper.readTree(retryPayload);
+      probe.put("traceId", firstTrace);
+      String firstProbe = mapper.writeValueAsString(probe);
+      probe.put("traceId", secondTrace);
+      String secondProbe = mapper.writeValueAsString(probe);
+      assertThat(JsonUtils.fromJson(firstProbe, TaskDispatchMessage.class))
+          .usingRecursiveComparison()
+          .ignoringFields("traceId")
+          .isEqualTo(retryDispatch);
+      assertThat(JsonUtils.fromJson(secondProbe, TaskDispatchMessage.class))
+          .usingRecursiveComparison()
+          .ignoringFields("traceId")
+          .isEqualTo(retryDispatch);
+      RecordMetadata firstProbeMetadata =
+          kafkaTemplate.send(retryTopic, retryKey, firstProbe).get().getRecordMetadata();
+      RecordMetadata lastProbeMetadata =
+          kafkaTemplate.send(retryTopic, retryKey, secondProbe).get().getRecordMetadata();
+      TopicPartition partition = new TopicPartition(retryTopic, firstOriginal.partition());
+      for (RecordMetadata metadata :
+          List.of(firstOriginal, secondOriginal, firstProbeMetadata, lastProbeMetadata)) {
+        assertThat(metadata.topic()).isEqualTo(retryTopic);
+        assertThat(metadata.partition()).isEqualTo(partition.partition());
+      }
+      assertThat(secondOriginal.offset()).isGreaterThan(firstOriginal.offset());
+      assertThat(firstProbeMetadata.offset()).isGreaterThan(secondOriginal.offset());
+      assertThat(lastProbeMetadata.offset()).isGreaterThan(firstProbeMetadata.offset());
+      try (Admin admin = Admin.create(Map.of("bootstrap.servers", kafkaBootstrapServers()))) {
+        await()
+            .atMost(Duration.ofSeconds(30))
+            .pollInterval(Duration.ofMillis(100))
+            .untilAsserted(() -> {
+              assertThat(listener.isRunning()).isTrue();
+              assertThat(listener.getAssignedPartitions()).contains(partition);
+              var offsets = admin
+                  .listConsumerGroupOffsets(atomicConsumer.consumerGroupId())
+                  .partitionsToOffsetAndMetadata()
+                  .get(10, TimeUnit.SECONDS);
+              var committed = offsets.get(partition);
+              assertThat(committed).isNotNull();
+              assertThat(committed.offset()).isGreaterThanOrEqualTo(lastProbeMetadata.offset() + 1);
+              assertThat(probeClaimsRejected)
+                  .containsEntry(firstTrace, true)
+                  .containsEntry(secondTrace, true);
+            });
+      }
       assertThat(successfulClaims).hasValue(2);
       assertThat(receivedRequests).hasValue(2);
+      String completedTaskStatus =
+          jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId);
+      assertThat(completedTaskStatus).isEqualTo("SUCCESS");
       String selectedRunStatus =
           jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, seed.requestId());
       assertThat(selectedRunStatus).isEqualTo("SUCCESS");

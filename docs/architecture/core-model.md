@@ -52,14 +52,14 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层"]
+  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun<br/>顶层运行"]
   R --> N["WorkflowNodeRun"]
-  N --> C["START / END / GATEWAY / WAIT"]
-  N -->|"JOB"| J["独立 JobInstance"]
-  J --> P["JobPartition · 身份 / 租约 / 重试"]
-  P --> T["JobTask · CLAIM / EXECUTE / REPORT"]
-  T --> S["JobStepInstance · 步骤审计"]
-  J -. "文件类型阶段观测" .-> PI["PipelineInstance / PipelineStepRun"]
+  N --> C["START / END<br/>GATEWAY / WAIT"]
+  N -->|"JOB 节点"| J["JobInstance<br/>独立作业执行"]
+  J --> P["JobPartition<br/>身份 / 租约 / 重试"]
+  P --> T["JobTask<br/>CLAIM / EXECUTE / REPORT"]
+  T --> S["JobStepInstance<br/>步骤审计"]
+  J -. "文件类阶段观测" .-> PI["PipelineInstance<br/>PipelineStepRun"]
 ```
 
 | 对象 | 原语与身份 | 职责边界 |
@@ -150,17 +150,14 @@ flowchart TB
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph O["Orchestrator"]
-    P["partition_no / partition_key"]
-    J["expected_partition_count"]
-    CFG["EffectiveTaskConfig"]
-    P --> CFG
-    J --> CFG
+    P["partition_no<br/>partition_key"] --> CFG["EffectiveTaskConfig"]
+    J["expected_partition_count"] --> CFG
   end
   CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]
   T --> W["DefaultTaskExecutionWrapper"]
-  W --> C["执行上下文 · 分区序号 / 总数 / 键"]
+  W --> C["执行上下文<br/>分区序号 / 总数 / 键"]
   C --> PL["Worker step / 业务插件"]
-  PL --> S["按行号 / Hash / ID 范围 / 输入快照切分"]
+  PL --> S["行号 / Hash / ID 范围<br/>输入快照切分"]
 ```
 
 **字段语义**（`PipelineRuntimeKeys`）：
@@ -288,6 +285,82 @@ step instance 是步骤审计镜像；它的 RETRYING 不能外推为 task 或 w
 <!-- enum-sync:TaskStatus:end -->
 
 task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_schedule 表达，新的执行尝试再进入 task 生命周期。
+
+#### 4.2.1 各对象的典型状态路径
+
+以下四图仅展示当前源码可定位的**典型路径**，不是完整状态转换表；初始状态、终止、恢复和受限管理操作以对应入口的前态、版本及租户条件为准。箭头表示同一条记录的状态转换，不表示不同层级同步迁移。
+
+**WorkflowRun：运行、暂停与终结**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+stateDiagram-v2
+  [*] --> CREATED
+  CREATED --> RUNNING
+  RUNNING --> PAUSED
+  PAUSED --> RUNNING
+  RUNNING --> SUCCESS
+  RUNNING --> FAILED
+  RUNNING --> SUCCESS_DRY_RUN
+  RUNNING --> FAILED_DRY_RUN
+  RUNNING --> TERMINATED
+```
+
+聚合可以在其他被允许的活跃前态完成；暂停只停止推进新节点，已在途的工作可按现有契约完成。实现入口为 `DefaultWorkflowRunLaunchService`、`WorkflowRunManagementApplicationService` 和 `WorkflowNodeTerminalFinalizer`。
+
+**WorkflowNodeRun：节点与等待**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+stateDiagram-v2
+  [*] --> READY: JOB 节点登记
+  READY --> SUCCESS
+  READY --> FAILED
+  [*] --> RUNNING: 控制节点运行
+  RUNNING --> SUCCESS
+  [*] --> WAITING_DEPENDENCY: 跨日依赖缺失
+  WAITING_DEPENDENCY --> FAILED: 依赖超时或解析失败
+  [*] --> SKIPPED: 条件分支跳过
+  FAILED --> SKIPPED: 受控人工跳过
+```
+
+这是分场景的典型路径：不同节点类型可直接以不同初态建记录。跨日依赖满足后重新派发可能创建新 `run_seq` 的节点记录；不能把它画成旧等待记录必然直接变为 READY。`FAILED → SKIPPED` 是具备前态和操作条件的人工跳过，不是失败后自动重试。参考 `WorkflowNodeRunSupport`、`CrossDayDependencyReconciler`、`WorkflowRunManagementApplicationService` 和 `TaskOutcomeNodeRunRecorder`。
+
+**JobPartition：准入、认领与重试**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+stateDiagram-v2
+  [*] --> CREATED: 默认创建
+  [*] --> WAITING: 容量不足时创建
+  CREATED --> READY: 准入并准备派发
+  WAITING --> READY: 条件满足并重派
+  READY --> RUNNING: 领取成功
+  RUNNING --> SUCCESS: 执行成功
+  RUNNING --> RETRYING: 安排重试
+  RETRYING --> READY: 重试重新派发
+  RUNNING --> FAILED: 失败且不再重试
+```
+
+创建时也可依据计划或调用参数指定初态，容量不足时可能处于 WAITING；租约过期后的回收路径需重新经过调度和派发，不等同于任意直接复位。参考 `DefaultPartitionLifecycleService`、`DefaultTaskOutcomeService` 和 `RetryRequeueCoordinator`。
+
+**JobTask：领取与报告**
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+stateDiagram-v2
+  [*] --> CREATED: 等待准入时创建
+  [*] --> READY: 可派发时创建
+  CREATED --> READY: 准备派发
+  READY --> RUNNING: CLAIM 成功
+  RUNNING --> SUCCESS: 成功报告
+  RUNNING --> FAILED: 失败报告
+  RUNNING --> CANCELLED: 符合取消条件的报告
+```
+
+这张图不画 `WAITING` / `RETRYING` 为 Task 状态；它们属于分区、步骤或重试计划。以上仅为典型路径，不能据此穷举取消、终止或 lease 恢复。例如 Worker 返回符合取消条件的报告时，Task 可进入 `CANCELLED`，该报告路径中不再重试的 Partition 按现有失败契约进入 `FAILED`；管理员分区取消走独立路径。参考 `DefaultPartitionLifecycleService`、`JobTaskMapper.assignWorker` 和 `DefaultTaskOutcomeService`。
+
+**待核对的终态边界：** 下节“终态不直接回到非终态”是统一模型的目标约束；当前实现中，`RetryRequeueCoordinator` 会在校验父实例与版本后调用 `JobTaskMapper.resetForRetry`，该 SQL 允许同一 Task 行由 `FAILED` 复位至 `READY`。同一受限路径的 `JobPartitionMapper.resetForDispatch` 也存在可将候选分区置回 `READY` 的条件更新。该实现与统一表述的关系需按实际调用和恢复语义专项复核，不能把这些复位画成通用公开状态迁移，也不能仅凭图判断业务缺陷或修复状态。
 
 ### 4.3 状态迁移原则
 

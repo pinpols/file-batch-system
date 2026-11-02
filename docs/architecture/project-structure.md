@@ -9,12 +9,12 @@ file-batch-system/
 ├── batch-common/                           基础设施 / Spring AutoConfiguration / 共享 DTO
 ├── batch-test-support/                     跨模块测试基础设施（仅 test scope）
 ├── batch-trigger/                          Quartz 调度触发 + 业务日历 → trigger_outbox_event
-├── batch-orchestrator/                     状态主机:CLAIM/EXECUTE/REPORT 闭环 + workflow 编排
+├── batch-orchestrator/                     状态主机：CLAIM/续租/REPORT 协调 + workflow 编排
 ├── batch-worker/                           worker 聚合器(aggregator + 各 worker parent;artifactId 不变)
 │   ├── core/                               Worker SPI 基础(pipeline stages 抽象;artifactId 仍为 batch-worker-core)
 │   ├── import/                             IMPORT：RECEIVE→PREPROCESS→PARSE→VALIDATE→LOAD→FEEDBACK
 │   ├── export/                             EXPORT：PREPARE→GENERATE→STORE→REGISTER→COMPLETE
-│   ├── process/                            PROCESS pipeline(纯业务计算)
+│   ├── process/                            PROCESS：staging、计算、校验和业务数据提交
 │   ├── dispatch/                           DISPATCH pipeline(下游分发)
 │   └── atomic/                             专用 Task SPI(shell/sql/stored-proc/http 隔离,ADR-029)
 ├── batch-console-api/                      控制面 REST API(运维/查询/审批/配置/可观测)
@@ -53,26 +53,35 @@ file-batch-system/
 
 ## 模块结构图
 
+以下两图分别展示运行主链和数据访问，均为简化视图。具体协议、readiness 查询及 Worker 注册/心跳见[运行时模块通信拓扑](runtime-module-communication.md)。图中模块分工不代表所有环境均采用相同部署或启用可选能力。
+
+### 运行主链
+
 ```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":40,"rankSpacing":58},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   FE["batch-console · 配对前端"] --> C["batch-console-api"]
   C -->|"发起运行"| T["batch-trigger"]
-  C -->|"审批 / 运维"| O["batch-orchestrator"]
-  T -->|"Trigger Outbox Relay"| K1["Kafka · launch"] --> O
+  T -->|"Trigger Outbox Relay"| K1["Kafka · launch"] --> O["batch-orchestrator"]
   O -->|"Task Outbox Relay"| K2["Kafka · task dispatch"] --> W["五类 Worker 应用"]
-  W -->|"HTTP CLAIM / REPORT"| O
-  C --> DB[("平台 PostgreSQL")]
-  T --> DB
-  O --> DB
-  W --> B["业务库 / 批处理对象存储 / 外部通道"]
-  C --> A["AI 附件 · 独立 bucket / prefix"]
-  COMMON["batch-common · 共享库"] -. "依赖" .-> C
-  T -. "依赖" .-> COMMON
-  O -. "依赖" .-> COMMON
-  W -. "依赖" .-> COMMON
-  W -. "依赖" .-> CORE["batch-worker/core · 共享执行库"]
+  W -->|"HTTP CLAIM / 续租 / REPORT"| O
+  C -->|"审批 / 运维"| O
 ```
+
+### 数据访问
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":45,"rankSpacing":60},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  C["batch-console-api"] --> DB[("平台 PostgreSQL")]
+  T["batch-trigger"] --> DB
+  O["batch-orchestrator"] --> DB
+  C --> A["AI 附件 · 独立 bucket"]
+  W["五类 Worker 应用"] --> B["业务库 / 批处理对象存储 / 外部通道"]
+  W -. "部分 Worker 受限访问文件元数据" .-> DB
+```
+
+虚线表示部分 Worker 的受限访问；Worker 按类型访问业务数据或外部通道，不能据图推断每类 Worker 访问全部目标。Console API、Trigger、Orchestrator 和五类 Worker 均依赖 `batch-common`；五类 Worker 还依赖 `batch-worker-core`。依赖方向及模块内部结构见[平台模块展开图](#平台模块展开图)。
 
 图中两条边界需要同时成立：平台运行时沿 `trigger → orchestrator → worker` 传递任务状态；
 Console 内部沿 `web → application.contract → application/domain` 处理控制面请求，`shared` /
@@ -80,7 +89,7 @@ Console 内部沿 `web → application.contract → application/domain` 处理�
 Console 的 DTO 不应下沉到 `batch-common`，Worker 也不能
 绕过 Orchestrator 直接写实例状态。
 
-AI 会话附件属于 Console 控制面数据：PostgreSQL 保存租户、所有者、会话绑定、对象键、保留期和审计元数据，文件正文进入与批处理业务文件物理隔离的 S3 bucket 或受控 prefix。浏览器只调用 Console API；不得直连对象存储、复用批处理文件下载权限或把对象存储凭据下发前端。存储隔离和生命周期配置见 [`../runbook/object-storage-s3-backends.md`](../runbook/object-storage-s3-backends.md)。
+AI 会话附件属于 Console 控制面数据：PostgreSQL 保存租户、所有者、会话绑定、对象键、保留期和审计元数据，文件正文进入与批处理业务文件不同的 S3 bucket。不同 bucket 不代表独立存储故障域。浏览器只调用 Console API；不得直连对象存储、复用批处理文件下载权限或把对象存储凭据下发前端。存储隔离和生命周期配置见 [`../runbook/object-storage-s3-backends.md`](../runbook/object-storage-s3-backends.md)。
 
 配对前端仓库不在本仓内；前后端联调时使用 sibling repo `../batch-console`，约定见根目录 [`../../AGENTS.md`](../../AGENTS.md)。
 
@@ -111,11 +120,11 @@ batch-e2e-tests
 |---|---|---|
 | `batch-common` | `common/{config,events,outbox,security,...}` | 跨模块运行时复用:AutoConfig、Outbox 抽象、RLS、Timezone、i18n |
 | `batch-trigger` | `trigger/{quartz,calendar,outbox}` | Quartz 调度 → `trigger_outbox_event`（orchestrator 消费后启动 instance） |
-| `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**:CLAIM / EXECUTE / REPORT 状态流转;workflow DAG 编排;outbox 投递 |
+| `batch-orchestrator` | `orchestrator/{application,domain,infrastructure,controller}` | **状态主机**：CLAIM / 续租 / REPORT 协调、workflow DAG 编排与 outbox 投递；业务执行由 Worker 承担 |
 | `batch-worker/core`(artifactId `batch-worker-core`) | `worker/core/{support,infrastructure,mapper,route}` | Worker 执行骨架、阶段上下文、步骤登记、路由统一契约 |
 | `batch-worker/import`(artifactId `batch-worker-import`) | `worker/imports/{stage,domain,infrastructure}` | 文件 IMPORT 6 stages(RECEIVE/PREPROCESS/PARSE/VALIDATE/LOAD/FEEDBACK);预处理策略由固定阶段调用 |
 | `batch-worker/export`(artifactId `batch-worker-export`) | `worker/exports/{stage,renderer,sink}` | 文件 EXPORT 5 stages(PREPARE/GENERATE/STORE/REGISTER/COMPLETE);导出格式策略由固定阶段调用 |
-| `batch-worker/process`(artifactId `batch-worker-process`) | `worker/processes/{stage,...}` | 纯业务计算(无文件 IO) |
+| `batch-worker/process`(artifactId `batch-worker-process`) | `worker/processes/{stage,...}` | staging、计算、校验和业务数据提交；不承担文件传输 |
 | `batch-worker/dispatch`(artifactId `batch-worker-dispatch`) | `worker/dispatch/{stage,target,...}` | 下游分发(向外部系统投递);渠道适配器由固定阶段路由 |
 | `batch-worker/atomic`(artifactId `batch-worker-atomic`) | `worker/atomic/{shell,sql,stored-proc,http}` | **专用 Task SPI**:特权执行器隔离(RCE 风险面收敛);插件能力替换原子执行实现 |
 | `batch-console-api` | `console/{application,domain,infrastructure,shared,support,web}` | 控制面 REST + 审批 + 运维操作 + AI Ops + 可观测(唯一允许走读写分离的模块) |
