@@ -185,6 +185,7 @@ public class ConsoleJobQueryService {
     JobInstanceQuery query = new JobInstanceQuery(
         tenantId,
         jobCode,
+        request.getExactJobCode(),
         instanceStatus,
         instanceStatuses,
         instanceNo,

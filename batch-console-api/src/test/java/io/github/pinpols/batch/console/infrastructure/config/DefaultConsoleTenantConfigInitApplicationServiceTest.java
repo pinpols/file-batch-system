@@ -59,6 +59,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -676,6 +677,76 @@ class DefaultConsoleTenantConfigInitApplicationServiceTest {
   }
 
   // ------------------------------------------------------------------ workflow definitions
+
+  @ParameterizedTest
+  @CsvSource({"NODE,false", "EDGE,false", "NODE,true", "EDGE,true"})
+  @DisplayName("超长节点名称和边条件在正式初始化及演练中逐项失败")
+  void batchInit_rejectsOverlongWorkflowTexts(String invalidField, boolean dryRun) {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setDryRun(dryRun);
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeName("😀".repeat("NODE".equals(invalidField) ? 257 : 256));
+    WorkflowDefinitionSpec.EdgeSpec edge = new WorkflowDefinitionSpec.EdgeSpec();
+    edge.setConditionExpr("😀".repeat("EDGE".equals(invalidField) ? 1025 : 1024));
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+    request.getWorkflowDefinitions().getFirst().setEdges(List.of(edge));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().failed()).isOne();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
+  @Test
+  @DisplayName("跳过已存在工作流时不因未应用的超长文本拒绝")
+  void batchInit_skipsExistingWorkflowWithOverlongTexts() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeName("😀".repeat(257));
+    WorkflowDefinitionSpec.EdgeSpec edge = new WorkflowDefinitionSpec.EdgeSpec();
+    edge.setConditionExpr("😀".repeat(1025));
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+    request.getWorkflowDefinitions().getFirst().setEdges(List.of(edge));
+    when(workflowDefinitionMapper.selectLatestByCode("t1", "wf-1"))
+        .thenReturn(new WorkflowDefinitionEntity());
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().skipped()).isOne();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
+
+  @Test
+  @DisplayName("未提供节点时不校验不会写入的边")
+  void batchInit_ignoresEdgesWhenNodesAreOmitted() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setDryRun(true);
+    WorkflowDefinitionSpec.EdgeSpec edge = new WorkflowDefinitionSpec.EdgeSpec();
+    edge.setConditionExpr("😀".repeat(1025));
+    request.getWorkflowDefinitions().getFirst().setEdges(List.of(edge));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isOne();
+  }
+
+  @Test
+  @DisplayName("工作流边界长度按 Unicode 码点支持演练")
+  void batchInit_acceptsWorkflowTextsAtCodePointLimit_whenDryRun() {
+    TenantConfigBatchInitRequest request = requestWithWorkflow("wf-1", List.of("t1"));
+    request.setDryRun(true);
+    WorkflowDefinitionSpec.NodeSpec node = new WorkflowDefinitionSpec.NodeSpec();
+    node.setNodeName("😀".repeat(256));
+    WorkflowDefinitionSpec.EdgeSpec edge = new WorkflowDefinitionSpec.EdgeSpec();
+    edge.setConditionExpr("😀".repeat(1024));
+    request.getWorkflowDefinitions().getFirst().setNodes(List.of(node));
+    request.getWorkflowDefinitions().getFirst().setEdges(List.of(edge));
+
+    TenantConfigBatchInitResponse response = service.batchInit(request, "admin", "batch-test-001");
+
+    assertThat(response.results().getFirst().workflowDefinitions().created()).isOne();
+    verify(workflowDefinitionMapper, never()).upsertWorkflowDefinition(any());
+  }
 
   @ParameterizedTest
   @ValueSource(booleans = {false, true})

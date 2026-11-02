@@ -1,5 +1,13 @@
 # 后端 Controller / Service / Entity 边界复核
 
+## 2026-11-02：PR 整合状态补记
+
+本记录下方的工作树、候选数量和暂停事项为 2026-11-01 的历史快照，不代表当前分支状态。边界审核及主线修复已通过 [PR #1301](https://github.com/pinpols/file-batch-system/pull/1301) 合入 `main`（合并提交 `f69e1783b9cb3d6f5f476af8c3db415bde1a4b15`）；后续 [#1302](https://github.com/pinpols/file-batch-system/pull/1302) 和 [#1303](https://github.com/pinpols/file-batch-system/pull/1303) 已合入。2026-11-02 核查时 #1301 检查结果为 25 项成功、8 项跳过；跳过不计成功。
+
+取证导出当前保留 `JSON` 和 `CSV` 历史请求兼容，实际产物仍为 ZIP；OpenAPI 已说明这一行为，不能表述为实现独立 JSON 或 CSV 导出。此前边界工作树的异步触发和 Worker 进程端到端测试共 9 项通过，证据 `/private/tmp/boundary-e2e-time-target.log`，不等于当前主线的全量验收。当前主线的租户复制响应丢失浏览器验证见[统一审查记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-02租户复制未知结果的真实浏览器验证)。
+
+上述合并和定向测试不代表所有 Controller、Service、Entity 调用链完成运行验证；目标部署和滚动升级等未验证边界仍需独立证据。不要沿用历史暂停段落推断当前工作树状态，也不要把已合并 PR 当作全工程逐文件审查结论。
+
 ## 基线与范围
 
 - 仓库：`file-batch-system`；分支 `fix/bug-fixes`；HEAD `0258697d14229e9da1bddb547943acf9d2481338`。

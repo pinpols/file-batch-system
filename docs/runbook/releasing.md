@@ -140,6 +140,8 @@ git commit -m "release: X.Y.Z"
 源码基线，不立即打 tag。使用 `compose-cd` 的 `frontend_sha` 输入固定前端提交；后端提交由 workflow
 运行自身的 commit 固定。生成的 Release Manifest 必须记录这两个 SHA 和不可变镜像 digest。
 
+包含作业实例 `exactJobCode` 筛选的联合版本，需先更新并核验所有接收 Console 查询的后端实例，再加载使用该参数的前端；现有 Compose 一次更新多个服务并不保证此顺序。旧 Console 会忽略新参数，退回模糊筛选，不能据此认定精确结果正确。已打开页面跨版本及滚动混版需单独验证，不能将同版本制品本身作为兼容证据。
+
 将该 Release Manifest 部署到 staging，完成后端门禁、真实前后端 E2E、前端可访问性与 Lighthouse、
 升级和回滚检查。只有同一组 SHA/digest 的发布候选通过验收，才能在两个仓库对应 commit 上创建同名
 版本 tag，并分别生成 GitHub Release；后端 tag 继续遵循 §6 的 annotated tag 要求：

@@ -965,6 +965,7 @@ Deployment note:
 - `targetTenantIds` 必填、最多50个，元素不得为null或空白；不会在省略时广播到全部活跃租户。
 - `SKIP_EXISTING` 默认只创建缺失项；`UPSERT` 更新已有项并创建缺失项；`dryRun=true` 只预判，不写配置或创建托管Workflow。
 - 创建或覆盖 Workflow 时，提交的节点必须包含非 null 的 `nodeName`；正式执行和 `dryRun` 均按逐项结果报告缺失名称，跳过已存在项时不校验未执行的配置。
+- Workflow 节点名称和连线条件表达式分别最多 256 和 1024 个 Unicode 码点，与 PostgreSQL `varchar` 的字符口径一致。普通创建与完整更新在请求校验阶段拒绝超长值；租户配置初始化对实际创建或覆盖的条目在正式执行和 `dryRun` 中按逐项失败报告，`SKIP_EXISTING` 跳过的条目不校验；Excel 配置包在预检阶段标记超长行。
 - 支持九类配置：作业、Workflow、文件渠道、文件模板、资源队列、批量窗口、业务日历、配额和告警路由；历史Pipeline定义不再作为配置资源接收。
 - 初始化与作业包导入在首个目标事务前检查全部目标身份；目标元素非法返回HTTP400，先前合法目标也不得写入。
 - 每个目标租户独立事务；严格包已确认回滚记为该租户失败，事务提交或连接结果未知则向上传播并停止后续目标，不能把错误当作未执行后重做整批。
@@ -1147,7 +1148,7 @@ Notes:
 - `GET /api/console/queries/file-arrival-groups`
 - `GET /api/console/queries/file-errors` — 错误消息遮蔽可识别的凭据形式；原始记录按文件模板配置的内容脱敏策略展示
 - `GET /api/console/queries/file-templates`
-- `GET /api/console/queries/instances` — supports `sortBy=duration` and `minDurationSeconds` for slow task diagnosis
+- `GET /api/console/queries/instances` — 支持 `sortBy=duration`、`minDurationSeconds` 和精确作业编码 `exactJobCode`；精确条件优先于原有 `jobCode` 模糊条件，列表和计数均在分页前过滤。新前端依赖支持该参数的 Console：发布时须先更新并核验所有接收查询的 Console 实例，再加载新前端；旧 Console 忽略未知参数时只会按兼容传入的 `jobCode` 模糊匹配，不能视为精确查询。已打开页面跨版本以及混版过程尚需在目标环境验证。
 - `GET /api/console/queries/instances/{id}`
 - `GET /api/console/queries/instances/batch-status` — batch query instance status by `instanceNos[]`
 - `GET /api/console/queries/job-step-instances`

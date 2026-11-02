@@ -9,6 +9,7 @@ import lombok.Builder;
 public record JobInstanceQuery(
     String tenantId,
     String jobCode,
+    String exactJobCode,
     String instanceStatus,
     /** 多状态过滤;非空时 IN (...) 查询,优先于 instanceStatus 单值。 */
     List<String> instanceStatuses,

@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.domain.workflow.application.contract.req
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import io.github.pinpols.batch.common.validation.ValidTenantId;
+import io.github.pinpols.batch.console.domain.workflow.validation.WorkflowTextLimits;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -12,6 +13,7 @@ import jakarta.validation.constraints.Size;
 import java.time.ZoneId;
 import java.util.List;
 import lombok.Data;
+import org.hibernate.validator.constraints.CodePointLength;
 import org.springframework.scheduling.support.CronExpression;
 
 @Data
@@ -95,6 +97,7 @@ public class WorkflowDefinitionSaveRequest {
     private String nodeCode;
 
     @NotNull
+    @CodePointLength(max = WorkflowTextLimits.NODE_NAME)
     private String nodeName;
 
     @NotBlank
@@ -122,7 +125,10 @@ public class WorkflowDefinitionSaveRequest {
     private String toNodeCode;
 
     private String edgeType;
+
+    @CodePointLength(max = WorkflowTextLimits.CONDITION_EXPR)
     private String conditionExpr;
+
     private Boolean enabled;
   }
 }
