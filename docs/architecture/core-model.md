@@ -52,14 +52,14 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层"]
+  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun<br/>顶层运行"]
   R --> N["WorkflowNodeRun"]
-  N --> C["START / END / GATEWAY / WAIT"]
-  N -->|"JOB"| J["独立 JobInstance"]
-  J --> P["JobPartition · 身份 / 租约 / 重试"]
-  P --> T["JobTask · CLAIM / EXECUTE / REPORT"]
-  T --> S["JobStepInstance · 步骤审计"]
-  J -. "文件类型阶段观测" .-> PI["PipelineInstance / PipelineStepRun"]
+  N --> C["START / END<br/>GATEWAY / WAIT"]
+  N -->|"JOB 节点"| J["JobInstance<br/>独立作业执行"]
+  J --> P["JobPartition<br/>身份 / 租约 / 重试"]
+  P --> T["JobTask<br/>CLAIM / EXECUTE / REPORT"]
+  T --> S["JobStepInstance<br/>步骤审计"]
+  J -. "文件类阶段观测" .-> PI["PipelineInstance<br/>PipelineStepRun"]
 ```
 
 | 对象 | 原语与身份 | 职责边界 |
@@ -150,17 +150,14 @@ flowchart TB
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph O["Orchestrator"]
-    P["partition_no / partition_key"]
-    J["expected_partition_count"]
-    CFG["EffectiveTaskConfig"]
-    P --> CFG
-    J --> CFG
+    P["partition_no<br/>partition_key"] --> CFG["EffectiveTaskConfig"]
+    J["expected_partition_count"] --> CFG
   end
   CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]
   T --> W["DefaultTaskExecutionWrapper"]
-  W --> C["执行上下文 · 分区序号 / 总数 / 键"]
+  W --> C["执行上下文<br/>分区序号 / 总数 / 键"]
   C --> PL["Worker step / 业务插件"]
-  PL --> S["按行号 / Hash / ID 范围 / 输入快照切分"]
+  PL --> S["行号 / Hash / ID 范围<br/>输入快照切分"]
 ```
 
 **字段语义**（`PipelineRuntimeKeys`）：

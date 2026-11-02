@@ -33,28 +33,28 @@
 **访问与租户边界**
 
 ```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":46,"rankSpacing":86}}}%%
-flowchart LR
-  U["浏览器 / 调用方"] -->|"身份凭据"| C["Console API<br/>认证 · 授权 · 租户守卫"]
-  C -->|"内部认证 / 租户校验"| O["Trigger / Orchestrator<br/>接纳与状态协调"]
-  C -->|"授权查询与配置"| PG[("平台 PostgreSQL<br/>运行事实及租户约束")]
-  O -->|"请求及运行状态"| PG
-  C -->|"受控附件访问"| AI["AI 附件 bucket"]
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
+  U["浏览器 / 调用方<br/>身份入口"] -->|"身份凭据"| C["Console API<br/>认证 · 授权 · 租户守卫"]
+  C -->|"内部认证<br/>租户校验"| O["Trigger / Orchestrator<br/>接纳与状态协调"]
+  C -->|"授权查询<br/>与配置"| PG[("平台 PostgreSQL<br/>运行事实及租户约束")]
+  O -->|"请求及<br/>运行状态"| PG
+  C -->|"受控附件<br/>访问"| AI["AI 附件存储<br/>独立 bucket"]
 ```
 
 **执行与数据边界**
 
 ```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":48,"rankSpacing":90}}}%%
-flowchart LR
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart TB
   DISP["Orchestrator<br/>任务派发"] -->|"Outbox"| K["Kafka<br/>通知不等于授权"]
   K --> W["Worker<br/>平台 / 租户自托管 SDK"]
   W -->|"内部认证 / 租户 API key"| API["Orchestrator · 任务 API<br/>CLAIM · 续租 · REPORT"]
   API --> PG[("平台 PostgreSQL<br/>运行状态")]
   W -->|"平台 Worker<br/>按租户设置"| R["事务级<br/>app.tenant_id"]
   R --> BP[("业务 PostgreSQL<br/>RLS · 最小权限角色")]
-  W -->|"平台 Worker<br/>文件域权限"| BF["业务文件 bucket"]
-  W -->|"平台 Worker<br/>渠道合同"| X["外部交付渠道"]
+  W -->|"平台 Worker<br/>文件域权限"| BF["业务文件<br/>bucket"]
+  W -->|"平台 Worker<br/>渠道合同"| X["外部交付<br/>渠道"]
 ```
 
 图中的任务派发与任务 API 是同一个 Orchestrator 服务的不同职责；Worker 访问路径按类型、权限和配置生效，并不表示每类 Worker 都访问所有依赖。

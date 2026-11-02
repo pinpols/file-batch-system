@@ -72,28 +72,28 @@ sequenceDiagram
 
 ## 1.5 运营视角 — console-api 的五个支线
 
-主图聚焦「一条任务的生命周期」，console-api（BFF）只在主图体现「人工 launch」这一跳。
-以下补充其余四条职责：配置管理、查询 / 报表、实时监控、补偿命令。
+主图聚焦一条任务的生命周期。以下按操作拆开展示 Console API 的配置、查询、运行发起、补偿、实时监控和 AI 入口。
 
-> **注意**：本节的图**只画 console-api 视角**，所有边都从 `USER` 起。这不代表系统是前台驱动 ——
-> 定时任务由 Trigger 自动发起，人工/API/事件入口按各自契约接纳，实际占比取决于租户负载。本节只是补充运营 5 条支线，不要据此理解为"系统都靠人点"。
+> 这些图只展示 Console 相关路径。定时任务仍由 Trigger 自动发起；人工、API 和事件入口按各自契约接纳请求。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  U["Console 前端"] --> C["Console API · 认证 / 租户 / 授权"]
-  C --> CFG["配置用例"] --> DB[("平台 PostgreSQL")]
-  C --> Q["运行查询"] --> DB
-  C --> RT["SSE 事件桥"]
-  RT <--> R["Redis Pub/Sub + 重放缓冲"]
-  RT --> U
-  C --> L["运行发起"] --> T["Trigger"]
-  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
-  C --> AI["AI 只读工具 / 会话"]
+flowchart LR
+  U["Console 前端"] --> C["Console API<br/>认证 / 租户 / 授权"]
+  C --> CFG["配置"] --> DB[("平台库")]
+  C --> Q["查询"] --> DB
+  C --> AI["AI 会话与只读工具"]
   AI --> DB
-  AI --> P["受控模型服务"]
+  AI --> M["受控模型服务"]
   AI --> A["独立附件存储"]
+  C --> RT["SSE 事件桥"]
+  RT <--> R["Redis 消息与回放"]
+  RT --> U
+  C --> L["发起"] --> T["Trigger"]
+  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
 ```
+
+各入口均经过 Console 的认证、租户与授权边界；SSE 回放受实际配置和缓冲窗口约束。
 
 ### 关键约束
 
@@ -162,49 +162,53 @@ flowchart TB
 
 主图省略了 DLQ，因为是**异常旁路**，不在 happy-path 主链上。但生产环境必跑，独立画。
 
-DLQ 在本系统里**走两条互补轨**：
-- **Kafka 隔离轨**：worker 处理失败的"毒丸消息"立即转发到 `batch.task.dead-letter` topic 隔离，
-  防止毒丸阻塞主派发队列（`DeadLetterPublisher`），运维侧用 Kafka 工具消费查看
-- **DB 落盘轨**：orchestrator 把 retry 耗尽的失败任务 INSERT `dead_letter_task` 表，
-  console 可查询 + 调 `POST /api/console/jobs/dead-letters/replay` 触发重放
-  （`DefaultRetryGovernanceService`）
+DLQ 有两条独立路径：Kafka 隔离不可恢复的消息，数据库记录业务任务的死信。两者不互相写入，也不能把 Kafka 消息死信视为数据库重放记录。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  W["Worker"] -->|"无法解析 / 毒消息"| DP["DeadLetterPublisher"] --> KDL["Kafka DLQ"]
-  W -->|"执行失败 REPORT"| O["Orchestrator"]
-  O --> RS[("retry_schedule")]
-  RS -->|"到期 / 允许重试"| O
-  O -->|"耗尽或不可重试"| DL[("dead_letter_task")]
-  C["Console 审批"] -->|"受控重放请求"| O
-  DL -. "原始失败证据" .-> O
-  O -->|"新运行 / 尝试 + 来源关联"| TX[("运行状态 + Outbox")]
-  TX --> R["Outbox Relay"] --> K["Kafka · task dispatch"] --> W
+  W["Worker"] -->|"毒消息"| P["DLQ 发布器"] --> K["Kafka DLQ"]
+  W -->|"失败报告"| O["Orchestrator"]
+  O -->|"可重试"| R[("retry_schedule")]
+  R -->|"到期重试"| O
+  O -->|"无法重试"| D[("dead_letter_task")]
+  C["Console 重放 / 审批"] --> O
+  D -. "失败证据" .-> O
+  O -->|"分区重排"| B[("派发 Outbox")]
+  B --> REL["Outbox Relay"] --> DIS["Kafka 派发"] --> W
+  O -->|"核实未知结果"| T["Trigger<br/>创建新根请求"]
 ```
+
+图中分别表示普通分区重排和经核实的未知外部结果路径；不是每条死信都满足任一路径的准入条件。执行结果需继续查看新尝试或新根运行。
 
 ### `dead_letter_task.replay_status` 状态机
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+  direction TB
   [*] --> NEW: 创建死信
-  NEW --> REPLAYING: 审批并开始重放
-  NEW --> GIVE_UP: 放弃
-  REPLAYING --> SUCCESS: 重放成功
-  REPLAYING --> FAILED: 重放失败
-  FAILED --> NEW: 再次提交处理
-  FAILED --> GIVE_UP: 放弃
+  NEW --> REPLAYING: 允许重放
+  NEW --> GIVE_UP: 自动预算耗尽
+  REPLAYING --> SUCCESS: 已受理
+  REPLAYING --> FAILED: 重排失败
+  REPLAYING --> GIVE_UP: 源失效
+  FAILED --> REPLAYING: 符合条件再试
+  FAILED --> GIVE_UP: 自动预算耗尽
   SUCCESS --> [*]
   GIVE_UP --> [*]
 ```
 
+`FAILED` 可在满足条件时直接再次进入 `REPLAYING`；自动重放预算耗尽时 `NEW` 或 `FAILED` 也可能转为 `GIVE_UP`。`SUCCESS` 表示重放请求已受理，不能单独证明后续业务执行成功。
+
 ### 关键约束
 
 - **两轨独立**：Kafka 隔离轨（`DeadLetterPublisher → batch.task.dead-letter`）与 DB 落盘轨（`dead_letter_task` 表）**互不依赖**。前者纯 Kafka 隔离避免阻塞，后者支持业务侧重放治理。
-- **重放幂等**：`markReplaying` 用乐观锁（`replay_status='NEW' AND id=?`），避免并发 replay；重放写新 `outbox_event(eventType=REPLAY)`，复用主链 publish 路径，**不绕过状态机**。
-- **GIVE_UP 是终态**：人工标记后不再 replay，需重置回 NEW 才能再走重放路径。
-- **source_type 决定重放粒度**：可重放 task / partition / instance / pipeline_instance / file_dispatch / mq_message 6 类，由 `RetryGovernanceService` 路由分发。
+- **重放并发控制**：`markReplaying` 按租户、记录 ID 和当前状态比较并更新，避免并发重放。普通分区重排写入任务派发 Outbox；受控的未知外部结果处置创建带来源关联的新根运行请求。
+- **GIVE_UP 不再自动重放**：源缺失、运行已关闭或自动重放预算耗尽等情况可进入该状态；不得直接修改数据库状态绕过受控恢复。
+- **重放粒度**：当前死信重放支持 `JOB_PARTITION`，不支持的来源类型会被拒绝；外部结果未知时须先核实并按审批路径处理。具体边界见[补偿与清理手册](../runbook/compensation-cleanup.md#dlq-补偿提交边界)。
+
+实现与契约参考：[Worker 死信发布](../../batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java)、[重试与死信治理](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java)、[补偿命令](../../batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java)和[Console API 协议](../api/console-api-protocol.md)。相关回归入口见[死信审批重放 E2E](../../batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DeadLetterApprovalReplayE2eIT.java) 与[重试执行边界集成测试](../../batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java)；这些测试入口不代表本次重跑结果。
 
 ---
 
