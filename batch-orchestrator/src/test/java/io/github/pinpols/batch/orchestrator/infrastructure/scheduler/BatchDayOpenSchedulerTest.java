@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayOpenService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -73,6 +74,7 @@ class BatchDayOpenSchedulerTest {
   private BatchDayCatchupMetrics catchupMetrics;
   private DisasterDayOverrideMapper disasterDayOverrideMapper;
   private TriggerRequestMapper triggerRequestMapper;
+  private BatchDayOpenService openService;
   private BatchDayOpenScheduler scheduler;
 
   @BeforeEach
@@ -110,26 +112,28 @@ class BatchDayOpenSchedulerTest {
     triggerRequestMapper = mock(TriggerRequestMapper.class);
     BatchTimezoneProvider timezoneProvider =
         new BatchTimezoneProvider(new BatchTimezoneProperties());
-    scheduler = new BatchDayOpenScheduler(
-        businessCalendarMapper,
+    openService = new BatchDayOpenService(
         batchDayInstanceMapper,
         catchupControlMapper,
         planCalendarMapper,
         jobExecutionLogMapper,
-        gracefulShutdown,
         timezoneProvider,
         new BatchDayTimePolicyResolver(timezoneProvider, new CutoffScheduleResolver()),
-        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
         calendarDependencyMapper,
         calendarDependencyWaitMapper,
         fileGroupExpectationService,
         externalEventExpectationService,
         alertEventService,
-        catchupMetrics,
         disasterDayOverrideMapper,
         triggerRequestMapper,
-        noopTransactionManager(),
         new BatchDayScanProperties());
+    scheduler = new BatchDayOpenScheduler(
+        businessCalendarMapper,
+        gracefulShutdown,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        catchupMetrics,
+        openService,
+        noopTransactionManager());
   }
 
   private static PlatformTransactionManager noopTransactionManager() {
@@ -195,7 +199,7 @@ class BatchDayOpenSchedulerTest {
     when(batchDayInstanceMapper.insert(any())).thenReturn(1);
     BatchDayScanProperties properties = new BatchDayScanProperties();
     properties.setCatchupDaysPerScan(1);
-    ReflectionTestUtils.setField(scheduler, "batchDayScanProperties", properties);
+    ReflectionTestUtils.setField(openService, "batchDayScanProperties", properties);
 
     scheduler.openDueBatchDays(now);
 
