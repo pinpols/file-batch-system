@@ -13,7 +13,7 @@ import io.github.pinpols.batch.e2e.config.E2ePlatformMybatisConfiguration;
 import io.github.pinpols.batch.e2e.config.E2eShedLockConfiguration;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunReportLock;
-import io.github.pinpols.batch.orchestrator.config.WorkflowSensorDataSourceConfiguration;
+import io.github.pinpols.batch.orchestrator.config.OrchestratorDataSourceConfiguration;
 import io.github.pinpols.batch.orchestrator.infrastructure.sensor.DbRowExistsSensorPolicy;
 import io.github.pinpols.batch.worker.dispatchs.BatchWorkerDispatchApplication;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchStepExecutionAdapter;
@@ -131,7 +131,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
           classes = BusinessDataSourceConfiguration.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
-          classes = WorkflowSensorDataSourceConfiguration.class),
+          classes = OrchestratorDataSourceConfiguration.class),
       @ComponentScan.Filter(
           type = FilterType.ASSIGNABLE_TYPE,
           classes = DbRowExistsSensorPolicy.class)
