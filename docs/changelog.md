@@ -6,7 +6,7 @@
 - 以 `scripts/lib/coverage-config.py` 统一 IMPORT/EXPORT 模板、渠道和主机信任配置，避免在命令或临时接口补丁中重复维护。
 - `acceptance-validation` 增加 harness 使用入口，明确静态导入、真实执行、业务副作用与恢复证据分层。
 - CATCH_UP 场景改为注册 Trigger 前预置 CUTOFF 业务日与拒绝 occurrence，补跑结果记录 runId；Skill 明确该准备不证明 Quartz 自身拒绝记录路径。
-- `todo-master.md` 增加全部开放事项统一索引，逐项链接权威计划、验收矩阵和原始证据，不再以历史“待办”字样代替当前状态。
+- `todo-master.md` 增加前后端全部开放事项统一索引，逐项链接两仓权威计划、验收矩阵和原始证据（含前端界面验收、批量开户、AI/维护降级、Workflow、OIDC 与发布验收），前端 README 只链接此处；不再以历史“待办”字样代替当前状态。
 
 
 - 移除三个已关闭一次性 PR 专用的 Full CI 派发工作流；常规 main Full CI 与手动入口保留。
