@@ -20,6 +20,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -172,9 +173,8 @@ public class RegisterStep implements ExportStageStep {
     attrs.put(PipelineRuntimeKeys.FILE_RECORD, fileRecord);
     context.setFileId(String.valueOf(fileId));
     String tenantId = context.getTenantId();
-    Object pipelineInstanceIdValue = attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
-    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
-    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    PipelineRunFence pipelineRun = PipelineRunFence.fromAttributes(attrs);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineRun, fileId);
     Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         fileRecord.get("file_generation_no") instanceof Number number ? number.intValue() : 1;
@@ -277,10 +277,8 @@ public class RegisterStep implements ExportStageStep {
     context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, existing);
     context.setFileId(String.valueOf(fileId));
     String tenantId = context.getTenantId();
-    Map<String, Object> attributes = context.getAttributes();
-    Object pipelineInstanceIdValue = attributes.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID);
-    Long pipelineInstanceId = PlatformRuntimeValues.toLong(pipelineInstanceIdValue);
-    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    PipelineRunFence pipelineRun = PipelineRunFence.fromAttributes(context.getAttributes());
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineRun, fileId);
     Long batchId = PlatformRuntimeValues.toLong(batch.get("id"));
     Integer exportVersion =
         existing.get("file_generation_no") instanceof Number number ? number.intValue() : 1;

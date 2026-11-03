@@ -74,6 +74,17 @@ class PipelineRunFenceRepositoryTest {
   }
 
   @Test
+  @DisplayName("文件绑定同样带运行代际:命中返回 true,迟到或缺少实例/文件时返回 false")
+  void shouldFenceFileBinding() {
+    when(mapper.bindFileToPipelineInstance("t1", 7L, STARTED_AT, 10L)).thenReturn(1);
+
+    assertThat(repository.bindFileToPipelineInstance("t1", RUN, 10L)).isTrue();
+    assertThat(repository.bindFileToPipelineInstance("t1", RUN, 11L)).isFalse();
+    assertThat(repository.bindFileToPipelineInstance("t1", null, 10L)).isFalse();
+    assertThat(repository.bindFileToPipelineInstance("t1", RUN, null)).isFalse();
+  }
+
+  @Test
   @DisplayName("从运行属性恢复围栏:缺少实例 ID 时为空,代际类型不符时保留实例但代际为空")
   void shouldRestoreFenceFromAttributes() {
     Map<String, Object> attributes = new HashMap<>();

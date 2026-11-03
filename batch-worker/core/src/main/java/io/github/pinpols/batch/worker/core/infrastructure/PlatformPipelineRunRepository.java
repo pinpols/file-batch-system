@@ -57,13 +57,16 @@ public class PlatformPipelineRunRepository {
         : new PipelineRunFence(created.id(), created.startedAt());
   }
 
-  public void bindFileToPipelineInstance(String tenantId, Long pipelineInstanceId, Long fileId) {
+  public boolean bindFileToPipelineInstance(String tenantId, PipelineRunFence run, Long fileId) {
     boolean pipelineFileAssociationIsComplete = EmptyChecks.isNotNull(tenantId)
-        && EmptyChecks.isNotNull(pipelineInstanceId)
+        && EmptyChecks.isNotNull(run)
         && EmptyChecks.isNotNull(fileId);
-    if (pipelineFileAssociationIsComplete) {
-      mapper.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    if (!pipelineFileAssociationIsComplete) {
+      return false;
     }
+    int updated = mapper.bindFileToPipelineInstance(
+        tenantId, run.pipelineInstanceId(), run.startedAt(), fileId);
+    return appliedOrLogStale(updated, run, "bindFileToPipelineInstance");
   }
 
   /*

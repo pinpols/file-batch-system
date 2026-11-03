@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.FrozenDispatchChannelSnapshot;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
@@ -166,7 +167,7 @@ class PrepareDispatchStepTest {
     DispatchPayload preparedPayload =
         (DispatchPayload) context.getAttributes().get(DispatchRuntimeKeys.DISPATCH_PAYLOAD);
     assertThat(preparedPayload.externalRequestId()).isNotBlank();
-    verify(pipelineRuns).bindFileToPipelineInstance("t1", 100L, 10L);
+    verify(pipelineRuns).bindFileToPipelineInstance("t1", new PipelineRunFence(100L, null), 10L);
   }
 
   @ParameterizedTest

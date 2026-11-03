@@ -18,6 +18,7 @@ import io.github.pinpols.batch.common.utils.EncodingUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam.FileRecordParamBuilder;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -235,9 +236,8 @@ public class ReceiveStep implements ImportStageStep {
         fileRecords.loadFileRecord(context.getTenantId(), fileId);
     attrs.put(PipelineRuntimeKeys.FILE_RECORD, persistedFileRecord);
     String tenantId = context.getTenantId();
-    Long pipelineInstanceId =
-        PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineInstanceId, fileId);
+    PipelineRunFence pipelineRun = PipelineRunFence.fromAttributes(attrs);
+    pipelineRuns.bindFileToPipelineInstance(tenantId, pipelineRun, fileId);
     context.setFileId(String.valueOf(fileId));
   }
 
