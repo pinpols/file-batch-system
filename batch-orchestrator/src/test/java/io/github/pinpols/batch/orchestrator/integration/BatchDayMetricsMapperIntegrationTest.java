@@ -1119,9 +1119,12 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
         insert into batch.trigger_request (tenant_id, request_id, trigger_type, workflow_definition_id,\s\
         biz_date, dedup_key, request_status) values (?, ?, 'CATCH_UP', ?, ?, ?, 'PROCESSING')\
         """;
+    // next_attempt_at 设在未来：后台 WorkflowLaunchWaitReconciler 每 5s 认领到期等待，'{}' 载荷会被拒绝并把请求改出
+    // PROCESSING，使本用例随调度时机偶发失败；本用例只验证仍在等待的持久化状态阻止空日结算。
     final String insertWorkflowLaunchWaitSql = """
         insert into batch.workflow_launch_wait (tenant_id, request_id, workflow_definition_id, biz_date,\s\
-        dry_run, launch_payload) values (?, ?, ?, ?, false, '{}'::jsonb)\
+        dry_run, launch_payload, next_attempt_at)\s\
+        values (?, ?, ?, ?, false, '{}'::jsonb, current_timestamp + interval '1 hour')\
         """;
 
     String tenantId = unique("tenant");

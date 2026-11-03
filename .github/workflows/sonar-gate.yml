@@ -58,6 +58,16 @@ jobs:
           java-version: '21'
           cache: maven
 
+      # Maven 全量测试包含调用仓库 Python 脚本的集成测试（如覆盖包初始化需要 openpyxl）；
+      # 固定解释器须先于依赖安装，避免中途切换 python3 丢失已装依赖。
+      - name: Set up pinned Python
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version-file: .python-version
+
+      - name: Setup Python guard environment
+        uses: ./.github/actions/setup-python-guard-env
+
       - name: Test Sonar Quality Gate validation
         run: python3 -m unittest scripts.dev.tests.test_sonar_quality_gate
 
