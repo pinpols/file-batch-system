@@ -10,6 +10,8 @@
 
 ### Added
 
+- 新增内建 Worker 平台库最小授权：`scripts/db/platform-worker-roles.sql` 为 Import/Export/Process/Dispatch/Atomic 指定角色授予由 Mapper/内联 SQL 生成的表级权限，Orchestrator 状态表与 outbox 不可写，`job_task` 仅登记列可写；Helm 新增可选的 `<worker>.platformDb.credentialsSecretName` 注入独立凭据。默认配置仍使用共享平台库账号，切换需先在目标库建角色并执行授权脚本，再逐个 Worker 配置 Secret 滚动发布。
+
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed

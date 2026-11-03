@@ -37,6 +37,7 @@ helm upgrade --install batch-platform ./helm/batch-platform \
 - `orchestratorBaseUrl` / `triggerBaseUrl` / `workerAtomicBaseUrl`
 - `consoleApi.ingress.enabled`
 - `otelCollector.enabled`
+- `workerImport` / `workerExport` / `workerProcess` / `workerDispatch` 的 `platformDb.credentialsSecretName`：指向含 `BATCH_PLATFORM_DB_USERNAME` 与 `BATCH_PLATFORM_DB_PASSWORD` 的独立 Secret。该 Worker 改用 [`scripts/db/platform-worker-roles.sql`](../../scripts/db/README.md) 授权的最小权限角色，留空时沿用共享平台库账号。切换顺序：先建角色并执行授权脚本，再创建 Secret，最后逐个 Worker 设置并滚动发布。ATOMIC 继续使用 `workerAtomic.envFromSecretName` 指定的独立 Secret。
 
 ## 环境分层
 
