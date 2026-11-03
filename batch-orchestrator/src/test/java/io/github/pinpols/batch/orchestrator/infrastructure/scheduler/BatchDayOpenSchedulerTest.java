@@ -1,11 +1,13 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
@@ -42,6 +44,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Month;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -634,6 +637,89 @@ class BatchDayOpenSchedulerTest {
 
     verify(batchDayInstanceMapper, never()).insert(any());
     verify(jobExecutionLogMapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("停机排空期间不扫描日历,也不开始扫描指标")
+  void shouldSkipScanWhileDraining() {
+    when(gracefulShutdown.isDraining()).thenReturn(true);
+
+    scheduler.openDueBatchDays(Instant.parse("2026-05-05T00:30:00Z"));
+
+    verifyNoInteractions(businessCalendarMapper, catchupMetrics, batchDayInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("定时入口在没有启用日历时以当前时刻完成一次空扫描")
+  void shouldCompleteEmptyScanFromScheduledEntry() {
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of());
+
+    scheduler.scheduledOpen();
+
+    verify(catchupMetrics).beginScan();
+    verify(catchupMetrics).completeScan();
+    verifyNoInteractions(batchDayInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("启用日历查询返回 null 时按空扫描结束")
+  void shouldCompleteScanWhenCalendarQueryReturnsNull() {
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(null);
+
+    scheduler.openDueBatchDays(Instant.parse("2026-05-05T00:30:00Z"));
+
+    verify(catchupMetrics).completeScan();
+    verifyNoInteractions(batchDayInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("空日历或缺少租户的日历被跳过,不进入开日事务也不记录滞后")
+  void shouldSkipCalendarsWithoutTenant() {
+    BusinessCalendarEntity blankTenant = new BusinessCalendarEntity(
+        2L,
+        " ",
+        "CAL",
+        "Calendar",
+        "Asia/Shanghai",
+        "SKIP",
+        "AUTO",
+        30,
+        LocalTime.of(6, 0),
+        60,
+        120,
+        true);
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(Arrays.asList(null, blankTenant));
+
+    scheduler.openDueBatchDays(Instant.parse("2026-05-05T00:30:00Z"));
+
+    verify(catchupMetrics).completeScan();
+    verify(catchupMetrics, never()).recordCalendarLag(ArgumentMatchers.anyLong());
+    verifyNoInteractions(batchDayInstanceMapper);
+  }
+
+  @Test
+  @DisplayName("单个日历开日失败时记录扫描失败并向上抛出")
+  void shouldMarkScanFailedAndRethrowWhenOpenFails() {
+    BatchDayOpenService failingService = mock(BatchDayOpenService.class);
+    IllegalStateException failure = new IllegalStateException("open failed");
+    when(failingService.openCalendar(any(), any())).thenThrow(failure);
+    BatchTimezoneProvider timezoneProvider =
+        new BatchTimezoneProvider(new BatchTimezoneProperties());
+    BatchDayOpenScheduler failingScheduler = new BatchDayOpenScheduler(
+        businessCalendarMapper,
+        gracefulShutdown,
+        new BatchDateTimeSupport(Clock.systemUTC(), timezoneProvider),
+        catchupMetrics,
+        failingService,
+        noopTransactionManager());
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of(calendar()));
+
+    assertThatThrownBy(
+            () -> failingScheduler.openDueBatchDays(Instant.parse("2026-05-05T00:30:00Z")))
+        .isSameAs(failure);
+
+    verify(catchupMetrics).failScan();
+    verify(catchupMetrics, never()).completeScan();
   }
 
   private BusinessCalendarEntity calendar() {
