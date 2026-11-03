@@ -92,6 +92,15 @@ flowchart TB
 - Trigger 状态查询由 Console 按当前租户作用域传递 `tenantId`；Trigger 在构造返回 DTO 前按 Quartz job identity 限域。平台级 Console 调用不传 `tenantId`，可查看全量。Console 仍保留租户过滤作为纵深防御。
 - worker 不是直接从库里扫任务，而是先消费 Kafka，再通过 HTTP 回 `orchestrator` 做 `claim`、`heartbeat`、`renew`、`report`。
 - worker 仍然会直连数据库，但直连的是执行阶段需要的业务表或文件类平台表，不直接接管调度状态主表。
+- **Worker 可写的 `job_task` 列**（白名单，由各 Worker 模块的 `*JobTaskWriteGuardArchTest` 守护；不得写 `task_status`，不得增删行）：
+
+  | Worker | 列 | 前置谓词 |
+  |---|---|---|
+  | Process | `process_staging_generation_id`、`process_staging_batch_key` | 任务与分区均 RUNNING，`worker_code` 与 `current_invocation_id` 匹配 |
+  | Dispatch | `external_outcome_resolution_consumed_at` | 授权 CTE 内的源任务，且该列为空 |
+
+  所有 Worker 都可以同时更新 `updated_at`。新增列时，要同步修改本表、对应模块的 `allowedJobTaskColumns()`，并写明谓词。
+- `pipeline_instance` / `pipeline_step_run` 是 Worker 执行观测表，由 Worker 写入运行态，Orchestrator 只负责 stale sweep 和归档。Worker 推进 `pipeline_instance` 时必须同时带上非终态谓词和 `started_at` 运行代际：重派 upsert 会重置 `started_at`，所以旧 invocation 迟到的写入不会生效，会被记录为 stale（见 `PipelineRunFence`）。
 - `batch-worker-export` 还会额外访问 MinIO，把导出产物写到对象存储。
 
 ## 对应代码
