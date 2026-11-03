@@ -159,10 +159,19 @@
     <!--
       重试时 worker 会对同一 job_instance 再次进 doExecute → 又调本 INSERT,
       但 uk_pipeline_instance_job_instance UNIQUE(related_job_instance_id) WHERE NOT NULL
-      会拒绝。改 ON CONFLICT 复用现有行:把状态重置到 RUNNING、清掉旧错误、
-      把 id 通过 RETURNING 回填给 useGeneratedKeys,调用方不需感知。
+      会拒绝。改 ON CONFLICT 复用现有行:把状态重置到 RUNNING、清掉旧错误。
+      显式 RETURNING id 与重置后的 started_at(运行代际,见 PipelineRunFence),只回传两列;
+      affectData=true 让 MyBatis 按写操作处理事务与缓存。引用检查拒绝时返回空。
     -->
-    <insert id="insertPipelineInstance" parameterType="io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <resultMap id="PipelineRunKeyResultMap" type="io.github.pinpols.batch.worker.core.mapper.PlatformPipelineRunKeyView">
+        <constructor>
+            <idArg column="id" javaType="java.lang.Long"/>
+            <arg column="started_at" javaType="java.time.OffsetDateTime"/>
+        </constructor>
+    </resultMap>
+
+    <select id="insertPipelineInstance" parameterType="io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam"
+            resultMap="PipelineRunKeyResultMap" flushCache="true" affectData="true">
         insert into batch.pipeline_instance (
             tenant_id, system_pipeline_code, system_pipeline_version,
             job_code, pipeline_type,
@@ -196,7 +205,8 @@
             finished_at = null,
             updated_at = current_timestamp
           where batch.pipeline_instance.tenant_id = excluded.tenant_id
-    </insert>
+        returning id, started_at
+    </select>
 
     <update id="bindFileToPipelineInstance">
         update batch.pipeline_instance
@@ -211,15 +221,23 @@
           )
     </update>
 
+    <!--
+      Worker 运行态写入的统一围栏(ARCH-20261103-02):
+      - run_status 前置态:Orchestrator stale sweep 已落的终态不被迟到的 Worker 写回覆盖;
+      - started_at 运行代际:重派 upsert 复用同一行并重置 started_at,旧 invocation 持有的值失配即不更新。
+      返回 0 由 PlatformPipelineRunRepository 记录为 stale 写入,不抛错。
+    -->
     <update id="updatePipelineStage">
         update batch.pipeline_instance
         set current_stage = #{currentStage},
             last_success_stage = coalesce(#{lastSuccessStage}, last_success_stage),
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
+          and started_at = #{runStartedAt}
+          and run_status = 'RUNNING'
     </update>
 
-    <update id="markPipelineSuccess">
+    <update id="markPipelineSuccess" parameterType="io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam">
         update batch.pipeline_instance
         set current_stage = #{currentStage},
             last_success_stage = #{lastSuccessStage},
@@ -227,9 +245,11 @@
             finished_at = current_timestamp,
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
+          and started_at = #{runStartedAt}
+          and run_status = 'RUNNING'
     </update>
 
-    <update id="markPipelineFailed">
+    <update id="markPipelineFailed" parameterType="io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam">
         update batch.pipeline_instance
         set current_stage = #{currentStage},
             last_success_stage = #{lastSuccessStage},
@@ -237,6 +257,8 @@
             finished_at = current_timestamp,
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
+          and started_at = #{runStartedAt}
+          and run_status in ('RUNNING', 'COMPENSATING')
     </update>
 
     <!--
@@ -249,6 +271,8 @@
         set run_status = #{runStatus},
             updated_at = current_timestamp
         where id = #{pipelineInstanceId}
+          and started_at = #{runStartedAt}
+          and run_status = 'RUNNING'
     </update>
 
     <select id="selectNextStepRunSeq" resultType="java.lang.Integer">

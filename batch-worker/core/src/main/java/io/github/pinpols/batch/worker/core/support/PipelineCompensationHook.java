@@ -3,6 +3,7 @@ package io.github.pinpols.batch.worker.core.support;
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -71,15 +72,16 @@ public class PipelineCompensationHook {
    *
    * @param tenantId 租户 ID
    * @param pipelineType worker 上报的 pipeline 类型("IMPORT"/"EXPORT"/"DISPATCH")
-   * @param pipelineInstanceId 当前 pipeline 实例 ID
+   * @param pipelineRun 当前 pipeline 实例及本次执行持有的运行代际
    * @param attributes pipeline runtime attributes(含 templateConfig / fileId / traceId 等)
    * @return 是否触发了补偿(仅用于 adapter 决定是否走 COMPENSATING→FAILED 两段写;无论返回值如何 adapter 都要落 FAILED)
    */
   public boolean runCompensation(
       String tenantId,
       String pipelineType,
-      Long pipelineInstanceId,
+      PipelineRunFence pipelineRun,
       Map<String, Object> attributes) {
+    Long pipelineInstanceId = pipelineRun == null ? null : pipelineRun.pipelineInstanceId();
     try {
       boolean compensationIsNotConfiguredOrDisabled =
           EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);
@@ -94,7 +96,7 @@ public class PipelineCompensationHook {
       }
       Long fileId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.FILE_ID));
       // ① 进入 COMPENSATING 中间态(adapter 随后落 FAILED 终态)。
-      pipelineRuns.markPipelineCompensating(pipelineInstanceId);
+      pipelineRuns.markPipelineCompensating(pipelineRun);
       // ② 先作废位点,再反向删业务数据。跨库无 1PC 时必须选择这个顺序:
       //    - 位点清理失败:不执行反向删除,业务数据+位点仍一致;
       //    - 位点清理成功后反向失败:重试从头跑,由 plugin 幂等约束吸收已存数据。

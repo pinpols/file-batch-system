@@ -11,8 +11,9 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.core.mapper.PlatformPipelineRunKeyView;
 import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
-import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import java.time.OffsetDateTime;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.annotation.Isolation;
@@ -21,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @DisplayName("平台仓储: 聚焦拆分的构造与事务契约, 查询过滤与文件记录写入")
 class PlatformRepositoryTest {
+
+  private static final OffsetDateTime STARTED_AT = OffsetDateTime.parse("2026-11-03T00:00:00Z");
 
   @Test
   @DisplayName("仓储拆分后各自保留构造函数, 写入方法使用独立事务与读已提交隔离级别")
@@ -54,16 +57,13 @@ class PlatformRepositoryTest {
     PlatformFileRuntimeMapper mapper = mock(PlatformFileRuntimeMapper.class);
     PlatformPipelineRunRepository repository = new PlatformPipelineRunRepository(mapper);
 
-    when(mapper.insertPipelineInstance(any())).thenAnswer(invocation -> {
-      PlatformPipelineInsertParam param = invocation.getArgument(0);
-      param.setId(5301L);
-      return 1;
-    });
+    when(mapper.insertPipelineInstance(any()))
+        .thenReturn(new PlatformPipelineRunKeyView(5301L, STARTED_AT));
 
-    Long pipelineInstanceId = repository.createPipelineInstance(new CreatePipelineInstanceParam(
+    PipelineRunFence run = repository.createPipelineInstance(new CreatePipelineInstanceParam(
         "tenant-a", "IMPORT", 1, "job-a", "IMPORT", 5201L, 4001L, "VALIDATE", "trace-a"));
 
-    assertThat(pipelineInstanceId).isEqualTo(5301L);
+    assertThat(run).isEqualTo(new PipelineRunFence(5301L, STARTED_AT));
     verify(mapper)
         .insertPipelineInstance(argThat(params -> "tenant-a".equals(params.getTenantId())
             && "job-a".equals(params.getJobCode())

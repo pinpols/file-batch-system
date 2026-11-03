@@ -3,9 +3,11 @@ package io.github.pinpols.batch.worker.core.mapper;
 import io.github.pinpols.batch.worker.core.param.PlatformFileAuditInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
+import java.time.OffsetDateTime;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -29,7 +31,7 @@ public interface PlatformFileRuntimeMapper {
       @Param("templateCode") String templateCode,
       @Param("templateType") String templateType);
 
-  int insertPipelineInstance(PlatformPipelineInsertParam params);
+  PlatformPipelineRunKeyView insertPipelineInstance(PlatformPipelineInsertParam params);
 
   int bindFileToPipelineInstance(
       @Param("tenantId") String tenantId,
@@ -38,23 +40,18 @@ public interface PlatformFileRuntimeMapper {
 
   int updatePipelineStage(
       @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("runStartedAt") OffsetDateTime runStartedAt,
       @Param("currentStage") String currentStage,
       @Param("lastSuccessStage") String lastSuccessStage);
 
-  int markPipelineSuccess(
-      @Param("pipelineInstanceId") Long pipelineInstanceId,
-      @Param("currentStage") String currentStage,
-      @Param("lastSuccessStage") String lastSuccessStage,
-      @Param("runStatus") String runStatus);
+  int markPipelineSuccess(PlatformPipelineFinishParam params);
 
-  int markPipelineFailed(
-      @Param("pipelineInstanceId") Long pipelineInstanceId,
-      @Param("currentStage") String currentStage,
-      @Param("lastSuccessStage") String lastSuccessStage,
-      @Param("runStatus") String runStatus);
+  int markPipelineFailed(PlatformPipelineFinishParam params);
 
   int markPipelineCompensating(
-      @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("runStatus") String runStatus);
+      @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("runStartedAt") OffsetDateTime runStartedAt,
+      @Param("runStatus") String runStatus);
 
   Integer selectNextStepRunSeq(
       @Param("pipelineInstanceId") Long pipelineInstanceId, @Param("stepCode") String stepCode);

@@ -26,6 +26,9 @@ public final class PipelineRuntimeKeys {
   public static final String SYSTEM_PIPELINE_CODE = SystemPipelineTaskKeys.CODE;
   public static final String SYSTEM_PIPELINE_VERSION = SystemPipelineTaskKeys.VERSION;
   public static final String PIPELINE_INSTANCE_ID = "pipelineInstanceId";
+  /** 本次执行持有的 pipeline_instance.started_at 代际，见 {@link PipelineRunFence}。 */
+  public static final String PIPELINE_RUN_STARTED_AT = "pipelineRunStartedAt";
+
   public static final String PIPELINE_STEP_RUN_ID = "pipelineStepRunId";
   public static final String PIPELINE_STEP_DEFINITIONS = "pipelineStepDefinitions";
   public static final String PIPELINE_LAST_SUCCESS_STAGE = "pipelineLastSuccessStage";

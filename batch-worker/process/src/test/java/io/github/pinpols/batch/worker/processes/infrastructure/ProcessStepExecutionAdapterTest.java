@@ -18,6 +18,7 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -30,6 +31,7 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.domain.ProcessWorkerType;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
 import io.github.pinpols.batch.worker.processes.stage.ProcessStageExecutor;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,6 +46,9 @@ import org.springframework.beans.factory.ObjectProvider;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("处理步骤执行适配器:流水线描述、插件码传递、失败错误本地化与成功信封的计数归一")
 class ProcessStepExecutionAdapterTest {
+
+  private static final PipelineRunFence RUN =
+      new PipelineRunFence(20L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
 
   @Mock
   private ProcessStageExecutor processStageExecutor;
@@ -87,7 +92,7 @@ class ProcessStepExecutionAdapterTest {
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.success(ProcessStage.PREPARE)));
     StepExecutionRequest request = new StepExecutionRequest(
@@ -115,7 +120,7 @@ class ProcessStepExecutionAdapterTest {
         .containsEntry("processImplCode", "dailySummary")
         .containsEntry(
             ProcessRuntimeKeys.PROCESS_COMPUTE_STEP_PARAMS, Map.of("targetTable", "daily_summary"));
-    verify(pipelineRuns).markPipelineSuccess(20L, "PREPARE", "PREPARE");
+    verify(pipelineRuns).markPipelineSuccess(RUN, "PREPARE", "PREPARE");
   }
 
   @Test
@@ -176,7 +181,7 @@ class ProcessStepExecutionAdapterTest {
         (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
         (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
     when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
-    when(pipelineRuns.createPipelineInstance(any())).thenReturn(20L);
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
     when(processStageExecutor.execute(any()))
         .thenReturn(List.of(ProcessStageResult.failure(
             ProcessStage.PREPARE,
@@ -199,7 +204,7 @@ class ProcessStepExecutionAdapterTest {
     assertThat(response.errorKey()).isEqualTo("error.common.invalid_argument");
     assertThat(response.errorArgs()).isEqualTo("[\"bad spec\"]");
     // 安全增量补偿默认 off（无 compensation hook bean）：失败直接 FAILED，绝不经过 COMPENSATING。
-    verify(pipelineRuns).markPipelineFailed(eq(20L), any(), any());
+    verify(pipelineRuns).markPipelineFailed(eq(RUN), any(), any());
     verify(pipelineRuns, never()).markPipelineCompensating(any());
   }
 

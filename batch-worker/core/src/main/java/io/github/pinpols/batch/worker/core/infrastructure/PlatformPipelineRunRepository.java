@@ -10,6 +10,8 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
+import io.github.pinpols.batch.worker.core.mapper.PlatformPipelineRunKeyView;
+import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
@@ -33,7 +35,7 @@ public class PlatformPipelineRunRepository {
 
   private final PlatformFileRuntimeMapper mapper;
 
-  public Long createPipelineInstance(CreatePipelineInstanceParam param) {
+  public PipelineRunFence createPipelineInstance(CreatePipelineInstanceParam param) {
     if (!Texts.hasText(param.tenantId()) || !Texts.hasText(param.systemPipelineCode())) {
       return null;
     }
@@ -49,8 +51,8 @@ public class PlatformPipelineRunRepository {
         .traceId(param.traceId())
         .runStatus(PipelineRunStatus.RUNNING.name())
         .build();
-    mapper.insertPipelineInstance(values);
-    return values.getId();
+    PlatformPipelineRunKeyView created = mapper.insertPipelineInstance(values);
+    return created == null ? null : new PipelineRunFence(created.id(), created.startedAt());
   }
 
   public void bindFileToPipelineInstance(String tenantId, Long pipelineInstanceId, Long fileId) {
@@ -62,33 +64,74 @@ public class PlatformPipelineRunRepository {
     }
   }
 
-  public void updatePipelineStage(
-      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
-    if (pipelineInstanceId != null) {
-      mapper.updatePipelineStage(pipelineInstanceId, currentStage, lastSuccessStage);
+  /*
+   * 以下运行态写入都带非终态与运行代际谓词：Orchestrator 已扫为终态或已被新 invocation 接管时返回 false。
+   * pipeline_instance 只承载观测，job_task 状态仍经 REPORT 收敛，因此迟到写入只记录不抛错。
+   */
+
+  public boolean updatePipelineStage(
+      PipelineRunFence run, String currentStage, String lastSuccessStage) {
+    if (run == null) {
+      return false;
     }
+    int updated = mapper.updatePipelineStage(
+        run.pipelineInstanceId(), run.startedAt(), currentStage, lastSuccessStage);
+    return appliedOrLogStale(updated, run, "updatePipelineStage");
   }
 
-  public void markPipelineSuccess(
-      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
-    if (pipelineInstanceId != null) {
-      mapper.markPipelineSuccess(
-          pipelineInstanceId, currentStage, lastSuccessStage, PipelineRunStatus.SUCCESS.name());
+  public boolean markPipelineSuccess(
+      PipelineRunFence run, String currentStage, String lastSuccessStage) {
+    if (run == null) {
+      return false;
     }
+    PlatformPipelineFinishParam values =
+        finishParam(run, currentStage, lastSuccessStage, PipelineRunStatus.SUCCESS);
+    return appliedOrLogStale(mapper.markPipelineSuccess(values), run, "markPipelineSuccess");
   }
 
-  public void markPipelineCompensating(Long pipelineInstanceId) {
-    if (pipelineInstanceId != null) {
-      mapper.markPipelineCompensating(pipelineInstanceId, PipelineRunStatus.COMPENSATING.name());
+  public boolean markPipelineCompensating(PipelineRunFence run) {
+    if (run == null) {
+      return false;
     }
+    int updated = mapper.markPipelineCompensating(
+        run.pipelineInstanceId(), run.startedAt(), PipelineRunStatus.COMPENSATING.name());
+    return appliedOrLogStale(updated, run, "markPipelineCompensating");
   }
 
-  public void markPipelineFailed(
-      Long pipelineInstanceId, String currentStage, String lastSuccessStage) {
-    if (pipelineInstanceId != null) {
-      mapper.markPipelineFailed(
-          pipelineInstanceId, currentStage, lastSuccessStage, PipelineRunStatus.FAILED.name());
+  public boolean markPipelineFailed(
+      PipelineRunFence run, String currentStage, String lastSuccessStage) {
+    if (run == null) {
+      return false;
     }
+    PlatformPipelineFinishParam values =
+        finishParam(run, currentStage, lastSuccessStage, PipelineRunStatus.FAILED);
+    return appliedOrLogStale(mapper.markPipelineFailed(values), run, "markPipelineFailed");
+  }
+
+  private static PlatformPipelineFinishParam finishParam(
+      PipelineRunFence run,
+      String currentStage,
+      String lastSuccessStage,
+      PipelineRunStatus runStatus) {
+    return PlatformPipelineFinishParam.builder()
+        .pipelineInstanceId(run.pipelineInstanceId())
+        .runStartedAt(run.startedAt())
+        .currentStage(currentStage)
+        .lastSuccessStage(lastSuccessStage)
+        .runStatus(runStatus.name())
+        .build();
+  }
+
+  private static boolean appliedOrLogStale(int updated, PipelineRunFence run, String operation) {
+    if (updated > 0) {
+      return true;
+    }
+    log.warn(
+        "stale pipeline write ignored: operation={}, pipelineInstanceId={}, runStartedAt={}",
+        operation,
+        run.pipelineInstanceId(),
+        run.startedAt());
+    return false;
   }
 
   public Set<String> loadSucceededStepCodes(Long pipelineInstanceId) {
