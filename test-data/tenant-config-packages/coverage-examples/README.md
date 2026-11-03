@@ -10,7 +10,7 @@
 
 8 个类型为 IMPORT、EXPORT、PROCESS、DISPATCH、ATOMIC、BUNDLE_IMPORT、BUNDLE_EXPORT、BUNDLE_DISPATCH。GENERAL 虽在 JobType 字典中，当前没有平台通用 Worker handler，样本仅留禁用占位，不能按可执行类型计数。历史 WORKFLOW 包装 Job、FILE_STEP、APPROVAL 和历史 TASK 节点不是当前新建配置类型。
 
-每包采用 11 个当前数据 sheet 和 Console 模板的辅助说明 sheet，不含已退役的 `pipeline_definition` 和 `pipeline_step_definition`。每包包含 START、END、JOB、GATEWAY、WAIT 五类新建节点及 SUCCESS、FAILURE、CONDITION、ALWAYS 四类边；三包合计覆盖 ALL、ANY、N_OF 三种汇聚。`WF_SERIAL` 展示导入到导出，`WF_BRANCH_*` 展示条件/失败分支及汇聚，`WF_WAIT` 展示文件到达等待，并带作业依赖。导出 Job 依赖导入 Job；具体含义以当前调度契约为准。CONDITION 表达式为 `proceed == true`；触发参数需要显式提供该字段。WAIT 使用 `sensor_type=FILE_ARRIVAL` 与 `sensor_spec`，当前桌面设计器不支持编辑 WAIT 节点。
+每包采用 11 个当前数据 sheet 和 Console 模板的辅助说明 sheet，不含已退役的 `pipeline_definition` 和 `pipeline_step_definition`。每包包含 START、END、JOB、GATEWAY、WAIT 五类新建节点及 SUCCESS、FAILURE、CONDITION、ALWAYS 四类边；三包合计覆盖 ALL、ANY、N_OF 三种汇聚。`WF_SERIAL` 展示导入到导出，`WF_BRANCH_*` 展示条件/失败分支及汇聚，`WF_WAIT` 展示文件到达等待，并带作业依赖。导出 Job 依赖导入 Job；具体含义以当前调度契约为准。CONDITION 表达式为 `proceed == true`；触发参数需要显式提供该字段。WAIT 使用 `sensor_type=FILE_ARRIVAL` 与 `sensor_spec`，当前桌面设计器不支持编辑 WAIT 节点。TB 覆盖日历的 `catch_up_policy=AUTO`，用于真实 CATCH_UP 验收；TA/TC 保持 `NONE`。
 
 ## 使用及范围
 

@@ -9,6 +9,16 @@ import json
 from pathlib import Path
 from openpyxl import load_workbook
 
+import importlib.util
+
+COVERAGE_CONFIG_SPEC = importlib.util.spec_from_file_location(
+    'coverage_config', Path(__file__).resolve().parents[3] / 'scripts/lib/coverage-config.py')
+coverage_config = importlib.util.module_from_spec(COVERAGE_CONFIG_SPEC)
+COVERAGE_CONFIG_SPEC.loader.exec_module(coverage_config)
+import sys
+sys.modules['coverage_config'] = coverage_config
+from coverage_config import apply_runtime_contract
+
 HERE = Path(__file__).resolve().parent
 DATA_SHEETS = (
     'resource_queue', 'business_calendar', 'batch_window', 'job_definition',
@@ -137,6 +147,7 @@ def make_package(source, tenant, mode, target):
     node(wait, 'END', 'END', order=3)
     edge(wait, 'START', 'WAIT_FILE')
     edge(wait, 'WAIT_FILE', 'END', 'SUCCESS')
+    apply_runtime_contract(tenant, book)
     book.save(target)
 
 

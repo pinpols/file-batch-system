@@ -17,6 +17,10 @@
 5. 手动或脚本导入均须维持同一租户和认证身份，使用最新 `previewToken`。Apply 是持久化写入，记录请求和响应，随后按租户回读定义、图和关键字段；重试前核对幂等状态。禁止用 SQL 直接造成功结果。任何未完成项按失败或未验证记录，不清空共享库/队列/对象存储。
 6. 需要可重复隔离集成证据时，可按当前测试源码选择 `ConsoleTenantCoveragePackagesIntegrationTest`，用 Maven Wrapper 和 `-pl batch-console-api -am` 运行，并确认 Testcontainers/Docker 可用、测试未跳过。该测试的随机端口/独立容器和数据库回读证明的是配置导入，不是前台浏览器或 Worker 运行。
 
+## 可重复 harness
+
+本地完整场景使用 `bash scripts/local/coverage-harness.sh all --operator <平台管理员> --allow-local-bypass`。首次创建租户时追加 `--credentials-file <仓库外 0600 文件>`；已有租户只复用，不重建。入口执行 preflight、初始化、配置收敛和真实运行，结果写到仓库外 `--run-dir`。默认 `--cleanup both` 在执行前和成功/失败后均清理运行产物：只注销三租户已注册的 `*_COV_*` Trigger，对覆盖活跃实例先请求 terminate 并等待终态，排空 PUBLISHING Outbox 后按 task_id 清理 Worker 回报，再删除对应数据库运行记录、`COV-%` 客户、SFTP 覆盖文件，以及路径含 `coverage` 或 `TA/TB/TC_COV_` 的 MinIO 对象；保留租户、Job/Workflow 定义、模板、渠道、`data_asset` 主数据目录、其它业务数据和验收 JSON。可用 `--cleanup never|before|after|both` 显式调整，不能用 reset、清库、删卷或整租户/整 bucket 删除代替。`trigger-matrix` 额外覆盖 API、RERUN、FIXED_RATE、CATCH_UP、MIXED；`all` 默认跳过该矩阵，只有显式追加 `--include-trigger-matrix` 才执行，并恢复调度注册与配置。RERUN 使用仅生效一次的 404 规则取得明确失败，再把同一 URL 的一次性规则修复为 200 后重跑，避免成功规则跨运行残留；CATCH_UP 在注册 Trigger 前用 TB `AUTO` 覆盖日历与 `prepare-coverage-closed-day.sql` 预置 CUTOFF 业务日和一条 `CLOSED_DAY_REJECTED` occurrence，再经补跑 API 验证新运行的真实终态并记录 runId；SQL 只准备场景，不计为通过，也不证明 Quartz 自身记录拒绝 occurrence 的路径。基础结果与触发矩阵分别保存为 `results.json`、`trigger-results.json`，清理证据为 `cleanup-before.json`、`cleanup-after.json`。模板和渠道运行配置以 `scripts/lib/coverage-config.py` 为事实源，不在命令里临时拼接。
+
 ## 真实运行与恢复
 
 1. 单独核对各类型所需 Worker、数据库表与 RLS、对象存储、SFTP/API 对端、凭据和网络；样本中的地址、SQL、模板与文件名是示意，不能当作环境已配置。每种 BUNDLE 使用该场景有效的 manifest；WAIT 准备匹配的文件到达事件。依赖不能满足时标记未验证，不发请求试错。

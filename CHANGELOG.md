@@ -8,6 +8,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
+
 ### Changed
 
 - 控制台 `/auth/me` 菜单的中文名称与前端菜单对齐，保持菜单路径及角色权限不变。

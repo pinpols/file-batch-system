@@ -30,6 +30,8 @@ python3 scripts/data/init-coverage-tenants.py --base-url http://127.0.0.1:18080 
 
 脚本只认领有本次回执且 ID、操作者一致的租户，其他既有租户立即停止。创建或应用阶段响应丢失时不重发、不自动认领，需人工核对；不执行跨租户清理。正常已完成阶段可使用相同回执和凭据续跑；包、操作者或地址变化会被拒绝。
 
+需要完整执行 Job、组合 Workflow、BUNDLE、WAIT 和触发矩阵时，使用 `bash scripts/local/coverage-harness.sh all --operator <平台管理员> --allow-local-bypass`。该入口复用上述初始化与运行配置；首次创建租户时另需 `--credentials-file <仓库外 0600 文件>`。调度/补跑矩阵默认跳过，追加 `--include-trigger-matrix` 后执行，并恢复原调度注册和配置。默认 `--cleanup both` 在执行前及成功/失败后只清理三租户 `*_COV_*` 运行产物和对应 SFTP/MinIO 文件，保留租户、定义、模板、渠道、其它数据与仓库外验收 JSON；不执行 reset、清库、删卷或整租户清理。可用 `--cleanup never|before|after|both` 调整。
+
 ## 外部环境
 
 这些脚本不要求必须进 Docker 容器，但需要本机安装对应客户端并通过环境变量指定连接信息：
