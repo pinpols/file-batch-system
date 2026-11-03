@@ -9,7 +9,7 @@
 |---|---:|
 | 生产 Java 源文件 | 3083 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2086 |
+| `Map<String, Object>` 出现次数 | 2085 |
 | 含 Map 的源文件 | 417 |
 | public Map 契约候选 | 60 |
 | public Map 契约候选文件 | 44 |
@@ -107,7 +107,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/FileTemplateSnapshotService.java` | `L41: public Map<String, Object> pin`<br>`L90: public Map<String, Object> pinWorkflowReplay` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java` | `L31: public Map<String, Object> loadFileRecord`<br>`L48: public Map<String, Object> loadFileRecordByStoragePath` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileTemplateRepository.java` | `L18: public Map<String, Object> loadLatestTemplateConfig` |
-| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L147: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
+| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L150: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileRecordView.java` | `L40: public Map<String, Object> toPluginValues` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileTemplateConfigView.java` | `L61: public Map<String, Object> toPluginValues` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/FrozenFileTemplateResolver.java` | `L31: public Map<String, Object> resolve` |
