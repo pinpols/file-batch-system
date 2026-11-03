@@ -104,14 +104,17 @@
 | ARCH-02 | **已确认并修复** | Worker 对 `pipeline_instance` 的阶段、补偿和终态写入，统一加上非终态谓词和 `started_at` 运行代际围栏。`insertPipelineInstance` 改为 `insert … returning id, started_at`（`<select affectData>`，遵守 generated key 只回传 `id` 的门禁），`PipelineRunFence` 贯穿 adapter、stage executor 和补偿 hook；返回 0 时记 warn，不抛错。不需要迁移。`pipeline_step_run` 已有 `step_status in (RUNNING, RETRYING)` 谓词，并且每次 attempt 新开一行，不在本次修改范围内 | 真实 PG：`PlatformFileRuntimeMapperStageSkipIntegrationTest` 新增路径①（stale sweep 后迟到成功）、路径②（重派后旧 invocation 迟到写入）以及按 `PipelineRunStatus` 全量枚举的前置态契约用例。修复前 3 条失败，修复后 19/19 通过 |
 | ARCH-03 | **已按方案 A 修复** | 新增 `BaseWorkerJobTaskWriteGuardArchTest`（batch-test-support），六个 Worker 模块各有一个 `*JobTaskWriteGuardArchTest`；列白名单登记在[模块通信](../architecture/runtime-module-communication.md#读图要点) | `WorkerJobTaskWriteGuardConventionTest` 覆盖拦截 `set task_status`、CTE/`<select>` 包装、动态标签、insert/delete，并放行现有 Process/Dispatch 写法；六个模块的守卫均通过 |
 | CONV-01 | **守卫已加** | `LegacyServicePackageFreezeArchTest` 冻结旧 `orchestrator.service` 包内现有的 21 个类，存量迁移随功能推进 | Orchestrator `*ArchTest` 16/16 通过 |
-| ARCH-01 / ARCH-04 / CONV-02..04 | 未处理 | ARCH-01 涉及 Helm 分账号和真实 PG 授权，需要先确认目标环境；ARCH-04 需要容量证据 | — |
+| CONV-02 | **已整改**（`cabf0f51a`） | 开日业务步骤原样下沉到 `application/service/batchday/BatchDayOpenService`；`BatchDayOpenScheduler` 从 758 行减到 78 行，只保留触发、ShedLock、停机排空、逐日历 RLS 绑定加短事务以及扫描指标，事务边界不变 | Orchestrator 按批次日/ArchTest/规约筛选共 298 个测试通过，其中 `MultiCalendarCoordinationIntegrationTest` 28 个为真实 PG；E2E 编译通过 |
+| CONV-03 | **已按建议处理**（`cabf0f51a`） | 拆分时把依赖等待超时判定提取为纯规则 `domain/scheduling/DependencyWaitTimeoutRule`；不为“充血”另行重构 | `DependencyWaitTimeoutRuleTest` 覆盖边界 |
+| CONV-04 | **已整改**（`e5785b467`） | 改名为 `OrchestratorDataSourceConfiguration`，Bean 名与条件装配不变；配置治理登记表已重新生成 | `check-config-governance.py` 通过，Orchestrator/E2E 编译通过 |
+| ARCH-01 / ARCH-04 | 未处理 | ARCH-01 需确定实施范围（Worker 角色清单、Helm 分账号回退、真实 PG 授权验证），并确认目标环境；ARCH-04 需容量证据 | — |
 
 实际执行的命令（本机 Docker/Testcontainers）：
 
 - `./mvnw -pl batch-test-support,batch-worker/{core,import,export,process,dispatch,atomic} -am install`：BUILD SUCCESS，0 失败（按 reactor 顺序：common 725、test-support 81、core 426、import 401、export 246、process 193、dispatch 263、atomic 264）。
 - `./mvnw -pl batch-orchestrator -Dtest='*ArchTest' test`：16/16 通过。未运行 Orchestrator 全量测试，因为它的生产代码没有改动。
 - `./mvnw -pl batch-worker/core,batch-test-support,batch-orchestrator spotless:check pmd:check`、`check-test-config-sources.py`、`check-java-readability.py`：通过。
-- 未执行：CI Full Gate、staging 竞态复现、Console/前端验证（契约未变）。
+- 未执行：Orchestrator 全量测试、CI Full Gate、staging 竞态复现、Console/前端验证（契约未变）。
 
 ## 未覆盖与未验证
 
