@@ -26,7 +26,12 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** DB_ROW_EXISTS 所需的租户路由业务库连接及只读事务。 */
+/**
+ * 配置了业务库时的 Orchestrator 数据源装配：主平台数据源 {@code orchestratorPlatformDataSource}，以及 DB_ROW_EXISTS
+ * sensor 所需的租户路由业务库连接和只读事务。
+ *
+ * <p>手工声明平台数据源，是因为再定义一个 DataSource 会让 Boot 的默认装配退让；未配置业务库时，平台库仍由 Boot 自动装配。
+ */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(prefix = "batch.datasource.business", name = "url")
 @EnableConfigurationProperties({
@@ -34,12 +39,12 @@ import org.springframework.transaction.support.TransactionTemplate;
   BusinessDataSourceProperties.class,
   BusinessRoutingProperties.class
 })
-public class WorkflowSensorDataSourceConfiguration {
+public class OrchestratorDataSourceConfiguration {
 
   private final BatchPgSessionProperties pgSessionProperties;
   private final Environment environment;
 
-  public WorkflowSensorDataSourceConfiguration(
+  public OrchestratorDataSourceConfiguration(
       BatchPgSessionProperties pgSessionProperties, Environment environment) {
     this.pgSessionProperties = pgSessionProperties;
     this.environment = environment;

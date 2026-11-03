@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [架构设计审查：状态所有权与模块边界](architecture-design-review-2026-11-03.md) | 平台库表写入者矩阵、共享 DB 账号、pipeline_instance 双写竞态候选、Orchestrator 分层；只读静态，未验证运行或目标环境 |
 | [批量调度系统架构适配性评估](architecture-suitability-assessment-2026-11-02.md) | 统一运行、事件可靠性、Worker 隔离、多租户、扩缩容与观测的静态评估；不代表生产或容量验收 |
 | [后端 Controller / Service / Entity 边界复核](backend-controller-service-entity-boundary-review-2026-11-01.md) | bug-fixes 工作树的控制层与实体边界复核、Service 清单、阶段性定向及容器测试；2026-11-01 暂停，后续改动与完整验证未完成 |
 | [Console Controller 边界清单](console-controller-boundary-inventory-2026-11-01.csv) | Console 97 个 Controller 的职责复核与证据边界；整改及验证进度以边界复核记录为准 |

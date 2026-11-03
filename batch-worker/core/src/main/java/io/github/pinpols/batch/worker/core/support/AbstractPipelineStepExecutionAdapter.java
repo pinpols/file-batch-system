@@ -20,6 +20,7 @@ import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
 import io.github.pinpols.batch.worker.core.infrastructure.CreatePipelineInstanceParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -213,26 +214,24 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         relatedJobInstanceId,
         currentStage,
         pipelineTraceId);
-    Long pipelineInstanceId = pipelineRuns.createPipelineInstance(createParam);
+    PipelineRunFence pipelineRun = pipelineRuns.createPipelineInstance(createParam);
     publishPipelineExecutionAttributes(
-        request, attributes, createParam, pipelineInstanceId, fileRecord, pipelineSteps);
+        request, attributes, createParam, pipelineRun, fileRecord, pipelineSteps);
     try {
       C context = buildContext(request, attributes, fileId);
       List<R> results = executeStages(context);
       R failed = firstFailure(results);
       if (failed == null) {
-        return completeSuccessfulPipeline(
-            request, attributes, pipelineInstanceId, context, results);
+        return completeSuccessfulPipeline(request, attributes, pipelineRun, context, results);
       }
-      return completeFailedPipelineStage(request, attributes, pipelineInstanceId, failed);
+      return completeFailedPipelineStage(request, attributes, pipelineRun, failed);
     } catch (Exception exception) {
       SwallowedExceptionLogger.warn(
           AbstractPipelineStepExecutionAdapter.class, "catch:Exception", exception);
 
       // 安全增量补偿(opt-in):未捕获异常落地点。开关 off → 直接 markPipelineFailed(行为不变)。
-      runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
-      pipelineRuns.markPipelineFailed(
-          pipelineInstanceId, initialStage(), lastSuccessfulStage(attributes));
+      runCompensationIfEnabled(request.tenantId(), pipelineRun, attributes);
+      pipelineRuns.markPipelineFailed(pipelineRun, initialStage(), lastSuccessfulStage(attributes));
       if (exception instanceof BizException bizException) {
         StepExecutionResponse failure =
             StepExecutionResponse.failure(bizException, ERROR_OBJECT_MAPPER);
@@ -255,7 +254,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       StepExecutionRequest request,
       Map<String, Object> attributes,
       CreatePipelineInstanceParam createParam,
-      Long pipelineInstanceId,
+      PipelineRunFence pipelineRun,
       Map<String, Object> fileRecord,
       List<PipelineStepDefinition> pipelineSteps) {
     Long fileId = createParam.fileId();
@@ -269,7 +268,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     attributes.put(PipelineRuntimeKeys.SYSTEM_PIPELINE_CODE, createParam.systemPipelineCode());
     attributes.put(
         PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION, createParam.systemPipelineVersion());
-    attributes.put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, pipelineInstanceId);
+    attributes.put(
+        PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
+        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId());
+    attributes.put(
+        PipelineRuntimeKeys.PIPELINE_RUN_STARTED_AT,
+        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.startedAt());
     attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
     // ADR-026: dry-run 标记从 task payload (orchestrator 写) 提取到 attributes,
     // step plugin 调用 DryRunGuard.fromAttributes(attributes) 拿 guard 包副作用。
@@ -284,7 +288,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   private StepExecutionResponse completeSuccessfulPipeline(
       StepExecutionRequest request,
       Map<String, Object> attributes,
-      Long pipelineInstanceId,
+      PipelineRunFence pipelineRun,
       C context,
       List<R> results) {
     String successStage = lastSuccessfulStage(attributes);
@@ -310,9 +314,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     if (verifierResult.fatalFailure()) {
       // §G 硬中止：DB 标 FAILED，返回失败 response 而非 success。
       // 安全增量补偿(opt-in):若开关 on 且注册了 compensator,先 COMPENSATING + 反向动作,再落 FAILED 终态。
-      runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
-      pipelineRuns.markPipelineFailed(
-          pipelineInstanceId, successStage, lastSuccessfulStage(attributes));
+      runCompensationIfEnabled(request.tenantId(), pipelineRun, attributes);
+      pipelineRuns.markPipelineFailed(pipelineRun, successStage, lastSuccessfulStage(attributes));
       String fatalCode = EmptyChecks.isNull(verifierResult.firstFatalCode())
           ? "VERIFIER_FATAL"
           : verifierResult.firstFatalCode();
@@ -323,7 +326,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
       return new StepExecutionResponse(false, fatalCode, fatalMessage);
     }
 
-    pipelineRuns.markPipelineSuccess(pipelineInstanceId, successStage, successStage);
+    pipelineRuns.markPipelineSuccess(pipelineRun, successStage, successStage);
     return successResponse;
   }
 
@@ -331,13 +334,12 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
   private StepExecutionResponse completeFailedPipelineStage(
       StepExecutionRequest request,
       Map<String, Object> attributes,
-      Long pipelineInstanceId,
+      PipelineRunFence pipelineRun,
       R failed) {
     String failureStage = resultStage(failed);
     // 安全增量补偿(opt-in):stage 失败落地点。开关 off → 直接 markPipelineFailed(行为不变)。
-    runCompensationIfEnabled(request.tenantId(), pipelineInstanceId, attributes);
-    pipelineRuns.markPipelineFailed(
-        pipelineInstanceId, failureStage, lastSuccessfulStage(attributes));
+    runCompensationIfEnabled(request.tenantId(), pipelineRun, attributes);
+    pipelineRuns.markPipelineFailed(pipelineRun, failureStage, lastSuccessfulStage(attributes));
     handlePipelineFailure(
         attributes,
         resultCode(failed),
@@ -460,11 +462,11 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
    * markPipelineFailed 落定,绝不停在 COMPENSATING。
    */
   private void runCompensationIfEnabled(
-      String tenantId, Long pipelineInstanceId, Map<String, Object> attributes) {
+      String tenantId, PipelineRunFence pipelineRun, Map<String, Object> attributes) {
     if (compensationHook == null) {
       return;
     }
-    compensationHook.runCompensation(tenantId, pipelineType(), pipelineInstanceId, attributes);
+    compensationHook.runCompensation(tenantId, pipelineType(), pipelineRun, attributes);
   }
 
   protected String resolveInitialStage(List<PipelineStepDefinition> pipelineSteps) {

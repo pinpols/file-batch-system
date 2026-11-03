@@ -571,6 +571,22 @@
       "sensitivity": "PUBLIC"
     },
     {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OrchestratorDataSourceConfiguration.java#orchestratorPlatformHikariConfig",
+      "className": "orchestratorPlatformHikariConfig",
+      "prefix": "spring.datasource.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "SECRET"
+    },
+    {
+      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OrchestratorDataSourceConfiguration.java#workflowSensorBusinessHikariConfig",
+      "className": "workflowSensorBusinessHikariConfig",
+      "prefix": "batch.datasource.business.hikari",
+      "source": "STATIC",
+      "activation": "RESTART_REQUIRED",
+      "sensitivity": "PUBLIC"
+    },
+    {
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/OutboxArchiveProperties.java#OutboxArchiveProperties",
       "className": "OutboxArchiveProperties",
       "prefix": "batch.outbox.archive",
@@ -734,22 +750,6 @@
       "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowArchiveProperties.java#WorkflowArchiveProperties",
       "className": "WorkflowArchiveProperties",
       "prefix": "batch.workflow.archive",
-      "source": "STATIC",
-      "activation": "RESTART_REQUIRED",
-      "sensitivity": "PUBLIC"
-    },
-    {
-      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowSensorDataSourceConfiguration.java#orchestratorPlatformHikariConfig",
-      "className": "orchestratorPlatformHikariConfig",
-      "prefix": "spring.datasource.hikari",
-      "source": "STATIC",
-      "activation": "RESTART_REQUIRED",
-      "sensitivity": "SECRET"
-    },
-    {
-      "id": "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/WorkflowSensorDataSourceConfiguration.java#workflowSensorBusinessHikariConfig",
-      "className": "workflowSensorBusinessHikariConfig",
-      "prefix": "batch.datasource.business.hikari",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
       "sensitivity": "PUBLIC"

@@ -21,9 +21,11 @@ import io.github.pinpols.batch.common.verifier.VerifyResult;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
+import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +136,8 @@ class AbstractPipelineStepExecutionAdapterDefinitionTest {
     ExecutionContext context = mock(ExecutionContext.class);
     doReturn(context).when(adapter).buildContext(any(), any(), any());
     doReturn(List.of("success")).when(adapter).executeStages(context);
-    when(runs.createPipelineInstance(any())).thenReturn(901L);
+    PipelineRunFence run = new PipelineRunFence(901L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
+    when(runs.createPipelineInstance(any())).thenReturn(run);
     Map<String, Object> attributes = new HashMap<>();
     attributes.put(SystemPipelineTaskKeys.CODE, "IMPORT");
     attributes.put(SystemPipelineTaskKeys.VERSION, 1);
@@ -144,7 +147,7 @@ class AbstractPipelineStepExecutionAdapterDefinitionTest {
 
     assertThat(response.success()).isFalse();
     assertThat(response.code()).isEqualTo("VERIFIER_FATAL");
-    verify(runs).markPipelineFailed(eq(901L), any(), any());
+    verify(runs).markPipelineFailed(eq(run), any(), any());
     verify(runs, never()).markPipelineSuccess(any(), any(), any());
   }
 

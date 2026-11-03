@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4c2818433`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `ed87a235e`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,225 | 800,342 | 418,786 | 52.3% |
+| 6,241 | 801,120 | 419,159 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,845 | 394,762 | 211,737 | 53.6% |
-| prod | 3,475 | 321,352 | 153,480 | 47.8% |
+| test | 1,855 | 395,207 | 211,963 | 53.6% |
+| prod | 3,481 | 321,685 | 153,627 | 47.8% |
 | script | 727 | 65,416 | 41,195 | 63.0% |
 | config | 68 | 10,269 | 7,678 | 74.8% |
 | infra-config | 34 | 6,107 | 4,465 | 73.1% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,685 | 624,002 | 329,470 | 52.8% |
+| Java | 4,701 | 624,756 | 329,839 | 52.8% |
 | Shell | 218 | 35,844 | 28,346 | 79.1% |
 | Python | 337 | 50,490 | 27,479 | 54.4% |
 | YAML | 109 | 14,938 | 11,585 | 77.6% |
-| XML | 222 | 31,054 | 9,288 | 29.9% |
+| XML | 222 | 31,078 | 9,292 | 29.9% |
 | TypeScript | 38 | 6,824 | 3,259 | 47.8% |
 | Rust | 24 | 8,967 | 3,074 | 34.3% |
 | Properties | 5 | 3,179 | 2,639 | 83.0% |
@@ -42,7 +42,7 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,808 | 3,270 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,064 | 2,617 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,925 | 2,583 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,697 | 1,767 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,700 | 1,767 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,798 | 1,459 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,916 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |

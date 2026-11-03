@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
@@ -106,7 +107,9 @@ public abstract class AbstractStageExecutor<
       String lastSuccessStage =
           (String) context.getAttributes().get(PipelineRuntimeKeys.PIPELINE_LAST_SUCCESS_STAGE);
       pipelineRuns.updatePipelineStage(
-          pipelineInstanceId, currentStep.stageCode(), lastSuccessStage);
+          PipelineRunFence.fromAttributes(context.getAttributes()),
+          currentStep.stageCode(),
+          lastSuccessStage);
       injectCurrentStepAttributes(context, currentStep);
       Map<String, Object> inputSummary = buildInputSummary(context, currentStep);
       Long stepRunId = pipelineRuns.startStepRun(

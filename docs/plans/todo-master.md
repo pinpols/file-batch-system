@@ -21,6 +21,7 @@
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
+| 状态所有权与模块边界 | ARCH-20261103-01（平台库共享账号/表级授权，待定实施范围与目标环境）、-04（热路径与后台治理共池，待容量证据）仍开放；-02（pipeline_instance 迟到写入，已真实 PG 复现并修复）、-03（job_task 列白名单守卫）及 CONV-20261103-01..04 已整改，待 PR 合并，见[架构设计审查](../audit/architecture-design-review-2026-11-03.md#优先级与实施顺序建议未授权实施)。 |
 | 三租户覆盖验收 | 覆盖包、harness 全类型/分支/触发矩阵、前后清理和交付证据，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
 
