@@ -81,7 +81,8 @@ public class PipelineCompensationHook {
       String pipelineType,
       PipelineRunFence pipelineRun,
       Map<String, Object> attributes) {
-    Long pipelineInstanceId = pipelineRun == null ? null : pipelineRun.pipelineInstanceId();
+    Long pipelineInstanceId =
+        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId();
     try {
       boolean compensationIsNotConfiguredOrDisabled =
           EmptyChecks.isNull(attributes) || !compensateEnabled(attributes);

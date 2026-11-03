@@ -270,10 +270,10 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
         PipelineRuntimeKeys.SYSTEM_PIPELINE_VERSION, createParam.systemPipelineVersion());
     attributes.put(
         PipelineRuntimeKeys.PIPELINE_INSTANCE_ID,
-        pipelineRun == null ? null : pipelineRun.pipelineInstanceId());
+        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.pipelineInstanceId());
     attributes.put(
         PipelineRuntimeKeys.PIPELINE_RUN_STARTED_AT,
-        pipelineRun == null ? null : pipelineRun.startedAt());
+        EmptyChecks.isNull(pipelineRun) ? null : pipelineRun.startedAt());
     attributes.put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, pipelineSteps);
     // ADR-026: dry-run 标记从 task payload (orchestrator 写) 提取到 attributes,
     // step plugin 调用 DryRunGuard.fromAttributes(attributes) 拿 guard 包副作用。

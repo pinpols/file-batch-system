@@ -7,16 +7,16 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 3078 |
+| 生产 Java 源文件 | 3083 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2085 |
-| 含 Map 的源文件 | 416 |
+| `Map<String, Object>` 出现次数 | 2086 |
+| 含 Map 的源文件 | 417 |
 | public Map 契约候选 | 60 |
 | public Map 契约候选文件 | 44 |
 | `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 175 |
 | `@Configuration` 类 | 51 |
-| 大于等于 700 行的源文件 | 35 |
+| 大于等于 700 行的源文件 | 34 |
 | `PMD.ExcessiveParameterList` 显式例外 | 29 |
 
 ## 模块源文件
@@ -25,9 +25,9 @@
 |---|---:|
 | `batch-common` | 363 |
 | `batch-console-api` | 1245 |
-| `batch-orchestrator` | 786 |
+| `batch-orchestrator` | 788 |
 | `batch-trigger` | 135 |
-| `batch-worker` | 446 |
+| `batch-worker` | 449 |
 | `sdk` | 94 |
 | `security-scan` | 9 |
 
@@ -69,12 +69,11 @@
 | `batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/http/HttpTaskExecutor.java` | 771 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java` | 769 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowDefinitionService.java` | 765 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayOpenScheduler.java` | 758 |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 732 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/observability/DefaultConsoleQueryApplicationService.java` | 726 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 712 |
+| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java` | 706 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelWorkbookWriter.java` | 704 |
-| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java` | 704 |
 
 ## Public Map 契约候选
 
@@ -107,7 +106,7 @@
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/FileTemplateSnapshotService.java` | `L41: public Map<String, Object> pin`<br>`L90: public Map<String, Object> pinWorkflowReplay` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileRecordRepository.java` | `L31: public Map<String, Object> loadFileRecord`<br>`L48: public Map<String, Object> loadFileRecordByStoragePath` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformFileTemplateRepository.java` | `L18: public Map<String, Object> loadLatestTemplateConfig` |
-| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L102: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
+| `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/PlatformPipelineRunRepository.java` | `L145: public Map<String, Object> loadLatestSucceededStepOutputSummary` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileRecordView.java` | `L40: public Map<String, Object> toPluginValues` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/mapper/PlatformFileTemplateConfigView.java` | `L61: public Map<String, Object> toPluginValues` |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/FrozenFileTemplateResolver.java` | `L31: public Map<String, Object> resolve` |

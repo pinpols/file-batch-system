@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.time.OffsetDateTime;
 import java.util.Map;
 
@@ -12,7 +13,7 @@ public record PipelineRunFence(Long pipelineInstanceId, OffsetDateTime startedAt
   public static PipelineRunFence fromAttributes(Map<String, Object> attributes) {
     Long pipelineInstanceId =
         PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-    if (pipelineInstanceId == null) {
+    if (EmptyChecks.isNull(pipelineInstanceId)) {
       return null;
     }
     Object startedAt = attributes.get(PipelineRuntimeKeys.PIPELINE_RUN_STARTED_AT);

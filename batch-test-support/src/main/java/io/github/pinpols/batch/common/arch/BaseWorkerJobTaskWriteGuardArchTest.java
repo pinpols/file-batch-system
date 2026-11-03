@@ -77,7 +77,7 @@ public abstract class BaseWorkerJobTaskWriteGuardArchTest {
     assertThat(violations)
         .as("Worker 写 batch.job_task 越过登记列白名单;任务状态只能经 Orchestrator report 收敛,确需新列时同步更新"
             + " allowedJobTaskColumns() 与 runtime-module-communication.md")
-        .isEmpty();
+        .isEmpty(); // empty-check: allow - AssertJ 断言,非业务空判断
   }
 
   /** 供守护自测复用:返回给定 Mapper XML 内容中的越界写入,格式为 {@code 文件#语句: 原因}。 */
