@@ -8,9 +8,9 @@ import io.github.pinpols.batch.common.enums.FileReceiptPolicy;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
-import io.github.pinpols.batch.worker.core.infrastructure.PlatformRuntimeValues;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
@@ -155,9 +155,8 @@ public class PrepareDispatchStep implements DispatchStageStep {
       Object receiptPolicy =
           channelConfig.getOrDefault("receipt_policy", FileReceiptPolicy.NONE.code());
       attrs.put(DispatchRuntimeKeys.RECEIPT_STATUS, receiptPolicy);
-      Long pipelineInstanceId =
-          PlatformRuntimeValues.toLong(attrs.get(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID));
-      pipelineRuns.bindFileToPipelineInstance(context.getTenantId(), pipelineInstanceId, fileId);
+      PipelineRunFence pipelineRun = PipelineRunFence.fromAttributes(attrs);
+      pipelineRuns.bindFileToPipelineInstance(context.getTenantId(), pipelineRun, fileId);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(PrepareDispatchStep.class, "catch:Exception", ex);
       String failureSummary = SwallowedExceptionLogger.summary(ex);
