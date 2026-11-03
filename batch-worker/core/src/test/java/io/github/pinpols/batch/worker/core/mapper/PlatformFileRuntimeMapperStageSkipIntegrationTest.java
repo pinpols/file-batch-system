@@ -238,8 +238,9 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
   @DisplayName("Pipeline 文件绑定要求 Pipeline 与文件均属于调用租户")
   void bindFileToPipelineInstance_rejectsCrossTenantRows() {
     final String insertBatchPipelineInstanceSql = """
-        insert into batch.pipeline_instance(id, tenant_id, job_code, pipeline_type, run_status)\s\
-        values (1, 't1', 'JOB1', 'IMPORT', 'RUNNING'), (2, 't2', 'JOB2', 'IMPORT', 'RUNNING')\
+        insert into batch.pipeline_instance(id, tenant_id, job_code, pipeline_type, run_status, started_at)\s\
+        values (1, 't1', 'JOB1', 'IMPORT', 'RUNNING', current_timestamp),\s\
+               (2, 't2', 'JOB2', 'IMPORT', 'RUNNING', current_timestamp)\
         """;
     jdbcTemplate.update(insertBatchPipelineInstanceSql);
     final String insertBatchFileRecordSql = """
@@ -247,12 +248,15 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
         values (10, 't1', 'RECEIVED'), (20, 't2', 'RECEIVED')\
         """;
     jdbcTemplate.update(insertBatchFileRecordSql);
+    String startedAtSql = "select started_at from batch.pipeline_instance where id = ?";
+    OffsetDateTime run1 = jdbcTemplate.queryForObject(startedAtSql, OffsetDateTime.class, 1L);
+    OffsetDateTime run2 = jdbcTemplate.queryForObject(startedAtSql, OffsetDateTime.class, 2L);
 
     try (SqlSession session = sqlSessionFactory.openSession(true)) {
       PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
-      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, 10L)).isEqualTo(1);
-      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, 20L)).isZero();
-      assertThat(mapper.bindFileToPipelineInstance("t1", 2L, 10L)).isZero();
+      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, run1, 10L)).isEqualTo(1);
+      assertThat(mapper.bindFileToPipelineInstance("t1", 1L, run1, 20L)).isZero();
+      assertThat(mapper.bindFileToPipelineInstance("t1", 2L, run2, 10L)).isZero();
     }
     final String selectBatchPipelineInstanceSql = """
         select file_id from batch.pipeline_instance where id = 1
@@ -265,6 +269,23 @@ class PlatformFileRuntimeMapperStageSkipIntegrationTest {
     Long selectedFileIdRead2 =
         jdbcTemplate.queryForObject(selectBatchPipelineInstanceSqlValue3, Long.class);
     assertThat(selectedFileIdRead2).isNull();
+  }
+
+  @Test
+  @DisplayName("重派后旧 invocation 迟到的文件绑定不覆盖新执行")
+  void bindFileToPipelineInstance_rejectsStaleRunGeneration() {
+    jdbcTemplate.update("insert into batch.job_instance(id, tenant_id) values (100, 't1')");
+    jdbcTemplate.update(
+        "insert into batch.file_record(id, tenant_id, file_status) values (10, 't1', 'RECEIVED')");
+    try (SqlSession session = sqlSessionFactory.openSession(true)) {
+      PlatformPipelineRunRepository runs =
+          new PlatformPipelineRunRepository(session.getMapper(PlatformFileRuntimeMapper.class));
+      PipelineRunFence previous = runs.createPipelineInstance(createRunParam(100L));
+      PipelineRunFence current = runs.createPipelineInstance(createRunParam(100L));
+
+      assertThat(runs.bindFileToPipelineInstance("t1", previous, 10L)).isFalse();
+      assertThat(runs.bindFileToPipelineInstance("t1", current, 10L)).isTrue();
+    }
   }
 
   @Test

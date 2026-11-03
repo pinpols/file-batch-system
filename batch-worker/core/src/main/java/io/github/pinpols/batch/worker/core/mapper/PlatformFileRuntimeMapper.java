@@ -36,6 +36,7 @@ public interface PlatformFileRuntimeMapper {
   int bindFileToPipelineInstance(
       @Param("tenantId") String tenantId,
       @Param("pipelineInstanceId") Long pipelineInstanceId,
+      @Param("runStartedAt") OffsetDateTime runStartedAt,
       @Param("fileId") Long fileId);
 
   int updatePipelineStage(

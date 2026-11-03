@@ -214,6 +214,8 @@
             updated_at = current_timestamp
         where tenant_id = #{tenantId}
           and id = #{pipelineInstanceId}
+          and started_at = #{runStartedAt}
+          and run_status = 'RUNNING'
           and exists (
             select 1 from batch.file_record file_record
             where file_record.tenant_id = #{tenantId}

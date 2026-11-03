@@ -32,6 +32,7 @@ v6 周期（57 项硬化条目）**已实质收敛**。2026-06-15 重新核实�
 | **V7-TEST-2** | console security rate-limit 真实 HTTP 限流 IT | ✅ 本地完成 | `ConsoleRateLimitHttpIntegrationTest` 通过真实 HTTP Filter 链和 Valkey 验证 expensive-op / file-op 429，并发现及修复 `ConsolePrincipal` 限流键错误。|
 | **V7-TEST-3** | `batch.shedlock.provider=jdbc` 装配与互斥 | 🟡 本地完成，切换演练待 staging | `ShedLockJdbcConfigurationIntegrationTest` 以真实 PostgreSQL 验证 JDBC provider、同名锁互斥和释放后重获；全停→切换→全起且无重复触发仍是 staging 运维演练。|
 | **V7-TEST-4** | 其余 P1 开关验证 | ✅ 本地代码项完成 | AI provider/client 与业务服务、Atomic 白名单、资源超限策略、文件到达校验已有专项测试；对象加密增加自动配置装配测试并修复装饰器被 raw bean 误退避；S3 自动建桶覆盖关闭探测与通用 404 创建。真实 AI provider 仍按受控外部验证，不纳入无密钥 CI。|
+| **V7-TEST-5** | 本地 MinIO Testcontainer 偶发 S3 405 | 🟡 待复现 | 2026-11-04 本地 `BatchDayMetricsMapperIntegrationTest` 一次失败：`ensureBucketExists` 启动时成功，约 15s 后 `ObjectStoreStartupCheck` 的 PUT/DELETE 返回 405，导致 Spring 上下文无法加载；立即重跑 60/60 通过，CI 未见同类失败。下次复现时保留容器（`docker logs`、`docker port`）并记录同时运行的 Testcontainers；确认根因（端口映射、bitnami 启动重启窗口或容器复用）后再改 `MinioObjectStoreContainer` 等待策略，不凭推测加重试。 |
 
 ### ❌ 不做（已论证，仅存档）
 

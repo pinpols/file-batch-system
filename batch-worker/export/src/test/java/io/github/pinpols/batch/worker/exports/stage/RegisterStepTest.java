@@ -18,6 +18,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.plugin.IdempotencyCapability;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -170,7 +171,7 @@ class RegisterStepTest {
 
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes()).containsEntry(PipelineRuntimeKeys.FILE_ID, 1L);
-    verify(pipelineRuns).bindFileToPipelineInstance("t1", 99L, 1L);
+    verify(pipelineRuns).bindFileToPipelineInstance("t1", new PipelineRunFence(99L, null), 1L);
     verify(exportDataPlugin).onRegistered(any(), anyLong(), eq(2), anyString());
     verifyNoInteractions(taskExecutionClient);
   }

@@ -102,6 +102,7 @@
 | ID | 状态 | 变更 | 验证 |
 |---|---|---|---|
 | ARCH-02 | **已确认并修复** | Worker 对 `pipeline_instance` 的阶段、补偿和终态写入，统一加上非终态谓词和 `started_at` 运行代际围栏。`insertPipelineInstance` 改为 `insert … returning id, started_at`（`<select affectData>`，遵守 generated key 只回传 `id` 的门禁），`PipelineRunFence` 贯穿 adapter、stage executor 和补偿 hook；返回 0 时记 warn，不抛错。不需要迁移。`pipeline_step_run` 已有 `step_status in (RUNNING, RETRYING)` 谓词，并且每次 attempt 新开一行，不在本次修改范围内 | 真实 PG：`PlatformFileRuntimeMapperStageSkipIntegrationTest` 新增路径①（stale sweep 后迟到成功）、路径②（重派后旧 invocation 迟到写入）以及按 `PipelineRunStatus` 全量枚举的前置态契约用例。修复前 3 条失败，修复后 19/19 通过 |
+| ARCH-02 补充 | **已修复** | `bindFileToPipelineInstance` 同样带 `started_at` 运行代际与 RUNNING 谓词；Import/Export/Dispatch 调用方改为传 `PipelineRunFence` | 真实 PG 新增旧代际绑定被拒用例；六个 Worker 模块全量测试 0 失败 |
 | ARCH-03 | **已按方案 A 修复** | 新增 `BaseWorkerJobTaskWriteGuardArchTest`（batch-test-support），六个 Worker 模块各有一个 `*JobTaskWriteGuardArchTest`；列白名单登记在[模块通信](../architecture/runtime-module-communication.md#读图要点) | `WorkerJobTaskWriteGuardConventionTest` 覆盖拦截 `set task_status`、CTE/`<select>` 包装、动态标签、insert/delete，并放行现有 Process/Dispatch 写法；六个模块的守卫均通过 |
 | CONV-01 | **守卫已加** | `LegacyServicePackageFreezeArchTest` 冻结旧 `orchestrator.service` 包内现有的 21 个类，存量迁移随功能推进 | Orchestrator `*ArchTest` 16/16 通过 |
 | CONV-02 | **已整改**（`cabf0f51a`） | 开日业务步骤原样下沉到 `application/service/batchday/BatchDayOpenService`；`BatchDayOpenScheduler` 从 758 行减到 78 行，只保留触发、ShedLock、停机排空、逐日历 RLS 绑定加短事务以及扫描指标，事务边界不变 | Orchestrator 按批次日/ArchTest/规约筛选共 298 个测试通过，其中 `MultiCalendarCoordinationIntegrationTest` 28 个为真实 PG；E2E 编译通过 |
