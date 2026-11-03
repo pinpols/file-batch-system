@@ -49,6 +49,9 @@ spec:
             # livenessProbe / Prometheus scrape 全部失效。管理端口真正隔离需 ADR + 单独 Service。
             - name: BATCH_MANAGEMENT_PORT
               value: {{ $svc.port | quote }}
+            {{- if ($svc.platformDb | default dict).credentialsSecretName }}
+            {{- include "batch-platform.workerPlatformDbCredentialsEnv" $svc | nindent 12 }}
+            {{- end }}
           {{- include "batch-platform.envFrom" . | nindent 10 }}
           {{- with $svc.startupProbe }}
           startupProbe:

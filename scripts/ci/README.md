@@ -1050,6 +1050,10 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 `FULL_SIM_XLSX_FIXTURE_TEST` 同时执行 `test_fix_fixture_xlsx.py`、`test_sim_tenant_fixture.py` 与 `test_config_package_fixture_generators.py`，覆盖 schema、规范渠道键、host/docker 私有上传副本、内容指纹和退出清理。原 Compose 模板不得写回宿主地址。新增的三组清理操作仅针对本轮 mktemp 目录和 O_EXCL 创建的精确文件，已审查目标、失败清理与邻居保留测试后逐项登记；未全量刷新破坏性预算。
 
 
+### Worker 平台库独立凭据渲染
+
+`python3 -m unittest scripts/ci/tests/test_helm_worker_platform_db_credentials.py` 渲染真实 Chart：默认配置下四类 Pipeline Worker 不覆盖共享平台库账号；设置 `<worker>.platformDb.credentialsSecretName` 后，只有对应 Worker 从该 Secret 读取 `BATCH_PLATFORM_DB_USERNAME/PASSWORD`。PR Gate 在 Helm 或 CI 变更时执行；需要本地 Helm，不操作真实集群，也不验证 Secret 内容或目标库授权。授权本身由 `scripts/db/generate-platform-worker-grants.py`（`PLATFORM_WORKER_GRANTS`）与 `PlatformWorkerRolesSqlIntegrationTest` 覆盖。
+
 ### Helm 双 Release 监控范围回归
 
 `python3 -m unittest scripts/ci/tests/test_helm_service_monitor_scope.py` 渲染同命名空间两个 Release,

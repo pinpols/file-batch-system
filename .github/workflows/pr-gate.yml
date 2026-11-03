@@ -111,13 +111,13 @@ jobs:
 
       # 固定解释器须先于依赖安装：中途切换 python3 会丢失已装的 PyYAML/openpyxl，后续门禁 ImportError。
       - name: Set up pinned Python
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.database == 'true'
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.helm == 'true'
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
         with:
           python-version-file: .python-version
 
       - name: Setup Python guard environment
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true'
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.helm == 'true'
         uses: ./.github/actions/setup-python-guard-env
 
       - name: Verify repository text encoding
@@ -332,6 +332,16 @@ jobs:
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.docs == 'true' || needs.changes.outputs.ci == 'true'
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_CONFIG_GOVERNANCE "配置治理注册表" -- python3 scripts/ci/check-config-governance.py
+
+      - name: Verify Worker platform DB grant manifest
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_PLATFORM_WORKER_GRANTS "Worker 平台库授权清单同步" -- python3 scripts/db/generate-platform-worker-grants.py
+
+      - name: Verify Worker platform DB credentials rendering
+        if: needs.changes.outputs.helm == 'true' || needs.changes.outputs.ci == 'true'
+        shell: bash
+        run: bash scripts/ci/run-gate.sh PR_HELM_WORKER_DB_CREDENTIALS "Worker 平台库独立凭据渲染" -- python3 -m unittest scripts/ci/tests/test_helm_worker_platform_db_credentials.py
 
       - name: Enforce no new direct config key access (baseline)
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.ci == 'true'

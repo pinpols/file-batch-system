@@ -326,6 +326,8 @@ pre-commit 分组为 `hygiene`、`quality`、`docs`、`config`、`supply-chain`�
 | `check-config-defaults-sync.py --check`、`check-helm-env-sync.py` | 按域触发的全量：配置 / Helm / Compose 变更时运行 |
 | `check-feature-switch-registry.py` | 按域触发的全量：功能开关、YAML、Helm 变更时运行 |
 | `check-config-governance.py`、`check-env-variable-governance.py` | 按域触发的全量：配置绑定、环境变量治理入口变更时运行 |
+| `scripts/db/generate-platform-worker-grants.py`（`PLATFORM_WORKER_GRANTS`） | 按域触发的全量：Worker 生产代码、Worker 所用 batch-common SQL、授权生成器或数据库变更时，校验已提交的 Worker 平台库授权清单与 psql 脚本仍与源码一致（PR 与本地 pre-commit） |
+| `test_helm_worker_platform_db_credentials.py`（`PR_HELM_WORKER_DB_CREDENTIALS`） | 按域触发：Helm 或 CI 变更时渲染默认与分账号两种配置；本地未装 Helm 时跳过，跳过不等于通过 |
 | `check-production-capacity-governance.py` | 按域触发的全量：生产容量巡检脚本、只读 SQL、runbook 和 workflow 入口变更时运行 |
 | `check-hardcoded-runtime-config.sh` | 按域触发的全量：运行配置、脚本、容器、测试基础设施变更时运行；检查 BE 验收脚本的平台服务端口以及观测脚本的 Console/Orchestrator 地址必须来自公共环境配置 |
 | `check-test-config-sources.py` | PR、Full Gate 与本地 pre-push；确保各模块导入共享测试配置且不在 `application-test.yml` 重复定义共享项；不拦截 Java 测试的场景覆盖值 |
