@@ -119,6 +119,8 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [backend-reliability-tests.sh](backend-reliability-tests.sh) | 本地与每日 CI 共用的隔离可靠性回归套件。 |
 | [batch-consume-load.sh](batch-consume-load.sh) | ADR-046 Phase 2 切片 2.3d —— worker 消费端攒批的「全栈负载验收」。 |
 | [be-acceptance.sh](be-acceptance.sh) | BE 全链路验收入口；流程说明见 docs/runbook/be-acceptance.md。 |
+| [coverage-harness.sh](coverage-harness.sh) | 可重复初始化并执行 ta/tb/tc 全类型覆盖场景；默认前后限定清理运行产物，支持 Job/Workflow、BUNDLE、WAIT、API、RERUN 及可选调度补跑矩阵。 |
+| [coverage-harness.py](coverage-harness.py) | `coverage-harness.sh` 对应的 Python 实现，负责覆盖初始化、配置收敛、真实执行、限定清理及结果核验。 |
 | [build-apps.sh](build-apps.sh) | 构建本地运行所需的应用可执行 JAR。 |
 | [clean-stale-test-env.sh](clean-stale-test-env.sh) | 清理上一轮 sim / 测试遗留的容器(幂等,随时可跑)。 |
 | [cleanup-disk.sh](cleanup-disk.sh) | 本地开发磁盘清理。默认只预览；数据卷、运行日志和构建产物均需显式启用。 |
@@ -155,6 +157,7 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [sql/check-biz-shard-initialization-state.sql](sql/check-biz-shard-initialization-state.sql) | 供 [provision-biz-shard.sh](provision-biz-shard.sh) 使用的配套 SQL。 |
 | [sql/check-biz-shard-ready.sql](sql/check-biz-shard-ready.sql) | 供 [provision-biz-shard.sh](provision-biz-shard.sh) 使用的配套 SQL。 |
 | [sql/check-database-ready.sql](sql/check-database-ready.sql) | 供 [validate-seed-scenarios.sh](validate-seed-scenarios.sh) 使用的配套 SQL。 |
+| [sql/cleanup-coverage-runtime.sql](sql/cleanup-coverage-runtime.sql) | 供 [coverage-harness.sh](coverage-harness.sh) 使用；只删除三租户 `*_COV_*` 运行记录与 `COV-%` 客户，保留定义和其它数据。 |
 | [sql/count-active-job-partitions.sql](sql/count-active-job-partitions.sql) | 供 [batch-consume-load.sh](batch-consume-load.sh) 使用的配套 SQL。 |
 | [sql/count-batch-schema-tables.sql](sql/count-batch-schema-tables.sql) | 供 [health-check-infra.sh](health-check-infra.sh) 使用的配套 SQL。 |
 | [sql/count-biz-schema-tables.sql](sql/count-biz-schema-tables.sql) | 供 [provision-biz-shard.sh](provision-biz-shard.sh) 使用的配套 SQL。 |
@@ -191,6 +194,7 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [sql/pg-ha-drill/is-streaming-standby.sql](sql/pg-ha-drill/is-streaming-standby.sql) | 供 [pg-replica-failover-drill.sh](pg-replica-failover-drill.sh) 使用的配套 SQL。 |
 | [sql/pg-ha-drill/promote-standby.sql](sql/pg-ha-drill/promote-standby.sql) | 供 [pg-replica-failover-drill.sh](pg-replica-failover-drill.sh) 使用的配套 SQL。 |
 | [sql/provision-single-job-workflow.sql](sql/provision-single-job-workflow.sql) | 保留父进程导出的所选环境，同时避免 |
+| [sql/prepare-coverage-closed-day.sql](sql/prepare-coverage-closed-day.sql) | 供 [coverage-harness.sh](coverage-harness.sh) 准备 TB 已截止业务日与一条拒绝 occurrence；仅建立 CATCH_UP 场景，补跑和运行终态仍走真实 API。 |
 | [sql/reload-postgres-config.sql](sql/reload-postgres-config.sql) | 供 [pg-write-parameter-matrix.sh](pg-write-parameter-matrix.sh) 使用的配套 SQL。 |
 | [sql/reset-business-runtime.sql](sql/reset-business-runtime.sql) | 供 [sim-harness.sh](sim-harness.sh) 使用的配套 SQL。 |
 | [sql/reset-platform-runtime.sql](sql/reset-platform-runtime.sql) | 供 [sim-harness.sh](sim-harness.sh) 使用的配套 SQL。 |

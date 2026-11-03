@@ -109,6 +109,13 @@ jobs:
           # 0 = 全历史:migration-safety / openapi-breaking 守护要相对 base 做 diff。
           fetch-depth: 0
 
+      # 固定解释器须先于依赖安装：中途切换 python3 会丢失已装的 PyYAML/openpyxl，后续门禁 ImportError。
+      - name: Set up pinned Python
+        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true' || needs.changes.outputs.database == 'true'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
+        with:
+          python-version-file: .python-version
+
       - name: Setup Python guard environment
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.sdk == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.tests == 'true' || needs.changes.outputs.ci == 'true'
         uses: ./.github/actions/setup-python-guard-env
@@ -201,12 +208,6 @@ jobs:
       - name: Verify repository hygiene
         shell: bash
         run: bash scripts/ci/run-gate.sh PR_REPOSITORY_HYGIENE "仓库卫生" -- python3 scripts/ci/check-repository-hygiene.py
-
-      - name: Set up Python for LOC snapshot
-        if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'
-        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7
-        with:
-          python-version-file: .python-version
 
       - name: Verify LOC snapshot
         if: needs.changes.outputs.java == 'true' || needs.changes.outputs.database == 'true' || needs.changes.outputs.scripts == 'true' || needs.changes.outputs.config == 'true' || needs.changes.outputs.ci == 'true'

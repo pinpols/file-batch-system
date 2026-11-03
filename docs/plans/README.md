@@ -6,6 +6,7 @@
 
 | 文档 | 用途 |
 |---|---|
+| [ta/tb/tc 全类型与 Workflow 覆盖配置包](tenant-coverage-packages-2026-11-03.md) | 三租户配置样本、隔离导入及真实执行边界与验收记录 |
 | [WDI 分阶段 PR 交付准备](wdi-pr-delivery-readiness-2026-10-30.md) | 前后端工作树、迁移与契约依赖的交付快照及待验证事项 |
 | [作业与 Workflow 时限告警补齐计划](job-workflow-sla-completion-plan-2026-10-25.md) | 两层三类告警、实际计时、漏扫补报、通知与自动解除的完整实施和验收台账 |
 | [当前专用工作树工程治理台账](development-worktree-governance-2026-10-24.md) | 用户 19 项范围、可读性集中整改、静态规则证据和未关闭项；不编译、不运行应用测试 |

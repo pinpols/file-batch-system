@@ -9,6 +9,7 @@
 修改工作簿、生成脚本或配置包导入 schema 后，必须执行 `python3 scripts/sim/fix-fixture-xlsx.py --check`。该检查要求样本不含已退役 Pipeline sheet；本地修复命令会移除这些旧 sheet 并按当前模板修复其余字段，运行后需审查工作簿差异并再次执行检查模式。
 
 - `ta/tb/tc-tenant-config-package-test.xlsx`：三大业务租户样本。按租户分工覆盖配置枚举和 Workflow 拓扑——ta 补 IMPORT Job / LOCAL channel；tb 补 DISPATCH Job / API channel；tc 补 GATEWAY ALL 与 N_OF join + FAILURE / CONDITION 边。阶段由系统 Pipeline 按 Job 类型固定提供，不再由租户 Excel 定义。幂等追加脚本 `scripts/local/append-tenant-coverage.py`。
+- [`coverage-examples/`](coverage-examples/README.md)：独立的三租户作业类型和 Workflow 拓扑覆盖示例，不替换以上 SIM 样本；导入和实际执行的前提见其说明。
 - `default-tenant-config-package-test.xlsx`：与 `batch-test-support/src/main/resources/db/testdata/multi-tenant-seed.sql` 中 v4 硬化批次新增的 `default-tenant` 项对齐（4 条本地化 channel_config + `wf_probe_pipeline` / `wf_probe_gateway` / `wf_probe_mixed` 3 条探针 workflow + 对应 job_definition）。生成脚本 `scripts/local/gen-default-tenant-excel.py`。
 
 > **关于基础依赖**：配置包可携带 `resource_queue`、`business_calendar`、`batch_window`、`file_template_config` 和独立的 `job_monitoring_policy`。Import 目标表、字段映射和 Export SQL 由 `file_template_config` 承载。含已退役租户 Pipeline sheet 的旧 11/12-sheet 工作簿会被拒绝，需从当前 10-sheet 模板重新导出或整理。

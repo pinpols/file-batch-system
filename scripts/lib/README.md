@@ -18,6 +18,7 @@
 | 文件 | 用途 / 调用归属 |
 |---|---|
 | [business-db-bootstrap.sh](business-db-bootstrap.sh) | 业务库初始化公共入口。只能被 source，不要直接执行。 |
+| [coverage-config.py](coverage-config.py) | 三租户覆盖包运行契约事实源，供生成器和 coverage-harness 复用；不执行环境清理。 |
 | [console-api-readiness.sh](console-api-readiness.sh) | 仅判断 Console API 是否已响应 Actuator JSON；依赖 DOWN 时聚合健康端点可返回 HTTP 503。 |
 | [destructive-ops.sh](destructive-ops.sh) | 本地维护/仿真脚本的破坏性操作边界。生产运维命令不应调用此 helper 绕过自身审批流程。 |
 | [env-common.sh](env-common.sh) | 公共环境入口。只能被 source,不要直接执行。 |

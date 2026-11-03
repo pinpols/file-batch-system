@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.console.config.ConsoleMenuProperties;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.context.properties.bind.Bindable;
@@ -83,6 +85,63 @@ class ConsoleMenuRegistryTest {
         .extracting(ConsoleMenuRegistry.MenuItem::path)
         .contains("/governance/queues", "/governance/windows")
         .doesNotContain("/jobs/pipelines");
+  }
+
+  @Test
+  @DisplayName("默认菜单名称与前端展示对齐，角色过滤仍基于现有授权")
+  void shouldExposeAlignedMenuTitles_whenAdminLoadsDefaultMenu() throws Exception {
+    var environment = new StandardEnvironment();
+    var sources = new YamlPropertySourceLoader().load("menu", new ClassPathResource("menu.yml"));
+    sources.forEach(environment.getPropertySources()::addLast);
+    ConsoleMenuProperties properties = Binder.get(environment)
+        .bind("batch.console.menu", Bindable.of(ConsoleMenuProperties.class))
+        .get();
+    var groups = new ConsoleMenuRegistry(properties).filterByAuthorities(Set.of("ROLE_ADMIN"));
+    Map<String, String> groupTitles = groups.stream()
+        .collect(Collectors.toMap(
+            ConsoleMenuRegistry.MenuGroup::key, ConsoleMenuRegistry.MenuGroup::title));
+    Map<String, String> itemTitles = groups.stream()
+        .flatMap(group -> group.children().stream())
+        .collect(Collectors.toMap(
+            ConsoleMenuRegistry.MenuItem::path, ConsoleMenuRegistry.MenuItem::title));
+
+    Map<String, String> expectedGroupTitles = Map.of(
+        "alerting",
+        "告警投递",
+        "definitions",
+        "准备作业",
+        "files",
+        "文件管理",
+        "scheduling",
+        "调度资源",
+        "system",
+        "平台管理");
+    Map<String, String> expectedItemTitles = Map.ofEntries(
+        Map.entry("/ops/summary", "控制面板"),
+        Map.entry("/reports", "报表中心"),
+        Map.entry("/ops/asset-freshness", "新鲜度策略"),
+        Map.entry("/monitor/job-instances", "作业运行"),
+        Map.entry("/monitor/job-steps", "作业步骤"),
+        Map.entry("/monitor/workflow-runs", "工作流运行"),
+        Map.entry("/observability/trace", "链路诊断"),
+        Map.entry("/observability/alerts", "告警事件"),
+        Map.entry("/observability/job-monitoring-policies", "监控策略"),
+        Map.entry("/observability/alert-routings", "告警路由（预留）"),
+        Map.entry("/system/notifications", "通知投递"),
+        Map.entry("/jobs/definitions", "作业定义"),
+        Map.entry("/workflow/definitions", "工作流定义"),
+        Map.entry("/workflow/designer", "编排设计器"),
+        Map.entry("/config/tenant-package", "配置导入"),
+        Map.entry("/files/arrival-groups", "到达组治理"),
+        Map.entry("/system/triggers", "触发器"),
+        Map.entry("/governance/queues", "资源队列"),
+        Map.entry("/system/tenants", "租户实例"),
+        Map.entry("/system/user-accounts", "登录账户"),
+        Map.entry("/config/releases", "发布管理"),
+        Map.entry("/config/management", "变更与同步"),
+        Map.entry("/observability/audits", "审计日志"));
+    assertThat(groupTitles).containsAllEntriesOf(expectedGroupTitles);
+    assertThat(itemTitles).containsAllEntriesOf(expectedItemTitles);
   }
 
   private static ConsoleMenuRegistry registryWithItem(

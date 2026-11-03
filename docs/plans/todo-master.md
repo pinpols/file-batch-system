@@ -1,5 +1,29 @@
 # TODO Master · 当前待办唯一索引
 
+## 2026-11-03：全部开放事项统一索引
+
+本节是前后端当前待办的唯一导航层，前端 `batch-console/docs/README.md` 只链接到这里，不再另维护索引；不另造任务、不复制关闭条件。各事项的状态、优先级、证据和下一步以链接原文为准；历史快照中的“待办”字样不直接视为当前开放项。
+
+| 领域 | 当前开放事项与权威原文 |
+|---|---|
+| 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境、复制与作业包未知结果对账，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。 |
+| 后端 25 包与全仓验证 | 逐文件语义缺口、完整 reactor/CI、Import/Export/归档/缓存/安全及性能剩余项，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
+| 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
+| Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
+| 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 |
+| 前端界面与菜单验收 | Worker/权限、筛选、菜单搜索、品牌加载、页面密度和文档站的用户验收，以及移动端文件渠道目的地确认，见[前端界面与菜单调整台账](../../../batch-console/docs/backlog/frontend-ui-acceptance-2026-11-02.md)。 |
+| 产品旅程与租户配置 | 四角色/无障碍/完整旅程验收、TCFG 阶段 4、敏感信息分类、容量与多副本组合恢复，见[产品旅程审计](#产品用户旅程对抗审计2026-10-10)和[租户配置主线及旁支](#租户作业配置简化与旁支2026-10-11)。 |
+| 告警与可观测性 | 六类时限告警的部署/供应商验收、OBS-ENV-01–06、生产容量与持续观察，见[时限告警](#作业与-workflow-六类时限告警2026-10-252026-10-26复核)、[监控目标环境验收](#事件与可用性监控目标环境验收2026-10-26)和[容量治理](../runbook/production-capacity-governance.md)。 |
+| AI、使用率与维护降级 | AI 原文留存/权限/成本与真实 provider、使用率业务对账（版本维度、业务租户切换、生产数据证据）、维护降级阈值与全量写按钮验收，以及前端移动软键盘、真实模型并发、provider 限流/超时、受控试生产、后置 HITL 和真实移动设备/其它下游恢复，见[G4–G6](#g4-console-ai-助手与成本治理-p1p2-本地开发已收口治理证据待外部验收)、[前端配套台账](../../../batch-console/docs/backlog/ai-and-usage-statistics-todo-2026-09-29.md)、[前端 AI 实施方案](../../../batch-console/docs/engineering/ai-assistant-frontend.md)和[前端维护与降级方案](../../../batch-console/docs/engineering/maintenance-degradation.md#2-当前实现与缺口)。 |
+| CI、发布与 GitOps | GDRIFT 的真实 PR/CI/staging、Actions 镜像证据、Compose CD 故障/回滚和 GitOps 接入，以及前端 staging release set、四角色/跨浏览器、故障阻断、回滚兼容和制品留存，见[漂移治理](#前后端约定与-ci-漂移治理2026-10-12)、[部署与持续交付](#部署与持续交付)、[Compose CD 路线](../runbook/compose-cd-roadmap.md#8-待办)、[前端 Compose CD 目标环境验收](../../../batch-console/docs/runbook/compose-cd-roadmap.md#目标环境待验收)和[前端上线准入清单](../../../batch-console/docs/runbook/go-live-readiness-checklist.md)。 |
+| 集群、合规与 IPv6 | Worker drain/接管/force-offline 集群验证、SBOM 条件项、IPv6 staging，见[外部环境阻塞](#九-本地不能做需-ops--staging--dba--业务方-配合)和[HE 路线](#m-ipv6-happy-eyeballs-渐进治理-p1)。 |
+| 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
+| 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
+| 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
+| OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
+| 三租户覆盖验收 | 覆盖包、harness 全类型/分支/触发矩阵、前后清理和交付证据，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
+| 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
+
 ## 2026-10-31：治理台账快照与当时的推进顺序（历史记录）
 
 2026-10-26 治理记录、10 月 27 日审查和本索引里的编号不能按条数当成独立缺陷。以下保留当次云代理核查的事实和当时的建议顺序；当前进度以现行台账及代码为准。

@@ -7,6 +7,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-11-03 | `/auth/me` 菜单的中文展示名称与控制台当前菜单对齐；路径、角色与授权规则不变。控制台根据后端返回的路径收口可见性，再使用本地词条显示中英文。 |
 | 2026-11-01 | 批量日重放的区间和单日审批保留必填 `approver` 查询参数以兼容既有客户端，实际记录和重试使用当前认证管理员身份。 |
 | 2026-11-01 | **配置批操作原键回查**：租户复制和作业包创建/导入增加管理员只读回查；按原目标顺序返回已确认回执和未知项，不重新执行。历史操作、无键请求和试运行不保证可查询。 |
 | 2026-10-28 | Dry-run L3 的 SQL 参数只做静态检查；数据库执行计划因规划阶段可能产生副作用而停用，合法 SQL 返回 `EXEC_SQL_PLAN_UNAVAILABLE`，不报告计划通过。对象存储与 HTTP 探测按各自规则执行。 |
@@ -245,7 +246,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 - Single-account login is single-session by default. A fresh login invalidates older JWTs for the same username and tenant.
 <!-- Legacy `X-Console-Token` header auth was physically removed on 2026-04-30 (commit ff20c36f, S5-d). Only JWT + SSE ticket remain. -->
 - `POST /api/console/auth/token` exchanges an authenticated console session for a JWT access token.
-- `GET /api/console/auth/me` returns the current authenticated principal, including `menus` — the role-filtered sidebar tree produced by `ConsoleMenuRegistry`. Frontends should render navigation from this field rather than hard-coding menu items.
+- `GET /api/console/auth/me` returns the current authenticated principal and the role-filtered `menus` tree from `ConsoleMenuRegistry`. The console uses its paths as a visibility limit and supplies localized titles and ordering locally. Backend titles are Chinese; this endpoint does not select a language. Endpoint authorization remains authoritative.
 - `ROLE_ADMIN` can perform all write actions.
 - `ROLE_AUDITOR` is read-only for operational views and queries.
 - `ROLE_TENANT_ADMIN` can access config and worker operations, but not all write actions.

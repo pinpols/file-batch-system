@@ -44,6 +44,8 @@
 - Workflow/每日连续性加入的 `batch_day_instance`、等待/回放运行记录、`calendar_dependency_wait`、`job_dependency_waiting_launch`、`scheduled_occurrence`、coverage、`expected_work_occurrence` 和相关审计历史均属于可重建 SIM 运行态，reset 在上述本机与会话守卫内清理；保留 `calendar_dependency`、`job_dependency`、文件/事件 expectation 定义及 `batch_day_catchup_control` 操作配置。不得把该 reset 用于保存生产/预发布运行历史的数据库。
 - SDK E2E Workflow 清理使用显式租户、Job code 和派生的 `JOB-WF-<job.id>` Workflow code 限定，只清理该 fixture 的运行记录、请求和定义；复用同租户的其他 Workflow 不属于目标。相关新增删除项已在审查目标范围后登记增量基线。
 - `scripts/ci/check-db-scripts-safety.sh` 扫描维护、sim、local、load-test SQL。`DROP`、`TRUNCATE`、`DELETE FROM` 和约束变更必须在文件头部标明风险及目标环境；seed SQL 也不豁免。
+- `scripts/data/init-coverage-tenants.py` 只删除自身 `mktemp` 创建且尚未原子替换的回执临时文件，不接受外部删除路径；正式回执保留用于续跑。
+- `scripts/local/coverage-harness.py` 与配套 SQL 默认在本机 Console、选定 Docker 容器和数据库中做覆盖验收前后清理。目标仅限 ta/tb/tc 的 `*_COV_*` 运行记录、`COV-%` 客户、匹配覆盖命名的 SFTP 文件和 MinIO 对象；先注销已注册的覆盖 Trigger，并仅对覆盖活跃实例请求 terminate、等待终态，拒绝直接删除在途运行；数据库在事务中按临时 ID 集合及外键顺序删除，对象逐个精确删除并复核；覆盖 Outbox 的 PUBLISHING 在途请求先排空，Worker 回报按 task_id 认领。租户、定义、模板、渠道、`data_asset` 主数据目录、其它业务数据和仓库外验收 JSON 均保留；失败返回非零，可通过重跑 harness 重建运行产物，不能用清库、删卷或整租户清理替代。
 - `scripts/local/pre-commit-checks.sh` 将本次门禁错误汇总写入由 `mktemp` 创建的独立临时文件，并仅在退出时删除该文件；路径由脚本创建，不接受调用方覆盖，清理不触碰仓库或服务数据。
 - `scripts/local/audit-runtime-warnings.sh` 的应用日志清单和单文件 WARN 缓冲分别由 `mktemp` 创建，创建成功后即登记退出清理；输入日志和策略文件不在清理范围内。盘点/读取失败返回输入错误，已有告警分类保持阻断。
 - `scripts/local/pre-push-sdk-checks.sh` 的 Java 治理与 clean compile 各自在 `mktemp -d` 创建的一次性 detached worktree 中运行；正常路径由 `git worktree remove` 清理，worktree 注册失败时仅对脚本刚创建且仍为空的精确临时目录执行 `rmdir`。目标不接受外部输入，不触碰仓库工作树或业务数据，失败后可直接重跑，无需业务恢复。
