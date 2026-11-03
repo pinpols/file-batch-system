@@ -69,6 +69,7 @@ maven_descriptor_changed=0
 helm_changed=0
 config_registry_changed=0
 sim_xlsx_fixture_changed=0
+worker_grants_changed=0
 for file in "${staged_files[@]}"; do
   case "$file" in
     docs/governance/java-contract-governance*.json|scripts/ci/check-java-contract-governance.py|scripts/ci/tests/test_check_java_contract_governance.py)
@@ -94,6 +95,11 @@ for file in "${staged_files[@]}"; do
     && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
+  # Worker SQL 或授权生成器变化时重新校验平台库最小授权清单（ARCH-20261103-01）。
+  [[ "$file" == batch-worker/*/src/main/* || "$file" == scripts/db/*platform-worker* \
+    || "$file" == batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml \
+    || "$file" == batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java ]] \
+    && worker_grants_changed=1
   [[ "$file" == test-data/tenant-config-packages/*.xlsx \
     || "$file" == batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelSchema.java \
     || "$file" == scripts/sim/fix-fixture-xlsx.py \
@@ -205,6 +211,11 @@ if ((config_registry_changed == 1)); then
   }
   gate_run PRE_COMMIT_CONFIG_GOVERNANCE_SYNC "配置治理登记表自动同步" \
     sync_config_governance_registry
+fi
+
+if ((worker_grants_changed == 1)); then
+  gate_run PRE_COMMIT_PLATFORM_WORKER_GRANTS "Worker 平台库授权清单同步" \
+    "$PYTHON_BIN" scripts/db/generate-platform-worker-grants.py
 fi
 
 if ((${#mapper_xml_files[@]} > 0)); then

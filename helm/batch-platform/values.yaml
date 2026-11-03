@@ -541,6 +541,10 @@ workerImport:
   javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18083
+  # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+  # scripts/db/platform-worker-roles.sql 授予的最小权限角色；留空时沿用共享平台库账号。
+  platformDb:
+    credentialsSecretName: ""
   # Worker 长任务可能 1-3 分钟才完成；@PreDestroy 上报下线 + Kafka consumer leave +
   # 完成在跑 task。如果你的 import 单 task 平均 >2 分钟，调高这里。
   gracefulShutdown:
@@ -595,6 +599,10 @@ workerExport:
   javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18084
+  # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+  # scripts/db/platform-worker-roles.sql 授予的最小权限角色；留空时沿用共享平台库账号。
+  platformDb:
+    credentialsSecretName: ""
   # Export 任务通常更长（生成大文件），给更宽窗口；超时未完成的 task 由 orchestrator
   # PartitionLeaseReclaimScheduler 回退重派。
   # R3-P0-8：之前 180s < preStop(15) + spring drain(120) + awaitDrain(120) = 255s
@@ -648,6 +656,10 @@ workerProcess:
   javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18086
+  # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+  # scripts/db/platform-worker-roles.sql 授予的最小权限角色；留空时沿用共享平台库账号。
+  platformDb:
+    credentialsSecretName: ""
   # PROCESS 任务可能很长(SQL 加工 / staging publish);需要充分的优雅停机时间。
   # R3-P0-8：同 workerExport，285s 覆盖 preStop + spring drain + awaitDrain 全程。
   gracefulShutdown:
@@ -787,6 +799,10 @@ workerDispatch:
   javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
   replicaCount: 2
   port: 18085
+  # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+  # scripts/db/platform-worker-roles.sql 授予的最小权限角色；留空时沿用共享平台库账号。
+  platformDb:
+    credentialsSecretName: ""
   # Dispatch 任务通常较短，但仍需 Kafka consumer leave + 完成在跑 task。
   gracefulShutdown:
     terminationGracePeriodSeconds: 120

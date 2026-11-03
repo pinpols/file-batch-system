@@ -125,6 +125,27 @@ envFrom:
 {{- end }}
 
 {{/*
+Worker 平台库独立凭据（ARCH-20261103-01）：设置 platformDb.credentialsSecretName 时，以显式 env 覆盖共享
+Secret 中的平台库账号，配合 scripts/db/platform-worker-roles.sql 授予的最小权限角色使用。
+该 Secret 需包含 BATCH_PLATFORM_DB_USERNAME 与 BATCH_PLATFORM_DB_PASSWORD；未设置时不渲染，沿用共享账号。
+*/}}
+{{- define "batch-platform.workerPlatformDbCredentialsEnv" -}}
+{{- $secretName := (.platformDb | default dict).credentialsSecretName -}}
+{{- if $secretName }}
+- name: BATCH_PLATFORM_DB_USERNAME
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName | quote }}
+      key: BATCH_PLATFORM_DB_USERNAME
+- name: BATCH_PLATFORM_DB_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName | quote }}
+      key: BATCH_PLATFORM_DB_PASSWORD
+{{- end }}
+{{- end }}
+
+{{/*
 启动期配置摘要。ConfigMap 或 Secret 的渲染结果变化时，Pod template hash 随之变化，
 Deployment/StatefulSet 因此自动执行滚动更新。摘要不暴露 Secret 明文。
 */}}

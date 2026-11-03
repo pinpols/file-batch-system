@@ -1,0 +1,878 @@
+{
+  "description": "由 scripts/db/generate-platform-worker-grants.py 生成，勿手改；见 ARCH-20261103-01。",
+  "workers": {
+    "import": {
+      "schemas": [
+        "batch"
+      ],
+      "tables": {
+        "batch.biz_table_schema": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/BizTableSchemaMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "update_columns": [
+            "updated_at"
+          ],
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml",
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "@SchedulerLock"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/StepRegistryMapper.xml"
+          ]
+        },
+        "batch.worker_report_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/WorkerReportOutboxPgMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": []
+    },
+    "export": {
+      "schemas": [
+        "batch"
+      ],
+      "tables": {
+        "batch.biz_table_schema": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/BizTableSchemaMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "update_columns": [
+            "updated_at"
+          ],
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml",
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/StepRegistryMapper.xml"
+          ]
+        },
+        "batch.worker_report_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/WorkerReportOutboxPgMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": []
+    },
+    "process": {
+      "schemas": [
+        "archive",
+        "batch"
+      ],
+      "tables": {
+        "archive.job_task_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/process/src/main/resources/mapper/ProcessInvocationFenceMapper.xml"
+          ]
+        },
+        "batch.biz_table_schema": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/BizTableSchemaMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "update_columns": [
+            "updated_at"
+          ],
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_partition": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/process/src/main/resources/mapper/ProcessInvocationFenceMapper.xml"
+          ]
+        },
+        "batch.job_task": {
+          "update_columns": [
+            "process_staging_batch_key",
+            "process_staging_generation_id",
+            "updated_at"
+          ],
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/process/src/main/resources/mapper/ProcessInvocationFenceMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml",
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "@SchedulerLock"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/StepRegistryMapper.xml"
+          ]
+        },
+        "batch.tenant": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/process/src/main/resources/mapper/ProcessInvocationFenceMapper.xml"
+          ]
+        },
+        "batch.worker_report_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/WorkerReportOutboxPgMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": [
+        "batch.process_staging_generation"
+      ]
+    },
+    "dispatch": {
+      "schemas": [
+        "batch"
+      ],
+      "tables": {
+        "batch.biz_table_schema": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/BizTableSchemaMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_channel_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/DispatchChannelHealthMapper.xml",
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.file_channel_health": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/DispatchChannelHealthMapper.xml"
+          ]
+        },
+        "batch.file_dispatch_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml",
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "update_columns": [
+            "updated_at"
+          ],
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml",
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.job_task": {
+          "update_columns": [
+            "external_outcome_resolution_consumed_at",
+            "updated_at"
+          ],
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml",
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml",
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.secret_version": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/DispatchSecretVersionMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "@SchedulerLock"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/StepRegistryMapper.xml"
+          ]
+        },
+        "batch.trigger_request": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        },
+        "batch.worker_report_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/WorkerReportOutboxPgMapper.xml"
+          ]
+        },
+        "batch.workflow_run": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/dispatch/src/main/resources/mapper/FileDispatchMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": []
+    },
+    "atomic": {
+      "schemas": [
+        "batch"
+      ],
+      "tables": {
+        "batch.biz_table_schema": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/BizTableSchemaMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "update_columns": [
+            "updated_at"
+          ],
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml",
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PipelineProgressMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/PlatformFileRuntimeMapper.xml"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/StepRegistryMapper.xml"
+          ]
+        },
+        "batch.worker_report_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-worker/core/src/main/resources/mapper/WorkerReportOutboxPgMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": []
+    }
+  }
+}

@@ -59,7 +59,7 @@ flowchart TB
 
 图中的任务派发与任务 API 是同一个 Orchestrator 服务的不同职责；Worker 访问路径按类型、权限和配置生效，并不表示每类 Worker 都访问所有依赖。
 
-租户身份由服务端认证和授权确定；RLS 上下文使用数据库事务变量，不存放在 Redis。平台 Worker 只在各自受权的路径访问业务数据与平台文件元数据；自托管 Worker 通过协议接入，不获得平台库全局写权限。ATOMIC 的受控执行器需要独立身份、网络策略和部署隔离。不同业务文件与 AI 附件 bucket 属于逻辑隔离；它们可以复用客户端及存储集群，**独立 bucket 不等于独立物理故障域**。具体访问和凭据见[业务分片路由](../runbook/biz-tenant-routing.md)与[存储域边界](../runbook/object-storage-s3-backends.md)。
+租户身份由服务端认证和授权确定；RLS 上下文使用数据库事务变量，不存放在 Redis。平台 Worker 只在各自受权的路径访问业务数据与平台文件元数据；自托管 Worker 通过协议接入，不获得平台库全局写权限。内建平台 Worker 默认仍沿用共享平台库账号；部署方可按 [Worker 平台库最小授权](../../scripts/db/README.md) 为每类 Worker 建立独立角色：权限由 Worker 的 Mapper XML 与内联 SQL 生成，Orchestrator 所有的 `job_instance`、`job_partition`、`workflow_run`、`outbox_event` 等表不授予写权限，`job_task` 只授予登记列的列级 UPDATE。Helm 用 `<worker>.platformDb.credentialsSecretName` 为每类 Worker 注入独立凭据；目标环境是否已切换，需以该环境的授权核查为准。ATOMIC 的受控执行器需要独立身份、网络策略和部署隔离。不同业务文件与 AI 附件 bucket 属于逻辑隔离；它们可以复用客户端及存储集群，**独立 bucket 不等于独立物理故障域**。具体访问和凭据见[业务分片路由](../runbook/biz-tenant-routing.md)与[存储域边界](../runbook/object-storage-s3-backends.md)。
 
 ## 攻击者与失效假设
 

@@ -108,7 +108,9 @@
 | CONV-02 | **已整改**（`cabf0f51a`） | 开日业务步骤原样下沉到 `application/service/batchday/BatchDayOpenService`；`BatchDayOpenScheduler` 从 758 行减到 78 行，只保留触发、ShedLock、停机排空、逐日历 RLS 绑定加短事务以及扫描指标，事务边界不变 | Orchestrator 按批次日/ArchTest/规约筛选共 298 个测试通过，其中 `MultiCalendarCoordinationIntegrationTest` 28 个为真实 PG；E2E 编译通过 |
 | CONV-03 | **已按建议处理**（`cabf0f51a`） | 拆分时把依赖等待超时判定提取为纯规则 `domain/scheduling/DependencyWaitTimeoutRule`；不为“充血”另行重构 | `DependencyWaitTimeoutRuleTest` 覆盖边界 |
 | CONV-04 | **已整改**（`e5785b467`） | 改名为 `OrchestratorDataSourceConfiguration`，Bean 名与条件装配不变；配置治理登记表已重新生成 | `check-config-governance.py` 通过，Orchestrator/E2E 编译通过 |
-| ARCH-01 / ARCH-04 | 未处理 | ARCH-01 需确定实施范围（Worker 角色清单、Helm 分账号回退、真实 PG 授权验证），并确认目标环境；ARCH-04 需容量证据 | — |
+| ARCH-01（Worker 范围） | **仓库内已实现，目标环境未切换** | `scripts/db/generate-platform-worker-grants.py` 从 Worker 的 Mapper XML 与内联 SQL 生成 `platform-worker-grants.json` 和 `platform-worker-roles.sql`；Orchestrator 所有的状态表与 outbox 不授予写权限，`job_task` 只授予登记列的列级 UPDATE。Helm 新增 `<worker>.platformDb.credentialsSecretName`，默认渲染不变。PR Gate 与 pre-commit 接入 `PLATFORM_WORKER_GRANTS` | `PlatformWorkerRolesSqlIntegrationTest` 在完整迁移的真实 PG 上覆盖 3 个用例；Helm 渲染测试 3 个用例。未验证：Worker 业务路径在受限角色下的端到端运行，以及目标环境的实际切换 |
+| ARCH-01（Console/Trigger/Orchestrator） | 未处理 | 按原建议顺序在 Worker 切换稳定后推进 | — |
+| ARCH-04 | 未处理 | 需容量证据 | — |
 
 实际执行的命令（本机 Docker/Testcontainers）：
 
