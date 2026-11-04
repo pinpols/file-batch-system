@@ -43,6 +43,9 @@ import org.springframework.core.env.Environment;
 @RequiredArgsConstructor
 public class AtomicExecutorProductionGuard {
 
+  /** Atomic 进程的平台库 DataSource bean 名（Spring Boot 主数据源），SQL/存储过程任务不得使用。 */
+  static final String PLATFORM_DATA_SOURCE_BEAN = "dataSource";
+
   private final Environment environment;
   private final AtomicExecutorGuardProperties guardProperties;
   private final ObjectProvider<SqlExecutorProperties> sqlProps;
@@ -121,6 +124,10 @@ public class AtomicExecutorProductionGuard {
           + " — prod profile 必须显式配 batch.worker.executors.sql.allowed-data-source-beans"
           + " 列出可用 DataSource bean 名(防业务方借 parameters.dataSourceBean 切到任意高权限连接)");
     }
+    if (EmptyChecks.isNotNull(sql) && sql.isEnabled()) {
+      addBusinessDataSourceViolations(
+          violations, "sql", sql.getDataSourceBeanName(), sql.getAllowedDataSourceBeans());
+    }
     StoredProcExecutorProperties sp = storedProcProps.getIfAvailable();
     boolean enabledStoredProcedureHasNoSchemaAllowlist = EmptyChecks.isNotNull(sp)
         && sp.isEnabled()
@@ -129,6 +136,10 @@ public class AtomicExecutorProductionGuard {
       violations.add("batch.worker.executors.stored-proc.enabled=true 但 allowedSchemas 为空"
           + " — prod profile 必须配 batch.worker.executors.stored-proc.allowed-schemas"
           + " 限定可调用的 schema(默认空=允许全部,prod 风险过大)");
+    }
+    if (EmptyChecks.isNotNull(sp) && sp.isEnabled()) {
+      addBusinessDataSourceViolations(
+          violations, "stored-proc", sp.getDataSourceBeanName(), sp.getAllowedDataSourceBeans());
     }
     HttpExecutorProperties http = httpProps.getIfAvailable();
     boolean httpEnabledWithEmptyUnenforcedAllowlist = EmptyChecks.isNotNull(http)
@@ -161,5 +172,24 @@ public class AtomicExecutorProductionGuard {
           + " 列出允许提交的 jar/.py 前缀(默认空=允许提交任意 jar,等同任意代码执行 RCE)");
     }
     return violations;
+  }
+
+  /**
+   * SQL/存储过程任务只能连业务库：未配置默认 bean 时任务会回落到 Atomic 进程的平台库，用 Worker 账号读写平台表，
+   * 绕过 Orchestrator 的状态所有权；把平台库 bean 列为默认或白名单同理。
+   */
+  private static void addBusinessDataSourceViolations(
+      List<String> violations, String executor, String defaultBean, Set<String> allowedBeans) {
+    String prefix = "batch.worker.executors." + executor;
+    if (EmptyChecks.isBlank(defaultBean)) {
+      violations.add(prefix + ".enabled=true 但未配置 " + prefix + ".data-source-bean-name"
+          + " — 任务不带 dataSourceBean 时会回落到平台库,必须显式指定业务库 DataSource bean");
+    }
+    boolean usesPlatformDataSource = PLATFORM_DATA_SOURCE_BEAN.equals(defaultBean)
+        || Objects.requireNonNull(allowedBeans).contains(PLATFORM_DATA_SOURCE_BEAN);
+    if (usesPlatformDataSource) {
+      violations.add(prefix + " 的 data-source-bean-name / allowed-data-source-beans 含平台库 bean '"
+          + PLATFORM_DATA_SOURCE_BEAN + "' — 原子任务只能连业务库,不能使用平台库连接");
+    }
   }
 }

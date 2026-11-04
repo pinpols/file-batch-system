@@ -575,7 +575,7 @@ bash scripts/ci/run-flaky-quarantine.sh
 - PR：`build-mode: none`，使用 CodeQL 默认高精度查询并上传 SARIF，作为 `CodeQL Java security analysis` 检查。
 - main push、schedule：`build-mode: manual`，执行跳过测试的全 reactor 编译，并使用 `security-extended` 分析。
 - SARIF 由 `github/codeql-action/analyze` 原生上传。同一 job 内不得针对同一 tool/category 再调用 `upload-sarif` 重试；GitHub 会将后续调用判定为重复上传。上传故障通过重新运行 job 处理。
-- 分析结果通过 `--no-group-results` 按原因分别输出，避免同一源位置聚合过多相关位置而被 GitHub 截断；不关闭查询或减少路径。此配置会改变结果分组，首次远端运行需核对 SARIF 上传、告警匹配与总结果量上限，并以该次实际状态判断是否生效。
+- 分析结果保持 CodeQL 默认聚合。曾用 `--no-group-results` 按原因分别输出以消除状态页 “relatedLocations were ignored” 截断警告，但它让已判误报的 CSRF 端点按位置展开为 1144 条新指纹告警，原处置失效，2026-11-04 已撤回；截断警告只影响展示，不代表扫描失败。详见[安全告警处置第十节](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。
 - 无构建模式只适用于当前纯 Java 仓库；引入 Kotlin 或发现生成源码漏析时必须恢复 PR 手工构建。
 - PR 与 main 告警差异需要人工解释，不能仅因 PR 更快就认定覆盖等价。
 

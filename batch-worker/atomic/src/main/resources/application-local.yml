@@ -49,7 +49,8 @@ batch:
     executors:
       sql:
         enabled: true
-        # 本地 SQL 只允许平台 DataSource；新增独立低权限 bean 后再按需显式加入白名单。
+        # 本地 SQL 只允许平台 DataSource；生产守卫会在本地告警、在生产类 profile 拒绝平台库，
+        # 新增独立业务库 bean 后改用 data-source-bean-name 指向它。
         allowed-data-source-beans:
         - dataSource
         forbid-os-capable-role: false  # 本地角色可能高权限;生产默认 true 回退
