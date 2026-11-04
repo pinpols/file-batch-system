@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.testing;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.lang.reflect.InvocationHandler;
@@ -82,7 +83,7 @@ public final class PlatformWorkerRoleDrill {
 
   static Optional<String> configuredWorker() {
     String worker = System.getProperty(WORKER_PROPERTY);
-    return worker == null || worker.isBlank() ? Optional.empty() : Optional.of(worker.trim());
+    return EmptyChecks.isBlank(worker) ? Optional.empty() : Optional.of(worker.trim());
   }
 
   static BeanPostProcessor postProcessor(String worker) {
@@ -105,7 +106,7 @@ public final class PlatformWorkerRoleDrill {
   }
 
   static boolean isPrepared() {
-    return preparedRole != null;
+    return EmptyChecks.isNotNull(preparedRole);
   }
 
   /** Worker 平台库数据源名为 {@code <worker>PlatformDataSource}；Dispatch/Atomic 使用 Boot 默认的 {@code dataSource}。 */
@@ -114,7 +115,7 @@ public final class PlatformWorkerRoleDrill {
   }
 
   private static synchronized void prepareRole(String worker) {
-    if (preparedRole != null) {
+    if (EmptyChecks.isNotNull(preparedRole)) {
       return;
     }
     String role = "drill_worker_" + worker;
@@ -178,10 +179,10 @@ public final class PlatformWorkerRoleDrill {
 
   private static Path repositoryRoot() {
     Path current = Path.of(System.getProperty("user.dir")).toAbsolutePath();
-    while (current != null && !Files.exists(current.resolve(ROLES_SCRIPT))) {
+    while (EmptyChecks.isNotNull(current) && !Files.exists(current.resolve(ROLES_SCRIPT))) {
       current = current.getParent();
     }
-    if (current == null) {
+    if (EmptyChecks.isNull(current)) {
       throw new IllegalStateException("找不到 " + ROLES_SCRIPT);
     }
     return current;
@@ -240,7 +241,7 @@ public final class PlatformWorkerRoleDrill {
       return Caller.UNKNOWN;
     }
     CodeSource source = type.getProtectionDomain().getCodeSource();
-    String location = source == null ? "" : source.getLocation().toString();
+    String location = EmptyChecks.isNull(source) ? "" : source.getLocation().toString();
     if (location.contains("/test-classes/") || location.contains("batch-test-support")) {
       return Caller.FIXTURE;
     }
@@ -264,7 +265,8 @@ public final class PlatformWorkerRoleDrill {
   }
 
   private static void report(String worker, String kind, String sql, String detail) {
-    String normalized = sql == null ? "-" : sql.replaceAll("\\s+", " ").trim();
+    String normalized =
+        EmptyChecks.isNull(sql) ? "-" : sql.replaceAll("\\s+", " ").trim();
     if (normalized.length() > 500) {
       normalized = normalized.substring(0, 500) + "…";
     }
@@ -273,7 +275,7 @@ public final class PlatformWorkerRoleDrill {
         kind,
         productionFrame(),
         normalized,
-        detail == null ? "-" : detail.replaceAll("\\s+", " "));
+        EmptyChecks.isNull(detail) ? "-" : detail.replaceAll("\\s+", " "));
     if (!REPORTED.add(line)) {
       return;
     }
@@ -319,23 +321,22 @@ public final class PlatformWorkerRoleDrill {
 
     private <T> T proxy(Class<T> type, T target, String sql) {
       InvocationHandler handler = (ignored, method, args) -> invoke(target, method, args, sql);
-      return type.cast(Proxy.newProxyInstance(
-          PlatformWorkerRoleDrill.class.getClassLoader(), new Class<?>[] {type}, handler));
+      ClassLoader loader = PlatformWorkerRoleDrill.class.getClassLoader();
+      Object proxy = Proxy.newProxyInstance(loader, new Class<?>[] {type}, handler);
+      return type.cast(proxy);
     }
 
     private Object invoke(Object target, Method method, Object[] args, String sql)
         throws Throwable {
       String name = method.getName();
       boolean executes = target instanceof Statement && EXECUTE_METHODS.contains(name);
-      String statementSql =
-          executes && args != null && args.length > 0 && args[0] instanceof String text
-              ? text
-              : sql;
+      String firstArg = firstStringArg(args);
+      String statementSql = executes && EmptyChecks.isNotNull(firstArg) ? firstArg : sql;
       boolean restricted = false;
       if (executes) {
         restricted = isWorkerCall();
         applyRole(((Statement) target).getConnection(), restricted, statementSql);
-        if (restricted && preparedRole != null) {
+        if (restricted && EmptyChecks.isNotNull(preparedRole)) {
           RESTRICTED.incrementAndGet();
         }
       }
@@ -355,8 +356,7 @@ public final class PlatformWorkerRoleDrill {
     }
 
     private Object wrapResult(Method method, Object[] args, Object result) {
-      String firstArg =
-          args != null && args.length > 0 && args[0] instanceof String text ? text : null;
+      String firstArg = firstStringArg(args);
       return switch (result) {
         case CallableStatement call
         when "prepareCall".equals(method.getName()) ->
@@ -370,15 +370,21 @@ public final class PlatformWorkerRoleDrill {
       };
     }
 
+    /** Statement 的 execute(String…) 与 Connection 的 prepare*(String…) 首个实参是 SQL。 */
+    private static String firstStringArg(Object[] args) {
+      return EmptyChecks.isNotEmpty(args) && args[0] instanceof String text ? text : null;
+    }
+
     private void applyRole(Connection connection, boolean restricted, String sql)
         throws SQLException {
       String role = preparedRole;
-      if (restricted && role == null) {
+      if (restricted && EmptyChecks.isNull(role)) {
         report(worker, "BEFORE_GRANT", sql, "授权前执行，未按受限角色校验");
       }
       // SET 不是事务局部的，但会随事务回滚撤销，因此每条语句前都重新设定。
       try (Statement switcher = connection.createStatement()) {
-        switcher.execute(restricted && role != null ? "SET ROLE " + role : "RESET ROLE");
+        switcher.execute(
+            restricted && EmptyChecks.isNotNull(role) ? "SET ROLE " + role : "RESET ROLE");
       } catch (SQLException failure) {
         if (!IN_FAILED_TRANSACTION.equals(failure.getSQLState())) {
           throw failure;
