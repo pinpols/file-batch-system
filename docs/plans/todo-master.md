@@ -7,7 +7,7 @@
 | 领域 | 当前开放事项与权威原文 |
 |---|---|
 | 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境、复制与作业包未知结果对账，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。 |
-| 后端 25 包与全仓验证 | 逐文件语义缺口、完整 reactor/CI、Import/Export/归档/缓存/安全及性能剩余项，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
+| 后端 25 包与全仓验证 | 2026-11-04 复核后开放项：51 个 Param/Query 构造校验与 69 项公共返回的逐项裁定、全仓测试/CI 完整通过记录；Trigger 恢复锚点、建档前被拒批次释放等 OPEN/CANDIDATE 条目已关闭或取代，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
 | 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
 | Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
 | 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 |
@@ -19,7 +19,7 @@
 | 集群、合规与 IPv6 | Worker drain/接管/force-offline 集群验证、SBOM 条件项、IPv6 staging，见[外部环境阻塞](#九-本地不能做需-ops--staging--dba--业务方-配合)和[HE 路线](#m-ipv6-happy-eyeballs-渐进治理-p1)。 |
 | 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
-| 安全告警关闭 | 2026-10-31 处置项 11-04 复核已全部关闭（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）；新问题是 #1300 引入 CodeQL `--no-group-results` 后，已判误报的 9 个 GET 端点按位置展开为 1144 条 open CSRF 告警，#1317 已撤回该选项，待合入后 `main` CodeQL 分析确认告警回落，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
+| 安全告警关闭 | ✅ 2026-11-04 关闭：10-31 处置项（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）均已关闭；#1300 的 `--no-group-results` 导致的 1144 条 CSRF 展开告警，经 #1317 撤回该选项后，`main`（`0bad968ad`）CodeQL 分析恢复为 15 条聚合结果，CSRF 告警标记 `fixed`，open 告警为 0，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
 | launch 受理容量 | 2026-10-31 本地压测后的现存积压隔离与对账、画像业务键/失败退出/Worker 观察方式调整，以及 429 准入拒绝原因与排队耗时；共享环境有其他测试时不直接清理或重跑，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
@@ -1227,7 +1227,7 @@ V324 JobPartition→file_record 热源文件引用（2026-10-19）：`job_partit
 - CONV-20261027-MAP12完成通知投递日志固定写入入参具名化，三条调用27字段及原SQL/异常/脱敏顺序对照；真实PG与13单测共14项通过。当时Mapper命名文件补充检索余1个文件投影类8行，须按消费者判断；其它Map契约、必填构造校验与全仓语义/CI仍待继续。
 - CONV-20261027-MAP13按调用方核实后退役文件配置2个无调用方Map投影及6个仅由其使用的辅助方法；4个存活视图/脱敏方法逐字一致，新增模板与空值单测1/1通过，未重复无关成功项。Mapper命名生产文件精确Map<String, Object>补充扫描为0，其他Map契约、必填构造校验与全仓语义/CI仍待继续。
 - CONV-20261027-REQ01完成通知投递日志参数7个数据库必填字段的构造校验；8个负例先红后绿，另8项可空/真实PG/三条调用路径通过。其余未跟踪Param/Query中51个无明显校验标记只是词法候选，需逐字段核对空值与错误/事务语义，不能批量加非空或计为51个Bug；详见治理记录。
-- 下一步继续其余专项场景及25包逐文件语义缺口，按当前源码核查Map、构造、复合判断和契约消费者；DP-01/02不再列为待修。全仓测试及CI仍无当前完整通过记录，按实际源码变化选择受影响检查。
+- 2026-11-04 状态复核（见[治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)）：`CANDIDATE-20261030-TRIGGER-RECOVERY-ANCHOR` 已随 #1300 修复并关闭，`OPEN-20261029-BATCHDAY-APPROVAL-PREVALIDATE` 已被批量日入口冻结与接续取代，读取窗口候选已澄清。`OPEN-20261030-BATCHDAY-REJECTED-BEFORE-PREPARE` 经核对已由 #1265 的 ABANDONED 围栏与页面释放流程实现（真实 PG 35/35、前端 28/28 本次重跑通过），关闭。**当前开放**：① 51 个 Param/Query 构造校验词法候选与 69 项公共返回清单的逐项裁定；② 全仓测试/CI 当前完整通过记录。DP-01/02 不再列为待修；按实际源码变化选择受影响检查。
 
 ### 2026-11-01 测试时间与业务日稳定性复核（进行中）
 
@@ -1250,4 +1250,5 @@ V324 JobPartition→file_record 热源文件引用（2026-10-19）：`job_partit
 - `ReplayAdmissionRecoveryE2eIT` 的源任务启动、重放范围和断言，以及 `DedupJobLaunchE2eIT` 的请求、并发和查询日期已统一，重放完整类 1/1、去重完整类 2/2 通过；派发失败场景同步请求与文件业务日，1/1 通过；真实进程恢复 `LaunchProcessCrashRecoveryE2eIT`、`WorkerProcessRestartRecoveryE2eIT` 以及 `StaleWorkerReportFenceE2eIT` 的启动业务日已同步，保留崩溃窗口之间的相对日间隔；启动进程崩溃恢复 2/2、Worker 重启 1/1、旧报告围栏 17/17 通过。`JobPushProcessRecoveryE2eIT`、`WorkflowTerminalNotificationProcessRecoveryE2eIT` 和 `WorkerDrainE2eIT` 的启动业务日已同步；Push 进程恢复 1/1、Worker 排空 4/4、通知进程恢复 1/1 通过。
 - `DeadLetterApprovalReplayE2eIT` 的固定日期用于直接构造历史死信源图和文件样本，未作为初始真实作业启动日期；保持历史恢复语义。`ImportFailurePipelineE2eIT` 中保留的日期是导入文件内容样本。
 - 其他日期形式：`TriggerAsyncLaunchFullChainE2eIT` 的真实启动场景原固定在 2026 年，已同步夹具与业务日，受影响方法 4/4 通过；涉及旧信封拒绝的固定日期保留。`WorkflowOccurrenceCatchUpApprovalE2eIT` 包含跨日、结算和夏令时专门边界，尚需逐项核对，不能统一改写。
-- 待办：逐项核对共享 E2E 夹具及多次 launch/重试场景的业务日一致性，再检查其他测试的系统时钟、日界线、时区及证书/令牌有效期；保留根因、受影响入口、验证结果和未覆盖范围。不得将孤立用例通过写成全仓完成。
+- 2026-11-04 续查：固定 `2026-01-15` 仍出现在 6 个 E2E 文件。`RuntimeConfigImportDispatchE2eIT` 把它同时用于 Trigger 预置、真实启动和生成文件业务日，属于已复现的“历史业务日被真实结算”同类机制；已改为类内一次取 UTC 次日并通过带日期的夹具重载统一三处，真实容器 1/1 通过。`DeadLetterApprovalReplayE2eIT`、`ImportFailurePipelineE2eIT`、`WorkerReportLostAfterBusinessCommitE2eIT`（导出结算样本按租户/批次查询）和 `ProcessE2eFixture` 的无日期重载均为样本或已有显式日期调用，保留。共享夹具 `E2eScenarioFixture.LaunchPreparationSpec` 仍默认 `2026-01-15`：147 处调用经 5 参数/文件束重载隐式使用该默认值写入 `trigger_request.biz_date`，必须与各类随后 launch 的日期一致，不能单独改默认值（尝试改为必填即在本类暴露隐式调用，已撤回）；需逐类核对后再收敛。另按“固定未来时刻与真实时钟比较”筛查后端测试：8 个文件中的 2026-11-05 之后日期均为日历/节假日数据、格式校验样本、映射往返值或计划触发时间样本，未发现会随墙钟到期而翻转的断言。
+- 待办：共享夹具隐式默认业务日的逐类核对（147 处调用）、多次 launch/重试场景的业务日一致性，以及时区、日界线与证书/令牌有效期的其余候选；保留根因、受影响入口、验证结果和未覆盖范围。不得将孤立用例通过写成全仓完成。

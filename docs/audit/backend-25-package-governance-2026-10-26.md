@@ -1517,3 +1517,16 @@ Console SLA 超期筛选使用 `CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED`，
 **CI-20261030-ARCHIVE-COST-PROBE / 性能探针按要求后测**：`ArchiveDiagnosticCadenceProbeIT` 自述仅显式运行，负责归档成本对照；此前 PR 和 Full A 分片的 Surefire 负向选择表达式会意外选中该 `*IT`。使用 Surefire 3.5.6 的隔离三类样本复现：原 PR 选择同时运行成本探针、普通单测和功能 `*IT`。按用户要求延后性能容量验证，两个 A 分片仅精确排除该探针；修订后的 PR 和 Full 表达式均保留普通单测及功能 `*IT`，显式单独选探针仍执行。归档功能集成测试不在排除项内。actionlint、模块及集成模块覆盖守卫通过；隔离样本日志在 `logs/verification/backend25-2026-10-30/ci-probe-selection/`。未重复运行实际性能探针或远端 CI；模块覆盖守卫不核验单个测试类执行。
 
 **CI-20261030-E2E-GUARD-REGISTRY / 分片守卫登记**：补充约定守卫矩阵与 CI runbook，明确分片静态/运行完整性正反例以及 PR Java/CI 域和 Full Gate 的测试入口。`python3 scripts/ci/check-docs-structure.py`、`python3 scripts/ci/check-script-governance.py` 及本次文档差异空白检查通过；本轮未重复执行已通过的守卫测试，未触发远端 CI。
+
+## 开放与候选条目状态复核（2026-11-04）
+
+基线 `main` `4d84ae7b2`。只核对本记录中仍带 OPEN/CANDIDATE 标签、且后文没有关闭说明的条目；以当前源码与已登记证据为准，不改写原条目。
+
+| 条目 | 当前结论 | 证据 |
+|---|---|---|
+| `CANDIDATE-20261030-TRIGGER-RECOVERY-ANCHOR` | **已关闭**：`TriggerLaunchRecoveryService.park` 现检查 `insertPending` 影响行数；已有锚点时加锁读取并比较原信封，相同 DEAD 重排队（零行不报成功），PENDING 视为已登记，DONE/REJECTED 视为已终态，解密失败、载荷不同或未知状态返回 `false` 不允许确认消息 | 修复随 #1300 合入；本次重跑 `TriggerLaunchRecoveryServiceTest` 24/24 通过；真实 PG 身份与并发 `TriggerLaunchRecoveryIdentityIntegrationTest`、真实 Kafka offset `TriggerRecoveryKafkaOffsetIntegrationTest` 已存在，本次未重跑 |
+| `OPEN-20261029-BATCHDAY-APPROVAL-PREVALIDATE` | **已被取代**：原两个失效模式——无效目标在审批创建前未拒绝、创建审批后作业停用导致同键重试报错——已由 `PROGRESS-20261029-BATCHDAY-ENTRY`（首次提交前整批校验、冻结候选与逐项状态，同键同请求返回首次结果）和 `VERIFY-20261030-BATCHDAY-MANUAL-CONTINUATION` 覆盖 | 见上述两条的真实 PG 与 HTTP 证据；本次未重跑 |
+| `CANDIDATE-20261030-READINESS-TWO-SIDE-DEADLINE` | 已由 `REVIEW-20261030-READINESS-CANDIDATE-SUPERSEDED` 说明为修复前观察 | 无新增验证 |
+| `OPEN-20261030-BATCHDAY-REJECTED-BEFORE-PREPARE` | **已关闭**：#1265 已实现服务端持久围栏——V370 新增 `ABANDONED` 状态，`BatchDayCatchUpOperationStore.abandonUnprepared` 以 `insert … on conflict do nothing` 与首次冻结竞争同一主键，只在原键从未建档时落 ABANDONED，之后同键不能再冻结或发送；Console 提供 `POST /api/console/jobs/batch-days/catchup/requests/abandon`，`BatchDayWindow.vue` 只在服务端确认围栏后释放原键，围栏失败或已有批次胜出时保留原键 | 本次重跑：`BatchDayCatchUpOperationSchemaIntegrationTest` 真实 PG 35/35（含“围栏后不能再冻结或发送”“已冻结不被覆盖”“与首次冻结并发只有一个获胜”“普通角色按租户隔离”）；前端 `BatchDayWindow.test.ts` 28/28（含“服务端确认围栏后才释放”“围栏失败或已有批次胜出时保留原键”）。未执行认证 HTTP 端到端与浏览器联调 |
+
+上表四项均已关闭或取代。除上表外，本记录的开放面还有两类逐项语义核对（不是缺陷计数）：其余 Param/Query 中 51 个无明显构造校验标记的词法候选（`CONV-20261027-REQ01` 之后），以及公共返回 69 项词法清单的调用方裁定；全仓测试与 CI 仍无当前完整通过记录。
