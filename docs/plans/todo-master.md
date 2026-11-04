@@ -19,7 +19,7 @@
 | 集群、合规与 IPv6 | Worker drain/接管/force-offline 集群验证、SBOM 条件项、IPv6 staging，见[外部环境阻塞](#九-本地不能做需-ops--staging--dba--业务方-配合)和[HE 路线](#m-ipv6-happy-eyeballs-渐进治理-p1)。 |
 | 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
-| 安全告警关闭 | 2026-10-31 处置项 11-04 复核已全部关闭（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）；新问题是 #1300 引入 CodeQL `--no-group-results` 后，已判误报的 9 个 GET 端点按位置展开为 1144 条 open CSRF 告警，待选择撤回聚合选项或逐批处置，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
+| 安全告警关闭 | 2026-10-31 处置项 11-04 复核已全部关闭（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）；新问题是 #1300 引入 CodeQL `--no-group-results` 后，已判误报的 9 个 GET 端点按位置展开为 1144 条 open CSRF 告警，#1317 已撤回该选项，待合入后 `main` CodeQL 分析确认告警回落，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
 | launch 受理容量 | 2026-10-31 本地压测后的现存积压隔离与对账、画像业务键/失败退出/Worker 观察方式调整，以及 429 准入拒绝原因与排队耗时；共享环境有其他测试时不直接清理或重跑，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |

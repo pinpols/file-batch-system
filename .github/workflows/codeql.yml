@@ -101,8 +101,7 @@ jobs:
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
-        env:
-          # 避免多个原因聚合到同一结果后超出 GitHub 的相关位置展示上限，不排除查询或路径。
-          CODEQL_ACTION_EXTRA_OPTIONS: '{"database":{"interpret-results":["--no-group-results"]}}'
+        # 保持 CodeQL 默认结果聚合：--no-group-results 会让每个相关位置生成新指纹的独立告警，
+        # 已按编号处置的误报失效（2026-11-01 起重复 1144 条），见 security-alert-remediation-2026-10-31.md 第十节。
         with:
           category: "/language:java"
