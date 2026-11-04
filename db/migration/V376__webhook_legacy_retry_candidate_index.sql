@@ -7,4 +7,5 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_webhook_delivery_log_legacy_retry
     ON batch.webhook_delivery_log (next_retry_at, id)
     WHERE terminal_event_key IS NULL AND next_retry_at IS NOT NULL;
 
--- 旧 idx_webhook_delivery_log_retry_eligible 暂保留：删除属于需审查的破坏性操作，随 IDX-06 重叠索引清理另行裁定。
+-- 旧 EXHAUSTED 专用索引已被新索引覆盖，只删除这一个具名索引，不涉及表或数据（已登记于 high-risk-operations.md）。
+DROP INDEX CONCURRENTLY IF EXISTS batch.idx_webhook_delivery_log_retry_eligible;

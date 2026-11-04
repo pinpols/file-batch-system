@@ -28,7 +28,7 @@
 
 ### Fixed
 
-- Console 作业实例按业务日筛选改为直接比较 `biz_date` DATE 列，可走索引并裁剪月分区；非规范或非法日期仍返回空结果（IDX-01）。新增迁移 V376 为 Webhook 旧式重投扫描建立覆盖 PENDING 与 EXHAUSTED 的候选索引（`CREATE INDEX CONCURRENTLY`，非事务迁移），旧 EXHAUSTED 专用索引暂保留（IDX-02）。
+- Console 作业实例按业务日筛选改为直接比较 `biz_date` DATE 列，可走索引并裁剪月分区；非规范或非法日期仍返回空结果（IDX-01）。新增迁移 V376 为 Webhook 旧式重投扫描建立覆盖 PENDING 与 EXHAUSTED 的候选索引（`CREATE INDEX CONCURRENTLY`，非事务迁移），并删除被其覆盖的旧 EXHAUSTED 专用索引（`DROP INDEX CONCURRENTLY IF EXISTS`，不涉及数据）（IDX-02）。服务端 `batch.task.batch-claim.enabled` / `job-overrides` 从未参与批量端点准入，已退役，残留配置被忽略；Worker 侧 `batch.worker.batch-claim.enabled` 不变（DOC-BATCH-FLAG-1）。
 
 - Outbox 状态统计接口 `GET /api/console/ops/outbox/stats` 恒返回 500：`ConsoleOutboxEventReadMapper` 的构造器参数写成 `javaType="long"`（MyBatis 别名即 `Long`），与 `OutboxEventStatusStat` 的原始类型 `long` 不匹配；改为 `_long`，并新增 Mapper XML 构造器解析测试。控制台 Outbox 页与运维诊断的 Outbox 统计因此恢复。
 - Workflow 创建、完整更新、租户配置初始化和 Excel 导入按数据库字符上限校验节点名称及边条件，超长内容在写入前被拒绝。
