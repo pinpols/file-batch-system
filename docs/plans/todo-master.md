@@ -21,7 +21,7 @@
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
-| 状态所有权与模块边界 | ARCH-20261103-01 Worker 角色与 Helm 分账号已在仓库实现，尚待目标环境切换与受限角色端到端演练；Console/Trigger/Orchestrator 分账号与 -04（热路径与后台治理共池，待容量证据）仍开放；-02、-03 及 CONV-20261103-01..04 已随 #1307 合并，见[架构设计审查](../audit/architecture-design-review-2026-11-03.md#优先级与实施顺序建议未授权实施)。 |
+| 状态所有权与模块边界 | ARCH-20261103-01 Worker 角色与 Helm 分账号已在仓库实现，本地受限角色演练四类 Worker 0 拒绝，Atomic SQL/存储过程任务默认回落平台库待裁定（见[演练记录](../verifications/platform-worker-restricted-role-drill-2026-11-04.md)），尚待目标环境切换；Console/Trigger/Orchestrator 分账号与 -04（热路径与后台治理共池，待容量证据）仍开放；-02、-03 及 CONV-20261103-01..04 已随 #1307 合并，见[架构设计审查](../audit/architecture-design-review-2026-11-03.md#优先级与实施顺序建议未授权实施)。 |
 | 三租户覆盖验收 | 覆盖包、harness 全类型/分支/触发矩阵、前后清理和交付证据，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
 

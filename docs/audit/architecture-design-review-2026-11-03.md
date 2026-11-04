@@ -97,7 +97,7 @@
 
 ## 整改进度（2026-11-03）
 
-分支 `fix/arch-20261103-state-ownership`：ARCH-02 见 `9823a4aa1`，ARCH-03/CONV-01 见 `6591ae43f`；尚未推送或开 PR。
+分支 `fix/arch-20261103-state-ownership`：ARCH-02 见 `9823a4aa1`，ARCH-03/CONV-01 见 `6591ae43f`；已随 [#1307](https://github.com/pinpols/file-batch-system/pull/1307) 合并。ARCH-01 Worker 范围随 [#1309](https://github.com/pinpols/file-batch-system/pull/1309) 合并。
 
 | ID | 状态 | 变更 | 验证 |
 |---|---|---|---|
@@ -108,7 +108,7 @@
 | CONV-02 | **已整改**（`cabf0f51a`） | 开日业务步骤原样下沉到 `application/service/batchday/BatchDayOpenService`；`BatchDayOpenScheduler` 从 758 行减到 78 行，只保留触发、ShedLock、停机排空、逐日历 RLS 绑定加短事务以及扫描指标，事务边界不变 | Orchestrator 按批次日/ArchTest/规约筛选共 298 个测试通过，其中 `MultiCalendarCoordinationIntegrationTest` 28 个为真实 PG；E2E 编译通过 |
 | CONV-03 | **已按建议处理**（`cabf0f51a`） | 拆分时把依赖等待超时判定提取为纯规则 `domain/scheduling/DependencyWaitTimeoutRule`；不为“充血”另行重构 | `DependencyWaitTimeoutRuleTest` 覆盖边界 |
 | CONV-04 | **已整改**（`e5785b467`） | 改名为 `OrchestratorDataSourceConfiguration`，Bean 名与条件装配不变；配置治理登记表已重新生成 | `check-config-governance.py` 通过，Orchestrator/E2E 编译通过 |
-| ARCH-01（Worker 范围） | **仓库内已实现，目标环境未切换** | `scripts/db/generate-platform-worker-grants.py` 从 Worker 的 Mapper XML 与内联 SQL 生成 `platform-worker-grants.json` 和 `platform-worker-roles.sql`；Orchestrator 所有的状态表与 outbox 不授予写权限，`job_task` 只授予登记列的列级 UPDATE。Helm 新增 `<worker>.platformDb.credentialsSecretName`，默认渲染不变。PR Gate 与 pre-commit 接入 `PLATFORM_WORKER_GRANTS` | `PlatformWorkerRolesSqlIntegrationTest` 在完整迁移的真实 PG 上覆盖 3 个用例；Helm 渲染测试 3 个用例。未验证：Worker 业务路径在受限角色下的端到端运行，以及目标环境的实际切换 |
+| ARCH-01（Worker 范围） | **仓库内已实现，目标环境未切换** | `scripts/db/generate-platform-worker-grants.py` 从 Worker 的 Mapper XML 与内联 SQL 生成 `platform-worker-grants.json` 和 `platform-worker-roles.sql`；Orchestrator 所有的状态表与 outbox 不授予写权限，`job_task` 只授予登记列的列级 UPDATE。Helm 新增 `<worker>.platformDb.credentialsSecretName`，默认渲染不变。PR Gate 与 pre-commit 接入 `PLATFORM_WORKER_GRANTS` | `PlatformWorkerRolesSqlIntegrationTest` 在完整迁移的真实 PG 上覆盖 3 个用例；Helm 渲染测试 3 个用例。2026-11-04 [受限角色本地演练](../verifications/platform-worker-restricted-role-drill-2026-11-04.md)：Import/Export/Process/Dispatch 成功与失败流水线 0 拒绝；Atomic 的 SQL/存储过程任务默认回落到平台库，被拒绝，需裁定。未验证：目标环境的实际切换 |
 | ARCH-01（Console/Trigger/Orchestrator） | 未处理 | 按原建议顺序在 Worker 切换稳定后推进 | — |
 | ARCH-04 | 未处理 | 需容量证据 | — |
 
@@ -121,7 +121,7 @@
 
 ## 未覆盖与未验证
 
-- 未连接任何数据库，无法确认目标环境实际使用的账号与授权；ARCH-01 只说明仓库默认值和模板现状。
+- 未连接任何目标环境数据库，无法确认实际使用的账号与授权；Worker 受限角色只在本地一次性容器中演练过（见上表）。
 - 写入者矩阵来自文本搜索，可能漏掉动态 SQL 或 JDBC 模板写法；也没有统计读路径。
-- ARCH-02 的竞态窗口没有复现；ARCH-04 没有容量数据。
+- ARCH-02 的两条竞态路径已在整改时用真实 PG 复现（见上表）；ARCH-04 没有容量数据。
 - 未审查 Console 内部、SDK、前端，也未覆盖 11-02 已评估的事件可靠性与扩缩容维度。
