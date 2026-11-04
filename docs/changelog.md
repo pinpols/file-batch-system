@@ -1,6 +1,6 @@
 # 工程基线规范条款变化日志
 
-## 2026-11-05 批量认领配置与终态复位口径
+## 2026-11-05 批量认领服务端配置退役
 
 - ADR-046 服务端配置行更新：批量 claim/report 端点始终可用，仅由 `maxBatchSize` 限制单次请求；从未参与准入的服务端 `batch.task.batch-claim.enabled` / `job-overrides` 已退役（DOC-BATCH-FLAG-1），是否批量由 Worker 侧 `batch.worker.batch-claim.enabled` 决定。
 
