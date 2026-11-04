@@ -92,7 +92,11 @@
             and instance_no = #{instanceNo}
         </if>
         <if test="bizDate != null and bizDate != ''">
-            and cast(biz_date as varchar) = #{bizDate}
+            <!-- IDX-01：直接比较 DATE 列以走索引与月分区裁剪；非规范日期派生为 null，返回空结果。 -->
+            <choose>
+                <when test="bizDateFilter != null">and biz_date = #{bizDateFilter}</when>
+                <otherwise>and false</otherwise>
+            </choose>
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}
@@ -164,7 +168,11 @@
             and instance_no = #{instanceNo}
         </if>
         <if test="bizDate != null and bizDate != ''">
-            and cast(biz_date as varchar) = #{bizDate}
+            <!-- IDX-01：直接比较 DATE 列以走索引与月分区裁剪；非规范日期派生为 null，返回空结果。 -->
+            <choose>
+                <when test="bizDateFilter != null">and biz_date = #{bizDateFilter}</when>
+                <otherwise>and false</otherwise>
+            </choose>
         </if>
         <if test="traceId != null and traceId != ''">
             and trace_id = #{traceId}

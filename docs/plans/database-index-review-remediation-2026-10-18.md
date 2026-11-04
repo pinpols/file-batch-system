@@ -41,7 +41,7 @@
 
 | ID | 级别 / 状态 | 必须处理的内容 | 责任与验收 |
 |---|---|---|---|
-| IDX-01 | P2，查询问题已确认，待改 | JobInstance 列侧字符串转换改为 DATE 绑定或参数侧转换；保持非法日期处理、日期口径及列表/count 一致 | Console / 数据库；完整 Mapper 结果、分页、跨日及裁剪计划，关联 PART-10 |
+| IDX-01 | ✅ 2026-11-04 已修（Console `JobInstanceMapper`） | `selectByQuery`/`countByQuery` 原以 `cast(biz_date as varchar) = #{bizDate}` 过滤，真实 PG 计划为 `((biz_date)::character varying)::text = …` 且扫描全部月分区；现由 `JobInstanceQuery.bizDateFilter()` 严格按 `yyyy-MM-dd` 派生 `LocalDate` 并直接比较 `biz_date`，非规范/非法输入渲染 `and false`，保持原先“仅规范字符串精确匹配、否则空结果”的语义及列表/count 一致 | `JobInstanceQueryIntegrationTest`：基于 MyBatis 实际绑定 SQL 的 EXPLAIN 断言修复前红、修复后绿，业务日规范/非规范/非法/不存在日期的列表与计数守护，整类 9/9；未做大数据量计时与 PART-10 其余查询 |
 | IDX-02 | P2，谓词漂移已确认，待设计 | Webhook 重试查询含 PENDING+EXHAUSTED，现 partial 仅 EXHAUSTED；按真实队列和计划决定新 partial 或全量键，不缩减待处理状态 | Console 通知；两状态可靠领取、SKIP LOCKED、公平顺序、prepared generic/custom 计划及积压扫描 |
 | IDX-03 | P2，热点候选待测 | Workflow stuck/归档、Task 超时、lease 回收、重放等待、告警、补偿、SUPERSEDED、Outbox 等，分别核过滤、排序、LIMIT、锁行数 | Orchestrator / Trigger / Worker；附录 A IX-R3、B M2。正常与最坏允许积压都测，不为少排序改变调度顺序 |
 | IDX-04 | P2，关联访问候选待测 | FK 子端、Workflow node 定义查询、file_dispatch/file_audit 清理、冷 pipeline/dispatch 谱系与重放 | 与 REF-01–06 同切片；父删除/更新、冷热查询、并发归档锁耗时与约束语义；避免先加旧单列再加复合键 |

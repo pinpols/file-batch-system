@@ -9,12 +9,20 @@ import io.github.pinpols.batch.console.domain.job.entity.JobInstanceEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.sql.Connection;
 import java.sql.Date;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.UUID;
+import javax.sql.DataSource;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.MappedStatement;
+import org.apache.ibatis.scripting.defaults.DefaultParameterHandler;
+import org.apache.ibatis.session.SqlSessionFactory;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,6 +42,12 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
 
   @Autowired
   private JdbcTemplate jdbcTemplate;
+
+  @Autowired
+  private SqlSessionFactory sqlSessionFactory;
+
+  @Autowired
+  private DataSource dataSource;
 
   @Test
   @DisplayName("无数据租户: 查询返回空列表")
@@ -245,10 +259,82 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(updateDeadlineSql, deadline, tenantId, instanceNo);
   }
 
+  @Test
+  @Transactional
+  @DisplayName("业务日按规范日期精确匹配，列表与计数一致；非规范或非法日期返回空且不报错")
+  void shouldMatchCanonicalBizDateOnly_whenFilteringListAndCount() {
+    String tenantId = "job-bizdate-" + UUID.randomUUID();
+    LocalDate target = LocalDate.of(2026, 3, 1);
+    insertJobInstance(tenantId, "JOB_D", "SUCCESS", "d1-" + tenantId, "trace-d1", target);
+    insertJobInstance(tenantId, "JOB_D", "SUCCESS", "d2-" + tenantId, "trace-d2", target);
+    insertJobInstance(
+        tenantId, "JOB_D", "SUCCESS", "d3-" + tenantId, "trace-d3", target.plusDays(1));
+
+    JobInstanceQuery canonical = queryByBizDate(tenantId, "2026-03-01");
+    assertThat(jobInstanceMapper.selectByQuery(canonical))
+        .extracting(JobInstanceEntity::getBizDate)
+        .containsOnly(target)
+        .hasSize(2);
+    assertThat(jobInstanceMapper.countByQuery(canonical)).isEqualTo(2);
+    for (String unmatched : List.of("2026-3-1", "not-a-date", "2026-02-30")) {
+      JobInstanceQuery query = queryByBizDate(tenantId, unmatched);
+      assertThat(jobInstanceMapper.selectByQuery(query)).as(unmatched).isEmpty();
+      assertThat(jobInstanceMapper.countByQuery(query)).as(unmatched).isZero();
+    }
+  }
+
+  @Test
+  @DisplayName("业务日筛选直接比较 biz_date 列，执行计划中不对列做字符串转换（IDX-01）")
+  void shouldCompareBizDateColumnDirectly_whenPlanningBizDateFilter() throws Exception {
+    JobInstanceQuery query = queryByBizDate("job-bizdate-plan", "2026-03-01");
+    for (String statement : List.of("selectByQuery", "countByQuery")) {
+      String plan = explain(statement, query);
+      assertThat(plan).as(statement).doesNotContain("character varying");
+      assertThat(plan).as(statement).contains("biz_date = '2026-03-01'::date");
+    }
+  }
+
+  private static JobInstanceQuery queryByBizDate(String tenantId, String bizDate) {
+    return JobInstanceQuery.builder()
+        .tenantId(tenantId)
+        .bizDate(bizDate)
+        .pageRequest(new PageRequest(1, 20))
+        .build();
+  }
+
+  /** 用 MyBatis 实际生成的 SQL 与参数绑定做 EXPLAIN，避免在测试里复制查询文本。 */
+  private String explain(String statementId, JobInstanceQuery query) throws Exception {
+    MappedStatement statement = sqlSessionFactory
+        .getConfiguration()
+        .getMappedStatement(JobInstanceMapper.class.getName() + "." + statementId);
+    BoundSql bound = statement.getBoundSql(query);
+    StringBuilder plan = new StringBuilder();
+    try (Connection connection = dataSource.getConnection();
+        PreparedStatement explain = connection.prepareStatement("explain " + bound.getSql())) {
+      new DefaultParameterHandler(statement, query, bound).setParameters(explain);
+      try (ResultSet rows = explain.executeQuery()) {
+        while (rows.next()) {
+          plan.append(rows.getString(1)).append('\n');
+        }
+      }
+    }
+    return plan.toString();
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private void insertJobInstance(
       String tenantId, String jobCode, String status, String instanceNo, String traceId) {
+    insertJobInstance(tenantId, jobCode, status, instanceNo, traceId, LocalDate.now());
+  }
+
+  private void insertJobInstance(
+      String tenantId,
+      String jobCode,
+      String status,
+      String instanceNo,
+      String traceId,
+      LocalDate bizDate) {
     long jobDefinitionId = ensureJobDefinitionId(tenantId, jobCode);
 
     final String insertJobInstanceSql = """
@@ -266,7 +352,7 @@ class JobInstanceQueryIntegrationTest extends AbstractIntegrationTest {
         jobDefinitionId,
         jobCode,
         instanceNo,
-        Date.valueOf(LocalDate.now()),
+        Date.valueOf(bizDate),
         status,
         tenantId + ":" + instanceNo,
         traceId);
