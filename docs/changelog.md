@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-05 批量认领配置与终态复位口径
+
+- ADR-046 服务端配置行更新：批量 claim/report 端点始终可用，仅由 `maxBatchSize` 限制单次请求；从未参与准入的服务端 `batch.task.batch-claim.enabled` / `job-overrides` 已退役（DOC-BATCH-FLAG-1），是否批量由 Worker 侧 `batch.worker.batch-claim.enabled` 决定。
+
 ## 2026-11-03 三租户覆盖验收入口固化
 
 - 新增独立 `coverage-harness.sh`，统一覆盖包运行配置、初始化、全类型执行和可选触发矩阵；已有租户受控复用，默认前后限定清理 `*_COV_*` 运行产物，不执行 reset、清库、删卷或共享数据清理。
