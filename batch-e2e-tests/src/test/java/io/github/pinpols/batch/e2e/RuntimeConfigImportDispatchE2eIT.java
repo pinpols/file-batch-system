@@ -29,6 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -100,6 +101,8 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
   static class ConsoleConfig {}
 
   private static final String TENANT = "t1";
+  // 真实启动链会结算历史业务日；取一次 UTC 次日作为未截止业务日，与其他 E2E 约定一致。
+  private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
   @Autowired
   private WorkflowRunLaunchService launchService;
@@ -127,7 +130,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
     insertLocalChannel(channelCode, originalDirectory);
     Long fileId = insertGeneratedFile(suffix, requestId);
     LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
-        jdbc, TENANT, "DISPATCH", "dispatch", TriggerType.API);
+        jdbc, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
     Map<String, Object> params = Map.of(
         "fileId",
         fileId.toString(),
@@ -140,7 +143,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
     LaunchRequest launch = new LaunchRequest(
         TENANT,
         seed.workflowDefinitionId(),
-        LocalDate.of(2026, 1, 15),
+        BIZ_DATE,
         TriggerType.API,
         seed.requestId(),
         "config-import-trace-" + suffix,
@@ -228,7 +231,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
             file_format_type, charset, mime_type, file_size_bytes, checksum_type, storage_type,
             storage_path, source_type, file_status, biz_date, trace_id
         ) values (?, ?, 'OUTPUT', 'OUTPUT', ?, ?, 'json', 'JSON', 'UTF-8', 'application/json',
-            32, 'NONE', 'LOCAL', ?, 'SYSTEM', 'GENERATED', date '2026-01-15', ?) returning id
+            32, 'NONE', 'LOCAL', ?, 'SYSTEM', 'GENERATED', ?, ?) returning id
         """;
     String name = "dispatch-" + suffix + ".json";
     return jdbc.queryForObject(
@@ -239,6 +242,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
         name,
         name,
         tempDir.resolve(name).toString(),
+        BIZ_DATE,
         traceId);
   }
 
