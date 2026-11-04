@@ -1190,7 +1190,7 @@ V324 JobPartition→file_record 热源文件引用（2026-10-19）：`job_partit
 
 | 编号 | 优先级与责任边界 | 当前证据 | 下一步与关闭条件 |
 |---|---|---|---|
-| DOC-BATCH-FLAG-1 | P1，Orchestrator/Worker契约维护者 | `BundleBatchClaimProperties.isEnabledForJob` 在生产源码只有定义、无调用；`TaskControllerApplicationService.claimBatch/reportBatch` 仅消费 `effectiveBatchSize`，因此 `enabled/jobOverrides` 不会关闭端点。Worker自身开关仍控制listener | 决定是否接入明确的服务端准入语义或退役未生效配置，再同步配置字典/契约并用真实端点正反例验证。本轮只修正文档，不修改运行行为；源码事实见 [ADR-046](../architecture/adr/ADR-046-file-bundle-aggregation.md#当前批量传输实现2026-10-25-源码核对) 2026-11-05 复核仍成立：`isEnabledForJob` 生产源码无调用方。注意 `enabled` 默认 `false`，若直接接入服务端准入会默认关闭所有未显式配置部署的批量 claim/report 端点，属静默破坏性变更；倾向退役未生效的 `enabled`/`jobOverrides` 并保留 `effectiveBatchSize`，需维护者裁定后再同步配置治理登记、Helm 与运行手册。 |
+| DOC-BATCH-FLAG-1 | ✅ 2026-11-05 关闭 | 维护者确认退役：`BundleBatchClaimProperties` 删除从未参与准入的 `enabled`、`jobOverrides` 与 `isEnabledForJob`，保留 `maxBatchSize`/`effectiveBatchSize()`；仓库内 YAML、环境模板与 Helm 均无这两个服务端键，残留部署配置按 Spring Boot 默认被忽略；Worker 侧 `batch.worker.batch-claim.enabled` 不变 | ADR-046 服务端配置行同步；`BundleBatchClaimPropertiesTest` 与受影响 Orchestrator 测试通过 |
 
 其余被删除的历史缺陷表不自动标记为已修或转为新待办；当前问题仍按现行方案、验收矩阵和本轮可复核证据判断。
 
