@@ -13,7 +13,7 @@
                type="io.github.pinpols.batch.console.domain.ops.view.OutboxEventStatusStat">
         <constructor>
             <arg column="publish_status" javaType="java.lang.String"/>
-            <arg column="status_count" javaType="long"/>
+            <arg column="status_count" javaType="_long"/>
             <arg column="oldest" javaType="java.time.Instant"/>
             <arg column="newest" javaType="java.time.Instant"/>
         </constructor>
