@@ -85,6 +85,7 @@
   "db/migration/V360__worker_report_outbox_delivery_identity.sql|database-drop": 1,
   "db/migration/V36__expand_job_task_type_check.sql|database-drop": 1,
   "db/migration/V370__batch_day_catchup_abandon_fence.sql|database-drop": 1,
+  "db/migration/V376__webhook_legacy_retry_candidate_index.sql|database-drop": 1,
   "db/migration/V37__fix_trigger_request_dedup_constraint.sql|database-drop": 1,
   "db/migration/V39__expand_trigger_request_status_check.sql|database-drop": 1,
   "db/migration/V40__expand_job_execution_log_type_check.sql|database-drop": 1,

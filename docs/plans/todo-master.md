@@ -10,7 +10,7 @@
 | 后端 25 包与全仓验证 | 2026-11-04 复核后开放项：51 个 Param/Query 构造校验与 69 项公共返回的逐项裁定、全仓测试/CI 完整通过记录；Trigger 恢复锚点、建档前被拒批次释放等 OPEN/CANDIDATE 条目已关闭或取代，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
 | 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
 | Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
-| 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 |
+| 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 IDX-01（JobInstance 业务日列侧字符串转换）已于 2026-11-04 修复；IDX-02（Webhook 旧式重投 PENDING 无可用索引）已由 V376 修复。 |
 | 前端界面与菜单验收 | Worker/权限、筛选、菜单搜索、品牌加载、页面密度和文档站的用户验收，以及移动端文件渠道目的地确认，见[前端界面与菜单调整台账](../../../batch-console/docs/backlog/frontend-ui-acceptance-2026-11-02.md)。 |
 | 产品旅程与租户配置 | 四角色/无障碍/完整旅程验收、TCFG 阶段 4、敏感信息分类、容量与多副本组合恢复，见[产品旅程审计](#产品用户旅程对抗审计2026-10-10)和[租户配置主线及旁支](#租户作业配置简化与旁支2026-10-11)。 |
 | 告警与可观测性 | 六类时限告警的部署/供应商验收、OBS-ENV-01–06、生产容量与持续观察，见[时限告警](#作业与-workflow-六类时限告警2026-10-252026-10-26复核)、[监控目标环境验收](#事件与可用性监控目标环境验收2026-10-26)和[容量治理](../runbook/production-capacity-governance.md)。 |
@@ -20,12 +20,12 @@
 | 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
 | 安全告警关闭 | ✅ 2026-11-04 关闭：10-31 处置项（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）均已关闭；#1300 的 `--no-group-results` 导致的 1144 条 CSRF 展开告警，经 #1317 撤回该选项后，`main`（`0bad968ad`）CodeQL 分析恢复为 15 条聚合结果，CSRF 告警标记 `fixed`，open 告警为 0，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
-| launch 受理容量 | 2026-10-31 本地压测后的现存积压隔离与对账、画像业务键/失败退出/Worker 观察方式调整，以及 429 准入拒绝原因与排队耗时；共享环境有其他测试时不直接清理或重跑，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md)。 |
+| launch 受理容量 | 2026-11-05 只读复核：本地 `ta` 压测积压已不存在（156 条请求全部 LAUNCHED、无 WAITING、运行全部终态），旧批次对账前置条件不再适用。仍开放：独立环境的小规模真实验证（成功链路与受控 429）、429 拒绝原因与排队耗时、画像业务键覆盖；按既定决定暂不在本地运行容量测试，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md#2026-11-05-积压只读复核)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
 | 状态所有权与模块边界 | ARCH-20261103-01 Worker 角色与 Helm 分账号已在仓库实现，本地受限角色演练四类 Worker 0 拒绝，Atomic SQL/存储过程任务回落平台库已改为生产类 profile 启动拒绝（见[演练记录](../verifications/platform-worker-restricted-role-drill-2026-11-04.md#发现atomic-sql存储过程任务默认落到平台库)），尚待目标环境切换；Console/Trigger/Orchestrator 分账号与 -04（热路径与后台治理共池，待容量证据）仍开放；-02、-03 及 CONV-20261103-01..04 已随 #1307 合并，见[架构设计审查](../audit/architecture-design-review-2026-11-03.md#优先级与实施顺序建议未授权实施)。 |
 | 架构适配性候选 | 2026-11-02 评估提出、尚未排期的候选，均需先有业务 SLO 或目标负载再定范围：ASSESS-20261102-01 结果未知恢复合同（延续 ADR-049，逐类核对副作用确认与 REPORT Outbox 部署）；-02 积压容量与接纳语义（WAITING 硬上限、派发 lag gate 先定接纳/拒绝/公平语义）；-03 保留期与恢复窗口联动（Kafka retention、Outbox、去重账本、归档与重放窗口）；-04 以现有 Helm/HPA/KEDA 与 SLI 降低运维复杂度。候选 3（状态所有权）已由[架构设计审查](../audit/architecture-design-review-2026-11-03.md)承接。ASSESS-20261102-DEC-01 已于 2026-11-04 裁定：保留为登记的受限复位例外，边界与守护见 [`core-model.md`](../architecture/core-model.md) 及 `BoundedRetryResetCallerArchTest`、`BoundedRetryResetSqlContractTest`。见[评估](../audit/architecture-suitability-assessment-2026-11-02.md#可考虑的架构优化顺序)与[复核](../audit/architecture-suitability-assessment-review-2026-11-04.md)。 |
-| 三租户覆盖验收 | 覆盖包、harness 全类型/分支/触发矩阵、前后清理和交付证据，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
+| 三租户覆盖验收 | 本机已通过（2026-11-03）：三包经真实 HTTP 导入回读，`coverage-harness.sh all --include-trigger-matrix` 基础 36 + 触发矩阵 8 个场景 SUCCESS、前后清理证据完整、`test_coverage_harness.py` 8/8。仍开放：浏览器向导路径、Quartz 自身写入拒绝 occurrence 的端到端、staging/目标环境执行，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
 
 ## 2026-10-31：治理台账快照与当时的推进顺序（历史记录）
@@ -1190,7 +1190,7 @@ V324 JobPartition→file_record 热源文件引用（2026-10-19）：`job_partit
 
 | 编号 | 优先级与责任边界 | 当前证据 | 下一步与关闭条件 |
 |---|---|---|---|
-| DOC-BATCH-FLAG-1 | P1，Orchestrator/Worker契约维护者 | `BundleBatchClaimProperties.isEnabledForJob` 在生产源码只有定义、无调用；`TaskControllerApplicationService.claimBatch/reportBatch` 仅消费 `effectiveBatchSize`，因此 `enabled/jobOverrides` 不会关闭端点。Worker自身开关仍控制listener | 决定是否接入明确的服务端准入语义或退役未生效配置，再同步配置字典/契约并用真实端点正反例验证。本轮只修正文档，不修改运行行为；源码事实见 [ADR-046](../architecture/adr/ADR-046-file-bundle-aggregation.md#当前批量传输实现2026-10-25-源码核对) |
+| DOC-BATCH-FLAG-1 | ✅ 2026-11-05 关闭 | 维护者确认退役：`BundleBatchClaimProperties` 删除从未参与准入的 `enabled`、`jobOverrides` 与 `isEnabledForJob`，保留 `maxBatchSize`/`effectiveBatchSize()`；仓库内 YAML、环境模板与 Helm 均无这两个服务端键，残留部署配置按 Spring Boot 默认被忽略；Worker 侧 `batch.worker.batch-claim.enabled` 不变 | ADR-046 服务端配置行同步；`BundleBatchClaimPropertiesTest` 与受影响 Orchestrator 测试通过 |
 
 其余被删除的历史缺陷表不自动标记为已修或转为新待办；当前问题仍按现行方案、验收矩阵和本轮可复核证据判断。
 

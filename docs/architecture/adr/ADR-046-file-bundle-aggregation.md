@@ -250,7 +250,7 @@ launch 不懂 manifest 格式,只读 DB(file_record),模块边界干净,且正�
 | Worker 续租 | 批量响应按 taskId 关联，确认明确结果后才更新本地租约；缺项、重复、陌生身份或解析异常回原单条确认，保留原 tenant/worker/invocation CAS |
 | Worker REPORT | 独立开关启用 `TaskReportBatcher` 同步微批。等待规整为0–100ms，HTTP上限复用CLAIM批大小；同租户且同taskId只放一份。flusher必须包含自身，HTTP在途/队满/关闭时回原单条，避免异租户后置等待。已确认项不重报；未确认批消耗原预算一次，剩余预算用尽后按原Outbox/失败恢复路径处理 |
 | 消费边界 | `AbstractTaskConsumer` 保留逐项失败、毒丸与重投判定，跨租户按现有租户作用域执行。Worker 的批量 listener 由 `batch.worker.batch-claim.enabled` 控制，默认关闭 |
-| 服务端配置 | `BundleBatchClaimProperties.maxBatchSize` 已被端点消费；`enabled/jobOverrides` 目前只有取值方法，没有热路径调用，不能作为关闭批量端点的措施。该缺口登记在 TODO，不在文档整理中改变运行行为 |
+| 服务端配置 | `BundleBatchClaimProperties.maxBatchSize` 限制单次批量请求大小；批量端点始终可用，是否走批量由 Worker 侧 `batch.worker.batch-claim.enabled` 决定。原服务端 `enabled/jobOverrides` 从未参与准入，已于 2026-11-05 退役（DOC-BATCH-FLAG-1），残留配置键会被忽略 |
 | 验证范围 | B200候选源码的136个不同用例已通过并按SHA写入实际分支，包含响应身份、未知协议、授权拒绝、部分失败、重试预算、租约交接和关闭；受控N8报告证明HTTP8→1，未证明吞吐或延迟改善。实际联合治理77例、七个生产模块PMD限定检查点通过；更新运行包受影响SIM10/10、REPORT开/关各4分区成功（claim均1次/4项，report分别0次与4次），详见[本批证据](../../verifications/wdi-local-closure-2026-10-25.md)。原始WARN失败、新SSE候选及并发Console新增范围保留，不能外推发布放行 |
 
 ### REPORT 微批与逐项恢复路径
