@@ -84,6 +84,7 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -1614,9 +1615,12 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
 
   private void awaitSettlementBlocked(
       SettlementExecution execution, String sqlFragment, Integer blockerPid) throws Exception {
+    // 子进程 application_name 形如 r11-settlement-first-* / r11-rerun-settle-*，只能按 r11- 前缀筛选；
+    // 原先的 'r11-settle-%' 匹配不到多数子进程，超时诊断恒为空。
     final String selectPidSql = """
-        select pid, application_name, state, wait_event_type, wait_event, query from pg_stat_activity\s\
-        where application_name like 'r11-settle-%%' order by application_name, pid\
+        select pid, application_name, state, wait_event_type, wait_event, pg_blocking_pids(pid) as blocked_by,\s\
+        left(query, 200) as query from pg_stat_activity where application_name like 'r11-%%'\s\
+        order by application_name, pid\
         """;
 
     if (execution.mode() == SettlementExecutionMode.SAME_JVM) {
@@ -1627,6 +1631,18 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
       }
       return;
     }
+    try {
+      awaitChildSettlementBlocked(execution, sqlFragment, blockerPid, selectPidSql);
+    } catch (ConditionTimeoutException timeout) {
+      // CI 只上传 surefire 报告，不上传子进程日志；把子进程存活状态与日志尾部带进失败信息。
+      throw new AssertionError(
+          timeout.getMessage() + System.lineSeparator() + childSettlementDiagnostics(execution),
+          timeout);
+    }
+  }
+
+  private void awaitChildSettlementBlocked(
+      SettlementExecution execution, String sqlFragment, Integer blockerPid, String selectPidSql) {
     await()
         .atMost(Duration.ofSeconds(60))
         .pollInterval(Duration.ofMillis(100))
@@ -1649,6 +1665,22 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
                   sqlFragment, activity)
               .isPositive();
         });
+  }
+
+  private static String childSettlementDiagnostics(SettlementExecution execution) {
+    Process child = execution.childProcess();
+    String state = child.isAlive() ? "alive" : "exited(" + child.exitValue() + ")";
+    List<String> lines;
+    try {
+      lines = Files.readAllLines(execution.logPath(), StandardCharsets.UTF_8);
+    } catch (IOException unreadable) {
+      return "child " + execution.applicationName() + " " + state + "; log unreadable: "
+          + unreadable.getMessage();
+    }
+    List<String> tail = lines.subList(Math.max(0, lines.size() - 80), lines.size());
+    return "child " + execution.applicationName() + " " + state + "; last " + tail.size()
+        + " log lines of " + execution.logPath() + ":" + System.lineSeparator()
+        + String.join(System.lineSeparator(), tail);
   }
 
   private void awaitSettlementCompletion(SettlementExecution execution) throws Exception {
