@@ -199,9 +199,11 @@ class AtomicExecutorProductionGuardTest {
     env.setActiveProfiles("prod");
     SqlExecutorProperties sql = new SqlExecutorProperties();
     sql.setEnabled(true);
+    sql.setDataSourceBeanName("batchReportDs");
     sql.setAllowedDataSourceBeans(Set.of("batchReportDs"));
     StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
     sp.setEnabled(true);
+    sp.setDataSourceBeanName("batchReportDs");
     sp.setAllowedSchemas(Set.of("batch"));
     HttpExecutorProperties http = new HttpExecutorProperties();
     http.setEnabled(true);
@@ -273,7 +275,67 @@ class AtomicExecutorProductionGuardTest {
     stubAllWith(sql, sp, http, shell);
 
     AtomicExecutorProductionGuard guard = newGuard();
-    assertThat(guard.collectViolations()).hasSize(2);
+    // SQL: 白名单 + 数据源未配置；存储过程: schema + 数据源未配置。
+    assertThat(guard.collectViolations()).hasSize(4);
+  }
+
+  @Test
+  @DisplayName("生产档位下数据库执行器未配置业务数据源时, 启动校验应拒绝回落到平台库")
+  void shouldFailFast_whenProdProfileAndSqlDataSourceBeanNameMissing() {
+    env.setActiveProfiles("prod");
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(true);
+    sql.setAllowedDataSourceBeans(Set.of("batchReportDs"));
+    stubAllWith(sql, disabledSp(), disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("batch.worker.executors.sql.data-source-bean-name");
+  }
+
+  @Test
+  @DisplayName("生产档位下存储过程执行器未配置业务数据源时, 启动校验应拒绝回落到平台库")
+  void shouldFailFast_whenProdProfileAndStoredProcDataSourceBeanNameMissing() {
+    env.setActiveProfiles("prod");
+    StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
+    sp.setEnabled(true);
+    sp.setAllowedSchemas(Set.of("report"));
+    stubAllWith(disabledSql(), sp, disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("batch.worker.executors.stored-proc.data-source-bean-name");
+  }
+
+  @Test
+  @DisplayName("生产档位下数据库执行器把平台数据源配为默认或白名单时, 启动校验应快速失败")
+  void shouldFailFast_whenProdProfileAndSqlUsesPlatformDataSource() {
+    env.setActiveProfiles("prod");
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(true);
+    sql.setDataSourceBeanName("batchReportDs");
+    sql.setAllowedDataSourceBeans(Set.of("batchReportDs", "dataSource"));
+    stubAllWith(sql, disabledSp(), disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("平台库");
+  }
+
+  @Test
+  @DisplayName("生产档位下存储过程执行器默认数据源指向平台库时, 启动校验应快速失败")
+  void shouldFailFast_whenProdProfileAndStoredProcDefaultIsPlatformDataSource() {
+    env.setActiveProfiles("prod");
+    StoredProcExecutorProperties sp = new StoredProcExecutorProperties();
+    sp.setEnabled(true);
+    sp.setAllowedSchemas(Set.of("report"));
+    sp.setDataSourceBeanName("dataSource");
+    stubAllWith(disabledSql(), sp, disabledHttp(), disabledShell());
+
+    assertThatThrownBy(() -> newGuard().verifyProductionFailClosed())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("batch.worker.executors.stored-proc")
+        .hasMessageContaining("平台库");
   }
 
   @Test
@@ -316,6 +378,12 @@ class AtomicExecutorProductionGuardTest {
   private static SqlExecutorProperties enabledSqlEmptyAllowlist() {
     SqlExecutorProperties sql = new SqlExecutorProperties();
     sql.setEnabled(true); // allowedDataSourceBeans 默认空 = 违规
+    return sql;
+  }
+
+  private static SqlExecutorProperties disabledSql() {
+    SqlExecutorProperties sql = new SqlExecutorProperties();
+    sql.setEnabled(false);
     return sql;
   }
 

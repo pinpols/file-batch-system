@@ -41,6 +41,7 @@ E2E 中 Orchestrator 与 Worker 共用一个上下文和平台库数据源，因
   - 当前（共享 `batch_user`）：启用 SQL/存储过程执行器后，用户任务默认可以用平台库凭据读写任意平台表，绕过 Orchestrator 的状态保护。生产 overlay 默认关闭这些执行器并要求白名单，是现有缓解。
   - 切换到 Atomic 受限角色后：这类任务会因权限不足失败，同时仍可读写 Atomic 角色被授予的平台表（如 Worker 报告发件箱）。
 - **需要裁定**：是否禁止 SQL/存储过程任务回落到平台库，例如在启用执行器时要求显式配置非平台数据源，由 `AtomicExecutorProductionGuard` 在启动时拒绝。这会改变现有任务的兼容性，未擅自修改。在裁定前，Atomic 的目标环境账号切换应先核对现网 SQL/存储过程任务是否依赖默认数据源。
+- **裁定与处置（2026-11-04）**：禁止回落。`AtomicExecutorProductionGuard` 在 SQL/存储过程执行器启用时，要求 `data-source-bean-name` 显式指向业务库，且默认值与 `allowed-data-source-beans` 都不得含平台库 bean `dataSource`；生产类 profile 启动失败，dev/local 只告警（本地与 E2E 仍按平台库运行）。验证：`AtomicExecutorProductionGuardTest` 19 项通过，其中新增 4 项先红后绿。生产 Helm 默认关闭这两类执行器，Compose 使用 local profile，现有部署不受影响；Atomic 尚无内置业务库 bean，生产启用前需部署方提供，目标环境未验证。
 
 ## 执行的命令
 

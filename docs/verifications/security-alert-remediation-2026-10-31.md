@@ -125,3 +125,10 @@
 - 本地工作流候选修复为 `CODEQL_ACTION_EXTRA_OPTIONS` 的 `database interpret-results --no-group-results`，逐原因输出结果，保留现有查询集、构建模式和上传类别。`actionlint`、选项 JSON 及配置保留检查通过；本机未运行 CodeQL。
 - **尚未确认远端修复**：须在独立 CI 运行中比较原始 SARIF 的结果量、位置、指纹和既有告警状态，确保不触发 5,000 条结果截断或产生重复告警，再确认上传成功及状态页警告消失。当前远端主分支尚未应用此工作区变更，不以本地配置检查宣称问题关闭。
 - 继续核对：固定版本 CodeQL Action 的 `src/codeql.ts` 在 `database interpret-results` 命令中读取 `CODEQL_ACTION_EXTRA_OPTIONS` 对应参数；本机无 CodeQL CLI，远端公开 Java 数据库约 47 MB，对应 macOS CLI 完整包约 984 MB，尚未完成本地重放。最近一次主分支分析仍为 2070302390，警告未消除。
+
+## 十、关闭状态复核（2026-11-04）
+
+- 来源：`gh api repos/pinpols/file-batch-system/code-scanning/alerts`、`.../dependabot/alerts?state=open`、`.../code-scanning/analyses?ref=refs/heads/main`，只读查询，未关闭或修改任何告警。
+- **10-31 处置项已全部关闭**：#309–#312 日志注入 `fixed`（2026-10-31 06:54Z）；#296 Scorecard `Vulnerabilities` `fixed`（2026-11-03 22:39Z，RUSTSEC-2026-0382 跟进已生效）；Dependabot open 为 0（aiohttp 8 条已刷新关闭）；#300–#308、#313–#316 保持 `dismissed`。
+- **新问题：CodeQL CSRF 告警按位置展开**：当前 open 的 1144 条全部是 `java/csrf-unprotected-request-type`，均创建于 2026-11-01，分布在第五节已判误报的同 8 个 Controller（9 个 GET 端点，如 `BatchDayCatchupPreviewController` 254 条、其余各 127 条）。原因是第九节的候选修复已随 #1300 进入 `main`（`.github/workflows/codeql.yml` 的 `CODEQL_ACTION_EXTRA_OPTIONS` `--no-group-results`），每个相关位置单独成为一条结果、生成新指纹，原 #300–#308 的误报处置不再覆盖。最近一次 `main` 分析（`ef5d2183e`，2026-11-04 09:10Z）上传 1159 条结果。第九节要求的“不产生重复告警”未满足。
+- 未处置，需维护者选择：撤回 `--no-group-results` 恢复聚合（原处置继续生效，状态页截断警告会回来），或保留展开并按第五节依据逐批 `dismiss`。在此之前不得把 open 数量当作新增漏洞，也不得宣称 CodeQL 告警已清零。

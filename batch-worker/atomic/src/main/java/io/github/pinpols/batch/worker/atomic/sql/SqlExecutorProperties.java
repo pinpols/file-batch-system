@@ -33,7 +33,10 @@ public class SqlExecutorProperties {
   /** 给 sql 任务挂的 task type。固定 "sql"。 */
   private String taskType = "sql";
 
-  /** dataSource bean 名。null = 用主 datasource;生产推荐显式指定专用低权限 datasource。 */
+  /**
+   * dataSource bean 名。null = 用 Atomic 进程主 datasource(平台库),仅限 dev/local;生产类 profile 启用本执行器时由
+   * {@code AtomicExecutorProductionGuard} 要求显式指定业务库 bean,且不得为平台库 {@code dataSource}。
+   */
   private String dataSourceBeanName = null;
 
   /**

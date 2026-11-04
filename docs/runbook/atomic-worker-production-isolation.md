@@ -19,13 +19,15 @@ NetworkPolicy 仅放行 DNS、平台 PostgreSQL、Kafka 和 values 中显式列�
 
 生产 overlay 默认关闭 SQL、stored-proc、HTTP、shell。需要启用某类 executor 时，必须同时提供其白名单：
 
-- SQL：`allowed-data-source-beans`
-- stored-proc：`allowed-schemas`
+- SQL：`allowed-data-source-beans`，以及指向业务库的 `data-source-bean-name`
+- stored-proc：`allowed-schemas`，以及指向业务库的 `data-source-bean-name`
 - HTTP：`allowed-host-patterns` 或显式 deny-all
 - shell：`command-whitelist`
 - Spark：`app-resource-allowlist`
 
-`AtomicExecutorProductionGuard` 会在 `prod` profile 启动时拒绝空白名单；`AtomicIsolationStartupCheck` 会校验隔离确认标志。两道检查都通过后，worker 才允许进入 Ready。
+SQL 和 stored-proc 未配置 `data-source-bean-name` 时，任务不带 `dataSourceBean` 会回落到 Atomic 进程的平台库，用 Worker 账号读写平台表；默认或白名单中出现平台库 bean `dataSource` 同样不允许。Atomic 当前没有内置业务库 DataSource bean，生产启用这两类执行器前需先由部署方提供业务库 bean。
+
+`AtomicExecutorProductionGuard` 会在 `prod` profile 启动时拒绝空白名单和上述平台库回落；`AtomicIsolationStartupCheck` 会校验隔离确认标志。两道检查都通过后，worker 才允许进入 Ready。
 
 stored-proc 的未限定过程名会使用 `default-schema` 补全，授权检查和实际调用指向同一 schema。事务模式下额外使用 `SET LOCAL search_path`；任务开启 `autoCommit` 时，该设置不会跨语句保留，过程内部未限定对象的解析依赖数据库会话配置，应由数据库管理员控制过程及其运行环境。
 

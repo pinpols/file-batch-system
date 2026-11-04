@@ -33,7 +33,10 @@ public class StoredProcExecutorProperties {
   /** 给 stored proc 任务挂的 task type。固定 "stored_proc"。 */
   private String taskType = "stored_proc";
 
-  /** dataSource bean 名。null = 主 datasource。 */
+  /**
+   * dataSource bean 名。null = 用 Atomic 进程主 datasource(平台库),仅限 dev/local;生产类 profile 启用本执行器时由
+   * {@code AtomicExecutorProductionGuard} 要求显式指定业务库 bean,且不得为平台库 {@code dataSource}。
+   */
   private String dataSourceBeanName = null;
 
   /**
