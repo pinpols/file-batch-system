@@ -7,6 +7,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [platform-worker-restricted-role-drill-2026-11-04.md](platform-worker-restricted-role-drill-2026-11-04.md) | Worker 平台库受限角色本地演练：五类 Worker E2E 流水线按生成授权执行，四类 0 拒绝；Atomic SQL/存储过程任务默认回落平台库待裁定；未切换目标环境 |
 | [security-alert-remediation-2026-10-31.md](security-alert-remediation-2026-10-31.md) | GitHub Security and quality 告警处置：日志注入修复、Rust 依赖升级、aiohttp 已修复复核、13 条误报判定证据；CodeQL 复扫与告警关闭未验证 |
 | [load-test-local-capacity-2026-10-31.md](load-test-local-capacity-2026-10-31.md) | launch 受理链路本地压测：20/50/100 rps 六轮，含冷启动复测与 429 准入拒绝归因；固定业务日走去重路径，不代表新建实例容量 |
 | [前后端Bug审查与验证汇总](../review/frontend-backend-bug-review-2026-10-27.md#backend-validation-record) | 配置身份140项/真实PG61项，Worker Core402项、上游783通过/5跳过、配额真实PG12/Redis6项；前轮迁移4项独立保留；配对前端证据与首红范围保留 |
