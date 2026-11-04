@@ -7,7 +7,7 @@
 | 领域 | 当前开放事项与权威原文 |
 |---|---|
 | 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境、复制与作业包未知结果对账，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。 |
-| 后端 25 包与全仓验证 | 逐文件语义缺口、完整 reactor/CI、Import/Export/归档/缓存/安全及性能剩余项，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
+| 后端 25 包与全仓验证 | 2026-11-04 复核后开放项：建档前被拒批次的服务端持久拒绝状态（`OPEN-20261030-BATCHDAY-REJECTED-BEFORE-PREPARE`，前后端契约）、51 个 Param/Query 构造校验与 69 项公共返回的逐项裁定、全仓测试/CI 完整通过记录；Trigger 恢复锚点候选已关闭，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
 | 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
 | Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
 | 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 |
@@ -1227,7 +1227,7 @@ V324 JobPartition→file_record 热源文件引用（2026-10-19）：`job_partit
 - CONV-20261027-MAP12完成通知投递日志固定写入入参具名化，三条调用27字段及原SQL/异常/脱敏顺序对照；真实PG与13单测共14项通过。当时Mapper命名文件补充检索余1个文件投影类8行，须按消费者判断；其它Map契约、必填构造校验与全仓语义/CI仍待继续。
 - CONV-20261027-MAP13按调用方核实后退役文件配置2个无调用方Map投影及6个仅由其使用的辅助方法；4个存活视图/脱敏方法逐字一致，新增模板与空值单测1/1通过，未重复无关成功项。Mapper命名生产文件精确Map<String, Object>补充扫描为0，其他Map契约、必填构造校验与全仓语义/CI仍待继续。
 - CONV-20261027-REQ01完成通知投递日志参数7个数据库必填字段的构造校验；8个负例先红后绿，另8项可空/真实PG/三条调用路径通过。其余未跟踪Param/Query中51个无明显校验标记只是词法候选，需逐字段核对空值与错误/事务语义，不能批量加非空或计为51个Bug；详见治理记录。
-- 下一步继续其余专项场景及25包逐文件语义缺口，按当前源码核查Map、构造、复合判断和契约消费者；DP-01/02不再列为待修。全仓测试及CI仍无当前完整通过记录，按实际源码变化选择受影响检查。
+- 2026-11-04 状态复核（见[治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)）：`CANDIDATE-20261030-TRIGGER-RECOVERY-ANCHOR` 已随 #1300 修复并关闭，`OPEN-20261029-BATCHDAY-APPROVAL-PREVALIDATE` 已被批量日入口冻结与接续取代，读取窗口候选已澄清。**当前开放**：① `OPEN-20261030-BATCHDAY-REJECTED-BEFORE-PREPARE`——建档前被拒批次需服务端持久“已拒绝”状态与并发围栏后才能让页面安全释放原键（前后端契约）；② 51 个 Param/Query 构造校验词法候选与 69 项公共返回清单的逐项裁定；③ 全仓测试/CI 当前完整通过记录。DP-01/02 不再列为待修；按实际源码变化选择受影响检查。
 
 ### 2026-11-01 测试时间与业务日稳定性复核（进行中）
 
