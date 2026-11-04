@@ -61,19 +61,22 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 工作流 DAG 节点派发：按节点类型分三条路径派发，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code workflow_node_run}
+ * 工作流 DAG 节点派发：按节点类型路由，所有路径的幂等由 {@link #isNodeAlreadyActivated} 配合 {@code workflow_node_run}
  * 行锁保证（见 {@code C-3}），防止同一节点被并发 dispatch 重复激活。
  *
- * <p>四种派发模式：
+ * <p>派发路径：
  *
  * <ul>
+ *   <li><b>END</b>：写终态 node_run，并在全部节点终结时收敛 Workflow 根运行。
  *   <li><b>GATEWAY / START</b>：本身无工作负载，合成"立即完成"的 node_run（RUNNING→SUCCESS 同事务） 后按条件解析下游节点并递归
  *       dispatch，保证 DAG 流转不被无作业节点阻塞。
  *   <li><b>JOB</b>：启动独立子 Job 实例，并将其唯一关联到对应的 Workflow 节点运行。
  *   <li><b>WAIT</b>：创建 RUNNING workflow_node_run 供 SensorPollScheduler 持久化轮询，不创建 worker 任务或分区。
- *   <li><b>TASK</b>：普通节点，走 {@code SchedulePlanBuilder} 生成分片 + 资源调度决策 + 创建任务 + 落 outbox
- *       派发事件（同事务）。
+ *   <li><b>TASK（遗留）</b>：仅为尚未迁移成 JOB 节点的旧定义保留，经 {@code SchedulePlanBuilder} 生成分片并同事务落 outbox；
+ *       缺少父 JobInstance 时以 {@code error.workflow.legacy_task_node_requires_job_migration} 拒绝，新定义应使用 JOB 节点。
  * </ul>
+ *
+ * <p>前置条件：关联父 JobInstance 的旧根运行对所有节点类型都以 {@code error.workflow.root_job_launch_retired} 拒绝。
  */
 @Slf4j
 @Service
@@ -101,7 +104,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
 
   /**
-   * 派发 DAG 单个节点。依据 {@code nodeType} 路由到 gateway / JOB / task 三条路径之一；返回新建成的分片数量， 调用方据此推进 {@code
+   * 派发 DAG 单个节点。依据 {@code nodeType} 路由到上述 END / GATEWAY·START / JOB / WAIT 或遗留 TASK 路径；返回新建成的分片数量， 调用方据此推进 {@code
    * job_instance.expected_partition_count}。返回 0 代表节点不具备 dispatch 条件 （依赖未就绪 / 已被其他线程激活 /
    * 节点定义缺失等），不是错误。
    */
