@@ -28,6 +28,7 @@
 
 ### Fixed
 
+- Outbox 状态统计接口 `GET /api/console/ops/outbox/stats` 恒返回 500：`ConsoleOutboxEventReadMapper` 的构造器参数写成 `javaType="long"`（MyBatis 别名即 `Long`），与 `OutboxEventStatusStat` 的原始类型 `long` 不匹配；改为 `_long`，并新增 Mapper XML 构造器解析测试。控制台 Outbox 页与运维诊断的 Outbox 统计因此恢复。
 - Workflow 创建、完整更新、租户配置初始化和 Excel 导入按数据库字符上限校验节点名称及边条件，超长内容在写入前被拒绝。
 
 - SQL 模板导出映射保存用户选择的列顺序与文件表头，分页内部字段不再被当作默认导出列；无法确定批次关联时提示填写实际过滤 SQL，不再生成缺少批次条件的默认查询。
