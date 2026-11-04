@@ -60,3 +60,4 @@
 - R2：`DefaultWorkflowNodeDispatchService` 类注释与 `dispatchNode` 注释改为按 END / GATEWAY·START / JOB / WAIT / 遗留 TASK 路由，并将旧根运行拒绝写为前置条件；仅修改注释，无行为变化。
 - R3、R4：评估文首补充“各节基线以节内声明为准”，文末追加“后续承接”说明；评估原有结论未改。
 - 验证：只做基础校验（链接解析、`git diff --check`、Spotless、Orchestrator 编译）；完整门禁交给 CI。
+- R1 后续：ASSESS-20261102-DEC-01 已裁定保留为登记的受限复位例外，见 [`core-model.md`](../architecture/core-model.md)；新增 `BoundedRetryResetCallerArchTest` 与 `BoundedRetryResetSqlContractTest` 守护入口与源状态。

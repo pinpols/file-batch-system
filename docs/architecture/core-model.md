@@ -360,11 +360,16 @@ stateDiagram-v2
 
 这张图不画 `WAITING` / `RETRYING` 为 Task 状态；它们属于分区、步骤或重试计划。以上仅为典型路径，不能据此穷举取消、终止或 lease 恢复。例如 Worker 返回符合取消条件的报告时，Task 可进入 `CANCELLED`，该报告路径中不再重试的 Partition 按现有失败契约进入 `FAILED`；管理员分区取消走独立路径。参考 `DefaultPartitionLifecycleService`、`JobTaskMapper.assignWorker` 和 `DefaultTaskOutcomeService`。
 
-**待核对的终态边界：** 下节“终态不直接回到非终态”是统一模型的目标约束；当前实现中，`RetryRequeueCoordinator` 会在校验父实例与版本后调用 `JobTaskMapper.resetForRetry`，该 SQL 允许同一 Task 行由 `FAILED` 复位至 `READY`。同一受限路径的 `JobPartitionMapper.resetForDispatch` 也存在可将候选分区置回 `READY` 的条件更新。该实现与统一表述的关系需按实际调用和恢复语义专项复核，不能把这些复位画成通用公开状态迁移，也不能仅凭图判断业务缺陷或修复状态。
+**受限复位例外（ASSESS-20261102-DEC-01，2026-11-04 裁定保留）：** Task 的 `FAILED` 表示“本次尝试失败”，在父实例仍可执行时允许由受限入口复位回 `READY` 重新派发；这不是通用公开迁移，也不改变下节“终态不直接回到非终态”对其他层级和其他状态的约束。边界如下：
+
+- **入口**：只有 `RetryRequeueCoordinator`（重试/人工重排队）、`DefaultFileGovernanceService`（文件重派）和 `PartitionReclaimUnit`（租约回收）可调用 `JobTaskMapper.resetForRetry` / `resetForLeaseReclaim` 与 `JobPartitionMapper.resetForDispatch` / `resetForLeaseReclaim`，由 `BoundedRetryResetCallerArchTest` 守护。
+- **源状态**：Task 只能从 `READY`、`RUNNING`、`FAILED` 复位；`SUCCESS`、`CANCELLED` 等已收尾的 Task 不会复活（`BoundedRetryResetSqlContractTest`）。Partition 复位 SQL 本身不限源状态并补偿父实例计数，但入口在同一事务内随后以版本 CAS 复位 Task，Task 不满足源状态即整体回滚，因此 Partition 只会随一次失败或租约过期的尝试回到 `READY`。
+- **前置条件**：版本 CAS；普通重试与重派要求父 JobInstance 处于 `CREATED`/`WAITING`/`READY`/`RUNNING`且所属 Workflow 处于 `CREATED`/`RUNNING`（Job 或 Workflow 暂停时须等待恢复），租约回收另允许暂停父级（`LeaseParentLifecycleSqlContractTest`）；结果未知（`EXTERNAL_OUTCOME_UNKNOWN`）必须先完成人工确认。
+- **不采用的方案**：每次尝试新建 Task 行会改变 REPORT、租约、Outbox 事件键、归档和幂等身份，且当前无缺陷证据支撑，不作为默认方向。新增复位入口须先在此登记，再扩展守护清单。
 
 ### 4.3 状态迁移原则
 
-1. 终态不直接回到非终态。
+1. 终态不直接回到非终态；唯一登记的例外是上节的 Task/Partition 受限复位。
 2. `PAUSED`、`WAITING_DEPENDENCY` 和 `RETRYING` 都不是终态，但只属于各自定义它们的层级。
 3. 状态变更必须有前置条件，不能“看起来像对就写进去”。
 4. `workflow_run`、`step_instance`、`task` 三层状态不能随意共用同一枚举值的业务含义。
