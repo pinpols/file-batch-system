@@ -86,7 +86,7 @@ def launch(job, label, params):
     }
     status, text = post_json(f"{BASE}/api/triggers/launch", body)
     ok = status == 200 and '"SUCCESS"' in text
-    print(f"  [launch] {label:14s} {'✓' if ok else '✗'}", flush=True)
+    print(f"  [launch] {label:14s} {'✅' if ok else '❌'}", flush=True)
     if not ok:
         print(text[:500], flush=True)
         raise RuntimeError(f"launch failed: {label}")

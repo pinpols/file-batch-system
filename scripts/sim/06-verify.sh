@@ -58,8 +58,8 @@ minio_mc() {
 
 GREEN='\033[32m' RED='\033[31m' YELLOW='\033[33m' BLUE='\033[34m' RST='\033[0m'
 hdr() { printf "\n${BLUE}── %s ──${RST}\n" "$1"; }
-ok()  { printf "  ${GREEN}✓${RST} %-32s %s\n" "$1" "$2"; }
-ng()  { printf "  ${RED}✗${RST} %-32s %s\n" "$1" "$2"; }
+ok()  { printf "  ${GREEN}✅${RST} %-32s %s\n" "$1" "$2"; }
+ng()  { printf "  ${RED}❌${RST} %-32s %s\n" "$1" "$2"; }
 note(){ printf "  ${YELLOW}·${RST} %-32s %s\n" "$1" "$2"; }
 fail(){ ng "$1" "$2"; FAILS=$((FAILS + 1)); }
 

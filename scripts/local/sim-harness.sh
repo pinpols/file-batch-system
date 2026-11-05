@@ -121,9 +121,9 @@ all_sim_teardown() {
 c_red()  { printf '\033[0;31m%s\033[0m\n' "$*"; }
 c_grn()  { printf '\033[0;32m%s\033[0m\n' "$*"; }
 c_ylw()  { printf '\033[1;33m%s\033[0m\n' "$*"; }
-fail()   { c_red "  ✗ $*"; FAILED=1; }
-ok()     { c_grn "  ✓ $*"; }
-warn()   { c_ylw "  ! $*"; }
+fail()   { c_red "  ❌ $*"; FAILED=1; }
+ok()     { c_grn "  ✅ $*"; }
+warn()   { c_ylw "  ⚠️ $*"; }
 
 sim_platform_sql() {
   local sql_file="$1"
@@ -160,7 +160,7 @@ clean_stale_env() {
   [ -x scripts/local/clean-stale-test-env.sh ] || [ -f scripts/local/clean-stale-test-env.sh ] || return 0
   echo "== 清理上一轮本脚本负责的残留(幂等)=="
   bash scripts/local/clean-stale-test-env.sh || {
-    c_red "  ✗ 残留清理未完成，停止 SIM"
+    c_red "  ❌ 残留清理未完成，停止 SIM"
     return 1
   }
 }
@@ -301,7 +301,7 @@ preflight() {
   fi
 
   echo
-  [[ "${FAILED:-0}" == 0 ]] && { c_grn "== preflight 全过 =="; return 0; } || { c_red "== preflight 有失败项,先修再起 =="; return 1; }
+  [[ "${FAILED:-0}" == 0 ]] && { c_grn "✅ preflight 全部通过"; return 0; } || { c_red "❌ preflight 有失败项，先修再起"; return 1; }
 }
 
 # fixture 兼容性:登录后 dry-upload ta fixture,检测「missing required headers」(如 watermark_field)。
@@ -333,7 +333,7 @@ reset() {
   if sim_business_sql reset-business-runtime.sql >/dev/null; then
     ok "biz 数据已清(动态枚举,跳过不存在的表)"
   else
-    c_red "  ✗ biz 清理失败"
+    c_red "  ❌ biz 清理失败"
     return 1
   fi
 
@@ -344,7 +344,7 @@ reset() {
   if sim_platform_sql reset-platform-runtime.sql >/dev/null; then
     ok "平台运行态已清(保留定义/配置/租户/用户/系统表)"
   else
-    c_red "  ✗ 平台运行态清理失败"
+    c_red "  ❌ 平台运行态清理失败"
     return 1
   fi
   c_grn "== reset 完成 =="
@@ -357,7 +357,7 @@ reset() {
 quiesce_runtime_for_reset() {
   local compose_env="${COMPOSE_ENV_FILE:-$ROOT/.env.local}"
   local compose_app="$ROOT/deploy/docker/compose/app.yml"
-  [[ -f "$compose_app" ]] || { c_red "  ✗ 未找到 Compose 应用文件"; return 1; }
+  [[ -f "$compose_app" ]] || { c_red "  ❌ 未找到 Compose 应用文件"; return 1; }
   local compose_args=(docker compose)
   [[ -f "$compose_env" ]] && compose_args+=(--env-file "$compose_env")
   compose_args+=(-f "$ROOT/docker-compose.yml" -f "$compose_app" stop
@@ -375,7 +375,7 @@ quiesce_runtime_for_reset() {
       "$WORKER_IMPORT_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" \
       "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT"; do
     if process_port_is_listening "$port"; then
-      echo "✗ :$port 仍有进程监听；拒绝在有写入者时 reset" >&2
+      echo "❌ :$port 仍有进程监听；拒绝在有写入者时 reset" >&2
       return 1
     fi
   done
@@ -386,52 +386,52 @@ quiesce_runtime_for_reset() {
 # ---------------------------------------------------------
 prereq() {
   echo "== prereq:biz 表 + RLS + 只读角色 =="
-  bash scripts/sim/01-init-biz.sh >"$SIM_LOG_DIR/initbiz.log" 2>&1 && ok "01-init-biz" || { c_red "  ✗ 01-init-biz(见 $SIM_LOG_DIR/initbiz.log)"; return 1; }
+  bash scripts/sim/01-init-biz.sh >"$SIM_LOG_DIR/initbiz.log" 2>&1 && ok "01-init-biz" || { c_red "  ❌ 01-init-biz(见 $SIM_LOG_DIR/initbiz.log)"; return 1; }
   # biz 角色密码本地注入(SQL 脚本不再含默认密码);本地复用本地 DB 密码。
   local biz_pw="${POSTGRES_PASSWORD:-$BATCH_DEFAULT_POSTGRES_PASSWORD}"
   docker exec -i "$PG" psql -q -U "$PGU" -d "$BIZ_DB" \
     -v writer_password="$biz_pw" -v admin_password="$biz_pw" \
     < scripts/db/business/rls-phase-a.sql >/dev/null 2>&1 && ok "rls-phase-a" \
-    || { c_red "  ✗ rls-phase-a(业务库 SIM 安全策略未就绪)"; return 1; }
+    || { c_red "  ❌ rls-phase-a(业务库 SIM 安全策略未就绪)"; return 1; }
   docker exec -i "$PG" psql -q -U "$PGU" -d "$BIZ_DB" \
     -v readonly_password="$biz_pw" -v readonly_all_password="$biz_pw" \
     < scripts/db/business/diagnostic-readonly-role.sql >/dev/null 2>&1 && ok "只读角色" \
-    || { c_red "  ✗ diagnostic-readonly-role(业务库权限基线未就绪)"; return 1; }
+    || { c_red "  ❌ diagnostic-readonly-role(业务库权限基线未就绪)"; return 1; }
 
   echo "== prereq:原子任务 job + refresh_metrics procedure =="
   # Stage 07/16/21 只需要四个 atomic job 和示例 procedure。不要在已有环境重放整份
   # platform_seed.sql；其固定 ID 可能与租户导入产生的自然键记录不同并触发唯统一冲突。
   sim_platform_sql ensure-sim-atomic-prerequisites.sql -q >"$SIM_LOG_DIR/atomic-prerequisites.log" 2>&1 \
     && ok "atomic prerequisites" \
-    || { c_red "  ✗ atomic prerequisites(见 $SIM_LOG_DIR/atomic-prerequisites.log)"; return 1; }
+    || { c_red "  ❌ atomic prerequisites(见 $SIM_LOG_DIR/atomic-prerequisites.log)"; return 1; }
 
   # 清理已经过期的 WAITING 样例，避免历史数据被 scheduler 反复重派并污染场景时序。
   sim_platform_sql delete-expired-waiting-retries.sql -q >/dev/null \
     && ok "清理 platform_seed 过期 retry 样例" \
-    || { c_red "  ✗ platform_seed 过期 retry 清理失败"; return 1; }
+    || { c_red "  ❌ platform_seed 过期 retry 清理失败"; return 1; }
 
   echo "== prereq:shard-1(幂等)=="
   BATCH_SIM_RESIDUE_CONTAINER=true \
     bash scripts/local/provision-biz-shard.sh shard-1 "${BIZ_SHARD_1_PORT:-15442}" >"$SIM_LOG_DIR/shard1.log" 2>&1 \
     && ok "shard-1 就绪" \
-    || { c_red "  ✗ shard-1(见 $SIM_LOG_DIR/shard1.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
+    || { c_red "  ❌ shard-1(见 $SIM_LOG_DIR/shard1.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
 
   echo "== prereq:下游模拟器(sftp/mockserver)=="
   if [[ "${SIM_SIMULATORS_READY:-0}" != 1 ]]; then
     bash scripts/sim/02-start-sim.sh >"$SIM_LOG_DIR/sim02.log" 2>&1 \
       && ok "sftp/mockserver" \
-      || { c_red "  ✗ 02-start-sim(见 $SIM_LOG_DIR/sim02.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
+      || { c_red "  ❌ 02-start-sim(见 $SIM_LOG_DIR/sim02.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
   fi
 
   echo "== prereq:租户导入(03)=="
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     bash scripts/sim/03-import-tenants.sh ) >"$SIM_LOG_DIR/import-tenants.log" 2>&1 \
     && ok "租户配置导入" \
-    || { c_red "  ✗ 03-import 失败(见 $SIM_LOG_DIR/import-tenants.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
+    || { c_red "  ❌ 03-import 失败(见 $SIM_LOG_DIR/import-tenants.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
   ( unset BATCH_ENV_LOADED BATCH_ENV_COMMON_ROOT; source scripts/sim/env-common.sh >/dev/null 2>&1
     bash scripts/sim/03-import-tenants.sh ) >"$SIM_LOG_DIR/import-idempotency-check.log" 2>&1 \
     && ok "配置包重复运行验证(未重复 Apply)" \
-    || { c_red "  ✗ 配置包重复运行验证失败(见 $SIM_LOG_DIR/import-idempotency-check.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
+    || { c_red "  ❌ 配置包重复运行验证失败(见 $SIM_LOG_DIR/import-idempotency-check.log)"; cleanup_sim_owned_biz_shard || c_red "临时 shard 清理失败"; return 1; }
   c_grn "== prereq 完成 =="
 }
 
@@ -487,7 +487,7 @@ clean_sim_minio_inputs() {
   # 只删 Stage 25/26 明确生成的随机名输入；batch-dev 其余对象和出站产物保留。
   local inventory
   if ! inventory=$(sim_minio_find_inputs "$target" "$generated_name_regex" 2>>"$cleanup_log"); then
-    c_red "  ✗ MinIO SIM 输入盘点失败(见 $cleanup_log)"
+    c_red "  ❌ MinIO SIM 输入盘点失败(见 $cleanup_log)"
     return 1
   fi
   printf '%s\n' "$inventory" >"$cleanup_log"
@@ -495,17 +495,17 @@ clean_sim_minio_inputs() {
   inventoried=$(printf '%s\n' "$inventory" | awk 'NF { count++ } END { print count + 0 }')
   if [[ -n "$inventory" ]] && ! bash scripts/lib/minio-mc.sh find "$target" --regex "$generated_name_regex" \
       --exec 'mc rm --force {}' >> "$cleanup_log" 2>&1; then
-    c_red "  ✗ MinIO SIM 输入清理失败(见 $cleanup_log)"
+    c_red "  ❌ MinIO SIM 输入清理失败(见 $cleanup_log)"
     return 1
   fi
   local remaining
   if ! remaining=$(sim_minio_find_inputs "$target" "$generated_name_regex" 2>>"$cleanup_log"); then
-    c_red "  ✗ MinIO SIM 输入清理后复核失败(见 $cleanup_log)"
+    c_red "  ❌ MinIO SIM 输入清理后复核失败(见 $cleanup_log)"
     return 1
   fi
   if [[ -n "$remaining" ]]; then
     printf '%s\n' "$remaining" >> "$cleanup_log"
-    c_red "  ✗ MinIO 仍有 SIM 输入残留(见 $cleanup_log)"
+    c_red "  ❌ MinIO 仍有 SIM 输入残留(见 $cleanup_log)"
     return 1
   fi
   ok "MinIO 精确清理并复核 SIM ingress 输入(移除 $inventoried 个；详情 $cleanup_log)"
@@ -524,14 +524,14 @@ clean_sim_sftp_inputs() {
     find /home/tb/inbound -maxdepth 1 -type f -name "tb-transaction-*.csv" -print
     find /home/tc/inbound -maxdepth 1 -type f -name "tc-risk-score-*.csv" -print
   '); then
-    c_red "  ✗ SFTP SIM 输入盘点失败(见 $cleanup_log)"
+    c_red "  ❌ SFTP SIM 输入盘点失败(见 $cleanup_log)"
     return 1
   fi
   while IFS= read -r input; do
     [[ -n "$input" ]] || continue
     if [[ ! "$input" =~ $generated_path_regex ]]; then
       printf 'unexpected SFTP SIM input path: %s\n' "$input" >>"$cleanup_log"
-      c_red "  ✗ SFTP SIM 输入包含未认可路径(见 $cleanup_log)"
+      c_red "  ❌ SFTP SIM 输入包含未认可路径(见 $cleanup_log)"
       return 1
     fi
     inventoried=$((inventoried + 1))
@@ -544,7 +544,7 @@ clean_sim_sftp_inputs() {
          -o -path "/home/tb/inbound/tb-transaction-*.csv" \
          -o -path "/home/tc/inbound/tc-risk-score-*.csv" \) -print -delete
   ' >>"$cleanup_log" 2>&1; then
-    c_red "  ✗ SFTP SIM 输入清理失败(见 $cleanup_log)"
+    c_red "  ❌ SFTP SIM 输入清理失败(见 $cleanup_log)"
     return 1
   fi
   if ! remaining=$(docker exec "$SFTP_CONTAINER" sh -c '
@@ -553,12 +553,12 @@ clean_sim_sftp_inputs() {
     find /home/tb/inbound -maxdepth 1 -type f -name "tb-transaction-*.csv" -print
     find /home/tc/inbound -maxdepth 1 -type f -name "tc-risk-score-*.csv" -print
   '); then
-    c_red "  ✗ SFTP SIM 输入清理后复核失败(见 $cleanup_log)"
+    c_red "  ❌ SFTP SIM 输入清理后复核失败(见 $cleanup_log)"
     return 1
   fi
   if [[ -n "$remaining" ]]; then
     printf 'residual %s\n' "$remaining" >>"$cleanup_log"
-    c_red "  ✗ SFTP 仍有 SIM 入站文件残留(见 $cleanup_log)"
+    c_red "  ❌ SFTP 仍有 SIM 入站文件残留(见 $cleanup_log)"
     return 1
   fi
   ok "SFTP 精确清理并复核 SIM inbound 输入(移除 $inventoried 个；详情 $cleanup_log)"
@@ -570,7 +570,7 @@ cleanup_sim_inputs() {
       "$WORKER_IMPORT_PORT" "$WORKER_EXPORT_PORT" "$WORKER_DISPATCH_PORT" \
       "$WORKER_PROCESS_PORT" "$WORKER_ATOMIC_PORT"; do
     if process_port_is_listening "$port"; then
-      c_red "  ✗ :$port 仍有应用监听；拒绝删除 SIM 输入"
+      c_red "  ❌ :$port 仍有应用监听；拒绝删除 SIM 输入"
       return 1
     fi
   done
@@ -580,10 +580,10 @@ cleanup_sim_inputs() {
 
 prepare_sim_inputs() {
   sim_platform_sql disable-stage5b-fault-channel.sql >"$SIM_LOG_DIR/clean-sim-fault-channels.log" 2>&1 \
-    || { c_red "  ✗ SIM 故障配置恢复未完成"; return 1; }
+    || { c_red "  ❌ SIM 故障配置恢复未完成"; return 1; }
   echo "== all:启动独立模拟器并清理旧 SIM 入站文件(应用尚未启动) =="
   bash scripts/sim/02-start-sim.sh >"$SIM_LOG_DIR/sim02.log" 2>&1 \
-    || { c_red "  ✗ 02-start-sim(见 $SIM_LOG_DIR/sim02.log)"; return 1; }
+    || { c_red "  ❌ 02-start-sim(见 $SIM_LOG_DIR/sim02.log)"; return 1; }
   clean_sim_sftp_inputs || return 1
   clean_sim_minio_inputs pre-run || return 1
   SIM_SIMULATORS_READY=1
@@ -864,7 +864,7 @@ sim() {
     if [[ -n "$requested_stages" ]]; then
       echo "SCOPE selected: $requested_stages (not a full SIM run)" | tee -a "$sum"
     fi
-    local sim_failed=0
+    local sim_failed=0 sim_passed_count=0 sim_failed_count=0
     local sim_stage_files
     sim_stage_files="$(find scripts/sim -maxdepth 1 -type f -name '[0-3][0-9]-*.sh' | sort)"
     local stage_manifest="$SIM_LOG_DIR/sim-stage-manifest.txt"
@@ -924,18 +924,22 @@ sim() {
       if run_sim_stage "$s" </dev/null >"$stage_log" 2>&1; then
         if [[ "$n" == 25-* || "$n" == 26-* ]]; then
           if clean_sim_minio_inputs "post-stage-${n%%-*}"; then
-            echo "PASS $n" | tee -a "$sum"
+            sim_passed_count=$((sim_passed_count + 1))
+            echo "✅ PASS $n" | tee -a "$sum"
           else
             sim_failed=1
-            echo "FAIL $n (SIM MinIO input cleanup failed)" | tee -a "$sum"
+            sim_failed_count=$((sim_failed_count + 1))
+            echo "❌ FAIL $n (SIM MinIO input cleanup failed)" | tee -a "$sum"
           fi
         else
-          echo "PASS $n" | tee -a "$sum"
+          sim_passed_count=$((sim_passed_count + 1))
+          echo "✅ PASS $n" | tee -a "$sum"
         fi
       else
         local rc=$?
         sim_failed=1
-        echo "FAIL $n (exit $rc)" | tee -a "$sum"
+        sim_failed_count=$((sim_failed_count + 1))
+        echo "❌ FAIL $n (exit $rc)" | tee -a "$sum"
         tail -6 "$stage_log" | sed 's/^/   /' | tee -a "$sum"
       fi
       case "$n" in
@@ -950,7 +954,12 @@ sim() {
       esac
       case "$n" in *load*|*stage*) sleep 20;; esac
     done 3< "$stage_manifest"
-    echo "== sim 完成 ==" | tee -a "$sum"
+    # 汇总行与逐阶段结果使用同一组标记：全部通过才是 ✅，任一阶段失败即 ❌。
+    if [[ "$sim_failed" == 0 ]]; then
+      echo "✅ sim 完成：${sim_passed_count} 个阶段通过" | tee -a "$sum"
+    else
+      echo "❌ sim 完成：${sim_failed_count} 个阶段失败，${sim_passed_count} 个通过（详情见 ${sum}）" | tee -a "$sum"
+    fi
     exit "$sim_failed" )
 }
 

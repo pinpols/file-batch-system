@@ -61,8 +61,8 @@ WORKER_LOG="$(mktemp -t sdk-verify-worker.XXXXXX)"
 WORKER_PID=""
 FAILS=0
 note()  { printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
-ok()    { printf '  \033[32m✓\033[0m %s\n' "$*"; }
-bad()   { printf '  \033[31m✗\033[0m %s\n' "$*"; FAILS=$((FAILS+1)); }
+ok()    { printf '  \033[32m✅\033[0m %s\n' "$*"; }
+bad()   { printf '  \033[31m❌\033[0m %s\n' "$*"; FAILS=$((FAILS+1)); }
 info()  { printf '  · %s\n' "$*"; }
 
 psql_file() {

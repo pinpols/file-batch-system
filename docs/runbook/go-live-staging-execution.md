@@ -14,7 +14,7 @@ bash scripts/local/sim-harness.sh all
 # 收尾静默(负向 cron→MANUAL + 清死信)
 bash scripts/sim/98-quiesce-schedules.sh
 ```
-**通过判据**:`PASS 阶段数` = 全部;`FAIL` 仅出现在已知 sim-tooling(若 06-verify/strict-verify 已合 #562 应无 FAIL);stage25 checkpoint-crash PASS。
+**通过判据**:`✅ PASS` 阶段数 = 全部，末行为 `✅ sim 完成`;`❌ FAIL` 仅出现在已知 sim-tooling(若 06-verify/strict-verify 已合 #562 应无 FAIL);stage25 checkpoint-crash PASS。
 签字:__________
 
 ## Phase 1-B · 容量 / SLO(目标 5–20 jobs/s)

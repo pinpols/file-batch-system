@@ -59,7 +59,7 @@ for round in $(seq 1 "$ROUNDS"); do
     req_id="sim-atomic-${round}-${job}-$(date +%s%N | tail -c 8)"
     REQUEST_IDS+=("$req_id")
     workflow_id=$("$PYTHON_BIN" "$ROOT/scripts/sim/launch_contract.py" "$ATOMIC_TENANT" "$job") || {
-      echo "!! managed Workflow fixture missing for $ATOMIC_TENANT/$job" >&2
+      echo "❌ managed Workflow fixture missing for $ATOMIC_TENANT/$job" >&2
       exit 1
     }
     resp=$(curl -sf --max-time 30 --connect-timeout 5 -X POST \
@@ -82,7 +82,7 @@ done
 echo
 ELAPSED=$(( $(date +%s) - START ))
 echo "==> 完成:触发 ${succ}/${total} 成功,用时 ${ELAPSED}s"
-[[ "$succ" -eq "$total" ]] || { echo "!! 有触发失败,检查 atomic worker 是否在跑 + 执行器是否 enable"; exit 1; }
+[[ "$succ" -eq "$total" ]] || { echo "❌ 有触发失败,检查 atomic worker 是否在跑 + 执行器是否 enable"; exit 1; }
 
 request_ids_csv="$(IFS=,; echo "${REQUEST_IDS[*]}")"
 deadline=$((SECONDS + 180))
@@ -104,5 +104,5 @@ bad_count="$(docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFO
   -tA -v ON_ERROR_STOP=1 -v tenant_id="$ATOMIC_TENANT" -v request_ids_csv="$request_ids_csv" \
   -f /dev/stdin < "$SQL_DIR/atomic-load-failed-count.sql" \
   | tr -d '[:space:]')"
-[[ "$bad_count" == "0" ]] || { echo "!! atomic 终态存在失败/未完成: bad_count=$bad_count"; exit 1; }
+[[ "$bad_count" == "0" ]] || { echo "❌ atomic 终态存在失败/未完成: bad_count=$bad_count"; exit 1; }
 echo "==> atomic 执行终态 PASS"

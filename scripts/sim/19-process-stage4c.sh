@@ -83,7 +83,7 @@ def launch(job, label, params):
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
         ok = resp.status == 200 and '"SUCCESS"' in text
-        print(f"  [launch] {job:28s} {'✓' if ok else '✗'}", flush=True)
+        print(f"  [launch] {job:28s} {'✅' if ok else '❌'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {job}")
