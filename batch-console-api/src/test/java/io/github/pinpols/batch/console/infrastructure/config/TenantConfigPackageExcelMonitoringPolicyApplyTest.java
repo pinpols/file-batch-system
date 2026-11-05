@@ -26,6 +26,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
+import io.github.pinpols.batch.console.domain.job.entity.JobDefinitionEntity;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
@@ -139,6 +140,64 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
         workflowEdgeMapper,
         workflowWriteSupport,
         cacheInvalidationService);
+  }
+
+  @Test
+  @DisplayName("Excel 新建作业回读数据库缺省值后再创建工作流,保留已保存的时区")
+  void shouldProvisionPersistedJob_whenExcelOmitsScheduleDefaults() {
+    JobDefinitionView persisted = new JobDefinitionView();
+    persisted.setId(41L);
+    persisted.setTenantId("tenant-a");
+    persisted.setJobCode("JOB_DAILY");
+    persisted.setScheduleType("CRON");
+    persisted.setTimezone("Asia/Shanghai");
+    persisted.setTriggerMode("SCHEDULED");
+    when(jobDefinitionMapper.insert(any())).thenAnswer(invocation -> {
+      JobDefinitionEntity inserted = invocation.getArgument(0);
+      inserted.setId(41L);
+      return 1;
+    });
+    when(jobDefinitionMapper.selectById("tenant-a", 41L)).thenReturn(persisted);
+    Map<String, String> row =
+        Map.of(COL_JOB_CODE, "JOB_DAILY", COL_JOB_NAME, "Daily", "schedule_type", "CRON");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult jobs = new SheetResult("job_definition", 1, List.of(row), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, jobs, empty, empty, empty, empty, empty, empty, empty, empty,
+        List.of());
+
+    service.applyAll(input, context());
+
+    verify(singleJobWorkflowProvisioner).provision(persisted);
+    ArgumentCaptor<JobDefinitionEntity> inserted =
+        ArgumentCaptor.forClass(JobDefinitionEntity.class);
+    verify(jobDefinitionMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getTimezone()).isNull();
+  }
+
+  @Test
+  @DisplayName("新建作业无法按原租户回读时失败关闭,不使用缺失默认值的对象创建工作流")
+  void shouldRejectProvisioning_whenInsertedJobCannotBeReloaded() {
+    when(jobDefinitionMapper.insert(any())).thenAnswer(invocation -> {
+      JobDefinitionEntity inserted = invocation.getArgument(0);
+      inserted.setId(41L);
+      return 1;
+    });
+    Map<String, String> row = Map.of(COL_JOB_CODE, "JOB_DAILY", COL_JOB_NAME, "Daily");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult jobs = new SheetResult("job_definition", 1, List.of(row), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, jobs, empty, empty, empty, empty, empty, empty, empty, empty,
+        List.of());
+
+    assertThatThrownBy(() -> service.applyAll(input, context()))
+        .isInstanceOf(BizException.class)
+        .extracting(exception -> ((BizException) exception).getMessageKey())
+        .isEqualTo("error.job.definition_not_found");
+
+    verify(jobDefinitionMapper).selectById("tenant-a", 41L);
+    verify(singleJobWorkflowProvisioner, never()).provision(any());
+    verify(jobDefinitionMapper, never()).upsertJobMonitoringPolicy(any());
   }
 
   @Test

@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
@@ -25,6 +27,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -39,15 +44,18 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
   private final WorkflowDefinitionMapper mapper;
   private final JdbcTemplate jdbc;
   private final TenantConfigPackageExcelApplyService excelApply;
+  private final JobDefinitionMapper jobMapper;
 
   @Autowired
   WorkflowDefinitionWriteContractIntegrationTest(
       WorkflowDefinitionMapper mapper,
       JdbcTemplate jdbc,
-      TenantConfigPackageExcelApplyService excelApply) {
+      TenantConfigPackageExcelApplyService excelApply,
+      JobDefinitionMapper jobMapper) {
     this.mapper = mapper;
     this.jdbc = jdbc;
     this.excelApply = excelApply;
+    this.jobMapper = jobMapper;
   }
 
   private String tenant;
@@ -89,7 +97,63 @@ class WorkflowDefinitionWriteContractIntegrationTest extends AbstractIntegration
     entity.setSingleJobDefinitionId(managedJobId);
     assertThat(mapper.insert(entity)).isEqualTo(1);
     id = entity.getId();
-    assertThat(mapper.toggleScheduleEnabled(tenant, id, false)).isEqualTo(1);
+    WorkflowDefinitionEntity saved = mapper.selectById(tenant, id);
+    assertThat(saved.getScheduleEnabled()).isFalse();
+  }
+
+  @ParameterizedTest
+  @NullSource
+  @ValueSource(booleans = {true, false})
+  @DisplayName("插入工作流保留显式调度开关,未给开关时保持原启用默认")
+  void shouldPersistScheduleEnabled_whenInsertingDefinition(Boolean scheduleEnabled) {
+    WorkflowDefinitionEntity entity = mapper.selectById(tenant, id);
+    entity.setId(null);
+    entity.setWorkflowCode("WF_INSERT_SCHEDULE");
+    entity.setSingleJobDefinitionId(null);
+    entity.setScheduleEnabled(scheduleEnabled);
+
+    int inserted = mapper.insert(entity);
+    WorkflowDefinitionEntity saved = mapper.selectById(tenant, entity.getId());
+
+    assertThat(inserted).isOne();
+    boolean expectedScheduleEnabled = scheduleEnabled == null || scheduleEnabled;
+    assertThat(saved.getScheduleEnabled()).isEqualTo(expectedScheduleEnabled);
+  }
+
+  @Test
+  @DisplayName("Excel 新建定时作业时受管工作流继承实际数据库时区且调度默认关闭")
+  void shouldUsePersistedJobDefaults_whenImportingCronJob() {
+    String insertCalendarSql = """
+        insert into batch.business_calendar (tenant_id, calendar_code, calendar_name, timezone, enabled)
+        values (?, 'default_calendar', 'Default calendar', 'UTC', true)
+        """;
+    jdbc.update(insertCalendarSql, tenant);
+    Map<String, String> row = Map.of(
+        "job_code", "IMPORTED_CRON",
+        "job_name", "Imported cron",
+        "job_type", "PROCESS",
+        "biz_type", "TEST",
+        "schedule_type", "CRON",
+        "schedule_expr", "0 0 2 * * ?");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult jobs = new SheetResult("job_definition", 1, List.of(row), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, jobs, empty, empty, empty, empty, empty, empty, empty, empty,
+        List.of());
+    ApplyContext context = new ApplyContext(tenant, "tester", "test", "trace-cron-defaults");
+
+    ApplyCounts result = excelApply.applyAll(input, context);
+    JobDefinitionView job = jobMapper.selectByUniqueKey(tenant, "IMPORTED_CRON");
+    WorkflowDefinitionEntity workflow = mapper.selectBySingleJobDefinitionId(tenant, job.getId());
+
+    assertThat(result.jobInserted()).isOne();
+    assertThat(job.getTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(workflow.getTimezone()).isEqualTo("Asia/Shanghai");
+    assertThat(workflow.getScheduleType()).isEqualTo("CRON");
+    assertThat(workflow.getScheduleExpr()).isEqualTo("0 0 2 * * ?");
+    assertThat(workflow.getTriggerMode()).isEqualTo("SCHEDULED");
+    assertThat(workflow.getScheduleEnabled()).isFalse();
+    assertThat(workflow.getEnabled()).isTrue();
   }
 
   @Test

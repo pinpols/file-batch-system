@@ -55,6 +55,14 @@ bash scripts/ops/manage-trigger.sh status
 bash scripts/ops/manage-trigger.sh drain-status
 ```
 
+## 调度缺省值与坏定义隔离
+
+Console 新建受管单作业 Workflow 默认关闭 `schedule_enabled`，仅显式启用后注册日程；Mapper 插入保留显式开关；未给开关的普通 Workflow 创建继续沿用原启用默认，不改变其公开创建行为。Excel 新建 Job 后回读已持久化的缺省值再生成 Workflow，使时区与实际 Job 相同，不用平台配置时区覆盖数据库缺省，也不改变显式时区。
+
+CRON 定义的时区必须非空且为 Java 可识别的时区。空值与非法值均明确拒绝，不静默退回 GMT 或默认业务时区。对账逐条隔离定义校验错误，日志保留 tenant/workflow 身份，其他合法 Workflow 继续注册、计划物化和恢复；基础设施失败仍按既有整轮错误处理。失败定义不会误触发 Quartz 残留清理；已有旧注册不会因此自动暂停，运维需按日志定位并通过受支持的管理/配置 API 决定处置。
+
+本次修复不自动迁移已有业务数据。先在已核实的平台库用已有只读权限执行 [调度缺省值审计 SQL](../../scripts/db/audit-workflow-schedule-defaults.sql)，必须提供单租户 `tenant_id`。它列出当前版本的活跃空时区定义、受管 Workflow/Job 时区差异及已开启的受管调度。差异或启用并不自动表示错误，后续可能由用户明确修改；需结合创建/修改时间、配置审计和业务日语义逐条确认。不得统一改成某个时区或批量停用，也不得直接改 Quartz 表。SQL 不把 PostgreSQL 时区目录当作 Java 时区合法性的完整替代。
+
 ## 状态变更
 
 真实执行必须显式关闭 dry-run，并保留命令输出和操作审计：

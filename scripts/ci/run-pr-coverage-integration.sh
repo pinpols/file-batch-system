@@ -46,6 +46,7 @@ case "$shard" in
     run_group batch-worker/export 'ExportKeysetRangeIT,ExportPartitionSliceIT'
     ;;
   b2-console)
+    run_group batch-console-api 'WorkflowDefinitionWriteContractIntegrationTest,WorkflowCreateVersionSnapshotIntegrationTest'
     run_group batch-console-api 'ConsoleBatchDayCatchUpHttpIntegrationTest,BatchDayCatchUpOperationSchemaIntegrationTest,ConsolePendingCatchUpQueryIntegrationTest,PendingCatchUpApprovalPagingIntegrationTest,ApprovalCommandQueryIntegrationTest'
     run_group batch-console-api 'JobPushDeliveryIntegrationTest,JobPushIntakeIntegrationTest,TerminalNotificationRecoveryIntegrationTest,WorkflowTerminalNotificationIntegrationTest,JobWorkflowSlaAlertDeliveryIntegrationTest,TerminalNotificationArchiveIntegrationTest'
     ;;

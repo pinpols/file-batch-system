@@ -47,6 +47,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
@@ -319,6 +320,37 @@ class TriggerSchedulerFacadeTest {
     facade.registerByWorkflowCode("t1", "WF_BAD_CRON");
 
     verify(scheduler, never()).scheduleJob(any(JobDetail.class), any(CronTrigger.class));
+  }
+
+  @ParameterizedTest
+  @NullAndEmptySource
+  @ValueSource(strings = {" ", "Invalid/Timezone"})
+  @DisplayName("对账拒绝缺失或非法时区,不注册或覆盖既有调度")
+  void shouldRejectInvalidTimezone_whenReconcilingCron(String timezone) {
+    TriggerDescriptor descriptor = cronDescriptor("t1", "BAD_ZONE", true);
+    descriptor.setTimezone(timezone);
+    when(triggerDefinitionLoader.loadByWorkflowCode("t1", "WF_BAD_ZONE")).thenReturn(descriptor);
+
+    assertThatThrownBy(() -> facade.reconcileByWorkflowCode("t1", "WF_BAD_ZONE"))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("timezone");
+
+    verifyNoInteractions(scheduler);
+  }
+
+  @Test
+  @DisplayName("全量注册跳过空时区定义后继续注册健康定义")
+  void shouldRegisterHealthyCron_whenEarlierTimezoneIsMissing() throws Exception {
+    TriggerDescriptor invalid = cronDescriptor("t1", "BAD_ZONE", true);
+    invalid.setTimezone(null);
+    TriggerDescriptor healthy = cronDescriptor("t1", "HEALTHY", true);
+    when(triggerDefinitionLoader.loadAll()).thenReturn(List.of(invalid, healthy));
+
+    facade.registerAll();
+
+    ArgumentCaptor<JobDetail> jobCaptor = ArgumentCaptor.forClass(JobDetail.class);
+    verify(scheduler).scheduleJob(jobCaptor.capture(), any(CronTrigger.class));
+    assertThat(jobCaptor.getValue().getKey().getName()).isEqualTo("t1:WF:WF_HEALTHY");
   }
 
   // ─── FIXED_RATE ───────────────────────────────────────────────────────────────
