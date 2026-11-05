@@ -151,6 +151,54 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
     }
   }
 
+  @Test
+  @DisplayName("V376仅替换旧式Webhook重投候选索引,不改变其他数据库对象")
+  void shouldReplaceOnlyLegacyWebhookRetryIndex_whenMigratingV376() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("375")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
+      Set<String> before =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("376")
+          .load()
+          .migrate();
+      Set<String> after =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Set<String> removed = new TreeSet<>(before);
+      removed.removeAll(after);
+      Set<String> added = new TreeSet<>(after);
+      added.removeAll(before);
+      assertThat(removed)
+          .singleElement()
+          .asString()
+          .contains(
+              "INDEX",
+              "CREATE INDEX idx_webhook_delivery_log_retry_eligible",
+              "ON batch.webhook_delivery_log");
+      assertThat(added)
+          .singleElement()
+          .asString()
+          .contains(
+              "INDEX",
+              "CREATE INDEX idx_webhook_delivery_log_legacy_retry",
+              "ON batch.webhook_delivery_log",
+              "(next_retry_at, id)",
+              "WHERE ((terminal_event_key IS NULL) AND (next_retry_at IS NOT NULL))")
+          .doesNotContain("delivery_status");
+      flyway.validate();
+    }
+  }
+
   @Container
   @SuppressWarnings("resource")
   private static final PostgreSQLContainer POSTGRES = TestPostgresContainers.platform();
