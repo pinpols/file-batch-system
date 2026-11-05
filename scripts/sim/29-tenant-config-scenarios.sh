@@ -58,7 +58,7 @@ else
       -H 'Content-Type: application/json' -X POST \
       "$CONSOLE_BASE/api/console/auth/login" --data-raw "$login_payload" || true)"
     if [[ "$login_code" != 200 ]]; then
-      echo "✗ Console 登录失败 HTTP=$login_code: $(head -c 300 "$TMP_DIR/login.json" 2>/dev/null)" >&2
+      echo "❌ Console 登录失败 HTTP=$login_code: $(head -c 300 "$TMP_DIR/login.json" 2>/dev/null)" >&2
       exit 1
     fi
     AUTH_ARGS=(-b "$COOKIE_JAR")
@@ -81,7 +81,7 @@ run_case() {
     -H "X-Tenant-Id: $TENANT_ID" "${AUTH_ARGS[@]}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/scenario-template?$query" || true)"
   if [[ ! "$download_code" =~ ^2 ]]; then
-    echo "✗ $case_name 模板下载失败 HTTP=$download_code" >&2
+    echo "❌ $case_name 模板下载失败 HTTP=$download_code" >&2
     head -c 500 "$workbook" 2>/dev/null >&2 || true
     return 1
   fi
@@ -117,7 +117,7 @@ try:
                 "soft_runtime_severity", "start_grace_severity",
             }.intersection(headers)
             assert not forbidden, f"{case_name}: platform monitoring headers leaked: {sorted(forbidden)}"
-    print(f"  ✓ {case_name}: sheets={','.join(actual_sheets)}")
+    print(f"  ✅ {case_name}: sheets={','.join(actual_sheets)}")
 finally:
     workbook.close()
 PY
@@ -132,7 +132,7 @@ PY
     -F "file=@$workbook;type=application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/upload?tenantId=$TENANT_ID" || true)"
   if [[ ! "$upload_code" =~ ^2 ]]; then
-    echo "✗ $case_name 工作簿上传失败 HTTP=$upload_code: $(head -c 500 "$upload_body")" >&2
+    echo "❌ $case_name 工作簿上传失败 HTTP=$upload_code: $(head -c 500 "$upload_body")" >&2
     return 1
   fi
 
@@ -147,7 +147,7 @@ if response.get("code") != "SUCCESS":
 print(response.get("data", {}).get("uploadToken", ""))
 PY
 )"
-  [[ -n "$upload_token" ]] || { echo "✗ $case_name 上传未返回 uploadToken" >&2; return 1; }
+  [[ -n "$upload_token" ]] || { echo "❌ $case_name 上传未返回 uploadToken" >&2; return 1; }
 
   local preview_body="$TMP_DIR/preview-$index.json"
   local preview_code
@@ -155,7 +155,7 @@ PY
     -H "X-Tenant-Id: $TENANT_ID" "${AUTH_ARGS[@]}" \
     "$CONSOLE_BASE/api/console/config/tenant-package/excel/preview/$upload_token" || true)"
   if [[ ! "$preview_code" =~ ^2 ]]; then
-    echo "✗ $case_name 预览失败 HTTP=$preview_code: $(head -c 500 "$preview_body")" >&2
+    echo "❌ $case_name 预览失败 HTTP=$preview_code: $(head -c 500 "$preview_body")" >&2
     return 1
   fi
   "$PYTHON_BIN" - "$preview_body" "$case_name" <<'PY'
@@ -169,7 +169,7 @@ assert response.get("code") == "SUCCESS", f"{case_name}: preview rejected: {resp
 assert data.get("invalidRows") == 0, f"{case_name}: invalidRows={data.get('invalidRows')} issues={data.get('issues')}"
 assert data.get("issues") == [], f"{case_name}: preview issues={data.get('issues')}"
 assert data.get("previewToken"), f"{case_name}: previewToken missing"
-print(f"  ✓ {case_name}: upload + preview valid; Apply intentionally not called")
+print(f"  ✅ {case_name}: upload + preview valid; Apply intentionally not called")
 PY
 }
 

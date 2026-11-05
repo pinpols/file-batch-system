@@ -187,7 +187,7 @@ def upload(object_name, data):
         input=data, text=True, capture_output=True)
     if p.returncode != 0:
         raise RuntimeError(f"upload {object_name} failed: {p.stderr.strip()}")
-    print(f"  ✓ uploaded {object_name} ({len(data)} bytes)")
+    print(f"  ✅ uploaded {object_name} ({len(data)} bytes)")
 
 
 # 1) 生成 2 个数据文件 + v2 清单(声明本束 → ${WORKFLOW_CODE},逐文件用 ta_import_customer_tpl 模板)
@@ -214,7 +214,7 @@ def cleanup_uploaded_objects():
         print(f"❌ failed to remove {len(failures)} owned bundle input object(s)",
               file=sys.stderr, flush=True)
         os._exit(1)
-    print(f"  ✓ removed {len(objects)} run-owned bundle input objects", flush=True)
+    print(f"  ✅ removed {len(objects)} run-owned bundle input objects", flush=True)
 
 
 atexit.register(cleanup_uploaded_objects)
@@ -248,7 +248,7 @@ instance_id = wait_instance(
 if instance_id is None:
     print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance(检查 scanner batch-manifest/arrival 配置是否开启)")
     sys.exit(1)
-print(f"  ✓ bundle launched, job_instance id={instance_id}")
+print(f"  ✅ bundle launched, job_instance id={instance_id}")
 
 # 3) 断言分区数 + 绑定
 parts = read_partitions(instance_id)
@@ -259,7 +259,7 @@ for cols in parts:
     assert cols[2] == TEMPLATE, f"partition template_code 不符: {cols}"
 assert {cols[4] for cols in parts} == {f"{prefix}/{f1}", f"{prefix}/{f2}"}, \
     f"partition 来源文件与本轮上传不一致: {parts}"
-print("  ✓ 2 个绑定异构 partition(各带 source_file_id + template_code)")
+print("  ✅ 2 个绑定异构 partition(各带 source_file_id + template_code)")
 
 # 4) 终态 + 业务行(worker 真跑时)
 print("==> 等待 partition 达终态")
@@ -304,7 +304,7 @@ export_parts = read_partitions(export_instance)
 print(f"  export partitions: {export_parts}")
 assert len(export_parts) == 2, f"BUNDLE_EXPORT 期望 2 个 partition,实得 {len(export_parts)}"
 assert [p[2] for p in export_parts] == ["ta_export_report_tpl", "TA_EXPORT_REPORT_JSON_TPL"]
-print("  ✓ BUNDLE_EXPORT 展开 2 个 template 绑定 partition")
+print("  ✅ BUNDLE_EXPORT 展开 2 个 template 绑定 partition")
 export_final = wait_partitions_terminal(export_instance, timeout=120)
 if export_final is None:
     print("❌ FAIL:文件束导出 partition 未在限时内达终态")
@@ -338,7 +338,7 @@ print(f"  dispatch partitions: {dispatch_parts}")
 assert len(dispatch_parts) == 2, f"BUNDLE_DISPATCH 期望 2 个 partition,实得 {len(dispatch_parts)}"
 assert [int(p[1]) for p in dispatch_parts] == [file1, file2]
 assert [p[3] for p in dispatch_parts] == ["ta_bundle_local", "ta_bundle_local"]
-print("  ✓ BUNDLE_DISPATCH 展开 2 个 source_file_id + target_ref 绑定 partition")
+print("  ✅ BUNDLE_DISPATCH 展开 2 个 source_file_id + target_ref 绑定 partition")
 dispatch_final = wait_partitions_terminal(dispatch_instance, timeout=120)
 if dispatch_final is None:
     print("❌ FAIL:文件束分发 partition 未在限时内达终态")

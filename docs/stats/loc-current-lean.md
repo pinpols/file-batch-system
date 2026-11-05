@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `5eaef8194`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `7de4a190f`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,258 | 806,312 | 421,101 | 52.2% |
+| 6,258 | 806,321 | 421,109 | 52.2% |
 
 ## 按用途
 
@@ -14,7 +14,7 @@
 |---|---:|---:|---:|---:|
 | test | 1,865 | 397,077 | 213,070 | 53.7% |
 | prod | 3,484 | 322,450 | 153,997 | 47.8% |
-| script | 731 | 67,930 | 41,648 | 61.3% |
+| script | 731 | 67,939 | 41,656 | 61.3% |
 | config | 68 | 10,269 | 7,678 | 74.8% |
 | infra-config | 34 | 6,150 | 4,477 | 72.8% |
 | sql | 76 | 2,436 | 231 | 9.5% |
@@ -24,7 +24,7 @@
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
 | Java | 4,712 | 627,147 | 331,173 | 52.8% |
-| Shell | 218 | 35,898 | 28,389 | 79.1% |
+| Shell | 218 | 35,907 | 28,397 | 79.1% |
 | Python | 340 | 51,298 | 27,980 | 54.5% |
 | YAML | 109 | 14,990 | 11,601 | 77.4% |
 | XML | 222 | 31,119 | 9,302 | 29.9% |
@@ -57,8 +57,8 @@
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/ArchiveColdStorageIntegrationTest.java` | test | Java | 1,887 | 917 |
+| `scripts/local/sim-harness.sh` | script | Shell | 1,101 | 916 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/ScheduledOccurrenceMapperIntegrationTest.java` | test | Java | 2,009 | 909 |
-| `scripts/local/sim-harness.sh` | script | Shell | 1,092 | 908 |
 
 ## 复跑
 

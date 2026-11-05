@@ -157,7 +157,7 @@ def launch(label, content, batch_no):
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
         ok = resp.status == 200 and '"SUCCESS"' in text
-        print(f"  [launch] {label:20s} {'✓' if ok else '✗'}", flush=True)
+        print(f"  [launch] {label:20s} {'✅' if ok else '❌'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {label}")
@@ -175,7 +175,7 @@ def wait_for(rid, expected):
         status = (out.stdout or "").strip()
         terminal = status.split("|", 1)[0]
         if terminal in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
-            marker = "✓" if terminal == expected else "✗"
+            marker = "✅" if terminal == expected else "❌"
             print(f"  [result] {rid:34s} {status:45s} expected={expected} {marker}", flush=True)
             if terminal != expected:
                 sys.exit(1)

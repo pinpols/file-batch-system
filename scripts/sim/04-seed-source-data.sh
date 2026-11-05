@@ -67,7 +67,7 @@ for t in ta tb tc; do
   docker cp "$TMP/$f" "$SFTP_CONTAINER:/home/$t/inbound/$f"
   docker exec "$SFTP_CONTAINER" chown "$t:users" "/home/$t/inbound/$f"
   size=$(docker exec "$SFTP_CONTAINER" stat -c %s "/home/$t/inbound/$f" 2>/dev/null || echo "?")
-  echo "  ✓ $t:/inbound/$f ($size bytes)"
+  echo "  ✅ $t:/inbound/$f ($size bytes)"
 done
 
 echo

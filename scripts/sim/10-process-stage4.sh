@@ -135,7 +135,7 @@ def launch(label, job_code, batch_key):
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
         ok = resp.status == 200 and '"SUCCESS"' in text
-        print(f"  [launch] {label:14s} {job_code:34s} {'✓' if ok else '✗'}", flush=True)
+        print(f"  [launch] {label:14s} {job_code:34s} {'✅' if ok else '❌'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {label}")

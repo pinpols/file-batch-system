@@ -148,7 +148,7 @@ def launch(label, job, template, content, batch_no):
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
         ok = resp.status == 200 and '"SUCCESS"' in text
-        print(f"  [launch] {label:16s} {job:28s} {'✓' if ok else '✗'}", flush=True)
+        print(f"  [launch] {label:16s} {job:28s} {'✅' if ok else '❌'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
             raise RuntimeError(f"launch failed: {label}")
@@ -162,7 +162,7 @@ def wait_for(job, rid, expected="SUCCESS"):
             {"tenant_id": "ta", "request_id": rid, "job_code": job}, tuples=True)
         status = (out.stdout or "").strip()
         if status in ("SUCCESS", "FAILED", "PARTIAL_FAILED", "REJECTED", "CANCELLED"):
-            marker = "✓" if status == expected else "✗"
+            marker = "✅" if status == expected else "❌"
             print(f"  [result] {job:28s} {status:14s} expected={expected} {marker}", flush=True)
             if status != expected:
                 print("  [failure details]", flush=True)

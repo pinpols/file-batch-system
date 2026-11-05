@@ -20,11 +20,11 @@ echo "==> 等 healthy/ready(30s)..."
 healthy=0
 for _ in $(seq 1 30); do
   status=$(docker inspect "$SFTP_CONTAINER" --format '{{.State.Health.Status}}' 2>/dev/null || echo "missing")
-  if [[ "$status" == "healthy" ]]; then echo "  ✓ sftp"; healthy=1; break; fi
+  if [[ "$status" == "healthy" ]]; then echo "  ✅ sftp"; healthy=1; break; fi
   sleep 1
 done
 if [[ "$healthy" -ne 1 ]]; then
-  echo "  ✗ sftp 30s 未 healthy(last status=$status)" >&2
+  echo "  ❌ sftp 30s 未 healthy(last status=$status)" >&2
   exit 1
 fi
 
@@ -37,13 +37,13 @@ code=""
 for _ in $(seq 1 30); do
   code=$(curl -s --max-time 5 --connect-timeout 2 -o /dev/null -w "%{http_code}" -X PUT "http://localhost:${sm_port}/mockserver/status" 2>/dev/null || true)
   if [[ "$code" == "200" ]]; then
-    echo "  ✓ mockserver HTTP ready"
+    echo "  ✅ mockserver HTTP ready"
     break
   fi
   sleep 1
 done
 if [[ "$code" != "200" ]]; then
-  echo "  ✗ mockserver 30s 未 ready(last HTTP=$code)" >&2
+  echo "  ❌ mockserver 30s 未 ready(last HTTP=$code)" >&2
   exit 1
 fi
 echo "  mockserver status: HTTP $code"
