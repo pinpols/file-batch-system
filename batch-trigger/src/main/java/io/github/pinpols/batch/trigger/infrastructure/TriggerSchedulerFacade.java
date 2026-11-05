@@ -140,7 +140,7 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
         removeQuartzByIdentity(tenantId, "WF:" + workflowCode);
         return;
       }
-      scheduleDescriptor(descriptor);
+      scheduleValidatedDescriptor(descriptor);
     });
   }
 
@@ -241,20 +241,25 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
 
   private void scheduleDescriptor(TriggerDescriptor descriptor) {
     try {
-      String scheduleType = descriptor.getScheduleType();
-      if (EmptyChecks.isNotNull(scheduleType)) {
-        Consumer<TriggerDescriptor> handler =
-            scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
-        if (EmptyChecks.isNotNull(handler)) {
-          handler.accept(descriptor);
-        }
-      }
+      scheduleValidatedDescriptor(descriptor);
     } catch (IllegalArgumentException e) {
       log.warn(
           "skipping invalid trigger descriptor for job={}/{}: {}",
           descriptor.getTenantId(),
           descriptor.getWorkflowCode(),
           SwallowedExceptionLogger.summary(e));
+    }
+  }
+
+  /** 对账需感知定义校验失败,不得继续为未成功注册的定义物化计划。 */
+  private void scheduleValidatedDescriptor(TriggerDescriptor descriptor) {
+    String scheduleType = descriptor.getScheduleType();
+    if (EmptyChecks.isNotNull(scheduleType)) {
+      Consumer<TriggerDescriptor> handler =
+          scheduleHandlers.get(scheduleType.toUpperCase(Locale.ROOT));
+      if (EmptyChecks.isNotNull(handler)) {
+        handler.accept(descriptor);
+      }
     }
   }
 
@@ -284,13 +289,16 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
                   : ""));
     }
     String timezone = descriptor.getTimezone();
-    if (EmptyChecks.isNotBlank(timezone)) {
-      try {
-        ZoneId.of(timezone);
-      } catch (DateTimeException e) {
-        throw new IllegalArgumentException(
-            "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
-      }
+    // 调度时区属于持久定义,不能静默回退平台默认值而改变已有 fire 的业务日。
+    if (EmptyChecks.isBlank(timezone)) {
+      throw new IllegalArgumentException(
+          "missing timezone for workflow " + descriptor.getWorkflowCode());
+    }
+    try {
+      ZoneId.of(timezone);
+    } catch (DateTimeException e) {
+      throw new IllegalArgumentException(
+          "invalid timezone for job " + descriptor.getJobCode() + ": '" + timezone + "'", e);
     }
     String identity = quartzIdentity(descriptor);
     JobDetail jobDetail = buildJobDetail(descriptor);

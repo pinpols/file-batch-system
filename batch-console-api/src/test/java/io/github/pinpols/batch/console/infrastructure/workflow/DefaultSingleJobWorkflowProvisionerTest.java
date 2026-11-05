@@ -84,6 +84,7 @@ class DefaultSingleJobWorkflowProvisionerTest {
     job.setScheduleType("CRON");
     job.setScheduleExpr("0 0 2 * * ?");
     job.setTriggerMode("MANUAL");
+    job.setTimezone("Asia/Tokyo");
 
     provisioner.provision(job);
 
@@ -93,6 +94,8 @@ class DefaultSingleJobWorkflowProvisionerTest {
     // CRON + MANUAL 不会被调度器注册，受管 Workflow 必须落成调度器可识别的 SCHEDULED
     assertThat(workflow.getValue().getScheduleType()).isEqualTo("CRON");
     assertThat(workflow.getValue().getTriggerMode()).isEqualTo("SCHEDULED");
+    assertThat(workflow.getValue().getTimezone()).isEqualTo("Asia/Tokyo");
+    assertThat(workflow.getValue().getScheduleEnabled()).isFalse();
   }
 
   @Test

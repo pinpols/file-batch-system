@@ -15,6 +15,19 @@ SCRIPT = ROOT / "scripts/ci/run-pr-coverage-integration.sh"
 
 
 class PrCoverageIntegrationTest(unittest.TestCase):
+    def test_console_shard_includes_workflow_schedule_write_contracts(self) -> None:
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "b2-console", "--list"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+        selected = {
+            name
+            for line in result.stdout.splitlines()
+            for name in line.split("\t", 1)[1].split(",")
+        }
+        self.assertIn("WorkflowDefinitionWriteContractIntegrationTest", selected)
+        self.assertIn("WorkflowCreateVersionSnapshotIntegrationTest", selected)
+
     def test_orchestrator_parallel_shards_are_required_and_reports_are_merged(self) -> None:
         workflow = (ROOT / ".github/workflows/pr-gate.yml").read_text(encoding="utf-8")
         aggregate = workflow.split("  unit-it-a:\n", 1)[1].split("\n  # ===", 1)[0]

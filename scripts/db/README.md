@@ -65,6 +65,8 @@ psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_s
 
 ## 常用入口
 
+- [audit-workflow-schedule-defaults.sql](audit-workflow-schedule-defaults.sql)：按明确的单租户参数，只读列出当前版本的空时区活跃日程、受管 Workflow/Job 时区差异及已开启的受管调度。启用或时区差异可能是后续有意配置，必须结合变更记录判断，不能据此统一停用或回填；说明见 [Trigger 运维](../../docs/runbook/trigger-operations.md#调度缺省值与坏定义隔离)。
+
 1. 本地联调先看 [docs/runbook/local-development.md](../../docs/runbook/local-development.md)。
 2. 业务库示例建模走 [business/README.md](./business/README.md)。
 3. 系统测试数据装载走 [test-seed/README.md](./test-seed/README.md)。

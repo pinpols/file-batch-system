@@ -31,6 +31,8 @@
 
 ### Fixed
 
+- 受管单作业 Workflow 的插入持久化关闭的调度开关，Excel 新建 Job 后回读实际默认时区再生成 Workflow；避免缺省字段被新触发模式激活为空时区日程。Trigger 明确拒绝空 CRON 时区并逐条隔离非法定义，正常 Workflow 的注册、计划与恢复不再被其阻断。SIM 静默改为关闭 ta/tb/tc 的 Workflow 权威开关。已有业务数据不自动回填或停用，提供单租户只读审计。
+
 - 告警事件 `detailJson` 不再做 HTML 转义：此前引号被转成 `&quot;`，控制台 `JSON.parse` 失败，告警卡片的“查看作业运行 / 查看工作流运行”跳转从不显示。现只做敏感字段脱敏，与审批 `payloadJson` 一致。
 - 受管单作业工作流不再照抄作业上与调度类型不兼容的触发模式：此前 `CRON` / `FIXED_RATE` 作业带 `MANUAL` 触发模式时，生成的工作流显示为定时、调度器却永不注册（只认 `SCHEDULED` / `MIXED`），保存调度时又被校验拒绝。现按调度类型推导兼容值；作业创建接口对显式不兼容的组合返回 `error.job.trigger_mode_incompatible`，未给触发模式时按调度类型取默认值（此前一律 `SCHEDULED`）。兼容规则抽为 `ScheduleTriggerModes`，与工作流调度保存校验同一张表。存量 `JOB-WF-*` 数据不自动迁移。
 - Console 作业实例按业务日筛选改为直接比较 `biz_date` DATE 列，可走索引并裁剪月分区；非规范或非法日期仍返回空结果（IDX-01）。新增迁移 V376 为 Webhook 旧式重投扫描建立覆盖 PENDING 与 EXHAUSTED 的候选索引（`CREATE INDEX CONCURRENTLY`，非事务迁移），并删除被其覆盖的旧 EXHAUSTED 专用索引（`DROP INDEX CONCURRENTLY IF EXISTS`，不涉及数据）（IDX-02）。服务端 `batch.task.batch-claim.enabled` / `job-overrides` 从未参与批量端点准入，已退役，残留配置被忽略；Worker 侧 `batch.worker.batch-claim.enabled` 不变（DOC-BATCH-FLAG-1）。

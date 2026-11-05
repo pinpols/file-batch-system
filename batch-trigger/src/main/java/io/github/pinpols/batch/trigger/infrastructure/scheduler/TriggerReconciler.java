@@ -12,6 +12,7 @@ import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -94,43 +95,86 @@ public class TriggerReconciler {
     Set<JobKey> quartzJobs = loadQuartzJobKeys();
     List<TriggerDescriptor> dbDescriptors = triggerDefinitionLoader.loadAll();
     Set<JobKey> expectedJobs = new HashSet<>();
+    boolean identitiesComplete = true;
     int registered = 0;
     int replaced = 0;
     for (TriggerDescriptor descriptor : dbDescriptors) {
       if (!descriptor.isEnabled()) {
         continue;
       }
-      JobKey key = JobKey.jobKey(
-          TriggerSchedulerFacade.quartzIdentity(descriptor), TriggerSchedulerFacade.JOB_GROUP);
-      expectedJobs.add(key);
-      if (!quartzJobs.contains(key)) {
-        triggerRegistrationService.reconcileByWorkflowCode(
-            descriptor.getTenantId(), descriptor.getWorkflowCode());
-        registered++;
-      } else if (hasScheduleDrift(key, descriptor)) {
-        log.info(
-            "trigger schedule drift detected, re-registering: jobKey={}, newExpr={}, tz={}",
-            key,
-            descriptor.getScheduleExpression(),
-            descriptor.getTimezone());
-        triggerRegistrationService.reconcileByWorkflowCode(
-            descriptor.getTenantId(), descriptor.getWorkflowCode());
-        replaced++;
+      JobKey key = null;
+      try {
+        key = JobKey.jobKey(
+            TriggerSchedulerFacade.quartzIdentity(descriptor), TriggerSchedulerFacade.JOB_GROUP);
+        expectedJobs.add(key);
+        if (!quartzJobs.contains(key)) {
+          triggerRegistrationService.reconcileByWorkflowCode(
+              descriptor.getTenantId(), descriptor.getWorkflowCode());
+          registered++;
+        } else if (hasScheduleDrift(key, descriptor)) {
+          log.info(
+              "trigger schedule drift detected, re-registering: jobKey={}, newExpr={}, tz={}",
+              key,
+              descriptor.getScheduleExpression(),
+              descriptor.getTimezone());
+          triggerRegistrationService.reconcileByWorkflowCode(
+              descriptor.getTenantId(), descriptor.getWorkflowCode());
+          replaced++;
+        }
+        materializeUpcomingOccurrences(key, descriptor);
+        misfireRecoveryListener.restorePendingMisfires(descriptor, key);
+      } catch (IllegalArgumentException invalidDefinition) {
+        if (EmptyChecks.isNull(key)) {
+          identitiesComplete = false;
+        }
+        logInvalidDefinition(descriptor, invalidDefinition);
       }
-      materializeUpcomingOccurrences(key, descriptor);
-      misfireRecoveryListener.restorePendingMisfires(descriptor, key);
     }
     // 在当前业务日期之后重新检查已持久化日期；截止时间到达时，存储日期不会漂移。
     // 创建业务日记录或其义务前，先获取与结算相同的事务围栏，
     List<TriggerDescriptor> pendingMisfireDefinitions =
         triggerDefinitionLoader.loadPendingMisfireDefinitions();
+    List<TriggerDescriptor> registeredRecoveryDefinitions = new ArrayList<>();
     for (TriggerDescriptor descriptor : pendingMisfireDefinitions) {
       JobKey key = TriggerSchedulerFacade.recoveryJobKey(descriptor);
       expectedJobs.add(key);
-      triggerRegistrationService.registerRecoveryJob(descriptor);
+      try {
+        triggerRegistrationService.registerRecoveryJob(descriptor);
+        registeredRecoveryDefinitions.add(descriptor);
+      } catch (IllegalArgumentException invalidDefinition) {
+        logInvalidDefinition(descriptor, invalidDefinition);
+      }
     }
+    // 缺失身份时无法证明某个 Quartz Job 已无权威定义,本轮只修复注册而不清理。
+    Set<JobKey> cleanupCandidates = identitiesComplete ? quartzJobs : Set.of();
+    int unregistered = removeOrphanedQuartzJobs(cleanupCandidates, expectedJobs);
+    // 使开日和最终结算遵循同一加锁顺序。
+    // 将终态日历跳过与 Trigger 准入串行化，并保留已
+    for (TriggerDescriptor descriptor : registeredRecoveryDefinitions) {
+      JobKey recoveryJobKey = TriggerSchedulerFacade.recoveryJobKey(descriptor);
+      try {
+        misfireRecoveryListener.restorePendingMisfires(
+            descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), recoveryJobKey);
+      } catch (IllegalArgumentException invalidDefinition) {
+        logInvalidDefinition(descriptor, invalidDefinition);
+      }
+    }
+    boolean triggerReconciliationChangedRegistrations =
+        registered > 0 || unregistered > 0 || replaced > 0;
+    if (triggerReconciliationChangedRegistrations) {
+      log.info(
+          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={},"
+              + " expectedTotal={}",
+          registered,
+          replaced,
+          unregistered,
+          expectedJobs.size());
+    }
+  }
+
+  private int removeOrphanedQuartzJobs(Set<JobKey> cleanupCandidates, Set<JobKey> expectedJobs) {
     int unregistered = 0;
-    for (JobKey key : quartzJobs) {
+    for (JobKey key : cleanupCandidates) {
       if (expectedJobs.contains(key)) {
         continue;
       }
@@ -153,24 +197,16 @@ public class TriggerReconciler {
       }
       unregistered++;
     }
-    // 使开日和最终结算遵循同一加锁顺序。
-    // 将终态日历跳过与 Trigger 准入串行化，并保留已
-    for (TriggerDescriptor descriptor : pendingMisfireDefinitions) {
-      JobKey recoveryJobKey = TriggerSchedulerFacade.recoveryJobKey(descriptor);
-      misfireRecoveryListener.restorePendingMisfires(
-          descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), recoveryJobKey);
-    }
-    boolean triggerReconciliationChangedRegistrations =
-        registered > 0 || unregistered > 0 || replaced > 0;
-    if (triggerReconciliationChangedRegistrations) {
-      log.info(
-          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={},"
-              + " expectedTotal={}",
-          registered,
-          replaced,
-          unregistered,
-          expectedJobs.size());
-    }
+    return unregistered;
+  }
+
+  private void logInvalidDefinition(
+      TriggerDescriptor descriptor, IllegalArgumentException invalidDefinition) {
+    log.warn(
+        "trigger definition reconciliation skipped: tenantId={}, workflowCode={}, reason={}",
+        SwallowedExceptionLogger.safeMessage(descriptor.getTenantId()),
+        SwallowedExceptionLogger.safeMessage(descriptor.getWorkflowCode()),
+        SwallowedExceptionLogger.summary(invalidDefinition));
   }
 
   private void materializeUpcomingOccurrences(JobKey key, TriggerDescriptor descriptor) {
