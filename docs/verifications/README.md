@@ -7,6 +7,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [platform-control-plane-restricted-role-drill-2026-11-05.md](platform-control-plane-restricted-role-drill-2026-11-05.md) | 控制面平台库受限角色本地演练：Console/Trigger/Orchestrator 模块测试按生成授权执行，修正生成器缺口与冷热表漂移检查授权；发现 Console 作业依赖同步触发器与 Orchestrator 测试数据清理依赖绕过 RLS；未切换目标环境 |
 | [workflow-schedule-defaults-2026-11-05.md](workflow-schedule-defaults-2026-11-05.md) | SIM 22/24 调度缺省值根因、Console/Trigger 修复边界、回归与未验证项；现有业务数据不自动修改 |
 | [platform-worker-restricted-role-drill-2026-11-04.md](platform-worker-restricted-role-drill-2026-11-04.md) | Worker 平台库受限角色本地演练：五类 Worker E2E 流水线按生成授权执行，四类 0 拒绝；Atomic SQL/存储过程任务默认回落平台库待裁定；未切换目标环境 |
 | [security-alert-remediation-2026-10-31.md](security-alert-remediation-2026-10-31.md) | GitHub Security and quality 告警处置：日志注入修复、Rust 依赖升级、aiohttp 已修复复核、13 条误报判定证据；CodeQL 复扫与告警关闭未验证 |

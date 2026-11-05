@@ -144,6 +144,10 @@ batchLocale: "C.UTF-8"
 # ── console-api ────────────────────────────────────────────────────────────────
 
 consoleApi:
+  # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，主库与只读副本都改用
+  # scripts/db/platform-control-plane-roles.sql 授予的最小权限角色；留空时沿用 consoleReadReplica 或共享账号。
+  platformDb:
+    credentialsSecretName: ""
   sso:
     oidc:
       enabled: false
@@ -292,6 +296,10 @@ trigger:
   port: 18081
   # HTTP 接收、Quartz JobStore 和 relay 共用的平台库连接预算。副本扩容时按总 PG 预算评估。
   platformDb:
+    # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+    # scripts/db/platform-control-plane-roles.sql 授予的最小权限运行时角色；留空时沿用共享平台库账号。
+    # Flyway 迁移改用共享 Secret 中的 owner 账号（BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD）。
+    credentialsSecretName: ""
     maxPoolSize: 10
     connectionTimeoutMillis: 5000
   # JobStoreTX 使用同一平台库的独立小池，防止 Quartz 元数据锁占用业务连接。
@@ -450,6 +458,10 @@ orchestrator:
   # R7-A4-P0：之前 .env.prod 写了但 ConfigMap 未渲染 → K8s 部署用默认 pool=30 / 限流 disabled
   # 撑不住 .env.prod 注释里承诺的 500-1000 req/s。
   platformDb:
+    # ARCH-20261103-01：指向含 BATCH_PLATFORM_DB_USERNAME/PASSWORD 的独立 Secret，使用
+    # scripts/db/platform-control-plane-roles.sql 授予的最小权限运行时角色；留空时沿用共享平台库账号。
+    # Flyway 迁移改用共享 Secret 中的 owner 账号（BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD）。
+    credentialsSecretName: ""
     maxPoolSize: 50
   workerCache:
     enabled: true

@@ -68,7 +68,12 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'import_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'import_role') \gexec
-    SELECT format('GRANT UPDATE (updated_at) ON batch.job_instance TO %I', :'import_role') \gexec
+    SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
+        (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
+            AND attname = 'updated_at' AND NOT attisdropped),
+        (SELECT a.attname FROM pg_index i JOIN pg_attribute a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+          WHERE i.indrelid = 'batch.job_instance'::regclass AND i.indisprimary)), :'import_role') \gexec
     SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.pipeline_instance TO %I', :'import_role') \gexec
     SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')
       FROM (SELECT DISTINCT pg_get_serial_sequence('batch.pipeline_instance', attname) AS sequence_name
@@ -163,7 +168,12 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'export_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'export_role') \gexec
-    SELECT format('GRANT UPDATE (updated_at) ON batch.job_instance TO %I', :'export_role') \gexec
+    SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
+        (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
+            AND attname = 'updated_at' AND NOT attisdropped),
+        (SELECT a.attname FROM pg_index i JOIN pg_attribute a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+          WHERE i.indrelid = 'batch.job_instance'::regclass AND i.indisprimary)), :'export_role') \gexec
     SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.pipeline_instance TO %I', :'export_role') \gexec
     SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'export_role')
       FROM (SELECT DISTINCT pg_get_serial_sequence('batch.pipeline_instance', attname) AS sequence_name
@@ -254,7 +264,12 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'process_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'process_role') \gexec
-    SELECT format('GRANT UPDATE (updated_at) ON batch.job_instance TO %I', :'process_role') \gexec
+    SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
+        (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
+            AND attname = 'updated_at' AND NOT attisdropped),
+        (SELECT a.attname FROM pg_index i JOIN pg_attribute a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+          WHERE i.indrelid = 'batch.job_instance'::regclass AND i.indisprimary)), :'process_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_partition TO %I', :'process_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_task TO %I', :'process_role') \gexec
     SELECT format('GRANT UPDATE (process_staging_batch_key, process_staging_generation_id, updated_at) ON batch.job_task TO %I', :'process_role') \gexec
@@ -366,7 +381,12 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'dispatch_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'dispatch_role') \gexec
-    SELECT format('GRANT UPDATE (updated_at) ON batch.job_instance TO %I', :'dispatch_role') \gexec
+    SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
+        (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
+            AND attname = 'updated_at' AND NOT attisdropped),
+        (SELECT a.attname FROM pg_index i JOIN pg_attribute a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+          WHERE i.indrelid = 'batch.job_instance'::regclass AND i.indisprimary)), :'dispatch_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_task TO %I', :'dispatch_role') \gexec
     SELECT format('GRANT UPDATE (external_outcome_resolution_consumed_at, updated_at) ON batch.job_task TO %I', :'dispatch_role') \gexec
     SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.pipeline_instance TO %I', :'dispatch_role') \gexec
@@ -466,7 +486,12 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'atomic_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'atomic_role') \gexec
-    SELECT format('GRANT UPDATE (updated_at) ON batch.job_instance TO %I', :'atomic_role') \gexec
+    SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
+        (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
+            AND attname = 'updated_at' AND NOT attisdropped),
+        (SELECT a.attname FROM pg_index i JOIN pg_attribute a
+            ON a.attrelid = i.indrelid AND a.attnum = i.indkey[0]
+          WHERE i.indrelid = 'batch.job_instance'::regclass AND i.indisprimary)), :'atomic_role') \gexec
     SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.pipeline_instance TO %I', :'atomic_role') \gexec
     SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'atomic_role')
       FROM (SELECT DISTINCT pg_get_serial_sequence('batch.pipeline_instance', attname) AS sequence_name

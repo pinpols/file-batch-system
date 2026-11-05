@@ -13,9 +13,11 @@
 | 到期实例、工作流、Outbox 与死信清理 | [使用场景](sql-script-usage-scenarios.md)及本页 SQL 索引 | 依照保留、审计、租户及外键约束执行，不能将清理当作通用修复 |
 | 业务库初始化与 RLS | [business](business/README.md) | 与平台 Flyway 分开；目标库、角色与租户隔离显式指定 |
 | 配置缓存失效队列角色授权 | [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) | 平台库 DBA 显式指定已有可信 Console 主库角色；只调整该角色的 V372 队列权限和专属策略 |
-| [generate-platform-worker-grants.py](generate-platform-worker-grants.py) | 从 Worker 的 Mapper XML 与内联 SQL 推导平台库最小授权，生成授权清单与 psql 脚本；默认校验产物与源码一致。 |
+| [generate-platform-worker-grants.py](generate-platform-worker-grants.py) | 从 Worker 与 Console/Trigger/Orchestrator 的 Mapper XML 与内联 SQL 推导平台库最小授权，生成授权清单与 psql 脚本；默认校验产物与源码一致。 |
 | [platform-worker-roles.sql](platform-worker-roles.sql) | 为指定的 Import/Export/Process/Dispatch/Atomic Worker 平台库角色授予或撤销最小权限（生成产物）。 |
+| [platform-control-plane-roles.sql](platform-control-plane-roles.sql) | 为指定的 Console/Trigger/Orchestrator 平台库运行时角色授予或撤销最小权限（生成产物）。 |
 | Worker 平台库最小授权 | [platform-worker-roles.sql](platform-worker-roles.sql)、[生成器](generate-platform-worker-grants.py)、[授权清单](platform-worker-grants.json) | 平台库 DBA 为已有的非超级用户 Worker 角色执行；每个角色先撤销 batch/archive 全部表与序列权限再按清单授予，`job_task` 只有登记列可写。清单由 Worker Mapper XML/内联 SQL 生成，勿手改。切换前可用 `-Dbatch.drill.platform-worker-role=<worker>` 让集成测试以受限角色执行 Worker 语句，见[演练记录](../../docs/verifications/platform-worker-restricted-role-drill-2026-11-04.md) |
+| 控制面平台库最小授权 | [platform-control-plane-roles.sql](platform-control-plane-roles.sql)、[生成器](generate-platform-worker-grants.py)、[授权清单](platform-control-plane-grants.json) | 平台库 DBA 为已有的非超级用户 Console/Trigger/Orchestrator 运行时角色执行；每个角色先撤销 batch/archive/quartz 全部表、序列与函数权限再按清单授予，Console/Trigger 对运行状态表只读，三者都不持有 DDL。Console 角色随后执行 [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) 获得跨租户缓存失效队列策略。运行时角色不执行 Flyway：Trigger/Orchestrator 以 `BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD` 指定 owner 账号迁移，每次迁移后重新执行授权脚本。切换前可用 `-Dbatch.drill.platform-control-plane-role=true` 让集成测试按调用模块以受限角色执行，见[演练记录](../../docs/verifications/platform-control-plane-restricted-role-drill-2026-11-05.md) |
 | 分区迁移演练 | [partition-migration](partition-migration/README.md) | 属于人工演练资产，不直接放入正式 migration 路径执行 |
 | 测试与压测种子 | [test-seed](test-seed/README.md)、[load-test-seed](load-test-seed/README.md) | 仅隔离测试目标；共享 SIM 场景输入在根 test-data |
 

@@ -64,6 +64,10 @@ spring:
   flyway:
     # 迁移脚本：与 orchestrator 同源（POM 复制其 db/migration 至 classpath:db/migration）
     enabled: true
+    # ARCH-20261103-01：运行时账号可换成 platform-control-plane-roles.sql 授权的最小权限角色，迁移改由
+    # owner 账号执行（对象属主与 DDL 权限）；未设置时沿用平台库账号，行为不变。
+    user: ${BATCH_PLATFORM_FLYWAY_USERNAME:${spring.datasource.username}}
+    password: ${BATCH_PLATFORM_FLYWAY_PASSWORD:${spring.datasource.password}}
     locations: classpath:db/migration
     # 默认 schema
     default-schema: batch

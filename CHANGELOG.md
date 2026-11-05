@@ -10,6 +10,8 @@
 
 ### Added
 
+- 新增 Console/Trigger/Orchestrator 平台库最小授权：`scripts/db/platform-control-plane-roles.sql` 为三个控制面运行时角色授予由各自 Mapper/内联 SQL 生成的表、序列与函数权限，Console/Trigger 对运行状态表只读、三者均无 DDL；Trigger/Orchestrator 新增可选的 `BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD`，迁移仍以 owner 执行；Helm 新增可选的 `consoleApi/trigger/orchestrator.platformDb.credentialsSecretName`，默认部署不变（ARCH-20261103-01）
+
 - `ConsoleJobInstanceResponse` 新增 `rootTriggerType`：工作流节点派发的子实例 `triggerType` 恒为 `EVENT`，新字段返回根运行的真实触发来源（`MANUAL` / `SCHEDULED` 等），供控制台“触发”列展示；非工作流派发的实例为 `null`。列表、详情与按实例编号查询统一投影，OpenAPI 同步。
 - 新增内建 Worker 平台库最小授权：`scripts/db/platform-worker-roles.sql` 为 Import/Export/Process/Dispatch/Atomic 指定角色授予由 Mapper/内联 SQL 生成的表级权限，Orchestrator 状态表与 outbox 不可写，`job_task` 仅登记列可写；Helm 新增可选的 `<worker>.platformDb.credentialsSecretName` 注入独立凭据。默认配置仍使用共享平台库账号，切换需先在目标库建角色并执行授权脚本，再逐个 Worker 配置 Secret 滚动发布。
 

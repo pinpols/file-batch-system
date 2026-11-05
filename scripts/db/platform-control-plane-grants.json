@@ -1,0 +1,2898 @@
+{
+  "description": "由 scripts/db/generate-platform-worker-grants.py 生成，勿手改；见 ARCH-20261103-01。",
+  "modules": {
+    "console": {
+      "schemas": [
+        "archive",
+        "batch"
+      ],
+      "tables": {
+        "archive.console_operation_audit_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/OperationAuditMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "archive.console_push_job_delivery_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "archive.notification_delivery_log_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/NotificationDeliveryLogMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "archive.webhook_delivery_log_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleWebhookDeliveryLogMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "archive.workflow_terminal_notification_receipt_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowTerminalNotificationMapper.xml"
+          ]
+        },
+        "batch.alert_escalation_notification_outbox": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AlertEscalationNotificationOutboxMapper.xml"
+          ]
+        },
+        "batch.alert_event": {
+          "privileges": [
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-console-api/src/main/resources/mapper/AlertNotificationReceiptMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml"
+          ]
+        },
+        "batch.alert_notification_receipt": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AlertNotificationReceiptMapper.xml"
+          ]
+        },
+        "batch.alert_routing_config": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AlertRoutingConfigMapper.xml"
+          ]
+        },
+        "batch.api_key": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleApiKeyMapper.xml"
+          ]
+        },
+        "batch.approval_command": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ApprovalCommandMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsolePushApprovalNotificationMapper.xml",
+            "batch-console-api/src/main/resources/mapper/PendingCatchUpMapper.xml"
+          ]
+        },
+        "batch.archive_policy": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleArchivePolicyMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml"
+          ]
+        },
+        "batch.asset_freshness_policy": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAssetFreshnessPolicyMapper.xml"
+          ]
+        },
+        "batch.atomic_task_config": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AtomicTaskConfigMapper.xml"
+          ]
+        },
+        "batch.batch_day_catchup_operation": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayCatchUpOperationMapper.xml"
+          ]
+        },
+        "batch.batch_day_instance": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml"
+          ]
+        },
+        "batch.batch_window": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchWindowMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleMetaQueryMapper.xml"
+          ]
+        },
+        "batch.business_calendar": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml",
+            "batch-console-api/src/main/resources/mapper/BusinessCalendarMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleMetaQueryMapper.xml"
+          ]
+        },
+        "batch.business_shard_catalog": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleBusinessShardCatalogMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleBusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.calendar_holiday": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/CalendarHolidayMapper.xml"
+          ]
+        },
+        "batch.config_approval": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigApprovalMapper.xml"
+          ]
+        },
+        "batch.config_batch_operation": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigBatchOperationMapper.xml"
+          ]
+        },
+        "batch.config_batch_target_receipt": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigBatchOperationMapper.xml"
+          ]
+        },
+        "batch.config_cache_invalidation_outbox": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigCacheInvalidationOutboxMapper.xml"
+          ]
+        },
+        "batch.config_change_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigChangeLogMapper.xml"
+          ]
+        },
+        "batch.config_release": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigReleaseMapper.xml"
+          ]
+        },
+        "batch.config_sync_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigSyncLogMapper.xml"
+          ]
+        },
+        "batch.config_sync_target_receipt": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConfigSyncTargetReceiptMapper.xml"
+          ]
+        },
+        "batch.console_ai_attachment": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiAttachmentMapper.xml"
+          ]
+        },
+        "batch.console_ai_audit_log": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiAuditLogMapper.xml"
+          ]
+        },
+        "batch.console_ai_conversation": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiAttachmentMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleAiConversationMapper.xml"
+          ]
+        },
+        "batch.console_ai_monthly_usage": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiMonthlyUsageMapper.xml"
+          ]
+        },
+        "batch.console_ai_object_cleanup": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiAttachmentMapper.xml"
+          ]
+        },
+        "batch.console_ai_turn": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAiConversationMapper.xml"
+          ]
+        },
+        "batch.console_external_identity": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleOidcIdentityMapper.xml"
+          ]
+        },
+        "batch.console_maintenance_state": {
+          "privileges": [
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/MaintenanceStateMapper.xml"
+          ]
+        },
+        "batch.console_operation_audit": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/OperationAuditMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "batch.console_push_approval_notification": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsolePushApprovalNotificationMapper.xml"
+          ]
+        },
+        "batch.console_push_job_delivery": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobPushDeliveryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml"
+          ]
+        },
+        "batch.console_push_subscription": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsolePushSubscriptionMapper.xml"
+          ]
+        },
+        "batch.console_usage_daily": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleUsageDailyMapper.xml"
+          ]
+        },
+        "batch.console_user_account": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleOidcIdentityMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleUserAccountMapper.xml"
+          ]
+        },
+        "batch.console_user_batch_operation": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleUserBatchOperationMapper.xml"
+          ]
+        },
+        "batch.custom_task_type_registry": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/CustomTaskTypeMapper.xml"
+          ]
+        },
+        "batch.dead_letter_task": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/DeadLetterTaskMapper.xml"
+          ]
+        },
+        "batch.event_delivery_log": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/OutboxDeliveryLogMapper.xml"
+          ]
+        },
+        "batch.event_outbox_retry": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/OutboxRetryLogMapper.xml"
+          ]
+        },
+        "batch.external_event_expectation_definition": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/AuditLogMapper.xml"
+          ]
+        },
+        "batch.file_channel_config": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleResourceTagMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileChannelConfigMapper.xml",
+            "trigger on batch.resource_tag"
+          ]
+        },
+        "batch.file_dispatch_record": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/FileDispatchRecordMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/FileErrorRecordMapper.xml"
+          ]
+        },
+        "batch.file_group_expectation_definition": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleMetaQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileArrivalGroupMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileRecordMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleResourceTagMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileTemplateConfigMapper.xml",
+            "trigger on batch.resource_tag"
+          ]
+        },
+        "batch.idempotency_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleIdempotencyMapper.xml"
+          ]
+        },
+        "batch.job_definition": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleAssetFreshnessPolicyMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleResourceTagMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml",
+            "trigger on batch.resource_tag"
+          ]
+        },
+        "batch.job_dependency": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml",
+            "trigger on batch.job_definition",
+            "trigger on batch.job_dependency"
+          ]
+        },
+        "batch.job_execution_log": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobExecutionLogMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileRecordMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
+          ]
+        },
+        "batch.job_monitoring_policy": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml"
+          ]
+        },
+        "batch.job_partition": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileRecordMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobPartitionMapper.xml"
+          ]
+        },
+        "batch.job_step_instance": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobStepInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
+          ]
+        },
+        "batch.job_task": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
+          ]
+        },
+        "batch.notification_channel": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/NotificationChannelMapper.xml",
+            "batch-console-api/src/main/resources/mapper/SubscriptionRuleMapper.xml"
+          ]
+        },
+        "batch.notification_delivery_log": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/NotificationDeliveryLogMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowTerminalNotificationMapper.xml"
+          ]
+        },
+        "batch.outbox_event": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleOutboxEventReadMapper.xml",
+            "batch-console-api/src/main/resources/mapper/OutboxRetryLogMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsolePipelineProgressDirtyMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FilePipelineMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FileRecordMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobStepInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsolePipelineProgressDirtyMapper.xml",
+            "batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/FilePipelineStepRunMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
+          ]
+        },
+        "batch.resource_queue": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleMetaQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ResourceQueueMapper.xml"
+          ]
+        },
+        "batch.resource_tag": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleResourceTagMapper.xml"
+          ]
+        },
+        "batch.retry_schedule": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/RetryScheduleMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_coverage": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_fire": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml"
+          ]
+        },
+        "batch.secret_version": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/SecretVersionMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.step_registry": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/StepRegistryQueryMapper.xml"
+          ]
+        },
+        "batch.subscription_rule": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/SubscriptionRuleMapper.xml"
+          ]
+        },
+        "batch.system_parameter": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleSystemParameterMapper.xml"
+          ]
+        },
+        "batch.tenant": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/TenantExistsRule.java",
+            "batch-console-api/src/main/resources/mapper/ConsoleAiConversationMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobPushDeliveryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TenantMapper.xml"
+          ]
+        },
+        "batch.tenant_configuration_revision": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml"
+          ]
+        },
+        "batch.tenant_quota_policy": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/TenantQuotaPolicyMapper.xml"
+          ]
+        },
+        "batch.trigger_request": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/BatchDayMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/PendingCatchUpMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowTriggerReceiptMapper.xml"
+          ]
+        },
+        "batch.trigger_request_idempotency_alias": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowTriggerReceiptMapper.xml"
+          ]
+        },
+        "batch.webhook_delivery_log": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleWebhookDeliveryLogMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationRecoveryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowTerminalNotificationMapper.xml"
+          ]
+        },
+        "batch.webhook_subscription": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleWebhookSubscriptionMapper.xml"
+          ]
+        },
+        "batch.worker_registry": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleClusterDiagnosticMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleMetaQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkerFingerprintMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkerRegistryMapper.xml"
+          ]
+        },
+        "batch.workflow_definition": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/ConsoleDashboardQueryMapper.xml",
+            "batch-console-api/src/main/resources/mapper/ConsoleResourceTagMapper.xml",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobDefinitionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/PendingCatchUpMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowEdgeMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowNodeMapper.xml",
+            "trigger on batch.resource_tag"
+          ]
+        },
+        "batch.workflow_definition_version": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowDefinitionVersionMapper.xml"
+          ]
+        },
+        "batch.workflow_edge": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowEdgeMapper.xml"
+          ]
+        },
+        "batch.workflow_monitoring_policy": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowMonitoringPolicyMapper.xml"
+          ]
+        },
+        "batch.workflow_node": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowNodeMapper.xml"
+          ]
+        },
+        "batch.workflow_node_run": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml"
+          ]
+        },
+        "batch.workflow_run": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/query/WorkflowNodeRunQuery.java",
+            "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowNodeRunMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowRunMapper.xml"
+          ]
+        },
+        "batch.workflow_terminal_notification_receipt": {
+          "lock_only": true,
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-console-api/src/main/resources/mapper/TerminalNotificationArchiveMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowTerminalNotificationMapper.xml"
+          ]
+        }
+      },
+      "excluded_non_platform": [],
+      "functions": [
+        "batch.current_tenant_configuration_revision",
+        "batch.lock_tenant_configuration_revision"
+      ]
+    },
+    "trigger": {
+      "schemas": [
+        "batch",
+        "quartz"
+      ],
+      "tables": {
+        "batch.api_key": {
+          "privileges": [
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerApiKeyAuthMapper.xml"
+          ]
+        },
+        "batch.approval_command": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml"
+          ]
+        },
+        "batch.batch_day_instance": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "batch.business_calendar": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/BusinessCalendarMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.calendar_holiday": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/BusinessCalendarMapper.xml"
+          ]
+        },
+        "batch.external_event_delivery": {
+          "lock_only": true,
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml"
+          ]
+        },
+        "batch.external_event_delivery_alias": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml"
+          ]
+        },
+        "batch.external_event_expectation_definition": {
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.job_definition": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.job_dependency": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml",
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "batch.scheduled_occurrence": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_catch_up_audit": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_coverage": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_fire": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "@SchedulerLock"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.tenant": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TenantStatusMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml"
+          ]
+        },
+        "batch.tenant_configuration_revision": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml"
+          ]
+        },
+        "batch.trigger_misfire_pending": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml"
+          ]
+        },
+        "batch.trigger_outbox_event": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerOutboxEventMapper.xml"
+          ]
+        },
+        "batch.trigger_request": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml",
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.trigger_request_idempotency_alias": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.workflow_definition": {
+          "privileges": [
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml",
+            "batch-trigger/src/main/resources/mapper/ScheduledOccurrenceMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerDefinitionMapper.xml",
+            "batch-trigger/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "batch.workflow_run": {
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-trigger/src/main/resources/mapper/ExternalEventDeliveryMapper.xml",
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "quartz.qrtz_blob_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_calendars": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_cron_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_fired_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_job_details": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_locks": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_paused_trigger_grps": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_scheduler_state": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_simple_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_simprop_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        },
+        "quartz.qrtz_triggers": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "CONTROL_PLANE_SCHEMA_GRANTS"
+          ]
+        }
+      },
+      "excluded_non_platform": [],
+      "functions": [
+        "batch.current_tenant_configuration_revision",
+        "batch.lock_tenant_configuration_revision"
+      ]
+    },
+    "orchestrator": {
+      "schemas": [
+        "archive",
+        "batch"
+      ],
+      "tables": {
+        "archive.batch_day_replay_entry_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.batch_day_replay_session_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.compensation_command_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.console_operation_audit_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.console_push_job_delivery_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.data_quality_check_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/DataQualityCheckMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.dead_letter_task_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.event_delivery_log_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/EventDeliveryLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "archive.event_outbox_retry_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/EventOutboxRetryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "archive.file_dispatch_record_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.file_record_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.job_execution_log_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.job_instance_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.job_partition_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.job_step_instance_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.job_task_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.notification_delivery_log_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.outbox_event_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/EventDeliveryLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/EventOutboxRetryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "archive.pipeline_instance_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.pipeline_progress_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.pipeline_step_run_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "archive.result_version_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/ResultVersionMapper.xml"
+          ]
+        },
+        "archive.trigger_outbox_event_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.webhook_delivery_log_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "archive.workflow_node_run_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml"
+          ]
+        },
+        "archive.workflow_run_archive": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml"
+          ]
+        },
+        "archive.workflow_terminal_notification_receipt_archive": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "batch.alert_event": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml"
+          ]
+        },
+        "batch.alert_notification_receipt": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml"
+          ]
+        },
+        "batch.alert_routing_config": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.api_key": {
+          "privileges": [
+            "DELETE",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ApiKeyAuthMapper.xml"
+          ]
+        },
+        "batch.approval_command": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ApprovalCommandMapper.xml"
+          ]
+        },
+        "batch.archive_policy": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.asset_freshness_policy": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AssetFreshnessPolicyMapper.xml"
+          ]
+        },
+        "batch.asset_partition": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AssetPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ResultVersionMapper.xml"
+          ]
+        },
+        "batch.batch_day_catchup_control": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayCatchupControlMapper.xml"
+          ]
+        },
+        "batch.batch_day_catchup_control_event": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayCatchupControlMapper.xml"
+          ]
+        },
+        "batch.batch_day_instance": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "batch.batch_day_open_cursor": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml"
+          ]
+        },
+        "batch.batch_day_operation_audit": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayOperationAuditMapper.xml"
+          ]
+        },
+        "batch.batch_day_replay_entry": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml"
+          ]
+        },
+        "batch.batch_day_replay_preview_token": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayPreviewTokenMapper.xml"
+          ]
+        },
+        "batch.batch_day_replay_session": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayPreviewTokenMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplaySessionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ReplayOperationMapper.xml"
+          ]
+        },
+        "batch.batch_day_waiting_launch": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml"
+          ]
+        },
+        "batch.batch_window": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchWindowMapper.xml"
+          ]
+        },
+        "batch.business_calendar": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayPlanCalendarMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BusinessCalendarMapper.xml"
+          ]
+        },
+        "batch.business_tenant_placement": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml"
+          ]
+        },
+        "batch.calendar_dependency": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/CalendarDependencyMapper.xml",
+            "trigger on batch.calendar_dependency"
+          ]
+        },
+        "batch.calendar_dependency_wait": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/CalendarDependencyWaitMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml"
+          ]
+        },
+        "batch.calendar_holiday": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayPlanCalendarMapper.xml"
+          ]
+        },
+        "batch.compensation_command": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.console_operation_audit": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "batch.console_push_job_delivery": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "batch.console_user_account": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.custom_task_type_registry": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/CustomTaskTypeRegistryMapper.xml"
+          ]
+        },
+        "batch.data_asset": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AssetPartitionMapper.xml"
+          ]
+        },
+        "batch.data_quality_check": {
+          "lock_only": true,
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/DataQualityCheckMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "trigger on batch.job_instance"
+          ]
+        },
+        "batch.data_quality_rule": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/DataQualityRuleMapper.xml"
+          ]
+        },
+        "batch.dead_letter_task": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/DeadLetterTaskMapper.xml"
+          ]
+        },
+        "batch.disaster_day_override": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/DisasterDayOverrideMapper.xml"
+          ]
+        },
+        "batch.event_delivery_log": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/EventDeliveryLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "batch.event_outbox_retry": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/EventOutboxRetryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "batch.expected_work_occurrence": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ExpectedWorkOccurrenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml"
+          ]
+        },
+        "batch.external_event_expectation_definition": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ExternalEventExpectationDefinitionMapper.xml"
+          ]
+        },
+        "batch.file_audit_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
+          ]
+        },
+        "batch.file_channel_config": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DispatchChannelSnapshotMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DispatchSecretBindingMapper.xml"
+          ]
+        },
+        "batch.file_channel_health": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/DownstreamAdmissionMapper.xml"
+          ]
+        },
+        "batch.file_dispatch_record": {
+          "privileges": [
+            "DELETE",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.file_error_record": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.file_group_expectation_definition": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGroupExpectationDefinitionMapper.xml"
+          ]
+        },
+        "batch.file_record": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CapacityProfileMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileRecordLookupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OpenLineageDatasetMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SensorFileArrivalMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.file_template_config": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileTemplateSnapshotMapper.xml"
+          ]
+        },
+        "batch.forensic_export_log": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/ForensicExportLogMapper.xml"
+          ]
+        },
+        "batch.idempotency_record": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/IdempotencyRecordMapper.xml"
+          ]
+        },
+        "batch.job_definition": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDefinitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.job_dependency": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyMapper.xml"
+          ]
+        },
+        "batch.job_dependency_waiting_launch": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml"
+          ]
+        },
+        "batch.job_execution_log": {
+          "lock_only": true,
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobExecutionLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.job_instance": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CapacityProfileMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CompensationCommandMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DataQualityCheckMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DeadLetterTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobExecutionLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OpenLineageDatasetMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PipelineProgressClaimMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml",
+            "trigger on batch.data_quality_check",
+            "trigger on batch.trigger_request",
+            "trigger on batch.workflow_node_run",
+            "trigger on batch.workflow_run"
+          ]
+        },
+        "batch.job_instance_dedup_key": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml"
+          ]
+        },
+        "batch.job_monitoring_alert_claim": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.job_monitoring_policy": {
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml"
+          ]
+        },
+        "batch.job_partition": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DeadLetterTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PipelineProgressClaimMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.job_step_instance": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobStepInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.job_task": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CapacityProfileMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PipelineProgressClaimMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkerRegistryMapper.xml"
+          ]
+        },
+        "batch.notification_delivery_log": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "batch.outbox_event": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/EventDeliveryLogMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/EventOutboxRetryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "batch.outbox_event_dedup_key": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
+          ]
+        },
+        "batch.pipeline_instance": {
+          "privileges": [
+            "DELETE",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/CapacityProfileMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/LineageEvidenceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/OpenLineageDatasetMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PipelineProgressClaimMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.pipeline_progress": {
+          "lock_only": true,
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/CapacityProfileMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.pipeline_step_run": {
+          "privileges": [
+            "DELETE",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PipelineProgressClaimMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml"
+          ]
+        },
+        "batch.quota_runtime_state": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/QuotaRuntimeStateMapper.xml"
+          ]
+        },
+        "batch.readiness_wait": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/PersistentWaitReadMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ReadinessWaitMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml"
+          ]
+        },
+        "batch.replay_operation": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/ReplayOperationMapper.xml"
+          ]
+        },
+        "batch.replay_operation_preview_token": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/ReplayOperationPreviewTokenMapper.xml"
+          ]
+        },
+        "batch.resource_queue": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/ResourceQueueMapper.xml"
+          ]
+        },
+        "batch.result_version": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/ResultVersionRetentionScheduler.java",
+            "batch-orchestrator/src/main/resources/mapper/AssetPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ResultVersionMapper.xml"
+          ]
+        },
+        "batch.retry_schedule": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_catch_up_audit": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.scheduled_occurrence_coverage": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml"
+          ]
+        },
+        "batch.secret_version": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/DispatchSecretBindingMapper.xml"
+          ]
+        },
+        "batch.shedlock": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "@SchedulerLock"
+          ]
+        },
+        "batch.stateful_backend_binding": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.stateful_backend_cutover_history": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java"
+          ]
+        },
+        "batch.system_parameter": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/SystemParameterMapper.xml"
+          ]
+        },
+        "batch.tenant": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TenantDirectoryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.tenant_configuration_revision": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml"
+          ]
+        },
+        "batch.tenant_quota_policy": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TenantQuotaPolicyMapper.xml"
+          ]
+        },
+        "batch.tenant_scheduler_snapshot": {
+          "privileges": [
+            "INSERT",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/TenantSchedulerSnapshotMapper.xml"
+          ]
+        },
+        "batch.trigger_launch_recovery": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/TriggerLaunchRecoveryMapper.xml"
+          ]
+        },
+        "batch.trigger_misfire_pending": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml"
+          ]
+        },
+        "batch.trigger_outbox_event": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.trigger_request": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PersistentWaitReadMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowLaunchWaitMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml",
+            "trigger on batch.job_instance",
+            "trigger on batch.workflow_run"
+          ]
+        },
+        "batch.waiting_partition_scan_cursor": {
+          "privileges": [
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml"
+          ]
+        },
+        "batch.webhook_delivery_log": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        },
+        "batch.worker_registry": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/WorkerRegistryMapper.xml"
+          ]
+        },
+        "batch.workflow_definition": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/ExternalEventExpectationDefinitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGroupExpectationDefinitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PersistentWaitReadMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SensorFileArrivalMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowDefinitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml",
+            "trigger on batch.trigger_request"
+          ]
+        },
+        "batch.workflow_edge": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowEdgeMapper.xml"
+          ]
+        },
+        "batch.workflow_launch_wait": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PersistentWaitReadMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WaitRelationshipMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowLaunchWaitMapper.xml"
+          ]
+        },
+        "batch.workflow_monitoring_policy": {
+          "lock_only": true,
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml"
+          ]
+        },
+        "batch.workflow_node": {
+          "privileges": [
+            "DELETE",
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowNodeMapper.xml"
+          ]
+        },
+        "batch.workflow_node_run": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DeadLetterTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml",
+            "trigger on batch.job_instance"
+          ]
+        },
+        "batch.workflow_run": {
+          "privileges": [
+            "DELETE",
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java",
+            "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/AlertEventMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/BatchDayReplayEntryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/DeadLetterTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobDependencyWaitingLaunchMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobPartitionMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/PersistentWaitReadMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/RetryScheduleMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/SuccessInstanceArchiveMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/TriggerRequestMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowLaunchWaitMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowMonitoringMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowNodeRunMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/WorkflowRunMapper.xml",
+            "trigger on batch.job_instance",
+            "trigger on batch.trigger_request",
+            "trigger on batch.workflow_node_run"
+          ]
+        },
+        "batch.workflow_terminal_notification_receipt": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java"
+          ]
+        }
+      },
+      "excluded_non_platform": [],
+      "functions": []
+    }
+  }
+}

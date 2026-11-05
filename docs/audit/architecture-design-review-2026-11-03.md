@@ -109,7 +109,7 @@
 | CONV-03 | **已按建议处理**（`cabf0f51a`） | 拆分时把依赖等待超时判定提取为纯规则 `domain/scheduling/DependencyWaitTimeoutRule`；不为“充血”另行重构 | `DependencyWaitTimeoutRuleTest` 覆盖边界 |
 | CONV-04 | **已整改**（`e5785b467`） | 改名为 `OrchestratorDataSourceConfiguration`，Bean 名与条件装配不变；配置治理登记表已重新生成 | `check-config-governance.py` 通过，Orchestrator/E2E 编译通过 |
 | ARCH-01（Worker 范围） | **仓库内已实现，目标环境未切换** | `scripts/db/generate-platform-worker-grants.py` 从 Worker 的 Mapper XML 与内联 SQL 生成 `platform-worker-grants.json` 和 `platform-worker-roles.sql`；Orchestrator 所有的状态表与 outbox 不授予写权限，`job_task` 只授予登记列的列级 UPDATE。Helm 新增 `<worker>.platformDb.credentialsSecretName`，默认渲染不变。PR Gate 与 pre-commit 接入 `PLATFORM_WORKER_GRANTS` | `PlatformWorkerRolesSqlIntegrationTest` 在完整迁移的真实 PG 上覆盖 3 个用例；Helm 渲染测试 3 个用例。2026-11-04 [受限角色本地演练](../verifications/platform-worker-restricted-role-drill-2026-11-04.md)：Import/Export/Process/Dispatch 成功与失败流水线 0 拒绝；Atomic 的 SQL/存储过程任务默认回落到平台库，被拒绝，需裁定。未验证：目标环境的实际切换 |
-| ARCH-01（Console/Trigger/Orchestrator） | 未处理 | 按原建议顺序在 Worker 切换稳定后推进 | — |
+| ARCH-01（Console/Trigger/Orchestrator） | **仓库内已实现，目标环境未切换** | 同一生成器从三个模块的 SQL 生成 `platform-control-plane-grants.json` 与 `platform-control-plane-roles.sql`：Console/Trigger 对运行状态表只读，三者无 DDL；Trigger/Orchestrator 迁移改由 `BATCH_PLATFORM_FLYWAY_USERNAME` 指定的 owner 账号执行；Helm 新增 `consoleApi/trigger/orchestrator.platformDb.credentialsSecretName`。本地受限角色演练修正了生成器 5 处缺口及 Orchestrator 冷热表漂移检查的只读授权，并发现两处依赖绕过 RLS 的写路径：Console 作业依赖同步触发器（阻塞 Console 切换）与 Orchestrator 测试数据清理接口 | [演练记录](../verifications/platform-control-plane-restricted-role-drill-2026-11-05.md) |
 | ARCH-04 | 未处理 | 需容量证据 | — |
 
 实际执行的命令（本机 Docker/Testcontainers）：

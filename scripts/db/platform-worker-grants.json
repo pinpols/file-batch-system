@@ -62,9 +62,6 @@
           ]
         },
         "batch.job_instance": {
-          "update_columns": [
-            "updated_at"
-          ],
           "lock_only": true,
           "privileges": [
             "SELECT"
@@ -219,9 +216,6 @@
           ]
         },
         "batch.job_instance": {
-          "update_columns": [
-            "updated_at"
-          ],
           "lock_only": true,
           "privileges": [
             "SELECT"
@@ -375,9 +369,6 @@
           ]
         },
         "batch.job_instance": {
-          "update_columns": [
-            "updated_at"
-          ],
           "lock_only": true,
           "privileges": [
             "SELECT"
@@ -593,9 +584,6 @@
           ]
         },
         "batch.job_instance": {
-          "update_columns": [
-            "updated_at"
-          ],
           "lock_only": true,
           "privileges": [
             "SELECT"
@@ -788,9 +776,6 @@
           ]
         },
         "batch.job_instance": {
-          "update_columns": [
-            "updated_at"
-          ],
           "lock_only": true,
           "privileges": [
             "SELECT"

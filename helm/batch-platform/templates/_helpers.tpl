@@ -146,6 +146,47 @@ Secret 中的平台库账号，配合 scripts/db/platform-worker-roles.sql 授�
 {{- end }}
 
 {{/*
+控制面平台库独立凭据（ARCH-20261103-01）：设置 <component>.platformDb.credentialsSecretName 时，运行时账号改用
+该 Secret 中 scripts/db/platform-control-plane-roles.sql 授权的最小权限角色。
+- 参数：dict "root" 根上下文 "svc" 组件 values "migrates" 是否执行 Flyway "console" 是否为 Console
+- migrates：Flyway 仍以共享 ConfigMap/Secret 中的 owner 账号迁移（BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD）
+- console：Console 主库与只读副本账号（BATCH_CONSOLE_PRIMARY_USER 与 BATCH_CONSOLE_REPLICA_USER 及其密码）一并改用该 Secret
+未设置时不渲染，沿用共享账号。
+*/}}
+{{- define "batch-platform.controlPlanePlatformDbCredentialsEnv" -}}
+{{- $secretName := (.svc.platformDb | default dict).credentialsSecretName -}}
+{{- if $secretName }}
+{{- include "batch-platform.workerPlatformDbCredentialsEnv" .svc }}
+{{- if .console }}
+{{- range $target := list "PRIMARY" "REPLICA" }}
+- name: BATCH_CONSOLE_{{ $target }}_USER
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName | quote }}
+      key: BATCH_PLATFORM_DB_USERNAME
+- name: BATCH_CONSOLE_{{ $target }}_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ $secretName | quote }}
+      key: BATCH_PLATFORM_DB_PASSWORD
+{{- end }}
+{{- end }}
+{{- if .migrates }}
+- name: BATCH_PLATFORM_FLYWAY_USERNAME
+  valueFrom:
+    configMapKeyRef:
+      name: {{ include "batch-platform.configmapName" .root }}
+      key: BATCH_PLATFORM_DB_USERNAME
+- name: BATCH_PLATFORM_FLYWAY_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "batch-platform.secretName" .root }}
+      key: BATCH_PLATFORM_DB_PASSWORD
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/*
 启动期配置摘要。ConfigMap 或 Secret 的渲染结果变化时，Pod template hash 随之变化，
 Deployment/StatefulSet 因此自动执行滚动更新。摘要不暴露 Secret 明文。
 */}}

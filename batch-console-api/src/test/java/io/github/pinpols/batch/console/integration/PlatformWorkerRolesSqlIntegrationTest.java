@@ -113,6 +113,16 @@ class PlatformWorkerRolesSqlIntegrationTest {
               .as("%s UPDATE(%s) %s", worker.getKey(), column, table.getKey())
               .isTrue();
         }
+        if (table.getValue().path("lock_only").asBoolean()) {
+          Boolean lockable = jdbc.queryForObject(
+              "SELECT has_any_column_privilege(?, ?, 'UPDATE')",
+              Boolean.class,
+              worker.getValue(),
+              table.getKey());
+          assertThat(lockable)
+              .as("%s lock-only %s", worker.getKey(), table.getKey())
+              .isTrue();
+        }
         boolean inserts = table.getValue().path("privileges").toString().contains("INSERT");
         if (inserts) {
           Boolean sequencesUsable = jdbc.queryForObject(
