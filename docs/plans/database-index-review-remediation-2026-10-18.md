@@ -50,6 +50,12 @@
 | IDX-07 | P2，专项计划待补 | JSONB 表达式/partial 谓词证明、混合排序、低选择性全局扫描和大/小租户计划偏差 | 按真实参数、NULL 比例、状态倾斜及 prepared plan 核实；不笼统要求 JSONB 建 GIN，不以字段相同认定索引覆盖 |
 | IDX-08 | 随实施验收 | 索引上线构建、失败残留、回退、分区扩展继承、统计刷新和写入代价 | 与 PART-08/09 配套；记录构建/锁/WAL/体积/更新开销、invalid 残留处置。真实环境审批和执行另行处理 |
 
+### 2026-11-05 IDX-02 主干迁移快照修复
+
+- #1320 的 V376 一换一替换 Webhook 重投索引后，遗漏更新平台 catalog 快照，导致后续 main Full CI 的 `LocalFlywayPlatformMigrationsIntegrationTest` 持续失败。失败提交与运行见 [#1322 的 Full CI](https://github.com/pinpols/file-batch-system/actions/runs/41946641205/job/126980394471)；不是调度触发模式改动引起的额外结构变化。
+- 在隔离的真实 PostgreSQL 17.11 中使用当前 Flyway 12.4.0、仓库迁移、catalog SQL 与 `RollingMonthCatalogNormalizer` 对照 V375→V376：只删除 `idx_webhook_delivery_log_retry_eligible` 并新增 `idx_webhook_delivery_log_legacy_retry`，其余 catalog 对象无差异。V375 全部摘要与旧快照一致，V376 仅 INDEX 摘要改变，索引总数仍为 1718；更新该项，不修改迁移、SQL、种子快照或断言强度。
+- 新增 `shouldReplaceOnlyLegacyWebhookRetryIndex_whenMigratingV376`，固定完整 catalog 只允许上述一删一增，并独立检查新索引的键与 partial 谓词。真实本地 Flyway `validate` 和重复 `migrate`（0 个迁移）已通过；该迁移类 8 个测试方法通过临时本机 PostgreSQL 连接适配执行全部通过（未跳过，不等同于 Testcontainers 生命周期验证），`test-compile -pl batch-orchestrator -am` 通过。原有 generic/custom 查询计划测试保持不变，完整 CI 仍需在修复提交上复核。
+
 建议顺序：先处理 PART-01 的隔离边界、REF 的数据完整性和 PART-02 的清理安全；同步完成 IDX-01/02 及主链热点测量，再按数据选择索引；最后收敛低风险重叠索引。P2/P3 候选未测不能统统计作发布阻断，也不能统统标为已关闭。
 
 ## 3. 性能与迁移验收要求
