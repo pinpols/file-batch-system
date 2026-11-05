@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -62,7 +63,7 @@ class JobInstanceMapperXmlTest {
         "id",
         1L,
         "instanceNos",
-        java.util.List.of("inst-a"),
+        List.of("inst-a"),
         "pageRequest",
         new PageRequest(1, 2));
     for (String statement : new String[] {"selectByQuery", "selectById", "selectByInstanceNos"}) {
