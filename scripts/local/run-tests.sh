@@ -26,7 +26,7 @@
 # 环境变量（可覆盖）：
 #   DOCKER_HOST                            远程 Docker（tcp://host:2375 或 ssh://user@host）；设置后不再默认指向本机 socket
 #   TESTCONTAINERS_HOST_OVERRIDE           远程 Docker 时容器端口所在主机（本机须能访问该主机的映射端口）
-#   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（未设置 DOCKER_HOST 且存在 macOS 用户级 socket 时默认使用它）
+#   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（默认 macOS 用户级 socket；远程 DOCKER_HOST 时不设默认值）
 #   DOCKER_API_VERSION                     Docker API 版本（默认 1.44）
 #   ALLOW_DOCKER_SKIP                      设为 1 时允许集成/E2E 测试因 Docker 不可用而跳过（默认视为失败）
 #   MAVEN_THREADS                          Maven Reactor 并发度；含 Testcontainers 时默认 1
@@ -43,11 +43,12 @@ source "$ROOT_DIR/scripts/lib/logging.sh"
 # shellcheck source=maven-env.sh
 source "$ROOT_DIR/scripts/local/maven-env.sh"
 
-# 远程 Docker（DOCKER_HOST）时 socket 覆盖会把容器内挂载指向本机路径，只在本机 Docker Desktop 场景下默认设置。
-if [[ -z "${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-}" && -z "${DOCKER_HOST:-}" \
-  && -S "$HOME/.docker/run/docker.sock" ]]; then
-  export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="$HOME/.docker/run/docker.sock"
-fi
+# 本机 Docker 行为保持不变；仅远程 Docker（DOCKER_HOST=tcp:// 或 ssh://）时不设置默认值，
+# 否则 Ryuk 等容器的 socket 挂载会指向远程主机上不存在的本机路径。
+case "${DOCKER_HOST:-}" in
+  tcp://*|ssh://*) ;;
+  *) export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}" ;;
+esac
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
 TEST_RESULT_LINES=()
@@ -246,6 +247,9 @@ run_module_tests() {
 }
 
 DOCKER_SKIP_REASON="disabledWithoutDocker is true and Docker is not available"
+# 只检查本次运行生成的报告：--skip-build 不清理旧报告，避免历史无 Docker 运行造成误报。
+RUN_STARTED_MARKER="$LOG_DIR/.run-started"
+: > "$RUN_STARTED_MARKER"
 
 # Testcontainers 在 Docker 不可达时按 disabledWithoutDocker=true 静默跳过整类测试，结果看似全绿。
 # 集成/E2E 模式下把这种跳过视为失败；ALLOW_DOCKER_SKIP=1 可显式放行。
@@ -255,7 +259,7 @@ check_docker_skips() {
   local -a scan_dirs=("$@")
   local skipped
   skipped=$(find "${scan_dirs[@]}" \( -path "*/target/surefire-reports/TEST-*.xml" \
-    -o -path "*/target/failsafe-reports/TEST-*.xml" \) -print0 2>/dev/null \
+    -o -path "*/target/failsafe-reports/TEST-*.xml" \) -newer "$RUN_STARTED_MARKER" -print0 2>/dev/null \
     | xargs -0 grep -lF "$DOCKER_SKIP_REASON" 2>/dev/null | wc -l | tr -d ' ')
   if [[ "${skipped:-0}" -eq 0 ]]; then
     return 0
