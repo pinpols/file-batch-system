@@ -68,6 +68,8 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 - `DRY_RUN`:只供核对,不能被下游消费。
 - `FAILED / CANCELLED / TERMINATED`:不是可消费产物。
 
+数据库层写入所有权（ARCH-20261103-01）：按 `scripts/db/platform-control-plane-roles.sql` 授权时，`result_version`、`asset_partition`、`readiness_wait` 及 `result_version_archive` 只有 Orchestrator 运行时角色可写；Console 与 Trigger 角色对这几张表没有任何权限，Console 的 readiness 与结果版本操作仍经 `ConsoleOrchestratorPort` 由 Orchestrator 执行。授权清单由 Mapper SQL 生成，新增读写路径时需重新生成并复核这一边界。
+
 ## 边界
 
 Trigger 日历与结果版本操作的日志字段经 `LogSanitizer.value` 输出,防止用户可控换行伪造运维记录。日志净化不修改原租户、业务键、状态或 readiness 判断输入;EFFECTIVE 物化与调度 defer 规则保持一致。

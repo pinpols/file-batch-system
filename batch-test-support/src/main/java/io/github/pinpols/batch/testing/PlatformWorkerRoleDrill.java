@@ -84,7 +84,8 @@ public final class PlatformWorkerRoleDrill {
           .map(Map.Entry::getValue)
           .sorted()
           .toList();
-  private static final boolean SHARED_CONTROL_PLANE_CONTEXT = !PRESENT_CONTROL_PLANE.isEmpty();
+  private static final boolean SHARED_CONTROL_PLANE_CONTEXT =
+      EmptyChecks.isNotEmpty(PRESENT_CONTROL_PLANE);
 
   private static final Set<String> REPORTED = ConcurrentHashMap.newKeySet();
   private static final Map<String, AtomicLong> RESTRICTED = new ConcurrentHashMap<>();
