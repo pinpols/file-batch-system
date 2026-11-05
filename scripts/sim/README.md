@@ -187,6 +187,8 @@ PG 15432 / Redis 16379 / Kafka 19092 / MinIO 19000 / SFTP 12222 / MockServer 110
 
 ## 调试入口
 
+输出标记统一为 ✅ 通过、❌ 失败、⚠️ 需关注：`sim`/`sim-selected` 每个阶段写一行 `✅ PASS <阶段>` 或 `❌ FAIL <阶段> (原因)`，末行汇总通过与失败阶段数，全部通过才是 `✅ sim 完成`；同样内容写入 `$SIM_LOG_DIR/sim-summary.txt`。阶段失败时以退出码和该文件为准，不只看颜色或标记。
+
 ```bash
 # SFTP 内容
 docker exec batch-sim-sftp ls -la /home/ta/inbound/ /home/tb/inbound/ /home/tc/inbound/

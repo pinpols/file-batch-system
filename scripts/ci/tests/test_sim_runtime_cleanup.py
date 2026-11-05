@@ -310,7 +310,7 @@ LISTENING_PORT=18083 cleanup_sim_inputs
 """
         result = subprocess.run(["bash", "-c", shell], capture_output=True, text=True)
         self.assertNotEqual(0, result.returncode)
-        self.assertIn("BLOCKED:  ✗ :18083 仍有应用监听", result.stdout)
+        self.assertIn("BLOCKED:  ❌ :18083 仍有应用监听", result.stdout)
         self.assertNotIn("SFTP_CLEANED", result.stdout)
         self.assertNotIn("MINIO_CLEANED", result.stdout)
 
@@ -347,10 +347,10 @@ cleanup_sim_inputs
         self.assertIn('clean_sim_minio_inputs "post-stage-${n%%-*}"', completed_stage)
         self.assertLess(
             completed_stage.index('clean_sim_minio_inputs "post-stage-${n%%-*}"'),
-            completed_stage.index('echo "PASS $n"'),
+            completed_stage.index('echo "✅ PASS $n"'),
         )
         self.assertIn('sim_failed=1', completed_stage)
-        self.assertIn('FAIL $n (SIM MinIO input cleanup failed)', completed_stage)
+        self.assertIn('❌ FAIL $n (SIM MinIO input cleanup failed)', completed_stage)
 
     def test_minio_cleanup_pattern_matches_only_owned_stage_25_and_26_inputs(self):
         harness = (ROOT / "scripts/local/sim-harness.sh").read_text()

@@ -236,7 +236,7 @@ try:
     assert old_snapshot[2:9] == ["/bin/sleep", "20", "EXPONENTIAL", "1", "300", "/bin/sleep", "20"], (
         f"in-flight instance drifted after update: observation={old_snapshot}"
     )
-    print("  ✓ running instance retains its creation-time execution and retry snapshot", flush=True)
+    print("  ✅ running instance retains its creation-time execution and retry snapshot", flush=True)
 
     new_instance_biz_date = (
         date.fromisoformat(BIZ_DATE) + timedelta(days=1)
@@ -251,7 +251,7 @@ try:
     old_terminal = wait_terminal(old_instance_request)
     assert old_terminal[1] == "SUCCESS", f"in-flight instance failed: {old_terminal}"
     print(
-        f"  ✓ old instance SUCCESS; new instance SUCCESS; requestIds="
+        f"  ✅ old instance SUCCESS; new instance SUCCESS; requestIds="
         f"{old_instance_request},{new_instance_request}",
         flush=True,
     )
@@ -266,7 +266,7 @@ finally:
         original_retry_count,
         original_timeout,
     )
-    print("  ✓ original SIM job definition restored", flush=True)
+    print("  ✅ original SIM job definition restored", flush=True)
 
 print("==> ✅ 运行中修改作业配置 SIM 完成；只验证执行/重试快照边界", flush=True)
 PY

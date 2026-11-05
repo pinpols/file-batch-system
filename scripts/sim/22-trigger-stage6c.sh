@@ -248,7 +248,7 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req, timeout=30) as resp:
     text = resp.read().decode()
     ok = resp.status == 200 and '"SUCCESS"' in text
-    print(f"  [approve] {'✓' if ok else '✗'}", flush=True)
+    print(f"  [approve] {'✅' if ok else '❌'}", flush=True)
     if not ok:
         print(text[:500], flush=True)
         sys.exit(1)

@@ -52,7 +52,7 @@ ensure_console_auth() {
     -X POST "$CONSOLE_BASE/api/console/auth/login" \
     --data-raw "{\"username\":\"$user\",\"password\":\"$pass\"}" || true)
   if [[ "$code" != "200" ]]; then
-    echo "  ✗ console login failed HTTP=$code: $(head -c 300 /tmp/sim-console-login.json 2>/dev/null)" >&2
+    echo "  ❌ console login failed HTTP=$code: $(head -c 300 /tmp/sim-console-login.json 2>/dev/null)" >&2
     exit 1
   fi
   CURL_AUTH_ARGS=(-b "$COOKIE_JAR")
@@ -62,7 +62,7 @@ import_one() {
   local tenant="$1"
   local template="$FIXTURE_DIR/${tenant}-tenant-config-package-test.xlsx"
   local file="$FIXTURE_WORK_DIR/${tenant}-tenant-config-package-test.xlsx"
-  [[ -f "$template" ]] || { echo "  ✗ 文件不存在:$template" >&2; return 1; }
+  [[ -f "$template" ]] || { echo "  ❌ 文件不存在:$template" >&2; return 1; }
   # 在 Apply 前一次性固定当前运行方式的地址，防止探针读取尚未 bootstrap 的容器地址。
   local mockserver_base_url
   mockserver_base_url="$(sim_mockserver_base_url)"
@@ -84,10 +84,10 @@ PY
     < "$ROOT/scripts/sim/sql/select-sim-tenant-fixture-import.sql")
   if [[ -n "$recorded_sha256" ]]; then
     if [[ "$recorded_sha256" == "$fixture_sha256" ]]; then
-      echo "  ✓ 配置包指纹一致，跳过重复 Apply"
+      echo "  ✅ 配置包指纹一致，跳过重复 Apply"
       return 0
     fi
-    echo "  ✗ 配置包与已导入指纹不同；SIM 只支持全新数据库部署，请切换到干净数据库" >&2
+    echo "  ❌ 配置包与已导入指纹不同；SIM 只支持全新数据库部署，请切换到干净数据库" >&2
     return 1
   fi
 
@@ -95,7 +95,7 @@ PY
     -v ON_ERROR_STOP=1 -v tenant_id="$tenant" -tA -f /dev/stdin \
     < "$ROOT/scripts/sim/sql/has-sim-tenant-package-data.sql")
   if [[ "$has_package_data" == "t" ]]; then
-    echo "  ✗ tenant $tenant 已有配置但没有 SIM 导入指纹；为避免版本冲突/覆盖，不会再次 Apply，请使用干净数据库" >&2
+    echo "  ❌ tenant $tenant 已有配置但没有 SIM 导入指纹；为避免版本冲突/覆盖，不会再次 Apply，请使用干净数据库" >&2
     return 1
   fi
 
@@ -113,16 +113,16 @@ PY
   upload_resp="$(cat "$upload_body" 2>/dev/null || true)"
   rm -f "$upload_body"
   if [[ ! "$upload_code" =~ ^2 ]]; then
-    echo "  ✗ upload 失败 HTTP=$upload_code: $upload_resp" >&2
+    echo "  ❌ upload 失败 HTTP=$upload_code: $upload_resp" >&2
     return 1
   fi
   local token
   token=$(echo "$upload_resp" | "$PYTHON_BIN" -c "import json,sys; print(json.load(sys.stdin).get('data',{}).get('uploadToken',''))" 2>/dev/null)
   if [[ -z "$token" ]]; then
-    echo "  ✗ upload 失败: $upload_resp" >&2
+    echo "  ❌ upload 失败: $upload_resp" >&2
     return 1
   fi
-  echo "  ✓ upload token=$token"
+  echo "  ✅ upload token=$token"
 
   # 第二步：应用配置包。
   local apply_resp apply_body apply_code
@@ -139,7 +139,7 @@ PY
   apply_resp="$(cat "$apply_body" 2>/dev/null || true)"
   rm -f "$apply_body"
   if [[ ! "$apply_code" =~ ^2 ]]; then
-    echo "  ✗ apply 失败 HTTP=$apply_code: $apply_resp" >&2
+    echo "  ❌ apply 失败 HTTP=$apply_code: $apply_resp" >&2
     return 1
   fi
   local code
@@ -148,15 +148,15 @@ PY
     docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
       -v ON_ERROR_STOP=1 -v tenant_id="$tenant" -v fixture_sha256="$fixture_sha256" \
       -f /dev/stdin < "$ROOT/scripts/sim/sql/record-sim-tenant-fixture-import.sql" >/dev/null
-    echo "  ✓ apply OK，导入指纹已持久化"
+    echo "  ✅ apply OK，导入指纹已持久化"
   else
-    echo "  ✗ apply 失败: $apply_resp" >&2
+    echo "  ❌ apply 失败: $apply_resp" >&2
     return 1
   fi
 }
 
 echo "==> console-api health"
-curl -sf --max-time 30 --connect-timeout 5 "$CONSOLE_BASE/actuator/health" -o /dev/null && echo "  ✓ UP" || { echo "  ✗ console-api DOWN"; exit 1; }
+curl -sf --max-time 30 --connect-timeout 5 "$CONSOLE_BASE/actuator/health" -o /dev/null && echo "  ✅ UP" || { echo "  ❌ console-api DOWN"; exit 1; }
 docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < "$ROOT/scripts/sim/sql/create-sim-tenant-fixture-import-state.sql" >/dev/null
 ensure_console_auth
@@ -171,14 +171,14 @@ echo "==> 应用 sim-e2e bootstrap(runtime config refresh)"
 docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PLATFORM_DB" -v ON_ERROR_STOP=1 \
   -v mockserver_base_url="$(sim_mockserver_base_url)" \
   -f /dev/stdin < "$ROOT/test-data/sim/sim-e2e-bootstrap.sql" >/dev/null
-echo "  ✓ bootstrap OK"
+echo "  ✅ bootstrap OK"
 sim_prepare_sftp_probe_channels
 
 if [[ "${SIM_IMPORT_TENANTS_QUIESCE_SCHEDULES:-true}" == "true" ]]; then
   echo
   echo "==> 静默自动 fire 的定时触发,避免导入配置后污染普通 sim"
   SIM_QUIESCE_FROM_IMPORT_TENANTS=1 bash "$ROOT/scripts/sim/98-quiesce-schedules.sh" >/dev/null
-  echo "  ✓ schedules quiesced"
+  echo "  ✅ schedules quiesced"
 fi
 
 echo

@@ -95,7 +95,7 @@ class SimFaultChannelCleanupTest(unittest.TestCase):
         cleanup_sql = (ROOT / "scripts/local/sql/disable-stage5b-fault-channel.sql").read_text()
 
         self.assertIn("sim_platform_sql disable-stage5b-fault-channel.sql", harness)
-        self.assertIn('|| { c_red "  ✗ SIM 故障配置恢复未完成"; return 1; }', harness)
+        self.assertIn('|| { c_red "  ❌ SIM 故障配置恢复未完成"; return 1; }', harness)
         self.assertIn("cleanup_stage5b_fault_channel", stage)
         self.assertIn('MOCKSERVER_BASE_URL="$(sim_mockserver_base_url)"', stage)
         self.assertIn('STAGE5B_FAULT_PATH="/tb/fail"', stage)

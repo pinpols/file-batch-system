@@ -171,7 +171,7 @@ def launch(label, job, params, biz_date):
     with urllib.request.urlopen(req, timeout=30) as resp:
         text = resp.read().decode()
         ok = resp.status == 200 and '"SUCCESS"' in text
-        print(f"  [launch] {label:16s} {job:28s} {'✓' if ok else '✗'}", flush=True)
+        print(f"  [launch] {label:16s} {job:28s} {'✅' if ok else '❌'}", flush=True)
         if not ok:
             print(text[:500], flush=True)
     return rid

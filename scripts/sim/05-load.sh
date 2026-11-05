@@ -183,7 +183,7 @@ def run(label, tenant, job, params):
     ok += 1 if good else 0
     if not good:
         errors.append(f"{label} {tenant}/{job} launch failed: {err}")
-    print(f"  [{label:8s}] {tenant}/{job:24s} {'✓' if good else '✗ '+err}")
+    print(f"  [{label:8s}] {tenant}/{job:24s} {'✅' if good else '❌ '+err}")
     return request_id if good else ""
 
 def read_import_status(tenant, request_id):
@@ -260,7 +260,7 @@ for t in TENANTS:
         for job, channel in DISPATCHES.get(t, []):
             msg = f"DISPATCH {t}/{job} skipped because prerequisite IMPORT did not reach SUCCESS"
             errors.append(msg)
-            print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
+            print(f"  [DISPATCH] {t}/{job}: ❌ {msg}")
         continue
     fid = wait_latest_file_id(t)
     for job, channel in DISPATCHES.get(t, []):
@@ -277,7 +277,7 @@ for t in TENANTS:
         else:
             msg = f"DISPATCH {t}/{job} missing OUTPUT/GENERATED file_record for batchNo={BATCH}"
             errors.append(msg)
-            print(f"  [DISPATCH] {t}/{job}: ✗ {msg}")
+            print(f"  [DISPATCH] {t}/{job}: ❌ {msg}")
     for job in WORKFLOWS.get(t, []):
         workflow_batch = f"{BATCH}-wf-{job.lower().replace('_', '-')}"
         run("WORKFLOW", t, job, {"batchNo": workflow_batch})
