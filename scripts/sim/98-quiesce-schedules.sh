@@ -13,12 +13,11 @@
 #   churn 永远自我延续。这个脚本就是 sim 的「收尾静默」一步。
 #
 # 做什么(都幂等):
-#   1. 所有 schedule_type ∈ (CRON, FIXED_RATE) 的 job_definition → schedule_type='MANUAL'。
-#      - 保留 schedule_expr(只改类型),enabled 不动 → job 仍可经 launch API 触发(sim 主链走 API,
-#        不受影响;4 天驱动 / 各 stage 照常)。
-#      - 真正需要 cron 自动 fire 的阶段(STAGE6C)在自己的 fixtures 重 seed 里用
-#        `ON CONFLICT (tenant_id, job_code) DO UPDATE SET schedule_type=EXCLUDED.schedule_type`
-#        把它的两个 job 改回 SCHEDULED,自我重置——所以本脚本静默后它下次跑仍正常。
+#   1. ta/tb/tc 的定时 workflow_definition → schedule_enabled=false。
+#      - Workflow 是调度权威源；只改 Job 的 schedule_type 不能停止自动 fire。
+#      - 保留日程类型、表达式、时区及 enabled，Job 仍可经 launch API 触发。
+#      - 真正需要自动 fire 的阶段(STAGE6C/6D)会在自己的 Workflow fixtures 中
+#        重置 schedule_enabled=true；其他租户的调度不在本步骤范围。
 #   2. 清空 dead_letter_task(sim 跑出来的全是负向用例残留:已解决的 SUCCESS 历史 +
 #      确定性失败如 missing_col 在 auto-retry 里反复再失败、不断新刷死信的 NEW/FAILED)。
 #      只静默 schedule 不够 —— 存量 open 死信里的「永不可能成功」项会被 retry governance

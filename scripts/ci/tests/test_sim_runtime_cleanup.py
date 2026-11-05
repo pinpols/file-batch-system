@@ -14,6 +14,27 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[3]
 
 
+class SimScheduleQuiesceTest(unittest.TestCase):
+    """静默脚本必须关闭 Workflow 权威开关,保留日程与非 SIM 租户。"""
+
+    def test_quiesce_disables_workflow_schedules_within_sim_tenants(self):
+        sql = (ROOT / "scripts/sim/sql/quiesce-schedules.sql").read_text()
+        update = re.search(r"(?is)UPDATE batch\.workflow_definition\s+SET(.*?)RETURNING", sql)
+        self.assertIsNotNone(update)
+        statement = update.group(1)
+        self.assertRegex(statement, r"(?i)schedule_enabled\s*=\s*false")
+        self.assertIn("tenant_id IN ('ta', 'tb', 'tc')", statement)
+        self.assertIn("schedule_type IN ('CRON', 'FIXED_RATE')", statement)
+        self.assertNotRegex(statement, r"(?i)(?:timezone|schedule_expr|schedule_type)\s*=")
+
+    def test_quiesce_residual_check_uses_authoritative_workflow_switch(self):
+        sql = (ROOT / "scripts/sim/sql/quiesce-schedules.sql").read_text()
+        check = sql.split("SELECT 'still_auto_fire'", 1)[1].split("UNION ALL", 1)[0]
+        self.assertIn("batch.workflow_definition", check)
+        self.assertIn("schedule_enabled = true", check)
+        self.assertIn("tenant_id IN ('ta', 'tb', 'tc')", check)
+
+
 class SimRuntimeProfileRecoveryTest(unittest.TestCase):
     """核心服务恢复不得静默清除场景要求的Worker模式。"""
 

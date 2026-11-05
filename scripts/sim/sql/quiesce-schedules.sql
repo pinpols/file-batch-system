@@ -1,9 +1,11 @@
 -- DANGER: 删除/停用 sim 调度夹具。仅限本地 sim 平台库，执行前确认 schedule 范围。
-\echo '-- 1/2 CRON/FIXED_RATE → MANUAL(保留 expr / enabled;stage6c 等自我重置不受影响)'
+\echo '-- 1/2 关闭 ta/tb/tc Workflow 定时调度(保留日程 / 时区 / enabled;stage6c 等自我重置)'
 WITH q AS (
-  UPDATE batch.job_definition
-     SET schedule_type = 'MANUAL'
-   WHERE schedule_type IN ('CRON', 'FIXED_RATE')
+  UPDATE batch.workflow_definition
+     SET schedule_enabled = false
+   WHERE tenant_id IN ('ta', 'tb', 'tc')
+     AND schedule_type IN ('CRON', 'FIXED_RATE')
+     AND schedule_enabled = true
   RETURNING 1)
 SELECT count(*) AS quiesced_schedules FROM q;
 
@@ -11,9 +13,12 @@ SELECT count(*) AS quiesced_schedules FROM q;
 WITH d AS (DELETE FROM batch.dead_letter_task RETURNING 1)
 SELECT count(*) AS purged_dead_letters FROM d;
 
-\echo '-- 残留核对:仍自动 fire 的定时 应为 0;死信 应为 0'
+\echo '-- 残留核对:ta/tb/tc 仍启用的定时调度 应为 0;死信 应为 0'
 SELECT 'still_auto_fire' AS check, count(*) AS n
-  FROM batch.job_definition WHERE schedule_type IN ('CRON', 'FIXED_RATE')
+  FROM batch.workflow_definition
+ WHERE tenant_id IN ('ta', 'tb', 'tc')
+   AND schedule_type IN ('CRON', 'FIXED_RATE')
+   AND schedule_enabled = true
 UNION ALL
 SELECT 'remaining_dead_letters', count(*) FROM batch.dead_letter_task;
 -- DANGER: 删除/停用 sim 调度夹具。仅限本地 sim 平台库，执行前确认 schedule 范围。

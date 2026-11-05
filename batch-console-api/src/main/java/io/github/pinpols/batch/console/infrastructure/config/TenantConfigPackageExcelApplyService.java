@@ -439,7 +439,12 @@ public class TenantConfigPackageExcelApplyService {
   private void insertJob(Map<String, String> row, ApplyContext ctx, String jobCode) {
     JobDefinitionEntity entity = newJobEntity(row, ctx, jobCode);
     jobDefinitionMapper.insert(entity);
-    singleJobWorkflowProvisioner.provision(entity);
+    // INSERT 的 SQL 缺省值不会回填 Java 对象,受管 Workflow 必须继承实际落库的时区与模式。
+    JobDefinitionView persistedJob = jobDefinitionMapper.selectById(ctx.tenantId(), entity.getId());
+    if (EmptyChecks.isNull(persistedJob)) {
+      throw BizException.of(ResultCode.NOT_FOUND, "error.job.definition_not_found");
+    }
+    singleJobWorkflowProvisioner.provision(persistedJob);
     JobMonitoringPolicyUpsertParam.JobMonitoringPolicyUpsertParamBuilder monitoringPolicyBuilder =
         JobMonitoringPolicyUpsertParam.builder()
             .tenantId(ctx.tenantId())

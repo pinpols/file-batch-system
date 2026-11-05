@@ -74,6 +74,8 @@ scripts/sim/
 
 ### 29/30 数据清理边界
 
+`98-quiesce-schedules.sh` 在隔离 SIM 平台库中关闭 ta/tb/tc 定时 Workflow 的 `schedule_enabled`，保留其类型、表达式、时区和整体启用状态，不再仅改 Job 调度类型。Stage 22/24 的专属 fixture 会明确重启自身日程。该脚本仍含原有的死信清理，只能用于专用 SIM 库，不能用于修复已有业务数据。
+
 - 29 的本地 Cookie、下载工作簿和响应文件由退出 trap 清理；服务端上传/预览会话使用既有 30 分钟 TTL，不通过清空 Redis 回收。未执行 Apply，不产生作业定义。
 - 30 的实例、任务、触发请求、Outbox 和 Console 操作审计由下一次 `all` 的 reset 清理。`00-reset-runtime.sh` 与 harness 共用 `scripts/local/sql/reset-platform-runtime.sql`，不再各自维护平台表清单。报告日志保留作为验证证据。
 - 30 在正常结束、断言失败、SIGTERM 或 Ctrl-C 时通过 `finally` 尝试恢复原配置；恢复 API 失败会使阶段失败，不能当作已恢复。SIGKILL/机器断电无法执行恢复。默认 `default-tenant/atomic_shell_demo` 在下一次 `all` 的 `prereq` 中由 `ensure-sim-atomic-prerequisites.sql` 重置为标准 fixture；单独 `reset` 不改定义。自定义 `SIM_ATOMIC_TENANT_ID/SIM_ATOMIC_JOB_CODE` 不受该 fixture 重置覆盖，必须使用专用测试作业并在异常后核对、恢复配置。

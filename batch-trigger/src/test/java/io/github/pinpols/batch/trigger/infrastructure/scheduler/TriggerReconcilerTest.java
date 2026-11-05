@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.infrastructure.scheduler;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -259,6 +260,124 @@ class TriggerReconcilerTest {
     reconciler.reconcile();
 
     verify(registration, never()).removeQuartzJob(any(), any());
+  }
+
+  @Test
+  @DisplayName("坏定义不阻塞后续健康定义注册、计划与恢复,也不误删既有调度")
+  void shouldContinueHealthyDefinition_whenEarlierRegistrationIsInvalid() throws Exception {
+    TriggerDescriptor invalid = enabledDescriptor("t1", "BAD");
+    invalid.setScheduleType("CRON");
+    invalid.setScheduleExpression("0 0 1 * * ?");
+    TriggerDescriptor healthy = enabledDescriptor("t1", "HEALTHY");
+    JobKey invalidKey = JobKey.jobKey("t1:WF:WF-BAD", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey healthyKey = JobKey.jobKey("t1:WF:WF-HEALTHY", TriggerSchedulerFacade.JOB_GROUP);
+    CronTrigger oldInvalid = TriggerBuilder.newTrigger()
+        .withIdentity(invalidKey.getName(), invalidKey.getGroup())
+        .forJob(invalidKey)
+        .withSchedule(CronScheduleBuilder.cronSchedule("0 0 2 * * ?"))
+        .build();
+    CronTrigger healthyTrigger = TriggerBuilder.newTrigger()
+        .withIdentity(healthyKey.getName(), healthyKey.getGroup())
+        .forJob(healthyKey)
+        .withSchedule(CronScheduleBuilder.cronSchedule("0 0 1 * * ?"))
+        .build();
+    when(loader.loadAll()).thenReturn(List.of(invalid, healthy));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(invalidKey));
+    doReturn(List.of(oldInvalid)).when(scheduler).getTriggersOfJob(invalidKey);
+    doReturn(List.of(healthyTrigger)).when(scheduler).getTriggersOfJob(healthyKey);
+    doThrow(new IllegalArgumentException("invalid timezone"))
+        .when(registration)
+        .reconcileByWorkflowCode("t1", "WF-BAD");
+
+    reconciler.reconcile();
+
+    verify(registration).reconcileByWorkflowCode("t1", "WF-HEALTHY");
+    verify(occurrencePlanner).materialize(ArgumentMatchers.eq(healthy), any(), any());
+    verify(misfireRecoveryListener).restorePendingMisfires(healthy, healthyKey);
+    verify(occurrencePlanner, never()).materialize(ArgumentMatchers.eq(invalid), any(), any());
+    verify(misfireRecoveryListener, never()).restorePendingMisfires(invalid, invalidKey);
+    verify(registration, never()).removeQuartzJob(any(), any());
+  }
+
+  @Test
+  @DisplayName("全局注册基础设施失败中止本轮,不继续注册或清理")
+  void shouldAbortPass_whenRegistrationInfrastructureFails() throws Exception {
+    TriggerDescriptor first = enabledDescriptor("t1", "FIRST");
+    TriggerDescriptor next = enabledDescriptor("t1", "NEXT");
+    when(loader.loadAll()).thenReturn(List.of(first, next));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(JobKey.jobKey("t1:WF:ORPHAN", TriggerSchedulerFacade.JOB_GROUP)));
+    doThrow(new IllegalStateException("Quartz unavailable"))
+        .when(registration)
+        .reconcileByWorkflowCode("t1", "WF-FIRST");
+
+    reconciler.reconcile();
+
+    verify(registration, never()).reconcileByWorkflowCode("t1", "WF-NEXT");
+    verify(registration, never()).removeQuartzJob(any(), any());
+    verify(occurrencePlanner, never()).materialize(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("定义身份缺失时继续健康注册,但不依据不完整身份集合清理")
+  void shouldPreserveQuartzJobs_whenDefinitionIdentityIsMissing() throws Exception {
+    TriggerDescriptor invalid = enabledDescriptor("t1", "BAD");
+    invalid.setWorkflowCode(null);
+    TriggerDescriptor healthy = enabledDescriptor("t1", "HEALTHY");
+    when(loader.loadAll()).thenReturn(List.of(invalid, healthy));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(JobKey.jobKey("t1:WF:EXISTING", TriggerSchedulerFacade.JOB_GROUP)));
+
+    reconciler.reconcile();
+
+    verify(registration).reconcileByWorkflowCode("t1", "WF-HEALTHY");
+    verify(registration, never()).removeQuartzJob(any(), any());
+  }
+
+  @Test
+  @DisplayName("恢复定义校验失败不阻塞后续恢复,且保留其已有恢复任务")
+  void shouldRestoreHealthyPendingMisfire_whenEarlierRecoveryDefinitionIsInvalid()
+      throws Exception {
+    TriggerDescriptor invalid = enabledDescriptor("t1", "BAD");
+    TriggerDescriptor healthy = enabledDescriptor("t1", "HEALTHY");
+    healthy.setWorkflowDefinitionId(12L);
+    JobKey invalidKey = JobKey.jobKey("t1:RECOVERY:11", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey healthyKey = JobKey.jobKey("t1:RECOVERY:12", TriggerSchedulerFacade.JOB_GROUP);
+    when(loader.loadAll()).thenReturn(List.of());
+    when(loader.loadPendingMisfireDefinitions()).thenReturn(List.of(invalid, healthy));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any()))
+        .thenReturn(Set.of(invalidKey));
+    doThrow(new IllegalArgumentException("invalid recovery definition"))
+        .when(registration)
+        .registerRecoveryJob(invalid);
+
+    reconciler.reconcile();
+
+    verify(registration).registerRecoveryJob(healthy);
+    verify(misfireRecoveryListener).restorePendingMisfires("t1", 12L, healthyKey);
+    verify(misfireRecoveryListener, never()).restorePendingMisfires("t1", 11L, invalidKey);
+    verify(registration, never()).removeQuartzJob(any(), any());
+  }
+
+  @Test
+  @DisplayName("单条恢复载荷非法不阻塞后续已注册恢复任务")
+  void shouldContinuePendingRecovery_whenEarlierRestoreRejectsDefinition() throws Exception {
+    TriggerDescriptor invalid = enabledDescriptor("t1", "BAD");
+    TriggerDescriptor healthy = enabledDescriptor("t1", "HEALTHY");
+    healthy.setWorkflowDefinitionId(12L);
+    JobKey invalidKey = JobKey.jobKey("t1:RECOVERY:11", TriggerSchedulerFacade.JOB_GROUP);
+    JobKey healthyKey = JobKey.jobKey("t1:RECOVERY:12", TriggerSchedulerFacade.JOB_GROUP);
+    when(loader.loadAll()).thenReturn(List.of());
+    when(loader.loadPendingMisfireDefinitions()).thenReturn(List.of(invalid, healthy));
+    when(scheduler.getJobKeys(ArgumentMatchers.<GroupMatcher<JobKey>>any())).thenReturn(Set.of());
+    doThrow(new IllegalArgumentException("invalid recovery payload"))
+        .when(misfireRecoveryListener)
+        .restorePendingMisfires("t1", 11L, invalidKey);
+
+    reconciler.reconcile();
+
+    verify(misfireRecoveryListener).restorePendingMisfires("t1", 12L, healthyKey);
   }
 
   private TriggerDescriptor enabledDescriptor(String tenantId, String jobCode) {
