@@ -145,9 +145,35 @@ public class TriggerReconciler {
         logInvalidDefinition(descriptor, invalidDefinition);
       }
     }
-    int unregistered = 0;
     // 缺失身份时无法证明某个 Quartz Job 已无权威定义,本轮只修复注册而不清理。
     Set<JobKey> cleanupCandidates = identitiesComplete ? quartzJobs : Set.of();
+    int unregistered = removeOrphanedQuartzJobs(cleanupCandidates, expectedJobs);
+    // 使开日和最终结算遵循同一加锁顺序。
+    // 将终态日历跳过与 Trigger 准入串行化，并保留已
+    for (TriggerDescriptor descriptor : registeredRecoveryDefinitions) {
+      JobKey recoveryJobKey = TriggerSchedulerFacade.recoveryJobKey(descriptor);
+      try {
+        misfireRecoveryListener.restorePendingMisfires(
+            descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), recoveryJobKey);
+      } catch (IllegalArgumentException invalidDefinition) {
+        logInvalidDefinition(descriptor, invalidDefinition);
+      }
+    }
+    boolean triggerReconciliationChangedRegistrations =
+        registered > 0 || unregistered > 0 || replaced > 0;
+    if (triggerReconciliationChangedRegistrations) {
+      log.info(
+          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={},"
+              + " expectedTotal={}",
+          registered,
+          replaced,
+          unregistered,
+          expectedJobs.size());
+    }
+  }
+
+  private int removeOrphanedQuartzJobs(Set<JobKey> cleanupCandidates, Set<JobKey> expectedJobs) {
+    int unregistered = 0;
     for (JobKey key : cleanupCandidates) {
       if (expectedJobs.contains(key)) {
         continue;
@@ -171,28 +197,7 @@ public class TriggerReconciler {
       }
       unregistered++;
     }
-    // 使开日和最终结算遵循同一加锁顺序。
-    // 将终态日历跳过与 Trigger 准入串行化，并保留已
-    for (TriggerDescriptor descriptor : registeredRecoveryDefinitions) {
-      JobKey recoveryJobKey = TriggerSchedulerFacade.recoveryJobKey(descriptor);
-      try {
-        misfireRecoveryListener.restorePendingMisfires(
-            descriptor.getTenantId(), descriptor.getWorkflowDefinitionId(), recoveryJobKey);
-      } catch (IllegalArgumentException invalidDefinition) {
-        logInvalidDefinition(descriptor, invalidDefinition);
-      }
-    }
-    boolean triggerReconciliationChangedRegistrations =
-        registered > 0 || unregistered > 0 || replaced > 0;
-    if (triggerReconciliationChangedRegistrations) {
-      log.info(
-          "trigger reconcile drift resolved: registered={}, replaced={}, unregistered={},"
-              + " expectedTotal={}",
-          registered,
-          replaced,
-          unregistered,
-          expectedJobs.size());
-    }
+    return unregistered;
   }
 
   private void logInvalidDefinition(

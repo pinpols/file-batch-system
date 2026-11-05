@@ -50,3 +50,7 @@ bash scripts/local/pre-commit-checks.sh
 定向测试结果为 Trigger 46 + Console 22，共 68，零失败、错误、跳过；上游没有匹配类不计为额外测试。Python 套件 25 项通过。首次 pre-commit 的环境失败来自临时 Python 环境缺 PyYAML，以及系统同名 `go` 不是 Go 编译器导致 SDK 脚本自测初始化失败；已安装仓库固定 Python 依赖，并按脚本支持的 `GOROOT_HINT` 隔离该无关探测，自测仍实际执行原失败传播断言。
 
 最终 `bash scripts/local/pre-commit-checks.sh` 返回 0，所有适用门禁通过，包含 171 项 CI 治理自测；LOC 快照由仓库工具更新。Sonar 未运行（缺 Docker/Sonar 服务），不视为通过。
+
+## 首轮远端门禁反馈
+
+精确提交 `8a20091fe464fcecb7a63fbe709d056d735e51e5` 的 [手动 PR Gate](https://github.com/pinpols/file-batch-system/actions/runs/41987844806) 检出 `TriggerReconciler.doReconcile()` 的 PMD NCSS 为 63，超过既有门槛。将孤儿 Quartz 清理等价提取为独立方法，保留执行顺序、清理条件、计数及异常边界；不修改门禁配置。拆分后本地 Trigger 两类 46 tests、PMD 7.17.0 与 Spotless 均通过，等待新提交的远端复验。补齐选测后 CI 治理自测为 172 项通过。
