@@ -10,6 +10,7 @@
 
 ### Added
 
+- `ConsoleJobInstanceResponse` 新增 `rootTriggerType`：工作流节点派发的子实例 `triggerType` 恒为 `EVENT`，新字段返回根运行的真实触发来源（`MANUAL` / `SCHEDULED` 等），供控制台“触发”列展示；非工作流派发的实例为 `null`。列表、详情与按实例编号查询统一投影，OpenAPI 同步。
 - 新增内建 Worker 平台库最小授权：`scripts/db/platform-worker-roles.sql` 为 Import/Export/Process/Dispatch/Atomic 指定角色授予由 Mapper/内联 SQL 生成的表级权限，Orchestrator 状态表与 outbox 不可写，`job_task` 仅登记列可写；Helm 新增可选的 `<worker>.platformDb.credentialsSecretName` 注入独立凭据。默认配置仍使用共享平台库账号，切换需先在目标库建角色并执行授权脚本，再逐个 Worker 配置 Secret 滚动发布。
 
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
@@ -28,6 +29,7 @@
 
 ### Fixed
 
+- 受管单作业工作流不再照抄作业上与调度类型不兼容的触发模式：此前 `CRON` / `FIXED_RATE` 作业带 `MANUAL` 触发模式时，生成的工作流显示为定时、调度器却永不注册（只认 `SCHEDULED` / `MIXED`），保存调度时又被校验拒绝。现按调度类型推导兼容值；作业创建接口对显式不兼容的组合返回 `error.job.trigger_mode_incompatible`，未给触发模式时按调度类型取默认值（此前一律 `SCHEDULED`）。兼容规则抽为 `ScheduleTriggerModes`，与工作流调度保存校验同一张表。存量 `JOB-WF-*` 数据不自动迁移。
 - Console 作业实例按业务日筛选改为直接比较 `biz_date` DATE 列，可走索引并裁剪月分区；非规范或非法日期仍返回空结果（IDX-01）。新增迁移 V376 为 Webhook 旧式重投扫描建立覆盖 PENDING 与 EXHAUSTED 的候选索引（`CREATE INDEX CONCURRENTLY`，非事务迁移），并删除被其覆盖的旧 EXHAUSTED 专用索引（`DROP INDEX CONCURRENTLY IF EXISTS`，不涉及数据）（IDX-02）。服务端 `batch.task.batch-claim.enabled` / `job-overrides` 从未参与批量端点准入，已退役，残留配置被忽略；Worker 侧 `batch.worker.batch-claim.enabled` 不变（DOC-BATCH-FLAG-1）。
 
 - Outbox 状态统计接口 `GET /api/console/ops/outbox/stats` 恒返回 500：`ConsoleOutboxEventReadMapper` 的构造器参数写成 `javaType="long"`（MyBatis 别名即 `Long`），与 `OutboxEventStatusStat` 的原始类型 `long` 不匹配；改为 `_long`，并新增 Mapper XML 构造器解析测试。控制台 Outbox 页与运维诊断的 Outbox 统计因此恢复。

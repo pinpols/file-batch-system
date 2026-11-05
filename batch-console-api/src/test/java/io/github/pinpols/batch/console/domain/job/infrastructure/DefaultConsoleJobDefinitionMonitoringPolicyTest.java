@@ -227,6 +227,56 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   }
 
   @Test
+  @DisplayName("创建作业时拒绝与调度类型不兼容的触发模式（如 CRON + MANUAL）")
+  void shouldRejectIncompatibleTriggerMode_whenCreatingJob() {
+    // 校验在解析操作人之前完成，这里只需要租户
+    when(tenantGuard.resolveTenant("tenant-a")).thenReturn("tenant-a");
+    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+    request.setTenantId("tenant-a");
+    request.setJobCode("JOB_CRON_MANUAL");
+    request.setJobName("cron manual");
+    request.setJobType("IMPORT");
+    request.setScheduleType("CRON");
+    request.setScheduleExpr("0 0 2 * * *");
+    request.setTriggerMode("MANUAL");
+    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_CRON_MANUAL")).thenReturn(null);
+
+    assertThatThrownBy(() -> service.create(request))
+        .isInstanceOf(BizException.class)
+        .hasMessageContaining("error.job.trigger_mode_incompatible");
+
+    verify(jobDefinitionMapper, never()).insert(any(JobDefinitionEntity.class));
+  }
+
+  @Test
+  @DisplayName("创建手动作业且未给触发模式时取 MANUAL，而不是一律 SCHEDULED")
+  void shouldDefaultTriggerModeFromScheduleType_whenCreatingManualJob() {
+    stubTenantAndOperator();
+    JobDefinitionCreateRequest request = new JobDefinitionCreateRequest();
+    request.setTenantId("tenant-a");
+    request.setJobCode("JOB_MANUAL");
+    request.setJobName("manual job");
+    request.setJobType("IMPORT");
+    request.setScheduleType("MANUAL");
+    when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_MANUAL")).thenReturn(null);
+    doAnswer(invocation -> {
+          JobDefinitionEntity entity = invocation.getArgument(0);
+          entity.setId(42L);
+          return 1;
+        })
+        .when(jobDefinitionMapper)
+        .insert(any(JobDefinitionEntity.class));
+    when(jobDefinitionMapper.selectById("tenant-a", 42L)).thenReturn(copyEntity("JOB_MANUAL"));
+
+    service.create(request);
+
+    ArgumentCaptor<JobDefinitionEntity> inserted =
+        ArgumentCaptor.forClass(JobDefinitionEntity.class);
+    verify(jobDefinitionMapper).insert(inserted.capture());
+    assertThat(inserted.getValue().getTriggerMode()).isEqualTo("MANUAL");
+  }
+
+  @Test
   @DisplayName("Job 更新入口拒绝修改由关联 Workflow 管理的调度字段")
   void shouldRejectScheduleMutation_whenUpdatingJob() {
     JobDefinitionView existing = new JobDefinitionView();

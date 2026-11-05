@@ -32,6 +32,7 @@
         <result column="finished_at" property="finishedAt"/>
         <result column="dry_run" property="dryRun"/>
         <result column="failure_class" property="failureClass"/>
+        <result column="root_trigger_type" property="rootTriggerType"/>
     </resultMap>
 
     <select id="selectByQuery" resultMap="JobInstanceResultMap">
@@ -61,7 +62,17 @@
                started_at,
                finished_at,
                dry_run,
-               failure_class
+               failure_class,
+               <!-- 工作流节点派发的子实例 trigger_type 固定为 EVENT；根运行的触发来源（MANUAL / SCHEDULED 等）供列表展示 -->
+               (select root_request.trigger_type
+                  from batch.trigger_request child_request
+                  join batch.workflow_run parent_run
+                    on parent_run.id = child_request.parent_workflow_run_id
+                   and parent_run.tenant_id = child_request.tenant_id
+                  join batch.trigger_request root_request
+                    on root_request.id = parent_run.trigger_request_id
+                 where child_request.id = job_instance.trigger_request_id
+                   and child_request.tenant_id = job_instance.tenant_id) as root_trigger_type
         from batch.job_instance
         where tenant_id = #{tenantId}
         <if test="cursorId != null">
@@ -135,7 +146,16 @@
     </select>
 
     <select id="selectById" resultMap="JobInstanceResultMap">
-        select *
+        select *,
+               (select root_request.trigger_type
+                  from batch.trigger_request child_request
+                  join batch.workflow_run parent_run
+                    on parent_run.id = child_request.parent_workflow_run_id
+                   and parent_run.tenant_id = child_request.tenant_id
+                  join batch.trigger_request root_request
+                    on root_request.id = parent_run.trigger_request_id
+                 where child_request.id = job_instance.trigger_request_id
+                   and child_request.tenant_id = job_instance.tenant_id) as root_trigger_type
         from batch.job_instance
         where tenant_id = #{tenantId}
           and id = #{id}
@@ -216,7 +236,16 @@
     </select>
 
     <select id="selectByInstanceNos" resultMap="JobInstanceResultMap">
-        select *
+        select *,
+               (select root_request.trigger_type
+                  from batch.trigger_request child_request
+                  join batch.workflow_run parent_run
+                    on parent_run.id = child_request.parent_workflow_run_id
+                   and parent_run.tenant_id = child_request.tenant_id
+                  join batch.trigger_request root_request
+                    on root_request.id = parent_run.trigger_request_id
+                 where child_request.id = job_instance.trigger_request_id
+                   and child_request.tenant_id = job_instance.tenant_id) as root_trigger_type
         from batch.job_instance
         where tenant_id = #{tenantId}
           and instance_no in

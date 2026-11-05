@@ -51,6 +51,39 @@ class JobInstanceMapperXmlTest {
   }
 
   @Test
+  @DisplayName("列表、详情与按编号查询都投影根运行的触发类型")
+  void shouldProjectRootTriggerType_inListDetailAndInstanceNoQueries() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+    Map<String, Object> params = Map.of(
+        "tenantId",
+        "tenant-a",
+        "id",
+        1L,
+        "instanceNos",
+        java.util.List.of("inst-a"),
+        "pageRequest",
+        new PageRequest(1, 2));
+    for (String statement : new String[] {"selectByQuery", "selectById", "selectByInstanceNos"}) {
+      String sql = configuration
+          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+          .getBoundSql(params)
+          .getSql()
+          .replaceAll("\\s+", " ")
+          .toLowerCase();
+      assertThat(sql).as(statement).contains("as root_trigger_type");
+      assertThat(sql)
+          .as(statement + " 租户隔离")
+          .contains("child_request.tenant_id = job_instance.tenant_id");
+    }
+    assertThat(configuration
+            .getResultMap(JobInstanceMapper.class.getName() + ".JobInstanceResultMap")
+            .getResultMappings())
+        .anySatisfy(m -> assertThat(m.getProperty()).isEqualTo("rootTriggerType"));
+  }
+
+  @Test
   @DisplayName("超期筛选保留自身业务口径的状态集合, 并包含部分失败状态")
   void shouldKeepBusinessStatusSet_whenSlaFilterApplied() {
     String resource = "mapper/JobInstanceMapper.xml";

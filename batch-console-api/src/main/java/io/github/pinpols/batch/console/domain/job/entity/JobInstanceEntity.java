@@ -48,4 +48,7 @@ public class JobInstanceEntity {
 
   /** ADR-012 失败分类。 */
   private String failureClass;
+
+  /** 工作流节点派发时根运行的触发类型；直接拉起的实例为空。只读投影，不落库。 */
+  private String rootTriggerType;
 }

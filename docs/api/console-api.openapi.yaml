@@ -16743,6 +16743,10 @@ components:
         failureClass:
           type: string
           description: ADR-012 失败分类码（FailureClass enum），仅终态 FAILED/PARTIAL_FAILED 时填值。
+        rootTriggerType:
+          type: string
+          nullable: true
+          description: 根运行的触发类型（MANUAL / SCHEDULED 等）。工作流节点派发的子实例 triggerType 恒为 EVENT，用户关心的来源在根运行上；非工作流派发的实例为 null，以 triggerType 为准。
       required: [id, tenantId, jobCode, instanceNo, bizDate, triggerType, instanceStatus, batchNo, operatorId, rerunFlag, retryFlag, rerunReason, relatedFileId, parentInstanceId, queueCode, workerGroup, priority, traceId, paramsSnapshot, resultSummary, deadlineAt, expectedDurationSeconds, slaAlertedAt, startedAt, finishedAt]
     ConsoleJobExecutionLogResponse:
       type: object
