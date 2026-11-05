@@ -9,7 +9,10 @@ import org.springframework.test.context.ContextCustomizer;
 import org.springframework.test.context.ContextCustomizerFactory;
 import org.springframework.test.context.MergedContextConfiguration;
 
-/** 仅在设置 {@link PlatformWorkerRoleDrill#WORKER_PROPERTY} 时为集成测试上下文挂接受限角色演练。 */
+/**
+ * 仅在设置 {@link PlatformWorkerRoleDrill#WORKER_PROPERTY} 或 {@link
+ * PlatformWorkerRoleDrill#CONTROL_PLANE_PROPERTY} 时为集成测试上下文挂接受限角色演练。
+ */
 public class PlatformWorkerRoleDrillContextCustomizerFactory implements ContextCustomizerFactory {
 
   @Override
@@ -18,16 +21,17 @@ public class PlatformWorkerRoleDrillContextCustomizerFactory implements ContextC
     if (!AbstractIntegrationTest.class.isAssignableFrom(testClass)) {
       return null;
     }
-    return PlatformWorkerRoleDrill.configuredWorker().map(DrillCustomizer::new).orElse(null);
+    return PlatformWorkerRoleDrill.configuredTarget().map(DrillCustomizer::new).orElse(null);
   }
 
-  /** record 的 equals/hashCode 让同一 Worker 的上下文缓存仍可复用。 */
-  private record DrillCustomizer(String worker) implements ContextCustomizer {
+  /** record 的 equals/hashCode 让同一演练对象的上下文缓存仍可复用。 */
+  private record DrillCustomizer(PlatformWorkerRoleDrill.Target target)
+      implements ContextCustomizer {
 
     @Override
     public void customizeContext(
         ConfigurableApplicationContext context, MergedContextConfiguration mergedConfig) {
-      context.getBeanFactory().addBeanPostProcessor(PlatformWorkerRoleDrill.postProcessor(worker));
+      context.getBeanFactory().addBeanPostProcessor(PlatformWorkerRoleDrill.postProcessor(target));
       // 没有 Flyway 初始化器时无法授权，演练会退化为 owner 执行，必须直接失败而不是给出空报告。
       context.addApplicationListener((ApplicationListener<ContextRefreshedEvent>) event -> {
         if (!PlatformWorkerRoleDrill.isPrepared()) {

@@ -95,8 +95,10 @@ for file in "${staged_files[@]}"; do
     && env_governance_changed=1
   [[ "$file" == pom.xml || "$file" == */pom.xml ]] && maven_descriptor_changed=1
   [[ "$file" == helm/* ]] && helm_changed=1
-  # Worker SQL 或授权生成器变化时重新校验平台库最小授权清单（ARCH-20261103-01）。
+  # Worker 或控制面 SQL、授权生成器变化时重新校验平台库最小授权清单（ARCH-20261103-01）。
   [[ "$file" == batch-worker/*/src/main/* || "$file" == scripts/db/*platform-worker* \
+    || "$file" == scripts/db/*platform-control-plane* || "$file" == batch-console-api/src/main/* \
+    || "$file" == batch-trigger/src/main/* || "$file" == batch-orchestrator/src/main/* \
     || "$file" == batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml \
     || "$file" == batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java ]] \
     && worker_grants_changed=1
@@ -214,7 +216,7 @@ if ((config_registry_changed == 1)); then
 fi
 
 if ((worker_grants_changed == 1)); then
-  gate_run PRE_COMMIT_PLATFORM_WORKER_GRANTS "Worker 平台库授权清单同步" \
+  gate_run PRE_COMMIT_PLATFORM_WORKER_GRANTS "平台库授权清单同步" \
     "$PYTHON_BIN" scripts/db/generate-platform-worker-grants.py
 fi
 
