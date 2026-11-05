@@ -50,6 +50,9 @@
   - `--e2e`：仅 E2E 测试（`*E2eIT`）
   - `--all`：单元 + 集成 + E2E 全量
   - `-- <mvn args>`：透传 Maven 参数
+  - 集成/E2E 测试类因 Docker 不可用被 Testcontainers 跳过时按失败处理；确需跳过设置 `ALLOW_DOCKER_SKIP=1`
+  - 远程 Docker：本机不装 Docker 时设置 `DOCKER_HOST=tcp://<host>:2375`（或 `ssh://user@host`），
+    本机须能访问远程主机上的容器映射端口，必要时设置 `TESTCONTAINERS_HOST_OVERRIDE=<host>`
 - `spark-e2e-runtime.py`：为恢复验收中的真实 Spark 场景准备 Apache Spark 4.0.1 与隔离 Python 3.12；完整 E2E 在构建前检查缓存，运行时不联网下载。具体命令见下方。
 - `restore-script-execute-bits.sh`：按 Git 已记录的 `100755` 模式一键恢复脚本执行位；详见[脚本执行权限 Runbook](../../docs/runbook/script-execution-permissions.md)
 - `docker-path.sh`：工具函数，确保 docker 在 PATH 中（供其他脚本 source）
