@@ -31,6 +31,8 @@
 
 ## 下一步
 
+上述两类 PostgreSQL 回归已纳入 PR Gate 的 `b2-console` 集成分片，选测自测先在旧白名单失败，再补清单通过；避免新增 IT 只编译而未被 PR 实际执行。草稿 PR 的自动 PR Gate 会跳过实质作业，因此使用修复分支的 `workflow_dispatch` 执行完整适用门禁，并手动触发 Daily SIM（`force=true`）。
+
 Console/Trigger 修复、最终定向 68 项单测与独立 diff 复核已完成。已获准推送修复、创建 draft PR 及 CI 验证，不包含合并、部署或业务数据修改。所有适用 pre-commit 门禁已通过，准备交付，并在具备 Docker 的隔离 CI 执行 PostgreSQL IT、Stage 22/24 和完整 SIM/strict；最终状态以该 SHA 的实际 CI 结果更新，不能把排队、跳过或未执行写成通过。
 
 ## 本地实际命令
