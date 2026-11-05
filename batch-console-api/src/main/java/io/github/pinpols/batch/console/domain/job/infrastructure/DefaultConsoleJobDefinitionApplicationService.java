@@ -26,6 +26,7 @@ import io.github.pinpols.batch.console.domain.job.support.JobResourceAssignmentG
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.infrastructure.workflow.DefaultSingleJobWorkflowProvisioner;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.schedule.ScheduleTriggerModes;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalTime;
@@ -327,8 +328,16 @@ public class DefaultConsoleJobDefinitionApplicationService
         EmptyChecks.isNull(request.getTimezone())
             ? CommonConstants.DEFAULT_TIMEZONE_ID
             : request.getTimezone());
+    // 显式给出的触发模式必须与调度类型兼容；未给时按调度类型取默认值（此前一律 SCHEDULED，手动作业也会被标成定时）
+    if (!ScheduleTriggerModes.isCompatible(request.getScheduleType(), request.getTriggerMode())) {
+      throw BizException.of(
+          ResultCode.VALIDATION_ERROR,
+          "error.job.trigger_mode_incompatible",
+          request.getTriggerMode(),
+          request.getScheduleType());
+    }
     entity.setTriggerMode(
-        EmptyChecks.isNull(request.getTriggerMode()) ? "SCHEDULED" : request.getTriggerMode());
+        ScheduleTriggerModes.resolve(request.getScheduleType(), request.getTriggerMode()));
     entity.setWorkerGroup(CodeNormalizer.toUpperOrNull(request.getWorkerGroup()));
     entity.setQueueCode(CodeNormalizer.toConfigFormOrNull(request.getQueueCode()));
     entity.setCalendarCode(CodeNormalizer.toConfigFormOrNull(request.getCalendarCode()));

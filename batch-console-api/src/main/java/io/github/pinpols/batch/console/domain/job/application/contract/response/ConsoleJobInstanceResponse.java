@@ -34,4 +34,9 @@ public record ConsoleJobInstanceResponse(
     /** ADR-026 dry-run 演练标记。 */
     Boolean dryRun,
     /** ADR-012 失败分类。 */
-    String failureClass) {}
+    String failureClass,
+    /**
+     * 根运行的触发类型。工作流节点派发的子实例 triggerType 恒为 EVENT，用户真正关心的手动 / 定时来源在根运行上；
+     * 非工作流派发的实例为 null，此时以 triggerType 为准。
+     */
+    String rootTriggerType) {}

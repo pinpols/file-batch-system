@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
+import io.github.pinpols.batch.console.shared.schedule.ScheduleTriggerModes;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -51,7 +52,9 @@ public class DefaultSingleJobWorkflowProvisioner {
     workflow.setScheduleType(job.getScheduleType());
     workflow.setScheduleExpr(job.getScheduleExpr());
     workflow.setTimezone(job.getTimezone());
-    workflow.setTriggerMode(job.getTriggerMode());
+    // 作业上的触发模式可能与调度类型不兼容（如 CRON + MANUAL），照抄会让工作流显示为定时却永不触发
+    workflow.setTriggerMode(
+        ScheduleTriggerModes.resolve(job.getScheduleType(), job.getTriggerMode()));
     String calendarCode = CodeNormalizer.toConfigFormOrNull(job.getCalendarCode());
     if (!Texts.hasText(calendarCode)) {
       calendarCode = DEFAULT_CALENDAR_CODE;

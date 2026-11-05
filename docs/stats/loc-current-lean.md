@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `fb4b617cb` + 当前工作区改动。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `f8b1d7035` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,251 | 803,431 | 420,186 | 52.3% |
+| 6,253 | 803,704 | 420,306 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,861 | 396,097 | 212,484 | 53.6% |
-| prod | 3,483 | 322,176 | 153,870 | 47.8% |
+| test | 1,862 | 396,266 | 212,571 | 53.6% |
+| prod | 3,484 | 322,280 | 153,903 | 47.8% |
 | script | 729 | 66,318 | 41,450 | 62.5% |
 | config | 68 | 10,269 | 7,678 | 74.8% |
 | infra-config | 34 | 6,135 | 4,473 | 72.9% |
@@ -23,14 +23,14 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,708 | 626,055 | 330,549 | 52.8% |
+| Java | 4,710 | 626,297 | 330,666 | 52.8% |
 | Shell | 218 | 35,896 | 28,386 | 79.1% |
 | Python | 339 | 50,896 | 27,724 | 54.5% |
 | YAML | 109 | 14,967 | 11,593 | 77.5% |
-| XML | 222 | 31,088 | 9,298 | 29.9% |
+| XML | 222 | 31,117 | 9,299 | 29.9% |
 | TypeScript | 38 | 6,824 | 3,259 | 47.8% |
 | Rust | 24 | 8,967 | 3,074 | 34.3% |
-| Properties | 5 | 3,179 | 2,639 | 83.0% |
+| Properties | 5 | 3,181 | 2,641 | 83.0% |
 | SQL | 545 | 17,728 | 2,049 | 11.6% |
 | Go | 35 | 7,479 | 1,384 | 18.5% |
 | TOML | 8 | 352 | 231 | 65.6% |
@@ -47,8 +47,8 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/SelfServiceJobCompensationHttpE2eIT.java` | test | Java | 2,916 | 1,389 |
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
-| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,579 | 1,319 |
-| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,577 | 1,319 |
+| `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,580 | 1,320 |
+| `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,578 | 1,320 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 2,929 | 1,303 |
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,409 | 1,293 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,152 | 1,125 |

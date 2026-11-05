@@ -725,8 +725,9 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     String severity = display(entity.getSeverity());
     String title = display(entity.getTitle());
     String detailJson = entity.getDetailJson();
-    String maskedDetailJson = SecretMasking.maskSensitiveJson(detailJson);
-    String displayDetailJson = ConsoleTextSanitizer.safeDisplay(maskedDetailJson);
+    // detailJson 是结构化 JSON，客户端要解析出 jobInstanceId / workflowRunId 等跳转目标；
+    // 只做敏感字段脱敏，不做 HTML 转义（转义会把引号变成实体导致 JSON.parse 失败），与审批 payloadJson 一致
+    String displayDetailJson = SecretMasking.maskSensitiveJson(detailJson);
     String dedupFingerprint = display(entity.getDedupFingerprint());
     String traceId = display(entity.getTraceId());
     String status = display(entity.getStatus());

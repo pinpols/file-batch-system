@@ -124,9 +124,11 @@ class ConsoleOpsQueryServiceTest {
     var alertResponse = service.alertEvents(alertRequest).items().getFirst();
     var approvalResponse = service.approvals(approvalRequest).items().getFirst();
 
+    // 告警详情保持可解析的 JSON（客户端据此生成运行跳转），只脱敏不做 HTML 转义
     assertThat(alertResponse.detailJson())
-        .contains("&quot;reason&quot;:&quot;failed&quot;")
-        .contains("&quot;clientSecret&quot;:&quot;****&quot;")
+        .contains("\"reason\":\"failed\"")
+        .contains("\"clientSecret\":\"****\"")
+        .doesNotContain("&quot;")
         .doesNotContain("raw");
     assertThat(approvalResponse.payloadJson())
         .contains("\"action\":\"retry\"")

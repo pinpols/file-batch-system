@@ -65,6 +65,37 @@ class DefaultSingleJobWorkflowProvisionerTest {
   }
 
   @Test
+  @DisplayName("Job 的触发模式与调度类型不兼容时，受管 Workflow 按调度类型取触发模式")
+  void shouldResolveIncompatibleTriggerModeFromScheduleType() {
+    WorkflowDefinitionMapper definitionMapper = Mockito.mock(WorkflowDefinitionMapper.class);
+    BusinessCalendarMapper businessCalendarMapper = Mockito.mock(BusinessCalendarMapper.class);
+    WorkflowNodeMapper nodeMapper = Mockito.mock(WorkflowNodeMapper.class);
+    WorkflowEdgeMapper edgeMapper = Mockito.mock(WorkflowEdgeMapper.class);
+    DefaultSingleJobWorkflowProvisioner provisioner = new DefaultSingleJobWorkflowProvisioner(
+        definitionMapper, businessCalendarMapper, nodeMapper, edgeMapper);
+    when(businessCalendarMapper.selectActiveByTenantAndCalendarCode("tenant-a", "default_calendar"))
+        .thenReturn(new ActiveCalendarRow(
+            1L, "tenant-a", "default_calendar", null, null, null, null, null, null));
+    JobDefinitionEntity job = new JobDefinitionEntity();
+    job.setTenantId("tenant-a");
+    job.setId(17L);
+    job.setJobCode("IMPORT_ORDERS");
+    job.setJobName("Import Orders");
+    job.setScheduleType("CRON");
+    job.setScheduleExpr("0 0 2 * * ?");
+    job.setTriggerMode("MANUAL");
+
+    provisioner.provision(job);
+
+    ArgumentCaptor<WorkflowDefinitionEntity> workflow =
+        ArgumentCaptor.forClass(WorkflowDefinitionEntity.class);
+    verify(definitionMapper).insert(workflow.capture());
+    // CRON + MANUAL 不会被调度器注册，受管 Workflow 必须落成调度器可识别的 SCHEDULED
+    assertThat(workflow.getValue().getScheduleType()).isEqualTo("CRON");
+    assertThat(workflow.getValue().getTriggerMode()).isEqualTo("SCHEDULED");
+  }
+
+  @Test
   @DisplayName("Job 未配置日历时受管 Workflow 使用租户默认业务日历")
   void shouldUseTenantDefaultCalendarWhenJobCalendarIsMissing() {
     WorkflowDefinitionMapper definitionMapper = Mockito.mock(WorkflowDefinitionMapper.class);

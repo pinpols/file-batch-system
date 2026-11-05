@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.domain.job.query.JobInstanceQuery;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -48,6 +49,39 @@ class JobInstanceMapperXmlTest {
       assertThat(exactSql).as(statement + " 精确筛选优先").doesNotContain("job_code like");
       assertThat(fuzzySql).as(statement + " 原模糊作业编码").contains("job_code like");
     }
+  }
+
+  @Test
+  @DisplayName("列表、详情与按编号查询都投影根运行的触发类型")
+  void shouldProjectRootTriggerType_inListDetailAndInstanceNoQueries() throws Exception {
+    Configuration configuration = new Configuration();
+    parseMapper(configuration, "mapper/CommonFragments.xml");
+    parseMapper(configuration, "mapper/JobInstanceMapper.xml");
+    Map<String, Object> params = Map.of(
+        "tenantId",
+        "tenant-a",
+        "id",
+        1L,
+        "instanceNos",
+        List.of("inst-a"),
+        "pageRequest",
+        new PageRequest(1, 2));
+    for (String statement : new String[] {"selectByQuery", "selectById", "selectByInstanceNos"}) {
+      String sql = configuration
+          .getMappedStatement(JobInstanceMapper.class.getName() + "." + statement)
+          .getBoundSql(params)
+          .getSql()
+          .replaceAll("\\s+", " ")
+          .toLowerCase();
+      assertThat(sql).as(statement).contains("as root_trigger_type");
+      assertThat(sql)
+          .as(statement + " 租户隔离")
+          .contains("child_request.tenant_id = job_instance.tenant_id");
+    }
+    assertThat(configuration
+            .getResultMap(JobInstanceMapper.class.getName() + ".JobInstanceResultMap")
+            .getResultMappings())
+        .anySatisfy(m -> assertThat(m.getProperty()).isEqualTo("rootTriggerType"));
   }
 
   @Test

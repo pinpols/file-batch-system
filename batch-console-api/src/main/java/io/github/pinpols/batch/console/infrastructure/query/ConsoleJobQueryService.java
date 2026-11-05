@@ -425,6 +425,7 @@ public class ConsoleJobQueryService {
         .finishedAt(finishedAt)
         .dryRun(dryRun)
         .failureClass(failureClass)
+        .rootTriggerType(display(entity.getRootTriggerType()))
         .build();
   }
 
