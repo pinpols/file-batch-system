@@ -24,8 +24,11 @@
 # --skip-build 会同时跳过 cleanup_test_reports，避免并发时互删报告目录。
 #
 # 环境变量（可覆盖）：
-#   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（macOS 默认已设置）
+#   DOCKER_HOST                            远程 Docker（tcp://host:2375 或 ssh://user@host）；设置后不再默认指向本机 socket
+#   TESTCONTAINERS_HOST_OVERRIDE           远程 Docker 时容器端口所在主机（本机须能访问该主机的映射端口）
+#   TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE  Docker socket 路径（未设置 DOCKER_HOST 且存在 macOS 用户级 socket 时默认使用它）
 #   DOCKER_API_VERSION                     Docker API 版本（默认 1.44）
+#   ALLOW_DOCKER_SKIP                      设为 1 时允许集成/E2E 测试因 Docker 不可用而跳过（默认视为失败）
 #   MAVEN_THREADS                          Maven Reactor 并发度；含 Testcontainers 时默认 1
 # =============================================================
 
@@ -40,7 +43,11 @@ source "$ROOT_DIR/scripts/lib/logging.sh"
 # shellcheck source=maven-env.sh
 source "$ROOT_DIR/scripts/local/maven-env.sh"
 
-export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-$HOME/.docker/run/docker.sock}"
+# 远程 Docker（DOCKER_HOST）时 socket 覆盖会把容器内挂载指向本机路径，只在本机 Docker Desktop 场景下默认设置。
+if [[ -z "${TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE:-}" && -z "${DOCKER_HOST:-}" \
+  && -S "$HOME/.docker/run/docker.sock" ]]; then
+  export TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE="$HOME/.docker/run/docker.sock"
+fi
 export DOCKER_API_VERSION="${DOCKER_API_VERSION:-1.44}"
 
 TEST_RESULT_LINES=()
@@ -236,6 +243,31 @@ run_module_tests() {
   done
 
   return $overall
+}
+
+DOCKER_SKIP_REASON="disabledWithoutDocker is true and Docker is not available"
+
+# Testcontainers 在 Docker 不可达时按 disabledWithoutDocker=true 静默跳过整类测试，结果看似全绿。
+# 集成/E2E 模式下把这种跳过视为失败；ALLOW_DOCKER_SKIP=1 可显式放行。
+check_docker_skips() {
+  local label=$1
+  shift
+  local -a scan_dirs=("$@")
+  local skipped
+  skipped=$(find "${scan_dirs[@]}" \( -path "*/target/surefire-reports/TEST-*.xml" \
+    -o -path "*/target/failsafe-reports/TEST-*.xml" \) -print0 2>/dev/null \
+    | xargs -0 grep -lF "$DOCKER_SKIP_REASON" 2>/dev/null | wc -l | tr -d ' ')
+  if [[ "${skipped:-0}" -eq 0 ]]; then
+    return 0
+  fi
+  if [[ "${ALLOW_DOCKER_SKIP:-0}" == "1" ]]; then
+    printf '⚠️  %s：%s 个测试类因 Docker 不可用被跳过（ALLOW_DOCKER_SKIP=1，已放行）\n' "$label" "$skipped"
+    return 0
+  fi
+  printf '❌ %s：%s 个测试类因 Docker 不可用被跳过，按失败处理。\n' "$label" "$skipped" >&2
+  printf '   本机 Docker：确认 Docker 已启动；远程 Docker：设置 DOCKER_HOST，必要时设置 TESTCONTAINERS_HOST_OVERRIDE。\n' >&2
+  printf '   确需跳过时设置 ALLOW_DOCKER_SKIP=1。\n' >&2
+  record_test_result "${label}_DOCKER_AVAILABLE" "FAILED"
 }
 
 record_test_result() {
@@ -448,6 +480,7 @@ case "$MODE" in
     fi
     _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_IT" "$LOG_IT_PASSED" "$LOG_IT_FAILED" "${_core_dirs[@]}"
+    check_docker_skips "INTEGRATION_TESTS" "${_core_dirs[@]}"
     ;;
 
   e2e)
@@ -464,6 +497,7 @@ case "$MODE" in
       record_test_result "E2E_TESTS" "FAILED"
     fi
     extract_test_results "$LOG_E2E" "$LOG_E2E_PASSED" "$LOG_E2E_FAILED" "$ROOT_DIR/batch-e2e-tests"
+    check_docker_skips "E2E_TESTS" "$ROOT_DIR/batch-e2e-tests"
     ;;
 
   default)
@@ -480,6 +514,7 @@ case "$MODE" in
     fi
     _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_DEFAULT" "$LOG_DEFAULT_PASSED" "$LOG_DEFAULT_FAILED" "${_core_dirs[@]}"
+    check_docker_skips "DEFAULT_TESTS" "${_core_dirs[@]}"
     ;;
 
   all)
@@ -497,6 +532,7 @@ case "$MODE" in
     fi
     _core_dirs=(); for _m in "${CORE_TEST_MODULES[@]}"; do _core_dirs+=("$ROOT_DIR/$_m"); done
     extract_test_results "$LOG_ALL_UNIT_IT" "$LOG_ALL_UNIT_IT_PASSED" "$LOG_ALL_UNIT_IT_FAILED" "${_core_dirs[@]}"
+    check_docker_skips "UNIT_INTEGRATION_TESTS" "${_core_dirs[@]}"
 
     banner "E2E 测试（*E2eIT）"
     cleanup_orphan_testcontainers
@@ -510,6 +546,7 @@ case "$MODE" in
       record_test_result "E2E_TESTS" "FAILED"
     fi
     extract_test_results "$LOG_ALL_E2E" "$LOG_ALL_E2E_PASSED" "$LOG_ALL_E2E_FAILED" "$ROOT_DIR/batch-e2e-tests"
+    check_docker_skips "E2E_TESTS" "$ROOT_DIR/batch-e2e-tests"
     ;;
 esac
 
