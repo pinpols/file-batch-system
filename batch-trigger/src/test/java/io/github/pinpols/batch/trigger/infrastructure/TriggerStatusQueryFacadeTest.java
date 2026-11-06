@@ -6,6 +6,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.DisplayName;
@@ -33,7 +35,8 @@ class TriggerStatusQueryFacadeTest {
     when(scheduler.getJobDetail(tenantA)).thenReturn(detail);
     when(scheduler.getTriggersOfJob(tenantA)).thenReturn(List.of());
 
-    var results = new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers("tenant-a");
+    var results =
+        new TriggerStatusQueryFacade(scheduler, emptyLoader()).listRegisteredTriggers("tenant-a");
 
     assertThat(results).hasSize(1);
     assertThat(results.get(0).tenantId()).isEqualTo("tenant-a");
@@ -50,7 +53,7 @@ class TriggerStatusQueryFacadeTest {
     when(scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)))
         .thenReturn(Set.of(legacyJobIdentity));
 
-    assertThat(new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers(null))
+    assertThat(new TriggerStatusQueryFacade(scheduler, emptyLoader()).listRegisteredTriggers(null))
         .isEmpty();
     verify(scheduler, never()).getJobDetail(legacyJobIdentity);
   }
@@ -70,7 +73,8 @@ class TriggerStatusQueryFacadeTest {
     when(scheduler.getJobDetail(workflowKey)).thenReturn(detail);
     when(scheduler.getTriggersOfJob(workflowKey)).thenReturn(List.of());
 
-    var result = new TriggerStatusQueryFacade(scheduler).listRegisteredTriggers("tenant-a");
+    var result =
+        new TriggerStatusQueryFacade(scheduler, emptyLoader()).listRegisteredTriggers("tenant-a");
 
     assertThat(result).singleElement().satisfies(info -> {
       assertThat(info.tenantId()).isEqualTo("tenant-a");
@@ -78,5 +82,52 @@ class TriggerStatusQueryFacadeTest {
       assertThat(info.workflowDefinitionId()).isEqualTo(71L);
       assertThat(info.jobCode()).isNull();
     });
+  }
+
+  @Test
+  @DisplayName("已配置周期调度但调度关闭的 Workflow 以未注册状态列出，已在 Quartz 中的不重复")
+  void unscheduled_definitions_are_listed_as_unregistered() throws Exception {
+    Scheduler scheduler = mock(Scheduler.class);
+    JobKey scheduledKey = JobKey.jobKey("tenant-a:WF:FLOW_A", TriggerSchedulerFacade.JOB_GROUP);
+    JobDetail detail = mock(JobDetail.class);
+    when(detail.getJobDataMap()).thenReturn(new JobDataMap());
+    when(scheduler.getJobKeys(GroupMatcher.jobGroupEquals(TriggerSchedulerFacade.JOB_GROUP)))
+        .thenReturn(Set.of(scheduledKey));
+    when(scheduler.getJobDetail(scheduledKey)).thenReturn(detail);
+    when(scheduler.getTriggersOfJob(scheduledKey)).thenReturn(List.of());
+    TriggerDefinitionLoader loader = mock(TriggerDefinitionLoader.class);
+    when(loader.loadUnscheduledDefinitions("tenant-a"))
+        .thenReturn(
+            List.of(descriptor("tenant-a", "FLOW_A"), descriptor("tenant-a", "FLOW_PAUSED")));
+
+    var results =
+        new TriggerStatusQueryFacade(scheduler, loader).listRegisteredTriggers("tenant-a");
+
+    assertThat(results).hasSize(2);
+    assertThat(results.get(1)).satisfies(info -> {
+      assertThat(info.workflowCode()).isEqualTo("FLOW_PAUSED");
+      assertThat(info.status()).isEqualTo(TriggerStatusQueryFacade.UNREGISTERED);
+      assertThat(info.scheduleType()).isEqualTo("CRON");
+      assertThat(info.scheduleExpression()).isEqualTo("0 0 22 * * ?");
+      assertThat(info.nextFireTime()).isNull();
+    });
+  }
+
+  private static TriggerDefinitionLoader emptyLoader() {
+    TriggerDefinitionLoader loader = mock(TriggerDefinitionLoader.class);
+    when(loader.loadUnscheduledDefinitions(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(List.of());
+    return loader;
+  }
+
+  private static TriggerDescriptor descriptor(String tenantId, String workflowCode) {
+    TriggerDescriptor descriptor = new TriggerDescriptor();
+    descriptor.setTenantId(tenantId);
+    descriptor.setWorkflowCode(workflowCode);
+    descriptor.setScheduleType("CRON");
+    descriptor.setScheduleExpression("0 0 22 * * ?");
+    descriptor.setTimezone("Asia/Shanghai");
+    descriptor.setTriggerMode("SCHEDULED");
+    return descriptor;
   }
 }
