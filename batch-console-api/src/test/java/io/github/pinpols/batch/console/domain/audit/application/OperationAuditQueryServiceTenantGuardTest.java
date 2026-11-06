@@ -18,6 +18,7 @@ import io.github.pinpols.batch.console.domain.audit.query.OperationAuditCountQue
 import io.github.pinpols.batch.console.domain.audit.query.OperationAuditQuery;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -62,7 +63,7 @@ class OperationAuditQueryServiceTenantGuardTest {
 
   @BeforeEach
   void setUp() {
-    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
+    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver, TenantDatabaseContext.NONE);
     service = new OperationAuditQueryService(mapper, tenantGuard, new ObjectMapper());
     when(requestMetadataResolver.current())
         .thenThrow(new IllegalStateException("request scope missing"));

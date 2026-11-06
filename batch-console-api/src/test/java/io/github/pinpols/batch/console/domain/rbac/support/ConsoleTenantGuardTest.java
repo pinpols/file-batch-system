@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
@@ -187,6 +188,6 @@ class ConsoleTenantGuardTest {
 
   @BeforeEach
   void initializeSubject() {
-    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver);
+    tenantGuard = new ConsoleTenantGuard(requestMetadataResolver, TenantDatabaseContext.NONE);
   }
 }
