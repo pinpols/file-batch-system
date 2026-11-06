@@ -83,6 +83,50 @@
         order by wf.tenant_id, wf.workflow_code
     </select>
 
+    <!-- 已配置周期调度但调度开关关闭的 Workflow：控制台触发器列表据此显示“未启用调度”行，
+         注销与暂停都会删除 Quartz 任务并关闭开关，不在此列出就无法从列表重新注册 / 恢复。 -->
+    <sql id="UnscheduledDefinitionFrom">
+        from batch.workflow_definition wf
+        left join batch.job_definition jd
+          on jd.tenant_id = wf.tenant_id
+         and wf.single_job_definition_id = jd.id
+        join batch.tenant t
+          on t.tenant_id = wf.tenant_id
+          and t.status != 'SUSPENDED'
+        left join batch.business_calendar bc
+          on bc.tenant_id = wf.tenant_id
+         and bc.calendar_code = wf.calendar_code
+         and bc.enabled = true
+        where (jd.id is null or jd.enabled = true)
+          and wf.enabled = true
+          and wf.schedule_enabled = false
+          and wf.version = (
+              select max(latest.version)
+              from batch.workflow_definition latest
+              where latest.tenant_id = wf.tenant_id
+                and latest.workflow_code = wf.workflow_code
+          )
+          and wf.schedule_type in ('CRON', 'FIXED_RATE')
+          and wf.trigger_mode in ('SCHEDULED', 'MIXED')
+    </sql>
+
+    <select id="selectUnscheduledDefinitionsByTenant" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        <include refid="UnscheduledDefinitionFrom"/>
+          and wf.tenant_id = #{tenantId}
+        order by wf.workflow_code
+    </select>
+
+    <!-- 跨租户：仅平台管理员的全局触发器列表使用（与 Quartz 全局列表一致） -->
+    <select id="selectAllUnscheduledDefinitions" resultMap="TriggerDescriptorResultMap">
+        select
+        <include refid="TriggerDefinitionBaseColumns"/>
+        <include refid="UnscheduledDefinitionFrom"/>
+        order by wf.tenant_id, wf.workflow_code
+    </select>
+
+
     <!-- advisory 锁；等待任一操作完成的报告必须读取其已提交的 -->
     <select id="selectDefinitionsWithPendingMisfires" resultMap="TriggerDescriptorResultMap">
         select

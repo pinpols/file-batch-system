@@ -1,11 +1,14 @@
 package io.github.pinpols.batch.trigger.infrastructure;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusInfo;
 import io.github.pinpols.batch.trigger.domain.TriggerStatusQueryService;
+import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +26,11 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
 
+  /** 列表中未进入 Quartz 的 Workflow 调度状态：注销与暂停都会删除 Quartz 任务并关闭调度开关。 */
+  static final String UNREGISTERED = "UNREGISTERED";
+
   private final Scheduler scheduler;
+  private final TriggerDefinitionLoader triggerDefinitionLoader;
 
   @Override
   public List<TriggerStatusInfo> listRegisteredTriggers(String tenantId) {
@@ -43,10 +50,40 @@ public class TriggerStatusQueryFacade implements TriggerStatusQueryService {
           result.add(toTriggerStatusInfo(jobKey, identity, detail));
         }
       }
+      appendUnscheduledDefinitions(tenantId, result);
       return result;
     } catch (SchedulerException e) {
       throw new IllegalStateException("failed to list triggers", e);
     }
+  }
+
+  /** 补上已配置周期调度但未在 Quartz 中的 Workflow，使控制台可直接重新注册 / 恢复。 */
+  private void appendUnscheduledDefinitions(String tenantId, List<TriggerStatusInfo> result) {
+    Set<String> scheduled = new HashSet<>();
+    for (TriggerStatusInfo info : result) {
+      scheduled.add(info.tenantId() + ":" + info.workflowCode());
+    }
+    for (TriggerDescriptor descriptor :
+        triggerDefinitionLoader.loadUnscheduledDefinitions(tenantId)) {
+      String identity = descriptor.getTenantId() + ":" + descriptor.getWorkflowCode();
+      if (scheduled.add(identity)) {
+        result.add(toUnscheduledStatusInfo(descriptor));
+      }
+    }
+  }
+
+  private static TriggerStatusInfo toUnscheduledStatusInfo(TriggerDescriptor descriptor) {
+    return TriggerStatusInfo.builder()
+        .tenantId(descriptor.getTenantId())
+        .jobCode(descriptor.getJobCode())
+        .workflowDefinitionId(descriptor.getWorkflowDefinitionId())
+        .workflowCode(descriptor.getWorkflowCode())
+        .scheduleType(descriptor.getScheduleType())
+        .scheduleExpression(descriptor.getScheduleExpression())
+        .timezone(descriptor.getTimezone())
+        .triggerMode(descriptor.getTriggerMode())
+        .status(UNREGISTERED)
+        .build();
   }
 
   @Override
