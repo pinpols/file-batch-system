@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.domain.ops.param.AtomicTaskConfigCreatePa
 import io.github.pinpols.batch.console.domain.ops.view.JobTaskHeartbeatView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Map;
 import java.util.Set;
@@ -112,7 +113,7 @@ class ConsoleOpsTenantAuthorizationTest {
   }
 
   private ConsoleTenantGuard guard() {
-    return new ConsoleTenantGuard(metadataResolver);
+    return new ConsoleTenantGuard(metadataResolver, TenantDatabaseContext.NONE);
   }
 
   private static void authenticate(String tenant, String role) {

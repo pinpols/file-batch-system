@@ -13,6 +13,7 @@ import io.github.pinpols.batch.console.domain.notification.entity.ConsolePushSub
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsolePushSubscriptionMapper;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.Set;
 import org.assertj.core.api.Assertions;
@@ -45,7 +46,7 @@ class ConsolePushSubscriptionServiceTest {
     properties.setPublicKey("public-key");
     properties.setPrivateKey("private-key");
     service = new ConsolePushSubscriptionService(
-        repository, new ConsoleTenantGuard(metadata), properties);
+        repository, new ConsoleTenantGuard(metadata, TenantDatabaseContext.NONE), properties);
     SecurityContextHolder.getContext()
         .setAuthentication(new UsernamePasswordAuthenticationToken(
             new ConsolePrincipal("alice", "tenant-a", Set.of("ROLE_TENANT_USER")), "ignored"));

@@ -78,6 +78,7 @@ public class DefaultConsoleJobDefinitionApplicationService
   private final DefaultSingleJobWorkflowProvisioner singleJobWorkflowProvisioner;
 
   @Override
+  @Transactional(readOnly = true)
   public ConsoleJobDefinitionResponse detail(Long id, String tenantId) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     JobDefinitionView selectedEntity = jobDefinitionMapper.selectById(resolvedTenant, id);

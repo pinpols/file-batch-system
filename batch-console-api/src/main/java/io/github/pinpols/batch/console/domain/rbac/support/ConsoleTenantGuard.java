@@ -5,6 +5,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.console.shared.query.TenantScopeResolver;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.regex.Pattern;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Component;
  *       FORBIDDEN}——跨租户访问一律拒绝，即使是只读请求。
  * </ul>
  *
+ * <p>解析出的租户同时写入当前平台库事务的 {@code app.tenant_id}（{@link TenantDatabaseContext}），强制 RLS 的表因此按该
+ * 租户校验；不在事务内调用时不绑定，需要读 RLS 表的只读路径应开启只读事务。
+ *
  * <p>Session 未激活（例如异步上下文）时 {@code ConsoleRequestMetadata} 读取会静默降级为 null， 由上游回退或抛 {@code
  * UNAUTHORIZED}。
  */
@@ -35,11 +39,18 @@ import org.springframework.stereotype.Component;
 public class ConsoleTenantGuard implements TenantScopeResolver {
 
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
+  private final TenantDatabaseContext tenantDatabaseContext;
 
   /** S-1.3 加固：只允许字母 / 数字 / 下划线 / 连字符；防止 requestTenantId 带路径字符（如 {@code ../x}）或特殊字符绕过后续 DB 查询语义。 */
   private static final Pattern TENANT_ID_PATTERN = Pattern.compile("^[a-zA-Z0-9_\\-]+$");
 
   public String resolveTenant(String requestTenantId) {
+    String tenantId = authorizeTenant(requestTenantId);
+    tenantDatabaseContext.bind(tenantId);
+    return tenantId;
+  }
+
+  private String authorizeTenant(String requestTenantId) {
     String normalized = sanitizeTenantId(requestTenantId);
     // 全局角色（ADMIN / AUDITOR / CONFIG_ADMIN）：必须显式指定目标租户
     if (isCurrentUserGlobal()) {
