@@ -51,13 +51,15 @@
 - **现象**：Console 创建或修改作业定义的 `depends_on_job_code`、以及租户配置包应用作业依赖时返回 500。`batch.job_definition` 未启用 RLS，但其触发器 `trg_sync_legacy_job_dependency`（`batch.sync_legacy_job_dependency()`，非 SECURITY DEFINER）向强制 RLS 的 `batch.job_dependency` 写行；这些写路径没有在事务中设置 `app.tenant_id`，`WITH CHECK` 拒绝。
 - **为什么之前没暴露**：本机和测试的平台库账号是 SUPERUSER + BYPASSRLS，RLS 被绕过。
 - **影响**：凡平台库账号不能绕过 RLS 的部署都会失败，包括本次让 Console 改用受限运行时角色。它是 Console 切换受限角色的前置阻塞项；Trigger/Orchestrator 不受影响。
-- **未处理**：修复需要为作业定义创建/修改/复制及租户配置包应用等写路径设置租户上下文（参照通知服务的 `bindTenant`），并补非绕过角色下的回归测试，单独处理，不在本次范围。
+- **不止写入**：同一 Mapper 的列表、详情、依赖环路校验（`selectAllDependencies`、`lockDependencyGraph`）与配置包预览校验也读取 `job_dependency`；无租户上下文时普通角色读到空结果，环路校验会把已有依赖当作不存在。
+- **处置（2026-11-06）**：Console 改为集中绑定。`ConsoleTenantGuard.resolveTenant` 在解析出租户后经 `TenantDatabaseContext` 向当前平台库事务写入 `app.tenant_id`（不在事务内或事务属于其他数据源时不做任何事）；作业定义详情与配置包 `preview` / `patchRow` / `downloadPreviewWorkbook` 补事务，使绑定对其读取生效。配置包 `apply` 经 `loadSession` 走租户守卫，已在事务内绑定。平台库账号仍可绕过 RLS 时行为不变。
+- **验证**：新增 `ConsoleJobDependencyTenantContextIntegrationTest`，让 Console 全部平台库连接切换为 NOBYPASSRLS 普通角色，经 HTTP 覆盖创建、修改、详情、列表依赖筛选、复制与环路拒绝；修复前两项用例均因 `job_dependency` RLS 拒绝失败（500），修复后通过。演练模式复跑首轮失败的配置包上传、覆盖包与作业定义写路径 58 项全部通过、0 拒绝。
 
 ## 发现二：测试数据清理接口依赖绕过 RLS
 
 - **现象**：Orchestrator 管理端测试数据清理（`AdminTestDataCleanupController`）删除 `trigger_request` 时违反 `workflow_launch_wait` 的外键，返回 500。
 - **原因**：清理按租户前缀或精确租户跨租户删除，没有设置 `app.tenant_id`；受限角色下对强制 RLS 表的 `DELETE` 被策略静默过滤为 0 行，下游引用行未删除，随后删除父行触发外键。owner 绕过 RLS 时不出现。
-- **影响**：只影响测试数据清理工具；Orchestrator 切换受限角色后该接口不可用，需按租户逐个设置上下文后清理，或明确保留为 owner 执行的运维操作。未处理。
+- **结论（2026-11-06）**：不作为切换阻塞项。该接口按租户前缀或租户列表一次删除多个租户，单租户 `app.tenant_id` 的 RLS 策略本就无法覆盖；而 `AdminTestDataCleanupService.rejectProductionProfile` 已在 prod/staging/uat/preprod 及未识别 profile 下拒绝调用，只在 dev/local/test 以 owner 账号运行。受限运行时角色面向生产类环境，因此保留为 owner 执行的开发测试工具，不改代码。
 
 ## Orchestrator 补充
 

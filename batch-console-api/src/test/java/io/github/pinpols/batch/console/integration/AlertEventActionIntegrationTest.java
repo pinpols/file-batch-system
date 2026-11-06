@@ -11,6 +11,7 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertEventMapper;
 import io.github.pinpols.batch.console.domain.notification.query.AlertEventActiveAlertsInAmGroupCountQuery;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -185,7 +186,7 @@ class AlertEventActionIntegrationTest extends AbstractIntegrationTest {
     @Bean
     @Primary
     ConsoleTenantGuard testTenantGuard() {
-      return new ConsoleTenantGuard(null) {
+      return new ConsoleTenantGuard(null, TenantDatabaseContext.NONE) {
         @Override
         public String resolveTenant(String requestTenantId) {
           return requestTenantId;

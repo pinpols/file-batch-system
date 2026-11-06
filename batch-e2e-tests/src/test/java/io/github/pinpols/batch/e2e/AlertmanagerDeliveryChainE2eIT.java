@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.console.application.contract.request.ops.AlertActionRequest;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
+import io.github.pinpols.batch.console.support.persistence.TenantDatabaseContext;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
 import io.github.pinpols.batch.e2e.support.E2eBusinessSchema;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -233,7 +234,7 @@ class AlertmanagerDeliveryChainE2eIT extends AbstractIntegrationTest {
     @Bean
     @Primary
     ConsoleTenantGuard isolatedTenantGuard() {
-      return new ConsoleTenantGuard(null) {
+      return new ConsoleTenantGuard(null, TenantDatabaseContext.NONE) {
         @Override
         public String resolveTenant(String requestTenantId) {
           return requestTenantId;

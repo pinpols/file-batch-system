@@ -440,7 +440,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         .build();
   }
 
+  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+  // 版本行，因此不能用只读事务。
   @Override
+  @Transactional
   public TenantConfigPackageExcelPreviewResponse preview(String uploadToken) {
     // 先校验上传会话归属再轮换一次性令牌，避免未授权请求使上传者当前预览失效。
     PackageExcelSession currentSession = loadSession(uploadToken);
@@ -460,7 +463,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
    * 内联编辑回写:把出错行被改动的单元格合并进 session 对应行（{@code rowNo - 2} = 列表下标），再重校验并返回新预览。 不落库——仍走原 apply
    * 闸门（invalid > 0 拒绝）。会话仍按 token 持有,30 分钟 TTL。
    */
+  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+  // 版本行，因此不能用只读事务。
   @Override
+  @Transactional
   public TenantConfigPackageExcelPreviewResponse patchRow(
       String uploadToken,
       String previewToken,
@@ -540,7 +546,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     return rows.stream().<Map<String, String>>map(LinkedHashMap::new).toList();
   }
 
+  // 校验读取现有作业依赖图（强制 RLS），需要事务让租户守卫绑定的 app.tenant_id 生效；读取配置版本的函数可能补写
+  // 版本行，因此不能用只读事务。
   @Override
+  @Transactional
   public ExcelDownload downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
