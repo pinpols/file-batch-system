@@ -384,6 +384,10 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
   void shouldPreserveMonitoringPolicy_whenCopyingWithOverrides() {
     stubTenantAndOperator();
     JobDefinitionView copied = copyEntity("JOB_COPY_OVERRIDE");
+    copied.setTriggerMode("SCHEDULED");
+    copied.setExecutionHandler("dispatch.order");
+    copied.setParamSchema("{\"type\":\"object\"}");
+    copied.setPriority(4);
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_COPY_OVERRIDE"))
         .thenReturn(null, copied);
     when(jobDefinitionMapper.selectById("tenant-a", 60L)).thenReturn(copyEntity("JOB_SOURCE"));
@@ -403,6 +407,10 @@ class DefaultConsoleJobDefinitionMonitoringPolicyTest {
     verify(jobDefinitionMapper).updateJobDefinitionMaintenance(updateCaptor.capture());
     assertThat(updateCaptor.getValue().getJobName()).isEqualTo("overridden name");
     assertThat(updateCaptor.getValue().getQueueCode()).isEqualTo("new_queue");
+    assertThat(updateCaptor.getValue().getTriggerMode()).isEqualTo("SCHEDULED");
+    assertThat(updateCaptor.getValue().getExecutionHandler()).isEqualTo("dispatch.order");
+    assertThat(updateCaptor.getValue().getParamSchema()).isEqualTo("{\"type\":\"object\"}");
+    assertThat(updateCaptor.getValue().getPriority()).isEqualTo(4);
     verify(jobDefinitionMapper).copyJobMonitoringPolicy("tenant-a", 60L, 61L, "tester");
     verify(cacheInvalidationService).evictJobDefinition("tenant-a", "JOB_COPY_OVERRIDE");
   }
