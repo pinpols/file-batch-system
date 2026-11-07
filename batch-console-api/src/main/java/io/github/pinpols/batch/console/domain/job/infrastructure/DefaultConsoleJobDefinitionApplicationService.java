@@ -584,7 +584,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     // 否则 priority 被写成 null 触发非空约束，执行器和参数模板也会被清空。
     param.setExecutionHandler(copied.getExecutionHandler());
     param.setParamSchema(copied.getParamSchema());
-    param.setPriority(copied.getPriority() == null ? 5 : copied.getPriority());
+    param.setPriority(EmptyChecks.isNull(copied.getPriority()) ? 5 : copied.getPriority());
     param.setDefaultParams(copied.getDefaultParams());
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
     param.setDescription(
