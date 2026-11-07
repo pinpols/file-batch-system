@@ -558,6 +558,7 @@ public class DefaultConsoleJobDefinitionApplicationService
             : copied.getWorkerGroup());
     param.setScheduleExpr(
         request.getScheduleExpr() != null ? request.getScheduleExpr() : copied.getScheduleExpr());
+    param.setTriggerMode(copied.getTriggerMode());
     param.setCalendarCode(
         request.getCalendarCode() != null
             ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
@@ -579,6 +580,11 @@ public class DefaultConsoleJobDefinitionApplicationService
     param.setShardStrategy(copied.getShardStrategy());
     param.setExecutionMode(copied.getExecutionMode());
     param.setWatermarkField(copied.getWatermarkField());
+    // 维护更新会无条件写这三列。克隆请求没有对应覆盖项，必须带回刚复制的值，
+    // 否则 priority 被写成 null 触发非空约束，执行器和参数模板也会被清空。
+    param.setExecutionHandler(copied.getExecutionHandler());
+    param.setParamSchema(copied.getParamSchema());
+    param.setPriority(EmptyChecks.isNull(copied.getPriority()) ? 5 : copied.getPriority());
     param.setDefaultParams(copied.getDefaultParams());
     param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
     param.setDescription(

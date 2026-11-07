@@ -293,7 +293,7 @@ services:
 
   kafka-ui:
     logging: *container-logging
-    image: provectuslabs/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v0.7.2}
+    image: ghcr.io/kafbat/kafka-ui:${KAFKA_UI_IMAGE_TAG:-v1.5.0}
     container_name: ${KAFKA_UI_CONTAINER:-batch-kafka-ui}
     restart: unless-stopped
     depends_on:
