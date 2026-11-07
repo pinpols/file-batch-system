@@ -72,3 +72,4 @@ qodana.sarif*.json
 reports/acceptance/be-acceptance-*.md
 /.workbuddy-ai/
 /.openidea/
+/.serena/
