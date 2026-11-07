@@ -10,6 +10,9 @@
 
 ### Added
 
+- 控制台菜单新增审计页 `/observability/audit` 和平台设置 `/system/settings`。文件审计、操作审计及其他旧路径保留，等前端页面和重定向上线后再删。`/runs` 未改。
+- 审批查询新增 `excludeApprovalTypes`：逗号分隔，最多 8 个类型代码。普通审批列表用它排除 `CATCH_UP`。
+
 - 新增 Console/Trigger/Orchestrator 平台库最小授权：`scripts/db/platform-control-plane-roles.sql` 为三个控制面运行时角色授予由各自 Mapper/内联 SQL 生成的表、序列与函数权限，Console/Trigger 对运行状态表只读、三者均无 DDL；Trigger/Orchestrator 新增可选的 `BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD`，迁移仍以 owner 执行；Helm 新增可选的 `consoleApi/trigger/orchestrator.platformDb.credentialsSecretName`，默认部署不变（ARCH-20261103-01）
 
 - `ConsoleJobInstanceResponse` 新增 `rootTriggerType`：工作流节点派发的子实例 `triggerType` 恒为 `EVENT`，新字段返回根运行的真实触发来源（`MANUAL` / `SCHEDULED` 等），供控制台“触发”列展示；非工作流派发的实例为 `null`。列表、详情与按实例编号查询统一投影，OpenAPI 同步。
@@ -18,6 +21,8 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+
+- 自助服务审批（`SELF_SERVICE`）禁止申请人批准自己的单据，与配置发布一致。拒绝不受影响；已经批准后的执行重试不在这次拦截。
 
 - 控制台 `/auth/me` 菜单的中文名称与前端菜单对齐，保持菜单路径及角色权限不变。
 

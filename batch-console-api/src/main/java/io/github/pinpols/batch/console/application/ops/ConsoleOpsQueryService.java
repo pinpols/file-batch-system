@@ -16,6 +16,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ApprovalTypeExclusions;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.OutboxDeliveryLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.OutboxRetryLogQueryRequest;
@@ -405,6 +406,7 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     query.setTenantId(tenantId);
     query.setApprovalNo(request.getApprovalNo());
     query.setApprovalType(request.getApprovalType());
+    query.setExcludeApprovalTypes(ApprovalTypeExclusions.parse(request.getExcludeApprovalTypes()));
     query.setActionType(request.getActionType());
     query.setApprovalStatus(request.getApprovalStatus());
     query.setRequesterId(request.getRequesterId());

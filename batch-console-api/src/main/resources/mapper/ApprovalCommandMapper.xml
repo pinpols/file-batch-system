@@ -34,6 +34,12 @@
         <if test="approvalType != null and approvalType != ''">
             and approval_type = #{approvalType}
         </if>
+        <if test="excludeApprovalTypes != null and excludeApprovalTypes.size() > 0">
+            and approval_type not in
+            <foreach collection="excludeApprovalTypes" item="excludedType" open="(" separator="," close=")">
+                #{excludedType}
+            </foreach>
+        </if>
         <if test="actionType != null and actionType != ''">
             and action_type = #{actionType}
         </if>
@@ -62,6 +68,12 @@
         </if>
         <if test="approvalType != null and approvalType != ''">
             and approval_type = #{approvalType}
+        </if>
+        <if test="excludeApprovalTypes != null and excludeApprovalTypes.size() > 0">
+            and approval_type not in
+            <foreach collection="excludeApprovalTypes" item="excludedType" open="(" separator="," close=")">
+                #{excludedType}
+            </foreach>
         </if>
         <if test="actionType != null and actionType != ''">
             and action_type = #{actionType}
