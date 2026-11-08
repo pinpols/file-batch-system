@@ -4,6 +4,8 @@
 >
 > 本文档只规划,不动代码。配套 ArchUnit 规则与脚本化迁移由后续 agent 处理。
 
+> **2026-11-08 复核**：Stage 1 已大部分落地——`domain/<context>` 下 9 个上下文包共 84 个 Controller；顶层 `web/` 剩 15 个、`mapper/` 剩 13 个、`service/` 剩 5 个，`domain/entity|param|query|command` 另剩 29 个旧子包文件。代码中无跨上下文标注（0 处），故批次 4 的「以跨上下文注释标注、P1-B 解耦」要求与工时表对应项已不适用。收尾清单与逐包数量见[待办索引](todo-master.md#p1-a-stage-1-迁移收尾2026-11-08-复核开放)。
+
 ---
 
 ## 1. 当前包结构盘点
@@ -330,7 +332,7 @@
 - **notification**(~35)— 涉及 `monitor` 包改名 + `support/push` 拆分,触面广
 
 ### 批次 4:跨域聚合(目标 2–3 天)
-- **ops**(~40)— 聚合多上下文 mapper(见 §4#4)。搬迁后保留耦合,标注 `// XXX: cross-context until P1-B`
+- **ops**(~40)— 聚合多上下文 mapper(见 §4#4)。搬迁后保留耦合,原计划以跨上下文注释标注、P1-B 解耦（2026-11-08 复核：代码中无该标注,本要求已不适用）
 - **observability**(~30)— infrastructure/realtime 13 个文件搬迁;realtime controller 跟随业务 ctx 走;`infrastructure/query/*` 子模块整体平移
 
 ### 批次 5:shared 与收尾(目标 1–2 天)
@@ -374,7 +376,7 @@
 | 新增包目录 | 9 contexts × 平均 4 层 + `shared` ≈ **40 个新目录** |
 | 需要更新的 MyBatis XML(全限定名 / namespace) | **~62** |
 | 需要修订的 Spring/MyBatis 配置项 | `type-aliases-package`、`mapper-scan` 至少 **2 处** |
-| 跨上下文已知耦合点(需 `// XXX:` 标注,P1-B 解耦) | **~15** |
+| 跨上下文已知耦合点(计划标注、P1-B 解耦) | **~15**（2026-11-08 复核：代码中实际 0 处） |
 | ArchUnit 规则数(后续 agent) | 9 contexts × allowed-targets + 1 shared 规则 ≈ **10–12 条** |
 | **总工时**(单工程师全时) | **8–10 人天**(批次 1+2 约 4 天,批次 3 约 3 天,批次 4+5 约 3 天,含返工与 review) |
 | **建议节奏** | 2 周内完成 5 批 PR,每 PR 控制在 < 80 个文件 / < 1500 行 import-only diff |

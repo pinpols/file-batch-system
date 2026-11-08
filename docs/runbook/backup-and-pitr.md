@@ -219,7 +219,7 @@ EOF
 
 ## 关联
 
-- `playbooks/pg-primary-failover.md` — 主库故障切主(HA;本 runbook 补它 §方案C 的 PITR TODO)
+- `playbooks/pg-primary-failover.md` — 主库故障切主(HA;本 runbook 补它 §方案C 的 PITR 待办,已处理)
 - `pg-table-partitioning.md` — process_staging 分区定义、预建和生命周期边界（当前不自动 DROP）
 - `read-replica.md` — 读写分离 / standby 语义(为何 standby 不是备份)
 - `docs/archive/audit/full-audit-2026-06-10.md` — 本 runbook 的来源(P1-7 / P2-7)

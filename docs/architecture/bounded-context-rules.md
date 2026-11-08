@@ -53,7 +53,7 @@
 过渡期允许局部豁免,但必须显式:
 
 ```java
-@SuppressWarnings("BoundedContext")  // TODO(P1-A): 拆 ConsoleXxxService 后清理 — 2026-Q3
+@SuppressWarnings("BoundedContext")  // 豁免原因与清理计划（示例）
 public class LegacyCrossContextHelper { ... }
 ```
 
