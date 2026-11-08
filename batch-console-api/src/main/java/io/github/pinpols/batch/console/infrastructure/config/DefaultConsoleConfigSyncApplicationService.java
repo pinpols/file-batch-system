@@ -204,17 +204,19 @@ public class DefaultConsoleConfigSyncApplicationService
   }
 
   @Override
+  @Transactional(propagation = Propagation.REQUIRES_NEW)
   public ConfigSyncRequestStatusResponse requestStatus(String tenantId, String requestKey) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
     String keyHash = requestKeyHash(requestKey);
     if (EmptyChecks.isNull(keyHash)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
-    return auditTransaction(resolvedTenant, () -> {
-      ConfigSyncLogRow row = configSyncLogMapper.selectByRequestKey(resolvedTenant, keyHash);
-      ConfigSyncLogResponse audit = ConfigSyncLogResponse.from(row);
-      return new ConfigSyncRequestStatusResponse(EmptyChecks.isNotNull(row), audit);
-    });
+    // GET 只读路径直接使用当前独立事务，不经过 auditTransaction 的 Supplier 回调：该回调会让 CodeQL 的
+    // java/csrf-unprotected-request-type 把虚拟分发到全仓 Supplier 实现，误判本 GET 能触达写库。
+    configSyncLogMapper.setTenantContext(resolvedTenant);
+    ConfigSyncLogRow row = configSyncLogMapper.selectByRequestKey(resolvedTenant, keyHash);
+    ConfigSyncLogResponse audit = ConfigSyncLogResponse.from(row);
+    return new ConfigSyncRequestStatusResponse(EmptyChecks.isNotNull(row), audit);
   }
 
   @Override

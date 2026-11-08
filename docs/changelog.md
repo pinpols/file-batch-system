@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-08 CodeQL CSRF 读路径告警收口
+
+- 修复 CodeQL `java/csrf-unprotected-request-type`（alert #1461）：`GET /api/console/config/sync/requests/status` 的只读查询经 `auditTransaction` 的 `Supplier` 回调，CodeQL 虚拟分发到全仓 `Supplier` 实现后误判该 GET 可触达写库。改为在服务方法上声明 `@Transactional(propagation = REQUIRES_NEW)` 并直接执行 mapper 查询，保持原独立事务、租户绑定与只读语义不变，移除泛型回调后调用图不再触达写库。
+
 ## 2026-11-08 P1-A E2E 回归修复
 
 - 修复 P1-A Stage 1 迁移引入的 E2E 回归：`E2eConsoleImportApplication` 与 `RuntimeConfigImportDispatchE2eIT.ConsoleConfig` 的 `@MapperScan` 仍按旧包白名单声明，漏扫新增的 `console.domain.config.mapper`，导致 7 个 E2E shard 的 ApplicationContext 因 `ConfigCacheInvalidationOutboxMapper` 找不到而启动失败；改为与生产一致的 `console.domain.**.mapper`，并移除已清空的 `console.service` / `console.web` 组件扫描。
