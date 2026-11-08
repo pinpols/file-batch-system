@@ -86,8 +86,6 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
       // 漏扫会 NoSuchBean 启动失败(main-red 2026-07-09),守护见 SpringWiringGuardArchTest
       "io.github.pinpols.batch.console.shared",
       "io.github.pinpols.batch.console.support",
-      "io.github.pinpols.batch.console.service",
-      "io.github.pinpols.batch.console.web",
       "io.github.pinpols.batch.orchestrator",
       "io.github.pinpols.batch.worker.core",
       "io.github.pinpols.batch.worker.imports"
@@ -147,18 +145,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     basePackages = "io.github.pinpols.batch.common.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory")
 @MapperScan(
-    basePackages = {
-      "io.github.pinpols.batch.console.mapper",
-      "io.github.pinpols.batch.console.domain.audit.mapper",
-      "io.github.pinpols.batch.console.domain.file.mapper",
-      "io.github.pinpols.batch.console.domain.governance.mapper",
-      "io.github.pinpols.batch.console.domain.job.mapper",
-      "io.github.pinpols.batch.console.domain.notification.mapper",
-      "io.github.pinpols.batch.console.domain.observability.mapper",
-      "io.github.pinpols.batch.console.domain.ops.mapper",
-      "io.github.pinpols.batch.console.domain.rbac.mapper",
-      "io.github.pinpols.batch.console.domain.workflow.mapper"
-    },
+    basePackages = "io.github.pinpols.batch.console.domain.**.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory",
     nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class)
 @MapperScan(

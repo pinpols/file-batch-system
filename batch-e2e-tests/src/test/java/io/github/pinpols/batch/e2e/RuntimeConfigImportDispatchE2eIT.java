@@ -71,9 +71,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
         "io.github.pinpols.batch.console.domain",
         "io.github.pinpols.batch.console.infrastructure",
         "io.github.pinpols.batch.console.shared",
-        "io.github.pinpols.batch.console.support",
-        "io.github.pinpols.batch.console.service",
-        "io.github.pinpols.batch.console.web"
+        "io.github.pinpols.batch.console.support"
       },
       excludeFilters =
           @ComponentScan.Filter(
@@ -84,18 +82,7 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
                 MaintenanceModeFilter.class
               }))
   @MapperScan(
-      basePackages = {
-        "io.github.pinpols.batch.console.mapper",
-        "io.github.pinpols.batch.console.domain.audit.mapper",
-        "io.github.pinpols.batch.console.domain.file.mapper",
-        "io.github.pinpols.batch.console.domain.governance.mapper",
-        "io.github.pinpols.batch.console.domain.job.mapper",
-        "io.github.pinpols.batch.console.domain.notification.mapper",
-        "io.github.pinpols.batch.console.domain.observability.mapper",
-        "io.github.pinpols.batch.console.domain.ops.mapper",
-        "io.github.pinpols.batch.console.domain.rbac.mapper",
-        "io.github.pinpols.batch.console.domain.workflow.mapper"
-      },
+      basePackages = "io.github.pinpols.batch.console.domain.**.mapper",
       sqlSessionFactoryRef = "sqlSessionFactory",
       nameGenerator = FullyQualifiedAnnotationBeanNameGenerator.class)
   static class ConsoleConfig {}
