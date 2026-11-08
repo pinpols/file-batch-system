@@ -1,0 +1,24 @@
+# 临时草稿：用仓库 Actions token 触发 feat/console-approval-menu 的 full-ci-gate。
+# 不要合并。full-ci-gate 排队后关闭本 PR。
+name: Temporary full-ci-gate dispatch
+
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch full-ci-gate
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh workflow run full-ci-gate.yml \
+            --repo "${{ github.repository }}" \
+            --ref feat/console-approval-menu
