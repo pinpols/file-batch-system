@@ -2,8 +2,10 @@ openapi: 3.1.0
 info:
   title: Batch Platform Console API
   version: 0.1.0
-  x-last-updated: "2026-11-01"
+  x-last-updated: "2026-11-08"
   x-changelog:
+    - date: "2026-11-08"
+      summary: "P1-A Stage 1 包结构收尾：Controller 迁入 domain.<ctx>.web 并新增 config 上下文；HTTP 路径、请求/响应字段、鉴权、状态码与 wire schema 不变。"
     - date: "2026-11-01"
       summary: "配置复制与作业包新增按原请求身份回查逐目标确认结果；缺失回执保持未知。"
     - date: "2026-10-15"
