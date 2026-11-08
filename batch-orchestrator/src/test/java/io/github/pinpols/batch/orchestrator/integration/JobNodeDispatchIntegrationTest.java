@@ -2824,8 +2824,13 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         AopTestUtils.getUltimateTargetObject(launchWaitReconciler);
     reconciler.reconcile();
 
-    assertCapacityWaitResumed(waitA);
-    assertCapacityWaitResumed(waitB);
+    // 生产 reconciler 同时被 @Scheduled 每 5s 调度，且 claimDue 使用 for update skip locked；
+    // 后台扫描可能先认领这两条等待项，显式调用会跳过它们并立即返回。这里等待后台完成恢复，
+    // 仍断言最终状态契约（RESUMED / LAUNCHED / 单 RootRun），避免依赖调度竞态时序。
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      assertCapacityWaitResumed(waitA);
+      assertCapacityWaitResumed(waitB);
+    });
   }
 
   @ParameterizedTest
