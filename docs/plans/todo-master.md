@@ -30,20 +30,9 @@
 | 三租户覆盖验收 | 本机已通过（2026-11-03）：三包经真实 HTTP 导入回读，`coverage-harness.sh all --include-trigger-matrix` 基础 36 + 触发矩阵 8 个场景 SUCCESS、前后清理证据完整、`test_coverage_harness.py` 8/8。仍开放：浏览器向导路径、Quartz 自身写入拒绝 occurrence 的端到端、staging/目标环境执行，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
 
-## P1-A Stage 1 迁移收尾（2026-11-08 复核，开放）
+## P1-A Stage 1 迁移收尾（2026-11-08 收尾完成）
 
-`BoundedContextDependencyArchTest` 的类注释称「Stage 1 已完成，以严格 0 断言运行」，但该规则只扫描 `domain.*`；`batch-console-api` 顶层仍有旧包未搬，不在守卫范围内。旧包不是废弃代码——`ConsoleQuotaPolicyController` 映射 `/api/console/quota-policies`，配置类端点被前端 `src/api/configReleases.ts` 等调用。
-
-| 旧包 | 文件数 | 内容 |
-|---|---:|---|
-| `console/web/` | 15 | 配置 / 配额 / 资源 / 资产策略类 Controller（`ConsoleConfig*`、`ConsoleQuotaPolicy*`、`ConsoleResource*`、`ConsoleArchivePolicy*`、`ConsoleAsset*`、`ConsoleLineageEvidence*`、`ConsoleBusinessShard*`、`ConsoleCapacityProfile*`） |
-| `console/mapper/` | 13 | `AuditLogMapper`、`Config*Mapper`、`Console*PolicyMapper`、`ConsoleIdempotencyMapper`、`TenantConfigRevisionMapper` |
-| `console/service/` | 5 | 与上述 Controller 配套的 4 个 Service + `ConsoleResponseFactory` |
-| `domain/entity` / `param` / `query` / `command` | 6 / 15 / 4 / 4 | 非上下文子包，计划要求清理的旧路径；逐类归属未判定 |
-
-- 代码中无跨上下文标注（0 处），跨上下文耦合是否已解耦无直接证据。
-- 未做：未逐类判定应并入哪个上下文；未核对 15 个 Controller 是否有重复或已废弃端点；未确认 `domain/entity` 等旧子包是否被新上下文引用。
-- 计划原文与批次划分：[p1a-stage1-migration-plan-2026-05-30](p1a-stage1-migration-plan-2026-05-30.md)。
+2026-11-08 复核时残留 62 个旧包生产文件（`console/web` 15、`console/mapper` 13、`console/service` 5、`domain.entity|param|query|command` 29）和 2 个 SecretVersion 契约；同日完成迁移：新增 `config` 为第 10 个有界上下文，旧包全部清空，`BoundedContextDependencyArchTest` 增加 `config` 与旧包守卫，豁免改为运行时 `BoundedContextExemption`（唯一豁免 `ConsoleQueryController`，P1-B/P1-C 拆分只读聚合）。逐类归属、残余与验证证据见 [计划 §8](p1a-stage1-migration-plan-2026-05-30.md#8-2026-11-08-stage-1-收尾记录)。
 
 ## 2026-10-31：治理台账快照与当时的推进顺序（历史记录）
 

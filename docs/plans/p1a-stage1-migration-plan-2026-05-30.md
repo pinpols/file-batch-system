@@ -4,7 +4,7 @@
 >
 > 本文档只规划,不动代码。配套 ArchUnit 规则与脚本化迁移由后续 agent 处理。
 
-> **2026-11-08 复核**：Stage 1 已大部分落地——`domain/<context>` 下 9 个上下文包共 84 个 Controller；顶层 `web/` 剩 15 个、`mapper/` 剩 13 个、`service/` 剩 5 个，`domain/entity|param|query|command` 另剩 29 个旧子包文件。代码中无跨上下文标注（0 处），故批次 4 的「以跨上下文注释标注、P1-B 解耦」要求与工时表对应项已不适用。收尾清单与逐包数量见[待办索引](todo-master.md#p1-a-stage-1-迁移收尾2026-11-08-复核开放)。
+> **2026-11-08 复核与收尾**：复核时 Stage 1 已大部分落地，同日完成收尾——10 个上下文包承载全部 Controller；顶层 `web/`、`mapper/`、`service/` 与 `domain.entity|param|query|command` 旧包已清空并加入 ArchUnit 旧包守卫。逐类归属、残余豁免与验证证据见 [§8](#8-2026-11-08-stage-1-收尾记录)；待办索引已关闭该项。
 
 ---
 
