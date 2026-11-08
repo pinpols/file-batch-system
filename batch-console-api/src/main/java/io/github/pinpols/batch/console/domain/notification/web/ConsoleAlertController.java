@@ -6,8 +6,8 @@ import io.github.pinpols.batch.console.application.contract.request.ops.AlertAct
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleAlertApplicationService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertActionResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

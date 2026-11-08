@@ -15,7 +15,7 @@ import io.github.pinpols.batch.console.application.observability.ConsoleSystemPa
 import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterPolicy;
 import io.github.pinpols.batch.console.domain.governance.application.ConsoleGovernanceParameterService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

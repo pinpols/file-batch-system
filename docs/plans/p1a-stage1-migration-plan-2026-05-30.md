@@ -389,6 +389,40 @@
 4. **回滚预案**:每批 PR 独立 revert;由于不动行为,revert 安全。
 5. **脚本化**:`git mv` + sed 批量改 package + import 的脚本应在批次 1 跑通后固化为 `scripts/p1a-stage1-rename.{py,sh}`。
 
+## 8. 2026-11-08 Stage 1 收尾记录
+
+**收尾决策**：把 `config` 正式纳入第 10 个有界上下文（`domain/config` 的 param/view 与 `application/config`
+已存在但此前未纳入守护），其余残留旧包按既有归属迁入 9 个 context 或 `shared`。
+
+**迁移范围**：剩余 62 个旧包生产文件 + 2 个 ops 的 SecretVersion 契约全部迁出（web 15、mapper 13、service 5、
+domain.entity 6、domain.param 15、domain.query 4、domain.command 4），逐类归属：config 20、governance 23、
+rbac 7、ops 9、audit 2、notification 1、observability 1、shared 1（`ConsoleResponseFactory` →
+`shared.web`）。归属依据：既有 Mapper/Entity/Service 所在上下文、调用方与契约归属；`ResourceQueue*` → ops、
+`TenantQuotaPolicy*` / `SecretVersion*` / `TenantUpsertParam` → rbac、归档 / 资产新鲜度 / 业务分片 /
+租户放置 → governance。
+
+**删除旧路径**：`console.web`、`console.mapper`、`console.service`、`domain.entity`、`domain.param`、
+`domain.query`、`domain.command` 旧目录清空；移除仅服务已迁走 `web/query` DTO 的 `web/query/lombok.config`；
+`@MapperScan` 去掉旧 `console.mapper` 包，保留 `domain.**.mapper`。
+
+**守护与豁免**：`BoundedContextDependencyArchTest` 的 `BOUNDED_CONTEXTS` 增加 `config`；新增旧包守卫（上述 7 个
+根包重新出现即失败）；豁免机制从 SOURCE 级、字节码不可见的 `@SuppressWarnings` 改为运行时注解
+`io.github.pinpols.batch.console.shared.arch.BoundedContextExemption`（当前唯一豁免：`ConsoleQueryController`
+跨上下文只读聚合，清理计划 P1-B/P1-C）。测试包同步：19 个 Controller/Service 测试移到对应
+`domain.<ctx>.web|service`；跨上下文 mapper/convention 测试保留在测试公共位置。
+
+**验证（2026-11-08 本轮实际执行）**：
+
+- `./mvnw -o -pl batch-console-api -am -DskipTests compile`：BUILD SUCCESS。
+- `./mvnw -o -pl batch-console-api test`（Docker/Testcontainers，OrbStack socket）：`2962` tests、`0` failures、`0` errors、`2` skipped（BUILD SUCCESS；首轮全量运行 7 个共享上下文时序用例失败，隔离重跑 31/31 通过后复跑全量通过）。
+- `./mvnw -o -pl batch-console-api -Dtest='BoundedContextDependencyArchTest,BoundedContextMigrationProgressTest' test`：
+  3/3 通过，跨上下文直接依赖 `0` 条（1 个显式豁免）。
+- `python3 scripts/ci/check-console-openapi-paths.py`：`439` 条 `/api/console` 路由一致。
+- `git diff --check`：通过。
+
+**残余**：`ConsoleQueryController` 的跨上下文只读聚合仍需在 P1-B/P1-C 按上下文拆分；`application` /
+`infrastructure` / `support` 顶层包的进一步上下文化不在本次改动范围。
+
 ---
 
 ## 附录 A:统计口径

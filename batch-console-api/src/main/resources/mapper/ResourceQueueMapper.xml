@@ -121,7 +121,7 @@
         limit 1
     </select>
 
-    <insert id="upsertResourceQueue" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam">
+    <insert id="upsertResourceQueue" parameterType="io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpsertParam">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,
@@ -148,7 +148,7 @@
             updated_at = current_timestamp
     </insert>
 
-    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         insert into batch.resource_queue (
             tenant_id, queue_code, queue_name, queue_type,
             max_running_jobs, max_running_partitions, max_qps,
@@ -162,7 +162,7 @@
         )
     </insert>
 
-    <update id="update" parameterType="io.github.pinpols.batch.console.domain.param.ResourceQueueUpdateParam">
+    <update id="update" parameterType="io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpdateParam">
         update batch.resource_queue
         set queue_name = #{queueName},
             queue_type = #{queueType},

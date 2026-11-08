@@ -22,6 +22,7 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse.IssueDto;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelPreviewResponse.SheetStats;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigPackageExcelUploadResponse;
+import io.github.pinpols.batch.console.domain.config.mapper.TenantConfigRevisionMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMapper;
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.query.FileChannelConfigQuery;
@@ -55,7 +56,6 @@ import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelWo
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSampleDataFactory;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageSheetSpecs;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageWorkbookLimits;
-import io.github.pinpols.batch.console.mapper.TenantConfigRevisionMapper;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;

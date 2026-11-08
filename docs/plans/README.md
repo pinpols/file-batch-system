@@ -82,7 +82,7 @@
 | 文档 | 职责 |
 |---|---|
 | [bounded-context-migration-plan-2026-08-03.md](bounded-context-migration-plan-2026-08-03.md) | Bounded Context 依赖治理计划（2026-08-03） |
-| [p1a-stage1-migration-plan-2026-05-30.md](p1a-stage1-migration-plan-2026-05-30.md) | P1-A Stage 1:console-api 子包归一迁移规划(2026-05-30) |
+| [p1a-stage1-migration-plan-2026-05-30.md](p1a-stage1-migration-plan-2026-05-30.md) | P1-A Stage 1:console-api 子包归一迁移规划(2026-05-30)，2026-11-08 收尾完成 |
 
 ## 当前工作台账与阶段方案
 

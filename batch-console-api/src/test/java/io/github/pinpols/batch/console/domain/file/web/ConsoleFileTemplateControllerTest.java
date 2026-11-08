@@ -20,7 +20,7 @@ import io.github.pinpols.batch.console.domain.file.application.FileTemplateMappi
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileProjectionMapper;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

@@ -5,7 +5,7 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.ConsolePushUnsubscribeRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsolePushVapidPublicKeyResponse;
 import io.github.pinpols.batch.console.domain.notification.service.ConsolePushSubscriptionService;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;

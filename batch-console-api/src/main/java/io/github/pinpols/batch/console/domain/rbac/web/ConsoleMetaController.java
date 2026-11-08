@@ -5,7 +5,7 @@ import io.github.pinpols.batch.console.application.rbac.ConsoleMetaQueryService;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaEnumItem;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaOption;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;

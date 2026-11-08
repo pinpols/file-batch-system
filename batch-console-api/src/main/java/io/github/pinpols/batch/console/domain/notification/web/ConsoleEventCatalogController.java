@@ -4,7 +4,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.notification.application.ConsoleEventCatalogService;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTopicResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleEventTypeResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.i18n.LocaleContextHolder;

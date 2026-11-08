@@ -4,13 +4,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
-import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
-import io.github.pinpols.batch.console.domain.param.ConfigReleaseInsertParam;
-import io.github.pinpols.batch.console.domain.param.ConfigReleaseStatusUpdateParam;
-import io.github.pinpols.batch.console.domain.param.SecretVersionInsertParam;
+import io.github.pinpols.batch.console.domain.config.entity.ConfigReleaseEntity;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigReleaseMapper;
+import io.github.pinpols.batch.console.domain.config.param.ConfigReleaseInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigReleaseStatusUpdateParam;
 import io.github.pinpols.batch.console.domain.rbac.entity.SecretVersionEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.SecretVersionMapper;
-import io.github.pinpols.batch.console.mapper.ConfigReleaseMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.SecretVersionInsertParam;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.time.Instant;
 import org.junit.jupiter.api.DisplayName;

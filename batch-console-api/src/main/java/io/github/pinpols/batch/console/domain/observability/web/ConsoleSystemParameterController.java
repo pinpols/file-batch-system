@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.domain.observability.application.contract
 import io.github.pinpols.batch.console.domain.observability.application.contract.response.SystemParameterResponse;
 import io.github.pinpols.batch.console.domain.observability.entity.SystemParameterEntity;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.constraints.NotBlank;

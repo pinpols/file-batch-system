@@ -5,7 +5,7 @@ import io.github.pinpols.batch.console.application.realtime.ConsoleProgressSnaps
 import io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressQueryService;
 import io.github.pinpols.batch.console.domain.observability.application.progress.DailyProgressResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

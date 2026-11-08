@@ -14,8 +14,8 @@ import io.github.pinpols.batch.console.domain.notification.service.NotificationR
 import io.github.pinpols.batch.console.domain.notification.service.NotificationRoutePreviewService.Preview;
 import io.github.pinpols.batch.console.domain.notification.service.NotificationRoutePreviewService.Rule;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

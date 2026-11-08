@@ -8,7 +8,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.ConsoleTenantSelf
 import io.github.pinpols.batch.console.domain.rbac.application.contract.request.QuotaChangeRequest;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

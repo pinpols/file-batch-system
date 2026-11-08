@@ -104,7 +104,7 @@
         limit 1
     </select>
 
-    <insert id="upsertTenantQuotaPolicy" parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
+    <insert id="upsertTenantQuotaPolicy" parameterType="io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,
@@ -125,7 +125,7 @@
     </insert>
 
     <insert id="insert"
-            parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam">
+            parameterType="io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpsertParam">
         insert into batch.tenant_quota_policy (
             tenant_id, policy_code, max_running_jobs_per_tenant,
             max_partitions_per_tenant, max_qps_per_tenant,
@@ -138,7 +138,7 @@
     </insert>
 
     <update id="update"
-            parameterType="io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam">
+            parameterType="io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpdateParam">
         update batch.tenant_quota_policy
         set max_running_jobs_per_tenant = #{maxRunningJobsPerTenant},
             max_partitions_per_tenant = #{maxPartitionsPerTenant},

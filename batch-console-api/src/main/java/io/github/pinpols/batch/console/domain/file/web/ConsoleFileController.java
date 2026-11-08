@@ -14,7 +14,7 @@ import io.github.pinpols.batch.console.domain.file.application.contract.response
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePresignUploadResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileUploadTargetResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

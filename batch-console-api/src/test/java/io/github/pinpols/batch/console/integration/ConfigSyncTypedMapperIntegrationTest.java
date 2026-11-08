@@ -3,9 +3,9 @@ package io.github.pinpols.batch.console.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogInsertParam;
 import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
-import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;

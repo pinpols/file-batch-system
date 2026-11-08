@@ -19,7 +19,7 @@ import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowInsertParam;
 import io.github.pinpols.batch.console.domain.job.param.BusinessCalendarInsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

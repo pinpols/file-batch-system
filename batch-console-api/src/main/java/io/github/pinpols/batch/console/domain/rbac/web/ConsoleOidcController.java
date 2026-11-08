@@ -7,9 +7,9 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.request.
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcIdentityResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleOidcProviderResponse;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleOidcIdentityService;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import jakarta.validation.Valid;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

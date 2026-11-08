@@ -5,8 +5,8 @@ import io.github.pinpols.batch.console.application.contract.request.system.Updat
 import io.github.pinpols.batch.console.application.contract.response.MaintenanceStatusResponse;
 import io.github.pinpols.batch.console.application.observability.ConsoleMaintenanceApplicationService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

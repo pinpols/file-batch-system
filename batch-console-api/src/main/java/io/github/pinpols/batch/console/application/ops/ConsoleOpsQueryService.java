@@ -25,6 +25,7 @@ import io.github.pinpols.batch.console.application.contract.query.WorkerRegistry
 import io.github.pinpols.batch.console.domain.audit.application.contract.query.ConsoleAiAuditLogQueryRequest;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiAuditLogResponse;
 import io.github.pinpols.batch.console.domain.audit.entity.ConsoleAiAuditLogEntity;
+import io.github.pinpols.batch.console.domain.audit.query.AuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.query.ConsoleAiAuditLogQuery;
 import io.github.pinpols.batch.console.domain.audit.view.FileAuditLogRow;
 import io.github.pinpols.batch.console.domain.governance.application.contract.query.DeadLetterQueryRequest;
@@ -62,7 +63,6 @@ import io.github.pinpols.batch.console.domain.ops.query.WorkerRegistryQuery;
 import io.github.pinpols.batch.console.domain.ops.view.OutboxDeliveryLogRow;
 import io.github.pinpols.batch.console.domain.ops.view.OutboxRetryLogRow;
 import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
-import io.github.pinpols.batch.console.domain.query.AuditLogQuery;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
 import io.github.pinpols.batch.console.shared.view.ConsoleAuditLogResponse;

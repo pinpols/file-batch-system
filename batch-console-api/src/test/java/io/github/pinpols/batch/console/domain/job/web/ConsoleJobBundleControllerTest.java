@@ -21,7 +21,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.J
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleExportResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleResultResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobBundleSummaryResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

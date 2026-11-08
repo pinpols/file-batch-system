@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.domain.ops.mapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import io.github.pinpols.batch.console.domain.entity.MaintenanceStateEntity;
+import io.github.pinpols.batch.console.domain.ops.entity.MaintenanceStateEntity;
 import java.io.InputStream;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.session.Configuration;

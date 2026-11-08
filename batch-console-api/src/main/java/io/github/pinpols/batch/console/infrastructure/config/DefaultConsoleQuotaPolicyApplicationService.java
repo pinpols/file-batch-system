@@ -10,9 +10,9 @@ import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInva
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
-import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
-import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantQuotaPolicyMapper;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpdateParam;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.util.List;

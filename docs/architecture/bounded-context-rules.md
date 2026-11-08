@@ -4,9 +4,9 @@
 > 进度 metric:`BoundedContextMigrationProgressTest.java`
 > 当前工程治理路线：[工程成熟度路线图](engineering-maturity-roadmap.md)；具体边界规则在本文维护。
 
-## 9 个有界上下文
+## 10 个有界上下文
 
-`console-api` 的领域代码按下列 9 个 context + 1 个 shared 组织,根包统一为
+`console-api` 的领域代码按下列 10 个 context + 1 个 shared 组织,根包统一为
 `io.github.pinpols.batch.console.domain.<ctx>`:
 
 | Context | 职责一句话 |
@@ -20,6 +20,7 @@
 | `audit` | 操作审计、登录审计、AI prompt 审计 |
 | `rbac` | 角色、权限、菜单、登录、JWT、Bypass |
 | `observability` | Dashboard、SLA、Kafka lag、监控查询、报表 |
+| `config` | 配置发布 / 同步 / 批量操作 / 租户配置版本与幂等台账 |
 | `shared` | 跨 context 共享 DTO / Entity / 工具,**禁放业务逻辑** |
 
 ## 允许的跨 context 通信(共 4 种)
@@ -53,32 +54,36 @@
 过渡期允许局部豁免,但必须显式:
 
 ```java
-@SuppressWarnings("BoundedContext")  // 豁免原因与清理计划（示例）
+@BoundedContextExemption(
+    reason = "跨上下文只读聚合的业务原因",
+    cleanupBy = "P1-B 拆分为各上下文端点后移除")
 public class LegacyCrossContextHelper { ... }
 ```
 
-- 守护测试看到 `@SuppressWarnings("BoundedContext")` 自动放行
+- 守护测试看到带非空 `reason` / `cleanupBy` 的 `@BoundedContextExemption` 自动放行
 - metric 测试单独统计豁免数,**不计入** violation 总数,但会打印 `suppressed edges: N`
-- 评审纪律:每个豁免都要在注释里写「为什么 + 何时清理」
+- 评审纪律:每个豁免都要写「为什么 + 何时清理」
+- 原 `@SuppressWarnings("BoundedContext")` 为 SOURCE 级注解,字节码扫描不可见;2026-11-08 起改用运行时注解
+  `io.github.pinpols.batch.console.shared.arch.BoundedContextExemption`
 
-## 当前状态(2026-09-20)
+## 当前状态（2026-11-08 收尾）
 
-- Console 契约已从 `web.request/query/response` 收敛到各 context 的 `application.contract`；Controller
-  保留在 `web` 作为 HTTP 适配层。
-- Console 存量职责矩阵已固化到 [`project-structure.md`](project-structure.md)；`web`、`application.contract`、
-  `application`、`domain`、`infrastructure` 和存量 `service` 的职责不再靠口头约定维护。
-- Controller 不再直接暴露持久化 Entity；敏感字段由 Response DTO 投影显式排除。当前已覆盖原有
-  Console Controller 存量响应，不新增兼容性破坏的路由或字段改名。
-- 守护测试已切换为严格门禁,当前跨 context 直接依赖为 `0` 条
-- metric 测试持续输出违规矩阵,用于迁移进度和边界回归核对
-- Stage 1 已完成;后续新增跨 context 直接依赖必须直接失败
+- `console-api` 领域代码已全部收敛到 `domain.<ctx>`：顶层 `web` / `mapper` / `service` 与
+  `domain.entity` / `domain.param` / `domain.query` / `domain.command` 旧包已清空，不得回流。
+- `config` 作为第 10 个有界上下文纳入守护（配置发布 / 同步 / 批量操作 / 租户配置版本与幂等台账）；
+  `@MapperScan` 只保留 `domain.**.mapper`。
+- 守护测试已切换为严格门禁，当前跨 context 直接依赖为 `0` 条；旧包守卫同步启用。
+- 豁免机制改用运行时注解 `shared.arch.BoundedContextExemption`（必须填写 `reason` / `cleanupBy`）；当前唯一豁免为
+  `ConsoleQueryController`（跨上下文只读聚合，P1-B/P1-C 拆分后移除）。
+- metric 测试持续输出违规矩阵，用于迁移进度和边界回归核对。
 
-本地复扫证据（2026-09-20）：
+本地复扫证据（2026-11-08）：
 
-- `./mvnw -pl batch-console-api -am test`：`1371` tests, `0` failures, `0` errors。
-- `check-console-openapi-paths.py`：`379` 条 `/api/console` 路由一致。
+- `./mvnw -o -pl batch-console-api -am -DskipTests compile`：BUILD SUCCESS。
+- `./mvnw -o -pl batch-console-api test`（Docker/Testcontainers，OrbStack socket）：`2962` tests、`0` failures、`0` errors、`2` skipped（BUILD SUCCESS；首轮全量运行 7 个共享上下文时序用例失败，隔离重跑 31/31 通过后复跑全量通过）。
+- `-Dtest=BoundedContextDependencyArchTest,BoundedContextMigrationProgressTest`：3/3 通过，跨 context 直接依赖 `0`。
+- `check-console-openapi-paths.py`：`439` 条 `/api/console` 路由一致。
 - `git diff --check`：通过。
-- 旧 `console.web.request/query/response` 引用：`0`；字面量反斜杠目录残留：`0`。
 
 ## 升级路径
 

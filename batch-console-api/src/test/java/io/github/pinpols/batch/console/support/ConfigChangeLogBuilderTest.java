@@ -3,7 +3,7 @@ package io.github.pinpols.batch.console.support;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.logging.AuditLogConstants;
-import io.github.pinpols.batch.console.domain.param.ConfigChangeLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigChangeLogInsertParam;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

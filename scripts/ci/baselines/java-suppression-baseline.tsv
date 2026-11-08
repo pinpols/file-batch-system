@@ -56,7 +56,7 @@ batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/c
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/WorkflowGraphTopologyValidator.java	PMD.NcssCount	1
-batch-console-api/src/main/java/io/github/pinpols/batch/console/service/ConsoleResponseFactory.java	unchecked	1
+batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/web/ConsoleResponseFactory.java	unchecked	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/shared/view/ConsoleWorkerRegistryResponse.java	PMD.ExcessiveParameterList	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/cache/ConsoleQueryCacheService.java	java:S2583	1
 batch-console-api/src/main/java/io/github/pinpols/batch/console/support/excel/ConsoleSingleSheetExcelImportSupport.java	java:S2259	1

@@ -22,9 +22,9 @@ import io.github.pinpols.batch.console.domain.workflow.application.contract.resp
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowMermaidResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowTriggerStatusResponse;
 import io.github.pinpols.batch.console.domain.workflow.web.support.WorkflowMermaidRenderer;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

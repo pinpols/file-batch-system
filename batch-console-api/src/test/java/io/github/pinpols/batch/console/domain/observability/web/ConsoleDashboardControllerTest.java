@@ -20,7 +20,7 @@ import io.github.pinpols.batch.console.domain.observability.view.dashboard.Trigg
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.TypeCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerGroupStatusCountView;
 import io.github.pinpols.batch.console.domain.observability.view.dashboard.WorkerLoadView;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;

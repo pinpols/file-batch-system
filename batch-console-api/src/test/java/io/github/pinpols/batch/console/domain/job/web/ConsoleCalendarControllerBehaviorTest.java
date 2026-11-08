@@ -22,7 +22,7 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.H
 import io.github.pinpols.batch.console.domain.job.application.contract.request.HolidaySaveRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleCalendarResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleHolidayResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.LocalDate;

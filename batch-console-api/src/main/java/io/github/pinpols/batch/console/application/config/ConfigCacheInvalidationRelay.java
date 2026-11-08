@@ -2,7 +2,7 @@ package io.github.pinpols.batch.console.application.config;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
-import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
 import jakarta.annotation.PreDestroy;
 import java.util.UUID;
 import java.util.concurrent.Executors;

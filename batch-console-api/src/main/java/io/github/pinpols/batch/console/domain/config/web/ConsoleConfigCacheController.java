@@ -1,0 +1,89 @@
+package io.github.pinpols.batch.console.domain.config.web;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
+import io.github.pinpols.batch.console.application.contract.response.CacheEvictionResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * 配置缓存运维（Ops-only）：手动失效 orchestrator 端的 Redis 配置缓存。
+ *
+ * <p>正常路径：console 通过既有写接口改 job_definition / workflow_definition 等配置时， {@link
+ * ConsoleConfigCacheInvalidationService} 会在事务 afterCommit 自动 evict 对应 Redis key， 多个 orchestrator
+ * 实例下次读时即刻 cache miss 重新加载。
+ *
+ * <p>需要手动 evict 的场景：运维直接通过 {@code psql} / SQL migration 改 DB 而**没有走** console 写路径（console
+ * 拦截不到）。在不重启 orchestrator 的前提下，这条路径可以让缓存立即失效。 否则需要等 {@code
+ * OrchestratorConfigCacheService.CONFIG_CACHE_TTL = 5min} 过期。
+ *
+ * <p>路径 {@code /api/console/ops/cache/evict-*}，仅 ROLE_ADMIN 可调。
+ */
+@RestController
+@Validated
+@RequestMapping("/api/console/ops/cache")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleConfigCacheController {
+
+  private final ConsoleConfigCacheInvalidationService cacheInvalidationService;
+  private final ConsoleResponseFactory responseFactory;
+
+  @PostMapping("/evict-job-definition")
+  public CommonResponse<CacheEvictionResponse> evictJobDefinition(
+      @RequestParam("tenantId") String tenantId, @RequestParam("jobCode") String jobCode) {
+    cacheInvalidationService.evictManual(tenantId, "job-definition", jobCode);
+    return responseFactory.success(
+        new CacheEvictionResponse("job-definition:" + tenantId + ":" + jobCode));
+  }
+
+  @PostMapping("/evict-all-job-definitions")
+  public CommonResponse<CacheEvictionResponse> evictAllJobDefinitions(
+      @RequestParam("tenantId") String tenantId) {
+    cacheInvalidationService.evictManual(tenantId, "job-definition", "*");
+    return responseFactory.success(new CacheEvictionResponse("job-definition:" + tenantId + ":*"));
+  }
+
+  @PostMapping("/evict-workflow-definition")
+  public CommonResponse<CacheEvictionResponse> evictWorkflowDefinition(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("workflowCode") String workflowCode) {
+    cacheInvalidationService.evictManual(tenantId, "workflow-definition", workflowCode);
+    return responseFactory.success(
+        new CacheEvictionResponse("workflow-definition:" + tenantId + ":" + workflowCode));
+  }
+
+  @PostMapping("/evict-business-calendar")
+  public CommonResponse<CacheEvictionResponse> evictBusinessCalendar(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("calendarCode") String calendarCode) {
+    cacheInvalidationService.evictManual(tenantId, "business-calendar", calendarCode);
+    return responseFactory.success(
+        new CacheEvictionResponse("business-calendar:" + tenantId + ":" + calendarCode));
+  }
+
+  @PostMapping("/evict-batch-window")
+  public CommonResponse<CacheEvictionResponse> evictBatchWindow(
+      @RequestParam("tenantId") String tenantId, @RequestParam("windowCode") String windowCode) {
+    cacheInvalidationService.evictManual(tenantId, "batch-window", windowCode);
+    return responseFactory.success(
+        new CacheEvictionResponse("batch-window:" + tenantId + ":" + windowCode));
+  }
+
+  @PostMapping("/evict-quota-policies")
+  public CommonResponse<CacheEvictionResponse> evictQuotaPolicies(
+      @RequestParam("tenantId") String tenantId) {
+    cacheInvalidationService.evictManual(tenantId, "tenant-quota-policy", "enabled-first");
+    return responseFactory.success(
+        new CacheEvictionResponse("tenant-quota-policy:" + tenantId + ":enabled-first"));
+  }
+}

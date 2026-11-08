@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.application.idempotency;
 
-import io.github.pinpols.batch.console.mapper.ConsoleIdempotencyMapper;
+import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleIdempotencyMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 

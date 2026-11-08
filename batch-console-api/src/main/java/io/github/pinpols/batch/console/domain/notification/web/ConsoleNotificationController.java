@@ -10,7 +10,7 @@ import io.github.pinpols.batch.console.domain.notification.application.contract.
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleNotificationTestResultResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleSubscriptionRuleResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;

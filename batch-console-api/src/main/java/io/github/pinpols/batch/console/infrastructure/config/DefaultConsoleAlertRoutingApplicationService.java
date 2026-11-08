@@ -10,10 +10,10 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleAl
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.notification.mapper.AlertRoutingConfigMapper;
+import io.github.pinpols.batch.console.domain.notification.param.AlertRoutingConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigCountQuery;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
-import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

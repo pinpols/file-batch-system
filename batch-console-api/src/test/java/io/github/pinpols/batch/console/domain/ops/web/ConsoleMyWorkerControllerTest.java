@@ -7,7 +7,7 @@ import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.WorkerRegistryResponse;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleMyWorkerQueryService;
 import io.github.pinpols.batch.console.domain.ops.view.WorkerRegistryView;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

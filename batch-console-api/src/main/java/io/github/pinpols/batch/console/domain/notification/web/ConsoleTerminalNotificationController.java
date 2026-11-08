@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.application.notification.TerminalNotifica
 import io.github.pinpols.batch.console.domain.notification.application.contract.request.TerminalDeliveryRetryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.TerminalDeliveryRecoveryResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;

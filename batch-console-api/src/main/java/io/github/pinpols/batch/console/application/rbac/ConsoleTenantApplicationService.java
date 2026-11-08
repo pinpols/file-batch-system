@@ -19,7 +19,6 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.domain.file.mapper.FilePipelineMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobInstanceMapper;
-import io.github.pinpols.batch.console.domain.param.TenantUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.BatchCreateTenantsResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ProvisionTenantResponse;
@@ -27,6 +26,7 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import io.github.pinpols.batch.console.domain.rbac.mapper.TenantMapper;
 import io.github.pinpols.batch.console.domain.rbac.param.ConsoleUserAccountInsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsolePasswordHasher;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleRoles;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
