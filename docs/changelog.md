@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-08 Workflow 槽位等待恢复测试稳定性
+
+- `JobNodeDispatchIntegrationTest#systemCapacityWaitRecovery_shouldResumeEachRunnableTenantIndependently` 改为用 Awaitility 等待最终 `RESUMED` / `LAUNCHED` / 单 RootRun 契约：生产 `WorkflowLaunchWaitReconciler` 同时被 5s `@Scheduled` 调度且 `claimDue` 使用 `for update skip locked`，显式扫描可能跳过已被后台认领的等待项，原即时断言在 #1337 的 main full gate 上偶发读到 `WAITING`（同 commit 重跑通过）。修复不改变生产逻辑与断言口径。
+
 ## 2026-11-08 CodeQL CSRF 读路径告警收口
 
 - 修复 CodeQL `java/csrf-unprotected-request-type`（alert #1461）：`GET /api/console/config/sync/requests/status` 的只读查询经 `auditTransaction` 的 `Supplier` 回调，CodeQL 虚拟分发到全仓 `Supplier` 实现后误判该 GET 可触达写库。改为在服务方法上声明 `@Transactional(propagation = REQUIRES_NEW)` 并直接执行 mapper 查询，保持原独立事务、租户绑定与只读语义不变，移除泛型回调后调用图不再触达写库。
