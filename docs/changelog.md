@@ -1,5 +1,12 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-08 P1-A E2E 回归修复
+
+- 修复 P1-A Stage 1 迁移引入的 E2E 回归：`E2eConsoleImportApplication` 与 `RuntimeConfigImportDispatchE2eIT.ConsoleConfig` 的 `@MapperScan` 仍按旧包白名单声明，漏扫新增的 `console.domain.config.mapper`，导致 7 个 E2E shard 的 ApplicationContext 因 `ConfigCacheInvalidationOutboxMapper` 找不到而启动失败；改为与生产一致的 `console.domain.**.mapper`，并移除已清空的 `console.service` / `console.web` 组件扫描。
+- 新增 `E2eConsoleMapperScanGuardArchTest`，校验 console mapper 包均位于 `console.domain.<ctx>.mapper` 且被端到端控制台应用的 `@MapperScan` 覆盖，避免同类漏扫再次只在 Full CI 现形。
+- 修复 `triggerRestart_resumesBoundedTwoDayCoverageBeforeBatchDaySettlement`：批次日改用生产 `CalendarBizDateResolver` 解析（cutoff 之前的触发归前一业务日），不再用 fireTime 的 UTC 日期，避免结算阻塞断言随执行时刻误判为 SETTLED。
+- 验证：受影响 E2E 类（`WorkflowOccurrenceCatchUpApprovalE2eIT` 36、`DeadLetterApprovalReplayE2eIT` 5、`RuntimeConfigImportDispatchE2eIT` 1、`WorkerProcessRestartRecoveryE2eIT` 2）本地真实 Testcontainers 运行通过；新守护测试通过。
+
 ## 2026-11-08 P1-A Stage 1 包结构收尾
 
 - `batch-console-api` 清空顶层 `web` / `mapper` / `service` 与 `domain.entity|param|query|command` 旧包：62 个生产文件与 2 个 SecretVersion 契约按既有边界归入 `domain.<ctx>`；新增 `config` 为第 10 个有界上下文。

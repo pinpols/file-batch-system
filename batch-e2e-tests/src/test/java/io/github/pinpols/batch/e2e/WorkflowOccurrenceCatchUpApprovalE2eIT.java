@@ -35,8 +35,11 @@ import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
 import io.github.pinpols.batch.trigger.infrastructure.QuartzScheduledFireEnumerator;
 import io.github.pinpols.batch.trigger.infrastructure.TriggerSchedulerFacade;
 import io.github.pinpols.batch.trigger.infrastructure.scheduler.TriggerReconciler;
+import io.github.pinpols.batch.trigger.service.CalendarBizDateResolver;
+import io.github.pinpols.batch.trigger.service.TriggerCalendarDefinitionProvider;
 import io.github.pinpols.batch.trigger.service.TriggerScheduledOccurrencePlanner;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import io.github.pinpols.batch.trigger.support.CalendarBizDateDefinition;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
@@ -2854,7 +2857,14 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
         .withSchedule(CronScheduleBuilder.cronSchedule("0/1 * * * * ?")
             .inTimeZone(TimeZone.getTimeZone("UTC")))
         .build();
-    LocalDate bizDate = firstFire.atZone(ZoneOffset.UTC).toLocalDate();
+    // occurrence.biz_date 由生产 CalendarBizDateResolver 按日历 cutoff 推导，可能不等于 firstFire 的 UTC
+    // 日期（如 cutoff=23:59:59 时当日触发归前一业务日）。用同一生产解析器生成用例业务日，避免结算
+    // 断言依赖用例执行时刻与日切边界的相对位置。
+    CalendarBizDateDefinition calendarDefinition =
+        triggerContext.getBean(TriggerCalendarDefinitionProvider.class).load(TENANT, calendarCode);
+    LocalDate bizDate = triggerContext
+        .getBean(CalendarBizDateResolver.class)
+        .resolve(firstFire, ZoneOffset.UTC, calendarDefinition);
     jdbcTemplate.update(
         insertBatchDayInstanceSql,
         TENANT,
