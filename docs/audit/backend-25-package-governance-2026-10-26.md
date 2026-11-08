@@ -1530,3 +1530,5 @@ Console SLA 超期筛选使用 `CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED`，
 | `OPEN-20261030-BATCHDAY-REJECTED-BEFORE-PREPARE` | **已关闭**：#1265 已实现服务端持久围栏——V370 新增 `ABANDONED` 状态，`BatchDayCatchUpOperationStore.abandonUnprepared` 以 `insert … on conflict do nothing` 与首次冻结竞争同一主键，只在原键从未建档时落 ABANDONED，之后同键不能再冻结或发送；Console 提供 `POST /api/console/jobs/batch-days/catchup/requests/abandon`，`BatchDayWindow.vue` 只在服务端确认围栏后释放原键，围栏失败或已有批次胜出时保留原键 | 本次重跑：`BatchDayCatchUpOperationSchemaIntegrationTest` 真实 PG 35/35（含“围栏后不能再冻结或发送”“已冻结不被覆盖”“与首次冻结并发只有一个获胜”“普通角色按租户隔离”）；前端 `BatchDayWindow.test.ts` 28/28（含“服务端确认围栏后才释放”“围栏失败或已有批次胜出时保留原键”）。未执行认证 HTTP 端到端与浏览器联调 |
 
 上表四项均已关闭或取代。除上表外，本记录的开放面还有两类逐项语义核对（不是缺陷计数）：其余 Param/Query 中 51 个无明显构造校验标记的词法候选（`CONV-20261027-REQ01` 之后），以及公共返回 69 项词法清单的调用方裁定；全仓测试与 CI 仍无当前完整通过记录。
+
+**2026-11-08 复核**：上表 4 项仍为关闭/取代状态，`CONV-20261030-BATCH-REPORT-TODO-DRIFT` 记录的 `todo-master.md` `ALIGN-WORKER-BATCH-REPORT` 修正仍有效。本轮只做文档与源码词法核对，未重跑上述定向测试；两类开放面（51 项 Param/Query 校验、69 项公共返回裁定）不变。

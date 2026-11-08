@@ -57,7 +57,7 @@ class SlackNotificationSenderTest {
     });
 
     WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://hooks.slack.com/services/XXX\"}"));
+        sender.send(message("{\"url\":\"https://hooks.slack.com/services/FAKE_WEBHOOK\"}"));
 
     assertThat(result.success()).isTrue();
     assertThat(captured.get().body()).contains("\"text\"").contains("JOB_FAILED");
@@ -71,7 +71,7 @@ class SlackNotificationSenderTest {
         objectMapper, request -> new OutboundHttpResponse(400, "invalid_payload"));
 
     WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://hooks.slack.com/services/XXX\"}"));
+        sender.send(message("{\"url\":\"https://hooks.slack.com/services/FAKE_WEBHOOK\"}"));
 
     assertThat(result.success()).isFalse();
     assertThat(result.httpStatus()).isEqualTo(400);
@@ -85,7 +85,7 @@ class SlackNotificationSenderTest {
         new SlackNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
 
     WebhookDeliveryResult result =
-        sender.send(message("{\"url\":\"https://localhost/services/XXX\"}"));
+        sender.send(message("{\"url\":\"https://localhost/services/FAKE_WEBHOOK\"}"));
 
     assertThat(result.success()).isFalse();
     assertThat(result.errorSummary()).contains("BlockedAddressException");

@@ -4,7 +4,7 @@
 > 方法:阅读当前代码、Flyway、runbook、benchmark、sim 脚本和既有审计文档；本轮不跑测试、不重启服务。
 > 结论口径:区分「代码能力已落地」「本地/sim 有验证」「只具备脚本或文档」「必须 staging 同构演练后才能签字」。
 >
-> **【2026-06-21 审计后更新】** 本报告成稿时 alert escalation notifier 还在未提交工作树。此后已合并 **PR #603(`f1ba2a04a`,告警升级最后一公里→平台内 webhook 通知)** 到 main,并跑通本地 live-smoke 实证(OPEN 告警 tier 抬升 → notifier 发 `alerts/alert-escalated` → 现有 webhook 分发器真发 HTTP,payload/CAS 幂等水位线/SSRF 拦截均验证)。故下文涉及「alert escalation 未提交/未闭环」的结论(§总结论 #4、§8、§10 No-Go、P0 #5)已被本次合并取代,正文处就近标注。其余告警 TODO(Prometheus alert 名待补等)仍 open。
+> **【2026-06-21 审计后更新】** 本报告成稿时 alert escalation notifier 还在未提交工作树。此后已合并 **PR #603(`f1ba2a04a`,告警升级最后一公里→平台内 webhook 通知)** 到 main,并跑通本地 live-smoke 实证(OPEN 告警 tier 抬升 → notifier 发 `alerts/alert-escalated` → 现有 webhook 分发器真发 HTTP,payload/CAS 幂等水位线/SSRF 拦截均验证)。故下文涉及「alert escalation 未提交/未闭环」的结论(§总结论 #4、§8、§10 No-Go、P0 #5)已被本次合并取代,正文处就近标注。其余告警待办(Prometheus alert 名待补等)仍 open(2026-11-08 更新:大部分已处理,仅 batch-day 剩余)。
 
 ## 总结论
 
@@ -15,7 +15,7 @@
 1. staging 同构演练证据还缺:整队 worker 崩溃、PITR、PG failover、Kafka 短时不可用、DLQ 重放、真实 S3/SFTP/OSS 故障注入。
 2. 对账闭环仍有默认告警-only/opt-in 的环节:跨阶段 count continuity 当前只告警不阻断；dispatch readback 已有代码路径，但按设计仍是 opt-in，且渠道能力缺失时会跳过并告警。
 3. Day-2 控制台入口有断点:orchestrator 内部已支持 instance/workflow pause/resume，但 console 暴露的 instance/workflow 运维 API 当前只看到 cancel/terminate/partition retry/skip-node，pause/resume 未公开。
-4. 告警规则/runbook 仍有 TODO:playbooks 多处写着 Prometheus alert 待补。~~当前工作树里有 alert escalation notify 变更，但未提交，不能算主线闭环。~~ **【2026-06-21 更新】alert escalation notify 已合并(PR #603)并 live-smoke 实证闭环;剩余仅 Prometheus alert 名待补。**
+4. 告警规则/runbook 仍有待办:playbooks 多处写着 Prometheus alert 待补。~~当前工作树里有 alert escalation notify 变更，但未提交，不能算主线闭环。~~ **【2026-06-21 更新】alert escalation notify 已合并(PR #603)并 live-smoke 实证闭环;剩余仅 Prometheus alert 名待补。**
 5. BYO 五语言 SDK 还不能按「全部生产级」签字:Java 最完整；Python/Go/TypeScript/Rust 有目录和 conformance/协议测试迹象，但本轮未看到同等生产 transport 验收证据。
 
 ## 1. 业务表达力:真实批量场景装得下吗
@@ -49,7 +49,7 @@
 缺口:
 
 - instance/workflow pause/resume:orchestrator 内部 `/internal/instances/{id}/pause|resume` 和 `/internal/workflow-runs/{id}/pause|resume` 已有，但 console API 当前未转发这两个动作。运维仍可能要绕过 console 调内部接口。
-- 多篇 playbook 的 Prometheus alert 名仍是 TODO，说明「怎么发现」尚未全自动。
+- 多篇 playbook 的 Prometheus alert 名仍是待办，说明「怎么发现」尚未全自动。**【2026-11-08 更新】已处理：6 篇写实际告警名，仅 batch-day-not-settling 仍缺。**
 - outbox cleanup/republish 是否全量走审批/操作人 reason 仍需复核；历史审计曾指出部分治理动作审计链不足。
 
 ## 3. 数字可信:跑成功的批敢不敢拿去出账
@@ -149,7 +149,7 @@
 
 主要风险:
 
-- `playbooks/README.md` 明确 alert 名待补清单由 ops 拉单维护，多篇 playbook 仍有 Prometheus alert TODO。
+- `playbooks/README.md` 明确 alert 名待补清单由 ops 拉单维护，多篇 playbook 仍有 Prometheus alert 待办。**【2026-11-08 更新】`README.md` 已改为「已有指标只写实际告警名，无规则时标注当前无专用告警并链接跟踪项」，正文不再留待补待办。**
 - ~~当前未提交的 alert escalation notifier 不能算已合主线。合并前只能说“工作树已有实现”，不能说“已上线闭环”。~~ **【2026-06-21 更新】已合主线(PR #603)且 live-smoke 验证升级→webhook 闭环;EMAIL/钉钉/企微 sender 仍未接通,v1 仅 WEBHOOK(+Web Push)。**
 - traceId 机制前面刚修过前端搜索契约，go-live 前要做一个端到端 traceId 可检索 smoke。
 
@@ -183,7 +183,7 @@ go-live readiness 已给出正确总闸:
 
 - 没有 staging 同构 DR/PITR/PG/Kafka/DLQ 演练记录。
 - 对结算链路没有把 count/control total/readback 的阻断策略逐 job/template 标清。
-- 告警规则仍有 TODO(Prometheus alert 名待补)。~~alert escalation 通知还在未提交工作树。~~ **【2026-06-21 更新】escalation 通知已合并(#603)+实证,此条不再阻断。**
+- 告警规则仍有待办(Prometheus alert 名待补)。~~alert escalation 通知还在未提交工作树。~~ **【2026-06-21 更新】escalation 通知已合并(#603)+实证,此条不再阻断。**
 - console 缺 instance/workflow pause/resume 入口。
 
 ## P0 / P1 / P2 后续清单
@@ -193,7 +193,7 @@ go-live readiness 已给出正确总闸:
 1. 跑 `go-live-staging-execution.md` Phase 1-A~E，并把日志/SQL/trace/截图/签字落到一次执行报告。
 2. 补 console instance/workflow pause/resume 转发 API + `@AuditAction` + 前端入口，避免运维绕内部接口。
 3. 对 ADR-041 关键链路做上线策略表:哪些模板 `controlRecordCheck/controlTotalCheck/countContinuity/readback` 是 WARN，哪些是 BLOCKER。
-4. 把 alert TODO 收敛:outbox stale/circuit open、Kafka lag、PG primary/replica/lock、Redis/ShedLock、batch day stuck、readiness timeout、DLQ 增长。
+4. 把 alert 待办收敛:outbox stale/circuit open、Kafka lag、PG primary/replica/lock、Redis/ShedLock、batch day stuck、readiness timeout、DLQ 增长。
 5. ✅ **【2026-06-21 已闭环 / PR #603】** 合并并验证 alert escalation notifier:`AlertEscalationNotifier`(console-api 轮询共享表 + ShedLock + CAS 通知水位线 V181)已合 main,并 live-smoke 实证 OPEN 告警升级 → `alerts/alert-escalated` 事件 → 现有 webhook 分发器真发 HTTP(payload/幂等/SSRF 均验)。**残留**:EMAIL/钉钉/企微 sender 未实现(v1 仅 WEBHOOK+Web Push),作 P1 跟进。
 6. staging 跑端到端 traceId smoke:trigger → orchestrator → worker → report → console 可检索。
 
@@ -217,3 +217,7 @@ go-live readiness 已给出正确总闸:
 - 没跑测试、没启动服务、没压测。
 - 没修改业务代码。
 - 没把当前工作树未提交的 alert/import 变更纳入“已合主线”结论，只作为观察到的本地变更背景。
+
+---
+
+> **【2026-11-08 更新】** 上文「多篇 playbook 的 Prometheus alert 名仍是待办」已处理：`playbooks/` 下 6 篇剧本现写实际告警名（`BatchOutboxStalePublishingStuck`、`BatchOutboxCircuitBreakerOpen`、`BatchOutboxCircuitBreakerFailOpen`、`BatchKafkaConsumerLagHigh`、`WorkerBackpressureSaturated`、`BatchTaskClaimLatencyHigh`、`BatchPipelineStepExecutionLatencyHigh`），[playbooks/README.md](../runbook/playbooks/README.md) 也已改为「已有指标只写实际告警名，无规则时标注当前无专用告警并链接跟踪项，不留待补待办」。剩余面仅 [batch-day-not-settling.md](../runbook/playbooks/batch-day-not-settling.md) 缺 `BatchDayStuckSettling` / `BatchDaySettleSchedulerSilent`，该条不整体关闭。本条为文档核对，未重跑告警规则校验。

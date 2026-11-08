@@ -30,6 +30,21 @@
 | 三租户覆盖验收 | 本机已通过（2026-11-03）：三包经真实 HTTP 导入回读，`coverage-harness.sh all --include-trigger-matrix` 基础 36 + 触发矩阵 8 个场景 SUCCESS、前后清理证据完整、`test_coverage_harness.py` 8/8。仍开放：浏览器向导路径、Quartz 自身写入拒绝 occurrence 的端到端、staging/目标环境执行，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
 
+## P1-A Stage 1 迁移收尾（2026-11-08 复核，开放）
+
+`BoundedContextDependencyArchTest` 的类注释称「Stage 1 已完成，以严格 0 断言运行」，但该规则只扫描 `domain.*`；`batch-console-api` 顶层仍有旧包未搬，不在守卫范围内。旧包不是废弃代码——`ConsoleQuotaPolicyController` 映射 `/api/console/quota-policies`，配置类端点被前端 `src/api/configReleases.ts` 等调用。
+
+| 旧包 | 文件数 | 内容 |
+|---|---:|---|
+| `console/web/` | 15 | 配置 / 配额 / 资源 / 资产策略类 Controller（`ConsoleConfig*`、`ConsoleQuotaPolicy*`、`ConsoleResource*`、`ConsoleArchivePolicy*`、`ConsoleAsset*`、`ConsoleLineageEvidence*`、`ConsoleBusinessShard*`、`ConsoleCapacityProfile*`） |
+| `console/mapper/` | 13 | `AuditLogMapper`、`Config*Mapper`、`Console*PolicyMapper`、`ConsoleIdempotencyMapper`、`TenantConfigRevisionMapper` |
+| `console/service/` | 5 | 与上述 Controller 配套的 4 个 Service + `ConsoleResponseFactory` |
+| `domain/entity` / `param` / `query` / `command` | 6 / 15 / 4 / 4 | 非上下文子包，计划要求清理的旧路径；逐类归属未判定 |
+
+- 代码中无跨上下文标注（0 处），跨上下文耦合是否已解耦无直接证据。
+- 未做：未逐类判定应并入哪个上下文；未核对 15 个 Controller 是否有重复或已废弃端点；未确认 `domain/entity` 等旧子包是否被新上下文引用。
+- 计划原文与批次划分：[p1a-stage1-migration-plan-2026-05-30](p1a-stage1-migration-plan-2026-05-30.md)。
+
 ## 2026-10-31：治理台账快照与当时的推进顺序（历史记录）
 
 2026-10-26 治理记录、10 月 27 日审查和本索引里的编号不能按条数当成独立缺陷。以下保留当次云代理核查的事实和当时的建议顺序；当前进度以现行台账及代码为准。
@@ -1037,6 +1052,20 @@ QF-1/QF-2/QF-3 全部完成，包含守护测试 `QueryRecordConstructionConvent
 ## 五、✅ 已完成（简表）
 
 > 维护：每月 review，把 ✅ 项移到 §归档（避免本节越写越长）
+
+### 2026-11-08 待办关闭复核（9 项）
+
+来源：全仓 `TODO|XXX` 命中复核。以下条目在原审计/计划记录中仍显示未结案，按当前源码与文档证据确认已处理；证据为当前 `main` 的词法零命中或已登记结论，不代表新增验证。
+
+- **`executeLegacy` 死代码主路径自调用**（[deep-scan-be-architecture-2026-06-03](../archive/audit/deep-scan-be-architecture-2026-06-03.md) P0-3 / P1-8）：全仓 Java `executeLegacy` 0 命中。
+- **4 处 `待办(needs-manual-review)` 单实现接口**（同上 P1-2 / P2-1）：`needs-manual-review` 0 命中。
+- **`customerPayloads` 路径下线**（同上 P1 建议①）：Java `customerPayloads` 0 命中。
+- **3 处 `*Record` 后缀违反持久化命名规则**（同上 P1）：`class *Record` 0 命中。
+- **`@Deprecated EXPECTED_POLICY_NAME`**（同上 P2-3）：常量 0 命中。
+- **4 项 OPEN/CANDIDATE 条目**（[backend-25-package-governance-2026-10-26](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)）：2026-11-04 复核已逐项关闭或取代（#1300 Trigger 恢复锚点、#1265 建档前被拒批次释放）。
+- **`CONV-20261030-BATCH-REPORT-TODO-DRIFT`**（同上）：`ALIGN-WORKER-BATCH-REPORT` 已改为独立开关、默认关闭、逐项确认与未确认项回退的当前实现。
+- **pg-primary-failover §方案C 的 PITR 待办**（[backup-and-pitr](../runbook/backup-and-pitr.md)）：该 playbook 已改为「完整步骤见 `../backup-and-pitr.md` §2」。
+- **Prometheus alert 名待补**（[go-live-realism-audit-2026-06-21](../audit/go-live-realism-audit-2026-06-21.md)）：6 篇 playbook 已写实际告警名；仅 [batch-day-not-settling](../runbook/playbooks/batch-day-not-settling.md) 仍缺 `BatchDayStuckSettling` / `BatchDaySettleSchedulerSilent`，该剩余面不关闭。
 
 ### deep-issue §5（全 6 项 ✅）
 

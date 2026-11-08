@@ -12,7 +12,7 @@
 
 - 总体评价:**架构红线守得住**,核心约束(MyBatis-only / 唯一状态主机 / 多租 UNIQUE / archive 镜像 / 模块单向依赖)经多轮硬性扫描沉淀,V164/V165 等近期新表均符合规则。`ConsoleOrchestratorProxyService` + `OutboxOpsController` 这条 console→orchestrator 运维通道已落实,直接写 outbox 的红线没被破。9 处 `@Lazy self` 与 docs/agent-baseline.md 自述完全对齐。
 - **核心风险**:在"守护边界"上有 **2 个静默的覆盖缺口**(P0)——`MapperXmlTenantGuardArchTest` 仅覆盖 `batch-orchestrator` + `batch-console-api`,**`batch-trigger` / `batch-worker-dispatch` / `batch-worker-process` 的 mapper XML 没有同等守护**;另外 `MultiTenantIsolationIntegrationTest` 只在 orchestrator 一处,对 V165 等跨模块新表无回归网。
-- **维护性短板**(P1):3 处 `*Record` 后缀违反持久化命名规则但未被构造期阻断;`@Deprecated executeLegacy` 仍被主路径自身调用(死代码假象);orchestrator/application/service 单实现接口 4 处历史 TODO 未结案;console-api `@Autowired field` 6+ 处生产代码(豁免仅给 IT 测试)。
+- **维护性短板**(P1):3 处 `*Record` 后缀违反持久化命名规则但未被构造期阻断;`@Deprecated executeLegacy` 仍被主路径自身调用(死代码假象);orchestrator/application/service 单实现接口 4 处历史待办未结案;console-api `@Autowired field` 6+ 处生产代码(豁免仅给 IT 测试)。**（2026-11-08 复核：`*Record`、`executeLegacy`、单实现接口三项已处理；`@Autowired` 仍开放。）**
 - 文档纪律:`docs/changelog.md`(14 个日期)与 root `CHANGELOG.md`(11 天未动)节奏脱钩,`CHANGELOG.md` 已成"低优先级老链路",建议明确"谁是权威源"或合并(P2)。
 - **发现统计**:**P0 × 5** / **P1 × 8** / **P2 × 9** / **P3 × 4**;另 4 项 N/A(扫到但实为合规)。
 
@@ -34,22 +34,22 @@
 
 | # | 项目 | 模块 |
 |---|---|---|
-| P1-1 | `@Autowired` field 注入在生产代码 6 处(豁免只给 IT 测试 + `@Lazy self`) | batch-console-api / batch-orchestrator / batch-worker-process |
-| P1-2 | 4 个 `Default*Service` + 同名接口的单实现接口 TODO 自 2026-05-23 未结案 | batch-orchestrator/application |
+| P1-1 | `@Autowired` field 注入在生产代码 6 处(豁免只给 IT 测试 + `@Lazy self`) **⚠️ 2026-11-08 仍开放：console-api 7 个生产文件** | batch-console-api / batch-orchestrator / batch-worker-process |
+| P1-2 | 4 个 `Default*Service` + 同名接口的单实现接口待办自 2026-05-23 未结案 **✅ 2026-11-08 已处理（`needs-manual-review` 0 命中）** | batch-orchestrator/application |
 | P1-3 | `@RequiredArgsConstructor` interface/Default 双件套滥用造成 63 接口 / 32 Default 实例,可读性下降 | batch-orchestrator |
 | P1-4 | 11 处 `Propagation.REQUIRES_NEW` 集中在 `DefaultRetryGovernanceService` + `DefaultCompensationService`,文档化覆盖不足 | batch-orchestrator/governance |
 | P1-5 | 5 个 console-api Mutation IT 类用 `@SpringBootTest` 自建链路(extends `AbstractMutationIntegrationTest`,实际 OK),但基类 _不_ 强制 `extends AbstractIntegrationTest`,逃离 Testcontainers 复用 | batch-console-api |
 | P1-6 | 同表双 OutboxEventMapper(orchestrator + console-api)接口同名,IDE / grep 易撞 | batch-orchestrator + batch-console-api |
 | P1-7 | sensor / forensic / dry-run / data-quality 子包成型,但 ADR-021 顶部仍写"默认不开工",代码 vs 文档脱钩 | docs/architecture/adr |
-| P1-8 | `LoadStep.executeLegacy` 死代码主路径自调用 + TODO needs-manual-review 4 处堆积 | 跨模块清单 |
+| P1-8 | `LoadStep.executeLegacy` 死代码主路径自调用 + 待办 needs-manual-review 4 处堆积 **✅ 2026-11-08 已处理（`executeLegacy` 0 命中）** | 跨模块清单 |
 
 ### P2(本月 — 维护性 / 一致性 / 收敛)
 
 | # | 项目 | 模块 |
 |---|---|---|
-| P2-1 | 4 处 `TODO(needs-manual-review): 审计 (2026-05-23)` 单实现接口候选 11 天未决 | batch-orchestrator |
+| P2-1 | 4 处 `待办(needs-manual-review): 审计 (2026-05-23)` 单实现接口候选 11 天未决 **✅ 2026-11-08 已处理** | batch-orchestrator |
 | P2-2 | `ConsoleClusterDiagnosticMapper.xml` 直接 `select from batch.outbox_event` 与 `OutboxEventMapper` 都是只读,但同表两路读法风格不齐 | batch-console-api |
-| P2-3 | `executeLegacy` 路径外还有 `@Deprecated EXPECTED_POLICY_NAME` 在 RlsPolicyHealthIndicator,无下线计划 | batch-common |
+| P2-3 | `executeLegacy` 路径外还有 `@Deprecated EXPECTED_POLICY_NAME` 在 RlsPolicyHealthIndicator,无下线计划 **✅ 2026-11-08 已处理（常量 0 命中）** | batch-common |
 | P2-4 | `batch-worker-atomic` HttpTaskExecutor.java:469 内有 `throws java.io.IOException` FQN(虽属 throws 子句,但违 #1) | batch-worker-atomic |
 | P2-5 | `OutboxEventMapper.statsByStatus` 在 console-api 与 orchestrator 双实现(选名一样,签名一样),职责重复 | console + orchestrator |
 | P2-6 | 测试基础设施:`AbstractMutationIntegrationTest` 与 `AbstractIntegrationTest` 关系不强,导致 mutation IT 没拿到统一 Testcontainers / Flyway 入口 | batch-console-api |
@@ -102,7 +102,7 @@
 - **位置**:`batch-worker-import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java:91, 96, 281-282`
 - **现象**:方法 `executeLegacy` 标了 `@Deprecated` + javadoc "将在下一版本下线",但同文件 `LoadStep` 主入口在 line 91、96 两个分支**仍主动调用**它(`return executeLegacy(context);`)。这不是兼容旧调用方,是主路径之一。
 - **根因**:`@Deprecated` 用错语义 — 标的是"我希望下线",但行为依赖仍在;Streaming 路径未完全替代 customerPayloads 路径,fallback 链没断。
-- **建议**:① 现状未达到 `@Deprecated` 语义,改成 javadoc 说明 + `// TODO(2026-Qx): 删除 customerPayloads 路径` 更诚实;② 如真要下线,补一份"主入口分支何时返 SUCCESS 而不走 legacy"的判定表;③ 排查 `customerPayloads` attribute 写入方,谁还在塞这条 key。
+- **建议**:① 现状未达到 `@Deprecated` 语义,改成 javadoc 说明 + `// 待办(2026-Qx): 删除 customerPayloads 路径` 更诚实;② 如真要下线,补一份"主入口分支何时返 SUCCESS 而不走 legacy"的判定表;③ 排查 `customerPayloads` attribute 写入方,谁还在塞这条 key。**（2026-11-08 复核：`customerPayloads` 已从 Java 代码移除，建议①不再适用。）**
 
 ### P0-4 双 CHANGELOG 脱钩
 
@@ -130,12 +130,14 @@
 - **根因**:`@Autowired(required=false)` 可选依赖在构造器注入下需要 `ObjectProvider` 模板,部分开发者图方便保留 field;`ConsoleJwtService` 因 self-AOP 解决方案选了 field;`OrchestratorGracefulShutdown` 是 ServletWebServerApplicationContext 钩子拿不到稳定构造时序。
 - **建议**:① `required=false` 全部改 `ObjectProvider<X>` 构造器注入,这是 docs/agent-baseline.md 默认推荐;② `ConsoleJwtService` 用 `@Lazy self` 豁免改造,纳入 9 处清单(变 10 处)+ 在 changelog 显式记录;③ `OrchestratorGracefulShutdown` 单独写 PR 评注证明无法构造注入。
 
-### P1-2 4 个单实现接口 TODO 已 11 天
+### P1-2 4 个单实现接口待办已 11 天
 
-- **位置**(所有 TODO 文本都是"审计 (2026-05-23) 标记为单实现接口候选删除"):
+> **【2026-11-08 复核】已处理**：`needs-manual-review` 全仓 0 命中，4 条候选已决议处理。
+
+- **位置**(所有待办文本都是"审计 (2026-05-23) 标记为单实现接口候选删除"):
   - `WorkerRouter` / `WorkerRoutingPolicy` / `LaunchValidationService` / `RedisShardAssignmentProvider`
-- **现象**:每条 TODO 都自带"为什么留着"的 4-6 行解释,但 PR 决议未跟进。
-- **建议**:为每条出 1 行 issue:"决议 = 留 / 删 / 改 SPI",带评审签名,**消化 TODO 比积累 TODO 重要**。
+- **现象**:每条待办都自带"为什么留着"的 4-6 行解释,但 PR 决议未跟进。
+- **建议**:为每条出 1 行 issue:"决议 = 留 / 删 / 改 SPI",带评审签名,**消化待办比积累待办重要**。
 
 ### P1-3 接口/Default 双件套泛滥
 
@@ -168,16 +170,18 @@
 - **根因**:ADR 顶部状态 stale,实现已超 v0.0 mini 但未回写 ADR。
 - **建议**:ADR-021 状态改"v0.0 mini 已落地",列已实现清单 + 还未做清单,触发 v1.0 完整方案的"金融触发"判定提问写明。
 
-### P1-8 TODO + 死代码集中清单
+### P1-8 待办 + 死代码集中清单
 
-- 同 P0-3(`executeLegacy`)+ P1-2(4 个单实现接口 TODO)+ P2-3(`@Deprecated EXPECTED_POLICY_NAME`)。
+> **【2026-11-08 复核】已处理**：`executeLegacy`、`needs-manual-review`、`EXPECTED_POLICY_NAME` 均为 0 命中。
+
+- 同 P0-3(`executeLegacy`)+ P1-2(4 个单实现接口待办)+ P2-3(`@Deprecated EXPECTED_POLICY_NAME`)。
 - **建议**:本月集中一次 `find . -name "*.java" | xargs grep -nH "TODO\|@Deprecated"` 全量出表 → 每条判定 [删/保留+说明/下沉到 backlog]。
 
 ### P2-1 ~ P2-9 概要
 
 (只列差异化建议,共性"补 ArchTest / 命名 / 重命名"略)
 
-- **P2-1**:同 P1-2 后续 — 即使决议"保留",至少把 TODO 文本改成"已决议保留(2026-Mx)"以剔除"待办"印象。
+- **P2-1**:同 P1-2 后续 — 即使决议"保留",至少把待办文本改成"已决议保留(2026-Mx)"以剔除"待办"印象。
 - **P2-2**:`ConsoleClusterDiagnosticMapper.xml` 直接读 `batch.outbox_event` 与 `OutboxEventMapper.xml` 重复路径,合并入 `OutboxEventMapper`(只读)。
 - **P2-3**:`RlsPolicyHealthIndicator.EXPECTED_POLICY_NAME @Deprecated` 配 `forRemoval=true` + 下线版本号,或直接删。
 - **P2-4**:`batch-worker-atomic/.../HttpTaskExecutor.java:469 throws java.io.IOException, InterruptedException` —— 唯一 FQN 残留,`import java.io.IOException;` 一行修。
@@ -251,8 +255,25 @@
 ## 附录:扫描覆盖证据
 
 - **代码深度**:批量 grep 18 次 + 单文件读 6 次,覆盖 1685 个生产 Java 文件 + 165 个 V***.sql + 39 份 ADR + 双 changelog;
-- **静态指标**:`@Autowired` 19 次命中(已过滤豁免)/ `Mockito.mock` private field 14 处 / `@Lazy` 11 次命中(9 处合规 + 2 处 OrchestratorConfigCacheService 类型不同) / `TODO` 4 处 needs-manual-review / `@Deprecated` 2 处;
+- **静态指标**:`@Autowired` 19 次命中(已过滤豁免)/ `Mockito.mock` private field 14 处 / `@Lazy` 11 次命中(9 处合规 + 2 处 OrchestratorConfigCacheService 类型不同) / `待办` 4 处 needs-manual-review / `@Deprecated` 2 处;
 - **守护测试覆盖**:`MapperXmlTenantGuardArchTest` 2 处(orchestrator + console);`MultiTenantIsolationIntegrationTest` 1 处(orchestrator);`CodingConventionsArchRules` 1 处(batch-common);`ConsoleCodingConventionsArchTest` 1 处(console);
 - **耗时**:约 45 分钟。
 
 — Generated 2026-06-03
+
+---
+
+## 2026-11-08 后续状态复核（追加，不改写上文结论）
+
+本节为后续追加，只登记原条目在 2026-11-08 的实际状态；上文结论、参数与基线仍以 2026-06-03 为准。
+
+| 原条目 | 2026-11-08 状态 | 证据 |
+|---|---|---|
+| P0-3 / P1-8 `executeLegacy` 死代码主路径自调用 | 已处理 | 全仓 Java `executeLegacy` 0 命中 |
+| P1-2 / P2-1 4 处 `待办(needs-manual-review)` 单实现接口 | 已处理 | `needs-manual-review` 0 命中 |
+| P1 建议① `customerPayloads` 路径 | 已处理 | Java `customerPayloads` 0 命中 |
+| P1 3 处 `*Record` 后缀违反持久化命名规则 | 已处理 | `class *Record` 0 命中 |
+| P2-3 `@Deprecated EXPECTED_POLICY_NAME` | 已处理 | 常量 0 命中 |
+| P1 `console-api @Autowired field` 6+ 处生产代码 | **仍开放** | 当前 7 个生产文件仍使用字段注入 |
+
+以上零命中为词法核对结果，本轮未重跑原扫描或测试；`@Autowired` 一项保留开放，不计入已处理。关闭依据同步登记在[待办索引](../../plans/todo-master.md#2026-11-08-待办关闭复核9-项)。
