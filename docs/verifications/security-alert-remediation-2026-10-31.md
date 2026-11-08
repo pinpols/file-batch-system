@@ -133,3 +133,9 @@
 - **新问题：CodeQL CSRF 告警按位置展开**：当前 open 的 1144 条全部是 `java/csrf-unprotected-request-type`，均创建于 2026-11-01，分布在第五节已判误报的同 8 个 Controller（9 个 GET 端点，如 `BatchDayCatchupPreviewController` 254 条、其余各 127 条）。原因是第九节的候选修复已随 #1300 进入 `main`（`.github/workflows/codeql.yml` 的 `CODEQL_ACTION_EXTRA_OPTIONS` `--no-group-results`），每个相关位置单独成为一条结果、生成新指纹，原 #300–#308 的误报处置不再覆盖。最近一次 `main` 分析（`ef5d2183e`，2026-11-04 09:10Z）上传 1159 条结果。第九节要求的“不产生重复告警”未满足。
 - 处置（维护者选择撤回）：#1317 从 `codeql.yml` 移除 `--no-group-results`，恢复默认聚合；状态页截断警告会回来，只影响展示。合入 `main` 后的下一次 CodeQL 分析应把这 1144 条标记为 `fixed`，聚合结果重新匹配 #300–#308 的误报处置。**未验证**：须以合入后 `main` 分析的结果数与 open 告警数确认，若出现新编号的聚合告警，需按第五节依据重新核对后处置。在确认前不得把 open 数量当作新增漏洞，也不得宣称 CodeQL 告警已清零。
 - **合入后确认（2026-11-04 21:30）**：#1317 合入后，`main` `0bad968ad` 的 CodeQL 分析（12:45Z）上传 15 条结果；`java/csrf-unprotected-request-type` 告警 1145 条为 `fixed`，`main` open code scanning 告警为 0，未出现需重新处置的新编号聚合告警。只读查询，未修改任何告警状态。
+
+## 十一、Scorecard GO-2026-6865 与 CodeQL 展示警告（2026-11-08）
+
+- 只读查询时，open code scanning 仅剩 #296。`main` `fa7a083d9` 的 Scorecard 报告 `github.com/klauspost/compress` 受 [GO-2026-6865](https://osv.dev/vulnerability/GO-2026-6865)（CVE-2026-116591）影响，固定版本为 1.20.2。受影响符号在 `fse` 与 `huff0`。仓库两份 Go 模块图都通过 `segmentio/kafka-go v0.4.51` 间接选择了 1.20.0。
+- 处理：`sdk/go/kafka` 与 `examples/self-hosted-sdk/sample-tenant-worker-go` 的选定版本升到 1.20.2，未改 Kafka 客户端主版本。#296 仍须该变更进入 `main` 后的下一次 Scorecard 扫描才能标为 `fixed`，此处不提前宣称关闭。
+- CodeQL 状态页警告来自分析 `2118458074`：`288 relatedLocations were ignored`。已处理的 SARIF 里 15 条结果的相关位置已被 GitHub 截到每条 100 个。上传前按同一上限保留前 100 个，保留默认聚合和 `partialFingerprints`。警告是否消失须看合入后的下一次 `main` CodeQL 分析，不以本地单测代替。

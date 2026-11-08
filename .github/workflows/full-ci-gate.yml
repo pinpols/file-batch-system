@@ -175,6 +175,7 @@ jobs:
             scripts/ci/tests/test_pr_coverage_integration.py \
             scripts/ci/tests/test_full_orchestrator_shards.py \
             scripts/ci/tests/test_report_ci_quality_trends.py \
+            scripts/ci/tests/test_trim_codeql_sarif_related_locations.py \
             scripts/ci/tests/test_install_upstream_modules.py \
             scripts/ci/tests/test_capture_sdk_test.py \
             scripts/ci/tests/test_report_sdk_test_summary.py \
