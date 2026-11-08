@@ -1,0 +1,39 @@
+name: Dispatch full CI gate once
+
+# 临时派发器：仓库集成令牌不能 workflow_dispatch 时，由本工作流的 GITHUB_TOKEN 触发。
+# 只服务一次性 draft，不合并进 main。
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    name: Dispatch full-ci-gate
+    if: github.event.pull_request.head.ref == 'cursor/dispatch-full-ci-gate-356b'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch full-ci-gate on the verified head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          TARGET_REF: fix/codeql-sarif-and-compress
+          EXPECTED_SHA: 6fe491de8579ca5f953870b8fc1ab4309276c8cc
+        run: |
+          set -euo pipefail
+          actual="$(gh api "repos/${REPO}/commits/${TARGET_REF}" --jq .sha)"
+          if [[ "${actual}" != "${EXPECTED_SHA}" ]]; then
+            printf 'ref %s is %s, expected %s\n' "${TARGET_REF}" "${actual}" "${EXPECTED_SHA}" >&2
+            exit 1
+          fi
+          gh api --method POST \
+            -H "Accept: application/vnd.github+json" \
+            "repos/${REPO}/actions/workflows/full-ci-gate.yml/dispatches" \
+            -f "ref=${TARGET_REF}"
+          printf 'dispatched full-ci-gate ref=%s sha=%s\n' "${TARGET_REF}" "${actual}"
