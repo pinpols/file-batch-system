@@ -385,10 +385,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
       return;
     }
     String requesterId = approvalRecord.getRequesterId();
-    if (requesterId == null
-        || requesterId.isBlank()
-        || operatorId == null
-        || operatorId.isBlank()) {
+    if (EmptyChecks.isBlank(requesterId) || EmptyChecks.isBlank(operatorId)) {
       return;
     }
     if (requesterId.equals(operatorId)) {

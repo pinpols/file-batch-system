@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.application.contract.query;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
@@ -15,13 +16,13 @@ public final class ApprovalTypeExclusions {
   private ApprovalTypeExclusions() {}
 
   public static List<String> parse(String raw) {
-    if (raw == null || raw.isBlank()) {
+    if (EmptyChecks.isBlank(raw)) {
       return List.of();
     }
     List<String> types = new ArrayList<>();
     for (String part : raw.split(",", -1)) {
       String code = part.trim();
-      if (code.isEmpty()) {
+      if (EmptyChecks.isEmpty(code)) {
         continue;
       }
       boolean tooMany = types.size() == MAX_TYPES;
