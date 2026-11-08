@@ -22,6 +22,8 @@
 
 ### Changed
 
+- P1-A Stage 1 包结构收尾：Console Controller 与应用契约迁入 `domain.<ctx>` 并新增 `config` 上下文；仅内部 Java 包路径变化，HTTP 路径、请求/响应字段、鉴权与 wire schema 不变。
+
 - 自助服务审批（`SELF_SERVICE`）禁止申请人批准自己的单据，与配置发布一致。拒绝不受影响；已经批准后的执行重试不在这次拦截。
 
 - 控制台 `/auth/me` 菜单的中文名称与前端菜单对齐，保持菜单路径及角色权限不变。

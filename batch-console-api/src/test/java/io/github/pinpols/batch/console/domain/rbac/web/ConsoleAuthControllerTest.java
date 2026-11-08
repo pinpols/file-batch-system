@@ -16,7 +16,7 @@ import io.github.pinpols.batch.console.domain.rbac.service.ConsoleAuthApplicatio
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserAccountService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleJwtService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTokenCookieWriter;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;

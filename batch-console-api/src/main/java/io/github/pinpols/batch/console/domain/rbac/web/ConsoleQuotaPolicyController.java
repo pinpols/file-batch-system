@@ -1,0 +1,58 @@
+package io.github.pinpols.batch.console.domain.rbac.web;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.common.model.PageResponse;
+import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
+import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.QuotaPolicyResponse;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@Validated
+@RequestMapping("/api/console/quota-policies")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleQuotaPolicyController {
+
+  private final ConsoleQuotaPolicyApplicationService quotaPolicyApplicationService;
+  private final ConsoleResponseFactory responseFactory;
+
+  @GetMapping
+  public CommonResponse<PageResponse<QuotaPolicyResponse>> list(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam(value = "policyCode", required = false) String policyCode,
+      @RequestParam(value = "enabled", required = false) Boolean enabled,
+      @RequestParam(value = "pageNo", defaultValue = "1") int pageNo,
+      @RequestParam(value = "pageSize", defaultValue = "20") int pageSize) {
+    return responseFactory.success(
+        quotaPolicyApplicationService.list(tenantId, policyCode, enabled, pageNo, pageSize));
+  }
+
+  @PostMapping
+  public CommonResponse<QuotaPolicyResponse> create(
+      @Valid @RequestBody QuotaPolicySaveRequest request) {
+    return responseFactory.success(quotaPolicyApplicationService.create(request));
+  }
+
+  @PutMapping("/{id}")
+  public CommonResponse<QuotaPolicyResponse> update(
+      @PathVariable Long id, @Valid @RequestBody QuotaPolicySaveRequest request) {
+    return responseFactory.success(quotaPolicyApplicationService.update(id, request));
+  }
+
+  @PatchMapping("/{id}/enabled")
+  public CommonResponse<Void> setEnabled(
+      @PathVariable Long id, @Valid @RequestBody EnabledPatchRequest request) {
+    quotaPolicyApplicationService.toggle(id, request.getTenantId(), request.getEnabled());
+    return responseFactory.success(null);
+  }
+}

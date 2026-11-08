@@ -9,8 +9,8 @@ import io.github.pinpols.batch.console.domain.job.application.contract.request.H
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleCalendarResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleHolidayResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

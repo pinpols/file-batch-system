@@ -1,9 +1,9 @@
 package io.github.pinpols.batch.console.domain.notification.mapper;
 
+import io.github.pinpols.batch.console.domain.notification.param.AlertRoutingConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigCountQuery;
 import io.github.pinpols.batch.console.domain.notification.query.AlertRoutingConfigQuery;
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
-import io.github.pinpols.batch.console.domain.param.AlertRoutingConfigUpsertParam;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 

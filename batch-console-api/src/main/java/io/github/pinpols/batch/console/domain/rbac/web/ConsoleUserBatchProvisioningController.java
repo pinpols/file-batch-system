@@ -7,8 +7,8 @@ import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvi
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Operation;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleUserBatchProvisioningService.Preview;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotNull;

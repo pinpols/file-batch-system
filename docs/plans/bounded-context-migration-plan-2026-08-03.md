@@ -236,3 +236,8 @@ bash scripts/ci/report-bounded-context-dependencies.sh logs/bounded-context/depe
 ## 最终收口
 
 Phase 28 已完成严格 0 收口。后续只允许通过应用层端口、共享无状态契约或领域事件跨上下文通信；任何新增直接依赖由严格门禁阻断。
+
+2026-11-08 P1-A Stage 1 包与模块收口完成：`batch-console-api` 顶层 `web` / `mapper` / `service` 与
+`domain.entity|param|query|command` 旧包已清空，新增 `config` 为第 10 个有界上下文；`BoundedContextDependencyArchTest`
+扩展为 10 context + 旧包守卫，过渡豁免改用运行时 `@BoundedContextExemption`。逐类归属、残余（`ConsoleQueryController`
+只读聚合）与验证证据见 [p1a-stage1-migration-plan-2026-05-30](p1a-stage1-migration-plan-2026-05-30.md#8-2026-11-08-stage-1-收尾记录)。

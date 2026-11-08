@@ -20,9 +20,9 @@ import io.github.pinpols.batch.console.application.contract.response.ConsoleWork
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobApprovalService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleJobRecoveryService;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleWorkflowRunReplaySubmissionResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.CompensationCommandRequest;
 import io.github.pinpols.batch.console.shared.command.DeadLetterReplayRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Instant;

@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpres
 import io.github.pinpols.batch.console.domain.workflow.application.WorkflowMonitoringPolicyService;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowMonitoringPolicyRequest;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowMonitoringPolicyResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

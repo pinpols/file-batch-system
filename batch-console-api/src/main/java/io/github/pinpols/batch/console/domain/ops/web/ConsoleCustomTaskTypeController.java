@@ -6,7 +6,7 @@ import io.github.pinpols.batch.console.domain.ops.service.ConsoleCustomTaskTypeQ
 import io.github.pinpols.batch.console.domain.ops.view.CustomTaskTypeView;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;

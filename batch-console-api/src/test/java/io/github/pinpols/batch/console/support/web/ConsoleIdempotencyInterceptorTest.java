@@ -21,7 +21,7 @@ import io.github.pinpols.batch.console.application.config.TenantConfigPackageExc
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigPackageExcelApplyRequest;
 import io.github.pinpols.batch.console.application.idempotency.ConsoleDurableIdempotencyStore;
 import io.github.pinpols.batch.console.domain.rbac.web.ConsoleTenantConfigPackageExcelController;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;

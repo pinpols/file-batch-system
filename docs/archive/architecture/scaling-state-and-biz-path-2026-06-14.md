@@ -29,7 +29,7 @@
 
 1. **没有当前规模问题**:docs/agent-baseline.md 早写「需求驱动,非当前缺口」。无表撞 PG 上限;真实数据量痛点(process_staging 118GB)是**分区**解的,不是 Citus。控制面 PG 写有 10-15× 余量,瓶颈在控制面逻辑非 PG。
 2. **压错层**:citus 分支 49 表复合 PK + distribute 全在 **platform 控制面**(编排元数据,量级有限),不是会涨的 biz。
-3. **真会受益的 biz 上不了**:biz 租户隔离 100% 靠 RLS;PoC(多节点 coord+worker)实测 **RLS 在 Citus 分布表上坏掉**(返 0 行/写报错,GUC 跨节点未正确传播)。详见 [[project_biz_citus_rls_poc_broken]] 记录。
+3. **真会受益的 biz 上不了**:biz 租户隔离 100% 靠 RLS;PoC(多节点 coord+worker)实测 **RLS 在 Citus 分布表上坏掉**(返 0 行/写报错,GUC 跨节点未正确传播)。详见 `project_biz_citus_rls_poc_broken` PoC 记录（原始文档未入库）。
 4. **从未进生产**:citus 永不合 main。
 
 **历史结论**(非当前状态账):① outbox/job_instance **分区**由 PR #470/#479 纳入 main;② "新多租大表复合 PK"前瞻规约(不依赖 Citus 也成立);③ 一次「当时不该上 + biz 此路不通」的实证。

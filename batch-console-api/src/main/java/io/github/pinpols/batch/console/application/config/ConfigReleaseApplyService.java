@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.application.config;
 
-import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
+import io.github.pinpols.batch.console.domain.config.entity.ConfigReleaseEntity;
 
 /** 校验版本化配置发布单，并将其应用到运行时配置表。 */
 public interface ConfigReleaseApplyService {

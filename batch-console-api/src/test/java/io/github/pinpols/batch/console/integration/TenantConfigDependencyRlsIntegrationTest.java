@@ -21,11 +21,11 @@ import io.github.pinpols.batch.console.application.contract.request.config.Tenan
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigCopyRequest.ConfigType;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.console.domain.config.param.ConfigSyncLogUpdateParam;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
 import io.github.pinpols.batch.console.domain.rbac.service.ConsoleResourceTagService;
 import io.github.pinpols.batch.console.domain.rbac.service.ResourceTagUpsertInput;
-import io.github.pinpols.batch.console.mapper.ConfigSyncLogMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.sql.SQLException;
 import java.time.Duration;

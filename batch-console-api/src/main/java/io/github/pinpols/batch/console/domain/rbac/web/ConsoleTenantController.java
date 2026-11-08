@@ -17,9 +17,9 @@ import io.github.pinpols.batch.console.domain.rbac.application.contract.response
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ProvisionTenantResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.TenantReadinessResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

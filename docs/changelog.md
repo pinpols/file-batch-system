@@ -1,5 +1,13 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-08 P1-A Stage 1 包结构收尾
+
+- `batch-console-api` 清空顶层 `web` / `mapper` / `service` 与 `domain.entity|param|query|command` 旧包：62 个生产文件与 2 个 SecretVersion 契约按既有边界归入 `domain.<ctx>`；新增 `config` 为第 10 个有界上下文。
+- `BoundedContextDependencyArchTest` 纳入 `config` 并新增旧包守卫；豁免机制从 SOURCE 级 `@SuppressWarnings` 改为运行时 `shared.arch.BoundedContextExemption`（唯一豁免为 `ConsoleQueryController` 跨上下文只读聚合）。
+- 19 个 Controller/Service 测试同步到对应 `domain.<ctx>.web|service`；`@MapperScan` 移除旧 `console.mapper` 包。
+- 验证：console-api 全量测试、ArchUnit 守护、OpenAPI 路由一致性与 `git diff --check` 通过；`application` / `infrastructure` / `support` 顶层包的进一步上下文化不在本次范围。
+- 修复 IDE 报告的 `DefaultTaskOutcomeService` 中 `Timer.record` 在 Micrometer 多 `Supplier` 重载下的歧义（改为块 lambda 明确 `Runnable`）；修复归档架构文档中指向未入库文档的失效链接。
+
 ## 2026-11-05 批量认领服务端配置退役
 
 - ADR-046 服务端配置行更新：批量 claim/report 端点始终可用，仅由 `maxBatchSize` 限制单次请求；从未参与准入的服务端 `batch.task.batch-claim.enabled` / `job-overrides` 已退役（DOC-BATCH-FLAG-1），是否批量由 Worker 侧 `batch.worker.batch-claim.enabled` 决定。

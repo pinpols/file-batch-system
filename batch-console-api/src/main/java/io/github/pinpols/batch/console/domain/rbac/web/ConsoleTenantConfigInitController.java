@@ -13,8 +13,8 @@ import io.github.pinpols.batch.console.application.contract.response.config.Tena
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigDiffPreviewResponse;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigMatrixResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleIdempotencyRequestIdentity;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.servlet.http.HttpServletRequest;

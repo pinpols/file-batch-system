@@ -42,8 +42,8 @@ import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.Bat
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpsertParam;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.application.command.WorkflowVersionSnapshotCommand;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.entity.WorkflowDefinitionEntity;

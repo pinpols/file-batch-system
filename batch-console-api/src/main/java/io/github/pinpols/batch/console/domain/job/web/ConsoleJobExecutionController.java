@@ -5,7 +5,7 @@ import io.github.pinpols.batch.console.application.realtime.ConsoleProgressSnaps
 import io.github.pinpols.batch.console.domain.job.application.JobExecutionQueryService;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.JobExecutionProgressResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import jakarta.validation.constraints.Positive;
 import java.util.Arrays;
 import lombok.RequiredArgsConstructor;

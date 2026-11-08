@@ -14,8 +14,8 @@ import io.github.pinpols.batch.console.domain.file.application.contract.response
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileNamePreviewResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.FileTemplateMappingDraftResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.command.EnabledPatchRequest;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

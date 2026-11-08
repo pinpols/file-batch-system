@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper">
+<mapper namespace="io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper">
     <resultMap id="intent" type="io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>

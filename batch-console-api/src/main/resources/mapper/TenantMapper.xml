@@ -63,7 +63,7 @@
             </foreach>
     </select>
 
-    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.param.TenantUpsertParam">
+    <insert id="insert" parameterType="io.github.pinpols.batch.console.domain.rbac.param.TenantUpsertParam">
         insert into batch.tenant (tenant_id, tenant_name, status, description, created_by)
         values (#{tenantId}, #{tenantName}, #{status}, #{description}, #{createdBy})
     </insert>

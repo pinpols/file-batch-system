@@ -5,7 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationIntent;
 import io.github.pinpols.batch.console.application.config.ConfigCacheInvalidationRelay;
-import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;

@@ -1,8 +1,8 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
 import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpdateParam;
-import io.github.pinpols.batch.console.domain.param.TenantQuotaPolicyUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpdateParam;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantQuotaPolicyUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantQuotaPolicyRow;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;

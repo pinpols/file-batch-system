@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.application.contract.response;
 
-import io.github.pinpols.batch.console.domain.entity.BusinessShardCatalogEntity;
+import io.github.pinpols.batch.console.domain.governance.entity.BusinessShardCatalogEntity;
 import java.time.Instant;
 import lombok.Builder;
 

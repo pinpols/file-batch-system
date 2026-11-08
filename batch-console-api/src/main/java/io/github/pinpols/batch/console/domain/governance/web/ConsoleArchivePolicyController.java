@@ -1,0 +1,74 @@
+package io.github.pinpols.batch.console.domain.governance.web;
+
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.contract.response.ArchivePolicyResponse;
+import io.github.pinpols.batch.console.domain.governance.command.ArchivePolicyUpsertCommand;
+import io.github.pinpols.batch.console.domain.governance.service.ConsoleArchivePolicyService;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
+import java.util.List;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/** 数据归档/清理策略管理：配置各运行态表的保留天数、是否归档、是否清理。 */
+@RestController
+@Validated
+@RequestMapping("/api/console/ops/archive-policies")
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleArchivePolicyController {
+
+  private final ConsoleArchivePolicyService archivePolicyService;
+  private final ConsoleResponseFactory responseFactory;
+  private final ConsoleRequestMetadataResolver requestMetadataResolver;
+
+  @GetMapping
+  public CommonResponse<List<ArchivePolicyResponse>> list(
+      @RequestParam("tenantId") String tenantId) {
+    List<ArchivePolicyResponse> responses = archivePolicyService.list(tenantId).stream()
+        .map(ArchivePolicyResponse::from)
+        .toList();
+    return responseFactory.success(responses);
+  }
+
+  @PutMapping
+  public CommonResponse<Void> upsert(
+      @RequestParam("tenantId") String tenantId,
+      @Valid @RequestBody UpsertArchivePolicyRequest request) {
+    String operator = requestMetadataResolver.current().operatorId();
+    ArchivePolicyUpsertCommand command = ArchivePolicyUpsertCommand.builder()
+        .tenantId(tenantId)
+        .targetTable(request.targetTable())
+        .retentionDays(request.retentionDays())
+        .archiveEnabled(request.archiveEnabled())
+        .cleanupEnabled(request.cleanupEnabled())
+        .batchSize(request.batchSize())
+        .description(request.description())
+        .operator(operator)
+        .build();
+    archivePolicyService.upsert(command);
+    return responseFactory.success(null);
+  }
+
+  record UpsertArchivePolicyRequest(
+      @NotBlank @Size(max = 64) String targetTable,
+      @Min(1) int retentionDays,
+      boolean archiveEnabled,
+      boolean cleanupEnabled,
+      @Min(100) int batchSize,
+      @Size(max = 512) String description) {}
+}

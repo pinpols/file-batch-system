@@ -6,7 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.config.CaptchaProperties;
 import io.github.pinpols.batch.console.config.LoginProtectionProperties;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleCaptchaConfigResponse;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;

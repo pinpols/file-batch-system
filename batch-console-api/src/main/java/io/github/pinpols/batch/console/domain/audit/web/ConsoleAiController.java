@@ -17,7 +17,7 @@ import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStre
 import io.github.pinpols.batch.console.domain.audit.application.ai.ConsoleAiStreamRegistry.Registration;
 import io.github.pinpols.batch.console.domain.audit.application.contract.response.AiChatResponse;
 import io.github.pinpols.batch.console.domain.audit.service.ConsoleAiAuthorizationService;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import io.github.pinpols.batch.console.support.web.Idempotent;

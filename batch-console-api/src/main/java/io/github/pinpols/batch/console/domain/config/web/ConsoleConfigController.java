@@ -1,0 +1,179 @@
+package io.github.pinpols.batch.console.domain.config.web;
+
+import io.github.pinpols.batch.common.constants.CommonConstants;
+import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.application.config.ConsoleConfigApplicationService;
+import io.github.pinpols.batch.console.application.contract.query.ConfigChangeLogQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.ConfigReleaseQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.SecretVersionQueryRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseActionRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ConfigReleaseUpsertRequest;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigDependenciesResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigGovernanceItemResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConfigReleaseDiffResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigChangeLogResponse;
+import io.github.pinpols.batch.console.application.contract.response.config.ConsoleConfigReleaseResponse;
+import io.github.pinpols.batch.console.domain.config.application.contract.request.SecretVersionRevokeRequest;
+import io.github.pinpols.batch.console.domain.config.application.contract.request.SecretVersionRotateRequest;
+import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
+import io.github.pinpols.batch.console.shared.view.ConsoleSecretVersionResponse;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.support.web.Idempotent;
+import jakarta.validation.Valid;
+import java.util.List;
+import java.util.Map;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+/** 控制台配置中心 REST：发布单、灰度、回滚、密钥轮换与变更日志（方法级权限见注解）。 */
+@RestController
+@Validated
+@RequestMapping("/api/console/config")
+@RequiredArgsConstructor
+@Idempotent
+public class ConsoleConfigController {
+
+  private final ConsoleConfigApplicationService applicationService;
+  private final ConsoleResponseFactory responseFactory;
+
+  /** 查询配置发布单列表。 */
+  @GetMapping("/releases")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<List<ConsoleConfigReleaseResponse>> configReleases(
+      @Valid @ModelAttribute ConfigReleaseQueryRequest request) {
+    return responseFactory.success(applicationService.configReleases(request));
+  }
+
+  /** 查询所有启动期配置绑定点及其生效、重启与敏感级别。 */
+  @GetMapping("/governance")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<List<ConfigGovernanceItemResponse>> configGovernanceCatalog() {
+    return responseFactory.success(applicationService.configGovernanceCatalog());
+  }
+
+  /** 创建配置发布单草稿。 */
+  @PostMapping("/releases")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<Long> createConfigRelease(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody ConfigReleaseUpsertRequest request) {
+    return responseFactory.success(applicationService.createConfigRelease(request));
+  }
+
+  /** 已弃用的直接发布端点，仅用于向旧客户端返回明确的终止响应。 */
+  @Deprecated
+  @PostMapping("/releases/{releaseId}/publish")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public ResponseEntity<Void> deprecatedPublishConfigRelease(
+      @PathVariable Long releaseId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @RequestBody Map<String, Object> ignoredRequest) {
+    return ResponseEntity.status(HttpStatus.GONE).build();
+  }
+
+  /** 已弃用的灰度发布端点，仅用于向旧客户端返回明确的终止响应。 */
+  @Deprecated
+  @PostMapping("/releases/{releaseId}/gray")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public ResponseEntity<Void> deprecatedGrayConfigRelease(
+      @PathVariable Long releaseId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @RequestBody Map<String, Object> ignoredRequest) {
+    return ResponseEntity.status(HttpStatus.GONE).build();
+  }
+
+  /** 回滚配置发布。 */
+  @PostMapping("/releases/{releaseId}/rollback")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<String> rollbackConfigRelease(
+      @PathVariable Long releaseId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody ConfigReleaseActionRequest request) {
+    return responseFactory.success(applicationService.rollbackConfigRelease(releaseId, request));
+  }
+
+  /** 查询密钥版本。 */
+  @GetMapping("/secrets")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<List<ConsoleSecretVersionResponse>> secretVersions(
+      @Valid @ModelAttribute SecretVersionQueryRequest request) {
+    return responseFactory.success(applicationService.secretVersions(request));
+  }
+
+  /** 轮换密钥。 */
+  @PostMapping("/secrets/rotate")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<Long> rotateSecretVersion(
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody SecretVersionRotateRequest request) {
+    return responseFactory.success(applicationService.rotateSecretVersion(request));
+  }
+
+  /** 紧急撤销密钥版本；已创建实例和重试仍绑定原版本，但下一次外发会被阻断。 */
+  @PostMapping("/secrets/{secretVersionId}/revoke")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_ONLY)
+  public CommonResponse<Void> revokeSecretVersion(
+      @PathVariable Long secretVersionId,
+      @RequestHeader(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
+      @Valid @RequestBody SecretVersionRevokeRequest request) {
+    applicationService.revokeSecretVersion(secretVersionId, request);
+    return responseFactory.success(null);
+  }
+
+  /** 查询配置变更日志。 */
+  @GetMapping("/change-logs")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<List<ConsoleConfigChangeLogResponse>> configChangeLogs(
+      @Valid @ModelAttribute ConfigChangeLogQueryRequest request) {
+    return responseFactory.success(applicationService.configChangeLogs(request));
+  }
+
+  @GetMapping("/releases/{releaseId}")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<ConsoleConfigReleaseResponse> configReleaseDetail(
+      @PathVariable Long releaseId, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(applicationService.configReleaseDetail(tenantId, releaseId));
+  }
+
+  /** 查询配置项的依赖关系。 */
+  @GetMapping("/dependencies")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<ConfigDependenciesResponse> configDependencies(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("configType") String configType,
+      @RequestParam("configCode") String configCode) {
+    return responseFactory.success(
+        applicationService.configDependencies(tenantId, configType, configCode));
+  }
+
+  /** 对比两个配置发布版本的差异。 */
+  @GetMapping("/releases/diff")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<ConfigReleaseDiffResponse> diffConfigReleases(
+      @RequestParam("tenantId") String tenantId,
+      @RequestParam("releaseIdA") Long releaseIdA,
+      @RequestParam("releaseIdB") Long releaseIdB) {
+    return responseFactory.success(
+        applicationService.diffConfigReleases(tenantId, releaseIdA, releaseIdB));
+  }
+
+  @GetMapping("/secrets/{secretVersionId}")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
+  public CommonResponse<ConsoleSecretVersionResponse> secretVersionDetail(
+      @PathVariable Long secretVersionId, @RequestParam("tenantId") String tenantId) {
+    return responseFactory.success(
+        applicationService.secretVersionDetail(tenantId, secretVersionId));
+  }
+}

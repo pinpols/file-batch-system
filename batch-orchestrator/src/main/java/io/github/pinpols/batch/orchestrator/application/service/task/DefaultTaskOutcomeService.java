@@ -156,8 +156,9 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     // 持锁线程收敛实例子状态时又可能等待这些 task 行，形成 advisory/row-lock 环形死锁。
     if (EmptyChecks.isNotNull(task.getJobInstanceId())) {
       Long jobInstanceId = task.getJobInstanceId();
-      advisoryLockWaitTimer.record(() -> jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(
-          command.tenantId(), jobInstanceId));
+      advisoryLockWaitTimer.record(() -> {
+        jobMappers.jobInstanceMapper.acquireInstanceAdvisoryLock(command.tenantId(), jobInstanceId);
+      });
       workflowRunReportLock.acquireForJobInstance(command.tenantId(), jobInstanceId);
     }
     // 围栏后重新读取。非幂等启动标记和租约回收共用同一个

@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.domain.rbac.mapper;
 
 import io.github.pinpols.batch.common.model.PageRequest;
-import io.github.pinpols.batch.console.domain.param.TenantUpsertParam;
+import io.github.pinpols.batch.console.domain.rbac.param.TenantUpsertParam;
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import java.util.Collection;
 import java.util.List;

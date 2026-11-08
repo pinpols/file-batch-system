@@ -9,10 +9,10 @@ import io.github.pinpols.batch.console.domain.ops.application.contract.request.A
 import io.github.pinpols.batch.console.domain.ops.application.contract.request.BatchApprovalActionRequest;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleBatchApprovalResultResponse;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.shared.audit.AuditAction;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import jakarta.validation.Valid;
 import java.util.List;

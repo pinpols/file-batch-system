@@ -35,7 +35,6 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
   RestClientAutoConfiguration.class
 })
 @MapperScan({
-  "io.github.pinpols.batch.console.mapper",
   "io.github.pinpols.batch.console.domain.**.mapper",
   "io.github.pinpols.batch.common.mapper"
 })

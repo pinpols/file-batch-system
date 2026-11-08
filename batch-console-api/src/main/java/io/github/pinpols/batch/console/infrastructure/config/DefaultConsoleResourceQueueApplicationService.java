@@ -13,10 +13,10 @@ import io.github.pinpols.batch.console.application.contract.request.config.Resou
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueUpdateRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.ResourceQueueResponse;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

@@ -5,7 +5,7 @@ import io.github.pinpols.batch.console.application.contract.response.ops.Console
 import io.github.pinpols.batch.console.application.contract.response.ops.ConsoleTriggerStatusResponse;
 import io.github.pinpols.batch.console.application.ops.ConsoleTriggerProxyService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.Idempotent;
 import java.util.List;
 import lombok.RequiredArgsConstructor;

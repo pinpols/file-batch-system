@@ -21,7 +21,7 @@ import io.github.pinpols.batch.console.domain.notification.application.ConsoleAl
 import io.github.pinpols.batch.console.domain.notification.application.contract.query.AlertRoutingQueryRequest;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
 import io.github.pinpols.batch.console.domain.notification.view.AlertRoutingConfigRow;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.util.List;

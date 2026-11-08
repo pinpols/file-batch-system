@@ -1,7 +1,7 @@
 package io.github.pinpols.batch.console.support;
 
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.console.domain.param.ConfigChangeLogInsertParam;
+import io.github.pinpols.batch.console.domain.config.param.ConfigChangeLogInsertParam;
 
 /**
  * 统一构造 {@code config_change_log} 固定插入参数的链式 Builder，集中配置写入与审批入口的默认审计字段。

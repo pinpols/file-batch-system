@@ -15,10 +15,9 @@ import java.util.Set;
  *
  * <p>一次导出、复制或预览的源配置查询使用独立只读快照；目标写入按租户各自提交。
  *
- * <p>P1(2026-05-23 audit):原实现 {@code
- * io.github.pinpols.batch.console.web.ConsoleTenantConfigCopyService} 标 {@code @Service} 却放在 {@code
- * web} 包,违反 application / infrastructure 分层。本接口位于 {@code application/config},默认实现见 {@code
- * infrastructure/config/DefaultConsoleTenantConfigCopyService}。
+ * <p>P1(2026-05-23 audit):原实现位于旧 {@code web} 包（P1-A Stage 1 覆盖迁移中已删除）却标
+ * {@code @Service},违反 application / infrastructure 分层。本接口位于 {@code application/config},默认实现见
+ * {@code infrastructure/config/DefaultConsoleTenantConfigCopyService}。
  */
 public interface ConsoleTenantConfigCopyService {
 

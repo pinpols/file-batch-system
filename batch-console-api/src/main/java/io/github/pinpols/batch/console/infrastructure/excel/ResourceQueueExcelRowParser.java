@@ -13,7 +13,7 @@ import io.github.pinpols.batch.common.enums.QueuePriorityPolicy;
 import io.github.pinpols.batch.common.enums.ResourceQueueType;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueUpsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpsertParam;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;

@@ -16,7 +16,7 @@ import io.github.pinpols.batch.console.application.contract.request.ops.UpdateWe
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService;
 import io.github.pinpols.batch.console.domain.notification.service.ConsoleWebhookService.CreateSubscriptionCommand;
-import io.github.pinpols.batch.console.service.ConsoleResponseFactory;
+import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadata;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;

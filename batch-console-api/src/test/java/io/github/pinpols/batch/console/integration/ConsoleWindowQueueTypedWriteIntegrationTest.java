@@ -9,7 +9,7 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.param.BatchWindowInsertParam;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
-import io.github.pinpols.batch.console.domain.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
 import java.util.Map;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

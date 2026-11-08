@@ -13,7 +13,7 @@ import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInva
 import io.github.pinpols.batch.console.application.config.ConsoleTenantConfigInitApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.TenantConfigBatchInitRequest;
 import io.github.pinpols.batch.console.application.contract.response.config.TenantConfigBatchInitResponse;
-import io.github.pinpols.batch.console.domain.entity.ConfigReleaseEntity;
+import io.github.pinpols.batch.console.domain.config.entity.ConfigReleaseEntity;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

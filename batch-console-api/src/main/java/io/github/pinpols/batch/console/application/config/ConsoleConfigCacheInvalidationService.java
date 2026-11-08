@@ -5,7 +5,7 @@ import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
-import io.github.pinpols.batch.console.mapper.ConfigCacheInvalidationOutboxMapper;
+import io.github.pinpols.batch.console.domain.config.mapper.ConfigCacheInvalidationOutboxMapper;
 import io.github.pinpols.batch.console.support.cache.ConsoleQueryCacheService;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
