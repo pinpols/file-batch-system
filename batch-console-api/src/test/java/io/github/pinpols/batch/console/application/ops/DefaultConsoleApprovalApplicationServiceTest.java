@@ -69,6 +69,43 @@ class DefaultConsoleApprovalApplicationServiceTest {
   }
 
   @Test
+  @DisplayName("自助服务申请不能由申请人本人批准")
+  void shouldRejectSelfApproval_whenSelfServiceRequesterApproves() {
+    String approvalJson = approvalRecord("SELF_SERVICE", "RERUN", "operator");
+    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-self"), any()))
+        .thenAnswer(invocation -> {
+          @SuppressWarnings("unchecked")
+          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+          return JsonUtils.fromJson(approvalJson, responseType);
+        });
+
+    Throwable thrown =
+        catchThrowable(() -> service.approve(TENANT_ID, "approval-self", "operator", "approve"));
+
+    assertThat(thrown).isInstanceOf(BizException.class);
+    verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("补跑审批仍允许申请人本人批准")
+  void shouldAllowSelfApproval_whenApprovalIsNotSelfService() {
+    String approvalJson = approvalRecord("CATCH_UP", "CATCH_UP", "operator");
+    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq("approval-catch"), any()))
+        .thenAnswer(invocation -> {
+          @SuppressWarnings("unchecked")
+          Class<Object> responseType = (Class<Object>) invocation.getArgument(2);
+          return JsonUtils.fromJson(approvalJson, responseType);
+        });
+    when(orchestratorClient.approveApproval(
+            eq(TENANT_ID), eq("approval-catch"), any(), any(), any(), any()))
+        .thenReturn(remoteDecision("approval-catch", "APPROVED", approvalJson, "operator"));
+    when(approvalService.approveCatchUp(any(), eq("approval-catch"))).thenReturn("caught-up");
+
+    assertThat(service.approve(TENANT_ID, "approval-catch", "operator", "approve"))
+        .isEqualTo("caught-up");
+  }
+
+  @Test
   @DisplayName("补偿、重跑、DLQ 重放和 catch-up 审批委派到各自的窄服务")
   void shouldDispatchApprovalActionsToDedicatedServices() {
     List<String> records = List.of(
@@ -380,6 +417,24 @@ class DefaultConsoleApprovalApplicationServiceTest {
         "sourceIdempotencyKey",
         SOURCE_IDEMPOTENCY_KEY);
     return JsonUtils.toJson(Map.of("record", record));
+  }
+
+  private static String approvalRecord(String approvalType, String actionType, String requesterId) {
+    return JsonUtils.toJson(Map.of(
+        "record",
+        Map.of(
+            "approvalStatus",
+            "PENDING",
+            "approvalType",
+            approvalType,
+            "actionType",
+            actionType,
+            "targetType",
+            "JOB_INSTANCE",
+            "requesterId",
+            requesterId,
+            "payloadJson",
+            "{}")));
   }
 
   private static String approval(String actionType, String targetType) {

@@ -8,6 +8,7 @@ import io.github.pinpols.batch.console.BatchConsoleApiApplication;
 import io.github.pinpols.batch.console.domain.ops.mapper.ApprovalCommandMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ApprovalCommandQuery;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
+import java.util.List;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -83,6 +84,24 @@ class ApprovalCommandQueryIntegrationTest extends AbstractIntegrationTest {
     // 命中 approval_no(PAYROLL-001)与 target_type(PAYROLL_BATCH)两行,大小写不敏感
     assertThat(approvalCommandMapper.selectByQuery(query)).hasSize(2);
     assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(2);
+  }
+
+  @Test
+  @DisplayName("排除类型: 普通列表去掉补跑单,计数与列表一致")
+  void shouldExcludeApprovalTypesFromListAndCount() {
+    String tenantId = "t-approval-ex-" + BatchDateTimeSupport.utcEpochMillis();
+    insertApproval(tenantId, "apr-catch", "CATCH_UP", "CATCH_UP", "PENDING");
+    insertApproval(tenantId, "apr-comp", "COMPENSATION", "COMPENSATION", "PENDING");
+
+    ApprovalCommandQuery query = new ApprovalCommandQuery();
+    query.setTenantId(tenantId);
+    query.setExcludeApprovalTypes(List.of("CATCH_UP"));
+    query.setPageRequest(new PageRequest(1, 10));
+
+    assertThat(approvalCommandMapper.selectByQuery(query))
+        .extracting(row -> row.getApprovalType())
+        .containsExactly("COMPENSATION");
+    assertThat(approvalCommandMapper.countByQuery(query)).isEqualTo(1);
   }
 
   private void insertApproval(

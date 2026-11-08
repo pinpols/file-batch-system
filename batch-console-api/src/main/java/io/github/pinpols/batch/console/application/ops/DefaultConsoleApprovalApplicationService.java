@@ -87,6 +87,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     // 若 side-effect 失败则状态停在 APPROVED(非 EXECUTED),异常抛给调用方且不卡死——
     // 重试同一 approvalNo 时命中 APPROVED:跳过重复推进,直接重跑 side-effect。只有 PENDING 才需推进。
     if ("PENDING".equalsIgnoreCase(status)) {
+      rejectSelfServiceSelfApproval(approvalRecord, operatorId);
       ApprovalDecision decision = approveRemote(tenantId, approvalNo, operatorId, reason);
       requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
       String actualStatus = decision.approvalStatus();
@@ -375,6 +376,21 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         "error.approval.not_pending_for_action",
         approvalNo,
         actualStatus);
+  }
+
+  /** 自助服务申请与配置发布一样，申请人不能批准自己的单据。拒绝仍允许。已批准后的重试不在这里拦截。 */
+  private static void rejectSelfServiceSelfApproval(
+      ApprovalRecord approvalRecord, String operatorId) {
+    if (!"SELF_SERVICE".equals(approvalRecord.getApprovalType())) {
+      return;
+    }
+    String requesterId = approvalRecord.getRequesterId();
+    if (EmptyChecks.isBlank(requesterId) || EmptyChecks.isBlank(operatorId)) {
+      return;
+    }
+    if (requesterId.equals(operatorId)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.self_approval_forbidden");
+    }
   }
 
   private void markExecutedRemote(String tenantId, String approvalNo) {
