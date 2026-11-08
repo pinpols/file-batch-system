@@ -1030,6 +1030,7 @@ Stage 5b 只启用具有专属名称 `[SIM:dispatch-stage5b]` 的 `tb/tb_api_fai
 | [sql/select-latest-sdk-job-status.sql](sql/select-latest-sdk-job-status.sql) | CI 门禁及运行验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
 | [sql/select-sdk-job-diagnostics.sql](sql/select-sdk-job-diagnostics.sql) | CI 门禁及运行验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
 | [sql/select-sdk-worker-diagnostics.sql](sql/select-sdk-worker-diagnostics.sql) | CI 门禁及运行验证的配套 SQL；由场景入口或参数化路径选择，执行边界见所属说明。 |
+| [trim-codeql-sarif-related-locations.py](trim-codeql-sarif-related-locations.py) | 将 CodeQL SARIF 每条结果的 relatedLocations 裁到 100 个后再上传。 |
 | [validate-flyway-schema.sh](validate-flyway-schema.sh) | Flyway 迁移静态校验。 |
 | [validate-kafka-topics.sh](validate-kafka-topics.sh) | 核对 Kafka topic 字面量与权威常量的对应关系。 |
 

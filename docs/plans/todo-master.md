@@ -6,7 +6,7 @@
 
 | 领域 | 当前开放事项与权威原文 |
 |---|---|
-| 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境、复制与作业包未知结果对账，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。 |
+| 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。复制与作业包未知结果已落地，见同清单。 |
 | 后端 25 包与全仓验证 | 2026-11-04 复核后开放项：51 个 Param/Query 构造校验与 69 项公共返回的逐项裁定、全仓测试/CI 完整通过记录；Trigger 恢复锚点、建档前被拒批次释放等 OPEN/CANDIDATE 条目已关闭或取代，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
 | 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
 | Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
@@ -21,7 +21,7 @@
 | 集群、合规与 IPv6 | Worker drain/接管/force-offline 集群验证、SBOM 条件项、IPv6 staging，见[外部环境阻塞](#九-本地不能做需-ops--staging--dba--业务方-配合)和[HE 路线](#m-ipv6-happy-eyeballs-渐进治理-p1)。 |
 | 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
 | 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
-| 安全告警关闭 | ✅ 2026-11-04 关闭：10-31 处置项（日志注入、Scorecard `Vulnerabilities`、Dependabot aiohttp）均已关闭；#1300 的 `--no-group-results` 导致的 1144 条 CSRF 展开告警，经 #1317 撤回该选项后，`main`（`0bad968ad`）CodeQL 分析恢复为 15 条聚合结果，CSRF 告警标记 `fixed`，open 告警为 0，见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十关闭状态复核2026-11-04)。 |
+| 安全告警关闭 | 2026-11-04 已关闭当时的日志注入、Scorecard `Vulnerabilities` 与 Dependabot aiohttp；#1317 撤回 `--no-group-results` 后 CSRF 展开告警回到 `fixed`。2026-11-08 #296 再次打开：Go `klauspost/compress` 1.20.0 命中 GO-2026-6865，选定版本已升到 1.20.2，关闭仍等下一次 Scorecard。CodeQL 状态页 “relatedLocations were ignored” 改为上传前裁到每条 100 个相关位置，仍保持默认聚合；警告是否消失等下一次 main 分析。见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十一scorecard-go-2026-6865-与-codeql-展示警告2026-11-08)。 |
 | launch 受理容量 | 2026-11-05 只读复核：本地 `ta` 压测积压已不存在（156 条请求全部 LAUNCHED、无 WAITING、运行全部终态），旧批次对账前置条件不再适用。仍开放：独立环境的小规模真实验证（成功链路与受控 429）、429 拒绝原因与排队耗时、画像业务键覆盖；按既定决定暂不在本地运行容量测试，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md#2026-11-05-积压只读复核)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
 | OIDC | 真实 IdP 试点、账号映射与生产启用；本地账号绑定通过不等于外部身份联测完成，见[OIDC SSO 方案](console-oidc-sso-integration-plan-2026-10-09.md)和[前端能力矩阵 G08](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
@@ -53,7 +53,7 @@
 
 - **配置失效与在途任务 / 本地部分修复**：失效已完成后的旧查询回填及事务快照污染已修复，隔离 Redis、真实 PG 和同 JVM 双缓存/Worker 定向验证通过。Redis 局部写入失败及不可用期间提交后旧值未失效已真实复现；V372 和 Console 持久重试已在开发工作区实现，隔离 PG/Valkey 故障恢复及丢广播对账定向通过；独立主库账号的队列授权/撤销 SQL 已在隔离 PG 验证；Spring 分账号部署、独立进程、版本回退和混版仍待验证。缓存新增读取/回源、队列投递的容量影响未测。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
 - **跨账号认证 / 本地部分修复**：登录页误登出、旧会话异步结果及换发成功响应判断已修复；同源当前版本浏览器锁场景通过。同版 Chromium 已验证当前参与协调的双标签切账号及旧登出确认框；未参与锁的旧标签/客户端仍有真实 Cookie 乱序首红，OIDC、其他业务确认框和目标环境尚未关闭。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
-- **复制与作业包未知结果 / 待实施**：现有提示要求核对目标，但旧入口尚无持久原键和逐目标回执对账；目标列表原序及重复项、源快照、权限与旧 wire 须保留，缺回执不能自动重试。见[统一记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。
+- **复制与作业包未知结果 / 已落地（2026-11-08 复核）**：租户复制、作业包创建和导入按原 HTTP 身份登记（`batch.config_batch_operation.request_identity_hash`），目标顺序和重复项保留在 `targets_json`；逐目标回执与目标写入同事务（`batch.config_batch_target_receipt`）。回查只读、不重放。缺回执为 UNKNOWN，不自动换键重试。不保存原请求正文，权限和旧 wire 未改。同账号、原请求租户、同标签刷新回查已有本地证据；混版、跨标签和目标环境未覆盖。见[回查结论](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)和[浏览器验证](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-02租户复制未知结果的真实浏览器验证)。
 
 WDI 合并后已移除已有 Flyway 迁移有效 SQL 漂移的临时例外；PR、merge queue 与其他分支均恢复严格阻断，旧开关不能重新放行。版本连续性和迁移安全扫描继续执行。
 
