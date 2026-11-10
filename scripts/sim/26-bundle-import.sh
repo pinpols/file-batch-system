@@ -4,7 +4,7 @@
 # =========================================================
 # 26-bundle-import.sh:ADR-046 文件束导入「全链」sim 阶段
 #
-#   投 2 个数据文件 + 1 个 .batch.json v2 清单到 MinIO ingress/ta/ →
+#   投 2 个数据文件 + 1 个按业务日命名的 .batch.json v2 清单到 MinIO ingress/ta/ →
 #   ImportIngressScanner 扫到、按清单 fileMapping 给每文件 file_record 落
 #   bundleTemplateCode + bundleWorkflowCode → 到达组满足完整性条件 → BundleArrivalLauncher 发
 #   TA_BUNDLE_IMPORT(BUNDLE_IMPORT)launch → DefaultSchedulePlanBuilder 展 2 个
@@ -13,9 +13,15 @@
 # 断言:① TA_BUNDLE_IMPORT 的 job_instance 出现并达终态;② 恰好 2 个 partition,各带
 #   source_file_id + template_code 绑定;③(worker 真跑时)biz.customer_account 收到两文件的行。
 #
+# 扫描器只认平台库里的 ACTIVE 入站归属，不再接受同目录任意 .batch.json。本脚本在上传前
+# 用 scripts/db/import-ingress-ownership.sql 声明 ingress/ 范围，并把 ta 的权威清单绑定到
+# 稳定文件组 simBundleImport 与 ingress/ta/bundle-import-{bizDate}.batch.json；结束时退休
+# 该范围。默认 Worker 的扫描规则摘要与 bundle 模式不同，范围若保持 ACTIVE，后续扫描会因
+# 规则不一致直接失败。
+#
 # 由 sim-harness 在本阶段前临时开启 batch-manifest 扫描与 arrival 到达组，结束后恢复
-# worker-import 默认配置。直接运行本脚本时调用方必须提供相同运行配置；前置不足即失败，
-# 不允许把未执行或只完成编排降级记为通过。
+# worker-import 默认配置。直接运行本脚本时，调用方必须先停掉默认扫描器并以 bundle 模式
+# 启动 worker-import，再执行本脚本；前置不足即失败，不允许把未执行或只完成编排降级记为通过。
 # =========================================================
 set -euo pipefail
 
@@ -38,6 +44,60 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
   -v ON_ERROR_STOP=1 -f /dev/stdin < test-data/sim/sim-bundle-import-fixtures.sql >/dev/null
 
 export MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
+# 文件组必须与归属绑定一致；清单键只允许一个业务日占位符，不能再把每次运行号写进组编码。
+export SIM_BUNDLE_FILE_GROUP="${SIM_BUNDLE_FILE_GROUP:-simBundleImport}"
+export SIM_BUNDLE_MANIFEST_TEMPLATE="${SIM_BUNDLE_MANIFEST_TEMPLATE:-ingress/ta/bundle-import-{bizDate}.batch.json}"
+export SIM_BUNDLE_SCOPE_PREFIX="${SIM_BUNDLE_SCOPE_PREFIX:-ingress/}"
+export SIM_BUNDLE_BINDING_PREFIX="${SIM_BUNDLE_BINDING_PREFIX:-ingress/ta/}"
+SIM_BUNDLE_SCOPE_ID=""
+
+apply_bundle_ingress_ownership() {
+  docker exec -i "$PG_CONTAINER" psql -X -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
+    -v ON_ERROR_STOP=1 "$@" -f /dev/stdin \
+    < scripts/db/import-ingress-ownership.sql
+}
+
+retire_bundle_ingress_ownership() {
+  local status=$?
+  if [[ -n "$SIM_BUNDLE_SCOPE_ID" ]]; then
+    if ! apply_bundle_ingress_ownership \
+        -v action=retire -v scope_id="$SIM_BUNDLE_SCOPE_ID" \
+        >>"$REPORT_DIR/bundle-ingress-ownership.log" 2>&1; then
+      echo "❌ 未能退休 bundle 入站归属 scope=${SIM_BUNDLE_SCOPE_ID}" >&2
+      status=1
+    fi
+  fi
+  exit "$status"
+}
+trap retire_bundle_ingress_ownership EXIT
+
+echo "==> declare ingress ownership for bundle manifest"
+identity="$("$PYTHON_BIN" scripts/db/import-ingress-ownership-id.py \
+  --bucket "$BATCH_S3_BUCKET" \
+  --prefix "$SIM_BUNDLE_SCOPE_PREFIX" \
+  --namespace "${BATCH_KAFKA_NAMESPACE:-}" \
+  --backend "${BATCH_STORAGE_BACKEND:-s3}" \
+  --endpoint "$BATCH_S3_ENDPOINT")"
+SIM_BUNDLE_STORAGE_ID="$(printf '%s\n' "$identity" | sed -n 's/^storage_id=//p')"
+parsed_scope_id="$(printf '%s\n' "$identity" | sed -n 's/^scope_id=//p')"
+if [[ ! "$SIM_BUNDLE_STORAGE_ID" =~ ^[0-9a-f]{64}$ || ! "$parsed_scope_id" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "❌ 无法计算入站归属身份" >&2
+  exit 1
+fi
+SIM_BUNDLE_SCOPE_ID="$parsed_scope_id"
+{
+  apply_bundle_ingress_ownership \
+    -v action=declare -v scope_id="$SIM_BUNDLE_SCOPE_ID" \
+    -v storage_id="$SIM_BUNDLE_STORAGE_ID" -v bucket_name="$BATCH_S3_BUCKET" \
+    -v object_prefix="$SIM_BUNDLE_SCOPE_PREFIX"
+  apply_bundle_ingress_ownership -v action=retire -v scope_id="$SIM_BUNDLE_SCOPE_ID"
+  apply_bundle_ingress_ownership \
+    -v action=manifest -v scope_id="$SIM_BUNDLE_SCOPE_ID" \
+    -v tenant_id=ta -v binding_prefix="$SIM_BUNDLE_BINDING_PREFIX" \
+    -v file_group_code="$SIM_BUNDLE_FILE_GROUP" \
+    -v manifest_key_template="$SIM_BUNDLE_MANIFEST_TEMPLATE"
+  apply_bundle_ingress_ownership -v action=activate -v scope_id="$SIM_BUNDLE_SCOPE_ID"
+} 2>&1 | tee -a "$REPORT_DIR/bundle-ingress-ownership.log"
 
 "$PYTHON_BIN" - <<'PY' 2>&1 | tee "$REPORT_DIR/bundle-import.log"
 import atexit
@@ -61,7 +121,8 @@ BUCKET = os.environ["BATCH_S3_BUCKET"]
 MINIO_MC_HELPER = os.path.join(os.getcwd(), "scripts", "lib", "minio-mc.sh")
 JOB_CODE = "TA_BUNDLE_IMPORT"
 TEMPLATE = "ta_import_customer_tpl"
-GROUP = f"bundle-import-{RUN}"
+GROUP = os.environ["SIM_BUNDLE_FILE_GROUP"]
+MANIFEST_KEY = os.environ["SIM_BUNDLE_MANIFEST_TEMPLATE"].replace("{bizDate}", BIZ)
 TRIGGER_BASE = os.environ["TRIGGER_BASE"]
 INTERNAL_SECRET = os.environ["INTERNAL_SECRET"]
 SQL_DIR = Path(os.environ["SIM_SQL_DIR"])
@@ -199,7 +260,7 @@ data2 = csv_rows(customer_prefixes[1], 15)
 
 
 def cleanup_uploaded_objects():
-    objects = [f"ingress/ta/{name}" for name in (f1, f2, f"{GROUP}.batch.json")]
+    objects = [f"ingress/ta/{f1}", f"ingress/ta/{f2}", MANIFEST_KEY]
     failures = []
     for object_name in objects:
         result = sh([
@@ -238,7 +299,7 @@ mc_init()
 prefix = f"ingress/ta"
 upload(f"{prefix}/{f1}", data1)
 upload(f"{prefix}/{f2}", data2)
-upload(f"{prefix}/{GROUP}.batch.json", json.dumps(manifest, ensure_ascii=False))
+upload(MANIFEST_KEY, json.dumps(manifest, ensure_ascii=False))
 
 # 2) 轮询:扫描器登记 → 到达组满足完整性条件 → BUNDLE_IMPORT launch → 分区展开
 print(f"==> 等待 scanner→到达组→BUNDLE_IMPORT launch(group={GROUP})")
@@ -246,7 +307,8 @@ instance_id = wait_instance(
     JOB_CODE, f"bundle-arrival-ta-{WORKFLOW_ID}-{GROUP}-{BIZ}", before_import)
 
 if instance_id is None:
-    print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance(检查 scanner batch-manifest/arrival 配置是否开启)")
+    print("❌ FAIL:超时未见 TA_BUNDLE_IMPORT job_instance"
+          "(检查 bundle 模式 scanner、ingress/ ACTIVE 归属和权威清单绑定)")
     sys.exit(1)
 print(f"  ✅ bundle launched, job_instance id={instance_id}")
 

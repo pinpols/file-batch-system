@@ -480,7 +480,7 @@ sim_minio_find_inputs() {
 # Stage 25/26 的 SIM 入站对象会留在持久 MinIO bucket 中；只按脚本生成的命名规则清理。
 clean_sim_minio_inputs() {
   local target="local/$MINIO_BUCKET/ingress/ta"
-  local generated_name_regex='^(bundle-[ab]-[0-9]{8}-[0-9]+\.csv|bundle-import-[0-9]+\.batch\.json|stage2e-checkpoint/sim-stage2e-ckpt-[0-9]+\.xml)$'
+  local generated_name_regex='^(bundle-[ab]-[0-9]{8}-[0-9]+\.csv|bundle-import-[0-9]+\.batch\.json|bundle-import-[0-9]{4}-[0-9]{2}-[0-9]{2}\.batch\.json|stage2e-checkpoint/sim-stage2e-ckpt-[0-9]+\.xml)$'
   local cleanup_phase="${1:-pre-run}"
   local cleanup_log="$SIM_LOG_DIR/clean-sim-minio-inputs-${cleanup_phase}.log"
 
