@@ -3,6 +3,7 @@
 ## 2026-11-10 Workflow 槽位等待与结算竞态测试稳定性
 
 - `JobNodeDispatchIntegrationTest#capacityWaitRecoveryRacingSettlement_shouldKeepBatchDayInFlight` 在围栏释放后用 Awaitility 等待 `RESUMED` / 单恢复 RootRun `RUNNING` / 业务日 `IN_FLIGHT`。生产 `WorkflowLaunchWaitReconciler` 的 5s 扫描可能先于显式 `reconcileTenant` 认领等待并阻塞在结算围栏上，显式 Future 会提前返回；根运行的独立事务先提交，`RESUMED` 仍未可见。main full gate run 42804543630 因此读到 `WAITING`。断言口径与围栏同步不变，不改变生产逻辑。
+- `AtomicTaskPipelineE2eIT#shouldNotRepeatHttpSideEffect_whenCompletedAtomicRetryMessageIsRedelivered` 在给已运行的 `TaskDispatchExecutor` spy 打桩前停止原子任务监听，打桩完成后再启动。消费线程并发调用同一 spy 时，Mockito 打桩会抛 `UnfinishedStubbing`。full gate run 42811907158 的 E2E 2 因此失败。探针断言口径不变，不改变生产逻辑。
 
 ## 2026-11-10 Java 控制流可读性
 

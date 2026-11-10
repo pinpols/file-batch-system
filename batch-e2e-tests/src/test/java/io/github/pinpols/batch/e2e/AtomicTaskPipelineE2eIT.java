@@ -1126,6 +1126,10 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       assertThat(listener).isNotNull();
       assertThat(listener.getContainerProperties().getGroupId())
           .isEqualTo(atomicConsumer.consumerGroupId());
+      // 消费线程正在调用同一个 spy。Mockito 打桩不是线程安全的，
+      // 打桩未完成时并发 execute 会抛 UnfinishedStubbing。先停监听再打桩。
+      listener.stop();
+      await().atMost(Duration.ofSeconds(15)).until(() -> !listener.isRunning());
 
       String firstTrace = seed.requestId() + "-retry-probe-1";
       String secondTrace = seed.requestId() + "-retry-probe-2";
@@ -1145,6 +1149,7 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
           })
           .when(taskDispatchExecutor)
           .execute(any(TaskDispatchMessage.class), any(String.class));
+      listener.start();
 
       // 模拟 Kafka 至少一次投递多出一条消息，固定次数不能作为重投消费栅栏。
       kafkaTemplate.send(retryTopic, retryKey, retryPayload).get();
