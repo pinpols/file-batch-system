@@ -2930,21 +2930,27 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
       assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
     }
 
-    Long recoveredRunId =
-        jdbcTemplate.queryForObject(selectIdSql, Long.class, seed.tenantId(), seed.requestId());
-    assertThat(recoveredRunId).isNotNull().isNotEqualTo(seed.ownerRunId());
-    Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
-        selectCountSql, Integer.class, seed.tenantId(), seed.tenantId(), seed.requestId());
-    assertThat(selectedWorkflowRunCount).isEqualTo(1);
-    String selectedWaitStatus = jdbcTemplate.queryForObject(
-        selectWaitStatusSql, String.class, seed.tenantId(), seed.requestId());
-    assertThat(selectedWaitStatus).isEqualTo("RESUMED");
-    String selectedRunStatus = jdbcTemplate.queryForObject(
-        selectRunStatusSql, String.class, seed.tenantId(), recoveredRunId);
-    assertThat(selectedRunStatus).isEqualTo("RUNNING");
-    String selectedDayStatus = jdbcTemplate.queryForObject(
-        selectDayStatusSql, String.class, seed.tenantId(), calendarCode, BIZ_DATE);
-    assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
+    // 生产 reconciler 每 5s 扫描，claimDue 使用 for update skip locked。后台扫描可能先认领
+    // 这条等待并阻塞在结算围栏上，显式 reconcileTenant 随即返回。根运行由独立事务先提交，
+    // RESUMED 要等持有围栏的那个事务结束后才可见。只等显式 Future 会读到 WAITING。
+    await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+      List<Long> recoveredRunIds =
+          jdbcTemplate.queryForList(selectIdSql, Long.class, seed.tenantId(), seed.requestId());
+      assertThat(recoveredRunIds).singleElement().isNotEqualTo(seed.ownerRunId());
+      Long recoveredRunId = recoveredRunIds.get(0);
+      Integer selectedWorkflowRunCount = jdbcTemplate.queryForObject(
+          selectCountSql, Integer.class, seed.tenantId(), seed.tenantId(), seed.requestId());
+      assertThat(selectedWorkflowRunCount).isEqualTo(1);
+      String selectedWaitStatus = jdbcTemplate.queryForObject(
+          selectWaitStatusSql, String.class, seed.tenantId(), seed.requestId());
+      assertThat(selectedWaitStatus).isEqualTo("RESUMED");
+      String selectedRunStatus = jdbcTemplate.queryForObject(
+          selectRunStatusSql, String.class, seed.tenantId(), recoveredRunId);
+      assertThat(selectedRunStatus).isEqualTo("RUNNING");
+      String selectedDayStatus = jdbcTemplate.queryForObject(
+          selectDayStatusSql, String.class, seed.tenantId(), calendarCode, BIZ_DATE);
+      assertThat(selectedDayStatus).isEqualTo("IN_FLIGHT");
+    });
   }
 
   @Test

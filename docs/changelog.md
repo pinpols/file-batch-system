@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-10 Workflow 槽位等待与结算竞态测试稳定性
+
+- `JobNodeDispatchIntegrationTest#capacityWaitRecoveryRacingSettlement_shouldKeepBatchDayInFlight` 在围栏释放后用 Awaitility 等待 `RESUMED` / 单恢复 RootRun `RUNNING` / 业务日 `IN_FLIGHT`。生产 `WorkflowLaunchWaitReconciler` 的 5s 扫描可能先于显式 `reconcileTenant` 认领等待并阻塞在结算围栏上，显式 Future 会提前返回；根运行的独立事务先提交，`RESUMED` 仍未可见。main full gate run 42804543630 因此读到 `WAITING`。断言口径与围栏同步不变，不改变生产逻辑。
+
 ## 2026-11-10 Java 控制流可读性
 
 - 后续按[控制流可读性审查](audit/control-flow-readability-2026-11-10.md)的候选实施：抽取 SQL 函数采集、租户复制影响分析、作业复制映射、模板草稿和账号工作簿解析等内聚职责，整理调度、回放、Worker 及 Console 的主流程；事务、短路、参数求值和异常边界保持原顺序。验证结果以审查记录的本次实施记录为准。
