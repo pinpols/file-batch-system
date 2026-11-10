@@ -1,0 +1,26 @@
+# 临时 workflow：用本仓库 Actions token 触发 full-ci-gate。不要合并。
+name: Dispatch full CI gate once
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch full-ci-gate on the fix branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/full-ci-gate.yml/dispatches" \
+            -f ref="cursor/fix-capacity-wait-settlement-race-2fed"
