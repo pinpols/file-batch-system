@@ -426,7 +426,7 @@ public class DispatchChannelHealthService {
         !securityProperties.isBypassMode(),
         runtimeProperties,
         httpProbeClient);
-    recordProbeResult(channelConfig, result);
+    recordDispatchOutcome(channelConfig, result.success(), result.message(), result.evidenceRef());
     if (result.success()) {
       probeSuccessCount.incrementAndGet();
     } else {
@@ -439,11 +439,6 @@ public class DispatchChannelHealthService {
           result.evidenceRef());
     }
     return result;
-  }
-
-  private void recordProbeResult(
-      Map<String, Object> channelConfig, DispatchChannelProbeResult result) {
-    recordDispatchOutcome(channelConfig, result.success(), result.message(), result.evidenceRef());
   }
 
   private Map<String, Object> mergedConfig(Map<String, Object> rawRow) {

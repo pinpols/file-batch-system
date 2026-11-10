@@ -145,7 +145,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
           ResultCode.INVALID_ARGUMENT, "error.workflow.workflow_run_replay_preview_required");
     }
     Long replayOperationId = ops.createPendingWorkflowRunReplay(request);
-    String approvalNo = ops.submitApproval(ApprovalSubmitContext.builder()
+    ConsoleJobOperationsPort operations = ops;
+    ApprovalSubmitContext approvalContext = ApprovalSubmitContext.builder()
         .approvalType(JOB_TYPE_COMPENSATION)
         .actionType(ACTION_WORKFLOW_RUN_REPLAY)
         .targetType("WORKFLOW_RUN")
@@ -153,7 +154,8 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .payload(new WorkflowRunReplayApprovalPayload(tenantId, replayOperationId))
         .approvalReason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
         .idempotencyKey(idempotencyKey)
-        .build());
+        .build();
+    String approvalNo = operations.submitApproval(approvalContext);
     ops.publishRefresh(tenantId);
     return new ConsoleWorkflowRunReplaySubmissionResponse(replayOperationId, approvalNo);
   }
@@ -270,20 +272,20 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
       return result;
     }
     ops.requireApprovedApproval(tenantId, request.getApprovalId(), "DLQ_REPLAY", request);
-    String result = ops.submitCompensation(
-        CompensationPayload.builder()
-            .tenantId(tenantId)
-            .compensationType("DLQ")
-            .targetId(request.getDeadLetterId())
-            .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
-            .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
-            .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
-            .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
-            .externalActionVerifiedNotExecuted(request.getExternalActionVerifiedNotExecuted())
-            .externalOutcomeEvidenceReference(
-                ConsoleTextSanitizer.safeInput(request.getExternalOutcomeEvidenceReference(), 512))
-            .build(),
-        idempotencyKey);
+    ConsoleJobOperationsPort operations = ops;
+    CompensationPayload payload = CompensationPayload.builder()
+        .tenantId(tenantId)
+        .compensationType("DLQ")
+        .targetId(request.getDeadLetterId())
+        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
+        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
+        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+        .externalActionVerifiedNotExecuted(request.getExternalActionVerifiedNotExecuted())
+        .externalOutcomeEvidenceReference(
+            ConsoleTextSanitizer.safeInput(request.getExternalOutcomeEvidenceReference(), 512))
+        .build();
+    String result = operations.submitCompensation(payload, idempotencyKey);
     ops.publishRefresh(tenantId);
     return result;
   }

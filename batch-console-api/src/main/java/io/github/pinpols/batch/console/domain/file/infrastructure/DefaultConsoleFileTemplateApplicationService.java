@@ -1,13 +1,11 @@
 package io.github.pinpols.batch.console.domain.file.infrastructure;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.file.ExportFileNameResolver;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.plugin.WorkerPluginIds;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -30,11 +28,8 @@ import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryV
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -169,7 +164,9 @@ public class DefaultConsoleFileTemplateApplicationService
   public FileTemplateMappingDraftResult draftMapping(FileTemplateMappingDraftCommand command) {
     resolveTenant(command.tenantId());
     String direction = normalizeDirection(command.direction());
-    return "EXPORT".equals(direction) ? draftExportMapping(command) : draftImportMapping(command);
+    return "EXPORT".equals(direction)
+        ? FileTemplateMappingDraftBuilder.draftExportMapping(objectMapper, command)
+        : FileTemplateMappingDraftBuilder.draftImportMapping(objectMapper, command);
   }
 
   @Override
@@ -414,132 +411,9 @@ public class DefaultConsoleFileTemplateApplicationService
       String loadTargetRef, String exportDataRef) {
     FileTemplateConfigUpsertParam.PluginRefs pluginRefs =
         new FileTemplateConfigUpsertParam.PluginRefs();
-    pluginRefs.setLoadTargetRef(blankToNull(loadTargetRef));
-    pluginRefs.setExportDataRef(blankToNull(exportDataRef));
+    pluginRefs.setLoadTargetRef(FileTemplateMappingDraftBuilder.blankToNull(loadTargetRef));
+    pluginRefs.setExportDataRef(FileTemplateMappingDraftBuilder.blankToNull(exportDataRef));
     return pluginRefs;
-  }
-
-  private FileTemplateMappingDraftResult draftImportMapping(
-      FileTemplateMappingDraftCommand command) {
-    List<String> warnings = new ArrayList<>();
-    List<Map<String, Object>> fieldMappings = new ArrayList<>();
-    List<Map<String, Object>> columnMappings = new ArrayList<>();
-    for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-      if (field == null) {
-        warnings.add("存在空字段配置,已跳过");
-        continue;
-      }
-      String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
-      String targetColumn = firstText(field.targetColumn(), sourceColumn);
-      if (!Texts.hasText(sourceColumn)) {
-        warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
-        continue;
-      }
-      Map<String, Object> mapping = new LinkedHashMap<>();
-      mapping.put("name", sourceColumn);
-      putIfText(mapping, "targetColumn", targetColumn);
-      putIfText(mapping, "type", field.type());
-      putIfNotNull(mapping, "required", field.required());
-      putIfNotNull(mapping, "persist", field.persist());
-      putIfText(mapping, "format", field.format());
-      fieldMappings.add(mapping);
-
-      if (!Boolean.FALSE.equals(field.persist()) && Texts.hasText(targetColumn)) {
-        Map<String, Object> columnMapping = new LinkedHashMap<>();
-        columnMapping.put("from", sourceColumn);
-        columnMapping.put("to", targetColumn);
-        columnMappings.add(columnMapping);
-      }
-    }
-
-    Map<String, Object> jdbcMappedImport = new LinkedHashMap<>();
-    putIfText(jdbcMappedImport, "schema", command.schemaName());
-    putIfText(jdbcMappedImport, "table", command.tableName());
-    jdbcMappedImport.put("tenantColumn", firstText(command.tenantColumn(), "tenant_id"));
-    if (!columnMappings.isEmpty()) {
-      jdbcMappedImport.put("columnMappings", columnMappings);
-    }
-    if (command.conflictColumns() != null && !command.conflictColumns().isEmpty()) {
-      jdbcMappedImport.put("conflictColumns", command.conflictColumns());
-    }
-    if (Boolean.TRUE.equals(command.standardAuditBindings())) {
-      jdbcMappedImport.put("standardAuditBindings", true);
-    }
-    if (!Texts.hasText(command.tableName())) {
-      warnings.add("未填写 tableName,保存前需要补齐 jdbcMappedImport.table");
-    }
-    Map<String, Object> queryParamSchema = new LinkedHashMap<>();
-    queryParamSchema.put("jdbcMappedImport", jdbcMappedImport);
-    String fieldMappingsJson = writeJson(fieldMappings);
-    String queryParamSchemaJson = writeJson(queryParamSchema);
-    String defaultQuerySql = blankToNull(command.defaultQuerySql());
-    return new FileTemplateMappingDraftResult(
-        "IMPORT", fieldMappingsJson, queryParamSchemaJson, defaultQuerySql, warnings);
-  }
-
-  private FileTemplateMappingDraftResult draftExportMapping(
-      FileTemplateMappingDraftCommand command) {
-    List<String> warnings = new ArrayList<>();
-    List<Map<String, Object>> fieldMappings = new ArrayList<>();
-    List<Map<String, Object>> csvColumns = new ArrayList<>();
-    List<String> selectedColumns = new ArrayList<>();
-    for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-      if (field == null) {
-        warnings.add("存在空字段配置,已跳过");
-        continue;
-      }
-      String sourceColumn = firstText(field.sourceColumn(), field.targetColumn());
-      if (!Texts.hasText(sourceColumn)) {
-        warnings.add("存在未填写 sourceColumn/targetColumn 的字段,已跳过");
-        continue;
-      }
-      Map<String, Object> mapping = new LinkedHashMap<>();
-      mapping.put("sourceColumn", sourceColumn);
-      mapping.put("header", firstText(field.header(), sourceColumn));
-      putIfText(mapping, "type", field.type());
-      putIfText(mapping, "format", field.format());
-      fieldMappings.add(mapping);
-      Map<String, Object> csvColumn = new LinkedHashMap<>();
-      csvColumn.put("header", firstText(field.header(), sourceColumn));
-      csvColumn.put("source", "detail." + sourceColumn);
-      csvColumns.add(csvColumn);
-      selectedColumns.add(sourceColumn);
-    }
-
-    Map<String, Object> sqlTemplateExport = new LinkedHashMap<>();
-    putIfText(sqlTemplateExport, "schema", command.schemaName());
-    putIfText(sqlTemplateExport, "table", command.tableName());
-    if (!selectedColumns.isEmpty()) {
-      sqlTemplateExport.put("columns", selectedColumns);
-    }
-    sqlTemplateExport.put("cursorColumn", "id");
-    Map<String, Object> queryParamSchema = new LinkedHashMap<>();
-    queryParamSchema.put("export_data_ref", WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE);
-    queryParamSchema.put("sqlTemplateExport", sqlTemplateExport);
-    if (EmptyChecks.isNotEmpty(csvColumns)) {
-      // Worker 的文件列来自 csvColumns；SQL 游标列只服务分页，不应自动进入文件。
-      queryParamSchema.put("csvColumns", csvColumns);
-    }
-
-    String defaultQuerySql = blankToNull(command.defaultQuerySql());
-    if (defaultQuerySql == null) {
-      warnings.add("请填写实际业务导出 SQL，按 :tenantId 和 :batchNo 过滤租户及批次，并返回分页游标列");
-    }
-    String fieldMappingsJson = writeJson(fieldMappings);
-    String queryParamSchemaJson = writeJson(queryParamSchema);
-    return new FileTemplateMappingDraftResult(
-        "EXPORT", fieldMappingsJson, queryParamSchemaJson, defaultQuerySql, warnings);
-  }
-
-  private String writeJson(Object value) {
-    try {
-      return objectMapper.writeValueAsString(value);
-    } catch (JsonProcessingException e) {
-      throw BizException.of(
-          ResultCode.SYSTEM_ERROR,
-          ResultCode.SYSTEM_ERROR.detailKey(),
-          "file template json draft failed");
-    }
   }
 
   private String normalizeDirection(String direction) {
@@ -552,31 +426,6 @@ public class DefaultConsoleFileTemplateApplicationService
         "IMPORT".equals(normalized) || "EXPORT".equals(normalized),
         "direction must be IMPORT or EXPORT");
     return normalized;
-  }
-
-  private static List<FileTemplateMappingDraftCommand.Field> fieldsOf(
-      FileTemplateMappingDraftCommand command) {
-    return command.fields() == null ? List.of() : command.fields();
-  }
-
-  private static void putIfText(Map<String, Object> map, String key, String value) {
-    if (Texts.hasText(value)) {
-      map.put(key, value.trim());
-    }
-  }
-
-  private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
-    if (value != null) {
-      map.put(key, value);
-    }
-  }
-
-  private static String firstText(String preferred, String fallback) {
-    return Texts.hasText(preferred) ? preferred.trim() : blankToNull(fallback);
-  }
-
-  private static String blankToNull(String value) {
-    return Texts.hasText(value) ? value.trim() : null;
   }
 
   private static Boolean coalesceFalse(Boolean v) {

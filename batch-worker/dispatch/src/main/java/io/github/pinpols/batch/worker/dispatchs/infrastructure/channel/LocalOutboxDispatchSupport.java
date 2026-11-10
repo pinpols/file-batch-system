@@ -87,9 +87,13 @@ final class LocalOutboxDispatchSupport {
         writeOutboxFile(manifestPath, manifest.bytes(), privateTarget);
       }
 
-      String message = transportStub
-          ? "transport stub: filesystem outbox only — " + (stubDetail == null ? "" : stubDetail)
-          : "dispatched via local filesystem outbox";
+      String message;
+      if (transportStub) {
+        String detail = EmptyChecks.isNull(stubDetail) ? "" : stubDetail;
+        message = "transport stub: filesystem outbox only — " + detail;
+      } else {
+        message = "dispatched via local filesystem outbox";
+      }
       return new DispatchResult(
           true,
           externalRequestId,

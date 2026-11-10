@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.application.service.governance;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews.FileRecordRow;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,8 @@ public class RelatedFileReferenceValidator {
     if (EmptyChecks.isNull(fileId)) {
       return;
     }
-    if (EmptyChecks.isNull(fileGovernanceRepository.loadFileRecord(tenantId, fileId))) {
+    FileRecordRow fileRecord = fileGovernanceRepository.loadFileRecord(tenantId, fileId);
+    if (EmptyChecks.isNull(fileRecord)) {
       throw BizException.of(ResultCode.NOT_FOUND, "error.file.record_not_found");
     }
   }

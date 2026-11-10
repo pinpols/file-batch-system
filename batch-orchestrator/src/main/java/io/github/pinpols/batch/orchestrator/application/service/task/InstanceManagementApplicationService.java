@@ -205,8 +205,8 @@ public class InstanceManagementApplicationService {
   }
 
   public RetryFailedPartitions retryFailedPartitions(String tenantId, Long instanceId) {
-    JobInstanceEntity instance = Guard.requireFound(
-        jobInstanceMapper.selectById(tenantId, instanceId), "job instance not found");
+    JobInstanceEntity selectedInstance = jobInstanceMapper.selectById(tenantId, instanceId);
+    JobInstanceEntity instance = Guard.requireFound(selectedInstance, "job instance not found");
     List<JobPartitionEntity> failedPartitions = jobPartitionMapper.selectByQuery(
         new JobPartitionQuery(tenantId, instanceId, PartitionStatus.FAILED.code(), null));
     if (EmptyChecks.isEmpty(failedPartitions)) {

@@ -254,7 +254,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         try {
           RlsTenantContextHolder.runWithTenant(
               retrySchedule.getTenantId(),
-              () -> inNewTransaction(() -> markRetryFailed(markFailedParam)));
+              () -> inNewTransaction(() -> retryScheduleMapper.markFailed(markFailedParam)));
         } catch (RuntimeException markFailedEx) {
           log.error(
               "markFailed itself failed for retryId={}, manual intervention required",
@@ -263,11 +263,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         }
       }
     }
-  }
-
-  /** R2-P0-2：非 transient 失败的独立事务标记，避免与外层扫描状态混合。 */
-  private void markRetryFailed(RetryScheduleMapper.MarkFailedParam param) {
-    retryScheduleMapper.markFailed(param);
   }
 
   @Override
@@ -533,15 +528,10 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     transaction.setPropagationBehavior(TransactionDefinition.PROPAGATION_MANDATORY);
     RuntimeException failure = transaction.execute(
-        status -> replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId, status));
+        status -> replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId, status, false));
     if (EmptyChecks.isNotNull(failure)) {
       throw failure;
     }
-  }
-
-  private RuntimeException replayDeadLetterWithinTransaction(
-      String tenantId, Long deadLetterTaskId, TransactionStatus status) {
-    return replayDeadLetterWithinTransaction(tenantId, deadLetterTaskId, status, false);
   }
 
   private RuntimeException replayDeadLetterWithinTransaction(

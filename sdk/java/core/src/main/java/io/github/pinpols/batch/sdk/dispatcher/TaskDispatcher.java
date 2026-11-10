@@ -763,7 +763,13 @@ public class TaskDispatcher {
     }
     String cls = error.getClass().getSimpleName();
     String base = message == null ? "" : message;
-    return base.contains(cls) ? base : (base.isEmpty() ? cls : base + " (" + cls + ")");
+    if (base.contains(cls)) {
+      return base;
+    }
+    if (EmptyChecks.isEmpty(base)) {
+      return cls;
+    }
+    return base + " (" + cls + ")";
   }
 
   /**

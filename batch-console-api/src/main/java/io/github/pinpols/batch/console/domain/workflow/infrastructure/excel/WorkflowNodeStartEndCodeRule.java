@@ -38,6 +38,13 @@ public final class WorkflowNodeStartEndCodeRule {
       return issues;
     }
 
+    Map<String, GroupStat> grouped = collectNodeGroups(rows, issues);
+    validateGroupCounts(grouped, issues);
+    return issues;
+  }
+
+  private static Map<String, GroupStat> collectNodeGroups(
+      List<Map<String, Object>> rows, List<WorkbookIssue> issues) {
     Map<String, GroupStat> grouped = new LinkedHashMap<>();
     for (Map<String, Object> row : rows) {
       String tenant = asString(row.get(ConfigPackageExcelValidator.COL_TENANT_ID));
@@ -93,6 +100,11 @@ public final class WorkflowNodeStartEndCodeRule {
       }
     }
 
+    return grouped;
+  }
+
+  private static void validateGroupCounts(
+      Map<String, GroupStat> grouped, List<WorkbookIssue> issues) {
     for (GroupStat stat : grouped.values()) {
       if (stat.startCount != 1) {
         issues.add(new WorkbookIssue(
@@ -123,7 +135,6 @@ public final class WorkflowNodeStartEndCodeRule {
                 + stat.endCount));
       }
     }
-    return issues;
   }
 
   private static String asString(Object o) {

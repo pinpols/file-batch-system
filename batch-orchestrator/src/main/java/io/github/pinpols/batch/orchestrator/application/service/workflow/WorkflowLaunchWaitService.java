@@ -114,13 +114,14 @@ public class WorkflowLaunchWaitService {
   private WorkflowLaunchWaitSnapshot restore(WorkflowLaunchWaitClaim claim) {
     try {
       Envelope envelope = JsonUtils.fromJsonStrict(claim.launchPayload(), Envelope.class);
-      if (EmptyChecks.isNull(envelope)
+      boolean envelopeDoesNotMatch = EmptyChecks.isNull(envelope)
           || !FORMAT.equals(envelope.format())
           || !Objects.equals(claim.tenantId(), envelope.tenantId())
           || !Objects.equals(claim.requestId(), envelope.requestId())
           || !Objects.equals(claim.workflowDefinitionId(), envelope.workflowDefinitionId())
           || !Objects.equals(claim.bizDate(), envelope.bizDate())
-          || Boolean.TRUE.equals(claim.dryRun()) != envelope.dryRun()) {
+          || Boolean.TRUE.equals(claim.dryRun()) != envelope.dryRun();
+      if (envelopeDoesNotMatch) {
         throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
       }
       String plaintext = secretPayloadProtector.revealEncrypted(envelope.sealedSnapshotPayload());
@@ -131,11 +132,12 @@ public class WorkflowLaunchWaitService {
       }
       snapshot.validate();
       LaunchRequest original = snapshot.originalRequest();
-      if (!Objects.equals(original.tenantId(), claim.tenantId())
+      boolean requestDoesNotMatch = !Objects.equals(original.tenantId(), claim.tenantId())
           || !Objects.equals(original.requestId(), claim.requestId())
           || !Objects.equals(original.workflowDefinitionId(), claim.workflowDefinitionId())
           || !Objects.equals(original.bizDate(), claim.bizDate())
-          || Boolean.TRUE.equals(original.dryRun()) != Boolean.TRUE.equals(claim.dryRun())) {
+          || Boolean.TRUE.equals(original.dryRun()) != Boolean.TRUE.equals(claim.dryRun());
+      if (requestDoesNotMatch) {
         throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
       }
       return snapshot;

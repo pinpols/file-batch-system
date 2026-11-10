@@ -257,7 +257,7 @@ public class WorkflowRunReplaySnapshotResolver {
         }
         Object rawDispatchChannelSnapshots = selectedDispatchChannelSnapshots.get(entry.getKey());
         Map<String, String> dispatchChannelSnapshots =
-            readProtectedDispatchChannelSnapshots(rawDispatchChannelSnapshots);
+            readProtectedFileTemplateSnapshots(rawDispatchChannelSnapshots);
         identity.put("frozenDispatchChannelSnapshots", dispatchChannelSnapshots);
       }
       if (selectedDispatchSecretBindings.containsKey(entry.getKey())) {
@@ -304,10 +304,6 @@ public class WorkflowRunReplaySnapshotResolver {
       protectedSnapshots.put(templateCode, protectedSnapshot);
     }
     return protectedSnapshots;
-  }
-
-  private Map<String, String> readProtectedDispatchChannelSnapshots(Object rawSnapshots) {
-    return readProtectedFileTemplateSnapshots(rawSnapshots);
   }
 
   private Map<String, Object> readDispatchSecretBindings(Object rawBindings) {

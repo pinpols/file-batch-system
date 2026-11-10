@@ -138,10 +138,12 @@ public class WorkflowGraphValidator {
     if (workflowDefinitionId == null) {
       return WorkflowValidationResult.clean();
     }
-    List<WorkflowNodeEntity> nodes =
-        nullToEmpty(workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId));
-    List<WorkflowEdgeEntity> edges =
-        nullToEmpty(workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId));
+    List<WorkflowNodeEntity> nodeRows =
+        workflowNodeMapper.selectByWorkflowDefinitionId(workflowDefinitionId);
+    List<WorkflowNodeEntity> nodes = nullToEmpty(nodeRows);
+    List<WorkflowEdgeEntity> edgeRows =
+        workflowEdgeMapper.selectAllByWorkflowDefinitionId(workflowDefinitionId);
+    List<WorkflowEdgeEntity> edges = nullToEmpty(edgeRows);
 
     List<ValidationIssue> errors = new ArrayList<>();
     List<ValidationIssue> warnings = new ArrayList<>();
@@ -500,9 +502,7 @@ public class WorkflowGraphValidator {
     Map<String, Integer> color = new HashMap<>(); // 0=未访问 1=访问中 2=已完成
     for (String n : nodes) {
       if (color.getOrDefault(n, 0) == 0) {
-        if (dfsHasCycle(n, outgoing, color, errors)) {
-          // 已记录，继续扫其它子图
-        }
+        dfsHasCycle(n, outgoing, color, errors);
       }
     }
   }

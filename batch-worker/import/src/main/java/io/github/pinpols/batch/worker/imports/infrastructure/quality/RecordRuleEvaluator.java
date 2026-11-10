@@ -83,8 +83,10 @@ public class RecordRuleEvaluator {
     if (nullCheck.isEmpty() || !enabled(nullCheck)) {
       return null;
     }
-    for (String field :
-        stringList(firstNonNull(nullCheck.get("fields"), nullCheck.get("requiredFields")))) {
+    Object configuredFields =
+        firstNonNull(nullCheck.get("fields"), nullCheck.get("requiredFields"));
+    List<String> requiredFields = stringList(configuredFields);
+    for (String field : requiredFields) {
       Object rawValue = row.get(field);
       String value = stringValue(rawValue);
       if (!Texts.hasText(value)) {

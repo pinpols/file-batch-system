@@ -111,25 +111,8 @@ final class TriggerScheduledRecoveryService {
         + request.workflowDefinitionId()
         + ":"
         + scheduledFireTime.toEpochMilli();
-    Map<String, Object> params = new LinkedHashMap<>();
-    params.put(
-        "operationType",
-        catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL
-            ? "SCHEDULED_OCCURRENCE_CATCH_UP_APPROVAL"
-            : "SCHEDULED_OCCURRENCE_CATCH_UP");
-    String scheduledFireTimeText = scheduledFireTime.toString();
-    params.put("scheduledFireTime", scheduledFireTimeText);
-    params.put("requestedBy", requestedBy);
-    params.put("reason", reason);
-    LaunchRequest launchRequest = LaunchRequest.builder()
-        .tenantId(request.tenantId())
-        .workflowDefinitionId(request.workflowDefinitionId())
-        .bizDate(request.bizDate())
-        .triggerType(TriggerType.CATCH_UP)
-        .requestId(command.requestId())
-        .traceId(command.traceId())
-        .params(params)
-        .build();
+    LaunchRequest launchRequest = buildRejectedOccurrenceLaunch(
+        command, request, catchUpPolicy, scheduledFireTime, requestedBy, reason);
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     return tx.execute(ignored -> {
@@ -193,6 +176,34 @@ final class TriggerScheduledRecoveryService {
               ? ScheduledOccurrenceStatus.MISFIRE_PENDING.code()
               : ScheduledOccurrenceStatus.REQUESTED.code());
     });
+  }
+
+  private LaunchRequest buildRejectedOccurrenceLaunch(
+      ScheduledOccurrenceCatchUpCommand command,
+      ScheduledOccurrenceCatchUpInput request,
+      CatchUpPolicyType catchUpPolicy,
+      Instant scheduledFireTime,
+      String requestedBy,
+      String reason) {
+    Map<String, Object> params = new LinkedHashMap<>();
+    params.put(
+        "operationType",
+        catchUpPolicy == CatchUpPolicyType.MANUAL_APPROVAL
+            ? "SCHEDULED_OCCURRENCE_CATCH_UP_APPROVAL"
+            : "SCHEDULED_OCCURRENCE_CATCH_UP");
+    String scheduledFireTimeText = scheduledFireTime.toString();
+    params.put("scheduledFireTime", scheduledFireTimeText);
+    params.put("requestedBy", requestedBy);
+    params.put("reason", reason);
+    return LaunchRequest.builder()
+        .tenantId(request.tenantId())
+        .workflowDefinitionId(request.workflowDefinitionId())
+        .bizDate(request.bizDate())
+        .triggerType(TriggerType.CATCH_UP)
+        .requestId(command.requestId())
+        .traceId(command.traceId())
+        .params(params)
+        .build();
   }
 
   private ScheduledOccurrenceCatchUpResponse occurrenceCatchUpResponse(
@@ -407,80 +418,81 @@ final class TriggerScheduledRecoveryService {
     // orchestrator 端消费触发实际 launch；最终一致性由 outbox + (tenant,request_id) 唯一约束保证。
     TransactionTemplate tx = new TransactionTemplate(transactionManager);
     tx.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
-    return tx.execute(ignored -> {
-      TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
-          ? triggerRequestMapper.selectById(requestFromPending.getId())
-          : triggerRequestMapper.selectByTenantAndRequestId(
-              command.getTenantId(), command.getRequestId());
-      Guard.requireFound(pendingRequest, "pending catch-up request not found");
-      if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
-        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
-      }
-      if (TriggerRequestStatus.REJECTED
-          .code()
-          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
-      }
-      if (TriggerRequestStatus.LAUNCHED
-          .code()
-          .equalsIgnoreCase(pendingRequest.getRequestStatus())) {
-        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-      }
-      LaunchRequest original = restorePendingLaunch(pendingRequest);
-      // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
-      int claimed = triggerRequestMapper.updateRequestStatusConditional(
-          command.getTenantId(),
-          command.getRequestId(),
-          TriggerRequestStatus.PROCESSING.code(),
-          TriggerRequestStatus.ACCEPTED.code());
-      if (claimed <= 0) {
-        // 另一实例正在处理；返回当前状态，重试方需重新查询
-        return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-      }
-      boolean pendingTargetRequiresApproval =
-          EmptyChecks.isNotNull(pendingTarget) && pendingTarget.approvePending();
-      if (pendingTargetRequiresApproval) {
-        int approved =
-            triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
-        if (approved != 1) {
-          TriggerMisfirePendingEntity current =
-              triggerMisfirePendingMapper.selectById(pendingTarget.pendingId());
-          if (EmptyChecks.isNull(current)
-              || !MisfirePendingStatus.APPROVED.code().equals(current.getStatus())) {
-            throw BizException.of(
-                ResultCode.STATE_CONFLICT, "error.trigger.pending_approval_changed");
-          }
+    return tx.execute(
+        ignored -> executePendingCatchUpApproval(command, pendingTarget, requestFromPending));
+  }
+
+  private LaunchResponse executePendingCatchUpApproval(
+      PendingCatchUpApprovalCommand command,
+      PendingApprovalTarget pendingTarget,
+      TriggerRequestEntity requestFromPending) {
+    TriggerRequestEntity pendingRequest = EmptyChecks.isNotNull(requestFromPending)
+        ? triggerRequestMapper.selectById(requestFromPending.getId())
+        : triggerRequestMapper.selectByTenantAndRequestId(
+            command.getTenantId(), command.getRequestId());
+    Guard.requireFound(pendingRequest, "pending catch-up request not found");
+    if (!TriggerType.CATCH_UP.code().equalsIgnoreCase(pendingRequest.getTriggerType())) {
+      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.not_catch_up");
+    }
+    if (TriggerRequestStatus.REJECTED.code().equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.request.already_rejected");
+    }
+    if (TriggerRequestStatus.LAUNCHED.code().equalsIgnoreCase(pendingRequest.getRequestStatus())) {
+      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+    }
+    LaunchRequest original = restorePendingLaunch(pendingRequest);
+    // 原子 CAS：ACCEPTED → PROCESSING，并发审批只有一个能进入
+    int claimed = triggerRequestMapper.updateRequestStatusConditional(
+        command.getTenantId(),
+        command.getRequestId(),
+        TriggerRequestStatus.PROCESSING.code(),
+        TriggerRequestStatus.ACCEPTED.code());
+    if (claimed <= 0) {
+      // 另一实例正在处理；返回当前状态，重试方需重新查询
+      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
+    }
+    boolean pendingTargetRequiresApproval =
+        EmptyChecks.isNotNull(pendingTarget) && pendingTarget.approvePending();
+    if (pendingTargetRequiresApproval) {
+      int approved = triggerMisfirePendingMapper.approve(pendingTarget.pendingId(), "trigger-api");
+      if (approved != 1) {
+        TriggerMisfirePendingEntity current =
+            triggerMisfirePendingMapper.selectById(pendingTarget.pendingId());
+        if (EmptyChecks.isNull(current)
+            || !MisfirePendingStatus.APPROVED.code().equals(current.getStatus())) {
+          throw BizException.of(
+              ResultCode.STATE_CONFLICT, "error.trigger.pending_approval_changed");
         }
       }
-      Map<String, Object> restoredParams =
-          EmptyChecks.isNull(original.params()) ? Map.of() : original.params();
-      Map<String, Object> approvalParams = new LinkedHashMap<>(restoredParams);
-      approvalParams.put("operationType", "CATCH_UP_APPROVAL");
-      approvalParams.put("approvalMode", "MANUAL_APPROVAL");
-      approvalParams.put("catchUpApproved", true);
-      String approvalReason = EmptyChecks.isNull(command.getReason()) ? "" : command.getReason();
-      approvalParams.put("reason", approvalReason);
-      LaunchRequest launchRequest = original.toBuilder().params(approvalParams).build();
-      String dedupKey = Texts.hasText(pendingRequest.getDedupKey())
-          ? pendingRequest.getDedupKey()
-          : pendingRequest.getRequestId();
-      requestPersistence.publishLaunchOutbox(launchRequest, dedupKey);
-      // 进程可能在恢复状态提交后、事务提交回调触发 DAG
-      // 推进前停止。先根据已持久化的成功节点运行记录协调，
-      boolean pendingMisfireCanBeApproved = EmptyChecks.isNotNull(pendingTarget)
-          && pendingTarget.approvePending()
-          && EmptyChecks.isNotNull(pendingTarget.scheduledFireTime());
-      if (pendingMisfireCanBeApproved) {
-        occurrenceRecorder.transition(
-            command.getTenantId(),
-            pendingRequest.getWorkflowDefinitionId(),
-            pendingTarget.scheduledFireTime(),
-            ScheduledOccurrenceStatus.MISFIRE_PENDING,
-            ScheduledOccurrenceStatus.REQUESTED,
-            pendingRequest.getRequestId());
-      }
-      return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
-    });
+    }
+    Map<String, Object> restoredParams =
+        EmptyChecks.isNull(original.params()) ? Map.of() : original.params();
+    Map<String, Object> approvalParams = new LinkedHashMap<>(restoredParams);
+    approvalParams.put("operationType", "CATCH_UP_APPROVAL");
+    approvalParams.put("approvalMode", "MANUAL_APPROVAL");
+    approvalParams.put("catchUpApproved", true);
+    String approvalReason = EmptyChecks.isNull(command.getReason()) ? "" : command.getReason();
+    approvalParams.put("reason", approvalReason);
+    LaunchRequest launchRequest = original.toBuilder().params(approvalParams).build();
+    String dedupKey = Texts.hasText(pendingRequest.getDedupKey())
+        ? pendingRequest.getDedupKey()
+        : pendingRequest.getRequestId();
+    requestPersistence.publishLaunchOutbox(launchRequest, dedupKey);
+    // 进程可能在恢复状态提交后、事务提交回调触发 DAG
+    // 推进前停止。先根据已持久化的成功节点运行记录协调，
+    boolean pendingMisfireCanBeApproved = EmptyChecks.isNotNull(pendingTarget)
+        && pendingTarget.approvePending()
+        && EmptyChecks.isNotNull(pendingTarget.scheduledFireTime());
+    if (pendingMisfireCanBeApproved) {
+      occurrenceRecorder.transition(
+          command.getTenantId(),
+          pendingRequest.getWorkflowDefinitionId(),
+          pendingTarget.scheduledFireTime(),
+          ScheduledOccurrenceStatus.MISFIRE_PENDING,
+          ScheduledOccurrenceStatus.REQUESTED,
+          pendingRequest.getRequestId());
+    }
+    return new LaunchResponse(pendingRequest.getRequestId(), pendingRequest.getTraceId());
   }
 
   private LaunchRequest restorePendingLaunch(TriggerRequestEntity pending) {

@@ -99,66 +99,69 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
       }
       approvalRecord.setApproverId(decision.approverId());
     }
-    String actionType = approvalRecord.getActionType();
-    String result =
-        switch (actionType) {
-          case "COMPENSATION" -> {
-            CompensationCommandRequest request = JsonUtils.fromJson(
-                approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
-            request.setApprovalId(approvalNo);
-            // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
-            // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
-            if (request.getCompensationType() == null
-                || request.getCompensationType().isBlank()) {
-              String targetType = approvalRecord.getTargetType();
-              String compensationType = deriveCompensationType(targetType);
-              request.setCompensationType(compensationType);
-            }
-            yield consoleJobRecoveryService.compensation(request, approvalNo);
-          }
-          case "RERUN" -> {
-            // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
-            // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
-            // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
-            RerunRequest request =
-                JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
-            request.setApprovalId(approvalNo);
-            yield consoleJobRecoveryService.rerun(request, approvalNo);
-          }
-          case "DLQ_REPLAY" -> {
-            DeadLetterReplayRequest request =
-                JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
-            request.setApprovalId(approvalNo);
-            request.setOperatorId(operatorId);
-            yield consoleJobRecoveryService.replayDeadLetter(request, approvalNo);
-          }
-          case "RETRY" -> replayApprovedTarget(approvalRecord, approvalNo);
-          case "DOWNLOAD" -> {
-            PresignDownloadFileRequest request = JsonUtils.fromJson(
-                approvalRecord.getPayloadJson(), PresignDownloadFileRequest.class);
-            request.setApprovalId(approvalNo);
-            ConsolePresignDownloadResponse downloadResponse =
-                consoleFileApplicationService.presignDownload(request, approvalNo);
-            yield downloadResponse == null ? null : downloadResponse.downloadUrl();
-          }
-          case "CATCH_UP" -> {
-            ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(
-                approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
-            request.setApprovalId(approvalNo);
-            yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
-          }
-          case "BATCH_DAY_REPLAY" ->
-            batchdayreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
-          case "WORKFLOW_RUN_REPLAY" ->
-            workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
-          default ->
-            throw BizException.of(
-                ResultCode.INVALID_ARGUMENT,
-                ResultCode.INVALID_ARGUMENT.detailKey(),
-                "unsupported approval action: " + actionType);
-        };
-    markExecutedRemote(tenantId, approvalNo);
+    String result = executeApprovedAction(approvalRecord, tenantId, approvalNo, operatorId);
+    orchestratorInternalRestClient.markApprovalExecuted(tenantId, approvalNo);
     return result;
+  }
+
+  private String executeApprovedAction(
+      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+    String actionType = approvalRecord.getActionType();
+    return switch (actionType) {
+      case "COMPENSATION" -> {
+        CompensationCommandRequest request =
+            JsonUtils.fromJson(approvalRecord.getPayloadJson(), CompensationCommandRequest.class);
+        request.setApprovalId(approvalNo);
+        // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
+        // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
+        if (EmptyChecks.isBlank(request.getCompensationType())) {
+          String targetType = approvalRecord.getTargetType();
+          String compensationType = deriveCompensationType(targetType);
+          request.setCompensationType(compensationType);
+        }
+        yield consoleJobRecoveryService.compensation(request, approvalNo);
+      }
+      case "RERUN" -> {
+        // SELF_SERVICE 自助重跑(ConsoleSelfServiceJobService.requestRerun 提交):payload =
+        // {tenantId, jobCode, bizDate, targetInstanceNo, reason}。approve 后 dispatch 到
+        // recovery rerun 真正提交补跑;approvalId 回填 approvalNo 与 COMPENSATION 一致。
+        RerunRequest request =
+            JsonUtils.fromJson(approvalRecord.getPayloadJson(), RerunRequest.class);
+        request.setApprovalId(approvalNo);
+        yield consoleJobRecoveryService.rerun(request, approvalNo);
+      }
+      case "DLQ_REPLAY" -> {
+        DeadLetterReplayRequest request =
+            JsonUtils.fromJson(approvalRecord.getPayloadJson(), DeadLetterReplayRequest.class);
+        request.setApprovalId(approvalNo);
+        request.setOperatorId(operatorId);
+        yield consoleJobRecoveryService.replayDeadLetter(request, approvalNo);
+      }
+      case "RETRY" -> replayApprovedTarget(approvalRecord, approvalNo);
+      case "DOWNLOAD" -> {
+        PresignDownloadFileRequest request =
+            JsonUtils.fromJson(approvalRecord.getPayloadJson(), PresignDownloadFileRequest.class);
+        request.setApprovalId(approvalNo);
+        ConsolePresignDownloadResponse downloadResponse =
+            consoleFileApplicationService.presignDownload(request, approvalNo);
+        yield EmptyChecks.isNull(downloadResponse) ? null : downloadResponse.downloadUrl();
+      }
+      case "CATCH_UP" -> {
+        ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(
+            approvalRecord.getPayloadJson(), ConsoleCatchUpApprovalRequest.class);
+        request.setApprovalId(approvalNo);
+        yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
+      }
+      case "BATCH_DAY_REPLAY" ->
+        batchdayreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
+      case "WORKFLOW_RUN_REPLAY" ->
+        workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
+      default ->
+        throw BizException.of(
+            ResultCode.INVALID_ARGUMENT,
+            ResultCode.INVALID_ARGUMENT.detailKey(),
+            "unsupported approval action: " + actionType);
+    };
   }
 
   private String batchdayreplayAction(
@@ -391,10 +394,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     if (requesterId.equals(operatorId)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.approval.self_approval_forbidden");
     }
-  }
-
-  private void markExecutedRemote(String tenantId, String approvalNo) {
-    orchestratorInternalRestClient.markApprovalExecuted(tenantId, approvalNo);
   }
 
   /**

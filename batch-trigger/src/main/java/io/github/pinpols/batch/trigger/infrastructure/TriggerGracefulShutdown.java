@@ -152,13 +152,24 @@ public class TriggerGracefulShutdown
   }
 
   public TriggerDrainStatus status() throws SchedulerException {
-    String schedulerStatus = scheduler.isShutdown()
-        ? "SHUTDOWN"
-        : scheduler.isInStandbyMode() ? "STANDBY" : scheduler.isStarted() ? "STARTED" : "STOPPED";
+    String schedulerStatus = schedulerStatus();
     return new TriggerDrainStatus(
         drainState.isDraining(),
         drainState.getDrainingSince(),
         drainState.getReason(),
         schedulerStatus);
+  }
+
+  private String schedulerStatus() throws SchedulerException {
+    if (scheduler.isShutdown()) {
+      return "SHUTDOWN";
+    }
+    if (scheduler.isInStandbyMode()) {
+      return "STANDBY";
+    }
+    if (scheduler.isStarted()) {
+      return "STARTED";
+    }
+    return "STOPPED";
   }
 }

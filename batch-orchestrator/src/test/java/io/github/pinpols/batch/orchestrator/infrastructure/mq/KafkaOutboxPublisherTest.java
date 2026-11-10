@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
@@ -180,6 +181,30 @@ class KafkaOutboxPublisherTest {
     verify(mqMessagePublisher).publish(captor.capture());
     assertThat(captor.getValue().topic()).isEqualTo("batch.task.dispatch.export");
     assertThat(captor.getValue().key()).isEqualTo("t1:IT_JOB:it-instance-001:1");
+  }
+
+  @Test
+  @DisplayName("指定 Worker 的派发成功后，投递记录保留目标 Worker 和实际主题")
+  void shouldRecordTargetWorker_whenDispatchToSelectedWorkerSucceeds() throws Exception {
+    batchMqTopicsProperties.setImportDispatch("batch.task.dispatch.import");
+    OutboxEventEntity event = dispatchEvent("IMPORT", "selected-worker-key");
+    ObjectMapper mapper = new ObjectMapper();
+    ObjectNode payload = (ObjectNode) mapper.readTree(event.getPayloadJson());
+    payload.put("selectedWorkerId", "worker-a");
+    event.setPayloadJson(mapper.writeValueAsString(payload));
+    when(mqMessagePublisher.publish(any(MqMessage.class)))
+        .thenReturn(CompletableFuture.completedFuture(null));
+
+    CompletableFuture<Boolean> publishFuture = publisher.publish(event);
+
+    assertThat(publishFuture).isCompletedWithValue(true);
+    ArgumentCaptor<EventDeliveryLogEntity> captor =
+        ArgumentCaptor.forClass(EventDeliveryLogEntity.class);
+    verify(outboxChildRecordService).recordDelivery(captor.capture());
+    EventDeliveryLogEntity delivery = captor.getValue();
+    assertThat(delivery.getDeliveryStatus()).isEqualTo(OutboxPublishStatus.PUBLISHED.code());
+    assertThat(delivery.getTargetWorkerId()).isEqualTo("worker-a");
+    assertThat(delivery.getTargetTopic()).isEqualTo("batch.task.dispatch.import.node.worker-a");
   }
 
   @Test

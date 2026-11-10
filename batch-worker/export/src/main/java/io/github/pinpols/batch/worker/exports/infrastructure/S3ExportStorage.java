@@ -132,10 +132,6 @@ public class S3ExportStorage {
     }
   }
 
-  private static String digestToHex(byte[] digest) {
-    return HexFormat.of().formatHex(digest);
-  }
-
   /**
    * 计算 bucket 中指定对象的 SHA-256 十六进制摘要（用于上传前后的完整性校验）。
    *
@@ -158,7 +154,7 @@ public class S3ExportStorage {
         }
       }
       byte[] checksumBytes = digest.digest();
-      return digestToHex(checksumBytes);
+      return HexFormat.of().formatHex(checksumBytes);
     } catch (Exception ex) {
       throw new IllegalStateException("failed to checksum export object", ex);
     }

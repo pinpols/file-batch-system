@@ -467,14 +467,16 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       case AUTH_TYPE_BASIC -> {
         String user = Objects.toString(auth.get("username"), "");
         // ADR-039 P1:password 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
-        String pass = CredentialEnvResolver.resolve(Objects.toString(auth.get("password"), ""));
+        String configuredPassword = Objects.toString(auth.get("password"), "");
+        String pass = CredentialEnvResolver.resolve(configuredPassword);
         String token = Base64.getEncoder()
             .encodeToString((user + ":" + pass).getBytes(StandardCharsets.UTF_8));
         headers.put("Authorization", "Basic " + token);
       }
       case AUTH_TYPE_BEARER -> {
         // ADR-039 P1:token 若是 ${ENV_NAME} envRef,解出部署侧真实值;明文原样放行。
-        String token = CredentialEnvResolver.resolve(Objects.toString(auth.get("token"), ""));
+        String configuredToken = Objects.toString(auth.get("token"), "");
+        String token = CredentialEnvResolver.resolve(configuredToken);
         if (token.isEmpty()) {
           throw new HttpValidationException("auth.token required for bearer");
         }

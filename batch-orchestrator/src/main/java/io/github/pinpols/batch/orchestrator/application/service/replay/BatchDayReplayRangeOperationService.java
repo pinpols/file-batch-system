@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.config.ReplayOperationProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.DisasterDayOverrideEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReplayOperationPreviewTokenEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayPlanCalendarMapper;
@@ -335,9 +336,9 @@ public class BatchDayReplayRangeOperationService {
     for (LocalDate date = command.fromDate();
         !date.isAfter(command.throughDate());
         date = date.plusDays(1)) {
-      boolean calendarBlocked =
-          EmptyChecks.isNotNull(disasterDayOverrideMapper.selectActiveByCalendarBizDate(
-              command.tenantId(), command.calendarCode(), date, now));
+      DisasterDayOverrideEntity override = disasterDayOverrideMapper.selectActiveByCalendarBizDate(
+          command.tenantId(), command.calendarCode(), date, now);
+      boolean calendarBlocked = EmptyChecks.isNotNull(override);
       if (!calendarBlocked) {
         String effectiveDayType = planCalendarMapper.selectEffectiveDayType(
             command.tenantId(), command.calendarCode(), date);
@@ -346,7 +347,7 @@ public class BatchDayReplayRangeOperationService {
       if (calendarBlocked) {
         days.add(new PreparedDay(date, null, DISPOSITION_CALENDAR_BLOCKED));
       } else {
-        BatchDayReplaySubmitCommand childCommand = commandForDate(command, date);
+        BatchDayReplaySubmitCommand childCommand = commandForDate(command, date, null);
         BatchDayReplayPreviewResponse preview = issueChildPreviewTokens
             ? singleDayReplayService.preview(childCommand)
             : singleDayReplayService.previewImpact(childCommand);
@@ -385,11 +386,6 @@ public class BatchDayReplayRangeOperationService {
               day.warnings());
         })
         .toList();
-  }
-
-  private static BatchDayReplaySubmitCommand commandForDate(
-      BatchDayReplayRangeCommand range, LocalDate bizDate) {
-    return commandForDate(range, bizDate, null);
   }
 
   private static BatchDayReplaySubmitCommand commandForDate(

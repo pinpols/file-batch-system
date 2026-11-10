@@ -68,6 +68,23 @@ class TriggerGracefulShutdownTest {
   }
 
   @Test
+  @DisplayName("读取调度器状态期间开始排水时，状态报告应反映读取后发生的排水")
+  void shouldReadDrainStateAfterSchedulerStatus() throws SchedulerException {
+    when(scheduler.isShutdown()).thenReturn(false);
+    when(scheduler.isInStandbyMode()).thenAnswer(invocation -> {
+      drainState.startDraining("status-check");
+      return true;
+    });
+
+    TriggerGracefulShutdown.TriggerDrainStatus status = shutdown.status();
+
+    assertThat(status.draining()).isTrue();
+    assertThat(status.drainingSince()).isNotNull();
+    assertThat(status.reason()).isEqualTo("status-check");
+    assertThat(status.schedulerStatus()).isEqualTo("STANDBY");
+  }
+
+  @Test
   @DisplayName("应用上下文关闭事件即触发排水,调度器进入 standby 防止停机期间继续触发")
   void shouldStandbyOnContextClosed() throws SchedulerException {
     when(scheduler.isShutdown()).thenReturn(false);

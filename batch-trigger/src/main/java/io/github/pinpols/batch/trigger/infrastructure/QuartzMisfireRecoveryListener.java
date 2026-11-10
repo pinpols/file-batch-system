@@ -183,39 +183,14 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
               SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
           .build();
       scheduler.resumeTriggers(GroupMatcher.triggerGroupEquals(RECOVERY_GROUP));
-      if (scheduler.checkExists(recoveryKey)) {
-        Trigger existing = scheduler.getTrigger(recoveryKey);
-        if (EmptyChecks.isNotNull(existing)) {
-          JobKey existingJobKey = existing.getJobKey();
-          if (durableJobKey.equals(existingJobKey)) {
-            scheduler.resumeTrigger(recoveryKey);
-            return;
-          }
-          JobDataMap reboundData = new JobDataMap(recoveryData);
-          reboundData.putAll(existing.getJobDataMap());
-          // TriggerBuilder 合并时保留已有值；从空 builder 构建，避免新版模板覆盖旧 fire 的快照。
-          Trigger rebound = TriggerBuilder.newTrigger()
-              .withIdentity(recoveryKey)
-              .forJob(durableJobKey)
-              .usingJobData(reboundData)
-              .startNow()
-              .withSchedule(
-                  SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
-              .build();
-          Date nextFireTime = scheduler.rescheduleJob(recoveryKey, rebound);
-          if (EmptyChecks.isNotNull(nextFireTime)) {
-            scheduler.resumeTrigger(recoveryKey);
-            log.info(
-                "rebound Quartz misfire recovery to durable JobDetail: triggerKey={},"
-                    + " previousJobKey={}, jobKey={}, workflowDefinitionId={}, originalFireTime={}",
-                recoveryKey,
-                existingJobKey,
-                durableJobKey,
-                workflowDefinitionId,
-                originalFireTime);
-            return;
-          }
-        }
+      if (resumeExistingRecovery(
+          scheduler,
+          recoveryKey,
+          durableJobKey,
+          recoveryData,
+          workflowDefinitionId,
+          originalFireTime)) {
+        return;
       }
       scheduler.scheduleJob(recovery);
       scheduler.resumeTrigger(recovery.getKey());
@@ -255,6 +230,51 @@ public class QuartzMisfireRecoveryListener implements TriggerListener {
           jobKey,
           exception);
     }
+  }
+
+  private boolean resumeExistingRecovery(
+      Scheduler scheduler,
+      TriggerKey recoveryKey,
+      JobKey durableJobKey,
+      JobDataMap recoveryData,
+      Long workflowDefinitionId,
+      long originalFireTime)
+      throws SchedulerException {
+    if (scheduler.checkExists(recoveryKey)) {
+      Trigger existing = scheduler.getTrigger(recoveryKey);
+      if (EmptyChecks.isNotNull(existing)) {
+        JobKey existingJobKey = existing.getJobKey();
+        if (durableJobKey.equals(existingJobKey)) {
+          scheduler.resumeTrigger(recoveryKey);
+          return true;
+        }
+        JobDataMap reboundData = new JobDataMap(recoveryData);
+        reboundData.putAll(existing.getJobDataMap());
+        // TriggerBuilder 合并时保留已有值；从空 builder 构建，避免新版模板覆盖旧 fire 的快照。
+        Trigger rebound = TriggerBuilder.newTrigger()
+            .withIdentity(recoveryKey)
+            .forJob(durableJobKey)
+            .usingJobData(reboundData)
+            .startNow()
+            .withSchedule(
+                SimpleScheduleBuilder.simpleSchedule().withMisfireHandlingInstructionFireNow())
+            .build();
+        Date nextFireTime = scheduler.rescheduleJob(recoveryKey, rebound);
+        if (EmptyChecks.isNotNull(nextFireTime)) {
+          scheduler.resumeTrigger(recoveryKey);
+          log.info(
+              "rebound Quartz misfire recovery to durable JobDetail: triggerKey={},"
+                  + " previousJobKey={}, jobKey={}, workflowDefinitionId={}, originalFireTime={}",
+              recoveryKey,
+              existingJobKey,
+              durableJobKey,
+              workflowDefinitionId,
+              originalFireTime);
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private JobKey ensureDurableRecoveryJob(

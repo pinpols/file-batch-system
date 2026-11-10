@@ -102,69 +102,10 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
         return;
       }
 
-      // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
-      String sseTicket = request.getParameter("ticket");
-      if (Texts.hasText(sseTicket)) {
-        // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
-        // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
-        SseTicketService.TicketPayload payload =
-            (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
-        if (payload == null) {
-          payload = sseTicketService.validate(sseTicket);
-          if (payload != null) {
-            request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
-          }
-        }
-        if (payload != null) {
-          if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
-            responseWriter.write(
-                response,
-                HttpStatus.UNAUTHORIZED,
-                ResultCode.UNAUTHORIZED,
-                CommonErrorMessages.INVALID_CONSOLE_JWT);
-            return;
-          }
-          LinkedHashSet<String> authorities = new LinkedHashSet<>(payload.authorities());
-          ConsolePrincipal principal =
-              new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
-          setAuthentication(principal, "sse-ticket");
-          filterChain.doFilter(request, response);
-          return;
-        }
+      if (authenticateSseTicket(request, response, filterChain)) {
+        return;
       }
-
-      String bearerToken = resolveCookieToken(request);
-      if (Texts.hasText(bearerToken)) {
-        try {
-          ConsolePrincipal principal = jwtService.authenticate(bearerToken);
-          setAuthentication(principal, bearerToken);
-        } catch (Exception exception) {
-          SwallowedExceptionLogger.warn(
-              ConsoleAuthenticationFilter.class, "catch:Exception", exception);
-
-          // D7 Stage B 切到 HttpOnly cookie 后,浏览器对任何同源请求都自动带 cookie
-          // (含 /auth/login、/auth/logout)。失效 cookie 在公开认证端点不应阻塞请求,
-          // 否则用户陷死:cookie 一旦过期,连重新登录换新 cookie 的机会都没有。
-          // 这些端点本来就在 SecurityConfig 标了 permitAll,放行给下游 controller 自处理。
-          if (isPublicAuthPath(request)) {
-            filterChain.doFilter(request, response);
-            return;
-          }
-
-          // P1-2 fix(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
-          // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
-          // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
-          // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
-          // bypass-mode 仍生效于"完全无凭据"路径(下方 if 块):dev/test 不带 cookie 时
-          // 走 default authorities,行为不变;一旦客户端带了 token 就严格按 token 校验。
-          responseWriter.write(
-              response,
-              HttpStatus.UNAUTHORIZED,
-              ResultCode.UNAUTHORIZED,
-              CommonErrorMessages.INVALID_CONSOLE_JWT);
-          return;
-        }
-        filterChain.doFilter(request, response);
+      if (authenticateCookie(request, response, filterChain)) {
         return;
       }
 
@@ -196,6 +137,84 @@ public class ConsoleAuthenticationFilter extends OncePerRequestFilter {
     } finally {
       SecurityContextHolder.clearContext();
     }
+  }
+
+  private boolean authenticateSseTicket(
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
+    // SSE ticket 鉴权：EventSource 不能设 header，用一次性 ticket 替代
+    String sseTicket = request.getParameter("ticket");
+    if (Texts.hasText(sseTicket)) {
+      // ASYNC/ERROR 分派复用 REQUEST 阶段已消费的 ticket 解析结果，避免二次 validate
+      // 命中已删 key 后假装匿名 → 落入 AuthorizationFilter 抛 AccessDenied → response committed 雪崩
+      SseTicketService.TicketPayload payload =
+          (SseTicketService.TicketPayload) request.getAttribute(TICKET_PRINCIPAL_ATTR);
+      if (EmptyChecks.isNull(payload)) {
+        payload = sseTicketService.validate(sseTicket);
+        if (EmptyChecks.isNotNull(payload)) {
+          request.setAttribute(TICKET_PRINCIPAL_ATTR, payload);
+        }
+      }
+      if (EmptyChecks.isNotNull(payload)) {
+        if (!ConsoleRoles.isFormalRoleSet(payload.authorities())) {
+          responseWriter.write(
+              response,
+              HttpStatus.UNAUTHORIZED,
+              ResultCode.UNAUTHORIZED,
+              CommonErrorMessages.INVALID_CONSOLE_JWT);
+          return true;
+        }
+        LinkedHashSet<String> authorities = new LinkedHashSet<>(payload.authorities());
+        ConsolePrincipal principal =
+            new ConsolePrincipal(payload.username(), payload.tenantId(), authorities);
+        setAuthentication(principal, "sse-ticket");
+        filterChain.doFilter(request, response);
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  private boolean authenticateCookie(
+      HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
+      throws ServletException, IOException {
+    String bearerToken = resolveCookieToken(request);
+    if (Texts.hasText(bearerToken)) {
+      try {
+        ConsolePrincipal principal = jwtService.authenticate(bearerToken);
+        setAuthentication(principal, bearerToken);
+      } catch (Exception exception) {
+        SwallowedExceptionLogger.warn(
+            ConsoleAuthenticationFilter.class, "catch:Exception", exception);
+
+        // D7 Stage B 切到 HttpOnly cookie 后,浏览器对任何同源请求都自动带 cookie
+        // (含 /auth/login、/auth/logout)。失效 cookie 在公开认证端点不应阻塞请求,
+        // 否则用户陷死:cookie 一旦过期,连重新登录换新 cookie 的机会都没有。
+        // 这些端点本来就在 SecurityConfig 标了 permitAll,放行给下游 controller 自处理。
+        if (isPublicAuthPath(request)) {
+          filterChain.doFilter(request, response);
+          return true;
+        }
+
+        // P1-2 fix(2026-06-03,docs/archive/audit/deep-scan-be-security-2026-06-03.md):
+        // 客户端**主动**带了 JWT(cookie)却解析失败 → 一律 401,不再因 bypass-mode 降级到 admin。
+        // 历史 A3-B 降级路径在 prod profile 误漂(SPRING_PROFILES_ACTIVE 缺失)
+        // + bypass-mode=true 同时成立时,变成"过期 cookie 自动升 admin"的认证绕过。
+        // bypass-mode 仍生效于主过滤流程的无凭据路径:dev/test 不带 cookie 时
+        // 走 default authorities,行为不变;一旦客户端带了 token 就严格按 token 校验。
+        responseWriter.write(
+            response,
+            HttpStatus.UNAUTHORIZED,
+            ResultCode.UNAUTHORIZED,
+            CommonErrorMessages.INVALID_CONSOLE_JWT);
+        return true;
+      }
+      filterChain.doFilter(request, response);
+      return true;
+    }
+
+    return false;
   }
 
   private void setAuthentication(ConsolePrincipal principal, String credentials) {

@@ -126,26 +126,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
           EmptyChecks.isNull(dispatchMessage) ? null : dispatchMessage.traceContext();
       CompletableFuture<MqPublishResult> publishFuture =
           sendWithTraceContext(targetTopic, kafkaKey, payloadJson, traceContext);
-      return publishFuture.handleAsync(
-          (result, ex) -> {
-            if (EmptyChecks.isNull(ex)) {
-              recordDelivery(
-                  event,
-                  targetTopic,
-                  workerId,
-                  OutboxPublishStatus.PUBLISHED.code(),
-                  LocalizedError.EMPTY);
-              return true;
-            }
-            recordDelivery(
-                event,
-                targetTopic,
-                workerId,
-                OutboxPublishStatus.FAILED.code(),
-                BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
-            throw new CompletionException(ex);
-          },
-          deliveryLogExecutor);
+      return trackDelivery(publishFuture, event, targetTopic, workerId);
     }
 
     // R6 P0-4：ADR-030 §F verifier.failure.v1 走专用 topic，运维告警 / SLO 直接订阅，
@@ -159,26 +140,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
           MqMessage.of(dedicatedTopic, event.getEventKey(), event.getPayloadJson());
       CompletableFuture<MqPublishResult> publishFuture =
           mqMessagePublisher.publish(dedicatedMessage);
-      return publishFuture.handleAsync(
-          (result, ex) -> {
-            if (EmptyChecks.isNull(ex)) {
-              recordDelivery(
-                  event,
-                  dedicatedTopic,
-                  null,
-                  OutboxPublishStatus.PUBLISHED.code(),
-                  LocalizedError.EMPTY);
-              return true;
-            }
-            recordDelivery(
-                event,
-                dedicatedTopic,
-                null,
-                OutboxPublishStatus.FAILED.code(),
-                BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
-            throw new CompletionException(ex);
-          },
-          deliveryLogExecutor);
+      return trackDelivery(publishFuture, event, dedicatedTopic, null);
     }
 
     // fallback：非任务派发类 outbox，统一包装成 BatchEventMessage 投递到默认 topic，便于通用消费者/审计。
@@ -204,21 +166,25 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
     String messageJson = JsonUtils.toJson(message);
     MqMessage mqMessage = MqMessage.of(fallbackTopic, messageEventKey, messageJson);
     CompletableFuture<MqPublishResult> publishFuture = mqMessagePublisher.publish(mqMessage);
+    return trackDelivery(publishFuture, event, fallbackTopic, null);
+  }
+
+  private CompletableFuture<Boolean> trackDelivery(
+      CompletableFuture<MqPublishResult> publishFuture,
+      OutboxEventEntity event,
+      String topic,
+      String workerId) {
     return publishFuture.handleAsync(
         (result, ex) -> {
           if (EmptyChecks.isNull(ex)) {
             recordDelivery(
-                event,
-                fallbackTopic,
-                null,
-                OutboxPublishStatus.PUBLISHED.code(),
-                LocalizedError.EMPTY);
+                event, topic, workerId, OutboxPublishStatus.PUBLISHED.code(), LocalizedError.EMPTY);
             return true;
           }
           recordDelivery(
               event,
-              fallbackTopic,
-              null,
+              topic,
+              workerId,
               OutboxPublishStatus.FAILED.code(),
               BizExceptionUtils.toLocalizedError(ex, bizMessageResolver, objectMapper));
           throw new CompletionException(ex);

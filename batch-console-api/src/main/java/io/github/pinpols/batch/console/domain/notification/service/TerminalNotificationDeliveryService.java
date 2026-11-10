@@ -141,22 +141,7 @@ public class TerminalNotificationDeliveryService {
       });
       return;
     }
-    WebhookDeliveryResult result;
-    try {
-      if (EmptyChecks.isNotNull(destination.problem())) {
-        result = WebhookDeliveryResult.failure(null, destination.problem());
-      } else if (EmptyChecks.isNotNull(destination.webhook())) {
-        result = webhooks.attemptDelivery(
-            destination.webhook(), destination.payload(), row.payloadJson());
-      } else {
-        NotificationSender sender = senders.resolve(destination.message().channelType());
-        result = EmptyChecks.isNull(sender)
-            ? WebhookDeliveryResult.failure(null, "notification sender unavailable")
-            : sender.send(destination.message());
-      }
-    } catch (RuntimeException failure) {
-      result = WebhookDeliveryResult.failure(null, SwallowedExceptionLogger.summary(failure));
-    }
+    WebhookDeliveryResult result = deliverToDestination(destination, row);
     boolean success = result.success();
     // Webhook 协议携带稳定的 Idempotency-Key。其他服务方未声明
     // 幂等能力，因此结果不确定的失败必须保留并供人工协调。
@@ -197,6 +182,27 @@ public class TerminalNotificationDeliveryService {
           retry,
           boundedError);
     }
+  }
+
+  private WebhookDeliveryResult deliverToDestination(
+      Destination destination, TerminalNotificationDelivery row) {
+    WebhookDeliveryResult result;
+    try {
+      if (EmptyChecks.isNotNull(destination.problem())) {
+        result = WebhookDeliveryResult.failure(null, destination.problem());
+      } else if (EmptyChecks.isNotNull(destination.webhook())) {
+        result = webhooks.attemptDelivery(
+            destination.webhook(), destination.payload(), row.payloadJson());
+      } else {
+        NotificationSender sender = senders.resolve(destination.message().channelType());
+        result = EmptyChecks.isNull(sender)
+            ? WebhookDeliveryResult.failure(null, "notification sender unavailable")
+            : sender.send(destination.message());
+      }
+    } catch (RuntimeException failure) {
+      result = WebhookDeliveryResult.failure(null, SwallowedExceptionLogger.summary(failure));
+    }
+    return result;
   }
 
   private static String safeDeliveryError(String error) {

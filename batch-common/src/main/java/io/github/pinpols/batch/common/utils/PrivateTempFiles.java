@@ -54,7 +54,7 @@ public final class PrivateTempFiles {
     FileChannel channel = null;
     boolean acquired = false;
     try {
-      createOwnerOnlyFile(lockPath);
+      OwnerOnlyFiles.createFile(lockPath);
       channel = FileChannel.open(lockPath, StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS);
       FileLock lock = channel.lock();
       acquired = true;
@@ -182,10 +182,6 @@ public final class PrivateTempFiles {
         directory, prefix, suffix, OwnerOnlyFiles.attributes(directory, false));
     OwnerOnlyFiles.protectExisting(created, false);
     return created;
-  }
-
-  private static void createOwnerOnlyFile(Path path) throws IOException {
-    OwnerOnlyFiles.createFile(path);
   }
 
   private static Path privateDirectory() throws IOException {

@@ -131,7 +131,9 @@ final class TriggerRequestPersistence {
       return LaunchResponse.skipped(launchRequest.traceId());
     }
     // 新请求在同一事务内完成 request + outbox 写入，中间状态对外不可见，直接落 ACCEPTED。
-    int inserted = triggerRequestMapper.insert(buildAcceptedEntity(launchRequest, dedupKey));
+    TriggerRequestMapper requestMapper = triggerRequestMapper;
+    TriggerRequestEntity acceptedRequest = buildAcceptedEntity(launchRequest, dedupKey);
+    int inserted = requestMapper.insert(acceptedRequest);
     if (inserted == 0 && EmptyChecks.isNotNull(launchRequest.externalEventSource())) {
       TriggerRequestEntity eventExisting = triggerRequestMapper.selectByExternalEventIdentity(
           launchRequest.tenantId(),

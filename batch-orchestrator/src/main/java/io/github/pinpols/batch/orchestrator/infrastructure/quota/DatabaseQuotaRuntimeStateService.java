@@ -220,11 +220,6 @@ public class DatabaseQuotaRuntimeStateService implements QuotaRuntimeStateServic
   }
 
   private QuotaRuntimeStateEntity refreshState(
-      QuotaRuntimeStateEntity state, QuotaResetPolicy policy, Instant now, int slidingWindowHours) {
-    return refreshState(state, policy, now, slidingWindowHours, true);
-  }
-
-  private QuotaRuntimeStateEntity refreshState(
       QuotaRuntimeStateEntity state,
       QuotaResetPolicy policy,
       Instant now,

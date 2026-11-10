@@ -325,15 +325,18 @@ public class BatchDaySettleScheduler {
 
   private boolean hasExpectedOrUnresolvedWork(
       String tenantId, String calendarCode, LocalDate bizDate, Instant cutoffAt) {
-    return expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate(
-                tenantId, calendarCode, bizDate)
-            > 0
-        || calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(
-                tenantId, calendarCode, bizDate)
-            > 0
-        || EmptyChecks.isNotEmpty(batchDayWaitingLaunchMapper.selectWaitingByCalendarBizDate(
-            tenantId, calendarCode, bizDate, 1))
-        || jobDependencyWaitingLaunchMapper.countWaitingForCalendarBizDate(
+    boolean expectedOrWaitingWork =
+        expectedWorkOccurrenceMapper.countBlockingByCalendarBizDate(tenantId, calendarCode, bizDate)
+                > 0
+            || calendarDependencyWaitMapper.countWaitingByTenantCalendarBizDate(
+                    tenantId, calendarCode, bizDate)
+                > 0
+            || EmptyChecks.isNotEmpty(batchDayWaitingLaunchMapper.selectWaitingByCalendarBizDate(
+                tenantId, calendarCode, bizDate, 1));
+    if (expectedOrWaitingWork) {
+      return true;
+    }
+    boolean unresolvedLaunch = jobDependencyWaitingLaunchMapper.countWaitingForCalendarBizDate(
                 tenantId, calendarCode, bizDate)
             > 0
         || triggerRequestMapper.countUnlaunchedForCalendarBizDate(
@@ -341,8 +344,11 @@ public class BatchDaySettleScheduler {
                 calendarCode,
                 bizDate,
                 List.of("PENDING", "PROCESSING", "ACCEPTED", "WAITING"))
-            > 0
-        || batchDayInstanceMapper.countBlockingScheduledOccurrences(tenantId, calendarCode, bizDate)
+            > 0;
+    if (unresolvedLaunch) {
+      return true;
+    }
+    return batchDayInstanceMapper.countBlockingScheduledOccurrences(tenantId, calendarCode, bizDate)
             > 0
         || batchDayInstanceMapper.countUncoveredScheduledDefinitions(
                 tenantId, calendarCode, cutoffAt)

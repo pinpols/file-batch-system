@@ -421,12 +421,11 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
     List<FileErrorRecordEntity> rows = fileMappers.fileErrorRecordMapper.selectByQuery(query);
     long total = fileMappers.fileErrorRecordMapper.countByQuery(query);
     Map<Long, Optional<FileTemplateSecurityFlagsView>> policies = new HashMap<>();
-    return page(
-        pageRequest,
-        total,
-        rows,
-        row -> toFileErrorRecordResponse(
-            row, fileContentMaskingPolicy(query.tenantId(), row.getFileId(), policies)));
+    return page(pageRequest, total, rows, row -> {
+      FileTemplateSecurityFlagsView policy =
+          fileContentMaskingPolicy(query.tenantId(), row.getFileId(), policies);
+      return toFileErrorRecordResponse(row, policy);
+    });
   }
 
   public ConsoleFileChannelResponse fileChannelDetail(String tenantId, String channelCode) {

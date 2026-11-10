@@ -46,15 +46,19 @@ public final class FixedWidthMappingValidation {
       JsonNode start = entry.path("start");
       JsonNode length = entry.path("length");
       Guard.require(
-          target.isTextual()
-              && Texts.hasText(target.textValue())
-              && start.isIntegralNumber()
-              && start.canConvertToInt()
-              && start.intValue() >= 0
-              && length.isIntegralNumber()
-              && length.canConvertToInt()
-              && length.intValue() > 0,
+          isValidMapping(target, start, length),
           "FIXED_WIDTH field mappings require non-blank target, non-negative start and positive length");
     }
+  }
+
+  private static boolean isValidMapping(JsonNode target, JsonNode start, JsonNode length) {
+    return target.isTextual()
+        && Texts.hasText(target.textValue())
+        && start.isIntegralNumber()
+        && start.canConvertToInt()
+        && start.intValue() >= 0
+        && length.isIntegralNumber()
+        && length.canConvertToInt()
+        && length.intValue() > 0;
   }
 }

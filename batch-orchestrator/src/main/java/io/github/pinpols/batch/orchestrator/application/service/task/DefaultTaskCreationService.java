@@ -183,9 +183,12 @@ public class DefaultTaskCreationService implements TaskCreationService {
     }
     String taskType = EmptyChecks.isNull(task) ? null : task.getTaskType();
     Integer taskSeq = EmptyChecks.isNull(task) ? null : task.getTaskSeq();
-    return EmptyChecks.isNotBlank(taskType)
-        ? taskType + ":" + (EmptyChecks.isNull(taskSeq) ? 1 : taskSeq)
-        : "EXECUTION:" + (EmptyChecks.isNull(taskSeq) ? 1 : taskSeq);
+    boolean hasTaskType = EmptyChecks.isNotBlank(taskType);
+    int sequence = EmptyChecks.isNull(taskSeq) ? 1 : taskSeq;
+    if (hasTaskType) {
+      return taskType + ":" + sequence;
+    }
+    return "EXECUTION:" + sequence;
   }
 
   private String resolveStepType(JobTaskEntity task) {

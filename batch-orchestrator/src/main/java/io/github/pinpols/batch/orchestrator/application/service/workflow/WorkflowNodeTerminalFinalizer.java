@@ -74,9 +74,7 @@ public class WorkflowNodeTerminalFinalizer {
     boolean failed = nodeRuns.stream()
         .anyMatch(node -> WorkflowNodeRunStatus.FAILED.code().equals(node.getNodeStatus()));
     boolean dryRun = Boolean.TRUE.equals(currentRun.getDryRun());
-    String status = failed
-        ? (dryRun ? WorkflowRunStatus.FAILED_DRY_RUN.code() : WorkflowRunStatus.FAILED.code())
-        : (dryRun ? WorkflowRunStatus.SUCCESS_DRY_RUN.code() : WorkflowRunStatus.SUCCESS.code());
+    String status = terminalRunStatus(failed, dryRun);
     Instant finishedAt = BatchDateTimeSupport.utcNow();
     int updated =
         workflowMappers.workflowRunMapper.updateStatus(UpdateWorkflowRunStatusParam.builder()
@@ -93,5 +91,18 @@ public class WorkflowNodeTerminalFinalizer {
       log.debug(
           "workflow node completion finalization lost CAS: workflowRunId={}", currentRun.getId());
     }
+  }
+
+  private static String terminalRunStatus(boolean failed, boolean dryRun) {
+    if (failed && dryRun) {
+      return WorkflowRunStatus.FAILED_DRY_RUN.code();
+    }
+    if (failed) {
+      return WorkflowRunStatus.FAILED.code();
+    }
+    if (dryRun) {
+      return WorkflowRunStatus.SUCCESS_DRY_RUN.code();
+    }
+    return WorkflowRunStatus.SUCCESS.code();
   }
 }

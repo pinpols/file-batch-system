@@ -189,8 +189,10 @@ public class OutboxPollScheduler {
         log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
         return;
       }
-      lockingTaskExecutor.executeWithLock(
-          (LockingTaskExecutor.Task) () -> doPoll(assignment), lockConfig(assignment));
+      LockingTaskExecutor executor = lockingTaskExecutor;
+      LockingTaskExecutor.Task pollTask = () -> executeAdvance(assignment);
+      LockConfiguration pollLock = lockConfig(assignment);
+      executor.executeWithLock(pollTask, pollLock);
     } catch (Throwable t) {
       rethrowFatal(t);
       log.error("Outbox poll failed", t);
@@ -220,9 +222,10 @@ public class OutboxPollScheduler {
         log.warn("Skipping Outbox poll: shard coordination backend is unavailable");
         return;
       }
-      lockingTaskExecutor.executeWithLock(
-          (LockingTaskExecutor.Task) () -> holder[0] = executeAdvance(assignment),
-          lockConfig(assignment));
+      LockingTaskExecutor executor = lockingTaskExecutor;
+      LockingTaskExecutor.Task pollTask = () -> holder[0] = executeAdvance(assignment);
+      LockConfiguration pollLock = lockConfig(assignment);
+      executor.executeWithLock(pollTask, pollLock);
     } catch (DataAccessException dae) {
       // 数据库连接/查询异常 — 瞬时故障（PG 重启 / 网络抖动），自动退避重试，不需要人介入
       // 用 WARN 而非 ERROR：ERROR 留给真正不可恢复 / 需要人介入的场景
@@ -303,10 +306,6 @@ public class OutboxPollScheduler {
           failureSummary);
       log.debug("Failed to reset stale PUBLISHING events", ex);
     }
-  }
-
-  private void doPoll(ShardAssignment assignment) {
-    executeAdvance(assignment);
   }
 
   /**

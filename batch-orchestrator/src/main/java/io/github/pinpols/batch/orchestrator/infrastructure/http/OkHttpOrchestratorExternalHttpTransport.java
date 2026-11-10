@@ -104,7 +104,8 @@ public class OkHttpOrchestratorExternalHttpTransport implements OutboundHttpTran
   private void applyGuardedRoute(OkHttpClient.Builder clientBuilder, OutboundHttpRequest request)
       throws UnknownHostException {
     String requestHost = request.uri().getHost();
-    List<InetAddress> validatedAddresses = List.copyOf(guardedDns.lookup(requestHost));
+    List<InetAddress> resolvedAddresses = guardedDns.lookup(requestHost);
+    List<InetAddress> validatedAddresses = List.copyOf(resolvedAddresses);
     if (EmptyChecks.isEmpty(validatedAddresses)) {
       throw new UnknownHostException("guarded DNS returned no address for " + requestHost);
     }

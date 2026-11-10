@@ -346,13 +346,7 @@ public class ValidateStep implements ImportStageStep {
           validatedCount += result.validCount();
           loadedCandidateCount += result.validCount();
           if (!result.success()) {
-            ImportStageResult failureResult = ImportStageResult.failure(
-                stage(),
-                result.errorCode(),
-                "error.import.validate.row_invalid",
-                new Object[] {result.errorMessage()},
-                result.errorMessage(),
-                objectMapper);
+            ImportStageResult failureResult = chunkFailure(result);
             return new StreamingValidationResult(
                 validatedCount, loadedCandidateCount, failureResult);
           }
@@ -365,18 +359,22 @@ public class ValidateStep implements ImportStageStep {
         validatedCount += result.validCount();
         loadedCandidateCount += result.validCount();
         if (!result.success()) {
-          ImportStageResult failureResult = ImportStageResult.failure(
-              stage(),
-              result.errorCode(),
-              "error.import.validate.row_invalid",
-              new Object[] {result.errorMessage()},
-              result.errorMessage(),
-              objectMapper);
+          ImportStageResult failureResult = chunkFailure(result);
           return new StreamingValidationResult(validatedCount, loadedCandidateCount, failureResult);
         }
       }
     }
     return new StreamingValidationResult(validatedCount, loadedCandidateCount, null);
+  }
+
+  private ImportStageResult chunkFailure(ChunkProcessResult result) {
+    return ImportStageResult.failure(
+        stage(),
+        result.errorCode(),
+        "error.import.validate.row_invalid",
+        new Object[] {result.errorMessage()},
+        result.errorMessage(),
+        objectMapper);
   }
 
   private void writeValidationResult(

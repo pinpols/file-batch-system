@@ -164,12 +164,14 @@ public class JobDependencyWaitingLaunchService {
       return;
     }
     if (EmptyChecks.isNull(original)) {
-      requireWaitWrite(waitingMapper.markCancelled(tenantId, requestId));
+      int cancelled = waitingMapper.markCancelled(tenantId, requestId);
+      requireWaitWrite(cancelled);
       return;
     }
     String status = original.getRequestStatus();
     if (TriggerRequestStatus.LAUNCHED.code().equals(status)) {
-      requireWaitWrite(waitingMapper.markReleased(tenantId, requestId));
+      int released = waitingMapper.markReleased(tenantId, requestId);
+      requireWaitWrite(released);
       return;
     }
     if (List.of(
@@ -177,7 +179,8 @@ public class JobDependencyWaitingLaunchService {
             TriggerRequestStatus.DUPLICATE.code(),
             TriggerRequestStatus.GIVE_UP.code())
         .contains(status)) {
-      requireWaitWrite(waitingMapper.markCancelled(tenantId, requestId));
+      int cancelled = waitingMapper.markCancelled(tenantId, requestId);
+      requireWaitWrite(cancelled);
       return;
     }
     if (restoreWaitRequest(current, original).isPresent()) {
@@ -185,11 +188,14 @@ public class JobDependencyWaitingLaunchService {
       return;
     }
     if (waitingMapper.hasJobInstanceForRequest(tenantId, original.getId())) {
-      requireWaitWrite(waitingMapper.recordCheck(tenantId, requestId, "LAUNCH_ALREADY_PREPARED"));
+      int checked = waitingMapper.recordCheck(tenantId, requestId, "LAUNCH_ALREADY_PREPARED");
+      requireWaitWrite(checked);
       return;
     }
-    requireWaitWrite(waitingMapper.recordCheck(tenantId, requestId, "LAUNCH_PAYLOAD_INVALID"));
-    requireWaitWrite(waitingMapper.markCancelled(tenantId, requestId));
+    int checked = waitingMapper.recordCheck(tenantId, requestId, "LAUNCH_PAYLOAD_INVALID");
+    requireWaitWrite(checked);
+    int cancelled = waitingMapper.markCancelled(tenantId, requestId);
+    requireWaitWrite(cancelled);
     int updatedRows = triggerRequestMapper.updateAcceptance(
         tenantId, requestId, TriggerRequestStatus.REJECTED.code(), null);
     requireWaitWrite(updatedRows);

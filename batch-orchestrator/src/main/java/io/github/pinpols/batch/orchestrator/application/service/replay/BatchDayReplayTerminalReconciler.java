@@ -204,11 +204,13 @@ public class BatchDayReplayTerminalReconciler {
       String tenantId, Long sessionId) {
     BatchDayReplaySessionEntity candidate = sessionMapper.selectById(tenantId, sessionId);
     if (EmptyChecks.isNull(candidate)) return null;
-    if (EmptyChecks.isNotNull(candidate.replayOperationId())
-        && EmptyChecks.isNull(replayOperationMapper.lockForProgressRefresh(
-            tenantId, candidate.replayOperationId()))) {
-      throw new IllegalStateException(
-          "replay operation not found while reconciling child session " + sessionId);
+    if (EmptyChecks.isNotNull(candidate.replayOperationId())) {
+      Long lockedOperationId =
+          replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId());
+      if (EmptyChecks.isNull(lockedOperationId)) {
+        throw new IllegalStateException(
+            "replay operation not found while reconciling child session " + sessionId);
+      }
     }
     BatchDayReplaySessionEntity locked = sessionMapper.selectForUpdate(tenantId, sessionId);
     if (EmptyChecks.isNull(locked)) return null;

@@ -75,17 +75,12 @@ public final class RetryRequeueCoordinator {
   }
 
   void requeuePartition(String tenantId, Long partitionId, String eventKey) {
-    requeuePartition(tenantId, partitionId, eventKey, false);
+    requeuePartition(tenantId, partitionId, eventKey, false, null);
   }
 
   void requeuePartitionAfterVerifiedUnknownOutcome(
       String tenantId, Long partitionId, String expectedSourceReference, String eventKey) {
     requeuePartition(tenantId, partitionId, eventKey, true, expectedSourceReference);
-  }
-
-  private void requeuePartition(
-      String tenantId, Long partitionId, String eventKey, boolean allowVerifiedUnknownOutcome) {
-    requeuePartition(tenantId, partitionId, eventKey, allowVerifiedUnknownOutcome, null);
   }
 
   private void requeuePartition(

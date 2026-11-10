@@ -147,7 +147,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void unregisterByWorkflowCode(String tenantId, String workflowCode) {
     runManaged("unregisterByWorkflowCode", () -> {
-      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
+      deleteQuartzForDescriptor(descriptor);
       triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
     });
   }
@@ -160,7 +162,9 @@ public class TriggerSchedulerFacade implements TriggerRegistrationService {
   @Override
   public void pauseByWorkflowCode(String tenantId, String workflowCode) {
     runManaged("pauseByWorkflowCode", () -> {
-      deleteQuartzForDescriptor(triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode));
+      TriggerDescriptor descriptor =
+          triggerDefinitionLoader.loadByWorkflowCode(tenantId, workflowCode);
+      deleteQuartzForDescriptor(descriptor);
       triggerDefinitionLoader.setWorkflowScheduleEnabled(tenantId, workflowCode, false);
     });
   }

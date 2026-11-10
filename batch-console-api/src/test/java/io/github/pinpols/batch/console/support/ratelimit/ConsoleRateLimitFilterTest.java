@@ -2,8 +2,10 @@ package io.github.pinpols.batch.console.support.ratelimit;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -24,6 +26,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -331,6 +334,46 @@ class ConsoleRateLimitFilterTest {
 
     verify(filterChain).doFilter(any(), any());
     verifyNoInteractions(rateLimiter);
+  }
+
+  @Test
+  @DisplayName("路径同时匹配多种限流时按顺序检查，超限后不继续执行")
+  void shouldCheckOverlappingLimitsInOrderAndStopWhenRejected() throws Exception {
+    String prefix = "/api/console/ops/triggers/";
+    ConsoleRateLimitProperties props = new ConsoleRateLimitProperties();
+    props.setSensitiveOpUserLimitPerMinute(5);
+    props.setExpensiveOpPathPrefixes(List.of(prefix));
+    props.setFileOpPathPrefixes(List.of(prefix));
+    ConsoleLoginIpRateLimiter loginLimiter = new ConsoleLoginIpRateLimiter(
+        rateLimiter,
+        props,
+        new ConsoleSecurityProperties(),
+        RedisRateLimitCircuitBreaker.forTesting(props));
+    ConsoleRateLimitFilter overlappingFilter = new ConsoleRateLimitFilter(
+        rateLimiter,
+        props,
+        responseWriter,
+        RedisRateLimitCircuitBreaker.forTesting(props),
+        loginLimiter);
+    authenticateAs("alice");
+    when(rateLimiter.tryAcquire(eq("sensitive:user:alice"), anyInt())).thenReturn(true);
+    when(rateLimiter.tryAcquire(eq("expensive:user:alice"), anyInt())).thenReturn(false);
+
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", prefix + "execute");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    overlappingFilter.doFilter(request, response, filterChain);
+
+    InOrder order = inOrder(rateLimiter);
+    order.verify(rateLimiter).tryAcquire(eq("sensitive:user:alice"), anyInt());
+    order.verify(rateLimiter).tryAcquire(eq("expensive:user:alice"), anyInt());
+    verify(rateLimiter, never()).tryAcquire(eq("fileop:user:alice"), anyInt());
+    verify(filterChain, never()).doFilter(any(), any());
+    verify(responseWriter)
+        .write(
+            eq(response),
+            eq(HttpStatus.TOO_MANY_REQUESTS),
+            eq(ResultCode.RATE_LIMITED),
+            anyString());
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────

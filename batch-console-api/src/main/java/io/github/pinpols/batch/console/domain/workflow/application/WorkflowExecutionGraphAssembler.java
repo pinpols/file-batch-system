@@ -68,9 +68,10 @@ public final class WorkflowExecutionGraphAssembler {
       throw invalidSnapshot();
     }
     List<FrozenNode> frozenNodes = snapshot.nodes();
-    if (!Objects.equals(snapshot.schemaVersion(), 2)
+    boolean snapshotIdentityIsInvalid = !Objects.equals(snapshot.schemaVersion(), 2)
         || !Objects.equals(snapshot.workflowDefinitionId(), run.getWorkflowDefinitionId())
-        || !Objects.equals(snapshot.workflowVersion(), run.getWorkflowVersionSnapshot())
+        || !Objects.equals(snapshot.workflowVersion(), run.getWorkflowVersionSnapshot());
+    if (snapshotIdentityIsInvalid
         || EmptyChecks.isEmpty(frozenNodes)
         || EmptyChecks.isNull(snapshot.edges())) {
       throw invalidSnapshot();
@@ -80,6 +81,20 @@ public final class WorkflowExecutionGraphAssembler {
       latest.merge(node.getNodeCode(), node, WorkflowExecutionGraphAssembler::newest);
     }
     Set<String> codes = new HashSet<>();
+    List<NodeProgress> nodes = buildNodes(run, frozenNodes, latest, codes);
+    List<Edge> edges = buildEdges(snapshot, codes);
+    return response
+        .snapshotAvailable(true)
+        .nodes(List.copyOf(nodes))
+        .edges(List.copyOf(edges))
+        .build();
+  }
+
+  private static List<NodeProgress> buildNodes(
+      WorkflowExecutionSnapshotView run,
+      List<FrozenNode> frozenNodes,
+      Map<String, WorkflowExecutionNodeView> latest,
+      Set<String> codes) {
     List<NodeProgress> nodes = new ArrayList<>();
     for (FrozenNode frozen : frozenNodes) {
       if (Boolean.FALSE.equals(frozen.enabled())) continue;
@@ -131,6 +146,10 @@ public final class WorkflowExecutionGraphAssembler {
       }
     }
     if (!codes.containsAll(latest.keySet())) throw invalidSnapshot();
+    return nodes;
+  }
+
+  private static List<Edge> buildEdges(Snapshot snapshot, Set<String> codes) {
     List<Edge> edges = new ArrayList<>();
     for (FrozenEdge edge : snapshot.edges()) {
       if (Boolean.FALSE.equals(edge.enabled())) continue;
@@ -138,11 +157,7 @@ public final class WorkflowExecutionGraphAssembler {
         throw invalidSnapshot();
       edges.add(new Edge(edge.fromNodeCode(), edge.toNodeCode(), edge.edgeType()));
     }
-    return response
-        .snapshotAvailable(true)
-        .nodes(List.copyOf(nodes))
-        .edges(List.copyOf(edges))
-        .build();
+    return edges;
   }
 
   private static WorkflowExecutionNodeView newest(

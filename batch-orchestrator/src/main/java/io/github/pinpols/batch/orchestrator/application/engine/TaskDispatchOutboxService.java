@@ -198,23 +198,25 @@ public class TaskDispatchOutboxService {
       return expected;
     }
     Map<String, Object> params = parsePayloadMap(jobInstance.getParamsSnapshot());
-    return firstPositiveInt(
-        params.get("partitionCount"),
-        params.get("estimatedPartitionCount"),
-        params.get("staticPartitionCount"),
-        params.get("shardCount"),
-        params.get("partitions"),
-        nestedValue(params, "effectiveParams", "partitionCount"),
-        nestedValue(params, "requestParams", "partitionCount"),
-        nestedValue(params, "defaultParams", "partitionCount"),
-        nestedValue(params, "effectiveParams", "estimatedPartitionCount"),
-        nestedValue(params, "requestParams", "estimatedPartitionCount"),
-        nestedValue(params, "effectiveParams", "staticPartitionCount"),
-        nestedValue(params, "requestParams", "staticPartitionCount"),
-        nestedValue(params, "effectiveParams", "shardCount"),
-        nestedValue(params, "requestParams", "shardCount"),
-        nestedValue(params, "effectiveParams", "partitions"),
-        nestedValue(params, "requestParams", "partitions"));
+    Object[] partitionCountCandidates = {
+      params.get("partitionCount"),
+      params.get("estimatedPartitionCount"),
+      params.get("staticPartitionCount"),
+      params.get("shardCount"),
+      params.get("partitions"),
+      nestedValue(params, "effectiveParams", "partitionCount"),
+      nestedValue(params, "requestParams", "partitionCount"),
+      nestedValue(params, "defaultParams", "partitionCount"),
+      nestedValue(params, "effectiveParams", "estimatedPartitionCount"),
+      nestedValue(params, "requestParams", "estimatedPartitionCount"),
+      nestedValue(params, "effectiveParams", "staticPartitionCount"),
+      nestedValue(params, "requestParams", "staticPartitionCount"),
+      nestedValue(params, "effectiveParams", "shardCount"),
+      nestedValue(params, "requestParams", "shardCount"),
+      nestedValue(params, "effectiveParams", "partitions"),
+      nestedValue(params, "requestParams", "partitions")
+    };
+    return firstPositiveInt(partitionCountCandidates);
   }
 
   @SuppressWarnings("unchecked")

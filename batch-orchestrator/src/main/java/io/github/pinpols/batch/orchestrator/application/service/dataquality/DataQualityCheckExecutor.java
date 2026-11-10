@@ -99,8 +99,7 @@ public class DataQualityCheckExecutor {
       }
     }
 
-    GateStatus status =
-        anyBlocker ? GateStatus.BLOCKED : (anyWarn ? GateStatus.WARN : GateStatus.PASS);
+    GateStatus status = gateStatus(anyBlocker, anyWarn);
     if (properties.getMode() == DataQualityProperties.Mode.SHADOW && status == GateStatus.BLOCKED) {
       log.warn(
           "DQ blocker findings observed in SHADOW mode; result promotion remains unchanged:"
@@ -197,6 +196,16 @@ public class DataQualityCheckExecutor {
     }
     return !(min instanceof Number minN && actual < minN.longValue())
         && !(max instanceof Number maxN && actual > maxN.longValue());
+  }
+
+  private static GateStatus gateStatus(boolean anyBlocker, boolean anyWarn) {
+    if (anyBlocker) {
+      return GateStatus.BLOCKED;
+    }
+    if (anyWarn) {
+      return GateStatus.WARN;
+    }
+    return GateStatus.PASS;
   }
 
   private void writeCheckWithoutDetails(

@@ -125,123 +125,135 @@ public class GenerateStep implements ExportStageStep {
           "export payload missing",
           objectMapper);
     }
-    Path generatedFile = null;
-    // ADR-038 P3:续跑激活时,失败要保留残文件供下次 truncate+续写(类比 Import 失败保留 staging)。
-    boolean keepPartialFileOnFailure = false;
+    GenerationAttempt attempt = new GenerationAttempt();
     try {
-      Map<String, Object> attrs = context.getAttributes();
-      String exportDataRef = resolveExportDataRef(context);
-      if (DryRunGuard.fromAttributes(attrs).isDryRun()
-          && WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE.equalsIgnoreCase(exportDataRef)) {
-        return ExportStageResult.failure(
-            stage(),
-            "EXPORT_DRY_RUN_SQL_UNAVAILABLE",
-            "error.export.generate.dry_run_sql_unavailable",
-            new Object[0],
-            "SQL template export is unavailable in dry-run because SQL planning may have side effects",
-            objectMapper);
-      }
-      attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
-      ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
-      ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
-      Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
-      if (batch.isEmpty()) {
-        return ExportStageResult.failure(
-            stage(),
-            "EXPORT_BATCH_NOT_FOUND",
-            "error.export.batch_not_found",
-            new Object[0],
-            "export batch not found",
-            objectMapper);
-      }
-      Object batchId = batch.get("id");
-      ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
-      if (EmptyChecks.isNotNull(rowLimitFailure)) {
-        return rowLimitFailure;
-      }
-      int pageSize = resolvePageSize(context);
-      int chunkSize = resolveChunkSize(context);
-      Object configuredFileFormatType = attrs.getOrDefault(
-          PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
-      String fileFormatType = String.valueOf(configuredFileFormatType);
-      // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
-      ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
-      attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
-      attrs.put(ExportRuntimeKeys.EXPORT_WITH_BOM, encoding.withBom());
-      attrs.put(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR, encoding.lineSeparator());
-
-      // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
-      // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
-      Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
-      boolean checkpointEnabled = checkpointInstanceId != null;
-      generatedFile = checkpointEnabled
-          ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
-          : createGeneratedFile(context, exportPayload, fileFormatType);
-
-      GenerateCheckpoint checkpoint = null;
-      if (checkpointEnabled) {
-        ProcessingPosition pos = positionStore.load(
-            context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
-        boolean checkpointCompletedFileExists = pos.completed() && Files.exists(generatedFile);
-        if (checkpointCompletedFileExists) {
-          // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
-          // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
-          long expectedSize =
-              GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
-          long actualSize = Files.size(generatedFile);
-          boolean completedFileSizeMatchesCheckpoint =
-              expectedSize >= 0 && actualSize == expectedSize;
-          if (completedFileSizeMatchesCheckpoint) {
-            long maxRows = effectiveMaxRows();
-            if (maxRows > 0 && pos.processedCount() > maxRows) {
-              keepPartialFileOnFailure = true;
-              throw new ExportRowLimitExceededException(pos.processedCount(), maxRows);
-            }
-            // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
-            return completeGeneration(
-                context, context.getAttributes(), batch, generatedFile, pos.processedCount());
-          }
-          logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
-          // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
-        }
-        checkpoint = GenerateCheckpoint.open(
-            positionStore,
-            cursorCodec,
-            context.getTenantId(),
-            checkpointInstanceId,
-            pos,
-            generatedFile);
-        keepPartialFileOnFailure = true;
-      }
-
-      ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
-      ExportFormatContext formatCtx = ExportFormatContext.builder()
-          .batch(batch)
-          .batchId(batchId)
-          .pageSize(pageSize)
-          .chunkSize(chunkSize)
-          .maxRows(effectiveMaxRows())
-          .generatedFile(generatedFile)
-          .jobContext(context)
-          .dataPlugin(dataPlugin)
-          .dataCtx(dataCtx)
-          .charset(encoding.charset())
-          .withBom(encoding.withBom())
-          .lineSeparator(encoding.lineSeparator())
-          .checkpoint(checkpoint)
-          .progressRegistry(progressRegistry)
-          .build();
-      long recordCount = strategy.generate(formatCtx);
-
-      if (checkpoint != null) {
-        // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
-        checkpoint.complete(recordCount, Files.size(generatedFile));
-      }
-
-      return completeGeneration(context, attrs, batch, generatedFile, recordCount);
+      return generateExport(context, exportPayload, attempt);
     } catch (Exception ex) {
-      return failGeneration(context, exportPayload, generatedFile, keepPartialFileOnFailure, ex);
+      return failGeneration(
+          context, exportPayload, attempt.generatedFile, attempt.keepPartialFileOnFailure, ex);
     }
+  }
+
+  private ExportStageResult generateExport(
+      ExportJobContext context, ExportPayload exportPayload, GenerationAttempt attempt)
+      throws Exception {
+    Map<String, Object> attrs = context.getAttributes();
+    String exportDataRef = resolveExportDataRef(context);
+    if (DryRunGuard.fromAttributes(attrs).isDryRun()
+        && WorkerPluginIds.EXPORT_DATA_SQL_TEMPLATE.equalsIgnoreCase(exportDataRef)) {
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_DRY_RUN_SQL_UNAVAILABLE",
+          "error.export.generate.dry_run_sql_unavailable",
+          new Object[0],
+          "SQL template export is unavailable in dry-run because SQL planning may have side effects",
+          objectMapper);
+    }
+    attrs.put(ExportRuntimeKeys.EXPORT_DATA_REF, exportDataRef);
+    ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
+    ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
+    Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
+    if (EmptyChecks.isEmpty(batch)) {
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_BATCH_NOT_FOUND",
+          "error.export.batch_not_found",
+          new Object[0],
+          "export batch not found",
+          objectMapper);
+    }
+    Object batchId = batch.get("id");
+    ExportStageResult rowLimitFailure = validateExportRowLimit(batch);
+    if (EmptyChecks.isNotNull(rowLimitFailure)) {
+      return rowLimitFailure;
+    }
+    int pageSize = resolvePageSize(context);
+    int chunkSize = resolveChunkSize(context);
+    Object configuredFileFormatType = attrs.getOrDefault(
+        PipelineRuntimeKeys.EXPORT_FILE_FORMAT_TYPE, FileTemplateFormat.JSON.code());
+    String fileFormatType = String.valueOf(configuredFileFormatType);
+    // 导出编码选项：target_charset / with_bom / line_separator 由模板声明，透传给格式策略与 REGISTER 登记。
+    ExportEncodingOptions encoding = resolveExportEncodingOptions(context, fileFormatType);
+    attrs.put(ExportRuntimeKeys.EXPORT_CHARSET, encoding.charset().name());
+    attrs.put(ExportRuntimeKeys.EXPORT_WITH_BOM, encoding.withBom());
+    attrs.put(ExportRuntimeKeys.EXPORT_LINE_SEPARATOR, encoding.lineSeparator());
+
+    // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
+    // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
+    Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
+    boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
+    attempt.generatedFile = checkpointEnabled
+        ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
+        : createGeneratedFile(context, exportPayload, fileFormatType);
+
+    GenerateCheckpoint checkpoint = null;
+    if (checkpointEnabled) {
+      ProcessingPosition pos =
+          positionStore.load(context.getTenantId(), checkpointInstanceId, ProcessingStage.GENERATE);
+      boolean checkpointCompletedFileExists =
+          pos.completed() && Files.exists(attempt.generatedFile);
+      if (checkpointCompletedFileExists) {
+        // P1-2 文件指纹校验:GENERATE 已 completed,但完成 marker 记录的字节数须与残文件实际字节数一致
+        // 才幂等跳过。双故障(完成后 fresh 半写又崩)下字节数不符 → 拒绝跳过、落到下面走全量重写(安全)。
+        long expectedSize =
+            GenerateCheckpoint.parseCompletedFileSize(cursorCodec, pos.positionMarker());
+        long actualSize = Files.size(attempt.generatedFile);
+        boolean completedFileSizeMatchesCheckpoint =
+            expectedSize >= 0 && actualSize == expectedSize;
+        if (completedFileSizeMatchesCheckpoint) {
+          long maxRows = effectiveMaxRows();
+          if (maxRows > 0 && pos.processedCount() > maxRows) {
+            attempt.keepPartialFileOnFailure = true;
+            throw new ExportRowLimitExceededException(pos.processedCount(), maxRows);
+          }
+          // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
+          return completeGeneration(
+              context, context.getAttributes(), batch, attempt.generatedFile, pos.processedCount());
+        }
+        logFingerprintMismatch(context, checkpointInstanceId, expectedSize, actualSize);
+        // 落到 open(pos.completed()) → resuming=false → generatePaged truncate 到 0 → 全量重写。
+      }
+      checkpoint = GenerateCheckpoint.open(
+          positionStore,
+          cursorCodec,
+          context.getTenantId(),
+          checkpointInstanceId,
+          pos,
+          attempt.generatedFile);
+      attempt.keepPartialFileOnFailure = true;
+    }
+
+    ExportFormatStrategy strategy = formatStrategyRegistry.resolve(fileFormatType);
+    ExportFormatContext formatCtx = ExportFormatContext.builder()
+        .batch(batch)
+        .batchId(batchId)
+        .pageSize(pageSize)
+        .chunkSize(chunkSize)
+        .maxRows(effectiveMaxRows())
+        .generatedFile(attempt.generatedFile)
+        .jobContext(context)
+        .dataPlugin(dataPlugin)
+        .dataCtx(dataCtx)
+        .charset(encoding.charset())
+        .withBom(encoding.withBom())
+        .lineSeparator(encoding.lineSeparator())
+        .checkpoint(checkpoint)
+        .progressRegistry(progressRegistry)
+        .build();
+    long recordCount = strategy.generate(formatCtx);
+
+    if (EmptyChecks.isNotNull(checkpoint)) {
+      // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
+      checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
+    }
+
+    return completeGeneration(context, attrs, batch, attempt.generatedFile, recordCount);
+  }
+
+  /** 续跑失败时保留残文件，供下次截断后续写。 */
+  private static final class GenerationAttempt {
+    private Path generatedFile;
+    private boolean keepPartialFileOnFailure;
   }
 
   /** 在读取明细和创建生成文件前，先检查批次声明的行数上限。 */

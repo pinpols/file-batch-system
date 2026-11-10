@@ -60,12 +60,18 @@ public class ImportScannerProperties {
           || EmptyChecks.isNull(binding.getObjectPrefix())) {
         continue;
       }
-      if ((EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix))
-          || EmptyChecks.isNull(batchManifestSuffix)
-          || batchManifestSuffix.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
-          || EmptyChecks.isNull(binding.getManifestKeyTemplate())
-          || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)
-          || !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
+      if (EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix)) {
+        return false;
+      }
+      if (EmptyChecks.isNull(batchManifestSuffix)
+          || batchManifestSuffix.isBlank()) { // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+        return false;
+      }
+      if (EmptyChecks.isNull(binding.getManifestKeyTemplate())
+          || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)) {
+        return false;
+      }
+      if (!seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
         return false;
       }
     }

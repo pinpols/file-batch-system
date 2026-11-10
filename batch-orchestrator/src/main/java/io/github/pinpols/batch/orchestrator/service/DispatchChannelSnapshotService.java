@@ -89,9 +89,8 @@ public class DispatchChannelSnapshotService {
     if (policy == ConfigVersionPolicy.USE_SPECIFIED_VERSION) {
       throw unavailableConfiguration();
     }
-    Map<String, Object> selectedParams = policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
-        ? EmptyChecks.isNull(originalEffectiveParams) ? Map.of() : originalEffectiveParams
-        : effectiveParams;
+    Map<String, Object> selectedParams =
+        selectedReplayParams(policy, originalEffectiveParams, effectiveParams);
     Map<String, Object> selectedParamsWithoutCallerSnapshots =
         withoutCallerSnapshots(selectedParams);
     Set<String> requestedChannels = channelCodes(selectedParamsWithoutCallerSnapshots);
@@ -375,6 +374,19 @@ public class DispatchChannelSnapshotService {
     } catch (ArithmeticException | NumberFormatException invalidNumber) {
       return 0;
     }
+  }
+
+  private static Map<String, Object> selectedReplayParams(
+      ConfigVersionPolicy policy,
+      Map<String, Object> originalEffectiveParams,
+      Map<String, Object> effectiveParams) {
+    if (policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG) {
+      if (EmptyChecks.isNull(originalEffectiveParams)) {
+        return Map.of();
+      }
+      return originalEffectiveParams;
+    }
+    return effectiveParams;
   }
 
   private BizException unavailableConfiguration() {

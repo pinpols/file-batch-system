@@ -1005,6 +1005,17 @@ public class TenantConfigPackageExcelApplyService {
     workflowWriteSupport.appendVersionSnapshot(snapshotCommand);
   }
 
+  private static Long singleJobDefinitionId(
+      JobDefinitionView singleJob, WorkflowDefinitionEntity existing) {
+    if (EmptyChecks.isNotNull(singleJob)) {
+      return singleJob.getId();
+    }
+    if (EmptyChecks.isNull(existing)) {
+      return null;
+    }
+    return existing.getSingleJobDefinitionId();
+  }
+
   /** 省略列沿用当前定义，显式列按本次配置包值写入；不在字段装配阶段修改图或版本。 */
   private void populateWorkflowDefinitionFields(
       WorkflowDefinitionUpsertParam defParam,
@@ -1024,9 +1035,7 @@ public class TenantConfigPackageExcelApplyService {
     boolean enabled = parseBoolean(requestedEnabled, currentEnabled);
     defParam.setEnabled(enabled);
 
-    Long workflowDefinitionId = EmptyChecks.isNull(singleJob)
-        ? (EmptyChecks.isNull(existing) ? null : existing.getSingleJobDefinitionId())
-        : singleJob.getId();
+    Long workflowDefinitionId = singleJobDefinitionId(singleJob, existing);
     defParam.setSingleJobDefinitionId(workflowDefinitionId);
 
     String requestedScheduleEnabled = row.get(COL_SCHEDULE_ENABLED);

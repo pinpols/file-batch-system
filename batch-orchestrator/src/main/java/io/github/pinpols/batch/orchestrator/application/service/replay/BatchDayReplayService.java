@@ -1198,8 +1198,9 @@ public class BatchDayReplayService {
     BatchDayReplaySessionEntity candidate = loadOrThrow(tenantId, sessionId);
     if (EmptyChecks.isNotNull(candidate.replayOperationId())) {
       replayOperationMapper.setTenantContext(tenantId);
-      if (EmptyChecks.isNull(
-          replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId()))) {
+      Long lockedOperationId =
+          replayOperationMapper.lockForProgressRefresh(tenantId, candidate.replayOperationId());
+      if (EmptyChecks.isNull(lockedOperationId)) {
         throw BizException.of(ResultCode.NOT_FOUND, "error.batch_day_replay.operation_not_found");
       }
     }

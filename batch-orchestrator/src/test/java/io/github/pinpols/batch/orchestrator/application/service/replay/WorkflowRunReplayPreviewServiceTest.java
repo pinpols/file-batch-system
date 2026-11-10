@@ -67,6 +67,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -434,6 +435,19 @@ class WorkflowRunReplayPreviewServiceTest {
     assertThat(operationCaptor.getValue().snapshotPayload())
         .isEqualTo(previewToken.snapshotPayload());
     assertThat(operationCaptor.getValue().sourceWorkflowRunId()).isEqualTo(RUN_ID);
+    InOrder persistenceOrder = Mockito.inOrder(previewTokens, operations);
+    persistenceOrder.verify(previewTokens).selectForUpdate(TENANT, previewToken.tokenHash());
+    persistenceOrder
+        .verify(previewTokens)
+        .consume(
+            ArgumentMatchers.eq(TENANT),
+            ArgumentMatchers.eq(previewToken.tokenHash()),
+            ArgumentMatchers.any());
+    persistenceOrder.verify(operations).insert(ArgumentMatchers.any());
+    persistenceOrder
+        .verify(operations)
+        .selectByIdentity(TENANT, preview.operationKey().toString());
+    persistenceOrder.verify(previewTokens).linkOperation(TENANT, previewToken.tokenHash(), 808L);
   }
 
   @Test

@@ -9,7 +9,9 @@ import io.github.pinpols.batch.trigger.auth.TriggerApiKeyPrincipal;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchResponse;
 import io.github.pinpols.batch.trigger.domain.ExternalEventLaunchStatus;
 import io.github.pinpols.batch.trigger.domain.TriggerLaunchStatus;
+import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchInput;
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
+import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
 import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import io.github.pinpols.batch.trigger.web.request.ExternalEventLaunchRequest;
 import io.github.pinpols.batch.trigger.web.request.ScheduledOccurrenceCatchUpRequest;
@@ -46,12 +48,10 @@ public class TriggerController {
       @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
           String traceId,
       @Valid @RequestBody TriggerLaunchRequest request) {
-    LaunchResponse result = applicationService.launch(
-        externalEventSourcePrincipal(),
-        TriggerCommandInputMapper.toInput(request),
-        idempotencyKey,
-        requestId,
-        traceId);
+    TriggerApiApplicationService service = applicationService;
+    TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
+    TriggerLaunchInput input = TriggerCommandInputMapper.toInput(request);
+    LaunchResponse result = service.launch(principal, input, idempotencyKey, requestId, traceId);
     return CommonResponse.success(result);
   }
 
@@ -63,12 +63,11 @@ public class TriggerController {
       @RequestHeader(value = CommonConstants.DEFAULT_TRACE_ID_HEADER, required = false)
           String traceId,
       @Valid @RequestBody ExternalEventLaunchRequest request) {
-    ExternalEventLaunchResponse result = applicationService.launchEvent(
-        externalEventSourcePrincipal(),
-        TriggerCommandInputMapper.toInput(request),
-        idempotencyKey,
-        requestId,
-        traceId);
+    TriggerApiApplicationService service = applicationService;
+    TriggerApiKeyPrincipal principal = externalEventSourcePrincipal();
+    ExternalEventLaunchInput input = TriggerCommandInputMapper.toInput(request);
+    ExternalEventLaunchResponse result =
+        service.launchEvent(principal, input, idempotencyKey, requestId, traceId);
     return CommonResponse.success(result);
   }
 

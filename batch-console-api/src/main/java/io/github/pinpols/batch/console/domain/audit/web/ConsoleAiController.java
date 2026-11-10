@@ -174,7 +174,7 @@ public class ConsoleAiController {
           }
         } finally {
           LocaleContextHolder.resetLocaleContext();
-          active.finish();
+          active.finished.set(true);
           streamRegistry.remove(requestId, registration);
           emitter.complete();
         }
@@ -239,10 +239,6 @@ public class ConsoleAiController {
       if (!finished.get() && cancelled.compareAndSet(false, true)) {
         cancellation.tryEmitEmpty();
       }
-    }
-
-    private void finish() {
-      finished.set(true);
     }
   }
 
