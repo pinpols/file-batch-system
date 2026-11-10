@@ -98,6 +98,11 @@ bash scripts/local/sim-harness.sh all
 range 切片，PARSE 不做行取模；普通单文件分片和 checkpoint 多分区保护不变。
 本轮实例按 requestId 定位，分区来源必须与上传路径一致，客户业务键带本轮标识，
 分别断言两文件为 10/15 行、合计 25 行，防止旧数据掩盖漏数或污染重跑结果。
+26 在上传前声明并激活扫描前缀 `ingress/` 的入站归属，权威清单绑定为租户 `ta`、
+文件组 `simBundleImport`、对象键 `ingress/ta/bundle-import-{bizDate}.batch.json`。
+阶段退出时退休该范围：bundle 模式与默认 Worker 的扫描规则摘要不同，范围保持
+ACTIVE 会让后续扫描因规则不一致失败。历史 `bundle-import-<运行号>.batch.json`
+仍由 harness 清理。
 对应回归位于 `ParseStepPartitionSliceTest`、`PreprocessRangeSliceTest`、
 `PreprocessStepObjectLoadIntegrationTest` 和 `ImportPipelineE2eIT`。
 

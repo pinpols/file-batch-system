@@ -362,6 +362,7 @@ cleanup_sim_inputs
             "bundle-a-20261017-15302514.csv",
             "bundle-b-20261017-15302514.csv",
             "bundle-import-42.batch.json",
+            "bundle-import-2026-11-11.batch.json",
             "stage2e-checkpoint/sim-stage2e-ckpt-15057843.xml",
         ):
             with self.subTest(owned=owned):
@@ -372,6 +373,7 @@ cleanup_sim_inputs
             "bundle-a-production.csv",
             "stage2e-checkpoint/production.xml",
             "bundle-import-42.json",
+            "bundle-import-2026-11-11.json",
         ):
             with self.subTest(unrelated=unrelated):
                 self.assertNotRegex(unrelated, pattern)
@@ -517,6 +519,19 @@ ok() { printf 'OK %s\\n' "$*"; }
             self.assertEqual(expected_remaining, state.read_text(encoding="utf-8").splitlines())
             if not fail_delete:
                 self.assertIn("移除 3 个", result.stdout)
+
+    def test_bundle_stage_declares_dated_manifest_and_retires_ownership(self):
+        script = (ROOT / "scripts/sim/26-bundle-import.sh").read_text()
+        self.assertIn("scripts/db/import-ingress-ownership.sql", script)
+        self.assertIn("-v action=declare", script)
+        self.assertIn("-v action=manifest", script)
+        self.assertIn("-v action=activate", script)
+        self.assertIn("-v action=retire", script)
+        self.assertIn("trap retire_bundle_ingress_ownership EXIT", script)
+        self.assertIn('SIM_BUNDLE_FILE_GROUP:-simBundleImport', script)
+        self.assertIn("ingress/ta/bundle-import-{bizDate}.batch.json", script)
+        self.assertIn('MANIFEST_KEY = os.environ["SIM_BUNDLE_MANIFEST_TEMPLATE"].replace("{bizDate}", BIZ)', script)
+        self.assertNotIn('GROUP = f"bundle-import-{RUN}"', script)
 
     def test_runtime_edit_handles_signals_before_mutation(self):
         script = (ROOT / "scripts/sim/30-tenant-config-runtime-edit.sh").read_text()
