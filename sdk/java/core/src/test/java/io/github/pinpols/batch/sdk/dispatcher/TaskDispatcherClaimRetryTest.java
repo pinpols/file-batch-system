@@ -20,8 +20,11 @@ import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +49,81 @@ class TaskDispatcherClaimRetryTest {
 
     assertThat(dispatcher.onMessage(msg())).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
     verify(http, times(4)).claim(anyLong(), anyString(), any());
+    verify(http, never()).report(anyLong(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("慢认领等待期间消费线程被中断时保留位点并保留中断状态")
+  void shouldWithholdOffset_whenWaitingForClaimIsInterrupted() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    CountDownLatch claimStarted = new CountDownLatch(1);
+    CountDownLatch releaseClaim = new CountDownLatch(1);
+    CountDownLatch decisionReturned = new CountDownLatch(1);
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(invocation -> {
+      claimStarted.countDown();
+      if (!releaseClaim.await(5, TimeUnit.SECONDS)) {
+        throw new IOException("认领测试未释放");
+      }
+      return new PlatformHttpClient.TaskClaimResponse("ti-9");
+    });
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+    AtomicReference<TaskDispatcher.DispatchDecision> decision = new AtomicReference<>();
+    AtomicBoolean interrupted = new AtomicBoolean();
+    Thread caller = new Thread(() -> {
+      decision.set(dispatcher.onMessage(msg()));
+      interrupted.set(Thread.currentThread().isInterrupted());
+      decisionReturned.countDown();
+    });
+    caller.start();
+    try {
+      assertThat(claimStarted.await(2, TimeUnit.SECONDS)).isTrue();
+      assertThat(decisionReturned.await(250, TimeUnit.MILLISECONDS)).isFalse();
+      caller.interrupt();
+      assertThat(decisionReturned.await(2, TimeUnit.SECONDS)).isTrue();
+      assertThat(decision.get()).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
+      assertThat(interrupted).isTrue();
+    } finally {
+      releaseClaim.countDown();
+      caller.join(2000);
+    }
+  }
+
+  @Test
+  @DisplayName("停机期间认领成功不会提交位点或进入业务处理")
+  void shouldWithholdOffset_whenClaimFinishesDuringShutdown() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    CountDownLatch claimStarted = new CountDownLatch(1);
+    CountDownLatch releaseClaim = new CountDownLatch(1);
+    when(http.claim(anyLong(), anyString(), any())).thenAnswer(invocation -> {
+      claimStarted.countDown();
+      if (!releaseClaim.await(5, TimeUnit.SECONDS)) {
+        throw new IOException("认领测试未释放");
+      }
+      return new PlatformHttpClient.TaskClaimResponse("ti-9");
+    });
+    SdkTaskHandler handler = mock(SdkTaskHandler.class);
+    dispatcher = new TaskDispatcher(config, Map.of("tt", handler), http);
+    AtomicReference<TaskDispatcher.DispatchDecision> decision = new AtomicReference<>();
+    Thread caller = new Thread(() -> decision.set(dispatcher.onMessage(msg())));
+    Thread stopper = new Thread(() -> dispatcher.stop(Duration.ofSeconds(5)));
+    caller.start();
+    try {
+      assertThat(claimStarted.await(2, TimeUnit.SECONDS)).isTrue();
+      stopper.start();
+      long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+      while (!dispatcher.isDraining() && System.nanoTime() < deadline) {
+        Thread.onSpinWait();
+      }
+      assertThat(dispatcher.isDraining()).isTrue();
+    } finally {
+      releaseClaim.countDown();
+      caller.join(2000);
+      stopper.join(6000);
+    }
+    assertThat(caller.isAlive()).isFalse();
+    assertThat(stopper.isAlive()).isFalse();
+    assertThat(decision.get()).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
+    verify(handler, never()).execute(any());
     verify(http, never()).report(anyLong(), anyString(), any());
   }
 

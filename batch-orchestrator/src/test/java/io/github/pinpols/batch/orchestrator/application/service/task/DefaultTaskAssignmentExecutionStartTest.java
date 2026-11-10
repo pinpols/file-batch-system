@@ -10,6 +10,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.ResourceSchedulerProperties;
@@ -167,7 +168,56 @@ class DefaultTaskAssignmentExecutionStartTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
-  private void runningTask(boolean cancelled) {
+  @Test
+  @DisplayName("相同认领下不同执行尝试不得续租或进入业务")
+  void heartbeat_shouldRejectDifferentExecutionAttempt() {
+    JobTaskEntity task = runningTask(false);
+    task.setExecutionAttemptId("attempt-original");
+    String details = """
+        {"executionStarted":true,"executionAttemptId":"attempt-replayed"}
+        """;
+
+    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+
+    assertThat(result.leaseRenewed()).isFalse();
+    verify(partitionMapper, never()).renewLease(any());
+    verify(taskMapper, never()).confirmExecutionAttempt(anyString(), anyLong(), anyString());
+    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+  }
+
+  @Test
+  @DisplayName("相同执行尝试的确认重试可续租并保留相同围栏标识")
+  void heartbeat_shouldAcceptTheSameExecutionAttempt() {
+    JobTaskEntity task = runningTask(false);
+    task.setExecutionAttemptId("attempt-original");
+    when(partitionMapper.renewLease(any())).thenReturn(1);
+    when(taskMapper.confirmExecutionAttempt("ta", 100L, "attempt-original")).thenReturn(1);
+    when(instanceMapper.markExecutionStarted("ta", 90L)).thenReturn(1);
+    String details = """
+        {"executionStarted":true,"executionAttemptId":"attempt-original"}
+        """;
+
+    TaskHeartbeatResult result = service.recordHeartbeat("ta", 100L, "w1", "inv-1", details);
+
+    assertThat(result.leaseRenewed()).isTrue();
+    verify(taskMapper).confirmExecutionAttempt("ta", 100L, "attempt-original");
+    verify(instanceMapper).markExecutionStarted("ta", 90L);
+  }
+
+  @Test
+  @DisplayName("无效执行尝试标识不能降级为旧客户端的无围栏确认")
+  void heartbeat_shouldRejectInvalidExecutionAttempt() {
+    String details = """
+        {"executionStarted":true,"executionAttemptId":"   "}
+        """;
+
+    assertThatThrownBy(() -> service.recordHeartbeat("ta", 100L, "w1", "inv-1", details))
+        .isInstanceOf(BizException.class);
+    verify(partitionMapper, never()).renewLease(any());
+    verify(instanceMapper, never()).markExecutionStarted(anyString(), anyLong());
+  }
+
+  private JobTaskEntity runningTask(boolean cancelled) {
     JobTaskEntity task = new JobTaskEntity();
     task.setId(100L);
     task.setTenantId("ta");
@@ -177,5 +227,6 @@ class DefaultTaskAssignmentExecutionStartTest {
     task.setAssignedWorkerCode("w1");
     task.setCancelRequested(cancelled);
     when(taskMapper.selectById("ta", 100L)).thenReturn(task);
+    return task;
   }
 }
