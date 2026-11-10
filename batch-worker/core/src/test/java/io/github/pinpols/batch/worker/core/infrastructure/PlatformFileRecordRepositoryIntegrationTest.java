@@ -77,6 +77,14 @@ class PlatformFileRecordRepositoryIntegrationTest {
     int indexEnd = hardeningSql.indexOf(';', indexStart);
     String createNullChecksumIndexSql = hardeningSql.substring(indexStart, indexEnd + 1);
     jdbcTemplate.execute(createNullChecksumIndexSql);
+    // 仅应用 V378 的热表部分，复用真实迁移并保持该测试的最小表结构范围。
+    Path channelMigrationPath =
+        Path.of("..", "..", "db", "migration", "V378__track_file_arrival_channel_identity.sql");
+    String channelMigration = Files.readString(channelMigrationPath);
+    int hotTableStart = channelMigration.indexOf("ALTER TABLE batch.file_record");
+    int archiveTableStart = channelMigration.indexOf("ALTER TABLE archive.file_record_archive");
+    String updateHotFileRecordSql = channelMigration.substring(hotTableStart, archiveTableStart);
+    jdbcTemplate.execute(updateHotFileRecordSql);
 
     Configuration configuration = new Configuration(
         new Environment("file-record", new SpringManagedTransactionFactory(), dataSource));
@@ -118,6 +126,21 @@ class PlatformFileRecordRepositoryIntegrationTest {
     assertThat(fileCount()).isEqualTo(1);
     assertThat(isLatest(firstId)).isTrue();
     assertThat(generation(firstId)).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("可信渠道随文件登记保存，新记录不允许历史来源回退")
+  void shouldPersistArrivalChannelWithoutLegacyFallback() {
+    FileRecordParam file = file("incoming/channel.csv", null, "orders", "bank_sftp");
+    Long fileId = create(file);
+    String selectChannelSql = """
+        select arrival_channel_code, legacy_channel_fallback
+          from batch.file_record where id = ?
+        """;
+    var row = jdbcTemplate.queryForMap(selectChannelSql, fileId);
+    assertThat(row)
+        .containsEntry("arrival_channel_code", "bank_sftp")
+        .containsEntry("legacy_channel_fallback", false);
   }
 
   @Test
@@ -367,6 +390,11 @@ class PlatformFileRecordRepositoryIntegrationTest {
   }
 
   private static FileRecordParam file(String path, String checksum, String fileCode) {
+    return file(path, checksum, fileCode, null);
+  }
+
+  private static FileRecordParam file(
+      String path, String checksum, String fileCode, String channelCode) {
     return FileRecordParam.builder()
         .tenantId("file-dedup-tenant")
         .fileCode(fileCode)
@@ -378,6 +406,7 @@ class PlatformFileRecordRepositoryIntegrationTest {
         .storagePath(path)
         .checksumValue(checksum)
         .sourceType("UPLOAD")
+        .arrivalChannelCode(channelCode)
         .fileStatus("RECEIVED")
         .build();
   }

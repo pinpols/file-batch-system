@@ -77,6 +77,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     basePackages = {
       "io.github.pinpols.batch.e2e.support",
       "io.github.pinpols.batch.common.spi.task",
+      "io.github.pinpols.batch.common.storage.ingress",
       "io.github.pinpols.batch.common.resilience",
       "io.github.pinpols.batch.console.application",
       "io.github.pinpols.batch.console.config",
@@ -153,6 +154,9 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     sqlSessionFactoryRef = "sqlSessionFactory")
 @MapperScan(
     basePackages = "io.github.pinpols.batch.worker.core.mapper",
+    sqlSessionFactoryRef = "sqlSessionFactory")
+@MapperScan(
+    basePackages = "io.github.pinpols.batch.worker.imports.mapper",
     sqlSessionFactoryRef = "sqlSessionFactory")
 public class E2eConsoleImportApplication {
 
