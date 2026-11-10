@@ -28,6 +28,19 @@ class ControlledConsumer extends FakeConsumer {
   }
 }
 
+class ConsumerAwaitingDelivery extends ControlledConsumer {
+  #activeDelivery?: Promise<MessageDisposition>;
+
+  override deliver(taskId = "task-1"): Promise<MessageDisposition> {
+    this.#activeDelivery = super.deliver(taskId);
+    return this.#activeDelivery;
+  }
+
+  override async wakeup(): Promise<void> {
+    await this.#activeDelivery;
+  }
+}
+
 const config = { tenantId: "tenant-A", workerCode: "w1", maxConcurrent: 4 };
 const logger = { info: () => {}, warn: () => {}, error: () => {} };
 
@@ -216,6 +229,55 @@ test("停机开始后认领才成功时不启动业务并保留 offset", async (
     assert.equal(lifecycle.inFlightCount, 0);
   } finally {
     release();
+    await lifecycle.stop(1000);
+  }
+});
+
+test("停机不等待未完成的认领回调，迟到成功不执行业务且 offset 暂扣", async () => {
+  const platform = new FakePlatform();
+  const consumer = new ConsumerAwaitingDelivery();
+  let claimStarted = () => {};
+  const started = new Promise<void>((resolve) => {
+    claimStarted = resolve;
+  });
+  let releaseClaim = () => {};
+  const pending = new Promise<void>((resolve) => {
+    releaseClaim = resolve;
+  });
+  platform.transport.claim = async () => {
+    claimStarted();
+    await pending;
+    return { partitionInvocationId: "inv-current", effectiveConfig: {} };
+  };
+  let executions = 0;
+  const lifecycle = new WorkerLifecycle({
+    config,
+    transport: platform.transport,
+    consumer,
+    logger,
+    installSignalHandlers: false,
+    handler: {
+      execute: async () => {
+        executions += 1;
+        return taskSuccess();
+      },
+    },
+  });
+  try {
+    await lifecycle.start();
+    const delivery = consumer.deliver();
+    await within(started);
+    const stopping = lifecycle.stop(40);
+    assert.equal(await within(delivery), "withhold");
+    await within(stopping);
+    assert.equal(platform.transport.countOf("deactivate"), 1);
+    releaseClaim();
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    assert.equal(executions, 0);
+    assert.equal(platform.transport.countOf("renew"), 0);
+    assert.equal(lifecycle.inFlightCount, 0);
+  } finally {
+    releaseClaim();
     await lifecycle.stop(1000);
   }
 });

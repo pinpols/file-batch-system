@@ -20,6 +20,96 @@ async function waitFor<T>(promise: Promise<T>, timeout: number, message: string)
   }
 }
 
+test(
+  "慢认领期间维持真实 Kafka 消费组心跳且不提前确认",
+  { skip: !broker, timeout: 60000 },
+  async () => {
+    const { Kafka, logLevel } = await import("kafkajs");
+    const { KafkaConsumerAdapter } = await import("../src/kafka/kafkaConsumer.ts");
+    const id = randomUUID();
+    const topic = `sdk-slow-claim-${id}`;
+    const groupId = `sdk-slow-claim-${id}`;
+    const kafka = new Kafka({ brokers: [broker!], clientId: groupId, logLevel: logLevel.NOTHING });
+    const admin = kafka.admin();
+    const producer = kafka.producer();
+    const originalConsumer = Kafka.prototype.consumer;
+    const consumerStub = mock.method(Kafka.prototype, "consumer", function (options) {
+      return originalConsumer.call(this, {
+        ...options,
+        sessionTimeout: 6000,
+        heartbeatInterval: 1000,
+      });
+    });
+    const adapter = new KafkaConsumerAdapter(
+      {
+        brokers: [broker!],
+        tenantId: "test",
+        workerCode: id,
+        groupId,
+        topicRegex: new RegExp(`^${topic}$`),
+      },
+      logger,
+    );
+    consumerStub.mock.restore();
+    let releaseClaim = () => {};
+    let markStarted = () => {};
+    const claimStarted = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const claimReleased = new Promise<void>((resolve) => {
+      releaseClaim = resolve;
+    });
+    try {
+      await admin.connect();
+      await admin.createTopics({
+        topics: [{ topic, numPartitions: 1, replicationFactor: 1 }],
+        waitForLeaders: true,
+      });
+      await producer.connect();
+      await producer.send({ topic, messages: [{ value: "pending-claim" }] });
+      await adapter.start(async () => {
+        markStarted();
+        await claimReleased;
+        return "commit";
+      });
+      await waitFor(claimStarted, 30000, "消息未进入慢认领");
+      const initialGroup = (await admin.describeGroups([groupId])).groups[0];
+      assert.equal(initialGroup.state, "Stable");
+      assert.equal(initialGroup.members.length, 1);
+      const memberId = initialGroup.members[0].memberId;
+      await new Promise((resolve) => setTimeout(resolve, 9000));
+      const waitingGroup = (await admin.describeGroups([groupId])).groups[0];
+      assert.equal(waitingGroup.state, "Stable");
+      assert.deepEqual(
+        waitingGroup.members.map((member) => member.memberId),
+        [memberId],
+      );
+      const before = (await admin.fetchOffsets({ groupId, topics: [topic] }))[0].partitions[0]
+        .offset;
+      assert.equal(before, "0", "认领未完成时只保存当前读取位置");
+      releaseClaim();
+      await waitFor(
+        (async () => {
+          while (true) {
+            const offset = (await admin.fetchOffsets({ groupId, topics: [topic] }))[0].partitions[0]
+              .offset;
+            if (offset === "1") return;
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        })(),
+        15000,
+        "认领完成后未提交消息位点",
+      );
+    } finally {
+      releaseClaim();
+      consumerStub.mock.restore();
+      await adapter.disconnect();
+      await producer.disconnect();
+      await admin.disconnect();
+    }
+  },
+);
+
 test("显式最新位置下首次未确认消息转交后仍可重读", { skip: !broker, timeout: 90000 }, async () => {
   const { Kafka, logLevel } = await import("kafkajs");
   const { KafkaConsumerAdapter } = await import("../src/kafka/kafkaConsumer.ts");

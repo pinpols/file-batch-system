@@ -1,5 +1,11 @@
 # 系统设计与容量整改代码复核（2026-11-10）
 
+## 合并前 TypeScript 审查修复
+
+- 远端审查发现慢 CLAIM 等待期间 KafkaJS `eachMessage` 不自动发送心跳，可能引发消费组重平衡；适配器在等待期间按间隔发送心跳，确认前不提交位点，并在等待结束时清理计时器。隔离 Kafka 的定向测试以 6 秒会话、9 秒认领等待验证成员保持稳定、位点不提前提交，释放后位点推进；该样本约 15 秒，仅证明指定场景，不是网络故障或生产容量验收。
+- 停机期间 consumer 关闭会等待正在处理的 CLAIM 回调，可能超过排空预算；生命周期在关闭前将未决认领标记为暂扣，迟到成功不能进入续租或业务。模拟消费者等待当前回调的测试从超过 1 秒未返回变为 `stop(40)` 约 46 毫秒完成。停止中不再创建新的分区重试计时器；底层 Kafka 关闭、位点初始化及注销请求耗时仍各自受依赖行为影响，不能推导所有网络故障均严格按预算退出。
+- 生命周期及相关定向测试在 Node 22、24 各 19 项通过。Node 24 执行 `BATCH_SDK_KAFKA_BOOTSTRAP=127.0.0.1:39092 node --test --test-concurrency=1 --experimental-strip-types tests/kafka-heartbeat.test.ts tests/kafka-adapter-anchor.test.ts tests/kafka-offset-policy.test.ts tests/kafka-withheld-integration.test.ts`，24/24、0 跳过，其中包括 6 个真实 Kafka 场景；Node 22 的相关非 broker 定向组 18/18，慢认领真实 Kafka 场景单独 1/1。最终远端 CI 尚待本次提交后确认；KafkaJS 本地运行仍出现 `TimeoutNegativeWarning`。
+
 ## 基线与范围
 
 - 后端 `codex/system-design-capacity-closure`，HEAD `e7999b3645682f5fa075f63023d5ec07b80e164b`；包含该工作树当时的未提交和未跟踪改动。前端同名分支，HEAD `1b0cd9b10369`，当时有 10 个已跟踪文件修改。

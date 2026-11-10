@@ -118,6 +118,7 @@ export interface WorkerLifecycleDeps {
 interface TrackedTask extends InFlightTask {
   promise: Promise<void>;
   leaseConfirmed: boolean;
+  settleAdmission: (accepted: boolean) => void;
   /** ADR-014 invocation token from the claim response; echoed on renew + report. */
   partitionInvocationId?: string | null;
 }
@@ -331,6 +332,7 @@ export class WorkerLifecycle {
       cancellation,
       promise: Promise.resolve(),
       leaseConfirmed: false,
+      settleAdmission,
     };
     this.#inFlight.set(msg.taskId, tracked);
     // fixture 24: mint a FRESH key per distinct write — never a fixed claim-{id}.
@@ -548,6 +550,8 @@ export class WorkerLifecycle {
     const plan = planStop(timeoutMs);
     this.#draining = true;
     this.#setFsm("DRAINING");
+    // 消费者关闭会等待当前消息回调；先释放尚未认领的回调并保留位点。
+    for (const task of this.#inFlight.values()) task.settleAdmission(false);
 
     // wake the consumer (interrupt poll); refuse new messages
     if (plan.kafka === "wakeup") {

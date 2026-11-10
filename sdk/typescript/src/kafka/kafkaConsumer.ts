@@ -39,6 +39,33 @@ import { offsetAction, resolveFromBeginning, commitBlockedByWithheld } from "./o
 
 // 未确认消息短暂等待后按原位置重读，避免持续失败时忙等。
 const WITHHOLD_RETRY_DELAY_MS = 2_000;
+// KafkaJS 的 eachMessage 等待期间不会自动发送消费组心跳。
+const KAFKA_HEARTBEAT_INTERVAL_MS = 3_000;
+
+async function awaitWithKafkaHeartbeat<T>(
+  work: Promise<T>,
+  heartbeat: () => Promise<void>,
+): Promise<T> {
+  let active = true;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const heartbeatFailure = new Promise<never>((_resolve, reject) => {
+    const sendHeartbeat = async () => {
+      try {
+        await heartbeat();
+        if (active) timer = setTimeout(sendHeartbeat, KAFKA_HEARTBEAT_INTERVAL_MS);
+      } catch (error) {
+        reject(error);
+      }
+    };
+    timer = setTimeout(sendHeartbeat, KAFKA_HEARTBEAT_INTERVAL_MS);
+  });
+  try {
+    return await Promise.race([work, heartbeatFailure]);
+  } finally {
+    active = false;
+    clearTimeout(timer);
+  }
+}
 
 /** SASL config (only SCRAM-SHA-512 is supported per byo-sdk-guide §1.2). */
 export interface KafkaSaslConfig {
@@ -235,7 +262,7 @@ export class KafkaConsumerAdapter implements Consumer {
           if (epoch !== this.#assignmentEpoch) return;
           this.#anchoredPartitions.add(key);
         }
-        const disposition = await onEach(record);
+        const disposition = await awaitWithKafkaHeartbeat(onEach(record), payload.heartbeat);
         if (epoch !== this.#assignmentEpoch) return;
         const action = offsetAction(
           disposition,
@@ -308,6 +335,8 @@ export class KafkaConsumerAdapter implements Consumer {
         }
 
         if (action.type === "withhold") {
+          // 停止后由已保存的读取位置恢复，无需创建新的分区重试定时器。
+          if (!this.#running) return;
           // 暂停当前分区并回到未确认位置，其他分区继续消费。
           const pending = this.#withheld.get(key) ?? new Set<string>();
           pending.add(action.offset);
