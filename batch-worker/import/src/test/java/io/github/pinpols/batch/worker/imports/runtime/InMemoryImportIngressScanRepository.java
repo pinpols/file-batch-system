@@ -80,17 +80,16 @@ final class InMemoryImportIngressScanRepository extends ImportIngressScanReposit
         || !Objects.equals(old.object.etag(), object.etag());
     long id = old == null ? ++nextId : old.id;
     Instant first = changed ? Instant.now() : old.first;
-    entries.put(
-        key,
-        new Entry(
-            lease.scopeId(),
-            id,
-            object,
-            first,
-            lease.cycle(),
-            lease.windowId(),
-            manifest,
-            changed ? null : old.waitReason));
+    Entry entry = new Entry(
+        lease.scopeId(),
+        id,
+        object,
+        first,
+        lease.cycle(),
+        lease.windowId(),
+        manifest,
+        changed ? null : old.waitReason);
+    entries.put(key, entry);
   }
 
   @Override

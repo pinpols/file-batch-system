@@ -237,55 +237,56 @@ class DefaultDispatchStageExecutorTest {
                 : DispatchStageResult.failure(
                     DispatchStage.ACK, "DISPATCH_ACK_FAILED", "ack failed"));
     when(complete.execute(any())).thenReturn(DispatchStageResult.success(DispatchStage.COMPLETE));
-    List<PipelineStepDefinition> definitions = List.of(
-        new PipelineStepDefinition(
-            1L,
-            "DISPATCH_DISPATCH",
-            "Dispatch",
-            "DISPATCH",
-            1,
-            "DISPATCH_DISPATCH",
-            Map.of("onFailureNextStageCode", "RETRY"),
-            0,
-            "NONE",
-            0,
-            true),
-        new PipelineStepDefinition(
-            2L,
-            "DISPATCH_RETRY",
-            "Retry",
-            "RETRY",
-            2,
-            "DISPATCH_RETRY",
-            Map.of("onSuccessNextStageCode", "ACK"),
-            0,
-            "NONE",
-            0,
-            true),
-        new PipelineStepDefinition(
-            3L,
-            "DISPATCH_ACK",
-            "Ack",
-            "ACK",
-            3,
-            "DISPATCH_ACK",
-            Map.of("onSuccessNextStageCode", "COMPLETE"),
-            0,
-            "NONE",
-            0,
-            true),
-        new PipelineStepDefinition(
-            4L,
-            "DISPATCH_COMPLETE",
-            "Complete",
-            "COMPLETE",
-            4,
-            "DISPATCH_COMPLETE",
-            Map.of("terminalOnSuccess", true),
-            0,
-            "NONE",
-            0,
-            true));
+    PipelineStepDefinition dispatchDefinition = new PipelineStepDefinition(
+        1L,
+        "DISPATCH_DISPATCH",
+        "Dispatch",
+        "DISPATCH",
+        1,
+        "DISPATCH_DISPATCH",
+        Map.of("onFailureNextStageCode", "RETRY"),
+        0,
+        "NONE",
+        0,
+        true);
+    PipelineStepDefinition retryDefinition = new PipelineStepDefinition(
+        2L,
+        "DISPATCH_RETRY",
+        "Retry",
+        "RETRY",
+        2,
+        "DISPATCH_RETRY",
+        Map.of("onSuccessNextStageCode", "ACK"),
+        0,
+        "NONE",
+        0,
+        true);
+    PipelineStepDefinition ackDefinition = new PipelineStepDefinition(
+        3L,
+        "DISPATCH_ACK",
+        "Ack",
+        "ACK",
+        3,
+        "DISPATCH_ACK",
+        Map.of("onSuccessNextStageCode", "COMPLETE"),
+        0,
+        "NONE",
+        0,
+        true);
+    PipelineStepDefinition completeDefinition = new PipelineStepDefinition(
+        4L,
+        "DISPATCH_COMPLETE",
+        "Complete",
+        "COMPLETE",
+        4,
+        "DISPATCH_COMPLETE",
+        Map.of("terminalOnSuccess", true),
+        0,
+        "NONE",
+        0,
+        true);
+    List<PipelineStepDefinition> definitions =
+        List.of(dispatchDefinition, retryDefinition, ackDefinition, completeDefinition);
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
     context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);

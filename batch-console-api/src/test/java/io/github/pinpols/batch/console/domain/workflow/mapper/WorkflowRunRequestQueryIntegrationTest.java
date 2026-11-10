@@ -140,39 +140,25 @@ class WorkflowRunRequestQueryIntegrationTest {
   void workflowCodeAndRequestId_shouldRespectTenantAndPagination() {
     try (SqlSession session = sessions.openSession()) {
       WorkflowRunMapper mapper = session.getMapper(WorkflowRunMapper.class);
-      WorkflowRunQuery firstPage = new WorkflowRunQuery(
-          "tenant-e",
-          null,
-          "WF",
-          null,
-          null,
-          null,
-          null,
-          "shared-request",
-          new PageRequest(1, 1),
-          null);
-      WorkflowRunQuery secondPage = new WorkflowRunQuery(
-          "tenant-e",
-          null,
-          "WF",
-          null,
-          null,
-          null,
-          null,
-          "shared-request",
-          new PageRequest(2, 1),
-          null);
-      WorkflowRunQuery selectedVersion = new WorkflowRunQuery(
-          "tenant-e",
-          105L,
-          "WF",
-          null,
-          null,
-          null,
-          null,
-          "shared-request",
-          new PageRequest(1, 20),
-          null);
+      WorkflowRunQuery firstPage = WorkflowRunQuery.builder()
+          .tenantId("tenant-e")
+          .workflowCode("WF")
+          .requestId("shared-request")
+          .pageRequest(new PageRequest(1, 1))
+          .build();
+      WorkflowRunQuery secondPage = WorkflowRunQuery.builder()
+          .tenantId("tenant-e")
+          .workflowCode("WF")
+          .requestId("shared-request")
+          .pageRequest(new PageRequest(2, 1))
+          .build();
+      WorkflowRunQuery selectedVersion = WorkflowRunQuery.builder()
+          .tenantId("tenant-e")
+          .workflowDefinitionId(105L)
+          .workflowCode("WF")
+          .requestId("shared-request")
+          .pageRequest(new PageRequest(1, 20))
+          .build();
 
       assertThat(mapper.selectByQuery(firstPage)).extracting("id").containsExactly(18L);
       assertThat(mapper.selectByQuery(secondPage)).extracting("id").containsExactly(17L);
@@ -184,7 +170,10 @@ class WorkflowRunRequestQueryIntegrationTest {
   }
 
   private WorkflowRunQuery query(String tenantId, String requestId) {
-    return new WorkflowRunQuery(
-        tenantId, null, null, null, null, null, null, requestId, new PageRequest(1, 20), null);
+    return WorkflowRunQuery.builder()
+        .tenantId(tenantId)
+        .requestId(requestId)
+        .pageRequest(new PageRequest(1, 20))
+        .build();
   }
 }
