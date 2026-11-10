@@ -113,7 +113,7 @@
     order by ji.created_at;
    ```
 2. 单条 stuck → 按通用 job stuck 流程(`incident-response.md`),可走治理接口标记 FAILED 或重试。
-3. 所有 stuck job 进终态后,下一个 `BatchDaySettleScheduler` tick(默认 60s,见 `batch.batch-day.settle-scan-interval-millis`)自动收敛。
+3. 所有 stuck job 进终态后,下一个 `BatchDaySettleScheduler` tick(默认 60s,见 `batch.batch-day.settle-scan-interval-millis`)自动收敛。首次扫描可由 `batch.batch-day.settle-initial-delay-millis` 延迟，默认 0，不改变现有启动时扫描行为；修改后需重启应用生效。
 
 ### 方案 B:核实 scheduler 与 ShedLock(按需)
 
@@ -153,6 +153,7 @@
 - **alert 缺失**:补 `BatchDayStuckSettling`、`BatchDaySettleSchedulerSilent`(60s 没 tick 就告)。
 - **判断要不要调阈值**:
   - `settle-scan-interval-millis` 默认 60s,SLA 紧的业务可调 30s
+  - `settle-initial-delay-millis` 默认 0,控制应用启动后首次扫描延迟；测试或维护场景可延后首次自动扫描
   - CAS 冲突频繁 → metrics 查询 + finalize 之间窗口太大,考虑 SELECT FOR UPDATE 保护(代码改动,出 plan)
 - **剧本走不通**:metrics SQL 与 `selectBatchDayMetrics` 实现不一致 → 补 `batch-day-metrics-drift.md`;catch-up dedup key 撞 → 补 `catch-up-dedup-collision.md`。
 

@@ -86,7 +86,9 @@ public class BatchDaySettleScheduler {
   private final BatchDateTimeSupport dateTimeSupport;
   private final PlatformTransactionManager transactionManager;
 
-  @Scheduled(fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
+  @Scheduled(
+      initialDelayString = "${batch.batch-day.settle-initial-delay-millis:0}",
+      fixedDelayString = "${batch.batch-day.settle-scan-interval-millis:60000}")
   @SchedulerLock(name = "batch_day_settle", lockAtMostFor = "PT3M", lockAtLeastFor = "PT30S")
   public void scheduledSettle() {
     settle();
