@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -57,7 +56,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
   private static final ObjectMapper OWNERSHIP_IDENTITY_MAPPER = JsonUtils.newDefaultMapper();
 
   private final SensorFileArrivalMapper mapper;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final S3StorageProperties storageProperties;
 
   @Override
@@ -145,8 +144,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
               .bizDate(bizDate)
               .fileGroupCode(fileGroupCode)
               .workflowDefinitionId(ctx.workflowDefinitionId())
-              .storageId(ImportIngressOwnershipIdentity.storageId(
-                  environment, storageProperties, OWNERSHIP_IDENTITY_MAPPER))
+              .storageId(ownershipIdentity.storageId(storageProperties, OWNERSHIP_IDENTITY_MAPPER))
               .requireCompleteGroup(requireCompleteGroup)
               .build();
       SensorFileArrivalView hit = mapper.selectLatestArrival(sensorFileArrivalLatestArrivalQuery);

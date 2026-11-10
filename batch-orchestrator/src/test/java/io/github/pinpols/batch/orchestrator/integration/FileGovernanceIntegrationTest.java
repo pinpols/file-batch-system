@@ -8,10 +8,14 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
 import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
@@ -52,7 +56,6 @@ import org.springframework.boot.restclient.autoconfigure.RestClientAutoConfigura
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.test.context.TestConstructor;
@@ -137,14 +140,25 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @EnableAutoConfiguration
   @ImportAutoConfiguration(RestClientAutoConfiguration.class)
   @EnableScheduling
-  @EnableConfigurationProperties({FileGovernanceProperties.class, S3StorageProperties.class})
-  @MapperScan("io.github.pinpols.batch.orchestrator.mapper")
+  @EnableConfigurationProperties({
+    FileGovernanceProperties.class,
+    S3StorageProperties.class,
+    KafkaNamespaceProperties.class,
+    StorageBackendProperties.class,
+    FilesystemStorageProperties.class
+  })
+  @MapperScan({
+    "io.github.pinpols.batch.orchestrator.mapper",
+    "io.github.pinpols.batch.common.mapper"
+  })
   @Import({
     BatchClockConfig.class,
     FileGovernanceScheduler.class,
     // ADR-046 2c-2b:FileGovernanceScheduler 现依赖 BundleArrivalLauncher,须一并导入。
     // 本测的到达组无 bundleJobCode → launchIfBundle 早返回,不触 LaunchService(故无需 mock)。
     BundleArrivalLauncher.class,
+    ImportIngressOwnershipIdentity.class,
+    ImportIngressOwnershipRepository.class,
     FileGovernanceRepository.class,
     S3GovernanceStorage.class,
     OrchestratorRedisSupport.class,
@@ -172,7 +186,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   private final MeterRegistry meterRegistry;
   private final FileGovernanceProperties fileGovernanceProperties;
   private final FileGovernanceMetricsCacheService metricsCacheService;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final S3StorageProperties s3StorageProperties;
   private final FileGovernanceReconcileCursorMapper reconcileCursorMapper;
 
@@ -186,7 +200,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
       MeterRegistry meterRegistry,
       FileGovernanceProperties fileGovernanceProperties,
       FileGovernanceMetricsCacheService metricsCacheService,
-      Environment environment,
+      ImportIngressOwnershipIdentity ownershipIdentity,
       S3StorageProperties s3StorageProperties,
       FileGovernanceReconcileCursorMapper reconcileCursorMapper) {
     this.jdbcTemplate = jdbcTemplate;
@@ -195,7 +209,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     this.meterRegistry = meterRegistry;
     this.fileGovernanceProperties = fileGovernanceProperties;
     this.metricsCacheService = metricsCacheService;
-    this.environment = environment;
+    this.ownershipIdentity = ownershipIdentity;
     this.s3StorageProperties = s3StorageProperties;
     this.reconcileCursorMapper = reconcileCursorMapper;
   }
@@ -497,8 +511,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
     String manifestKey = root + "01-authority/group-20261109.batch.json";
     String ordinaryKey = root + "99-ordinary/orphan.csv";
     var objectMapper = JsonUtils.newDefaultMapper();
-    String storageId =
-        ImportIngressOwnershipIdentity.storageId(environment, s3StorageProperties, objectMapper);
+    String storageId = ownershipIdentity.storageId(s3StorageProperties, objectMapper);
     String scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, dataPrefix, objectMapper);
     jdbcTemplate.update(insertScopeSql, scopeId, storageId, s3Bucket(), dataPrefix);
     jdbcTemplate.update(
@@ -592,8 +605,7 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("对账分页进度用版本保护，过期执行者不能回退游标")
   void shouldNotOverwriteReconcileProgressFromAnOlderPage() {
     var objectMapper = JsonUtils.newDefaultMapper();
-    String storageId =
-        ImportIngressOwnershipIdentity.storageId(environment, s3StorageProperties, objectMapper);
+    String storageId = ownershipIdentity.storageId(s3StorageProperties, objectMapper);
     String prefix = "incoming/reconcile-cursor-" + suffix() + "/";
     reconcileCursorMapper.insertIfAbsent(storageId, prefix);
     var firstRead = reconcileCursorMapper.select(storageId, prefix);

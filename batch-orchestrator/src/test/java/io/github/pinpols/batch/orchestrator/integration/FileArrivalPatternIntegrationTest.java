@@ -20,7 +20,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 @SpringBootTest(
@@ -32,7 +31,7 @@ class FileArrivalPatternIntegrationTest extends AbstractIntegrationTest {
 
   private final JdbcTemplate jdbc;
   private final FileGovernanceMapper fileGovernanceMapper;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final S3StorageProperties s3StorageProperties;
 
   @Autowired
@@ -40,12 +39,12 @@ class FileArrivalPatternIntegrationTest extends AbstractIntegrationTest {
       FileArrivalSensorPolicy policy,
       JdbcTemplate jdbc,
       FileGovernanceMapper fileGovernanceMapper,
-      Environment environment,
+      ImportIngressOwnershipIdentity ownershipIdentity,
       S3StorageProperties s3StorageProperties) {
     this.policy = policy;
     this.jdbc = jdbc;
     this.fileGovernanceMapper = fileGovernanceMapper;
-    this.environment = environment;
+    this.ownershipIdentity = ownershipIdentity;
     this.s3StorageProperties = s3StorageProperties;
   }
 
@@ -118,8 +117,7 @@ class FileArrivalPatternIntegrationTest extends AbstractIntegrationTest {
     String prefix = "ingress/" + tenant + "/";
     String bucket = s3StorageProperties.getBucket();
     var objectMapper = JsonUtils.newDefaultMapper();
-    String storageId =
-        ImportIngressOwnershipIdentity.storageId(environment, s3StorageProperties, objectMapper);
+    String storageId = ownershipIdentity.storageId(s3StorageProperties, objectMapper);
     String scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, prefix, objectMapper);
     String insertScopeSql = """
         insert into batch.import_ingress_ownership

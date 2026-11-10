@@ -5,7 +5,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalView;
 import io.github.pinpols.batch.orchestrator.infrastructure.sensor.FileArrivalSensorPolicy;
@@ -22,7 +26,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("文件到达传感策略: 到达命中, 记录缺失与查询异常口径")
@@ -35,7 +38,12 @@ class FileArrivalSensorPolicyTest {
 
   @BeforeEach
   void setUp() {
-    policy = new FileArrivalSensorPolicy(mapper, new MockEnvironment(), new S3StorageProperties());
+    KafkaNamespaceProperties kafka = new KafkaNamespaceProperties();
+    StorageBackendProperties backend = new StorageBackendProperties();
+    FilesystemStorageProperties filesystem = new FilesystemStorageProperties();
+    ImportIngressOwnershipIdentity identity =
+        new ImportIngressOwnershipIdentity(kafka, backend, filesystem);
+    policy = new FileArrivalSensorPolicy(mapper, identity, new S3StorageProperties());
   }
 
   @Test

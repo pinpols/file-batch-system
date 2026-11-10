@@ -41,7 +41,6 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("导入入口扫描器单测:列举失败上抛,完成标记读取与兼容模式语义")
@@ -95,7 +94,7 @@ class ImportIngressScannerTest {
         objectStore,
         new ObjectMapper(),
         scans,
-        new MockEnvironment());
+        ImportIngressIdentityFixtures.s3Identity());
     declareBindings(List.of());
     lenient().when(objectStore.exists(any(), any())).thenReturn(true);
   }
@@ -352,7 +351,7 @@ class ImportIngressScannerTest {
         objectStore,
         new ObjectMapper(),
         scans,
-        new MockEnvironment());
+        ImportIngressIdentityFixtures.s3Identity());
     String directory = "ingress/wait-file-76ee0f1a/default-tenant/input/";
     List<ImportIngressOwnershipRepository.Binding> bindings = List.of(
         new ImportIngressOwnershipRepository.Binding(

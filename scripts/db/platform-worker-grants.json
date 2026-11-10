@@ -66,7 +66,7 @@
             "SELECT"
           ],
           "sources": [
-            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java"
+            "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml"
           ]
         },
         "batch.import_ingress_ownership_binding": {
@@ -74,7 +74,7 @@
             "SELECT"
           ],
           "sources": [
-            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java"
+            "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml"
           ]
         },
         "batch.import_ingress_scan_object": {
@@ -85,7 +85,7 @@
             "UPDATE"
           ],
           "sources": [
-            "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanRepository.java"
+            "batch-worker/import/src/main/resources/mapper/ImportIngressScanMapper.xml"
           ]
         },
         "batch.import_ingress_scan_state": {
@@ -95,7 +95,7 @@
             "UPDATE"
           ],
           "sources": [
-            "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanRepository.java"
+            "batch-worker/import/src/main/resources/mapper/ImportIngressScanMapper.xml"
           ]
         },
         "batch.import_ingress_scan_storage_lease": {
@@ -105,7 +105,7 @@
             "UPDATE"
           ],
           "sources": [
-            "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanRepository.java"
+            "batch-worker/import/src/main/resources/mapper/ImportIngressScanMapper.xml"
           ]
         },
         "batch.job_instance": {

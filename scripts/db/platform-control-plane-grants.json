@@ -2256,7 +2256,7 @@
             "SELECT"
           ],
           "sources": [
-            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java",
+            "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
           ]
         },
@@ -2265,7 +2265,7 @@
             "SELECT"
           ],
           "sources": [
-            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java",
+            "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
           ]
         },

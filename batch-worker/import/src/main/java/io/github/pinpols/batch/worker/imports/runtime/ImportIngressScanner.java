@@ -60,7 +60,6 @@ import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
@@ -94,7 +93,7 @@ public class ImportIngressScanner {
   private final BatchObjectStore objectStore;
   private final ObjectMapper objectMapper;
   private final ImportIngressScanRepository scanRepository;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
 
   /** sidecar manifest(.chk JSON)上限,防异常大对象拖垮扫描;manifest 本应是 KB 级小文件。 */
   private static final String KEY_REQUIRED_FILE_SET = "requiredFileSet";
@@ -626,7 +625,7 @@ public class ImportIngressScanner {
   }
 
   String scanStorageIdentity() {
-    return ImportIngressOwnershipIdentity.storageId(environment, s3StorageProperties, objectMapper);
+    return ownershipIdentity.storageId(s3StorageProperties, objectMapper);
   }
 
   String scanConfigurationDigest() {
@@ -919,12 +918,8 @@ public class ImportIngressScanner {
       return;
     }
     String fileName = baseName(snapshot.objectName());
-    LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
-    if (bizDate == null) {
-      return;
-    }
     registerDiscoveredInputFile(
-        snapshot, resolvedTenant, manifest, batchManifests, fileName, bizDate, bindings);
+        snapshot, resolvedTenant, manifest, batchManifests, fileName, bindings);
   }
 
   private boolean isReconciledFile(Map<String, Object> fileRecord) {
@@ -1016,8 +1011,11 @@ public class ImportIngressScanner {
       SidecarManifest manifest,
       List<BatchManifest> batchManifests,
       String fileName,
-      LocalDate bizDate,
       EffectiveBindings bindings) {
+    LocalDate bizDate = resolveScannerBizDate(snapshot.objectName());
+    if (EmptyChecks.isNull(bizDate)) {
+      return;
+    }
     // ADR-040 Phase1:命中批次清单(成员名 ∈ manifest.requiredFiles)→ 用清单的 group + requiredFiles
     // 覆盖静态配置,实现动态成组;未命中则沿用静态 arrival 配置。
     String effectiveGroupCode = scannerProperties.getArrival().getFileGroupCode();

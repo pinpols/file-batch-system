@@ -7,7 +7,7 @@
 
 | 指标 | 数量 |
 |---|---:|
-| 生产 Java 源文件 | 3098 |
+| 生产 Java 源文件 | 3100 |
 | CGLIB 自注入类 | 0 |
 | `Map<String, Object>` 出现次数 | 2104 |
 | 含 Map 的源文件 | 418 |
@@ -23,11 +23,11 @@
 
 | 模块 | 生产 Java 文件 |
 |---|---:|
-| `batch-common` | 366 |
+| `batch-common` | 367 |
 | `batch-console-api` | 1251 |
 | `batch-orchestrator` | 789 |
 | `batch-trigger` | 135 |
-| `batch-worker` | 454 |
+| `batch-worker` | 455 |
 | `sdk` | 94 |
 | `security-scan` | 9 |
 
@@ -40,7 +40,7 @@
 
 | 文件 | 行数 |
 |---|---:|
-| `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 1579 |
+| `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java` | 1577 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageSheetSpecs.java` | 1531 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java` | 1357 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/audit/infrastructure/ai/DefaultConsoleAiApplicationService.java` | 1295 |

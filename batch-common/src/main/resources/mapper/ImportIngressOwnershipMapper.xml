@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper">
+    <resultMap id="ownershipRow" type="io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper$OwnershipRow">
+        <result property="scopeId" column="scope_id"/>
+        <result property="storageId" column="storage_id"/>
+        <result property="bucketName" column="bucket_name"/>
+        <result property="scopePrefix" column="scope_prefix"/>
+        <result property="state" column="state"/>
+        <result property="bindingType" column="binding_type"/>
+        <result property="tenantId" column="tenant_id"/>
+        <result property="bindingPrefix" column="binding_prefix"/>
+        <result property="fileGroupCode" column="file_group_code"/>
+        <result property="manifestKeyTemplate" column="manifest_key_template"/>
+        <result property="channelCode" column="channel_code"/>
+        <result property="enabled" column="enabled"/>
+    </resultMap>
+
+    <sql id="columns">
+        s.scope_id, s.storage_id, s.bucket_name, s.object_prefix AS scope_prefix, s.state,
+        b.binding_type, b.tenant_id, b.object_prefix AS binding_prefix,
+        b.file_group_code, b.manifest_key_template, b.channel_code, b.enabled
+    </sql>
+
+    <select id="findActiveScope" resultMap="ownershipRow">
+        SELECT <include refid="columns"/>
+        FROM batch.import_ingress_ownership s
+        LEFT JOIN batch.import_ingress_ownership_binding b ON b.scope_id = s.scope_id AND b.enabled
+        WHERE s.scope_id = #{scopeId} AND s.state = 'ACTIVE'
+        ORDER BY s.scope_id, b.binding_type, b.tenant_id, b.object_prefix
+    </select>
+
+    <select id="listProtectedScopes" resultMap="ownershipRow">
+        SELECT <include refid="columns"/>
+        FROM batch.import_ingress_ownership s
+        LEFT JOIN batch.import_ingress_ownership_binding b ON b.scope_id = s.scope_id
+        WHERE s.storage_id = #{storageId} AND s.state IN ('ACTIVE', 'RETIRED')
+        ORDER BY s.scope_id, b.binding_type, b.tenant_id, b.object_prefix
+    </select>
+</mapper>

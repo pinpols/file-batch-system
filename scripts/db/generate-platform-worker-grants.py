@@ -46,10 +46,7 @@ SHARED_SOURCES = (
 )
 
 # 入站归属配置仅由 Import scanner 与 Orchestrator 对账读取，不能授予所有 Worker/控制面。
-INGRESS_OWNERSHIP_SOURCE = (
-    "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/"
-    "ImportIngressOwnershipRepository.java"
-)
+INGRESS_OWNERSHIP_SOURCE = "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml"
 
 # 使用 @SchedulerLock 的模块在 BATCH_SHEDLOCK_PROVIDER=jdbc 时读写 ShedLock 表。
 SHEDLOCK_TABLE = "batch.shedlock"

@@ -10,8 +10,11 @@ import static org.mockito.Mockito.spy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
 import io.github.pinpols.batch.common.storage.FilesystemObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import io.github.pinpols.batch.worker.core.config.WorkerDataSourceSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.FileAuditParam;
@@ -21,6 +24,7 @@ import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepo
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.config.ImportWorkerConfiguration;
+import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository.Lease;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -53,7 +57,6 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.springframework.mock.env.MockEnvironment;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
@@ -78,7 +81,7 @@ class ImportIngressScanPersistenceIntegrationTest {
   private S3StorageProperties storage;
   private ImportWorkerConfiguration worker;
   private FilesystemObjectStore objectStore;
-  private MockEnvironment environment;
+  private ImportIngressOwnershipIdentity ownershipIdentity;
 
   @BeforeAll
   static void setUpDatabase() throws Exception {
@@ -91,10 +94,14 @@ class ImportIngressScanPersistenceIntegrationTest {
         .load()
         .migrate();
     jdbc = new JdbcTemplate(dataSource);
-    scanRepository =
-        new ImportIngressScanRepository(jdbc, new DataSourceTransactionManager(dataSource));
     SqlSessionTemplate session =
         new SqlSessionTemplate(WorkerDataSourceSupport.buildPlatformSqlSessionFactory(dataSource));
+    ImportIngressScanMapper scans = session.getMapper(ImportIngressScanMapper.class);
+    ImportIngressOwnershipMapper ownership = session.getMapper(ImportIngressOwnershipMapper.class);
+    scanRepository = new ImportIngressScanRepository(
+        scans,
+        new ImportIngressOwnershipRepository(ownership),
+        new DataSourceTransactionManager(dataSource));
     PlatformFileRuntimeMapper mapper = session.getMapper(PlatformFileRuntimeMapper.class);
     fileRecords = new PlatformFileRecordRepository(mapper);
     fileAudits = new PlatformFileAuditRepository(mapper);
@@ -121,9 +128,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500),
         null);
     objectStore = new FilesystemObjectStore(root.toString(), "", "test-secret");
-    environment = new MockEnvironment()
-        .withProperty("batch.storage.backend", "filesystem")
-        .withProperty("batch.storage.filesystem.root", root.toString());
+    ownershipIdentity = ImportIngressIdentityFixtures.filesystemIdentity(root);
   }
 
   @Test
@@ -189,7 +194,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(nested, nestedProperties);
     String setStateSql = "UPDATE batch.import_ingress_ownership SET state = ? WHERE scope_id = ?";
     jdbc.update(setStateSql, nestedState, nested.scanScope());
@@ -247,7 +252,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(nested, nestedProperties);
     String setStateSql = "UPDATE batch.import_ingress_ownership SET state = ? WHERE scope_id = ?";
     jdbc.update(setStateSql, nestedState, nested.scanScope());
@@ -568,7 +573,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(scanner, properties);
     assertThatThrownBy(() -> {
           for (int tick = 0; tick < 20; tick++) {
@@ -732,7 +737,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     assertThat(scanner.scan()).isEqualTo(ImportIngressScanner.ScanResult.OWNERSHIP_INACTIVE);
     String stateSql = "SELECT count(*) FROM batch.import_ingress_scan_state WHERE scope_id = ?";
     assertThat(jdbc.queryForObject(stateSql, Long.class, scanner.scanScope())).isZero();
@@ -944,7 +949,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         changingStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(scanner, properties);
     String objectKey = prefix + "t1/orders.csv";
 
@@ -1146,7 +1151,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         changingStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(scanner, properties);
 
     scanner.scan();
@@ -1294,7 +1299,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         blockingStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     ImportIngressScanner second = new ImportIngressScanner(
         fileRecords,
         fileAudits,
@@ -1304,7 +1309,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(first, firstProperties);
     declareOwnership(second, secondProperties);
     AtomicReference<Throwable> failure = new AtomicReference<>();
@@ -1467,7 +1472,7 @@ class ImportIngressScanPersistenceIntegrationTest {
         objectStore,
         new ObjectMapper(),
         scanRepository,
-        environment);
+        ownershipIdentity);
     declareOwnership(scanner, properties);
     return scanner;
   }

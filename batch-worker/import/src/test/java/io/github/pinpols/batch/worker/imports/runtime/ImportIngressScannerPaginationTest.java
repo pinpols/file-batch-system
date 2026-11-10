@@ -25,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.mock.env.MockEnvironment;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("导入扫描器分页发现")
@@ -77,7 +76,7 @@ class ImportIngressScannerPaginationTest {
         objectStore,
         new ObjectMapper(),
         scans,
-        new MockEnvironment());
+        ImportIngressIdentityFixtures.s3Identity());
     scans.declare(new ImportIngressOwnershipRepository.Scope(
         scanner.scanScope(),
         scanner.scanStorageIdentity(),
@@ -135,7 +134,7 @@ class ImportIngressScannerPaginationTest {
         objectStore,
         new ObjectMapper(),
         scans,
-        new MockEnvironment());
+        ImportIngressIdentityFixtures.s3Identity());
     scans.declare(new ImportIngressOwnershipRepository.Scope(
         scanner.scanScope(),
         scanner.scanStorageIdentity(),

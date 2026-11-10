@@ -24,7 +24,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -67,7 +66,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   private final ImportScannerProperties scannerProperties;
   private final JdbcTemplate jdbcTemplate;
   private final S3StorageProperties storageProperties;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final ObjectMapper objectMapper;
   private String testPrefix;
   private String scopeId;
@@ -78,14 +77,14 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
       ImportScannerProperties scannerProperties,
       JdbcTemplate jdbcTemplate,
       S3StorageProperties storageProperties,
-      Environment environment,
+      ImportIngressOwnershipIdentity ownershipIdentity,
       ObjectMapper objectMapper) {
     this.scanner = scanner;
     this.runtimeRepository = runtimeRepository;
     this.scannerProperties = scannerProperties;
     this.jdbcTemplate = jdbcTemplate;
     this.storageProperties = storageProperties;
-    this.environment = environment;
+    this.ownershipIdentity = ownershipIdentity;
     this.objectMapper = objectMapper;
   }
 
@@ -108,8 +107,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void declareCurrentScope() {
-    String storageId =
-        ImportIngressOwnershipIdentity.storageId(environment, storageProperties, objectMapper);
+    String storageId = ownershipIdentity.storageId(storageProperties, objectMapper);
     String currentPrefix = scannerProperties.getPrefix();
     scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, currentPrefix, objectMapper);
     String declareSql = """

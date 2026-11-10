@@ -29,7 +29,6 @@ import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -93,12 +92,11 @@ public class FileGovernanceRepository {
       String currentStatus, String nextStatus, String operatorId, String reason) {}
 
   private final FileGovernanceMapper fileGovernanceMapper;
-  private final Environment environment;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final S3StorageProperties storageProperties;
 
   private String storageId() {
-    return ImportIngressOwnershipIdentity.storageId(
-        environment, storageProperties, OWNERSHIP_IDENTITY_MAPPER);
+    return ownershipIdentity.storageId(storageProperties, OWNERSHIP_IDENTITY_MAPPER);
   }
 
   public boolean isEnabledFileChannel(String tenantId, String channelCode) {

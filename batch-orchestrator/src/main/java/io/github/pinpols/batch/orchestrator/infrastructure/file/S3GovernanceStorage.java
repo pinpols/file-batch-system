@@ -19,8 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.core.env.Environment;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -30,8 +28,8 @@ public class S3GovernanceStorage {
 
   private final S3StorageProperties properties;
   private final BatchObjectStore objectStore;
-  private final JdbcTemplate platformJdbc;
-  private final Environment environment;
+  private final ImportIngressOwnershipRepository ownershipRepository;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
   private final FileGovernanceReconcileCursorMapper cursorMapper;
 
   /** 治理任务只做对象清点和清理，不在这里承载业务编排。 */
@@ -39,12 +37,10 @@ public class S3GovernanceStorage {
       String prefix, int limit, boolean includeTemporaryObjects) {
     String bucket = properties.getBucket();
     String effectivePrefix = prefix == null ? "" : prefix;
-    String storageId = ImportIngressOwnershipIdentity.storageId(
-        environment, properties, JsonUtils.newDefaultMapper());
+    String storageId = ownershipIdentity.storageId(properties, JsonUtils.newDefaultMapper());
     cursorMapper.insertIfAbsent(storageId, effectivePrefix);
     Cursor cursor = cursorMapper.select(storageId, effectivePrefix);
-    List<Scope> protectedScopes =
-        new ImportIngressOwnershipRepository(platformJdbc).listProtectedScopes(storageId);
+    List<Scope> protectedScopes = ownershipRepository.listProtectedScopes(storageId);
     List<StorageObjectView> objects = new ArrayList<>();
     try {
       // 批大小约束原始对象数；跳过受保护对象也消费本页预算，避免一次对账无限翻页。

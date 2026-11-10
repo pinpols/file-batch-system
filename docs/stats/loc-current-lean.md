@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4bfd005c3`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `234a3b030`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,318 | 824,208 | 430,662 | 52.3% |
+| 6,323 | 824,420 | 430,866 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,901 | 409,913 | 220,159 | 53.7% |
-| prod | 3,499 | 326,318 | 155,901 | 47.8% |
-| script | 740 | 69,095 | 42,212 | 61.1% |
+| test | 1,902 | 410,008 | 220,224 | 53.7% |
+| prod | 3,503 | 326,438 | 156,040 | 47.8% |
+| script | 740 | 69,092 | 42,212 | 61.1% |
 | config | 68 | 10,272 | 7,680 | 74.8% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
 | sql | 76 | 2,450 | 231 | 9.4% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,751 | 639,093 | 337,551 | 52.8% |
-| Python | 351 | 53,040 | 29,113 | 54.9% |
+| Java | 4,754 | 639,091 | 337,676 | 52.8% |
+| Python | 351 | 53,037 | 29,113 | 54.9% |
 | Shell | 218 | 36,029 | 28,513 | 79.1% |
 | YAML | 109 | 15,009 | 11,608 | 77.3% |
-| XML | 223 | 31,357 | 9,345 | 29.8% |
+| XML | 225 | 31,574 | 9,424 | 29.8% |
 | TypeScript | 41 | 8,291 | 4,322 | 52.1% |
 | Rust | 24 | 9,854 | 3,529 | 35.8% |
 | Properties | 5 | 3,187 | 2,647 | 83.1% |
@@ -55,8 +55,8 @@
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,519 | 1,078 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,040 | 1,014 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DispatchPipelineE2eIT.java` | test | Java | 2,065 | 988 |
+| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,531 | 954 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
-| `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,526 | 949 |
 | `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 1,030 | 939 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
 
