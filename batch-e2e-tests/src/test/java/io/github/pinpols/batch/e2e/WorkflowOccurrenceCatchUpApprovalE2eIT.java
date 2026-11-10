@@ -144,7 +144,8 @@ import org.springframework.test.web.reactive.server.WebTestClient;
       "batch.resource-scheduler.waiting-dispatch-interval-millis=200",
       "batch.workflow.cross-day-dep.poll-interval-millis=200",
       "batch.trigger.outbox.poll-interval-millis=200",
-      "batch.trigger.kafka.send-timeout-seconds=5"
+      "batch.trigger.kafka.send-timeout-seconds=5",
+      "batch.batch-day.settle-scan-interval-millis=3600000"
     })
 @Tag("critical")
 @DisplayName("计划 occurrence 补跑经真实 Console/Trigger HTTP 与集中审批后创建 WorkflowRun 和 JOB 节点实例")
