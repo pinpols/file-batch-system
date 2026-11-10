@@ -52,9 +52,7 @@ export interface Assignment {
  *   - "commit"       — advance past this offset (accepted task, or a poison
  *                      record commit-skipped so it can't head-of-line block the
  *                      partition; §4.5 / fixture 30).
- *   - "withhold"     — do NOT commit; record a per-partition commit ceiling and
- *                      keep consuming (rejected schema / foreign tenant / not-for-us;
- *                      §A / §1.9). A rebalance/restart re-reads it.
+ *   - "withhold"     — 不提交，保留分区提交上限，由适配器暂停并重读该记录。
  *   - "backpressure" — at capacity; seek back + pause the partition, resume when a
  *                      slot frees (§1.5 / §2). The message is redelivered.
  */
@@ -64,6 +62,7 @@ export type MessageDisposition = "commit" | "withhold" | "backpressure";
 export function dispositionOf(outcome: PipelineOutcome): MessageDisposition {
   switch (outcome.kind) {
     case "accepted":
+      return outcome.committed ? "commit" : "withhold";
     case "parse-error":
       return "commit";
     case "backpressure":
@@ -125,17 +124,13 @@ export interface MessagePipelineDeps {
   maxConcurrent: number;
   assignment: Assignment;
   logger?: Logger;
-  /** invoked for an accepted, in-tenant, processable message. */
-  onAccepted: (msg: DispatchMessage) => Promise<void>;
+  /** 处理通过验证的消息；返回 false 时保留 offset，void 保持既有提交语义。 */
+  onAccepted: (msg: DispatchMessage) => Promise<boolean | void>;
 }
 
 /**
- * Pure-ish pipeline: validates a record and either dispatches it or drops it.
- * "committed" mirrors the offset-commit decision the real Kafka adapter must
- * honor: accepted + parse-error commit (the latter commit-skips an undecodable
- * poison record past the partition, fixture 30 / §4.5); rejected-schema /
- * dropped-tenant / not-for-worker / backpressure withhold so a fixed deploy or
- * another group member can re-read (§A / §1.9).
+ * 校验消息并调用认领回调；只有已确认认领或明确可跳过的消息才提交 offset。
+ * 格式错误的毒丸消息按 fixture 30 跳过，租户、版本、容量或认领未确认时保留重读入口。
  */
 export class MessagePipeline {
   #deps: MessagePipelineDeps;
@@ -218,7 +213,8 @@ export class MessagePipeline {
     }
 
     // 5. dispatch to claim→execute→report
-    await this.#deps.onAccepted(msg);
+    const accepted = await this.#deps.onAccepted(msg);
+    if (accepted === false) return { kind: "accepted", message: msg, committed: false };
     return { kind: "accepted", message: msg, committed: true };
   }
 }

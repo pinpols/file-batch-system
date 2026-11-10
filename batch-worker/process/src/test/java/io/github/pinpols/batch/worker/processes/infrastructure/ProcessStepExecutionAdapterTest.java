@@ -209,6 +209,37 @@ class ProcessStepExecutionAdapterTest {
   }
 
   @Test
+  @DisplayName("处理流水线多个阶段失败时保持报告首个失败")
+  @SuppressWarnings("unchecked")
+  void execute_preservesFirstFailureForOtherWorker() {
+    ProcessStepExecutionAdapter adapter = new ProcessStepExecutionAdapter(
+        processStageExecutor,
+        new ObjectMapper(),
+        pipelineRuns,
+        fileRecords,
+        stepTemplateProvider,
+        (ObjectProvider<PipelineVerifierHook>) mock(ObjectProvider.class),
+        (ObjectProvider<PipelineCompensationHook>) mock(ObjectProvider.class));
+    when(stepTemplateProvider.defaultStepDefinitions()).thenReturn(processTemplates());
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(RUN);
+    when(processStageExecutor.execute(any()))
+        .thenReturn(List.of(
+            ProcessStageResult.failure(ProcessStage.COMPUTE, "FIRST_FAILURE", "first"),
+            ProcessStageResult.failure(ProcessStage.VALIDATE, "SECOND_FAILURE", "second")));
+    StepExecutionRequest executionRequest = new StepExecutionRequest(
+        "tenant-a",
+        "job-process",
+        "PROCESS",
+        "worker-1",
+        Map.of("payload", "{}", "systemPipelineCode", "PROCESS", "systemPipelineVersion", 1));
+
+    StepExecutionResponse response = adapter.execute(executionRequest);
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("FIRST_FAILURE");
+  }
+
+  @Test
   @DisplayName("Worker 收到与实现类型不一致的任务时拒绝执行且不创建 Pipeline 实例")
   @SuppressWarnings("unchecked")
   void shouldRejectMismatchedTaskTypeBeforeCreatingPipelineInstance() {

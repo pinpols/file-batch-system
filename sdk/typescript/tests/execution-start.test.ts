@@ -46,13 +46,26 @@ for (const scenario of ["confirmed", "revoked", "unknown", "cancelled"] as const
       await lifecycle.stop(1000);
       const starts = platform.transport.calls.filter((call) => call.op === "renew");
       assert.equal(starts.length, 1);
+      const startRequest = starts[0].args[1] as {
+        tenantId: string;
+        workerId: string;
+        partitionInvocationId: string;
+        details: { executionStarted: boolean; executionAttemptId: string };
+      };
+      assert.match(
+        startRequest.details.executionAttemptId,
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+      );
       assert.deepEqual(starts[0].args, [
         "task-1",
         {
           tenantId: "tenant-A",
           workerId: "w1",
           partitionInvocationId: "inv-current",
-          details: { executionStarted: true },
+          details: {
+            executionStarted: true,
+            executionAttemptId: startRequest.details.executionAttemptId,
+          },
         },
       ]);
       assert.equal(executions, scenario === "confirmed" ? 1 : 0);
@@ -65,3 +78,35 @@ for (const scenario of ["confirmed", "revoked", "unknown", "cancelled"] as const
     }
   });
 }
+
+test("不同执行入口生成不同尝试标识", async () => {
+  const platform = new FakePlatform({
+    claim: { partitionInvocationId: "inv-current", effectiveConfig: {} },
+    renew: () => ({ cancelRequested: false }),
+  });
+  platform.feedMessages(
+    { taskId: "task-1", tenantId: "tenant-A", schemaVersion: "v1" },
+    { taskId: "task-2", tenantId: "tenant-A", schemaVersion: "v1" },
+  );
+  const lifecycle = new WorkerLifecycle({
+    config,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    logger,
+    installSignalHandlers: false,
+    handler: { execute: async () => taskSuccess({}, "ok") },
+  });
+  try {
+    await lifecycle.start();
+    await lifecycle.stop(1000);
+    const starts = platform.transport.calls.filter((call) => call.op === "renew");
+    assert.equal(starts.length, 2);
+    const attempts = starts.map(
+      (call) =>
+        (call.args[1] as { details: { executionAttemptId: string } }).details.executionAttemptId,
+    );
+    assert.notEqual(attempts[0], attempts[1]);
+  } finally {
+    await lifecycle.stop(1000);
+  }
+});

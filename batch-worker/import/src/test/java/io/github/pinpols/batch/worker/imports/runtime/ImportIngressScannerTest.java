@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -15,6 +17,7 @@ import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.storage.BatchObjectStore;
 import io.github.pinpols.batch.common.storage.ObjectListing;
 import io.github.pinpols.batch.common.storage.ObjectSummary;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.FileRecordParam;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileAuditRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -56,6 +59,7 @@ class ImportIngressScannerTest {
   private ImportScannerProperties scannerProperties;
   private S3StorageProperties s3StorageProperties;
   private ImportIngressScanner scanner;
+  private InMemoryImportIngressScanRepository scans;
 
   @BeforeEach
   void setUp() {
@@ -80,6 +84,7 @@ class ImportIngressScannerTest {
     s3StorageProperties = new S3StorageProperties();
     s3StorageProperties.setBucket("batch-dev");
 
+    scans = new InMemoryImportIngressScanRepository();
     scanner = new ImportIngressScanner(
         runtimeRepository,
         fileAudits,
@@ -87,7 +92,11 @@ class ImportIngressScannerTest {
         scannerProperties,
         s3StorageProperties,
         objectStore,
-        new ObjectMapper());
+        new ObjectMapper(),
+        scans,
+        ImportIngressIdentityFixtures.s3Identity());
+    declareBindings(List.of());
+    lenient().when(objectStore.exists(any(), any())).thenReturn(true);
   }
 
   @Test
@@ -101,6 +110,65 @@ class ImportIngressScannerTest {
         .hasMessageContaining("failed to scan objectStore ingress objects");
 
     verifyNoInteractions(runtimeRepository);
+  }
+
+  @Test
+  @DisplayName("同一存储范围和等价规则的摘要不受扫描间隔、批大小及绑定顺序影响")
+  void scanIdentity_shouldIgnoreOperationalSettingsAndBindingOrder() {
+    ImportScannerProperties.ChannelBinding first = binding("t1", "ingress/t1/a/", "CH_A");
+    ImportScannerProperties.ChannelBinding second = binding("t2", "ingress/t2/b/", "CH_B");
+    declareBindings(List.of(first, second));
+    String scope = scanner.scanScope();
+    String rules = scanner.scanConfigurationDigest();
+
+    scannerProperties.setPollIntervalMillis(5000);
+    scannerProperties.setBatchSize(5);
+    declareBindings(List.of(second, first));
+
+    assertThat(scanner.scanScope()).isEqualTo(scope);
+    assertThat(scanner.scanConfigurationDigest()).isEqualTo(rules);
+    scannerProperties.setSourceType("API");
+    assertThat(scanner.scanScope()).isEqualTo(scope);
+    assertThat(scanner.scanConfigurationDigest()).isNotEqualTo(rules);
+    scannerProperties.setPrefix("other/");
+    assertThat(scanner.scanScope()).isNotEqualTo(scope);
+  }
+
+  @Test
+  @DisplayName("导入渠道仅按租户和最长受控目录前缀绑定")
+  void scanner_shouldAssignConfiguredTenantAndLongestPrefix() {
+    scannerProperties.setDefaultBizDate("2026-11-09");
+    declareBindings(List.of(
+        binding("t1", "ingress/t1/", "CH_BASE"),
+        binding("t1", "ingress/t1/a/", "CH_A"),
+        binding("other", "ingress/t2/", "CH_OTHER")));
+    ObjectSummary matched = new ObjectSummary("ingress/t1/a/orders.csv", 1, Instant.now(), "a");
+    ObjectSummary unmatched = new ObjectSummary("ingress/t2/orders.csv", 1, Instant.now(), "b");
+    when(objectStore.list(any(), any(), any(), anyInt()))
+        .thenReturn(new ObjectListing(List.of(matched, unmatched), null));
+
+    scanner.scan();
+
+    ArgumentCaptor<FileRecordParam> records = ArgumentCaptor.forClass(FileRecordParam.class);
+    verify(runtimeRepository, times(2)).createFileRecord(records.capture());
+    assertThat(records.getAllValues())
+        .anySatisfy(record -> {
+          assertThat(record.getStoragePath()).isEqualTo(matched.key());
+          assertThat(record.getArrivalChannelCode()).isEqualTo("CH_A");
+        })
+        .anySatisfy(record -> {
+          assertThat(record.getStoragePath()).isEqualTo(unmatched.key());
+          assertThat(record.getArrivalChannelCode()).isNull();
+        });
+  }
+
+  private static ImportScannerProperties.ChannelBinding binding(
+      String tenant, String prefix, String channel) {
+    ImportScannerProperties.ChannelBinding binding = new ImportScannerProperties.ChannelBinding();
+    binding.setTenantId(tenant);
+    binding.setObjectPrefix(prefix);
+    binding.setChannelCode(channel);
+    return binding;
   }
 
   @ParameterizedTest
@@ -237,5 +305,93 @@ class ImportIngressScannerTest {
 
     verify(objectStore, never()).get(any(), any());
     verify(runtimeRepository).createFileRecord(any());
+  }
+
+  @Test
+  @DisplayName("未声明 ACTIVE 范围时不列举对象")
+  void scan_skipsUndeclaredScope() {
+    scannerProperties.setPrefix("undeclared/");
+    assertThat(scanner.scan()).isEqualTo(ImportIngressScanner.ScanResult.OWNERSHIP_INACTIVE);
+    verifyNoInteractions(objectStore, runtimeRepository);
+  }
+
+  @Test
+  @DisplayName("遗留静态渠道绑定必须迁移到共享声明")
+  void scan_rejectsStaticBindings() {
+    scannerProperties.setChannelBindings(List.of(binding("t1", "ingress/t1/", "CH_A")));
+    assertThatThrownBy(() -> scanner.scan())
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("迁移至共享入口归属声明");
+    verifyNoInteractions(objectStore, runtimeRepository);
+  }
+
+  @Test
+  @DisplayName("迁移相同清单和渠道声明后保持既有扫描规则摘要")
+  void scanDigest_shouldMatchPreviouslyPersistedStaticBindings() {
+    scannerProperties.setPrefix("ingress/wait-file-76ee0f1a/");
+    scannerProperties.setDefaultBizDate("2026-11-09");
+    scannerProperties.setBatchManifestEnabled(true);
+    scannerProperties.setStabilityWindowSeconds(2);
+    workerConfiguration = new ImportWorkerConfiguration(
+        null,
+        "IMPORT",
+        "default-tenant",
+        15000L,
+        "test-topic",
+        "test-group",
+        null,
+        new ImportWorkerConfiguration.FileProcessing(false, 1000, 1000, 500),
+        null);
+    scanner = new ImportIngressScanner(
+        runtimeRepository,
+        fileAudits,
+        workerConfiguration,
+        scannerProperties,
+        s3StorageProperties,
+        objectStore,
+        new ObjectMapper(),
+        scans,
+        ImportIngressIdentityFixtures.s3Identity());
+    String directory = "ingress/wait-file-76ee0f1a/default-tenant/input/";
+    List<ImportIngressOwnershipRepository.Binding> bindings = List.of(
+        new ImportIngressOwnershipRepository.Binding(
+            "MANIFEST",
+            "default-tenant",
+            directory,
+            "G_76ee0f1a",
+            "validation-manifests/wait-file-76ee0f1a/customers-{bizDateCompact}.batch.json",
+            null,
+            true),
+        new ImportIngressOwnershipRepository.Binding(
+            "CHANNEL", "default-tenant", directory, null, null, "scan_76ee0f1a", true));
+    scans.declare(new ImportIngressOwnershipRepository.Scope(
+        scanner.scanScope(),
+        scanner.scanStorageIdentity(),
+        s3StorageProperties.getBucket(),
+        scannerProperties.getPrefix(),
+        "ACTIVE",
+        bindings));
+    assertThat(scanner.scanConfigurationDigest())
+        .isEqualTo("8af03a3dfab1b5bbc47e70b022feee6f4b93ad62d0e3701ef5d9dff6a924161c");
+  }
+
+  private void declareBindings(List<ImportScannerProperties.ChannelBinding> channels) {
+    List<ImportIngressOwnershipRepository.Binding> bindings = channels.stream()
+        .map(value -> new ImportIngressOwnershipRepository.Binding(
+            "CHANNEL",
+            value.getTenantId(),
+            value.getObjectPrefix(),
+            null,
+            null,
+            value.getChannelCode(),
+            true))
+        .toList();
+    scans.declare(new ImportIngressOwnershipRepository.Scope(
+        scanner.scanScope(),
+        scanner.scanStorageIdentity(),
+        s3StorageProperties.getBucket(),
+        scannerProperties.getPrefix(),
+        "ACTIVE",
+        bindings));
   }
 }

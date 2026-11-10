@@ -8,6 +8,8 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
 import io.github.pinpols.batch.orchestrator.domain.command.AlertEmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
@@ -39,7 +41,8 @@ class WorkflowMonitoringAlertEmissionServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new WorkflowMonitoringAlertEmissionService(mapper, alertEventService);
+    service = new WorkflowMonitoringAlertEmissionService(
+        mapper, alertEventService, new BatchTimezoneProvider(new BatchTimezoneProperties()));
   }
 
   @ParameterizedTest
@@ -72,6 +75,7 @@ class WorkflowMonitoringAlertEmissionServiceTest {
     assertThat(queryCaptor.getValue().resourceKey()).isEqualTo("workflow_run:21");
     assertThat(queryCaptor.getValue().violation()).isEqualTo(violation);
     assertThat(queryCaptor.getValue().limit()).isOne();
+    assertThat(queryCaptor.getValue().defaultTimezone()).isEqualTo("Asia/Shanghai");
   }
 
   @Test

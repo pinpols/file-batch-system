@@ -46,7 +46,7 @@
 |---|---|---|---|---|---|
 | `batch.storage.backend` | `s3` / `filesystem` | **s3** | 对象存储后端：S3 协议全系（MinIO/AWS S3/阿里 OSS/腾讯 COS）或本地 NAS/文件系统；切换需迁移对象 + `BATCH_STORAGE_BACKEND_CUTOVER_ID` | `BATCH_STORAGE_BACKEND` | ✅ |
 | `batch.quota.runtime-store` | `redis` / `database` | **redis** | 配额限流运行时状态后端（Lua 原子 vs PG 乐观锁）；切换需 snapshot 核对 + `BATCH_QUOTA_BACKEND_CUTOVER_ID` | `BATCH_QUOTA_RUNTIME_STORE` | ✅ |
-| `batch.worker.report-outbox.enabled` | `true` / `false` | **false** | worker 上报走事务性 Outbox（防 Kafka 写失败丢报告）；启停/换存储需排空 + `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` | `BATCH_WORKER_REPORT_OUTBOX_ENABLED` | ✅ |
+| `batch.worker.report-outbox.enabled` | `true` / `false` | **false** | Worker 回报经 HTTP 重试仍失败时，可持久化到 Outbox 继续投递；启停/换存储需排空 + `BATCH_WORKER_REPORT_OUTBOX_CUTOVER_ID` | `BATCH_WORKER_REPORT_OUTBOX_ENABLED` | ✅ |
 | `batch.shedlock.provider` | `redis` / `jdbc` | **redis** | 调度锁后端（48 处 `@SchedulerLock`）；**必须全停 → 切配置 → 全起**，双 provider 会重复触发任务 | `BATCH_SHEDLOCK_PROVIDER` | ✅ |
 
 ### 1.B 调度与正确性
@@ -207,7 +207,9 @@ Import 在 LOAD 前校验插件幂等能力；`NONE/UNKNOWN` 会以 `IMPORT_LOAD
 | `mq.routing.mode` | — | 无故障场景 | — | 切换需走灰度 SOP（[`mq-topic-routing-rollout.md`](./mq-topic-routing-rollout.md)） |
 | `quota.runtime-store=redis` | 🟡 中 | Redis `DataAccessException` | `catch` → `ResourceCheck.allow()`（**放行**）+ WARN | **限流功能等同关闭**：长期 Redis 故障会让大租户吃掉小租户配额 |
 | `quota.snapshot.enabled` | 🟢 强（局部） | 单租户 snapshot 失败 | per-tenant `catch` → 跳过该租户继续下一个 | 该租户审计数据漏一个周期，下次自然恢复 |
-| `report-outbox.enabled` | — | Outbox 写入失败（磁盘/PG） | `enqueue` 失败 → `report` 继续抛异常（与未开 outbox 相同） | **`PLATFORM_PG`**：依赖 orchestrator 已迁移 V96；**`SQLITE`**：须持久卷 |
+| `report-outbox.enabled` | — | Outbox 写入失败（磁盘/PG） | HTTP 重试及持久化均失败时记录 dropped 日志与指标，回报不再向消费线程抛出异常 | 任务结果依赖租约回收等后续处理；**`PLATFORM_PG`** 依赖 orchestrator 已迁移 V96，**`SQLITE`** 须持久卷 |
+
+修正启用开关后，`false` 或未配置时不会创建回报 Outbox，也不会继续轮询其中的历史记录。如果旧版本在配置关闭时仍产生了发件箱数据，升级前应按 [Worker Report Outbox 切换流程](stateful-backend-cutover.md#4-worker-report-outbox)检查并处理未完成记录；切换不会自动删除或投递它们。
 
 > "强 fail-open"=故障时业务完全不受影响；"中 fail-open"=故障时业务继续但行为/语义变化，需运维监控。
 

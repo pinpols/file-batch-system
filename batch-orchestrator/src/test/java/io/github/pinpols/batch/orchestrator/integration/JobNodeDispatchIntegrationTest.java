@@ -94,6 +94,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentMatchers;
@@ -3799,6 +3800,202 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     Long selectedWorkflowNodeRunCount =
         jdbcTemplate.queryForObject(selectCountSql, Long.class, workflowRunId);
     assertThat(selectedWorkflowNodeRunCount).isEqualTo(2L);
+  }
+
+  @ParameterizedTest
+  @CsvSource({"ALL,false", "ANY,false", "ALL,true", "ANY,true"})
+  @DisplayName("并行作业及网关推进汇合时只生成一个 END 并正确结束")
+  void parallelReports_shouldCompleteJoinOnce(String joinMode, boolean gatewayBranch)
+      throws Exception {
+    String insertNode = """
+        insert into batch.workflow_node (
+            tenant_id, workflow_definition_id, node_code, node_name, node_type,
+            related_job_code, node_order, retry_policy, retry_max_count, timeout_seconds, enabled
+        ) values (?, ?, 'JOB_NODE_2', 'Parallel Job', 'JOB', ?, 2, 'NONE', 0, 0, true)
+        """;
+    String insertEdges = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values
+            (?, ?, 'START', 'JOB_NODE_2', 'ALWAYS', true),
+            (?, ?, 'JOB_NODE_2', ?, 'SUCCESS', true)
+        """;
+    String insertGateway = """
+        insert into batch.workflow_node (
+            tenant_id, workflow_definition_id, node_code, node_name, node_type,
+            node_order, retry_policy, retry_max_count, timeout_seconds, enabled
+        ) values (?, ?, 'GATEWAY_JOIN', 'Gateway', 'GATEWAY', 3, 'NONE', 0, 0, true)
+        """;
+    String insertGatewayEdge = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'GATEWAY_JOIN', 'END', 'SUCCESS', true)
+        """;
+    String setJoinMode = """
+        update batch.workflow_node set node_params = jsonb_build_object('joinMode', ?::text)
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'END'
+        """;
+    String acquireFence = "select batch.acquire_batch_day_settlement_fence(?, ?, ?)";
+    String selectStatus =
+        "select run_status from batch.workflow_run where tenant_id = ? and id = ?";
+    String selectNodeStatuses = """
+        select node_status from batch.workflow_node_run
+        where workflow_run_id = ? and node_code in ('JOB_NODE_1', 'JOB_NODE_2')
+        order by node_code
+        """;
+    String countEnd = """
+        select count(*) from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'END' and node_status = 'SUCCESS'
+        """;
+    String countAllEnd = """
+        select count(*) from batch.workflow_node_run where workflow_run_id = ? and node_code = 'END'
+        """;
+    String gatewayStatus = """
+        select node_status from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'GATEWAY_JOIN'
+        """;
+
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String firstJob = seedChildJob("WG_JOIN_FIRST_" + suffix);
+    String secondJob = seedChildJob("WG_JOIN_SECOND_" + suffix);
+    DirectWorkflowSeed seed = seedDirectWorkflow(firstJob);
+    jdbcTemplate.update(insertNode, testTenantId, seed.workflowDefinitionId(), secondJob);
+    if (gatewayBranch) {
+      jdbcTemplate.update(insertGateway, testTenantId, seed.workflowDefinitionId());
+      jdbcTemplate.update(insertGatewayEdge, testTenantId, seed.workflowDefinitionId());
+    }
+    jdbcTemplate.update(
+        insertEdges,
+        testTenantId,
+        seed.workflowDefinitionId(),
+        testTenantId,
+        seed.workflowDefinitionId(),
+        gatewayBranch ? "GATEWAY_JOIN" : "END");
+    jdbcTemplate.update(setJoinMode, joinMode, testTenantId, seed.workflowDefinitionId());
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(testTenantId)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("parallel-join-" + suffix)
+        .params(Map.of())
+        .build();
+    workflowRunLaunchService.launch(request);
+    Long runId = workflowRunId(seed.requestId());
+    Long firstInstance = linkedNodeJobInstance(runId, "JOB_NODE_1");
+    Long secondInstance = linkedNodeJobInstance(runId, "JOB_NODE_2");
+    assertThat(firstInstance).isNotNull().isNotEqualTo(secondInstance);
+    assertThat(secondInstance).isNotNull();
+
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    try (Connection fence = jdbcTemplate.getDataSource().getConnection()) {
+      fence.setAutoCommit(false);
+      Future<?> firstReport;
+      Future<?> secondReport;
+      try {
+        try (PreparedStatement statement = fence.prepareStatement(acquireFence)) {
+          statement.setString(1, testTenantId);
+          statement.setString(2, "WF_CALENDAR");
+          statement.setObject(3, BIZ_DATE);
+          statement.executeQuery().close();
+        }
+        int fencePid = backendPid(fence);
+        firstReport = executor.submit(() -> reportJobSuccess(firstInstance));
+        secondReport = executor.submit(() -> reportJobSuccess(secondInstance));
+        awaitBlockedBySql(fencePid, "acquire_batch_day_settlement_fence", 2);
+      } finally {
+        fence.rollback();
+      }
+      firstReport.get(20, TimeUnit.SECONDS);
+      secondReport.get(20, TimeUnit.SECONDS);
+    } finally {
+      executor.shutdownNow();
+      assertThat(executor.awaitTermination(10, TimeUnit.SECONDS)).isTrue();
+    }
+
+    String status = jdbcTemplate.queryForObject(selectStatus, String.class, testTenantId, runId);
+    List<String> nodeStatuses = jdbcTemplate.queryForList(selectNodeStatuses, String.class, runId);
+    Long successfulEnds = jdbcTemplate.queryForObject(countEnd, Long.class, runId);
+    Long allEnds = jdbcTemplate.queryForObject(countAllEnd, Long.class, runId);
+    assertThat(status).isEqualTo("SUCCESS");
+    assertThat(nodeStatuses).containsExactly("SUCCESS", "SUCCESS");
+    assertThat(successfulEnds).isEqualTo(1L);
+    assertThat(allEnds).isEqualTo(1L);
+    if (gatewayBranch) {
+      List<String> statuses = jdbcTemplate.queryForList(gatewayStatus, String.class, runId);
+      assertThat(statuses).containsExactly("SUCCESS");
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ALL", "ANY"})
+  @DisplayName("网关和作业并行汇合时，END 按汇合规则推进")
+  void directWorkflow_shouldWaitForParallelJobBeforeGatewayEnd(String joinMode) {
+    String insertGateway = """
+        insert into batch.workflow_node (
+            tenant_id, workflow_definition_id, node_code, node_name, node_type,
+            node_order, retry_policy, retry_max_count, timeout_seconds, enabled
+        ) values (?, ?, 'GATEWAY_FAST', 'Gateway', 'GATEWAY', 1, 'NONE', 0, 0, true)
+        """;
+    String insertEdges = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values
+            (?, ?, 'START', 'GATEWAY_FAST', 'ALWAYS', true),
+            (?, ?, 'GATEWAY_FAST', 'END', 'SUCCESS', true)
+        """;
+    String selectRun = """
+        select run.id from batch.workflow_run run
+        join batch.trigger_request request on request.id = run.trigger_request_id
+        where run.tenant_id = ? and request.tenant_id = ? and request.request_id = ?
+        """;
+    String countEnd = """
+        select count(*) from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = 'END'
+        """;
+    String selectRunStatus = "select run_status from batch.workflow_run where id = ?";
+    String setAnyJoin = """
+        update batch.workflow_node set node_params = '{"joinMode":"ANY"}'::jsonb
+        where workflow_definition_id = ? and node_code = 'END'
+        """;
+
+    String workerGroup = "WG_GATEWAY_END_" + System.nanoTime();
+    String jobCode = seedChildJob(workerGroup);
+    DirectWorkflowSeed seed = seedDirectWorkflow(jobCode);
+    if ("ANY".equals(joinMode)) {
+      jdbcTemplate.update(setAnyJoin, seed.workflowDefinitionId());
+    }
+    jdbcTemplate.update(insertGateway, testTenantId, seed.workflowDefinitionId());
+    jdbcTemplate.update(
+        insertEdges,
+        testTenantId,
+        seed.workflowDefinitionId(),
+        testTenantId,
+        seed.workflowDefinitionId());
+    LaunchRequest request = LaunchRequest.builder()
+        .tenantId(testTenantId)
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .requestId(seed.requestId())
+        .traceId("trace-gateway-end")
+        .params(Map.of())
+        .build();
+    workflowRunLaunchService.launch(request);
+    Long runId = jdbcTemplate.queryForObject(
+        selectRun, Long.class, testTenantId, testTenantId, seed.requestId());
+    Long jobInstanceId = linkedNodeJobInstance(runId, "JOB_NODE_1");
+    assertThat(jobInstanceId).isNotNull();
+    assertThat(jdbcTemplate.queryForObject(selectRunStatus, String.class, runId))
+        .isEqualTo("RUNNING");
+    Long endCountBeforeJob = jdbcTemplate.queryForObject(countEnd, Long.class, runId);
+    assertThat(endCountBeforeJob).isEqualTo("ANY".equals(joinMode) ? 1L : 0L);
+
+    reportJobSuccess(jobInstanceId);
+    assertThat(jdbcTemplate.queryForObject(selectRunStatus, String.class, runId))
+        .isEqualTo("SUCCESS");
+    assertThat(jdbcTemplate.queryForObject(countEnd, Long.class, runId)).isEqualTo(1L);
   }
 
   @Test

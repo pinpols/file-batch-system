@@ -20,4 +20,6 @@ public record TenantConfigPackageExcelApplyResponse(
     int fileTemplateInserted,
     int fileTemplateUpdated,
     int workflowInserted,
-    int workflowUpdated) {}
+    int workflowUpdated,
+    int jobMonitoringPoliciesApplied,
+    int workflowMonitoringPoliciesApplied) {}

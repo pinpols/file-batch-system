@@ -132,6 +132,12 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     JobPartitionEntity claimedPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
     String invocationI1 = claimedPartition.getCurrentInvocationId();
     assertThat(invocationI1).isNotBlank();
+    String firstStartDetails = """
+        {"executionStarted":true,"executionAttemptId":"attempt-before-reclaim"}
+        """;
+    var firstStart = taskExecutionService.recordHeartbeat(
+        TENANT, task.getId(), seed.workerCode(), invocationI1, firstStartDetails);
+    assertThat(firstStart.leaseRenewed()).isTrue();
 
     // 2) 真 PG reclaim:将租约置为过期后运行生产 reclaim 单元,复位 task/partition/step 并写入重派 outbox。
     String expirePartitionLeaseSql = """
@@ -165,6 +171,14 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     String invocationI2 =
         jobPartitionMapper.selectById(TENANT, partition.getId()).getCurrentInvocationId();
     assertThat(invocationI2).isNotBlank().isNotEqualTo(invocationI1);
+    String secondStartDetails = """
+        {"executionStarted":true,"executionAttemptId":"attempt-after-reclaim"}
+        """;
+    var secondStart = taskExecutionService.recordHeartbeat(
+        TENANT, task.getId(), seed.workerCode(), invocationI2, secondStartDetails);
+    assertThat(secondStart.leaseRenewed()).isTrue();
+    assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getExecutionAttemptId())
+        .isEqualTo("attempt-after-reclaim");
     List<TaskAssignmentService.TaskHeartbeatResult> oldRenewal =
         taskExecutionService.renewLeaseBatch(List.of(new TaskAssignmentService.LeaseRenewCommand(
             TENANT, task.getId(), seed.workerCode(), invocationI1)));

@@ -548,7 +548,10 @@ mod tests {
             let request = requests.recv_timeout(Duration::from_secs(2)).expect("开始确认请求");
             assert_eq!(request.method, "POST");
             assert_eq!(request.path, "/internal/tasks/42/renew");
-            let body: Value = serde_json::from_str(&request.body).expect("确认 JSON");
+            let mut body: Value = serde_json::from_str(&request.body).expect("确认 JSON");
+            let attempt_id = body["details"]["executionAttemptId"].as_str().expect("执行尝试标识");
+            assert_eq!(attempt_id.len(), 36);
+            body["details"].as_object_mut().unwrap().remove("executionAttemptId");
             assert_eq!(body, serde_json::json!({"tenantId":"tenant-42", "workerId":"w1", "partitionInvocationId":"inv-current", "details":{"executionStarted":true}}));
             42
         }).expect("入口确认");

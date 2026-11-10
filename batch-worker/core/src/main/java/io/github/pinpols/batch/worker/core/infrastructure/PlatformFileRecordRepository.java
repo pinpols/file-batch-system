@@ -12,6 +12,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRecordView;
 import io.github.pinpols.batch.worker.core.mapper.PlatformFileRuntimeMapper;
 import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformReconciledFileAdoptionParam;
 import java.time.LocalDate;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
@@ -121,6 +122,7 @@ public class PlatformFileRecordRepository {
         .fileGenerationNo(nextGenerationNo)
         .sourceType(sourceType)
         .sourceRef(sourceRef)
+        .arrivalChannelCode(param.getArrivalChannelCode())
         .fileStatus(fileStatus)
         .bizDate(bizDate)
         .traceId(traceId)
@@ -185,6 +187,11 @@ public class PlatformFileRecordRepository {
       String metadataJson = toJson(metadata);
       mapper.updateFileRecordMetadata(fileId, metadataJson);
     }
+  }
+
+  /** 仅接管同一对象的非历史对账记录；冲突时保持原记录。 */
+  public boolean adoptReconciledFileRecord(PlatformReconciledFileAdoptionParam params) {
+    return mapper.adoptReconciledFileRecord(params) == 1;
   }
 
   private String resolveFileExt(String fileName) {

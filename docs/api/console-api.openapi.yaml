@@ -5518,14 +5518,25 @@ paths:
     get:
       tags: [Queries]
       summary: Query workflow runs
+      description: 按触发请求标识筛选时，只返回该租户由此请求创建的在线 Workflow 运行；请求等待容量或运行已归档时列表可能为空。
       operationId: queryWorkflowRuns
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
         - $ref: '#/components/parameters/PageNoQuery'
         - $ref: '#/components/parameters/PageSizeQuery'
         - $ref: '#/components/parameters/WorkflowDefinitionIdFilter'
+        - name: workflowCode
+          in: query
+          required: false
+          description: 按工作流编码精确匹配，包含该编码的所有定义版本。
+          schema: { type: string }
         - $ref: '#/components/parameters/RunStatusFilter'
         - $ref: '#/components/parameters/TraceIdFilter'
+        - name: requestId
+          in: query
+          required: false
+          description: Trigger 受理响应中返回的请求标识，按精确值匹配。
+          schema: { type: string }
       responses:
         '200':
           description: Workflow run list
@@ -20620,6 +20631,14 @@ components:
         workflowUpdated:
           type: integer
           format: int32
+        jobMonitoringPoliciesApplied:
+          type: integer
+          format: int32
+          description: 成功处理的作业监控策略行数，兼容旧服务端时可能缺省。
+        workflowMonitoringPoliciesApplied:
+          type: integer
+          format: int32
+          description: 成功处理的工作流监控策略行数，兼容旧服务端时可能缺省。
       required: [uploadToken, tenantId, resourceQueueInserted, resourceQueueUpdated, businessCalendarInserted, businessCalendarUpdated, batchWindowInserted, batchWindowUpdated, jobInserted, jobUpdated, channelInserted, channelUpdated, fileTemplateInserted, fileTemplateUpdated, workflowInserted, workflowUpdated]
 
     CreateWebhookRequest:

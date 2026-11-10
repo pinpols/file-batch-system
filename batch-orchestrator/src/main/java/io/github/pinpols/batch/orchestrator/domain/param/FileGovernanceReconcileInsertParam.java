@@ -23,6 +23,7 @@ public class FileGovernanceReconcileInsertParam {
   private final String storagePath;
   private final String storageBucket;
   private final String sourceType;
+  private final String arrivalChannelCode;
   private final String fileStatus;
   private final LocalDate bizDate;
   private final String traceId;

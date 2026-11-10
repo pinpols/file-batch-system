@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -11,10 +12,12 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -33,11 +36,18 @@ class RetryDispatchStepTest {
   @Mock
   private DispatchChannelGateway dispatchChannelGateway;
 
+  @Mock
+  private DispatchSecretResolver dispatchSecretResolver;
+
   private RetryDispatchStep step;
 
   @BeforeEach
   void setUp() {
-    step = new RetryDispatchStep(fileDispatchRepository, dispatchChannelGateway);
+    step = new RetryDispatchStep(
+        fileDispatchRepository, dispatchChannelGateway, dispatchSecretResolver);
+    lenient()
+        .when(dispatchSecretResolver.resolveInto(any(), any(), any(), any()))
+        .thenReturn(Set.of());
   }
 
   @Test

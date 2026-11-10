@@ -6,16 +6,10 @@
  *   - a "commit" disposition advances PAST the record (offset + 1, kafkajs
  *     commit semantics) — accepted task, or a poison record commit-skipped —
  *     UNLESS the partition already has a lower withheld offset (see below).
- *   - a "withhold" disposition (rejected schema / foreign tenant / not-for-us)
- *     does NOT commit and does NOT pause the partition: it records the record's
- *     own offset as the partition's commit CEILING and keeps consuming. No later
- *     commit on that partition may cross the ceiling, so the withheld record is
- *     redelivered on the next rebalance/restart while subsequent records still
- *     flow (no head-of-line block). This mirrors the Go SDK's `committable`
- *     ceiling exactly; Java/Python/Rust use the same per-partition invariant.
+ *   - "withhold" 不提交该记录；适配器保留提交上限并暂停当前分区，等待后重读。
  *   - a "backpressure" disposition seeks BACK to the record's own offset and
  *     pauses the partition — that pause is TEMPORARY, resumed when a slot frees
- *     (§1.5 / §2). This is the only disposition that pauses.
+ *     (§1.5 / §2).
  */
 
 import type { MessageDisposition } from "../client/consumer.ts";
@@ -35,8 +29,7 @@ export type OffsetAction =
  * Map a {@link MessageDisposition} to the concrete Kafka offset action for a
  * record at (topic, partition, offset).
  *   - "commit"       → commit offset+1 (advance past this record)
- *   - "withhold"     → record this offset as the partition's commit ceiling and
- *                      KEEP consuming (never committed → redelivered later)
+ *   - "withhold"     → 保留该 offset，由适配器暂停分区并等待重读
  *   - "backpressure" → seek back to this offset + pause (temporary, resumable)
  */
 export function offsetAction(
@@ -88,11 +81,8 @@ export function commitBlockedByWithheld(
 }
 
 /**
- * Resolve the subscribe `fromBeginning` flag. Defaults to `false` (latest) to
- * match the other four SDKs' `auto.offset.reset=latest`; `fromBeginning:true`
- * would replay the whole topic on every new consumer group. An explicit value
- * always wins.
+ * 解析订阅起点；新消费组默认从最早保留位置读取，显式配置优先。
  */
 export function resolveFromBeginning(fromBeginning?: boolean): boolean {
-  return fromBeginning ?? false;
+  return fromBeginning ?? true;
 }

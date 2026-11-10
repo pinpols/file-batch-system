@@ -50,6 +50,8 @@
 
 开始及完成时限从 `scheduled_occurrence` 的计划时刻，或 `expected_work_occurrence` 的到期/预期时刻判定，未创建 TriggerRequest/Run 也可产生候选。实际 Run 已存在时保留其真实开始/完成时间；机会显式终结只记录 `opportunityClosedAt`，不能伪装为 Run 完成。耗时按根开始至实际结束计算，包含 WAIT/SENSOR 等编排等待。已开始/结束后仍可补判违约；策略生效前已终结的历史记录不回溯。
 
+完成截止钟点优先按 Workflow 显式配置的时区计算；未配置时使用编排服务的 `batch.timezone.default-zone`，与触发时区的默认解析口径一致。扫描与发送前复核使用相同的默认时区；部署时须保持相关服务的默认时区配置一致。
+
 告警资源按根运行或独立预期机会定位，三类各自去重；发送前持有单资源/类型事务锁重新核对策略、资格及既有告警。根级候选、未建 Run 的计划机会、策略隔离、前端配置和租户配置包均已接线；策略接口读写按租户校验，采用显式列映射，不依赖 MyBatis 全局下划线转驼峰设置。Job 实际执行计时、未建实例 Workflow 子作业机会及两阶段自动解除/恢复重投已有定向证据。真实 Orchestrator→Alertmanager→Console 联合发送和部署环境 firing/resolved 验收仍待完成，见[专项计划](../plans/job-workflow-sla-completion-plan-2026-10-25.md)。
 
 ### 1.4 作业监控告警的隔离边界

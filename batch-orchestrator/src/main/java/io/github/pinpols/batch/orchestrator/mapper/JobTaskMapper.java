@@ -27,6 +27,12 @@ public interface JobTaskMapper {
   /** CLAIM 读取必须同时满足父 Job 和关联 Workflow 的执行准入，包含同 Worker 的重试响应。 */
   JobTaskEntity selectForWorkerClaim(@Param("tenantId") String tenantId, @Param("id") Long id);
 
+  /** 首次执行尝试写入标识，同标识重试保持幂等，不同标识不能重复进入业务。 */
+  int confirmExecutionAttempt(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("attemptId") String attemptId);
+
   /** REPORT 热路径一次读取 task 与所属 partition，避免同事务连续两次主键查询。 */
   TaskOutcomePersistenceContext selectOutcomePersistenceContext(
       @Param("tenantId") String tenantId, @Param("id") Long id);

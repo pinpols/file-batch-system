@@ -1,14 +1,21 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
+import static io.github.pinpols.batch.worker.core.support.AbstractStageExecutor.ERROR_OBJECT_MAPPER;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
+import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
+import io.github.pinpols.batch.common.enums.SystemPipelineTaskKeys;
 import io.github.pinpols.batch.common.plugin.ReplayCapabilityDeclaration;
+import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionRequest;
 import io.github.pinpols.batch.worker.core.domain.StepExecutionResponse;
+import io.github.pinpols.batch.worker.core.infrastructure.PipelineRunFence;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
@@ -19,6 +26,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageExecutor;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,6 +34,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -121,6 +131,148 @@ class DispatchStepExecutionAdapterTest {
     assertThat(adapter.resultStage(result)).isEqualTo("DISPATCH");
     assertThat(adapter.resultCode(result)).isEqualTo("DELIVERY_FAILED");
     assertThat(adapter.resultMessage(result)).isEqualTo("delivery failed");
+  }
+
+  @Test
+  @DisplayName("投递已知失败后重试和确认成功时对外报告成功")
+  void shouldReportSuccess_whenRetryAndAcknowledgementRecoverDelivery() {
+    prepareExecution();
+    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+      DispatchJobContext context = invocation.getArgument(0);
+      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+      return List.of(
+          DispatchStageResult.success(DispatchStage.PREPARE),
+          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+          DispatchStageResult.success(DispatchStage.RETRY),
+          DispatchStageResult.success(DispatchStage.ACK),
+          DispatchStageResult.success(DispatchStage.COMPLETE));
+    });
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isTrue();
+  }
+
+  @Test
+  @DisplayName("首次确定失败而重试外部结果不明时对外报告结果不明")
+  void shouldReportUnknown_whenRetryOutcomeIsUnknown() {
+    prepareExecution();
+    when(stageExecutor.execute(any()))
+        .thenReturn(List.of(
+            DispatchStageResult.success(DispatchStage.PREPARE),
+            DispatchStageResult.failure(
+                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+            DispatchStageResult.failure(
+                DispatchStage.RETRY, "EXTERNAL_OUTCOME_UNKNOWN", "unknown")));
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("EXTERNAL_OUTCOME_UNKNOWN");
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"ACK", "COMPLETE"})
+  @DisplayName("重试成功后确认或完成阶段失败时应返回后续失败")
+  void shouldReportLaterFailure_whenRecoveredRetryDoesNotComplete(String failureStage) {
+    prepareExecution();
+    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+      DispatchJobContext context = invocation.getArgument(0);
+      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+      DispatchStage stage = DispatchStage.valueOf(failureStage);
+      return List.of(
+          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+          DispatchStageResult.success(DispatchStage.RETRY),
+          DispatchStageResult.failure(stage, "LATER_FAILURE", "failed later"));
+    });
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("LATER_FAILURE");
+  }
+
+  @Test
+  @DisplayName("首次失败后固定密钥被撤销时返回密钥撤销错误")
+  void shouldReportBlockedSecret_whenRetrySecretIsRevoked() {
+    prepareExecution();
+    DispatchStageResult revoked = DispatchStageResult.failure(
+        DispatchStage.RETRY,
+        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+        "error.dispatch.secret.blocked",
+        new Object[0],
+        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+        ERROR_OBJECT_MAPPER);
+    when(stageExecutor.execute(any()))
+        .thenReturn(List.of(
+            DispatchStageResult.failure(
+                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+            revoked));
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
+  }
+
+  @Test
+  @DisplayName("已知投递失败和重试失败后补偿不改变既有首错报告")
+  void shouldPreserveFirstFailure_whenKnownRetryFailsAndCompensates() {
+    prepareExecution();
+    when(stageExecutor.execute(any()))
+        .thenReturn(List.of(
+            DispatchStageResult.failure(
+                DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+            DispatchStageResult.failure(DispatchStage.RETRY, "DISPATCH_RETRY_FAILED", "failed"),
+            DispatchStageResult.success(DispatchStage.COMPENSATE)));
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
+  }
+
+  @Test
+  @DisplayName("重试成功但缺少确认和完成阶段时不能报告成功")
+  void shouldNotReportSuccess_whenRecoveredRetryHasNoCompletion() {
+    prepareExecution();
+    when(stageExecutor.execute(any())).thenAnswer(invocation -> {
+      DispatchJobContext context = invocation.getArgument(0);
+      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+      return List.of(
+          DispatchStageResult.failure(DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"),
+          DispatchStageResult.success(DispatchStage.RETRY));
+    });
+
+    StepExecutionResponse response = adapter.execute(dispatchRequest());
+
+    assertThat(response.success()).isFalse();
+    assertThat(response.code()).isEqualTo("DISPATCH_SEND_FAILED");
+  }
+
+  private void prepareExecution() {
+    SystemPipelineDefinition definition =
+        SystemPipelineCatalog.forJobType("DISPATCH").orElseThrow();
+    List<PipelineStepTemplate> templates = definition.stages().stream()
+        .map(stage -> PipelineStepTemplate.builder()
+            .stepCode(stage)
+            .stepName(stage)
+            .stageCode(stage)
+            .stepOrder(definition.stages().indexOf(stage) + 1)
+            .implCode(stage)
+            .enabled(true)
+            .build())
+        .toList();
+    when(stageExecutor.defaultStepDefinitions()).thenReturn(templates);
+    PipelineRunFence run = new PipelineRunFence(901L, OffsetDateTime.parse("2026-11-03T00:00:00Z"));
+    when(pipelineRuns.createPipelineInstance(any())).thenReturn(run);
+  }
+
+  private static StepExecutionRequest dispatchRequest() {
+    Map<String, Object> attributes = new LinkedHashMap<>();
+    attributes.put(SystemPipelineTaskKeys.CODE, "DISPATCH");
+    attributes.put(SystemPipelineTaskKeys.VERSION, 1);
+    return new StepExecutionRequest("tenant-a", "job-dispatch", "DISPATCH", "worker-1", attributes);
   }
 
   @Test

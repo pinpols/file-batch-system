@@ -37,7 +37,7 @@ PR 的 `PR_JAVA_CONTRACT` 检查变更生产 Java；规则或治理注册表变�
 
 Actions 页面以 `Backend / ...`、`SDK / ...` 和 `Platform / ...` 标识工作流用途；本文 `pr-gate` 等名称指对应的 workflow 文件标识。Ruleset 必需检查名称保持不变，E2E 分片显示测试业务范围而非历史耗时。
 
-其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
+其他独立工作流：`codeql.yml` 在 PR、main push 和每周定时运行（当前未配置手动触发）；`sdk-orchestrator-e2e.yml` 在相关 main 变更后/手动执行五语言真实 Orchestrator E2E（非 required），先构建一次 Orchestrator/Trigger 镜像并预热 BuildKit GHA 缓存，五个语言 job 仍各自启动隔离服务栈；Java、TypeScript、Rust 语言腿复用各自 Kafka，分别补测慢认领心跳、分区暂扣恢复和双成员转交，Go/Python 真实 Kafka 回归仍走现有 SDK live transport。该追加回归不进入 PR 的 live transport 步骤，实际耗时以线上结果为准；`workflow-lint.yml` 检查 workflow/action、Zizmor 配置及其 Python 工具依赖变更；`license-review.yml` 检查依赖许可变更；`strict-verify.yml` 提供手动严格校验及 PR dry-run；`sonar-gate.yml` 独立于 Full Gate，在 main Java/构建相关变更、夜间和手动场景运行，不延迟 Full Gate；`fuzzing.yml` 按其 workflow 配置单独运行。以上工作流是否 required 以仓库 Ruleset 当前配置为准，不由 workflow 文件名推断。
 
 ## CI 依赖与安全扫描版本基线
 
@@ -156,6 +156,8 @@ gh pr create --base main --head revert/main-broken-<short-sha> --title "revert: 
 | Common、Test Support、数据库迁移、任意 POM、Maven Wrapper、未知路径或未登记 `batch-*` 模块 | 全部 |
 
 `unit-it-a`、`unit-it-b1` 和 `unit-it-b2` 是 Ruleset 使用的稳定聚合 context。编排和 Console 各拆为主片与集成补充片，`JobNodeDispatchIntegrationTest` 以独立 Maven 调用放在编排补充片，CompensationFailureRecovery 与 BatchDayWaitingLaunchReference 集成类也由补充片运行；Trigger/PROCESS/DISPATCH 拆为单测片与集成片；`unit-it-b2` 还汇总 Worker 与 Java 治理结果。每组按可执行行合并 JaCoCo XML 并维持 80% 差异覆盖率门槛，报告缺失或需要执行的分片被跳过会失败。拆分前基线为第 3611 次运行：编排约 10 分 36 秒、Console 约 10 分 46 秒；拆分后墙钟耗时以实际 CI 为准。
+
+编排补充片复用现有文件治理和文件到达集成类中的六个方法，覆盖入口保护、对账重试及回扫、渠道匹配与历史回退。它们加入现有 Maven 组，不新增测试片；本地隔离依赖的一次定向执行耗时 1 分 03 秒，远端增量覆盖和作业耗时仍以实际 CI 为准。
 
 更改 `scripts/ci/run-pr-coverage-integration.sh` 或 `scripts/ci/check-diff-coverage.py` 时，范围探测会启动四个测试范围，确保执行器和覆盖率汇总的变更得到真实 CI 验证；其他不影响业务测试的 CI 改动仍不启动 Maven 单测。
 

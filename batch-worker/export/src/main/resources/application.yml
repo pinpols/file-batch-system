@@ -58,7 +58,7 @@ batch:
       topic: ${BATCH_TOPIC_EXPORT_DISPATCH:batch.task.dispatch.export}
       # Kafka consumer group（同类 worker 负载均衡）
       consumer-group-id: ${BATCH_WORKER_EXPORT_CONSUMER_GROUP_ID:batch-worker-export}
-      # H-8: 每次导出最大行数，防止无限制查询导致堆内存耗尽；0 表示不限制（不推荐生产使用）
+      # 批次声明行数的预检查及单个生成任务实际输出上限；非正值使用默认值 500000。
       max-export-rows: ${BATCH_WORKER_EXPORT_MAX_EXPORT_ROWS:500000}
       file-processing:
         # 流式处理开关

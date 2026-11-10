@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.nio.charset.StandardCharsets;
@@ -9,7 +10,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.sql.Connection;
+import java.sql.DriverManager;
 import java.sql.Statement;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -20,6 +23,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.IntStream;
@@ -196,6 +201,412 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               "WHERE ((terminal_event_key IS NULL) AND (next_retry_at IS NOT NULL))")
           .doesNotContain("delivery_status");
       flyway.validate();
+    }
+  }
+
+  @Test
+  @DisplayName("V378 将并发提交前的历史文件与迁移后的新文件可靠区分")
+  void shouldSeparateLegacyFilesAtMigrationBoundary() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("377")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true);
+        var executor = Executors.newSingleThreadExecutor();
+        Connection writer = DriverManager.getConnection(
+            POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String insertFileSql = """
+          insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+            storage_type, storage_path, source_type, file_status, created_at)
+          values (?, 'INPUT', ?, 'DELIMITED', 'LOCAL', ?, 'SYSTEM', 'RECEIVED', ?::timestamptz)
+          """;
+      jdbc.update(insertFileSql, "legacy", "old.csv", "legacy/old.csv", "2026-01-01T00:00:00Z");
+      writer.setAutoCommit(false);
+      int writerPid;
+      try (var statement = writer.createStatement()) {
+        statement.executeUpdate("""
+            insert into batch.file_record (tenant_id, file_category, file_name, file_format_type,
+              storage_type, storage_path, source_type, file_status)
+            values ('legacy', 'INPUT', 'inflight.csv', 'DELIMITED', 'LOCAL',
+              'legacy/inflight.csv', 'SYSTEM', 'RECEIVED')
+            """);
+        try (var result = statement.executeQuery("select pg_backend_pid()")) {
+          result.next();
+          writerPid = result.getInt(1);
+        }
+      }
+      var migration = executor.submit(() -> Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("378")
+          .load()
+          .migrate());
+      String blockedQuery = """
+          select count(*) from pg_stat_activity where ? = any(pg_blocking_pids(pid))
+          """;
+      await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+        Integer blocked = jdbc.queryForObject(blockedQuery, Integer.class, writerPid);
+        assertThat(blocked).isGreaterThan(0);
+      });
+      writer.commit();
+      migration.get(30, TimeUnit.SECONDS);
+      jdbc.update(insertFileSql, "legacy", "new.csv", "legacy/new.csv", "2000-01-01T00:00:00Z");
+
+      String legacySql = """
+          select legacy_channel_fallback from batch.file_record where tenant_id = ? and file_name = ?
+          """;
+      assertThat(jdbc.queryForObject(legacySql, Boolean.class, "legacy", "old.csv"))
+          .isTrue();
+      assertThat(jdbc.queryForObject(legacySql, Boolean.class, "legacy", "inflight.csv"))
+          .isTrue();
+      assertThat(jdbc.queryForObject(legacySql, Boolean.class, "legacy", "new.csv"))
+          .isFalse();
+      String archiveColumnsSql = """
+          select count(*) from information_schema.columns
+           where table_schema = 'archive' and table_name = 'file_record_archive'
+             and column_name in ('arrival_channel_code', 'legacy_channel_fallback')
+          """;
+      assertThat(jdbc.queryForObject(archiveColumnsSql, Integer.class)).isEqualTo(2);
+    }
+  }
+
+  @Test
+  @DisplayName("V377 至 V379 的数据库对象变化限定在扫描状态、渠道身份和执行尝试")
+  void shouldChangeOnlyReviewedObjectsBetweenV376AndV379() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("376")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
+      Set<String> before =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("379")
+          .load()
+          .migrate();
+      Set<String> after =
+          new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
+      Set<String> removed = new TreeSet<>(before);
+      removed.removeAll(after);
+      Set<String> added = new TreeSet<>(after);
+      added.removeAll(before);
+
+      assertThat(removed).isEmpty();
+      assertThat(added)
+          .isNotEmpty()
+          .allSatisfy(
+              object -> assertThat(object)
+                  .matches(
+                      "(?s).*(import_ingress_scan_|(?:batch\\.file_record|archive\\.file_record_archive)\\.(?:arrival_channel_code|legacy_channel_fallback)|(?:batch\\.job_task|archive\\.job_task_archive)\\.execution_attempt_id).*"));
+    }
+  }
+
+  @Test
+  @DisplayName("V376 存量冷热数据升级至 V383 后保留历史语义并兼容新写入")
+  void shouldPreserveExistingHotAndArchivedData_whenUpgradingFromV376ToV383() throws Exception {
+    Flyway flyway = newFlyway();
+    cleanTestDatabase(flyway);
+    Flyway.configure()
+        .configuration(flyway.getConfiguration())
+        .target("376")
+        .load()
+        .migrate();
+    try (SingleConnectionDataSource dataSource = new SingleConnectionDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword(), true)) {
+      JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+      String insertFileSql = """
+          insert into batch.file_record (
+            tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
+            source_type, file_status, metadata_json
+          ) values (?, ?, ?, 'DELIMITED', 'LOCAL', ?, 'SFTP', 'RECEIVED', ?::jsonb)
+          returning id
+          """;
+      Long oldFileId = jdbc.queryForObject(
+          insertFileSql,
+          Long.class,
+          "migration-tenant",
+          "INPUT",
+          "old.csv",
+          "migration/old.csv",
+          "{\"marker\":\"old\"}");
+      String archiveFileSql = """
+          insert into archive.file_record_archive
+          select * from batch.file_record where tenant_id = ? and id = ?
+          """;
+      int oldFileArchived = jdbc.update(archiveFileSql, "migration-tenant", oldFileId);
+      assertThat(oldFileArchived).isEqualTo(1);
+
+      String insertDefinitionSql = """
+          insert into batch.job_definition (
+            tenant_id, job_code, job_name, job_type, schedule_type, timezone, retry_policy
+          ) values (?, 'MIGRATION_JOB', '迁移测试作业', 'GENERAL', 'MANUAL', 'Asia/Shanghai', 'NONE')
+          returning id
+          """;
+      Long definitionId = jdbc.queryForObject(insertDefinitionSql, Long.class, "migration-tenant");
+      String insertInstanceSql = """
+          insert into batch.job_instance (
+            tenant_id, job_definition_id, job_code, instance_no, biz_date, trigger_type,
+            instance_status, dedup_key
+          ) values (?, ?, 'MIGRATION_JOB', 'migration-instance', DATE '2026-11-09',
+                    'MANUAL', 'SUCCESS', 'migration-dedup')
+          returning id
+          """;
+      Long instanceId =
+          jdbc.queryForObject(insertInstanceSql, Long.class, "migration-tenant", definitionId);
+      String insertTaskSql = """
+          insert into batch.job_task (
+            tenant_id, job_instance_id, job_instance_biz_date, task_type, task_status,
+            assigned_worker_code, task_payload
+          ) values (?, ?, DATE '2026-11-09', 'EXECUTION', 'SUCCESS', 'migration-worker', ?::jsonb)
+          returning id
+          """;
+      Long taskId = jdbc.queryForObject(
+          insertTaskSql, Long.class, "migration-tenant", instanceId, "{\"marker\":\"old-task\"}");
+      String archiveTaskSql = """
+          insert into archive.job_task_archive (
+            id, tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq, task_status,
+            assigned_worker_code, task_payload
+          ) select id, tenant_id, job_instance_id, job_instance_biz_date, task_type, task_seq,
+                   task_status, assigned_worker_code, task_payload
+              from batch.job_task where tenant_id = ? and id = ?
+          """;
+      int oldTaskArchived = jdbc.update(archiveTaskSql, "migration-tenant", taskId);
+      assertThat(oldTaskArchived).isEqualTo(1);
+
+      Flyway.configure()
+          .configuration(flyway.getConfiguration())
+          .target("383")
+          .load()
+          .migrate();
+
+      String newTablesQuery = """
+          select to_regclass('batch.import_ingress_ownership') is not null as ownership_exists,
+                 to_regclass('batch.import_ingress_ownership_binding') is not null as binding_exists,
+                 to_regclass('batch.file_governance_reconcile_cursor') is not null as cursor_exists
+          """;
+      Map<String, Object> newTables = jdbc.queryForMap(newTablesQuery);
+      assertThat(newTables)
+          .containsEntry("ownership_exists", true)
+          .containsEntry("binding_exists", true)
+          .containsEntry("cursor_exists", true);
+      String newTablesCountQuery = """
+          select (select count(*) from batch.import_ingress_ownership) as ownership_count,
+                 (select count(*) from batch.import_ingress_ownership_binding) as binding_count,
+                 (select count(*) from batch.file_governance_reconcile_cursor) as cursor_count
+          """;
+      Map<String, Object> newTableCounts = jdbc.queryForMap(newTablesCountQuery);
+      assertThat(newTableCounts)
+          .containsEntry("ownership_count", 0L)
+          .containsEntry("binding_count", 0L)
+          .containsEntry("cursor_count", 0L);
+      String ownershipRlsQuery = """
+          select count(*) from pg_class
+           where oid in ('batch.import_ingress_ownership'::regclass,
+                         'batch.import_ingress_ownership_binding'::regclass)
+             and relrowsecurity and relforcerowsecurity
+          """;
+      Integer forcedOwnershipRls = jdbc.queryForObject(ownershipRlsQuery, Integer.class);
+      assertThat(forcedOwnershipRls).isEqualTo(2);
+
+      String scopeId = "a".repeat(64);
+      String storageId = "b".repeat(64);
+      String insertOwnershipSql = """
+          insert into batch.import_ingress_ownership (scope_id, storage_id, bucket_name, object_prefix)
+          values (?, ?, 'migration-bucket', 'migration/')
+          """;
+      int ownershipInserted = jdbc.update(insertOwnershipSql, scopeId, storageId);
+      assertThat(ownershipInserted).isEqualTo(1);
+      String insertBindingSql = """
+          insert into batch.import_ingress_ownership_binding
+            (scope_id, binding_type, tenant_id, object_prefix, file_group_code, manifest_key_template)
+          values (?, 'MANIFEST', 'migration-tenant', 'migration/inbox/',
+                  'MIGRATION_GROUP', 'migration/manifests/{bizDate}.json')
+          """;
+      int bindingInserted = jdbc.update(insertBindingSql, scopeId);
+      assertThat(bindingInserted).isEqualTo(1);
+      String insertCursorSql = """
+          insert into batch.file_governance_reconcile_cursor (storage_id, object_prefix)
+          values (?, 'migration/')
+          """;
+      int cursorInserted = jdbc.update(insertCursorSql, storageId);
+      assertThat(cursorInserted).isEqualTo(1);
+      String ownershipQuery = """
+          select o.state, b.binding_type, b.tenant_id, b.file_group_code,
+                 b.manifest_key_template, b.enabled
+            from batch.import_ingress_ownership o
+            join batch.import_ingress_ownership_binding b on b.scope_id = o.scope_id
+           where o.scope_id = ?
+          """;
+      Map<String, Object> ownership = jdbc.queryForMap(ownershipQuery, scopeId);
+      assertThat(ownership)
+          .containsEntry("state", "RETIRED")
+          .containsEntry("binding_type", "MANIFEST")
+          .containsEntry("tenant_id", "migration-tenant")
+          .containsEntry("file_group_code", "MIGRATION_GROUP")
+          .containsEntry("manifest_key_template", "migration/manifests/{bizDate}.json")
+          .containsEntry("enabled", true);
+      String cursorQuery = """
+          select next_marker, revisit_marker, revisit_budget, revisit_remaining, next_lane, version
+            from batch.file_governance_reconcile_cursor where storage_id = ? and object_prefix = ?
+          """;
+      Map<String, Object> cursor = jdbc.queryForMap(cursorQuery, storageId, "migration/");
+      assertThat(cursor)
+          .containsEntry("next_marker", null)
+          .containsEntry("revisit_marker", null)
+          .containsEntry("revisit_budget", 1L)
+          .containsEntry("revisit_remaining", 1L)
+          .containsEntry("next_lane", "FORWARD")
+          .containsEntry("version", 0L);
+
+      String oldFileQuery = """
+          select file_name, storage_path, file_category, source_type, metadata_json ->> 'marker' as marker,
+                 arrival_channel_code, legacy_channel_fallback
+            from batch.file_record where tenant_id = ? and id = ?
+          union all
+          select file_name, storage_path, file_category, source_type, metadata_json ->> 'marker' as marker,
+                 arrival_channel_code, legacy_channel_fallback
+            from archive.file_record_archive where tenant_id = ? and id = ?
+          """;
+      List<Map<String, Object>> oldFiles = jdbc.queryForList(
+          oldFileQuery, "migration-tenant", oldFileId, "migration-tenant", oldFileId);
+      assertThat(oldFiles)
+          .hasSize(2)
+          .allSatisfy(row -> assertThat(row)
+              .containsEntry("file_name", "old.csv")
+              .containsEntry("storage_path", "migration/old.csv")
+              .containsEntry("file_category", "INPUT")
+              .containsEntry("source_type", "SFTP")
+              .containsEntry("marker", "old")
+              .containsEntry("arrival_channel_code", null)
+              .containsEntry("legacy_channel_fallback", true));
+
+      String oldTaskQuery = """
+          select task_status, assigned_worker_code, task_payload ->> 'marker' as marker, execution_attempt_id
+            from batch.job_task where tenant_id = ? and id = ?
+          union all
+          select task_status, assigned_worker_code, task_payload ->> 'marker' as marker, execution_attempt_id
+            from archive.job_task_archive where tenant_id = ? and id = ?
+          """;
+      List<Map<String, Object>> oldTasks =
+          jdbc.queryForList(oldTaskQuery, "migration-tenant", taskId, "migration-tenant", taskId);
+      assertThat(oldTasks)
+          .hasSize(2)
+          .allSatisfy(row -> assertThat(row)
+              .containsEntry("task_status", "SUCCESS")
+              .containsEntry("assigned_worker_code", "migration-worker")
+              .containsEntry("marker", "old-task")
+              .containsEntry("execution_attempt_id", null));
+      String setHotAttemptSql = """
+          update batch.job_task set execution_attempt_id = ? where tenant_id = ? and id = ?
+          """;
+      String copyAttemptSql = """
+          update archive.job_task_archive
+             set execution_attempt_id = (select execution_attempt_id from batch.job_task
+                                          where tenant_id = ? and id = ?)
+           where tenant_id = ? and id = ?
+          """;
+      int hotAttemptUpdated =
+          jdbc.update(setHotAttemptSql, "attempt-1", "migration-tenant", taskId);
+      int coldAttemptUpdated =
+          jdbc.update(copyAttemptSql, "migration-tenant", taskId, "migration-tenant", taskId);
+      assertThat(hotAttemptUpdated).isEqualTo(1);
+      assertThat(coldAttemptUpdated).isEqualTo(1);
+      List<Map<String, Object>> updatedTasks =
+          jdbc.queryForList(oldTaskQuery, "migration-tenant", taskId, "migration-tenant", taskId);
+      assertThat(updatedTasks)
+          .hasSize(2)
+          .allSatisfy(row -> assertThat(row).containsEntry("execution_attempt_id", "attempt-1"));
+
+      Long oldWriterFileId = jdbc.queryForObject(
+          insertFileSql,
+          Long.class,
+          "migration-tenant",
+          "INPUT",
+          "old-writer.csv",
+          "migration/old-writer.csv",
+          "{}");
+      String insertChannelFileSql = """
+          insert into batch.file_record (
+            tenant_id, file_category, file_name, file_format_type, storage_type, storage_path,
+            source_type, file_status, arrival_channel_code
+          ) values (?, 'INPUT', 'new-writer.csv', 'DELIMITED', 'LOCAL', ?, 'SFTP', 'RECEIVED', ?)
+          returning id
+          """;
+      Long newWriterFileId = jdbc.queryForObject(
+          insertChannelFileSql,
+          Long.class,
+          "migration-tenant",
+          "migration/new-writer.csv",
+          "bank_sftp");
+      int oldWriterArchived = jdbc.update(archiveFileSql, "migration-tenant", oldWriterFileId);
+      int newWriterArchived = jdbc.update(archiveFileSql, "migration-tenant", newWriterFileId);
+      assertThat(oldWriterArchived).isEqualTo(1);
+      assertThat(newWriterArchived).isEqualTo(1);
+      String newFilesQuery = """
+          select file_name, arrival_channel_code, legacy_channel_fallback
+            from batch.file_record where tenant_id = ? and id in (?, ?)
+          union all
+          select file_name, arrival_channel_code, legacy_channel_fallback
+            from archive.file_record_archive where tenant_id = ? and id in (?, ?)
+          """;
+      List<Map<String, Object>> newFiles = jdbc.queryForList(
+          newFilesQuery,
+          "migration-tenant",
+          oldWriterFileId,
+          newWriterFileId,
+          "migration-tenant",
+          oldWriterFileId,
+          newWriterFileId);
+      assertThat(newFiles).hasSize(4).allSatisfy(row -> {
+        assertThat(row).containsEntry("legacy_channel_fallback", false);
+        if ("old-writer.csv".equals(row.get("file_name"))) {
+          assertThat(row).containsEntry("arrival_channel_code", null);
+        } else {
+          assertThat(row)
+              .containsEntry("file_name", "new-writer.csv")
+              .containsEntry("arrival_channel_code", "bank_sftp");
+        }
+      });
+
+      Long exportFileId = jdbc.queryForObject(
+          insertFileSql,
+          Long.class,
+          "migration-tenant",
+          "EXPORT_TRIGGER",
+          "export.batch.json",
+          "migration/export.batch.json",
+          "{}");
+      int exportArchived = jdbc.update(archiveFileSql, "migration-tenant", exportFileId);
+      assertThat(exportArchived).isEqualTo(1);
+      String constraintQuery = """
+          select count(*) from pg_constraint
+           where conname = 'ck_file_record_category_v2' and convalidated
+             and conrelid in ('batch.file_record'::regclass, 'archive.file_record_archive'::regclass)
+          """;
+      Integer validatedConstraints = jdbc.queryForObject(constraintQuery, Integer.class);
+      assertThat(validatedConstraints).isEqualTo(2);
+      String invalidHotCategorySql = """
+          update batch.file_record set file_category = 'UNKNOWN' where tenant_id = ? and id = ?
+          """;
+      String invalidColdCategorySql = """
+          update archive.file_record_archive set file_category = 'UNKNOWN' where tenant_id = ? and id = ?
+          """;
+      assertThatThrownBy(() -> jdbc.update(invalidHotCategorySql, "migration-tenant", exportFileId))
+          .isInstanceOf(DataIntegrityViolationException.class);
+      assertThatThrownBy(
+              () -> jdbc.update(invalidColdCategorySql, "migration-tenant", exportFileId))
+          .isInstanceOf(DataIntegrityViolationException.class);
     }
   }
 

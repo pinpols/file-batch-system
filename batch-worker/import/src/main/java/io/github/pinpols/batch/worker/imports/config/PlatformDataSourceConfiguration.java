@@ -15,6 +15,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.core.env.Environment;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 
 /** 平台数据源配置，装配逻辑委托 {@link WorkerDataSourceSupport}（三个 worker 模块共用）。 */
 @Configuration(proxyBeanMethods = false)
@@ -50,5 +51,13 @@ public class PlatformDataSourceConfiguration {
   public SqlSessionTemplate importPlatformSqlSessionTemplate(
       @Qualifier("importPlatformSqlSessionFactory") SqlSessionFactory sqlSessionFactory) {
     return new SqlSessionTemplate(sqlSessionFactory);
+  }
+
+  /** 平台事务与业务库、SQLite 回报发件箱事务分别绑定各自的数据源。 */
+  @Bean(name = "transactionManager")
+  @Primary
+  public DataSourceTransactionManager transactionManager(
+      @Qualifier("importPlatformDataSource") DataSource dataSource) {
+    return WorkerDataSourceSupport.buildTransactionManager(dataSource);
   }
 }

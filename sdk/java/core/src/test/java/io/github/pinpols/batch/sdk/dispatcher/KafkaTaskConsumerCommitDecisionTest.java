@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
@@ -26,6 +27,14 @@ import org.mockito.ArgumentMatchers;
 /** SDK Kafka offset 契约:只有已接收/终态坏消息提交 offset,可恢复拒收不提交。 */
 @DisplayName("Kafka 消费位移决策 — 仅接收成功或终态坏消息提交位移,可恢复拒收不提交")
 class KafkaTaskConsumerCommitDecisionTest {
+
+  @Test
+  @DisplayName("单次 poll 最多接收一条，避免认领等待累积超过消费组时限")
+  void shouldLimitPollBatchForClaimBarrier() {
+    assertThat(KafkaTaskConsumer.consumerProperties(config)
+            .get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG))
+        .isEqualTo(1);
+  }
 
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
       .baseUrl("http://localhost:0")
@@ -58,7 +67,7 @@ class KafkaTaskConsumerCommitDecisionTest {
   @DisplayName("瞬时背压拒收时不提交位移,回退到本条并暂停该分区")
   void shouldNotCommitAndSeekBack_whenRetryLater() throws Exception {
     // RETRY_LATER = 瞬时背压(容量满 / 平台 PAUSED / draining):seek 回本条 + pause 分区(可恢复,由
-    // applyBackpressure 在恢复后 resume)。这不是 withhold —— withhold 不 seek 不 pause(见下方 schema 测)。
+    // applyBackpressure 在恢复后 resume)。
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.RETRY_LATER);
     @SuppressWarnings("unchecked")
@@ -151,10 +160,8 @@ class KafkaTaskConsumerCommitDecisionTest {
   }
 
   @Test
-  @DisplayName("协议主版本不受支持时抬高提交位点上限但不冻结分区,后续消息继续送达")
-  void shouldNotBlockLaterRecord_whenSchemaUnsupported() throws Exception {
-    // wire-protocol §A:未知大版本(v3)**不提交** offset,但也不 seek/pause 冻结分区。
-    // 后续正常记录继续送达 dispatcher,只是其 commit 被最低 withheld ceiling 拦住。
+  @DisplayName("协议版本不支持时仅暂缓当前分区,其他分区继续提交")
+  void shouldPauseOnlyAffectedPartition_whenSchemaUnsupported() throws Exception {
     TaskDispatcher dispatcher = mock(TaskDispatcher.class);
     when(dispatcher.onMessage(any())).thenReturn(TaskDispatcher.DispatchDecision.SUBMITTED);
     @SuppressWarnings("unchecked")
@@ -164,23 +171,37 @@ class KafkaTaskConsumerCommitDecisionTest {
                 + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
             .getBytes(StandardCharsets.UTF_8);
 
-    boolean withholdKeepsGoing;
-    boolean laterKeepsGoing;
+    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
     try (KafkaTaskConsumer kafka =
         new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
-      withholdKeepsGoing = kafka.handleRecordAndMaybeCommit(
-          new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
-      laterKeepsGoing = kafka.handleRecordAndMaybeCommit(consumerRecord(6, message("tx")));
+      kafka.processPolledRecords(List.of(
+          new ConsumerRecord<>(tp.topic(), 0, 5, "k", v3),
+          consumerRecord(tp.topic(), 6, message("tx")),
+          consumerRecord(healthy.topic(), 7, message("tx"))));
+      verify(consumer).seek(tp, 5);
+      verify(consumer).pause(Set.of(tp));
+      verify(consumer).commitSync(Map.of(healthy, new OffsetAndMetadata(8)));
+      verify(dispatcher).onMessage(any());
     }
+  }
 
-    TopicPartition tp = new TopicPartition("batch.task.dispatch.tx.t0", 0);
-    assertThat(withholdKeepsGoing).isTrue();
-    assertThat(laterKeepsGoing).isTrue();
-    verify(dispatcher).onMessage(any());
-    verify(consumer, never())
-        .commitSync(ArgumentMatchers.<Map<TopicPartition, OffsetAndMetadata>>any());
-    verify(consumer, never()).seek(tp, 5);
-    verify(consumer, never()).pause(Set.of(tp));
+  @Test
+  @DisplayName("分区撤销后不保留旧的暂缓状态")
+  void shouldClearWithheldRetry_whenPartitionRevoked() {
+    TaskDispatcher dispatcher = mock(TaskDispatcher.class);
+    @SuppressWarnings("unchecked")
+    Consumer<String, byte[]> consumer = mock(Consumer.class);
+    TopicPartition partition = new TopicPartition("batch.task.dispatch.tx.t0", 0);
+    when(consumer.assignment()).thenReturn(Set.of(partition));
+    byte[] v3 = "{\"tenantId\":\"tx\",\"schemaVersion\":\"v3\"}".getBytes(StandardCharsets.UTF_8);
+    try (KafkaTaskConsumer kafka =
+        new KafkaTaskConsumer(config, dispatcher, consumer, new ObjectMapper())) {
+      kafka.handleRecordAndMaybeCommit(new ConsumerRecord<>(partition.topic(), 0, 5, "k", v3));
+      kafka.new PauseAwareRebalanceListener().onPartitionsRevoked(Set.of(partition));
+      kafka.resumeWithheldPartitions(Long.MAX_VALUE);
+      verify(consumer, never()).resume(Set.of(partition));
+    }
   }
 
   private static ConsumerRecord<String, byte[]> consumerRecord(long offset, TaskDispatchMessage msg)

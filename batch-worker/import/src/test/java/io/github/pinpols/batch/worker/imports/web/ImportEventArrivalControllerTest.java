@@ -3,19 +3,22 @@ package io.github.pinpols.batch.worker.imports.web;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
 import io.github.pinpols.batch.worker.imports.config.ImportScannerProperties;
 import io.github.pinpols.batch.worker.imports.runtime.ImportEventArrivalService;
 import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner;
+import io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanner.ScanResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +34,11 @@ class ImportEventArrivalControllerTest {
   private ImportIngressScanner importIngressScanner;
 
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+
+  @BeforeEach
+  void defaultScanResult() {
+    lenient().when(importIngressScanner.scan()).thenReturn(ScanResult.STARTED);
+  }
 
   private ImportEventArrivalController controller(boolean eventArrivalEnabled) {
     ImportScannerProperties properties = new ImportScannerProperties();
@@ -106,10 +114,9 @@ class ImportEventArrivalControllerTest {
   @DisplayName("扫描失败后释放在途标记，后续通知可以再次触发")
   void shouldAllowNextNotification_whenScanFails() {
     ImportEventArrivalController controller = controller(true);
-    doThrow(new IllegalStateException("scan failed"))
-        .doNothing()
-        .when(importIngressScanner)
-        .scan();
+    when(importIngressScanner.scan())
+        .thenThrow(new IllegalStateException("scan failed"))
+        .thenReturn(ScanResult.STARTED);
 
     assertThatThrownBy(() -> controller.objectArrival(null))
         .isInstanceOf(IllegalStateException.class);
@@ -127,7 +134,7 @@ class ImportEventArrivalControllerTest {
           if (!release.await(5, TimeUnit.SECONDS)) {
             throw new IllegalStateException("scan was not released");
           }
-          return null;
+          return ScanResult.STARTED;
         })
         .when(importIngressScanner)
         .scan();
@@ -146,6 +153,28 @@ class ImportEventArrivalControllerTest {
       assertThat(controller.objectArrival(null).data().triggered()).isTrue();
     }
     verify(importIngressScanner, times(2)).scan();
+  }
+
+  @Test
+  @DisplayName("未获得租约时不声称启动扫描且不增加扫描计数")
+  void shouldNotCountScan_whenLeaseUnavailable() {
+    when(importIngressScanner.scan()).thenReturn(ScanResult.LEASE_UNAVAILABLE);
+
+    CommonResponse<ImportEventArrivalResponse> response = controller(true).objectArrival(null);
+
+    assertThat(response.data().triggered()).isFalse();
+    assertThat(response.data().reason()).isEqualTo("scan-lease-unavailable");
+    assertThat(meterRegistry.find("batch.import.event_arrival.scans").counter()).isNull();
+  }
+
+  @Test
+  @DisplayName("归属未启用时事件通知不声称启动扫描")
+  void shouldNotCountScan_whenOwnershipInactive() {
+    when(importIngressScanner.scan()).thenReturn(ScanResult.OWNERSHIP_INACTIVE);
+    CommonResponse<ImportEventArrivalResponse> response = controller(true).objectArrival(null);
+    assertThat(response.data().triggered()).isFalse();
+    assertThat(response.data().reason()).isEqualTo("scanner-ownership-inactive");
+    assertThat(meterRegistry.find("batch.import.event_arrival.scans").counter()).isNull();
   }
 
   @Test

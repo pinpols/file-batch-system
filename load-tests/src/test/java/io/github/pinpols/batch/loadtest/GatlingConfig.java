@@ -1,9 +1,12 @@
 package io.github.pinpols.batch.loadtest;
 
 import static io.gatling.javaapi.core.CoreDsl.global;
+import static io.gatling.javaapi.http.HttpDsl.Cookie;
 
 import io.gatling.javaapi.core.Assertion;
+import io.gatling.javaapi.http.AddCookie;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
@@ -31,6 +34,22 @@ public final class GatlingConfig {
     /** 本地 trigger 端点需要的内部共享密钥。 */
     public static final String INTERNAL_SECRET =
             systemPropertyOrEnv("internal.secret", "BATCH_INTERNAL_SECRET", "internal-secret");
+
+    /** 登录态由 Gatling 的 Cookie jar 管理，限制到 Console 路径。 */
+    public static AddCookie consoleAuthCookie() {
+        String token = System.getProperty("console.accessToken");
+        if (token == null) {
+            token = System.getProperty("console.authToken", "Bearer load-test-token");
+        }
+        if (token.startsWith("Bearer ")) {
+            token = token.substring("Bearer ".length());
+        }
+        URI consoleUri = URI.create(CONSOLE_BASE_URL);
+        return Cookie("batch_console_token", token)
+                .withDomain(consoleUri.getHost())
+                .withPath("/api/console")
+                .withSecure("https".equalsIgnoreCase(consoleUri.getScheme()));
+    }
 
     // ── Test data ──────────────────────────────────────────────────────────────
 

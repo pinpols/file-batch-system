@@ -36,10 +36,12 @@ Production idempotency stores implement `SdkIdempotencyStore`; the SDK ships onl
 
 ## 实际执行入口计时
 
-默认 `Worker.dispatch` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true`，使用 CLAIM 返回的当前 invocation。确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。详见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。
+默认 `Worker.dispatch` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true` 和本次独立的 `executionAttemptId`，使用 CLAIM 返回的当前 invocation。同一次入口请求的传输重试复用该标识；确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。旧客户端和旧服务混版的保护边界见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。
 
 ### 消费背压与已拉取记录
 
 达到并发上限后, Worker 保留当前已经拉取的记录, 等待原有低水位判定恢复后优先认领它,
 再继续获取后续记录。Pause/Resume 本身不能让已拉取记录自动重读; 提交不能跨过未处理消息。
 停机或取消会退出容量等待, 原记录保持未提交。真实 Kafka 回归位于 `kafka/kafka_consumer_integration_test.go`。
+
+同一任务在本 Worker 认领或执行期间再次投递时，重复消息不会覆盖原任务的续租与取消登记，offset 通过 `Withhold` 保留。适配器使用消费组分配的独立分区读取器，未确认的消息在当前分区等待 2 秒后重试，其他分区仍可消费；提交使用消息所属消费组代际，不能越过未确认消息。分区重新分配后从 broker 已提交位置恢复；重投可能包含已处理记录，业务处理仍需遵循幂等契约。

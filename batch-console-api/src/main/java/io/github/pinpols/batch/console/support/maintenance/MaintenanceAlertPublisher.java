@@ -10,10 +10,12 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
+import io.github.pinpols.batch.console.config.ConsoleAsyncConfiguration;
 import io.github.pinpols.batch.console.support.http.ConsoleOutboundTransport;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Clock;
 import java.time.Duration;
@@ -21,9 +23,16 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ScheduledFuture;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.context.event.EventListener;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
+import org.springframework.scheduling.TaskScheduler;
 import org.springframework.stereotype.Component;
 
 /**
@@ -33,14 +42,18 @@ import org.springframework.stereotype.Component;
  * endsAt 取维护窗口，不能按每次心跳续期，Console 停机后也会到期解除抑制。
  */
 @Component
+@Lazy(false)
 @Slf4j
 public class MaintenanceAlertPublisher {
 
   private static final Duration REPUBLISH_INTERVAL = Duration.ofSeconds(30);
+  private static final Duration RECONCILE_INTERVAL = Duration.ofSeconds(5);
   private final MaintenanceStateHolder stateHolder;
   private final AlertmanagerNotifyProperties.Silence properties;
   private final OutboundHttpTransport transport;
   private final Clock clock;
+  private final TaskScheduler scheduler;
+  private ScheduledFuture<?> reconciliation;
   private volatile boolean lastPublishSucceeded;
   private long publishedVersion = Long.MIN_VALUE;
   private boolean publishedActive;
@@ -51,8 +64,9 @@ public class MaintenanceAlertPublisher {
       MaintenanceStateHolder stateHolder,
       AlertmanagerNotifyProperties properties,
       @ConsoleOutboundTransport OutboundHttpTransport transport,
-      MeterRegistry registry) {
-    this(stateHolder, properties, transport, registry, Clock.systemUTC());
+      MeterRegistry registry,
+      @Qualifier(ConsoleAsyncConfiguration.REALTIME_SCHEDULER) TaskScheduler scheduler) {
+    this(stateHolder, properties, transport, registry, Clock.systemUTC(), scheduler);
   }
 
   MaintenanceAlertPublisher(
@@ -60,11 +74,13 @@ public class MaintenanceAlertPublisher {
       AlertmanagerNotifyProperties properties,
       OutboundHttpTransport transport,
       MeterRegistry registry,
-      Clock clock) {
+      Clock clock,
+      TaskScheduler scheduler) {
     this.stateHolder = stateHolder;
     this.properties = properties.getSilence();
     this.transport = transport;
     this.clock = clock;
+    this.scheduler = scheduler;
     Gauge.builder(
             "batch.console.maintenance.alert_suppression_available",
             this,
@@ -79,8 +95,21 @@ public class MaintenanceAlertPublisher {
         .register(registry);
   }
 
-  /** 使用 Spring 托管调度器；共享状态和 HTTP 客户端仍按原所有权关闭。 */
-  @Scheduled(fixedDelay = 5000)
+  /** 在共享状态完成首次刷新后，使用 Spring 托管调度器周期对账。 */
+  @Order(Ordered.HIGHEST_PRECEDENCE + 1)
+  @EventListener(ApplicationReadyEvent.class)
+  public void startReconciliation() {
+    reconciliation = scheduler.scheduleWithFixedDelay(this::reconcile, RECONCILE_INTERVAL);
+  }
+
+  /** 取消本组件的周期任务；调度器由 Spring 容器统一关闭。 */
+  @PreDestroy
+  void stopReconciliation() {
+    if (EmptyChecks.isNotNull(reconciliation)) {
+      reconciliation.cancel(false);
+    }
+  }
+
   public synchronized void reconcile() {
     MaintenanceState state = stateHolder.current();
     boolean configured = properties.isEnabled()

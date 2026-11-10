@@ -341,16 +341,16 @@ flowchart LR
 
 | Stage | 关键动作 | 输入 | 输出 |
 |---|---|---|---|
-| PREPARE | 校验 sqlTransformCompute spec / target 表存在性 / schema allowlist；生成 `batchKey`；删除本 batchKey 历史 staging | `step_params.sqlTransformCompute` + `payload.bizDate` | `attributes.batchKey` |
-| COMPUTE | 默认 JSONB 模式用 `processBusinessDataSource` 跑 `sourceSql`，逐行 `jsonb_build_object` 写入 `batch.process_staging`（按 batchKey 隔离）；`stagingMode=DIRECT` 只登记快路径元信息。或走自定义 `ProcessComputePlugin.compute()` | sourceSql + 命名参数（`:tenantId / :bizDate / :highWaterMarkIn`） | staging 行数 / DIRECT 模式标记 |
+| PREPARE | 校验 sqlTransformCompute spec / target 表存在性 / schema allowlist；使用传入或生成的 `batchKey` | `step_params.sqlTransformCompute` + `payload.bizDate` | `attributes.batchKey` |
+| COMPUTE | 默认 JSONB 模式按租户、批次、目标表和当前 generation 清理残留，再用 `processBusinessDataSource` 跑 `sourceSql`，逐行写入 `batch.process_staging`；`stagingMode=DIRECT` 只登记快路径元信息。或走自定义 `ProcessComputePlugin.compute()` | sourceSql + 命名参数（`:tenantId / :bizDate / :highWaterMarkIn`） | staging 行数 / DIRECT 模式标记 |
 | VALIDATE | JSONB 模式按 `validations[].checkSql` 跑用户校验（典型：`SELECT bool_and(...) AS pass, ... AS message`）；`DIRECT` 模式不支持 staging validations | staging 行 + checkSql | pass/fail（fail → 跳过 COMMIT） |
-| COMMIT | JSONB 模式 `INSERT INTO target SELECT jsonb_populate_record(...) FROM staging WHERE batch_key=?` 一句原子发布；`DIRECT` 模式 `INSERT INTO target SELECT ... FROM (sourceSql) base` 直接发布；按 `writeMode` 走 INSERT / UPSERT / INSERT_IGNORE | staging 或 sourceSql | target 表写入 + `attributes.publishedCount` |
-| FEEDBACK | JSONB 模式 `DELETE FROM staging WHERE batch_key=?` 清场；`DIRECT` 模式跳过 staging 清理；从插件 / 配置写 `highWaterMarkOut` 到 attributes（orchestrator 在 success 路径下回写 `job_instance`） | publishedCount + watermark column | `high_water_mark_out` |
+| COMMIT | JSONB 模式按租户、批次、目标表和当前 generation 发布 staging，并在同一业务事务清理该范围；`DIRECT` 模式从 sourceSql 直接发布；按 `writeMode` 走 INSERT / UPSERT / INSERT_IGNORE | staging 或 sourceSql | target 表写入 + `attributes.publishedCount` |
+| FEEDBACK | JSONB 模式再次清理当前 generation 的对应暂存行；`DIRECT` 模式跳过 staging 清理；从插件 / 配置写 `highWaterMarkOut` 到 attributes（orchestrator 在 success 路径下回写 `job_instance`） | publishedCount + watermark column | `high_water_mark_out` |
 
 > **失败语义差异（与 IMPORT/EXPORT/DISPATCH 对比）**：
-> - VALIDATE 失败：staging **保留**（不清），target 不变 → forensics 友好；下次 PREPARE 同 batchKey 才会清
-> - COMMIT 失败：staging 保留 + target 部分写（INSERT/UPSERT 是单语句原子，但跨语句 batch 失败可能留半成品），需业务在 target 上做幂等键防重
-> - DISPATCH 有独立的 RETRY / COMPENSATE 阶段；PROCESS **没有**——整个 task 失败由 task 层 `retry_policy` 重跑，每次重跑生成新 batchKey 走完整 5 stage
+> - VALIDATE 失败：当前 generation 的 staging 保留供排查，target 不变。
+> - JSONB 模式 COMMIT 失败：发布与清理处于同一业务事务；回滚后 staging 保留，具体外部副作用仍以插件实现为准。
+> - DISPATCH 有独立的 RETRY / COMPENSATE 阶段；PROCESS 由 task 层 `retry_policy` 重跑。重试使用新的 staging generation，旧代是否回收受 §7.9.7 的开关与围栏约束。
 
 > 详细 SQL 模板与运行回路见 [`../design/batch-classification-and-gaps.md`](../design/batch-classification-and-gaps.md) §4.5；ExecutionMode.INCREMENTAL 水位回路见 §7.8。
 
@@ -837,15 +837,15 @@ flowchart TB
   C -->|"未通过"| F["失败与核查证据"]
   E -->|"REPORT / 输出水位"| O["Orchestrator"]
   O --> STATE[("平台运行状态")]
-  E -->|"JSONB 清理本批 staging"| ST
+  E -->|"JSONB 清理当前 generation"| ST
 ```
 
 ### 7.9.3 关键不变量
 
 - **target 表干净**:VALIDATE 失败时 COMMIT 不跑,target 完全不变;失败本批数据留在 staging 供运维复盘
-- **batchKey 唯一性**:PREPARE 阶段生成 `process-<taskId>-<traceId>`,5 个 stage 共享;不同 task 不同 batchKey,staging 行天然隔离
+- **暂存隔离**:5 个 stage 共享传入或生成的 `batchKey`；暂存访问还按租户、目标表和当前 generation 限定，重试的新 generation 不混用旧代数据。
 - **原子 publish**:JSONB 模式 COMMIT 是单 SQL `INSERT ... SELECT FROM staging ... ON CONFLICT DO UPDATE`;DIRECT 模式是单 SQL `INSERT ... SELECT FROM sourceSql ... ON CONFLICT ...`,不存在"写一半"——PG 单语句要么全成要么全失败
-- **staging 不堆积**:JSONB 成功路径 FEEDBACK 必清(`DELETE WHERE batch_key`);失败路径 staging 保留供 forensics,直到下次 PREPARE 同 batchKey 才清(实际由 retry 触发的新 task 是新 batchKey,旧 batchKey 需运维按 staged_at 清理)。DIRECT 模式不写 staging。
+- **暂存保留和回收**:JSONB 成功发布时在同一业务事务清理当前代，FEEDBACK 再次清理；失败代保留供排查。旧代仅在启用删除开关、超过保留期并经平台围栏确认不再是当前代后有界回收；删除默认关闭，因此不能保证暂存不会堆积。DIRECT 模式不写 staging。
 - **plugin opt-in**:`ProcessComputePlugin` 5 个 lifecycle 方法都有默认 no-op,自定义插件只重写 `compute()` 也合法,框架仍跑全 5 stage
 
 ### 7.9.4 关键代码位
@@ -897,7 +897,7 @@ sqlTransformCompute:
 
 ### 7.9.6 与 ExecutionMode.INCREMENTAL(§7.8)的协作
 
-PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 字段就是给 INCREMENTAL 模式用的——COMPUTE 阶段算出 `max(watermarkColumn)` 写入 `attributes.HIGH_WATER_MARK_OUT`,FEEDBACK 透传 → orchestrator 回写 `job_instance.high_water_mark_out`,下次该 job 启动时被加载为 `highWaterMarkIn` 命名参数,业务 SQL 用 `WHERE event_id > :highWaterMarkIn` 取增量。
+PROCESS 与 ExecutionMode 正交:既可以做 FULL 全量(每次重新聚合),也可以做 INCREMENTAL 增量(读取上次 OUT 当本次 IN)。`watermarkColumn` 指定目标列名，用于计算本批 `highWaterMarkOut`，经 FEEDBACK 透传后由 orchestrator 回写 `job_instance.high_water_mark_out`；下次启动时作为 `highWaterMarkIn` 命名参数，业务 SQL 可用 `WHERE event_id > :highWaterMarkIn` 取增量。JSONB 模式在 COMPUTE 阶段从暂存计算；DIRECT 模式在 COMMIT 阶段计算。DIRECT 的 INSERT / INSERT_IGNORE 使用 `columns` 中对应的源列，在同一语句中物化本批源数据，同时用于发布和计算最高水位，因此冲突跳过的输入也计入水位，但 `publishedCount` 仍只统计实际写入行。空输入不产生新水位。水位列未出现在 `columns` 中时保留按目标表 `RETURNING` 计算的兼容行为，跳过的冲突行不参与该水位；增量配置应将水位列明确包含在映射中。
 
 ### 7.9.7 资源上限与孤儿清理(P1-6 / P1-7)
 

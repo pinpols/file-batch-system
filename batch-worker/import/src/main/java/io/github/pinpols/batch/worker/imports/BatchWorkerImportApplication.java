@@ -26,6 +26,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @MapperScan(
     basePackages = {
       "io.github.pinpols.batch.worker.core.mapper",
+      "io.github.pinpols.batch.worker.imports.mapper",
       "io.github.pinpols.batch.common.mapper"
     },
     sqlSessionFactoryRef = "importPlatformSqlSessionFactory")

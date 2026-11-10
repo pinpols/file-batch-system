@@ -916,6 +916,56 @@ class BatchDayMetricsMapperIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("超期事件预期重复扫描只告警一次并持续阻止空日结算")
+  void shouldAlertOnceForOverdueEventExpectationWithoutSettling() {
+    String tenantId = unique("event-tenant");
+    String calendarCode = unique("event-calendar");
+    String eventCode = unique("missing-event");
+    LocalDate bizDate = LocalDate.now();
+    Long workflowDefinitionId = insertWorkflowDefinition(tenantId, calendarCode);
+    insertOpenBatchDay(tenantId, calendarCode, bizDate);
+    String cutoffSql = """
+        update batch.batch_day_instance set day_status = 'CUTOFF',
+          cutoff_at = current_timestamp - interval '1 minute'
+        where tenant_id = ? and calendar_code = ? and biz_date = ?
+        """;
+    jdbcTemplate.update(cutoffSql, tenantId, calendarCode, bizDate);
+    Instant dueAt = Instant.now().minusSeconds(60);
+    int inserted = expectedWorkOccurrenceMapper.insertIfAbsent(
+        ExpectedWorkOccurrenceInsertIfAbsentParam.builder()
+            .tenantId(tenantId)
+            .calendarCode(calendarCode)
+            .bizDate(bizDate)
+            .workflowDefinitionId(workflowDefinitionId)
+            .sourceType("EXTERNAL_EVENT")
+            .sourceKey(eventCode)
+            .expectedAt(dueAt.minusSeconds(300))
+            .dueAt(dueAt)
+            .build());
+    assertThat(inserted).isOne();
+
+    batchDaySettleScheduler.settle();
+    batchDaySettleScheduler.settle();
+
+    assertThat(dayStatus(tenantId, calendarCode, bizDate)).isEqualTo("CUTOFF");
+    String occurrenceSql = """
+        select occurrence_status from batch.expected_work_occurrence
+        where tenant_id = ? and calendar_code = ? and biz_date = ? and source_key = ?
+        """;
+    String occurrenceStatus = jdbcTemplate.queryForObject(
+        occurrenceSql, String.class, tenantId, calendarCode, bizDate, eventCode);
+    assertThat(occurrenceStatus).isEqualTo("EXPECTED");
+    String alertSql = """
+        select detail_json::text as detail_json, occurrence_count from batch.alert_event
+        where tenant_id = ? and alert_type = 'BATCH_EXPECTED_WORK_MISSING'
+        """;
+    Map<String, Object> alert = jdbcTemplate.queryForMap(alertSql, tenantId);
+    assertThat(alert.get("occurrence_count")).isEqualTo(1);
+    assertThat(String.valueOf(alert.get("detail_json")))
+        .contains(workflowDefinitionId.toString(), eventCode, bizDate.toString(), "EXTERNAL_EVENT");
+  }
+
+  @Test
   @DisplayName("生产结算器在计划 occurrence 和文件/事件预期未终结时不结空日")
   void shouldKeepEmptyDayOpenUntilAllExpectedWorkAndOccurrenceAreTerminal() {
     final String updateWorkflowDefinitionSql = """

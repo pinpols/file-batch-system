@@ -41,7 +41,7 @@ class FileArrivalGroupBacklogIntegrationTest extends AbstractIntegrationTest {
     insertWaitingFile(tenantId, olderGroup, "older-b.csv", "-1 day");
     insertWaitingFile(tenantId, newerGroup, "newer-a.csv", "-1 hour");
 
-    ArrivalGroupBacklogRow backlog = fileGovernanceMapper.selectArrivalGroupBacklogMetrics();
+    ArrivalGroupBacklogRow backlog = fileGovernanceMapper.selectArrivalGroupBacklogMetrics("");
 
     long waitingGroupCount = backlog.waitingGroups();
     long oldestWaitingSeconds = backlog.oldestWaitSeconds();

@@ -57,7 +57,9 @@ START → JOB_A → JOB_B → END
 
 KAFKA_OFFSET 的 `partition` 必须是非负 32 位整数，`minOffset` 必须是非负 64 位整数；非整数和溢出配置会被图验证及运行时探针拒绝。
 
-FILE_ARRIVAL 文件名 `pattern` 中仅 `*` 匹配任意长度字符，`%`、`_`、反斜线和 `!` 按字面匹配。`bizDate` 和 `fileGroupCode` 对旧式文件匹配均可选。新配置可显式提供 `bizDate`，或设 `bindWorkflowBizDate=true` 使用 Workflow run 固定业务日；未请求完整组时，旧配置仍按原文件名/最大年龄规则运行。设置 `requireCompleteGroup=true` 时，必须同时提供 `fileGroupCode` 和 `bizDate` 或 `bindWorkflowBizDate=true`，避免周期性复用的组编码把另一个业务日的完整组误判为本次运行到达。只有到达组治理将成员 `arrivalState` 推进到 `TRIGGERED` 且业务日一致后 sensor 才命中。
+FILE_ARRIVAL 文件名 `pattern` 中仅 `*` 匹配任意长度字符，`%`、`_`、反斜线和 `!` 按字面匹配。`bizDate` 和 `fileGroupCode` 对旧式文件匹配均可选。新配置可显式提供 `bizDate`，或设 `bindWorkflowBizDate=true` 使用 Workflow run 固定业务日；未请求完整组时，旧配置仍按原文件名/最大年龄规则运行。托管上传会话先创建文件占位记录，只有文件内容经确认到达后才参与 sensor 匹配；其他来源沿用原有匹配规则。设置 `requireCompleteGroup=true` 时，必须同时提供 `fileGroupCode` 和 `bizDate` 或 `bindWorkflowBizDate=true`，避免周期性复用的组编码把另一个业务日的完整组误判为本次运行到达。只有到达组治理将成员 `arrivalState` 推进到 `TRIGGERED` 且业务日一致后 sensor 才命中。
+
+`channelCode` 未填写时沿用通用文件等待；填写时必须是长度不超过 128 的字符串，新文件按同租户的可信到达渠道精确匹配，而不是用渠道名前缀代替具体渠道。Workflow 保存、租户 JSON 配置和 Excel 导入均校验格式，但不要求渠道在配置导入时已经部署。托管上传只有选择了同租户已启用渠道才写入可信身份；未验证渠道仍允许上传，但不满足指定渠道的等待。Import scanner 的可信身份来自部署侧配置的租户与对象目录绑定，未绑定的新记录不会按历史规则回退。迁移前已有且缺少可信渠道身份的文件保留旧的来源类型过滤方式，命中时记录警告，节点输出带 `legacyChannelFallback=true`；该兼容命中仍可能混淆同类型渠道，应根据业务核对或重新登记。迁移边界、配置和限制见[事件到达手册](../../runbook/event-driven-arrival.md)。
 
 ### 执行机制
 
@@ -71,6 +73,7 @@ FILE_ARRIVAL 文件名 `pattern` 中仅 `*` 匹配任意长度字符，`%`、`_`
      - TIMEOUT + on_timeout=SKIP_DOWNSTREAM → workflow_node_run.status=SKIPPED；该节点不触发 SUCCESS / CONDITION / FAILURE / ALWAYS 边，级联将因此不再可触发的下游节点标记为 SKIPPED；多前驱节点仍可按其它前驱和既有 JOIN 规则等待或执行，且不创建 WAIT 的 Worker task。Workflow 没有其它失败时以 SUCCESS 终态收口
      - ERROR → workflow_node_run.status=FAILED + 写 error_key
 - `SKIP_DOWNSTREAM` 是“放弃该等待路径”的显式处置，不是条件成功信号，因此不能沿 `SUCCESS` 边继续派发。级联只跳过已因此不可达的节点；有其它前驱的 JOIN 仍按既有 JOIN 规则判定，避免一个超时分支误杀仍可由其它分支满足的 `ANY` JOIN。
+- WAIT 以 `MATCHED` 或 `FAIL` 结束时，除沿命中边推进外，也按既有 DAG 规则将仅依赖未命中边且已不可达的节点级联标记为 `SKIPPED`；仍可由其他前驱触达的汇合节点继续等待或执行。Workflow 处于暂停状态时沿用恢复后再推进的语义。
 - 探测结果（如 FILE_ARRIVAL 命中的 fileId）写到 `workflow_node_run.output` JSONB，下游节点可以通过 ADR-009 DSL 引用：
   ```
   $.nodes.<WAIT_NODE_CODE>.output.fileId

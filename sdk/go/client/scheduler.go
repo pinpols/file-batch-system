@@ -239,6 +239,17 @@ func (r *InFlightRegistry) Remove(taskID string) {
 	delete(r.tasks, taskID)
 }
 
+// removeIfCurrent 避免旧续租响应删除同一 taskId 的后续执行登记。
+func (r *InFlightRegistry) removeIfCurrent(taskID string, expected *inFlightEntry) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.tasks[taskID] != expected {
+		return false
+	}
+	delete(r.tasks, taskID)
+	return true
+}
+
 // Count returns the number of in-flight tasks.
 func (r *InFlightRegistry) Count() int {
 	r.mu.RLock()
@@ -315,8 +326,9 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 			if errors.As(err, &nf) {
 				s.logger.Printf("WARN lease gone taskId=%s, dropping: %v", taskID, err)
 				entry.sig.MarkCancelled()
-				s.registry.Remove(taskID)
-				dropped = append(dropped, taskID)
+				if s.registry.removeIfCurrent(taskID, entry) {
+					dropped = append(dropped, taskID)
+				}
 				continue
 			}
 			s.logger.Printf("WARN renew error taskId=%s: %v", taskID, err)
@@ -327,8 +339,9 @@ func (s *LeaseRenewalScheduler) RenewOnce(ctx context.Context) []string {
 		if resp.Revoked {
 			s.logger.Printf("WARN lease revoked (409) taskId=%s, cancelling handler and dropping", taskID)
 			entry.sig.MarkCancelled()
-			s.registry.Remove(taskID)
-			dropped = append(dropped, taskID)
+			if s.registry.removeIfCurrent(taskID, entry) {
+				dropped = append(dropped, taskID)
+			}
 			continue
 		}
 		// ApplyRenew turns cancelRequested into a cancel decision.

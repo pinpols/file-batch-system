@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.config.OrchestratorTaskClientProperties;
 import io.github.pinpols.batch.worker.core.config.WorkerBatchClaimProperties;
@@ -67,10 +68,58 @@ class HttpTaskExecutionClientTest {
               "\"tenantId\":\"t1\"",
               "\"workerId\":\"w1\"",
               "\"partitionInvocationId\":\"inv-1\"",
-              "\"details\":{\"executionStarted\":true}");
+              "\"executionStarted\":true",
+              "\"executionAttemptId\":");
       var ordinary = server.takeRequest();
       assertThat(ordinary.getUrl().encodedPath()).isEqualTo("/internal/tasks/leases/renew-batch");
       assertThat(ordinary.getBody().utf8()).contains("inv-2").doesNotContain("executionStarted");
+    }
+  }
+
+  @Test
+  @DisplayName("执行入口确认响应失败时使用同一尝试标识重试")
+  void shouldReuseExecutionAttemptId_whenStartConfirmationIsRetried() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(new MockResponse.Builder().code(500).build());
+      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+      server.start();
+      HttpTaskExecutionClient client =
+          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+      TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+
+      Map<Long, TaskLeaseRenewResult> result = client.renewLeasesBatch(List.of(item));
+
+      assertThat(result).containsEntry(1L, TaskLeaseRenewResult.renewed(1L));
+      String firstBody = server.takeRequest().getBody().utf8();
+      String retryBody = server.takeRequest().getBody().utf8();
+      assertThat(firstBody).contains("\"executionAttemptId\":");
+      assertThat(retryBody).isEqualTo(firstBody);
+    }
+  }
+
+  @Test
+  @DisplayName("同一任务的两次业务入口使用不同的执行尝试标识")
+  void shouldUseDifferentAttemptIdsForSeparateExecutionStarts() throws Exception {
+    try (MockWebServer server = new MockWebServer()) {
+      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+      server.enqueue(jsonResponse("{\"cancelRequested\":false}"));
+      server.start();
+      HttpTaskExecutionClient client =
+          newClient(clientProperties(server.getPort()), new WorkerBatchClaimProperties());
+      TaskLeaseRenewItem item = TaskLeaseRenewItem.executionStart("t1", 1L, "w1", "inv-1");
+
+      client.renewLeasesBatch(List.of(item));
+      client.renewLeasesBatch(List.of(item));
+
+      ObjectMapper mapper = new ObjectMapper();
+      String firstBody = server.takeRequest().getBody().utf8();
+      String secondBody = server.takeRequest().getBody().utf8();
+      String firstId =
+          mapper.readTree(firstBody).path("details").path("executionAttemptId").asText();
+      String secondId =
+          mapper.readTree(secondBody).path("details").path("executionAttemptId").asText();
+      assertThat(firstId).isNotBlank();
+      assertThat(secondId).isNotBlank().isNotEqualTo(firstId);
     }
   }
 

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -21,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class WorkflowMonitoringAlertEmissionService {
   private final WorkflowMonitoringMapper mapper;
   private final AlertEventService alertEventService;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Transactional(propagation = Propagation.REQUIRES_NEW)
   public boolean emitOnce(WorkflowMonitoringAlertCandidate scanned) {
@@ -31,6 +33,7 @@ public class WorkflowMonitoringAlertEmissionService {
         .tenantId(tenantId)
         .resourceKey(scanned.resourceKey())
         .violation(scanned.violation())
+        .defaultTimezone(timezoneProvider.defaultZone().getId())
         .limit(1)
         .build();
     List<WorkflowMonitoringAlertCandidate> current = mapper.selectCandidates(query);

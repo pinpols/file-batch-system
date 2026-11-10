@@ -71,7 +71,7 @@ import org.springframework.stereotype.Component;
  *   <li>{@code headers} (optional, Map&lt;String,String&gt;):自定义 header
  *   <li>{@code body} (optional, String):请求体
  *   <li>{@code timeoutSeconds} (optional, Long):覆盖默认超时,只能缩短
- *   <li>{@code expectStatus} (optional, Integer / List&lt;Integer&gt;):期望的 status code,不匹配 → fail
+ *   <li>{@code expectStatus} (optional, Integer / List&lt;Integer&gt;):期望的状态码；缺省时 5xx 失败
  *   <li>{@code auth} (optional, Map):鉴权,{@code {"type": "basic", "username": ".", "password": "."}}
  *       或 {@code {"type": "bearer", "token": "."}}
  * </ul>
@@ -524,7 +524,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         TaskResult result = runOnce(inv, attempt);
-        // 显式接受的状态已满足调用方预期；未指定期望时保留默认 5xx 重试。
+        // 显式接受的状态已满足调用方预期；未指定期望时服务端错误沿原策略重试。
         Integer status = (Integer) result.output().get("statusCode");
         boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
             && status >= 500
@@ -643,7 +643,10 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       output.put("responseTruncated", truncated);
     }
 
-    boolean expectMatch = inv.expectedStatus.isEmpty() || inv.expectedStatus.contains(statusCode);
+    boolean serverError = statusCode >= 500 && statusCode < 600;
+    boolean expectMatch = EmptyChecks.isEmpty(inv.expectedStatus)
+        ? !serverError
+        : inv.expectedStatus.contains(statusCode);
     if (!expectMatch) {
       AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
           ? AtomicErrorCode.EXECUTION_FAILED
@@ -651,9 +654,12 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
           ? "; remote side effect may have committed, manual reconciliation is required"
           : "";
+      String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
+          ? "is a server error"
+          : "not in expected " + inv.expectedStatus;
       return AtomicErrorCode.fail(
           code,
-          "status " + statusCode + " not in expected " + inv.expectedStatus + outcomeNote,
+          "status " + statusCode + " " + statusReason + outcomeNote,
           Map.of("statusCode", statusCode),
           null);
     }

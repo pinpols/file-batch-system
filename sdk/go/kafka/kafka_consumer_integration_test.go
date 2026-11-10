@@ -21,115 +21,67 @@ import (
 //
 //	BATCH_SDK_KAFKA_BOOTSTRAP=localhost:19092 go test ./...
 //
+// 设置 BATCH_SDK_KAFKA_KEEP_TOPICS=1 可保留本轮独立主题用于核对。
+//
 // SASL/SCRAM-SHA-512 + TLS are config-supported (see Config / buildDialer) but
 // the local broker is PLAINTEXT, so this test exercises the PLAINTEXT path; the
 // SCRAM path is validated by construction (buildDialer) and code review.
 func TestKafkaConsumer_Integration(t *testing.T) {
 	bootstrap := os.Getenv("BATCH_SDK_KAFKA_BOOTSTRAP")
 	if bootstrap == "" {
-		t.Skip("BATCH_SDK_KAFKA_BOOTSTRAP not set; skipping Kafka integration test (broker-free run)")
+		t.Skip("未设置 Kafka 地址")
 	}
-
-	const tenant = "acme"
-	// Unique suffix so concurrent / repeated runs don't collide.
-	suffix := fmt.Sprintf("%d", time.Now().UnixNano())
-	workerCode := "w-" + suffix
-	// node-direct topic the consumer discovers by suffix (.node.<workerCode>):
-	// batch.task.dispatch.<workerType>.node.<workerCode> (#2; was tenant-first).
-	topic := fmt.Sprintf("batch.task.dispatch.http.node.%s", workerCode)
-
 	brokers := strings.Split(bootstrap, ",")
-
-	// --- create topic + cleanup -------------------------------------------
-	createTopic(t, brokers[0], topic)
-	t.Cleanup(func() { deleteTopic(brokers[0], topic) })
-
-	// --- build the adapter under test -------------------------------------
-	logger := log.New(os.Stderr, "[itest] ", log.LstdFlags)
-	consumer, err := NewConsumer(Config{
-		Brokers:    brokers,
-		TenantID:   tenant,
-		WorkerCode: workerCode,
-		// Short refresh so the wildcard discovery is exercised quickly.
-		TopicRefreshInterval: 2 * time.Second,
-		FetchMaxWait:         500 * time.Millisecond,
-		Logger:               logger,
-	})
-	if err != nil {
-		t.Fatalf("NewConsumer: %v", err)
-	}
-	t.Cleanup(consumer.Close)
-
-	// Pipeline bound to tenant "acme", maxConcurrent high so no backpressure.
-	fsm := client.NewFSM()
-	pipeline := client.NewMessagePipeline(tenant, fsm, 100, func() int { return 0 }, logger)
-
-	// --- produce the three messages ---------------------------------------
-	validMsg := client.TaskDispatchMessage{
-		TaskID:        "task-" + suffix,
-		TenantID:      tenant,
-		SchemaVersion: "v1",
-		WorkerType:    "http",
-	}
-	foreignMsg := client.TaskDispatchMessage{
-		TaskID:        "foreign-" + suffix,
-		TenantID:      "other-tenant",
-		SchemaVersion: "v1",
-		WorkerType:    "http",
-	}
-	badSchemaMsg := client.TaskDispatchMessage{
-		TaskID:        "badschema-" + suffix,
-		TenantID:      tenant,
-		SchemaVersion: "v3",
-		WorkerType:    "http",
-	}
-	produce(t, brokers, topic, validMsg, foreignMsg, badSchemaMsg)
-
-	// --- consume + run through the pipeline -------------------------------
-	// Collect dispositions for the three known taskIds. We poll until we have
-	// observed all three or hit a deadline.
-	deadline := time.Now().Add(30 * time.Second)
-	seen := map[string]client.MessageDisposition{}
-	wantIDs := map[string]bool{
-		validMsg.TaskID:     true,
-		foreignMsg.TaskID:   true,
-		badSchemaMsg.TaskID: true,
-	}
-
-	for time.Now().Before(deadline) && len(seen) < len(wantIDs) {
-		recs, ok := consumer.Poll()
-		if !ok {
-			t.Fatalf("consumer Poll returned not-ok unexpectedly")
-		}
-		for _, rec := range recs {
-			msg, disp := pipeline.OnMessage(rec)
-			if !wantIDs[msg.TaskID] {
-				continue // ignore stray records from other runs
+	for _, tc := range []struct {
+		name          string
+		tenantID      string
+		schemaVersion string
+		want          client.MessageDisposition
+	}{
+		{name: "foreign", tenantID: "other-tenant", schemaVersion: "v1", want: client.DispositionDroppedForeignTenant},
+		{name: "schema", tenantID: "acme", schemaVersion: "v3", want: client.DispositionRejectedSchema},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			const tenant = "acme"
+			suffix := fmt.Sprintf("%d", time.Now().UnixNano())
+			workerCode := "w-" + suffix
+			topic := fmt.Sprintf("batch.task.dispatch.http.node.%s", workerCode)
+			createTopic(t, brokers[0], topic)
+			if os.Getenv("BATCH_SDK_KAFKA_KEEP_TOPICS") != "1" {
+				t.Cleanup(func() { deleteTopic(brokers[0], topic) })
 			}
-			seen[msg.TaskID] = disp
-			// Commit ONLY on acceptance; otherwise Withhold so the offset is
-			// deferred (never crossed by a later commit) and the message would be
-			// redelivered — mirroring the live consume loop's disposition handling.
-			if disp == client.DispositionAccepted {
-				consumer.Commit()
-			} else {
-				consumer.Withhold()
+			logger := log.New(os.Stderr, "[itest] ", log.LstdFlags)
+			consumer, err := NewConsumer(Config{Brokers: brokers, TenantID: tenant, WorkerCode: workerCode,
+				TopicRefreshInterval: 2 * time.Second, FetchMaxWait: 500 * time.Millisecond, Logger: logger})
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-	}
-
-	// --- assertions --------------------------------------------------------
-	if got := seen[validMsg.TaskID]; got != client.DispositionAccepted {
-		t.Errorf("valid v1 message: disposition = %q, want ACCEPTED", got)
-	}
-	if got := seen[foreignMsg.TaskID]; got != client.DispositionDroppedForeignTenant {
-		t.Errorf("foreign-tenant message: disposition = %q, want DROPPED_FOREIGN_TENANT", got)
-	}
-	if got := seen[badSchemaMsg.TaskID]; got != client.DispositionRejectedSchema {
-		t.Errorf("schemaVersion=v3 message: disposition = %q, want REJECTED_SCHEMA", got)
-	}
-	if len(seen) != len(wantIDs) {
-		t.Errorf("only saw %d/%d expected messages: %v", len(seen), len(wantIDs), seen)
+			t.Cleanup(consumer.Close)
+			pipeline := client.NewMessagePipeline(tenant, client.NewFSM(), 100, func() int { return 0 }, logger)
+			valid := client.TaskDispatchMessage{TaskID: "valid-" + suffix, TenantID: tenant, SchemaVersion: "v1", WorkerType: "http"}
+			rejected := client.TaskDispatchMessage{TaskID: "rejected-" + suffix, TenantID: tc.tenantID, SchemaVersion: tc.schemaVersion, WorkerType: "http"}
+			produce(t, brokers, topic, valid, rejected)
+			seen := map[string]client.MessageDisposition{}
+			deadline := time.Now().Add(30 * time.Second)
+			for time.Now().Before(deadline) && len(seen) < 2 {
+				records, ok := consumer.Poll()
+				if !ok {
+					t.Fatal("消费者提前停止")
+				}
+				for _, record := range records {
+					msg, disposition := pipeline.OnMessage(record)
+					seen[msg.TaskID] = disposition
+					if disposition == client.DispositionAccepted {
+						consumer.Commit()
+					} else {
+						consumer.Withhold()
+					}
+				}
+			}
+			if seen[valid.TaskID] != client.DispositionAccepted || seen[rejected.TaskID] != tc.want {
+				t.Fatalf("消费结果=%v，预期合法=%s，拒绝=%s", seen, client.DispositionAccepted, tc.want)
+			}
+		})
 	}
 }
 

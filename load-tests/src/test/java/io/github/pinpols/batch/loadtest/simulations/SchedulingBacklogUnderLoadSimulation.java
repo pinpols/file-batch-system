@@ -26,11 +26,6 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  */
 public class SchedulingBacklogUnderLoadSimulation extends Simulation {
 
-  private static final String AUTH_TOKEN =
-      System.getProperty("console.accessToken") != null
-          ? "Bearer " + System.getProperty("console.accessToken")
-          : System.getProperty("console.authToken", "Bearer load-test-token");
-
   private final HttpProtocolBuilder triggerProtocol =
       http
           .baseUrl(GatlingConfig.TRIGGER_BASE_URL)
@@ -42,7 +37,6 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
       http
           .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
           .acceptHeader("application/json")
-          .header("Authorization", AUTH_TOKEN)
           .shareConnections();
 
   private final Iterator<Map<String, Object>> launchFeeder =
@@ -100,7 +94,8 @@ public class SchedulingBacklogUnderLoadSimulation extends Simulation {
 
   private final ChainBuilder consoleReads =
       GatlingConfig.SCHEDULING_CONSOLE_READS_ENABLED
-          ? exec(
+          ? exec(addCookie(GatlingConfig.consoleAuthCookie()))
+              .exec(
                   http("GET /api/console/scheduler/status")
                       .get("/api/console/scheduler/status")
                       .check(status().is(200)))

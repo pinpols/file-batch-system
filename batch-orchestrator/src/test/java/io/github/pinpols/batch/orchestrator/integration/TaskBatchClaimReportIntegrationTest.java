@@ -40,6 +40,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -274,6 +277,84 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     assertThat(ra.claimed()).isFalse(); // a 被对手领走,逐项 skip 不抛异常
     assertThat(rb.claimed()).isTrue(); // b 正常领到
     assertThat(rb.config()).isNotNull();
+  }
+
+  @Test
+  @DisplayName("执行入口同一尝试可重试，不同尝试不能复用当前认领")
+  void shouldFenceDistinctExecutionAttemptsWithinSameClaim() {
+    LaunchedTask task = launchOne(9);
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    String worker = task.seed().workerCode();
+    JobTaskEntity claimed = taskExecutionService.assignWorker(TENANT, task.taskId(), worker);
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.partitionId());
+    String invocation = partition.getCurrentInvocationId();
+    String firstDetails = """
+        {"executionStarted":true,"executionAttemptId":"attempt-first"}
+        """;
+    String secondDetails = """
+        {"executionStarted":true,"executionAttemptId":"attempt-second"}
+        """;
+
+    var first = taskExecutionService.recordHeartbeat(
+        TENANT, task.taskId(), worker, invocation, firstDetails);
+    var retry = taskExecutionService.recordHeartbeat(
+        TENANT, task.taskId(), worker, invocation, firstDetails);
+    var duplicate = taskExecutionService.recordHeartbeat(
+        TENANT, task.taskId(), worker, invocation, secondDetails);
+
+    assertThat(first.leaseRenewed()).isTrue();
+    assertThat(retry.leaseRenewed()).isTrue();
+    assertThat(duplicate.leaseRenewed()).isFalse();
+    JobTaskEntity persisted = jobTaskMapper.selectById(TENANT, task.taskId());
+    assertThat(persisted.getExecutionAttemptId()).isEqualTo("attempt-first");
+  }
+
+  @Test
+  @DisplayName("同一认领的两个执行尝试并发确认时只能有一个获准")
+  void shouldAdmitOnlyOneConcurrentExecutionAttempt() throws Exception {
+    LaunchedTask task = launchOne(10);
+    LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
+    String worker = task.seed().workerCode();
+    JobTaskEntity claimed = taskExecutionService.assignWorker(TENANT, task.taskId(), worker);
+    assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
+    String invocation =
+        jobPartitionMapper.selectById(TENANT, task.partitionId()).getCurrentInvocationId();
+    CountDownLatch start = new CountDownLatch(1);
+    CompletableFuture<Boolean> first = CompletableFuture.supplyAsync(() -> {
+      awaitStart(start);
+      String details = """
+          {"executionStarted":true,"executionAttemptId":"attempt-a"}
+          """;
+      return taskExecutionService
+          .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
+          .leaseRenewed();
+    });
+    CompletableFuture<Boolean> second = CompletableFuture.supplyAsync(() -> {
+      awaitStart(start);
+      String details = """
+          {"executionStarted":true,"executionAttemptId":"attempt-b"}
+          """;
+      return taskExecutionService
+          .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
+          .leaseRenewed();
+    });
+
+    start.countDown();
+    boolean firstAllowed = first.get(30, TimeUnit.SECONDS);
+    boolean secondAllowed = second.get(30, TimeUnit.SECONDS);
+    assertThat(firstAllowed).isNotEqualTo(secondAllowed);
+  }
+
+  private static void awaitStart(CountDownLatch start) {
+    try {
+      if (!start.await(10, TimeUnit.SECONDS)) {
+        throw new IllegalStateException("等待并发确认超时");
+      }
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("并发确认被中断", interrupted);
+    }
   }
 
   private record LaunchedTask(

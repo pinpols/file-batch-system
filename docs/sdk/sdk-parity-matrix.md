@@ -20,6 +20,14 @@
 
 计时信号不设置非幂等副作用证据，不改变处理器参数或业务批处理逻辑。Rust 自定义 `MessageHandler` 没有统一自动派发器，因此公开保护入口通过真实 HTTP 用例验证，宿主仍需按 [Rust README](../../sdk/rust/README.md) 接入；不能把可调用能力等同于所有外部宿主已升级。其余旧矩阵保留历史证据边界。
 
+2026-11-10 隔离集成验证补充：Java SDK 经真实 Kafka 和控制面 HTTP 进入业务处理器前，已可从 PostgreSQL 回读非空执行尝试身份、执行开始时间和与处理器一致的 invocation；幂等业务未写非幂等开始标记，最终任务、Workflow 和业务记录均成功。验证范围和命令见[系统设计验证记录](../plans/system-design-capacity-validation-plan-2026-11-09.md)；其他四种语言、混版和异常恢复不能由此结果推断。
+
+同日 Go 样例经独立租户、真实 Kafka、API key 鉴权和控制面完成任务，并在修正停机请求体后主动下线；执行身份及 Worker 状态已回读。该样例为 echo 任务，不等同于故障恢复或其他语言的运行证据。
+
+同日 Rust 样例实际运行时发现执行桥漏接入口确认，任务成功但平台未记录执行身份和开始时间；样例接入 SDK 确认入口后，拒绝确认的反例及真实控制面正常路径已验证。样例原 SIGTERM 钩子为空，现已接入 SIGTERM 和 SIGINT；隔离环境中向运行中的样例发送 SIGTERM 后，所测任务完成并回报，Worker 主动下线。同步处理器仍须先返回，具体验证边界见[系统设计验证记录](../plans/system-design-capacity-validation-plan-2026-11-09.md)。
+
+同日 Python 样例将 SIGTERM 和 SIGINT 接入停止流程；隔离环境中运行任务时发送 SIGTERM，所测任务完成回报并主动下线。TypeScript 样例同场景发现一次停机触发两次下线，SDK 现复用并发停止过程；修复后所测任务成功且仅下线一次。上述均为单次样例链路，不代表故障恢复或目标环境验收。
+
 ## 0. 怎么读这张表 + 核查方法论(重要)
 
 本表是**逐文件亲核**的结果,不是 grep 汇总。原因:基于单点 `grep` 的快速扫描在这件事上容易系统性误判,根因是——
@@ -84,12 +92,12 @@
 |---|---|---|
 | 成功受理 / 重复投递(ACCEPTED) | ✅ 提交 | 已受理,offset 前移 |
 | 缺失 / 空白 schemaVersion | ✅ 提交(按 v1) | fixture 16:缺省按 v1 **accept** |
-| **未知大版本(v3+)** | **❌ 不提交** | **fixture 18 硬契约 `do NOT commit`** / `sdkMustNot: commit offset for a rejected message`。记录分区 commit ceiling 后继续消费,重启 / rebalance 后重投,不再永久 HOL 阻塞 |
-| 跨租户 | ❌ 不提交 | 安全 fail-closed:不 claim / 不执行;记录分区 commit ceiling 后继续服务本租户消息,重启 / rebalance 后重投 |
-| draining / 平台 PAUSED\|DRAINING / 容量背压 | ❌ 不提交 | 瞬态:seek 回本条 + 临时 pause 分区,条件恢复后 resume |
+| **未知大版本(v3+)** | **❌ 不提交** | **fixture 18 硬契约 `do NOT commit`** / `sdkMustNot: commit offset for a rejected message`；不得跨越未确认记录 |
+| 跨租户 | ❌ 不提交 | 安全 fail-closed：不 claim、不执行，且不得跨越未确认记录 |
+| draining / 平台 PAUSED\|DRAINING / 容量背压 | ❌ 不提交 | 保留当前消息，按平台状态或 Worker 容量暂停消费，条件恢复后重试 |
 | fatal(认证 / 不可恢复协议错误) | ❌ 不提交 | worker fail-fast 停止,由部署修复后重启;broker 从旧 committed offset 重投 |
 
-> 五语言 Kafka 适配器对 schema-reject / foreign-tenant 统一采用每分区最低 withheld offset 作为 commit ceiling:后续合法消息继续处理,但其 commit 不得跨过 ceiling;重启 / rebalance 从旧 committed offset 重投。仅瞬时 backpressure 使用 seek + pause + resume。
+> 五语言均不得提交越过 schema-reject / foreign-tenant 消息，当前实现均只暂扣受影响分区并等待约 2 秒重试；容量暂停仍按各自容量控制执行。五语言新消费组默认从最早保留位置读取，Python、Rust、TypeScript 在业务处理前固定当前读取位置；这不是确认当前消息。TypeScript 显式选择最新位置时，首次位置保存失败后转交仍可能漏读。分区转交与异常验证按语言和测试层级分别记录，见[统一复核记录](../review/system-design-capacity-code-review-2026-11-10.md)。消息可能重投，不能以 offset 代替业务幂等。
 
 **decode / parse-error —— 已固化为 commit-skip(fixture 30,五语言对齐)**
 

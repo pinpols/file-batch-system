@@ -334,6 +334,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     // 普通续租只读一次任务；进度与执行入口写入先取得实例锁，与 REPORT 保持一致的锁顺序。
     JobTaskEntity current = jobTaskMapper.selectById(tenantId, taskId);
     boolean executionStarted = isExecutionStart(detailsJson);
+    String executionAttemptId = executionStarted ? executionAttemptId(detailsJson) : null;
     if (executionStarted
         && (EmptyChecks.isNull(current) || EmptyChecks.isNull(current.getJobInstanceId()))) {
       return new TaskHeartbeatResult(false, false);
@@ -348,12 +349,23 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
         return new TaskHeartbeatResult(false, false);
       }
     }
+    if (EmptyChecks.isNotNull(executionAttemptId)
+        && EmptyChecks.isNotNull(current.getExecutionAttemptId())
+        && !executionAttemptId.equals(current.getExecutionAttemptId())) {
+      return new TaskHeartbeatResult(false, false);
+    }
     boolean renewed = renewTaskLease(current, tenantId, taskId, workerCode, partitionInvocationId);
     if (!renewed) {
       return new TaskHeartbeatResult(false, false);
     }
     boolean cancelRequested = Boolean.TRUE.equals(current.getCancelRequested());
     if (executionStarted && !cancelRequested) {
+      if (EmptyChecks.isNotNull(executionAttemptId)
+          && jobTaskMapper.confirmExecutionAttempt(tenantId, taskId, executionAttemptId) == 0) {
+        // 回滚本次续租，避免被拒绝的旧尝试延长当前租约。
+        TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+        return new TaskHeartbeatResult(false, false);
+      }
       int marked = jobInstanceMapper.markExecutionStarted(tenantId, current.getJobInstanceId());
       if (marked == 0) {
         throw BizException.of(ResultCode.STATE_CONFLICT, "error.task.claim_not_available");
@@ -373,6 +385,21 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
     JsonNode marker = EmptyChecks.isNull(details) ? null : details.get("executionStarted");
     return EmptyChecks.isNotNull(marker) && marker.isBoolean() && marker.booleanValue();
+  }
+
+  /** 旧客户端未提供标识时保持兼容；新客户端的无效标识不能降级为无围栏请求。 */
+  private static String executionAttemptId(String detailsJson) {
+    JsonNode details = JsonUtils.fromJson(detailsJson, JsonNode.class);
+    JsonNode attempt = EmptyChecks.isNull(details) ? null : details.get("executionAttemptId");
+    if (EmptyChecks.isNull(attempt) || attempt.isNull()) {
+      return null;
+    }
+    if (!attempt.isTextual()
+        || EmptyChecks.isBlank(attempt.textValue())
+        || attempt.textValue().length() > 64) {
+      throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
+    }
+    return attempt.textValue();
   }
 
   /**

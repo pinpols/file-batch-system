@@ -23,8 +23,8 @@ to build rdkafka (see the SDK README).
 > and never blocks, so the in-flight registry the lease-renewal loop iterates is
 > usually empty between polls — the wiring is real, but a production worker with
 > long-running/async tasks is what actually exercises lease renewal +
-> cooperative cancel. The SIGTERM hook is also a documented no-op (see below): a
-> production worker installs a real signal handler that flips the SDK stop flag.
+> cooperative cancel. SIGTERM 和 SIGINT 会触发停止标志；当前同步处理器需先返回，
+> 然后才能关闭消费与调度线程并主动下线。部署时应将停机期限与任务时长相匹配。
 
 ## What it shows
 
@@ -36,7 +36,9 @@ to build rdkafka (see the SDK README).
    vars are set.
 3. An echo-style **business handler** implementing the `TaskHandler` SPI, plus a
    `HandlerBridge` that adapts the Kafka adapter's per-message callback
-   (`MessageHandler`) to it: it runs the **claim → execute → report** lifecycle,
+   (`MessageHandler`) to it: it runs **claim → execution-start confirmation →
+   execute → report**. If confirmation fails, it does not call the handler or
+   report a business failure; the task follows lease recovery. It also
    **skips execution on a 409/already-claimed** (no double side-effects), and
    **guards the handler with `catch_unwind`** so a panicking handler is reported
    as a fail (`EXECUTION_FAILED`) instead of killing the worker.
@@ -89,8 +91,6 @@ transport. Building rdkafka needs `cmake` on the `PATH`.
 Swap `EchoHandler` for your business logic (implement `TaskHandler::execute`).
 For a production worker you should also:
 
-- install a **real SIGTERM handler** (e.g. the `signal_hook` crate) that flips
-  the SDK stop flag — the sample's hook is a documented no-op (see `main.rs`);
 - run tasks **asynchronously** (a bounded executor) and increment/decrement the
   `in_flight` counter around execution so backpressure (§1.5) and lease renewal
   (§1.4) reflect real concurrency — the echo handler here is synchronous.

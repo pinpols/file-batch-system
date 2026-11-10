@@ -12,9 +12,15 @@
  *   - SIGTERM → stop(30000) (K8s terminationGracePeriodSeconds default).
  */
 
+import { randomUUID } from "node:crypto";
 import { decideBackpressure, decideRegister, newIdempotencyKey, planStop } from "../decide.ts";
 import type { FsmState, KafkaAction } from "../protocol.ts";
-import { FatalTransportError, type ReportBody, type Transport } from "./transport.ts";
+import {
+  FatalTransportError,
+  NotFoundTransportError,
+  type ReportBody,
+  type Transport,
+} from "./transport.ts";
 import { HeartbeatScheduler, LeaseRenewalScheduler, type InFlightTask } from "./scheduler.ts";
 import {
   MessagePipeline,
@@ -111,6 +117,8 @@ export interface WorkerLifecycleDeps {
 
 interface TrackedTask extends InFlightTask {
   promise: Promise<void>;
+  leaseConfirmed: boolean;
+  settleAdmission: (accepted: boolean) => void;
   /** ADR-014 invocation token from the claim response; echoed on renew + report. */
   partitionInvocationId?: string | null;
 }
@@ -132,6 +140,7 @@ export class WorkerLifecycle {
   #leaseRenewal: LeaseRenewalScheduler;
   #pipeline: MessagePipeline;
   #sigtermHandler?: () => void;
+  #stopPromise?: Promise<void>;
 
   constructor(deps: WorkerLifecycleDeps) {
     this.#cfg = deps.config;
@@ -173,17 +182,21 @@ export class WorkerLifecycle {
     this.#leaseRenewal = new LeaseRenewalScheduler(
       this.#transport,
       {
-        inFlight: () => [...this.#inFlight.values()],
+        inFlight: () => [...this.#inFlight.values()].filter((task) => task.leaseConfirmed),
+        isCurrent: (task) => this.#inFlight.get(task.taskId) === task,
         // TaskClaimRequest (claim/renew shared) requires [tenantId, workerId];
         // taskId is in the URL. Echo the ADR-014 invocation token when present.
         buildBody:
           this.#cfg.buildRenewBody ??
-          ((taskId) => ({
+          ((_taskId, task) => ({
             tenantId: this.#cfg.tenantId,
             workerId: this.#cfg.workerCode,
-            partitionInvocationId: this.#inFlight.get(taskId)?.partitionInvocationId ?? null,
+            partitionInvocationId: task.partitionInvocationId ?? null,
           })),
-        dropTask: (taskId) => this.#inFlight.delete(taskId),
+        dropTask: (taskId, task) => {
+          const tracked = this.#inFlight.get(taskId);
+          if (tracked === task) tracked.leaseConfirmed = false;
+        },
         logger: this.#logger,
       },
       deps.leaseRenewIntervalMs ?? 60_000,
@@ -298,8 +311,30 @@ export class WorkerLifecycle {
   }
 
   /** claim → execute → report for one accepted, in-tenant message. */
-  async #handleAccepted(msg: DispatchMessage): Promise<void> {
+  async #handleAccepted(msg: DispatchMessage): Promise<boolean> {
+    // 认领前占位并保留到执行结束；重复投递不能覆盖原租约或提前提交 offset。
+    if (this.#inFlight.has(msg.taskId)) return false;
     const cancellation = new SimpleCancellationSignal();
+    let resolveAdmission: (accepted: boolean) => void = () => {};
+    let admissionSettled = false;
+    const admission = new Promise<boolean>((resolve) => {
+      resolveAdmission = resolve;
+    });
+    let awaitingClaim = false;
+    const settleAdmission = (accepted: boolean): void => {
+      if (!admissionSettled) {
+        admissionSettled = true;
+        resolveAdmission(accepted);
+      }
+    };
+    const tracked: TrackedTask = {
+      taskId: msg.taskId,
+      cancellation,
+      promise: Promise.resolve(),
+      leaseConfirmed: false,
+      settleAdmission,
+    };
+    this.#inFlight.set(msg.taskId, tracked);
     // fixture 24: mint a FRESH key per distinct write — never a fixed claim-{id}.
     const claimIdempotencyKey = newIdempotencyKey();
 
@@ -313,6 +348,7 @@ export class WorkerLifecycle {
             errorCode: ErrorCode.SECURITY_REJECTED,
             resultSummary: `credential in parameters: ${paramScan.leakedKeys.join(", ")}`,
           });
+          settleAdmission(true);
           return;
         }
 
@@ -324,7 +360,14 @@ export class WorkerLifecycle {
         const msgInvocationId =
           (msg.runtimeAttributes?.partitionInvocationId as string | undefined) ?? null;
 
+        awaitingClaim = true;
         const claim = await this.#transport.claim(msg.taskId, claimIdempotencyKey, msgInvocationId);
+        awaitingClaim = false;
+        if (this.#draining) {
+          // 停机开始后不启动新业务；保留 offset 并由租约回收处理已认领任务。
+          settleAdmission(false);
+          return;
+        }
         if (claim.idempotent) {
           // claim 409 = already claimed (redelivery, or another worker won the
           // race): NOT ours to execute. Skip the handler + report so we never
@@ -332,13 +375,13 @@ export class WorkerLifecycle {
           this.#logger.info("claim idempotent (already claimed); skipping execution", {
             taskId: msg.taskId,
           });
+          settleAdmission(true);
           return;
         }
         // 开始确认、续租和回报使用 CLAIM 当前身份，消息中的身份只作为旧协议缺字段时的回退。
-        const tracked = this.#inFlight.get(msg.taskId);
-        if (tracked) {
-          tracked.partitionInvocationId = claim.partitionInvocationId ?? msgInvocationId ?? null;
-        }
+        tracked.partitionInvocationId = claim.partitionInvocationId ?? msgInvocationId ?? null;
+        tracked.leaseConfirmed = true;
+        settleAdmission(true);
         const progress = new NoopProgressReporter();
         const resume = new ResumeSupport({
           taskId: msg.taskId,
@@ -386,8 +429,10 @@ export class WorkerLifecycle {
           tenantId: this.#cfg.tenantId,
           workerId: this.#cfg.workerCode,
           partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
-          details: { executionStarted: true },
+          details: { executionStarted: true, executionAttemptId: randomUUID() },
         });
+        // 停机后不再进入业务，未完成的执行交由服务端租约恢复。
+        if (this.#draining) return;
         if (executionStarted.cancelRequested || cancellation.isCancellationRequested) {
           cancellation.markCancelled();
           await this.#report(msg.taskId, {
@@ -441,6 +486,8 @@ export class WorkerLifecycle {
           partitionInvocationId: this.#inFlight.get(msg.taskId)?.partitionInvocationId ?? null,
         });
       } catch (e) {
+        // 已不存在的任务沿用原有跳过提交；其它认领失败必须保留 offset。
+        settleAdmission(awaitingClaim && e instanceof NotFoundTransportError);
         // claim/report fatal — log, then fail-fast on auth errors (§ openapi:
         // 401/403 must stop the worker; a stale/invalid credential won't fix itself).
         this.#logger.error("task pipeline failed", {
@@ -455,7 +502,8 @@ export class WorkerLifecycle {
           void this.stop(30_000);
         }
       } finally {
-        this.#inFlight.delete(msg.taskId);
+        settleAdmission(false);
+        if (this.#inFlight.get(msg.taskId) === tracked) this.#inFlight.delete(msg.taskId);
         // A slot just freed. Route the resume decision through the shared core so
         // the max/2 hysteresis applies: stay paused while in-flight is still in
         // the [max/2, max) band, resume only once it drops below max/2. This
@@ -469,11 +517,8 @@ export class WorkerLifecycle {
       }
     })();
 
-    this.#inFlight.set(msg.taskId, {
-      taskId: msg.taskId,
-      cancellation,
-      promise: run,
-    });
+    tracked.promise = run;
+    return await admission;
   }
 
   async #report(taskId: string, body: ReportBody): Promise<void> {
@@ -489,10 +534,15 @@ export class WorkerLifecycle {
    * stop(timeoutMs): DRAINING → wakeup → drain in-flight (40%) → await executor
    * (60%) → deactivate. Order per wire-protocol §4.
    */
-  async stop(timeoutMs = 30_000): Promise<void> {
-    if (this.#draining && this.#fsm === "DRAINING" && this.#inFlight.size === 0) {
-      // already stopping with nothing in flight — still ensure deactivate ran
-    }
+  stop(timeoutMs = 30_000): Promise<void> {
+    this.#stopPromise ??= this.#stopOnce(timeoutMs).catch((error: unknown) => {
+      this.#stopPromise = undefined;
+      throw error;
+    });
+    return this.#stopPromise;
+  }
+
+  async #stopOnce(timeoutMs: number): Promise<void> {
     this.#logger.info("graceful stop starting", {
       timeoutMs,
       inFlight: this.#inFlight.size,
@@ -500,6 +550,8 @@ export class WorkerLifecycle {
     const plan = planStop(timeoutMs);
     this.#draining = true;
     this.#setFsm("DRAINING");
+    // 消费者关闭会等待当前消息回调；先释放尚未认领的回调并保留位点。
+    for (const task of this.#inFlight.values()) task.settleAdmission(false);
 
     // wake the consumer (interrupt poll); refuse new messages
     if (plan.kafka === "wakeup") {
@@ -532,6 +584,7 @@ export class WorkerLifecycle {
         this.#logger.warn("deactivate failed (heartbeat-stop fallback applies)", {
           error: String(e),
         });
+        this.#stopPromise = undefined;
       }
     }
 
@@ -548,11 +601,15 @@ export class WorkerLifecycle {
       if (remaining <= 0) break;
       const settledPromises = Promise.allSettled(promises);
       const pollIntervalMs = Math.min(remaining, 25);
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
       const pollDelay = new Promise<void>((resolve) => {
-        const pollTimer = setTimeout(resolve, pollIntervalMs);
-        pollTimer.unref?.();
+        pollTimer = setTimeout(resolve, pollIntervalMs);
       });
-      await Promise.race([settledPromises, pollDelay]);
+      try {
+        await Promise.race([settledPromises, pollDelay]);
+      } finally {
+        clearTimeout(pollTimer);
+      }
     }
   }
 }

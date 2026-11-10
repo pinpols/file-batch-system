@@ -35,6 +35,7 @@ import io.github.pinpols.batch.worker.exports.plugin.ExportDataPluginRegistry;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatContext;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategy;
 import io.github.pinpols.batch.worker.exports.stage.format.ExportFormatStrategyRegistry;
+import io.github.pinpols.batch.worker.exports.stage.format.ExportRowLimitExceededException;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCheckpoint;
 import io.github.pinpols.batch.worker.exports.stage.format.GenerateCursorCodec;
 import java.io.IOException;
@@ -191,6 +192,11 @@ public class GenerateStep implements ExportStageStep {
           boolean completedFileSizeMatchesCheckpoint =
               expectedSize >= 0 && actualSize == expectedSize;
           if (completedFileSizeMatchesCheckpoint) {
+            long maxRows = effectiveMaxRows();
+            if (maxRows > 0 && pos.processedCount() > maxRows) {
+              keepPartialFileOnFailure = true;
+              throw new ExportRowLimitExceededException(pos.processedCount(), maxRows);
+            }
             // 幂等跳过:GENERATE 已整体完成且文件完整(STORE 尚未消费)→ 重派不重生成,补齐下游 attribute 即可。
             return completeGeneration(
                 context, context.getAttributes(), batch, generatedFile, pos.processedCount());
@@ -214,6 +220,7 @@ public class GenerateStep implements ExportStageStep {
           .batchId(batchId)
           .pageSize(pageSize)
           .chunkSize(chunkSize)
+          .maxRows(effectiveMaxRows())
           .generatedFile(generatedFile)
           .jobContext(context)
           .dataPlugin(dataPlugin)
@@ -240,9 +247,7 @@ public class GenerateStep implements ExportStageStep {
   /** 在读取明细和创建生成文件前，先检查批次声明的行数上限。 */
   private ExportStageResult validateExportRowLimit(Map<String, Object> batch) {
     // H-8: 生成前强制检查最大行数限制，防止 OOM
-    long maxRows = EmptyChecks.isNotNull(workerConfiguration)
-        ? workerConfiguration.effectiveMaxExportRows()
-        : 500_000L;
+    long maxRows = effectiveMaxRows();
     Object totalCountObj = batch.get("total_count");
     Number totalCount = totalCountObj instanceof Number number ? number : null;
     boolean totalCountExceedsMaxRows =
@@ -259,6 +264,12 @@ public class GenerateStep implements ExportStageStep {
     return null;
   }
 
+  private long effectiveMaxRows() {
+    return EmptyChecks.isNotNull(workerConfiguration)
+        ? workerConfiguration.effectiveMaxExportRows()
+        : 500_000L;
+  }
+
   /** 失败清理仍由原 catch 调用；续跑文件只有成功打开 checkpoint 后才保留。 */
   private ExportStageResult failGeneration(
       ExportJobContext context,
@@ -273,6 +284,15 @@ public class GenerateStep implements ExportStageStep {
     // 续跑激活时故意保留残文件:下次重派 truncate 到 fsync 位点后续写。否则按今天行为删临时文件。
     if (!keepPartialFileOnFailure) {
       deleteQuietly(generatedFile);
+    }
+    if (ex instanceof ExportRowLimitExceededException limit) {
+      return ExportStageResult.failure(
+          stage(),
+          "EXPORT_EXCEEDS_MAX_ROWS",
+          "error.export.exceeds_max_rows",
+          new Object[] {limit.observedRows(), limit.maxRows()},
+          limit.getMessage(),
+          objectMapper);
     }
     boolean configError = ex instanceof WorkerConfigException;
     ExportStage failureStage = stage();

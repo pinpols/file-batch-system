@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
+import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.orchestrator.domain.query.WorkflowMonitoringQuery;
 import io.github.pinpols.batch.orchestrator.domain.view.WorkflowMonitoringAlertCandidate;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowMonitoringMapper;
@@ -13,10 +14,14 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class WorkflowMonitoringCandidateService {
   private final WorkflowMonitoringMapper mapper;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Transactional(readOnly = true)
   public List<WorkflowMonitoringAlertCandidate> select(WorkflowMonitoringQuery query) {
     mapper.setTenantContext(query.tenantId());
-    return mapper.selectCandidates(query);
+    WorkflowMonitoringQuery scoped = query.toBuilder()
+        .defaultTimezone(timezoneProvider.defaultZone().getId())
+        .build();
+    return mapper.selectCandidates(scoped);
   }
 }

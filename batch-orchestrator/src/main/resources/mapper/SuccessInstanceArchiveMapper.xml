@@ -410,7 +410,7 @@
             dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
             task_timeout_seconds, process_staging_generation_id, process_staging_batch_key,
             external_outcome_resolution_version, external_outcome_resolution_trigger_request_id,
-            external_outcome_resolution_consumed_at)
+            external_outcome_resolution_consumed_at, execution_attempt_id)
         select id, tenant_id, job_instance_id, job_instance_biz_date, job_partition_id,
             task_type, task_seq, task_status,
             assigned_worker_code, task_payload, result_summary, error_code, error_message, started_at,
@@ -418,7 +418,7 @@
             dry_run, effective_parameters, heartbeat_details, heartbeat_at, cancel_requested,
             task_timeout_seconds, process_staging_generation_id, process_staging_batch_key,
             external_outcome_resolution_version, external_outcome_resolution_trigger_request_id,
-            external_outcome_resolution_consumed_at
+            external_outcome_resolution_consumed_at, execution_attempt_id
         from batch.job_task
         where job_instance_id in
         <foreach collection="instanceIds" item="id" open="(" separator="," close=")">#{id}</foreach>
@@ -504,6 +504,8 @@
             is_latest,
             source_type,
             source_ref,
+            arrival_channel_code,
+            legacy_channel_fallback,
             file_status,
             biz_date,
             trace_id,
@@ -534,6 +536,8 @@
             fr.is_latest,
             fr.source_type,
             fr.source_ref,
+            fr.arrival_channel_code,
+            fr.legacy_channel_fallback,
             fr.file_status,
             fr.biz_date,
             fr.trace_id,

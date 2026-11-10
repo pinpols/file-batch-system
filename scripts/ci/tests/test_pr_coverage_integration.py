@@ -15,6 +15,18 @@ SCRIPT = ROOT / "scripts/ci/run-pr-coverage-integration.sh"
 
 
 class PrCoverageIntegrationTest(unittest.TestCase):
+    def test_orchestrator_shard_includes_file_arrival_and_reconcile_paths(self) -> None:
+        result = subprocess.run(
+            ["bash", str(SCRIPT), "a-extra", "--list"],
+            cwd=ROOT, capture_output=True, text=True, check=True,
+        )
+        self.assertIn("FileGovernanceIntegrationTest#shouldProtectIngressAndManifestWithoutStarvingOrdinaryOrphans", result.stdout)
+        self.assertIn("shouldRetryFailedReconcilePageBeforeAdvancing", result.stdout)
+        self.assertIn("shouldRevisitEarlierOrphansWhileObjectsKeepArriving", result.stdout)
+        self.assertIn("FileArrivalPatternIntegrationTest#shouldWaitForScannerAcceptanceOfExistingReconciledFileInOwnedScope", result.stdout)
+        self.assertIn("shouldMatchTrustedChannelWithinTenant", result.stdout)
+        self.assertIn("shouldMarkLegacyChannelFallback", result.stdout)
+
     def test_console_shard_includes_workflow_schedule_write_contracts(self) -> None:
         result = subprocess.run(
             ["bash", str(SCRIPT), "b2-console", "--list"],
@@ -112,13 +124,18 @@ class PrCoverageIntegrationTest(unittest.TestCase):
                 modules.add(module)
                 sources = list((ROOT / module / "src/test/java").rglob("*.java"))
                 for name in names.split(","):
-                    self.assertNotIn((module, name), seen)
-                    seen.add((module, name))
-                    pattern = re.compile(r"\bclass\s+" + re.escape(name) + r"\b")
+                    class_name, _, selected_methods = name.partition("#")
+                    self.assertNotIn((module, class_name), seen)
+                    seen.add((module, class_name))
+                    pattern = re.compile(r"\bclass\s+" + re.escape(class_name) + r"\b")
+                    matches = [source for source in sources if pattern.search(source.read_text(encoding="utf-8"))]
                     self.assertTrue(
-                        any(pattern.search(source.read_text(encoding="utf-8")) for source in sources),
-                        f"{module}: missing {name}",
+                        matches, f"{module}: missing {class_name}",
                     )
+                    if selected_methods:
+                        contents = "\n".join(source.read_text(encoding="utf-8") for source in matches)
+                        for method in selected_methods.split("+"):
+                            self.assertRegex(contents, r"\b" + re.escape(method) + r"\s*\(")
             self.assertEqual(expected, modules)
 
     def test_runs_each_group_with_append_and_stops_on_failure(self) -> None:

@@ -42,6 +42,299 @@ func dispatchRecord(taskID string) Record {
 	}
 }
 
+type duplicateStartPlatform struct {
+	*FakePlatform
+	mu       sync.Mutex
+	starts   int
+	rejected chan struct{}
+	renewed  chan struct{}
+}
+
+func (p *duplicateStartPlatform) Renew(_ context.Context, _ string, request RenewRequest) (RenewResult, error) {
+	if request.Details["executionStarted"] == true {
+		p.mu.Lock()
+		defer p.mu.Unlock()
+		p.starts++
+		if p.starts > 1 {
+			close(p.rejected)
+			return RenewResult{Revoked: true}, nil
+		}
+		return RenewResult{}, nil
+	}
+	select {
+	case p.renewed <- struct{}{}:
+	default:
+	}
+	cancel := true
+	return RenewResult{RenewResponse: protocol.RenewResponse{CancelRequested: &cancel}}, nil
+}
+
+func TestDuplicateDeliveryPreservesOriginalLeaseAndWithholdsOffset(t *testing.T) {
+	platform := &duplicateStartPlatform{
+		FakePlatform: NewFakePlatform(), rejected: make(chan struct{}), renewed: make(chan struct{}, 1),
+	}
+	platform.ClaimResp = ClaimResult{PartitionInvocationID: "inv-current"}
+	started := make(chan *TaskContext, 1)
+	release := make(chan struct{})
+	handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+		started <- ctx
+		<-release
+		return Success(nil, "ok")
+	})
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1"), dispatchRecord("task-1")})
+	worker := NewWorker(testConfig(), platform, consumer, handler, nil, quietLogger())
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var releaseOnce sync.Once
+	defer func() { releaseOnce.Do(func() { close(release) }); worker.Stop(time.Second) }()
+	waitFor(t, time.Second, func() bool { return consumer.commits()+consumer.withholds() == 2 })
+	var task *TaskContext
+	select {
+	case task = <-started:
+	case <-time.After(time.Second):
+		t.Fatal("首次业务未开始")
+	}
+	platform.mu.Lock()
+	starts := platform.starts
+	platform.mu.Unlock()
+	if starts > 1 {
+		<-platform.rejected
+		waitFor(t, time.Second, func() bool { return worker.InFlight() == 0 })
+	}
+	if consumer.commits() != 1 || consumer.withholds() != 1 {
+		t.Errorf("首次和重复消息的 offset：commit=%d withhold=%d", consumer.commits(), consumer.withholds())
+	}
+	if worker.InFlight() != 1 {
+		t.Errorf("首次执行仍在进行，租约登记不应被重复消息删除")
+	}
+	worker.lease.RenewOnce(context.Background())
+	select {
+	case <-platform.renewed:
+	case <-time.After(time.Second):
+		t.Error("原执行未获得后续续租")
+	}
+	if !task.Cancellation.IsCancellationRequested() {
+		t.Error("原执行未收到续租返回的取消信号")
+	}
+	releaseOnce.Do(func() { close(release) })
+	waitFor(t, time.Second, func() bool { return worker.InFlight() == 0 })
+}
+
+type delayedClaimPlatform struct {
+	*FakePlatform
+	mu      sync.Mutex
+	count   int
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *delayedClaimPlatform) Claim(_ context.Context, _ string, _ string, _ ClaimRequest) (ClaimResult, error) {
+	p.mu.Lock()
+	p.count++
+	attempt := p.count
+	p.mu.Unlock()
+	if attempt == 1 {
+		close(p.started)
+		<-p.release
+		return ClaimResult{}, errors.New("claim unavailable")
+	}
+	return ClaimResult{PartitionInvocationID: "inv-current"}, nil
+}
+
+func TestDuplicateWhileClaimPendingIsWithheldAndReservationIsReleased(t *testing.T) {
+	platform := &delayedClaimPlatform{
+		FakePlatform: NewFakePlatform(), started: make(chan struct{}), release: make(chan struct{}),
+	}
+	worker := NewWorker(testConfig(), platform, NewFakeConsumer(nil),
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "ok") }), nil, quietLogger())
+	message := TaskDispatchMessage{TaskID: "task-1", TenantID: "t1"}
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(platform.release) })
+	first := make(chan bool, 1)
+	go func() { first <- worker.dispatch(context.Background(), message) }()
+	select {
+	case <-platform.started:
+	case <-time.After(time.Second):
+		t.Fatal("首次认领未开始")
+	}
+	if worker.dispatch(context.Background(), message) {
+		t.Error("未完成的重复认领不应提交 offset")
+	}
+	releaseOnce.Do(func() { close(platform.release) })
+	if <-first {
+		t.Error("认领失败不应提交 offset")
+	}
+	if !worker.dispatch(context.Background(), message) {
+		t.Error("认领失败后应允许后续投递重新认领")
+	}
+	worker.taskWg.Wait()
+	platform.mu.Lock()
+	defer platform.mu.Unlock()
+	if platform.count != 2 {
+		t.Errorf("认领请求数=%d，重复投递不应发起额外认领", platform.count)
+	}
+}
+
+type stopDuringClaimPlatform struct {
+	*FakePlatform
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *stopDuringClaimPlatform) Claim(_ context.Context, _ string, _ string, _ ClaimRequest) (ClaimResult, error) {
+	close(p.started)
+	<-p.release
+	return ClaimResult{PartitionInvocationID: "inv-current"}, nil
+}
+
+func TestStopDuringClaimDoesNotStartBusinessOrCommit(t *testing.T) {
+	platform := &stopDuringClaimPlatform{
+		FakePlatform: NewFakePlatform(), started: make(chan struct{}), release: make(chan struct{}),
+	}
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	executed := make(chan struct{}, 1)
+	worker := NewWorker(testConfig(), platform, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { executed <- struct{}{}; return Success(nil, "ok") }), nil, quietLogger())
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(platform.release) })
+	select {
+	case <-platform.started:
+	case <-time.After(time.Second):
+		t.Fatal("认领未开始")
+	}
+	stopped := make(chan struct{})
+	go func() { worker.Stop(time.Second); close(stopped) }()
+	waitFor(t, time.Second, func() bool { return consumer.wakeups() > 0 })
+	select {
+	case <-worker.rootCtx.Done():
+	case <-time.After(30 * time.Millisecond):
+	}
+	releaseOnce.Do(func() { close(platform.release) })
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("停机未完成")
+	}
+	if consumer.commits() != 0 {
+		t.Errorf("停机期间的认领不应提交 offset，实际提交 %d", consumer.commits())
+	}
+	select {
+	case <-executed:
+		t.Error("开始停机后不能再启动业务")
+	default:
+	}
+}
+
+type delayedRenewPlatform struct {
+	*FakePlatform
+	mu      sync.Mutex
+	count   int
+	started chan struct{}
+	release chan struct{}
+	renewed chan struct{}
+}
+
+func (p *delayedRenewPlatform) Renew(_ context.Context, _ string, request RenewRequest) (RenewResult, error) {
+	if request.Details["executionStarted"] == true {
+		return RenewResult{}, nil
+	}
+	p.mu.Lock()
+	p.count++
+	count := p.count
+	p.mu.Unlock()
+	if count == 1 {
+		close(p.started)
+		<-p.release
+		return RenewResult{Revoked: true}, nil
+	}
+	select {
+	case p.renewed <- struct{}{}:
+	default:
+	}
+	return RenewResult{}, nil
+}
+
+func TestLateLeaseRejectionDoesNotRemoveNextExecution(t *testing.T) {
+	platform := &delayedRenewPlatform{
+		FakePlatform: NewFakePlatform(), started: make(chan struct{}), release: make(chan struct{}), renewed: make(chan struct{}, 1),
+	}
+	platform.ClaimResp = ClaimResult{PartitionInvocationID: "inv-current"}
+	started := make(chan *TaskContext, 2)
+	releaseFirst := make(chan struct{})
+	releaseSecond := make(chan struct{})
+	var executionMu sync.Mutex
+	executions := 0
+	handler := HandlerFunc(func(ctx *TaskContext) TaskResult {
+		executionMu.Lock()
+		executions++
+		index := executions
+		executionMu.Unlock()
+		started <- ctx
+		if index == 1 {
+			<-releaseFirst
+		} else {
+			<-releaseSecond
+		}
+		return Success(nil, "ok")
+	})
+	worker := NewWorker(testConfig(), platform, NewFakeConsumer(nil), handler, nil, quietLogger())
+	message := TaskDispatchMessage{TaskID: "task-1", TenantID: "t1"}
+	var firstOnce, secondOnce, renewOnce sync.Once
+	defer firstOnce.Do(func() { close(releaseFirst) })
+	defer secondOnce.Do(func() { close(releaseSecond) })
+	defer renewOnce.Do(func() { close(platform.release) })
+	if !worker.dispatch(context.Background(), message) {
+		t.Fatal("首次任务未认领")
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("首次执行未开始")
+	}
+	renewFinished := make(chan struct{})
+	go func() { worker.lease.RenewOnce(context.Background()); close(renewFinished) }()
+	select {
+	case <-platform.started:
+	case <-time.After(time.Second):
+		t.Fatal("旧租约续期未开始")
+	}
+	firstOnce.Do(func() { close(releaseFirst) })
+	worker.taskWg.Wait()
+	if !worker.dispatch(context.Background(), message) {
+		t.Fatal("后续任务未认领")
+	}
+	var next *TaskContext
+	select {
+	case next = <-started:
+	case <-time.After(time.Second):
+		t.Fatal("后续执行未开始")
+	}
+	renewOnce.Do(func() { close(platform.release) })
+	select {
+	case <-renewFinished:
+	case <-time.After(time.Second):
+		t.Fatal("旧续期未结束")
+	}
+	if worker.InFlight() != 1 {
+		t.Error("旧续租拒绝不应移除后续执行的登记")
+	}
+	if next.Cancellation.IsCancellationRequested() {
+		t.Error("旧续租拒绝不应取消后续执行")
+	}
+	worker.lease.RenewOnce(context.Background())
+	select {
+	case <-platform.renewed:
+	case <-time.After(time.Second):
+		t.Error("后续执行未获得续租")
+	}
+	secondOnce.Do(func() { close(releaseSecond) })
+	worker.taskWg.Wait()
+}
+
 // Start -> consume one task -> handler runs -> report SUCCESS. Then Stop ordering:
 // wakeup, drain, deactivate.
 func TestWorker_StartConsumeReportStop(t *testing.T) {
@@ -556,5 +849,53 @@ func TestWorker_BackpressureRetainsFetchedRecord(t *testing.T) {
 	})
 	if got := consumer.commits(); got != 3 {
 		t.Fatalf("commits=%d, want all three claimed records", got)
+	}
+}
+
+type stopDuringExecutionStartPlatform struct {
+	*FakePlatform
+	started chan struct{}
+	release chan struct{}
+}
+
+func (p *stopDuringExecutionStartPlatform) Renew(_ context.Context, _ string, request RenewRequest) (RenewResult, error) {
+	if request.Details["executionStarted"] == true {
+		close(p.started)
+		<-p.release
+	}
+	return RenewResult{}, nil
+}
+
+func TestStopDuringExecutionStartDoesNotStartBusiness(t *testing.T) {
+	platform := &stopDuringExecutionStartPlatform{
+		FakePlatform: NewFakePlatform(), started: make(chan struct{}), release: make(chan struct{}),
+	}
+	consumer := NewFakeConsumer([]Record{dispatchRecord("task-1")})
+	executed := make(chan struct{}, 1)
+	worker := NewWorker(testConfig(), platform, consumer,
+		HandlerFunc(func(*TaskContext) TaskResult { executed <- struct{}{}; return Success(nil, "ok") }), nil, quietLogger())
+	if err := worker.Start(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var releaseOnce sync.Once
+	defer releaseOnce.Do(func() { close(platform.release) })
+	select {
+	case <-platform.started:
+	case <-time.After(time.Second):
+		t.Fatal("执行开始确认未发出")
+	}
+	stopped := make(chan struct{})
+	go func() { worker.Stop(time.Second); close(stopped) }()
+	waitFor(t, time.Second, func() bool { return consumer.wakeups() > 0 })
+	releaseOnce.Do(func() { close(platform.release) })
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("停机未完成")
+	}
+	select {
+	case <-executed:
+		t.Error("停机开始后迟到的确认不能启动业务")
+	default:
 	}
 }

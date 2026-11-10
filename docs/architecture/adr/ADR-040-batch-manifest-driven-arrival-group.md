@@ -67,12 +67,12 @@
 
 ### 2. 时序与回填(核心难点)
 
-scanner 每轮扫描会看到对象集合。批次清单与数据文件的到达顺序不定,两种都要支持:
+scanner 通过有界分页和持久回扫持续发现对象；一个遍历周期可跨多个调度 tick，持续追加不会要求先等整个前缀到达末页。启用清单驱动时，数据文件只接受绑定的权威清单，未绑定或清单缺失、未稳定、不匹配时等待，不能退回静态文件组提前登记或触发：
 
-- **清单先到 / 同批到**:scanner 登记某数据文件时,查到同 `(group, bizDate)` 的批次清单 → 把 `requiredFiles` 写进该文件 `file_record.required_file_set`(metadata)。到达组判定即可算 `missingFiles`。
-- **数据文件先到、清单后到**:数据文件登记时还没清单 → `required_file_set` 暂空 → 到达组「空清单守卫」跳过(现状)。清单后到时,scanner 须**回填**:对该 `(group, bizDate)` 下**已登记**的成员 `file_record` 批量补写 `required_file_set`。
+- **清单先到 / 同周期发现**：依据可信租户、数据目录及业务日从配置计算唯一清单 key，校验其租户、文件组、业务日及成员名；满足条件后将清单元数据写入成员记录。
+- **数据文件先到、清单后到**：文件保持未登记，待权威清单可用后由后续窗口处理。启用前已经登记的历史成员仍可在匹配权威清单后按既有规则补写缺失元数据。
 
-**回填的承载**:把批次清单持久化为一条 `file_record`(`file_category=CONTROL` 或新增轻量状态),scanner 每轮对「已知批次清单 × 其 group/bizDate 下已登记成员」做对账补写(幂等:`required_file_set` 已一致则跳过,复用 `updateGroupState` 的 idempotent-skip 思路)。
+**权威身份与回填**：部署配置按租户和数据目录绑定文件组及带业务日占位符的完整清单 key 模板，最长目录前缀生效；扫描器直接查询该 key 并核对内容，不从已扫描清单中任意选择。无输入导出束清单保留原有后缀发现和独立触发入口。历史上未遵循建议文件名的清单可以在绑定中写入其实际路径，但启用清单驱动前必须完成绑定迁移；未启用清单驱动时静态文件组行为保持不变。重启续扫、配置切换和角色授权见[事件到达手册](../../runbook/event-driven-arrival.md#扫描分页恢复与配置切换)。
 
 ### 3. 判定与触发(复用,不改)
 
@@ -94,7 +94,7 @@ scanner 每轮扫描会看到对象集合。批次清单与数据文件的到达
 
 - **batch-worker-import / `ImportIngressScanner`**:① 按后缀识别批次清单对象并解析(新 `BatchManifest` record);② 登记数据文件时注入 `required_file_set`;③ 清单后到的回填对账。配置:`scanner.batch-manifest.enabled` / `.suffix`。
 - **batch-orchestrator / `FileGovernanceScheduler`**:判定逻辑**不变**(已读 `required_file_set`)。仅可能加可观测(批次清单声明数 vs 已到数指标)。
-- **DB**:不新增热表;批次清单走 `file_record`(CONTROL 类别),`required_file_set` 已在 metadata。**不触发 archive 冷表 schema 漂移**。
+- **DB**：成员的 `requiredFileSet` 等业务信息保留在 `file_record` metadata；V377 另有持久扫描进度和可重建的对象版本观察，不保存清单全文，也不是业务文件事实。V380、V381 扩展并验证文件热表及归档表的 `EXPORT_TRIGGER` 类别；迁移锁和回滚前提见运行手册。受限 Import 角色需按运行手册授予权限。
 - **docs**:`file-pipeline-design.md` §到达组补「清单驱动」小节。
 
 ## 实施分阶段
@@ -106,5 +106,5 @@ scanner 每轮扫描会看到对象集合。批次清单与数据文件的到达
 ## Consequences
 
 - **正面**:动态地区 + 时间戳场景无需人工维护静态清单;成员仍可异构、各挂模板、导不同表;完全复用既有到达组满足条件 + 超时 + verified,改动集中在 scanner 一侧。
-- **代价**:依赖上游产批次清单(产不出则退回「不等齐、各到各导」或静态清单);回填对账带来每轮少量额外查询(受 batch-size 限制)。
+- **代价**:依赖上游产批次清单(产不出则退回「不等齐、各到各导」或静态清单)；分页索引、版本复核和回填产生数据库与对象存储开销，单次各阶段对象数受 `batch-size` 限制，但目标环境容量和完整周期时延仍需实测。
 - **风险**:批次清单与 per-file `.chk` 两套协议需文档清晰区分,避免上游混淆「批次清单」与「单文件 manifest」。

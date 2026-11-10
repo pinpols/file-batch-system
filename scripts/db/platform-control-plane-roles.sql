@@ -4,6 +4,7 @@
 -- 只处理传入的角色；每个角色先撤销 batch/archive/quartz 下全部表、序列与函数权限再按清单授予，重复执行收敛到同一状态。
 -- 运行时角色不执行 Flyway：迁移由 BATCH_PLATFORM_FLYWAY_USERNAME 指定的 owner 账号执行，每次迁移后重新执行本脚本。
 -- Console 角色另需执行 config-cache-invalidation-role.sql 获得跨租户的缓存失效队列策略。action=revoke 时撤销后不再授予。
+-- 使用统一入口归属的 Orchestrator 角色须执行 import-ingress-ownership-role.sql 配置只读 RLS 策略。
 
 \set ON_ERROR_STOP on
 
@@ -1021,6 +1022,12 @@ SELECT (:{?console_role} OR :{?trigger_role} OR :{?orchestrator_role}) AS has_an
     SELECT format('GRANT SELECT ON batch.file_channel_health TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT DELETE, SELECT, UPDATE ON batch.file_dispatch_record TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT DELETE, SELECT ON batch.file_error_record TO %I', :'orchestrator_role') \gexec
+    SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.file_governance_reconcile_cursor TO %I', :'orchestrator_role') \gexec
+    SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'orchestrator_role')
+      FROM (SELECT DISTINCT pg_get_serial_sequence('batch.file_governance_reconcile_cursor', attname) AS sequence_name
+              FROM pg_attribute
+             WHERE attrelid = 'batch.file_governance_reconcile_cursor'::regclass AND attnum > 0 AND NOT attisdropped) sequences
+     WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT DELETE, INSERT, SELECT, UPDATE ON batch.file_group_expectation_definition TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'orchestrator_role')
       FROM (SELECT DISTINCT pg_get_serial_sequence('batch.file_group_expectation_definition', attname) AS sequence_name
@@ -1046,6 +1053,8 @@ SELECT (:{?console_role} OR :{?trigger_role} OR :{?orchestrator_role}) AS has_an
               FROM pg_attribute
              WHERE attrelid = 'batch.idempotency_record'::regclass AND attnum > 0 AND NOT attisdropped) sequences
      WHERE sequence_name IS NOT NULL \gexec
+    SELECT format('GRANT SELECT ON batch.import_ingress_ownership TO %I', :'orchestrator_role') \gexec
+    SELECT format('GRANT SELECT ON batch.import_ingress_ownership_binding TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT DELETE, SELECT ON batch.job_definition TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT SELECT ON batch.job_dependency TO %I', :'orchestrator_role') \gexec
     SELECT format('GRANT DELETE, INSERT, SELECT, UPDATE ON batch.job_dependency_waiting_launch TO %I', :'orchestrator_role') \gexec

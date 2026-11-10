@@ -128,15 +128,18 @@ export class HeartbeatScheduler {
 export interface InFlightTask {
   taskId: string;
   cancellation: CancellationSignal;
+  partitionInvocationId?: string | null;
 }
 
 export interface LeaseRenewalHooks {
   /** live snapshot of in-flight tasks to renew. */
   inFlight: () => InFlightTask[];
+  /** 跳过等待前序请求期间已结束或被替换的执行。 */
+  isCurrent?: (task: InFlightTask) => boolean;
   /** build the renew request body (TaskHeartbeatRequest). */
-  buildBody: (taskId: string) => Record<string, unknown>;
+  buildBody: (taskId: string, task: InFlightTask) => Record<string, unknown>;
   /** drop a task locally when its lease is gone (404/409). */
-  dropTask: (taskId: string) => void;
+  dropTask: (taskId: string, task: InFlightTask) => void;
   logger?: Logger;
 }
 
@@ -167,11 +170,12 @@ export class LeaseRenewalScheduler {
   async tick(): Promise<void> {
     const tasks = this.#hooks.inFlight();
     for (const task of tasks) {
+      if (this.#hooks.isCurrent && !this.#hooks.isCurrent(task)) continue;
       try {
         const transport = this.#transport;
         const renew = transport.renew;
         const taskId = task.taskId;
-        const renewalBody = this.#hooks.buildBody(taskId);
+        const renewalBody = this.#hooks.buildBody(taskId, task);
         const resp = await renew.call(transport, taskId, renewalBody);
         const decision = applyRenew(resp);
         if (decision.action === "cancel") {
@@ -191,7 +195,7 @@ export class LeaseRenewalScheduler {
             error: String(e),
           });
           task.cancellation.markCancelled();
-          this.#hooks.dropTask(task.taskId);
+          this.#hooks.dropTask(task.taskId, task);
         } else {
           this.#logger.warn("renew failed transiently; retrying next tick", {
             taskId: task.taskId,

@@ -37,6 +37,10 @@ Spark 本地绝对资源路径按消除 `..` 后的路径匹配允许前缀；�
 
 Shell 和 HTTP 任务的 `timeoutSeconds`、SQL 和 stored-proc 任务的 `statementTimeoutSeconds` 若提供非空值，必须是可表示为 64 位整数的正整数数值；Console 的 Atomic 配置保存入口会先校验，Worker 执行入口也会拒绝无效值并返回 `CONFIG_INVALID`，不会执行命令、发送请求或连接数据库。Console 表单只接受 JavaScript 可精确表示的安全整数。字段缺失或为 null 时使用执行器默认超时；合法值只能缩短默认超时，不能延长它。Spark 任务使用独立参数解析规则。
 
+HTTP 任务未填写 `expectStatus` 或提供空列表时，5xx 响应不再视为成功：GET、HEAD、PUT、DELETE 按既有策略重试，耗尽后失败；POST 等非幂等方法不在 Worker 内重试，返回 `EXTERNAL_OUTCOME_UNKNOWN`，应先核对下游副作用再决定后续操作。显式配置的状态码仍按配置判定，例如 `expectStatus=503` 仍视为成功且不重试；默认的其他状态码行为不变。升级前应核对原先未填写状态码且有意接受 5xx 的任务，明确配置所需状态码。
+
+HTTP 执行器重试和作业重试是两层独立配置。持续返回未接受的 5xx 时，每次作业执行都可能重新用完 HTTP 执行器的重试次数；例如幂等 GET 的两层最大重试次数均为 1 时，可能共请求下游 4 次。配置时应同时评估两层次数和退避对下游的压力；这不改变非幂等请求的结果未知及人工核对要求。
+
 ## 验证
 
 ```bash

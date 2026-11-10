@@ -32,7 +32,8 @@
 
     <select id="selectCandidates" resultMap="candidateMap" timeout="5">
         WITH policies AS (
-            SELECT policy.*, definition.workflow_code, definition.timezone
+            SELECT policy.*, definition.workflow_code,
+                   COALESCE(NULLIF(BTRIM(definition.timezone), ''), #{defaultTimezone}) AS timezone
             FROM batch.workflow_monitoring_policy policy
             JOIN batch.workflow_definition definition
               ON definition.tenant_id = policy.tenant_id AND definition.id = policy.workflow_definition_id

@@ -98,7 +98,9 @@ jobs:
               TriggerAsyncLaunchFullChainE2eIT,
               DispatchFailurePipelineE2eIT,
               OutboxForwarderRetryE2eIT,
-              SensorWaitFixtureE2eIT
+              SensorWaitFixtureE2eIT,
+              AtomicHttpRetryLayersE2eIT,
+              WorkerReportBatchHttpE2eIT
           - id: 4
             label: "import, export, atomic and worker drain"
             tests: >-
@@ -121,7 +123,8 @@ jobs:
               ExportContentVerificationE2eIT,
               MultiTenantConcurrentE2eIT,
               DispatchPipelineE2eIT,
-              AtomicTaskLoadE2eIT
+              AtomicTaskLoadE2eIT,
+              ExportEncryptedArtifactE2eIT
           - id: 7
             label: "business commit recovery"
             tests: >-
@@ -129,7 +132,8 @@ jobs:
           - id: 8
             label: "workflow catch-up and approval 1"
             tests: >-
-              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldConsumePinnedVersion_whenUpstreamVersionPromoted+triggerApiAdmissionRacingBatchDaySettlementShouldConverge+consoleManualAdmissionRacingBatchDaySettlementShouldConverge+dstHolidayQuartzMisfire_completesWorkerBeforeBatchDaySettlement+triggerRestart_resumesBoundedTwoDayCoverageBeforeBatchDaySettlement+manualMisfireApprovalRacingSettlement_completesWorkerBeforeBatchDaySettlement+shouldReconcileAndContinueManualBatchAfterRealApprovalResponseLoss+shouldBlockPersistedBusinessDay_whenDstCutoffOccurrencePending+rejectedManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight+duplicateQuartzMisfireCallbacks_createOneRootRunAndBusinessEffect+expiredManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+approvalOfConsoleCatchUp_reconcilesAndLaunchesWorkflowNode+shouldConvergeCoverage_whenPublicationAndSettlementRace+scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking
+              WorkflowOccurrenceCatchUpApprovalE2eIT#shouldConsumePinnedVersion_whenUpstreamVersionPromoted+triggerApiAdmissionRacingBatchDaySettlementShouldConverge+consoleManualAdmissionRacingBatchDaySettlementShouldConverge+dstHolidayQuartzMisfire_completesWorkerBeforeBatchDaySettlement+triggerRestart_resumesBoundedTwoDayCoverageBeforeBatchDaySettlement+manualMisfireApprovalRacingSettlement_completesWorkerBeforeBatchDaySettlement+shouldReconcileAndContinueManualBatchAfterRealApprovalResponseLoss+shouldBlockPersistedBusinessDay_whenDstCutoffOccurrencePending+rejectedManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+shouldKeepCalendarBusinessDate_whenFireCrossesUtcMidnight+duplicateQuartzMisfireCallbacks_createOneRootRunAndBusinessEffect+expiredManualMisfire_closesOccurrenceBeforeEmptyDaySettlement+approvalOfConsoleCatchUp_reconcilesAndLaunchesWorkflowNode+shouldConvergeCoverage_whenPublicationAndSettlementRace+scheduledAdmissionBeforeSettlement_keepsOccurrenceBlocking,
+              ImportBomPartitionE2eIT
           - id: 9
             label: "stale report fence"
             tests: >-

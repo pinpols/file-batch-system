@@ -80,7 +80,11 @@ kafka_lag_snapshot() {
     echo "kafka lag via host CLI failed; trying container CLI" >&2
   fi
 
-  kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+  if [[ -n "${KAFKA_CONTAINER:-}" ]]; then
+    kafka_container="$KAFKA_CONTAINER"
+  else
+    kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+  fi
   if [[ -n "$kafka_container" ]]; then
     if output="$(
       docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \

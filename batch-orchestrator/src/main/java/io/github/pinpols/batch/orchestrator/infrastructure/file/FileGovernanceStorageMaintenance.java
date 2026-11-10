@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.FileStateMachine;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage.ReconcilePage;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage.StorageObjectView;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -81,14 +82,19 @@ final class FileGovernanceStorageMaintenance {
     if (!properties.getReconcile().isEnabled()) {
       return;
     }
-    List<StorageObjectView> objects = storage.listObjects(
+    int batchSize = properties.getReconcile().getBatchSize();
+    if (batchSize <= 0) {
+      return;
+    }
+    ReconcilePage page = storage.listReconcilePage(
         properties.getReconcile().getPrefix(),
-        properties.getReconcile().getBatchSize(),
+        batchSize,
         properties.getReconcile().isIncludeTemporaryObjects());
-    for (StorageObjectView object : objects) {
+    for (StorageObjectView object : page.objects()) {
       RlsTenantContextHolder.runWithTenant(
           properties.getReconcile().getDefaultTenantId(), () -> reconcileObject(object));
     }
+    storage.completeReconcilePage(page);
   }
 
   private void cleanupArchivedFile(FileGovernanceMaintenanceViews.ArchivedFileCleanupView file) {

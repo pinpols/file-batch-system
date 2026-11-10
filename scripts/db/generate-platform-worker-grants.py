@@ -5,6 +5,7 @@
 
 每个 Worker 的权限 = worker-core 公共 SQL ∪ 本模块 SQL ∪ Worker 运行时加载的 batch-common 片段；
 控制面模块的权限 = 本模块 SQL ∪ 同一组 batch-common 片段。
+入站归属声明属于跨模块读取，仅对实际使用该公共仓储的 Import 与 Orchestrator 加入该源码。
 只做静态推导：写入目标额外获得 SELECT（UPDATE/DELETE 的 WHERE、RETURNING 与生成主键都需要读权限）；
 行锁子句需要被锁表至少一列的 UPDATE，按“仅锁”列授权；Orchestrator 所有的表只授予实际 SET 的列。
 触发器函数以调用者身份执行：模块写入的表上挂有非 SECURITY DEFINER 触发器时，函数体访问的表一并授予。
@@ -43,6 +44,9 @@ SHARED_SOURCES = (
     "batch-common/src/main/resources/mapper/BusinessTenantPlacementMapper.xml",
     "batch-common/src/main/java/io/github/pinpols/batch/common/stateful/StatefulBackendGuard.java",
 )
+
+# 入站归属配置仅由 Import scanner 与 Orchestrator 对账读取，不能授予所有 Worker/控制面。
+INGRESS_OWNERSHIP_SOURCE = "batch-common/src/main/resources/mapper/ImportIngressOwnershipMapper.xml"
 
 # 使用 @SchedulerLock 的模块在 BATCH_SHEDLOCK_PROVIDER=jdbc 时读写 ShedLock 表。
 SHEDLOCK_TABLE = "batch.shedlock"
@@ -378,6 +382,8 @@ def build_manifest() -> dict:
         access = Access()
         sources = module_sources(CORE_MODULE) + module_sources(worker)
         sources += [ROOT / relative for relative in SHARED_SOURCES]
+        if worker == "import":
+            sources.append(ROOT / INGRESS_OWNERSHIP_SOURCE)
         for path in sources:
             relative = path.relative_to(ROOT).as_posix()
             for fragment in sql_fragments(path):
@@ -414,7 +420,10 @@ def build_control_plane_manifest() -> dict:
     for module, directory in CONTROL_PLANE.items():
         access = Access()
         module_paths = sources_under(ROOT / directory / "src/main")
-        for path in module_paths + [ROOT / relative for relative in SHARED_SOURCES]:
+        shared_paths = [ROOT / relative for relative in SHARED_SOURCES]
+        if module == "orchestrator":
+            shared_paths.append(ROOT / INGRESS_OWNERSHIP_SOURCE)
+        for path in module_paths + shared_paths:
             relative = path.relative_to(ROOT).as_posix()
             for fragment in sql_fragments(path):
                 collect(fragment, access, relative)
@@ -469,6 +478,8 @@ WORKER_SQL_HEADER = (
     "--       -v dispatch_role=… -v atomic_role=…] -f scripts/db/platform-worker-roles.sql",
     "-- 只处理传入的角色；每个角色先撤销 batch/archive 下全部表与序列权限再按清单授予，重复执行收敛到同一状态。",
     "-- 脚本不创建账号、不改 schema，也不调整 Orchestrator/Console/Trigger 角色。action=revoke 时撤销后不再授予。",
+    "-- Import 角色还须执行 import-ingress-scan-role.sql 配置入口扫描协调状态的跨租户 RLS 策略。",
+    "-- 使用统一入口归属的 Import 角色须执行 import-ingress-ownership-role.sql 配置只读 RLS 策略。",
 )
 
 CONTROL_PLANE_SQL_HEADER = (
@@ -478,6 +489,7 @@ CONTROL_PLANE_SQL_HEADER = (
     "-- 只处理传入的角色；每个角色先撤销 batch/archive/quartz 下全部表、序列与函数权限再按清单授予，重复执行收敛到同一状态。",
     "-- 运行时角色不执行 Flyway：迁移由 BATCH_PLATFORM_FLYWAY_USERNAME 指定的 owner 账号执行，每次迁移后重新执行本脚本。",
     "-- Console 角色另需执行 config-cache-invalidation-role.sql 获得跨租户的缓存失效队列策略。action=revoke 时撤销后不再授予。",
+    "-- 使用统一入口归属的 Orchestrator 角色须执行 import-ingress-ownership-role.sql 配置只读 RLS 策略。",
 )
 
 

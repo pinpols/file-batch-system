@@ -1,5 +1,25 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-10 文件等待、清单及回报发件箱边界
+
+- 当前待办索引按源码复核：关闭已落地的批量开关准入、移动端渠道目的地和自助服务自批；补跑排除改为已合入、待真实联调。文件等待保留一项开放缺陷：无法映射来源类型的渠道，其历史回退会匹配全部历史文件。
+- 系统设计与容量核查按用户选择以本地结果收口；将完整容量、恢复及目标环境缺项登记到当前待办，并保留原始证据与验收边界。
+- 明确 Workflow 容量等待的优先顺序适用于等待记录，新请求可能先占用空闲槽位并延长已有等待。
+- 说明 Go 和 TypeScript Kafka 适配器在未确认消息后有界等待并重读的行为，以及 Go 会暂缓整个消费者的边界。
+- 说明 TypeScript Kafka 消费组重新分配时，旧分配的提交屏障会被清除，新分配从 broker 提交位置恢复。
+- 明确 Workflow 汇合放行后仍可能受到队列和 Kafka 分区顺序影响，下游启动不保证即时。
+
+- 说明控制面压测 PostgreSQL 压力采样的缺失记录和不完整状态。
+- 说明控制面压测积压采样失败的报告、退出码和现场保留行为。
+- 明确控制面混合画像按各启用模块分别检查 launch 写入 p95，说明本机反例验证入口及其范围。
+- 补充 Atomic HTTP 执行器与作业两层重试叠加时的外呼次数示例及配置提示。
+- 明确 Workflow 未指定时区时，完成截止监控使用平台默认业务时区，并要求触发与编排服务配置一致。
+- 修正端到端定长导入夹具的解析字段与记录长度，并增加带 BOM 对象的双分片实际写入对账。
+- 补充 Process 基准和长稳监控的 Kafka 采样目标与未知分区说明，避免将采样不完整误判为零积压。
+- 校正 Process 流程说明：按当前 generation 隔离暂存，JSONB 发布与清理同事务，失败旧代回收受独立删除开关与实例围栏约束。
+- 更新 ADR-028 的文件占位、具体渠道匹配、历史记录兼容和 WAIT 不可达分支推进说明；更新 ADR-040 的权威清单绑定、分页扫描与持久状态边界，目标环境验证限制保留在对应记录。
+- 明确回报 Outbox 关闭开关修复后的升级检查与排空步骤，说明旧版本可能留下记录且仅修复代码不会触发后端切换守卫；具体操作见[有状态后端切换手册](runbook/stateful-backend-cutover.md#4-worker-report-outbox)。
+
 ## 2026-11-08 Workflow 槽位等待恢复测试稳定性
 
 - `JobNodeDispatchIntegrationTest#systemCapacityWaitRecovery_shouldResumeEachRunnableTenantIndependently` 改为用 Awaitility 等待最终 `RESUMED` / `LAUNCHED` / 单 RootRun 契约：生产 `WorkflowLaunchWaitReconciler` 同时被 5s `@Scheduled` 调度且 `claimDue` 使用 `for update skip locked`，显式扫描可能跳过已被后台认领的等待项，原即时断言在 #1337 的 main full gate 上偶发读到 `WAITING`（同 commit 重跑通过）。修复不改变生产逻辑与断言口径。

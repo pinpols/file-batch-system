@@ -1096,7 +1096,7 @@
       "prefix": "batch.worker.import.scanner",
       "source": "STATIC",
       "activation": "RESTART_REQUIRED",
-      "sensitivity": "SECRET"
+      "sensitivity": "PUBLIC"
     },
     {
       "id": "batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/config/ImportSkipProperties.java#ImportSkipProperties",

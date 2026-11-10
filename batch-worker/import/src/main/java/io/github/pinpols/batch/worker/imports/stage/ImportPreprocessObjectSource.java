@@ -191,8 +191,19 @@ public final class ImportPreprocessObjectSource {
               StandardOpenOption.CREATE,
               StandardOpenOption.TRUNCATE_EXISTING,
               StandardOpenOption.WRITE)) {
-        InputStream source = slice.partitionNo() == 1 ? EncodingUtils.stripUtf8Bom(in) : in;
-        keptBytes = copyPartitionRange(source, out, rawEnd - rawStart, slice.partitionNo() > 1);
+        BufferedInputStream source = new BufferedInputStream(in, 64 * 1024);
+        long sliceLength = rawEnd - rawStart;
+        if (slice.partitionNo() == 1) {
+          source.mark(3);
+          byte[] prefix = source.readNBytes(3);
+          if (EncodingUtils.stripUtf8Bom(prefix).length < prefix.length) {
+            // 原始分片边界包含 BOM；扣除被剥离的字节后仍让首片承接首行。
+            sliceLength = Math.max(0, sliceLength - prefix.length);
+          } else {
+            source.reset();
+          }
+        }
+        keptBytes = copyPartitionRange(source, out, sliceLength, slice.partitionNo() > 1);
       }
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH, spool.toString());
       context.getAttributes().put(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET, slice.charset());

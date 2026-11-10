@@ -12,10 +12,13 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretBlockedException;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,12 +35,15 @@ public class RetryDispatchStep implements DispatchStageStep {
 
   private final FileDispatchRepository fileDispatchRepository;
   private final DispatchChannelGateway dispatchChannelGateway;
+  private final DispatchSecretResolver dispatchSecretResolver;
 
   public RetryDispatchStep(
       FileDispatchRepository fileDispatchRepository,
-      DispatchChannelGateway dispatchChannelGateway) {
+      DispatchChannelGateway dispatchChannelGateway,
+      DispatchSecretResolver dispatchSecretResolver) {
     this.fileDispatchRepository = fileDispatchRepository;
     this.dispatchChannelGateway = dispatchChannelGateway;
+    this.dispatchSecretResolver = dispatchSecretResolver;
   }
 
   @Override
@@ -85,6 +91,39 @@ public class RetryDispatchStep implements DispatchStageStep {
     @SuppressWarnings("unchecked")
     Map<String, Object> channelConfig =
         (Map<String, Object>) attrs.get(PipelineRuntimeKeys.CHANNEL_CONFIG);
+    Object rawBindings = attrs.get(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS);
+    Map<String, Object> secretPayload = rawBindings instanceof Map<?, ?>
+        ? Map.of(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, rawBindings)
+        : Map.of();
+    Set<String> resolvedSecretKeys;
+    try {
+      resolvedSecretKeys = dispatchSecretResolver.resolveInto(
+          context.getTenantId(), dispatchPayload.channelCode(), secretPayload, channelConfig);
+    } catch (DispatchSecretBlockedException exception) {
+      attrs.put(DispatchRuntimeKeys.RETRY_REQUESTED, Boolean.FALSE);
+      attrs.remove(PipelineRuntimeKeys.PIPELINE_NEXT_STAGE_CODE);
+      return DispatchStageResult.failure(
+          stage(),
+          exception.errorCode(),
+          "error.dispatch.secret.blocked",
+          new Object[0],
+          exception.errorCode(),
+          ERROR_OBJECT_MAPPER);
+    }
+    try {
+      return retry(context, dispatchPayload, attrs, fileId, fileRecord, channelConfig);
+    } finally {
+      resolvedSecretKeys.forEach(channelConfig::remove);
+    }
+  }
+
+  private DispatchStageResult retry(
+      DispatchJobContext context,
+      DispatchPayload dispatchPayload,
+      Map<String, Object> attrs,
+      Long fileId,
+      Map<String, Object> fileRecord,
+      Map<String, Object> channelConfig) {
     int attemptStarted = fileDispatchRepository.beginAttempt(
         context.getTenantId(), fileId, dispatchPayload.channelCode());
     if (attemptStarted <= 0) {

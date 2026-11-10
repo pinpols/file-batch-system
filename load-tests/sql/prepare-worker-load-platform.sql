@@ -135,7 +135,20 @@ INSERT INTO batch.file_template_config (
        JOIN biz.settlement_batch sb
          ON sb.tenant_id = sd.tenant_id AND sb.id = sd.batch_id
       WHERE sb.tenant_id = :tenantId AND sb.batch_no = :batchNo',
-    '{"sqlTemplateExport":{"cursorColumn":"id"}}'::jsonb,
+    '{
+      "sqlTemplateExport":{"cursorColumn":"id"},
+      "csvColumns":[
+        {"source":"detail.batch_no","header":"batchNo"},
+        {"source":"detail.biz_date","header":"bizDate"},
+        {"source":"detail.settlement_no","header":"settlementNo"},
+        {"source":"detail.customer_no","header":"customerNo"},
+        {"source":"detail.gross_amount","header":"grossAmount"},
+        {"source":"detail.fee_amount","header":"feeAmount"},
+        {"source":"detail.net_amount","header":"netAmount"},
+        {"source":"detail.currency","header":"currency"},
+        {"source":"detail.settlement_status","header":"status"}
+      ]
+    }'::jsonb,
     true, 1000, 1000, 500, true, 1, 'load-test', 'load-test',
     NULL, 'sql_template_export', false
   )
@@ -170,8 +183,9 @@ INSERT INTO batch.file_channel_config (
   auth_type, config_json, receipt_policy, timeout_seconds, enabled, is_deleted
 ) VALUES (
   'default-tenant', 'local_dispatch', 'Load Test Local Dispatch', 'LOCAL',
-  '/tmp/batch/local-dispatch', 'NONE',
-  '{"target_endpoint":"/tmp/batch/local-dispatch","receipt_policy":"NONE","channel_type":"LOCAL","channel_code":"local_dispatch"}'::jsonb,
+  :'dispatch_target_dir', 'NONE',
+  jsonb_build_object('target_endpoint', :'dispatch_target_dir', 'receipt_policy', 'NONE',
+                     'channel_type', 'LOCAL', 'channel_code', 'local_dispatch'),
   'NONE', 30, true, false
 )
 ON CONFLICT (tenant_id, channel_code) DO UPDATE SET

@@ -124,19 +124,29 @@ check_kafka_lag() {
     lag="$(
       "$kafka_cli" --bootstrap-server "$KAFKA_HOST_BOOTSTRAP" \
         --describe --all-groups 2>/dev/null \
-        | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
+        | awk 'NR>1 && $6 == "-" {missing=1} NR>1 && $6 ~ /^[0-9]+$/ {seen=1; if($6>m) m=$6} END{if(missing && seen) print "kafka lag incomplete: some partitions unavailable" > "/dev/stderr"; if(seen) print m+0}'
     )" || lag=""
   fi
   if [[ -z "${lag:-}" ]]; then
-    kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
-    [[ -n "$kafka_container" ]] || return
-    lag="$(
-      docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
-        --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>/dev/null \
-        | awk 'NR>1 && $6 ~ /^[0-9]+$/ {if($6>m) m=$6} END{print m+0}'
-    )" || lag=""
+    if [[ -n "${KAFKA_CONTAINER:-}" ]]; then
+      kafka_container="$KAFKA_CONTAINER"
+    else
+      kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+    fi
+    if [[ -n "$kafka_container" ]]; then
+      lag="$(
+        docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
+          --bootstrap-server "$KAFKA_CONTAINER_BOOTSTRAP" --describe --all-groups 2>/dev/null \
+          | awk 'NR>1 && $6 == "-" {missing=1} NR>1 && $6 ~ /^[0-9]+$/ {seen=1; if($6>m) m=$6} END{if(missing && seen) print "kafka lag incomplete: some partitions unavailable" > "/dev/stderr"; if(seen) print m+0}'
+      )" || lag=""
+    fi
   fi
-  if [[ -z "$lag" ]]; then return; fi
+  if [[ -z "${lag:-}" ]]; then
+    # 无法证明告警持续时间；记录采样缺失，并从下一次有效采样重新计时。
+    kafka_breach_since=0
+    echo "kafka lag unavailable: no numeric partition lag" >&2
+    return
+  fi
   if (( lag > KAFKA_LAG_THRESHOLD )); then
     if (( kafka_breach_since == 0 )); then kafka_breach_since=$(date +%s); fi
     local elapsed=$(( $(date +%s) - kafka_breach_since ))

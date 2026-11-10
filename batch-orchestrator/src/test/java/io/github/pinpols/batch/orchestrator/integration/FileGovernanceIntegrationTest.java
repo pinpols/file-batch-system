@@ -3,13 +3,21 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 
 import io.github.pinpols.batch.common.config.BatchClockConfig;
+import io.github.pinpols.batch.common.config.FilesystemStorageProperties;
+import io.github.pinpols.batch.common.config.KafkaNamespaceProperties;
 import io.github.pinpols.batch.common.config.S3StorageProperties;
+import io.github.pinpols.batch.common.config.StorageBackendProperties;
 import io.github.pinpols.batch.common.enums.FileIntegrityState;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.FileGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.BundleArrivalLauncher;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceLatencyMetrics;
@@ -18,6 +26,8 @@ import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceSc
 import io.github.pinpols.batch.orchestrator.infrastructure.file.S3GovernanceStorage;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.FileGovernanceMetricsCacheService;
 import io.github.pinpols.batch.orchestrator.infrastructure.redis.OrchestratorRedisSupport;
+import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper;
+import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper.Advance;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.ByteArrayInputStream;
@@ -130,14 +140,25 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   @EnableAutoConfiguration
   @ImportAutoConfiguration(RestClientAutoConfiguration.class)
   @EnableScheduling
-  @EnableConfigurationProperties({FileGovernanceProperties.class, S3StorageProperties.class})
-  @MapperScan("io.github.pinpols.batch.orchestrator.mapper")
+  @EnableConfigurationProperties({
+    FileGovernanceProperties.class,
+    S3StorageProperties.class,
+    KafkaNamespaceProperties.class,
+    StorageBackendProperties.class,
+    FilesystemStorageProperties.class
+  })
+  @MapperScan({
+    "io.github.pinpols.batch.orchestrator.mapper",
+    "io.github.pinpols.batch.common.mapper"
+  })
   @Import({
     BatchClockConfig.class,
     FileGovernanceScheduler.class,
     // ADR-046 2c-2b:FileGovernanceScheduler 现依赖 BundleArrivalLauncher,须一并导入。
     // 本测的到达组无 bundleJobCode → launchIfBundle 早返回,不触 LaunchService(故无需 mock)。
     BundleArrivalLauncher.class,
+    ImportIngressOwnershipIdentity.class,
+    ImportIngressOwnershipRepository.class,
     FileGovernanceRepository.class,
     S3GovernanceStorage.class,
     OrchestratorRedisSupport.class,
@@ -165,6 +186,9 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
   private final MeterRegistry meterRegistry;
   private final FileGovernanceProperties fileGovernanceProperties;
   private final FileGovernanceMetricsCacheService metricsCacheService;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
+  private final S3StorageProperties s3StorageProperties;
+  private final FileGovernanceReconcileCursorMapper reconcileCursorMapper;
 
   @MockitoSpyBean
   private FileGovernanceRepository fileGovernanceRepositorySpy;
@@ -175,13 +199,19 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
       FileGovernanceRepository fileGovernanceRepository,
       MeterRegistry meterRegistry,
       FileGovernanceProperties fileGovernanceProperties,
-      FileGovernanceMetricsCacheService metricsCacheService) {
+      FileGovernanceMetricsCacheService metricsCacheService,
+      ImportIngressOwnershipIdentity ownershipIdentity,
+      S3StorageProperties s3StorageProperties,
+      FileGovernanceReconcileCursorMapper reconcileCursorMapper) {
     this.jdbcTemplate = jdbcTemplate;
     this.fileGovernanceScheduler = fileGovernanceScheduler;
     this.fileGovernanceRepository = fileGovernanceRepository;
     this.meterRegistry = meterRegistry;
     this.fileGovernanceProperties = fileGovernanceProperties;
     this.metricsCacheService = metricsCacheService;
+    this.ownershipIdentity = ownershipIdentity;
+    this.s3StorageProperties = s3StorageProperties;
+    this.reconcileCursorMapper = reconcileCursorMapper;
   }
 
   @Test
@@ -455,6 +485,179 @@ class FileGovernanceIntegrationTest extends AbstractIntegrationTest {
 
     Integer auditCount = jdbcTemplate.queryForObject(selectCountSql, Integer.class);
     assertThat(auditCount).isGreaterThanOrEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("入口范围和独立清单受保护，跨页仍可对账普通孤儿对象")
+  void shouldProtectIngressAndManifestWithoutStarvingOrdinaryOrphans() throws Exception {
+    final String insertScopeSql = """
+        insert into batch.import_ingress_ownership
+            (scope_id, storage_id, bucket_name, object_prefix, state)
+        values (?, ?, ?, ?, 'ACTIVE')
+        """;
+    final String insertBindingSql = """
+        insert into batch.import_ingress_ownership_binding
+            (scope_id, binding_type, tenant_id, object_prefix, file_group_code, manifest_key_template)
+        values (?, 'MANIFEST', ?, ?, ?, ?)
+        """;
+    final String selectCountSql = """
+        select count(*) from batch.file_record
+        where storage_bucket = ? and storage_path = ?
+        """;
+
+    String root = "incoming/owned-scope-" + suffix() + "/";
+    String dataPrefix = root + "00-scanner/";
+    String manifestTemplate = root + "01-authority/group-{bizDateCompact}.batch.json";
+    String manifestKey = root + "01-authority/group-20261109.batch.json";
+    String ordinaryKey = root + "99-ordinary/orphan.csv";
+    var objectMapper = JsonUtils.newDefaultMapper();
+    String storageId = ownershipIdentity.storageId(s3StorageProperties, objectMapper);
+    String scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, dataPrefix, objectMapper);
+    jdbcTemplate.update(insertScopeSql, scopeId, storageId, s3Bucket(), dataPrefix);
+    jdbcTemplate.update(
+        insertBindingSql, scopeId, TENANT_ID, dataPrefix, "TEST_GROUP", manifestTemplate);
+    for (int i = 1; i <= 3; i++) {
+      putObject(dataPrefix + "file-" + i + ".csv", "id\n" + i + "\n");
+    }
+    putObject(manifestKey, "{}");
+    putObject(ordinaryKey, "id\n4\n");
+
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    int originalBatchSize = fileGovernanceProperties.getReconcile().getBatchSize();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(root);
+      fileGovernanceProperties.getReconcile().setBatchSize(2);
+      fileGovernanceScheduler.reconcileObjectStorage();
+      Integer ordinaryAfterFirstPage =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), ordinaryKey);
+      assertThat(ordinaryAfterFirstPage).isZero();
+      for (int i = 0; i < 5; i++) {
+        fileGovernanceScheduler.reconcileObjectStorage();
+      }
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+      fileGovernanceProperties.getReconcile().setBatchSize(originalBatchSize);
+    }
+
+    for (int i = 1; i <= 3; i++) {
+      Integer protectedCount = jdbcTemplate.queryForObject(
+          selectCountSql, Integer.class, s3Bucket(), dataPrefix + "file-" + i + ".csv");
+      assertThat(protectedCount).isZero();
+    }
+    Integer manifestCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), manifestKey);
+    Integer ordinaryCount =
+        jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), ordinaryKey);
+    assertThat(manifestCount).isZero();
+    assertThat(ordinaryCount).isEqualTo(1);
+  }
+
+  @Test
+  @DisplayName("对账页处理失败不跳过对象，重试成功后继续下一页")
+  void shouldRetryFailedReconcilePageBeforeAdvancing() throws Exception {
+    final String selectCountSql = """
+        select count(*) from batch.file_record
+        where storage_bucket = ? and storage_path = ?
+        """;
+    String root = "incoming/reconcile-retry-" + suffix() + "/";
+    String firstKey = root + "first.csv";
+    String secondKey = root + "second.csv";
+    putObject(firstKey, "id\n1\n");
+    putObject(secondKey, "id\n2\n");
+    AtomicBoolean failFirst = new AtomicBoolean(true);
+    doAnswer(invocation -> {
+          if (failFirst.getAndSet(false)) {
+            throw new IllegalStateException("模拟本页对象处理失败");
+          }
+          return invocation.callRealMethod();
+        })
+        .when(fileGovernanceRepositorySpy)
+        .existsFileRecordByStoragePath(anyString(), eq(s3Bucket()), eq(firstKey));
+
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    int originalBatchSize = fileGovernanceProperties.getReconcile().getBatchSize();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(root);
+      fileGovernanceProperties.getReconcile().setBatchSize(1);
+      assertThatThrownBy(fileGovernanceScheduler::reconcileObjectStorage)
+          .isInstanceOf(IllegalStateException.class)
+          .hasMessage("模拟本页对象处理失败");
+      fileGovernanceScheduler.reconcileObjectStorage();
+      fileGovernanceScheduler.reconcileObjectStorage();
+      Integer firstCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), firstKey);
+      Integer secondCountBefore =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), secondKey);
+      assertThat(firstCount).isEqualTo(1);
+      assertThat(secondCountBefore).isZero();
+
+      fileGovernanceScheduler.reconcileObjectStorage();
+      Integer secondCountAfter =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), secondKey);
+      assertThat(secondCountAfter).isEqualTo(1);
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+      fileGovernanceProperties.getReconcile().setBatchSize(originalBatchSize);
+    }
+  }
+
+  @Test
+  @DisplayName("对账分页进度用版本保护，过期执行者不能回退游标")
+  void shouldNotOverwriteReconcileProgressFromAnOlderPage() {
+    var objectMapper = JsonUtils.newDefaultMapper();
+    String storageId = ownershipIdentity.storageId(s3StorageProperties, objectMapper);
+    String prefix = "incoming/reconcile-cursor-" + suffix() + "/";
+    reconcileCursorMapper.insertIfAbsent(storageId, prefix);
+    var firstRead = reconcileCursorMapper.select(storageId, prefix);
+    var concurrentRead = reconcileCursorMapper.select(storageId, prefix);
+
+    Advance firstProgress =
+        new Advance(storageId, prefix, firstRead.version(), prefix + "b", null, 1L, 1L, "FORWARD");
+    Advance staleProgress = new Advance(
+        storageId, prefix, concurrentRead.version(), prefix + "a", null, 1L, 1L, "FORWARD");
+    int firstUpdate = reconcileCursorMapper.advance(firstProgress);
+    int staleUpdate = reconcileCursorMapper.advance(staleProgress);
+    var finalCursor = reconcileCursorMapper.select(storageId, prefix);
+
+    assertThat(firstUpdate).isEqualTo(1);
+    assertThat(staleUpdate).isZero();
+    assertThat(finalCursor.nextMarker()).isEqualTo(prefix + "b");
+    assertThat(finalCursor.version()).isEqualTo(firstRead.version() + 1);
+  }
+
+  @Test
+  @DisplayName("持续新增对象时，对账仍能发现游标之前新出现的普通孤儿")
+  void shouldRevisitEarlierOrphansWhileObjectsKeepArriving() throws Exception {
+    final String selectCountSql = """
+        select count(*) from batch.file_record
+        where storage_bucket = ? and storage_path = ?
+        """;
+    String root = "incoming/reconcile-continuous-" + suffix() + "/";
+    String lateKey = root + "a-late.csv";
+    for (int i = 0; i < 4; i++) {
+      putObject(root + "z-" + String.format("%04d", i) + ".csv", "id\n" + i + "\n");
+    }
+    String originalPrefix = fileGovernanceProperties.getReconcile().getPrefix();
+    int originalBatchSize = fileGovernanceProperties.getReconcile().getBatchSize();
+    try {
+      fileGovernanceProperties.getReconcile().setPrefix(root);
+      fileGovernanceProperties.getReconcile().setBatchSize(2);
+      fileGovernanceScheduler.reconcileObjectStorage();
+      putObject(lateKey, "id\nlate\n");
+      for (int tick = 0; tick < 6; tick++) {
+        for (int offset = 0; offset < 3; offset++) {
+          int id = 4 + tick * 3 + offset;
+          putObject(root + "z-" + String.format("%04d", id) + ".csv", "id\n" + id + "\n");
+        }
+        fileGovernanceScheduler.reconcileObjectStorage();
+      }
+      Integer lateCount =
+          jdbcTemplate.queryForObject(selectCountSql, Integer.class, s3Bucket(), lateKey);
+      assertThat(lateCount).isEqualTo(1);
+    } finally {
+      fileGovernanceProperties.getReconcile().setPrefix(originalPrefix);
+      fileGovernanceProperties.getReconcile().setBatchSize(originalBatchSize);
+    }
   }
 
   @Test

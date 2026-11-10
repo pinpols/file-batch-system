@@ -135,6 +135,9 @@ public abstract class AbstractStageExecutor<
             result.errorArgs(),
             outputSummary);
       }
+      if (!result.success() && isTerminalFailure(result)) {
+        break;
+      }
       currentStep = PipelineStepFlowSupport.resolveNextStep(
           currentStep, result.success(), configuredSteps, context.getAttributes());
       if (!result.success() && currentStep == null) {
@@ -142,6 +145,11 @@ public abstract class AbstractStageExecutor<
       }
     }
     return results;
+  }
+
+  /** 对不能继续执行任何后续步骤的领域失败，子类可以显式终止流程。 */
+  protected boolean isTerminalFailure(R result) {
+    return false;
   }
 
   /**

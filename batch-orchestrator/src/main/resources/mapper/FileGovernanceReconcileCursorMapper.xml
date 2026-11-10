@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper">
+    <resultMap id="cursorMap" type="io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper$Cursor">
+        <constructor>
+            <arg column="next_marker" javaType="java.lang.String"/>
+            <arg column="revisit_marker" javaType="java.lang.String"/>
+            <arg column="revisit_budget" javaType="_long"/>
+            <arg column="revisit_remaining" javaType="_long"/>
+            <arg column="next_lane" javaType="java.lang.String"/>
+            <arg column="version" javaType="_long"/>
+        </constructor>
+    </resultMap>
+
+    <insert id="insertIfAbsent">
+        insert into batch.file_governance_reconcile_cursor (storage_id, object_prefix)
+        values (#{storageId}, #{prefix})
+        on conflict (storage_id, object_prefix) do nothing
+    </insert>
+
+    <select id="select" resultMap="cursorMap">
+        select next_marker, revisit_marker, revisit_budget, revisit_remaining, next_lane, version
+        from batch.file_governance_reconcile_cursor
+        where storage_id = #{storageId} and object_prefix = #{prefix}
+    </select>
+
+    <update id="advance">
+        update batch.file_governance_reconcile_cursor
+        set next_marker = #{nextMarker,jdbcType=VARCHAR},
+            revisit_marker = #{revisitMarker,jdbcType=VARCHAR},
+            revisit_budget = #{revisitBudget}, revisit_remaining = #{revisitRemaining},
+            next_lane = #{nextLane}, version = version + 1,
+            updated_at = current_timestamp
+        where storage_id = #{storageId} and object_prefix = #{prefix} and version = #{version}
+    </update>
+</mapper>

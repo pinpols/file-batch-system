@@ -162,10 +162,9 @@ class KafkaTaskConsumerCapacityPauseTest {
     }
   }
 
-  /** withhold 不再 pause 分区;容量 pause/resume 仍必须完整覆盖 assignment。 */
   @Test
-  @DisplayName("withhold ceiling 不干扰容量维度 pause/resume")
-  void shouldCoverWithheldPartition_whenCapacityResumes() {
+  @DisplayName("容量恢复不会提前解除未确认分区的暂停")
+  void shouldKeepWithheldPartitionPaused_whenCapacityResumes() {
     TopicPartition withheld = new TopicPartition("batch.task.dispatch.tx.t0", 0);
     TopicPartition healthy = new TopicPartition("batch.task.dispatch.tx.t1", 0);
     // 容量先满(pause 整个 assignment),再跌破阈值(resume)
@@ -176,21 +175,23 @@ class KafkaTaskConsumerCapacityPauseTest {
       mockConsumer.assign(List.of(withheld, healthy));
       try (KafkaTaskConsumer consumer = newConsumer(mockConsumer)) {
 
-        // 一条 v3 落到 t0 → WITHHOLD commit ceiling,继续消费且不 pause。
+        // 一条 v3 落到 t0，回退并暂缓该分区。
         byte[] v3 =
             ("{\"taskId\":42,\"tenantId\":\"tx\",\"jobCode\":\"job-1\",\"taskType\":\"task-type\","
                     + "\"taskInstanceId\":\"ti\",\"schemaVersion\":\"v3\"}")
                 .getBytes(StandardCharsets.UTF_8);
         boolean keepGoing = consumer.handleRecordAndMaybeCommit(
             new ConsumerRecord<>("batch.task.dispatch.tx.t0", 0, 5, "k", v3));
-        assertThat(keepGoing).isTrue();
-        assertThat(mockConsumer.paused()).isEmpty();
+        assertThat(keepGoing).isFalse();
+        assertThat(mockConsumer.paused()).containsExactly(withheld);
 
         // act: 容量满 → pause 整个 assignment;再跌破 → resume
         consumer.applyBackpressure(); // pause
         assertThat(mockConsumer.paused()).contains(withheld, healthy);
-        consumer.applyBackpressure(); // resume 全 assignment
+        consumer.applyBackpressure(); // 仅恢复健康分区
 
+        assertThat(mockConsumer.paused()).containsExactly(withheld);
+        consumer.resumeWithheldPartitions(Long.MAX_VALUE);
         assertThat(mockConsumer.paused()).isEmpty();
       }
     }

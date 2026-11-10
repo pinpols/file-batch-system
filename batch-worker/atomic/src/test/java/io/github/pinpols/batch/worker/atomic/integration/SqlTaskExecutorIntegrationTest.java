@@ -12,12 +12,16 @@ import io.github.pinpols.batch.worker.atomic.sql.SqlExecutorProperties;
 import io.github.pinpols.batch.worker.atomic.sql.SqlTaskExecutor;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -81,6 +85,32 @@ class SqlTaskExecutorIntegrationTest extends AbstractIntegrationTest {
     Map<?, ?> decoded = JsonUtils.fromJson(JsonUtils.toJson(result.output()), Map.class);
     assertThat(decoded.get("lastResultSet"))
         .isEqualTo(List.of(Map.of("numbers", List.of(1, 2, 3))));
+  }
+
+  @ParameterizedTest
+  @CsvSource({"true, 1", "false, 0"})
+  @DisplayName("多语句后续失败时自动提交保留前项，显式事务回滚全部")
+  void shouldRespectTransactionMode_whenLaterStatementFails(boolean autoCommit, int expectedRows) {
+    String suffix = UUID.randomUUID().toString().replace("-", "");
+    String table = "batch.atomic_sql_failure_" + suffix;
+    String createTableSql = "create table " + table + " (id integer primary key)";
+    String insertTwiceSql =
+        "insert into " + table + " values (1); insert into " + table + " values (1)";
+    String countSql = "select count(*) from " + table;
+    String dropTableSql = "drop table if exists " + table;
+    JdbcTemplate jdbc = new JdbcTemplate(dataSource);
+    jdbc.execute(createTableSql);
+    try {
+      TaskResult result =
+          executor().execute(ctx(Map.of("sql", insertTwiceSql, "autoCommit", autoCommit)));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+      Integer actualRows = jdbc.queryForObject(countSql, Integer.class);
+      assertThat(actualRows).isEqualTo(expectedRows);
+    } finally {
+      jdbc.execute(dropTableSql);
+    }
   }
 
   @Test

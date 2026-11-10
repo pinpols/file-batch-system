@@ -82,19 +82,40 @@ export DISPATCH_FIXTURE_COUNT
 
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CLEANUP_ONLY="${CLEANUP_ONLY:-0}"
+SCHEDULER_SAMPLER_STATUS="not-run"
 PG_SAMPLER_PID=""
+PG_SAMPLER_STATUS="not-run"
 stop_pg_pressure_sampler() {
-  if [[ -n "$PG_SAMPLER_PID" ]] && kill -0 "$PG_SAMPLER_PID" 2>/dev/null; then
+  [[ -n "$PG_SAMPLER_PID" ]] || return 0
+  local stopped_unexpectedly=0
+  if kill -0 "$PG_SAMPLER_PID" 2>/dev/null; then
     kill "$PG_SAMPLER_PID" 2>/dev/null || true
+    wait "$PG_SAMPLER_PID" 2>/dev/null || true
+  else
+    stopped_unexpectedly=1
     wait "$PG_SAMPLER_PID" 2>/dev/null || true
   fi
   PG_SAMPLER_PID=""
+  if [[ "$stopped_unexpectedly" -eq 1 ]]; then
+    PG_SAMPLER_STATUS="stopped-unexpectedly"
+  elif [[ -s "$LOG_DIR/pg-pressure-sample-errors.log" ]]; then
+    PG_SAMPLER_STATUS="incomplete"
+  elif [[ ! -f "$LOG_DIR/pg-pressure-samples.csv" ]] \
+      || [[ "$(wc -l < "$LOG_DIR/pg-pressure-samples.csv")" -lt 2 ]]; then
+    PG_SAMPLER_STATUS="no-samples"
+  else
+    PG_SAMPLER_STATUS="complete"
+    return 0
+  fi
+  SKIP_AUTO_CLEANUP=1
+  echo "ERROR: PostgreSQL pressure samples ${PG_SAMPLER_STATUS}; retaining run data" >&2
+  return 1
 }
 
 on_exit_cleanup() {
   local rc=$? cleanup_rc=0 operation_rc
   trap - EXIT
-  stop_pg_pressure_sampler
+  stop_pg_pressure_sampler || true
   if [[ "$SKIP_AUTO_CLEANUP" == "1" ]]; then
     echo "SKIP_AUTO_CLEANUP=1, leaving RUN_ID=${RUN_ID} data in place for inspection"
     exit "$rc"
@@ -313,7 +334,11 @@ kafka_lag_snapshot() {
     echo "kafka lag via host CLI failed; trying container CLI" >&2
   fi
 
-  kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+  if [[ -n "${KAFKA_CONTAINER:-}" ]]; then
+    kafka_container="$KAFKA_CONTAINER"
+  else
+    kafka_container="$(docker ps --format '{{.Names}}' 2>/dev/null | grep -E 'kafka$|kafka-1' | head -1 || true)"
+  fi
   if [[ -n "$kafka_container" ]]; then
     if output="$(
       docker exec -i "$kafka_container" "$KAFKA_CONTAINER_BIN_DIR/kafka-consumer-groups.sh" \
@@ -336,19 +361,27 @@ pg_pressure_snapshot() {
 
 pg_pressure_sampler() {
   local output_file="$1"
+  local error_file="$2"
   local sample_header
   sample_header="sampled_at|database_size_bytes|active_connections|active_waiting_connections"
   sample_header+="|lock_waiters|xact_commit|xact_rollback|wal_bytes|wal_records|wal_fpi"
   sample_header+="|wal_buffers_full|wal_write|wal_sync|checkpoints_timed|checkpoints_requested"
   sample_header+="|checkpoint_buffers_written|host_load_1m"
   : > "$output_file"
+  : > "$error_file"
   printf '%s\n' "$sample_header" >> "$output_file"
   while true; do
     local database_sample host_load
-    database_sample="$(
+    if database_sample="$(
       psql_platform -At -F '|' \
-        -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" 2>/dev/null || true
-    )"
+        -f "$LOAD_DIR/sql/control-pg-pressure-sample.sql" 2>/dev/null
+    )" && [[ -n "$database_sample" ]]; then
+      :
+    else
+      database_sample=""
+      printf '%s PostgreSQL pressure query failed or returned no sample\n' \
+        "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$error_file"
+    fi
     if [[ -r /proc/loadavg ]]; then
       host_load="$(awk '{ print $1 }' /proc/loadavg)"
     elif command -v sysctl >/dev/null 2>&1; then
@@ -523,7 +556,7 @@ run_trigger_pressure() {
   local params_file="$1"
   local log_file="$LOG_DIR/trigger.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
-  local gatling_rc
+  local gatling_rc sampler_rc=0
   local workflow_id
   local -a pipeline_status
 
@@ -569,14 +602,22 @@ run_trigger_pressure() {
     [[ "$gatling_rc" -ne 0 ]] || gatling_rc="${pipeline_status[1]}"
   fi
 
-  wait "$sampler_pid" || true
-  return "$gatling_rc"
+  if wait "$sampler_pid"; then
+    SCHEDULER_SAMPLER_STATUS="complete"
+  else
+    sampler_rc=$?
+    SCHEDULER_SAMPLER_STATUS="failed:${sampler_rc}"
+    SKIP_AUTO_CLEANUP=1
+    echo "ERROR: scheduler backlog sampler failed (exit=${sampler_rc}); retaining run data" >&2
+  fi
+  [[ "$gatling_rc" -eq 0 ]] || return "$gatling_rc"
+  return "$sampler_rc"
 }
 
 run_mixed_pressure() {
   local log_file="$LOG_DIR/mixed.log"
   local sample_file="$LOG_DIR/trigger-scheduler-backlog.csv"
-  local gatling_rc
+  local gatling_rc sampler_rc=0
   local module job_code workflow_id
   local process_params="$PROCESS_PARAMS"
   local -a pipeline_status
@@ -654,7 +695,14 @@ run_mixed_pressure() {
   fi
 
   if [[ -n "$sampler_pid" ]]; then
-    wait "$sampler_pid" || true
+    if wait "$sampler_pid"; then
+      SCHEDULER_SAMPLER_STATUS="complete"
+    else
+      sampler_rc=$?
+      SCHEDULER_SAMPLER_STATUS="failed:${sampler_rc}"
+      SKIP_AUTO_CLEANUP=1
+      echo "ERROR: scheduler backlog sampler failed (exit=${sampler_rc}); retaining run data" >&2
+    fi
   fi
 
   if [[ "$gatling_rc" -ne 0 && "$WAIT_TERMINAL_ABORT_ON_STABLE_SHORTFALL" == "1" ]]; then
@@ -665,7 +713,8 @@ run_mixed_pressure() {
 
   wait_run_terminal mixed || return 1
   assert_run_success mixed || return 1
-  return "$gatling_rc"
+  [[ "$gatling_rc" -eq 0 ]] || return "$gatling_rc"
+  return "$sampler_rc"
 }
 
 assert_run_success() {
@@ -695,6 +744,31 @@ write_params() {
     '{metadata: {runId: $runId, benchmarkModule: $module}}' > "$file"
 }
 
+report_expected_end_to_end_requests() {
+  if [[ "$CONTROL_PLANE_MODE" == "parallel" ]]; then
+    printf '%s\n' "$WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS"
+    return
+  fi
+
+  local jobs=0 job_code
+  if csv_contains process "$MODULES_CSV"; then
+    jobs=$((jobs + 1))
+  fi
+  if csv_contains dispatch "$MODULES_CSV"; then
+    jobs=$((jobs + 1))
+  fi
+  if csv_contains atomic "$MODULES_CSV"; then
+    local -a atomic_jobs
+    IFS=',' read -r -a atomic_jobs <<< "$ATOMIC_JOBS_CSV"
+    for job_code in "${atomic_jobs[@]}"; do
+      job_code="$(echo "$job_code" | xargs)"
+      [[ -n "$job_code" ]] && jobs=$((jobs + 1))
+    done
+  fi
+  # 顺序 Trigger 压测仅验证受理与积压，不计入逐项等待终态的 Pipeline 请求。
+  printf '%s\n' "$((jobs * USERS))"
+}
+
 write_report() {
   {
     echo "# Control Plane Worker Benchmark - ${RUN_ID}"
@@ -706,9 +780,11 @@ write_report() {
     echo "- Mixed launch rates: process=${PROCESS_LAUNCH_RPS}/s, dispatch=${DISPATCH_LAUNCH_RPS}/s, atomic=${ATOMIC_LAUNCH_RPS}/s"
     echo "- Dispatch fixtures: ${DISPATCH_FIXTURE_COUNT} unique file records"
     echo "- Trigger pressure: job=${TRIGGER_JOB_CODE}, launch_rps=${TRIGGER_LAUNCH_RPS}, read_rps=${TRIGGER_READ_RPS}, duration=${TRIGGER_DURATION_SECONDS}s"
-    echo "- Expected end-to-end launch requests: ${WAIT_TERMINAL_EXPECTED_TRIGGER_REQUESTS}"
+    echo "- Expected end-to-end launch requests: $(report_expected_end_to_end_requests)"
     echo "- Result business-key cardinality: ${BIZ_DATE_CARDINALITY} (rotating bizDate from ${BIZ_DATE})"
     echo "- Trigger console reads: ${SCHEDULING_CONSOLE_READS}"
+    echo "- Scheduler backlog sampler: ${SCHEDULER_SAMPLER_STATUS:-not-run}"
+    echo "- PostgreSQL pressure sampler: ${PG_SAMPLER_STATUS:-not-run}"
     echo "- Logs: ${LOG_DIR}"
     echo "- Auto cleanup: $([[ "$SKIP_AUTO_CLEANUP" == "1" ]] && echo disabled || echo enabled)"
     echo
@@ -786,7 +862,11 @@ write_report() {
     echo "## PostgreSQL Pressure Samples"
     echo
     echo '```text'
-    tail -n 20 "$LOG_DIR/pg-pressure-samples.csv"
+    if [[ -f "$LOG_DIR/pg-pressure-samples.csv" ]]; then
+      tail -n 20 "$LOG_DIR/pg-pressure-samples.csv"
+    else
+      echo "PostgreSQL pressure samples unavailable"
+    fi
     echo '```'
     echo
     if [[ -f "$LOG_DIR/trigger-scheduler-backlog.csv" ]]; then
@@ -889,7 +969,7 @@ write_params "$PARAM_DIR/trigger.params.json" "trigger"
 RUN_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-before.txt"
 pg_pressure_snapshot "$LOG_DIR/pg-pressure-before.txt"
-pg_pressure_sampler "$LOG_DIR/pg-pressure-samples.csv" &
+pg_pressure_sampler "$LOG_DIR/pg-pressure-samples.csv" "$LOG_DIR/pg-pressure-sample-errors.log" &
 PG_SAMPLER_PID=$!
 BENCHMARK_RC=0
 
@@ -940,7 +1020,9 @@ case "$CONTROL_PLANE_MODE" in
 esac
 
 kafka_lag_snapshot "$KAFKA_LAG_GROUP_REGEX" > "$LOG_DIR/kafka-lag-after.txt"
-stop_pg_pressure_sampler
+if ! stop_pg_pressure_sampler; then
+  [[ "$BENCHMARK_RC" -ne 0 ]] || BENCHMARK_RC=1
+fi
 pg_pressure_snapshot "$LOG_DIR/pg-pressure-after.txt"
 write_report
 

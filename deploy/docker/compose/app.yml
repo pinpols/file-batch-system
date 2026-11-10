@@ -459,6 +459,8 @@ services:
     mem_limit: ${BATCH_WORKER_IMPORT_MEMORY_LIMIT:-512m}
     environment:
       <<: *app-runtime-env
+      # 可选的 Import 独立 Spring JSON；旧渠道/清单绑定须迁入平台库入口归属。
+      SPRING_APPLICATION_JSON: ${WORKER_IMPORT_SPRING_APPLICATION_JSON:-}
       # P1-9 容器感知 JVM 内存:Xmx/Xms 由容器 mem_limit + MaxRAMPercentage/InitialRAMPercentage 驱动
       JAVA_OPTS: ${BATCH_APP_JAVA_OPTS:---enable-native-access=ALL-UNNAMED -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=192m}
       SPRING_FLYWAY_ENABLED: "false"

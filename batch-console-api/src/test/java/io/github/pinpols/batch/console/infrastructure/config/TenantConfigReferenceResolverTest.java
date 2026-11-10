@@ -22,6 +22,21 @@ class TenantConfigReferenceResolverTest {
   }
 
   @Test
+  @DisplayName("文件等待的精确渠道保留大小写和连字符，其他引用继续规范化")
+  void shouldPreserveExactFileArrivalChannel() {
+    String input = """
+        {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"channelCode":"BANK-SFTP",
+        "templateCode":"ORDERS-CSV"},"other":{"channelCode":"OTHER-CHANNEL"}}
+        """;
+    String normalized = TenantConfigReferenceResolver.normalizeConfigReferences(input);
+
+    assertThat(normalized)
+        .isEqualTo(
+            "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{\"channelCode\":\"BANK-SFTP\","
+                + "\"templateCode\":\"orders_csv\"},\"other\":{\"channelCode\":\"other_channel\"}}");
+  }
+
+  @Test
   @DisplayName("没有配置引用时不改写 JSON 格式")
   void shouldPreserveJson_whenNoConfigReferenceExists() {
     String json = "{ \"description\" : \"Keep-MixedCase\" }";

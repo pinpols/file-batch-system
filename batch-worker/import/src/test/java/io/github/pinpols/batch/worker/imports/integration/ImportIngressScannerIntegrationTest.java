@@ -2,7 +2,10 @@ package io.github.pinpols.batch.worker.imports.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.FileStatus;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -13,8 +16,10 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -44,6 +49,7 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
     properties = {
       "batch.worker.import.tenant-id=t1",
       "batch.worker.import.scanner.enabled=true",
+      "batch.worker.import.scanner.poll-interval-millis=3600000",
       "batch.worker.import.scanner.stability-window-seconds=0",
       "batch.worker.import.scanner.prefix=ingress/",
       "batch.worker.import.scanner.require-done-file=false",
@@ -59,16 +65,27 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   private final PlatformFileRecordRepository runtimeRepository;
   private final ImportScannerProperties scannerProperties;
   private final JdbcTemplate jdbcTemplate;
+  private final S3StorageProperties storageProperties;
+  private final ImportIngressOwnershipIdentity ownershipIdentity;
+  private final ObjectMapper objectMapper;
+  private String testPrefix;
+  private String scopeId;
 
   ImportIngressScannerIntegrationTest(
       ImportIngressScanner scanner,
       PlatformFileRecordRepository runtimeRepository,
       ImportScannerProperties scannerProperties,
-      JdbcTemplate jdbcTemplate) {
+      JdbcTemplate jdbcTemplate,
+      S3StorageProperties storageProperties,
+      ImportIngressOwnershipIdentity ownershipIdentity,
+      ObjectMapper objectMapper) {
     this.scanner = scanner;
     this.runtimeRepository = runtimeRepository;
     this.scannerProperties = scannerProperties;
     this.jdbcTemplate = jdbcTemplate;
+    this.storageProperties = storageProperties;
+    this.ownershipIdentity = ownershipIdentity;
+    this.objectMapper = objectMapper;
   }
 
   @DynamicPropertySource
@@ -76,10 +93,35 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
+  @BeforeEach
+  void isolateScannerScope() {
+    testPrefix = "ingress/" + UUID.randomUUID() + "/";
+    scannerProperties.setPrefix(testPrefix);
+    scannerProperties.setBatchSize(10);
+    scannerProperties.setBatchManifestEnabled(false);
+    scannerProperties.getArrival().setEnabled(false);
+    scannerProperties.setManifestBindings(List.of());
+    scannerProperties.setRequireDoneFile(false);
+    scannerProperties.setStabilityWindowSeconds(0);
+    declareCurrentScope();
+  }
+
+  private void declareCurrentScope() {
+    String storageId = ownershipIdentity.storageId(storageProperties, objectMapper);
+    String currentPrefix = scannerProperties.getPrefix();
+    scopeId = ImportIngressOwnershipIdentity.scopeId(storageId, currentPrefix, objectMapper);
+    String declareSql = """
+        INSERT INTO batch.import_ingress_ownership(scope_id, storage_id, bucket_name, object_prefix, state)
+        VALUES (?, ?, ?, ?, 'ACTIVE')
+        """;
+    jdbcTemplate.update(
+        declareSql, scopeId, storageId, storageProperties.getBucket(), currentPrefix);
+  }
+
   @Test
   @DisplayName("扫描发现新文件后登记为平台文件记录,状态与字节数均正确")
   void shouldRegisterDiscoveredFileInPlatformDb() throws Exception {
-    String objectName = "ingress/it-scan-test.csv";
+    String objectName = testPrefix + "it-scan-test.csv";
     String bucket = s3Bucket();
 
     // 上传一个最小化的 CSV 到对象存储
@@ -114,7 +156,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @Test
   @DisplayName("重复扫描同一文件不产生重复记录,记录标识保持不变")
   void shouldNotRegisterAlreadyKnownFile() throws Exception {
-    String objectName = "ingress/it-scan-already-known.csv";
+    String objectName = testPrefix + "it-scan-already-known.csv";
     String bucket = s3Bucket();
 
     byte[] content = """
@@ -151,8 +193,9 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("新版批次清单里的按文件模板与Workflow 根目标写入文件记录元数据")
   void shouldPersistBundleTemplateCodeFromV2Manifest() throws Exception {
     String bucket = s3Bucket();
-    String dataObject = "ingress/order-it.csv";
-    String manifestObject = "ingress/bundle-it.batch.json";
+    String dataObject = testPrefix + "order-it.csv";
+    String manifestObject = testPrefix + "bundle-2026-05-05.batch.json";
+    bindManifest("bundle-it-group", testPrefix + "bundle-{bizDate}.batch.json");
     S3Client client = s3Client();
 
     // v2 批次清单:声明 order-it.csv 用模板 TPL_ORDER
@@ -186,7 +229,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
             .build(),
         RequestBody.fromBytes(content));
 
-    scanner.scan();
+    scanUntilRegistered(bucket, dataObject);
 
     Map<String, Object> row =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
@@ -204,8 +247,10 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
   @DisplayName("旧 jobCode 根目标清单被扫描器拒绝,不写入文件束启动元数据")
   void shouldRejectRetiredJobCodeManifestTarget() throws Exception {
     String bucket = s3Bucket();
-    String dataObject = "ingress/retired-job-target.csv";
-    String manifestObject = "ingress/retired-job-target.batch.json";
+    String dataObject = testPrefix + "retired-job-target.csv";
+    String manifestObject = testPrefix + "retired-job-target-2026-05-05.batch.json";
+    bindManifest(
+        "retired-job-target-group", testPrefix + "retired-job-target-{bizDate}.batch.json");
     S3Client client = s3Client();
     String manifestJson = """
         {
@@ -235,24 +280,24 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
             .build(),
         RequestBody.fromBytes("id,name\n1,Retired\n".getBytes(StandardCharsets.UTF_8)));
 
-    scanner.scan();
+    for (int tick = 0; tick < 6; tick++) {
+      scanner.scan();
+    }
 
     Map<String, Object> row =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(row).isNotEmpty();
-    assertThat(String.valueOf(row.get("metadata_json")))
-        .doesNotContain("bundleWorkflowCode")
-        .doesNotContain("bundleTemplateCode");
+    assertThat(row).isEmpty();
   }
 
   @Test
-  @DisplayName("数据先到,清单后到时补写批次元数据,含所需文件集与模板")
-  void shouldBackfillBundleMetadataWhenDataArrivesBeforeManifest() throws Exception {
+  @DisplayName("数据先到时等待权威清单，清单到达后登记批次元数据")
+  void shouldWaitForAuthoritativeManifestWhenDataArrivesFirst() throws Exception {
     String bucket = s3Bucket();
     String suffix = String.valueOf(System.nanoTime());
     String dataFileName = "order-late-manifest-it-" + suffix + ".csv";
-    String dataObject = "ingress/" + dataFileName;
-    String manifestObject = "ingress/bundle-late-manifest-it-" + suffix + ".batch.json";
+    String dataObject = testPrefix + dataFileName;
+    String manifestObject = testPrefix + "bundle-late-2026-05-05.batch.json";
+    bindManifest("bundle-late-it-group", testPrefix + "bundle-late-{bizDate}.batch.json");
     S3Client client = s3Client();
 
     byte[] content = """
@@ -270,8 +315,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
     scanner.scan();
     Map<String, Object> before =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
-    assertThat(before).isNotEmpty();
-    assertThat(String.valueOf(before.get("metadata_json"))).doesNotContain("bundleWorkflowCode");
+    assertThat(before).isEmpty();
 
     String manifestJson = """
         {
@@ -294,7 +338,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
             .build(),
         RequestBody.fromBytes(manifestJson.getBytes(StandardCharsets.UTF_8)));
 
-    scanner.scan();
+    scanUntilRegistered(bucket, dataObject);
 
     Map<String, Object> after =
         runtimeRepository.loadFileRecordByStoragePath("t1", bucket, dataObject);
@@ -304,6 +348,25 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         .contains("TPL_ORDER_LATE")
         .contains("bundleWorkflowCode")
         .contains("BUNDLE_IMPORT_LATE_IT");
+  }
+
+  private void bindManifest(String group, String keyTemplate) {
+    String bindingSql = """
+        INSERT INTO batch.import_ingress_ownership_binding
+          (scope_id, binding_type, tenant_id, object_prefix, file_group_code, manifest_key_template)
+        VALUES (?, 'MANIFEST', 't1', ?, ?, ?)
+        """;
+    jdbcTemplate.update(bindingSql, scopeId, testPrefix, group, keyTemplate);
+    scannerProperties.setBatchManifestEnabled(true);
+    scannerProperties.getArrival().setEnabled(true);
+  }
+
+  private void scanUntilRegistered(String bucket, String objectName) {
+    for (int tick = 0;
+        tick < 30 && !runtimeRepository.existsFileRecordByStoragePath("t1", bucket, objectName);
+        tick++) {
+      scanner.scan();
+    }
   }
 
   @Test
@@ -322,6 +385,7 @@ class ImportIngressScannerIntegrationTest extends AbstractIntegrationTest {
         scannerProperties.getDoneFileFormat();
 
     scannerProperties.setPrefix(prefix);
+    declareCurrentScope();
     scannerProperties.setRequireDoneFile(true);
     scannerProperties.setDoneFileFormat(ImportScannerProperties.DoneFileFormat.MANIFEST);
     try {

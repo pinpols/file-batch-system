@@ -15,6 +15,7 @@ import io.github.pinpols.batch.testing.TestObjectStoreContainers;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileTemplateRepository;
+import io.github.pinpols.batch.worker.imports.config.WorkerImportPayloadProperties;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import io.github.pinpols.batch.worker.imports.domain.ImportStageResult;
@@ -25,6 +26,7 @@ import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -290,5 +292,56 @@ class PreprocessStepObjectLoadIntegrationTest {
         .isEqualTo(sb.toString().getBytes(StandardCharsets.UTF_8).length);
     assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.PARTITION_PRESLICED);
     Files.deleteIfExists(spool);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("对象存储范围分片在有无 UTF-8 BOM 时均保持记录不重不漏")
+  void rangeSlices_doNotDuplicateRecords_whenUtf8BomPresent(boolean bom) throws Exception {
+    S3StorageProperties properties = new S3StorageProperties();
+    properties.setBucket(bucket);
+    S3ObjectStore store = new S3ObjectStore(client, presigner, properties);
+    ImportPreprocessObjectSource source = new ImportPreprocessObjectSource(
+        mock(PlatformFileRecordRepository.class),
+        properties,
+        store,
+        new WorkerImportPayloadProperties());
+    assertThat(store.supportsRangeRead()).isTrue();
+    List<String> samples = List.of("a\nb\nc\nd\n", "aa\n\nbb\ncc\ndd\n");
+    for (int sample = 0; sample < samples.size(); sample++) {
+      String records = samples.get(sample);
+      String key = "ingress/objload-it/range-bom-" + bom + "-" + sample + ".txt";
+      String content = bom ? "\uFEFF" + records : records;
+      putObject(key, content);
+      ImportPayload payload = objectPayload(key, "FIXED_WIDTH");
+      long size = store.statSize(bucket, key);
+      for (int partitionCount : List.of(2, 4, 8, 20)) {
+        assertThat(ImportPreprocessObjectSource.rangeSliceEligible(
+                payload, Map.of(), 1, partitionCount, StandardCharsets.UTF_8))
+            .isTrue();
+        StringBuilder actual = new StringBuilder();
+        for (int partition = 1; partition <= partitionCount; partition++) {
+          ImportJobContext context = contextWithBlankRawPayload(payload);
+          ImportPreprocessObjectSource.RangeSlice slice =
+              new ImportPreprocessObjectSource.RangeSlice(
+                  StandardCharsets.UTF_8, size, partition, partitionCount);
+          ImportStageResult result =
+              source.streamObjectRangeToSpool(context, payload, Map.of(), null, slice);
+          assertThat(result.success()).isTrue();
+          assertThat(context.getAttributes())
+              .containsEntry(PipelineRuntimeKeys.PARTITION_PRESLICED, true);
+          Path spool = Path.of(context
+              .getAttributes()
+              .get(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH)
+              .toString());
+          try {
+            actual.append(Files.readString(spool, StandardCharsets.UTF_8));
+          } finally {
+            Files.deleteIfExists(spool);
+          }
+        }
+        assertThat(actual.toString()).as("BOM=%s, 分片数=%d", bom, partitionCount).isEqualTo(records);
+      }
+    }
   }
 }

@@ -119,6 +119,7 @@ public class StoreStep implements ExportStageStep {
       encryption = encryptIfNeeded(context, generatedFile);
       Path uploadPath = encryption.uploadPath();
       boolean encrypt = encryption.encrypted();
+      long uploadSize = Files.size(uploadPath);
 
       String expectedSha = sha256Hex(uploadPath);
       context
@@ -140,7 +141,7 @@ public class StoreStep implements ExportStageStep {
         return finalVerification;
       }
 
-      return commitStoredObject(context, objectName, tempKey, generatedFile);
+      return commitStoredObject(context, objectName, tempKey, generatedFile, uploadSize);
     } catch (Exception ex) {
       SwallowedExceptionLogger.warn(StoreStep.class, "catch:Exception", ex);
 
@@ -341,10 +342,15 @@ public class StoreStep implements ExportStageStep {
   }
 
   private ExportStageResult commitStoredObject(
-      ExportJobContext context, String objectName, String tempKey, Path generatedFile)
+      ExportJobContext context,
+      String objectName,
+      String tempKey,
+      Path generatedFile,
+      long uploadSize)
       throws IOException {
     context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
     context.getAttributes().put(PipelineRuntimeKeys.TEMP_OBJECT_NAME, tempKey);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, uploadSize);
     context.getAttributes().put(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
     Files.deleteIfExists(generatedFile);
     return ExportStageResult.success(stage());

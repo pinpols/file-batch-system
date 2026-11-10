@@ -135,6 +135,50 @@ class GenerateStepTest {
   }
 
   @ParameterizedTest
+  @ValueSource(strings = {"JSON", "DELIMITED", "FIXED_WIDTH", "EXCEL"})
+  @DisplayName("四种内置格式均按实际写入行数执行上限")
+  void shouldRejectExcessRowsForEachFormat(String format) throws Exception {
+    stubSinglePage(List.of(Map.of("id", "1"), Map.of("id", "2"), Map.of("id", "3")));
+    ObjectMapper mapper = new ObjectMapper();
+    ExportWorkerConfiguration limitedConfig = new ExportWorkerConfiguration(
+        "worker-test",
+        "EXPORT",
+        "tenant-test",
+        5000L,
+        "batch-export",
+        "group-export",
+        null,
+        2L,
+        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+    WorkerCheckpointProperties checkpoints = new WorkerCheckpointProperties();
+    checkpoints.setEnabled(false);
+    GenerateStep limitedStep = new GenerateStep(
+        pluginRegistry,
+        new ExportFormatStrategyRegistry(List.of(
+            new JsonExportFormat(mapper), new DelimitedExportFormat(mapper),
+            new FixedWidthExportFormat(mapper), new ExcelExportFormat(mapper))),
+        limitedConfig,
+        mapper,
+        new GenerateRuntimeSupport(
+            checkpoints,
+            mock(ProcessingPositionStore.class),
+            new GenerateCursorCodec(),
+            new PipelineStageProgressRegistry()));
+    Map<String, Object> config = Map.of(
+        "export_data_ref",
+        PLUGIN_ID,
+        "fixed_width_columns",
+        List.of(Map.of("header", "id", "source", "id", "width", 3)));
+    ExportJobContext context = buildContext(format, config);
+
+    ExportStageResult result = limitedStep.execute(context);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
+    assertThat(context.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+  }
+
+  @ParameterizedTest
   @ValueSource(strings = {"sql_template_export", "SQL_TEMPLATE_EXPORT"})
   @DisplayName("演练阻止 SQL 模板插件执行，插件标识不区分大小写")
   void shouldRejectSqlTemplateDryRun_regardlessOfPluginIdCase(String pluginId) {

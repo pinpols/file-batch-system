@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorSpecs;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -124,6 +125,13 @@ final class WorkflowWaitSensorSpecValidator {
 
   private void validateFileArrivalSensorSpec(
       Map<String, Object> spec, String nodeCode, List<ValidationIssue> errors) {
+    Object channelCode = spec.get("channelCode");
+    if (!FileArrivalChannelCode.isValid(channelCode)) {
+      errors.add(issue(
+          V16C,
+          "FILE_ARRIVAL sensor_spec.channelCode must be a string up to 128 characters",
+          nodeCode));
+    }
     Object patternValue = spec.get("pattern");
     String pattern = asString(patternValue);
     if (!Texts.hasText(pattern)) {

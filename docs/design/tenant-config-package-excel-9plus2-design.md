@@ -425,6 +425,7 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 8. workflow_definition
 9. workflow_node
 10. workflow_edge
+11. workflow_monitoring_policy
 ```
 
 > `alert_routing_config` 不在此列：从配置包剔除，由独立 CRUD 页写入数据库。
@@ -435,6 +436,7 @@ Excel 展示顺序按业务主线组织；后端 apply 必须按依赖拓扑执�
 - **业务表存在性检查（用于 jdbcMappedImport / SQL 校验）走独立连接 / 独立事务**：业务表通常在 routing datasource 的"业务库"端，校验仅 read-only metadata 查询，不影响配置表事务边界。注意 `@Transactional(propagation = NOT_SUPPORTED)` 标注，避免被外层事务卷入。
 - 模板、渠道等被引用配置先校验，Job 与其监控策略关联校验，Workflow definition 先于节点和边写入。系统 Pipeline 不参与配置写入。
 - 工作流节点和边必须在 definition upsert 后重建或差异更新。
+- 应用结果分别返回作业及工作流监控策略的已处理行数；该数量表示执行了策略 upsert，不区分新增和更新，也不证明字段值发生变化。旧服务端未提供这些字段时，前端提示监控策略明细不可用，不能将缺失视为零。
 - **事务监控**：长事务可能持有多个配置对象的行锁，建议加 metric `config_package_apply_duration_seconds`，p95 > 5s 报警。
 
 ## 前端呈现建议

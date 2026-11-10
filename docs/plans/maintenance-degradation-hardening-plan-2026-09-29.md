@@ -280,3 +280,7 @@ downstream.call.duration{service,op}
 - **部署与工程检查**：Helm 缺省/覆盖范围各核对 Console、8 个 ServiceMonitor、两类可用性查询；Compose 非空/空范围各核对 Console/Prometheus 透传，8 个服务继续保留 300 秒停止宽限。配置默认值、Helm env、环境变量与 env Shell 安全、观测契约、规则副本、脚本、文档、OpenAPI 431 路由和定向差异检查通过。前端 API 重新生成且 drift 检查、typecheck、6131 个 i18n key、75 份当前文档及 changelog 检查通过；changelog 工具比较范围为 `HEAD^...HEAD`，本轮根日志另行人工核对。
 - **复现命令**：Java 使用 `./mvnw -ntp -pl batch-console-api -am -Dtest=MaintenanceAlertWindowTest,MaintenanceAlertPublisherTest,MaintenanceHttpObservationConventionTest,MaintenanceModeFilterTest,MaintenanceStateHolderTest,MaintenanceStateHolderTransactionTest,ConsoleAdminMaintenanceControllerTest,AlertmanagerNotifyServiceTest,AlertmanagerNotifyControllerTest -Dsurefire.failIfNoSpecifiedTests=false test`。原生工具使用本机缓存的 `prom/prometheus:v3.11.3` 和 `prom/alertmanager:v0.28.1`，以 `--network none` 和只读挂载运行 `promtool test rules` / `amtool check-config`；部署范围和运行抑制脚本留在 `/private/tmp/wdi-maintenance-helm-check.py`、`wdi-maintenance-alertmanager-check.py`、`wdi-maintenance-entrypoint-check.py`，均只使用合成场景。
 - **尚未验证**：站点实际配置加载、多副本并发更新、真实滚动停机和最终收件；不继承历史环境 PASS。配置和语义说明以[维护 SOP](../runbook/maintenance-mode.md#10-维护期通知抑制2026-10-26)为准。
+
+## 2026-11-10 自动发布修复
+
+隔离环境复验发现 Console 未启用全局定时任务，原发布器的 `@Scheduled` 不会触发；本地懒加载还会使发布器没有初始化。现改为应用就绪并完成首次共享状态刷新后，使用已有受管调度器执行周期对账，组件销毁时取消任务，并确保懒加载模式下发布器初始化。实际首红、定向测试与隔离 Alertmanager 联动结果维护在[系统设计与容量验证计划](system-design-capacity-validation-plan-2026-11-09.md)；站点实际配置、真实通知渠道和生产环境仍需各自验证。

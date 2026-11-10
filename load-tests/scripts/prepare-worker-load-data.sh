@@ -55,8 +55,13 @@ evict_console_definition() {
 require_console_session
 
 validate_load_test_run_id "$RUN_ID"
+validate_load_test_fixture_roots
 
-mkdir -p "$OUT_DIR" /tmp/batch/load-test /tmp/batch/local-dispatch
+HOST_DISPATCH_DIR="${LOAD_TEST_HOST_ROOT%/}/load-test"
+HOST_DISPATCH_TARGET_DIR="${LOAD_TEST_HOST_ROOT%/}/local-dispatch"
+WORKER_DISPATCH_DIR="${LOAD_TEST_WORKER_ROOT%/}/load-test"
+WORKER_DISPATCH_TARGET_DIR="${LOAD_TEST_WORKER_ROOT%/}/local-dispatch"
+mkdir -p "$OUT_DIR" "$HOST_DISPATCH_DIR" "$HOST_DISPATCH_TARGET_DIR"
 
 write_import_csv() {
   local rows="$1"
@@ -154,18 +159,18 @@ psql_business \
   -v process_biz_date_cardinality="$PROCESS_BIZ_DATE_CARDINALITY" \
   -f "$LOAD_DIR/sql/prepare-worker-load-business.sql"
 
-DISPATCH_DIR="/tmp/batch/load-test"
 for ((fixture_no = 1; fixture_no <= DISPATCH_FIXTURE_COUNT; fixture_no++)); do
   printf -v fixture_suffix '%06d' "$fixture_no"
   printf 'load-test-dispatch %s fixture=%s\n' "$RUN_ID" "$fixture_suffix" \
-    > "$DISPATCH_DIR/${RUN_ID}-dispatch-${fixture_suffix}.txt"
+    > "$HOST_DISPATCH_DIR/${RUN_ID}-dispatch-${fixture_suffix}.txt"
 done
-DISPATCH_FILE_SIZE="$(wc -c < "$DISPATCH_DIR/${RUN_ID}-dispatch-000001.txt" | tr -d ' ')"
+DISPATCH_FILE_SIZE="$(wc -c < "$HOST_DISPATCH_DIR/${RUN_ID}-dispatch-000001.txt" | tr -d ' ')"
 
 psql_platform \
   -v run_id="$RUN_ID" \
   -v biz_date="$BIZ_DATE" \
-  -v dispatch_dir="$DISPATCH_DIR" \
+  -v dispatch_dir="$WORKER_DISPATCH_DIR" \
+  -v dispatch_target_dir="$WORKER_DISPATCH_TARGET_DIR" \
   -v dispatch_file_size="$DISPATCH_FILE_SIZE" \
   -v dispatch_fixture_count="$DISPATCH_FIXTURE_COUNT" \
   -v process_agg_max_staged_rows="$PROCESS_AGG_MAX_STAGED_ROWS" \

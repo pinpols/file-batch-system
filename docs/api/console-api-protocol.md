@@ -1194,10 +1194,12 @@ Notes:
 | `/query/workflow-definitions` | `workflowCode` (partial) | partial |
 | `/query/workflow-nodes` | `workflowDefinitionId` (exact); `workflowCode`, `nodeCode` (exact); `nodeType`, `enabled` (exact) | exact |
 | `/query/workflow-edges` | `workflowDefinitionId` (exact); `workflowCode`, `fromNodeCode`, `toNodeCode`, `edgeType`, `enabled` (exact) | exact |
-| `/query/workflow-runs` | `workflowDefinitionId`, `relatedJobInstanceId`, `runStatus`, `currentNodeCode`, `traceId` (exact) | exact |
+| `/query/workflow-runs` | `workflowDefinitionId`, `workflowCode`, `relatedJobInstanceId`, `runStatus`, `currentNodeCode`, `traceId` (exact) | exact；`workflowCode` 匹配该编码的所有定义版本，可与 `workflowDefinitionId` 组合 |
 | `/query/workflow-node-runs` | `workflowRunId`, `nodeCode`, `nodeStatus` (exact) | exact |
 | `/query/outbox-retries` | `retryStatus`, `eventKey` (exact) | exact |
 | `/query/outbox-deliveries` | `deliveryStatus`, `eventType`, `eventKey` (exact) | exact |
+
+工作流运行按编码筛选的配对部署应先升级 Console API，再升级 Console 前端。旧前端仍可按 `workflowDefinitionId` 请求新后端；若新前端连接会忽略未知 `workflowCode` 参数的旧后端，运行列表可能没有按编码筛选，不能将此混版结果视为准确筛选。相关混版部署尚需在目标环境验证。
 
 `trace-snapshot.timeline` 是诊断投影，不是新的事实表，也不改变各领域状态机的写入责任。时间线项的 `message` 只允许摘要字段；前端应按 `source/eventType/status` 展示，不能把它当作可重放事件流。
 

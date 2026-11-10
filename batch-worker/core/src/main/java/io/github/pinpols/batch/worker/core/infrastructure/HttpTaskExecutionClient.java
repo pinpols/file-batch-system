@@ -299,7 +299,9 @@ public class HttpTaskExecutionClient
     String resolvedTraceId = Texts.hasText(traceId) ? traceId : IdGenerator.newTraceId();
     Object request;
     if (item.executionStarted()) {
-      ExecutionStartedDetails details = new ExecutionStartedDetails(true);
+      // 一次业务执行生成一次身份；下面的 HTTP 重试复用同一个 request。
+      ExecutionStartedDetails details =
+          new ExecutionStartedDetails(true, IdGenerator.newInvocationId());
       request = new ExecutionStartHttpRequest(
           item.tenantId(), item.workerId(), item.partitionInvocationId(), details);
     } else {
@@ -885,7 +887,7 @@ public class HttpTaskExecutionClient
       String partitionInvocationId,
       ExecutionStartedDetails details) {}
 
-  private record ExecutionStartedDetails(boolean executionStarted) {}
+  private record ExecutionStartedDetails(boolean executionStarted, String executionAttemptId) {}
 
   private record BatchRenewHttpRequest(List<BatchRenewHttpItem> items) {}
 

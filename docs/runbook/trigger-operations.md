@@ -142,8 +142,9 @@ Workflow 首次建档时会加密保存 START 载荷；该运行的入口节点�
 
 同一 Workflow 定义、业务日和 dry-run 模式已有 `CREATED/RUNNING` 根运行时，独立请求进入 Orchestrator 的
 `workflow_launch_wait` 持久等待。Kafka 消息只有在等待记录和请求 `PROCESSING` 同事务提交后才确认；
-不会因某个 Workflow 占位而暂停整个 Kafka 分区。恢复器按租户与可用槽位扫描，每个槽位优先处理最早请求，
-使用原 LaunchRequest 载荷、业务日和幂等身份恢复；重启后无需重新调用原触发 API。
+不会因某个 Workflow 占位而暂停整个 Kafka 分区。恢复器按租户与可用槽位扫描，每个槽位优先处理最早的等待请求，
+使用原 LaunchRequest 载荷、业务日和幂等身份恢复；重启后无需重新调用原触发 API。新请求可能在恢复扫描前先占用空闲槽位，
+因此新旧请求之间不保证严格按到达顺序启动，已有等待可能延长；排障时应结合等待创建时间、状态和关联运行时间核对。
 
 人工 misfire 审批写入 Outbox 后保持 `PROCESSING`；只有实际存在根运行后才显示 `LAUNCHED`。
 被拒绝的请求不能通过等待恢复复活；载荷身份或日期与原请求不符时拒绝恢复。租户挂起期间不扫描该租户。

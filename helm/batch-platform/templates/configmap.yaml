@@ -1,3 +1,9 @@
+{{- if .Values.workerImport.scannerChannelBindings }}
+{{- fail "workerImport.scannerChannelBindings 已迁移至平台库统一入口归属，请先按 scripts/db/README.md 中 import-ingress-ownership 步骤声明，再移除旧 values" }}
+{{- end }}
+{{- if .Values.workerImport.scannerManifestBindings }}
+{{- fail "workerImport.scannerManifestBindings 已迁移至平台库统一入口归属，请先按 scripts/db/README.md 中 import-ingress-ownership 步骤声明，再移除旧 values" }}
+{{- end }}
 {{- if and .Values.security.enforceStrongSecrets (empty .Values.objectStorage.endpoint) }}
 {{- fail "objectStorage.endpoint 必须提供 (生产环境通过 Helm values 注入非敏感端点)" }}
 {{- end }}

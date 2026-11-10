@@ -397,13 +397,13 @@
             tenant_id, file_code, biz_type, file_category, file_name, original_file_name,
             file_ext, file_format_type, charset, mime_type, file_size_bytes,
             checksum_type, checksum_value, storage_type, storage_path, storage_bucket,
-            file_version, file_generation_no, is_latest, source_type, source_ref,
+            file_version, file_generation_no, is_latest, source_type, source_ref, arrival_channel_code,
             file_status, biz_date, trace_id, metadata_json, created_at, updated_at
         ) values (
             #{tenantId}, #{fileCode}, #{bizType}, #{fileCategory}, #{fileName}, #{originalFileName},
             #{fileExt}, #{fileFormatType}, #{charset}, #{mimeType}, #{fileSizeBytes},
             #{checksumType}, #{checksumValue}, #{storageType}, #{storagePath}, #{storageBucket},
-            #{fileVersion}, #{fileGenerationNo}, true, #{sourceType}, #{sourceRef},
+            #{fileVersion}, #{fileGenerationNo}, true, #{sourceType}, #{sourceRef}, #{arrivalChannelCode},
             #{fileStatus}, #{bizDate}, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
         )
     </insert>
@@ -433,6 +433,40 @@
         set metadata_json = coalesce(metadata_json, '{}'::jsonb) || coalesce(#{metadataJson,jdbcType=VARCHAR}::jsonb, '{}'::jsonb),
             updated_at = current_timestamp
         where id = #{fileId}
+    </update>
+
+    <!-- 只补同一对象尚未确认的身份，已存在的 metadata 键保持原值。 -->
+    <update id="adoptReconciledFileRecord"
+            parameterType="io.github.pinpols.batch.worker.core.param.PlatformReconciledFileAdoptionParam">
+        update batch.file_record f
+        set biz_date = coalesce(f.biz_date, #{bizDate}),
+            biz_type = coalesce(f.biz_type, #{bizType,jdbcType=VARCHAR}),
+            arrival_channel_code = coalesce(f.arrival_channel_code, #{arrivalChannelCode,jdbcType=VARCHAR}),
+            checksum_type = case when f.checksum_value is null and #{checksumValue,jdbcType=VARCHAR} is not null
+                                 then #{checksumType,jdbcType=VARCHAR} else f.checksum_type end,
+            checksum_value = coalesce(f.checksum_value, #{checksumValue,jdbcType=VARCHAR}),
+            metadata_json = coalesce(f.metadata_json, '{}'::jsonb) ||
+                (#{metadataJson,jdbcType=VARCHAR}::jsonb -
+                    array(select jsonb_object_keys(coalesce(f.metadata_json, '{}'::jsonb)))),
+            updated_at = current_timestamp
+        where f.id = #{fileId} and f.tenant_id = #{tenantId}
+          and coalesce(f.storage_bucket, '') = coalesce(#{storageBucket}, '')
+          and f.storage_path = #{storagePath}
+          and f.metadata_json @> '{"reconciled": true}'::jsonb
+          and f.legacy_channel_fallback = false
+          and f.file_size_bytes = #{fileSizeBytes}
+          and (f.metadata_json -&gt;&gt; 'etag') is not distinct from #{etag,jdbcType=VARCHAR}
+          and (f.biz_date is null or f.biz_date = #{bizDate})
+          and (f.arrival_channel_code is null or #{arrivalChannelCode,jdbcType=VARCHAR} is null
+               or f.arrival_channel_code = #{arrivalChannelCode,jdbcType=VARCHAR})
+          and (f.checksum_value is null or #{checksumValue,jdbcType=VARCHAR} is null
+               or f.checksum_value = #{checksumValue,jdbcType=VARCHAR})
+          and (f.biz_date is null
+               or (f.biz_type is null and #{bizType,jdbcType=VARCHAR} is not null)
+               or (f.arrival_channel_code is null and #{arrivalChannelCode,jdbcType=VARCHAR} is not null)
+               or (f.checksum_value is null and #{checksumValue,jdbcType=VARCHAR} is not null)
+               or (#{metadataJson,jdbcType=VARCHAR}::jsonb -
+                   array(select jsonb_object_keys(coalesce(f.metadata_json, '{}'::jsonb)))) &lt;&gt; '{}'::jsonb)
     </update>
 
     <insert id="insertFileErrorRecord" parameterType="io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam" useGeneratedKeys="true" keyProperty="id" keyColumn="id">

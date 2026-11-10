@@ -1,0 +1,177 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper">
+  <resultMap id="leaseRow" type="io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper$LeaseRow">
+    <constructor>
+      <arg column="phase" javaType="java.lang.String"/>
+      <arg column="cycle" javaType="_long"/>
+      <arg column="list_marker" javaType="java.lang.String"/>
+      <arg column="after_object_id" javaType="_long"/>
+      <arg column="fence" javaType="_long"/>
+      <arg column="window_id" javaType="_long"/>
+      <arg column="revisit_marker" javaType="java.lang.String"/>
+      <arg column="revisit_budget" javaType="_long"/>
+      <arg column="revisit_remaining" javaType="_long"/>
+      <arg column="next_lane" javaType="java.lang.String"/>
+      <arg column="cleanup_required" javaType="_boolean"/>
+      <arg column="apply_after_id" javaType="_long"/>
+      <arg column="apply_upper_id" javaType="_long"/>
+    </constructor>
+  </resultMap>
+  <resultMap id="configuration" type="io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository$Configuration">
+    <constructor>
+      <arg column="config_digest" javaType="java.lang.String"/>
+      <arg column="phase" javaType="java.lang.String"/>
+      <arg column="storage_id" javaType="java.lang.String"/>
+    </constructor>
+  </resultMap>
+  <resultMap id="observed" type="io.github.pinpols.batch.worker.imports.runtime.ImportIngressScanRepository$Observed">
+    <constructor>
+      <arg column="id" javaType="_long"/>
+      <arg column="object_key" javaType="java.lang.String"/>
+      <arg column="size_bytes" javaType="_long"/>
+      <arg column="etag" javaType="java.lang.String"/>
+      <arg column="last_modified" javaType="java.time.Instant"/>
+      <arg column="first_observed_at" javaType="java.time.Instant"/>
+      <arg column="database_now" javaType="java.time.Instant"/>
+    </constructor>
+  </resultMap>
+  <insert id="ensureStorage">
+    INSERT INTO batch.import_ingress_scan_storage_lease (storage_id) VALUES (#{storageId})
+    ON CONFLICT (storage_id) DO NOTHING
+  </insert>
+  <select id="lockStorage" resultType="boolean">
+    SELECT lease_owner IS NULL OR lease_until &lt;= clock_timestamp()
+      FROM batch.import_ingress_scan_storage_lease WHERE storage_id = #{storageId} FOR UPDATE
+  </select>
+  <insert id="ensureScope">
+    INSERT INTO batch.import_ingress_scan_state (scope_id, storage_id, bucket_name, object_prefix, config_digest)
+    VALUES (#{scopeId}, #{storageId}, #{bucket}, #{prefix}, #{digest}) ON CONFLICT (scope_id) DO NOTHING
+  </insert>
+  <update id="setInitialDigest">
+    UPDATE batch.import_ingress_scan_state SET config_digest = #{digest}
+    WHERE scope_id = #{scopeId} AND config_digest IS NULL AND phase = 'DISCOVER' AND lease_owner IS NULL
+  </update>
+  <select id="configurations" resultMap="configuration">
+    SELECT config_digest, phase, storage_id FROM batch.import_ingress_scan_state WHERE scope_id = #{scopeId}
+  </select>
+  <update id="queueScope">
+    UPDATE batch.import_ingress_scan_state
+       SET waiting_since = CASE WHEN waiting_until IS NULL OR waiting_until &lt;= clock_timestamp()
+                                THEN clock_timestamp() ELSE waiting_since END,
+           waiting_until = greatest(coalesce(waiting_until, clock_timestamp()),
+                                    clock_timestamp() + (#{waitingMillis} * interval '1 millisecond'))
+     WHERE scope_id = #{scopeId}
+  </update>
+  <select id="eligibleScopes" resultType="string">
+    SELECT scope_id FROM batch.import_ingress_scan_state
+     WHERE storage_id = #{storageId} AND waiting_since IS NOT NULL
+       AND waiting_until &gt; clock_timestamp() AND phase &lt;&gt; 'MAINTENANCE'
+     ORDER BY waiting_since, scope_id LIMIT 1
+  </select>
+  <select id="acquireScope" resultMap="leaseRow" affectData="true" flushCache="true">
+    UPDATE batch.import_ingress_scan_state
+       SET lease_owner = #{owner}, lease_until = clock_timestamp() + interval '2 minutes',
+           fence = fence + 1, waiting_since = NULL, waiting_until = NULL, updated_at = clock_timestamp()
+     WHERE scope_id = #{start.scopeId} AND config_digest = #{start.digest} AND phase &lt;&gt; 'MAINTENANCE'
+       AND (lease_owner IS NULL OR lease_until &lt;= clock_timestamp())
+    RETURNING phase, cycle, list_marker, after_object_id, fence, window_id, revisit_marker,
+              revisit_budget, revisit_remaining, next_lane, cleanup_required, apply_after_id, apply_upper_id
+  </select>
+  <select id="acquireStorage" resultType="long" affectData="true" flushCache="true">
+    UPDATE batch.import_ingress_scan_storage_lease
+       SET lease_owner = #{owner}, lease_until = clock_timestamp() + interval '2 minutes',
+           fence = fence + 1, updated_at = clock_timestamp()
+     WHERE storage_id = #{storageId} RETURNING fence
+  </select>
+  <select id="lockOwnedStorage" resultType="int">
+    SELECT 1 FROM batch.import_ingress_scan_storage_lease
+     WHERE storage_id = #{storageId} AND lease_owner = #{owner} AND fence = #{storageFence} FOR UPDATE
+  </select>
+  <select id="lockActiveStorage" resultType="int">
+    SELECT 1 FROM batch.import_ingress_scan_storage_lease
+     WHERE storage_id = #{storageId} AND lease_owner = #{owner} AND fence = #{storageFence}
+       AND lease_until &gt; clock_timestamp() FOR UPDATE
+  </select>
+  <select id="lockActiveScope" resultType="int">
+    SELECT 1 FROM batch.import_ingress_scan_state
+     WHERE scope_id = #{scopeId} AND lease_owner = #{owner} AND fence = #{fence}
+       AND lease_until &gt; clock_timestamp() FOR UPDATE
+  </select>
+  <update id="releaseScope">
+    UPDATE batch.import_ingress_scan_state SET lease_owner = NULL, lease_until = NULL, updated_at = clock_timestamp()
+     WHERE scope_id = #{scopeId} AND lease_owner = #{owner} AND fence = #{fence}
+  </update>
+  <update id="releaseStorage">
+    UPDATE batch.import_ingress_scan_storage_lease SET lease_owner = NULL, lease_until = NULL, updated_at = clock_timestamp()
+     WHERE storage_id = #{storageId} AND lease_owner = #{owner} AND fence = #{storageFence}
+  </update>
+  <update id="extendStorage">
+    UPDATE batch.import_ingress_scan_storage_lease SET lease_until = clock_timestamp() + interval '2 minutes', updated_at = clock_timestamp()
+     WHERE storage_id = #{storageId}
+  </update>
+  <update id="extendScope">
+    UPDATE batch.import_ingress_scan_state SET lease_until = clock_timestamp() + interval '2 minutes', updated_at = clock_timestamp()
+     WHERE scope_id = #{scopeId}
+  </update>
+  <select id="observe" resultType="long" affectData="true" flushCache="true">
+    INSERT INTO batch.import_ingress_scan_object
+        (scope_id, object_digest, object_key, size_bytes, etag, last_modified, first_observed_at, seen_cycle, seen_window, is_manifest)
+    VALUES (#{scopeId}, #{digest}, #{key}, #{size}, #{etag,jdbcType=VARCHAR}, #{lastModified,jdbcType=TIMESTAMP},
+            clock_timestamp(), #{cycle}, #{windowId}, #{manifest})
+    ON CONFLICT (scope_id, object_digest) DO UPDATE
+       SET first_observed_at = CASE
+             WHEN batch.import_ingress_scan_object.size_bytes IS DISTINCT FROM EXCLUDED.size_bytes
+               OR batch.import_ingress_scan_object.etag IS DISTINCT FROM EXCLUDED.etag
+             THEN clock_timestamp() ELSE batch.import_ingress_scan_object.first_observed_at END,
+           manifest_wait_reason = CASE
+             WHEN batch.import_ingress_scan_object.size_bytes IS DISTINCT FROM EXCLUDED.size_bytes
+               OR batch.import_ingress_scan_object.etag IS DISTINCT FROM EXCLUDED.etag
+             THEN NULL ELSE batch.import_ingress_scan_object.manifest_wait_reason END,
+           size_bytes = EXCLUDED.size_bytes, etag = EXCLUDED.etag, last_modified = EXCLUDED.last_modified,
+           seen_cycle = EXCLUDED.seen_cycle, seen_window = EXCLUDED.seen_window, is_manifest = EXCLUDED.is_manifest
+     WHERE batch.import_ingress_scan_object.object_key = EXCLUDED.object_key RETURNING id
+  </select>
+  <sql id="observedColumns">id, object_key, size_bytes, etag, last_modified, first_observed_at, clock_timestamp() AS database_now</sql>
+  <select id="manifestPage" resultMap="observed">
+    SELECT <include refid="observedColumns"/> FROM batch.import_ingress_scan_object
+     WHERE scope_id = #{lease.scopeId} AND seen_window = #{lease.windowId} AND id &gt; #{lease.afterObjectId} AND is_manifest
+     ORDER BY id LIMIT #{limit}
+  </select>
+  <select id="applyPage" resultMap="observed">
+    SELECT <include refid="observedColumns"/> FROM batch.import_ingress_scan_object
+     WHERE scope_id = #{lease.scopeId} AND id &gt; #{lease.applyAfterId} AND id &lt;= #{lease.applyUpperId}
+     ORDER BY id LIMIT #{limit}
+  </select>
+  <select id="maxObjectId" resultType="long">
+    SELECT id FROM batch.import_ingress_scan_object WHERE scope_id = #{scopeId} ORDER BY id DESC LIMIT 1
+  </select>
+  <select id="findObject" resultMap="observed">
+    SELECT <include refid="observedColumns"/> FROM batch.import_ingress_scan_object
+     WHERE scope_id = #{lease.scopeId} AND object_digest = #{digest}
+  </select>
+  <update id="setManifestWaitReason">
+    UPDATE batch.import_ingress_scan_object SET manifest_wait_reason = #{reason,jdbcType=VARCHAR}
+     WHERE scope_id = #{lease.scopeId} AND id = #{objectId} AND manifest_wait_reason IS DISTINCT FROM #{reason,jdbcType=VARCHAR}
+  </update>
+  <delete id="removeObject">DELETE FROM batch.import_ingress_scan_object WHERE scope_id = #{lease.scopeId} AND id = #{objectId}</delete>
+  <delete id="cleanOldObjects">
+    DELETE FROM batch.import_ingress_scan_object WHERE id IN (
+      SELECT id FROM batch.import_ingress_scan_object
+       WHERE scope_id = #{lease.scopeId} AND seen_cycle &lt; #{lease.cycle} ORDER BY seen_cycle, id LIMIT #{limit}
+    )
+  </delete>
+  <update id="advance">
+    UPDATE batch.import_ingress_scan_state
+       SET phase = #{phase}, list_marker = #{marker,jdbcType=VARCHAR}, after_object_id = #{afterObjectId}, cycle = #{cycle}, updated_at = clock_timestamp()
+     WHERE scope_id = #{lease.scopeId} AND lease_owner = #{lease.owner} AND fence = #{lease.fence}
+  </update>
+  <update id="saveProgress">
+    UPDATE batch.import_ingress_scan_state
+       SET phase = #{phase}, cycle = #{cycle}, list_marker = #{listMarker,jdbcType=VARCHAR}, after_object_id = #{afterObjectId}, window_id = #{windowId},
+           revisit_marker = #{revisitMarker,jdbcType=VARCHAR}, revisit_budget = #{revisitBudget}, revisit_remaining = #{revisitRemaining},
+           next_lane = #{nextLane}, cleanup_required = #{cleanupRequired}, apply_after_id = #{applyAfterId},
+           apply_upper_id = #{applyUpperId}, updated_at = clock_timestamp()
+     WHERE scope_id = #{scopeId} AND lease_owner = #{owner} AND fence = #{fence}
+  </update>
+</mapper>

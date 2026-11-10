@@ -152,6 +152,75 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
   }
 
   @Test
+  @DisplayName("Java SDK 进入业务前由真实控制面持久化执行身份")
+  void shouldPersistExecutionAttemptBeforeSdkBusinessEffect() throws Exception {
+    String selectStartSql = """
+        select task.execution_attempt_id, task.non_idempotent_started_at, instance.execution_started_at,
+               partition.current_invocation_id, task.task_status
+        from batch.job_task task
+        join batch.job_instance instance on instance.tenant_id = task.tenant_id
+            and instance.id = task.job_instance_id
+        join batch.job_partition partition on partition.tenant_id = task.tenant_id
+            and partition.id = task.job_partition_id
+        where task.tenant_id = ? and instance.job_code = ? and instance.biz_date = ?
+        """;
+    String selectWorkflowStatusSql = """
+        select run.run_status from batch.workflow_run run
+        join batch.trigger_request request on request.id = run.trigger_request_id
+            and request.tenant_id = run.tenant_id
+        where request.tenant_id = ? and request.request_id = ?
+        """;
+    try (Scenario scenario = new Scenario()) {
+      scenario.prepare();
+      AtomicReference<Map<String, Object>> beforeEffect = new AtomicReference<>();
+      AtomicReference<String> handlerInvocation = new AtomicReference<>();
+      BusinessEffectHandler delegate = new BusinessEffectHandler(scenario, true, false);
+      SdkTaskHandler handler = new SdkTaskHandler() {
+        @Override
+        public String taskType() {
+          return "ATOMIC";
+        }
+
+        @Override
+        public boolean isSafeToReplay(SdkTaskContext context) {
+          return delegate.isSafeToReplay(context);
+        }
+
+        @Override
+        public SdkTaskResult execute(SdkTaskContext context) {
+          beforeEffect.set(platformJdbc.queryForMap(
+              selectStartSql, scenario.tenant, scenario.seed.jobCode(), BIZ_DATE));
+          handlerInvocation.set((String) context.runtimeAttributes().get("partitionInvocationId"));
+          return delegate.execute(context);
+        }
+      };
+      startWorker(scenario, "first", handler);
+      launch(scenario);
+      await().atMost(WAIT).untilAsserted(() -> {
+        Map<String, Object> finished = task(scenario);
+        assertThat(finished.get("task_status")).isEqualTo("SUCCESS");
+        String workflowStatus = platformJdbc.queryForObject(
+            selectWorkflowStatusSql, String.class, scenario.tenant, scenario.seed.requestId());
+        assertThat(workflowStatus).isEqualTo("SUCCESS");
+      });
+      Map<String, Object> started = beforeEffect.get();
+      assertThat(started).isNotNull();
+      assertThat(started.get("task_status")).isEqualTo("RUNNING");
+      String executionAttemptId = (String) started.get("execution_attempt_id");
+      assertThat(executionAttemptId).isNotBlank().isNotEqualTo(handlerInvocation.get());
+      assertThat(started.get("execution_started_at")).isNotNull();
+      assertThat(started.get("non_idempotent_started_at")).isNull();
+      assertThat(started.get("current_invocation_id"))
+          .isNotNull()
+          .isEqualTo(handlerInvocation.get());
+      assertThat(scenario.executions).hasValue(1);
+      assertEffectCount(scenario, 1L);
+      Long retries = platformJdbc.queryForObject(RETRY_COUNT_SQL, Long.class, scenario.tenant);
+      assertThat(retries).isZero();
+    }
+  }
+
+  @Test
   @DisplayName("独立 SDK 业务提交后强杀进程，租约回收为 UNKNOWN 且原消息不能重复动作")
   void shouldBlockUnsafeEffectAfterSdkProcessIsKilled() throws Exception {
     try (Scenario scenario = new Scenario()) {
@@ -524,6 +593,11 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
 
   private BatchPlatformClient startWorker(
       Scenario scenario, String suffix, boolean safe, boolean crash) throws Exception {
+    return startWorker(scenario, suffix, new BusinessEffectHandler(scenario, safe, crash));
+  }
+
+  private BatchPlatformClient startWorker(Scenario scenario, String suffix, SdkTaskHandler handler)
+      throws Exception {
     String workerCode = scenario.workerCode(suffix);
     String groupId = scenario.tenant + "-consumer";
     BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
@@ -539,7 +613,6 @@ class SdkOrdinaryLeaseRecoveryE2eIT extends AbstractIntegrationTest {
         .leaseRenewInterval(Duration.ofSeconds(10))
         .httpTimeout(Duration.ofSeconds(5))
         .build();
-    SdkTaskHandler handler = new BusinessEffectHandler(scenario, safe, crash);
     BatchPlatformClient client =
         BatchPlatformClient.builder(config).register(handler).build();
     scenario.clients.add(client);

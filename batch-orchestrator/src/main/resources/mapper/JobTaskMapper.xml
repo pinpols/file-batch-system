@@ -17,6 +17,7 @@
         <result column="assigned_worker_code" property="assignedWorkerCode"/>
         <result column="version" property="version"/>
         <result column="task_payload" property="taskPayload"/>
+        <result column="execution_attempt_id" property="executionAttemptId"/>
         <result column="effective_parameters" property="effectiveParameters"/>
         <result column="heartbeat_details" property="heartbeatDetails"/>
         <result column="heartbeat_at" property="heartbeatAt"/>
@@ -219,6 +220,7 @@
                t.assigned_worker_code       as task_assigned_worker_code,
                t.version                    as task_version,
                t.task_payload               as task_task_payload,
+               t.execution_attempt_id       as task_execution_attempt_id,
                t.effective_parameters       as task_effective_parameters,
                t.heartbeat_details          as task_heartbeat_details,
                t.heartbeat_at               as task_heartbeat_at,
@@ -451,6 +453,7 @@
         update batch.job_task
         set assigned_worker_code = #{assignedWorkerCode},
             task_status = #{taskStatus},
+            execution_attempt_id = null,
             started_at = current_timestamp,
             version = version + 1,
             updated_at = current_timestamp
@@ -465,6 +468,13 @@
           <include refid="ClaimableParentPredicate"/>
         returning *
     </select>
+
+    <update id="confirmExecutionAttempt">
+        update batch.job_task
+        set execution_attempt_id = #{attemptId}
+        where tenant_id = #{tenantId} and id = #{id} and task_status = 'RUNNING'
+          and (execution_attempt_id is null or execution_attempt_id = #{attemptId})
+    </update>
 
     <sql id="ResetTaskForRetryAssignments">
         set task_status = #{readyStatus},

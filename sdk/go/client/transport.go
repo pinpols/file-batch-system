@@ -512,7 +512,11 @@ func (t *HTTPTransport) Heartbeat(ctx context.Context, workerCode string, req He
 
 // Deactivate sends the graceful-goodbye.
 func (t *HTTPTransport) Deactivate(ctx context.Context, workerCode string) error {
-	_, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/deactivate", nil, "", "deactivate", true)
+	body := struct {
+		TenantID   string `json:"tenantId,omitempty"`
+		WorkerCode string `json:"workerCode"`
+	}{TenantID: t.tenantID, WorkerCode: workerCode}
+	_, _, err := t.call(ctx, http.MethodPost, "/internal/workers/"+workerCode+"/deactivate", body, "", "deactivate", true)
 	return err
 }
 

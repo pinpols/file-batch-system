@@ -363,6 +363,8 @@ PR 的编排集成场景拆为 `a` / `a-extra`；`JobNodeDispatchIntegrationTest
 
 Console 主分片明确包含 `WorkflowDefinitionWriteContractIntegrationTest` 和 `WorkflowCreateVersionSnapshotIntegrationTest`，在真实 PostgreSQL 上验证调度开关、Excel 缺省时区回读及普通新建 Workflow 的版本快照兼容；选测清单由 `test_pr_coverage_integration.py` 守护。
 
+编排补充片还运行文件对账与文件等待的指定场景，验证受管入口保护、对账失败重试与回扫，以及渠道匹配、历史兼容和扫描准入；六个方法复用同一 Maven 组，保留各自真实依赖。实际新增墙钟时间以 CI 运行记录为准。
+
 PR、Full 和手动 Staging Gate 使用 `report-ci-quality-trends.py` 汇总各 Java 测试片 Surefire/Failsafe XML 与任务状态，输出 JSON 和 Markdown；成功任务及成功的 E2E matrix 缺少应有报告时汇总失败。PR/Staging 产物保留 14 天，Full 产物保留 90 天并包含最近 30 次工作流趋势。报告区分 E2E 套件全部跳过与成功，并按分片统计 XML 的测试累计时间；该时间不含排队或作业准备，不能作为墙钟耗时。该汇总不含单独工作流的多语言 SDK、前端测试或 Python/Shell 门禁测试。
 
 SDK 契约工作流通过 `capture-sdk-test.sh` 保留五语言测试原始日志和真实退出码，由 `report-sdk-test-summary.py` 汇总各语言版本及独立的真实传输门禁。成功任务缺报告会失败，跳过和未执行单独显示；报告不把日志中的测试执行项伪装为统一用例计数。

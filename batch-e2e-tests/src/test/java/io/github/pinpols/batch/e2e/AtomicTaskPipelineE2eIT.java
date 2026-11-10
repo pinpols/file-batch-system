@@ -20,10 +20,14 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskExecutionReportCommand;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskHeartbeatCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
+import io.github.pinpols.batch.orchestrator.infrastructure.lease.PartitionReclaimUnit;
 import io.github.pinpols.batch.orchestrator.infrastructure.timeout.JobInstanceTimeoutEnforcer;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicTaskConsumer;
 import io.github.pinpols.batch.worker.atomic.runtime.AtomicWorkerLoop;
@@ -41,6 +45,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.clients.admin.Admin;
@@ -573,6 +578,236 @@ class AtomicTaskPipelineE2eIT extends AbstractIntegrationTest {
       String selectedRunStatus =
           jdbcTemplate.queryForObject(selectRunStatusSql, String.class, TENANT, seed.requestId());
       assertThat(selectedRunStatus).isEqualTo("SUCCESS");
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("上报未成功时重复投递不应再次执行已完成的原子任务")
+  void shouldNotExecuteAgain_whenReportFailsAndDispatchIsRedelivered() throws Exception {
+    String selectTaskSql = """
+        select task.id
+        from batch.job_task task
+        join batch.job_instance ji on ji.id = task.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+    String selectPayloadSql = """
+        select payload_json::text
+        from batch.outbox_event
+        where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
+        order by id
+        limit 1
+        """;
+    String selectTaskStatusSql = """
+        select task_status from batch.job_task where tenant_id = ? and id = ?
+        """;
+    String selectPendingReportsSql = """
+        select count(*) from batch.worker_report_outbox where tenant_id = ? and task_id = ?
+        """;
+    AtomicInteger receivedRequests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/report-pending", exchange -> {
+      receivedRequests.incrementAndGet();
+      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream output = exchange.getResponseBody()) {
+        output.write(body);
+      }
+    });
+    server.start();
+    try {
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
+      Map<String, Object> params = Map.of(
+          "taskType", "http",
+          "url", "http://127.0.0.1:" + server.getAddress().getPort() + "/report-pending",
+          "method", "GET");
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.workflowDefinitionId(),
+          BIZ_DATE,
+          TriggerType.API,
+          seed.requestId(),
+          "e2e-report-pending",
+          params));
+      Long taskId = jdbcTemplate.queryForObject(selectTaskSql, Long.class, TENANT, seed.dedupKey());
+      String payload = jdbcTemplate.queryForObject(selectPayloadSql, String.class, TENANT, taskId);
+      TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+      AtomicInteger completedExecutions = new AtomicInteger();
+      doAnswer(invocation -> {
+            Long reportTaskId = invocation.getArgument(0);
+            if (taskId.equals(reportTaskId)) {
+              throw new IllegalStateException("test: REPORT unavailable before commit");
+            }
+            return invocation.callRealMethod();
+          })
+          .when(taskControllerApplicationService)
+          .report(any(Long.class), any(TaskExecutionReportCommand.class));
+      doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            TaskDispatchMessage executed = invocation.getArgument(0);
+            if (taskId.equals(executed.taskId())) {
+              completedExecutions.incrementAndGet();
+            }
+            return result;
+          })
+          .when(taskDispatchExecutor)
+          .execute(any(TaskDispatchMessage.class), any(String.class));
+
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(completedExecutions).hasValue(1));
+      assertThat(receivedRequests).hasValue(1);
+      assertThat(jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId))
+          .isEqualTo("RUNNING");
+      Integer pendingReports =
+          jdbcTemplate.queryForObject(selectPendingReportsSql, Integer.class, TENANT, taskId);
+      assertThat(pendingReports).isPositive();
+
+      String dispatchTopic = BatchTopics.directDispatchTopic(
+          BatchTopics.TASK_DISPATCH_ATOMIC, message.selectedWorkerId());
+      String kafkaKey = TENANT + ":" + message.jobCode() + ":" + message.instanceNo() + ":task:"
+          + message.taskId();
+      kafkaTemplate.send(dispatchTopic, kafkaKey, payload).get();
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(completedExecutions).hasValue(2));
+      assertThat(receivedRequests).hasValue(1);
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  @DisplayName("执行入口确认已提交但响应全部丢失时等待租约回收后恢复")
+  void shouldRecoverAfterExecutionStartResponseIsLost() throws Exception {
+    String selectTaskSql = """
+        select task.id
+        from batch.job_task task
+        join batch.job_instance ji on ji.id = task.job_instance_id
+        where ji.tenant_id = ? and ji.dedup_key = ?
+        """;
+    String selectPayloadSql = """
+        select payload_json::text from batch.outbox_event
+        where tenant_id = ? and aggregate_type = 'JOB_TASK' and aggregate_id = ?
+        order by id limit 1
+        """;
+    String selectAttemptSql = """
+        select execution_attempt_id from batch.job_task where tenant_id = ? and id = ?
+        """;
+    String selectTaskStatusSql = """
+        select task_status from batch.job_task where tenant_id = ? and id = ?
+        """;
+    String selectPartitionSql = """
+        select job_partition_id from batch.job_task where tenant_id = ? and id = ?
+        """;
+    String expireLeaseSql = """
+        update batch.job_partition set lease_expire_at = current_timestamp - interval '1 minute'
+        where tenant_id = ? and id = ?
+        """;
+    AtomicInteger receivedRequests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/start-response-lost", exchange -> {
+      receivedRequests.incrementAndGet();
+      byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (OutputStream output = exchange.getResponseBody()) {
+        output.write(body);
+      }
+    });
+    server.start();
+    try {
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          jdbcTemplate, TENANT, "ATOMIC", "atomic", TriggerType.API, BIZ_DATE);
+      Map<String, Object> params = Map.of(
+          "taskType", "http",
+          "url", "http://127.0.0.1:" + server.getAddress().getPort() + "/start-response-lost",
+          "method", "GET");
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.workflowDefinitionId(),
+          BIZ_DATE,
+          TriggerType.API,
+          seed.requestId(),
+          "e2e-start-response-lost",
+          params));
+      Long taskId = jdbcTemplate.queryForObject(selectTaskSql, Long.class, TENANT, seed.dedupKey());
+      Long partitionId =
+          jdbcTemplate.queryForObject(selectPartitionSql, Long.class, TENANT, taskId);
+      String payload = jdbcTemplate.queryForObject(selectPayloadSql, String.class, TENANT, taskId);
+      TaskDispatchMessage message = JsonUtils.fromJson(payload, TaskDispatchMessage.class);
+      AtomicBoolean loseStartResponses = new AtomicBoolean(true);
+      AtomicInteger completedExecutions = new AtomicInteger();
+      doAnswer(invocation -> {
+            Long requestedTaskId = invocation.getArgument(0);
+            TaskHeartbeatCommand command = invocation.getArgument(1);
+            Object result = invocation.callRealMethod();
+            if (taskId.equals(requestedTaskId)
+                && loseStartResponses.get()
+                && command.details() instanceof Map<?, ?> details
+                && Boolean.TRUE.equals(details.get("executionStarted"))) {
+              throw new IllegalStateException("test: execution start response lost after commit");
+            }
+            return result;
+          })
+          .when(taskControllerApplicationService)
+          .renew(any(Long.class), any(TaskHeartbeatCommand.class));
+      doAnswer(invocation -> {
+            Object result = invocation.callRealMethod();
+            TaskDispatchMessage executed = invocation.getArgument(0);
+            if (taskId.equals(executed.taskId())) {
+              completedExecutions.incrementAndGet();
+            }
+            return result;
+          })
+          .when(taskDispatchExecutor)
+          .execute(any(TaskDispatchMessage.class), any(String.class));
+
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(completedExecutions).hasValue(1));
+      String firstAttemptId =
+          jdbcTemplate.queryForObject(selectAttemptSql, String.class, TENANT, taskId);
+      assertThat(firstAttemptId).isNotBlank();
+      assertThat(receivedRequests).hasValue(0);
+      assertThat(jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId))
+          .isEqualTo("RUNNING");
+
+      String dispatchTopic = BatchTopics.directDispatchTopic(
+          BatchTopics.TASK_DISPATCH_ATOMIC, message.selectedWorkerId());
+      String kafkaKey = TENANT + ":" + message.jobCode() + ":" + message.instanceNo() + ":task:"
+          + message.taskId();
+      kafkaTemplate.send(dispatchTopic, kafkaKey, payload).get();
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(completedExecutions).hasValue(2));
+      assertThat(receivedRequests).hasValue(0);
+
+      loseStartResponses.set(false);
+      jdbcTemplate.update(expireLeaseSql, TENANT, partitionId);
+      JobPartitionMapper partitionMapper = applicationContext.getBean(JobPartitionMapper.class);
+      PartitionReclaimUnit reclaim = applicationContext.getBean(PartitionReclaimUnit.class);
+      reclaim.reclaim(partitionMapper.selectById(TENANT, partitionId));
+      assertThat(jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId))
+          .isEqualTo("READY");
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> assertThat(
+                  jdbcTemplate.queryForObject(selectTaskStatusSql, String.class, TENANT, taskId))
+              .isEqualTo("SUCCESS"));
+      assertThat(receivedRequests).hasValue(1);
+      String recoveredAttemptId =
+          jdbcTemplate.queryForObject(selectAttemptSql, String.class, TENANT, taskId);
+      assertThat(recoveredAttemptId).isNotBlank().isNotEqualTo(firstAttemptId);
     } finally {
       server.stop(0);
     }

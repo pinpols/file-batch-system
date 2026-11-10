@@ -557,6 +557,124 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     }
   }
 
+  @ParameterizedTest(name = "WAIT {0} 后跳过未命中分支")
+  @ValueSource(strings = {"FAIL", "MATCHED"})
+  @DisplayName("WAIT 完成后跳过未命中分支并收口运行")
+  void shouldSkipUnreachableBranch_whenWaitFinishes(String outcome) {
+    String deleteWaitEdges = """
+        delete from batch.workflow_edge
+        where tenant_id = ? and workflow_definition_id = ? and from_node_code = 'WAIT_FILE'
+        """;
+    String moveEnd = """
+        update batch.workflow_node set node_order = 3
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'END'
+        """;
+    String insertGateway = """
+        insert into batch.workflow_node (
+            tenant_id, workflow_definition_id, node_code, node_name, node_type, node_order,
+            node_params, retry_policy, retry_max_count, timeout_seconds, enabled
+        ) values (?, ?, 'SUCCESS_GATEWAY', 'success gateway', 'GATEWAY', 2,
+            '{}'::jsonb, 'NONE', 0, 0, true)
+        """;
+    String insertEdges = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'WAIT_FILE', 'SUCCESS_GATEWAY', ?, true),
+                 (?, ?, 'SUCCESS_GATEWAY', 'END', 'SUCCESS', true)
+        """;
+    String insertSuccessEdge = """
+        insert into batch.workflow_edge (
+            tenant_id, workflow_definition_id, from_node_code, to_node_code, edge_type, enabled
+        ) values (?, ?, 'WAIT_FILE', 'END', 'SUCCESS', true)
+        """;
+    String updateWaitParams = """
+        update batch.workflow_node set node_params = ?::jsonb
+        where tenant_id = ? and workflow_definition_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String insertFile = """
+        insert into batch.file_record (
+            tenant_id, file_category, file_name, file_format_type, storage_type,
+            storage_path, source_type, file_status, biz_date
+        ) values (?, 'INPUT', ?, 'DELIMITED', 'S3', ?, 'SFTP', 'RECEIVED', ?)
+        """;
+    String findRun = """
+        select id from batch.workflow_run
+        where tenant_id = ? and workflow_definition_id = ? and biz_date = ?
+        """;
+    String expireWait = """
+        update batch.workflow_node_run
+        set started_at = current_timestamp - interval '2 hours',
+            sensor_next_probe_at = current_timestamp - interval '1 second'
+        where workflow_run_id = ? and node_code = 'WAIT_FILE'
+        """;
+    String findNodeStatus = """
+        select node_status from batch.workflow_node_run
+        where workflow_run_id = ? and node_code = ?
+        """;
+    String findRunStatus = """
+        select run_status from batch.workflow_run where tenant_id = ? and id = ?
+        """;
+    String countTerminalEvents = """
+        select count(*) from batch.outbox_event
+        where tenant_id = ? and aggregate_type = 'WORKFLOW_RUN'
+          and aggregate_id = ? and event_type = 'WORKFLOW_TERMINAL'
+        """;
+
+    long suffix = System.nanoTime();
+    String requestId = "req-wait-fail-branch-" + suffix;
+    LocalDate bizDate = LocalDate.of(2026, 10, 20);
+    try (ConfigurableApplicationContext application = applicationContext(true)) {
+      JdbcTemplate jdbc = application.getBean(JdbcTemplate.class);
+      Long definitionId = seedWorkflow(
+          jdbc, "WF_WAIT_FAIL_BRANCH_" + suffix, requestId, "dedup-" + suffix, requestId, bizDate);
+      jdbc.update(deleteWaitEdges, tenantId, definitionId);
+      jdbc.update(moveEnd, tenantId, definitionId);
+      jdbc.update(insertGateway, tenantId, definitionId);
+      boolean matched = "MATCHED".equals(outcome);
+      String unreachableEdge = matched ? "FAILURE" : "SUCCESS";
+      jdbc.update(insertEdges, tenantId, definitionId, unreachableEdge, tenantId, definitionId);
+      if (matched) {
+        jdbc.update(insertSuccessEdge, tenantId, definitionId);
+        String params = """
+            {"sensor_type":"FILE_ARRIVAL",
+             "sensor_spec":{"pattern":"wait-branch-*.csv","maxAgeSeconds":3600},
+             "timeout_seconds":3600,"poll_interval_seconds":1,"on_timeout":"FAIL"}
+            """;
+        jdbc.update(updateWaitParams, params, tenantId, definitionId);
+      }
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(tenantId)
+          .workflowDefinitionId(definitionId)
+          .bizDate(bizDate)
+          .triggerType(TriggerType.API)
+          .requestId(requestId)
+          .traceId(requestId)
+          .params(Map.of())
+          .build();
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(WorkflowRunLaunchService.class).launch(request));
+      Long runId = jdbc.queryForObject(findRun, Long.class, tenantId, definitionId, bizDate);
+      if (matched) {
+        String filename = "wait-branch-" + suffix + ".csv";
+        jdbc.update(insertFile, tenantId, filename, "s3://test/" + filename, bizDate);
+      } else {
+        jdbc.update(expireWait, runId);
+      }
+
+      RlsTenantContextHolder.runWithTenant(
+          tenantId, () -> application.getBean(SensorPollScheduler.class).scan());
+
+      assertThat(jdbc.queryForObject(findNodeStatus, String.class, runId, "WAIT_FILE"))
+          .isEqualTo(matched ? "SUCCESS" : "FAILED");
+      assertThat(jdbc.queryForList(findNodeStatus, String.class, runId, "SUCCESS_GATEWAY"))
+          .containsExactly("SKIPPED");
+      assertThat(jdbc.queryForObject(findRunStatus, String.class, tenantId, runId))
+          .isEqualTo(matched ? "SUCCESS" : "FAILED");
+      assertThat(jdbc.queryForObject(countTerminalEvents, Integer.class, tenantId, runId))
+          .isEqualTo(1);
+    }
+  }
+
   @Test
   @DisplayName("WAIT 超时配置跳过下游时级联跳过并成功收口")
   void shouldSkipDownstreamAndSucceed_whenWaitTimeoutActionIsSkipDownstream() {
@@ -669,9 +787,10 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     }
   }
 
-  @Test
-  @DisplayName("WAIT 超时跳过时保留多前驱 ANY 汇聚,另一 WAIT 命中后仍可继续")
-  void shouldKeepAnyJoinReachable_whenAnotherWaitSucceedsAfterSkipDownstreamTimeout() {
+  @ParameterizedTest(name = "WAIT 超时 {0} 后保留可达汇聚")
+  @ValueSource(strings = {"FAIL", "SKIP_DOWNSTREAM"})
+  @DisplayName("WAIT 超时后保留多前驱 ANY 汇聚，另一 WAIT 命中后仍可继续")
+  void shouldKeepAnyJoinReachable_whenAnotherWaitSucceedsAfterTimeout(String timeoutAction) {
     final String deleteWorkflowEdgeSql = """
         delete from batch.workflow_edge where tenant_id = ? and workflow_definition_id = ?
     """;
@@ -686,7 +805,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
         """;
     final String updateWorkflowNodeSql3 = """
         update batch.workflow_node set node_params = jsonb_set(node_params, '{on_timeout}',\s\
-        '"SKIP_DOWNSTREAM"'::jsonb) where tenant_id = ? and workflow_definition_id = ?\s\
+        to_jsonb(?::text)) where tenant_id = ? and workflow_definition_id = ?\s\
         and node_code = 'WAIT_FILE'\
         """;
     final String updateWorkflowNodeSql4 = """
@@ -771,7 +890,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       jdbc.update(deleteWorkflowEdgeSql, tenantId, workflowDefinitionId);
       jdbc.update(updateWorkflowNodeSql, tenantId, workflowDefinitionId);
       jdbc.update(updateWorkflowNodeSql2, tenantId, workflowDefinitionId);
-      jdbc.update(updateWorkflowNodeSql3, tenantId, workflowDefinitionId);
+      jdbc.update(updateWorkflowNodeSql3, timeoutAction, tenantId, workflowDefinitionId);
       jdbc.update(updateWorkflowNodeSql4, tenantId, workflowDefinitionId);
       jdbc.update(updateWorkflowNodeSql5, tenantId, workflowDefinitionId);
       String secondWaitParams = """
@@ -816,7 +935,7 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
 
       String selectedNodeStatus =
           jdbc.queryForObject(selectNodeStatusSql, String.class, workflowRunId);
-      assertThat(selectedNodeStatus).isEqualTo("SKIPPED");
+      assertThat(selectedNodeStatus).isEqualTo("FAIL".equals(timeoutAction) ? "FAILED" : "SKIPPED");
       Integer selectedWorkflowNodeRunCount =
           jdbc.queryForObject(selectCountSql, Integer.class, workflowRunId);
       assertThat(selectedWorkflowNodeRunCount).isZero();
@@ -841,7 +960,8 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
       assertThat(selectedNodeStatusRead4).isEqualTo("SUCCESS");
       String selectedRunStatusRead2 =
           jdbc.queryForObject(selectRunStatusSql, String.class, tenantId, workflowRunId);
-      assertThat(selectedRunStatusRead2).isEqualTo("SUCCESS");
+      assertThat(selectedRunStatusRead2)
+          .isEqualTo("FAIL".equals(timeoutAction) ? "FAILED" : "SUCCESS");
     }
   }
 

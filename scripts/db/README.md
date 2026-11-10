@@ -13,10 +13,13 @@
 | 到期实例、工作流、Outbox 与死信清理 | [使用场景](sql-script-usage-scenarios.md)及本页 SQL 索引 | 依照保留、审计、租户及外键约束执行，不能将清理当作通用修复 |
 | 业务库初始化与 RLS | [business](business/README.md) | 与平台 Flyway 分开；目标库、角色与租户隔离显式指定 |
 | 配置缓存失效队列角色授权 | [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) | 平台库 DBA 显式指定已有可信 Console 主库角色；只调整该角色的 V372 队列权限和专属策略 |
+| 导入入口扫描协调角色授权 | [import-ingress-scan-role.sql](import-ingress-scan-role.sql) | 平台库 DBA 在 Worker 授权后，为指定可信 Import 主库角色授予或撤销 V377 扫描状态及跨租户协调的专属 RLS 策略 |
+| 导入入口扫描规则切换 | [import-ingress-scan-maintenance.sql](import-ingress-scan-maintenance.sql) | 状态表所有者预览指定 scope，在停用旧扫描器后分批清理可重建扫描状态；不清理业务文件与审计 |
+| 入站归属声明与授权 | [身份计算](import-ingress-ownership-id.py)、[声明维护](import-ingress-ownership.sql)、[读取授权](import-ingress-ownership-role.sql) | DBA 在上游写对象及相关服务启动前，声明桶、扫描范围和绑定；运行角色仅获只读权限，退休后仍保护旧对象路径 |
 | [generate-platform-worker-grants.py](generate-platform-worker-grants.py) | 从 Worker 与 Console/Trigger/Orchestrator 的 Mapper XML 与内联 SQL 推导平台库最小授权，生成授权清单与 psql 脚本；默认校验产物与源码一致。 |
 | [platform-worker-roles.sql](platform-worker-roles.sql) | 为指定的 Import/Export/Process/Dispatch/Atomic Worker 平台库角色授予或撤销最小权限（生成产物）。 |
 | [platform-control-plane-roles.sql](platform-control-plane-roles.sql) | 为指定的 Console/Trigger/Orchestrator 平台库运行时角色授予或撤销最小权限（生成产物）。 |
-| Worker 平台库最小授权 | [platform-worker-roles.sql](platform-worker-roles.sql)、[生成器](generate-platform-worker-grants.py)、[授权清单](platform-worker-grants.json) | 平台库 DBA 为已有的非超级用户 Worker 角色执行；每个角色先撤销 batch/archive 全部表与序列权限再按清单授予，`job_task` 只有登记列可写。清单由 Worker Mapper XML/内联 SQL 生成，勿手改。切换前可用 `-Dbatch.drill.platform-worker-role=<worker>` 让集成测试以受限角色执行 Worker 语句，见[演练记录](../../docs/verifications/platform-worker-restricted-role-drill-2026-11-04.md) |
+| Worker 平台库最小授权 | [platform-worker-roles.sql](platform-worker-roles.sql)、[生成器](generate-platform-worker-grants.py)、[授权清单](platform-worker-grants.json) | 平台库 DBA 为已有的非超级用户 Worker 角色执行；每个角色先撤销 batch/archive 全部表与序列权限再按清单授予，`job_task` 只有登记列可写。清单由 Worker Mapper XML/内联 SQL 生成，勿手改。启用入口扫描的独立 Import 角色还须执行 [import-ingress-scan-role.sql](import-ingress-scan-role.sql) 配置跨租户扫描协调状态的 RLS 策略。切换前可用 `-Dbatch.drill.platform-worker-role=<worker>` 让集成测试以受限角色执行 Worker 语句，见[演练记录](../../docs/verifications/platform-worker-restricted-role-drill-2026-11-04.md) |
 | 控制面平台库最小授权 | [platform-control-plane-roles.sql](platform-control-plane-roles.sql)、[生成器](generate-platform-worker-grants.py)、[授权清单](platform-control-plane-grants.json) | 平台库 DBA 为已有的非超级用户 Console/Trigger/Orchestrator 运行时角色执行；每个角色先撤销 batch/archive/quartz 全部表、序列与函数权限再按清单授予，Console/Trigger 对运行状态表只读，三者都不持有 DDL。Console 角色随后执行 [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) 获得跨租户缓存失效队列策略。运行时角色不执行 Flyway：Trigger/Orchestrator 以 `BATCH_PLATFORM_FLYWAY_USERNAME/PASSWORD` 指定 owner 账号迁移，每次迁移后重新执行授权脚本。切换前可用 `-Dbatch.drill.platform-control-plane-role=true` 让集成测试按调用模块以受限角色执行，见[演练记录](../../docs/verifications/platform-control-plane-restricted-role-drill-2026-11-05.md) |
 | 分区迁移演练 | [partition-migration](partition-migration/README.md) | 属于人工演练资产，不直接放入正式 migration 路径执行 |
 | 测试与压测种子 | [test-seed](test-seed/README.md)、[load-test-seed](load-test-seed/README.md) | 仅隔离测试目标；共享 SIM 场景输入在根 test-data |
@@ -24,6 +27,41 @@
 SQL 文件维持现有路径。若后续单独整理本目录的平铺 SQL，需同时验证读取器、相对 include、构建资源、容器挂载及测试；不把目录整理与迁移脚本内容改写混成一次操作。
 
 这里收纳非 Flyway 的数据库维护脚本：业务库样例、测试种子、压测种子、清理、备份恢复和分区迁移演练。
+
+## 导入入口扫描规则切换
+
+变更影响匹配语义的规则或回滚版本时，先停止所有指向该范围的旧扫描器和事件入口，确认当前数据库、桶和前缀；使用状态表所有者查询 `batch.import_ingress_scan_state`，取得完整 `scope_id`。按脚本头部命令先预览，确认范围及剩余对象；脚本不接收凭据，连接参数使用现有安全环境入口。
+
+使用相同 `scope_id` 依次指定 `-v action=begin`、`-v action=clear-page -v max_rows=200`；重复执行清理直到输出的剩余样本数为零，再执行 `-v action=activate`。预览和清理后的计数最多读取批次上限加一行，达到该值仅表示至少还有这么多行，不是全量总数。每步是独立事务，可在中断后重试；活动租约会阻止修改，清理未完成时不能启用。脚本默认每批 200、上限 10000，只删除扫描观察和清单索引，不删除文件登记或审计。切换和回滚都要先确认旧版本/旧配置扫描器停净，新配置首次扫描后会绑定其规则摘要；如果旧配置先启动并绑定，应再次按上述步骤切换。若这些前提无法满足，保持维护状态并排查，不能手工修改游标强行继续。
+
+## 入站范围归属声明
+
+V382 的归属声明是 Import scanner 和 Orchestrator 对象对账共读的配置事实，不由首次扫描自动创建。升级或配置切换前，停止受影响的上游写入、旧 scanner 和对象对账，清点原有目录、桶、日期化清单及在途记录；为每个物理存储和 scanner 前缀先声明范围及完整绑定，再激活并启动新版本，最后恢复上游。旧版应用不读取声明，不能与新版本混跑来保证归属。已由旧对账产生的文件记录须按受控接管及运行手册核查，不能假设声明会自动回写。
+
+使用与目标 Worker 完全相同的 `BATCH_STORAGE_BACKEND`、`BATCH_S3_ENDPOINT`（或文件系统根目录）、`BATCH_S3_BUCKET`、`BATCH_KAFKA_NAMESPACE` 和扫描前缀计算身份；计算器只输出摘要，不输出端点或凭据。文件系统根目录必须是应用容器内部使用的同一绝对路径；不同端点别名或命名空间不会被自动识别为同一物理存储。
+
+```sh
+python3 scripts/db/import-ingress-ownership-id.py --bucket "$BATCH_S3_BUCKET" --prefix 'ingress/'
+# 将输出分别填入 SCAN_STORAGE_ID 和 SCAN_SCOPE_ID；连接凭据仍通过现有安全环境入口提供。
+psql -X -v ON_ERROR_STOP=1 -v action=declare -v scope_id="$SCAN_SCOPE_ID" \
+  -v storage_id="$SCAN_STORAGE_ID" -v bucket_name="$BATCH_S3_BUCKET" \
+  -v object_prefix='ingress/' -f scripts/db/import-ingress-ownership.sql
+psql -X -v ON_ERROR_STOP=1 -v action=manifest -v scope_id="$SCAN_SCOPE_ID" \
+  -v tenant_id=tenant-a -v binding_prefix='ingress/tenant-a/orders/' \
+  -v file_group_code=ORDERS -v manifest_key_template='manifests/tenant-a/orders-{bizDateCompact}.batch.json' \
+  -f scripts/db/import-ingress-ownership.sql
+psql -X -v ON_ERROR_STOP=1 -v action=channel -v scope_id="$SCAN_SCOPE_ID" \
+  -v tenant_id=tenant-a -v binding_prefix='ingress/tenant-a/orders/' -v channel_code=bank_in \
+  -f scripts/db/import-ingress-ownership.sql
+psql -X -v ON_ERROR_STOP=1 -v action=activate -v scope_id="$SCAN_SCOPE_ID" \
+  -f scripts/db/import-ingress-ownership.sql
+```
+
+新范围初始为 RETIRED：scanner 不运行，但完整数据前缀和已声明的清单路径仍受保护。相同物理桶可以为多个 scanner 分别声明范围；按各自 scope 重复上述流程，不能把多个实例配置擅自合并。`manifest` 和 `channel` 仅在 RETIRED 时配置，同目录对应的旧绑定会停用并保留；再次指定相同绑定可启用。`disable-binding` 使用 `binding_type=MANIFEST|CHANNEL`、`tenant_id` 和 `binding_prefix` 停用绑定，旧清单模板仍保持对账保护。更改扫描规则还须执行上节 V377 扫描状态维护流程，避免复用旧规则摘要。
+
+`retire` 停止 scanner 但不把路径交给普通对账；上游停止、待处理文件和在途任务核对完毕且无有效扫描租约后，DBA 可显式使用 `-v action=release -v reason=原因` 归还普通对账。RELEASED 声明行保留并记录最近操作人、时间和原因；如需重新保护，先 `retire` 再核对绑定并 `activate`。脚本不会替操作员停止应用或验证对象存储中的所有在途文件，不能仅因 Worker 已停止就直接释放。
+
+运行前先执行本目录现有平台角色授权，再分别对可信 Import 及 Orchestrator 角色执行 `psql -X -v ON_ERROR_STOP=1 -v action=grant -v runtime_role=角色 -f scripts/db/import-ingress-ownership-role.sql`。基础授权包含这两个角色对归属表的 SELECT；专用脚本再设置跨租户读取所需的 RLS 策略。两者都不能授予声明修改权限。重复执行基础授权会恢复 SELECT，已配置的专用 RLS 策略仍保留；撤销专用授权则会同时移除策略和 SELECT，需重新授信才能读取。
 
 ## 目录分工
 
@@ -117,6 +155,8 @@ psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_s
 | [cleanup-trigger-outbox-events.sql](cleanup-trigger-outbox-events.sql) | 清理 trigger_outbox_event 表的历史事件,避免无限膨胀拖慢 TriggerOutboxRelay 扫描。 |
 | [cleanup-workflow-runs.sql](cleanup-workflow-runs.sql) | 归档 workflow_run + workflow_node_run。和 cleanup-success-instances.sql 互补： |
 | [config-cache-invalidation-role.sql](config-cache-invalidation-role.sql) | 为显式指定的可信 Console 主库角色授予或撤销 V372 缓存失效队列权限和专属 RLS 策略。 |
+| [import-ingress-scan-role.sql](import-ingress-scan-role.sql) | 为显式指定的可信 Import 主库角色授予或撤销 V377 扫描状态权限和专属 RLS 策略。 |
+| [import-ingress-scan-maintenance.sql](import-ingress-scan-maintenance.sql) | 预览和分批重置指定导入扫描范围的可重建状态，供受控规则切换使用。 |
 | [scheduled-occurrence-fire-roles.sql](scheduled-occurrence-fire-roles.sql) | 为指定的 Trigger 与 Console 主库角色授予或撤销实际触发观察记录表权限。 |
 | [inspect/schema-capacity.sql](inspect/schema-capacity.sql) | 只读检查数据库结构容量，支持 Docker 容器和宿主机上的 psql 环境。 |
 | [inspect/select-data-quality-evidence.sql](inspect/select-data-quality-evidence.sql) | 按精确租户/Job实例只读回查热表与归档表DQ执行证据；用于归档后诊断与恢复核对，不执行数据恢复写入。 |

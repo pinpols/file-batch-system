@@ -1,10 +1,23 @@
 package io.github.pinpols.batch.worker.imports.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.validation.ValidResourceCode;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.AssertTrue;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import lombok.Data;
 import lombok.Getter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.validation.annotation.Validated;
 
 @Data
+@Validated
 @ConfigurationProperties(prefix = "batch.worker.import.scanner")
 public class ImportScannerProperties {
 
@@ -33,9 +46,98 @@ public class ImportScannerProperties {
   /** 批次清单对象后缀(含点),默认 .batch.json；即使处理开关关闭也保留协议文件归属，不作普通数据登记。 */
   private String batchManifestSuffix = ".batch.json";
 
+  /** 按租户和数据目录选择唯一文件组与权威批次清单位置。 */
+  private List<@NotNull @Valid ManifestBinding> manifestBindings = new ArrayList<>();
+
+  @AssertTrue(
+      message =
+          "manifest bindings must use unique tenant and directory pairs within scanner prefix")
+  public boolean isManifestBindingsValid() {
+    Set<List<String>> seen = new HashSet<>();
+    for (ManifestBinding binding : manifestBindings) {
+      if (EmptyChecks.isNull(binding)
+          || EmptyChecks.isNull(binding.getTenantId())
+          || EmptyChecks.isNull(binding.getObjectPrefix())) {
+        continue;
+      }
+      if ((EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix))
+          || EmptyChecks.isNull(batchManifestSuffix)
+          || batchManifestSuffix.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+          || EmptyChecks.isNull(binding.getManifestKeyTemplate())
+          || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)
+          || !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Data
+  public static class ManifestBinding {
+    @NotBlank
+    private String tenantId;
+
+    @NotBlank
+    @Pattern(regexp = ".+/", message = "object prefix must end with /")
+    private String objectPrefix;
+
+    @ValidResourceCode
+    private String fileGroupCode;
+
+    @NotBlank
+    private String manifestKeyTemplate;
+
+    @AssertTrue(
+        message = "manifest key must contain exactly one supported business date placeholder")
+    public boolean isManifestKeyTemplateValid() {
+      if (EmptyChecks.isNull(manifestKeyTemplate)
+          || manifestKeyTemplate.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+          || manifestKeyTemplate.startsWith("/")
+          || List.of(manifestKeyTemplate.split("/", -1)).contains("..")) {
+        return false;
+      }
+      String expanded =
+          manifestKeyTemplate.replace("{bizDate}", "").replace("{bizDateCompact}", "");
+      int placeholders = (manifestKeyTemplate.length() - expanded.length());
+      return (placeholders == "{bizDate}".length() || placeholders == "{bizDateCompact}".length())
+          && !expanded.contains("{")
+          && !expanded.contains("}");
+    }
+  }
+
   private long stabilityWindowSeconds = 30L;
   private String sourceType = "SYSTEM";
   private String defaultBizType = "IMPORT_SCAN";
+
+  /** 由部署配置指定租户和对象目录的可信渠道绑定；不从文件名或任务载荷推断渠道。 */
+  private List<@Valid ChannelBinding> channelBindings = new ArrayList<>();
+
+  @AssertTrue(message = "scanner channel bindings must not repeat a tenant and object prefix")
+  public boolean isChannelBindingsUnique() {
+    Set<List<String>> seen = new HashSet<>();
+    for (ChannelBinding binding : channelBindings) {
+      if (EmptyChecks.isNotNull(binding)
+          && EmptyChecks.isNotNull(binding.getTenantId())
+          && EmptyChecks.isNotNull(binding.getObjectPrefix())
+          && !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  @Data
+  public static class ChannelBinding {
+    @NotBlank
+    private String tenantId;
+
+    @NotBlank
+    @Pattern(regexp = ".+/", message = "object prefix must end with /")
+    private String objectPrefix;
+
+    @ValidResourceCode
+    private String channelCode;
+  }
 
   /**
    * 文件名/对象名解析 bizDate 的正则；必须包含命名捕获组 {@code (?<bizDate>...)}，匹配到的 token 用 {@code yyyyMMdd} 解析。

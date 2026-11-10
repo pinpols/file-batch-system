@@ -51,6 +51,8 @@ PAUSED worker stops claiming without leaving its consumer group; clearing the
 pause gate resumes polling. `run(in_flight, keep_running)` remains available for
 workers that do not need an external platform-pause gate.
 
+未知协议版本、外租户消息及处理器返回的临时失败仅暂停对应分区，等待两秒后从未确认位置重读，其他分区继续处理。新消费组或已提交位置失效时，从 broker 仍保留的最早消息读取；这可能重读历史消息，处理器须遵循业务幂等契约。首次消费且分区尚无提交位置时，在调用处理器之前保存当前消息位置，不越过该消息；容量不足仍暂停整个已分配集合。
+
 ## 实际执行入口确认
 
 Rust 的 `MessageHandler` 由宿主自定义。启用 `http` 或 `kafka` 特性后，在 CLAIM 成功并将权威响应应用到 `TaskContext` 后，使用 `client::execute_after_start_confirmation` 包裹实际业务调用；不能在消费入队或等待名额时提前确认。
@@ -70,7 +72,7 @@ fn execute_claimed<T: Transport, H: TaskHandler>(
 }
 ```
 
-该入口通过原续租端点发送当前租户、Worker、invocation 和 `details.executionStarted=true`，仅在确认成功后执行闭包；取消结果不调用闭包，租约拒绝、传输失败或无效响应返回 `ExecutionStartError`。宿主遇到该错误应保留原租约恢复流程，不发送伪造的业务失败回报。该计时信号不代替非幂等外部副作用开始标记，也不授权 Replay。
+该入口通过原续租端点发送当前租户、Worker、invocation、`details.executionStarted=true` 和本次业务尝试独有的 `details.executionAttemptId`。标识在请求序列化前生成，传输层对同一请求重试时须复用原请求体；新业务尝试使用新标识。仅在确认成功后执行闭包；取消结果不调用闭包，租约拒绝、传输失败或无效响应返回 `ExecutionStartError`。宿主遇到该错误应保留原租约恢复流程，不发送伪造的业务失败回报。旧服务忽略新字段，旧 SDK 不提供围栏标识，混版期间不能保证重复执行被拦截。该计时信号不代替非幂等外部副作用开始标记，也不授权 Replay。
 
 ## P1 retry / idempotency
 

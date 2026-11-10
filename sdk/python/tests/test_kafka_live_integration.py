@@ -14,12 +14,14 @@ import os
 import time
 from datetime import timedelta
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from aiokafka import AIOKafkaProducer
+from aiokafka import AIOKafkaProducer, TopicPartition
 from aiokafka.admin import AIOKafkaAdminClient, NewTopic
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher
+from batch_worker_sdk.dispatcher.dispatcher import DispatchDisposition
 from batch_worker_sdk.internal._http import PlatformHttpClient
 from batch_worker_sdk.internal._kafka import KafkaTaskConsumer
 from batch_worker_sdk.task.context import SdkTaskContext
@@ -45,6 +47,47 @@ async def _wait_until(predicate, timeout_s: float = 20.0) -> None:
             return
         await asyncio.sleep(0.1)
     raise AssertionError("timed out waiting for live SDK pipeline")
+
+
+async def _wait_for_committed(
+    consumer: KafkaTaskConsumer, tp: TopicPartition, expected: int
+) -> None:
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        if await consumer._consumer.committed(tp) == expected:  # type: ignore[union-attr]
+            return
+        await asyncio.sleep(0.1)
+    raise AssertionError(f"partition {tp} did not reach offset {expected}")
+
+
+async def _start_live_consumer(
+    cfg: Any, dispatcher: Any, handler: Any, tp: TopicPartition
+) -> KafkaTaskConsumer:
+    """启动指定测试消费者并等待目标分区分配。"""
+    consumer = KafkaTaskConsumer(cfg, dispatcher)
+    consumer._handle_record = handler  # type: ignore[method-assign]
+    await consumer.start()
+    await _wait_until(lambda: tp in consumer._consumer.assignment())  # type: ignore[union-attr]
+    return consumer
+
+
+def _anchor_failure_fixture(
+    bootstrap: str,
+) -> tuple[str, TopicPartition, BatchPlatformClientConfig]:
+    """构造首次位置失败测试的独立主题和消费组。"""
+    suffix = str(time.time_ns())
+    topic = f"batch.task.dispatch.python-anchor-failure-{suffix}"
+    cfg = BatchPlatformClientConfig(
+        base_url="http://localhost:8081",
+        tenant_id="acme",
+        worker_code=f"anchor-failure-{suffix}",
+        max_concurrent_tasks=4,
+        kafka_bootstrap=bootstrap,
+        kafka_group_id=f"python-anchor-failure-{suffix}",
+        kafka_topic_pattern=rf"^batch\.task\.dispatch\.python-anchor-failure-{suffix}$",
+        kafka_poll_interval=timedelta(milliseconds=100),
+    )
+    return topic, TopicPartition(topic, 0), cfg
 
 
 def _dispatch_payload(
@@ -102,7 +145,10 @@ def _assert_live_results(
     not os.getenv("BATCH_SDK_KAFKA_BOOTSTRAP"),
     reason="BATCH_SDK_KAFKA_BOOTSTRAP not set; live broker integration skipped",
 )
-async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() -> None:
+@pytest.mark.parametrize("blocked_schema", [False, True])
+async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform(
+    blocked_schema: bool,
+) -> None:
     bootstrap = os.environ["BATCH_SDK_KAFKA_BOOTSTRAP"]
     suffix = str(time.time_ns())
     tenant = "acme"
@@ -118,7 +164,7 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
             max_concurrent_tasks=4,
             kafka_bootstrap=bootstrap,
             kafka_group_id=f"g-sdk-{tenant}-{worker_code}",
-            kafka_topic_pattern=rf"^batch\.task\.dispatch\.{tenant}\..+$",
+            kafka_topic_pattern=rf"^batch\.task\.dispatch\.{tenant}\.echo-{suffix}$",
             kafka_poll_interval=timedelta(milliseconds=100),
         )
         http = PlatformHttpClient(cfg)
@@ -130,22 +176,19 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
             # Apache Kafka 镜像默认可能关闭自动建 topic。显式建临时 topic,避免
             # 测试依赖 broker 的 auto.create.topics.enable 默认值或 metadata race。
             await admin.create_topics(
-                [NewTopic(name=topic, num_partitions=1, replication_factor=1)]
+                [NewTopic(name=topic, num_partitions=2, replication_factor=1)]
             )
             await producer.start()
 
             dispatcher = TaskDispatcher(cfg, http, {"echo": EchoHandler()})
             consumer = KafkaTaskConsumer(cfg, dispatcher)
             await consumer.start()
-            await asyncio.sleep(1.0)
+            await _wait_until(lambda: len(consumer._consumer.assignment()) == 2)  # type: ignore[union-attr]
 
             payload = _dispatch_payload(tenant, 9001, "hello-live", "pinv-live-1")
-            await producer.send_and_wait(topic, json.dumps(payload).encode("utf-8"))
+            await producer.send_and_wait(topic, json.dumps(payload).encode("utf-8"), partition=1)
 
-            # 横向对齐 Go / TS #826 / Rust:同一分区在正常消息之后连续遇到
-            # foreign-tenant 与未知 schema 大版本时,两条都必须 withhold(不提交),
-            # 但不能 pause 分区。最后一条本租户 v2 任务必须继续到达 handler。
-            # topic 默认单分区且 send_and_wait 串行,因此顺序稳定。
+            # 异常消息暂扣分区 0, 另一个分区仍应正常处理。
             foreign = _dispatch_payload(
                 "foreign-tenant", 9002, "must-not-run-foreign", "pinv-live-2"
             )
@@ -157,16 +200,154 @@ async def test_live_kafka_dispatch_claim_execute_report_against_fake_platform() 
                 schema_version="v3",
             )
             after_withhold = _dispatch_payload(tenant, 9004, "after-withhold", "pinv-live-4")
-            for message in (foreign, unsupported, after_withhold):
-                await producer.send_and_wait(topic, json.dumps(message).encode("utf-8"))
+            message = unsupported if blocked_schema else foreign
+            await producer.send_and_wait(topic, json.dumps(message).encode("utf-8"), partition=0)
+            await _wait_until(lambda: TopicPartition(topic, 0) in consumer.withheld_ceilings)
+            await producer.send_and_wait(
+                topic, json.dumps(after_withhold).encode("utf-8"), partition=1
+            )
 
             await _wait_until(lambda: len(platform.get_reports()) >= 2)
             await _wait_until(lambda: dispatcher.in_flight_count() == 0)
 
             _assert_live_results(platform.get_claims(), platform.get_reports(), tenant, worker_code)
+            assert await consumer._consumer.committed(TopicPartition(topic, 0)) in (None, 0)  # type: ignore[union-attr]
+            assert await consumer._consumer.committed(TopicPartition(topic, 1)) == 2  # type: ignore[union-attr]
         finally:
             if consumer is not None:
                 await consumer.stop()
             await producer.stop()
             await admin.close()
             await http.close()
+
+
+@pytest.mark.skipif(
+    not os.getenv("BATCH_SDK_KAFKA_BOOTSTRAP"),
+    reason="BATCH_SDK_KAFKA_BOOTSTRAP not set; live broker integration skipped",
+)
+async def test_live_reassigned_partition_recovers_after_other_member_commits() -> None:
+    """真实消费组中, 暂扣分区转交后由另一成员提交, 再交回原成员继续提交。"""
+    bootstrap = os.environ["BATCH_SDK_KAFKA_BOOTSTRAP"]
+    suffix = str(time.time_ns())
+    topic = f"batch.task.dispatch.python-transfer-{suffix}"
+    cfg = BatchPlatformClientConfig(
+        base_url="http://localhost:8081",
+        tenant_id="acme",
+        worker_code=f"python-transfer-{suffix}",
+        max_concurrent_tasks=4,
+        kafka_bootstrap=bootstrap,
+        kafka_group_id=f"python-transfer-{suffix}",
+        kafka_topic_pattern=rf"^batch\.task\.dispatch\.python-transfer-{suffix}$",
+        kafka_poll_interval=timedelta(milliseconds=100),
+    )
+    dispatcher = MagicMock()
+    dispatcher.in_flight_count.return_value = 0
+    dispatcher.accepts_new_tasks.return_value = True
+    admin = AIOKafkaAdminClient(bootstrap_servers=bootstrap)
+    producer = AIOKafkaProducer(bootstrap_servers=bootstrap)
+    first: KafkaTaskConsumer | None = None
+    second: KafkaTaskConsumer | None = None
+
+    async def first_handle(_tp: Any, rec: Any) -> DispatchDisposition:
+        return DispatchDisposition.WITHHOLD if rec.offset == 0 else DispatchDisposition.ACCEPTED
+
+    async def second_handle(_tp: Any, _rec: Any) -> DispatchDisposition:
+        return DispatchDisposition.ACCEPTED
+
+    try:
+        await admin.start()
+        await admin.create_topics([NewTopic(name=topic, num_partitions=2, replication_factor=1)])
+        await producer.start()
+        first = KafkaTaskConsumer(cfg, dispatcher)
+        first._handle_record = first_handle  # type: ignore[method-assign]
+        await first.start()
+        await _wait_until(lambda: len(first._consumer.assignment()) == 2)  # type: ignore[union-attr]
+        for partition in (0, 1):
+            await producer.send_and_wait(topic, b"{}", partition=partition)
+        await _wait_until(lambda: len(first.withheld_ceilings) == 2)
+        for partition in (0, 1):
+            await _wait_for_committed(first, TopicPartition(topic, partition), 0)
+
+        second = KafkaTaskConsumer(cfg, dispatcher)
+        second._handle_record = second_handle  # type: ignore[method-assign]
+        await second.start()
+        await _wait_until(lambda: len(second._consumer.assignment()) == 1)  # type: ignore[union-attr]
+        transferred = next(iter(second._consumer.assignment()))  # type: ignore[union-attr]
+        await _wait_for_committed(second, transferred, 1)
+        assert transferred not in first.withheld_ceilings
+
+        await second.stop()
+        second = None
+        await _wait_until(lambda: transferred in first._consumer.assignment())  # type: ignore[union-attr]
+        await producer.send_and_wait(topic, b"{}", partition=transferred.partition)
+        await _wait_for_committed(first, transferred, 2)
+        assert transferred not in first.withheld_ceilings
+    finally:
+        if second is not None:
+            await second.stop()
+        if first is not None:
+            await first.stop()
+        await producer.stop()
+        await admin.close()
+
+
+@pytest.mark.skipif(
+    not os.getenv("BATCH_SDK_KAFKA_BOOTSTRAP"),
+    reason="BATCH_SDK_KAFKA_BOOTSTRAP not set; live broker integration skipped",
+)
+async def test_live_first_position_commit_failure_during_transfer_keeps_message() -> None:
+    """首次保存失败后发生真实分区转交, 新成员仍应读到未处理消息。"""
+    bootstrap = os.environ["BATCH_SDK_KAFKA_BOOTSTRAP"]
+    topic, tp, cfg = _anchor_failure_fixture(bootstrap)
+    dispatcher = MagicMock()
+    dispatcher.in_flight_count.return_value = 0
+    dispatcher.accepts_new_tasks.return_value = True
+    admin = AIOKafkaAdminClient(bootstrap_servers=bootstrap)
+    producer = AIOKafkaProducer(bootstrap_servers=bootstrap)
+    first: KafkaTaskConsumer | None = None
+    second: KafkaTaskConsumer | None = None
+    entered_commit = asyncio.Event()
+    release_failure = asyncio.Event()
+    second_seen: list[int] = []
+    first_handle = AsyncMock(return_value=DispatchDisposition.ACCEPTED)
+
+    async def second_handle(_tp: Any, record: Any) -> DispatchDisposition:
+        second_seen.append(record.offset)
+        return DispatchDisposition.ACCEPTED
+
+    try:
+        await admin.start()
+        await admin.create_topics([NewTopic(name=topic, num_partitions=1, replication_factor=1)])
+        await producer.start()
+        first = await _start_live_consumer(cfg, dispatcher, first_handle, tp)
+        assert first._consumer is not None
+        assert await first._consumer.position(tp) == 0
+
+        async def fail_first_checkpoint(_offsets: Any) -> None:
+            entered_commit.set()
+            await release_failure.wait()
+            raise RuntimeError("注入首次位置提交失败")
+
+        first._consumer.commit = fail_first_checkpoint  # type: ignore[method-assign]
+        await producer.send_and_wait(topic, b"first", partition=0)
+        await asyncio.wait_for(entered_commit.wait(), timeout=20)
+        first_handle.assert_not_awaited()
+        assert await first._consumer.committed(tp) is None
+        stopping = asyncio.create_task(first.stop())
+        await _wait_until(lambda: not first._running)  # type: ignore[union-attr]
+        release_failure.set()
+        await stopping
+
+        second = await _start_live_consumer(cfg, dispatcher, second_handle, tp)
+        await second._consumer.position(tp)  # type: ignore[union-attr]
+        await producer.send_and_wait(topic, b"marker", partition=0)
+        await _wait_until(lambda: 1 in second_seen)
+        assert 0 in second_seen, f"新成员跳过未处理的首条消息, 实际消费位置={second_seen}"
+    finally:
+        release_failure.set()
+        if second is not None:
+            await second.stop()
+        if first is not None:
+            await first.stop()
+        await producer.stop()
+        await admin.close()

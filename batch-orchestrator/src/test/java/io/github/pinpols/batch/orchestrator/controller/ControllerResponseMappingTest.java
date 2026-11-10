@@ -63,12 +63,14 @@ class ControllerResponseMappingTest {
     task.setTenantId("tenant");
     task.setTaskStatus("CLAIMED");
     task.setErrorKey("task.failed");
+    task.setExecutionAttemptId("internal-execution-attempt");
     JsonNode taskEntityJson = objectMapper.valueToTree(task);
     ((ObjectNode) taskEntityJson).remove("jobInstanceBizDate");
     ((ObjectNode) taskEntityJson).remove("nonIdempotentStartedAt");
     ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionVersion");
     ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionTriggerRequestId");
     ((ObjectNode) taskEntityJson).remove("externalOutcomeResolutionConsumedAt");
+    ((ObjectNode) taskEntityJson).remove("executionAttemptId");
     JsonNode taskResponseJson = objectMapper.valueToTree(JobTaskResponse.from(task));
     assertThat(taskResponseJson).isEqualTo(taskEntityJson);
     assertThat(taskResponseJson.has("nonIdempotentStartedAt")).isFalse();
@@ -77,6 +79,7 @@ class ControllerResponseMappingTest {
         .isFalse();
     assertThat(taskResponseJson.has("externalOutcomeResolutionConsumedAt")).isFalse();
     assertThat(taskResponseJson.has("jobInstanceBizDate")).isFalse();
+    assertThat(taskResponseJson.has("executionAttemptId")).isFalse();
   }
 
   @Test

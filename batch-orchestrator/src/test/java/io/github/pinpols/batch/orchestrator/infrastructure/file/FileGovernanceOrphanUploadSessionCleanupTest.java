@@ -58,6 +58,7 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
     when(properties.getUploadSession().isCleanupEnabled()).thenReturn(true);
     when(properties.getUploadSession().getOrphanTtlSeconds()).thenReturn(86400L);
     when(properties.getUploadSession().getCleanupBatchSize()).thenReturn(100);
+    when(properties.getReconcile().getBatchSize()).thenReturn(200);
 
     scheduler = new FileGovernanceScheduler(
         repository,
@@ -258,13 +259,15 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
   void shouldReconcileObjectsWithinConfiguredTenantContext() {
     when(properties.getReconcile().isEnabled()).thenReturn(true);
     when(properties.getReconcile().getDefaultTenantId()).thenReturn("tenant-configured");
-    when(storage.listObjects(any(), anyInt(), anyBoolean()))
-        .thenReturn(List.of(new S3GovernanceStorage.StorageObjectView(
-            "batch-files",
-            "incoming/new.csv",
-            12L,
-            "etag",
-            Instant.parse("2026-10-17T00:00:00Z"))));
+    when(storage.listReconcilePage(any(), anyInt(), anyBoolean()))
+        .thenReturn(new S3GovernanceStorage.ReconcilePage(
+            null,
+            List.of(new S3GovernanceStorage.StorageObjectView(
+                "batch-files",
+                "incoming/new.csv",
+                12L,
+                "etag",
+                Instant.parse("2026-10-17T00:00:00Z")))));
     List<String> tenantContexts = new ArrayList<>();
     when(repository.existsFileRecordByStoragePath(anyString(), anyString(), anyString()))
         .thenAnswer(invocation -> {
@@ -294,13 +297,15 @@ class FileGovernanceOrphanUploadSessionCleanupTest {
   void shouldExcludeManagedUploadObjectsFromDefaultTenantReconciliation() {
     when(properties.getReconcile().isEnabled()).thenReturn(true);
     when(properties.getReconcile().getDefaultTenantId()).thenReturn("tenant-configured");
-    when(storage.listObjects(any(), anyInt(), anyBoolean()))
-        .thenReturn(List.of(new S3GovernanceStorage.StorageObjectView(
-            "batch-files",
-            "uploads/tenant-other/20261026Z/session-upload.csv",
-            12L,
-            "etag",
-            Instant.parse("2026-10-26T00:00:00Z"))));
+    when(storage.listReconcilePage(any(), anyInt(), anyBoolean()))
+        .thenReturn(new S3GovernanceStorage.ReconcilePage(
+            null,
+            List.of(new S3GovernanceStorage.StorageObjectView(
+                "batch-files",
+                "uploads/tenant-other/20261026Z/session-upload.csv",
+                12L,
+                "etag",
+                Instant.parse("2026-10-26T00:00:00Z")))));
 
     scheduler.reconcileObjectStorage();
 

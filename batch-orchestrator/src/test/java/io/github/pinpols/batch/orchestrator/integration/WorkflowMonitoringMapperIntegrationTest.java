@@ -51,7 +51,7 @@ class WorkflowMonitoringMapperIntegrationTest {
         CREATE SCHEMA batch;
         CREATE TABLE batch.workflow_definition (
             id BIGSERIAL PRIMARY KEY, tenant_id VARCHAR(64) NOT NULL,
-            workflow_code VARCHAR(128) NOT NULL, timezone VARCHAR(64) NOT NULL,
+            workflow_code VARCHAR(128) NOT NULL, timezone VARCHAR(64),
             UNIQUE (tenant_id, id));
         CREATE TABLE batch.trigger_request (
             id BIGSERIAL PRIMARY KEY, tenant_id VARCHAR(64), request_id VARCHAR(128),
@@ -177,13 +177,33 @@ class WorkflowMonitoringMapperIntegrationTest {
         """;
     jdbcTemplate.update(updateOffsetSql, fixture.tenantId(), fixture.definitionId());
 
-    List<WorkflowMonitoringAlertCandidate> candidates = select(fixture);
+    List<WorkflowMonitoringAlertCandidate> candidates = select(fixture, "America/New_York");
 
     assertThat(candidates)
         .filteredOn(candidate -> candidate.violation() == Violation.NOT_COMPLETED_BY_DEADLINE)
         .singleElement()
         .satisfies(candidate -> assertThat(candidate.monitoringDeadlineAt())
             .isEqualTo(Instant.parse("2026-01-03T20:30:00Z")));
+  }
+
+  @Test
+  @DisplayName("工作流未设置时区时，完成截止按配置的平台默认时区计算")
+  void shouldUseConfiguredDefaultTimezoneWhenWorkflowTimezoneIsAbsent() {
+    Fixture fixture = createFixture(null);
+    insertScheduled(fixture);
+    String updateOffsetSql = """
+        UPDATE batch.workflow_monitoring_policy SET completion_deadline_day_offset = 1
+        WHERE tenant_id = ? AND workflow_definition_id = ?
+        """;
+    jdbcTemplate.update(updateOffsetSql, fixture.tenantId(), fixture.definitionId());
+
+    List<WorkflowMonitoringAlertCandidate> candidates = select(fixture, "America/New_York");
+
+    assertThat(candidates)
+        .filteredOn(candidate -> candidate.violation() == Violation.NOT_COMPLETED_BY_DEADLINE)
+        .singleElement()
+        .satisfies(candidate -> assertThat(candidate.monitoringDeadlineAt())
+            .isEqualTo(Instant.parse("2026-01-03T09:30:00Z")));
   }
 
   @Test
@@ -366,8 +386,13 @@ class WorkflowMonitoringMapperIntegrationTest {
   }
 
   private List<WorkflowMonitoringAlertCandidate> select(Fixture fixture) {
+    return select(fixture, "Asia/Shanghai");
+  }
+
+  private List<WorkflowMonitoringAlertCandidate> select(Fixture fixture, String defaultTimezone) {
     WorkflowMonitoringQuery query = WorkflowMonitoringQuery.builder()
         .tenantId(fixture.tenantId())
+        .defaultTimezone(defaultTimezone)
         .limit(100)
         .build();
     try (SqlSession session = sessionFactory.openSession(false)) {

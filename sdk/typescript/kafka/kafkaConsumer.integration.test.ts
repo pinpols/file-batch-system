@@ -14,7 +14,7 @@
  *   - a foreign-tenant message is DROPPED (not committed)
  *   - a schemaVersion "v3" message is REJECTED (not committed)
  *
- * Cleanup: unique topic/group per run; topics deleted in a finally block.
+ * 每次使用独立主题和消费组；设置 BATCH_SDK_KAFKA_KEEP_TOPICS=1 时保留主题。
  */
 
 import { test } from "node:test";
@@ -118,7 +118,7 @@ test(
     try {
       await admin.connect();
       await admin.createTopics({
-        topics: [{ topic, numPartitions: 1, replicationFactor: 1 }],
+        topics: [{ topic, numPartitions: 2, replicationFactor: 1 }],
         waitForLeaders: true,
       });
       await producer.connect();
@@ -148,9 +148,9 @@ test(
       await producer.send({
         topic,
         messages: [
-          { value: JSON.stringify(validV1) },
-          { value: JSON.stringify(foreign) },
-          { value: JSON.stringify(v3) },
+          { partition: 0, value: JSON.stringify(validV1) },
+          { partition: 0, value: JSON.stringify(foreign) },
+          { partition: 1, value: JSON.stringify(v3) },
         ],
       });
 
@@ -189,7 +189,9 @@ test(
     } finally {
       await adapter.disconnect().catch(() => {});
       await producer.disconnect().catch(() => {});
-      await admin.deleteTopics({ topics: [topic] }).catch(() => {});
+      if (process.env.BATCH_SDK_KAFKA_KEEP_TOPICS !== "1") {
+        await admin.deleteTopics({ topics: [topic] }).catch(() => {});
+      }
       await admin.disconnect().catch(() => {});
     }
   },
