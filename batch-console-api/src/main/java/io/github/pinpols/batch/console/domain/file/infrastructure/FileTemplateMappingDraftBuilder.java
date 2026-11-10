@@ -24,7 +24,7 @@ final class FileTemplateMappingDraftBuilder {
     List<Map<String, Object>> fieldMappings = new ArrayList<>();
     List<Map<String, Object>> columnMappings = new ArrayList<>();
     for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-      if (field == null) {
+      if (EmptyChecks.isNull(field)) {
         warnings.add("存在空字段配置,已跳过");
         continue;
       }
@@ -55,10 +55,10 @@ final class FileTemplateMappingDraftBuilder {
     putIfText(jdbcMappedImport, "schema", command.schemaName());
     putIfText(jdbcMappedImport, "table", command.tableName());
     jdbcMappedImport.put("tenantColumn", firstText(command.tenantColumn(), "tenant_id"));
-    if (!columnMappings.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(columnMappings)) {
       jdbcMappedImport.put("columnMappings", columnMappings);
     }
-    if (command.conflictColumns() != null && !command.conflictColumns().isEmpty()) {
+    if (EmptyChecks.isNotEmpty(command.conflictColumns())) {
       jdbcMappedImport.put("conflictColumns", command.conflictColumns());
     }
     if (Boolean.TRUE.equals(command.standardAuditBindings())) {
@@ -83,7 +83,7 @@ final class FileTemplateMappingDraftBuilder {
     List<Map<String, Object>> csvColumns = new ArrayList<>();
     List<String> selectedColumns = new ArrayList<>();
     for (FileTemplateMappingDraftCommand.Field field : fieldsOf(command)) {
-      if (field == null) {
+      if (EmptyChecks.isNull(field)) {
         warnings.add("存在空字段配置,已跳过");
         continue;
       }
@@ -108,7 +108,7 @@ final class FileTemplateMappingDraftBuilder {
     Map<String, Object> sqlTemplateExport = new LinkedHashMap<>();
     putIfText(sqlTemplateExport, "schema", command.schemaName());
     putIfText(sqlTemplateExport, "table", command.tableName());
-    if (!selectedColumns.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(selectedColumns)) {
       sqlTemplateExport.put("columns", selectedColumns);
     }
     sqlTemplateExport.put("cursorColumn", "id");
@@ -121,7 +121,7 @@ final class FileTemplateMappingDraftBuilder {
     }
 
     String defaultQuerySql = blankToNull(command.defaultQuerySql());
-    if (defaultQuerySql == null) {
+    if (EmptyChecks.isNull(defaultQuerySql)) {
       warnings.add("请填写实际业务导出 SQL，按 :tenantId 和 :batchNo 过滤租户及批次，并返回分页游标列");
     }
     String fieldMappingsJson = writeJson(objectMapper, fieldMappings);
@@ -143,7 +143,7 @@ final class FileTemplateMappingDraftBuilder {
 
   private static List<FileTemplateMappingDraftCommand.Field> fieldsOf(
       FileTemplateMappingDraftCommand command) {
-    return command.fields() == null ? List.of() : command.fields();
+    return EmptyChecks.isNull(command.fields()) ? List.of() : command.fields();
   }
 
   private static void putIfText(Map<String, Object> map, String key, String value) {
@@ -153,7 +153,7 @@ final class FileTemplateMappingDraftBuilder {
   }
 
   private static void putIfNotNull(Map<String, Object> map, String key, Object value) {
-    if (value != null) {
+    if (EmptyChecks.isNotNull(value)) {
       map.put(key, value);
     }
   }

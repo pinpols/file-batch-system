@@ -766,7 +766,7 @@ public class TaskDispatcher {
     if (base.contains(cls)) {
       return base;
     }
-    if (base.isEmpty()) {
+    if (EmptyChecks.isEmpty(base)) {
       return cls;
     }
     return base + " (" + cls + ")";

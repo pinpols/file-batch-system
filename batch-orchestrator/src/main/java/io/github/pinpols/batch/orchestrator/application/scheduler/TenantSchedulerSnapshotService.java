@@ -205,10 +205,11 @@ public class TenantSchedulerSnapshotService {
       long tenantWaitingPartitions,
       Set<String> onlineWorkerGroups) {
     long activeJobs = queueCountMap.getOrDefault(queue.queueCode(), 0L);
-    int maxRunningJobs = queue.maxRunningJobs() == null ? 0 : queue.maxRunningJobs();
-    int burstLimit = queue.burstLimit() == null ? 0 : Math.max(0, queue.burstLimit());
+    int maxRunningJobs = EmptyChecks.isNull(queue.maxRunningJobs()) ? 0 : queue.maxRunningJobs();
+    int burstLimit = EmptyChecks.isNull(queue.burstLimit()) ? 0 : Math.max(0, queue.burstLimit());
     int effectiveMaxRunningJobs = maxRunningJobs > 0 ? maxRunningJobs + burstLimit : 0;
-    int partitionCap = queue.maxRunningPartitions() == null ? 0 : queue.maxRunningPartitions();
+    int partitionCap =
+        EmptyChecks.isNull(queue.maxRunningPartitions()) ? 0 : queue.maxRunningPartitions();
     QueuePartitionBacklogStats backlog =
         backlogMap.getOrDefault(queue.queueCode(), emptyBacklog(queue));
     QuotaRuntimeStateService.QuotaReservationOwner quotaOwner =

@@ -19,34 +19,39 @@ final class JobDefinitionCopyOverrideMapper {
     param.setTenantId(resolved);
     param.setJobCode(request.getNewJobCode());
     param.setDependsOnJobCode(copied.getDependsOnJobCode());
-    param.setJobName(request.getJobName() != null ? request.getJobName() : copied.getJobName());
+    param.setJobName(
+        EmptyChecks.isNotNull(request.getJobName()) ? request.getJobName() : copied.getJobName());
     param.setQueueCode(
-        request.getQueueCode() != null
+        EmptyChecks.isNotNull(request.getQueueCode())
             ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
             : copied.getQueueCode());
     param.setWorkerGroup(
-        request.getWorkerGroup() != null
+        EmptyChecks.isNotNull(request.getWorkerGroup())
             ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
             : copied.getWorkerGroup());
     param.setScheduleExpr(
-        request.getScheduleExpr() != null ? request.getScheduleExpr() : copied.getScheduleExpr());
+        EmptyChecks.isNotNull(request.getScheduleExpr())
+            ? request.getScheduleExpr()
+            : copied.getScheduleExpr());
     param.setTriggerMode(copied.getTriggerMode());
     param.setCalendarCode(
-        request.getCalendarCode() != null
+        EmptyChecks.isNotNull(request.getCalendarCode())
             ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
             : copied.getCalendarCode());
     param.setWindowCode(
-        request.getWindowCode() != null
+        EmptyChecks.isNotNull(request.getWindowCode())
             ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
             : copied.getWindowCode());
     param.setRetryPolicy(
-        request.getRetryPolicy() != null ? request.getRetryPolicy() : copied.getRetryPolicy());
+        EmptyChecks.isNotNull(request.getRetryPolicy())
+            ? request.getRetryPolicy()
+            : copied.getRetryPolicy());
     param.setRetryMaxCount(
-        request.getRetryMaxCount() != null
+        EmptyChecks.isNotNull(request.getRetryMaxCount())
             ? request.getRetryMaxCount()
             : copied.getRetryMaxCount());
     param.setTimeoutSeconds(
-        request.getTimeoutSeconds() != null
+        EmptyChecks.isNotNull(request.getTimeoutSeconds())
             ? request.getTimeoutSeconds()
             : copied.getTimeoutSeconds());
     param.setShardStrategy(copied.getShardStrategy());
@@ -58,9 +63,12 @@ final class JobDefinitionCopyOverrideMapper {
     param.setParamSchema(copied.getParamSchema());
     param.setPriority(EmptyChecks.isNull(copied.getPriority()) ? 5 : copied.getPriority());
     param.setDefaultParams(copied.getDefaultParams());
-    param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
+    param.setEnabled(
+        EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : copied.getEnabled());
     param.setDescription(
-        request.getDescription() != null ? request.getDescription() : copied.getDescription());
+        EmptyChecks.isNotNull(request.getDescription())
+            ? request.getDescription()
+            : copied.getDescription());
     param.setUpdatedBy(operator);
     return param;
   }

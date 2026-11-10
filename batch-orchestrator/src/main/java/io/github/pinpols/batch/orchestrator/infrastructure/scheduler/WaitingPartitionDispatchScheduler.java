@@ -93,9 +93,10 @@ public class WaitingPartitionDispatchScheduler {
     List<WaitingDispatchCandidate> sorted =
         candidates.stream().sorted(comparator).toList();
     for (WaitingDispatchCandidate candidate : sorted) {
-      String tenantId =
-          candidate.partition() == null ? null : candidate.partition().getTenantId();
-      if (tenantId == null || tenantId.isBlank()) {
+      String tenantId = EmptyChecks.isNull(candidate.partition())
+          ? null
+          : candidate.partition().getTenantId();
+      if (EmptyChecks.isBlank(tenantId)) {
         continue;
       }
       try {

@@ -89,7 +89,7 @@ final class LocalOutboxDispatchSupport {
 
       String message;
       if (transportStub) {
-        String detail = stubDetail == null ? "" : stubDetail;
+        String detail = EmptyChecks.isNull(stubDetail) ? "" : stubDetail;
         message = "transport stub: filesystem outbox only — " + detail;
       } else {
         message = "dispatched via local filesystem outbox";

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.sql;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -35,7 +36,7 @@ final class SqlFunctionNameCollector {
     TablesNamesFinder<Void> finder = new TablesNamesFinder<>() {
       @Override
       public <S> Void visit(Function function, S context) {
-        if (function.getName() != null) {
+        if (EmptyChecks.isNotNull(function.getName())) {
           // 去引号：防 "pg_read_server_files"(...) 这类带引号标识符逃逸比对。
           String lowerCaseName = function.getName().toLowerCase(Locale.ROOT);
           String normalizedName = lowerCaseName.replace("\"", "");
@@ -47,7 +48,7 @@ final class SqlFunctionNameCollector {
       @Override
       public <S> Void visit(AnalyticExpression aexpr, S context) {
         // 窗口/分析函数是 AnalyticExpression 而非 Function 节点,名字单独采集,内部表达式手动下钻。
-        if (aexpr.getName() != null) {
+        if (EmptyChecks.isNotNull(aexpr.getName())) {
           String lowerCaseName = aexpr.getName().toLowerCase(Locale.ROOT);
           String normalizedName = lowerCaseName.replace("\"", "");
           names.add(normalizedName);
@@ -55,7 +56,7 @@ final class SqlFunctionNameCollector {
         acceptIfPresent(aexpr.getExpression(), context);
         acceptIfPresent(aexpr.getOffset(), context);
         acceptIfPresent(aexpr.getDefaultValue(), context);
-        if (aexpr.getPartitionExpressionList() != null) {
+        if (EmptyChecks.isNotNull(aexpr.getPartitionExpressionList())) {
           aexpr.getPartitionExpressionList().accept(this, context);
         }
         acceptOrderBy(aexpr.getOrderByElements(), context);
@@ -66,7 +67,7 @@ final class SqlFunctionNameCollector {
       public <S> Void visit(PlainSelect plainSelect, S context) {
         Void r = super.visit(plainSelect, context);
         acceptScalarClauses(
-            plainSelect.getGroupBy() == null
+            EmptyChecks.isNull(plainSelect.getGroupBy())
                 ? null
                 : plainSelect.getGroupBy().getGroupByExpressionList(),
             plainSelect.getHaving(),
@@ -101,17 +102,17 @@ final class SqlFunctionNameCollector {
         acceptIfPresent(groupByExpressions, context);
         acceptIfPresent(having, context);
         acceptOrderBy(orderBy, context);
-        if (limit != null) {
+        if (EmptyChecks.isNotNull(limit)) {
           acceptIfPresent(limit.getRowCount(), context);
           acceptIfPresent(limit.getOffset(), context);
         }
-        if (offset != null) {
+        if (EmptyChecks.isNotNull(offset)) {
           acceptIfPresent(offset.getOffset(), context);
         }
       }
 
       private <S> void acceptOrderBy(List<OrderByElement> orderBy, S context) {
-        if (orderBy != null) {
+        if (EmptyChecks.isNotNull(orderBy)) {
           for (OrderByElement obe : orderBy) {
             acceptIfPresent(obe.getExpression(), context);
           }
@@ -119,7 +120,7 @@ final class SqlFunctionNameCollector {
       }
 
       private <S> void acceptIfPresent(Expression e, S context) {
-        if (e != null) {
+        if (EmptyChecks.isNotNull(e)) {
           e.accept(this, context);
         }
       }

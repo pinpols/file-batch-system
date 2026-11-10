@@ -153,7 +153,7 @@ public class GenerateStep implements ExportStageStep {
     ExportDataContext dataCtx = buildExportDataContext(context, exportPayload);
     ExportDataPlugin dataPlugin = exportDataPluginRegistry.require(exportDataRef);
     Map<String, Object> batch = dataPlugin.loadBatch(dataCtx);
-    if (batch.isEmpty()) {
+    if (EmptyChecks.isEmpty(batch)) {
       return ExportStageResult.failure(
           stage(),
           "EXPORT_BATCH_NOT_FOUND",
@@ -181,7 +181,7 @@ public class GenerateStep implements ExportStageStep {
     // ADR-038 P3:续跑开关 + pipelineInstanceId + 非 Excel 才启用续跑。启用时生成文件路径必须确定化
     // (随机 temp 跨崩溃重派会丢残文件);开关关时保持随机 temp,行为与今天完全一致。
     Long checkpointInstanceId = resolveCheckpointInstanceId(context, fileFormatType);
-    boolean checkpointEnabled = checkpointInstanceId != null;
+    boolean checkpointEnabled = EmptyChecks.isNotNull(checkpointInstanceId);
     attempt.generatedFile = checkpointEnabled
         ? deterministicGeneratedFile(checkpointInstanceId, fileFormatType)
         : createGeneratedFile(context, exportPayload, fileFormatType);
@@ -242,7 +242,7 @@ public class GenerateStep implements ExportStageStep {
         .build();
     long recordCount = strategy.generate(formatCtx);
 
-    if (checkpoint != null) {
+    if (EmptyChecks.isNotNull(checkpoint)) {
       // 整体完成 → 补记终页行数 + 文件字节数指纹 + 标记 completed;此后该实例重派会走上面的幂等跳过(校验指纹)分支。
       checkpoint.complete(recordCount, Files.size(attempt.generatedFile));
     }

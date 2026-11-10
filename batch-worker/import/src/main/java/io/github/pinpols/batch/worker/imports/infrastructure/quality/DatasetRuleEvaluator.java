@@ -76,7 +76,7 @@ public class DatasetRuleEvaluator {
 
   private static Integer expectedRowCount(
       Integer ruleExact, boolean fromManifest, Integer manifestExpectedCount) {
-    if (ruleExact != null) {
+    if (EmptyChecks.isNotNull(ruleExact)) {
       return ruleExact;
     }
     if (fromManifest) {

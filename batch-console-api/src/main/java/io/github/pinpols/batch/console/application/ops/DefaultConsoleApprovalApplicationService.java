@@ -114,8 +114,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         request.setApprovalId(approvalNo);
         // 历史/异常补偿单 payload 未带 compensationType(创建时未选)→ 补偿执行必抛
         // 「必须指定补偿类型」、审批单长期停滞无从补救。按目标类型确定性推导补偿粒度回退。
-        if (request.getCompensationType() == null
-            || request.getCompensationType().isBlank()) {
+        if (EmptyChecks.isBlank(request.getCompensationType())) {
           String targetType = approvalRecord.getTargetType();
           String compensationType = deriveCompensationType(targetType);
           request.setCompensationType(compensationType);
@@ -145,7 +144,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         request.setApprovalId(approvalNo);
         ConsolePresignDownloadResponse downloadResponse =
             consoleFileApplicationService.presignDownload(request, approvalNo);
-        yield downloadResponse == null ? null : downloadResponse.downloadUrl();
+        yield EmptyChecks.isNull(downloadResponse) ? null : downloadResponse.downloadUrl();
       }
       case "CATCH_UP" -> {
         ConsoleCatchUpApprovalRequest request = JsonUtils.fromJson(

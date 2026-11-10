@@ -74,9 +74,8 @@ public class DefaultTriggerService implements TriggerService {
         || command.request().triggerType() != TriggerType.CATCH_UP) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
-    TriggerLaunchQueryService queryService = launchQueryService;
-    LaunchRequest launchRequest = launchAdapterService.fromApiRequest(command);
-    return queryService.verifyCatchUpSubmission(launchRequest, command.idempotencyKey());
+    return launchQueryService.verifyCatchUpSubmission(
+        launchAdapterService.fromApiRequest(command), command.idempotencyKey());
   }
 
   @Override
