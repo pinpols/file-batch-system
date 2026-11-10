@@ -4,6 +4,7 @@
 
 - `JobNodeDispatchIntegrationTest#capacityWaitRecoveryRacingSettlement_shouldKeepBatchDayInFlight` 在围栏释放后用 Awaitility 等待 `RESUMED` / 单恢复 RootRun `RUNNING` / 业务日 `IN_FLIGHT`。生产 `WorkflowLaunchWaitReconciler` 的 5s 扫描可能先于显式 `reconcileTenant` 认领等待并阻塞在结算围栏上，显式 Future 会提前返回；根运行的独立事务先提交，`RESUMED` 仍未可见。main full gate run 42804543630 因此读到 `WAITING`。断言口径与围栏同步不变，不改变生产逻辑。
 - `AtomicTaskPipelineE2eIT#shouldNotRepeatHttpSideEffect_whenCompletedAtomicRetryMessageIsRedelivered` 在给已运行的 `TaskDispatchExecutor` spy 打桩前停止原子任务监听，打桩完成后再启动。消费线程并发调用同一 spy 时，Mockito 打桩会抛 `UnfinishedStubbing`。full gate run 42811907158 的 E2E 2 因此失败。探针断言口径不变，不改变生产逻辑。
+- Java SDK `TaskDispatcher.awaitClaimDecision` 在认领决定已经完成时返回该决定。执行线程若在调用方读到结果前因 `Error` 把调度器标成 fatal，旧循环会丢掉已写入的 `SUBMITTED` 并返回 `WITHHOLD`。full gate run 42815701093 的 `LeaseRenewalSchedulerTest#shouldStopRenewingTask_whenHandlerThrowsError` 因此失败。尚未完成的决定在 fatal 或停机时仍返回 `WITHHOLD`。
 
 ## 2026-11-10 Java 控制流可读性
 
