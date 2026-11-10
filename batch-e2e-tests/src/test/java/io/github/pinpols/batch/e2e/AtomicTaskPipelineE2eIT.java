@@ -85,7 +85,10 @@ import org.springframework.test.util.AopTestUtils;
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
     properties = {
       "batch.retry.poll-interval-millis=600000",
-      "batch.outbox.poll-interval-millis=600000"
+      "batch.outbox.poll-interval-millis=600000",
+      "batch.worker.report-outbox.enabled=true",
+      "batch.worker.report-outbox.storage=PLATFORM_PG",
+      "batch.worker.report-outbox.poll-interval-millis=600000"
     })
 @E2eBusinessSchema
 @Tag("critical")
