@@ -38,6 +38,7 @@
 
 ### Fixed
 
+- Java SDK 在认领决定已经完成时返回该决定。处理器若在调用方读到结果前抛出 `Error`，调度器会进入 fatal，但已写入的 `SUBMITTED` 不再被改写成 `WITHHOLD`。尚未完成的决定在 fatal 或停机时仍不提交位点。
 - 五语言 SDK 遇到无法确认的 Kafka 消息时仅暂缓对应分区并重试，其他分区继续消费；修复 Python、Rust 的转交恢复及 TypeScript 全局暂停竞态。Python、Rust、TypeScript 新消费组默认改为从最早保留位置读取，可能重读历史消息，需依靠 CLAIM 和业务幂等；TypeScript 显式选择最新位置时仍有首次保存失败后转交漏读的风险。Java 在 CLAIM 结果明确后才推进位点，默认单条 poll，未注册处理器时先认领再回报失败。
 - 修复 TypeScript SDK 消费组分区转交后继续保留旧提交屏障的问题；重新分配后从 broker 的提交位置恢复。
 - 修复 TypeScript SDK 停机排空时等待计时器不保活，导致 Node.js 可能在注销完成前退出的问题；等待结束后及时清理计时器。

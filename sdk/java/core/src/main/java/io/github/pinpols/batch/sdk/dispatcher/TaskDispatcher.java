@@ -378,9 +378,9 @@ public class TaskDispatcher {
   }
 
   private DispatchDecision awaitClaimDecision(CompletableFuture<DispatchDecision> decision) {
-    while (!draining.get() && !retryCoordinator.isFatal()) {
+    while (!decision.isDone() && !draining.get() && !retryCoordinator.isFatal()) {
       try {
-        return decision.get(100, TimeUnit.MILLISECONDS);
+        decision.get(100, TimeUnit.MILLISECONDS);
       } catch (TimeoutException timeout) {
         // 周期检查停机状态，避免工作项尚未启动时阻塞消费线程。
       } catch (InterruptedException interrupted) {
@@ -389,6 +389,11 @@ public class TaskDispatcher {
       } catch (ExecutionException failed) {
         return DispatchDecision.WITHHOLD;
       }
+    }
+    // 认领决定已经写入后，执行线程可能立刻因 Error 把调度器标成 fatal。
+    // 已完成的位点决定必须原样返回，不能被随后看到的 fatal 改写成 WITHHOLD。
+    if (decision.isDone() && !decision.isCompletedExceptionally()) {
+      return decision.join();
     }
     return DispatchDecision.WITHHOLD;
   }

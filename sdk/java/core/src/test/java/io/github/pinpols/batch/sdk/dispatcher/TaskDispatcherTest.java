@@ -20,6 +20,7 @@ import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskHandler;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.IOException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -488,6 +489,35 @@ class TaskDispatcherTest {
     dispatcher.onMessage(msg("tt"));
 
     assertThat(executed.await(2, TimeUnit.SECONDS)).isTrue();
+  }
+
+  @Test
+  @DisplayName("认领尚未完成时停机不提交位点")
+  void shouldWithhold_whenDispatcherStopsBeforeClaimDecision() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    CountDownLatch claimEntered = new CountDownLatch(1);
+    CountDownLatch releaseClaim = new CountDownLatch(1);
+    when(http.claim(eq(42L), anyString(), any())).thenAnswer(invocation -> {
+      claimEntered.countDown();
+      if (!releaseClaim.await(5, TimeUnit.SECONDS)) {
+        throw new IllegalStateException("claim was not released");
+      }
+      return new PlatformHttpClient.TaskClaimResponse("inv-42");
+    });
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+    ExecutorService caller = Executors.newSingleThreadExecutor();
+    Future<TaskDispatcher.DispatchDecision> decision =
+        caller.submit(() -> dispatcher.onMessage(msg("tt")));
+    try {
+      assertThat(claimEntered.await(2, TimeUnit.SECONDS)).isTrue();
+      dispatcher.stop(Duration.ZERO);
+      assertThat(decision.get(2, TimeUnit.SECONDS))
+          .isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
+    } finally {
+      releaseClaim.countDown();
+      caller.shutdownNow();
+      assertThat(caller.awaitTermination(2, TimeUnit.SECONDS)).isTrue();
+    }
   }
 
   @Test
