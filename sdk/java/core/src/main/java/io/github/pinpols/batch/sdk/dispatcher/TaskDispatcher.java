@@ -380,12 +380,12 @@ public class TaskDispatcher {
   private DispatchDecision awaitClaimDecision(CompletableFuture<DispatchDecision> decision) {
     while (!decision.isDone() && !draining.get() && !retryCoordinator.isFatal()) {
       try {
-        return decision.get(100, TimeUnit.MILLISECONDS);
+        decision.get(100, TimeUnit.MILLISECONDS);
       } catch (TimeoutException timeout) {
         // 周期检查停机状态，避免工作项尚未启动时阻塞消费线程。
       } catch (InterruptedException interrupted) {
         Thread.currentThread().interrupt();
-        break;
+        return DispatchDecision.WITHHOLD;
       } catch (ExecutionException failed) {
         return DispatchDecision.WITHHOLD;
       }
