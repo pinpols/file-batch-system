@@ -597,11 +597,15 @@ export class WorkerLifecycle {
       if (remaining <= 0) break;
       const settledPromises = Promise.allSettled(promises);
       const pollIntervalMs = Math.min(remaining, 25);
+      let pollTimer: ReturnType<typeof setTimeout> | undefined;
       const pollDelay = new Promise<void>((resolve) => {
-        const pollTimer = setTimeout(resolve, pollIntervalMs);
-        pollTimer.unref?.();
+        pollTimer = setTimeout(resolve, pollIntervalMs);
       });
-      await Promise.race([settledPromises, pollDelay]);
+      try {
+        await Promise.race([settledPromises, pollDelay]);
+      } finally {
+        clearTimeout(pollTimer);
+      }
     }
   }
 }
