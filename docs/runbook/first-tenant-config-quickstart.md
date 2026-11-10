@@ -129,7 +129,7 @@ curl -X POST /api/console/tenants \
 
 使用 `sql_template_export` 时，须根据真实业务表关系填写导出 SQL，使用 `:tenantId` 和 `:batchNo` 分别过滤当前租户及批次；映射草案不会猜测批次字段或表关联，也不会生成默认 SQL。查询结果还必须包含 `query_param_schema.sqlTemplateExport.cursorColumn` 指定的分页游标；缺省为 `id`，应确认该列存在并适合稳定分页。游标可只用于分页，不必出现在 `csvColumns` 文件输出字段中。若业务表使用其他游标，需要同时修改查询和游标配置并核对排序及唯一性。
 
-映射草案同时生成 `query_param_schema.csvColumns`，按所选字段顺序保存输出来源和表头；这是分隔符文件实际使用的列配置。分页游标只在用户明确选择时输出。已有模板不会自动重写，修改查询或输出字段时应同步检查该配置。
+映射草案同时生成 `query_param_schema.csvColumns`，按所选字段顺序保存输出来源和表头；这是分隔符文件及 Excel 实际使用的列配置。`field_mappings` 不会单独指定文件输出列；未配置 `csvColumns` 时，生成器会依次使用插件提供的列或从首行查询结果推断，因此分页游标也可能出现在文件中。要排除游标，应明确配置 `csvColumns`。已有模板不会自动重写，修改查询或输出字段时应同步检查该配置。
 
 ```sql
 -- default_query_sql::tenantId / :status 是命名参数(运行时绑定);别和文件命名的 ${bizDate} 混淆。
@@ -155,7 +155,7 @@ WHERE tenant_id = :tenantId AND (:status IS NULL OR status = :status)
   "status":{"type":"string","required":false}}}
 ```
 
-- 导出 **Excel**:把模板 `file_format_type` 设 `EXCEL`。新增可选项:`field_mappings[*].type=NUMBER/DATE`(让数字/日期在 Excel 里是真类型可求和/筛选)、`rows_per_sheet`(超大结果集自动拆 sheet)、`header_style`(表头加粗/列宽/冻结)。不填 = 全文本单 sheet(向后兼容)。
+- 导出 **Excel**：把模板 `file_format_type` 设为 `EXCEL`。可在 `query_param_schema.csvColumns` 的列项中设置 `type=NUMBER/DATE` 和 `numberFormat/dateFormat`，让数值和日期以对应单元格类型输出；还可配置 `rows_per_sheet` 和 `header_style`。不配置列类型时按文本输出。
 
 > **import vs export 的 field_mappings 是两套结构**:import 用 `targetColumn`(文件→表列),export 用 `sourceColumn`+`header`(SQL 列→表头)。别抄错。
 

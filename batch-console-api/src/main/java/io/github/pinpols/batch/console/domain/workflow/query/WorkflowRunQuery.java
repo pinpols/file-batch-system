@@ -5,14 +5,17 @@ import io.github.pinpols.batch.common.model.PageRequest;
 public record WorkflowRunQuery(
     String tenantId,
     Long workflowDefinitionId,
+    String workflowCode,
     Long relatedJobInstanceId,
     String runStatus,
     String currentNodeCode,
     String traceId,
+    String requestId,
     PageRequest pageRequest,
     Long cursorId) {
 
   public static WorkflowRunQuery ofDefinition(String tenantId, Long workflowDefinitionId) {
-    return new WorkflowRunQuery(tenantId, workflowDefinitionId, null, null, null, null, null, null);
+    return new WorkflowRunQuery(
+        tenantId, workflowDefinitionId, null, null, null, null, null, null, null, null);
   }
 }

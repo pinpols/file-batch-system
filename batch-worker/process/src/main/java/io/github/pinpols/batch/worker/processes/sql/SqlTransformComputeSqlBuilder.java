@@ -56,18 +56,21 @@ final class SqlTransformComputeSqlBuilder {
 
   /** 构建不使用 JSONB 暂存表的 DIRECT 发布语句。 */
   static String buildDirectPublishSql(SqlTransformComputeSpec spec) {
+    String source = "(\n" + spec.sourceSql() + "\n)";
+    return buildDirectPublishSql(spec, source);
+  }
+
+  private static String buildDirectPublishSql(SqlTransformComputeSpec spec, String source) {
     String sql = """
         INSERT INTO %s (%s)
         SELECT %s
-        FROM (
-        %s
-        ) base
+        FROM %s base
         ORDER BY %s
         """.formatted(
             targetName(spec),
             targetColumnList(spec),
             directSourceSelectColumns(spec),
-            spec.sourceSql(),
+            source,
             conflictOrderByColumns(spec, true));
     return appendConflictClause(sql, spec);
   }
@@ -75,6 +78,36 @@ final class SqlTransformComputeSqlBuilder {
   /** 通过一条 DIRECT 写入语句返回发布行数和水位值。 */
   static String buildDirectPublishMetricsSql(SqlTransformComputeSpec spec) {
     String watermarkColumn = JdbcMappedSqlValidator.quotePg(spec.watermarkColumn());
+    boolean ignoresConflicts = spec.writeMode() != SqlTransformComputeSpec.WriteMode.UPSERT
+        || spec.columns().stream()
+            .allMatch(column -> spec.conflictColumns().contains(column.target()));
+    SqlTransformComputeSpec.ColumnMapping watermarkMapping = spec.columns().stream()
+        .filter(column -> column.target().equals(spec.watermarkColumn()))
+        .findFirst()
+        .orElse(null);
+    if (ignoresConflicts && watermarkMapping != null) {
+      String directPublishSql = buildDirectPublishSql(spec, "source_rows");
+      String sourceWatermark = JdbcMappedSqlValidator.quotePg(watermarkMapping.source());
+      // 发布与水位读取同一批物化源数据，冲突跳过的行仍属于已处理的输入。
+      return """
+      WITH source_rows AS MATERIALIZED (
+      %s
+      ), published AS (
+      %s
+      RETURNING 1
+      )
+      SELECT (SELECT count(*) FROM published) AS published_rows,
+             (SELECT max((jsonb_populate_record(NULL::%s,
+                        jsonb_build_object('%s', base.%s))).%s)
+              FROM source_rows base) AS high_water_mark
+      """.formatted(
+              spec.sourceSql(),
+              directPublishSql,
+              targetName(spec),
+              spec.watermarkColumn(),
+              sourceWatermark,
+              watermarkColumn);
+    }
     String directPublishSql = buildDirectPublishSql(spec);
     return """
     WITH published AS (

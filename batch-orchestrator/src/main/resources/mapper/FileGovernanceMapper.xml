@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper">
+    <select id="existsEnabledFileChannel" resultType="boolean">
+        select exists (
+            select 1 from batch.file_channel_config
+            where tenant_id = #{tenantId} and channel_code = #{channelCode} and enabled = true
+        )
+    </select>
     <resultMap id="fileRecordRow" type="io.github.pinpols.batch.orchestrator.domain.view.FileGovernanceViews$FileRecordRow">
         <constructor>
             <idArg column="id" javaType="java.lang.Long"/>
@@ -259,6 +265,56 @@
         limit #{limit}
     </select>
 
+    <!-- 已被旧对账抢登的受管入口对象，须等 scanner 准入后才参与 WAIT 与到达组。 -->
+    <sql id="scannerAcceptedOrUnowned">
+        and (
+          file.legacy_channel_fallback
+          or not coalesce(file.metadata_json @&gt; '{"reconciled": true}'::jsonb, false)
+          or coalesce(file.metadata_json @&gt; '{"scannerAccepted": true}'::jsonb, false)
+          or not exists (
+            select 1
+              from batch.import_ingress_ownership scope
+             where scope.storage_id = #{storageId}
+               and scope.state in ('ACTIVE', 'RETIRED')
+               and scope.bucket_name = file.storage_bucket
+               and (
+                 left(file.storage_path, length(scope.object_prefix)) = scope.object_prefix
+                 or exists (
+                   select 1
+                     from batch.import_ingress_ownership_binding binding
+                     cross join lateral (
+                       select case when position('{bizDateCompact}' in binding.manifest_key_template) &gt; 0
+                                   then '{bizDateCompact}' else '{bizDate}' end as placeholder,
+                              case when position('{bizDateCompact}' in binding.manifest_key_template) &gt; 0
+                                   then 8 else 10 end as date_length
+                     ) template_kind
+                     cross join lateral (
+                       select position(template_kind.placeholder in binding.manifest_key_template) as marker
+                     ) template_position
+                    where binding.scope_id = scope.scope_id
+                      and binding.binding_type = 'MANIFEST'
+                      and template_position.marker &gt; 0
+                      and position(template_kind.placeholder in substring(binding.manifest_key_template
+                          from template_position.marker + length(template_kind.placeholder))) = 0
+                      and length(file.storage_path) = length(binding.manifest_key_template)
+                          - length(template_kind.placeholder) + template_kind.date_length
+                      and left(file.storage_path, template_position.marker - 1)
+                          = left(binding.manifest_key_template, template_position.marker - 1)
+                      and substring(file.storage_path from template_position.marker + template_kind.date_length)
+                          = substring(binding.manifest_key_template
+                              from template_position.marker + length(template_kind.placeholder))
+                      and (
+                        (template_kind.date_length = 8 and substring(file.storage_path
+                            from template_position.marker for 8) ~ '^[0-9]{8}$')
+                        or (template_kind.date_length = 10 and substring(file.storage_path
+                            from template_position.marker for 10) ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+                      )
+                 )
+               )
+          )
+        )
+    </sql>
+
     <select id="selectArrivalGovernanceCandidates" resultMap="arrivalCandidateRow">
         select id,
                tenant_id,
@@ -278,8 +334,9 @@
                metadata_json -&gt;&gt; 'expectedArrivalTime' as expected_arrival_time,
                metadata_json -&gt;&gt; 'latestTolerableTime' as latest_tolerable_time,
                metadata_json -&gt;&gt; 'triggerOnComplete' as trigger_on_complete
-        from batch.file_record
+        from batch.file_record file
         where jsonb_exists(metadata_json, 'fileGroupCode')
+          <include refid="scannerAcceptedOrUnowned"/>
           and (metadata_json -&gt;&gt; 'uploadMode' is distinct from 'APP_MANAGED'
                or jsonb_exists(metadata_json, 'arrivalConfirmedAt'))
           and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL')
@@ -306,8 +363,9 @@
                    coalesce(metadata_json -&gt;&gt; 'requiredFileSet', '') as required_file_set,
                    coalesce(metadata_json -&gt;&gt; 'arrivalTimeoutAction', 'MANUAL_CONFIRM') as timeout_action,
                    min(created_at) as first_file_at
-            from batch.file_record
+            from batch.file_record file
             where jsonb_exists(metadata_json, 'fileGroupCode')
+              <include refid="scannerAcceptedOrUnowned"/>
               and coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%'
             group by tenant_id, biz_date, metadata_json -&gt;&gt; 'fileGroupCode',
                      coalesce(metadata_json -&gt;&gt; 'waitFileGroupMode', 'ALL_OF'),
@@ -355,8 +413,9 @@
                count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') = 'TIMEOUT') as timeout_count,
                count(1) filter (where coalesce(metadata_json -&gt;&gt; 'arrivalState', 'WAITING_ARRIVAL') like 'WAITING%') as waiting_count,
                max(updated_at) as last_updated_at
-        from batch.file_record
+        from batch.file_record file
         where jsonb_exists(metadata_json, 'fileGroupCode')
+        <include refid="scannerAcceptedOrUnowned"/>
         <if test="tenantId != null and tenantId != ''">
             and tenant_id = #{tenantId}
         </if>
@@ -390,9 +449,10 @@
                coalesce(metadata_json -&gt;&gt; 'allowSkipBizDate', 'false') as allow_skip_biz_date,
                metadata_json -&gt;&gt; 'requiredFileSet' as required_file_set,
                metadata_json -&gt;&gt; 'latestTolerableTime' as latest_tolerable_time
-        from batch.file_record
+        from batch.file_record file
         where tenant_id = #{tenantId}
           and metadata_json -&gt;&gt; 'fileGroupCode' = #{fileGroupCode}
+          <include refid="scannerAcceptedOrUnowned"/>
           and (metadata_json -&gt;&gt; 'uploadMode' is distinct from 'APP_MANAGED'
                or jsonb_exists(metadata_json, 'arrivalConfirmedAt'))
         <if test="bizDate != null and bizDate != ''">
@@ -481,12 +541,12 @@
             tenant_id, file_category, file_name, original_file_name, file_ext, file_format_type,
             charset, mime_type, file_size_bytes, checksum_type, checksum_value,
             storage_type, storage_path, storage_bucket, file_version, file_generation_no, is_latest,
-            source_type, source_ref, file_status, biz_date, trace_id, metadata_json, created_at, updated_at
+            source_type, source_ref, arrival_channel_code, file_status, biz_date, trace_id, metadata_json, created_at, updated_at
         ) values (
             #{tenantId}, #{fileCategory}, #{fileName}, #{fileName}, #{fileExt}, #{fileFormatType},
             'UTF-8', #{mimeType}, #{fileSizeBytes}, 'NONE', null,
             #{storageType}, #{storagePath}, #{storageBucket}, 'v1', 1, true,
-            #{sourceType}, null, #{fileStatus}, #{bizDate,jdbcType=DATE}, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
+            #{sourceType}, null, #{arrivalChannelCode}, #{fileStatus}, #{bizDate,jdbcType=DATE}, #{traceId}, #{metadataJson,jdbcType=VARCHAR}::jsonb, current_timestamp, current_timestamp
         )
         <!--
           TOCTOU 回退(2026-06 加固):reconcileObject 的 existsFileRecordByStoragePath → insert 两步非原子,

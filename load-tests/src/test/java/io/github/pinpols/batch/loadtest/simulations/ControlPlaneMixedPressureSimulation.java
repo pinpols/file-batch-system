@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.loadtest.simulations;
 
 import io.github.pinpols.batch.loadtest.GatlingConfig;
+import io.gatling.javaapi.core.Assertion;
 import io.gatling.javaapi.core.ChainBuilder;
 import io.gatling.javaapi.core.PopulationBuilder;
 import io.gatling.javaapi.core.ScenarioBuilder;
@@ -112,12 +113,24 @@ public class ControlPlaneMixedPressureSimulation extends Simulation {
     setUp(populations.toArray(PopulationBuilder[]::new))
         .protocols(httpProtocol)
         .maxDuration(Duration.ofSeconds(GatlingConfig.DURATION_SECONDS + 60L))
-        .assertions(
-            // 控制面混压下,launch/claim/report 写延迟会先于错误率劣化逼近瓶颈
-            // (单机~20 jobs/s 上限);仅卡错误率会"绿着已逼近瓶颈"。补全局 p95
-            // 写延迟门,使容量验收在延迟侧也有硬 SLO(slo.write.p95ms,默认 500ms)。
-            global().responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS),
-            GatlingConfig.maxErrorRateAssertion());
+        .assertions(assertions());
+  }
+
+  private static Assertion[] assertions() {
+    List<Assertion> checks = new ArrayList<>();
+    addWriteAssertion(checks, "process", PROCESS_RPS);
+    addWriteAssertion(checks, "dispatch", DISPATCH_RPS);
+    addWriteAssertion(checks, "atomic", ATOMIC_RPS);
+    addWriteAssertion(checks, "trigger", GatlingConfig.SCHEDULING_LAUNCH_RPS);
+    checks.add(GatlingConfig.maxErrorRateAssertion());
+    return checks.toArray(Assertion[]::new);
+  }
+
+  private static void addWriteAssertion(List<Assertion> checks, String module, double rate) {
+    if (enabled(module) && rate > 0) {
+      String requestName = "mixed " + module + " / POST /api/triggers/launch";
+      checks.add(details(requestName).responseTime().percentile(95).lt(GatlingConfig.WRITE_P95_MS));
+    }
   }
 
   private static void addLaunchPopulation(

@@ -88,11 +88,13 @@ type Worker struct {
 	rootCtx    context.Context
 	rootCancel context.CancelFunc
 
-	wg       sync.WaitGroup // consume + scheduler goroutines
-	taskWg   sync.WaitGroup // in-flight handler executions
-	draining atomic.Bool
-	stopOnce sync.Once
-	started  atomic.Bool
+	wg          sync.WaitGroup // consume + scheduler goroutines
+	taskWg      sync.WaitGroup // in-flight handler executions
+	dispatchMu  sync.Mutex
+	dispatching map[string]struct{}
+	draining    atomic.Bool
+	stopOnce    sync.Once
+	started     atomic.Bool
 }
 
 // NewWorker builds a worker. consumer + handler are required; validator
@@ -108,14 +110,15 @@ func NewWorker(cfg Config, transport Transport, consumer Consumer, handler TaskH
 	fsm := NewFSM()
 	registry := NewInFlightRegistry()
 	w := &Worker{
-		cfg:       cfg,
-		transport: transport,
-		consumer:  consumer,
-		handler:   handler,
-		validator: validator,
-		fsm:       fsm,
-		registry:  registry,
-		logger:    logger,
+		cfg:         cfg,
+		transport:   transport,
+		consumer:    consumer,
+		handler:     handler,
+		validator:   validator,
+		fsm:         fsm,
+		registry:    registry,
+		dispatching: make(map[string]struct{}),
+		logger:      logger,
 	}
 	w.pipeline = NewMessagePipeline(cfg.TenantID, fsm, cfg.MaxConcurrentTasks, registry.Count, logger)
 	w.heartbeat = NewHeartbeatScheduler(transport, fsm, cfg.WorkerCode, cfg.TenantID,
@@ -287,7 +290,27 @@ func (w *Worker) awaitCapacity(ctx context.Context) bool {
 //   - claim hard failure (5xx exhausted / transport / non-409 4xx) -> WITHHOLD:
 //     the task was never claimed, so committing would strand it forever; leave
 //     the offset uncommitted so the platform lease/timeout redelivers it.
+//   - 同一任务仍在认领或执行 -> WITHHOLD，保留原执行的续租与取消登记。
 func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit bool) {
+	// CLAIM 前占位：同任务的重复投递不得覆盖正在执行的续租和取消登记。
+	w.dispatchMu.Lock()
+	if _, exists := w.dispatching[msg.TaskID]; exists {
+		w.dispatchMu.Unlock()
+		return false
+	}
+	w.dispatching[msg.TaskID] = struct{}{}
+	w.dispatchMu.Unlock()
+	release := func() {
+		w.dispatchMu.Lock()
+		delete(w.dispatching, msg.TaskID)
+		w.dispatchMu.Unlock()
+	}
+	handedOff := false
+	defer func() {
+		if !handedOff {
+			release()
+		}
+	}()
 	invID := partitionInvocationID(msg)
 	// Mint a FRESH Idempotency-Key per distinct write (fixture 24); do NOT reuse
 	// the Kafka delivery key (which is also empty when the platform omits it).
@@ -312,6 +335,10 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		w.logger.Printf("WARN claim failed taskId=%s (withholding offset for redelivery): %v", msg.TaskID, err)
 		return false
 	}
+	// 停机期间即使认领成功也不启动新业务，保留消息由租约回收后重投。
+	if w.draining.Load() || ctx.Err() != nil {
+		return false
+	}
 	if claim.Idempotent {
 		// 409: already claimed by another worker; treat as no-op success (§B) and
 		// commit-skip so we don't re-read a task we don't own.
@@ -330,6 +357,7 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		defer func() {
 			// 先归还容量再判断恢复, 避免最后一个任务仍被计入在途数。
 			w.registry.Remove(msg.TaskID)
+			release()
 			if w.fsm.Paused() {
 				inFlight := w.registry.Count()
 				maxConcurrent := w.cfg.MaxConcurrentTasks
@@ -391,10 +419,16 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		}
 		// 在业务协程实际进入处理器前确认当前身份；拒绝或响应未知均不伪造业务失败。
 		startRequest := RenewRequest{TenantID: w.cfg.TenantID, WorkerID: w.cfg.WorkerCode,
-			PartitionInvocationID: invID, Details: map[string]any{"executionStarted": true}}
+			PartitionInvocationID: invID, Details: map[string]any{
+				"executionStarted": true, "executionAttemptId": newNonce(),
+			}}
 		startResult, startError := w.transport.Renew(ctx, msg.TaskID, startRequest)
 		if startError != nil || startResult.Revoked {
 			w.logger.Printf("WARN execution start was not confirmed taskId=%s: %v", msg.TaskID, startError)
+			return
+		}
+		// 停机后不再进入业务，未完成的执行交由服务端租约恢复。
+		if w.draining.Load() || ctx.Err() != nil {
 			return
 		}
 		if (startResult.CancelRequested != nil && *startResult.CancelRequested) || sig.IsCancellationRequested() {
@@ -410,6 +444,7 @@ func (w *Worker) dispatch(ctx context.Context, msg TaskDispatchMessage) (commit 
 		}
 		w.report(msg, invID, result)
 	}()
+	handedOff = true
 	// Claim succeeded and the handler is now in-flight: the offset is safe to
 	// commit (the task is durably owned via the lease; the async report lands
 	// independently of the Kafka offset).
@@ -572,10 +607,16 @@ func (w *Worker) Stop(timeout time.Duration) {
 	})
 }
 
-// waitInFlight blocks until the in-flight count hits zero or the budget expires.
+// waitInFlight 等待认领中及已启动的派发收敛，或等待预算耗尽。
 func (w *Worker) waitInFlight(budget time.Duration) {
 	deadline := time.Now().Add(budget)
-	for w.registry.Count() > 0 && time.Now().Before(deadline) {
+	for time.Now().Before(deadline) {
+		w.dispatchMu.Lock()
+		remaining := len(w.dispatching)
+		w.dispatchMu.Unlock()
+		if remaining == 0 {
+			return
+		}
 		time.Sleep(10 * time.Millisecond)
 	}
 }

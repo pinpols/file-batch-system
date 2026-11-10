@@ -27,6 +27,42 @@ function startServer(
   });
 }
 
+test("执行入口标识通过真实 HTTP 续租请求发送", async () => {
+  const captured: unknown[] = [];
+  const srv = await startServer((req, res) => {
+    let body = "";
+    req.setEncoding("utf8");
+    req.on("data", (chunk: string) => {
+      body += chunk;
+    });
+    req.on("end", () => {
+      captured.push(JSON.parse(body));
+      res.setHeader("Content-Type", "application/json");
+      res.end(JSON.stringify({ cancelRequested: false }));
+    });
+  });
+  const transport = new HttpTransport({ baseUrl: srv.url, tenantId: "tenant-A", workerCode: "w1" });
+  try {
+    await transport.renew("task-1", {
+      tenantId: "tenant-A",
+      workerId: "w1",
+      partitionInvocationId: "inv-current",
+      details: { executionStarted: true, executionAttemptId: "attempt-1" },
+    });
+    assert.deepEqual(captured, [
+      {
+        tenantId: "tenant-A",
+        workerId: "w1",
+        partitionInvocationId: "inv-current",
+        details: { executionStarted: true, executionAttemptId: "attempt-1" },
+      },
+    ]);
+  } finally {
+    (transport as unknown as { close(): void }).close();
+    await srv.close();
+  }
+});
+
 test("transport: 503 then 200 → retry with backoff, eventual success", async () => {
   let hits = 0;
   const srv = await startServer((req, res) => {

@@ -1,22 +1,13 @@
-// Package kafka is the real Kafka consumer adapter for the BYO worker SDK,
-// implementing the broker-agnostic client.Consumer SPI on top of
-// github.com/segmentio/kafka-go.
+// Package kafka 基于 github.com/segmentio/kafka-go 实现自托管 Worker SDK 的消费适配器。
 //
-// It lives in a NESTED module (see go.mod) so the root batch-worker-sdk-go
-// module stays zero-dependency: the SDK core only knows the client.Consumer
-// interface and never imports a Kafka library. Tenants who want real Kafka
-// pull in this module; tenants who embed the SDK and bring their own broker
-// glue do not.
+// 本包使用独立嵌套模块，SDK 核心仅依赖 client.Consumer 接口；使用 Kafka 的调用方
+// 按需引入本模块，自行提供消息代理适配器的调用方无需引入。
 //
-// Wire behavior implemented here mirrors byo-sdk-guide.md §1.2 / §1.5 / §1.9:
-//   - wildcard topic subscription batch.task.dispatch.<tenant>.*
-//   - consumer group g-sdk-<tenantId>-<workerCode>
-//   - SASL/SCRAM-SHA-512 + TLS support (config-driven; PLAINTEXT when no creds)
-//   - JSON deserialize -> client.MessagePipeline (schemaVersion reject,
-//     tenant self-check, capacity backpressure)
-//   - MANUAL offset commit: commit ONLY after the pipeline accepts; never on
-//     reject (unknown schemaVersion) or foreign-tenant drop -> redelivery
-//   - partition pause/resume modeled by stopping/resuming the fetch loop
+// 消费行为遵循 byo-sdk-guide.md §1.2、§1.5 和 §1.9：
+//   - 按任务类型和 Worker 编码发现定向派单主题，使用租户和 Worker 专属消费组。
+//   - 按配置启用 SASL/SCRAM-SHA-512 和 TLS；未配置凭据时使用明文连接。
+//   - 反序列化消息后交给 client.MessagePipeline，执行协议版本、租户和容量检查。
+//   - 认领或终结处置明确后手动提交位点；被拒绝消息按分区保留位置并等待重投。
 package kafka
 
 import (
@@ -33,17 +24,17 @@ import (
 	"github.com/segmentio/kafka-go/sasl/scram"
 )
 
-// DefaultTopicRefreshInterval is how often the adapter re-lists broker topics to
-// pick up newly created per-task-type dispatch topics
-// (batch.task.dispatch.<tenant>.<taskType>). kafka-go's GroupReader takes a
-// fixed GroupTopics slice at construction and does NOT support regex/wildcard
-// subscriptions, so wildcard is emulated by periodic metadata polling +
-// prefix-filtering + reader restart when the matched set changes.
+// DefaultTopicRefreshInterval 控制重新发现派单主题的周期。
+// kafka-go 消费组创建时需要固定主题集合，适配器通过定期查询元数据发现匹配主题，
+// 并在主题集合变化时重建消费组。
 const DefaultTopicRefreshInterval = 5 * time.Minute
 
 // DefaultFetchMaxWait bounds how long a single underlying FetchMessage blocks
 // before returning so Poll() stays responsive to Wakeup()/Pause().
 const DefaultFetchMaxWait = 1 * time.Second
+
+// 未确认消息重读前的间隔，避免持续失败时频繁重试。
+const withholdRetryDelay = 2 * time.Second
 
 // Config drives the Kafka adapter. Credentials come from here (sourced by the
 // caller from env / secret store) and are NEVER read from message payloads
@@ -109,11 +100,8 @@ func (c Config) groupID() string {
 
 // Consumer is the kafka-go-backed implementation of client.Consumer.
 //
-// Pause/Resume have no native equivalent on kafka-go's GroupReader, so they are
-// modeled by gating the fetch loop: while paused, Poll() blocks (parking until
-// resumed or woken) instead of fetching, which stops new records from flowing —
-// equivalent in effect to assignment.pause(). Offsets already fetched are not
-// committed until Commit() is called after pipeline acceptance.
+// Pause/Resume 控制向业务消费循环交付记录；分区 reader 最多缓存有限记录。
+// 已拉取记录仍须由当前代际的 Commit 确认，重平衡后由 broker 提交位置恢复。
 type Consumer struct {
 	cfg    Config
 	logger *log.Logger
@@ -121,27 +109,37 @@ type Consumer struct {
 	client *kgo.Client
 
 	mu     sync.Mutex
-	reader *kgo.Reader
 	topics []string
 	paused bool
 	woken  bool
+	group  *kgo.ConsumerGroup
+	active *delivery
+	events chan *delivery
+	done   chan struct{}
 
-	// pending holds messages fetched-but-not-yet-committed, so Commit() can
-	// acknowledge exactly the offsets the pipeline accepted.
+	// pending 保留交付给消费循环、尚未判定的单条记录。
 	pending []kgo.Message
 
-	// withheld is the per-partition commit ceiling: the LOWEST offset that was
-	// withheld (schema-rejected / foreign-tenant / hard claim failure). Commit()
-	// never acknowledges an offset at or past the ceiling for that partition, so
-	// a withheld record's offset can never be crossed by a later record's commit
-	// (the effect of the Java SDK's seek-back, achieved without a seek API).
+	// 记录当前代际中被暂扣的位置；每个分区不会在确认前交付后续记录。
 	withheld map[tpKey]int64
+	// 每个待处理 offset 单独保留，重读成功时只解除对应记录。
+	withheldOffsets map[tpKey]map[int64]struct{}
 
 	resumeCh chan struct{} // signaled on Resume()/Wakeup() to unpark a paused Poll
 	ctx      context.Context
 	cancel   context.CancelFunc
+}
 
-	lastRefresh time.Time
+// 每个分区至多有一条记录等待消费循环判定；代际结束后不得继续处理或提交。
+type delivery struct {
+	message    kgo.Message
+	ctx        context.Context
+	generation offsetCommitter
+	decision   chan bool
+}
+
+type offsetCommitter interface {
+	CommitOffsets(map[string]map[int]int64) error
 }
 
 // tpKey identifies a topic-partition for the per-partition commit ceiling.
@@ -189,6 +187,8 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 		dialer:   dialer,
 		client:   kc,
 		resumeCh: make(chan struct{}, 1),
+		events:   make(chan *delivery),
+		done:     make(chan struct{}),
 		ctx:      ctx,
 		cancel:   cancel,
 		withheld: map[tpKey]int64{},
@@ -204,8 +204,7 @@ func NewConsumer(cfg Config) (*Consumer, error) {
 		return nil, fmt.Errorf("kafka: no topics match suffix %q (the node-direct dispatch topic batch.task.dispatch.<workerType>.node.<workerCode> must exist; the orchestrator creates it on first dispatch, or pre-create it)", cfg.directDispatchSuffix())
 	}
 	c.topics = topics
-	c.reader = c.newReader(topics)
-	c.lastRefresh = time.Now()
+	go c.runConsumerGroup()
 	logger.Printf("INFO kafka adapter subscribed group=%s topics=%v", cfg.groupID(), topics)
 	return c, nil
 }
@@ -270,59 +269,139 @@ func (c *Consumer) discoverTopics() ([]string, error) {
 	return matched, nil
 }
 
-// newReader constructs a GroupReader over the given concrete topic set with
-// MANUAL commit (CommitInterval: 0) so offsets are only acknowledged via
-// explicit CommitMessages after the pipeline accepts.
-func (c *Consumer) newReader(topics []string) *kgo.Reader {
-	maxWait := c.cfg.FetchMaxWait
-	if maxWait <= 0 {
-		maxWait = DefaultFetchMaxWait
-	}
-	return kgo.NewReader(kgo.ReaderConfig{
-		Brokers:        c.cfg.Brokers,
-		GroupID:        c.cfg.groupID(),
-		GroupTopics:    topics,
-		Dialer:         c.dialer,
-		CommitInterval: 0, // MANUAL commit
-		MaxWait:        maxWait,
-	})
-}
-
-// maybeRefreshTopics periodically re-lists topics; if the matched set changed it
-// rebuilds the reader so newly created <taskType> topics get consumed. Any
-// uncommitted pending messages are dropped on rebuild (they will be redelivered
-// since they were never committed), preserving at-least-once.
-//
-// It is called with c.mu held. The old reader is NOT closed here — closing a
-// kafka-go reader can block (it leaves the group), and doing so under c.mu would
-// stall a concurrent Wakeup()/Close()/Commit(). Instead the displaced reader is
-// returned so the caller can Close() it AFTER releasing the lock.
-func (c *Consumer) maybeRefreshTopics() (old *kgo.Reader) {
+// runConsumerGroup 管理分配代际和主题发现；每次重建均等待旧组退出。
+func (c *Consumer) runConsumerGroup() {
+	defer close(c.done)
 	interval := c.cfg.TopicRefreshInterval
 	if interval <= 0 {
 		interval = DefaultTopicRefreshInterval
 	}
-	if time.Since(c.lastRefresh) < interval {
-		return nil
+	for c.ctx.Err() == nil {
+		c.mu.Lock()
+		topics := append([]string(nil), c.topics...)
+		c.mu.Unlock()
+		group, err := kgo.NewConsumerGroup(kgo.ConsumerGroupConfig{
+			ID: c.cfg.groupID(), Brokers: c.cfg.Brokers, Topics: topics, Dialer: c.dialer,
+		})
+		if err != nil {
+			c.logger.Printf("ERROR kafka consumer group creation failed: %v", err)
+			return
+		}
+		c.mu.Lock()
+		c.group = group
+		c.mu.Unlock()
+		refreshAt := time.Now().Add(interval)
+		for c.ctx.Err() == nil {
+			wait, cancel := context.WithDeadline(c.ctx, refreshAt)
+			gen, nextErr := group.Next(wait)
+			cancel()
+			if nextErr != nil {
+				if c.ctx.Err() != nil {
+					break
+				}
+				if nextErr == context.DeadlineExceeded {
+					refreshAt = time.Now().Add(interval)
+					updated, discoverErr := c.discoverTopics()
+					if discoverErr != nil {
+						c.logger.Printf("WARN kafka topic refresh failed: %v", discoverErr)
+					} else if len(updated) > 0 && !sameTopics(updated, topics) {
+						c.mu.Lock()
+						c.topics = updated
+						c.mu.Unlock()
+						break
+					}
+					continue
+				}
+				if nextErr == kgo.ErrGroupClosed {
+					break
+				}
+				c.logger.Printf("WARN kafka consumer group error: %v", nextErr)
+				continue
+			}
+			c.mu.Lock()
+			c.withheld = map[tpKey]int64{}
+			c.withheldOffsets = nil
+			c.mu.Unlock()
+			for topic, assignments := range gen.Assignments {
+				for _, assignment := range assignments {
+					topic, assignment := topic, assignment
+					gen.Start(func(ctx context.Context) { c.readPartition(ctx, gen, topic, assignment) })
+				}
+			}
+		}
+		_ = group.Close()
+		c.mu.Lock()
+		if c.group == group {
+			c.group = nil
+		}
+		c.mu.Unlock()
 	}
-	c.lastRefresh = time.Now()
-	topics, err := c.discoverTopics()
-	if err != nil {
-		c.logger.Printf("WARN kafka topic refresh failed: %v", err)
-		return nil
+}
+
+// 每个分区只预取一条并等待结果；未确认时仅重试该分区。
+func (c *Consumer) readPartition(ctx context.Context, gen *kgo.Generation, topic string, assignment kgo.PartitionAssignment) {
+	maxWait := c.cfg.FetchMaxWait
+	if maxWait <= 0 {
+		maxWait = DefaultFetchMaxWait
 	}
-	if len(topics) == 0 || sameTopics(topics, c.topics) {
-		return nil
+	reader := kgo.NewReader(kgo.ReaderConfig{
+		Brokers: c.cfg.Brokers, Topic: topic, Partition: assignment.ID,
+		Dialer: c.dialer, MaxWait: maxWait, QueueCapacity: 1,
+	})
+	defer reader.Close()
+	if err := reader.SetOffset(assignment.Offset); err != nil {
+		c.logger.Printf("ERROR kafka partition offset setup failed: %v", err)
+		return
 	}
-	c.logger.Printf("INFO kafka topic set changed old=%v new=%v; rebuilding reader", c.topics, topics)
-	old = c.reader
-	c.reader = c.newReader(topics)
-	c.topics = topics
-	c.pending = nil
-	// Uncommitted pending is dropped (redelivered); the ceilings referenced those
-	// dropped offsets, so clear them too — nothing remains that they must guard.
-	c.withheld = map[tpKey]int64{}
-	return old
+	for ctx.Err() == nil && c.ctx.Err() == nil {
+		message, err := reader.FetchMessage(ctx)
+		if err != nil {
+			if ctx.Err() != nil || c.ctx.Err() != nil {
+				return
+			}
+			c.logger.Printf("WARN kafka partition fetch failed: %v", err)
+			timer := time.NewTimer(time.Second)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+			case <-c.ctx.Done():
+			}
+			timer.Stop()
+			continue
+		}
+		item := &delivery{message: message, ctx: ctx, generation: gen, decision: make(chan bool, 1)}
+		for {
+			select {
+			case c.events <- item:
+			case <-ctx.Done():
+				return
+			case <-c.ctx.Done():
+				return
+			}
+			var committed bool
+			select {
+			case committed = <-item.decision:
+			case <-ctx.Done():
+				return
+			case <-c.ctx.Done():
+				return
+			}
+			if committed {
+				break
+			}
+			timer := time.NewTimer(withholdRetryDelay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-c.ctx.Done():
+				timer.Stop()
+				return
+			}
+			timer.Stop()
+		}
+	}
 }
 
 // sameTopics compares two topic sets ignoring order.
@@ -342,20 +421,16 @@ func sameTopics(a, b []string) bool {
 	return true
 }
 
-// Poll fetches one record (kafka-go has no batch fetch; we return single-record
-// batches) and returns it as a client.Record. It returns (nil, false) when the
-// consumer has been woken/closed. While paused, it parks until Resume/Wakeup
-// rather than fetching — the partition-pause emulation.
+// Poll 返回一个仍属于当前消费组代际的分区记录。
 func (c *Consumer) Poll() ([]client.Record, bool) {
 	for {
 		c.mu.Lock()
-		if c.woken {
+		if c.woken || c.ctx.Err() != nil {
 			c.mu.Unlock()
 			return nil, false
 		}
 		if c.paused {
 			c.mu.Unlock()
-			// Park until resumed or woken; do not fetch new records.
 			select {
 			case <-c.resumeCh:
 				continue
@@ -363,41 +438,36 @@ func (c *Consumer) Poll() ([]client.Record, bool) {
 				return nil, false
 			}
 		}
-		oldReader := c.maybeRefreshTopics()
-		reader := c.reader
 		c.mu.Unlock()
-
-		// Close the displaced reader outside the lock (it can block leaving the
-		// group); a nil-check keeps the common no-refresh path allocation-free.
-		if oldReader != nil {
-			_ = oldReader.Close()
-		}
-
-		fetchTimeout := c.fetchTimeout()
-		fetchCtx, cancel := context.WithTimeout(c.ctx, fetchTimeout)
-		msg, err := reader.FetchMessage(fetchCtx)
-		cancel()
-		if err != nil {
-			c.mu.Lock()
-			woken := c.woken
-			c.mu.Unlock()
-			if woken || c.ctx.Err() != nil {
-				return nil, false
+		select {
+		case <-c.ctx.Done():
+			return nil, false
+		case <-c.resumeCh:
+			continue
+		case item := <-c.events:
+			for item.ctx.Err() == nil {
+				c.mu.Lock()
+				if c.woken || c.ctx.Err() != nil {
+					c.mu.Unlock()
+					return nil, false
+				}
+				if !c.paused {
+					c.active = item
+					c.pending = []kgo.Message{item.message}
+					c.mu.Unlock()
+					return []client.Record{{Topic: item.message.Topic, Key: string(item.message.Key), Value: item.message.Value}}, true
+				}
+				c.mu.Unlock()
+				select {
+				case <-c.resumeCh:
+				case <-item.ctx.Done():
+				case <-c.ctx.Done():
+					return nil, false
+				}
 			}
-			// Timeout / transient: return an empty batch with ok=true so the
-			// consume loop can re-check pause/wakeup state and poll again.
+		case <-time.After(c.fetchTimeout()):
 			return nil, true
 		}
-
-		c.mu.Lock()
-		c.pending = append(c.pending, msg)
-		c.mu.Unlock()
-
-		return []client.Record{{
-			Topic: msg.Topic,
-			Key:   string(msg.Key),
-			Value: msg.Value,
-		}}, true
 	}
 }
 
@@ -406,7 +476,6 @@ func (c *Consumer) fetchTimeout() time.Duration {
 	if w <= 0 {
 		w = DefaultFetchMaxWait
 	}
-	// Give the fetch a little headroom beyond MaxWait.
 	return w + 500*time.Millisecond
 }
 
@@ -425,82 +494,68 @@ func (c *Consumer) Resume() {
 	c.signalResume()
 }
 
-// Commit acknowledges all pending (fetched-and-accepted) offsets. The live
-// worker calls Commit() ONLY after the pipeline accepts; on reject / foreign
-// tenant the caller must NOT call Commit for that record, so it is redelivered.
-//
-// Because Poll returns one record per call and the worker commits per accepted
-// record, pending normally holds exactly the message just accepted. Any pending
-// message left uncommitted at the next rebuild/close is redelivered.
+// Commit 只提交当前代际内实际受理的分区位置；失败时保留该记录重试。
 func (c *Consumer) Commit() {
 	c.mu.Lock()
-	if len(c.pending) == 0 {
-		c.mu.Unlock()
-		return
-	}
-	// Enforce the per-partition ceiling: never acknowledge an offset at or past a
-	// withheld record. Anything at/past the ceiling is dropped from the commit set
-	// (it stays uncommitted → redelivered), so a later record can never silently
-	// skip a withheld one on the same partition.
-	msgs := committable(c.pending, c.withheld)
+	item := c.active
+	c.active = nil
 	c.pending = nil
-	reader := c.reader
 	c.mu.Unlock()
-
-	if len(msgs) == 0 {
+	if item == nil || item.ctx.Err() != nil {
 		return
 	}
-
-	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
-	defer cancel()
-	if err := reader.CommitMessages(ctx, msgs...); err != nil {
+	m := item.message
+	err := item.generation.CommitOffsets(map[string]map[int]int64{m.Topic: {m.Partition: m.Offset + 1}})
+	if err != nil {
 		c.logger.Printf("ERROR kafka commit offsets failed (will redeliver): %v", err)
-		// Put them back so a later Commit can retry.
+	}
+	if err == nil {
 		c.mu.Lock()
-		c.pending = append(msgs, c.pending...)
+		key := tpKey{topic: m.Topic, partition: m.Partition}
+		delete(c.withheld, key)
+		delete(c.withheldOffsets, key)
 		c.mu.Unlock()
+	}
+	select {
+	case item.decision <- err == nil:
+	case <-item.ctx.Done():
+	case <-c.ctx.Done():
 	}
 }
 
-// DropPending discards the not-yet-committed messages without committing, so the
-// broker redelivers them. The worker calls this after a reject / foreign-tenant
-// drop instead of Commit(), keeping the offset withheld (§1.9 / §A).
-func (c *Consumer) DropPending() {
-	c.mu.Lock()
-	c.pending = nil
-	c.mu.Unlock()
-}
+// DropPending 放弃当前记录并在原分区重试，不推进提交位置。
+func (c *Consumer) DropPending() { c.Withhold() }
 
-// Withhold marks the LAST fetched record (the one the pipeline just judged) as
-// valid-but-deferred and enforces the client.Consumer contract: its offset is
-// never committed and no later commit on the same partition may cross it.
-//
-// Because Poll returns one record per call, the record just judged is the tail
-// of pending. We record its offset as the partition's commit ceiling (keeping
-// the LOWEST if several are withheld) and drop everything at/past the ceiling
-// from pending. kafka-go has no seek on a GroupReader, so we cannot re-read the
-// record; instead we simply never commit past it, so the group resumes from the
-// last committed offset (before the withheld record) on the next rebalance /
-// restart and redelivers it — the same net effect as the Java SDK's seek-back.
-//
-// SPI limitation (documented, not a bug): client.Consumer has no per-partition
-// pause, so — unlike the Java SDK, which pause()s only the poisoned partition —
-// this adapter keeps fetching. Correctness is unaffected (the ceiling guarantees
-// no offset is ever crossed); the only cost is that later records on a poisoned
-// partition may be processed and then redelivered on restart (bounded, and
-// harmless under claim idempotency). Full parity needs a per-partition SPI.
+// Withhold 仅阻塞当前分区，原代际失效时由 broker 的提交位置恢复。
 func (c *Consumer) Withhold() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if len(c.pending) == 0 {
+		c.mu.Unlock()
 		return
 	}
 	m := c.pending[len(c.pending)-1]
-	k := tpKey{topic: m.Topic, partition: m.Partition}
-	if cur, ok := c.withheld[k]; !ok || m.Offset < cur {
-		c.withheld[k] = m.Offset
+	key := tpKey{topic: m.Topic, partition: m.Partition}
+	if c.withheldOffsets == nil {
+		c.withheldOffsets = make(map[tpKey]map[int64]struct{})
 	}
-	c.pending = committable(c.pending, c.withheld)
+	if c.withheldOffsets[key] == nil {
+		c.withheldOffsets[key] = make(map[int64]struct{})
+	}
+	c.withheldOffsets[key][m.Offset] = struct{}{}
+	if cur, ok := c.withheld[key]; !ok || m.Offset < cur {
+		c.withheld[key] = m.Offset
+	}
+	item := c.active
+	c.active = nil
+	c.pending = nil
+	c.mu.Unlock()
+	if item != nil {
+		select {
+		case item.decision <- false:
+		case <-item.ctx.Done():
+		case <-c.ctx.Done():
+		}
+	}
 }
 
 // committable returns the subset of msgs whose offset is strictly below their
@@ -533,17 +588,10 @@ func (c *Consumer) Wakeup() {
 
 // Close releases the reader and metadata client.
 func (c *Consumer) Close() {
-	c.mu.Lock()
-	reader := c.reader
-	c.reader = nil
-	c.mu.Unlock()
 	c.cancel()
-	if reader != nil {
-		_ = reader.Close()
-	}
+	<-c.done
 }
 
-// signalResume does a non-blocking send on resumeCh to wake a parked Poll.
 func (c *Consumer) signalResume() {
 	select {
 	case c.resumeCh <- struct{}{}:

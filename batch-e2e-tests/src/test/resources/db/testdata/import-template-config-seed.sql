@@ -152,23 +152,23 @@ VALUES
  true, 1, 'test',
  'jdbc_mapped'),
 
--- 4. 定长导入（每条记录恰好 100 字符）
+-- 4. 定长导入（每条记录恰好 101 字符）
 ('t1', 'IMP-CUSTOMER-FW', 'Customer Import Fixed-Width', 'IMPORT', 'CUSTOMER',
  'FIXED_WIDTH', 'UTF-8', 'UTF-8', false,
  null, null, null,
- 100, 0, 0,
+ 101, 0, 0,
  'NONE', 'NONE', 'NONE',
  '[
-   {"name":"customerNo","targetColumn":"customer_no","type":"STRING","required":true,"offset":0,"length":4},
-   {"name":"customerName","targetColumn":"customer_name","type":"STRING","required":true,"offset":4,"length":20},
-   {"name":"customerType","targetColumn":"customer_type","type":"STRING","required":true,"offset":24,"length":9},
-   {"name":"creditLimit","targetColumn":"credit_limit","type":"DECIMAL","required":true,"offset":33,"length":10,"format":"0000000.00"},
-   {"name":"currencyCode","targetColumn":"currency_code","type":"STRING","required":true,"offset":43,"length":3},
-   {"name":"email","targetColumn":"email","type":"STRING","required":false,"offset":46,"length":24},
-   {"name":"phone","targetColumn":"phone","type":"STRING","required":false,"offset":70,"length":12},
-   {"name":"status","targetColumn":"status","type":"STRING","required":true,"offset":82,"length":8},
-   {"name":"openDate","targetColumn":"open_date","type":"DATE","required":true,"offset":90,"length":8,"format":"yyyyMMdd"},
-   {"name":"remark","targetColumn":"remark","type":"STRING","required":false,"offset":98,"length":3}
+   {"name":"customerNo","target":"customerNo","targetColumn":"customer_no","type":"STRING","required":true,"start":0,"length":4},
+   {"name":"customerName","target":"customerName","targetColumn":"customer_name","type":"STRING","required":true,"start":4,"length":20},
+   {"name":"customerType","target":"customerType","targetColumn":"customer_type","type":"STRING","required":true,"start":24,"length":9},
+   {"name":"creditLimit","target":"creditLimit","targetColumn":"credit_limit","type":"DECIMAL","required":true,"start":33,"length":10,"format":"0000000.00"},
+   {"name":"currencyCode","target":"currencyCode","targetColumn":"currency_code","type":"STRING","required":true,"start":43,"length":3},
+   {"name":"email","target":"email","targetColumn":"email","type":"STRING","required":false,"start":46,"length":24},
+   {"name":"phone","target":"phone","targetColumn":"phone","type":"STRING","required":false,"start":70,"length":12},
+   {"name":"status","target":"status","targetColumn":"status","type":"STRING","required":true,"start":82,"length":8},
+   {"name":"openDate","target":"openDate","targetColumn":"open_date","type":"DATE","required":true,"start":90,"length":8,"format":"yyyyMMdd"},
+   {"name":"remark","target":"remark","targetColumn":"remark","type":"STRING","required":false,"start":98,"length":3}
  ]'::jsonb,
  null,
  '{"jdbcMappedImport":{

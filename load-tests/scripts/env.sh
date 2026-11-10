@@ -19,6 +19,21 @@ export MAX_ERROR_PCT="${MAX_ERROR_PCT:-20.0}"
 export PIPELINE_POLL_INTERVAL_SEC="${PIPELINE_POLL_INTERVAL_SEC:-2}"
 export SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 export CONSOLE_ACCESS_TOKEN="${CONSOLE_ACCESS_TOKEN:-load-test-token}"
+# 宿主机负责创建/清理夹具；文件记录和渠道配置需要使用 Worker 进程内可见的路径。
+export LOAD_TEST_HOST_ROOT="${LOAD_TEST_HOST_ROOT:-/tmp/batch}"
+export LOAD_TEST_WORKER_ROOT="${LOAD_TEST_WORKER_ROOT:-/tmp/batch}"
+
+validate_load_test_fixture_roots() {
+  local name value
+  for name in LOAD_TEST_HOST_ROOT LOAD_TEST_WORKER_ROOT; do
+    value="${!name}"
+    if [[ "$value" != /* || "$value" =~ ^/+$ || "$value" == *$'\n'* \
+        || "/$value/" == *"/../"* || "/$value/" == *"/./"* ]]; then
+      echo "$name must be an absolute non-root path without parent traversal or newlines" >&2
+      return 2
+    fi
+  done
+}
 
 # worker 夹具会给 RUN_ID 追加最长的 "-SETTLEMENT" 后缀并写入 varchar(64)。在产生文件或写库前
 # 统一校验，避免长时间容量画像最终才以数据库长度错误失败。

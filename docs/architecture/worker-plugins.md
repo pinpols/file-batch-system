@@ -41,6 +41,7 @@
   - EXPLAIN 前置检查（`explainCheckEnabled=true`）：首页前执行 `EXPLAIN (FORMAT JSON)`，超过 `maxEstimatedRows` / `maxPlanCost` 则拒绝执行
   - 每页大小受 `batch.worker.export.sql-template.max-page-size` 限制
 - **路由**：模板 **`export_data_ref`** 字段（必须显式配置，无默认值）
+- **导出行数上限**：`batch.worker.export.max-export-rows` 默认 500000，非正值同样使用默认值。批次投影中存在数值型 `total_count` 时先按批次总数预检；无论是否投影该字段，四种内置格式的单个 GENERATE 任务都会按实际累计写入记录数执行上限（续跑包含已处理记录），超过时返回 `EXPORT_EXCEEDS_MAX_ROWS`，不进入文件登记。扩展格式须自行遵守行数限制。多分片时逐任务上限不代表对所有分片执行全局计数；若需要批次级预检，数据插件须提供准确的 `total_count`。
 
 新增业务：**优先**用 `jdbc_mapped_export`；复杂 join/存储过程再写专用 `ExportDataPlugin`。
 
@@ -52,7 +53,7 @@
 - **渠道配置**：表字段 + **`config_json`** 合并（**`ChannelConfigMerge`**），密钥与 `sftp_*` / `smtp_*` / `receipt_poll_url` 等放在 **`config_json`**；`channel_type` / `channel_code` 等治理保留键不允许被 JSON 覆盖。
 - **HTTP 自动重试**：`API` / `API_PUSH` 只有在 `config_json.receiver_idempotency_supported=true` 明确声明且接收端按请求 `Idempotency-Key` 去重时，才把发送后的 HTTP/传输失败作为可自动重试的已知失败；缺省或 `false` 时按 `EXTERNAL_OUTCOME_UNKNOWN` 处理并停止自动重试。仅发送幂等键不代表接收端兑现了该契约。
 - **NAS / OSS 配置**：`nas_remote_directory` / `nas_remote_file_name` 用于共享目录落盘；`oss_bucket` / `oss_object_prefix` 用于对象存储落盘，兼容 `batch.storage.s3` 默认连接信息。
-- **异步回执**：**`DispatchReceiptPollScheduler`** GET **`receipt_poll_url?externalRequestId=`**（`SENT`+`PENDING` 行）。
+- **异步回执**：投递成功但回执待确认时，分发记录保留 `SENT` + `PENDING`；回执码本身不表示接收方已确认。任务可以完成，回执状态仍需单独查看。启用 **`DispatchReceiptPollScheduler`** 并配置 `receipt_poll_url` 后，调度器查询时效窗口内的待确认记录，通过 GET `receipt_poll_url?externalRequestId=` 获取确认结果；接收方确认后才将记录更新为 `ACKED`、回执更新为 `SUCCESS`、文件更新为 `DISPATCHED`。未配置地址、停用轮询或超过查询时效的记录不会由该轮询器自动收口。
 - **健康治理**：`DispatchChannelHealthService` 维护 `batch.file_channel_health`，对 NAS/OSS 做主动探测和失败退避，网关在 dispatch 前会做健康短路。
 - **扩展**：替换 NAS/OSS = 新 `DispatchChannelAdapter` 独占类型。
 

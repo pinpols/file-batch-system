@@ -3,6 +3,8 @@
 --       -v dispatch_role=… -v atomic_role=…] -f scripts/db/platform-worker-roles.sql
 -- 只处理传入的角色；每个角色先撤销 batch/archive 下全部表与序列权限再按清单授予，重复执行收敛到同一状态。
 -- 脚本不创建账号、不改 schema，也不调整 Orchestrator/Console/Trigger 角色。action=revoke 时撤销后不再授予。
+-- Import 角色还须执行 import-ingress-scan-role.sql 配置入口扫描协调状态的跨租户 RLS 策略。
+-- 使用统一入口归属的 Import 角色须执行 import-ingress-ownership-role.sql 配置只读 RLS 策略。
 
 \set ON_ERROR_STOP on
 
@@ -67,6 +69,26 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
              WHERE attrelid = 'batch.file_record'::regclass AND attnum > 0 AND NOT attisdropped) sequences
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.file_template_config TO %I', :'import_role') \gexec
+    SELECT format('GRANT SELECT ON batch.import_ingress_ownership TO %I', :'import_role') \gexec
+    SELECT format('GRANT SELECT ON batch.import_ingress_ownership_binding TO %I', :'import_role') \gexec
+    SELECT format('GRANT DELETE, INSERT, SELECT, UPDATE ON batch.import_ingress_scan_object TO %I', :'import_role') \gexec
+    SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')
+      FROM (SELECT DISTINCT pg_get_serial_sequence('batch.import_ingress_scan_object', attname) AS sequence_name
+              FROM pg_attribute
+             WHERE attrelid = 'batch.import_ingress_scan_object'::regclass AND attnum > 0 AND NOT attisdropped) sequences
+     WHERE sequence_name IS NOT NULL \gexec
+    SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.import_ingress_scan_state TO %I', :'import_role') \gexec
+    SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')
+      FROM (SELECT DISTINCT pg_get_serial_sequence('batch.import_ingress_scan_state', attname) AS sequence_name
+              FROM pg_attribute
+             WHERE attrelid = 'batch.import_ingress_scan_state'::regclass AND attnum > 0 AND NOT attisdropped) sequences
+     WHERE sequence_name IS NOT NULL \gexec
+    SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.import_ingress_scan_storage_lease TO %I', :'import_role') \gexec
+    SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')
+      FROM (SELECT DISTINCT pg_get_serial_sequence('batch.import_ingress_scan_storage_lease', attname) AS sequence_name
+              FROM pg_attribute
+             WHERE attrelid = 'batch.import_ingress_scan_storage_lease'::regclass AND attnum > 0 AND NOT attisdropped) sequences
+     WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT SELECT ON batch.job_instance TO %I', :'import_role') \gexec
     SELECT format('GRANT UPDATE (%I) ON batch.job_instance TO %I', COALESCE(
         (SELECT attname FROM pg_attribute WHERE attrelid = 'batch.job_instance'::regclass
@@ -91,12 +113,6 @@ SELECT (:{?import_role} OR :{?export_role} OR :{?process_role} OR :{?dispatch_ro
       FROM (SELECT DISTINCT pg_get_serial_sequence('batch.pipeline_step_run', attname) AS sequence_name
               FROM pg_attribute
              WHERE attrelid = 'batch.pipeline_step_run'::regclass AND attnum > 0 AND NOT attisdropped) sequences
-     WHERE sequence_name IS NOT NULL \gexec
-    SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.shedlock TO %I', :'import_role') \gexec
-    SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')
-      FROM (SELECT DISTINCT pg_get_serial_sequence('batch.shedlock', attname) AS sequence_name
-              FROM pg_attribute
-             WHERE attrelid = 'batch.shedlock'::regclass AND attnum > 0 AND NOT attisdropped) sequences
      WHERE sequence_name IS NOT NULL \gexec
     SELECT format('GRANT INSERT, SELECT, UPDATE ON batch.stateful_backend_binding TO %I', :'import_role') \gexec
     SELECT format('GRANT USAGE ON SEQUENCE %s TO %I', sequence_name, :'import_role')

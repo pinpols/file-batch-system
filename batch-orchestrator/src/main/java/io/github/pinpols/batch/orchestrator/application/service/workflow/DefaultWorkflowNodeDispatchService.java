@@ -842,7 +842,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     int dispatchedCount = 0;
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-        createTerminalNodeRun(workflowRun.getId(), nextNode, now);
+        createTerminalNodeRunIfReady(workflowRun, nextNode, sourcePayload, now);
         continue;
       }
       dispatchedCount += dispatchNode(
@@ -872,6 +872,19 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     terminalNode.setFinishedAt(finishedAt);
     terminalNode.setDurationMs(0L);
     workflowMappers.workflowNodeRunMapper.insert(terminalNode);
+  }
+
+  private void createTerminalNodeRunIfReady(
+      WorkflowRunEntity workflowRun,
+      WorkflowDagService.DagNodeResolution nextNode,
+      String sourcePayload,
+      Instant finishedAt) {
+    if (!workflowDagService.isNodeReadyForRunDispatch(
+            workflowRun, nextNode.nodeCode(), sourcePayload)
+        || isNodeAlreadyActivated(workflowRun.getId(), nextNode.nodeCode())) {
+      return;
+    }
+    createTerminalNodeRun(workflowRun.getId(), nextNode, finishedAt);
   }
 
   private int recordRejectedChildJobLaunch(
@@ -905,7 +918,7 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
     int dispatchedCount = 0;
     for (WorkflowDagService.DagNodeResolution nextNode : nextNodes) {
       if (WorkflowNodeCode.END.code().equals(nextNode.nodeCode())) {
-        createTerminalNodeRun(workflowRun.getId(), nextNode, finishedAt);
+        createTerminalNodeRunIfReady(workflowRun, nextNode, sourcePayload, finishedAt);
         continue;
       }
       dispatchedCount += dispatchNode(null, workflowRun, nextNode, sourcePayload, traceId);

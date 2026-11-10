@@ -6,6 +6,8 @@
 
 | 文档 | 用途 |
 |---|---|
+| [系统设计核查与容量验证计划](system-design-capacity-validation-plan-2026-11-09.md) | 本地设计核查、修复与小负载证据已收口；完整容量、恢复和目标环境缺项另行验收 |
+| [负载测试草案](load-test-plan-2026-11-09.md) | 受理、查询和调度积压的候选场景；执行前须按系统级计划核对业务口径、环境与验收阈值 |
 | [ta/tb/tc 全类型与 Workflow 覆盖配置包](tenant-coverage-packages-2026-11-03.md) | 三租户配置样本、隔离导入及真实执行边界与验收记录 |
 | [WDI 分阶段 PR 交付准备](wdi-pr-delivery-readiness-2026-10-30.md) | 前后端工作树、迁移与契约依赖的交付快照及待验证事项 |
 | [作业与 Workflow 时限告警补齐计划](job-workflow-sla-completion-plan-2026-10-25.md) | 两层三类告警、实际计时、漏扫补报、通知与自动解除的完整实施和验收台账 |
@@ -39,7 +41,7 @@
 
 ## 计划登记
 
-计划状态以各文档头部和 [`../analysis/todo-master.md`](todo-master.md) 为准；“Implemented”文档只保留实施与验收依据。
+计划状态以各文档头部和 [当前待办](todo-master.md) 为准；“Implemented”文档只保留实施与验收依据。
 
 | 领域 | 文档 |
 |---|---|

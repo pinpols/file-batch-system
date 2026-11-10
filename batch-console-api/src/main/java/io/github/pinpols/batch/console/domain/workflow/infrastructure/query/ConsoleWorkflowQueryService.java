@@ -114,10 +114,12 @@ public class ConsoleWorkflowQueryService {
     WorkflowRunQuery query = new WorkflowRunQuery(
         tenantId,
         request.getWorkflowDefinitionId(),
+        request.getWorkflowCode(),
         request.getRelatedJobInstanceId(),
         request.getRunStatus(),
         request.getCurrentNodeCode(),
         request.getTraceId(),
+        request.getRequestId(),
         pageRequest,
         decodedCursorId);
     List<WorkflowRunEntity> rows = workflowMappers.workflowRunMapper.selectByQuery(query);

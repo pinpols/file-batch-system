@@ -31,21 +31,15 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  *       -DtenantId=t1 -Dusers.peak=30 -Dduration.seconds=180
  * </pre>
  *
- * <p>NOTE: The console API requires authentication. Set the Authorization header
- * via {@code -Dconsole.authToken=Bearer <token>}.
+ * <p>Console 查询需要登录 Cookie，通过 {@code -Dconsole.accessToken=<token>} 提供登录凭据。
  */
 public class ConsoleQuerySimulation extends Simulation {
-
-    private static final String AUTH_TOKEN = System.getProperty("console.accessToken") != null
-            ? "Bearer " + System.getProperty("console.accessToken")
-            : System.getProperty("console.authToken", "Bearer load-test-token");
 
     // ── Protocol ───────────────────────────────────────────────────────────────
 
     private final HttpProtocolBuilder httpProtocol = http
             .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
             .acceptHeader("application/json")
-            .header("Authorization", AUTH_TOKEN)
             .shareConnections();
 
     // ── 请求链：按权重混合典型 Console 查询 ─────────────────
@@ -82,6 +76,7 @@ public class ConsoleQuerySimulation extends Simulation {
             );
 
     private final ScenarioBuilder scenario = scenario("Console Query")
+            .exec(addCookie(GatlingConfig.consoleAuthCookie()))
             .forever().on(queries);
 
     // ── Load profile ───────────────────────────────────────────────────────────

@@ -40,11 +40,13 @@ pub fn execute_after_start_confirmation<T: Transport, R>(
     if context.is_cancelled() {
         return Ok(ExecutionStartOutcome::Cancelled);
     }
+    // 一次业务入口生成一次身份；传输层重试时复用已经序列化的请求。
+    let execution_attempt_id = crate::random::uuid_v4();
     let body = serde_json::json!({
         "tenantId": context.tenant_id,
         "workerId": worker_code,
         "partitionInvocationId": context.partition_invocation_id,
-        "details": { "executionStarted": true }
+        "details": { "executionStarted": true, "executionAttemptId": execution_attempt_id }
     });
     let serialized = body.to_string();
     let response = transport.renew(&context.task_id, &serialized);
@@ -120,10 +122,26 @@ mod tests {
         .unwrap();
         assert_eq!(result, ExecutionStartOutcome::Executed(42));
         let raw = transport.request.lock().unwrap().clone().unwrap();
-        let request: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let mut request: serde_json::Value = serde_json::from_str(&raw).unwrap();
+        let attempt_id = request["details"]["executionAttemptId"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(attempt_id.len(), 36);
+        request["details"]
+            .as_object_mut()
+            .unwrap()
+            .remove("executionAttemptId");
         assert_eq!(
             request,
             serde_json::json!({"tenantId":"tenant-\"escaped", "workerId":"w1", "partitionInvocationId":"inv-current", "details":{"executionStarted":true}})
+        );
+        execute_after_start_confirmation(&transport, &context, "w1", || 7).unwrap();
+        let second_raw = transport.request.lock().unwrap().clone().unwrap();
+        let second: serde_json::Value = serde_json::from_str(&second_raw).unwrap();
+        assert_ne!(
+            second["details"]["executionAttemptId"].as_str().unwrap(),
+            attempt_id
         );
     }
 

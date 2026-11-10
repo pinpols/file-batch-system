@@ -19,6 +19,8 @@
 
 | 文件 | 范围 | 一句话 |
 |---|---|---|
+| [system-design-capacity-code-review-2026-11-10.md](system-design-capacity-code-review-2026-11-10.md) | 系统设计与容量整改代码复核 | 记录历史文件清单例外、部署顺序及静态复核边界 |
+| [file-wait-trigger-review-2026-11-09.md](file-wait-trigger-review-2026-11-09.md) | 文件等待、触发与预期 | 对渠道过滤、扫描范围、延迟和预期满足语义的源码核查 |
 | [frontend-backend-bug-review-2026-10-27.md](frontend-backend-bug-review-2026-10-27.md#backend-review-record) | 前后端Bug及分层验证汇总 | 原14项风险片段复核、问题/首红/命令、历史运行证据及当前未验边界；合并三份原报告 |
 | [backend-bug-review-2026-10-26.md](backend-bug-review-2026-10-26.md) | 后端高风险业务链与部署配置 | 初轮九项及后续逐文件审查证据，当前任务仍未全量完成 |
 | `batch-worker-sdk-deep-review-2026-05-31.md` | SDK 三件套(core + starter + testkit) | SDK 全模块代码深度审查,产生改进点列表 |

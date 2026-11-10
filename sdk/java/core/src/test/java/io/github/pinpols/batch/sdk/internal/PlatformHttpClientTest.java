@@ -29,6 +29,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -78,6 +79,8 @@ class PlatformHttpClientTest {
     try (MockWebServer timingServer = new MockWebServer()) {
       timingServer.enqueue(
           new MockResponse.Builder().body("{\"cancelRequested\":true}").build());
+      timingServer.enqueue(
+          new MockResponse.Builder().body("{\"cancelRequested\":true}").build());
       timingServer.start(InetAddress.getByName("127.0.0.1"), 0);
       PlatformHttpClient client =
           new PlatformHttpClient(config("http://127.0.0.1:" + timingServer.getPort()));
@@ -95,6 +98,15 @@ class PlatformHttpClientTest {
         assertThat(body.path("partitionInvocationId").asText()).isEqualTo("inv-current");
         assertThat(body.path("details").path("executionStarted").isBoolean()).isTrue();
         assertThat(body.path("details").path("executionStarted").asBoolean()).isTrue();
+        String attemptId = body.path("details").path("executionAttemptId").asText();
+        assertThat(UUID.fromString(attemptId).version()).isEqualTo(4);
+        client.confirmExecutionStarted(42L, identity);
+        RecordedRequest secondRequest = timingServer.takeRequest(1, TimeUnit.SECONDS);
+        assertThat(secondRequest).isNotNull();
+        JsonNode secondBody =
+            SdkJsonMapperFactory.create().readTree(secondRequest.getBody().utf8());
+        assertThat(secondBody.path("details").path("executionAttemptId").asText())
+            .isNotEqualTo(attemptId);
         assertThat(identity).doesNotContainKey("details");
       } finally {
         client.evictIdleConnections();

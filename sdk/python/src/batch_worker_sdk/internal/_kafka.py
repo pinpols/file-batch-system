@@ -21,6 +21,7 @@ import contextlib
 import json
 import logging
 import re
+import time
 from typing import TYPE_CHECKING, Any
 
 from aiokafka import (  # type: ignore[import-untyped]
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 # ADR-035 后续扩展:可暴露为 BatchPlatformClientConfig 字段,允许租户
 # 按部署环境调优;当前 hardcode 保守值,优先填上 fail-fast 缺口。
 KAFKA_START_TIMEOUT_S: float = 10.0
+WITHHOLD_RETRY_SECONDS: float = 2.0
 
 
 def _notblank(s: str | None) -> bool:
@@ -74,11 +76,7 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
     ``_capacity_paused`` 重置为 ``False``;若仍处饱和状态,下一次
     ``apply_backpressure`` 会重新 pause。
 
-    withhold(未知 schema / 外租户 / 不可处理)**不再** pause 分区,而是记
-    每分区 commit 上限并继续消费(见 :class:`KafkaTaskConsumer`),因此
-    rebalance 无需清任何 poison 账本 —— 上限从不 commit,revoke 后由后续
-    rebalance/重启从原位重投,保留旧上限既无害也不需要主动清理(对齐 TS
-    #826 的 ``#withheld`` 生命周期)。
+    撤销分区时清除本地暂扣状态;重新分配从 broker 已提交位置恢复。
     """
 
     def __init__(self, parent: KafkaTaskConsumer) -> None:
@@ -87,6 +85,11 @@ class _PauseAwareRebalanceListener(ConsumerRebalanceListener):
     async def on_partitions_revoked(self, revoked: set[TopicPartition]) -> None:
         revoked_partition_names = sorted(map(str, revoked))
         logger.info("kafka rebalance: partitions revoked=%s", revoked_partition_names)
+        self._parent._assignment_epoch += 1
+        for tp in revoked:
+            self._parent._withheld_ceilings.pop(tp, None)
+            self._parent._withheld_retry_at.pop(tp, None)
+            self._parent._checkpointed.pop(tp, None)
 
     async def on_partitions_assigned(self, assigned: set[TopicPartition]) -> None:
         assigned_partition_names = sorted(map(str, assigned))
@@ -132,16 +135,13 @@ class KafkaTaskConsumer:
         # 供 client.metrics()/is_healthy() 判活(消费已停但 liveness 仍误报 UP 是隐患)。
         self._crashed: bool = False
         # 容量 / 平台维度的「整 assignment pause」缓存,带 hysteresis,由
-        # apply_backpressure 独占翻转(见其注释)。这是**唯一**会 pause 分区的
-        # 路径,且总有配对的 resume。
+        # apply_backpressure 独占翻转,暂扣分区单独维护。
         self._capacity_paused: bool = False
-        # 每分区 commit 上限(对齐 Go ``committable`` / TS #826 ``#withheld``):
-        # withhold(未知 schema 大版本 / 外租户 / 不可处理)不 pause、不 seek,而是
-        # 把该 tp 遇到的**最低** withheld offset 记为上限并继续消费;commit 时
-        # offset >= 上限者一律不提交(留待 rebalance/重启从原位重投),offset <
-        # 上限者按自身 offset 提交。既消除首条 withhold 的 head-of-line 冻结,又
-        # 保证 at-least-once 不丢、不越过 withheld offset。
+        # 每分区保留最低未确认位点及下次重试时间。
         self._withheld_ceilings: dict[TopicPartition, int] = {}
+        self._withheld_retry_at: dict[TopicPartition, float] = {}
+        self._checkpointed: dict[TopicPartition, int] = {}
+        self._assignment_epoch = 0
         self._poll_task: asyncio.Task[None] | None = None
 
     # ─── 公共生命周期 ────────────────────────────────────────────────
@@ -215,7 +215,7 @@ class KafkaTaskConsumer:
             "bootstrap_servers": self._config.kafka_bootstrap,
             "group_id": self._config.kafka_group_id,
             "enable_auto_commit": False,
-            "auto_offset_reset": "latest",
+            "auto_offset_reset": "earliest",
         }
         if _notblank(self._config.kafka_security_protocol):
             kwargs["security_protocol"] = self._config.kafka_security_protocol
@@ -272,44 +272,11 @@ class KafkaTaskConsumer:
         try:
             while self._running:
                 self.apply_backpressure()
+                self._resume_due_withheld()
                 batches = await self._consumer.getmany(timeout_ms=poll_ms, max_records=64)
                 if not batches:
                     continue
-                # 按分区累积「可提交到哪」的 offset。对齐 Go ``committable`` /
-                # TS #826:
-                #   - WITHHOLD → 记该 tp 的 commit 上限(最低
-                #     withheld offset),**不 seek、不 pause、不 break**,继续处理
-                #     本批后续记录 → 消除 head-of-line 冻结。
-                #   - RETRY_LATER(平台 PAUSED / draining / fatal 的瞬时竞态)→
-                #     seek 回本条 + 临时 pause,条件恢复后由 apply_backpressure
-                #     resume;不把瞬时背压固化成长期 commit ceiling。
-                #   - ACCEPTED / DROP_TERMINAL → 候选前移 offset,但仅当本条
-                #     offset **严格小于** 该 tp 上限时才提交(offset >= 上限
-                #     一律不提交,留待重投);绝不夹逼到「上限-1」(那会提交没
-                #     处理的中间 offset = 丢消息)。
-                commit_offsets: dict[TopicPartition, int] = {}
-                for tp, records in batches.items():
-                    for rec in records:
-                        disposition = await self._handle_record(tp, rec)
-                        if disposition is DispatchDisposition.WITHHOLD:
-                            self._lower_ceiling(tp, rec.offset)
-                            continue
-                        if disposition is DispatchDisposition.RETRY_LATER:
-                            self._consumer.seek(tp, rec.offset)
-                            self._consumer.pause(tp)
-                            self._capacity_paused = True
-                            break
-                        # ACCEPTED / DROP_TERMINAL:仅在上限之下才推进 offset。
-                        ceiling = self._withheld_ceilings.get(tp)
-                        if ceiling is not None and rec.offset >= ceiling:
-                            # 越过/等于上限:提交会静默跳过 withheld offset → 不提交。
-                            continue
-                        commit_offsets[tp] = rec.offset + 1
-                if commit_offsets:
-                    try:
-                        await self._consumer.commit(commit_offsets)
-                    except Exception as ex:
-                        logger.warning("kafka commit failed (will retry next poll): %s", ex)
+                await self._process_batch(batches)
         except asyncio.CancelledError:
             logger.info("kafka poll loop cancelled")
             raise
@@ -317,6 +284,110 @@ class KafkaTaskConsumer:
             logger.exception("KafkaTaskConsumer poll loop died")
             self._crashed = True
             self._running = False
+
+    async def _process_batch(self, batches: dict[TopicPartition, list[Any]]) -> None:
+        """处理一批消息, 暂扣当前分区并保留其他分区的推进。"""
+        assert self._consumer is not None
+        batch_epoch = self._assignment_epoch
+        commit_offsets: dict[TopicPartition, int] = {}
+        resolved: dict[TopicPartition, int] = {}
+        first_offsets = {tp: records[0].offset for tp, records in batches.items() if records}
+        if not await self._checkpoint_batch(first_offsets, batch_epoch):
+            return
+        for tp, records in batches.items():
+            for rec in records:
+                ceiling = self._withheld_ceilings.get(tp)
+                if ceiling is not None and rec.offset > ceiling:
+                    self._withhold_partition(tp, ceiling)
+                    break
+                disposition = await self._handle_record(tp, rec)
+                if self._assignment_epoch != batch_epoch:
+                    return
+                if disposition is DispatchDisposition.WITHHOLD:
+                    self._withhold_partition(tp, rec.offset)
+                    # 新消费组可能尚无提交位点; 保存重读位置本身, 不越过该消息。
+                    commit_offsets[tp] = rec.offset
+                    break
+                if disposition is DispatchDisposition.RETRY_LATER:
+                    self._consumer.seek(tp, rec.offset)
+                    self._consumer.pause(tp)
+                    self._capacity_paused = True
+                    # 瞬时失败同样保留该消息为重读起点。
+                    commit_offsets[tp] = rec.offset
+                    break
+                commit_offsets[tp] = rec.offset + 1
+                if ceiling is not None and rec.offset == ceiling:
+                    # 批次余下数据须在确认成功后从下一条重新读取。
+                    self._consumer.seek(tp, rec.offset + 1)
+                    resolved[tp] = ceiling
+                    break
+        if commit_offsets:
+            await self._commit_batch(commit_offsets, first_offsets, resolved, batch_epoch)
+
+    async def _checkpoint_batch(
+        self, first_offsets: dict[TopicPartition, int], batch_epoch: int
+    ) -> bool:
+        """进入业务前保存分区本批首条位置, 避免新组转交时按最新位置跳过。"""
+        assert self._consumer is not None
+        offsets = {
+            tp: min(offset, self._withheld_ceilings.get(tp, offset))
+            for tp, offset in first_offsets.items()
+        }
+        pending = {
+            tp: offset for tp, offset in offsets.items() if self._checkpointed.get(tp) != offset
+        }
+        if not pending:
+            return self._assignment_epoch == batch_epoch
+        try:
+            await self._consumer.commit(pending)
+        except Exception as ex:
+            logger.warning("kafka initial checkpoint failed (will retry): %s", ex)
+            if self._assignment_epoch == batch_epoch:
+                assigned = set(self._consumer.assignment())
+                for tp in pending.keys() & assigned:
+                    self._withhold_partition(tp, offsets[tp])
+            return False
+        if self._assignment_epoch != batch_epoch:
+            return False
+        self._checkpointed.update(pending)
+        return True
+
+    async def _commit_batch(
+        self,
+        offsets: dict[TopicPartition, int],
+        first_offsets: dict[TopicPartition, int],
+        resolved: dict[TopicPartition, int],
+        batch_epoch: int,
+    ) -> None:
+        """提交已处理的连续位置; 失败时重读当前代际的消息。"""
+        assert self._consumer is not None
+        pending = {
+            tp: offset for tp, offset in offsets.items() if self._checkpointed.get(tp) != offset
+        }
+        try:
+            if pending:
+                await self._consumer.commit(pending)
+        except Exception as ex:
+            logger.warning("kafka commit failed (will retry): %s", ex)
+            if self._assignment_epoch != batch_epoch:
+                return
+            assigned = set(self._consumer.assignment())
+            for tp in pending.keys() & assigned:
+                self._withhold_partition(tp, first_offsets[tp])
+        else:
+            if self._assignment_epoch == batch_epoch:
+                self._checkpointed.update(offsets)
+                for tp, offset in resolved.items():
+                    if self._withheld_ceilings.get(tp) == offset:
+                        self._withheld_ceilings.pop(tp, None)
+
+    def _withhold_partition(self, tp: TopicPartition, offset: int) -> None:
+        """保留未确认位置, 暂停对应分区后等待重试。"""
+        assert self._consumer is not None
+        self._lower_ceiling(tp, offset)
+        self._consumer.seek(tp, offset)
+        self._consumer.pause(tp)
+        self._withheld_retry_at[tp] = time.monotonic() + WITHHOLD_RETRY_SECONDS
 
     async def _handle_record(self, tp: TopicPartition, rec: Any) -> DispatchDisposition:
         """解码单条 ``ConsumerRecord`` 并喂给 dispatcher,返回 offset 处置决定。
@@ -356,13 +427,25 @@ class KafkaTaskConsumer:
     def _lower_ceiling(self, tp: TopicPartition, offset: int) -> None:
         """把分区 ``tp`` 的 commit 上限降到不高于 ``offset``(保留最低 withheld)。
 
-        对齐 TS #826 ``loweredCeiling`` / Go ``committable`` 的最低 offset 语义:
+        按最低 offset 设置提交上限:
         一个分区可能先后 withhold 多条(乱序 offset),上限须取其中**最低**者,
         才能保证任何一条 withheld 都不会被后续 commit 越过。
         """
         current = self._withheld_ceilings.get(tp)
         if current is None or offset < current:
             self._withheld_ceilings[tp] = offset
+
+    def _resume_due_withheld(self) -> None:
+        """重试到期时仅恢复受影响分区,容量暂停期间继续等待。"""
+        if self._capacity_paused:
+            return
+        assert self._consumer is not None
+        assigned = set(self._consumer.assignment())
+        now = time.monotonic()
+        for tp, retry_at in list(self._withheld_retry_at.items()):
+            if tp in assigned and retry_at <= now:
+                self._consumer.resume(tp)
+                self._withheld_retry_at.pop(tp, None)
 
     # ─── 容量感知的分区暂停 ───────────────────────────────────────────
 
@@ -384,10 +467,8 @@ class KafkaTaskConsumer:
         未处理消息的 offset 永不提交,Kafka 会在 resume 后重投递。
 
         ``_capacity_paused`` 缓存上次容量/平台决策,避免每次 poll 都发
-        pause/resume RPC;rebalance 时由 listener 清空。这是唯一 pause 分区的
-        路径且 pause/resume 成对;withhold 不再 pause(改走 commit 上限,见
-        ``_poll_loop`` / ``_withheld_ceilings``),故 resume 直接覆盖整个
-        assignment,无需再排除任何「poison 分区」。
+        pause/resume RPC;rebalance 时由 listener 清空。容量恢复时保留尚未
+        到期的暂扣分区,避免提前恢复未确认消息。
         """
         assert self._consumer is not None
         max_in_flight = self._config.max_concurrent_tasks
@@ -409,9 +490,9 @@ class KafkaTaskConsumer:
                 self._dispatcher.runtime_state,
             )
         elif self._capacity_paused and not platform_paused and capacity_resume_ok:
-            # 容量恢复:resume 整个 assignment。withhold 不再 pause 分区(改走
-            # commit 上限),故这里无需排除任何分区。
-            self._consumer.resume(*assignment)
+            resumable = assignment - self._withheld_retry_at.keys()
+            if resumable:
+                self._consumer.resume(*resumable)
             self._capacity_paused = False
             logger.info(
                 "kafka consumer resume: inFlight=%d max=%d state=%s (below max//2 hysteresis)",
@@ -426,7 +507,7 @@ class KafkaTaskConsumer:
     def paused(self) -> bool:
         """最近一次缓存的**容量 / 平台维度** pause 决策(供测试 + 诊断)。
 
-        withhold 不再 pause 分区(见 :meth:`withheld_ceilings`)。
+        withhold 分区单独暂停,不计入容量暂停标记。
         """
         return self._capacity_paused
 
@@ -434,9 +515,8 @@ class KafkaTaskConsumer:
     def withheld_ceilings(self) -> dict[TopicPartition, int]:
         """每分区 commit 上限快照:``tp → 最低 withheld offset``(供测试 + 诊断)。
 
-        withhold(未知 schema 大版本 / 外租户 / 不可处理)记上限并继续消费;
-        offset >= 上限者永不提交(留待 rebalance/重启重投),消除 head-of-line
-        冻结的同时保证不丢、不越过 withheld offset。
+        withhold(未知 schema 大版本 / 外租户 / 不可处理)暂停对应分区,
+        成功重试后清除;其他分区继续消费。
         """
         return dict(self._withheld_ceilings)
 

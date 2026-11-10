@@ -30,13 +30,16 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -288,7 +291,7 @@ public class TaskDispatcher {
 
   /** dispatcher 对单条派单消息的处理决定,由 Kafka consumer 决定是否提交 offset。 */
   public enum DispatchDecision {
-    /** 已提交到 executor,offset 可前移。 */
+    /** 已认领或确认无需再次认领，offset 可前移。 */
     SUBMITTED,
     /** 消息本身不可恢复,跳过并提交 offset,避免 poison message 卡住分区。 */
     DROP_TERMINAL,
@@ -300,16 +303,12 @@ public class TaskDispatcher {
      */
     RETRY_LATER,
     /**
-     * 有效但当前 worker 不该处理、可重投的消息(纵深防御 ACL 漂移的 foreign-tenant / 未知 schema 大版本)。对齐 Go {@code
-     * DispositionDroppedForeignTenant / DispositionRejectedSchema} 与 TS #826:**不提交 offset、不 pause
-     * 分区** —— Kafka consumer 记该分区 commit 上限(取最低 withheld offset)后**继续消费**,上限之上的 offset
-     * 永不提交(withheld 记录随 rebalance / 重启重投,at-least-once),同分区其它租户的正常消息不被 head-of-line 阻塞。§A
-     * 硬契约只要求「reject + 不 commit offset」,commit 上限已满足,无需冻结分区。
+     * 当前无法确认可提交的消息：保留 offset，暂缓对应分区并等待重试。
      */
     WITHHOLD
   }
 
-  /** 收到一条派单消息 — 提交到线程池异步处理(返回快,Kafka consumer 不阻塞)。 */
+  /** 等待后台认领结果后返回位点决定；业务执行仍在工作线程中进行。 */
   public DispatchDecision onMessage(TaskDispatchMessage msg) {
     if (draining.get() || retryCoordinator.isFatal()) {
       // P0 hardening:已发起 stop 或 P1-2 fail-fast 后,不接新消息
@@ -339,8 +338,7 @@ public class TaskDispatcher {
     // Lane J §J1:租户自检 fail-safe。Kafka topic 模式 `batch.task.dispatch.<tenant>.*` + consumer group
     // + ACL 已隔离;若 consumer group 配置失误或 ACL 漂移导致拿到非本租户消息,这里 ERROR + WITHHOLD:
     // 不 ack offset 留给后续 redeliver / 人工介入,本进程不处理避免串任务。
-    // 对齐 Go DispositionDroppedForeignTenant / TS #826:**不置 fatal、不冻结分区** —— consumer 记该分区
-    // commit 上限后继续消费,同分区其它租户的正常消息不被 head-of-line 阻塞;该 foreign 消息永不提交(可重投)。
+    // 不提交该消息，consumer 仅暂停所属分区并等待重试。
     if (!config.getTenantId().equals(msg.tenantId())) {
       throttledLog.error(
           "tenant_mismatch",
@@ -361,20 +359,38 @@ public class TaskDispatcher {
           msg.taskId());
       return DispatchDecision.RETRY_LATER;
     }
+    CompletableFuture<DispatchDecision> claimDecision = new CompletableFuture<>();
     try {
       executor.execute(() -> {
         try {
-          processInWorkerThread(msg);
+          processInWorkerThread(msg, claimDecision);
         } finally {
+          claimDecision.complete(DispatchDecision.WITHHOLD);
           capacity.release();
         }
       });
-      return DispatchDecision.SUBMITTED;
+      return awaitClaimDecision(claimDecision);
     } catch (RejectedExecutionException ex) {
       capacity.release();
       log.warn("dispatcher executor rejected taskId={}, will retry later", msg.taskId(), ex);
       return DispatchDecision.RETRY_LATER;
     }
+  }
+
+  private DispatchDecision awaitClaimDecision(CompletableFuture<DispatchDecision> decision) {
+    while (!draining.get() && !retryCoordinator.isFatal()) {
+      try {
+        return decision.get(100, TimeUnit.MILLISECONDS);
+      } catch (TimeoutException timeout) {
+        // 周期检查停机状态，避免工作项尚未启动时阻塞消费线程。
+      } catch (InterruptedException interrupted) {
+        Thread.currentThread().interrupt();
+        return DispatchDecision.WITHHOLD;
+      } catch (ExecutionException failed) {
+        return DispatchDecision.WITHHOLD;
+      }
+    }
+    return DispatchDecision.WITHHOLD;
   }
 
   /**
@@ -389,10 +405,16 @@ public class TaskDispatcher {
 
   /** 单消息处理:claim → execute → report。所有异常都被 catch。 */
   void processInWorkerThread(TaskDispatchMessage msg) {
+    processInWorkerThread(msg, new CompletableFuture<>());
+  }
+
+  private void processInWorkerThread(
+      TaskDispatchMessage msg, CompletableFuture<DispatchDecision> claimDecision) {
     Map<String, String> previousContext = MDC.getCopyOfContextMap();
     Long taskId = msg.taskId();
     if (!activeDispatches.add(taskId)) {
       log.info("duplicate dispatch ignored while task is already executing: taskId={}", taskId);
+      claimDecision.complete(DispatchDecision.WITHHOLD);
       return;
     }
     try {
@@ -401,12 +423,13 @@ public class TaskDispatcher {
         return;
       }
       setupMdc(msg);
-      processCore(msg);
+      processCore(msg, claimDecision);
     } catch (Error executionError) {
       // 执行线程会被线程池重建；严重错误后必须暂停新派发，不能让同一调用再次产生效果。
       retryCoordinator.markExecutionFatal(executionError);
       throw executionError;
     } finally {
+      claimDecision.complete(DispatchDecision.WITHHOLD);
       // 仅取得占位的调用可以清理；先释放租约上下文，再允许下一次调用接手。
       inFlight.remove(taskId);
       cancellations.remove(taskId);
@@ -417,17 +440,9 @@ public class TaskDispatcher {
     }
   }
 
-  private void processCore(TaskDispatchMessage msg) {
+  private void processCore(
+      TaskDispatchMessage msg, CompletableFuture<DispatchDecision> claimDecision) {
     SdkTaskHandler handler = handlers.get(msg.taskType());
-    if (handler == null) {
-      log.error(
-          "no SdkTaskHandler for taskType={} (registered: {}); reporting failure",
-          msg.taskType(),
-          handlers.keySet());
-      reportFailure(msg, "no handler registered for taskType=" + msg.taskType(), null);
-      return;
-    }
-
     // CLAIM — body 对齐 TaskController.TaskClaimRequest(tenantId/workerId/partitionInvocationId)
     String idemClaim = BatchPlatformClient.newIdempotencyKey();
     Map<String, Object> claimBody = new HashMap<>();
@@ -441,9 +456,16 @@ public class TaskDispatcher {
     TaskDispatcherRetryCoordinator.ClaimResult claimResult =
         retryCoordinator.claimWithRetry(msg, idemClaim, claimBody);
     if (!claimResult.claimed()) {
+      claimDecision.complete(
+          claimResult.commitSafe() ? DispatchDecision.DROP_TERMINAL : DispatchDecision.WITHHOLD);
       // 未认领不进入执行；外层拥有者 finally 统一释放本次占位和可能建立的上下文。
       return;
     }
+    if (draining.get() || retryCoordinator.isFatal()) {
+      claimDecision.complete(DispatchDecision.WITHHOLD);
+      return;
+    }
+    claimDecision.complete(DispatchDecision.SUBMITTED);
     String partitionInvocationId = claimResult.response().partitionInvocationId();
     if (EmptyChecks.isBlank(partitionInvocationId)) {
       // 普通任务必须持有本次 CLAIM 的分区身份；安全动作也不能用消息中的旧身份执行。
@@ -453,6 +475,14 @@ public class TaskDispatcher {
     }
     partitionInvocations.put(msg.taskId(), partitionInvocationId);
     inFlight.add(msg.taskId());
+    if (handler == null) {
+      log.error(
+          "no SdkTaskHandler for taskType={} (registered: {}); reporting failure",
+          msg.taskType(),
+          handlers.keySet());
+      reportFailure(msg, "no handler registered for taskType=" + msg.taskType(), null);
+      return;
+    }
     CancellationSignal cancellation = new CancellationSignal();
     cancellations.put(msg.taskId(), cancellation);
     ProgressReporter progress = new ProgressReporter();

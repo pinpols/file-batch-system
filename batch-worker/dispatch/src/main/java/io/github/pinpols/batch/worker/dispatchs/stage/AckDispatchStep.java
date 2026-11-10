@@ -74,7 +74,8 @@ public class AckDispatchStep implements DispatchStageStep {
     boolean acknowledged = dispatchResult != null && dispatchResult.acknowledged();
     boolean pending = dispatchResult != null && dispatchResult.receiptPending();
     boolean hasAcknowledgementEvidence = acknowledged
-        || (EmptyChecks.isNotNull(receiptCode)
+        || (!pending
+            && EmptyChecks.isNotNull(receiptCode)
             && !EmptyChecks.isBlank(Objects.requireNonNull(receiptCode)));
     if (hasAcknowledgementEvidence) {
       int updated = fileDispatchRepository.markAcked(

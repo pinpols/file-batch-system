@@ -25,6 +25,7 @@ public class FileRecordParam {
   private final LocalDate bizDate;
   private final String sourceType;
   private final String sourceRef;
+  private final String arrivalChannelCode;
   private final String fileStatus;
   private final String traceId;
   private final Object metadata;

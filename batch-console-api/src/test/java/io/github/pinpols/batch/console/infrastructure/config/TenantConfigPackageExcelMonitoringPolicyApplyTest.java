@@ -44,6 +44,7 @@ import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowNodeMapper
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
+import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
 import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelValidator.PackageValidationResult;
@@ -209,7 +210,11 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
     job.setScheduleType("CRON");
     when(jobDefinitionMapper.selectByUniqueKey("tenant-a", "JOB_DAILY")).thenReturn(job);
 
-    service.applyAll(validationResult(policyRow("23:45")), context());
+    TenantConfigPackageExcelApplyService.ApplyCounts counts =
+        service.applyAll(validationResult(policyRow("23:45")), context());
+    Map<String, Object> countValues = JsonUtils.toMap(counts);
+    assertThat(countValues).containsEntry("jobMonitoringPoliciesApplied", 1);
+    assertThat(countValues).containsEntry("workflowMonitoringPoliciesApplied", 0);
 
     ArgumentCaptor<JobMonitoringPolicyUpsertParam> captor =
         ArgumentCaptor.forClass(JobMonitoringPolicyUpsertParam.class);
@@ -266,7 +271,10 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
         .crossRefIssues(List.of())
         .build();
 
-    service.applyAll(result, context());
+    TenantConfigPackageExcelApplyService.ApplyCounts counts = service.applyAll(result, context());
+    Map<String, Object> countValues = JsonUtils.toMap(counts);
+    assertThat(countValues).containsEntry("jobMonitoringPoliciesApplied", 0);
+    assertThat(countValues).containsEntry("workflowMonitoringPoliciesApplied", 1);
 
     ArgumentCaptor<WorkflowMonitoringPolicyEntity> captor =
         ArgumentCaptor.forClass(WorkflowMonitoringPolicyEntity.class);
@@ -646,6 +654,76 @@ class TenantConfigPackageExcelMonitoringPolicyApplyTest {
                 empty, List.of()),
             context()))
         .isInstanceOf(BizException.class);
+  }
+
+  @Test
+  @DisplayName("Excel 应用工作流节点时拒绝非字符串渠道")
+  void shouldRejectInvalidFileChannelInWorkflowNode() {
+    WorkflowDefinitionEntity saved = new WorkflowDefinitionEntity();
+    saved.setId(99L);
+    saved.setVersion(1);
+    when(workflowDefinitionMapper.selectByUniqueKey("tenant-a", "WF", 1)).thenReturn(null, saved);
+    Map<String, String> workflowRow = Map.of(
+        "workflow_code", "WF", "workflow_name", "Workflow", "workflow_type", "DAG", "version", "1");
+    Map<String, String> nodeRow = Map.of(
+        "workflow_code",
+        "WF",
+        "workflow_version",
+        "1",
+        "node_code",
+        "wait-file",
+        "node_type",
+        "WAIT",
+        "node_params",
+        "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{\"channelCode\":42}}");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows =
+        new SheetResult("workflow_definition", 1, List.of(workflowRow), List.of());
+    SheetResult nodes = new SheetResult("workflow_node", 1, List.of(nodeRow), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, nodes, empty,
+        List.of());
+
+    assertThatThrownBy(() -> service.applyAll(input, context())).isInstanceOf(BizException.class);
+    verify(workflowNodeMapper, never()).upsertWorkflowNode(any());
+  }
+
+  @Test
+  @DisplayName("Excel 应用文件等待时保留与渠道编码一致的大小写及连字符")
+  void shouldPreserveFileArrivalChannelWhenApplyingWorkflow() {
+    WorkflowDefinitionEntity saved = new WorkflowDefinitionEntity();
+    saved.setId(99L);
+    saved.setVersion(1);
+    when(workflowDefinitionMapper.selectByUniqueKey("tenant-a", "WF", 1)).thenReturn(null, saved);
+    when(workflowNodeMapper.selectByQuery(any(WorkflowNodeQuery.class))).thenReturn(List.of());
+    when(workflowEdgeMapper.selectByQuery(any(WorkflowEdgeQuery.class))).thenReturn(List.of());
+    Map<String, String> workflowRow = Map.of(
+        "workflow_code", "WF", "workflow_name", "Workflow", "workflow_type", "DAG", "version", "1");
+    Map<String, String> nodeRow = Map.of(
+        "workflow_code",
+        "WF",
+        "workflow_version",
+        "1",
+        "node_code",
+        "wait-file",
+        "node_type",
+        "WAIT",
+        "node_params",
+        "{\"sensor_type\":\"FILE_ARRIVAL\",\"sensor_spec\":{\"channelCode\":\"BANK-SFTP\"}}");
+    SheetResult empty = new SheetResult("empty", 0, List.of(), List.of());
+    SheetResult workflows =
+        new SheetResult("workflow_definition", 1, List.of(workflowRow), List.of());
+    SheetResult nodes = new SheetResult("workflow_node", 1, List.of(nodeRow), List.of());
+    PackageValidationResult input = new PackageValidationResult(
+        empty, empty, empty, empty, empty, empty, empty, empty, empty, workflows, nodes, empty,
+        List.of());
+
+    service.applyAll(input, context());
+
+    ArgumentCaptor<WorkflowNodeUpsertParam> captor =
+        ArgumentCaptor.forClass(WorkflowNodeUpsertParam.class);
+    verify(workflowNodeMapper).upsertWorkflowNode(captor.capture());
+    assertThat(captor.getValue().getNodeParams()).contains("\"channelCode\":\"BANK-SFTP\"");
   }
 
   private static TenantConfigPackageExcelApplyService.ApplyContext context() {

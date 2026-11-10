@@ -1,10 +1,15 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.sensor;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.enums.SensorType;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorContext;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorPolicy;
 import io.github.pinpols.batch.orchestrator.application.service.sensor.SensorProbeResult;
@@ -22,6 +27,7 @@ import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
 /**
@@ -32,7 +38,7 @@ import org.springframework.stereotype.Component;
  *
  * <pre>{@code
  * {
- *   "channelCode": "sftp_bank_in",   // 可选，对应 source_type；当前实现取该字段第一段映射 (SFTP/API/...)
+ *   "channelCode": "sftp_bank_in",   // 可选，匹配可信渠道身份；迁移前历史记录兼容旧来源类型
  *   "pattern": "settle-*.csv",       // 必填，glob 风格，* → SQL LIKE %
  *   "maxAgeSeconds": 3600            // 必填，文件 created_at 必须在 now - maxAgeSeconds 之内
  * }
@@ -48,8 +54,11 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
   private static final String SENSOR_SPEC_INVALID = "error.workflow.sensor_spec_invalid";
 
   private static final String SENSOR_TYPE_CODE = SensorType.FILE_ARRIVAL.code();
+  private static final ObjectMapper OWNERSHIP_IDENTITY_MAPPER = JsonUtils.newDefaultMapper();
 
   private final SensorFileArrivalMapper mapper;
+  private final Environment environment;
+  private final S3StorageProperties storageProperties;
 
   @Override
   public SensorType type() {
@@ -113,7 +122,15 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
     // SQL LIKE 的通配符和转义符必须按字面处理,只有 sensor 的星号表示任意字符。
     String sqlPattern =
         pattern.replace("!", "!!").replace("%", "!%").replace("_", "!_").replace('*', '%');
-    String sourceType = mapChannelToSourceType(SensorSpecs.string(spec, "channelCode"));
+    Object configuredChannelCode = spec.get("channelCode");
+    if (!FileArrivalChannelCode.isValid(configuredChannelCode)) {
+      return SensorProbeResult.error(
+          SENSOR_SPEC_INVALID,
+          List.of(SENSOR_TYPE_CODE, "channelCode must be a string up to 128 characters"));
+    }
+    String channelCode = (String) configuredChannelCode;
+    channelCode = Texts.hasText(channelCode) ? channelCode : null;
+    String sourceType = mapChannelToSourceType(channelCode);
     OffsetDateTime since =
         BatchDateTimeSupport.utcNow().minusSeconds(maxAgeSeconds).atOffset(ZoneOffset.UTC);
 
@@ -123,17 +140,28 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
               .tenantId(ctx.tenantId())
               .namePattern(sqlPattern)
               .sourceType(sourceType)
+              .channelCode(channelCode)
               .since(since)
               .bizDate(bizDate)
               .fileGroupCode(fileGroupCode)
               .workflowDefinitionId(ctx.workflowDefinitionId())
+              .storageId(ImportIngressOwnershipIdentity.storageId(
+                  environment, storageProperties, OWNERSHIP_IDENTITY_MAPPER))
               .requireCompleteGroup(requireCompleteGroup)
               .build();
       SensorFileArrivalView hit = mapper.selectLatestArrival(sensorFileArrivalLatestArrivalQuery);
       if (hit == null) {
         return SensorProbeResult.notYet();
       }
-      return SensorProbeResult.matched(hit.toProbeOutput());
+      Map<String, Object> output = hit.toProbeOutput();
+      if (channelCode != null && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
+        log.warn(
+            "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
+            ctx.tenantId(),
+            hit.fileId());
+        output.put("legacyChannelFallback", true);
+      }
+      return SensorProbeResult.matched(output);
     } catch (Exception e) {
       log.warn(
           "FILE_ARRIVAL probe error tenant={} pattern={} err={}",
@@ -147,7 +175,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
     }
   }
 
-  /** channelCode 映射到 file_record.source_type；channelCode 为空则 null（不过滤）。 */
+  /** 仅供迁移前历史文件沿用原来源类型回退语义。 */
   private static String mapChannelToSourceType(String channelCode) {
     if (!Texts.hasText(channelCode)) {
       return null;

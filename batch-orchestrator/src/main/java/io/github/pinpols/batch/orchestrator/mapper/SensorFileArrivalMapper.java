@@ -10,7 +10,7 @@ import org.apache.ibatis.annotations.Param;
  * ADR-028 FILE_ARRIVAL sensor 反查 batch.file_record。
  *
  * <p>策略：按 (tenant_id, file_category=INPUT, file_name LIKE pattern, created_at &gt;= since) 取最近一条。
- * 命中即 sensor.MATCHED 推进。
+ * 托管上传会话须确认到达后才能命中；命中即 sensor.MATCHED 推进。
  */
 public interface SensorFileArrivalMapper {
 

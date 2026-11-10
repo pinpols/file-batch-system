@@ -67,7 +67,7 @@ final class TaskDispatcherRetryCoordinator {
         PlatformHttpClient.TaskClaimResponse claimResponse = EmptyChecks.isNull(response)
             ? new PlatformHttpClient.TaskClaimResponse(null)
             : response;
-        return new ClaimResult(true, claimResponse);
+        return new ClaimResult(true, true, claimResponse);
       } catch (PlatformHttpException httpEx) {
         if (httpEx.isAuthError()) {
           markFatal(
@@ -79,19 +79,19 @@ final class TaskDispatcherRetryCoordinator {
         }
         if (httpEx.isConflict()) {
           log.info("CLAIM 409 for taskId={} (taken by peer), skipping", message.taskId());
-          return ClaimResult.notClaimed();
+          return ClaimResult.alreadyHandled();
         }
         if (httpEx.statusCode() == 404) {
           // 历史派单的任务可能已终态或清理，正常不可领取不应累计为客户端协议故障。
           log.debug("CLAIM 404 for taskId={} (no longer claimable), skipping", message.taskId());
-          return ClaimResult.notClaimed();
+          return ClaimResult.alreadyHandled();
         }
         if (httpEx.isServerError()) {
           if (attempt >= maxRetries) {
             throttledLog.warn(
                 "claim_5xx_exhausted",
                 "CLAIM 5xx (HTTP {}) for taskId={} exhausted {} retries, giving up "
-                    + "(orchestrator will redispatch on lease timeout)",
+                    + "(message remains uncommitted for retry)",
                 httpEx.statusCode(),
                 message.taskId(),
                 maxRetries);
@@ -266,9 +266,14 @@ final class TaskDispatcherRetryCoordinator {
     }
   }
 
-  record ClaimResult(boolean claimed, PlatformHttpClient.TaskClaimResponse response) {
+  record ClaimResult(
+      boolean claimed, boolean commitSafe, PlatformHttpClient.TaskClaimResponse response) {
     static ClaimResult notClaimed() {
-      return new ClaimResult(false, new PlatformHttpClient.TaskClaimResponse(null));
+      return new ClaimResult(false, false, new PlatformHttpClient.TaskClaimResponse(null));
+    }
+
+    static ClaimResult alreadyHandled() {
+      return new ClaimResult(false, true, new PlatformHttpClient.TaskClaimResponse(null));
     }
   }
 }

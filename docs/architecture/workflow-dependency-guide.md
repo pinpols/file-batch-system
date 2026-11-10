@@ -197,6 +197,8 @@ Worker输出先进入任务/作业聚合，再按节点关系保存到 `workflow
 | Edge | SUCCESS、FAILURE、CONDITION、ALWAYS | CONDITION 基于上游 payload/output；空表达式等价 true，应避免误配 |
 | Join | ALL、ANY、N_OF | 默认 ALL；N_OF 必须满足合法 threshold |
 
+END 同样遵循入边汇合规则：网关或作业拒绝等同步节点推进到 END 时，先核对全部入边及其汇合规则；ALL 等待全部入边匹配，ANY 可在首条匹配时到达。END 到达不等于并行运行中的其他业务节点已经结束，Workflow 仍须按所有节点的最终状态收敛；其他并行作业完成时不会为已成功的 END 重复记录一次运行。
+
 失败节点无法满足的 SUCCESS 下游会级联标记 `SKIPPED`，避免 ALL join 永久等待。并行分支会同时出现在
 `current_node_code` 活跃集合中；只有真实创建了 READY/RUNNING 运行态的节点才进入该集合。
 
@@ -291,6 +293,8 @@ FROM batch.workflow_definition WHERE workflow_code='WF_2OF3';
 ```
 
 `joinThreshold` 含义：上游入边里至少 N 条 fire 就触发下游。
+
+达到阈值表示下游已放行并进入调度，不保证立即开始执行。当前 Worker 中，同一 Kafka 分区的后续任务可能等待前一个任务完成；实际启动时间还受消息路由、队列和 Worker 并发配置影响。
 - `joinThreshold=1` ≡ `joinMode=ANY`
 - `joinThreshold=入度` ≡ `joinMode=ALL`
 

@@ -18,6 +18,7 @@ import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchWorkerType;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchManifestRef;
 import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageExecutor;
+import io.github.pinpols.batch.worker.dispatchs.stage.DispatchStageOutcome;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -96,6 +97,14 @@ public class DispatchStepExecutionAdapter
   @Override
   protected List<DispatchStageResult> executeStages(DispatchJobContext context) {
     return dispatchStageExecutor.execute(context);
+  }
+
+  @Override
+  protected DispatchStageResult resolvePipelineFailure(
+      DispatchJobContext context, List<DispatchStageResult> results) {
+    boolean retryRecovered =
+        Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
+    return DispatchStageOutcome.failure(results, retryRecovered);
   }
 
   @Override

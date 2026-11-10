@@ -2,12 +2,9 @@
  * offsetPolicy — the pure Kafka offset rules (no kafkajs dependency).
  *
  *   - "commit" advances PAST the record (offset + 1, kafkajs commit semantics).
- *   - "withhold" records the record's own offset as the partition commit CEILING
- *     and KEEPS consuming; no later commit may cross it (§A/§1.9, mirrors the Go
- *     SDK's `committable` ceiling; Java/Python/Rust use the same invariant).
+ *   - "withhold" 保留当前 offset，适配器不得提交越过该记录。
  *   - "backpressure" seeks BACK to the record's own offset + pauses (temporary).
- *   - fromBeginning defaults to false (latest), parity with the other 4 SDKs; the
- *     old default of true replayed the whole topic on every new group.
+ *   - 新消费组默认从最早保留位置开始；显式配置优先。
  */
 
 import { test } from "node:test";
@@ -24,7 +21,7 @@ test("offsetAction: commit → commit offset+1 (advance past)", () => {
   assert.deepEqual(a, { type: "commit", topic: "topic-a", partition: 3, offset: "42" });
 });
 
-test("offsetAction: withhold → ceiling at the SAME offset (keep consuming, never cross)", () => {
+test("offsetAction: withhold 保留当前 offset", () => {
   const a = offsetAction("withhold", "topic-a", 3, "41");
   assert.deepEqual(a, {
     type: "withhold",
@@ -71,8 +68,8 @@ test("offsetAction: commit handles large (64-bit) offsets without precision loss
   assert.equal(a.offset, "9007199254740994");
 });
 
-test("resolveFromBeginning: defaults to false (latest), parity with the 4 other SDKs", () => {
-  assert.equal(resolveFromBeginning(undefined), false);
+test("resolveFromBeginning: 新消费组默认从最早保留位置开始", () => {
+  assert.equal(resolveFromBeginning(undefined), true);
 });
 
 test("resolveFromBeginning: an explicit value always wins", () => {

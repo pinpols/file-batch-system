@@ -21,6 +21,7 @@ public record ExportFormatContext(
     Object batchId,
     int pageSize,
     int chunkSize,
+    long maxRows,
     Path generatedFile,
     ExportJobContext jobContext,
     ExportDataPlugin dataPlugin,

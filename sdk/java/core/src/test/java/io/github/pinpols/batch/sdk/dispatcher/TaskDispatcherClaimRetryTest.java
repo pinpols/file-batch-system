@@ -36,6 +36,45 @@ import org.mockito.Mockito;
 @DisplayName("TaskDispatcher 认领重试 — 鉴权快速失败、冲突让位与 5xx 退避重试")
 class TaskDispatcherClaimRetryTest {
 
+  @Test
+  @DisplayName("认领失败未持有租约时不得允许提交消费位点")
+  void shouldWithholdOffset_whenClaimRetriesExhausted() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(503, "Service Unavailable"));
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+
+    assertThat(dispatcher.onMessage(msg())).isEqualTo(TaskDispatcher.DispatchDecision.WITHHOLD);
+    verify(http, times(4)).claim(anyLong(), anyString(), any());
+    verify(http, never()).report(anyLong(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("任务已不存在时允许提交位点")
+  void shouldCommitOffset_whenClaimReportsTaskMissing() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(404, "error.task.claim_not_available"));
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+
+    assertThat(dispatcher.onMessage(msg()))
+        .isEqualTo(TaskDispatcher.DispatchDecision.DROP_TERMINAL);
+    verify(http, never()).report(anyLong(), anyString(), any());
+  }
+
+  @Test
+  @DisplayName("其他执行者已认领时允许提交位点")
+  void shouldCommitOffset_whenClaimReportsConflict() throws Exception {
+    PlatformHttpClient http = mock(PlatformHttpClient.class);
+    when(http.claim(anyLong(), anyString(), any()))
+        .thenThrow(new PlatformHttpException(409, "claim conflict"));
+    dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
+
+    assertThat(dispatcher.onMessage(msg()))
+        .isEqualTo(TaskDispatcher.DispatchDecision.DROP_TERMINAL);
+    verify(http, never()).report(anyLong(), anyString(), any());
+  }
+
   private final BatchPlatformClientConfig config = BatchPlatformClientConfig.builder()
       .baseUrl("http://localhost:0")
       .tenantId("tx")

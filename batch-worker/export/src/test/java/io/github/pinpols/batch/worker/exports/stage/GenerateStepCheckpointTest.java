@@ -154,6 +154,76 @@ class GenerateStepCheckpointTest {
   }
 
   @Test
+  @DisplayName("分页续跑累计已处理记录，超过上限时不得生成成功结果")
+  void resumedPages_countPreviouslyWrittenRowsAgainstLimit() throws Exception {
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(
+            new ExportDataPlugin.DetailPage(List.of(Map.of("id", "1"), Map.of("id", "2")), "2"));
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq("2")))
+        .thenThrow(new RuntimeException("模拟第二页读取失败"))
+        .thenReturn(new ExportDataPlugin.DetailPage(List.of(Map.of("id", "3")), null));
+    GenerateStep limitedStep = stepWithMaxRows(2);
+
+    ExportStageResult first = limitedStep.execute(buildContext());
+    assertThat(first.success()).isFalse();
+    assertThat(positionStore.count).isEqualTo(2);
+
+    ExportJobContext resumed = buildContext();
+    ExportStageResult result = limitedStep.execute(resumed);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
+    assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+    assertThat(positionStore.completed).isFalse();
+    assertThat(deterministicFile).exists();
+  }
+
+  @Test
+  @DisplayName("已完成位点超过新上限时不得跳过校验并登记")
+  void completedCheckpoint_aboveCurrentLimitIsRejected() throws Exception {
+    List<Map<String, Object>> rows =
+        List.of(Map.of("id", "1"), Map.of("id", "2"), Map.of("id", "3"));
+    when(dataPlugin.loadDetailPage(any(ExportDataContext.class), anyLong(), anyInt(), eq(null)))
+        .thenReturn(new ExportDataPlugin.DetailPage(rows, null));
+    ExportStageResult initial = generateStep.execute(buildContext());
+    assertThat(initial.success()).isTrue();
+    assertThat(positionStore.completed).isTrue();
+
+    ExportJobContext resumed = buildContext();
+    ExportStageResult result = stepWithMaxRows(2).execute(resumed);
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.code()).isEqualTo("EXPORT_EXCEEDS_MAX_ROWS");
+    assertThat(resumed.getAttributes()).doesNotContainKey(PipelineRuntimeKeys.GENERATED_FILE_PATH);
+    assertThat(deterministicFile).exists();
+  }
+
+  private GenerateStep stepWithMaxRows(long maxRows) {
+    ExportDataPluginRegistry registry = mock(ExportDataPluginRegistry.class);
+    when(registry.require(any())).thenReturn(dataPlugin);
+    ExportWorkerConfiguration config = new ExportWorkerConfiguration(
+        "worker-test",
+        "EXPORT",
+        "tenant-test",
+        5000L,
+        "batch-export",
+        "group-export",
+        null,
+        maxRows,
+        new ExportWorkerConfiguration.FileProcessing(true, 100, 100, 50));
+    WorkerCheckpointProperties props = new WorkerCheckpointProperties();
+    props.setEnabled(true);
+    ObjectMapper mapper = new ObjectMapper();
+    return new GenerateStep(
+        registry,
+        new ExportFormatStrategyRegistry(List.of(new JsonExportFormat(mapper))),
+        config,
+        mapper,
+        new GenerateRuntimeSupport(
+            props, positionStore, new GenerateCursorCodec(), new PipelineStageProgressRegistry()));
+  }
+
+  @Test
   @DisplayName("第二页崩溃后重派:从残文件续写,最终文件行数完整且不重复")
   void crashOnSecondPage_thenResume_producesCompleteValidJsonWithoutDuplication() throws Exception {
     List<Map<String, Object>> page1 = List.of(Map.of("id", "1"), Map.of("id", "2"));

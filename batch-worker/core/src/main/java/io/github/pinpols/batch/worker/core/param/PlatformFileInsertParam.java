@@ -32,6 +32,7 @@ public class PlatformFileInsertParam {
   private final Integer fileGenerationNo;
   private final String sourceType;
   private final String sourceRef;
+  private final String arrivalChannelCode;
   private final String fileStatus;
   private final LocalDate bizDate;
   private final String traceId;

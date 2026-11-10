@@ -1,5 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.file;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.common.constants.BatchFileConstants;
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileDispatchRunStatus;
@@ -7,6 +9,7 @@ import io.github.pinpols.batch.common.enums.FileDispatchStatus;
 import io.github.pinpols.batch.common.enums.FileReceiptStatus;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.enums.FileTemplateFormat;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
@@ -26,6 +29,7 @@ import java.time.LocalDate;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +49,7 @@ public class FileGovernanceRepository {
 
   private static final String PIPELINE_STATUS_RUNNING = "RUNNING";
   private static final String PIPELINE_STATUS_FAILED = "FAILED";
+  private static final ObjectMapper OWNERSHIP_IDENTITY_MAPPER = JsonUtils.newDefaultMapper();
 
   public record FileIdentity(
       String tenantId, String fileCategory, String fileName, String fileFormatType) {}
@@ -58,7 +63,19 @@ public class FileGovernanceRepository {
       String sourceType,
       String fileStatus,
       String traceId,
-      Object metadata) {}
+      Object metadata,
+      String arrivalChannelCode) {
+    public ReconciledFileRecordCommand(
+        FileIdentity identity,
+        long fileSizeBytes,
+        FileStorage storage,
+        String sourceType,
+        String fileStatus,
+        String traceId,
+        Object metadata) {
+      this(identity, fileSizeBytes, storage, sourceType, fileStatus, traceId, metadata, null);
+    }
+  }
 
   public record FileAuditActor(String operatorType, String operatorId) {}
 
@@ -76,6 +93,17 @@ public class FileGovernanceRepository {
       String currentStatus, String nextStatus, String operatorId, String reason) {}
 
   private final FileGovernanceMapper fileGovernanceMapper;
+  private final Environment environment;
+  private final S3StorageProperties storageProperties;
+
+  private String storageId() {
+    return ImportIngressOwnershipIdentity.storageId(
+        environment, storageProperties, OWNERSHIP_IDENTITY_MAPPER);
+  }
+
+  public boolean isEnabledFileChannel(String tenantId, String channelCode) {
+    return fileGovernanceMapper.existsEnabledFileChannel(tenantId, channelCode);
+  }
 
   public FileGovernanceViews.FileRecordRow loadFileRecord(String tenantId, Long fileId) {
     if (!Texts.hasText(tenantId) || fileId == null) {
@@ -181,14 +209,14 @@ public class FileGovernanceRepository {
     if (limit <= 0) {
       return List.of();
     }
-    return fileGovernanceMapper.selectArrivalGovernanceCandidates(limit).stream()
+    return fileGovernanceMapper.selectArrivalGovernanceCandidates(limit, storageId()).stream()
         .map(FileGovernanceArrivalViews::arrivalCandidate)
         .toList();
   }
 
   FileGovernanceArrivalViews.ArrivalGroupBacklogView selectArrivalGroupBacklogMetrics() {
     FileGovernanceViews.ArrivalGroupBacklogRow row =
-        fileGovernanceMapper.selectArrivalGroupBacklogMetrics();
+        fileGovernanceMapper.selectArrivalGroupBacklogMetrics(storageId());
     return EmptyChecks.isNull(row)
         ? new FileGovernanceArrivalViews.ArrivalGroupBacklogView(0L, 0L)
         : FileGovernanceArrivalViews.arrivalGroupBacklog(row);
@@ -197,7 +225,7 @@ public class FileGovernanceRepository {
   public List<FileGovernanceArrivalViews.ArrivalGroupSummaryView> selectArrivalGroupSummaries(
       String tenantId, String fileGroupCode, String arrivalState) {
     return fileGovernanceMapper
-        .selectArrivalGroupSummaries(tenantId, fileGroupCode, arrivalState)
+        .selectArrivalGroupSummaries(tenantId, fileGroupCode, arrivalState, storageId())
         .stream()
         .map(FileGovernanceArrivalViews::arrivalGroupSummary)
         .toList();
@@ -213,7 +241,9 @@ public class FileGovernanceRepository {
     if (!Texts.hasText(tenantId) || !Texts.hasText(fileGroupCode)) {
       return List.of();
     }
-    return fileGovernanceMapper.selectArrivalGroupFiles(tenantId, fileGroupCode, bizDate).stream()
+    return fileGovernanceMapper
+        .selectArrivalGroupFiles(tenantId, fileGroupCode, bizDate, storageId())
+        .stream()
         .map(FileGovernanceArrivalViews::arrivalGroupFile)
         .toList();
   }
@@ -303,6 +333,7 @@ public class FileGovernanceRepository {
         .storagePath(command.storage().storagePath())
         .storageBucket(command.storage().storageBucket())
         .sourceType(command.sourceType())
+        .arrivalChannelCode(command.arrivalChannelCode())
         .fileStatus(command.fileStatus())
         .bizDate(bizDate)
         .traceId(command.traceId())

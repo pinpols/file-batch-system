@@ -17,6 +17,7 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionV
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.domain.workflow.validation.FileArrivalChannelNodeValidation;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionDagInspector;
 import io.github.pinpols.batch.console.infrastructure.workflow.WorkflowDefinitionWriteSupport;
 import java.util.List;
@@ -220,6 +221,7 @@ final class TenantWorkflowDefinitionApplySupport {
         String storedNodeParams = existingNodeParams.get(nodeCode);
         String resolvedNodeParams =
             TenantConfigMaskedParameters.resolve(submittedNodeParams, storedNodeParams);
+        FileArrivalChannelNodeValidation.validate(nodeSpec.getNodeType(), resolvedNodeParams);
         nodeParam.setNodeParams(resolvedNodeParams);
         nodeParam.setCrossDayDependencies(nodeSpec.getCrossDayDependencies());
         nodeParam.setCrossDayDependencyTimeoutSeconds(

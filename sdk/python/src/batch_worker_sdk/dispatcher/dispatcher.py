@@ -576,7 +576,7 @@ class TaskDispatcher:
         start_body: dict[str, Any] = {
             "tenantId": self._config.tenant_id,
             "workerId": self._config.worker_code,
-            "details": {"executionStarted": True},
+            "details": {"executionStarted": True, "executionAttemptId": str(uuid.uuid4())},
         }
         p_inv = self._partition_invocation_ids.get(task_id)
         if p_inv is not None:

@@ -420,7 +420,7 @@ bash scripts/ci/run-full-regression.sh --skip-default-tests --skip-it-suite --wi
 |---|---|---|
 | `JobLaunchSimulation` | `POST /api/triggers/launch`（trigger:18081） | 写入路径吞吐/延迟基线 |
 | `ConsoleQuerySimulation` | `GET /api/console/query/instances` 等（console:18080） | 查询路径吞吐/延迟基线 |
-| `CapacityBaselineSimulation` | 写入 30 % + 查询 70 % 混合 | **生产前容量基线**（分级爬坡找饱和点） |
+| `CapacityBaselineSimulation` | 历史计划为写入 30 % + 查询 70 %；当前画像按写后读编排，读场景可能未启动 | 历史规划为生产前容量基线；当前实现不能证明并发混合负载，见 [压测说明](../../../load-tests/README.md) |
 
 ---
 

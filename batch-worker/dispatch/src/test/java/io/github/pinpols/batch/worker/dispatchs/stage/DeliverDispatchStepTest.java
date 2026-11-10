@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -389,6 +390,92 @@ class DeliverDispatchStepTest {
 
     verify(dispatchChannelGateway).dispatch(any());
     assertThat(result.success()).isTrue();
+    assertThat(channelConfig).doesNotContainKey("sftp_password");
+  }
+
+  @Test
+  @DisplayName("首次投递确定失败后重试应重新解析固定密钥并在完成后清理")
+  void execute_reloadsPinnedSecretForRetryAndCleansIt() {
+    setupMocksForNewRecord();
+    when(fileDispatchRepository.markAttemptFailed(any(), any(), any(), any(), any()))
+        .thenReturn(1);
+    when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
+    when(fileDispatchRepository.markSent(any(), any(), any(), any(), any(), any()))
+        .thenReturn(1);
+    Map<String, Object> channelConfig =
+        new LinkedHashMap<>(Map.of("channel_type", "SFTP", "secret_ref", "dispatch/key"));
+    DispatchJobContext context = buildContext(Map.of("id", 10L), channelConfig);
+    Map<String, Object> bindings =
+        Map.of("CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42));
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, bindings);
+    when(dispatchSecretResolver.resolveInto(eq("t1"), eq("CH1"), any(), eq(channelConfig)))
+        .thenAnswer(invocation -> {
+          channelConfig.put("sftp_password", "runtime-secret");
+          return Set.of("sftp_password");
+        });
+    when(dispatchChannelGateway.dispatch(any()))
+        .thenAnswer(invocation -> {
+          DispatchCommand command = invocation.getArgument(0);
+          if (!command.channelConfig().containsKey("sftp_password")) {
+            return DispatchResult.failureWithoutReceipt("sftp_password missing");
+          }
+          return new DispatchResult(false, "ext-1", "R-001", false, false, "temporary", null);
+        })
+        .thenAnswer(invocation -> {
+          DispatchCommand command = invocation.getArgument(0);
+          if (!command.channelConfig().containsKey("sftp_password")) {
+            return DispatchResult.failureWithoutReceipt("sftp_password missing");
+          }
+          return successResult();
+        });
+
+    DispatchStageResult firstResult = step.execute(context);
+    assertThat(firstResult.success()).isFalse();
+    assertThat(channelConfig).doesNotContainKey("sftp_password");
+    RetryDispatchStep retry = new RetryDispatchStep(
+        fileDispatchRepository, dispatchChannelGateway, dispatchSecretResolver);
+    DispatchStageResult retryResult = retry.execute(context);
+
+    assertThat(retryResult.success()).isTrue();
+    verify(dispatchSecretResolver, times(2))
+        .resolveInto(eq("t1"), eq("CH1"), any(), eq(channelConfig));
+    assertThat(channelConfig).doesNotContainKey("sftp_password");
+  }
+
+  @Test
+  @DisplayName("密钥在首次失败后撤销时重试不得再次外发")
+  void execute_doesNotRetryAfterPinnedSecretIsRevoked() {
+    setupMocksForNewRecord();
+    when(fileDispatchRepository.markAttemptFailed(any(), any(), any(), any(), any()))
+        .thenReturn(1);
+    lenient().when(fileDispatchRepository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
+    Map<String, Object> channelConfig =
+        new LinkedHashMap<>(Map.of("channel_type", "SFTP", "secret_ref", "dispatch/key"));
+    DispatchJobContext context = buildContext(Map.of("id", 10L), channelConfig);
+    Map<String, Object> bindings =
+        Map.of("CH1", Map.of("secretRef", "dispatch/key", "secretVersionId", 42));
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_SECRET_BINDINGS, bindings);
+    when(dispatchSecretResolver.resolveInto(eq("t1"), eq("CH1"), any(), eq(channelConfig)))
+        .thenAnswer(invocation -> {
+          channelConfig.put("sftp_password", "runtime-secret");
+          return Set.of("sftp_password");
+        })
+        .thenThrow(new DispatchSecretBlockedException("DISPATCH_SECRET_REVOKED_OR_EXPIRED"));
+    when(dispatchChannelGateway.dispatch(any()))
+        .thenReturn(new DispatchResult(false, "ext-1", "R-001", false, false, "temporary", null))
+        .thenReturn(successResult());
+
+    DispatchStageResult firstResult = step.execute(context);
+    assertThat(firstResult.success()).isFalse();
+    assertThat(channelConfig).doesNotContainKey("sftp_password");
+    RetryDispatchStep retry = new RetryDispatchStep(
+        fileDispatchRepository, dispatchChannelGateway, dispatchSecretResolver);
+    DispatchStageResult retryResult = retry.execute(context);
+
+    assertThat(retryResult.success()).isFalse();
+    assertThat(retryResult.code()).isEqualTo("DISPATCH_SECRET_REVOKED_OR_EXPIRED");
+    verify(dispatchChannelGateway, times(1)).dispatch(any());
+    verify(fileDispatchRepository, never()).beginAttempt(any(), any(), any());
     assertThat(channelConfig).doesNotContainKey("sftp_password");
   }
 

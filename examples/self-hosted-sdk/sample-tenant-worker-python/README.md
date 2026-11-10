@@ -103,6 +103,9 @@ asyncio.run(main())
 
 完整 testkit 用法见 [`sdk/python/tests/testkit/`](../../../sdk/python/tests/testkit/)。
 
+样例在支持 POSIX 信号的环境中将 SIGTERM 和 SIGINT 接入停止流程，调用
+`client.stop(timeout=30)` 等待在途任务并主动下线；任务能否在停止时限内完成取决于处理器。
+
 ## Java sample 等价对照(快速 mental map)
 
 | Java 端(`sample-tenant-worker`) | Python 端(本目录) |

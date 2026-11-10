@@ -10,6 +10,7 @@
             <arg column="storagePath" javaType="java.lang.String"/>
             <arg column="bizDate" javaType="java.time.LocalDate"/>
             <arg column="fileGroupCode" javaType="java.lang.String"/>
+            <arg column="legacyChannelFallback" javaType="java.lang.Boolean"/>
         </constructor>
     </resultMap>
     <resultMap id="sensorFileArrivalMatchView" type="io.github.pinpols.batch.orchestrator.domain.view.SensorFileArrivalMatchView">
@@ -30,12 +31,16 @@
                created_at  AS "arrivalTime",
                storage_path AS "storagePath",
                biz_date    AS "bizDate",
-               metadata_json -&gt;&gt; 'fileGroupCode' AS "fileGroupCode"
+               metadata_json -&gt;&gt; 'fileGroupCode' AS "fileGroupCode",
+               (file.legacy_channel_fallback AND file.arrival_channel_code IS NULL) AS "legacyChannelFallback"
           FROM batch.file_record file
          WHERE file.tenant_id = #{tenantId}
            AND file.file_category = 'INPUT'
            AND file.file_name LIKE #{namePattern} ESCAPE '!'
            AND file.created_at &gt;= #{since}
+           <include refid="io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper.scannerAcceptedOrUnowned"/>
+           AND (file.metadata_json -&gt;&gt; 'uploadMode' is distinct from 'APP_MANAGED'
+                OR jsonb_exists(file.metadata_json, 'arrivalConfirmedAt'))
         <if test="bizDate != null">
            AND file.biz_date = #{bizDate}
         </if>
@@ -55,8 +60,14 @@
              )
            )
         </if>
-        <if test="sourceType != null">
-           AND file.source_type = #{sourceType}
+        <if test="channelCode != null">
+           AND (file.arrival_channel_code = #{channelCode}
+                <if test="sourceType != null">
+                OR (file.legacy_channel_fallback AND file.arrival_channel_code IS NULL
+                    AND file.source_type = #{sourceType}
+                )
+                </if>
+               )
         </if>
          ORDER BY file.created_at DESC, file.id DESC
          LIMIT 1

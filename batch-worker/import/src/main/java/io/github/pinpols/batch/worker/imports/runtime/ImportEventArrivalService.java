@@ -37,7 +37,16 @@ public class ImportEventArrivalService {
           logSafe(tenantId),
           logSafe(bucket),
           logSafe(objectKey));
-      scanner.scan();
+      ImportIngressScanner.ScanResult scanResult = scanner.scan();
+      if (scanResult == ImportIngressScanner.ScanResult.DISABLED) {
+        return new Result(false, "scanner-disabled");
+      }
+      if (scanResult == ImportIngressScanner.ScanResult.LEASE_UNAVAILABLE) {
+        return new Result(false, "scan-lease-unavailable");
+      }
+      if (scanResult == ImportIngressScanner.ScanResult.OWNERSHIP_INACTIVE) {
+        return new Result(false, "scanner-ownership-inactive");
+      }
       meterRegistry.counter("batch.import.event_arrival.scans").increment();
       return new Result(true, null);
     } finally {

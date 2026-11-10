@@ -401,8 +401,7 @@ public class SensorStateMachine {
    *   <li>非 END：dispatchService.dispatchNode 进 CLAIM → EXECUTE → REPORT 主链路
    * </ul>
    *
-   * <p>失败路径 + cascadeSkipDownstream 不在本类范围（避免重复 ADR-018 skip 级联逻辑），由 WorkflowDagService 在下次 worker
-   * 回报时自然推进。
+   * <p>完成后按实际边条件级联跳过不可达分支，再尝试收口；WAIT 失败时可能不存在后续 worker 回报。
    */
   private void advanceDownstream(
       WorkflowRunEntity wfRun, String currentNodeCode, boolean success, Instant now) {
@@ -416,22 +415,23 @@ public class SensorStateMachine {
     String sourcePayload = resolveSourcePayloadForDownstream(wfRun, currentNodeCode);
     List<DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodesForRun(wfRun, currentNodeCode, success, sourcePayload);
-    if (nextNodes == null || nextNodes.isEmpty()) {
-      workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(wfRun);
-      return;
+    if (nextNodes != null && !nextNodes.isEmpty()) {
+      WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
+      for (DagNodeResolution next : nextNodes) {
+        if (next == null) {
+          continue;
+        }
+        if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
+          dispatchEndNode(wfRun, next, success, now);
+        } else {
+          // 让 probeOne 事务包含下游激活。异常必须继续向外传播，使
+          // WAIT 终态转换回滚，并让持久化传感器扫描可以重试节点。
+          dispatchService.dispatchNode(jobInstance, wfRun, next, sourcePayload, wfRun.getTraceId());
+        }
+      }
     }
-    WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
-    for (DagNodeResolution next : nextNodes) {
-      if (next == null) {
-        continue;
-      }
-      if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {
-        dispatchEndNode(wfRun, next, success, now);
-      } else {
-        // 让 probeOne 事务包含下游激活。异常必须继续向外传播，使
-        // WAIT 终态转换回滚，并让持久化传感器扫描可以重试节点。
-        dispatchService.dispatchNode(jobInstance, wfRun, next, sourcePayload, wfRun.getTraceId());
-      }
+    if (!WorkflowRunStatus.PAUSED.code().equals(wfRun.getRunStatus())) {
+      workflowDagService.cascadeSkipDownstreamForRun(wfRun, currentNodeCode, sourcePayload);
     }
     workflowNodeTerminalFinalizer.finalizeIfAllNodesTerminal(wfRun);
   }

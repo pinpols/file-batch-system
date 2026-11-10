@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import uuid
 from typing import Any
 
 import pytest
+from aiohttp import web
 from pytest_httpx import HTTPXMock
 
 from batch_worker_sdk import BatchPlatformClientConfig, TaskDispatcher, WorkerRuntimeState
@@ -73,7 +75,10 @@ async def test_execution_start_confirms_current_identity_before_handler(
         requests = httpx_mock.get_requests()
         starts = [request for request in requests if request.url.path.endswith("/renew")]
         assert len(starts) == 1
-        assert json.loads(starts[0].content) == {
+        start_body = json.loads(starts[0].content)
+        attempt_id = start_body["details"].pop("executionAttemptId")
+        assert uuid.UUID(attempt_id).version == 4
+        assert start_body == {
             "tenantId": "acme",
             "workerId": "w-1",
             "partitionInvocationId": "inv-current",
@@ -84,6 +89,58 @@ async def test_execution_start_confirms_current_identity_before_handler(
         assert len(reports) == (1 if scenario in {"confirmed", "cancelled"} else 0)
     finally:
         await http.close()
+
+
+async def test_execution_start_generates_distinct_identity_for_each_attempt(
+    httpx_mock: HTTPXMock,
+) -> None:
+    config = _cfg()
+    http = PlatformHttpClient(config)
+    dispatcher = TaskDispatcher(config, http)
+    ctx = SdkTaskContext(tenant_id="acme", task_id=1, worker_code="w-1", task_type="echo")
+    httpx_mock.add_response(url=config.base_url + "/internal/tasks/1/renew", json={})
+    httpx_mock.add_response(url=config.base_url + "/internal/tasks/1/renew", json={})
+    try:
+        assert await dispatcher._confirm_execution_entry(1, _msg(), ctx)
+        assert await dispatcher._confirm_execution_entry(1, _msg(), ctx)
+        attempts = [
+            json.loads(request.content)["details"]["executionAttemptId"]
+            for request in httpx_mock.get_requests()
+        ]
+        assert len(attempts) == 2
+        assert attempts[0] != attempts[1]
+    finally:
+        await http.close()
+
+
+async def test_execution_start_sends_attempt_identity_over_real_http() -> None:
+    captured: list[dict[str, Any]] = []
+
+    async def renew(request: web.Request) -> web.Response:
+        captured.append(await request.json())
+        return web.json_response({"cancelRequested": False})
+
+    app = web.Application()
+    app.router.add_post("/internal/tasks/1/renew", renew)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "127.0.0.1", 0)
+    await site.start()
+    port = runner.addresses[0][1]
+    config = BatchPlatformClientConfig(
+        base_url=f"http://127.0.0.1:{port}", tenant_id="acme", worker_code="w-1"
+    )
+    http = PlatformHttpClient(config)
+    dispatcher = TaskDispatcher(config, http)
+    ctx = SdkTaskContext(tenant_id="acme", task_id=1, worker_code="w-1", task_type="echo")
+    try:
+        assert await dispatcher._confirm_execution_entry(1, _msg(), ctx)
+        assert len(captured) == 1
+        assert uuid.UUID(captured[0]["details"]["executionAttemptId"]).version == 4
+        assert captured[0]["details"]["executionStarted"] is True
+    finally:
+        await http.close()
+        await runner.cleanup()
 
 
 async def test_tenant_mismatch_drops_message(

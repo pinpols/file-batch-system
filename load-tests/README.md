@@ -12,10 +12,10 @@
 
 - [JobLaunchSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/JobLaunchSimulation.java) — trigger **`POST /api/triggers/launch`** 写压测
 - [ConsoleQuerySimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/ConsoleQuerySimulation.java) — console 列表类查询读压测
-- [CapacityBaselineSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/CapacityBaselineSimulation.java) — 混合读写容量基线（阶梯加压）
+- [CapacityBaselineSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/CapacityBaselineSimulation.java) — 读写阶梯画像；写场景完成后才启动读场景，写用户持续运行且有全局时限，读场景可能不会启动，不能作为并发混合负载证据。
 - [SchedulingSnapshotUnderLoadSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/SchedulingSnapshotUnderLoadSimulation.java) — **launch 写压 + orchestrator `GET /internal/scheduler/snapshot`**（调度路径只读可观测性）
 - [SchedulingBacklogUnderLoadSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/SchedulingBacklogUnderLoadSimulation.java) — 固定 launch RPS + 调度/队列/WAITING/READY 查询，配合 SQL sampler 观测派发滞后
-- [LaunchPipelineCompletionSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/LaunchPipelineCompletionSimulation.java) — **launch → console batch-status 轮询终态**，统计 Gatling 分组 **`pipeline_completion`**（依赖真实 Worker）
+- [LaunchPipelineCompletionSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/LaunchPipelineCompletionSimulation.java) — 非零轮询按 Trigger 返回的请求标识查询对应在线 Workflow，统计 Gatling 分组 **`pipeline_completion`**（依赖真实 Worker）。结果组分别记录 `SUCCESS`、`FAILED`、`TERMINATED`、`SUCCESS_DRY_RUN`、`FAILED_DRY_RUN` 与 `TIMEOUT`；只有全部用户达到 `SUCCESS` 且组内无失败时场景通过，dry-run 不能替代真实业务结果。`pipeline.maxPolls=0` 只统计 **`launch_acceptance`** 受理结果，不能作为运行完成证据。业务数据和文件副作用仍须独立对账。
 - [WorkerTaskLifecycleSimulation.java](./src/test/java/io/github/pinpols/batch/loadtest/simulations/WorkerTaskLifecycleSimulation.java) — 基于显式 CSV 任务清单压 **CLAIM → REPORT** 内部接口（会修改任务状态，仅限隔离任务）
 
 维度说明见 [docs/testing/load-test-dimensions.md](../docs/testing/load-test-dimensions.md)。
@@ -68,7 +68,7 @@ mvn -Pstaging gatling:test -Dsimulation=JobLaunchSimulation
 - `-Dramp.seconds=30`
 - `-Dscheduling.launch.rps=5.0`、`-Dscheduling.read.rps=5.0`（固定写压 + 调度积压查询）
 - `-Dpipeline.completion.users=10`（端到尾场景并发用户数）
-- `-Dpipeline.maxPolls=90`、`-Dpipeline.pollIntervalSec=2`（端到尾轮询上限与间隔）
+- `-Dpipeline.maxPolls=90`、`-Dpipeline.pollIntervalSec=2`（轮询上限与间隔；设为 0 只验证受理，终态须另行对账）
 - `-Dtask.lifecycle.csv=target/task-lifecycle-tasks.csv`（CLAIM → REPORT 场景任务清单，CSV header: `taskId,tenantId,workerId`）
 - `-Dtask.lifecycle.executePauseMs=0`（CLAIM 与 REPORT 之间的模拟执行耗时）
 
@@ -80,8 +80,10 @@ mvn -Pstaging gatling:test -Dsimulation=JobLaunchSimulation
 
 ### 控制台认证
 
-- `-Dconsole.authToken=Bearer <token>`
-- `-Dconsole.accessToken=<jwt>`（推荐，脚本内部拼 `Bearer `，避免 shell/Maven 空格转义问题）
+- `-Dconsole.accessToken=<jwt>`：传入 Console 登录返回的令牌，画像以 `batch_console_token` Cookie 发送。
+- 兼容旧参数 `-Dconsole.authToken='Bearer <token>'`，仍以 Cookie 发送；两项同时设置时优先使用 `console.accessToken`。不要在日志中打印令牌。
+- Trigger launch 使用独立的 `X-Internal-Secret`（`-Dinternal.secret` 或 `BATCH_INTERNAL_SECRET`），不能使用 Console 登录 Cookie 代替。
+- 本机回环鉴权回归：运行 [test-pipeline-completion.py](scripts/test-pipeline-completion.py) 和 [test-console-auth-profiles.py](scripts/test-console-auth-profiles.py)；只访问临时 stub，不验证真实登录服务。
 
 ### 调度积压采样
 
@@ -203,7 +205,26 @@ source scripts/lib/env-common.sh
 Dispatch 压测会按虚拟用户数创建独立文件记录，并为每档压力分配不重叠的 `fileId`，避免共享文件状态竞争污染吞吐和失败率。
 每轮 Worker 压测的本地夹具位于 `target/worker-load-data/<RUN_ID>`，不同运行的 payload 和 `run.env` 独立。共享模板和序列的准备事务使用数据库 advisory lock，避免并发 `setval` 回拨序列；该锁仅保护造数，不能隔离 Job/Workflow 定义修改。同一数据库的多个画像串行执行；单次画像内模块可用 `parallel` 模式并发发压。
 控制面混合压测会根据各模块速率和持续时间计算期望 launch 数，根据 Dispatch 请求数预建唯一文件记录，并自包含准备只读 Atomic SQL 作业。每个 trigger request 都必须关联实例，且所有实例最终为 `SUCCESS`；仅有部分实例进入终态不再视为通过。
+写入 p95 门槛分别针对本次实际启用且速率大于零的各模块 launch 请求计算，读请求不会稀释写入延迟；全局错误率仍覆盖画像中的全部请求。该门槛只衡量 Trigger 的 launch 接口，不代表 claim、report 或端到端完成延迟。用本机模拟服务运行 [test-control-mixed-slo.py](scripts/test-control-mixed-slo.py)，可复核慢写被快读掩盖的反例和单模块放行；不访问真实服务。
+启用 Trigger 压测时，报告记录调度积压采样状态；采样进程失败会保留本轮数据并使画像退出非零。混合画像仍尝试收集已发起请求的终态，若 Gatling 同时失败则保留其退出码。采样文件即使已生成，也需结合状态判断是否完整。
+PostgreSQL 压力采样的每次查询失败会记入本轮 `pg-pressure-sample-errors.log`，报告标明完整、缺失、无样本或进程提前退出；不完整时保留本轮数据并返回非零。采样完整仅表示查询没有报告缺失且至少有一个样本，不代表采样频率足以支持性能结论。
 Process 故障画像重启本地 Worker 时会通过公共环境转换函数使用宿主机 PostgreSQL/Redis 地址，避免把 Compose 服务名传给本地 JVM。
+
+结算导出夹具通过 `query_param_schema.csvColumns` 指定九个业务输出列，`id` 仅用作分页游标。可运行 `python3 -m unittest scripts.ci.tests.test_export_load_fixture` 核对配置；真实导出还需对账文件内容与业务源数据。
+
+#### 隔离本地文件夹具
+
+`LOAD_TEST_HOST_ROOT` 控制宿主机生成及清理的目录，`LOAD_TEST_WORKER_ROOT` 控制登记到数据库的文件路径和 LOCAL 渠道目标，二者默认均为 `/tmp/batch`。例如，容器 Compose 把 `BATCH_DISPATCH_LOCAL_ROOT=/path/to/isolated-root` 挂载到容器 `/tmp/batch` 时，在运行夹具、压测和后续清理脚本的同一环境中设置：
+
+```bash
+export LOAD_TEST_HOST_ROOT=/path/to/isolated-root
+export LOAD_TEST_WORKER_ROOT=/tmp/batch
+export SKIP_AUTO_CLEANUP=1
+```
+
+宿主机根目录必须与该 Compose 绑定目录相同；若 Worker 直接运行在宿主机，则应把两个根目录设为同一路径。执行前确认 Worker 对 `<root>/load-test` 有读取权限、对 `<root>/local-dispatch` 有写入权限，并确认沙箱配置允许目标路径。两个根目录均须为绝对非根路径，不能包含 `.` 或 `..` 路径段。`SKIP_AUTO_CLEANUP=1` 保留本轮数据；之后若明确需要清理，应重新指定同一个 `RUN_ID` 和 `LOAD_TEST_HOST_ROOT`，核对目标数据库及目录后再单独执行 `cleanup-worker-load-data.sh`。该清理仍使用运行标识匹配本地分发文件，运行标识互相包含时不能作为独立所有权证明，应使用彼此隔离的宿主目录。
+
+脚本使用的路径路由可通过 `python3 -m unittest scripts/ci/tests/test_load_fixture_paths.py` 在不连接数据库或 Console 的情况下核验；实际 Worker 文件访问仍需在所选环境验证。
 
 `RUN_ID` 最长 53 个字符；夹具会追加最长的 `-SETTLEMENT` 后缀并写入 `varchar(64)`。所有造数入口会在写文件或数据库前校验，P2 容量画像还会校验追加 `-10w` 后的派生标识。
 
@@ -287,9 +308,14 @@ SKIP_AUTO_CLEANUP=1 \
   bash load-tests/scripts/run-control-plane-worker-benchmark.sh
 ```
 
-Kafka lag 默认优先通过 `batch-kafka` 容器内 `${KAFKA_CONTAINER_BIN_DIR}/kafka-consumer-groups.sh` 采样；目录默认值见
-`.env.example`，可随 Kafka 镜像布局覆盖；找不到容器时会尝试本机
-`kafka-consumer-groups.sh`。非容器环境需安装 PostgreSQL client 和 Kafka CLI：
+Kafka lag 优先使用本机 CLI 和 `KAFKA_HOST_BOOTSTRAP` 采样。回退到容器时，若设置了
+`KAFKA_CONTAINER`，只使用指定容器；采样失败会标记不可用，不再发现其他容器。未指定时沿用
+容器名自动发现。容器内 CLI 目录可通过 `KAFKA_CONTAINER_BIN_DIR` 覆盖，连接地址使用
+`KAFKA_CONTAINER_BOOTSTRAP`。Process 专项基准及长稳监控同样遵循此选择顺序。长稳监控在
+所有分区积压均不可读取时报告 `kafka lag unavailable` 并重新计时；部分分区不可读取时报告
+`kafka lag incomplete`，已读取的最大值只能作为下限，不能证明其余分区无积压。非容器环境需安装 PostgreSQL client 和 Kafka CLI：
+
+报告中的 `Expected end-to-end launch requests` 在顺序模式按选中的 Process、Dispatch 及各 Atomic 作业的用户数计算；独立的 Trigger 压测不逐项等待终态，因此不计入这一字段。并行模式继续展示配置或计算出的终态等待目标。该字段是计划数，实际受理和完成情况仍需以请求和业务结果对账。
 
 自适应 Relay 容量轮次必须显式声明，preflight 会同时校验 Trigger benchmark profile、入口准入、Hikari、
 Relay min/max、当前有效速率和 consumer lag 指标：
@@ -510,6 +536,7 @@ select id as taskId, tenant_id as tenantId, 'synthetic-worker-1' as workerId
 | [scripts/sample-scheduler-backlog.sh](scripts/sample-scheduler-backlog.sh) | 在 Gatling 运行期间采样 scheduler / dispatch / worker 的积压情况。 |
 | [scripts/start-soak.sh](scripts/start-soak.sh) | 启动 console-api + 4 worker(JFR + clock offset)。 |
 | [scripts/test-control-plane-metrics.py](scripts/test-control-plane-metrics.py) | 在目标测试库的隔离 schema 中验证控制面根运行与子作业指标。 |
+| [scripts/test-pipeline-completion.py](scripts/test-pipeline-completion.py) | 以本机回环 stub 验证完成、失败、终止、dry-run 与超时的场景断言；不连接实际服务。 |
 | [sql/analyze-soak-batch-days.sql](sql/analyze-soak-batch-days.sql) | 供 [analyze-soak.sh](scripts/analyze-soak.sh) 使用的配套 SQL。 |
 | [sql/analyze-soak-job-latency.sql](sql/analyze-soak-job-latency.sql) | 供 [analyze-soak.sh](scripts/analyze-soak.sh) 使用的配套 SQL。 |
 | [sql/capture-pg-capacity-settings.sql](sql/capture-pg-capacity-settings.sql) | 记录容量压测报告中的 PostgreSQL 运行参数。 |

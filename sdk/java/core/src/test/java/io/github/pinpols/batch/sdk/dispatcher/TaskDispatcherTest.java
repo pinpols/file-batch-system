@@ -361,18 +361,20 @@ class TaskDispatcherTest {
   // ─── 未注册 taskType ────────────────────────────────────────────────────────
 
   @Test
-  @DisplayName("任务类型未注册时不认领,直接回报失败并说明原因")
-  void shouldReportFailureWithoutClaim_whenTaskTypeUnregistered() throws Exception {
+  @DisplayName("任务类型未注册时先认领，再用当前调用身份回报失败")
+  void shouldClaimBeforeFailureReport_whenTaskTypeUnregistered() throws Exception {
     PlatformHttpClient http = mock(PlatformHttpClient.class);
+    stubCurrentClaim(http, 42L, "inv-42");
     dispatcher = new TaskDispatcher(config, Map.of("tt", noopHandler()), http);
 
     dispatcher.processInWorkerThread(msg("unknown_type"));
 
-    verify(http, never()).claim(anyLong(), anyString(), any());
+    verify(http).claim(eq(42L), anyString(), any());
     ArgumentCaptor<Map<String, Object>> body = mapCaptor();
     verify(http).report(eq(42L), anyString(), body.capture());
     assertThat(String.valueOf(body.getValue().get("message")))
         .contains("no handler registered for taskType=unknown_type");
+    assertThat(body.getValue()).containsEntry("partitionInvocationId", "inv-42");
   }
 
   // ─── CLAIM 失败 ─────────────────────────────────────────────────────────────

@@ -65,19 +65,68 @@ class SensorFileArrivalMapperXmlTest {
     assertThat(boundSql.getSql()).contains("file_name LIKE ?");
     assertThat(boundSql.getSql()).doesNotContain("biz_date = ?");
     assertThat(boundSql.getSql()).doesNotContain("metadata_json ->> 'arrivalState'");
+    assertThat(boundSql.getSql())
+        .contains("metadata_json ->> 'uploadMode' is distinct from 'APP_MANAGED'")
+        .contains("jsonb_exists(file.metadata_json, 'arrivalConfirmedAt')");
+  }
+
+  @Test
+  @DisplayName("未知渠道不能匹配无渠道的历史文件，已知来源仍可同源回退")
+  void shouldRestrictLegacyFallbackToKnownSourceType() {
+    var statement = parseMapper()
+        .getMappedStatement(
+            "io.github.pinpols.batch.orchestrator.mapper.SensorFileArrivalMapper.selectLatestArrival");
+    var unknownSql = statement
+        .getBoundSql(Map.of(
+            "tenantId",
+            "tenant-a",
+            "namePattern",
+            "settle.csv",
+            "channelCode",
+            "BANK-SFTP",
+            "since",
+            OffsetDateTime.parse("2026-05-07T00:00:00Z"),
+            "requireCompleteGroup",
+            false))
+        .getSql();
+    assertThat(unknownSql)
+        .contains("file.arrival_channel_code = ?")
+        .doesNotContain("OR (file.legacy_channel_fallback");
+
+    var knownSql = statement
+        .getBoundSql(Map.of(
+            "tenantId",
+            "tenant-a",
+            "namePattern",
+            "settle.csv",
+            "channelCode",
+            "sftp_bank",
+            "sourceType",
+            "SFTP",
+            "since",
+            OffsetDateTime.parse("2026-05-07T00:00:00Z"),
+            "requireCompleteGroup",
+            false))
+        .getSql();
+    assertThat(knownSql)
+        .contains("file.arrival_channel_code = ?")
+        .contains("OR (file.legacy_channel_fallback")
+        .contains("file.source_type = ?");
   }
 
   private static Configuration parseMapper() {
     Configuration configuration = new Configuration();
-    String resource = "mapper/SensorFileArrivalMapper.xml";
-    try (InputStream inputStream =
-        Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
-      assertThat(inputStream).as(resource).isNotNull();
-      new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments())
-          .parse();
-      return configuration;
-    } catch (Exception exception) {
-      throw new AssertionError("failed to parse " + resource, exception);
+    for (String resource :
+        new String[] {"mapper/FileGovernanceMapper.xml", "mapper/SensorFileArrivalMapper.xml"}) {
+      try (InputStream inputStream =
+          Thread.currentThread().getContextClassLoader().getResourceAsStream(resource)) {
+        assertThat(inputStream).as(resource).isNotNull();
+        new XMLMapperBuilder(inputStream, configuration, resource, configuration.getSqlFragments())
+            .parse();
+      } catch (Exception exception) {
+        throw new AssertionError("failed to parse " + resource, exception);
+      }
     }
+    return configuration;
   }
 }

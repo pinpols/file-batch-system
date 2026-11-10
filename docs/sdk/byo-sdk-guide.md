@@ -54,6 +54,8 @@
 - **schemaVersion 兼容矩阵**:见 wire-protocol §A —— 未知 major(`v3+`)直接 reject,不 commit offset
 - **at-least-once 投递**:消息允许重复投递；平台持久化去重身份和 CLAIM 围栏共同控制执行，SDK 不以 Kafka offset 代替业务幂等
 
+五语言 Kafka 适配器在 `withhold` 后限制受影响分区的消费，等待约 2 秒后重试；其他分区仍可继续。持续拒绝或认领失败会阻塞相应分区，重投不能替代业务幂等；初始位点、转交与验证边界见[通讯协议](wire-protocol.md#kafka-消费确认与背压)和[支持矩阵](sdk-parity-matrix.md#45-kafka-offset-commit-契约)。
+
 ### 1.3 心跳调度(默认 30s,消费 nextHeartbeatHint 动态调速)
 
 ```

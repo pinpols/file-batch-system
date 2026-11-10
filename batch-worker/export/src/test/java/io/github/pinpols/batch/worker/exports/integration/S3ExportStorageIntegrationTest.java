@@ -13,7 +13,10 @@ import io.github.pinpols.batch.testing.OrchestratorWireMockSupport;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.exports.BatchWorkerExportApplication;
 import io.github.pinpols.batch.worker.exports.domain.ExportJobContext;
+import io.github.pinpols.batch.worker.exports.domain.ExportPayload;
 import io.github.pinpols.batch.worker.exports.infrastructure.S3ExportStorage;
+import io.github.pinpols.batch.worker.exports.stage.ExportRuntimeKeys;
+import io.github.pinpols.batch.worker.exports.stage.RegisterStep;
 import io.github.pinpols.batch.worker.exports.stage.StoreStep;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -51,6 +54,8 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
 
   private final StoreStep storeStep;
 
+  private final RegisterStep registerStep;
+
   private final S3StorageProperties storageProperties;
 
   private final JdbcTemplate jdbcTemplate;
@@ -60,13 +65,105 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   S3ExportStorageIntegrationTest(
       StoreStep storeStep,
+      RegisterStep registerStep,
       S3StorageProperties storageProperties,
       JdbcTemplate jdbcTemplate,
       BatchObjectStore objectStore) {
     this.storeStep = storeStep;
+    this.registerStep = registerStep;
     this.storageProperties = storageProperties;
     this.jdbcTemplate = jdbcTemplate;
     this.objectStore = objectStore;
+  }
+
+  @Test
+  @DisplayName("加密导出登记的文件大小与存储密文的实际字节数一致")
+  void shouldReportStoredCiphertextSizeForEncryptedExport() throws Exception {
+    String tenantId = "export_size_" + UUID.randomUUID().toString().replace("-", "");
+    String keyRef = "EXPORT_SIZE_TEST_KEY";
+    String keyMaterial = Base64.getEncoder()
+        .encodeToString("01234567890123456789012345678901".getBytes(StandardCharsets.US_ASCII));
+    BatchSecurityProperties security = new BatchSecurityProperties();
+    security.setBypassMode(false);
+    BatchKmsProperties kms = new BatchKmsProperties();
+    kms.setDefaultKeyRef(keyRef);
+    kms.setKeys(Map.of(keyRef, keyMaterial));
+    BatchObjectCryptoService realCrypto = new BatchObjectCryptoService(security, kms);
+    String objectName = "export/encrypted-size-" + UUID.randomUUID() + ".json";
+    Path generated = Files.createTempFile("export-encrypted-size-", ".json");
+    byte[] plaintext = "真实加密产物".getBytes(StandardCharsets.UTF_8);
+    Files.write(generated, plaintext);
+    ExportJobContext context = new ExportJobContext();
+    context.setTenantId(tenantId);
+    context.setJobCode("EXPORT_SIZE_TEST");
+    context.setWorkerId("export-size-test");
+    context.getAttributes().put(PipelineRuntimeKeys.GENERATED_FILE_PATH, generated.toString());
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_SIZE_BYTES, (long) plaintext.length);
+    context.getAttributes().put(PipelineRuntimeKeys.OBJECT_NAME, objectName);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_NAME, "encrypted-size.json");
+    context.getAttributes().put(PipelineRuntimeKeys.TRACE_ID, tenantId);
+    context.getAttributes().put(ExportRuntimeKeys.EXPORT_DATA_REF, "jdbc_mapped_export");
+    context.getAttributes().put(ExportRuntimeKeys.EXPORT_BATCH, Map.of("id", 1L));
+    ExportPayload payload = new ExportPayload(
+        null,
+        "EXPORT_SIZE_TEST",
+        "TEST_TEMPLATE",
+        "TEST_BATCH",
+        "encrypted-size.json",
+        objectName,
+        null,
+        null,
+        false,
+        null,
+        Map.of());
+    context.getAttributes().put(ExportRuntimeKeys.EXPORT_PAYLOAD, payload);
+    context
+        .getAttributes()
+        .put(
+            PipelineRuntimeKeys.TEMPLATE_CONFIG,
+            Map.of("content_encryption_enabled", true, "encryption_key_ref", keyRef));
+
+    try {
+      var result = new StoreStep(storage, realCrypto).execute(context);
+
+      assertThat(result.success()).isTrue();
+      byte[] stored;
+      try (var input = objectStore.get(storageProperties.getBucket(), objectName)) {
+        stored = input.readAllBytes();
+      }
+      assertThat(realCrypto.decrypt(stored)).isEqualTo(plaintext);
+      assertThat(stored.length).isGreaterThan(plaintext.length);
+      String expectedChecksum =
+          HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(stored));
+      assertThat(context.getAttributes())
+          .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, (long) stored.length)
+          .containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, expectedChecksum);
+
+      var registerResult = registerStep.execute(context);
+
+      assertThat(registerResult.success()).isTrue();
+      final String selectRegisteredFileSql = """
+          select id, file_size_bytes, checksum_value
+          from batch.file_record
+          where tenant_id = ? and storage_bucket = ? and storage_path = ?
+          """;
+      Map<String, Object> registered = jdbcTemplate.queryForMap(
+          selectRegisteredFileSql, tenantId, storageProperties.getBucket(), objectName);
+      long registeredFileId = ((Number) registered.get("id")).longValue();
+      long contextFileId =
+          ((Number) context.getAttributes().get(PipelineRuntimeKeys.FILE_ID)).longValue();
+      long registeredSize = ((Number) registered.get("file_size_bytes")).longValue();
+      assertThat(registeredFileId).isEqualTo(contextFileId);
+      assertThat(registeredSize).isEqualTo(stored.length);
+      assertThat(registered.get("checksum_value")).isEqualTo(expectedChecksum);
+    } finally {
+      storage.removeObject(objectName);
+      final String deleteRegisteredFileSql = """
+          delete from batch.file_record where tenant_id = ? and storage_path = ?
+          """;
+      jdbcTemplate.update(deleteRegisteredFileSql, tenantId, objectName);
+      Files.deleteIfExists(generated);
+    }
   }
 
   @Test
@@ -136,6 +233,7 @@ class S3ExportStorageIntegrationTest extends AbstractIntegrationTest {
       assertThat(result.success()).isTrue();
       assertThat(context.getAttributes())
           .containsEntry(PipelineRuntimeKeys.CHECKSUM_VALUE, originalChecksum)
+          .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, (long) originalCiphertext.length)
           .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, true);
       assertThat(storage.sha256Hex(objectName)).isEqualTo(originalChecksum);
       try (var storedBytes = objectStore.get(storageProperties.getBucket(), objectName)) {

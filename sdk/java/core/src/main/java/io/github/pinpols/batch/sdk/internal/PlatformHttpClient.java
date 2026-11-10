@@ -142,7 +142,9 @@ public class PlatformHttpClient {
   public boolean confirmExecutionStarted(Long taskId, Map<String, Object> identity)
       throws IOException {
     Map<String, Object> body = new HashMap<>(identity);
-    body.put("details", Map.of("executionStarted", true));
+    body.put(
+        "details",
+        Map.of("executionStarted", true, "executionAttemptId", UUID.randomUUID().toString()));
     TaskRenewResponse response = renew(taskId, body);
     if (EmptyChecks.isNull(response)) {
       throw new IOException("execution start response was empty");

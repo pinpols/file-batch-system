@@ -12,7 +12,18 @@ public record SensorFileArrivalView(
     OffsetDateTime arrivalTime,
     String storagePath,
     LocalDate bizDate,
-    String fileGroupCode) {
+    String fileGroupCode,
+    Boolean legacyChannelFallback) {
+
+  public SensorFileArrivalView(
+      Long fileId,
+      String fileName,
+      OffsetDateTime arrivalTime,
+      String storagePath,
+      LocalDate bizDate,
+      String fileGroupCode) {
+    this(fileId, fileName, arrivalTime, storagePath, bizDate, fileGroupCode, false);
+  }
 
   /** 仅在 Sensor 动态输出边界恢复原协议字段。 */
   public Map<String, Object> toProbeOutput() {

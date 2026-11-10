@@ -35,6 +35,9 @@ final class ExportPageGenerationCoordinator {
     GenerateCheckpoint checkpoint = ctx.checkpoint();
     boolean resuming = EmptyChecks.isNotNull(checkpoint) && checkpoint.resuming();
     long recordCount = resuming ? checkpoint.resumeRecordCount() : 0L;
+    if (ctx.maxRows() > 0 && recordCount > ctx.maxRows()) {
+      throw new ExportRowLimitExceededException(recordCount, ctx.maxRows());
+    }
     ExportDataPlugin.DetailPage page;
     if (resuming) {
       page = ctx.dataPlugin()
@@ -54,6 +57,9 @@ final class ExportPageGenerationCoordinator {
         break;
       }
       for (Map<String, Object> detail : details) {
+        if (ctx.maxRows() > 0 && recordCount >= ctx.maxRows()) {
+          throw new ExportRowLimitExceededException(recordCount + 1, ctx.maxRows());
+        }
         rowWriter.writeRow(ctx.batch(), detail, recordCount);
         recordCount++;
         if (recordCount % PROGRESS_PUBLISH_EVERY_N_ROWS == 0) {

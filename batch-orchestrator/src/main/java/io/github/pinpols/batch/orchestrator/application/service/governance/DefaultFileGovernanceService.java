@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -74,6 +75,7 @@ import org.springframework.transaction.annotation.Transactional;
  * </ul>
  */
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class DefaultFileGovernanceService implements FileGovernanceService {
 
@@ -240,6 +242,10 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     metadata.put("uploadSessionCreatedAt", now.toString());
     metadata.put("uploadSessionOperatorId", command.operatorId());
     metadata.putAll(uploadGroupMetadata);
+    String arrivalChannelCode =
+        fileGovernanceRepository.isEnabledFileChannel(command.tenantId(), command.channelCode())
+            ? command.channelCode()
+            : null;
     FileGovernanceRepository.FileIdentity fileIdentity = new FileGovernanceRepository.FileIdentity(
         command.tenantId(), "INPUT", fileName, fileFormatType(fileName));
     FileGovernanceRepository.FileStorage fileStorage =
@@ -252,10 +258,14 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
             "UPLOAD",
             FileStatus.RECEIVED.code(),
             command.traceId(),
-            metadata);
+            metadata,
+            arrivalChannelCode);
     Long fileId = EmptyChecks.isEmpty(uploadGroupMetadata)
         ? fileGovernanceRepository.createReconciledFileRecord(recordCommand)
         : fileGovernanceRepository.createReconciledFileRecord(recordCommand, command.bizDate());
+    if (arrivalChannelCode == null) {
+      log.warn("上传文件渠道未通过租户渠道校验，文件等待不会按渠道匹配 tenant={} fileId={}", command.tenantId(), fileId);
+    }
     if (EmptyChecks.isNull(fileId)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,

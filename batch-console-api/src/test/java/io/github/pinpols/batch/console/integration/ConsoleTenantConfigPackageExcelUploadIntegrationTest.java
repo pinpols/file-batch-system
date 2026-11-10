@@ -1565,6 +1565,29 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
         schedulePolicyWorkbook(), "schedule-policy-sparse-merge", "ROLE_TENANT_ADMIN", tenantId);
 
     assertThat(response.statusCode()).isEqualTo(HttpStatus.OK.value());
+    JsonNode applyResult = new ObjectMapper().readTree(response.body()).path("data");
+    assertThat(applyResult.path("jobMonitoringPoliciesApplied").intValue()).isEqualTo(1);
+    assertThat(applyResult.path("workflowMonitoringPoliciesApplied").isInt()).isTrue();
+    assertThat(applyResult.path("workflowMonitoringPoliciesApplied").intValue()).isZero();
+    List<String> otherCounts = List.of(
+        "resourceQueueInserted",
+        "resourceQueueUpdated",
+        "businessCalendarInserted",
+        "businessCalendarUpdated",
+        "batchWindowInserted",
+        "batchWindowUpdated",
+        "jobInserted",
+        "jobUpdated",
+        "channelInserted",
+        "channelUpdated",
+        "fileTemplateInserted",
+        "fileTemplateUpdated",
+        "workflowInserted",
+        "workflowUpdated");
+    for (String field : otherCounts) {
+      assertThat(applyResult.path(field).isInt()).as(field).isTrue();
+      assertThat(applyResult.path(field).intValue()).as(field).isZero();
+    }
     Map<String, Object> policy =
         jdbcTemplate.queryForMap(selectSoftRuntimeSecondsSql, tenantId, jobCode);
     assertThat(policy)
@@ -1575,6 +1598,87 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
     assertThat(((Number) policy.get("completion_deadline_day_offset")).intValue())
         .isEqualTo(1);
     assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:00:00");
+  }
+
+  @Test
+  @DisplayName("仅导入工作流监控策略时写入指定版本并保留其他版本")
+  void shouldApplyWorkflowMonitoringPolicyToExistingDefinitionOverHttp() throws Exception {
+    String tenantId = "workflow-policy-" + UUID.randomUUID().toString().substring(0, 8);
+    String workflowCode = "WF_CUSTOMER_EOD";
+    byte[] seedWorkbook = workbookForTenant(workflowScenarioWorkbook(false, true), tenantId);
+    HttpResponse<String> seed = applyWorkbookAsRole(
+        seedWorkbook, "workflow-policy-seed-" + tenantId, "ROLE_ADMIN", tenantId);
+    assertThat(seed.statusCode()).as("创建测试工作流: %s", seed.body()).isEqualTo(200);
+    assertThat(new ObjectMapper().readTree(seed.body()).path("code").asText()).isEqualTo("SUCCESS");
+
+    String insertVersionSql = """
+        insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, version)
+        values (?, ?, 'Version 2', 2) returning id
+        """;
+    Long otherVersionId =
+        jdbcTemplate.queryForObject(insertVersionSql, Long.class, tenantId, workflowCode);
+    String insertOtherPolicySql = """
+        insert into batch.workflow_monitoring_policy
+          (tenant_id, workflow_definition_id, soft_runtime_seconds, soft_runtime_severity,
+           start_grace_seconds, start_grace_severity, completion_deadline_local_time,
+           completion_deadline_day_offset, completion_deadline_severity)
+        values (?, ?, 321, 'WARN', 45, 'ERROR', '02:15', 0, 'CRITICAL')
+        """;
+    jdbcTemplate.update(insertOtherPolicySql, tenantId, otherVersionId);
+
+    HttpResponse<String> response = applyWorkbookAsRole(
+        workflowPolicyWorkbook(),
+        "workflow-policy-only-" + tenantId,
+        "ROLE_TENANT_ADMIN",
+        tenantId);
+    assertThat(response.statusCode()).as("导入工作流策略: %s", response.body()).isEqualTo(200);
+    JsonNode payload = new ObjectMapper().readTree(response.body());
+    assertThat(payload.path("code").asText()).isEqualTo("SUCCESS");
+    JsonNode counts = payload.path("data");
+    for (String field : List.of(
+        "workflowMonitoringPoliciesApplied",
+        "jobMonitoringPoliciesApplied",
+        "workflowInserted",
+        "workflowUpdated")) {
+      assertThat(counts.path(field).isInt()).as(field).isTrue();
+    }
+    assertThat(counts.path("workflowMonitoringPoliciesApplied").asInt()).isEqualTo(1);
+    assertThat(counts.path("jobMonitoringPoliciesApplied").asInt()).isZero();
+    assertThat(counts.path("workflowInserted").asInt()).isZero();
+    assertThat(counts.path("workflowUpdated").asInt()).isZero();
+
+    String selectPolicySql = """
+        select policy.soft_runtime_seconds, policy.soft_runtime_severity,
+               policy.start_grace_seconds, policy.start_grace_severity,
+               policy.completion_deadline_local_time, policy.completion_deadline_day_offset,
+               policy.completion_deadline_severity, definition.version
+        from batch.workflow_monitoring_policy policy
+        join batch.workflow_definition definition
+          on definition.tenant_id = policy.tenant_id and definition.id = policy.workflow_definition_id
+        where policy.tenant_id = ? and definition.workflow_code = ? and definition.version = ?
+        """;
+    Map<String, Object> policy =
+        jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 1);
+    assertThat(policy)
+        .containsEntry("version", 1)
+        .containsEntry("soft_runtime_seconds", 600)
+        .containsEntry("soft_runtime_severity", "ERROR")
+        .containsEntry("start_grace_seconds", 120)
+        .containsEntry("start_grace_severity", "CRITICAL")
+        .containsEntry("completion_deadline_day_offset", 1)
+        .containsEntry("completion_deadline_severity", "WARN");
+    assertThat(policy.get("completion_deadline_local_time").toString()).isEqualTo("04:30:00");
+    Map<String, Object> otherPolicy =
+        jdbcTemplate.queryForMap(selectPolicySql, tenantId, workflowCode, 2);
+    assertThat(otherPolicy)
+        .containsEntry("version", 2)
+        .containsEntry("soft_runtime_seconds", 321)
+        .containsEntry("soft_runtime_severity", "WARN")
+        .containsEntry("start_grace_seconds", 45)
+        .containsEntry("start_grace_severity", "ERROR")
+        .containsEntry("completion_deadline_day_offset", 0)
+        .containsEntry("completion_deadline_severity", "CRITICAL");
+    assertThat(otherPolicy.get("completion_deadline_local_time").toString()).isEqualTo("02:15:00");
   }
 
   @Test
@@ -2419,6 +2523,37 @@ class ConsoleTenantConfigPackageExcelUploadIntegrationTest extends AbstractInteg
               "completion_deadline_local_time", "04:00",
               "completion_deadline_day_offset", "1",
               "dependency_completion_window_seconds", "0",
+              "completion_deadline_severity", "WARN")));
+      ByteArrayOutputStream out = new ByteArrayOutputStream();
+      workbook.write(out);
+      return out.toByteArray();
+    }
+  }
+
+  private static byte[] workflowPolicyWorkbook() throws Exception {
+    try (XSSFWorkbook workbook = new XSSFWorkbook()) {
+      sheet(
+          workbook,
+          ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET,
+          List.of(
+              "workflow_code",
+              "workflow_version",
+              "soft_runtime_seconds",
+              "soft_runtime_severity",
+              "start_grace_seconds",
+              "start_grace_severity",
+              "completion_deadline_local_time",
+              "completion_deadline_day_offset",
+              "completion_deadline_severity"),
+          List.of(row(
+              "workflow_code", "WF_CUSTOMER_EOD",
+              "workflow_version", "1",
+              "soft_runtime_seconds", "600",
+              "soft_runtime_severity", "ERROR",
+              "start_grace_seconds", "120",
+              "start_grace_severity", "CRITICAL",
+              "completion_deadline_local_time", "04:30",
+              "completion_deadline_day_offset", "1",
               "completion_deadline_severity", "WARN")));
       ByteArrayOutputStream out = new ByteArrayOutputStream();
       workbook.write(out);

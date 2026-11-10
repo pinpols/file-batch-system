@@ -16,6 +16,9 @@ import org.apache.ibatis.annotations.Param;
 
 public interface FileGovernanceMapper {
 
+  boolean existsEnabledFileChannel(
+      @Param("tenantId") String tenantId, @Param("channelCode") String channelCode);
+
   FileGovernanceViews.FileRecordRow selectFileRecord(
       @Param("tenantId") String tenantId, @Param("fileId") Long fileId);
 
@@ -48,19 +51,22 @@ public interface FileGovernanceMapper {
       FileGovernanceOrphanUploadQuery params);
 
   List<FileGovernanceViews.ArrivalCandidateRow> selectArrivalGovernanceCandidates(
-      @Param("limit") Integer limit);
+      @Param("limit") Integer limit, @Param("storageId") String storageId);
 
-  FileGovernanceViews.ArrivalGroupBacklogRow selectArrivalGroupBacklogMetrics();
+  FileGovernanceViews.ArrivalGroupBacklogRow selectArrivalGroupBacklogMetrics(
+      @Param("storageId") String storageId);
 
   List<FileGovernanceViews.ArrivalGroupSummaryRow> selectArrivalGroupSummaries(
       @Param("tenantId") String tenantId,
       @Param("fileGroupCode") String fileGroupCode,
-      @Param("arrivalState") String arrivalState);
+      @Param("arrivalState") String arrivalState,
+      @Param("storageId") String storageId);
 
   List<FileGovernanceViews.ArrivalGroupFileRow> selectArrivalGroupFiles(
       @Param("tenantId") String tenantId,
       @Param("fileGroupCode") String fileGroupCode,
-      @Param("bizDate") String bizDate);
+      @Param("bizDate") String bizDate,
+      @Param("storageId") String storageId);
 
   Long countArrivalDelayViolations(
       @Param("tenantId") String tenantId, @Param("thresholdSeconds") Long thresholdSeconds);

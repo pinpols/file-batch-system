@@ -32,7 +32,7 @@
 
 - **目的**：单次虚拟用户路径：**launch → 轮询控制台 batch-status**，直到实例状态落入业务终态集或超出最大轮询次数。
 - **验收关注点**：Gatling **`pipeline_completion` 分组**统计端到尾耗时；全局仍校验 launch 与轮询 HTTP 错误率。
-- **非目标**：不代替 Worker 单测；若无 Worker 或 Job 无法推进，轮询可能直至超时，报告需在分析时剔除此类样本。
+- **非目标**：不代替 Worker 单测；若无 Worker 或 Job 无法推进，轮询可能直至超时。报告须单独统计超时并纳入总请求和业务结果对账，不能将其从结果中剔除。仅计算已完成样本的端到端延迟分布时，应同时标明样本数、超时数与未完成比例，避免分位数掩盖未完成请求。
 - **前置**：与既有 launch 压测相同（租户、`jobCode`、bizDate、种子数据）；控制台 Bearer Token；**需有 Worker 消费任务**才有意义的端到尾样本。
 
 ### 2.3 `SchedulingBacklogUnderLoadSimulation`

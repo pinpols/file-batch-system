@@ -610,6 +610,128 @@ class SqlTransformComputePluginIntegrationTest {
   }
 
   @Test
+  @DisplayName("直接写入忽略冲突时仍推进已处理数据的最高水位")
+  void directMode_insertIgnore_advancesWatermarkPastConflictingRow() {
+    String insertExistingSummarySql = """
+        insert into biz.account_summary (tenant_id, account_id, total_amount, high_water_mark)
+        values (?, ?, ?, ?)
+        """;
+    jdbcTemplate.update(insertExistingSummarySql, "t1", "B", new BigDecimal("7.00"), 3L);
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("stagingMode", "DIRECT");
+    spec.put("writeMode", "INSERT_IGNORE");
+
+    plugin.prepare(context);
+    assertThat(plugin.compute(context).success()).isTrue();
+    assertThat(plugin.validate(context).success()).isTrue();
+    assertThat(plugin.commit(context).success()).isTrue();
+    assertThat(plugin.feedback(context).success()).isTrue();
+
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 1)
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
+  }
+
+  @Test
+  @DisplayName("直接写入成功后重复执行全部冲突时仍报告本批最高水位")
+  void directMode_insertIgnore_reportsWatermarkOnReplay() {
+    ProcessJobContext first = newContextWithSpec();
+    Map<String, Object> firstSpec = nestedSpec(currentStepParams(first));
+    firstSpec.put("stagingMode", "DIRECT");
+    firstSpec.put("writeMode", "INSERT_IGNORE");
+    plugin.prepare(first);
+    assertThat(plugin.commit(first).success()).isTrue();
+
+    ProcessJobContext replay = newContextWithSpec();
+    Map<String, Object> replaySpec = nestedSpec(currentStepParams(replay));
+    replaySpec.put("stagingMode", "DIRECT");
+    replaySpec.put("writeMode", "INSERT_IGNORE");
+    plugin.prepare(replay);
+    assertThat(plugin.commit(replay).success()).isTrue();
+
+    assertThat(replay.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 0)
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
+  }
+
+  @Test
+  @DisplayName("直接写入的源水位列与目标列异名时按映射计算水位")
+  void directMode_insertIgnore_usesMappedSourceWatermark() {
+    String insertExistingSummarySql = """
+        insert into biz.account_summary (tenant_id, account_id, total_amount, high_water_mark)
+        values (?, ?, ?, ?)
+        """;
+    jdbcTemplate.update(insertExistingSummarySql, "t1", "B", new BigDecimal("7.00"), 3L);
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    String sourceSql = """
+        select tenant_id, account_id, sum(amount) as total_amount,
+               max(event_id) as source_mark
+        from biz.order_event
+        where tenant_id = :tenantId and event_id > cast(:highWaterMarkIn as bigint)
+        group by tenant_id, account_id
+        """;
+    spec.put("sourceSql", sourceSql);
+    spec.put(
+        "columns",
+        List.of(
+            Map.of("source", "tenant_id", "target", "tenant_id"),
+            Map.of("source", "account_id", "target", "account_id"),
+            Map.of("source", "total_amount", "target", "total_amount"),
+            Map.of("source", "source_mark", "target", "high_water_mark")));
+    spec.put("stagingMode", "DIRECT");
+    spec.put("writeMode", "INSERT");
+    plugin.prepare(context);
+    assertThat(plugin.commit(context).success()).isTrue();
+
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 1)
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
+  }
+
+  @Test
+  @DisplayName("直接写入没有匹配源数据时发布数为零且不生成水位")
+  void directMode_insertIgnore_emptySourceHasNoWatermark() {
+    ProcessJobContext context = newContextWithSpec();
+    context.getAttributes().put(PipelineRuntimeKeys.HIGH_WATER_MARK_IN, 999L);
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("stagingMode", "DIRECT");
+    spec.put("writeMode", "INSERT_IGNORE");
+    plugin.prepare(context);
+    assertThat(plugin.commit(context).success()).isTrue();
+
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 0)
+        .doesNotContainKey(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT);
+  }
+
+  @Test
+  @DisplayName("直接写入 UPSERT 冲突更新后仍按实际发布行统计和推进水位")
+  void directMode_upsert_retainsConflictUpdateAndWatermark() {
+    String insertExistingSummarySql = """
+        insert into biz.account_summary (tenant_id, account_id, total_amount, high_water_mark)
+        values (?, ?, ?, ?)
+        """;
+    jdbcTemplate.update(insertExistingSummarySql, "t1", "B", new BigDecimal("1.00"), 1L);
+    ProcessJobContext context = newContextWithSpec();
+    Map<String, Object> spec = nestedSpec(currentStepParams(context));
+    spec.put("stagingMode", "DIRECT");
+    plugin.prepare(context);
+    assertThat(plugin.commit(context).success()).isTrue();
+
+    String selectAccountBAmountSql = """
+        select total_amount from biz.account_summary where tenant_id = ? and account_id = ?
+        """;
+    BigDecimal amount =
+        jdbcTemplate.queryForObject(selectAccountBAmountSql, BigDecimal.class, "t1", "B");
+    assertThat(amount).isEqualByComparingTo("7.00");
+    assertThat(context.getAttributes())
+        .containsEntry(ProcessRuntimeKeys.PROCESS_PUBLISHED_COUNT, 2)
+        .containsEntry(PipelineRuntimeKeys.HIGH_WATER_MARK_OUT, "3");
+  }
+
+  @Test
   @DisplayName("发布语句在冲突更新之前按冲突列排序暂存记录,保证同键多行顺序稳定")
   void buildPublishSql_ordersStagedRowsByConflictColumnsBeforeUpsert() {
     ProcessJobContext context = newContextWithSpec();

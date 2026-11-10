@@ -2,25 +2,27 @@
 
 ## 2026-11-03：全部开放事项统一索引
 
-本节是前后端当前待办的唯一导航层，前端 `batch-console/docs/README.md` 只链接到这里，不再另维护索引；不另造任务、不复制关闭条件。各事项的状态、优先级、证据和下一步以链接原文为准；历史快照中的“待办”字样不直接视为当前开放项。
+本节是前后端当前待办的唯一导航层，前端 `batch-console/docs/README.md` 只链接到这里，不再另维护索引；不另造任务、不复制关闭条件。各事项的状态、优先级、证据和下一步以链接原文为准；历史快照中的“待办”字样不直接视为当前开放项。2026-11-10 复核：本表只保留仍然开放的事项。移动端渠道目的地、批量开关准入语义（DOC-BATCH-FLAG-1）和自助服务申请人自批已关闭，不再列在本表。
 
 | 领域 | 当前开放事项与权威原文 |
 |---|---|
-| 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境，以及六项定向审查，见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。复制与作业包未知结果已落地，见同清单。 |
+| 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境仍开放。六项清单的第 1 项已定向核查，第 2–6 项自 2026-10-27 起仍为待执行，不属于本次容量收口。见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。复制与作业包未知结果已落地，见同清单。 |
+| 文件等待与入口扫描 | 新记录已按渠道编码精确匹配，有界扫描会保存分页位置。无法识别来源的渠道不再回退匹配历史文件；端到端集成验证仍待 Kafka 环境恢复。真实云存储、多 JVM、默认扫描窗口和目标环境仍开放。见[当前状态](#文件等待与入口扫描2026-11-09)及[系统设计核查记录](system-design-capacity-validation-plan-2026-11-09.md#当前进度与下一步)。 |
+| 系统设计与容量验收 | 已按用户选择以本地结果收口；完整容量与稳态、真实断链恢复、目标环境和混版验证另行验收。范围、具体缺口与本地证据见[系统设计与容量验证计划](system-design-capacity-validation-plan-2026-11-09.md#当前进度与下一步)。候选负载场景见[负载测试草案](load-test-plan-2026-11-09.md)，执行前须单独核对环境与阈值，不作为当前编码任务。 |
 | 后端 25 包与全仓验证 | 2026-11-04 复核后开放项：51 个 Param/Query 构造校验与 69 项公共返回的逐项裁定、全仓测试/CI 完整通过记录；Trigger 恢复锚点、建档前被拒批次释放等 OPEN/CANDIDATE 条目已关闭或取代，见[25 包治理记录](../audit/backend-25-package-governance-2026-10-26.md#开放与候选条目状态复核2026-11-04)和[本表续接](#后端-25-工作包全仓治理2026-10-27)。 |
 | 测试时间与业务日 | 共享 E2E 夹具、多次 launch/重试、系统时钟、时区、有效期及新 CI 分片实测，见[2026-11-01 复核](#2026-11-01-测试时间与业务日稳定性复核进行中)。 |
 | Workflow 每日连续性 | R01–R36 的 EX-01–04、R25/R35、I1/I5/I6、最终新库与目标部署，见[共同整合门槛](#workflow-与每日连续性共同整合门槛2026-10-14-修订)、[唯一验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md)和[整合执行日志](workflow-daily-integration-execution-log-2026-10-14.md)；前端目标 CI/预发布/生产、G07 新增类型与凭据校验闭环及组合/容量边界见[前端 Workflow 实施方案](../../../batch-console/docs/engineering/workflow-job-pipeline-unification-plan-2026-10-14.md)和[能力承接矩阵](../../../batch-console/docs/engineering/backend-capability-alignment-plan-2026-10-25.md#关闭矩阵)。 |
 | 数据库完整性、索引与分区 | REF/RT/DBSAFE、IDX 候选实施、PART 多库/恢复/持续扩展，见[数据库总方案](database-integrity-index-partition-remediation-2026-10-18.md)、[引用完整性方案](database-reference-integrity-remediation-2026-10-18.md)、[索引方案](database-index-review-remediation-2026-10-18.md)和[分区方案](database-partition-lifecycle-remediation-2026-10-18.md)。 IDX-01（JobInstance 业务日列侧字符串转换）已于 2026-11-04 修复；IDX-02（Webhook 旧式重投 PENDING 无可用索引）已由 V376 修复。 |
-| 前端界面与菜单验收 | Worker/权限、筛选、菜单搜索、品牌加载、页面密度和文档站的用户验收，以及移动端文件渠道目的地确认，见[前端界面与菜单调整台账](../../../batch-console/docs/backlog/frontend-ui-acceptance-2026-11-02.md)。 |
+| 前端界面与菜单验收 | Worker/权限、筛选、菜单搜索、品牌加载、页面密度和文档站的用户验收，见[前端界面与菜单调整台账](../../../batch-console/docs/backlog/frontend-ui-acceptance-2026-11-02.md)。移动端渠道目的地已于 2026-11-04 确认继续转到 `/m/files`。 |
 | 前端列表空态 | 2026-11-07 源码已按[列表空态](../../../batch-console/docs/engineering/ui-interaction-conventions.md#列表空态)改完，待用户验收。逐页状态见[台账](../../../batch-console/docs/backlog/frontend-ui-acceptance-2026-11-02.md#列表空态对齐2026-11-07)，审查证据见[审查](../../../batch-console/docs/audits/ui-ux/list-empty-state-review-2026-11-07.md)。 |
-| 前端产品信息架构整改 | 2026-11-08 本仓已配合三件事：`menu.yml` 新增 `/observability/audit`、`/system/settings`，旧路径和 `/runs` 未删；`SELF_SERVICE` 禁止申请人自批；审批查询新增 `excludeApprovalTypes`。批次 1 与批次 2–3 的前端页面仍待实施。批次 4 仍待产品决定（下线 `/runs`、自助服务按角色区分）。见[前端整改方案](../../../batch-console/docs/engineering/product-ia-remediation-plan-2026-11-06.md)和[审查记录](../../../batch-console/docs/audits/ui-ux/product-ia-review-2026-11-06.md)。 |
+| 前端产品信息架构整改 | 批次 1–3 的前端页面仍待实施。批次 4 仍待产品决定：下线 `/runs`、自助服务按角色区分。自助服务申请人自批已由后端 #1330 与前端 #389 关闭，补跑审批不在此限制内；补跑从普通审批列表排除已合入前端 #390，真实后端联调未完成。`menu.yml` 已增加 `/observability/audit`、`/system/settings`，旧路径未删。见[前端整改方案](../../../batch-console/docs/engineering/product-ia-remediation-plan-2026-11-06.md)和[审查记录](../../../batch-console/docs/audits/ui-ux/product-ia-review-2026-11-06.md)。 |
 | 产品旅程与租户配置 | 四角色/无障碍/完整旅程验收、TCFG 阶段 4、敏感信息分类、容量与多副本组合恢复，见[产品旅程审计](#产品用户旅程对抗审计2026-10-10)和[租户配置主线及旁支](#租户作业配置简化与旁支2026-10-11)。 |
 | 告警与可观测性 | 六类时限告警的部署/供应商验收、OBS-ENV-01–06、生产容量与持续观察，见[时限告警](#作业与-workflow-六类时限告警2026-10-252026-10-26复核)、[监控目标环境验收](#事件与可用性监控目标环境验收2026-10-26)和[容量治理](../runbook/production-capacity-governance.md)。 |
 | AI、使用率与维护降级 | AI 原文留存/权限/成本与真实 provider、使用率业务对账（版本维度、业务租户切换、生产数据证据）、维护降级阈值与全量写按钮验收，以及前端移动软键盘、真实模型并发、provider 限流/超时、受控试生产、后置 HITL 和真实移动设备/其它下游恢复，见[G4–G6](#g4-console-ai-助手与成本治理-p1p2-本地开发已收口治理证据待外部验收)、[前端配套台账](../../../batch-console/docs/backlog/ai-and-usage-statistics-todo-2026-09-29.md)、[前端 AI 实施方案](../../../batch-console/docs/engineering/ai-assistant-frontend.md)和[前端维护与降级方案](../../../batch-console/docs/engineering/maintenance-degradation.md#2-当前实现与缺口)。 |
 | CI、发布与 GitOps | GDRIFT 的真实 PR/CI/staging、Actions 镜像证据、Compose CD 故障/回滚和 GitOps 接入，以及前端 staging release set、四角色/跨浏览器、故障阻断、回滚兼容和制品留存，见[漂移治理](#前后端约定与-ci-漂移治理2026-10-12)、[部署与持续交付](#部署与持续交付)、[Compose CD 路线](../runbook/compose-cd-roadmap.md#8-待办)、[前端 Compose CD 目标环境验收](../../../batch-console/docs/runbook/compose-cd-roadmap.md#目标环境待验收)和[前端上线准入清单](../../../batch-console/docs/runbook/go-live-readiness-checklist.md)；main Full CI E2E 8 的 `WorkflowOccurrenceCatchUpApprovalE2eIT.triggerApiAdmissionRacingBatchDaySettlementShouldConverge[2]` 在 968e4adfd 偶发超时（同代码 e5d2d140e 通过，本地整类 36/36 未复现），超时诊断改进见 [#1315](https://github.com/pinpols/file-batch-system/pull/1315)；截至 2026-11-06，#1315 合入后 `main` Full CI 连续 8 次成功、未再复现，根因仍待下次失败的子进程证据。 |
 | 集群、合规与 IPv6 | Worker drain/接管/force-offline 集群验证、SBOM 条件项、IPv6 staging，见[外部环境阻塞](#九-本地不能做需-ops--staging--dba--业务方-配合)和[HE 路线](#m-ipv6-happy-eyeballs-渐进治理-p1)。 |
 | 批量账号开户 | staging/前台的冲突、预览过期、多副本、丢包恢复与凭据交付，以及真实后端 PG/Redis 并发、审计检索和安全验收，见[批量账号开户](#批量账号开户bulk-user-provisioning)、[后端设计](../design/bulk-user-provisioning.md)和[前端环境验收](../../../batch-console/docs/backlog/bulk-user-provisioning.md#已交付能力与剩余验收)。 |
-| 文档与配置缺口 | 文档站搜索预算波动与浏览器复核、批量开关准入语义，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)和[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
+| 文档与配置缺口 | 文档站搜索预算波动与浏览器复核，见[文档站体积复核](#文档站体积复核docs-size-2026-10-24)。批量开关准入语义（DOC-BATCH-FLAG-1）已于 2026-11-05 关闭，见[当前配置缺口](#归档核对确认的当前配置缺口2026-10-25)。 |
 | 安全告警关闭 | 2026-11-04 已关闭当时的日志注入、Scorecard `Vulnerabilities` 与 Dependabot aiohttp；#1317 撤回 `--no-group-results` 后 CSRF 展开告警回到 `fixed`。2026-11-08 #296 再次打开：Go `klauspost/compress` 1.20.0 命中 GO-2026-6865，选定版本已升到 1.20.2，关闭仍等下一次 Scorecard。CodeQL 状态页 “relatedLocations were ignored” 改为上传前裁到每条 100 个相关位置，仍保持默认聚合；警告是否消失等下一次 main 分析。见[安全告警处置](../verifications/security-alert-remediation-2026-10-31.md#十一scorecard-go-2026-6865-与-codeql-展示警告2026-11-08)。 |
 | launch 受理容量 | 2026-11-05 只读复核：本地 `ta` 压测积压已不存在（156 条请求全部 LAUNCHED、无 WAITING、运行全部终态），旧批次对账前置条件不再适用。仍开放：独立环境的小规模真实验证（成功链路与受控 429）、429 拒绝原因与排队耗时、画像业务键覆盖；按既定决定暂不在本地运行容量测试，见[本地容量压测](../verifications/load-test-local-capacity-2026-10-31.md#2026-11-05-积压只读复核)。 |
 | 持续硬化 | 索引治理观察窗口、ShedLock JDBC 切换演练及外部 AI provider，见[hardening-backlog](hardening-backlog.md#待办v7-活清单)。 |
@@ -29,6 +31,20 @@
 | 架构适配性候选 | 2026-11-02 评估提出、尚未排期的候选，均需先有业务 SLO 或目标负载再定范围：ASSESS-20261102-01 结果未知恢复合同（延续 ADR-049，逐类核对副作用确认与 REPORT Outbox 部署）；-02 积压容量与接纳语义（WAITING 硬上限、派发 lag gate 先定接纳/拒绝/公平语义）；-03 保留期与恢复窗口联动（Kafka retention、Outbox、去重账本、归档与重放窗口）；-04 以现有 Helm/HPA/KEDA 与 SLI 降低运维复杂度。候选 3（状态所有权）已由[架构设计审查](../audit/architecture-design-review-2026-11-03.md)承接。ASSESS-20261102-DEC-01 已于 2026-11-04 裁定：保留为登记的受限复位例外，边界与守护见 [`core-model.md`](../architecture/core-model.md) 及 `BoundedRetryResetCallerArchTest`、`BoundedRetryResetSqlContractTest`。见[评估](../audit/architecture-suitability-assessment-2026-11-02.md#可考虑的架构优化顺序)与[复核](../audit/architecture-suitability-assessment-review-2026-11-04.md)。 |
 | 三租户覆盖验收 | 本机已通过（2026-11-03）：三包经真实 HTTP 导入回读，`coverage-harness.sh all --include-trigger-matrix` 基础 36 + 触发矩阵 8 个场景 SUCCESS、前后清理证据完整、`test_coverage_harness.py` 8/8。仍开放：浏览器向导路径、Quartz 自身写入拒绝 occurrence 的端到端、staging/目标环境执行，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
+
+## 文件等待与入口扫描（2026-11-09）
+
+**2026-11-10 当前状态**：新文件按 `arrival_channel_code` 精确匹配；有界扫描把列表位置写入租约，后续轮次继续向后发现。未确认的托管上传占位不再命中 WAIT。隔离 MinIO 已覆盖清单匹配后的扫描登记、指定渠道 WAIT 和 Import 成功路径。仍开放：真实云存储、多 JVM、默认扫描窗口、目标环境，以及托管上传的真实 API 与浏览器路径。
+
+**2026-11-10 本地修复**：渠道编码无法映射为 `SFTP`、`API` 或 `UPLOAD` 时，原历史回退会匹配任意来源的同名文件。现已将回退限定为能够识别来源类型的渠道；`BANK-SFTP` 等无法映射的渠道只匹配精确渠道编码。Mapper 的 3 项 JUnit 测试通过（使用已有测试类路径独立运行），隔离 PostgreSQL 条件验证通过；在集成用例加入了不同来源的历史诱饵，但完整用例因 Kafka 容器启动超时未进入断言，仍需复验。可映射前缀（如 `sftp_bank`）仍按来源类型回退。详见[系统设计核查记录](system-design-capacity-validation-plan-2026-11-09.md#当前进度与下一步)。
+
+以下是 2026-11-09 立项时的判断，后续实现已经取代，不再作为当前缺陷：
+
+- **渠道口径**：当时 `channelCode` 只按前缀映射来源类型。新记录现已改为精确渠道匹配，并保留可识别来源类型的历史回退。
+- **扫描上界**：当时每轮只从对象列表起点取 200 项，第 201 项连续两轮看不到。现保存分页位置；`ImportIngressScannerPaginationTest` 覆盖占满一页后的新文件。本轮未重跑该测试。
+- **未确认占位**：当时托管上传占位会被 FILE_ARRIVAL WAIT 匹配。现要求已确认到达；隔离 PostgreSQL 定向测试此前 20 项通过，本轮未重跑。
+
+原始复现与方案见[核查报告](../review/file-wait-trigger-review-2026-11-09.md)。
 
 ## P1-A Stage 1 迁移收尾（2026-11-08 收尾完成）
 

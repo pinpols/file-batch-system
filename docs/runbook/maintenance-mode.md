@@ -131,7 +131,7 @@ POST /internal/orchestrator/drain/disable
 
 - 公告发布但 `startsAt` 未到时不抑制通知。到点后按共享状态轮询同步；轮询与 HTTP 重试会有短暂传播延迟，计划停机前应核对同步指标和 Alertmanager 中的控制信号，不把保存成功当作已完成摘流或通知抑制。
 - 抑制截止采用 `etaAt`；缺省从持久化的 `startsAt` 或 `updatedAt` 加默认 120 分钟计算，复用 `silence.default-duration-minutes`。最大窗口为 24 小时。重试、后台轮询及进程重启不从当前时间续期；需要延长时须显式更新共享维护状态。
-- Console 每 5 秒检查状态，正常每 30 秒重发一次控制信号；范围、活动状态或版本变化时立即同步下一轮。提前关闭或缩小范围会发布相同身份的解除信号，多副本重复发布不会制造不同标签身份。
+- Console 在应用就绪并完成首次共享状态刷新后，使用受管调度器每 5 秒检查状态，正常每 30 秒重发一次控制信号；范围、活动状态或版本变化时立即同步下一轮。发布器在全局懒加载模式下也会初始化；提前关闭或缩小范围会发布相同身份的解除信号，多副本重复发布不会制造不同标签身份。
 - 控制信号携带固定 RFC3339 `endsAt`。即使 Console 随后停机、不再刷新，到期也会解除抑制；这遵循 [Alertmanager Alerts API](https://prometheus.io/docs/alerting/latest/alerts_api/) 的生命周期。抑制解除不会制造业务恢复回执，仍存在的故障由 Alertmanager 正常通知。
 - 未配置地址/范围、共享状态不可确认、未知服务范围或同步请求失败时，`batch_console_maintenance_alert_suppression_available=0`，保留未确认状态；已经成功发送的信号最多保留到原固定截止时间。`BatchConsoleMaintenanceSuppressionUnavailable` 提示维护抑制未确认，`BatchConsoleMaintenanceWindowOverdue` 提示窗口已结束。截止只恢复告警通知，不自动取消业务冻结。
 

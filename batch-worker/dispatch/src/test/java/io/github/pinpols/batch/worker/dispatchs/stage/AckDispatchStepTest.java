@@ -101,13 +101,13 @@ class AckDispatchStepTest {
   }
 
   @Test
-  @DisplayName("投递结果回执待定时判定成功,回执状态置待定且不调用落库确认")
+  @DisplayName("投递结果回执待定且带回执码时保持待定,不提前确认或更新文件状态")
   void execute_setsPendingStatusWhenReceiptPending() {
 
     DispatchPayload payload =
         new DispatchPayload("10", null, "CH1", null, null, null, null, null, null, null);
     DispatchResult dispatchResult =
-        new DispatchResult(true, "ext-1", null, false, true, "ok", null);
+        new DispatchResult(true, "ext-1", "R-ext-1", false, true, "ok", null);
 
     DispatchJobContext context = new DispatchJobContext();
     context.setTenantId("t1");
@@ -121,6 +121,52 @@ class AckDispatchStepTest {
     assertThat(context.getAttributes())
         .containsEntry(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.PENDING.code());
     verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("载荷带回执码但投递结果待定时不提前确认")
+  void execute_keepsPendingWhenPayloadHasReceiptCode() {
+    DispatchPayload payload =
+        new DispatchPayload("10", null, "CH1", null, null, "R-payload", null, null, null, null);
+    DispatchResult dispatchResult =
+        new DispatchResult(true, "ext-1", "R-ext-1", false, true, "ok", null);
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.PENDING.code());
+    verify(fileDispatchRepository, never()).markAcked(any(), any(), any(), any());
+    verify(fileRecords, never()).updateFileStatus(any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("非待定投递结果带回执码时沿用原有确认行为")
+  void execute_marksAckedWhenNonPendingResultHasReceiptCode() {
+    when(fileDispatchRepository.markAcked("t1", 10L, "CH1", "R-ext-1")).thenReturn(1);
+    DispatchPayload payload =
+        new DispatchPayload("10", null, "CH1", null, null, null, null, null, null, null);
+    DispatchResult dispatchResult =
+        new DispatchResult(true, "ext-1", "R-ext-1", false, false, "ok", null);
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_PAYLOAD, payload);
+    context.getAttributes().put(DispatchRuntimeKeys.DISPATCH_RESULT, dispatchResult);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
+
+    DispatchStageResult result = step.execute(context);
+
+    assertThat(result.success()).isTrue();
+    assertThat(context.getAttributes())
+        .containsEntry(DispatchRuntimeKeys.RECEIPT_STATUS, FileReceiptStatus.SUCCESS.code());
+    verify(fileDispatchRepository).markAcked("t1", 10L, "CH1", "R-ext-1");
+    verify(fileRecords).updateFileStatus(eq(10L), eq(FileStatus.DISPATCHED.code()), any());
   }
 
   @Test

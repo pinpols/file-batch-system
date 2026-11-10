@@ -457,6 +457,53 @@ class ConsoleQueryControllerTest {
   }
 
   @Test
+  @DisplayName("工作流列表接受触发请求标识并返回对应结果")
+  void shouldQueryWorkflowRunsByRequestId() throws Exception {
+    when(queryApplicationService.workflowRuns(argThat(request ->
+            "t1".equals(request.getTenantId()) && "req-1".equals(request.getRequestId()))))
+        .thenReturn(new PageResponse<>(
+            1L,
+            1,
+            20,
+            List.of(ConsoleWorkflowRunResponse.builder()
+                .id(31L)
+                .runStatus("SUCCESS")
+                .build())));
+
+    mockMvc
+        .perform(get("/api/console/queries/workflow-runs")
+            .param("tenantId", "t1")
+            .param("requestId", "req-1"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.total").value(1))
+        .andExpect(jsonPath("$.data.items[0].id").value(31));
+  }
+
+  @Test
+  @DisplayName("工作流运行列表接受工作流编码筛选")
+  void shouldQueryWorkflowRunsByWorkflowCode() throws Exception {
+    when(queryApplicationService.workflowRuns(argThat(request ->
+            "t1".equals(request.getTenantId()) && "WF".equals(request.getWorkflowCode()))))
+        .thenReturn(new PageResponse<>(
+            2L,
+            1,
+            20,
+            List.of(
+                ConsoleWorkflowRunResponse.builder().id(31L).runStatus("FAILED").build(),
+                ConsoleWorkflowRunResponse.builder()
+                    .id(32L)
+                    .runStatus("SUCCESS")
+                    .build())));
+
+    mockMvc
+        .perform(get("/api/console/queries/workflow-runs")
+            .param("tenantId", "t1")
+            .param("workflowCode", "WF"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.data.total").value(2));
+  }
+
+  @Test
   @DisplayName("工作流运行详情:返回运行状态与当前节点")
   void shouldReturnWorkflowRunDetail() throws Exception {
     when(queryApplicationService.workflowRun(anyString(), anyLong()))

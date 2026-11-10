@@ -15,22 +15,22 @@ import static io.gatling.javaapi.core.CoreDsl.*;
 import static io.gatling.javaapi.http.HttpDsl.*;
 
 /**
- * Production-level capacity baseline simulation.
+ * 读写阶梯容量画像。
  *
- * <p>Models realistic mixed traffic: 70 % read (console queries) + 30 % write (job launches).
- * 采用阶梯式升压查找饱和点，而不是使用固定用户数。
+ * <p>写入和读取分别按计划总用户数的 30% 和 70% 计算注入规模，但两个场景通过
+ * {@code andThen} 顺序执行。写用户持续运行，全局时限可能在读场景启动前结束；本画像不能
+ * 用作并发读写混合负载证据。
  *
- * <p>Stepped ramp profile:
+ * <p>各阶梯的计算基数如下，并非单场景实际注入人数：
  * <pre>
  *   Step 1:  25 users   ×  60 s
  *   Step 2:  50 users   ×  60 s
- *   Step 3: 100 users   ×  60 s  ← default capacity baseline target
+ *   Step 3: 100 users   ×  60 s
  *   Step 4: 150 users   ×  60 s
- *   Step 5: 200 users   ×  60 s  ← observe degradation onset
+ *   Step 5: 200 users   ×  60 s
  * </pre>
  *
- * <p>The test passes only when the 100-user step meets all SLOs. Steps above 100 users
- * 用于描绘性能退化曲线；这些阶段出现失败不会导致构建失败。
+ * <p>SLO 断言按全部已执行请求汇总，不单独判定某个阶梯。
  *
  * <p>SLO assertions (applied globally across all steps):
  * <ul>
@@ -47,10 +47,6 @@ import static io.gatling.javaapi.http.HttpDsl.*;
  */
 public class CapacityBaselineSimulation extends Simulation {
 
-    private static final String AUTH_TOKEN = System.getProperty("console.accessToken") != null
-            ? "Bearer " + System.getProperty("console.accessToken")
-            : System.getProperty("console.authToken", "Bearer load-test-token");
-
     // ── Protocols ──────────────────────────────────────────────────────────────
 
     private final HttpProtocolBuilder triggerHttpProtocol = http
@@ -62,7 +58,6 @@ public class CapacityBaselineSimulation extends Simulation {
     private final HttpProtocolBuilder consoleHttpProtocol = http
             .baseUrl(GatlingConfig.CONSOLE_BASE_URL)
             .acceptHeader("application/json")
-            .header("Authorization", AUTH_TOKEN)
             .shareConnections();
 
     // ── Feeders ────────────────────────────────────────────────────────────────
@@ -124,13 +119,14 @@ public class CapacityBaselineSimulation extends Simulation {
             .pause(1);
 
     private final ScenarioBuilder readScenario = scenario("Read: Console Query")
+            .exec(addCookie(GatlingConfig.consoleAuthCookie()))
             .forever().on(readPath);
 
     // ── Stepped ramp load profile ──────────────────────────────────────────────
 
     /*
-     * Each step runs for 60 s.  writeRatio = 30 % of total users.
-     * Step sizes: 25 / 50 / 100 / 150 / 200 total virtual users.
+     * 每个注入阶梯持续 60 秒，规模基数为 25 / 50 / 100 / 150 / 200。
+     * 两个场景顺序执行，比例用于计算注入人数，不表示同时运行的流量比例。
      */
     private static final int STEP_DURATION = 60;
 

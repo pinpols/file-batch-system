@@ -137,7 +137,7 @@ copy 场景耗时 867.606s 的主因是双写放大:
 - `SqlTransformComputeSpec.stagingMode`:默认 `JSONB`,可显式配置 `DIRECT`。
 - `DIRECT` 禁止 `validations` 和 `emptyResultPolicy=FAIL`,避免误以为有 staging audit。
 - `DIRECT` 在 COMPUTE/VALIDATE/FEEDBACK 阶段不写/不查/不删 `batch.process_staging`,COMMIT 阶段执行 `INSERT INTO target SELECT ... FROM (sourceSql) base ON CONFLICT ...`。
-- 带 `watermarkColumn` 时通过 `RETURNING` 统计 published rows 和 high_water_mark,避免额外重扫 source。
+- 当时的带 `watermarkColumn` 实现通过 `RETURNING` 统计 published rows 和 high_water_mark。后续修正 DIRECT 冲突跳过时的水位：映射水位列的 INSERT / INSERT_IGNORE 使用单条语句物化源数据，分别计算源数据最高水位和 `RETURNING` 发布行数；本报告的历史吞吐数据不代表该修正后的性能。
 - 压测 copy 模板 `lt_process_copy_job` 已改为 `stagingMode=DIRECT`。
 
 后续仍可继续评估:

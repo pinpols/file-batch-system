@@ -165,6 +165,7 @@ class StoreStepTest {
 
     Path generated = Files.createTempFile("export-generated-", ".json");
     Files.writeString(generated, "{\"ok\":true}");
+    long generatedSize = Files.size(generated);
 
     // 临时对象和最终对象的 sha256 均应与本地文件计算出的摘要一致。
     // 该方法依次调用 sha256Hex(tempKey) 和 sha256Hex(objectName)。
@@ -184,7 +185,8 @@ class StoreStepTest {
 
     assertThat(result.success()).isTrue();
     assertThat(ctx.getAttributes())
-        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE);
+        .containsEntry(PipelineRuntimeKeys.EXPORT_STORE_COMMITTED, Boolean.TRUE)
+        .containsEntry(PipelineRuntimeKeys.FILE_SIZE_BYTES, generatedSize);
     assertThat(Files.exists(generated)).isFalse();
     verify(storage).copyObject(eq("tmp.part"), anyString());
     verify(storage).removeObject("tmp.part");

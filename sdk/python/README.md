@@ -178,6 +178,8 @@ Lane S (P2) 把 dispatcher + Kafka consumer 接上,对齐 Java SDK 下列 5 个�
 **P2 简化 vs Java**(明列出来,P3 接续清单):
 
 - CLAIM 的有限重试由 `_http.PlatformHttpClient` 执行。消息入口等待认领确认后才返回可提交处置; CLAIM 传输失败或重试耗尽时返回 `RETRY_LATER`, Kafka 消费循环 seek 回原 offset 并临时暂停, 恢复后重读。未认领任务没有租约, 不能依赖租约超时补发。业务处理仍在后台执行, 不等待业务完成才提交。
+- 未知 schema 或外租户消息按分区暂扣并等待 2 秒后重读, 其他分区继续消费。首次暂扣时将安全起点设为该消息自身的 offset, 不越过该消息; 分区转交后从 broker 已提交位置恢复。容量恢复不会提前唤醒暂扣分区, 消息重投仍须遵守业务幂等契约。
+- 已有消费组继续使用 broker 已提交位置；新消费组或提交位置失效时从最早保留位置读取，可能重读保留期内历史消息。
 - 没有 `ThrottledLogger`(Java Lane J #2)—— PAUSED-state drop 日志降到 DEBUG 避免重复日志,不引外部依赖。
 - 没有 MDC —— 结构化字段以 `logging.LogRecord.extra` 形式传给用户的 formatter。
 
@@ -280,4 +282,4 @@ Apache-2.0,与主仓一致。见 [`LICENSE`](../../LICENSE)。
 
 ## 实际执行入口计时
 
-默认 `TaskDispatcher` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true`，使用 CLAIM 返回的当前 invocation。确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。详见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。
+默认 `TaskDispatcher` 在实际进入业务处理器前，通过原续租端点提交 `details.executionStarted=true` 和本次独立的 `executionAttemptId`，使用 CLAIM 返回的当前 invocation。同一次入口请求的传输重试复用该标识；确认失败或租约失效时不调用业务、不伪造业务失败回报；明确取消则保留取消结果。计时信号与非幂等副作用开始标记独立，处理器参数和业务批处理逻辑保持原契约。旧客户端和旧服务混版的保护边界见 [通讯协议](../../docs/sdk/wire-protocol.md#实际执行入口计时)。

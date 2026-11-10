@@ -549,6 +549,10 @@ orchestrator:
 # ── worker-import ──────────────────────────────────────────────────────────────
 
 workerImport:
+  # 已废弃：渠道绑定须迁入平台库入口归属；非空时拒绝渲染，避免静默丢失配置。
+  scannerChannelBindings: []
+  # 已废弃：权威清单绑定须迁入平台库入口归属；非空时拒绝渲染。
+  scannerManifestBindings: []
   # 大文件流 + Netty direct buffer 上量,扩到 1G(覆盖全局 512M 默认)
   javaOptsExtra: "-XX:+UseG1GC -XX:MaxDirectMemorySize=1g"
   replicaCount: 2

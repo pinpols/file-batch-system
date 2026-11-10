@@ -861,6 +861,7 @@ class DefaultFileGovernanceServiceTest {
   void shouldCreateUploadSessionAsObjectStoreBackedRecord() {
     when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
     when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
+    when(fileGovernanceRepository.isEnabledFileChannel("t1", "ch-1")).thenReturn(true);
     FileUploadSessionCommand command = FileUploadSessionCommand.builder()
         .tenantId("t1")
         .channelCode("ch-1")
@@ -882,7 +883,29 @@ class DefaultFileGovernanceServiceTest {
     assertThat(captor.getValue().storage().storageBucket()).isEqualTo("bucket-a");
     assertThat(captor.getValue().storage().storagePath()).startsWith("uploads/t1/");
     assertThat(captor.getValue().storage().storagePath()).doesNotContain("..");
+    assertThat(captor.getValue().arrivalChannelCode()).isEqualTo("ch-1");
     verify(fileGovernanceRepository).appendAudit(any());
+  }
+
+  @Test
+  @DisplayName("未验证的上传渠道仍可创建会话，但不赋予可信渠道身份")
+  void shouldNotTrustUploadChannelOutsideTenant() {
+    when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
+    when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
+    FileUploadSessionCommand command = FileUploadSessionCommand.builder()
+        .tenantId("t1")
+        .channelCode("other-channel")
+        .fileName("orders.csv")
+        .build();
+
+    FileUploadSessionResponse response = service.createUploadSession(command);
+
+    assertThat(response.fileId()).isEqualTo(42L);
+    ArgumentCaptor<FileGovernanceRepository.ReconciledFileRecordCommand> captor =
+        ArgumentCaptor.forClass(FileGovernanceRepository.ReconciledFileRecordCommand.class);
+    verify(fileGovernanceRepository).isEnabledFileChannel("t1", "other-channel");
+    verify(fileGovernanceRepository).createReconciledFileRecord(captor.capture());
+    assertThat(captor.getValue().arrivalChannelCode()).isNull();
   }
 
   @Test

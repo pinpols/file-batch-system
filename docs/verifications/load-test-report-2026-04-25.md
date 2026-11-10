@@ -108,7 +108,7 @@ mvn gatling:test \
 
 - 复现条件：所有 6 个 JVM 进程 healthy，`disp_local_probe` 是 default-tenant MANUAL job
 - 真实生产压测需要在 staging（pool=30 + 多实例 + k8s autoscale）跑 CapacityBaselineSimulation 30 分钟
-- 此次只做了写路径（JobLaunchSimulation），读路径（ConsoleQuerySimulation）和混合（CapacityBaselineSimulation）未跑
+- 此次只做了写路径（JobLaunchSimulation），读路径（ConsoleQuerySimulation）和读写阶梯画像（CapacityBaselineSimulation）未跑；当前画像不能作为并发混合负载证据，见 [压测说明](../../load-tests/README.md)。
 
 ---
 

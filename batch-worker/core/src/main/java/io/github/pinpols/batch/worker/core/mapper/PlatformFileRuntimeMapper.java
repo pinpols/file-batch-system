@@ -5,6 +5,7 @@ import io.github.pinpols.batch.worker.core.param.PlatformFileErrorInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformFileInsertParam;
 import io.github.pinpols.batch.worker.core.param.PlatformPipelineFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformPipelineInsertParam;
+import io.github.pinpols.batch.worker.core.param.PlatformReconciledFileAdoptionParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunFinishParam;
 import io.github.pinpols.batch.worker.core.param.PlatformStepRunInsertParam;
 import java.time.OffsetDateTime;
@@ -89,6 +90,8 @@ public interface PlatformFileRuntimeMapper {
 
   int updateFileRecordMetadata(
       @Param("fileId") Long fileId, @Param("metadataJson") String metadataJson);
+
+  int adoptReconciledFileRecord(PlatformReconciledFileAdoptionParam params);
 
   int insertFileErrorRecord(PlatformFileErrorInsertParam params);
 

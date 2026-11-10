@@ -9,6 +9,7 @@ LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
 validate_load_test_run_id "$RUN_ID"
+validate_load_test_fixture_roots
 SQL_DIR="$ROOT_DIR/load-tests/sql"
 
 psql_platform() {
@@ -74,8 +75,12 @@ run_with_retry "business load-test cleanup" \
   psql_business -v run_id="$RUN_ID" -f "$SQL_DIR/cleanup-worker-load-business.sql"
 assert_no_platform_residue
 
-rm -f "/tmp/batch/load-test/${RUN_ID}-dispatch.txt"
-find /tmp/batch/load-test -maxdepth 1 -type f -name "${RUN_ID}-dispatch-*.txt" -delete
-rm -f /tmp/batch/local-dispatch/*"${RUN_ID}"* 2>/dev/null || true
+HOST_DISPATCH_DIR="${LOAD_TEST_HOST_ROOT%/}/load-test"
+HOST_DISPATCH_TARGET_DIR="${LOAD_TEST_HOST_ROOT%/}/local-dispatch"
+rm -f "$HOST_DISPATCH_DIR/${RUN_ID}-dispatch.txt"
+if [[ -d "$HOST_DISPATCH_DIR" ]]; then
+  find "$HOST_DISPATCH_DIR" -maxdepth 1 -type f -name "${RUN_ID}-dispatch-*.txt" -delete
+fi
+rm -f "$HOST_DISPATCH_TARGET_DIR/"*"${RUN_ID}"* 2>/dev/null || true
 
 echo "Cleaned worker load-test data for RUN_ID=${RUN_ID}"

@@ -66,7 +66,9 @@ public class DefaultDispatchStageExecutor
   public List<DispatchStageResult> execute(DispatchJobContext context) {
     // 全流程 stage loop；只有全部阶段成功才计入”成功回执”指标。
     List<DispatchStageResult> results = runStageLoop(context);
-    boolean overallSuccess = results.stream().allMatch(DispatchStageResult::success);
+    boolean retryRecovered =
+        Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
+    boolean overallSuccess = DispatchStageOutcome.failure(results, retryRecovered) == null;
     if (overallSuccess) {
       recordDispatchReceiptMetric(context);
     }
@@ -142,6 +144,11 @@ public class DefaultDispatchStageExecutor
           failureSummary,
           ERROR_OBJECT_MAPPER);
     }
+  }
+
+  @Override
+  protected boolean isTerminalFailure(DispatchStageResult result) {
+    return DispatchStageOutcome.isTerminalFailure(result);
   }
 
   @Override

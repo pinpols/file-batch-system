@@ -31,6 +31,9 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
+use batch_worker_sdk::client::execution_start::{
+    execute_after_start_confirmation, ExecutionStartOutcome,
+};
 use batch_worker_sdk::client::handler::{
     CancellationSignal, NoopProgressReporter, TaskContext, TaskHandler, TaskResult,
 };
@@ -149,15 +152,12 @@ fn main() {
     let mut worker = Worker::new(&cfg.worker_code, transport.clone());
     let platform_paused = Arc::new(AtomicBool::new(false));
 
-    // (4a) SIGTERM hook. std has no portable async-signal-safe handler, so the
-    // documented integration point is `Worker::request_stop()` / `stop_flag()`:
-    // a tenant signal handler (e.g. the `signal_hook` crate, or raw
-    // `libc::sigaction`) flips the shared flag, and the run loop below observes
-    // it and runs `stop(30_000)` within K8s' 30s grace window. We install a
-    // best-effort handler when `signal_hook` is available; absent that, the
-    // `keep_running` closure still honours the same flag.
+    // 接收到停机信号后由正常线程完成排空和主动下线，不在信号处理器中执行网络操作。
     let stop_flag: Arc<AtomicBool> = worker.stop_flag();
-    install_sigterm_hook(Arc::clone(&stop_flag));
+    if let Err(error) = install_sigterm_hook(Arc::clone(&stop_flag)) {
+        eprintln!("[sample-worker] FATAL signal handler registration failed: {error}");
+        process::exit(1);
+    }
 
     // (4b) Register with the control plane (FSM NORMAL entry). The register body
     // carries the fields the platform requires: tenantId / workerCode / a
@@ -583,18 +583,29 @@ impl<H: TaskHandler> MessageHandler for HandlerBridge<H> {
         // the worker with no terminal report — the platform would otherwise wait
         // for the lease to expire and re-dispatch (double-run). `execute` takes
         // `&self` + `&ctx` (shared refs); `AssertUnwindSafe` is sound here.
-        let result = match std::panic::catch_unwind(AssertUnwindSafe(|| self.handler.execute(&ctx)))
-        {
-            Ok(r) => r,
-            Err(panic) => {
+        let execution =
+            execute_after_start_confirmation(&self.transport, &ctx, &self.worker_code, || {
+                std::panic::catch_unwind(AssertUnwindSafe(|| self.handler.execute(&ctx)))
+            });
+        self.unregister_in_flight(&task_id);
+        let result = match execution {
+            Ok(ExecutionStartOutcome::Executed(Ok(r))) => r,
+            Ok(ExecutionStartOutcome::Executed(Err(panic))) => {
                 let detail = panic_message(panic.as_ref());
                 log(&format!(
                     "task {task_id} handler PANICKED: {detail} → reporting fail"
                 ));
                 TaskResult::failure("EXECUTION_FAILED", &format!("handler panicked: {detail}"))
             }
+            Ok(ExecutionStartOutcome::Cancelled) => {
+                TaskResult::cancelled("cancelled before execution")
+            }
+            Err(error) => {
+                return Err(format!(
+                    "execution start not confirmed for task {task_id}: {error}"
+                ))
+            }
         };
-        self.unregister_in_flight(&task_id);
         let success = result.is_success();
         log(&format!(
             "task {task_id} -> errorCode={} summary={:?}",
@@ -774,26 +785,13 @@ fn opt_env(name: &str) -> Option<String> {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
-// SIGTERM hook (documented limitation)
+// 进程停止信号
 // ───────────────────────────────────────────────────────────────────────────
 
-/// Best-effort SIGTERM/SIGINT hook. std has no portable async-signal-safe
-/// signal API, so a production worker wires a real handler (e.g. the
-/// `signal_hook` crate, or a raw `libc::sigaction`) that flips the SDK's shared
-/// stop flag — exactly the `stop_flag` we pass here. This sample keeps its
-/// dependency surface to just the SDK, so the hook is a documented no-op:
-/// the worker still drains when the flag flips by any means (a test, a future
-/// signal-hook adapter, or a manual `worker.request_stop()`).
-fn install_sigterm_hook(_stop_flag: Arc<AtomicBool>) {
-    // Wiring with the `signal_hook` crate would be:
-    //
-    //     use signal_hook::consts::{SIGINT, SIGTERM};
-    //     use signal_hook::flag;
-    //     flag::register(SIGTERM, Arc::clone(&_stop_flag)).expect("register SIGTERM");
-    //     flag::register(SIGINT, Arc::clone(&_stop_flag)).expect("register SIGINT");
-    //
-    // Left out so this example depends only on the SDK (no extra crates).
-    log("SIGTERM hook is a documented no-op (add `signal_hook` to enable; see source)");
+fn install_sigterm_hook(stop_flag: Arc<AtomicBool>) -> std::io::Result<()> {
+    signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&stop_flag))?;
+    signal_hook::flag::register(signal_hook::consts::SIGINT, stop_flag)?;
+    Ok(())
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -806,8 +804,17 @@ fn log(msg: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{claim_partition_invocation_id, EchoHandler, TaskContext, TaskHandler};
+    use super::{
+        claim_partition_invocation_id, DispatchMessage, EchoHandler, HandlerBridge, MessageHandler,
+        ReqwestConfig, ReqwestTransport, TaskContext, TaskHandler, TaskResult,
+    };
     use batch_worker_sdk::client::transport::{decode_claim_response, HttpResponse};
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::TcpListener;
+    use std::process::{Command, Stdio};
+    use std::sync::{atomic::AtomicUsize, atomic::Ordering, Arc, Mutex};
+    use std::thread;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn claim_invocation_id_takes_precedence_over_dispatch_value() {
@@ -840,5 +847,127 @@ mod tests {
         assert_eq!(result.outputs["text"], "hello");
         assert_eq!(result.outputs["count"], "3");
         assert_eq!(result.outputs["nested"], r#"{"ok":true}"#);
+    }
+
+    #[test]
+    fn rejected_execution_start_does_not_call_handler_or_report() {
+        struct CountingHandler(Arc<AtomicUsize>);
+        impl TaskHandler for CountingHandler {
+            fn task_type(&self) -> &str {
+                "ATOMIC"
+            }
+            fn execute(&self, _: &TaskContext) -> TaskResult {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                TaskResult::success("unexpected")
+            }
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let mut paths = Vec::new();
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut reader = BufReader::new(stream.try_clone().unwrap());
+                let mut line = String::new();
+                reader.read_line(&mut line).unwrap();
+                paths.push(line.split_whitespace().nth(1).unwrap().to_string());
+                let mut content_length = 0;
+                loop {
+                    line.clear();
+                    reader.read_line(&mut line).unwrap();
+                    if line == "\r\n" {
+                        break;
+                    }
+                    if let Some((name, value)) = line.split_once(':') {
+                        if name.eq_ignore_ascii_case("content-length") {
+                            content_length = value.trim().parse().unwrap();
+                        }
+                    }
+                }
+                let mut body = vec![0; content_length];
+                reader.read_exact(&mut body).unwrap();
+                let (status, payload) = if paths.len() == 1 {
+                    (
+                        "200 OK",
+                        r#"{"partitionInvocationId":"inv-current","payload":"{}"}"#,
+                    )
+                } else {
+                    ("409 Conflict", "{}")
+                };
+                write!(
+                    stream,
+                    "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{payload}",
+                    payload.len()
+                )
+                .unwrap();
+            }
+            paths
+        });
+        let transport =
+            ReqwestTransport::new(ReqwestConfig::new(format!("http://{address}"), "tenant"))
+                .unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let mut bridge = HandlerBridge {
+            handler: CountingHandler(Arc::clone(&calls)),
+            transport,
+            tenant_id: "tenant".into(),
+            worker_code: "worker".into(),
+            in_flight: Arc::new(Mutex::new(Default::default())),
+        };
+        let message: DispatchMessage = serde_json::from_str(
+            r#"{"taskId":42,"tenantId":"tenant","workerType":"ATOMIC","schemaVersion":"v2"}"#,
+        )
+        .unwrap();
+
+        assert!(bridge.on_accepted(&message).is_err());
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert!(bridge.in_flight.lock().unwrap().is_empty());
+        assert_eq!(
+            server.join().unwrap(),
+            ["/internal/tasks/42/claim", "/internal/tasks/42/renew"]
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn termination_signals_request_graceful_stop() {
+        use std::sync::atomic::AtomicBool;
+
+        const CHILD_ENV: &str = "BATCH_RUST_SIGNAL_TEST_CHILD";
+        if std::env::var_os(CHILD_ENV).is_some() {
+            let flag = Arc::new(AtomicBool::new(false));
+            super::install_sigterm_hook(Arc::clone(&flag)).unwrap();
+            println!("SIGNAL_HANDLER_READY");
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while !flag.load(Ordering::SeqCst) && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert!(flag.load(Ordering::SeqCst), "进程信号未触发停止标志");
+            return;
+        }
+
+        for signal in ["TERM", "INT"] {
+            let mut child = Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "tests::termination_signals_request_graceful_stop",
+                    "--nocapture",
+                ])
+                .env(CHILD_ENV, "1")
+                .stdout(Stdio::piped())
+                .spawn()
+                .unwrap();
+            let stdout = child.stdout.take().unwrap();
+            let mut lines = BufReader::new(stdout).lines();
+            assert!(lines.any(|line| line.unwrap().contains("SIGNAL_HANDLER_READY")));
+            let status = Command::new("kill")
+                .args([&format!("-{signal}"), &child.id().to_string()])
+                .status()
+                .unwrap();
+            assert!(status.success());
+            let exit = child.wait().unwrap();
+            assert!(exit.success(), "{signal} 后未执行正常停止: {exit}");
+        }
     }
 }

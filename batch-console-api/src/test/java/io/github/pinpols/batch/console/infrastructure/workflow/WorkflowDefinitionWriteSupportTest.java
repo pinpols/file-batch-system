@@ -1,10 +1,14 @@
 package io.github.pinpols.batch.console.infrastructure.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.request.WorkflowDefinitionSaveRequest;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowDefinitionVersionMapper;
 import io.github.pinpols.batch.console.domain.workflow.mapper.WorkflowEdgeMapper;
@@ -43,5 +47,28 @@ class WorkflowDefinitionWriteSupportTest {
     assertThat(captor.getValue().getCrossDayDependencies())
         .isEqualTo("[{\"alias\":\"previous_day\",\"jobCode\":\"LOAD_SOURCE\"}]");
     assertThat(captor.getValue().getCrossDayDependencyTimeoutSeconds()).isEqualTo(7200);
+  }
+
+  @Test
+  @DisplayName("保存文件等待节点时拒绝非字符串渠道编码")
+  void shouldRejectInvalidChannelBeforeNodeWrite() {
+    WorkflowNodeMapper nodeMapper = mock(WorkflowNodeMapper.class);
+    WorkflowDefinitionWriteSupport writeSupport = new WorkflowDefinitionWriteSupport(
+        nodeMapper,
+        mock(WorkflowEdgeMapper.class),
+        mock(WorkflowDefinitionVersionMapper.class),
+        new ObjectMapper());
+    WorkflowDefinitionSaveRequest.NodeItem node = new WorkflowDefinitionSaveRequest.NodeItem();
+    node.setNodeCode("wait_file");
+    node.setNodeType("WAIT");
+    node.setNodeParams("""
+        {"sensor_type":"FILE_ARRIVAL","sensor_spec":{"channelCode":42}}
+        """);
+    WorkflowDefinitionSaveRequest request = new WorkflowDefinitionSaveRequest();
+    request.setNodes(List.of(node));
+
+    assertThatThrownBy(() -> writeSupport.upsertNodesAndEdges("tenant_a", 42L, request))
+        .isInstanceOf(BizException.class);
+    verify(nodeMapper, never()).upsertWorkflowNode(any());
   }
 }

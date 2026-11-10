@@ -5,9 +5,11 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import io.github.pinpols.batch.common.config.S3StorageProperties;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.mock.env.MockEnvironment;
 
 @DisplayName("文件治理仓储:重新派送保留失败态与未回执态")
 class FileGovernanceRepositoryStatusTest {
@@ -16,7 +18,8 @@ class FileGovernanceRepositoryStatusTest {
   @DisplayName("重新派送参数包含 FAILED 与 NONE 状态")
   void shouldResetDispatchAndReceiptStatuses() {
     FileGovernanceMapper mapper = mock(FileGovernanceMapper.class);
-    FileGovernanceRepository repository = new FileGovernanceRepository(mapper);
+    FileGovernanceRepository repository =
+        new FileGovernanceRepository(mapper, new MockEnvironment(), new S3StorageProperties());
     doReturn(1).when(mapper).resetDispatchRecordForRedispatch(any(), any(), any(), any());
 
     repository.resetDispatchRecordForRedispatch("tenant-a", 7L);

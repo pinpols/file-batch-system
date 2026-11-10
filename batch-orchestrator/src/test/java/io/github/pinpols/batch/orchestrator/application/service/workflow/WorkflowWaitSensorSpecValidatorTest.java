@@ -100,6 +100,24 @@ class WorkflowWaitSensorSpecValidatorTest {
   }
 
   @Test
+  @DisplayName("文件到达渠道编码允许省略，填写时必须是长度有效的字符串")
+  void shouldValidateOptionalFileChannelCode() {
+    assertThat(codes(wait("FILE_ARRIVAL", "{\"pattern\":\"*.csv\",\"maxAgeSeconds\":60}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL",
+            "{\"pattern\":\"*.csv\",\"maxAgeSeconds\":60,\"channelCode\":\"bank_in\"}")))
+        .isEmpty();
+    assertThat(codes(wait(
+            "FILE_ARRIVAL", "{\"pattern\":\"*.csv\",\"maxAgeSeconds\":60,\"channelCode\":12}")))
+        .contains("V16-c");
+    String tooLongCode = "a".repeat(129);
+    String invalidSpec =
+        "{\"pattern\":\"*.csv\",\"maxAgeSeconds\":60,\"channelCode\":\"" + tooLongCode + "\"}";
+    assertThat(codes(wait("FILE_ARRIVAL", invalidSpec))).contains("V16-c");
+  }
+
+  @Test
   @DisplayName("传感器对象、超时窗口与超时动作缺失或无效时返回对应错误")
   void shouldReportMalformedSensorSpecAndTimeoutSettings() {
     assertThat(codes(node("WAIT", """

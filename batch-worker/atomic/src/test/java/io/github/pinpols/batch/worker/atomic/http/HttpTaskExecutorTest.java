@@ -566,6 +566,42 @@ class HttpTaskExecutorTest {
     }
 
     @Test
+    @DisplayName("未配置期望状态时，幂等请求的服务端错误重试耗尽后应失败")
+    void shouldFail_whenDefaultServerErrorRetryExhausts() {
+      props.setMaxRetries(1);
+      props.setRetryBackoff(Duration.ofMillis(10));
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext("/always-fail-default", ex -> {
+        calls.incrementAndGet();
+        ex.sendResponseHeaders(503, -1);
+        ex.close();
+      });
+
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("url", url("/always-fail-default"))));
+
+      assertThat(result.success()).isFalse();
+      assertThat(result.output()).containsOnlyKeys("error_code");
+      assertThat(result.output()).containsEntry("error_code", "EXECUTION_FAILED");
+      assertThat(calls).hasValue(2);
+    }
+
+    @Test
+    @DisplayName("未配置期望状态时保留客户端错误的原有处理")
+    void shouldPreserveDefaultClientErrorBehavior() {
+      server.createContext("/client-error-default", ex -> {
+        ex.sendResponseHeaders(404, -1);
+        ex.close();
+      });
+
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("url", url("/client-error-default"))));
+
+      assertThat(result.success()).isTrue();
+      assertThat(result.output()).containsEntry("statusCode", 404);
+    }
+
+    @Test
     @DisplayName("显式期望的 5xx 是成功结果，不再进行重试")
     void shouldAcceptExpectedServerError_withoutRetry() {
       props.setMaxRetries(1);
@@ -582,6 +618,24 @@ class HttpTaskExecutorTest {
 
       assertThat(result.success()).isTrue();
       assertThat(result.output()).containsEntry("statusCode", 503).containsEntry("attempts", 1);
+      assertThat(calls).hasValue(1);
+    }
+
+    @Test
+    @DisplayName("非幂等请求显式接受服务端错误时仍按期望成功")
+    void shouldAcceptExpectedServerError_whenPost() {
+      AtomicInteger calls = new AtomicInteger();
+      server.createContext("/post-expected-server-error", ex -> {
+        calls.incrementAndGet();
+        ex.sendResponseHeaders(503, -1);
+        ex.close();
+      });
+
+      TaskResult result = executor.execute(ctxWithParams(Map.of(
+          "url", url("/post-expected-server-error"), "method", "POST", "expectStatus", 503)));
+
+      assertThat(result.success()).isTrue();
+      assertThat(result.output()).containsEntry("statusCode", 503);
       assertThat(calls).hasValue(1);
     }
 
@@ -680,9 +734,13 @@ class HttpTaskExecutorTest {
         ex.close();
       });
 
-      executor.execute(ctxWithParams(Map.of("url", url("/post-fail"), "method", "POST")));
+      TaskResult result =
+          executor.execute(ctxWithParams(Map.of("url", url("/post-fail"), "method", "POST")));
 
-      // POST 不重试,只 1 次
+      assertThat(result.success()).isFalse();
+      assertThat(result.output())
+          .containsEntry(
+              AtomicErrorCode.OUTPUT_KEY, AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN.name());
       assertThat(calls.get()).isEqualTo(1);
     }
 

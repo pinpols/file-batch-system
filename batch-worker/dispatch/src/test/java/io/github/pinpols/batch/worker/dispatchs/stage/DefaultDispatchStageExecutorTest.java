@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,16 +16,26 @@ import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformPipelineRunRepository;
 import io.github.pinpols.batch.worker.core.support.StageFailureCode;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchJobContext;
+import io.github.pinpols.batch.worker.dispatchs.domain.DispatchPayload;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchRuntimeKeys;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretBlockedException;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchSecretResolver;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.FileDispatchRepository;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchChannelGateway;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.DispatchResult;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -93,6 +105,201 @@ class DefaultDispatchStageExecutorTest {
         .isNotNull();
     assertThat(hasTagKey("dispatch.receipt.total", "tenant")).isFalse();
     verify(pipelineRuns).finishStepRunSuccess(eq(STEP_RUN_ID), any());
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "DISPATCH_SECRET_REVOKED_OR_EXPIRED",
+        "EXTERNAL_OUTCOME_UNKNOWN",
+        "DISPATCH_RETRY_FAILED"
+      })
+  @DisplayName("密钥撤销或结果不明时终止,已知投递失败仍进入默认补偿分支")
+  void execute_stopsBeforeCompensationForBlockedOrUnknownRetry(String failureCode) {
+    FileDispatchRepository repository = mock(FileDispatchRepository.class);
+    DispatchChannelGateway gateway = mock(DispatchChannelGateway.class);
+    DispatchSecretResolver resolver = mock(DispatchSecretResolver.class);
+    DispatchStageStep compensation = stubStep(DispatchStage.COMPENSATE);
+    RetryDispatchStep retry = new RetryDispatchStep(repository, gateway, resolver);
+    List<DispatchStageStep> steps = new ArrayList<>();
+    for (DispatchStage stage : DispatchStage.values()) {
+      steps.add(
+          stage == DispatchStage.RETRY
+              ? retry
+              : stage == DispatchStage.COMPENSATE ? compensation : stubStep(stage));
+    }
+    DefaultDispatchStageExecutor stageExecutor =
+        new DefaultDispatchStageExecutor(steps, pipelineRuns, meterRegistry);
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_ID, 10L);
+    context.getAttributes().put(PipelineRuntimeKeys.FILE_RECORD, Map.of("id", 10L));
+    context.getAttributes().put(PipelineRuntimeKeys.CHANNEL_CONFIG, Map.of("channel_type", "API"));
+    context
+        .getAttributes()
+        .put(
+            DispatchRuntimeKeys.DISPATCH_PAYLOAD,
+            new DispatchPayload("10", null, "CH1", "target", null, null, null, null, null, null));
+    context.getAttributes().put(DispatchRuntimeKeys.RETRY_REQUESTED, true);
+    PipelineStepDefinition retryDefinition = new PipelineStepDefinition(
+        1L,
+        "DISPATCH_RETRY",
+        "Retry",
+        "RETRY",
+        1,
+        "DISPATCH_RETRY",
+        Map.of("onFailureNextStageCode", "COMPENSATE"),
+        0,
+        "NONE",
+        0,
+        true);
+    PipelineStepDefinition compensateDefinition = new PipelineStepDefinition(
+        2L,
+        "DISPATCH_COMPENSATE",
+        "Compensate",
+        "COMPENSATE",
+        2,
+        "DISPATCH_COMPENSATE",
+        Map.of("terminalOnSuccess", true),
+        0,
+        "NONE",
+        0,
+        true);
+    context
+        .getAttributes()
+        .put(
+            PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS,
+            List.of(retryDefinition, compensateDefinition));
+    when(compensation.execute(any()))
+        .thenReturn(DispatchStageResult.success(DispatchStage.COMPENSATE));
+    if ("DISPATCH_SECRET_REVOKED_OR_EXPIRED".equals(failureCode)) {
+      when(resolver.resolveInto(any(), any(), any(), any()))
+          .thenThrow(new DispatchSecretBlockedException(failureCode));
+    } else {
+      when(resolver.resolveInto(any(), any(), any(), any())).thenReturn(Set.of());
+      when(repository.beginAttempt("t1", 10L, "CH1")).thenReturn(1);
+      if ("EXTERNAL_OUTCOME_UNKNOWN".equals(failureCode)) {
+        when(gateway.dispatch(any()))
+            .thenReturn(DispatchResult.externalOutcomeUnknown("ext", null, "response lost"));
+      } else {
+        when(gateway.dispatch(any())).thenReturn(DispatchResult.failureWithoutReceipt("failed"));
+      }
+      when(repository.markAttemptFailed(any(), any(), any(), any(), any())).thenReturn(1);
+    }
+
+    List<DispatchStageResult> results = stageExecutor.execute(context);
+
+    if ("DISPATCH_RETRY_FAILED".equals(failureCode)) {
+      assertThat(results)
+          .extracting(DispatchStageResult::code)
+          .containsExactly(failureCode, "SUCCESS");
+      verify(compensation, times(1)).execute(any());
+    } else {
+      assertThat(results).extracting(DispatchStageResult::code).containsExactly(failureCode);
+      verify(compensation, never()).execute(any());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  @DisplayName("重试后确认成功才计入成功回执,确认失败不能计入")
+  void execute_countsReceiptOnlyWhenRetryRecoveryFullySucceeds(boolean ackSucceeds) {
+    DispatchStageStep delivery = stubStep(DispatchStage.DISPATCH);
+    DispatchStageStep retry = stubStep(DispatchStage.RETRY);
+    DispatchStageStep ack = stubStep(DispatchStage.ACK);
+    DispatchStageStep complete = stubStep(DispatchStage.COMPLETE);
+    List<DispatchStageStep> steps = new ArrayList<>();
+    for (DispatchStage stage : DispatchStage.values()) {
+      steps.add(
+          switch (stage) {
+            case DISPATCH -> delivery;
+            case RETRY -> retry;
+            case ACK -> ack;
+            case COMPLETE -> complete;
+            default -> stubStep(stage);
+          });
+    }
+    DefaultDispatchStageExecutor stageExecutor =
+        new DefaultDispatchStageExecutor(steps, pipelineRuns, meterRegistry);
+    when(delivery.execute(any()))
+        .thenReturn(DispatchStageResult.failure(
+            DispatchStage.DISPATCH, "DISPATCH_SEND_FAILED", "temporary"));
+    when(retry.execute(any())).thenAnswer(invocation -> {
+      DispatchJobContext context = invocation.getArgument(0);
+      context.getAttributes().put(DispatchRuntimeKeys.RETRY_RECOVERED, true);
+      return DispatchStageResult.success(DispatchStage.RETRY);
+    });
+    when(ack.execute(any()))
+        .thenReturn(
+            ackSucceeds
+                ? DispatchStageResult.success(DispatchStage.ACK)
+                : DispatchStageResult.failure(
+                    DispatchStage.ACK, "DISPATCH_ACK_FAILED", "ack failed"));
+    when(complete.execute(any())).thenReturn(DispatchStageResult.success(DispatchStage.COMPLETE));
+    List<PipelineStepDefinition> definitions = List.of(
+        new PipelineStepDefinition(
+            1L,
+            "DISPATCH_DISPATCH",
+            "Dispatch",
+            "DISPATCH",
+            1,
+            "DISPATCH_DISPATCH",
+            Map.of("onFailureNextStageCode", "RETRY"),
+            0,
+            "NONE",
+            0,
+            true),
+        new PipelineStepDefinition(
+            2L,
+            "DISPATCH_RETRY",
+            "Retry",
+            "RETRY",
+            2,
+            "DISPATCH_RETRY",
+            Map.of("onSuccessNextStageCode", "ACK"),
+            0,
+            "NONE",
+            0,
+            true),
+        new PipelineStepDefinition(
+            3L,
+            "DISPATCH_ACK",
+            "Ack",
+            "ACK",
+            3,
+            "DISPATCH_ACK",
+            Map.of("onSuccessNextStageCode", "COMPLETE"),
+            0,
+            "NONE",
+            0,
+            true),
+        new PipelineStepDefinition(
+            4L,
+            "DISPATCH_COMPLETE",
+            "Complete",
+            "COMPLETE",
+            4,
+            "DISPATCH_COMPLETE",
+            Map.of("terminalOnSuccess", true),
+            0,
+            "NONE",
+            0,
+            true));
+    DispatchJobContext context = new DispatchJobContext();
+    context.setTenantId("t1");
+    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_INSTANCE_ID, PIPELINE_INSTANCE_ID);
+    context.getAttributes().put(PipelineRuntimeKeys.PIPELINE_STEP_DEFINITIONS, definitions);
+
+    stageExecutor.execute(context);
+
+    var receiptCounter = meterRegistry.find("dispatch.receipt.total").counter();
+    if (ackSucceeds) {
+      assertThat(receiptCounter).isNotNull();
+      assertThat(receiptCounter.count()).isEqualTo(1.0);
+    } else {
+      assertThat(receiptCounter).isNull();
+    }
   }
 
   @Test

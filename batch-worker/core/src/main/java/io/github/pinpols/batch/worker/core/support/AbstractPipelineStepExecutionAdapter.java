@@ -220,7 +220,7 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     try {
       C context = buildContext(request, attributes, fileId);
       List<R> results = executeStages(context);
-      R failed = firstFailure(results);
+      R failed = resolvePipelineFailure(context, results);
       if (failed == null) {
         return completeSuccessfulPipeline(request, attributes, pipelineRun, context, results);
       }
@@ -604,7 +604,8 @@ public abstract class AbstractPipelineStepExecutionAdapter<C extends ExecutionCo
     return lastSuccessStage == null ? initialStage() : String.valueOf(lastSuccessStage);
   }
 
-  private R firstFailure(List<R> results) {
+  /** 默认保留首个失败；具有明确恢复语义的业务类型可按自身阶段结果判定。 */
+  protected R resolvePipelineFailure(C context, List<R> results) {
     if (results == null) {
       return null;
     }

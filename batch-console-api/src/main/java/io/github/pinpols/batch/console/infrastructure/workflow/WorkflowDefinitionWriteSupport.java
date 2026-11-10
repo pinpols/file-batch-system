@@ -20,6 +20,7 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertP
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowEdgeQuery;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowNodeQuery;
+import io.github.pinpols.batch.console.domain.workflow.validation.FileArrivalChannelNodeValidation;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -86,6 +87,7 @@ public final class WorkflowDefinitionWriteSupport {
         String submittedNodeParams = node.getNodeParams();
         String storedNodeParams = existingNodeParams.get(node.getNodeCode());
         String resolvedNodeParams = resolveNodeParams(submittedNodeParams, storedNodeParams);
+        FileArrivalChannelNodeValidation.validate(node.getNodeType(), resolvedNodeParams);
         param.setNodeParams(resolvedNodeParams);
         param.setCrossDayDependencies(node.getCrossDayDependencies());
         param.setCrossDayDependencyTimeoutSeconds(node.getCrossDayDependencyTimeoutSeconds());

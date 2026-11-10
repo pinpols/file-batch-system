@@ -25,6 +25,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.scheduling.TaskScheduler;
 
 @DisplayName("维护抑制信号：范围隔离、提前结束与失败重试")
 class MaintenanceAlertPublisherTest {
@@ -45,7 +46,8 @@ class MaintenanceAlertPublisherTest {
     properties.getSilence().setMaintenanceScope("test-deployment");
     registry = new SimpleMeterRegistry();
     Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-    publisher = new MaintenanceAlertPublisher(holder, properties, transport, registry, clock);
+    publisher = new MaintenanceAlertPublisher(
+        holder, properties, transport, registry, clock, mock(TaskScheduler.class));
   }
 
   @Test

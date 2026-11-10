@@ -33,7 +33,12 @@ import org.springframework.transaction.support.TransactionTemplate;
     havingValue = "true")
 public class WorkerReportOutboxConfiguration {
 
+  // 嵌套配置也可能被组件扫描独立发现，两个后端均须检查启用开关。
   @Configuration(proxyBeanMethods = false)
+  @ConditionalOnProperty(
+      prefix = "batch.worker.report-outbox",
+      name = "enabled",
+      havingValue = "true")
   @ConditionalOnProperty(
       prefix = "batch.worker.report-outbox",
       name = "storage",
@@ -131,6 +136,10 @@ public class WorkerReportOutboxConfiguration {
   }
 
   @Configuration(proxyBeanMethods = false)
+  @ConditionalOnProperty(
+      prefix = "batch.worker.report-outbox",
+      name = "enabled",
+      havingValue = "true")
   @ConditionalOnProperty(
       prefix = "batch.worker.report-outbox",
       name = "storage",

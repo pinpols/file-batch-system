@@ -294,7 +294,7 @@ v1 P2-9 称 "BatchDayCutoffScheduler 缺 lockAtLeast",grep 显示实际为 `lock
 |---|---|---|---|
 | JobLaunchSimulation | trigger 写 RPS | write.p95 < 500ms | ❌ 无 |
 | ConsoleQuerySimulation | 读 P99 | read.p99 < 300ms | ❌ 无 |
-| CapacityBaselineSimulation | 混合阶梯加压 | 同上 | ❌ 无 |
+| CapacityBaselineSimulation | 历史记录为混合阶梯；当前实现不能证明并发混合负载，见 [压测说明](../../../load-tests/README.md) | 同上 | ❌ 无 |
 | SchedulingSnapshotUnderLoadSimulation | 调度可观测性 | 同上 | ❌ 无 |
 | SchedulingBacklogUnderLoadSimulation | WAITING/READY backlog | jp_waiting 不持续上升 | ❌ 无 |
 | LaunchPipelineCompletionSimulation | 端到端 launch → 终态 | 90 polls × 2s | ❌ 无 |

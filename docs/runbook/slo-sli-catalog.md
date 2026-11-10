@@ -81,7 +81,7 @@ Prometheus 规则入口：
 | 事件 | 当前规则 / 指标 | 覆盖结论 | 说明 |
 |---|---|---|---|
 | HTTP Controller/API 异常 | `HttpServerErrorRateHigh` / `http_server_requests_seconds_count` | 已覆盖：按稳定 target `job` 分服务计算 5xx 比率，并设请求数下限；避免服务间流量稀释 | 低于请求数下限的单次错误由日志/追踪定位，不按 URI 等高基数标签分组告警 |
-| Import 对象到达事件 | `batch.import.event_arrival.notifications`、`batch.import.event_arrival.scans` | 部分覆盖：只有通知数和即时扫描调用数，没有扫描成功/失败、最后成功时间、对象登记结果或到达至 `file_record` 的时延指标；当前没有对应 Prometheus 告警。扫描总开关关闭时返回 `scanner-disabled` 且不计扫描；在途扫描会合并通知，对象若在该轮列表快照之后落地仍需等待轮询兜底，且未度量合并数和事件到登记时延 | 补低基数扫描结果、新鲜度、合并数量和事件到登记延迟信号及告警。轮询兜底只能限制漏发现时间，不能证明事件加速生效 |
+| Import 对象到达事件 | `batch.import.event_arrival.notifications`、`batch.import.event_arrival.scans` | 部分覆盖：只有通知数和即时扫描调用数，没有扫描成功/失败、最后成功时间、对象登记结果或到达至 `file_record` 的时延指标；当前没有对应 Prometheus 告警。扫描总开关关闭时返回 `scanner-disabled` 且不计扫描；在途扫描会合并通知，对象若在该轮列表快照之后落地需要依靠后续扫描发现，且未度量合并数和事件到登记时延 | 补低基数扫描结果、新鲜度、合并数量和事件到登记延迟信号及告警。轮询不证明事件加速生效；扫描范围及分页饥饿待验证前，也不能保证漏发现时间有界 |
 | Trigger launch 技术失败 | `TriggerLaunchFailureDetected`、`TriggerLaunchFailureSpike` / `batch_trigger_launch_failed_total` | 已覆盖：低频技术失败告警 + 持续高频严重告警；排除预期限流和业务拒绝 | 消息解析、HTTP 和 runtime 失败触发；业务拒绝保留为业务结果，不升级成平台故障告警 |
 | ACCEPTED 请求未创建实例 | `TriggerStaleAcceptedWithoutInstance` / `batch_trigger_launch_stale_accepted_count`、`batch_trigger_launch_stale_accepted_oldest_age_seconds` | 已覆盖：超过配置阈值仍没有非 CREATED 实例即告警；待人工审批的 misfire/catch-up 不计入，避免把审批等待误报为投递故障 | 排查 outbox 发布、Kafka consumer、Orchestrator launch 错误和陈旧 CREATED 恢复；审批等待由独立待审批/过期链路处理；指标为全局聚合，不暴露租户标签 |
 | 请求到实例延迟 | `TriggerRequestToInstanceLatencyHigh` / `batch_trigger_launch_request_to_instance_p95_seconds` | 已覆盖：近 15 分钟至少 20 个样本且 p95 超过 30 秒持续 10 分钟告警 | 这是数据库请求创建到 job_instance 创建的端到端控制面时延；WAITING/未启动请求不进入延迟样本 |
@@ -143,7 +143,7 @@ Prometheus 规则入口：
 
 ### 2026-10-26 事件与用户路径可用性静态复核
 
-本次只静态核对 Import 到达事件生产端、HTTP/服务告警规则及现有 SLO 目录，未运行测试、promtool 或目标环境探测。确认 Import 端点目前只有通知/扫描调用计数，缺少扫描结果、最后成功时间与到达登记时延告警；当事件到达开关开启但扫描器总开关关闭时，调用会被扫描器提前忽略，端点仍返回 `triggered=true` 并计一次扫描。在途扫描会合并通知；若对应对象晚于该轮列表快照落地，本轮可能看不到，只能等待后续轮询，当前未统计合并数量或事件到登记延迟。服务可用性已有 Prometheus target/down 与聚合 5xx 规则，但未发现用户路径黑盒、通用 HTTP 延迟告警或量化可用性 SLO/error-budget burn 规则。整改和验收责任列于 [TODO Master OBS-ENV-05/06](../plans/todo-master.md)。
+本次只静态核对 Import 到达事件生产端、HTTP/服务告警规则及现有 SLO 目录，未运行测试、promtool 或目标环境探测。确认 Import 端点目前只有通知/扫描调用计数，缺少扫描结果、最后成功时间与到达登记时延告警；当事件到达开关开启但扫描器总开关关闭时，调用会被扫描器提前忽略，端点仍返回 `triggered=true` 并计一次扫描。在途扫描会合并通知；若对应对象晚于该轮列表快照落地，本轮可能看不到，需要后续轮询发现，但扫描分页可能造成饥饿，不能保证后续轮询一定发现；当前未统计合并数量或事件到登记延迟。服务可用性已有 Prometheus target/down 与聚合 5xx 规则，但未发现用户路径黑盒、通用 HTTP 延迟告警或量化可用性 SLO/error-budget burn 规则。整改和验收责任列于 [TODO Master OBS-ENV-05/06](../plans/todo-master.md)。
 
 ### 规则变更验收
 

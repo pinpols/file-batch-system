@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"regexp"
 	"testing"
 )
 
@@ -26,7 +27,7 @@ func TestExecutionStartDetailsSurviveRealHTTPTransport(t *testing.T) {
 	}))
 	defer server.Close()
 	transport := NewHTTPTransport(server.URL, WithTenantID("t1"))
-	request := RenewRequest{TenantID: "t1", WorkerID: "w1", PartitionInvocationID: "inv-current", Details: map[string]any{"executionStarted": true}}
+	request := RenewRequest{TenantID: "t1", WorkerID: "w1", PartitionInvocationID: "inv-current", Details: map[string]any{"executionStarted": true, "executionAttemptId": "attempt-1"}}
 	result, err := transport.Renew(context.Background(), "42", request)
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +36,7 @@ func TestExecutionStartDetailsSurviveRealHTTPTransport(t *testing.T) {
 		t.Fatal("丢失取消指令")
 	}
 	body := <-requests
-	expected := map[string]any{"tenantId": "t1", "workerId": "w1", "partitionInvocationId": "inv-current", "details": map[string]any{"executionStarted": true}}
+	expected := map[string]any{"tenantId": "t1", "workerId": "w1", "partitionInvocationId": "inv-current", "details": map[string]any{"executionStarted": true, "executionAttemptId": "attempt-1"}}
 	if !reflect.DeepEqual(body, expected) {
 		t.Fatalf("HTTP 开始载荷=%#v", body)
 	}
@@ -82,6 +83,15 @@ func TestExecutionStartConfirmsCurrentOwnerBeforeBusiness(t *testing.T) {
 			message := TaskDispatchMessage{TaskID: "task-1", TenantID: "t1", RuntimeAttributes: map[string]any{"partitionInvocationId": "inv-stale"}}
 			worker.dispatch(context.Background(), message)
 			worker.taskWg.Wait()
+			details, ok := platform.request["details"].(map[string]any)
+			if !ok {
+				t.Fatalf("缺少执行入口详情: %#v", platform.request)
+			}
+			attemptID, ok := details["executionAttemptId"].(string)
+			if !ok || !regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`).MatchString(attemptID) {
+				t.Fatalf("无效执行尝试标识: %#v", details["executionAttemptId"])
+			}
+			delete(details, "executionAttemptId")
 			expected := map[string]any{"tenantId": "t1", "workerId": "w1", "partitionInvocationId": "inv-current", "details": map[string]any{"executionStarted": true}}
 			if !reflect.DeepEqual(platform.request, expected) {
 				t.Fatalf("开始确认载荷 = %#v", platform.request)
@@ -100,5 +110,22 @@ func TestExecutionStartConfirmsCurrentOwnerBeforeBusiness(t *testing.T) {
 				t.Fatal("未保留取消结果")
 			}
 		})
+	}
+}
+
+func TestRedeliveredTaskReceivesNewExecutionAttemptID(t *testing.T) {
+	platform := &executionStartPlatform{FakePlatform: NewFakePlatform(), scenario: "confirmed"}
+	platform.ClaimResp = ClaimResult{PartitionInvocationID: "inv-current"}
+	worker := NewWorker(testConfig(), platform, NewFakeConsumer(nil),
+		HandlerFunc(func(*TaskContext) TaskResult { return Success(nil, "ok") }), nil, quietLogger())
+	message := TaskDispatchMessage{TaskID: "task-1", TenantID: "t1"}
+	worker.dispatch(context.Background(), message)
+	worker.taskWg.Wait()
+	first := platform.request["details"].(map[string]any)["executionAttemptId"].(string)
+	worker.dispatch(context.Background(), message)
+	worker.taskWg.Wait()
+	second := platform.request["details"].(map[string]any)["executionAttemptId"].(string)
+	if first == second {
+		t.Fatal("重投业务入口不能复用上一次执行尝试标识")
 	}
 }

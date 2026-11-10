@@ -38,11 +38,14 @@ import io.github.pinpols.batch.orchestrator.domain.command.FileGovernanceCommand
 import io.github.pinpols.batch.orchestrator.service.DispatchChannelSnapshotService;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.testing.TestContainerLabels;
+import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
+import io.github.pinpols.batch.worker.dispatchs.infrastructure.DispatchReceiptPollScheduler;
 import io.github.pinpols.batch.worker.dispatchs.infrastructure.channel.FrozenDispatchChannelResolver;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -74,6 +77,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
+import org.springframework.test.util.AopTestUtils;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -138,6 +142,12 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
 
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
+
+  @Autowired
+  private DispatchReceiptPollScheduler receiptPollScheduler;
+
+  @Autowired
+  private DispatchReceiptPollProperties receiptPollProperties;
 
   private final KafkaTemplate<String, String> kafkaTemplate;
 
@@ -401,6 +411,132 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
         .expectedMinAuditCount(1)
         .build()
         .verify();
+  }
+
+  @Test
+  @DisplayName("真实 HTTP 异步投递先保持待确认，接收方确认后推进文件与回执状态")
+  void shouldConfirmAsyncHttpDispatchOnlyAfterReceiptPolling() throws Exception {
+    String insertChannelSql = """
+        insert into batch.file_channel_config (
+          tenant_id, channel_code, channel_name, channel_type, target_endpoint,
+          auth_type, config_json, receipt_policy, timeout_seconds, enabled
+        ) values (?, ?, '异步回执端到端测试', 'API_PUSH', ?, 'NONE',
+          jsonb_build_object('receipt_poll_url', ?), 'POLLING', 10, true)
+        """;
+    String selectTaskStatusSql = """
+        select task.task_status from batch.job_task task
+        join batch.job_instance instance on instance.id = task.job_instance_id
+        where instance.tenant_id = ? and instance.dedup_key = ?
+        """;
+    String selectDispatchSql = """
+        select dispatch_status, receipt_status, receipt_code, external_request_id
+        from batch.file_dispatch_record where tenant_id = ? and file_id = ? and channel_code = ?
+        """;
+    String selectFileStatusSql =
+        "select file_status from batch.file_record where tenant_id = ? and id = ?";
+    String suffix = Long.toUnsignedString(System.nanoTime());
+    String channelCode = "async-http-" + suffix;
+    String requestId = "async-request-" + suffix;
+    String initialReceipt = "initial-" + suffix;
+    AtomicBoolean acknowledged = new AtomicBoolean();
+    AtomicInteger deliveries = new AtomicInteger();
+    AtomicInteger polls = new AtomicInteger();
+    AtomicReference<String> receivedQuery = new AtomicReference<>();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/dispatch", exchange -> {
+      if (!"HEAD".equalsIgnoreCase(exchange.getRequestMethod())) {
+        deliveries.incrementAndGet();
+        exchange.getRequestBody().readAllBytes();
+      }
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
+    server.createContext("/receipt", exchange -> {
+      polls.incrementAndGet();
+      receivedQuery.set(exchange.getRequestURI().getRawQuery());
+      byte[] body = ("{\"acknowledged\":" + acknowledged.get() + ",\"receiptCode\":\"confirmed-"
+              + suffix + "\"}")
+          .getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, body.length);
+      try (var response = exchange.getResponseBody()) {
+        response.write(body);
+      }
+    });
+    server.start();
+    boolean previousPollEnabled = receiptPollProperties.isEnabled();
+    try {
+      String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
+      String endpoint = baseUrl + "/dispatch";
+      jdbcTemplate.update(insertChannelSql, TENANT, channelCode, endpoint, baseUrl + "/receipt");
+      Path source = tempDir.resolve("async-source-" + suffix + ".json");
+      Files.writeString(source, "{\"dispatch\":\"async\"}", StandardCharsets.UTF_8);
+      Long fileId = insertGeneratedFile(
+          "async-file-" + suffix, source.getFileName().toString(), source.toString(), suffix);
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API, BIZ_DATE);
+      Map<String, Object> params = new LinkedHashMap<>();
+      params.put("fileId", fileId.toString());
+      params.put("channelCode", channelCode);
+      params.put("dispatchTarget", endpoint);
+      params.put("externalRequestId", requestId);
+      params.put("receiptCode", initialReceipt);
+      params.put("ackRequired", true);
+      launchService.launch(new LaunchRequest(
+          TENANT,
+          seed.workflowDefinitionId(),
+          BIZ_DATE,
+          TriggerType.API,
+          seed.requestId(),
+          "async-dispatch-" + suffix,
+          params));
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> {
+            String taskStatus = jdbcTemplate.queryForObject(
+                selectTaskStatusSql, String.class, TENANT, seed.dedupKey());
+            assertThat(taskStatus).isEqualTo("SUCCESS");
+          });
+      assertThat(deliveries).hasValue(1);
+      Map<String, Object> beforePoll =
+          jdbcTemplate.queryForMap(selectDispatchSql, TENANT, fileId, channelCode);
+      assertThat(beforePoll)
+          .containsEntry("dispatch_status", "SENT")
+          .containsEntry("receipt_status", "PENDING")
+          .containsEntry("receipt_code", initialReceipt)
+          .containsEntry("external_request_id", requestId);
+      String beforeStatus =
+          jdbcTemplate.queryForObject(selectFileStatusSql, String.class, TENANT, fileId);
+      assertThat(beforeStatus).isEqualTo("DISPATCHING");
+
+      receiptPollProperties.setEnabled(true);
+      DispatchReceiptPollScheduler scheduler = AopTestUtils.getTargetObject(receiptPollScheduler);
+      scheduler.poll();
+      assertThat(polls).hasValue(1);
+      assertThat(receivedQuery).hasValue("externalRequestId=" + requestId);
+      Map<String, Object> stillPending =
+          jdbcTemplate.queryForMap(selectDispatchSql, TENANT, fileId, channelCode);
+      assertThat(stillPending)
+          .containsEntry("dispatch_status", "SENT")
+          .containsEntry("receipt_status", "PENDING");
+      acknowledged.set(true);
+      scheduler.poll();
+      assertThat(polls).hasValue(2);
+      Map<String, Object> confirmed =
+          jdbcTemplate.queryForMap(selectDispatchSql, TENANT, fileId, channelCode);
+      assertThat(confirmed)
+          .containsEntry("dispatch_status", "ACKED")
+          .containsEntry("receipt_status", "SUCCESS")
+          .containsEntry("receipt_code", "confirmed-" + suffix);
+      String afterStatus =
+          jdbcTemplate.queryForObject(selectFileStatusSql, String.class, TENANT, fileId);
+      assertThat(afterStatus).isEqualTo("DISPATCHED");
+      assertThat(deliveries).hasValue(1);
+    } finally {
+      receiptPollProperties.setEnabled(previousPollEnabled);
+      server.stop(0);
+    }
   }
 
   @Test
@@ -1430,6 +1566,101 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
     assertThat(fileStatus).isEqualTo(FileStatus.GENERATED.code());
     assertThat(dispatchCount).isZero();
     assertThat(auditCount).isZero();
+  }
+
+  @Test
+  @DisplayName("HTTP 投递演练不请求接收端且不写投递记录")
+  void shouldNotCallHttpReceiver_whenDispatchDryRunCompletes() throws Exception {
+    String insertChannel = """
+        insert into batch.file_channel_config (
+            tenant_id, channel_code, channel_name, channel_type, target_endpoint, auth_type,
+            config_json, receipt_policy, timeout_seconds, enabled
+        ) values (?, ?, '演练 HTTP 渠道', 'API', ?, 'NONE',
+            jsonb_build_object('channel_type', 'API', 'channel_code', ?), 'NONE', 10, true)
+        """;
+    String selectRunStatus = """
+        select wr.run_status, ji.instance_status, task.task_status
+        from batch.trigger_request tr
+        join batch.workflow_run wr on wr.tenant_id = tr.tenant_id and wr.trigger_request_id = tr.id
+        join batch.workflow_node_run nr on nr.workflow_run_id = wr.id and nr.node_type = 'JOB'
+        join batch.job_instance ji on ji.tenant_id = wr.tenant_id and ji.id = nr.job_instance_id
+        join batch.job_task task on task.tenant_id = ji.tenant_id and task.job_instance_id = ji.id
+        where tr.tenant_id = ? and tr.request_id = ?
+        """;
+    String countDispatch = """
+        select count(*) from batch.file_dispatch_record where tenant_id = ? and file_id = ?
+        """;
+    String selectFileStatus =
+        "select file_status from batch.file_record where tenant_id = ? and id = ?";
+
+    AtomicInteger receivedRequests = new AtomicInteger();
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/dispatch", exchange -> {
+      receivedRequests.incrementAndGet();
+      exchange.sendResponseHeaders(200, -1);
+      exchange.close();
+    });
+    server.start();
+    try {
+      String endpoint = "http://127.0.0.1:" + server.getAddress().getPort() + "/dispatch";
+      URI endpointUri = new URI(endpoint);
+      try (InputStream response = endpointUri.toURL().openStream()) {
+        response.readAllBytes();
+      }
+      assertThat(receivedRequests.getAndSet(0)).isEqualTo(1);
+
+      String suffix = Long.toUnsignedString(System.nanoTime());
+      String channelCode = "e2e-http-dry-" + suffix;
+      jdbcTemplate.update(insertChannel, TENANT, channelCode, endpoint, channelCode);
+      Long fileId = insertGeneratedFile(
+          "e2e-http-dry-file-" + suffix,
+          "e2e-http-dry-file-" + suffix + ".json",
+          tempDir.resolve("e2e-http-dry-file-" + suffix + ".json").toString(),
+          "e2e-http-dry-trace-" + suffix);
+      LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+          new E2eScenarioFixture.LaunchPreparationSpec(
+                  jdbcTemplate, TENANT, "DISPATCH", "dispatch", TriggerType.API)
+              .dryRun(true)
+              .bizDate(BIZ_DATE));
+      Map<String, Object> params = new LinkedHashMap<>();
+      params.put("fileId", fileId.toString());
+      params.put("channelCode", channelCode);
+      params.put("dispatchTarget", endpoint);
+      params.put("externalRequestId", "e2e-http-dry-request-" + suffix);
+      params.put("ackRequired", false);
+      params.put("forceRetry", false);
+      LaunchRequest request = LaunchRequest.builder()
+          .tenantId(TENANT)
+          .workflowDefinitionId(seed.workflowDefinitionId())
+          .bizDate(BIZ_DATE)
+          .triggerType(TriggerType.API)
+          .requestId(seed.requestId())
+          .traceId("e2e-http-dry-dispatch-" + suffix)
+          .params(params)
+          .dryRun(true)
+          .build();
+      launchService.launch(request);
+      e2eOutboxPublishSupport.publishAllPending(TENANT);
+      await()
+          .atMost(Duration.ofSeconds(120))
+          .pollInterval(Duration.ofMillis(200))
+          .untilAsserted(() -> {
+            Map<String, Object> run =
+                jdbcTemplate.queryForMap(selectRunStatus, TENANT, seed.requestId());
+            assertThat(run)
+                .containsEntry("run_status", "SUCCESS_DRY_RUN")
+                .containsEntry("instance_status", "SUCCESS_DRY_RUN")
+                .containsEntry("task_status", "SUCCESS");
+          });
+      Long dispatchCount = jdbcTemplate.queryForObject(countDispatch, Long.class, TENANT, fileId);
+      String fileStatus =
+          jdbcTemplate.queryForObject(selectFileStatus, String.class, TENANT, fileId);
+      assertThat(receivedRequests).hasValue(0);
+      assertThat(dispatchCount).isZero();
+      assertThat(fileStatus).isEqualTo(FileStatus.GENERATED.code());
+    } finally {
+      server.stop(0);
+    }
   }
 
   @Test

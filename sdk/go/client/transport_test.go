@@ -292,6 +292,29 @@ func TestHTTPTransport_ClaimDecodesPartitionInvocationID(t *testing.T) {
 	}
 }
 
+func TestHTTPTransport_DeactivateSendsWorkerTenantBody(t *testing.T) {
+	var received map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/internal/workers/w1/deactivate" {
+			http.Error(w, "unexpected request", http.StatusBadRequest)
+			return
+		}
+		if err := json.NewDecoder(r.Body).Decode(&received); err != nil {
+			http.Error(w, "missing JSON body", http.StatusBadRequest)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+	tr := NewHTTPTransport(srv.URL, WithHTTPClient(srv.Client()), WithTenantID("t1"))
+	if err := tr.Deactivate(context.Background(), "w1"); err != nil {
+		t.Fatalf("Deactivate: %v", err)
+	}
+	if received["tenantId"] != "t1" || received["workerCode"] != "w1" {
+		t.Fatalf("deactivate body = %v", received)
+	}
+}
+
 // Retry exhaustion: always 500 -> RetryExhaustedError after all attempts.
 func TestHTTPTransport_RetryExhausted(t *testing.T) {
 	var calls int32

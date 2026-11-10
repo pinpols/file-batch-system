@@ -146,12 +146,17 @@ Workflow 关系和 DAG 配置示例见 [Workflow 依赖指南](../architecture/w
 | 表 | 职责 |
 |---|---|
 | `file_record` | 文件身份、到达、校验、对象存储和生命周期权威记录 |
+| `import_ingress_scan_storage_lease`、`import_ingress_scan_state`、`import_ingress_scan_object` | V377 导入入口按部署与存储范围维护的分页周期、租约围栏和对象版本观察；可重建的热协调状态，不保存清单全文，也不替代文件事实记录 |
+| `import_ingress_ownership`、`import_ingress_ownership_binding` | [V382](../../db/migration/V382__declare_import_ingress_ownership.sql) 中 Import 与对象对账共用的扫描范围及租户目录、权威清单和渠道绑定；退休范围与停用的历史清单绑定继续受保护，明确释放后才交还普通对账。两表强制 RLS，仅经授权的可信角色读取；声明须在文件写入前完成，切换步骤见[入口归属管理](../../scripts/db/README.md) |
+| `file_governance_reconcile_cursor` | [V383](../../db/migration/V383__persist_file_governance_reconcile_cursor.sql) 按存储和对账前缀保存有界前向扫描与回访位置、预算及并发版本；只记录对账进度，不替代文件状态 |
 | `file_channel_config`、`file_channel_health` | 文件通道配置和探活结果 |
 | `file_template_config` | 文件格式、校验、映射和处理目标配置 |
 | 系统固定Pipeline目录 | 文件执行身份和阶段来自 `SystemPipelineCatalog` 及 Job 参数 |
 | `pipeline_definition`、`pipeline_step_definition`（已退役） | 旧租户可编辑 Pipeline 定义与步骤；现行运行从系统目录和 Job 参数选取固定阶段，旧定义没有执行消费者。[V347](../../db/migration/V347__retire_unused_platform_tables.sql) 仅在空表时删除两表及运行表的旧定义 ID，不迁移历史数据或保留兼容入口 |
 | `pipeline_instance`、`pipeline_step_run`、`pipeline_progress` | 文件链路运行态、步骤结果和续跑位点 |
 | `file_dispatch_record`、`file_error_record`、`file_audit_log` | 下游投递回执、坏记录明细和文件治理审计 |
+
+导入扫描范围可覆盖多个租户，因此这三张协调表不以单个 `tenant_id` 表示访问范围；对象键和清单可能包含租户信息。三表启用并强制 RLS，仅迁移账号及通过[专用授权脚本](../../scripts/db/import-ingress-scan-role.sql)配置的可信 Import 角色可跨范围访问。对象行按完整扫描周期清理不再发现的条目，不进入冷归档；停用或变更扫描范围后，历史范围状态不会仅凭时间自动删除，须另行确认范围后处置。文件真实性仍以 `file_record` 和对象存储为准。
 
 `pipeline_progress` 的热父关系由 [V292](../../db/migration/V292__protect_pipeline_checkpoint_parent_lifecycle.sql) 的租户复合 FK 保护，父删除 RESTRICT。正式归档先锁父及位点、保全并核对冷副本，再显式删热子和父；`archive.pipeline_progress_archive` 保留独立历史身份，不引用热父表。应用位点写入0行必须失败，补偿删除0行仍为幂等；完整语义见 [ADR-038](../architecture/adr/ADR-038-platform-worker-checkpoint-resume.md)。
 

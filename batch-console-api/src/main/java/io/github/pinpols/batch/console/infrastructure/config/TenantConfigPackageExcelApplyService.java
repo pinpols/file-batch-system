@@ -57,6 +57,7 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionU
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowEdgeUpsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowNodeUpsertParam;
+import io.github.pinpols.batch.console.domain.workflow.validation.FileArrivalChannelNodeValidation;
 import io.github.pinpols.batch.console.infrastructure.excel.BatchWindowExcelRowParser;
 import io.github.pinpols.batch.console.infrastructure.excel.BatchWindowExcelRowParser.WindowRow;
 import io.github.pinpols.batch.console.infrastructure.excel.BusinessCalendarExcelRowParser;
@@ -131,7 +132,9 @@ public class TenantConfigPackageExcelApplyService {
       int jobInserted,
       int jobUpdated,
       int workflowInserted,
-      int workflowUpdated) {}
+      int workflowUpdated,
+      int jobMonitoringPoliciesApplied,
+      int workflowMonitoringPoliciesApplied) {}
 
   public ApplyCounts applyAll(PackageValidationResult result, ApplyContext ctx) {
     ApplyStats resourceQueueStats = applyResourceQueues(result.validResourceQueues(), ctx);
@@ -165,7 +168,9 @@ public class TenantConfigPackageExcelApplyService {
         jobStats.inserted(),
         jobStats.updated(),
         wfStats.inserted(),
-        wfStats.updated());
+        wfStats.updated(),
+        result.validJobMonitoringPolicies().size(),
+        result.validWorkflowMonitoringPolicies().size());
   }
 
   private void invalidateRuntimeCaches(
@@ -1118,6 +1123,7 @@ public class TenantConfigPackageExcelApplyService {
       String mergedNodeParams = mergeNodeParams(requestedNodeParams, existingNodeParams);
       String normalizedNodeParams =
           TenantConfigReferenceResolver.normalizeConfigReferences(mergedNodeParams);
+      FileArrivalChannelNodeValidation.validate(p.getNodeType(), normalizedNodeParams);
       p.setNodeParams(normalizedNodeParams); // empty-check: allow - Sonar S2259
       String configuredEnabled = values.get(COL_ENABLED);
       boolean existingEnabled = EmptyChecks.isNull(existing) || existing.getEnabled();

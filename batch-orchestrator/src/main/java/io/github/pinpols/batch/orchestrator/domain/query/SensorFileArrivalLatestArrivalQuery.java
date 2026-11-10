@@ -10,8 +10,10 @@ public record SensorFileArrivalLatestArrivalQuery(
     String tenantId,
     String namePattern,
     String sourceType,
+    String channelCode,
     OffsetDateTime since,
     LocalDate bizDate,
     String fileGroupCode,
     Long workflowDefinitionId,
+    String storageId,
     boolean requireCompleteGroup) {}

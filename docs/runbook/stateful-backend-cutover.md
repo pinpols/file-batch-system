@@ -85,7 +85,13 @@ Redis host/port/database、Sentinel master/nodes 或平台 JDBC URL 变化也视
 每个 `spring.application.name` 独立登记。`disabled` 是明确 backend 状态，因此启用、禁用、
 PG/SQLite 互切都必须使用新 token。
 
-切换或关闭前先停止对应 Worker 写入，确保源 Outbox 没有待发送记录。
+切换或关闭前先停止新任务进入并等待已有任务完成，保留可用的 Outbox 投递器处理已产生的回报，
+确认源 Outbox 排空后再停止相关 Worker。平台 PG 的表可能被多个 Worker 共用；SQLite 需要逐个
+核对各实例实际挂载的文件。
+
+旧版本可能在 `enabled=false` 时仍因组件扫描创建 Outbox。修复后，相同配置会真正停止写入和轮询，
+而后端守护此前按配置登记的仍是 `disabled`，不会把这次行为修正识别成一次配置切换。因此即使
+不更改配置或 cutover ID，升级前也必须按下列查询检查旧记录；不能仅凭开关为 false 判断队列为空。
 
 PLATFORM_PG：
 
@@ -104,6 +110,11 @@ sqlite3 /absolute/path/worker-report-outbox.db \
 
 `NEW`、`PUBLISHING`、`GIVE_UP` 均须处理到 0。当前没有 PG/SQLite 自动搬运器；如无法排空，
 应取消切换。完成排空后，再同时修改 enabled/storage/path 和新 token。
+
+若旧版配置为 false 却发现记录，先确认实际使用的存储及旧版投递器是否运行，再按上面的停接新任务、
+等待在途完成和排空步骤处理。`PUBLISHING` 的陈旧恢复需要可用的投递器；`GIVE_UP` 不会自行重投，
+须根据任务、执行身份及业务结果调查并按获授权的恢复流程处置。若无法确认投递状态或完成排空，
+暂停升级，保留原存储与证据；不要直接删除记录、改写状态或盲目重执行业务。
 
 ## 5. Object Storage
 

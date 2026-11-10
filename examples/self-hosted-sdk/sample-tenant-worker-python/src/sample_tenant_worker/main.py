@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import signal
 
 from batch_worker_sdk import (
     BatchPlatformClientConfig,
@@ -53,9 +54,13 @@ async def atomic_base_echo(ctx: SdkTaskContext) -> SdkTaskResult:
     演示用;平台真实 dispatch 不会以它们为 workerType。"""
     delay_ms = int(os.environ.get("BATCH_SDK_CONTROL_E2E_DELAY_MS", "0"))
     if delay_ms > 0 and ctx.cancel_signal is not None:
-        logger.info("control-e2e handler started taskId=%s delayMs=%d", ctx.task_id, delay_ms)
+        logger.info(
+            "control-e2e handler started taskId=%s delayMs=%d", ctx.task_id, delay_ms
+        )
         try:
-            await asyncio.wait_for(ctx.cancel_signal.wait_cancelled(), timeout=delay_ms / 1000)
+            await asyncio.wait_for(
+                ctx.cancel_signal.wait_cancelled(), timeout=delay_ms / 1000
+            )
         except TimeoutError:
             pass
         else:
@@ -84,7 +89,9 @@ async def main() -> None:
     )
 
     try:
-        from batch_worker_sdk.client.client import BatchPlatformClient  # type: ignore[attr-defined]
+        from batch_worker_sdk.client.client import (
+            BatchPlatformClient,  # type: ignore[attr-defined]
+        )
     except ImportError:
         logger.warning(
             "BatchPlatformClient (Lane T) not yet available — exiting after registration smoke."
@@ -94,8 +101,16 @@ async def main() -> None:
     client = BatchPlatformClient(cfg)
     for h in handlers:
         client.register_handler(h)
-    await client.start()
+    stop_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(signal.SIGTERM, stop_event.set)
+    loop.add_signal_handler(signal.SIGINT, stop_event.set)
     try:
-        await asyncio.Event().wait()  # 阻塞直到 SIGINT
+        await client.start()
+        try:
+            await stop_event.wait()
+        finally:
+            await client.stop(timeout=30)
     finally:
-        await client.stop(timeout=30)
+        loop.remove_signal_handler(signal.SIGTERM)
+        loop.remove_signal_handler(signal.SIGINT)

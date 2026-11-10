@@ -52,25 +52,31 @@ public class TenantConfigReferenceResolver {
     try {
       Object parsed = JsonUtils.fromJson(raw, Object.class);
       boolean[] changed = {false};
-      Object normalized = normalizeReferenceValues(parsed, changed);
+      Object normalized = normalizeReferenceValues(parsed, changed, false);
       return changed[0] ? JsonUtils.toJson(normalized) : raw;
     } catch (IllegalArgumentException ignored) {
       return raw;
     }
   }
 
-  private static Object normalizeReferenceValues(Object value, boolean[] changed) {
+  private static Object normalizeReferenceValues(
+      Object value, boolean[] changed, boolean fileArrivalSpec) {
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> normalized = new LinkedHashMap<>();
       map.forEach((key, entryValue) -> {
         String name = EmptyChecks.isNull(key) ? "" : key.toString();
+        boolean exactFileArrivalChannel = fileArrivalSpec && "channelCode".equals(name);
         if (entryValue instanceof String reference
+            && !exactFileArrivalChannel
             && (TEMPLATE_KEYS.contains(name) || CHANNEL_KEYS.contains(name))) {
           String canonical = CodeNormalizer.toConfigFormOrNull(reference);
           normalized.put(name, canonical);
           changed[0] |= !reference.equals(canonical);
         } else {
-          normalized.put(name, normalizeReferenceValues(entryValue, changed));
+          boolean nestedFileArrivalSpec =
+              "sensor_spec".equals(name) && "FILE_ARRIVAL".equals(map.get("sensor_type"));
+          normalized.put(
+              name, normalizeReferenceValues(entryValue, changed, nestedFileArrivalSpec));
         }
       });
       return normalized;
@@ -78,7 +84,7 @@ public class TenantConfigReferenceResolver {
     if (value instanceof List<?> list) {
       List<Object> normalized = new ArrayList<>(list.size());
       for (Object item : list) {
-        normalized.add(normalizeReferenceValues(item, changed));
+        normalized.add(normalizeReferenceValues(item, changed, false));
       }
       return normalized;
     }

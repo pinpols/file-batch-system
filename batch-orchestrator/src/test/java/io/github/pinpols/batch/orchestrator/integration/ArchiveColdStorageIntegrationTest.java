@@ -788,7 +788,8 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
     String stagingBatchKey = "process-" + taskId;
     String updateTaskStagingIdentitySql = """
         update batch.job_task
-        set process_staging_generation_id = ?, process_staging_batch_key = ?
+        set process_staging_generation_id = ?, process_staging_batch_key = ?,
+            execution_attempt_id = 'archive-attempt-id'
         where tenant_id = ? and id = ?
         """;
     jdbcTemplate.update(
@@ -933,6 +934,13 @@ class ArchiveColdStorageIntegrationTest extends AbstractIntegrationTest {
         values (?, ?, 'COMPLETED_LATE')
         """;
     jdbcTemplate.update(insertMonitoringClaimSql, tenantId, instanceId);
+
+    String setFileChannelSql = """
+        update batch.file_record set arrival_channel_code = ?, legacy_channel_fallback = ?
+         where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(setFileChannelSql, "bank_in", false, tenantId, stepFileId);
+    jdbcTemplate.update(setFileChannelSql, null, true, tenantId, compensationFileId);
 
     String jobInstanceSnapshot = rowSnapshot("batch", "job_instance", instanceId);
     String partitionSnapshot = rowSnapshot("batch", "job_partition", partitionId);

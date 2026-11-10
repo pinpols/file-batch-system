@@ -624,6 +624,8 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           .fileTemplateUpdated(counts.fileTemplateUpdated())
           .workflowInserted(counts.workflowInserted())
           .workflowUpdated(counts.workflowUpdated())
+          .jobMonitoringPoliciesApplied(counts.jobMonitoringPoliciesApplied())
+          .workflowMonitoringPoliciesApplied(counts.workflowMonitoringPoliciesApplied())
           .build();
     } finally {
       if (!completionRegistered) {

@@ -224,6 +224,64 @@ test("lifecycle: stop drains in-flight then deactivates (order)", async () => {
   assert.equal(lc.inFlightCount, 0, "drained");
 });
 
+test("lifecycle: concurrent stop calls drain and deactivate only once", async () => {
+  const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
+  platform.feedMessages({ taskId: "task-concurrent-stop", tenantId: "tenant-A" });
+  let release: () => void = () => {};
+  const handler: TaskHandler = {
+    execute: async () =>
+      new Promise((resolve) => {
+        release = () => resolve(taskSuccess());
+      }),
+  };
+  const lifecycle = new WorkerLifecycle({
+    config: baseConfig,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler,
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+
+  await lifecycle.start();
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  assert.equal(lifecycle.inFlightCount, 1);
+  const first = lifecycle.stop(300);
+  const second = lifecycle.stop(300);
+  release();
+  await Promise.all([first, second]);
+  const ops = platform.transport.calls.map((call) => call.op);
+  assert.equal(platform.transport.countOf("deactivate"), 1);
+  assert.ok(ops.indexOf("report") < ops.indexOf("deactivate"));
+});
+
+test("下线请求失败后再次停止会重新尝试下线", async () => {
+  let attempts = 0;
+  const platform = new FakePlatform({
+    deactivate: () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error("下线请求暂时失败");
+    },
+  });
+  const lifecycle = new WorkerLifecycle({
+    config: baseConfig,
+    transport: platform.transport,
+    consumer: platform.consumer,
+    handler: { execute: async () => taskSuccess() },
+    logger: silentLogger,
+    installSignalHandlers: false,
+  });
+
+  await lifecycle.start();
+  await lifecycle.stop(100);
+  assert.equal(platform.transport.countOf("deactivate"), 1);
+  const firstRetry = lifecycle.stop(100);
+  const secondRetry = lifecycle.stop(100);
+  await Promise.all([firstRetry, secondRetry]);
+  await lifecycle.stop(100);
+  assert.equal(platform.transport.countOf("deactivate"), 2);
+});
+
 test("lifecycle: refuses new messages once draining", async () => {
   const platform = new FakePlatform({ claim: { effectiveConfig: {} } });
   const handler: TaskHandler = { execute: async () => taskSuccess() };

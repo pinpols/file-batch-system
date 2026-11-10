@@ -54,6 +54,8 @@ public final class PlatformWorkerRoleDrill {
   private static final String CONTROL_PLANE_SCRIPT = "scripts/db/platform-control-plane-roles.sql";
   // Console 跨租户转发缓存失效队列依赖该脚本创建的角色专属 RLS 策略。
   private static final String CONFIG_CACHE_SCRIPT = "scripts/db/config-cache-invalidation-role.sql";
+  // Import 入口扫描协调状态跨租户，需要单独设置该角色的 RLS 策略。
+  private static final String IMPORT_SCAN_SCRIPT = "scripts/db/import-ingress-scan-role.sql";
   private static final String CONTROL_PLANE_REPORT = "control-plane";
   private static final String PERMISSION_DENIED = "42501";
   private static final String IN_FAILED_TRANSACTION = "25P02";
@@ -205,6 +207,9 @@ public final class PlatformWorkerRoleDrill {
       if (target.controlPlane()) {
         runScript(
             postgres, CONFIG_CACHE_SCRIPT, List.of("-v", "console_role=" + roles.get("console")));
+      } else if ("import".equals(target.worker())) {
+        runScript(
+            postgres, IMPORT_SCAN_SCRIPT, List.of("-v", "import_role=" + roles.get("import")));
       }
     } catch (IOException failure) {
       throw new IllegalStateException("受限角色演练授权失败", failure);

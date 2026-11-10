@@ -9,6 +9,8 @@ import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayCatchupControlService;
 import io.github.pinpols.batch.orchestrator.application.service.batchday.BatchDayCatchupPreviewService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.ExternalEventExpectationService;
+import io.github.pinpols.batch.orchestrator.application.service.batchday.FileGroupExpectationService;
 import io.github.pinpols.batch.orchestrator.application.service.calendar.CalendarDependencyWaitGovernanceService;
 import io.github.pinpols.batch.orchestrator.domain.entity.CalendarDependencyWaitEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.SensorFileArrivalLatestArrivalQuery;
@@ -83,6 +85,12 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
+  @Autowired
+  private ExternalEventExpectationService externalEventExpectationService;
+
+  @Autowired
+  private FileGroupExpectationService fileGroupExpectationService;
+
   private final DataSource dataSource;
 
   private final SensorFileArrivalMapper sensorFileArrivalMapper;
@@ -154,6 +162,97 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(deleteBatchDayInstanceSql, TENANT);
     jdbcTemplate.update(deleteCalendarHolidaySql, TENANT);
     jdbcTemplate.update(deleteBusinessCalendarSql, TENANT);
+  }
+
+  @Test
+  @DisplayName("首次开日按日历物化文件组和外部事件预期，重复扫描不重复生成")
+  void shouldMaterializeFileAndEventExpectationsWhenBusinessDayFirstOpens() {
+    final String insertWorkflowSql = """
+        insert into batch.workflow_definition (tenant_id, workflow_code, workflow_name, calendar_code, enabled)
+        values (?, ?, ?, ?, true) returning id
+        """;
+    final String selectDaySql = """
+        select day_status from batch.batch_day_instance
+        where tenant_id = ? and calendar_code = ? and biz_date = ?
+        """;
+    final String selectOccurrencesSql = """
+        select source_type, source_key, occurrence_status, trigger_request_id
+        from batch.expected_work_occurrence
+        where tenant_id = ? and calendar_code = ? and biz_date = ? and workflow_definition_id = ?
+        order by source_type
+        """;
+    final String deleteOccurrencesSql = """
+        delete from batch.expected_work_occurrence where tenant_id = ? and workflow_definition_id = ?
+        """;
+    final String deleteEventDefinitionSql = """
+        delete from batch.external_event_expectation_definition
+        where tenant_id = ? and workflow_definition_id = ?
+        """;
+    final String deleteFileDefinitionSql = """
+        delete from batch.file_group_expectation_definition
+        where tenant_id = ? and workflow_definition_id = ?
+        """;
+    final String deleteWorkflowSql = """
+        delete from batch.workflow_definition where tenant_id = ? and id = ?
+        """;
+
+    String suffix = UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+    String calendarCode = "cal_expected_" + suffix;
+    String workflowCode = "wf_expected_" + suffix;
+    String fileGroupCode = "incoming_" + suffix;
+    String eventCode = "settled_" + suffix;
+    insertCalendar(calendarCode, "Asia/Shanghai");
+    Long workflowId = jdbcTemplate.queryForObject(
+        insertWorkflowSql, Long.class, TENANT, workflowCode, workflowCode, calendarCode);
+    try {
+      fileGroupExpectationService.configure(new FileGroupExpectationService.DefinitionRequest(
+          TENANT,
+          calendarCode,
+          workflowId,
+          fileGroupCode,
+          LocalTime.of(9, 0),
+          LocalTime.of(10, 0),
+          true));
+      externalEventExpectationService.configure(
+          new ExternalEventExpectationService.DefinitionRequest(
+              TENANT,
+              calendarCode,
+              workflowId,
+              eventCode,
+              LocalTime.of(9, 15),
+              LocalTime.of(10, 15),
+              true));
+
+      Instant now = BIZ.atTime(23, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant();
+      scheduler.openDueBatchDays(now);
+
+      String dayStatus =
+          jdbcTemplate.queryForObject(selectDaySql, String.class, TENANT, calendarCode, BIZ);
+      List<Map<String, Object>> occurrences =
+          jdbcTemplate.queryForList(selectOccurrencesSql, TENANT, calendarCode, BIZ, workflowId);
+      assertThat(dayStatus).isEqualTo("OPEN");
+      assertThat(occurrences).hasSize(2);
+      assertThat(occurrences.get(0))
+          .containsEntry("source_type", "EXTERNAL_EVENT")
+          .containsEntry("source_key", eventCode)
+          .containsEntry("occurrence_status", "EXPECTED")
+          .containsEntry("trigger_request_id", null);
+      assertThat(occurrences.get(1))
+          .containsEntry("source_type", "FILE_GROUP")
+          .containsEntry("source_key", fileGroupCode)
+          .containsEntry("occurrence_status", "EXPECTED")
+          .containsEntry("trigger_request_id", null);
+
+      scheduler.openDueBatchDays(now.plusSeconds(1));
+      List<Map<String, Object>> repeatedScanOccurrences =
+          jdbcTemplate.queryForList(selectOccurrencesSql, TENANT, calendarCode, BIZ, workflowId);
+      assertThat(repeatedScanOccurrences).isEqualTo(occurrences);
+    } finally {
+      jdbcTemplate.update(deleteOccurrencesSql, TENANT, workflowId);
+      jdbcTemplate.update(deleteEventDefinitionSql, TENANT, workflowId);
+      jdbcTemplate.update(deleteFileDefinitionSql, TENANT, workflowId);
+      jdbcTemplate.update(deleteWorkflowSql, TENANT, workflowId);
+    }
   }
 
   @Test

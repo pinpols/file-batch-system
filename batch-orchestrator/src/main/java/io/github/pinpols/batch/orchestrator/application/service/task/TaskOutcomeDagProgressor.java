@@ -146,6 +146,12 @@ final class TaskOutcomeDagProgressor {
         ctx.workflowRun(), nextNode.nodeCode(), sourcePayload)) {
       return;
     }
+    WorkflowNodeRunEntity existingEnd = workflowMappers.workflowNodeRunMapper.selectLatestForUpdate(
+        ctx.workflowRun().getId(), nextNode.nodeCode());
+    if (EmptyChecks.isNotNull(existingEnd)
+        && WorkflowNodeRunStatus.SUCCESS.code().equals(existingEnd.getNodeStatus())) {
+      return;
+    }
     nodeRunRecorder.recordStart(
         ctx.workflowRun().getId(), nextNode.nodeCode(), nextNode.nodeType(), ctx.finishedAt());
     NodeRunOutcome endOutcome = NodeRunOutcome.builder()

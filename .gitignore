@@ -34,6 +34,7 @@ target/security-scan-report/
 .factorypath
 .settings/
 .playwright-cli/
+.playwright-mcp/
 nbproject/private/
 .recommenders/
 .sts4-cache/

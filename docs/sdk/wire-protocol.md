@@ -36,6 +36,8 @@ SDK 在 CLAIM 成功并确认当前执行入口后调用业务，REPORT 由 Orch
 | `POST /internal/tasks/{id}/renew` | SDK → orch | 业务入口确认及周期续租 | 入口一次，周期默认 60s | 各语言派发器/执行桥与 `LeaseRenewalScheduler` | `TaskController.renew()` |
 | Kafka `batch.task.dispatch.<taskType>[.<route>][.node.<workerId>]` | orch → SDK | orch 投递 → SDK poll | 持续 | `KafkaTaskConsumer.poll()` | producer in `*OrchestratorService` |
 
+`deactivate` 必须携带 JSON 请求体；SDK 可发送 `tenantId` 和 `workerCode`，平台按认证身份核验租户并依据路径中的 Worker 编码下线。无请求体会被控制器拒绝，不能视为已主动下线；心跳超时后的离线属于回退路径。
+
 注册体中的可选 `maxConcurrent` 是 Worker 本地执行器的物理并发上限。五语言 SDK 的默认
 注册路径都会从 `maxConcurrentTasks` 上报该值，平台据此初始化或重注册校准
 `worker_registry.max_concurrent`；旧 SDK 未携带时继续使用平台默认值。周期心跳不更新该字段，
@@ -58,16 +60,29 @@ CLAIM 返回完整 `EffectiveTaskConfig`：身份/任务载荷取自持久化任
 
 可提交的任务消息必须先取得持久化 CLAIM 归属或明确的幂等/终结处置。仅创建后台协程、加入本地队列,
 不能确认消费。认领失败且请求未落库时不存在可供超时恢复的租约, 必须保留原 offset 的重读入口。
-Python 消息入口等待 CLAIM 屏障后返回, 业务处理仍异步; 并发重复消息共享认领结果。
+Python 消息入口等待 CLAIM 屏障后返回, 业务处理仍异步; 并发重复消息共享认领结果。Go 和 TypeScript 在 CLAIM 前占用本地任务身份；同任务仍在认领或执行时，重复投递暂不认领且以 `withhold` 保留 offset，不覆盖原任务的续租及取消信号。TypeScript 同样等待 CLAIM 结果后决定 offset：认领失败保留，任务不存在的 404 仍按既有语义提交跳过。
+
+五语言遇到 `withhold` 时只暂缓受影响分区，约两秒后从未确认位置重试，其他分区可继续；后续提交不得跨过未确认消息。容量或平台状态触发的暂停仍按各适配器的容量控制执行，不由暂扣重试提前解除。重读不承诺首次任务完成后立即成功，业务必须能够处理重投。
+
+五语言的新消费组在没有已提交位置时默认从 Kafka 仍保留的最早位置开始；这可能重读保留期内的历史派单，应保留稳定的消费组身份并依靠租户校验、CLAIM 和业务幂等处理重投。Python、Rust、TypeScript 在执行业务前将安全读取位置固定到当前消息（或本批首条）自身；提交值不是 `offset + 1`，不表示确认该消息，保存失败时不启动该消息的业务。TypeScript 显式配置 `fromBeginning:false` 时仍选择最新位置；该兼容配置下首次位置保存失败并发生转交可能漏读，不适用于要求保留该窗口消息的场景。
+
+Go 的分区分配变更后从 broker 已提交位置恢复，旧代际不能提交新位置；Java、Python 在分区撤销时清除相应暂扣状态；TypeScript 在重新分配时清除旧提交屏障，Rust 按实际分配和 broker 已提交位置协调。Java 消费入口等待 CLAIM 结果后才决定是否提交，业务继续在线程池执行；默认单次 poll 一条，以免批量串行认领等待累积超过消费组时限。极端自定义超时和重试配置仍须结合 poll 时限评估。
+Go 和 TypeScript 在执行开始确认返回后检查停机状态；如果此时已观察到停机，便不进入业务处理，未进入业务的任务由服务端租约恢复。已进入的处理仍按停机窗口排空；该检查不提供停机与业务入口之间严格线性化的承诺。
+Go 与 TypeScript 进入停机状态后，即使先前发起的 CLAIM 随后成功，也不启动新业务且保留 offset，由租约回收处理；Go 的排空等待同时计入尚在认领的派发。
+两者处理迟到的续租拒绝时，只撤销发出该续租的本地执行登记；同一 taskId 随后已登记的另一执行不受旧响应影响。
 
 容量背压必须保留已经取出的消息, 不能仅 Pause 后继续拉取并提交后续 offset。Go Worker 在当前记录处
 等待既有低水位条件, 恢复后优先处理该记录; 停机退出等待并保留未提交状态。
 
 ### 实际执行入口计时
 
-Job 的 `started_at` 保留派发时间；`execution_started_at` 由执行入口确认首次写入。SDK 在执行线程或业务协程即将调用处理器时，向原 `POST /internal/tasks/{id}/renew` 提交当前租户、Worker、CLAIM 返回的当前 `partitionInvocationId`，并携带 `details: {"executionStarted": true}`。认领成功、消息入队或等待执行名额均不能提前提交该标记。无当前响应身份时，仅按该 SDK 已支持的非分区任务兼容规则处理，不能用旧消息身份覆盖 CLAIM 当前身份。
+Job 的 `started_at` 保留派发时间；`execution_started_at` 由执行入口确认首次写入。SDK 在执行线程或业务协程即将调用处理器时，向原 `POST /internal/tasks/{id}/renew` 提交当前租户、Worker、CLAIM 返回的当前 `partitionInvocationId`，并携带 `details: {"executionStarted": true, "executionAttemptId": "<本次尝试标识>"}`。每次进入业务的尝试生成一个新的随机标识；同一次入口确认的传输重试复用相同请求和标识。不能使用 taskId、traceId、partitionInvocationId 或 Kafka 消息身份代替。认领成功、消息入队或等待执行名额均不能提前提交该标记。无当前响应身份时，仅按该 SDK 已支持的非分区任务兼容规则处理，不能用旧消息身份覆盖 CLAIM 当前身份。
 
-服务端先确认租约及当前所有者，再记录首次入口。开始确认被拒绝、传输失败或响应未知时，SDK 不调用业务处理器，也不将其转换为业务失败 REPORT；原租约恢复机制继续负责收敛。明确返回取消指令时不进入业务，并通过既有取消结果路径收敛任务。续租的 HTTP 409 表示租约失效，不能套用 CLAIM 的幂等成功语义。
+现有 SDK 的 renew 默认不做内部退避重试；上述重用规则约束同一确认请求的传输重试，并不表示已启用额外重试。确认结果未知时由租约恢复，不能重新生成标识后继续执行同一次业务。
+
+服务端先确认租约及当前所有者，在同一 invocation 内持久确认首次执行尝试：同一标识的确认请求可幂等重试，不同标识被拒绝；租约回收后的新 invocation 可以确认新的尝试。开始确认被拒绝、传输失败或响应未知时，SDK 不调用业务处理器，也不将其转换为业务失败 REPORT；若服务端已提交但所有响应均丢失，后续不同尝试需等待原租约回收，再由新 invocation 恢复。明确返回取消指令时不进入业务，并通过既有取消结果路径收敛任务。续租的 HTTP 409 表示租约失效或执行尝试不匹配，不能套用 CLAIM 的幂等成功语义。
+
+升级时先应用 V379 并升级所有 Orchestrator，再升级内置 Worker 和 SDK。旧客户端仍可不发送 `executionAttemptId`，保留原有兼容行为，但不具备该执行尝试围栏；旧 Orchestrator 会忽略新字段，混版和回滚至旧 Orchestrator 时不能保证防止重复执行。迁移同时扩展任务热表与归档表，版本回退不应直接删列。此围栏约束同一 invocation 的执行入口，不替代外部副作用自身的幂等性，也不保证所有故障下恰好执行一次。
 
 计时信号与 `non-idempotent-started` 的外部副作用证据独立：安全 GET、带业务幂等键的处理和普通业务同样需要执行计时，但不能因此被标为非幂等动作。Java、Go、Python、TypeScript 的默认派发器已接入；Rust 自定义执行桥应在 CLAIM 载荷应用到 `TaskContext` 后使用 `execute_after_start_confirmation`，并分别处理执行结果、取消结果和控制面错误，见 [Rust 接入说明](../../sdk/rust/README.md)。这项改造不意味着通用 Replay 能力已经开放。
 
@@ -174,6 +189,8 @@ SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
   → executor.awaitTermination (timeout 60%)
   → ──POST /deactivate──► orch   DB status=OFFLINE
 ```
+
+TypeScript SDK 中并发调用 `stop` 时复用首次停止过程及其超时设置，避免重复执行下线；如果下线请求失败，后续调用可再次尝试。
 
 ## 5. 配置与时序对齐(运维必读)
 

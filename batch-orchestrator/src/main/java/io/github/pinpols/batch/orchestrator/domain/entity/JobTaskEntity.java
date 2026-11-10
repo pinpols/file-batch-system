@@ -23,6 +23,9 @@ public class JobTaskEntity extends AbstractLocalizedErrorEntity implements State
   private Long version;
   private String taskPayload;
 
+  /** 当前认领内已确认的执行尝试标识；重派后的新认领会清空。 */
+  private String executionAttemptId;
+
   /**
    * ORCH-P3-3 派单期生效参数快照(descriptor.defaults &lt; default_params &lt; request.params 合并后);审计/排障用, 与
    * {@code taskPayload}(投递 worker 的 wire 载荷,含运行态注入)解耦。JSON 文本,mapper {@code ::jsonb} 入库。敏感凭据禁入。

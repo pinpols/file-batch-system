@@ -909,6 +909,7 @@
             "batch-console-api/src/main/resources/mapper/DailyProgressMapper.xml",
             "batch-console-api/src/main/resources/mapper/JobInstanceMapper.xml",
             "batch-console-api/src/main/resources/mapper/PendingCatchUpMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowRunMapper.xml",
             "batch-console-api/src/main/resources/mapper/WorkflowTriggerReceiptMapper.xml"
           ]
         },
@@ -972,6 +973,7 @@
             "batch-console-api/src/main/resources/mapper/WorkflowDefinitionMapper.xml",
             "batch-console-api/src/main/resources/mapper/WorkflowEdgeMapper.xml",
             "batch-console-api/src/main/resources/mapper/WorkflowNodeMapper.xml",
+            "batch-console-api/src/main/resources/mapper/WorkflowRunMapper.xml",
             "trigger on batch.resource_tag"
           ]
         },
@@ -2139,7 +2141,8 @@
           "sources": [
             "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/DispatchChannelSnapshotMapper.xml",
-            "batch-orchestrator/src/main/resources/mapper/DispatchSecretBindingMapper.xml"
+            "batch-orchestrator/src/main/resources/mapper/DispatchSecretBindingMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
           ]
         },
         "batch.file_channel_health": {
@@ -2172,6 +2175,16 @@
           ],
           "sources": [
             "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml"
+          ]
+        },
+        "batch.file_governance_reconcile_cursor": {
+          "privileges": [
+            "INSERT",
+            "SELECT",
+            "UPDATE"
+          ],
+          "sources": [
+            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/FileGovernanceReconcileCursorMapper.java"
           ]
         },
         "batch.file_group_expectation_definition": {
@@ -2236,6 +2249,24 @@
           ],
           "sources": [
             "batch-orchestrator/src/main/resources/mapper/IdempotencyRecordMapper.xml"
+          ]
+        },
+        "batch.import_ingress_ownership": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
+          ]
+        },
+        "batch.import_ingress_ownership_binding": {
+          "privileges": [
+            "SELECT"
+          ],
+          "sources": [
+            "batch-common/src/main/java/io/github/pinpols/batch/common/storage/ingress/ImportIngressOwnershipRepository.java",
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceMapper.xml"
           ]
         },
         "batch.job_definition": {
