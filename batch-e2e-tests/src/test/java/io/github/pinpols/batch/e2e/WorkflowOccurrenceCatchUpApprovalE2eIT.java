@@ -145,6 +145,7 @@ import org.springframework.test.web.reactive.server.WebTestClient;
       "batch.workflow.cross-day-dep.poll-interval-millis=200",
       "batch.trigger.outbox.poll-interval-millis=200",
       "batch.trigger.kafka.send-timeout-seconds=5",
+      "batch.batch-day.settle-initial-delay-millis=3600000",
       "batch.batch-day.settle-scan-interval-millis=3600000"
     })
 @Tag("critical")
