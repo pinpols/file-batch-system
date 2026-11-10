@@ -31,11 +31,20 @@ public class DispatchDeliveryMetrics {
   }
 
   public void recordDelivery(String channelType, boolean success, boolean circuitRejected) {
-    String result = circuitRejected ? "circuit_open" : (success ? "success" : "failure");
     Counter.builder("batch.dispatch.deliveries")
         .tag("channel_type", channelType == null ? "unknown" : channelType)
-        .tag("result", result)
+        .tag("result", deliveryResult(circuitRejected, success))
         .register(registry)
         .increment();
+  }
+
+  private static String deliveryResult(boolean circuitRejected, boolean success) {
+    if (circuitRejected) {
+      return "circuit_open";
+    }
+    if (success) {
+      return "success";
+    }
+    return "failure";
   }
 }

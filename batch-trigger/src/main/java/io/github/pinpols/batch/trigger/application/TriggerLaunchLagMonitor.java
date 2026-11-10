@@ -85,7 +85,7 @@ public class TriggerLaunchLagMonitor {
       return;
     }
     try {
-      long sampledLag = queryLag();
+      long sampledLag = lagQuery.sampleLag();
       publishSnapshot(sampledLag);
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
@@ -99,10 +99,6 @@ public class TriggerLaunchLagMonitor {
             TriggerLaunchLagMonitor.class, "trigger-launch-consumer-lag-sample-failed", exception);
       }
     }
-  }
-
-  private long queryLag() throws InterruptedException, ExecutionException, TimeoutException {
-    return lagQuery.sampleLag();
   }
 
   private void publishSnapshot(long lag) {

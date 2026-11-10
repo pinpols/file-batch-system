@@ -384,7 +384,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
     int updateCount = count(items, "UPDATE");
     int unchangedCount = count(items, "UNCHANGED");
     int deleteCandidateCount = count(items, "DELETE_CANDIDATE");
-    List<ConfigImpactItem> configImpacts = impacts(items);
+    List<ConfigImpactItem> configImpacts = TenantConfigCopyImpactAnalyzer.analyze(items);
     return new TenantDiffResult(
         targetTenantId,
         addCount,
@@ -444,37 +444,6 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       }
     }
     setList(overlay, type, overlayItems);
-  }
-
-  private List<ConfigImpactItem> impacts(List<ConfigDiffItem> items) {
-    List<ConfigImpactItem> impacts = new ArrayList<>();
-    for (ConfigDiffItem item : items) {
-      if ("UNCHANGED".equals(item.action())) {
-        continue;
-      }
-      boolean configImpactRequiresEnvironmentReview =
-          ConfigType.FILE_CHANNEL.name().equals(item.configType())
-              || ConfigType.RESOURCE_QUEUE.name().equals(item.configType())
-              || ConfigType.BATCH_WINDOW.name().equals(item.configType())
-              || ConfigType.BUSINESS_CALENDAR.name().equals(item.configType());
-      if (configImpactRequiresEnvironmentReview) {
-        impacts.add(new ConfigImpactItem(
-            "ENV_SPECIFIC_REVIEW",
-            item.configType() + ":" + item.configKey(),
-            "review endpoint, capacity, calendar or batch window values before apply"));
-      } else if (ConfigType.JOB_DEFINITION.name().equals(item.configType())) {
-        impacts.add(new ConfigImpactItem(
-            "JOB_CONFIG_CHANGE",
-            item.configKey(),
-            "schedule, queue, worker group or default parameters may affect future launches"));
-      } else if (ConfigType.FILE_TEMPLATE.name().equals(item.configType())) {
-        impacts.add(new ConfigImpactItem(
-            "FILE_CONTRACT_CHANGE",
-            item.configKey(),
-            "template format, validation, mapping or SQL may affect import/export results"));
-      }
-    }
-    return impacts;
   }
 
   /** 构建传输描述符；历史 Pipeline 定义不再作为新的可复制配置资源。 */

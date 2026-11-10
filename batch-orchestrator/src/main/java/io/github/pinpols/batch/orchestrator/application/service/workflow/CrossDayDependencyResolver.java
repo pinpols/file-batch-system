@@ -405,8 +405,10 @@ public class CrossDayDependencyResolver {
         if (spec.specificVersionNo() == null) {
           yield Optional.empty();
         }
-        yield findSpecificVersion(
-            tenantId, spec.jobCode(), bizDate, spec.specificVersionNo(), dryRun);
+        String jobCode = spec.jobCode();
+        int versionNo = spec.specificVersionNo();
+        yield resultVersionQueryService.findCrossDayDependencyVersion(
+            tenantId, jobCode, bizDate, versionNo, dryRun);
       }
       default -> Optional.empty();
     };
@@ -416,12 +418,6 @@ public class CrossDayDependencyResolver {
       String tenantId, CrossDayDependencySpec spec, LocalDate bizDate, boolean dryRun) {
     return resultVersionQueryService.findLatestCrossDayDependencyVersion(
         tenantId, spec.jobCode(), bizDate, dryRun);
-  }
-
-  private Optional<ResultVersionEntity> findSpecificVersion(
-      String tenantId, String jobCode, LocalDate bizDate, int versionNo, boolean dryRun) {
-    return resultVersionQueryService.findCrossDayDependencyVersion(
-        tenantId, jobCode, bizDate, versionNo, dryRun);
   }
 
   private Map<String, Object> toEntry(ResultVersionEntity row) {

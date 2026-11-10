@@ -70,7 +70,7 @@ public final class Guard {
   public static void require(boolean condition, ResultCode resultCode, String message) {
     if (!condition) {
       ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
-      throw BizException.of(code, detailKey(code), message);
+      throw BizException.of(code, code.detailKey(), message);
     }
   }
 
@@ -79,11 +79,7 @@ public final class Guard {
   public static void requireText(@Nullable String str, ResultCode resultCode, String message) {
     if (!Texts.hasText(str)) {
       ResultCode code = resultCode == null ? ResultCode.INVALID_ARGUMENT : resultCode;
-      throw BizException.of(code, detailKey(code), message);
+      throw BizException.of(code, code.detailKey(), message);
     }
-  }
-
-  private static String detailKey(ResultCode code) {
-    return code.detailKey();
   }
 }

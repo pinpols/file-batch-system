@@ -138,19 +138,46 @@ public class WorkflowRunReplayPreviewService {
     String operationKey = command.operationKey().toString();
     String requestHash = requestHash(command, policies);
     ReplayOperationEntity existing =
-        operationMapper.selectByIdentity(command.tenantId(), operationKey);
+        existingReplayOperation(command.tenantId(), operationKey, requestHash);
     if (EmptyChecks.isNotNull(existing)) {
-      if (requestHash.equals(existing.requestHash())
-          && ReplayOperationType.WORKFLOW_RUN.code().equals(existing.operationType())) {
-        return existing;
-      }
+      return existing;
+    }
+    String tokenHash = sha256(command.previewToken());
+    LockedPreview locked =
+        lockMatchingPreviewToken(command.tenantId(), tokenHash, operationKey, requestHash);
+    if (EmptyChecks.isNotNull(locked.alreadyConsumed())) {
+      return locked.alreadyConsumed();
+    }
+    ReplayOperationPreviewTokenEntity token = locked.token();
+    Instant now = dateTimeSupport.nowInstant();
+    if (EmptyChecks.isNull(token.expiresAt()) || !token.expiresAt().isAfter(now)) {
       throw previewChanged();
     }
+    PreparedPreview fresh =
+        preparePreview(command, command.operationKey(), command.previewToken(), token.expiresAt());
+    ReplaySubmissionIdentity identity =
+        new ReplaySubmissionIdentity(operationKey, tokenHash, requestHash);
+    return insertPendingReplayOperation(command, policies, fresh, token, identity, now);
+  }
 
-    String tokenHash = sha256(command.previewToken());
+  private ReplayOperationEntity existingReplayOperation(
+      String tenantId, String operationKey, String requestHash) {
+    ReplayOperationEntity existing = operationMapper.selectByIdentity(tenantId, operationKey);
+    if (EmptyChecks.isNull(existing)) {
+      return null;
+    }
+    if (requestHash.equals(existing.requestHash())
+        && ReplayOperationType.WORKFLOW_RUN.code().equals(existing.operationType())) {
+      return existing;
+    }
+    throw previewChanged();
+  }
+
+  private LockedPreview lockMatchingPreviewToken(
+      String tenantId, String tokenHash, String operationKey, String requestHash) {
     ReplayOperationPreviewTokenEntity token;
     try {
-      token = tokenMapper.selectForUpdate(command.tenantId(), tokenHash);
+      token = tokenMapper.selectForUpdate(tenantId, tokenHash);
     } catch (PessimisticLockingFailureException concurrentConsumption) {
       throw previewChanged();
     }
@@ -163,34 +190,36 @@ public class WorkflowRunReplayPreviewService {
     if (EmptyChecks.isNotNull(token.consumedAt())) {
       ReplayOperationEntity consumed = EmptyChecks.isNull(token.operationId())
           ? null
-          : operationMapper.selectById(command.tenantId(), token.operationId());
+          : operationMapper.selectById(tenantId, token.operationId());
       if (EmptyChecks.isNotNull(consumed) && requestHash.equals(consumed.requestHash())) {
-        return consumed;
+        return new LockedPreview(consumed, token);
       }
       throw previewChanged();
     }
-    Instant now = dateTimeSupport.nowInstant();
-    if (EmptyChecks.isNull(token.expiresAt()) || !token.expiresAt().isAfter(now)) {
-      throw previewChanged();
-    }
+    return new LockedPreview(null, token);
+  }
 
-    PreparedPreview fresh =
-        preparePreview(command, command.operationKey(), command.previewToken(), token.expiresAt());
+  private ReplayOperationEntity insertPendingReplayOperation(
+      WorkflowRunReplayCommand command,
+      Policies policies,
+      PreparedPreview fresh,
+      ReplayOperationPreviewTokenEntity token,
+      ReplaySubmissionIdentity identity,
+      Instant now) {
     String freshSnapshotHash = sha256(fresh.snapshotPayload());
     if (!freshSnapshotHash.equals(token.snapshotHash())
         || fresh.response().nodes().stream()
             .anyMatch(node -> !EmptyChecks.isEmpty(Objects.requireNonNull(node.blockers())))) {
       throw previewChanged();
     }
-    if (tokenMapper.consume(command.tenantId(), tokenHash, now) != 1) {
+    if (tokenMapper.consume(command.tenantId(), identity.tokenHash(), now) != 1) {
       throw previewChanged();
     }
-
     Source source = fresh.source();
     ReplayOperationEntity.ReplayOperationEntityBuilder operationBuilder =
         ReplayOperationEntity.builder()
             .tenantId(command.tenantId())
-            .operationKey(operationKey)
+            .operationKey(identity.operationKey())
             .operationType(ReplayOperationType.WORKFLOW_RUN.code())
             .status(ReplayOperationStatus.PENDING_APPROVAL.code())
             .calendarCode(source.executionSnapshot().workflowCalendarCode())
@@ -206,7 +235,7 @@ public class WorkflowRunReplayPreviewService {
         .configVersionPolicy(policies.config().code())
         .configVersion(command.configVersion())
         .sourceWorkflowRunId(source.run().getId())
-        .requestHash(requestHash)
+        .requestHash(identity.requestHash())
         .snapshotHash(token.snapshotHash())
         .snapshotPayload(token.snapshotPayload());
     String normalizedReason = command.reason().trim();
@@ -224,16 +253,22 @@ public class WorkflowRunReplayPreviewService {
         .build();
     operationMapper.insert(operation);
     ReplayOperationEntity persisted =
-        operationMapper.selectByIdentity(command.tenantId(), operationKey);
+        operationMapper.selectByIdentity(command.tenantId(), identity.operationKey());
     boolean previewOperationWasNotLinked = EmptyChecks.isNull(persisted)
         || EmptyChecks.isNull(persisted.id())
-        || tokenMapper.linkOperation(command.tenantId(), tokenHash, persisted.id()) != 1;
+        || tokenMapper.linkOperation(command.tenantId(), identity.tokenHash(), persisted.id()) != 1;
     if (previewOperationWasNotLinked) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.workflow.workflow_run_replay_operation_not_persisted");
     }
     return persisted;
   }
+
+  private record LockedPreview(
+      ReplayOperationEntity alreadyConsumed, ReplayOperationPreviewTokenEntity token) {}
+
+  private record ReplaySubmissionIdentity(
+      String operationKey, String tokenHash, String requestHash) {}
 
   @Transactional
   public ReplayOperationEntity reject(String tenantId, Long operationId) {

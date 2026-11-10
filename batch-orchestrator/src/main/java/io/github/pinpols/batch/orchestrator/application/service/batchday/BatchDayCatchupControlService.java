@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure;
 import io.github.pinpols.batch.orchestrator.application.error.OperationFailure.Kind;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayCatchupControlEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.BusinessCalendarEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupEventParam;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayCatchupPauseStateParam;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayCatchupControlMapper;
@@ -122,8 +123,9 @@ public class BatchDayCatchupControlService {
   }
 
   private void ensureEnabledCalendar(String tenantId, String calendarCode) {
-    if (EmptyChecks.isNull(
-        calendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true))) {
+    BusinessCalendarEntity calendar =
+        calendarMapper.selectFirstByTenantAndCodeAndEnabled(tenantId, calendarCode, true);
+    if (EmptyChecks.isNull(calendar)) {
       throw new OperationFailure(Kind.NOT_FOUND, "Enabled business calendar was not found");
     }
   }

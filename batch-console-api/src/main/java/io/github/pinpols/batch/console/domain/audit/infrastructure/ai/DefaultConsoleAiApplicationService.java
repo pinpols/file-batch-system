@@ -537,21 +537,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String grounded = appendCitations(trimmedAnswer, execution.snippets());
     answer = ConsoleTextSanitizer.safeDisplay(grounded, grounded.length());
 
-    AiChatResponse response = new AiChatResponse();
-    response.setRequestId(execution.requestId());
-    response.setTraceId(execution.traceId());
-    response.setSessionId(execution.sessionId());
-    response.setPromptCategory(execution.gateResult().category().code());
-    response.setPromptDecision(AiPromptDecision.APPROVED.code());
-    response.setModelName(execution.modelName());
-    response.setAnswer(answer);
-    response.setRefusalReason(null);
-    response.setSources(execution.snippets().stream()
-        .map(ConsoleAiKnowledgeBase.Snippet::source)
-        .filter(Texts::hasText)
-        .distinct()
-        .map(AiSourceResponse::new)
-        .toList());
+    AiChatResponse response = buildApprovedChatResponse(execution, answer);
 
     if (EmptyChecks.isNotNull(execution.persistedTurn())) {
       ConsoleAiConversationService.TurnCompletion approvedTurnCompletion =
@@ -591,6 +577,26 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
         AuditContext.builder().request(request).result(result).build();
     AiAuditCommand auditCommand = buildAuditCommand(context);
     auditService.record(auditCommand);
+    return response;
+  }
+
+  private AiChatResponse buildApprovedChatResponse(ApprovedChatExecution execution, String answer) {
+    AiChatResponse response = new AiChatResponse();
+    response.setRequestId(execution.requestId());
+    response.setTraceId(execution.traceId());
+    response.setSessionId(execution.sessionId());
+    response.setPromptCategory(execution.gateResult().category().code());
+    response.setPromptDecision(AiPromptDecision.APPROVED.code());
+    response.setModelName(execution.modelName());
+    response.setAnswer(answer);
+    response.setRefusalReason(null);
+    response.setSources(execution.snippets().stream()
+        .map(ConsoleAiKnowledgeBase.Snippet::source)
+        .filter(Texts::hasText)
+        .distinct()
+        .map(AiSourceResponse::new)
+        .toList());
+
     return response;
   }
 

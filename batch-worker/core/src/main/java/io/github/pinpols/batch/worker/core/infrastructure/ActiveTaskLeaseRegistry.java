@@ -230,7 +230,7 @@ public class ActiveTaskLeaseRegistry {
     long maxAgeNanos = normalizedMaxAgeMillis > Long.MAX_VALUE / 1_000_000L
         ? Long.MAX_VALUE
         : normalizedMaxAgeMillis * 1_000_000L;
-    return nanoTime.getAsLong() - lease.lastConfirmedNanosValue() > maxAgeNanos;
+    return nanoTime.getAsLong() - lease.lastConfirmedNanos.get() > maxAgeNanos;
   }
 
   private static boolean sameOwner(
@@ -536,10 +536,6 @@ public class ActiveTaskLeaseRegistry {
 
     private boolean startExecution() {
       return executionStarted.compareAndSet(false, true);
-    }
-
-    private long lastConfirmedNanosValue() {
-      return lastConfirmedNanos.get();
     }
 
     private void markRenewed(long nowNanos) {

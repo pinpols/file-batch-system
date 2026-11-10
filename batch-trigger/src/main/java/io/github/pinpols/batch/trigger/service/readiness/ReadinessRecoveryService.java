@@ -49,12 +49,14 @@ public class ReadinessRecoveryService {
       return RecoveryLaunchOutcome.NOT_FOUND;
     }
     try {
-      LaunchResponse launchResponse = triggerService.launchScheduled(new ScheduledTriggerCommand(
+      TriggerService recoveryTriggerService = triggerService;
+      ScheduledTriggerCommand command = new ScheduledTriggerCommand(
           descriptor,
           scheduledFireTime,
           TriggerType.SCHEDULED,
           IdGenerator.newBusinessNo("readiness"),
-          IdGenerator.newTraceId()));
+          IdGenerator.newTraceId());
+      LaunchResponse launchResponse = recoveryTriggerService.launchScheduled(command);
       if (EmptyChecks.isNull(launchResponse) || EmptyChecks.isNull(launchResponse.instanceNo())) {
         return RecoveryLaunchOutcome.ALREADY_TERMINATED;
       }

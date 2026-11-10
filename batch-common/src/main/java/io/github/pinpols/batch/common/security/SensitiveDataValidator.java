@@ -142,7 +142,8 @@ public final class SensitiveDataValidator {
     if (!(data instanceof Map<?, ?>) && !(data instanceof Iterable<?>)) {
       return null;
     }
-    if (EmptyChecks.isNotNull(seen.put(data, Boolean.TRUE))) {
+    Boolean previousVisit = seen.put(data, Boolean.TRUE);
+    if (EmptyChecks.isNotNull(previousVisit)) {
       return null;
     }
     if (data instanceof Map<?, ?> map) {

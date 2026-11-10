@@ -17,7 +17,6 @@ import io.github.pinpols.batch.console.domain.rbac.view.ConsoleUserBatchOperatio
 import io.github.pinpols.batch.console.domain.rbac.view.TenantRow;
 import io.github.pinpols.batch.console.shared.security.ConsolePrincipal;
 import io.github.pinpols.batch.console.support.web.UploadFileGuard;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.security.MessageDigest;
@@ -35,15 +34,8 @@ import java.util.UUID;
 import java.util.regex.Pattern;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
-import org.apache.poi.ss.usermodel.Cell;
-import org.apache.poi.ss.usermodel.CellType;
-import org.apache.poi.ss.usermodel.DataFormatter;
 import org.apache.poi.ss.usermodel.Row;
 import org.apache.poi.ss.usermodel.Sheet;
-import org.apache.poi.ss.usermodel.Workbook;
-import org.apache.poi.ss.usermodel.WorkbookFactory;
-import org.apache.poi.xssf.usermodel.XSSFRelation;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
@@ -60,12 +52,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class ConsoleUserBatchProvisioningService {
 
-  private static final int MAX_ROWS = 500;
+  static final int MAX_ROWS = 500;
   private static final long MAX_BYTES = 2L * 1024 * 1024;
   private static final Duration PREVIEW_TTL = Duration.ofMinutes(15);
   private static final String PREFIX = "console:user-batch:preview:";
-  private static final List<String> HEADERS =
-      List.of("tenantId", "username", "displayName", "role");
+  static final List<String> HEADERS = List.of("tenantId", "username", "displayName", "role");
   private static final Pattern USERNAME = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9._-]{1,127}$");
   private static final SecureRandom RANDOM = new SecureRandom();
 
@@ -135,7 +126,7 @@ public class ConsoleUserBatchProvisioningService {
       throw invalid("XLSX file exceeds 2 MiB or has an unsupported extension");
     }
     byte[] bytes = file.getBytes();
-    List<AccountRow> rows = parse(bytes);
+    List<AccountRow> rows = ConsoleUserBatchWorkbookParser.parse(bytes);
     if (EmptyChecks.isEmpty(rows)) throw invalid("Workbook contains no accounts");
     UUID tokenId = UUID.randomUUID();
     String token = tokenId.toString();
@@ -357,74 +348,6 @@ public class ConsoleUserBatchProvisioningService {
     return EmptyChecks.isEmpty(trimmed) ? null : trimmed;
   }
 
-  private List<AccountRow> parse(byte[] bytes) {
-    try (Workbook workbook = WorkbookFactory.create(new ByteArrayInputStream(bytes))) {
-      if (!(workbook instanceof XSSFWorkbook xssf)
-          || xssf.getPackagePart()
-              .getRelationshipsByType(XSSFRelation.EXTERNAL_LINKS.getRelation())
-              .iterator()
-              .hasNext()) {
-        throw invalid("Only XLSX without external links is supported");
-      }
-      if (workbook.getNumberOfSheets() != 1 || !"Accounts".equals(workbook.getSheetName(0))) {
-        throw invalid("Expected one Accounts sheet");
-      }
-      Sheet sheet = workbook.getSheetAt(0);
-      if (sheet.getLastRowNum() > 5000) throw invalid("Workbook has too many rows");
-      DataFormatter formatter = new DataFormatter(Locale.ROOT);
-      validateHeader(sheet, formatter);
-      return parseRows(sheet, formatter);
-    } catch (IOException | InvalidFormatException ex) {
-      throw invalid("Invalid XLSX workbook");
-    }
-  }
-
-  private void validateHeader(Sheet sheet, DataFormatter formatter) {
-    Row header = sheet.getRow(0);
-    if (EmptyChecks.isNull(header) || header.getLastCellNum() != HEADERS.size())
-      throw invalid("Invalid header");
-    for (int i = 0; i < HEADERS.size(); i++) {
-      if (!HEADERS.get(i).equals(text(header.getCell(i), formatter)))
-        throw invalid("Invalid header");
-    }
-  }
-
-  private List<AccountRow> parseRows(Sheet sheet, DataFormatter formatter) {
-    List<AccountRow> rows = new ArrayList<>();
-    for (int rowIndex = 1; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
-      Row row = sheet.getRow(rowIndex);
-      if (EmptyChecks.isNotNull(row)) {
-        AccountRow account = parseRow(row, rowIndex + 1, formatter);
-        if (EmptyChecks.isNotNull(account)) {
-          if (rows.size() == MAX_ROWS) throw invalid("Maximum 500 accounts per batch");
-          rows.add(account);
-        }
-      }
-    }
-    return rows;
-  }
-
-  private AccountRow parseRow(Row row, int rowNo, DataFormatter formatter) {
-    if (row.getLastCellNum() > HEADERS.size()) throw invalid("Unexpected columns at row " + rowNo);
-    List<String> cells = new ArrayList<>();
-    for (int col = 0; col < HEADERS.size(); col++) {
-      Cell cell = row.getCell(col);
-      String cellText = text(cell, formatter);
-      cells.add(cellText);
-    }
-    boolean allCellsBlank = cells.stream().allMatch(String::isBlank);
-    if (allCellsBlank) return null;
-    return new AccountRow(rowNo, cells.get(0), cells.get(1), cells.get(2), cells.get(3));
-  }
-
-  private String text(Cell cell, DataFormatter formatter) {
-    if (EmptyChecks.isNull(cell)) return "";
-    if (cell.getCellType() == CellType.FORMULA) throw invalid("Formula cells are not allowed");
-    String value = formatter.formatCellValue(cell).trim();
-    if (value.length() > 256) throw invalid("Cell value exceeds 256 characters");
-    return value;
-  }
-
   private void save(String token, Session session) {
     store.savePreview(PREFIX + token, serialize(session), PREVIEW_TTL);
   }
@@ -480,7 +403,7 @@ public class ConsoleUserBatchProvisioningService {
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }
 
-  private static BizException invalid(String detail) {
+  static BizException invalid(String detail) {
     return BizException.of(
         ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey(), detail);
   }

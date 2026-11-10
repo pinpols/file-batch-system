@@ -80,6 +80,48 @@ public class WaitingPartitionDispatchScheduler {
     // 每 10 秒一次 tick，evaluate 数本身没业务进展信息（仍 WAITING 表明一直被限流挡）；
     // 改 DEBUG 防 3 小时积 1000+ 噪音。真有 partition 被释放时由 line 269 的"released" 日志体现。
     log.debug("waiting dispatch tick: {} WAITING partitions to evaluate", waitingPartitions.size());
+    List<WaitingDispatchCandidate> candidates = collectWaitingCandidates(waitingPartitions);
+    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparing(
+            WaitingDispatchCandidate::dryRun)
+        .thenComparing(
+            Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore).reversed())
+        .thenComparing(
+            Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
+        .thenComparingLong(WaitingDispatchCandidate::partitionId);
+    // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
+    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；事务协作者开新事务。
+    List<WaitingDispatchCandidate> sorted =
+        candidates.stream().sorted(comparator).toList();
+    for (WaitingDispatchCandidate candidate : sorted) {
+      String tenantId =
+          candidate.partition() == null ? null : candidate.partition().getTenantId();
+      if (tenantId == null || tenantId.isBlank()) {
+        continue;
+      }
+      try {
+        // RLS Phase B：dispatchWaitingPartition → dispatcher (REQUIRES_NEW) → 多张 batch 表写入，
+        // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
+        // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
+        RlsTenantContextHolder.runWithTenant(
+            tenantId,
+            () -> dispatchWaitingPartition(
+                candidate.partition(),
+                candidate.task(),
+                candidate.jobInstance(),
+                candidate.decision()));
+      } catch (RuntimeException exception) {
+        log.warn(
+            "dispatch waiting partition failed, will retry next tick: tenantId={},"
+                + " partitionId={}, error={}",
+            candidate.partition().getTenantId(),
+            candidate.partition().getId(),
+            SwallowedExceptionLogger.summary(exception));
+      }
+    }
+  }
+
+  private List<WaitingDispatchCandidate> collectWaitingCandidates(
+      List<JobPartitionEntity> waitingPartitions) {
     List<WaitingDispatchCandidate> candidates = new ArrayList<>();
     // 开启 DefaultResourceScheduler 的 tick 级活跃计数缓存:同租户/队列的 4 路 COUNT 在本批
     // 内只查 DB 一次,消除 N x 4 重复 round-trip。
@@ -125,43 +167,7 @@ public class WaitingPartitionDispatchScheduler {
     } finally {
       DefaultResourceScheduler.closeTickCache();
     }
-    Comparator<WaitingDispatchCandidate> comparator = Comparator.comparing(
-            WaitingDispatchCandidate::dryRun)
-        .thenComparing(
-            Comparator.comparingLong(WaitingDispatchCandidate::fairnessScore).reversed())
-        .thenComparing(
-            Comparator.comparingInt(WaitingDispatchCandidate::priority).reversed())
-        .thenComparingLong(WaitingDispatchCandidate::partitionId);
-    // 逐个 partition 走独立 REQUIRES_NEW 事务：release + outbox + instance/workflow 状态推进作为原子单元。
-    // 一个 partition 出错（例如乐观锁冲突）只回滚它自己，其他候选继续；事务协作者开新事务。
-    List<WaitingDispatchCandidate> sorted =
-        candidates.stream().sorted(comparator).toList();
-    for (WaitingDispatchCandidate candidate : sorted) {
-      String tenantId =
-          candidate.partition() == null ? null : candidate.partition().getTenantId();
-      if (tenantId == null || tenantId.isBlank()) {
-        continue;
-      }
-      try {
-        // RLS Phase B：dispatchWaitingPartition → dispatcher (REQUIRES_NEW) → 多张 batch 表写入，
-        // 必须在事务协作者调用前绑好 holder，事务起点才能读到 app.tenant_id。
-        // try/catch 包在 runWithTenant 外保留"单 partition 失败不影响其余"语义。
-        RlsTenantContextHolder.runWithTenant(
-            tenantId,
-            () -> dispatchWaitingPartition(
-                candidate.partition(),
-                candidate.task(),
-                candidate.jobInstance(),
-                candidate.decision()));
-      } catch (RuntimeException exception) {
-        log.warn(
-            "dispatch waiting partition failed, will retry next tick: tenantId={},"
-                + " partitionId={}, error={}",
-            candidate.partition().getTenantId(),
-            candidate.partition().getId(),
-            SwallowedExceptionLogger.summary(exception));
-      }
-    }
+    return candidates;
   }
 
   private List<JobPartitionEntity> selectWaitingCandidates(int batchSize) {
@@ -201,9 +207,10 @@ public class WaitingPartitionDispatchScheduler {
     boolean nextDryRunPhase = phaseComplete ? !dryRunPhase : dryRunPhase;
     long nextCursor = phaseComplete ? 0 : lastId;
     long nextUpperId = phaseComplete && dryRunPhase ? 0 : upperId;
-    if ((scanCursor.lastPartitionId() != 0
-            || scanCursor.cycleUpperId() != 0
-            || EmptyChecks.isNotEmpty(waitingPartitions))
+    boolean cursorNeedsAdvance = scanCursor.lastPartitionId() != 0
+        || scanCursor.cycleUpperId() != 0
+        || EmptyChecks.isNotEmpty(waitingPartitions);
+    if (cursorNeedsAdvance
         && jobMappers.jobPartitionMapper.advanceWaitingPartitionScanCursor(
                 nextCursor, nextUpperId, nextDryRunPhase, scanCursor.version())
             != 1) {

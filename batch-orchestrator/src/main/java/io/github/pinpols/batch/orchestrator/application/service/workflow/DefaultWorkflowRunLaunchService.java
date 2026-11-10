@@ -58,6 +58,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Supplier;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DuplicateKeyException;
@@ -393,6 +394,21 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     throw new IllegalStateException("unreachable workflow launch retry state");
   }
 
+  private <T> T preferLaunchSnapshot(
+      WorkflowLaunchWaitSnapshot capacitySnapshot,
+      WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot,
+      Supplier<T> fromCapacity,
+      Supplier<T> fromReplay,
+      Supplier<T> fromDefinition) {
+    if (EmptyChecks.isNotNull(capacitySnapshot)) {
+      return fromCapacity.get();
+    }
+    if (EmptyChecks.isNull(replaySnapshot)) {
+      return fromDefinition.get();
+    }
+    return fromReplay.get();
+  }
+
   private WorkflowRunEntity prepareRun(RunPreparation preparation) {
     LaunchRequest request = preparation.request();
     LaunchRequest deferredRequest = preparation.originalRequest();
@@ -479,31 +495,33 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
           }
         }
         Instant startedAt = BatchDateTimeSupport.utcNow();
+        WorkflowDefinitionView definitionForSnapshot = transactionDefinition;
+        List<DagNodeResolution> nodesForSnapshot = initialNodes;
         WorkflowRunEntity created = new WorkflowRunEntity();
         created.setTenantId(request.tenantId());
         created.setWorkflowDefinitionId(request.workflowDefinitionId());
-        created.setSingleJobDefinitionId(
-            EmptyChecks.isNotNull(capacitySnapshot)
-                ? capacitySnapshot.singleJobDefinitionId()
-                : EmptyChecks.isNull(replaySnapshot)
-                    ? transactionDefinition.singleJobDefinitionId()
-                    : replaySnapshot.singleJobDefinitionId());
+        created.setSingleJobDefinitionId(preferLaunchSnapshot(
+            capacitySnapshot,
+            replaySnapshot,
+            () -> capacitySnapshot.singleJobDefinitionId(),
+            () -> replaySnapshot.singleJobDefinitionId(),
+            () -> definitionForSnapshot.singleJobDefinitionId()));
         created.setTriggerRequestId(triggerRequest.getId());
-        created.setWorkflowVersionSnapshot(
-            EmptyChecks.isNotNull(capacitySnapshot)
-                ? capacitySnapshot.workflowVersion()
-                : EmptyChecks.isNull(replaySnapshot)
-                    ? transactionDefinition.version()
-                    : replaySnapshot.workflowVersion());
+        created.setWorkflowVersionSnapshot(preferLaunchSnapshot(
+            capacitySnapshot,
+            replaySnapshot,
+            () -> capacitySnapshot.workflowVersion(),
+            () -> replaySnapshot.workflowVersion(),
+            () -> definitionForSnapshot.version()));
         created.setBizDate(request.bizDate());
         created.setDataIntervalStart(request.dataIntervalStart());
         created.setDataIntervalEnd(request.dataIntervalEnd());
-        created.setExecutionSnapshot(
-            EmptyChecks.isNotNull(capacitySnapshot)
-                ? capacitySnapshot.executionSnapshotJson()
-                : EmptyChecks.isNull(replaySnapshot)
-                    ? buildExecutionSnapshot(request, transactionDefinition, initialNodes)
-                    : replaySnapshot.executionSnapshotJson());
+        created.setExecutionSnapshot(preferLaunchSnapshot(
+            capacitySnapshot,
+            replaySnapshot,
+            () -> capacitySnapshot.executionSnapshotJson(),
+            () -> replaySnapshot.executionSnapshotJson(),
+            () -> buildExecutionSnapshot(request, definitionForSnapshot, nodesForSnapshot)));
         created.setRunStatus(WorkflowRunStatus.CREATED.code());
         String currentNodeCode;
         if (EmptyChecks.isEmpty(initialNodes)) {

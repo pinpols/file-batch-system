@@ -1033,6 +1033,11 @@ public class ConfigPackageExcelValidator {
       }
       fallbackRowNo++;
     }
+    addDependencyGraphIssues(tenantId, rows, issues);
+  }
+
+  private void addDependencyGraphIssues(
+      String tenantId, List<Map<String, String>> rows, List<WorkbookIssue> issues) {
     Map<String, Set<String>> graph = new HashMap<>();
     Set<String> replacedJobs = rows.stream()
         .map(row -> normalize(row.get(COL_JOB_CODE)))

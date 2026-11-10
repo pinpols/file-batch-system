@@ -114,42 +114,7 @@ public class PartitionReclaimUnit {
   private void doReclaim(
       JobPartitionEntity partition, JobTaskEntity task, JobInstanceEntity jobInstance) {
     if (EmptyChecks.isNotNull(task.getNonIdempotentStartedAt())) {
-      JobPartitionEntity currentPartition =
-          jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
-      if (EmptyChecks.isNull(currentPartition)
-          || EmptyChecks.isNull(currentPartition.getCurrentInvocationId())
-          || EmptyChecks.isBlank(
-              Objects.requireNonNull(currentPartition.getCurrentInvocationId()))) {
-        throw new ReclaimRetryableException(
-            "non-idempotent task reclaim has no current partition invocation: partitionId="
-                + partition.getId()
-                + ", taskId="
-                + task.getId());
-      }
-      JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(TaskOutcomeCommand.builder()
-          .tenantId(task.getTenantId())
-          .taskId(task.getId())
-          .workerId(task.getAssignedWorkerCode())
-          .success(false)
-          .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
-          .errorMessage(
-              "Worker lease expired after non-idempotent execution started; external outcome requires reconciliation.")
-          .partitionInvocationId(currentPartition.getCurrentInvocationId())
-          .build());
-      if (EmptyChecks.isNull(outcome)) {
-        throw new ReclaimRetryableException(
-            "non-idempotent task outcome was not recorded: partitionId="
-                + partition.getId()
-                + ", taskId="
-                + task.getId());
-      }
-      log.warn(
-          "expired non-idempotent task closed as external outcome unknown: tenantId={},"
-              + " partitionId={}, taskId={}, invocationId={}",
-          task.getTenantId(),
-          partition.getId(),
-          task.getId(),
-          currentPartition.getCurrentInvocationId());
+      closeUnknownExternalOutcome(partition, task);
       return;
     }
     if (jobPartitionMapper.resetForLeaseReclaim(
@@ -229,5 +194,43 @@ public class PartitionReclaimUnit {
         resetSteps,
         partition.getVersion(),
         governance.partitionLease().getExpireSeconds());
+  }
+
+  private void closeUnknownExternalOutcome(JobPartitionEntity partition, JobTaskEntity task) {
+    JobPartitionEntity currentPartition =
+        jobPartitionMapper.selectById(partition.getTenantId(), partition.getId());
+    if (EmptyChecks.isNull(currentPartition)
+        || EmptyChecks.isNull(currentPartition.getCurrentInvocationId())
+        || EmptyChecks.isBlank(Objects.requireNonNull(currentPartition.getCurrentInvocationId()))) {
+      throw new ReclaimRetryableException(
+          "non-idempotent task reclaim has no current partition invocation: partitionId="
+              + partition.getId()
+              + ", taskId="
+              + task.getId());
+    }
+    JobTaskEntity outcome = taskOutcomeService.applyTaskOutcome(TaskOutcomeCommand.builder()
+        .tenantId(task.getTenantId())
+        .taskId(task.getId())
+        .workerId(task.getAssignedWorkerCode())
+        .success(false)
+        .errorCode(TaskErrorCodes.EXTERNAL_OUTCOME_UNKNOWN)
+        .errorMessage(
+            "Worker lease expired after non-idempotent execution started; external outcome requires reconciliation.")
+        .partitionInvocationId(currentPartition.getCurrentInvocationId())
+        .build());
+    if (EmptyChecks.isNull(outcome)) {
+      throw new ReclaimRetryableException(
+          "non-idempotent task outcome was not recorded: partitionId="
+              + partition.getId()
+              + ", taskId="
+              + task.getId());
+    }
+    log.warn(
+        "expired non-idempotent task closed as external outcome unknown: tenantId={},"
+            + " partitionId={}, taskId={}, invocationId={}",
+        task.getTenantId(),
+        partition.getId(),
+        task.getId(),
+        currentPartition.getCurrentInvocationId());
   }
 }

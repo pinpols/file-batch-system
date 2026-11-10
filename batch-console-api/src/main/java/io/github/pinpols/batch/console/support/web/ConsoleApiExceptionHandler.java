@@ -102,16 +102,22 @@ public class ConsoleApiExceptionHandler {
           exception.getCode(),
           SwallowedExceptionLogger.summary(exception));
     }
-    String message = EmptyChecks.isNull(bizMessageResolver)
-        ? (EmptyChecks.isNull(exception.getMessageKey())
-            ? exception.getMessage()
-            : exception.getCode().label())
-        : bizMessageResolver.resolve(exception);
+    String message = bizExceptionMessage(exception);
     ResponseEntity.BodyBuilder response =
         ResponseEntity.status(exception.getCode().httpStatus());
     ResultCode code = exception.getCode();
     CommonResponse<Object> failureBody = responseFactory.failure(code, message);
     return response.body(failureBody);
+  }
+
+  private String bizExceptionMessage(BizException exception) {
+    if (EmptyChecks.isNull(bizMessageResolver)) {
+      if (EmptyChecks.isNull(exception.getMessageKey())) {
+        return exception.getMessage();
+      }
+      return exception.getCode().label();
+    }
+    return bizMessageResolver.resolve(exception);
   }
 
   private static boolean isExpectedUnavailableTaskClaim(BizException exception) {

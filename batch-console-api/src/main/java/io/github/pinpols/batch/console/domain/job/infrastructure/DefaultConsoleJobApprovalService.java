@@ -205,6 +205,14 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
       return completedResponse(operation);
     }
     FrozenBatch frozen = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
+    operation = submitFrozenTargets(tenantId, operation, frozen, safeReason);
+    operation = operationStore.complete(tenantId, operation.requestKeyHash(), operation.revision());
+    ops.publishRefresh(tenantId);
+    return completedResponse(operation);
+  }
+
+  private BatchDayCatchUpOperation submitFrozenTargets(
+      String tenantId, BatchDayCatchUpOperation operation, FrozenBatch frozen, String safeReason) {
     for (FrozenTarget target : frozen.targets()) {
       operation = operationStore.startItem(
           tenantId, operation.requestKeyHash(), operation.revision(), target.sourceKey());
@@ -223,9 +231,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
           target.sourceKey(),
           referenceNo);
     }
-    operation = operationStore.complete(tenantId, operation.requestKeyHash(), operation.revision());
-    ops.publishRefresh(tenantId);
-    return completedResponse(operation);
+    return operation;
   }
 
   private List<String> sanitizedRequestedJobCodes(List<String> jobCodes) {
@@ -264,37 +270,17 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     FrozenBatch batch = JsonUtils.fromJsonStrict(operation.snapshotJson(), FrozenBatch.class);
     BatchRequestIdentity identity =
         JsonUtils.fromJsonStrict(operation.requestJson(), BatchRequestIdentity.class);
-    if (EmptyChecks.isNull(batch)
+    boolean invalidSnapshotIdentity = EmptyChecks.isNull(batch)
         || EmptyChecks.isNull(identity)
         || EmptyChecks.isNull(batch.targets())
         || !Objects.equals(batch.bizDate(), identity.bizDate())
-        || !Objects.equals(batch.calendarCode(), identity.calendarCode())
+        || !Objects.equals(batch.calendarCode(), identity.calendarCode());
+    if (invalidSnapshotIdentity
         || (!CatchUpPolicyType.AUTO.code().equals(batch.catchUpPolicy())
             && !CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy()))) {
       throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
     }
-    // 先校验所有待发项目，避免中途发现冻结信息损坏造成新一轮部分提交。
-    for (int index = 0; index < items.size(); index++) {
-      BatchDayCatchUpProgress.Item item = items.get(index);
-      if (item.status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
-      FrozenTarget target = batch.targets().get(index);
-      if (EmptyChecks.isNull(target.workflowDefinitionId()) || target.workflowDefinitionId() <= 0) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-      }
-      if (CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy())) {
-        ApprovalSubmitCommand command =
-            BatchDayCatchUpReconciliation.frozenApproval(operation, target.sourceKey());
-        JsonNode payload = JsonUtils.fromJsonStrict(command.payloadJson(), JsonNode.class);
-        String payloadReason =
-            payload.path("reason").isNull() || payload.path("reason").isMissingNode()
-                ? null
-                : payload.path("reason").asText();
-        if (!Objects.equals(identity.reason(), command.approvalReason())
-            || !Objects.equals(identity.reason(), payloadReason)) {
-          throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
-        }
-      }
-    }
+    validatePendingTargets(operation, items, batch, identity);
     for (int index = 0; index < items.size(); index++) {
       if (items.get(index).status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
       FrozenTarget target = batch.targets().get(index);
@@ -321,6 +307,35 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         operationStore.complete(resolvedTenant, operation.requestKeyHash(), operation.revision());
     ops.publishRefresh(resolvedTenant);
     return completedResponse(operation);
+  }
+
+  private void validatePendingTargets(
+      BatchDayCatchUpOperation operation,
+      List<BatchDayCatchUpProgress.Item> items,
+      FrozenBatch batch,
+      BatchRequestIdentity identity) {
+    // 先校验所有待发项目，避免中途发现冻结信息损坏造成新一轮部分提交。
+    for (int index = 0; index < items.size(); index++) {
+      BatchDayCatchUpProgress.Item item = items.get(index);
+      if (item.status() != BatchDayCatchUpProgress.ItemStatus.PENDING) continue;
+      FrozenTarget target = batch.targets().get(index);
+      if (EmptyChecks.isNull(target.workflowDefinitionId()) || target.workflowDefinitionId() <= 0) {
+        throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+      }
+      if (CatchUpPolicyType.MANUAL_APPROVAL.code().equals(batch.catchUpPolicy())) {
+        ApprovalSubmitCommand command =
+            BatchDayCatchUpReconciliation.frozenApproval(operation, target.sourceKey());
+        JsonNode payload = JsonUtils.fromJsonStrict(command.payloadJson(), JsonNode.class);
+        String payloadReason =
+            payload.path("reason").isNull() || payload.path("reason").isMissingNode()
+                ? null
+                : payload.path("reason").asText();
+        if (!Objects.equals(identity.reason(), command.approvalReason())
+            || !Objects.equals(identity.reason(), payloadReason)) {
+          throw BizException.of(ResultCode.STATE_CONFLICT, CONFLICT_MESSAGE);
+        }
+      }
+    }
   }
 
   private String submitFrozenTarget(

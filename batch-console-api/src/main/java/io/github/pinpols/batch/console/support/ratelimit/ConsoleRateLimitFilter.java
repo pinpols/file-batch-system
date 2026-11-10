@@ -73,6 +73,17 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
     String path = ServletRequestPaths.applicationPath(request);
     String method = request.getMethod();
 
+    if (rejectLogin(request, response, path, method)) return;
+    if (rejectSensitiveOperation(response, path, method)) return;
+    if (rejectExpensiveOperation(response, path)) return;
+    if (rejectFileOperation(response, path)) return;
+
+    filterChain.doFilter(request, response);
+  }
+
+  private boolean rejectLogin(
+      HttpServletRequest request, HttpServletResponse response, String path, String method)
+      throws IOException {
     // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────
     boolean passwordLogin = HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path);
     if (passwordLogin) {
@@ -83,10 +94,15 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
         log.warn("Console login rate limit triggered: ip={} path={}", sanitizedIp, sanitizedPath);
         responseWriter.write(
             response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
-        return;
+        return true;
       }
     }
 
+    return false;
+  }
+
+  private boolean rejectSensitiveOperation(HttpServletResponse response, String path, String method)
+      throws IOException {
     // ── 2. 敏感操作接口：用户限流 ─────────────────────────────────────────
     if (HttpMethod.POST.matches(method) && path.startsWith(TRIGGER_PATH_PREFIX)) {
       String username = resolveUsername();
@@ -102,11 +118,16 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
               sanitizedPath);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return;
+          return true;
         }
       }
     }
 
+    return false;
+  }
+
+  private boolean rejectExpensiveOperation(HttpServletResponse response, String path)
+      throws IOException {
     // ── 3. 昂贵接口（导出/导入/Excel/报表）：用户限流（任意方法，更严阈值）────────────────
     if (isExpensivePath(path)) {
       String username = resolveUsername();
@@ -122,11 +143,16 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
               sanitizedPath);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return;
+          return true;
         }
       }
     }
 
+    return false;
+  }
+
+  private boolean rejectFileOperation(HttpServletResponse response, String path)
+      throws IOException {
     // ── 4. 文件操作接口（下载/错误导出/归档/重派/到达组）：用户限流（任意方法，高水位）──────────
     if (matchesAnyPrefix(path, properties.getFileOpPathPrefixes())) {
       String username = resolveUsername();
@@ -142,12 +168,12 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
               sanitizedPath);
           responseWriter.write(
               response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "操作请求过于频繁，请稍后重试");
-          return;
+          return true;
         }
       }
     }
 
-    filterChain.doFilter(request, response);
+    return false;
   }
 
   private boolean isExpensivePath(String path) {

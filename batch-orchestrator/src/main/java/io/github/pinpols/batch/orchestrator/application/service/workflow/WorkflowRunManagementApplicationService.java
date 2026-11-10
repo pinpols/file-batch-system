@@ -171,9 +171,10 @@ public class WorkflowRunManagementApplicationService {
         && !WorkflowRunStatus.FAILED.code().equals(run.getRunStatus())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.skip_node_state_invalid");
     }
-    WorkflowNodeRunEntity nodeRun = Guard.requireFound(
-        workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode),
-        "node run not found: " + nodeCode);
+    WorkflowNodeRunEntity latestNodeRun =
+        workflowNodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(id, nodeCode);
+    WorkflowNodeRunEntity nodeRun =
+        Guard.requireFound(latestNodeRun, "node run not found: " + nodeCode);
     if (!WorkflowNodeRunStatus.FAILED.code().equals(nodeRun.getNodeStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,

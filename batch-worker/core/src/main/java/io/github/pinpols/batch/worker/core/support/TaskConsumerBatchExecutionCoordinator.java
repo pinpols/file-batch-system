@@ -58,8 +58,9 @@ final class TaskConsumerBatchExecutionCoordinator {
             "{} batch payload parse failed — publishing only this payload to DLQ: error={}",
             workerType,
             errorSummary);
-        if (!publishToDlq.apply(
-            payload, SwallowedExceptionLogger.safeMessage(parseEx.getMessage(), 2000))) {
+        BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
+        String safeError = SwallowedExceptionLogger.safeMessage(parseEx.getMessage(), 2000);
+        if (!deadLetterPublisher.apply(payload, safeError)) {
           return false;
         }
         continue;
@@ -125,8 +126,10 @@ final class TaskConsumerBatchExecutionCoordinator {
             workerType,
             taskId,
             errorSummary);
-        if (!publishToDlq.apply(
-            payload, SwallowedExceptionLogger.safeMessage(execution.error().getMessage(), 2000))) {
+        BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
+        String safeError =
+            SwallowedExceptionLogger.safeMessage(execution.error().getMessage(), 2000);
+        if (!deadLetterPublisher.apply(payload, safeError)) {
           allDlq = false;
         }
       }

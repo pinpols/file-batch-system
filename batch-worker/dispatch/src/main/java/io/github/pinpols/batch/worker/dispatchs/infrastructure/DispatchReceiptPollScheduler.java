@@ -267,18 +267,7 @@ public class DispatchReceiptPollScheduler {
         }
         root = objectMapper.readTree(limited);
       }
-      boolean acknowledged = root.path("acknowledged").asBoolean(false);
-      boolean ack = acknowledged;
-      if (!ack) {
-        String responseStatus = root.path("status").asText();
-        ack = "ACKED".equalsIgnoreCase(responseStatus);
-      }
-      if (!ack) {
-        String receiptStatus = root.path("receipt_status").asText();
-        String successReceiptStatus = FileReceiptStatus.SUCCESS.code();
-        ack = successReceiptStatus.equalsIgnoreCase(receiptStatus);
-      }
-      if (!ack) {
+      if (!isAcknowledged(root)) {
         return;
       }
       String receiptCode = root.path(DispatchRuntimeKeys.RECEIPT_CODE).asText(null);
@@ -309,5 +298,18 @@ public class DispatchReceiptPollScheduler {
             receiptCode);
       }
     }
+  }
+
+  private static boolean isAcknowledged(JsonNode root) {
+    if (root.path("acknowledged").asBoolean(false)) {
+      return true;
+    }
+    String responseStatus = root.path("status").asText();
+    if ("ACKED".equalsIgnoreCase(responseStatus)) {
+      return true;
+    }
+    String receiptStatus = root.path("receipt_status").asText();
+    String successReceiptStatus = FileReceiptStatus.SUCCESS.code();
+    return successReceiptStatus.equalsIgnoreCase(receiptStatus);
   }
 }

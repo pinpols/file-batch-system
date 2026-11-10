@@ -20,13 +20,15 @@ public class ImportIngressOwnershipRepository {
 
   /** 只有 ACTIVE 范围可供 Import 扫描。 */
   public Optional<Scope> findActiveScope(String scopeId) {
-    List<Scope> scopes = scopes(mapper.findActiveScope(scopeId));
+    List<OwnershipRow> rows = mapper.findActiveScope(scopeId);
+    List<Scope> scopes = scopes(rows);
     return scopes.stream().findFirst();
   }
 
   /** 已退休范围继续受保护，明确释放后才可交给普通对象对账。 */
   public List<Scope> listProtectedScopes(String storageId) {
-    return scopes(mapper.listProtectedScopes(storageId));
+    List<OwnershipRow> rows = mapper.listProtectedScopes(storageId);
+    return scopes(rows);
   }
 
   private List<Scope> scopes(List<OwnershipRow> rows) {

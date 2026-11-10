@@ -101,7 +101,7 @@ public class ConsoleSessionRegistry {
       long v = version == null ? 1L : version;
       localMirror.put(key, v);
       try {
-        sessionStore.expire(key, sessionStateTtl());
+        sessionStore.expire(key, resolveTtl(securityProperties));
       } catch (DataAccessException expireEx) {
         // TTL 刷失败不影响版本号正确性，仅可能让 key 提前 / 延后到期。记 warn 不抛。
         String causeSummary = SwallowedExceptionLogger.summary(expireEx);
@@ -179,10 +179,6 @@ public class ConsoleSessionRegistry {
       log.warn("Unexpected Redis failure in isCurrentSession; fail-open: {}", causeSummary);
       return true;
     }
-  }
-
-  private Duration sessionStateTtl() {
-    return resolveTtl(securityProperties);
   }
 
   private static Duration resolveTtl(ConsoleSecurityProperties props) {

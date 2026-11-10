@@ -48,7 +48,8 @@ public class DataQualityRuleApplicationService {
     if (ruleMapper.update(rule) == 0) {
       throw new OperationFailure(Kind.NOT_FOUND, "Data quality rule was not found");
     }
-    return Objects.requireNonNull(ruleMapper.selectById(id, tenantId));
+    DataQualityRuleEntity updated = ruleMapper.selectById(id, tenantId);
+    return Objects.requireNonNull(updated);
   }
 
   private static DataQualityRuleEntity toEntity(DataQualityRuleWriteCommand command) {

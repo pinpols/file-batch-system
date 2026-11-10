@@ -107,7 +107,13 @@ public final class ExportRegionResolver {
   }
 
   private static String firstNonBlank(String a, String b) {
-    return Texts.hasText(a) ? a : (Texts.hasText(b) ? b : null);
+    if (Texts.hasText(a)) {
+      return a;
+    }
+    if (Texts.hasText(b)) {
+      return b;
+    }
+    return null;
   }
 
   private static List<String> stringList(Object primary, Object alias) {

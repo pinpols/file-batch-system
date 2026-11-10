@@ -96,7 +96,9 @@ public class CrossDayDependencyReconciler {
   void reconcileOne(WorkflowNodeRunEntity nodeRun, Instant now) {
     // workflow_node_run 实体本身没 tenantId 字段；用 RLS-bypass 的 selectByIdAnyTenant 先解出 tenant，
     // 之后所有 mapper / dispatchNode / alertEventService 调用都在 runWithTenant 内做，保证 RLS Phase B 通过。
-    WorkflowRunEntity workflowRun = loadWorkflowRun(nodeRun.getWorkflowRunId());
+    Long workflowRunId = nodeRun.getWorkflowRunId();
+    WorkflowRunEntity workflowRun =
+        workflowMappers.workflowRunMapper.selectByIdAnyTenant(workflowRunId);
     if (EmptyChecks.isNull(workflowRun)) {
       return;
     }
@@ -166,10 +168,6 @@ public class CrossDayDependencyReconciler {
         emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
       }
     }
-  }
-
-  private WorkflowRunEntity loadWorkflowRun(Long workflowRunId) {
-    return workflowMappers.workflowRunMapper.selectByIdAnyTenant(workflowRunId);
   }
 
   private long resolveTimeoutSeconds(WorkflowNodeEntity workflowNode) {

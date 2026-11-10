@@ -117,7 +117,7 @@ public record WorkflowRunExecutionSnapshot(
           if (jobEntry.containsKey("frozenDispatchChannelSnapshots")) {
             Object rawDispatchChannelSnapshots = jobEntry.get("frozenDispatchChannelSnapshots");
             Map<String, String> dispatchChannelSnapshots =
-                readProtectedDispatchChannelSnapshots(rawDispatchChannelSnapshots);
+                readProtectedTemplateSnapshots(rawDispatchChannelSnapshots);
             frozenDispatchChannelSnapshots.put(nodeCode, dispatchChannelSnapshots);
           }
           if (jobEntry.containsKey("dispatchSecretBindings")) {
@@ -662,10 +662,6 @@ public record WorkflowRunExecutionSnapshot(
       snapshots.put(templateCode, protectedSnapshot);
     }
     return snapshots;
-  }
-
-  private static Map<String, String> readProtectedDispatchChannelSnapshots(Object value) {
-    return readProtectedTemplateSnapshots(value);
   }
 
   private static Map<String, Object> readDispatchSecretBindings(Object value) {

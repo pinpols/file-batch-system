@@ -59,22 +59,24 @@ public record WorkflowLaunchWaitSnapshot(
   }
 
   public void validate() {
-    if (EmptyChecks.isBlank(originalRequestJson)
+    boolean snapshotFieldsAreInvalid = EmptyChecks.isBlank(originalRequestJson)
         || EmptyChecks.isBlank(launchParamsJson)
         || EmptyChecks.isNull(workflowVersion)
         || workflowVersion <= 0
         || EmptyChecks.isBlank(traceId)
-        || EmptyChecks.isBlank(executionSnapshotJson)) {
+        || EmptyChecks.isBlank(executionSnapshotJson);
+    if (snapshotFieldsAreInvalid) {
       throw invalidSnapshot();
     }
     LaunchRequest original = originalRequest();
-    if (EmptyChecks.isNull(original)
+    boolean originalRequestIsInvalid = EmptyChecks.isNull(original)
         || EmptyChecks.isNull(original.workflowDefinitionId())
         || original.workflowDefinitionId() <= 0
         || EmptyChecks.isNotNull(original.jobCode())
         || EmptyChecks.isBlank(original.tenantId())
         || EmptyChecks.isBlank(original.requestId())
-        || EmptyChecks.isNull(original.bizDate())) {
+        || EmptyChecks.isNull(original.bizDate());
+    if (originalRequestIsInvalid) {
       throw invalidSnapshot();
     }
     WorkflowRunExecutionSnapshot parsed = executionSnapshot();

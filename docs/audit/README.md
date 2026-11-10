@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [控制流可读性审查](control-flow-readability-2026-11-10.md) | 2026-11-10 阶段 8 批次 0–4：14 处嵌套选择按原短路拆开，88 项原有单测通过；薄壳与未纳入清单的跨行选择只记录、不另开清零 |
 | [架构适配性评估文档复核](architecture-suitability-assessment-review-2026-11-04.md) | 复核 11-02 评估的事实陈述、链接与后续闭环：结论与代码一致，优化候选未进入待办、派发服务注释漂移未修；只读文档核对 |
 | [架构设计审查：状态所有权与模块边界](architecture-design-review-2026-11-03.md) | 平台库表写入者矩阵、共享 DB 账号、pipeline_instance 双写竞态、Orchestrator 分层；ARCH-02/03、CONV-01..04 已随 #1307 合并，ARCH-01 Worker 范围随 #1309 合并并完成本地受限角色演练；Console/Trigger/Orchestrator 运行时角色已实现并完成本地演练（Console 作业依赖 RLS 问题已修复），ARCH-04 与目标环境切换未完成 |
 | [批量调度系统架构适配性评估](architecture-suitability-assessment-2026-11-02.md) | 统一运行、事件可靠性、Worker 隔离、多租户、扩缩容与观测的静态评估；不代表生产或容量验收 |

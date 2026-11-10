@@ -542,54 +542,8 @@ public class DefaultConsoleJobDefinitionApplicationService
     jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
     JobDefinitionView refreshedCopy = jobDefinitionMapper.selectById(resolved, copied.getId());
     copied = Guard.requireFound(refreshedCopy, "copied job definition not found");
-    // Apply overrides
-    JobDefinitionMaintenanceUpdateParam param = new JobDefinitionMaintenanceUpdateParam();
-    param.setTenantId(resolved);
-    param.setJobCode(request.getNewJobCode());
-    param.setDependsOnJobCode(copied.getDependsOnJobCode());
-    param.setJobName(request.getJobName() != null ? request.getJobName() : copied.getJobName());
-    param.setQueueCode(
-        request.getQueueCode() != null
-            ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
-            : copied.getQueueCode());
-    param.setWorkerGroup(
-        request.getWorkerGroup() != null
-            ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
-            : copied.getWorkerGroup());
-    param.setScheduleExpr(
-        request.getScheduleExpr() != null ? request.getScheduleExpr() : copied.getScheduleExpr());
-    param.setTriggerMode(copied.getTriggerMode());
-    param.setCalendarCode(
-        request.getCalendarCode() != null
-            ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
-            : copied.getCalendarCode());
-    param.setWindowCode(
-        request.getWindowCode() != null
-            ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
-            : copied.getWindowCode());
-    param.setRetryPolicy(
-        request.getRetryPolicy() != null ? request.getRetryPolicy() : copied.getRetryPolicy());
-    param.setRetryMaxCount(
-        request.getRetryMaxCount() != null
-            ? request.getRetryMaxCount()
-            : copied.getRetryMaxCount());
-    param.setTimeoutSeconds(
-        request.getTimeoutSeconds() != null
-            ? request.getTimeoutSeconds()
-            : copied.getTimeoutSeconds());
-    param.setShardStrategy(copied.getShardStrategy());
-    param.setExecutionMode(copied.getExecutionMode());
-    param.setWatermarkField(copied.getWatermarkField());
-    // 维护更新会无条件写这三列。克隆请求没有对应覆盖项，必须带回刚复制的值，
-    // 否则 priority 被写成 null 触发非空约束，执行器和参数模板也会被清空。
-    param.setExecutionHandler(copied.getExecutionHandler());
-    param.setParamSchema(copied.getParamSchema());
-    param.setPriority(EmptyChecks.isNull(copied.getPriority()) ? 5 : copied.getPriority());
-    param.setDefaultParams(copied.getDefaultParams());
-    param.setEnabled(request.getEnabled() != null ? request.getEnabled() : copied.getEnabled());
-    param.setDescription(
-        request.getDescription() != null ? request.getDescription() : copied.getDescription());
-    param.setUpdatedBy(operator);
+    JobDefinitionMaintenanceUpdateParam param =
+        JobDefinitionCopyOverrideMapper.create(request, copied, resolved, operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
     Integer copiedSoftRuntimeSeconds = valueOrZero(copied.getSoftRuntimeSeconds());
     upsertMonitoringPolicy(resolved, copied.getId(), copied, copiedSoftRuntimeSeconds, operator);
@@ -663,13 +617,7 @@ public class DefaultConsoleJobDefinitionApplicationService
           normalizeDependencyRules(request.getJobDependencyRules());
       List<String> legacyCodes =
           normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
-      if (EmptyChecks.isNotEmpty(legacyCodes)) {
-        List<String> ruleUpstreamCodes =
-            rules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
-        if (!legacyCodes.equals(ruleUpstreamCodes)) {
-          throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
-        }
-      }
+      validateLegacyDependencyCodes(rules, legacyCodes);
       return rules;
     }
     List<String> dependencyCodes =
@@ -686,13 +634,7 @@ public class DefaultConsoleJobDefinitionApplicationService
           normalizeDependencyRules(request.getJobDependencyRules());
       List<String> legacyCodes =
           normalizeDependencies(request.getDependsOnJobCodes(), request.getDependsOnJobCode());
-      if (EmptyChecks.isNotEmpty(legacyCodes)) {
-        List<String> ruleUpstreamCodes =
-            rules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
-        if (!legacyCodes.equals(ruleUpstreamCodes)) {
-          throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
-        }
-      }
+      validateLegacyDependencyCodes(rules, legacyCodes);
       return rules;
     }
     if (EmptyChecks.isNotNull(request.getDependsOnJobCodes())) {
@@ -704,6 +646,17 @@ public class DefaultConsoleJobDefinitionApplicationService
       return preserveAlignments(requestedCodes, existing);
     }
     return resolveExistingDependencyRules(existing);
+  }
+
+  private static void validateLegacyDependencyCodes(
+      List<JobDependencyRuleRequest> rules, List<String> legacyCodes) {
+    if (EmptyChecks.isNotEmpty(legacyCodes)) {
+      List<String> ruleUpstreamCodes =
+          rules.stream().map(JobDependencyRuleRequest::upstreamJobCode).toList();
+      if (!legacyCodes.equals(ruleUpstreamCodes)) {
+        throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
+      }
+    }
   }
 
   private static List<JobDependencyRuleRequest> normalizeDependencyRules(

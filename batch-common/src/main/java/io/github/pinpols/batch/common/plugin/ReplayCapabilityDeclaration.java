@@ -69,12 +69,15 @@ public record ReplayCapabilityDeclaration(
    * 执行配置解析出的能力。
    */
   public boolean covers(ReplayCapabilityDeclaration actual) {
-    return isFullyDeclared()
+    boolean capabilitiesAreDeclared = isFullyDeclared()
         && idempotencyCapability != IdempotencyCapability.NONE
         && EmptyChecks.isNotNull(actual)
         && actual.isFullyDeclared()
-        && actual.idempotencyCapability() != IdempotencyCapability.NONE
-        && pluginId.equals(actual.pluginId())
+        && actual.idempotencyCapability() != IdempotencyCapability.NONE;
+    if (!capabilitiesAreDeclared) {
+      return false;
+    }
+    return pluginId.equals(actual.pluginId())
         && pluginVersion.equals(actual.pluginVersion())
         && externalEffectCategories.containsAll(actual.externalEffectCategories())
         && idempotencyCapability == actual.idempotencyCapability()

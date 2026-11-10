@@ -1,15 +1,18 @@
 package io.github.pinpols.batch.worker.dispatchs.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sun.net.httpserver.HttpServer;
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
 import io.github.pinpols.batch.worker.dispatchs.config.DispatchReceiptPollProperties;
@@ -17,13 +20,19 @@ import io.github.pinpols.batch.worker.dispatchs.domain.PendingReceiptPollRow;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.io.IOException;
 import java.net.ConnectException;
+import java.net.InetSocketAddress;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.context.event.ContextClosedEvent;
 import org.springframework.context.support.StaticApplicationContext;
 
@@ -34,6 +43,7 @@ class DispatchReceiptPollSchedulerTest {
   private DispatchReceiptPollProperties properties;
   private FileDispatchRepository fileDispatchRepository;
   private PlatformFileRecordRepository fileRecords;
+  private BatchSecurityProperties securityProperties;
   private DispatchReceiptPollScheduler scheduler;
 
   @BeforeEach
@@ -41,13 +51,14 @@ class DispatchReceiptPollSchedulerTest {
     properties = new DispatchReceiptPollProperties();
     fileDispatchRepository = mock(FileDispatchRepository.class);
     fileRecords = mock(PlatformFileRecordRepository.class);
+    securityProperties = new BatchSecurityProperties();
     scheduler = new DispatchReceiptPollScheduler(
         properties,
         fileDispatchRepository,
         new ObjectMapper(),
         fileRecords,
         new SimpleMeterRegistry(),
-        new BatchSecurityProperties());
+        securityProperties);
     scheduler.initializeMeters();
   }
 
@@ -157,6 +168,49 @@ class DispatchReceiptPollSchedulerTest {
 
     verify(fileDispatchRepository, never())
         .markAcked(anyString(), anyLong(), anyString(), anyString());
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("acknowledgedResponses")
+  @DisplayName("三种回执确认格式均推进分发记录和文件状态")
+  void shouldMarkAcknowledgedReceipt(String scenario, String responseBody) throws Exception {
+    HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/receipt", exchange -> {
+      byte[] bytes = responseBody.getBytes(StandardCharsets.UTF_8);
+      exchange.sendResponseHeaders(200, bytes.length);
+      try (var output = exchange.getResponseBody()) {
+        output.write(bytes);
+      }
+    });
+    server.start();
+    try {
+      properties.setEnabled(true);
+      securityProperties.setBypassMode(true);
+      PendingReceiptPollRow row = new PendingReceiptPollRow("tenant-1", 42L, "channel-1", "req-1");
+      when(fileDispatchRepository.listPendingReceiptPolls(anyInt(), anyLong()))
+          .thenReturn(List.of(row));
+      String pollUrl = "http://127.0.0.1:" + server.getAddress().getPort() + "/receipt";
+      when(fileDispatchRepository.loadChannel("tenant-1", "channel-1"))
+          .thenReturn(Map.of("receipt_poll_url", pollUrl));
+      when(fileDispatchRepository.markAcked("tenant-1", 42L, "channel-1", "receipt-1"))
+          .thenReturn(1);
+
+      scheduler.poll();
+
+      verify(fileDispatchRepository).markAcked("tenant-1", 42L, "channel-1", "receipt-1");
+      verify(fileRecords).updateFileStatus(eq(42L), eq("DISPATCHED"), any());
+    } finally {
+      scheduler.shutdown();
+      server.stop(0);
+    }
+  }
+
+  private static Stream<Arguments> acknowledgedResponses() {
+    return Stream.of(
+        Arguments.of("acknowledged", "{\"acknowledged\":true,\"receiptCode\":\"receipt-1\"}"),
+        Arguments.of("status", "{\"status\":\"ACKED\",\"receiptCode\":\"receipt-1\"}"),
+        Arguments.of(
+            "receipt_status", "{\"receipt_status\":\"SUCCESS\",\"receiptCode\":\"receipt-1\"}"));
   }
 
   @Test

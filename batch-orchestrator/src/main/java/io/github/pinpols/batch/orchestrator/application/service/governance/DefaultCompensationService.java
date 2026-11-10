@@ -180,29 +180,20 @@ public class DefaultCompensationService implements CompensationService {
     }
     // 2026-05-01 hardening: pre-insert 阶段(validate / 冲突检查 / insert 唯一约束)失败时
     // 也要落审计 trail。原实现只在 insert 成功后才 log,导致"提交即拒"的请求丢线索。
-    String commandNo = null;
-    String traceId = null;
-    String requestFingerprint = null;
+    PreInsertAttempt attempt = new PreInsertAttempt();
     try {
-      validate(command);
-      requestFingerprint = fingerprintApprovedRequest(command);
-      CompensationCommandEntity priorCommand = findPriorApprovedCommand(command);
+      CompensationCommandEntity priorCommand = prepareBeforeInsert(command, attempt);
       if (EmptyChecks.isNotNull(priorCommand)) {
-        return resolvePriorApprovedCommand(priorCommand, requestFingerprint);
+        return resolvePriorApprovedCommand(priorCommand, attempt.requestFingerprint);
       }
-      commandNo = IdGenerator.newBusinessNo("cmp");
-      String normalizedType = normalizeType(command.compensationType());
-      String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
-      traceId = Texts.hasText(resolvedTraceId)
-          ? resolvedTraceId
-          : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
-      assertNoRunningConflict(command);
     } catch (RuntimeException pre) {
-      appendPreInsertFailureLogInNewTx(command, traceId, commandNo, pre);
+      appendPreInsertFailureLogInNewTx(command, attempt.traceId, attempt.commandNo, pre);
       throw pre;
     }
+    String commandNo = attempt.commandNo;
+    String traceId = attempt.traceId;
     CompensationCommandEntity entity = buildCommandEntity(command, commandNo, traceId);
-    entity.setRequestFingerprint(requestFingerprint);
+    entity.setRequestFingerprint(attempt.requestFingerprint);
     String resolvedCommandNo = commandNo;
     String resolvedTraceId = traceId;
     try {
@@ -210,7 +201,7 @@ public class DefaultCompensationService implements CompensationService {
     } catch (DataIntegrityViolationException ex) {
       CompensationCommandEntity concurrentCommand = findPriorApprovedCommand(command);
       if (EmptyChecks.isNotNull(concurrentCommand)) {
-        return resolvePriorApprovedCommand(concurrentCommand, requestFingerprint);
+        return resolvePriorApprovedCommand(concurrentCommand, attempt.requestFingerprint);
       }
       BizException wrapped =
           BizException.of(ResultCode.CONFLICT, "error.compensation.already_running", ex);
@@ -244,6 +235,30 @@ public class DefaultCompensationService implements CompensationService {
           new IllegalStateException("caller transaction rolled back after compensation"));
     }
     return resolvedCommandNo;
+  }
+
+  private CompensationCommandEntity prepareBeforeInsert(
+      CompensationSubmitCommand command, PreInsertAttempt attempt) {
+    validate(command);
+    attempt.requestFingerprint = fingerprintApprovedRequest(command);
+    CompensationCommandEntity priorCommand = findPriorApprovedCommand(command);
+    if (EmptyChecks.isNotNull(priorCommand)) {
+      return priorCommand;
+    }
+    attempt.commandNo = IdGenerator.newBusinessNo("cmp");
+    String normalizedType = normalizeType(command.compensationType());
+    String resolvedTraceId = resolveTraceIdFromTarget(command, normalizedType);
+    attempt.traceId = Texts.hasText(resolvedTraceId)
+        ? resolvedTraceId
+        : (Texts.hasText(command.traceId()) ? command.traceId() : IdGenerator.newTraceId());
+    assertNoRunningConflict(command);
+    return null;
+  }
+
+  private static final class PreInsertAttempt {
+    private String commandNo;
+    private String traceId;
+    private String requestFingerprint;
   }
 
   /** 参与外层事务时，等该事务释放命令行锁后才能以独立事务记录回滚。 */

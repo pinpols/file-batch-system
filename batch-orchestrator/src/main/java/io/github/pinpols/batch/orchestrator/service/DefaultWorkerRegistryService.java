@@ -77,7 +77,8 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     String expectedStatus = registry == null ? null : registry.status();
     String newStatus = resolveIncomingStatus(
         request, WorkerRegistryStatus.ONLINE.code(), registry == null ? null : registry.status());
-    Instant heartbeatAt = firstHeartbeat();
+    // 首次注册用本机时钟，忽略 worker 上报的 heartbeatAt，避免 NTP 漂移写入 heartbeat_at。
+    Instant heartbeatAt = BatchDateTimeSupport.utcNow();
     Integer newLoad = request.currentLoad() != null
         ? request.currentLoad()
         : (registry == null ? 0 : registry.currentLoad());
@@ -353,15 +354,6 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.common.concurrent_modification");
     }
     return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
-  }
-
-  /**
-   * 首次注册 / register 路径的 heartbeat_at。Spring Data JDBC 路径必须 Java 端持有时间，无法直接用 SQL current_timestamp；
-   * 这里统一用 orchestrator JVM 时钟，<b>忽略 worker 提供的 {@code request.heartbeatAt()}</b>，避免 worker NTP
-   * 漂移直接进入 DB 的 heartbeat_at 列。心跳路径走 mybatis xml 直接 current_timestamp，二者口径一致。
-   */
-  private Instant firstHeartbeat() {
-    return BatchDateTimeSupport.utcNow();
   }
 
   /**

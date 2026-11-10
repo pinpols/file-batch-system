@@ -782,14 +782,15 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (!bindingRequested) {
       return Map.of();
     }
-    if (!Texts.hasText(command.calendarCode())
+    boolean bindingIsInvalid = !Texts.hasText(command.calendarCode())
         || EmptyChecks.isNull(command.workflowDefinitionId())
         || !Texts.hasText(command.fileGroupCode())
         || EmptyChecks.isNull(command.bizDate())
         || EmptyChecks.isEmpty(command.requiredFileNames())
         || command.requiredFileNames().size() > 100
         || !Texts.hasText(command.bundleTemplateCode())
-        || command.bundleTemplateCode().trim().length() > 128) {
+        || command.bundleTemplateCode().trim().length() > 128;
+    if (bindingIsInvalid) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ResultCode.INVALID_ARGUMENT.detailKey(),

@@ -184,25 +184,28 @@ public class ImportIngressScanner {
       current = applyPage(current, batchSize, bindings, nestedScopes);
     }
     if (EmptyChecks.isNotNull(current) && "CLEAN".equals(current.phase())) {
-      Lease cleanLease = current;
-      scanRepository.fenced(cleanLease, () -> {
-        int deleted = scanRepository.cleanOldObjects(cleanLease, batchSize);
-        if (deleted < batchSize) {
-          Lease next = cleanLease.toBuilder()
-              .phase("DISCOVER")
-              .cycle(cleanLease.cycle() + 1)
-              .listMarker(null)
-              .afterObjectId(0)
-              .revisitMarker(null)
-              .revisitBudget(1)
-              .revisitRemaining(1)
-              .nextLane("FORWARD")
-              .cleanupRequired(false)
-              .build();
-          scanRepository.saveProgress(next);
-        }
-      });
+      cleanPage(current, batchSize);
     }
+  }
+
+  private void cleanPage(Lease cleanLease, int batchSize) {
+    scanRepository.fenced(cleanLease, () -> {
+      int deleted = scanRepository.cleanOldObjects(cleanLease, batchSize);
+      if (deleted < batchSize) {
+        Lease next = cleanLease.toBuilder()
+            .phase("DISCOVER")
+            .cycle(cleanLease.cycle() + 1)
+            .listMarker(null)
+            .afterObjectId(0)
+            .revisitMarker(null)
+            .revisitBudget(1)
+            .revisitRemaining(1)
+            .nextLane("FORWARD")
+            .cleanupRequired(false)
+            .build();
+        scanRepository.saveProgress(next);
+      }
+    });
   }
 
   private Lease discoverPage(
@@ -228,23 +231,9 @@ public class ImportIngressScanner {
     Lease.LeaseBuilder builder =
         lease.toBuilder().phase("INDEX").afterObjectId(0).windowId(lease.windowId() + 1);
     if (revisit) {
-      boolean revisitComplete = EmptyChecks.isNull(marker) || lease.revisitRemaining() <= 1;
-      if (revisitComplete) {
-        long nextBudget =
-            lease.revisitBudget() > Long.MAX_VALUE / 2 ? Long.MAX_VALUE : lease.revisitBudget() * 2;
-        builder.revisitMarker(null).revisitBudget(nextBudget).revisitRemaining(nextBudget);
-      } else {
-        builder.revisitMarker(marker).revisitRemaining(lease.revisitRemaining() - 1);
-      }
-      builder.nextLane("FORWARD");
+      recordRevisitLane(builder, lease, marker);
     } else {
-      builder
-          .listMarker(marker)
-          .cleanupRequired(EmptyChecks.isNull(marker))
-          .nextLane(EmptyChecks.isNull(marker) ? "FORWARD" : "REVISIT");
-      if (EmptyChecks.isNull(marker)) {
-        builder.applyAfterId(0).applyUpperId(0);
-      }
+      recordForwardLane(builder, marker);
     }
     Lease next = builder.build();
     boolean updated = scanRepository.fenced(lease, () -> {
@@ -301,26 +290,10 @@ public class ImportIngressScanner {
           EmptyChecks.isNull(parsed) ? latest : findExactObject(observed.key());
       Lease objectLease = current;
       AtomicBoolean invalidChanged = new AtomicBoolean();
+      IndexDecision decision =
+          new IndexDecision(verified, shouldRead, parsed, invalidReason, invalidChanged);
       boolean updated = scanRepository.fenced(objectLease, () -> {
-        if (EmptyChecks.isNull(verified)) {
-          scanRepository.removeObject(objectLease, observed.id());
-        } else if (!sameVersion(observed, verified)) {
-          scanRepository.observe(objectLease, sha256(verified.key()), verified, true);
-        } else {
-          if (shouldRead) {
-            String reason = EmptyChecks.isNull(parsed) ? invalidReason : null;
-            invalidChanged.set(
-                scanRepository.setManifestWaitReason(objectLease, observed.id(), reason)
-                    && EmptyChecks.isNotNull(reason));
-          }
-          boolean exportTrigger = EmptyChecks.isNotNull(parsed)
-              && scannerProperties.getArrival().isEnabled()
-              && parsed.isManifestOnlyExport()
-              && Texts.hasText(parsed.fileGroupCode());
-          if (exportTrigger) {
-            registerExportTrigger(snapshot(observed), parsed);
-          }
-        }
+        persistIndexedObject(objectLease, observed, decision);
         scanRepository.saveProgress(
             objectLease.toBuilder().afterObjectId(observed.id()).build());
       });
@@ -340,6 +313,34 @@ public class ImportIngressScanner {
     Lease next = completed.toBuilder().phase("APPLY").afterObjectId(0).build();
     boolean updated = scanRepository.fenced(completed, () -> scanRepository.saveProgress(next));
     return updated ? next : null;
+  }
+
+  private void persistIndexedObject(Lease objectLease, Observed observed, IndexDecision decision) {
+    if (EmptyChecks.isNull(decision.verified())) {
+      scanRepository.removeObject(objectLease, observed.id());
+      return;
+    }
+    if (!sameVersion(observed, decision.verified())) {
+      ImportIngressScanRepository repository = scanRepository;
+      String objectDigest = sha256(decision.verified().key());
+      repository.observe(objectLease, objectDigest, decision.verified(), true);
+      return;
+    }
+    if (decision.shouldRead()) {
+      String reason = EmptyChecks.isNull(decision.parsed()) ? decision.invalidReason() : null;
+      AtomicBoolean invalidChanged = decision.invalidChanged();
+      boolean waitReasonChanged =
+          scanRepository.setManifestWaitReason(objectLease, observed.id(), reason);
+      invalidChanged.set(waitReasonChanged && EmptyChecks.isNotNull(reason));
+    }
+    BatchManifest parsed = decision.parsed();
+    boolean exportTrigger = EmptyChecks.isNotNull(parsed)
+        && scannerProperties.getArrival().isEnabled()
+        && parsed.isManifestOnlyExport()
+        && Texts.hasText(parsed.fileGroupCode());
+    if (exportTrigger) {
+      registerExportTrigger(snapshot(observed), parsed);
+    }
   }
 
   private Lease applyPage(
@@ -379,8 +380,7 @@ public class ImportIngressScanner {
     }
     Lease completed = current;
     boolean sweepComplete = page.size() <= batchSize;
-    String nextPhase =
-        completed.cleanupRequired() ? (sweepComplete ? "CLEAN" : "APPLY") : "DISCOVER";
+    String nextPhase = nextPhaseAfterApply(completed.cleanupRequired(), sweepComplete);
     Lease.LeaseBuilder nextBuilder = completed.toBuilder().phase(nextPhase).afterObjectId(0);
     if (sweepComplete) {
       nextBuilder.applyAfterId(0).applyUpperId(0);
@@ -388,6 +388,39 @@ public class ImportIngressScanner {
     Lease next = nextBuilder.build();
     boolean updated = scanRepository.fenced(completed, () -> scanRepository.saveProgress(next));
     return updated ? next : null;
+  }
+
+  private static void recordRevisitLane(Lease.LeaseBuilder builder, Lease lease, String marker) {
+    boolean revisitComplete = EmptyChecks.isNull(marker) || lease.revisitRemaining() <= 1;
+    if (revisitComplete) {
+      long nextBudget =
+          lease.revisitBudget() > Long.MAX_VALUE / 2 ? Long.MAX_VALUE : lease.revisitBudget() * 2;
+      builder.revisitMarker(null).revisitBudget(nextBudget).revisitRemaining(nextBudget);
+    } else {
+      builder.revisitMarker(marker).revisitRemaining(lease.revisitRemaining() - 1);
+    }
+    builder.nextLane("FORWARD");
+  }
+
+  private static void recordForwardLane(Lease.LeaseBuilder builder, String marker) {
+    boolean listingFinished = EmptyChecks.isNull(marker);
+    builder
+        .listMarker(marker)
+        .cleanupRequired(listingFinished)
+        .nextLane(listingFinished ? "FORWARD" : "REVISIT");
+    if (listingFinished) {
+      builder.applyAfterId(0).applyUpperId(0);
+    }
+  }
+
+  private static String nextPhaseAfterApply(boolean cleanupRequired, boolean sweepComplete) {
+    if (!cleanupRequired) {
+      return "DISCOVER";
+    }
+    if (sweepComplete) {
+      return "CLEAN";
+    }
+    return "APPLY";
   }
 
   /** 更具体的入口拥有其数据目录和权威清单，退休后仍保持保护。 */
@@ -398,6 +431,22 @@ public class ImportIngressScanner {
   }
 
   private boolean applyObject(Lease lease, Observed observed, EffectiveBindings bindings) {
+    PreparedObject prepared = prepareObject(lease, observed, bindings);
+    boolean committed = scanRepository.fenced(
+        lease, () -> commitPreparedObject(lease, observed, prepared, bindings));
+    if (committed && EmptyChecks.isNotNull(prepared.changedWaitReason().get())) {
+      log.warn(
+          "导入扫描等待权威批次清单: tenantId={}, bizDate={}, objectDigest={}, reason={}",
+          prepared.resolvedTenant(),
+          prepared.fileDate(),
+          sha256(observed.key()),
+          prepared.changedWaitReason().get());
+    }
+    return committed;
+  }
+
+  /** 登记前按原顺序完成观察。存在性查询仍放在短路链内，提交阶段只消费这里的结果。 */
+  private PreparedObject prepareObject(Lease lease, Observed observed, EffectiveBindings bindings) {
     String manifestSuffix = scannerProperties.getBatchManifestSuffix();
     boolean batchManifestObject =
         EmptyChecks.isNotBlank(manifestSuffix) && observed.key().endsWith(manifestSuffix);
@@ -433,14 +482,14 @@ public class ImportIngressScanner {
     boolean scannerAccepted = reconciled && isScannerAcceptedFile(existingRecord);
     boolean manifestReady =
         !scannerProperties.isBatchManifestEnabled() || EmptyChecks.isNotNull(batchManifest);
-    SidecarManifest sidecar = eligible
-            && done
-            && manifestReady
-            && (!alreadyRegistered || (reconciled && !scannerAccepted))
-            && isManifestMode()
-            && scannerProperties.isRequireDoneFile()
-        ? readAndVerifyManifest(marker, snapshot(observed), lease)
-        : null;
+    boolean sidecarRequired = eligible
+        && done
+        && manifestReady
+        && (!alreadyRegistered || (reconciled && !scannerAccepted))
+        && isManifestMode()
+        && scannerProperties.isRequireDoneFile();
+    SidecarManifest sidecar =
+        sidecarRequired ? readAndVerifyManifest(marker, snapshot(observed), lease) : null;
     ObjectSummary verified = eligible && done ? findExactObject(observed.key()) : latest;
     boolean verifiedVersion = EmptyChecks.isNotNull(verified) && sameVersion(observed, verified);
     ObjectSummary verifiedAuthority = EmptyChecks.isNull(resolution.manifest())
@@ -451,47 +500,65 @@ public class ImportIngressScanner {
     boolean verifiedDone = done
         && (!scannerProperties.isRequireDoneFile()
             || objectStore.exists(s3StorageProperties.getBucket(), marker));
-    AtomicReference<String> changedWaitReason = new AtomicReference<>();
-    boolean committed = scanRepository.fenced(lease, () -> {
-      if (EmptyChecks.isNotNull(resolution.key())
-          && EmptyChecks.isNull(verifiedAuthority)
-          && EmptyChecks.isNotNull(resolution.previousId())) {
-        scanRepository.removeObject(lease, resolution.previousId());
-      } else if (EmptyChecks.isNotNull(verifiedAuthority)) {
-        scanRepository.observe(lease, sha256(verifiedAuthority.key()), verifiedAuthority, true);
-      }
-      if (eligible && scannerProperties.isBatchManifestEnabled()) {
-        String reason = verifiedManifest ? resolution.waitReason() : "MANIFEST_CHANGED";
-        boolean changed = scanRepository.setManifestWaitReason(lease, observed.id(), reason);
-        if (changed && EmptyChecks.isNotNull(reason)) {
-          changedWaitReason.set(reason);
-        }
-      }
-      if (EmptyChecks.isNull(verified)) {
-        scanRepository.removeObject(lease, observed.id());
-      } else if (!verifiedVersion) {
-        scanRepository.observe(lease, sha256(verified.key()), verified, batchManifestObject);
-      } else if (eligible
-          && verifiedDone
-          && verifiedManifest
-          && verifiedVersion
-          && (!scannerProperties.isBatchManifestEnabled()
-              || EmptyChecks.isNotNull(batchManifest))) {
-        List<BatchManifest> manifests =
-            EmptyChecks.isNull(batchManifest) ? List.of() : List.of(batchManifest);
-        tryRegisterPrepared(snapshot(observed), manifests, sidecar, bindings);
-      }
-      scanRepository.saveProgress(lease.toBuilder().applyAfterId(observed.id()).build());
-    });
-    if (committed && EmptyChecks.isNotNull(changedWaitReason.get())) {
-      log.warn(
-          "导入扫描等待权威批次清单: tenantId={}, bizDate={}, objectDigest={}, reason={}",
-          resolvedTenant,
-          fileDate,
-          sha256(observed.key()),
-          changedWaitReason.get());
+    return new PreparedObject(
+        batchManifestObject,
+        resolvedTenant,
+        fileDate,
+        resolution,
+        eligible,
+        verified,
+        verifiedVersion,
+        verifiedAuthority,
+        verifiedManifest,
+        verifiedDone,
+        batchManifest,
+        sidecar,
+        new AtomicReference<>());
+  }
+
+  private void commitPreparedObject(
+      Lease lease, Observed observed, PreparedObject prepared, EffectiveBindings bindings) {
+    ManifestResolution resolution = prepared.resolution();
+    ObjectSummary verifiedAuthority = prepared.verifiedAuthority();
+    boolean authorityDisappeared = EmptyChecks.isNotNull(resolution.key())
+        && EmptyChecks.isNull(verifiedAuthority)
+        && EmptyChecks.isNotNull(resolution.previousId());
+    if (authorityDisappeared) {
+      scanRepository.removeObject(lease, resolution.previousId());
+    } else if (EmptyChecks.isNotNull(verifiedAuthority)) {
+      ImportIngressScanRepository repository = scanRepository;
+      String authorityDigest = sha256(verifiedAuthority.key());
+      repository.observe(lease, authorityDigest, verifiedAuthority, true);
     }
-    return committed;
+    if (prepared.eligible() && scannerProperties.isBatchManifestEnabled()) {
+      String reason = prepared.verifiedManifest() ? resolution.waitReason() : "MANIFEST_CHANGED";
+      boolean changed = scanRepository.setManifestWaitReason(lease, observed.id(), reason);
+      if (changed && EmptyChecks.isNotNull(reason)) {
+        prepared.changedWaitReason().set(reason);
+      }
+    }
+    ObjectSummary verified = prepared.verified();
+    if (EmptyChecks.isNull(verified)) {
+      scanRepository.removeObject(lease, observed.id());
+    } else if (!prepared.verifiedVersion()) {
+      ImportIngressScanRepository repository = scanRepository;
+      String objectDigest = sha256(verified.key());
+      repository.observe(lease, objectDigest, verified, prepared.batchManifestObject());
+    } else {
+      boolean readyToRegister = prepared.eligible()
+          && prepared.verifiedDone()
+          && prepared.verifiedManifest()
+          && prepared.verifiedVersion()
+          && (!scannerProperties.isBatchManifestEnabled()
+              || EmptyChecks.isNotNull(prepared.batchManifest()));
+      if (readyToRegister) {
+        List<BatchManifest> manifests = EmptyChecks.isNull(prepared.batchManifest())
+            ? List.of()
+            : List.of(prepared.batchManifest());
+        tryRegisterPrepared(snapshot(observed), manifests, prepared.sidecar(), bindings);
+      }
+    }
+    scanRepository.saveProgress(lease.toBuilder().applyAfterId(observed.id()).build());
   }
 
   private ManifestResolution resolveAuthoritativeManifest(
@@ -551,6 +618,29 @@ public class ImportIngressScanner {
         && first.size() == second.size()
         && Objects.equals(first.etag(), second.etag());
   }
+
+  private record IndexDecision(
+      ObjectSummary verified,
+      boolean shouldRead,
+      BatchManifest parsed,
+      String invalidReason,
+      AtomicBoolean invalidChanged) {}
+
+  /** 一次对象登记前的观察结果。存在性与清单读取已在准备阶段按原短路完成。 */
+  private record PreparedObject(
+      boolean batchManifestObject,
+      String resolvedTenant,
+      LocalDate fileDate,
+      ManifestResolution resolution,
+      boolean eligible,
+      ObjectSummary verified,
+      boolean verifiedVersion,
+      ObjectSummary verifiedAuthority,
+      boolean verifiedManifest,
+      boolean verifiedDone,
+      BatchManifest batchManifest,
+      SidecarManifest sidecar,
+      AtomicReference<String> changedWaitReason) {}
 
   private record ManifestResolution(
       BatchManifest manifest,

@@ -18,6 +18,7 @@
 | 5 测试风格 | 已完成 | 已按阶段 4 影响域统一 fixture、契约命名和协作者窄单测；移除 worker 消费测试对受保护业务入口的反射调用，保留服务级契约测试 | 后续新增测试沿用本阶段规则；不对全仓测试做机械重写，动态 Map 和 test-as-spec inline fixture 按既有边界保留 |
 | 6 例外治理 | 已完成 | #954：suppression 登记表、精确规则守卫、失效编译守卫清理 | 后续新增例外必须登记并通过 CI |
 | 7 最终验收 | 进行中 | 刷新可读性扫描快照；将快照一致性接入 PR/full gate | 完成 Full Gate、关键 sim 与容器启动验收 |
+| 8 控制流语义密度 | 批次 0–4 已在工作区落地，未提交 | 批次 0：文件到达探测与入站扫描周期。批次 1–4：14 处嵌套选择按原短路拆开。原有单测通过 | 嵌套 `if` 不按层数全量改写。未纳入核查清单的跨行选择保持原样 |
 
 近期合入记录：#918 `529b9a319`、#921 `557897f4b`、#922 `c053c4544`、#923 `8e5e1342`、#924 `cfa33e871`、#933 `911fd15d8`、#935 `fb2c7ad59`、#936 `490d02c73`、#938 `a2b5ca682`。#935 后已用 `@Lazy/@Autowired`、`ObjectProvider` 及常见 self/proxy 标识复扫生产源码，结果为 0；#936 保持 batch-day replay 预览 JSON 字段不变，仅将两组固定 SQL 投影移至 record 边界。本批继续保持 wire 字段不变，将文件治理延迟指标的 Controller/调度读取边界改为固定 record，Redis 内部缓存协议保持兼容。
 
@@ -252,3 +253,102 @@
 - Full Gate、关键 E2E/sim 和容器启动证据无回归。
 
 达到以上状态即可视为“符合成熟 Spring/Apache 项目的工程纪律”，无需复制其源码组织或为了风格一致牺牲 BFS 的批处理领域表达。
+
+<a id="control-flow-density-2026-11-10"></a>
+
+## 6. 2026-11-10 控制流语义密度
+
+阶段 0–6 已把格式、自注入、固定契约、复杂类和 suppression 收口。2026-11-10 复核看到的阅读成本来自方法内部：校验、查询和状态推进写在一起，互斥阶段用嵌套分支或嵌套三元表达，同一失败翻译边界包住整段调用。`if` 个数、`catch` 个数和行数不作为清理指标。长期规则见 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#17-控制流阶段与异常边界)；调度器三层 catch 继续按 [§11.4](../coding-conventions.md#114-分布式锁的两种用法) 保留。
+
+本阶段按已核查的嵌套选择分批，不按文件数或 `if` 数量推进。批次 0–4 已在工作区落地，未提交。日期化结论见 [控制流可读性审查](../audit/control-flow-readability-2026-11-10.md)。
+
+### 6.1 已完成批次（工作区，未提交）
+
+| 位置 | 拆分 | 保持不变 |
+|---|---|---|
+| `FileArrivalSensorPolicy.probe` | 按原顺序完成规格、日期、LIKE 转义和渠道校验；有效规格交给 `selectLatestArrival` 查询与命中 | 日期解析失败仍在查询之外返回。查询、存储身份和 legacy 警告仍在原 `catch (Exception)` 内，失败码仍是 `sensor_probe_failed` |
+| `ImportIngressScanner` 分页 | `recordRevisitLane`、`recordForwardLane`、`nextPhaseAfterApply` | 回访预算翻倍与 `Long.MAX_VALUE` 饱和、列举结束后的游标清零、`DISCOVER` / `APPLY` / `CLEAN` 的选择条件与原表达式一致 |
+| `ImportIngressScanner.scanCycle` | `CLEAN` 收成 `cleanPage` | 删除数量、周期加一和进度字段与原围栏内代码一致 |
+| `ImportIngressScanner.indexPage` | 单对象写入收成 `persistIndexedObject` | 进度保存仍在围栏内、对象写入之后。清单等待原因和导出触发仍只在版本未变时执行 |
+| `ImportIngressScanner.applyObject` | `prepareObject` 完成观察，`commitPreparedObject` 写入 | 文件存在性、清单读取和 sidecar 校验仍在原短路链内。登记条件是局部布尔，只在版本确认分支里决定是否登记 |
+| `DataQualityCheckExecutor` | `gateStatus` | `BLOCKED` / `WARN` / `PASS` 的优先级不变。SHADOW 模式仍在这次选择之后把 `BLOCKED` 降为 `WARN` |
+| `LineageEvidenceService` | `evidenceSource`、`dispatchEvidenceSource` | 热表、归档和合并来源的选择条件不变。查询仍在选择之前完成 |
+| `WorkflowNodeTerminalFinalizer` | `terminalRunStatus` | 四种终态编码不变，仍在状态写库之前算完 |
+| `DispatchChannelSnapshotService` | `selectedReplayParams` | 指定原配置时，空参数仍换成空 Map；其他策略仍用当前参数 |
+| `DefaultTaskCreationService.resolveStepCode` | 序号缺省提前成一次纯空判断 | 有任务类型时仍用 `类型:序号`，否则仍用 `EXECUTION:序号` |
+| `TriggerGracefulShutdown.status` | `schedulerStatus` | 仍按停机、待机、已启动、停止的顺序询问调度器，命中即返回 |
+| `TaskDispatcher.diagnosticMessage` | 提前返回 | 空消息仍先变成空串。类名已在文案中则原样返回，空文案只返回类名，否则仍是 `文案 (类名)` |
+| `DispatchDeliveryMetrics` | `deliveryResult` | 熔断拒绝仍优先于成功，得到 `circuit_open` / `success` / `failure` |
+| `LocalOutboxDispatchSupport` | 出箱结果文案按是否传输桩分支 | 传输桩才读取明细并把 null 收成空串 |
+| `ExportRegionResolver.firstNonBlank` | 提前返回 | 第一项有文本则不再看第二项 |
+| `DatasetRuleEvaluator` | `expectedRowCount` | 规则上的精确行数优先；否则才在清单参与时用清单期望行数 |
+| `ConsoleApiExceptionHandler.handleBizException` | `bizExceptionMessage` | 没有文案解析器时，空 message key 仍返回异常原文，否则返回错误码标签。有解析器时才调用 `resolve` |
+| `TenantConfigPackageExcelApplyService` | `singleJobDefinitionId` | 有单个作业时只取它的标识；没有作业且已有定义时才读取定义上的标识 |
+
+批次 2–4 验证：`TriggerGracefulShutdownTest` 7、`TaskDispatcherTest` 15、`DispatchDeliveryMetricsTest` 6、`LocalOutboxDispatchSupportTest` 4、`ExportRegionResolverTest` 8、`DatasetRuleEvaluatorManifestRowCountTest` 4、`DatasetRuleEvaluatorControlRecordTest` 4、`TenantConfigPackageExcelMonitoringPolicyApplyTest` 15、`ConsoleApiExceptionHandlerTest` 25，合计 88 项失败数为 0。`LocalOutboxDispatchSupport` Spotless apply 为 clean。这是原有契约测试，不代表全仓或真实存储验收。
+
+批次 1 验证：`DataQualityCheckExecutorTest` 10、`LineageEvidenceServiceTest` 8、`WorkflowNodeTerminalFinalizerTest` 7、`DispatchChannelSnapshotServiceTest` 28、`DefaultTaskCreationServiceTest` 25，合计 78 项失败数为 0。对应 5 个生产文件 Spotless 为 clean。`DispatchChannelSnapshotIntegrationTest` 未跑。
+
+验证命令与结果：
+
+```bash
+./mvnw -o -ntp -pl batch-orchestrator -am -Dtest=FileArrivalSensorPolicyTest -Dsurefire.failIfNoSpecifiedTests=false test
+./mvnw -o -ntp -pl batch-worker/import -am -Dtest=ImportIngressScannerTest,ImportIngressScannerPaginationTest -Dsurefire.failIfNoSpecifiedTests=false test
+./mvnw -o -ntp -pl batch-orchestrator,batch-worker/import -DspotlessFiles='.*(FileArrivalSensorPolicy|ImportIngressScanner)[.]java' spotless:check
+```
+
+`FileArrivalSensorPolicyTest` 13 项、扫描器两类共 16 项失败数为 0；两个文件 Spotless 为 clean。扫描器测试在本批次拆分后重跑，仍是 16 项失败数为 0。这是原有契约测试，不代表全仓或真实存储验收。集成测试未在本批次运行。
+
+### 6.2 准入
+
+进入本阶段需要同时满足三条：方法里能指出至少两个业务阶段，或用嵌套分支/嵌套三元选择下一阶段；提取后主方法能按阶段读完；该路径已有契约测试，或先补一条锁定现有分支的测试再移动代码。
+
+随手改到该方法时，可以把重复的纯空判断收成一个局部变量，或把已有三项业务条件按 §1.5 命名。空值防御、两项简单条件、声明式注册、调度器三层 catch，以及已经把一组调用翻译成同一错误码的 `catch`，保持原样。
+
+持久化、跨进程或写入租约的阶段字符串保持原字面量。可读性提交不把它们改成枚举，也不调整写入顺序。含外部调用或可变状态的条件保持短路顺序、调用次数和异常时机。
+
+### 6.3 一个批次怎么做
+
+1. 一个提交只处理一个方法簇，并写明等价点：阶段字符串、错误码、短路、日志字段和 SQL。
+2. 行为缺陷另案修改。渠道匹配、状态机和错误码修正不进入可读性提交。
+3. 主方法保留阶段顺序。守卫条件直接返回；同一阶段内的互斥状态再用分支表达。
+4. 选择下一阶段的嵌套三元收成提前返回的私有方法。新代码的 `try` 包住会抛出的那次调用；既有失败翻译边界按 §1.7 保持。
+5. 扫描脚本只列出候选。`check-java-readability.py` 继续只检查显式类型和配置代理，不增加 `if` / `catch` 计数门禁。
+6. 验收使用该类型已有测试、Spotless，以及差异审查。缺少能观察分支结果的测试时，先补测试，确认它锁住当前行为，再提取。
+
+### 6.4 完成定义
+
+- 被纳入批次的主方法可以按阶段读完，失败路径和成功路径分开。
+- 原契约测试通过，阶段字符串、错误码、异常类型和副作用次数与提取前一致。
+- 未纳入批次的大类、调度器 catch 和动态 Map 保持原登记结论。
+- 全仓文件数、`if` 数或 `catch` 数下降不构成完成。
+
+### 6.5 2026-11-10 核查后的批次
+
+> 追加复核：批次 2 的 `TriggerGracefulShutdown.status` 曾改变调度器状态与排水状态的读取顺序，现已恢复；重放提交的 8 参数方法已收敛为 6 参数。见[控制流可读性审查的追加复核](../audit/control-flow-readability-2026-11-10.md#追加复核与整改方案2026-11-10)。以下批次为工作区落地记录，验证结果以追加记录为准。
+
+生产 Java 3100 个。去掉注释、字符串和泛型 `?` 后，同一语句里出现两个三元运算符的有 16 处：3 处是并列缺省，保留；13 处是同一行里的嵌套选择。另有 1 处三元分跨两行，是 `ConsoleApiExceptionHandler.handleBizException`。嵌套选择合计 14 处，批次 1–4 已全部按原短路改完。调度器三层 catch、既有失败翻译边界、持久化阶段字符串和大类按行数拆分不进入这些批次。并列缺省保留在 `ConsoleTriggerStatsResponse`、`ConsoleWorkerLoadResponse` 和 `ConfigPackageExcelWorkbookWriter`。
+
+| 批次 | 状态 | 范围 |
+|---|---|---|
+| 0 | 工作区已落地 | `FileArrivalSensorPolicy` 与 `ImportIngressScanner` 的扫描阶段 |
+| 1 | 工作区已落地 | 编排器 6 处状态选择，见 §6.1 |
+| 2 | 工作区已落地 | `TriggerGracefulShutdown.status` 的调度器状态短路；`TaskDispatcher.diagnosticMessage` |
+| 3 | 工作区已落地 | `DispatchDeliveryMetrics`、`LocalOutboxDispatchSupport`、`ExportRegionResolver.firstNonBlank`、`DatasetRuleEvaluator` 的期望行数 |
+| 4 | 工作区已落地 | `ConsoleApiExceptionHandler.handleBizException` 的消息选择；`TenantConfigPackageExcelApplyService` 的单作业定义标识 |
+
+### 6.6 因素裁定
+
+业界做法是让读者看出业务决定，并用格式化工具管住排版。下面这些因素这次不再单独立项。
+
+| 因素 | 裁定 |
+|---|---|
+| 格式、换行、import | Spotless / Palantir 已是门禁，手改不增加可读性 |
+| 嵌套三元选择 | 闭合清单 14 处已全部落地。同一行并列缺省不改。`DefaultWorkflowRunLaunchService` 另有的三处跨行选择已收成 `preferLaunchSnapshot`，`buildExecutionSnapshot` 仍只在容量和重放都为空时调用 |
+| 薄壳转发、一行封装和辅助类 | 阶段 8 里的空串拼接和只用一次的登记条件已收回调用点。全仓纯转调已收回调用点。命名谓词、声明式登记和 `writeHeaderBlock` 留下。`GenerateStep.execute`、重放提交和补偿提交已按原顺序拆阶段。私有方法个数不是拆类门槛。`ImportIngressScanner` 的登记簇仍留在扫描器里 |
+| 嵌套 `if` | 空值防御、类型判断和同一阶段内的互斥分支保持原样。不按嵌套层数开清单 |
+| 三项以上复合条件 | 2026-10-24 已从生产 387 处提取 251 处，其余按 §1.5 保留。不再按 `&&` / `||` 数量提取 |
+| `try/catch` | 新代码只包住会抛出的调用。调度器三层 catch 和已经翻译成同一错误码的 `catch` 保持原边界 |
+| 一个方法里的多个阶段 | 批次 0 已处理文件到达和扫描周期。35 个 700 行以上的类维持阶段 4 的裁定，行数不是拆分理由 |
+| 长参数、嵌套调用、动态 Map、自注入 | 参数例外、增量调用门禁、固定契约和自注入归零都已有现成规则。历史候选不回扫清零 |
+| 阶段字符串、注释和泛化命名 | 已持久化的阶段字符串保持字面量。命名和注释只在改到该行时调整 |

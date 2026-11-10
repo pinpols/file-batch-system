@@ -81,10 +81,12 @@ public class LineageEvidenceService {
           version.tenantId(), version.jobInstanceId());
       pipelineSource = ARCHIVE;
     }
-    List<FileRecord> hotFiles = nullToEmpty(lineageEvidenceMapper.selectFileRecords(
-        version.tenantId(), version.jobInstanceId(), payloadFileId));
-    List<FileRecord> archivedFiles = nullToEmpty(lineageEvidenceMapper.selectArchivedFileRecords(
-        version.tenantId(), version.jobInstanceId(), payloadFileId));
+    List<FileRecord> hotFileRows = lineageEvidenceMapper.selectFileRecords(
+        version.tenantId(), version.jobInstanceId(), payloadFileId);
+    List<FileRecord> hotFiles = nullToEmpty(hotFileRows);
+    List<FileRecord> archivedFileRows = lineageEvidenceMapper.selectArchivedFileRecords(
+        version.tenantId(), version.jobInstanceId(), payloadFileId);
+    List<FileRecord> archivedFiles = nullToEmpty(archivedFileRows);
     TreeMap<Long, FileRecord> filesById = new TreeMap<>();
     boolean archivedJob = EmptyChecks.isNotNull(jobInstance) && ARCHIVE.equals(jobInstanceSource);
     List<FileRecord> preferredFiles = archivedJob ? archivedFiles : hotFiles;
@@ -96,15 +98,16 @@ public class LineageEvidenceService {
     String preferredSource = archivedJob ? ARCHIVE : HOT;
     String otherSource = archivedJob ? HOT : ARCHIVE;
     String fileSource =
-        preferredCount == 0 ? otherSource : otherFilesUsed ? HOT_AND_ARCHIVE : preferredSource;
+        evidenceSource(preferredCount, otherFilesUsed, otherSource, preferredSource);
     List<FileRecord> files = List.copyOf(filesById.values());
     List<Long> fileIds =
         files.stream().map(FileRecord::id).filter(Objects::nonNull).toList();
-    List<DispatchRecord> hotDispatches = nullToEmpty(lineageEvidenceMapper.selectDispatchRecords(
-        version.tenantId(), version.jobInstanceId(), fileIds));
-    List<DispatchRecord> archivedDispatches =
-        nullToEmpty(lineageEvidenceMapper.selectArchivedDispatchRecords(
-            version.tenantId(), version.jobInstanceId(), fileIds));
+    List<DispatchRecord> hotDispatchRows = lineageEvidenceMapper.selectDispatchRecords(
+        version.tenantId(), version.jobInstanceId(), fileIds);
+    List<DispatchRecord> hotDispatches = nullToEmpty(hotDispatchRows);
+    List<DispatchRecord> archivedDispatchRows = lineageEvidenceMapper.selectArchivedDispatchRecords(
+        version.tenantId(), version.jobInstanceId(), fileIds);
+    List<DispatchRecord> archivedDispatches = nullToEmpty(archivedDispatchRows);
     TreeMap<Long, DispatchRecord> dispatchesById = new TreeMap<>(Comparator.reverseOrder());
     hotDispatches.forEach(dispatch -> dispatchesById.put(dispatch.id(), dispatch));
     archivedDispatches.forEach(dispatch -> dispatchesById.putIfAbsent(dispatch.id(), dispatch));
@@ -116,7 +119,7 @@ public class LineageEvidenceService {
         dispatches.stream().anyMatch(dispatch -> hotDispatchIds.contains(dispatch.id()));
     boolean archiveDispatchUsed =
         dispatches.stream().anyMatch(dispatch -> !hotDispatchIds.contains(dispatch.id()));
-    String dispatchSource = hotDispatchUsed ? archiveDispatchUsed ? HOT_AND_ARCHIVE : HOT : ARCHIVE;
+    String dispatchSource = dispatchEvidenceSource(hotDispatchUsed, archiveDispatchUsed);
     pipelines = nullToEmpty(pipelines);
     dispatches = nullToEmpty(dispatches);
     EvidenceCoverageInput coverageInput = new EvidenceCoverageInput(
@@ -201,6 +204,28 @@ public class LineageEvidenceService {
         input.fileRecords().size(),
         input.dispatchRecords().size(),
         knownGaps);
+  }
+
+  private static String evidenceSource(
+      int preferredCount, boolean otherFilesUsed, String otherSource, String preferredSource) {
+    if (preferredCount == 0) {
+      return otherSource;
+    }
+    if (otherFilesUsed) {
+      return HOT_AND_ARCHIVE;
+    }
+    return preferredSource;
+  }
+
+  private static String dispatchEvidenceSource(
+      boolean hotDispatchUsed, boolean archiveDispatchUsed) {
+    if (!hotDispatchUsed) {
+      return ARCHIVE;
+    }
+    if (archiveDispatchUsed) {
+      return HOT_AND_ARCHIVE;
+    }
+    return HOT;
   }
 
   private static Long payloadFileId(ResultVersionEntity version) {

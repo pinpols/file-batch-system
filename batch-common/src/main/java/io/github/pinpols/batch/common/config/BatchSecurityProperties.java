@@ -46,7 +46,7 @@ public class BatchSecurityProperties implements EnvironmentAware {
     if (environment == null) {
       return; // 纯单元测试场景，无 Spring 容器
     }
-    boolean prod = isProductionProfile();
+    boolean prod = BatchProfileSupport.isProductionProfile(environment);
     if (bypassMode && prod) {
       throw new IllegalStateException(
           "FATAL: batch.security.bypass-mode=true is forbidden in a production profile."
@@ -117,9 +117,5 @@ public class BatchSecurityProperties implements EnvironmentAware {
           + MIN_SECRET_LENGTH
           + "; inject a high-entropy secret through a secret manager");
     }
-  }
-
-  private boolean isProductionProfile() {
-    return BatchProfileSupport.isProductionProfile(environment);
   }
 }

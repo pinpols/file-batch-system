@@ -106,11 +106,12 @@ public class BatchDayCatchUpReconciliation {
     try {
       JsonNode snapshot = JsonUtils.fromJsonStrict(operation.snapshotJson(), JsonNode.class);
       JsonNode identity = JsonUtils.fromJsonStrict(operation.requestJson(), JsonNode.class);
-      if (EmptyChecks.isNull(snapshot)
+      boolean snapshotStructureIsInvalid = EmptyChecks.isNull(snapshot)
           || EmptyChecks.isNull(identity)
           || !snapshot.path("targets").isArray()
           || !snapshot.path(BIZ_DATE_FIELD).isTextual()
-          || !snapshot.path("calendarCode").isTextual()
+          || !snapshot.path("calendarCode").isTextual();
+      if (snapshotStructureIsInvalid
           || !snapshot.path(BIZ_DATE_FIELD).equals(identity.path(BIZ_DATE_FIELD))
           || !snapshot.path("calendarCode").equals(identity.path("calendarCode"))) throw conflict();
       JsonNode reasonNode = identity.path("reason");
@@ -209,13 +210,14 @@ public class BatchDayCatchUpReconciliation {
       ApprovalSubmitCommand command =
           JsonUtils.fromJsonStrict(match.path("approval").toString(), ApprovalSubmitCommand.class);
       JsonNode payload = JsonUtils.fromJsonStrict(command.payloadJson(), JsonNode.class);
-      if (!operation.tenantId().equals(command.tenantId())
+      boolean approvalIdentityIsInvalid = !operation.tenantId().equals(command.tenantId())
           || !sourceKey.equals(command.idempotencyKey())
           || !"CATCH_UP".equals(command.approvalType())
           || !"CATCH_UP".equals(command.actionType())
           || !"CATCH_UP".equals(command.targetType())
           || EmptyChecks.isNotNull(command.targetId())
-          || !Texts.hasText(command.requesterId())
+          || !Texts.hasText(command.requesterId());
+      if (approvalIdentityIsInvalid
           || EmptyChecks.isNull(payload)
           || !payload.isObject()
           || !operation.tenantId().equals(payload.path("tenantId").asText())

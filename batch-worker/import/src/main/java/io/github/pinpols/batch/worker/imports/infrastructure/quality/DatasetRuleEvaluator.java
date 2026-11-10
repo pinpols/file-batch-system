@@ -74,6 +74,17 @@ public class DatasetRuleEvaluator {
     return integerValue(expectedRecordCount);
   }
 
+  private static Integer expectedRowCount(
+      Integer ruleExact, boolean fromManifest, Integer manifestExpectedCount) {
+    if (ruleExact != null) {
+      return ruleExact;
+    }
+    if (fromManifest) {
+      return manifestExpectedCount;
+    }
+    return null;
+  }
+
   private void evaluateRowCount(
       long actualCount,
       Map<String, Object> ruleSet,
@@ -86,8 +97,7 @@ public class DatasetRuleEvaluator {
     // 模板已显式给 exact → 模板优先(template wins),不被 manifest 覆盖。
     Integer ruleExact = ruleEnabled ? integerValue(rule.get("exact")) : null;
     boolean fromManifest = ruleExact == null && manifestExpectedCount != null;
-    Integer exactCount =
-        ruleExact != null ? ruleExact : (fromManifest ? manifestExpectedCount : null);
+    Integer exactCount = expectedRowCount(ruleExact, fromManifest, manifestExpectedCount);
     Integer minCount = null;
     Integer maxCount = null;
     if (ruleEnabled) {
