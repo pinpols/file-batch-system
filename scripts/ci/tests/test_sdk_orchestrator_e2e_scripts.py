@@ -23,6 +23,25 @@ def write_executable(path: Path, content: str) -> None:
 
 
 class SdkOrchestratorE2eScriptsTest(unittest.TestCase):
+    def test_kafka_recovery_uses_existing_main_language_lanes(self) -> None:
+        workflow = (ROOT / ".github/workflows/sdk-orchestrator-e2e.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("  pull_request:", workflow)
+        cases = (
+            ("java", "KafkaTaskConsumerHeartbeatIntegrationTest"),
+            ("typescript", "tests/kafka-withheld-integration.test.ts"),
+            ("rust", "real_broker_two_member_partition_transfer"),
+        )
+        for language, selector in cases:
+            with self.subTest(language=language):
+                marker = f"        if: matrix.lang == '{language}'"
+                section = workflow.split(selector, maxsplit=1)[0].rsplit("      - name:", 1)[-1]
+                self.assertIn(marker, section)
+                self.assertIn("BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092", section)
+        self.assertIn("-Dsurefire.failIfNoSpecifiedTests=true test", workflow)
+        self.assertIn("grep -Eq '^test result: ok\\. 1 passed;'", workflow)
+
     def assert_worker_preparation_failure_is_propagated(
         self,
         language: str,

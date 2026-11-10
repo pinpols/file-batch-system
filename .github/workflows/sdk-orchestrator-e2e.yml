@@ -204,6 +204,34 @@ jobs:
         # 五语言使用同一套自包含 fixture 和硬断言。
         run: bash scripts/ci/run-sdk-orchestrator-e2e.sh "${{ matrix.lang }}"
 
+      - name: Verify Java Kafka heartbeat during slow claim
+        if: matrix.lang == 'java'
+        env:
+          BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092
+        run: >-
+          ./mvnw -B -pl sdk/java/core
+          -Dtest=KafkaTaskConsumerHeartbeatIntegrationTest
+          -Dsurefire.failIfNoSpecifiedTests=true test
+
+      - name: Verify TypeScript Kafka partition recovery
+        if: matrix.lang == 'typescript'
+        working-directory: sdk/typescript
+        env:
+          BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092
+        run: |
+          npm ci --include=optional --ignore-scripts --no-audit --no-fund
+          node --test --test-concurrency=1 --experimental-strip-types tests/kafka-withheld-integration.test.ts
+
+      - name: Verify Rust Kafka partition transfer
+        if: matrix.lang == 'rust'
+        working-directory: sdk/rust
+        env:
+          BATCH_SDK_KAFKA_BOOTSTRAP: localhost:19092
+        run: |
+          set -o pipefail
+          cargo test --locked --features kafka real_broker_two_member_partition_transfer -- --nocapture | tee /tmp/sdk-rust-transfer.log
+          grep -Eq '^test result: ok\. 1 passed;' /tmp/sdk-rust-transfer.log
+
       - name: Dump container logs on failure
         if: failure()
         run: |

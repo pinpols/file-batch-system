@@ -22,7 +22,7 @@ Actions 展示名按 `Backend /`、`SDK /`、`Platform /` 区分职责；工作�
 |---|---|---|
 | [sdk-contract-parity.yml](sdk-contract-parity.yml) | PR → main、merge_group、手动 | 五语言共享 fixture 与契约测试；sdk-contract-required 汇总稳定门禁，独立汇总各语言和 live transport 测试日志。live transport 不纳入该 required 门禁 |
 | [sdk-python.yml](sdk-python.yml) | Python SDK/共享 fixture 相关 PR、main push；手动 | Python lint、格式和版本矩阵测试 |
-| [sdk-orchestrator-e2e.yml](sdk-orchestrator-e2e.yml) | main 的 SDK、服务、迁移、容器等相关变更；手动 | 预热镜像后，在五语言各自隔离服务栈运行真实 Orchestrator/Trigger E2E；不自动替代 PR 合入检查 |
+| [sdk-orchestrator-e2e.yml](sdk-orchestrator-e2e.yml) | main 的 SDK、服务、迁移、容器等相关变更；手动 | 预热镜像后，在五语言各自隔离服务栈运行真实 Orchestrator/Trigger E2E；Java、TypeScript、Rust 对应语言追加真实 Kafka 心跳或分区恢复回归；不自动替代 PR 合入检查 |
 | [sdk-release-validation.yml](sdk-release-validation.yml) | GitHub Release published、手动 | 契约/破坏性变更、打包和供应链验证；发布 job 依据事件、dry-run、版本及 Environment 条件执行，涉及包仓库写入。手动 dry-run 默认为 true |
 | [sdk-python-publish.yml](sdk-python-publish.yml) | sdk-python-v*.*.* tag push、手动 | 构建并发布 Python 包；手动 dry-run=true 指上传 TestPyPI，仍是外部写入，不表示只读演练 |
 

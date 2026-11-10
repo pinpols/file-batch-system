@@ -37,6 +37,8 @@ class MapperXmlTenantGuardArchTest extends BaseMapperXmlTenantGuardArchTest {
     Set<String> tables = new HashSet<>(super.tenantExemptTables());
     // V363 全局扫描单例仅保存分片水位和版本，不含租户业务数据，也没有 tenant_id。
     tables.add("waiting_partition_scan_cursor");
+    // V383 对账游标按共享存储和前缀维护跨租户扫描进度，没有 tenant_id。
+    tables.add("file_governance_reconcile_cursor");
     return Set.copyOf(tables);
   }
 
