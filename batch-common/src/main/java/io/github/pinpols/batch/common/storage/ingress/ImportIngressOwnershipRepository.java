@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.storage.ingress;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -49,12 +50,12 @@ public final class ImportIngressOwnershipRepository {
           while (resultSet.next()) {
             String scopeId = resultSet.getString("scope_id");
             ScopeBuilder scope = scopes.get(scopeId);
-            if (scope == null) {
+            if (EmptyChecks.isNull(scope)) {
               scope = new ScopeBuilder(resultSet);
               scopes.put(scopeId, scope);
             }
             String bindingType = resultSet.getString("binding_type");
-            if (bindingType != null) {
+            if (EmptyChecks.isNotNull(bindingType)) {
               scope.bindings.add(new Binding(
                   bindingType,
                   resultSet.getString("tenant_id"),
@@ -93,7 +94,7 @@ public final class ImportIngressOwnershipRepository {
 
     /** 清单可能位于扫描前缀外，按已声明模板的完整对象键识别。 */
     public boolean protects(String bucket, String objectKey) {
-      if (!bucketName.equals(bucket) || objectKey == null) {
+      if (!bucketName.equals(bucket) || EmptyChecks.isNull(objectKey)) {
         return false;
       }
       if (objectKey.startsWith(objectPrefix)) {
@@ -105,7 +106,7 @@ public final class ImportIngressOwnershipRepository {
     }
 
     private static boolean matchesManifestTemplate(String template, String key) {
-      if (template == null) {
+      if (EmptyChecks.isNull(template)) {
         return false;
       }
       String placeholder = template.contains("{bizDateCompact}") ? "{bizDateCompact}" : "{bizDate}";

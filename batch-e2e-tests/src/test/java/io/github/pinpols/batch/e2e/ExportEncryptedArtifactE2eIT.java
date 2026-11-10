@@ -69,21 +69,25 @@ class ExportEncryptedArtifactE2eIT extends AbstractIntegrationTest {
     }
   }
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final E2eOutboxPublishSupport outbox;
+  private final BatchObjectCryptoService crypto;
+  private final DataSource businessDataSource;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport outbox;
-
-  @Autowired
-  private BatchObjectCryptoService crypto;
-
-  @Autowired
-  @Qualifier("exportBusinessDataSource")
-  private DataSource businessDataSource;
+  ExportEncryptedArtifactE2eIT(
+      WorkflowRunLaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      E2eOutboxPublishSupport outbox,
+      BatchObjectCryptoService crypto,
+      @Qualifier("exportBusinessDataSource") DataSource businessDataSource) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outbox = outbox;
+    this.crypto = crypto;
+    this.businessDataSource = businessDataSource;
+  }
 
   @Test
   @DisplayName("Worker 加密导出后，关联文件大小、摘要和解密业务内容与实际对象一致")

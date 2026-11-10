@@ -105,7 +105,7 @@ public class MaintenanceAlertPublisher {
   /** 取消本组件的周期任务；调度器由 Spring 容器统一关闭。 */
   @PreDestroy
   void stopReconciliation() {
-    if (reconciliation != null) {
+    if (EmptyChecks.isNotNull(reconciliation)) {
       reconciliation.cancel(false);
     }
   }

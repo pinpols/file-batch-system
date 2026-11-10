@@ -2,6 +2,7 @@ package io.github.pinpols.batch.worker.imports.runtime;
 
 import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
@@ -67,7 +68,7 @@ public class ImportIngressScanRepository {
           SELECT lease_owner IS NULL OR lease_until <= clock_timestamp()
             FROM batch.import_ingress_scan_storage_lease WHERE storage_id = ? FOR UPDATE
           """, (rs, n) -> rs.getBoolean(1), storageId);
-      if (storageReady.isEmpty()) {
+      if (EmptyChecks.isEmpty(storageReady)) {
         throw new IllegalStateException("无法读取存储扫描租约，请检查数据库及 Import 角色授权");
       }
       jdbc.update("""
@@ -88,7 +89,7 @@ public class ImportIngressScanRepository {
           (rs, n) -> new Configuration(
               rs.getString("config_digest"), rs.getString("phase"), rs.getString("storage_id")),
           scopeId);
-      if (configurations.isEmpty()) {
+      if (EmptyChecks.isEmpty(configurations)) {
         throw new IllegalStateException("无法读取入站扫描状态，请检查数据库及 Import 角色授权");
       }
       Configuration configuration = configurations.get(0);
@@ -118,7 +119,9 @@ public class ImportIngressScanRepository {
              AND waiting_until > clock_timestamp() AND phase <> 'MAINTENANCE'
            ORDER BY waiting_since, scope_id LIMIT 1
           """, (rs, n) -> rs.getString(1), storageId);
-      if (eligible.isEmpty() || !scopeId.equals(eligible.get(0)) || !storageReady.get(0)) {
+      if (EmptyChecks.isEmpty(eligible)
+          || !scopeId.equals(eligible.get(0))
+          || !storageReady.get(0)) {
         return Optional.empty();
       }
       List<Lease> rows = jdbc.query(
@@ -154,7 +157,7 @@ public class ImportIngressScanRepository {
           owner,
           scopeId,
           configDigest);
-      if (rows.isEmpty()) {
+      if (EmptyChecks.isEmpty(rows)) {
         return Optional.empty();
       }
       List<Long> storageFences = jdbc.query("""
@@ -166,7 +169,7 @@ public class ImportIngressScanRepository {
       return Optional.of(
           rows.get(0).toBuilder().storageFence(storageFences.get(0)).build());
     });
-    return claimed == null ? Optional.empty() : claimed;
+    return EmptyChecks.isNull(claimed) ? Optional.empty() : claimed;
   }
 
   public void release(Lease lease) {
@@ -176,7 +179,7 @@ public class ImportIngressScanRepository {
           SELECT 1 FROM batch.import_ingress_scan_storage_lease
            WHERE storage_id = ? AND lease_owner = ? AND fence = ? FOR UPDATE
           """, (rs, n) -> rs.getInt(1), lease.storageId(), lease.owner(), lease.storageFence());
-      if (owned.isEmpty()) {
+      if (EmptyChecks.isEmpty(owned)) {
         return;
       }
       jdbc.update("""
@@ -202,7 +205,7 @@ public class ImportIngressScanRepository {
              AND lease_until > clock_timestamp()
            FOR UPDATE
           """, (rs, n) -> rs.getInt(1), lease.storageId(), lease.owner(), lease.storageFence());
-      if (storageLocked.isEmpty()) {
+      if (EmptyChecks.isEmpty(storageLocked)) {
         return false;
       }
       List<Integer> locked =
@@ -212,7 +215,7 @@ public class ImportIngressScanRepository {
              AND lease_until > clock_timestamp()
            FOR UPDATE
           """, (rs, n) -> rs.getInt(1), lease.scopeId(), lease.owner(), lease.fence());
-      if (locked.isEmpty()) {
+      if (EmptyChecks.isEmpty(locked)) {
         return false;
       }
       jdbc.update("""
@@ -266,7 +269,7 @@ public class ImportIngressScanRepository {
         lease.cycle(),
         lease.windowId(),
         manifest);
-    if (rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       throw new IllegalStateException("扫描对象摘要冲突，无法安全记录对象");
     }
   }
@@ -321,7 +324,7 @@ public class ImportIngressScanRepository {
         SELECT id FROM batch.import_ingress_scan_object
          WHERE scope_id = ? ORDER BY id DESC LIMIT 1
         """, (rs, n) -> rs.getLong(1), lease.scopeId());
-    return rows.isEmpty() ? 0 : rows.get(0);
+    return EmptyChecks.isEmpty(rows) ? 0 : rows.get(0);
   }
 
   public Optional<Observed> findObject(Lease lease, String digest) {
@@ -406,11 +409,11 @@ public class ImportIngressScanRepository {
   }
 
   private static Timestamp timestamp(Instant value) {
-    return value == null ? null : Timestamp.from(value);
+    return EmptyChecks.isNull(value) ? null : Timestamp.from(value);
   }
 
   private static Instant instant(Timestamp value) {
-    return value == null ? null : value.toInstant();
+    return EmptyChecks.isNull(value) ? null : value.toInstant();
   }
 
   @Builder(toBuilder = true)

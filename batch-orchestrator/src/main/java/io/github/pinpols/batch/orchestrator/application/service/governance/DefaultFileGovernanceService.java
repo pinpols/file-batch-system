@@ -263,7 +263,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     Long fileId = EmptyChecks.isEmpty(uploadGroupMetadata)
         ? fileGovernanceRepository.createReconciledFileRecord(recordCommand)
         : fileGovernanceRepository.createReconciledFileRecord(recordCommand, command.bizDate());
-    if (arrivalChannelCode == null) {
+    if (EmptyChecks.isNull(arrivalChannelCode)) {
       log.warn("上传文件渠道未通过租户渠道校验，文件等待不会按渠道匹配 tenant={} fileId={}", command.tenantId(), fileId);
     }
     if (EmptyChecks.isNull(fileId)) {

@@ -2184,7 +2184,7 @@
             "UPDATE"
           ],
           "sources": [
-            "batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/mapper/FileGovernanceReconcileCursorMapper.java"
+            "batch-orchestrator/src/main/resources/mapper/FileGovernanceReconcileCursorMapper.xml"
           ]
         },
         "batch.file_group_expectation_definition": {

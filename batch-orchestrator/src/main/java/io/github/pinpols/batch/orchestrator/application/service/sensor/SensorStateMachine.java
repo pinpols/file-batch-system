@@ -415,10 +415,10 @@ public class SensorStateMachine {
     String sourcePayload = resolveSourcePayloadForDownstream(wfRun, currentNodeCode);
     List<DagNodeResolution> nextNodes =
         workflowDagService.resolveNextNodesForRun(wfRun, currentNodeCode, success, sourcePayload);
-    if (nextNodes != null && !nextNodes.isEmpty()) {
+    if (EmptyChecks.isNotEmpty(nextNodes)) {
       WorkflowNodeDispatchService dispatchService = dispatchServiceProvider.getObject();
       for (DagNodeResolution next : nextNodes) {
-        if (next == null) {
+        if (EmptyChecks.isNull(next)) {
           continue;
         }
         if (WorkflowNodeCode.END.code().equals(next.nodeCode())) {

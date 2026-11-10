@@ -644,8 +644,9 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
 
     boolean serverError = statusCode >= 500 && statusCode < 600;
-    boolean expectMatch =
-        inv.expectedStatus.isEmpty() ? !serverError : inv.expectedStatus.contains(statusCode);
+    boolean expectMatch = EmptyChecks.isEmpty(inv.expectedStatus)
+        ? !serverError
+        : inv.expectedStatus.contains(statusCode);
     if (!expectMatch) {
       AtomicErrorCode code = IDEMPOTENT_METHODS.contains(inv.method)
           ? AtomicErrorCode.EXECUTION_FAILED
@@ -653,7 +654,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
       String outcomeNote = code == AtomicErrorCode.EXTERNAL_OUTCOME_UNKNOWN
           ? "; remote side effect may have committed, manual reconciliation is required"
           : "";
-      String statusReason = inv.expectedStatus.isEmpty()
+      String statusReason = EmptyChecks.isEmpty(inv.expectedStatus)
           ? "is a server error"
           : "not in expected " + inv.expectedStatus;
       return AtomicErrorCode.fail(

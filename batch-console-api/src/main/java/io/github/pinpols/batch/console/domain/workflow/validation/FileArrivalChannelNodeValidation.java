@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.domain.workflow.validation;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.common.validation.FileArrivalChannelCode;
@@ -22,7 +23,7 @@ public final class FileArrivalChannelNodeValidation {
       // 原有节点 JSON 的校验和错误处理由对应写入入口负责。
       return;
     }
-    if (params == null
+    if (EmptyChecks.isNull(params)
         || !"FILE_ARRIVAL".equals(params.get("sensor_type"))
         || !(params.get("sensor_spec") instanceof Map<?, ?> spec)) {
       return;

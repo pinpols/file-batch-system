@@ -45,14 +45,19 @@ class DispatchReceiptPollIntegrationTest extends AbstractIntegrationTest {
     OrchestratorWireMockSupport.registerOrchestratorBaseUrls(registry);
   }
 
-  @Autowired
-  private FileDispatchRepository dispatchRepository;
+  private final FileDispatchRepository dispatchRepository;
+  private final PlatformFileRecordRepository fileRecords;
+  private final AckDispatchStep ackStep;
 
   @Autowired
-  private PlatformFileRecordRepository fileRecords;
-
-  @Autowired
-  private AckDispatchStep ackStep;
+  DispatchReceiptPollIntegrationTest(
+      FileDispatchRepository dispatchRepository,
+      PlatformFileRecordRepository fileRecords,
+      AckDispatchStep ackStep) {
+    this.dispatchRepository = dispatchRepository;
+    this.fileRecords = fileRecords;
+    this.ackStep = ackStep;
+  }
 
   @Test
   @DisplayName("带回执号的异步投递先保持待确认，下游确认后才更新分发和文件状态")

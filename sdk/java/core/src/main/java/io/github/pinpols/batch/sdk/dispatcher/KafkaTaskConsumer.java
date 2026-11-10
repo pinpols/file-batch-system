@@ -303,7 +303,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       }
     });
     ready.retainAll(consumer.assignment());
-    if (!ready.isEmpty()) {
+    if (!EmptyChecks.isEmpty(ready)) {
       consumer.resume(ready);
       ready.forEach(withheldRetryAt::remove);
     }

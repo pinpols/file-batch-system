@@ -8,6 +8,7 @@ import io.github.pinpols.batch.common.storage.ObjectSummary;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository;
 import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipRepository.Scope;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper;
 import io.github.pinpols.batch.orchestrator.mapper.FileGovernanceReconcileCursorMapper.Advance;
@@ -80,7 +81,7 @@ public class S3GovernanceStorage {
     long remaining = cursor.revisitRemaining();
     String lane;
     if ("REVISIT".equals(cursor.nextLane())) {
-      if (marker == null || remaining <= 1) {
+      if (EmptyChecks.isNull(marker) || remaining <= 1) {
         revisitMarker = null;
         budget = budget > Long.MAX_VALUE / 2 ? Long.MAX_VALUE : budget * 2;
         remaining = budget;
@@ -91,8 +92,8 @@ public class S3GovernanceStorage {
       lane = "FORWARD";
     } else {
       nextMarker = marker;
-      lane = marker == null ? "FORWARD" : "REVISIT";
-      if (marker == null) {
+      lane = EmptyChecks.isNull(marker) ? "FORWARD" : "REVISIT";
+      if (EmptyChecks.isNull(marker)) {
         revisitMarker = null;
         budget = 1;
         remaining = 1;

@@ -475,7 +475,7 @@ public class TaskDispatcher {
     }
     partitionInvocations.put(msg.taskId(), partitionInvocationId);
     inFlight.add(msg.taskId());
-    if (handler == null) {
+    if (EmptyChecks.isNull(handler)) {
       log.error(
           "no SdkTaskHandler for taskType={} (registered: {}); reporting failure",
           msg.taskType(),

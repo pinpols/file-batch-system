@@ -154,7 +154,7 @@ public class FileArrivalSensorPolicy implements SensorPolicy {
         return SensorProbeResult.notYet();
       }
       Map<String, Object> output = hit.toProbeOutput();
-      if (channelCode != null && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
+      if (EmptyChecks.isNotNull(channelCode) && Boolean.TRUE.equals(hit.legacyChannelFallback())) {
         log.warn(
             "FILE_ARRIVAL matched a legacy file without verified channel tenant={} fileId={}",
             ctx.tenantId(),

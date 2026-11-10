@@ -126,17 +126,22 @@ class RuntimeConfigImportDispatchE2eIT extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbc;
 
-  @Autowired
-  private TenantConfigPackageExcelService excelService;
+  private final TenantConfigPackageExcelService excelService;
+  private final WorkflowMonitoringCandidateService workflowMonitoring;
+  private final WorkflowMonitoringAlertEmissionService workflowAlertEmission;
+  private final BatchTimezoneProvider timezoneProvider;
 
   @Autowired
-  private WorkflowMonitoringCandidateService workflowMonitoring;
-
-  @Autowired
-  private WorkflowMonitoringAlertEmissionService workflowAlertEmission;
-
-  @Autowired
-  private BatchTimezoneProvider timezoneProvider;
+  RuntimeConfigImportDispatchE2eIT(
+      TenantConfigPackageExcelService excelService,
+      WorkflowMonitoringCandidateService workflowMonitoring,
+      WorkflowMonitoringAlertEmissionService workflowAlertEmission,
+      BatchTimezoneProvider timezoneProvider) {
+    this.excelService = excelService;
+    this.workflowMonitoring = workflowMonitoring;
+    this.workflowAlertEmission = workflowAlertEmission;
+    this.timezoneProvider = timezoneProvider;
+  }
 
   @TempDir
   private Path tempDir;

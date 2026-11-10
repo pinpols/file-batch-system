@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.worker.imports.config;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.validation.ValidResourceCode;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
@@ -54,13 +55,15 @@ public class ImportScannerProperties {
   public boolean isManifestBindingsValid() {
     Set<List<String>> seen = new HashSet<>();
     for (ManifestBinding binding : manifestBindings) {
-      if (binding == null || binding.getTenantId() == null || binding.getObjectPrefix() == null) {
+      if (EmptyChecks.isNull(binding)
+          || EmptyChecks.isNull(binding.getTenantId())
+          || EmptyChecks.isNull(binding.getObjectPrefix())) {
         continue;
       }
-      if ((prefix != null && !binding.getObjectPrefix().startsWith(prefix))
-          || batchManifestSuffix == null
-          || batchManifestSuffix.isBlank()
-          || binding.getManifestKeyTemplate() == null
+      if ((EmptyChecks.isNotNull(prefix) && !binding.getObjectPrefix().startsWith(prefix))
+          || EmptyChecks.isNull(batchManifestSuffix)
+          || batchManifestSuffix.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
+          || EmptyChecks.isNull(binding.getManifestKeyTemplate())
           || !binding.getManifestKeyTemplate().endsWith(batchManifestSuffix)
           || !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
         return false;
@@ -87,8 +90,8 @@ public class ImportScannerProperties {
     @AssertTrue(
         message = "manifest key must contain exactly one supported business date placeholder")
     public boolean isManifestKeyTemplateValid() {
-      if (manifestKeyTemplate == null
-          || manifestKeyTemplate.isBlank()
+      if (EmptyChecks.isNull(manifestKeyTemplate)
+          || manifestKeyTemplate.isBlank() // empty-check: allow - 保留 String.isBlank 的原生空白字符语义
           || manifestKeyTemplate.startsWith("/")
           || List.of(manifestKeyTemplate.split("/", -1)).contains("..")) {
         return false;
@@ -113,9 +116,9 @@ public class ImportScannerProperties {
   public boolean isChannelBindingsUnique() {
     Set<List<String>> seen = new HashSet<>();
     for (ChannelBinding binding : channelBindings) {
-      if (binding != null
-          && binding.getTenantId() != null
-          && binding.getObjectPrefix() != null
+      if (EmptyChecks.isNotNull(binding)
+          && EmptyChecks.isNotNull(binding.getTenantId())
+          && EmptyChecks.isNotNull(binding.getObjectPrefix())
           && !seen.add(List.of(binding.getTenantId(), binding.getObjectPrefix()))) {
         return false;
       }

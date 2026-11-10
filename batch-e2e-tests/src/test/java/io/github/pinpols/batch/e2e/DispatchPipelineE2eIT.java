@@ -143,11 +143,9 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
   @Autowired
   private E2eOutboxPublishSupport e2eOutboxPublishSupport;
 
-  @Autowired
-  private DispatchReceiptPollScheduler receiptPollScheduler;
+  private final DispatchReceiptPollScheduler receiptPollScheduler;
 
-  @Autowired
-  private DispatchReceiptPollProperties receiptPollProperties;
+  private final DispatchReceiptPollProperties receiptPollProperties;
 
   private final KafkaTemplate<String, String> kafkaTemplate;
 
@@ -171,12 +169,16 @@ class DispatchPipelineE2eIT extends AbstractIntegrationTest {
       RetryGovernanceService retryGovernanceService,
       FileGovernanceService fileGovernanceService,
       DispatchChannelSnapshotService dispatchChannelSnapshots,
-      FrozenDispatchChannelResolver frozenDispatchChannels) {
+      FrozenDispatchChannelResolver frozenDispatchChannels,
+      DispatchReceiptPollScheduler receiptPollScheduler,
+      DispatchReceiptPollProperties receiptPollProperties) {
     this.kafkaTemplate = kafkaTemplate;
     this.retryGovernanceService = retryGovernanceService;
     this.fileGovernanceService = fileGovernanceService;
     this.dispatchChannelSnapshots = dispatchChannelSnapshots;
     this.frozenDispatchChannels = frozenDispatchChannels;
+    this.receiptPollScheduler = receiptPollScheduler;
+    this.receiptPollProperties = receiptPollProperties;
   }
 
   @Test

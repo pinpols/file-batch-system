@@ -54,26 +54,31 @@ class WorkerReportBatchHttpE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final HttpTaskExecutionClient taskClient;
+  private final KafkaListenerEndpointRegistry listenerRegistry;
+  private final MeterRegistry meterRegistry;
+  private final ObjectProvider<WorkerReportOutboxCoordinator> reportOutbox;
+  private final Environment environment;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private HttpTaskExecutionClient taskClient;
-
-  @Autowired
-  private KafkaListenerEndpointRegistry listenerRegistry;
-
-  @Autowired
-  private MeterRegistry meterRegistry;
-
-  @Autowired
-  private ObjectProvider<WorkerReportOutboxCoordinator> reportOutbox;
-
-  @Autowired
-  private Environment environment;
+  WorkerReportBatchHttpE2eIT(
+      WorkflowRunLaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      HttpTaskExecutionClient taskClient,
+      KafkaListenerEndpointRegistry listenerRegistry,
+      MeterRegistry meterRegistry,
+      ObjectProvider<WorkerReportOutboxCoordinator> reportOutbox,
+      Environment environment) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.taskClient = taskClient;
+    this.listenerRegistry = listenerRegistry;
+    this.meterRegistry = meterRegistry;
+    this.reportOutbox = reportOutbox;
+    this.environment = environment;
+  }
 
   @Test
   @DisplayName("批次包含成功、业务失败及身份失效回报时分别处理")

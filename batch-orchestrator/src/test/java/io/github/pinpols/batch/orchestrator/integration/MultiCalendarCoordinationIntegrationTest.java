@@ -85,11 +85,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
   @Autowired
   private JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private ExternalEventExpectationService externalEventExpectationService;
+  private final ExternalEventExpectationService externalEventExpectationService;
 
-  @Autowired
-  private FileGroupExpectationService fileGroupExpectationService;
+  private final FileGroupExpectationService fileGroupExpectationService;
 
   private final DataSource dataSource;
 
@@ -113,7 +111,9 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
       CalendarDependencyWaitGovernanceService calendarDependencyWaitGovernanceService,
       BatchDayCatchupPreviewService batchDayCatchupPreviewService,
       BatchDayCatchupControlService batchDayCatchupControlService,
-      PlatformTransactionManager transactionManager) {
+      PlatformTransactionManager transactionManager,
+      ExternalEventExpectationService externalEventExpectationService,
+      FileGroupExpectationService fileGroupExpectationService) {
     this.dataSource = dataSource;
     this.sensorFileArrivalMapper = sensorFileArrivalMapper;
     this.calendarDependencyWaitMapper = calendarDependencyWaitMapper;
@@ -121,6 +121,8 @@ class MultiCalendarCoordinationIntegrationTest extends AbstractIntegrationTest {
     this.batchDayCatchupPreviewService = batchDayCatchupPreviewService;
     this.batchDayCatchupControlService = batchDayCatchupControlService;
     this.transactionManager = transactionManager;
+    this.externalEventExpectationService = externalEventExpectationService;
+    this.fileGroupExpectationService = fileGroupExpectationService;
   }
 
   @BeforeEach

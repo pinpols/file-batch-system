@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepDefinition;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplate;
 import io.github.pinpols.batch.worker.core.domain.PipelineStepTemplateParam;
@@ -68,7 +69,8 @@ public class DefaultDispatchStageExecutor
     List<DispatchStageResult> results = runStageLoop(context);
     boolean retryRecovered =
         Boolean.TRUE.equals(context.getAttributes().get(DispatchRuntimeKeys.RETRY_RECOVERED));
-    boolean overallSuccess = DispatchStageOutcome.failure(results, retryRecovered) == null;
+    boolean overallSuccess =
+        EmptyChecks.isNull(DispatchStageOutcome.failure(results, retryRecovered));
     if (overallSuccess) {
       recordDispatchReceiptMetric(context);
     }

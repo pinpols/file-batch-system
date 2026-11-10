@@ -51,18 +51,22 @@ class ImportBomPartitionE2eIT extends AbstractIntegrationTest {
   private static final LocalDate BIZ_DATE = LocalDate.now(ZoneOffset.UTC).plusDays(1);
   private final String auditName = "bom_range_" + Long.toUnsignedString(System.nanoTime());
 
-  @Autowired
-  private WorkflowRunLaunchService launchService;
+  private final WorkflowRunLaunchService launchService;
+  private final JdbcTemplate jdbcTemplate;
+  private final E2eOutboxPublishSupport outbox;
+  private final DataSource businessDataSource;
 
   @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private E2eOutboxPublishSupport outbox;
-
-  @Autowired
-  @Qualifier("importBusinessDataSource")
-  private DataSource businessDataSource;
+  ImportBomPartitionE2eIT(
+      WorkflowRunLaunchService launchService,
+      JdbcTemplate jdbcTemplate,
+      E2eOutboxPublishSupport outbox,
+      @Qualifier("importBusinessDataSource") DataSource businessDataSource) {
+    this.launchService = launchService;
+    this.jdbcTemplate = jdbcTemplate;
+    this.outbox = outbox;
+    this.businessDataSource = businessDataSource;
+  }
 
   @MockitoSpyBean
   private BatchObjectStore objectStore;

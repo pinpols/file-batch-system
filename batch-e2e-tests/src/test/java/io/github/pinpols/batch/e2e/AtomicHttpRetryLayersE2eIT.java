@@ -40,17 +40,22 @@ import org.springframework.jdbc.core.JdbcTemplate;
 class AtomicHttpRetryLayersE2eIT extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
 
-  @Autowired
-  private JdbcTemplate jdbc;
+  private final JdbcTemplate jdbc;
+  private final WorkflowRunLaunchService launchService;
+  private final RetryGovernanceService retryService;
+  private final E2eOutboxPublishSupport outbox;
 
   @Autowired
-  private WorkflowRunLaunchService launchService;
-
-  @Autowired
-  private RetryGovernanceService retryService;
-
-  @Autowired
-  private E2eOutboxPublishSupport outbox;
+  AtomicHttpRetryLayersE2eIT(
+      JdbcTemplate jdbc,
+      WorkflowRunLaunchService launchService,
+      RetryGovernanceService retryService,
+      E2eOutboxPublishSupport outbox) {
+    this.jdbc = jdbc;
+    this.launchService = launchService;
+    this.retryService = retryService;
+    this.outbox = outbox;
+  }
 
   @Test
   @DisplayName("幂等 GET 两层各重试一次，下游持续 503 时共外呼四次并失败")

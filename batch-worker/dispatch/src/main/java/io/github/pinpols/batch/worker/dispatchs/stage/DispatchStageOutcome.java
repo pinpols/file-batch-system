@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.dispatchs.stage;
 
 import io.github.pinpols.batch.common.enums.TaskErrorCodes;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStage;
 import io.github.pinpols.batch.worker.dispatchs.domain.DispatchStageResult;
 import java.util.List;
@@ -19,7 +20,7 @@ public final class DispatchStageOutcome {
   /** 返回未恢复的失败；只有实际成功的重试才能消除其直接对应的发送失败。 */
   public static DispatchStageResult failure(
       List<DispatchStageResult> results, boolean retryRecovered) {
-    if (results == null || results.isEmpty()) {
+    if (EmptyChecks.isEmpty(results)) {
       return null;
     }
     int recoveredFailure = recoveredFailureIndex(results, retryRecovered);
