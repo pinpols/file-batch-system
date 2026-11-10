@@ -172,11 +172,11 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
       String query = readManifestQuery(SCHEMA_MANIFEST_RESOURCE, "platform catalog");
       Set<String> before =
           new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
-      Flyway.configure()
+      Flyway version376 = Flyway.configure()
           .configuration(flyway.getConfiguration())
           .target("376")
-          .load()
-          .migrate();
+          .load();
+      version376.migrate();
       Set<String> after =
           new TreeSet<>(jdbc.query(query, (rs, row) -> rs.getString("canonical_object")));
       Set<String> removed = new TreeSet<>(before);
@@ -200,7 +200,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               "(next_retry_at, id)",
               "WHERE ((terminal_event_key IS NULL) AND (next_retry_at IS NOT NULL))")
           .doesNotContain("delivery_status");
-      flyway.validate();
+      version376.validate();
     }
   }
 

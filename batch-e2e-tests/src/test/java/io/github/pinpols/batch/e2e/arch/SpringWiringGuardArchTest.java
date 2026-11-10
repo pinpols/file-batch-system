@@ -6,14 +6,25 @@ import com.tngtech.archunit.core.domain.JavaClasses;
 import com.tngtech.archunit.core.importer.ClassFileImporter;
 import com.tngtech.archunit.core.importer.ImportOption;
 import io.github.pinpols.batch.common.arch.CodingConventionsArchRules;
+import io.github.pinpols.batch.common.mapper.ImportIngressOwnershipMapper;
 import io.github.pinpols.batch.common.service.SecretPayloadProtector;
+import io.github.pinpols.batch.common.storage.ingress.ImportIngressOwnershipIdentity;
+import io.github.pinpols.batch.e2e.apps.E2eAtomicApplication;
 import io.github.pinpols.batch.e2e.apps.E2eConsoleImportApplication;
+import io.github.pinpols.batch.e2e.apps.E2eDispatchApplication;
+import io.github.pinpols.batch.e2e.apps.E2eExportApplication;
+import io.github.pinpols.batch.e2e.apps.E2eImportApplication;
+import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
+import io.github.pinpols.batch.e2e.apps.E2eProcessApplication;
+import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
+import io.github.pinpols.batch.worker.imports.mapper.ImportIngressScanMapper;
 import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
 
@@ -97,5 +108,42 @@ class SpringWiringGuardArchTest {
         .as("E2eConsoleImportApplication must import SecretPayloadProtector because its explicit "
             + "ComponentScan does not include batch-common services")
         .isTrue();
+  }
+
+  @Test
+  @DisplayName("编排端到端应用覆盖入站组件与公共 Mapper，导入应用还覆盖扫描 Mapper")
+  void shouldCoverIngressComponentsAndMappers_whenE2eAppsScan() {
+    List<Class<?>> apps = List.of(
+        E2eAtomicApplication.class,
+        E2eConsoleImportApplication.class,
+        E2eDispatchApplication.class,
+        E2eExportApplication.class,
+        E2eImportApplication.class,
+        E2eOrchestratorApplication.class,
+        E2eProcessApplication.class,
+        E2eReportRecoveryOrchestratorApplication.class);
+    String componentPackage = ImportIngressOwnershipIdentity.class.getPackageName();
+    String commonMapperPackage = ImportIngressOwnershipMapper.class.getPackageName();
+    for (Class<?> app : apps) {
+      ComponentScan scan = app.getAnnotation(ComponentScan.class);
+      assertThat(scan).as("%s 的组件扫描", app.getSimpleName()).isNotNull();
+      assertThat(List.of(scan.basePackages()))
+          .as("%s 应扫描入站组件包", app.getSimpleName())
+          .anyMatch(
+              base -> componentPackage.equals(base) || componentPackage.startsWith(base + "."));
+      assertMapperCovered(app, commonMapperPackage);
+    }
+    String importMapperPackage = ImportIngressScanMapper.class.getPackageName();
+    assertMapperCovered(E2eImportApplication.class, importMapperPackage);
+    assertMapperCovered(E2eConsoleImportApplication.class, importMapperPackage);
+  }
+
+  private static void assertMapperCovered(Class<?> app, String mapperPackage) {
+    assertThat(List.of(app.getAnnotationsByType(MapperScan.class)))
+        .as("%s 应使用平台 SqlSessionFactory 扫描 %s", app.getSimpleName(), mapperPackage)
+        .anyMatch(scan -> "sqlSessionFactory".equals(scan.sqlSessionFactoryRef())
+            && List.of(scan.basePackages()).stream()
+                .anyMatch(
+                    base -> mapperPackage.equals(base) || mapperPackage.startsWith(base + ".")));
   }
 }

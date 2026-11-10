@@ -1,5 +1,10 @@
 # 系统设计与容量整改代码复核（2026-11-10）
 
+## 合并后 Full CI 修复
+
+- 后端主线 Full CI（运行 `42746990731`）的 20 个 E2E 分片均在测试应用启动时缺少公共入站身份组件，业务断言未执行；8 个受影响测试应用已补齐组件扫描，两个导入应用补齐平台 Mapper 扫描。`./mvnw -o -ntp -pl batch-e2e-tests -am '-Dtest=SpringWiringGuardArchTest,AtomicHttpRetryLayersE2eIT#shouldCountHttpAndJobRetriesWhenServerContinuesToFail,KafkaConsumerNamespaceIsolationE2eIT#shouldAssignOnlyNamespacedTopics_whenLegacyTopicsAlsoExist,DispatchFailurePipelineE2eIT#shouldRejectLaunch_whenChannelConfigMissing,ExportEncryptedArtifactE2eIT#shouldRegisterActualEncryptedObjectAndRecoverBusinessContent,ImportBomPartitionE2eIT#shouldWriteEachBomDelimitedRangeRecordOnce,SensorWaitFixtureE2eIT#shouldContainValidWaitFileArrivalWorkflow_whenTaTenantSeedLoaded,ProcessFailurePipelineE2eIT#wap_sqlTransform_validationFailureAbortsCommit,ReadinessHandoverE2eIT#shouldKeepFirstDeadlineAcrossRepeatedHandover' -Dsurefire.failIfNoSpecifiedTests=false test` 13/13 通过、0 跳过：8 个应用各 1 个真实场景及装配守护 5 项；日志 `/tmp/postmerge-e2e-app-wiring-tests.log`。这不等于完整 E2E 全量通过。
+- Full CI 另有 V376 定向迁移测试将后续未应用迁移误判为验证失败，以及文件登记测试夹具缺少 V378 新列。前者保持目标版本一致执行迁移和校验；后者复用权威 V378 热表 DDL 并增加渠道写入断言，未修改生产迁移。`./mvnw -o -ntp -pl batch-orchestrator,batch-worker/core -am '-Dtest=LocalFlywayPlatformMigrationsIntegrationTest#shouldReplaceOnlyLegacyWebhookRetryIndex_whenMigratingV376,PlatformFileRecordRepositoryIntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false test` 11/11 通过、0 跳过，日志 `/tmp/postmerge-flyway-file-record-tests.log`。最终 PR 门禁及合并后的 Full CI 仍需实际运行确认。
+
 ## 合并前 TypeScript 审查修复
 
 - 远端审查发现慢 CLAIM 等待期间 KafkaJS `eachMessage` 不自动发送心跳，可能引发消费组重平衡；适配器在等待期间按间隔发送心跳，确认前不提交位点，并在等待结束时清理计时器。隔离 Kafka 的定向测试以 6 秒会话、9 秒认领等待验证成员保持稳定、位点不提前提交，释放后位点推进；该样本约 15 秒，仅证明指定场景，不是网络故障或生产容量验收。

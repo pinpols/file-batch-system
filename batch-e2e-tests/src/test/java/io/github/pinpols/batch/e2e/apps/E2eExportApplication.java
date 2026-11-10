@@ -73,6 +73,7 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
     basePackages = {
       "io.github.pinpols.batch.e2e.support",
       "io.github.pinpols.batch.common.spi.task",
+      "io.github.pinpols.batch.common.storage.ingress",
       "io.github.pinpols.batch.orchestrator",
       "io.github.pinpols.batch.worker.core",
       "io.github.pinpols.batch.worker.exports"
