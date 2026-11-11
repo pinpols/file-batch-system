@@ -19,6 +19,7 @@ import static io.github.pinpols.batch.console.infrastructure.excel.ConfigPackage
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.validation.WorkflowGraphs;
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelPreviewWorkbookSupport.WorkbookIssue;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -28,8 +29,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * ADR-025 §校验项清单 — Excel 导入阶段的纯静态 DAG 拓扑校验。
@@ -73,8 +72,6 @@ final class WorkflowGraphTopologyValidator {
         : normalize(row.get(COL_VERSION));
     return normalize(row.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + v;
   }
-
-  private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.(\\w+)\\.");
 
   // workflow graph 校验是一个完整 transaction:索引节点 -> 邻接表 -> 环/可达/终止 一气呵成,
   // 拆方法会让中间状态(byCode/incoming/outgoing/startCodes/endCodes)散落到字段,牺牲可读性。
@@ -175,10 +172,7 @@ final class WorkflowGraphTopologyValidator {
       }
     }
     // V2——从 START 状态不可达。
-    Set<String> reachFromStart = new HashSet<>();
-    for (String s : startCodes) {
-      dfsCollect(s, outgoing, reachFromStart);
-    }
+    Set<String> reachFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
     if (EmptyChecks.isNotEmpty(startCodes)) {
       for (String code : byCode.keySet()) {
         if (!reachFromStart.contains(code)) {
@@ -190,10 +184,7 @@ final class WorkflowGraphTopologyValidator {
       }
     }
     // V3 — cannot reach END
-    Set<String> reachToEnd = new HashSet<>();
-    for (String e : endCodes) {
-      dfsCollect(e, incoming, reachToEnd);
-    }
+    Set<String> reachToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
     if (EmptyChecks.isNotEmpty(endCodes)) {
       for (String code : byCode.keySet()) {
         boolean nonEndNodeCannotReachAnyEnd =
@@ -229,9 +220,7 @@ final class WorkflowGraphTopologyValidator {
       if (!Texts.hasText(params)) {
         continue;
       }
-      Matcher m = DSL_NODE_REF.matcher(params);
-      while (m.find()) {
-        String ref = m.group(1);
+      for (String ref : WorkflowGraphs.dslNodeReferences(params)) {
         if (!byCode.containsKey(ref)) {
           int issueRowNo = excelRowNo(n, fallbackRowNo);
           issues.add(new WorkbookIssue(
@@ -258,6 +247,7 @@ final class WorkflowGraphTopologyValidator {
     }
   }
 
+  // 环检测不与编排器共享：这里发现环后继续检查其余节点，可能在多处上报；编排器遇到第一个环就停止。
   private static void dfsCycle(
       String node,
       Map<String, List<String>> outgoing,
@@ -283,15 +273,6 @@ final class WorkflowGraphTopologyValidator {
       }
     }
     color.put(node, 2);
-  }
-
-  private static void dfsCollect(String node, Map<String, List<String>> adj, Set<String> visited) {
-    if (!visited.add(node)) {
-      return;
-    }
-    for (String next : adj.getOrDefault(node, List.of())) {
-      dfsCollect(next, adj, visited);
-    }
   }
 
   /** 给每个节点算出可达的祖先集合。从每个 START 出发,沿 outgoing 边游走,把 source + source 的祖先并入 target 的祖先。 */

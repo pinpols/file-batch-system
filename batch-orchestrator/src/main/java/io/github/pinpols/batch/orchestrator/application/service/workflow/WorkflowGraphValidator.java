@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.model.WorkflowJoinThreshold;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.common.validation.WorkflowGraphs;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowValidationResult.ValidationIssue;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowEdgeEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeEntity;
@@ -64,7 +65,6 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class WorkflowGraphValidator {
 
-  private static final Pattern DSL_NODE_REF = Pattern.compile("\\$\\.nodes\\.(\\w+)\\.");
   private static final Pattern DSL_OUTPUT_KEY_REF =
       Pattern.compile("\\$\\.nodes\\.(\\w+)\\.output\\.(\\w+)");
   private static final TypeReference<List<CrossDayDependencySpec>> SPEC_LIST_TYPE =
@@ -251,15 +251,13 @@ public class WorkflowGraphValidator {
       Map<String, List<String>> outgoing,
       Map<String, List<String>> incoming,
       List<ValidationIssue> errors) {
-    Set<String> reachableFromStart = new HashSet<>();
-    for (String s : startCodes) dfs(s, outgoing, reachableFromStart);
+    Set<String> reachableFromStart = WorkflowGraphs.reachableFrom(startCodes, outgoing);
     for (String code : allCodes) {
       if (!startCodes.isEmpty() && !reachableFromStart.contains(code)) {
         errors.add(issue("V2", "node unreachable from START", code));
       }
     }
-    Set<String> reachableToEnd = new HashSet<>();
-    for (String e : endCodes) dfs(e, incoming, reachableToEnd);
+    Set<String> reachableToEnd = WorkflowGraphs.reachableFrom(endCodes, incoming);
     for (String code : allCodes) {
       boolean nodeCannotReachAnEnd = !EmptyChecks.isEmpty(endCodes)
           && !reachableToEnd.contains(code)
@@ -273,10 +271,7 @@ public class WorkflowGraphValidator {
   private void validateDslNodeRefs(
       Map<String, WorkflowNodeEntity> byCode, List<ValidationIssue> errors) {
     for (WorkflowNodeEntity n : byCode.values()) {
-      if (!Texts.hasText(n.getNodeParams())) continue;
-      Matcher m = DSL_NODE_REF.matcher(n.getNodeParams());
-      while (m.find()) {
-        String referenced = m.group(1);
+      for (String referenced : WorkflowGraphs.dslNodeReferences(n.getNodeParams())) {
         if (!byCode.containsKey(referenced)) {
           errors.add(issue(
               "V4", "node_params DSL references missing node: " + referenced, n.getNodeCode()));
@@ -507,6 +502,7 @@ public class WorkflowGraphValidator {
     }
   }
 
+  // 环检测不与 Excel 校验共享：这里遇到第一个环就停止，Excel 校验会继续检查并多处上报。
   private boolean dfsHasCycle(
       String node,
       Map<String, List<String>> outgoing,
@@ -525,11 +521,6 @@ public class WorkflowGraphValidator {
     }
     color.put(node, 2);
     return false;
-  }
-
-  private void dfs(String node, Map<String, List<String>> adj, Set<String> visited) {
-    if (!visited.add(node)) return;
-    for (String next : adj.getOrDefault(node, List.of())) dfs(next, adj, visited);
   }
 
   private void validateCrossDayDeps(WorkflowNodeEntity node, List<ValidationIssue> errors) {
