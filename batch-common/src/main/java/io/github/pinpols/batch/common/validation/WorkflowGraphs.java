@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.common.validation;
 
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -30,7 +31,7 @@ public final class WorkflowGraphs {
     Deque<String> pending = new ArrayDeque<>();
     for (String root : roots) {
       pending.push(root);
-      while (!pending.isEmpty()) {
+      while (EmptyChecks.isNotEmpty(pending)) {
         String node = pending.pop();
         if (!visited.add(node)) {
           continue;
