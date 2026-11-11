@@ -67,9 +67,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
       ExportWorkerConfiguration workerConfiguration) {
     this.businessDataSource = businessDataSource;
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    int configuredQueryTimeoutSeconds =
-        EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
-    int effectiveQueryTimeoutSeconds = Math.max(1, configuredQueryTimeoutSeconds);
+    int effectiveQueryTimeoutSeconds = Math.max(1, security.getQueryTimeoutSeconds());
     template.setQueryTimeout(effectiveQueryTimeoutSeconds);
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
@@ -117,7 +115,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     String baseSql = sqlValidator.validate(spec.detailSql());
 
     int limit = Math.max(1, pageSize);
-    if (security != null && security.getMaxPageSize() > 0) {
+    if (security.getMaxPageSize() > 0) {
       limit = Math.min(limit, security.getMaxPageSize());
     }
 
@@ -130,9 +128,7 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
     baseParams.put("region", regionFromSnapshot(context));
 
     // 首页（cursor == null）时执行 EXPLAIN 预检
-    boolean shouldRunExplainCheck = EmptyChecks.isNull(cursor)
-        && EmptyChecks.isNotNull(security)
-        && security.isExplainCheckEnabled();
+    boolean shouldRunExplainCheck = EmptyChecks.isNull(cursor) && security.isExplainCheckEnabled();
     if (shouldRunExplainCheck) {
       runExplainCheck(baseSql, baseParams, context);
     }
@@ -178,16 +174,14 @@ public class SqlTemplateExportDataPlugin implements ExportDataPlugin {
 
   private NamedParameterJdbcTemplate namedJdbc(int fetchSize) {
     JdbcTemplate template = new JdbcTemplate(businessDataSource);
-    int configuredQueryTimeout =
-        EmptyChecks.isNull(security) ? 30 : security.getQueryTimeoutSeconds();
-    int effectiveQueryTimeout = Math.max(1, configuredQueryTimeout);
+    int effectiveQueryTimeout = Math.max(1, security.getQueryTimeoutSeconds());
     template.setQueryTimeout(effectiveQueryTimeout);
     template.setFetchSize(fetchSize);
     return new NamedParameterJdbcTemplate(template);
   }
 
   private int resolveFetchSize(ExportDataContext context) {
-    int fallback = workerConfiguration == null ? 1000 : workerConfiguration.fetchSize();
+    int fallback = workerConfiguration.fetchSize();
     Map<String, Object> tc = context == null ? Map.of() : context.templateConfig();
     Object raw = tc == null ? null : firstNonNull(tc.get("fetch_size"), tc.get("fetchSize"));
     Integer configured = positiveInt(raw);

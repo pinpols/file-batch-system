@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.plugin.ExportDataPlugin;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
+import io.github.pinpols.batch.worker.exports.config.ExportWorkerConfiguration;
 import io.github.pinpols.batch.worker.exports.config.JdbcMappedExportSecurityProperties;
 import io.github.pinpols.batch.worker.exports.config.SqlTemplateExportSecurityProperties;
 import java.lang.reflect.InvocationTargetException;
@@ -138,7 +139,10 @@ class ExportPartitionMixedFallbackIntegrationTest {
     ObjectMapper mapper = new ObjectMapper();
     if (mode.equals("sql_template")) {
       return new SqlTemplateExportDataPlugin(
-          dataSource, mapper, new SqlTemplateExportSecurityProperties(), null);
+          dataSource,
+          mapper,
+          new SqlTemplateExportSecurityProperties(),
+          new ExportWorkerConfiguration(null, null, null, null, null, null, null, 0, null));
     }
     return new GenericJdbcMappedExportDataPlugin(
         dataSource, mapper, new JdbcMappedExportSecurityProperties());

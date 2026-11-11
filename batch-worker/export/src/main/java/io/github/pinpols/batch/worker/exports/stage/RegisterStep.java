@@ -338,9 +338,6 @@ public class RegisterStep implements ExportStageStep {
     Map<String, Object> attributes = context.getAttributes();
     Long taskId = PlatformRuntimeValues.toLong(attributes.get(PipelineRuntimeKeys.TASK_ID));
     Object invocationValue = attributes.get(PipelineRuntimeKeys.PARTITION_INVOCATION_ID);
-    if (EmptyChecks.isNull(taskExecutionClient)) {
-      return false;
-    }
     if (EmptyChecks.isNull(taskId)) {
       return false;
     }
