@@ -926,9 +926,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     if (isOnlineWorker(primary)) {
       return primary;
     }
-    String fallbackTenant = EmptyChecks.isNull(resourceSchedulerProperties)
-        ? null
-        : resourceSchedulerProperties.getSharedTenantFallback();
+    String fallbackTenant = resourceSchedulerProperties.getSharedTenantFallback();
     if (EmptyChecks.isBlank(fallbackTenant) || fallbackTenant.equals(tenantId)) {
       return null;
     }
