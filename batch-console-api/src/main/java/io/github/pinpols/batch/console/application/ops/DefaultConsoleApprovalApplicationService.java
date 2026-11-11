@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.application.ops;
 
+import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -79,14 +80,14 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     if ("EXECUTED".equalsIgnoreCase(status)) {
       return approvalNo;
     }
-    if ("REJECTED".equalsIgnoreCase(status)) {
+    if (ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(status)) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.approval.not_pending_for_action", approvalNo, status);
     }
     // 原子性/可重试补偿:approveRemote(→APPROVED)与 markExecutedRemote(→EXECUTED)之间,
     // 若 side-effect 失败则状态停在 APPROVED(非 EXECUTED),异常抛给调用方且不卡死——
     // 重试同一 approvalNo 时命中 APPROVED:跳过重复推进,直接重跑 side-effect。只有 PENDING 才需推进。
-    if ("PENDING".equalsIgnoreCase(status)) {
+    if (ApprovalCommandStatus.PENDING.code().equalsIgnoreCase(status)) {
       rejectSelfServiceSelfApproval(approvalRecord, operatorId);
       ApprovalDecision decision = approveRemote(tenantId, approvalNo, operatorId, reason);
       requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
@@ -211,11 +212,15 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     // 同动作幂等:已 REJECTED 再 reject 直接返回;反动作冲突:已 APPROVED 不可再 reject → 409
     // (此前 reject 无守卫,对已 APPROVED 委托远端静默忽略、返 200 却不改状态,误导操作员)。
     ApprovalRecord approvalRecord = loadApproval(tenantId, approvalNo).getRecord();
-    if ("REJECTED".equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
+    if (ApprovalCommandStatus.REJECTED
+        .code()
+        .equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
       rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);
       return approvalNo;
     }
-    if (!"PENDING".equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
+    if (!ApprovalCommandStatus.PENDING
+        .code()
+        .equalsIgnoreCase(approvalRecord.getApprovalStatus())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT,
           "error.approval.not_pending_for_action",
@@ -224,7 +229,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     }
     ApprovalDecision decision = rejectRemote(tenantId, approvalNo, operatorId, reason);
     requireMatchingDecision(tenantId, approvalNo, approvalRecord, decision);
-    if (!"REJECTED".equalsIgnoreCase(decision.approvalStatus())) {
+    if (!ApprovalCommandStatus.REJECTED.code().equalsIgnoreCase(decision.approvalStatus())) {
       throw decisionConflict(approvalNo, decision.approvalStatus());
     }
     rejectAssociatedWorkflowNodeReplay(tenantId, approvalRecord);

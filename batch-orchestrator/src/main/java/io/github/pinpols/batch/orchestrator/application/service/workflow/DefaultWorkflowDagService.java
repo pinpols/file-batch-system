@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
 import io.github.pinpols.batch.common.enums.WorkflowJoinMode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
+import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.logging.LogSanitizer;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
@@ -580,7 +581,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
         STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
             || ("SKIPPED".equalsIgnoreCase(predecessorStatus)
                 && "OPERATOR_SKIPPED".equals(predecessorSkipReasonCode));
-      case FAILURE -> "FAILED".equalsIgnoreCase(predecessorStatus);
+      case FAILURE -> WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(predecessorStatus);
       case CONDITION ->
         STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
             && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
@@ -600,7 +601,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             workflowRunId, predecessorCodes);
     boolean hasSkippedPredecessor = false;
     for (WorkflowNodeRunEntity predecessor : predecessors) {
-      if ("FAILED".equalsIgnoreCase(predecessor.getNodeStatus())) {
+      if (WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(predecessor.getNodeStatus())) {
         return new SkipReason("UPSTREAM_FAILED");
       }
       hasSkippedPredecessor |= "SKIPPED".equalsIgnoreCase(predecessor.getNodeStatus());
@@ -619,7 +620,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
   private boolean isTerminal(String nodeStatus) {
     return STATUS_SUCCESS.equalsIgnoreCase(nodeStatus)
-        || "FAILED".equalsIgnoreCase(nodeStatus)
+        || WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(nodeStatus)
         || "SKIPPED".equalsIgnoreCase(nodeStatus);
   }
 

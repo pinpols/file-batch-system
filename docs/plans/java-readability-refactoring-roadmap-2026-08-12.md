@@ -359,7 +359,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| R1–R3、R5–R10、R12–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定，未开工；执行方式与提交授权待定 |
+| R1–R3、R5–R10、R12–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定；Task 1（R5 状态字面量，PR-1）进行中，其余未开工；执行方式与提交授权待定 |
 | R4 空值判断写法 | 已裁定：对象判空用 `== null`，字符串/集合用 `EmptyChecks`；规则写入 [`coding-conventions.md`](../coding-conventions.md) §1.8 后按模块替换（计划 Task 18，最后执行） |
 | R11 大类按领域拆分 | 暂缓，登记在 [todo-master](todo-master.md) |
 | R24 用字符串表达有限域的公共参数 | 只登记，由[有限域与常量计划](typed-contract-enum-constant-governance-plan-2026-10-07.md)统一处理 |

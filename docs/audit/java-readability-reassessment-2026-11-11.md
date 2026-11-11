@@ -240,6 +240,21 @@
 - 没有命中的 7934 个方法只说明低于阈值。30 行以下的方法没有判断；读起来是否清楚，还要在改到时按主流程验收标准复看。
 - 类名后缀过滤可能误排除个别名字以 `Result` / `Snapshot` 结尾、但其实承载流程的类。上面已知的 `WorkflowRunExecutionSnapshot`（786 行）不在本次统计里，已由 R1 / Task 4 附近的复查覆盖。执行时如果发现类似的类，补进清单。
 
+## R5 逐处结论（Task 1）
+
+判定依据：只有写入端（Mapper、实体、状态机）实际落库的正是该枚举的 `code()` 时才替换；`BatchLifecycleStatus` 是派生类型、不直接落库，不能作为持久化字段的比较对象。
+
+| 位置 | 字面量 | 结论 | 说明 |
+|---|---|---|---|
+| `DefaultConsoleApprovalApplicationService`（82、89、214、218、227） | `PENDING`、`REJECTED`（忽略大小写） | 已替换为 `ApprovalCommandStatus` | `approval_status` 由 `DefaultApprovalWorkflowService` 以该枚举的 `code()` 写入，库约束为 PENDING/APPROVED/REJECTED/EXECUTED；原有 `equalsIgnoreCase` 保留。同方法内未列入计划的 `EXECUTED` 比较未动 |
+| `DefaultConsoleJobApprovalService:260`、`BatchDayCatchUpReconciliation:47` | `RUNNING`（operationStatus） | 不替换 | 该字段是补跑操作自己的状态机（PREPARED/RUNNING/COMPLETE/UNKNOWN，见 `BatchDayCatchUpOperationMapper.xml`），`ReplayOperationStatus` 没有 PREPARED/COMPLETE/UNKNOWN，不是同一个值域 |
+| `DefaultWorkflowDagService`（583、603、622）、`WorkflowRunStuckReconciler:151` | `FAILED`（节点状态） | 已替换为 `WorkflowNodeRunStatus` | 节点状态由 `WorkflowNodeRunStatus.*.code()` 写入；忽略大小写的三处保持 `equalsIgnoreCase` |
+| `FileGroupExpectationService:220`、`ExternalEventExpectationService:273`、`LaunchBatchDayService:383` | `FAILED`（dayStatus） | 不替换 | `batch_day_instance.day_status` 是批次日自己的状态机（OPEN/CUTOFF/IN_FLIGHT/SETTLED/FAILED），`BatchLifecycleStatus` 不含 SETTLED/IN_FLIGHT 且不直接落库 |
+| `BundleArrivalLauncher:409` | `FAILED`（dayStatus） | 不替换 | 同上，比较的是 `BatchDayInstanceEntity.dayStatus()` |
+| `BatchDayReplayService:512` | `FAILED`（回放 entry 状态） | 不替换 | entry 状态为 PENDING/RUNNING/SUCCEEDED/FAILED，没有一个枚举覆盖该值域（`ReplayOperationStatus` 无 PENDING，`SUCCEEDED` 与 entry 的写入也不对应）；同类的 `ENTRY_PENDING` 等常量留给有限域治理计划 |
+| `JobExecutionQueryService`（100、112、113） | `RUNNING`（stage/step 状态） | 已替换为 `PipelineRunStatus` | 状态来自 `pipeline_step_run.step_status`，写入端 `PlatformPipelineRunRepository.startStepRun` 使用 `PipelineRunStatus.RUNNING`；同文件第 73 行的 `NOT_EXECUTED`/`PENDING` 是展示占位，未动 |
+| `ResultVersionPromoteService:47、76`、`DefaultConsoleConfigSyncApplicationService:241`、`AuditAspect:200`、`DefaultCompensationService:1171` | — | 不替换 | 没有对应枚举，本计划不新增枚举 |
+
 ## 决策记录（2026-11-11）
 
 用户裁定以下三项。执行方式（逐任务子代理 / 本会话直接实施）与提交、推送、开 PR 的授权尚未决定，当前不动工。
