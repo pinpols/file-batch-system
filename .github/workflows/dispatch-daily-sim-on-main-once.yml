@@ -1,0 +1,46 @@
+# 临时 workflow：用本仓库 Actions token 对 main 触发每日仿真。不要合并。
+name: Dispatch daily sim on main once
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch daily simulation on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: main
+        run: |
+          set -euo pipefail
+          python3 - "$TARGET_REF" <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          payload = json.dumps({
+              "ref": sys.argv[1],
+              "inputs": {"force": "true"},
+          })
+          subprocess.run(
+              [
+                  "gh", "api", "--method", "POST",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/daily-sim-strict-validation.yml/dispatches",
+                  "--input", "-",
+              ],
+              input=payload,
+              text=True,
+              check=True,
+          )
+          PY
