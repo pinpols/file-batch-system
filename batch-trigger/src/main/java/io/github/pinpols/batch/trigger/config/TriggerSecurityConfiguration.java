@@ -108,10 +108,6 @@ public class TriggerSecurityConfiguration {
       this.apiKeyVerifier = apiKeyVerifier;
     }
 
-    InternalSecretFilter(BatchSecurityProperties securityProperties) {
-      this(securityProperties, null);
-    }
-
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
       // actuator 健康检查由 docker / k8s 探针调用，不可能携带 X-Internal-Secret；
@@ -134,9 +130,7 @@ public class TriggerSecurityConfiguration {
       String apiKey = request.getHeader(CommonConstants.BATCH_API_KEY_HEADER);
       if (EmptyChecks.isNotBlank(apiKey)) {
         String tenantId = request.getHeader(CommonConstants.BATCH_TENANT_ID_HEADER);
-        boolean apiKeyAuthenticationCanRun =
-            EmptyChecks.isNotNull(apiKeyVerifier) && isApiKeyAllowedUri(request);
-        if (apiKeyAuthenticationCanRun) {
+        if (isApiKeyAllowedUri(request)) {
           Optional<TriggerApiKeyPrincipal> principal =
               apiKeyVerifier.authenticate(apiKey, tenantId);
           if (principal.isPresent()) {
