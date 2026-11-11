@@ -39,7 +39,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
       HttpServletRequest request, HttpServletResponse response, Authentication authentication)
       throws IOException, ServletException {
     Optional<OidcUser> trusted = trustedOidcUser(authentication);
-    if (trusted.isEmpty()) {
+    if (trusted.isEmpty()) { // empty-check: allow - Optional 判空，不是字符串或集合
       loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_INVALID");
       redirectFailure(response);
       return;
