@@ -169,7 +169,7 @@ public class ConsoleMetaQueryService {
   private static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
     String key = item.messageKey();
     String fallback = item.label();
-    if (key == null || messageSource == null) {
+    if (key == null) {
       return fallback;
     }
     return messageSource.getMessage(key, null, fallback, locale);
