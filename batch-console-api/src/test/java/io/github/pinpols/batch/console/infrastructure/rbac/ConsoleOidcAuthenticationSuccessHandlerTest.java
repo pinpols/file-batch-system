@@ -29,6 +29,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.authentication.TestingAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
@@ -41,6 +43,7 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
   private static final String ISSUER = "https://idp.example.com/issuer";
   private static final String REGISTRATION_ID = "pilot-tenant";
 
+  private ConsoleOidcProperties properties;
   private ConsoleOidcIdentityMapper identityMapper;
   private ConsoleAuthApplicationService authApplicationService;
   private ConsoleOidcLoginAudit loginAudit;
@@ -48,7 +51,7 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
 
   @BeforeEach
   void setUp() {
-    ConsoleOidcProperties properties = new ConsoleOidcProperties();
+    properties = new ConsoleOidcProperties();
     properties.setEnabled(true);
     properties.setTenantId(TENANT_ID);
     properties.setIssuerUri(ISSUER);
@@ -125,17 +128,99 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
     verify(authApplicationService, never()).issueToken(any(ConsolePrincipal.class));
   }
 
+  @Test
+  @DisplayName("OIDC 开关关闭时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenOidcDisabled() throws Exception {
+    properties.setEnabled(false);
+
+    MockHttpServletResponse response = invoke("external-sub", ISSUER, REGISTRATION_ID);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("认证对象不是 OAuth2 令牌时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenAuthenticationIsNotOAuth2Token() throws Exception {
+    OidcUser user = oidcUser("external-sub", ISSUER);
+
+    MockHttpServletResponse response = invoke(new TestingAuthenticationToken(user, null));
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("issuer 缺失时拒绝身份且不抛出空指针")
+  void shouldRejectInvalidIdentity_whenIssuerMissing() throws Exception {
+    MockHttpServletResponse response = invoke("external-sub", null, REGISTRATION_ID);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("subject 为空白时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenSubjectBlank() throws Exception {
+    MockHttpServletResponse response = invoke("   ", ISSUER, REGISTRATION_ID);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("subject 超过 255 个字符时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenSubjectLongerThan255() throws Exception {
+    MockHttpServletResponse response = invoke("a".repeat(256), ISSUER, REGISTRATION_ID);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("subject 含非 ASCII 字符时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenSubjectNotAscii() throws Exception {
+    MockHttpServletResponse response = invoke("用户", ISSUER, REGISTRATION_ID);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("subject 恰好 255 个 ASCII 字符时进入身份映射")
+  void shouldAcceptSubjectOfExactly255Ascii() throws Exception {
+    String subject = "a".repeat(255);
+    when(identityMapper.findEnabledAccount(TENANT_ID, ISSUER, subject))
+        .thenReturn(Optional.empty());
+
+    invoke(subject, ISSUER, REGISTRATION_ID);
+
+    verify(identityMapper).findEnabledAccount(TENANT_ID, ISSUER, subject);
+  }
+
+  private void assertInvalidIdentityRejected(MockHttpServletResponse response) {
+    assertThat(response.getStatus()).isEqualTo(302);
+    assertThat(response.getRedirectedUrl()).isEqualTo("/login?authError=oidc");
+    assertThat(response.getHeader(HttpHeaders.SET_COOKIE)).isNull();
+    verify(loginAudit).failed(TENANT_ID, "OIDC_IDENTITY_INVALID");
+    verify(identityMapper, never()).findEnabledAccount(any(), any(), any());
+  }
+
   private MockHttpServletResponse invoke(String subject, String issuer, String registrationId)
       throws Exception {
-    OidcUser user = mock(OidcUser.class);
-    when(user.getIssuer()).thenReturn(URI.create(issuer).toURL());
-    when(user.getSubject()).thenReturn(subject);
-    List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("OIDC_USER"));
-    doReturn(authorities).when(user).getAuthorities();
+    OidcUser user = oidcUser(subject, issuer);
     OAuth2AuthenticationToken authentication =
-        new OAuth2AuthenticationToken(user, authorities, registrationId);
+        new OAuth2AuthenticationToken(user, user.getAuthorities(), registrationId);
+    return invoke(authentication);
+  }
+
+  private MockHttpServletResponse invoke(Authentication authentication) throws Exception {
     MockHttpServletResponse response = new MockHttpServletResponse();
     handler.onAuthenticationSuccess(new MockHttpServletRequest(), response, authentication);
     return response;
+  }
+
+  // issuer 传 null 时模拟 IdP 未提供 iss 声明
+  private OidcUser oidcUser(String subject, String issuer) throws Exception {
+    OidcUser user = mock(OidcUser.class);
+    when(user.getIssuer()).thenReturn(issuer == null ? null : URI.create(issuer).toURL());
+    when(user.getSubject()).thenReturn(subject);
+    List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("OIDC_USER"));
+    doReturn(authorities).when(user).getAuthorities();
+    return user;
   }
 }

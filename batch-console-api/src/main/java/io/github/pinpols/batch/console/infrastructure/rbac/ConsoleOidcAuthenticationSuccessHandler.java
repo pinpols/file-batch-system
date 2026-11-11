@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.Authentication;
@@ -37,21 +38,13 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
   public void onAuthenticationSuccess(
       HttpServletRequest request, HttpServletResponse response, Authentication authentication)
       throws IOException, ServletException {
-    if (!properties.isEnabled()
-        || !(authentication instanceof OAuth2AuthenticationToken oauthAuthentication)
-        || !(authentication.getPrincipal() instanceof OidcUser oidcUser)
-        || !properties
-            .getRegistrationId()
-            .equals(oauthAuthentication.getAuthorizedClientRegistrationId())
-        || EmptyChecks.isNull(oidcUser.getIssuer())
-        || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())
-        || EmptyChecks.isBlank(oidcUser.getSubject())
-        || oidcUser.getSubject().length() > 255
-        || !isAscii(oidcUser.getSubject())) {
+    Optional<OidcUser> trusted = trustedOidcUser(authentication);
+    if (trusted.isEmpty()) {
       loginAudit.failed(properties.getTenantId(), "OIDC_IDENTITY_INVALID");
       redirectFailure(response);
       return;
     }
+    OidcUser oidcUser = trusted.get();
 
     ConsolePrincipal principal = identityMapper
         .findEnabledAccount(
@@ -66,6 +59,37 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
       return;
     }
     issueLocalSession(principal, response);
+  }
+
+  // 按阶段校验 OIDC 身份：开关、认证类型、registration、issuer、subject 依次检查；
+  // 任一阶段不满足即返回空，后续阶段不再求值，保持原短路顺序。
+  private Optional<OidcUser> trustedOidcUser(Authentication authentication) {
+    if (!properties.isEnabled()) {
+      return Optional.empty();
+    }
+    if (!(authentication instanceof OAuth2AuthenticationToken oauthAuthentication)) {
+      return Optional.empty();
+    }
+    if (!(authentication.getPrincipal() instanceof OidcUser oidcUser)) {
+      return Optional.empty();
+    }
+    if (!properties
+        .getRegistrationId()
+        .equals(oauthAuthentication.getAuthorizedClientRegistrationId())) {
+      return Optional.empty();
+    }
+    // issuer 判空必须先于 toString()，避免 IdP 缺少 iss 时抛出空指针
+    if (EmptyChecks.isNull(oidcUser.getIssuer())
+        || !properties.getIssuerUri().equals(oidcUser.getIssuer().toString())) {
+      return Optional.empty();
+    }
+    // subject 判空白必须先于长度与 ASCII 检查
+    if (EmptyChecks.isBlank(oidcUser.getSubject())
+        || oidcUser.getSubject().length() > 255
+        || !isAscii(oidcUser.getSubject())) {
+      return Optional.empty();
+    }
+    return Optional.of(oidcUser);
   }
 
   private ConsolePrincipal localPrincipal(String username, String tenantId, String authoritiesCsv) {
