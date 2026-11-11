@@ -1,0 +1,51 @@
+# 临时 workflow：用本仓库 Actions token 触发 full-ci-gate 与每日仿真。不要合并。
+name: Dispatch full CI and daily sim once
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch full-ci-gate and daily simulation on the fix branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TARGET_REF: cursor/fix-sim-manifest-template-7ead
+        run: |
+          set -euo pipefail
+          echo "target ref ${TARGET_REF}"
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${TARGET_REF}" --jq .sha
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/full-ci-gate.yml/dispatches" \
+            -f ref="${TARGET_REF}"
+          python3 - "$TARGET_REF" <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          payload = json.dumps({
+              "ref": sys.argv[1],
+              "inputs": {"force": "true"},
+          })
+          subprocess.run(
+              [
+                  "gh", "api", "--method", "POST",
+                  f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/workflows/daily-sim-strict-validation.yml/dispatches",
+                  "--input", "-",
+              ],
+              input=payload,
+              text=True,
+              check=True,
+          )
+          PY
