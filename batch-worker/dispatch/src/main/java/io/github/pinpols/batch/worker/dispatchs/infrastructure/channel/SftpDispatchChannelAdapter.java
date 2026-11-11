@@ -91,9 +91,6 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private boolean isProductionProfile() {
-    if (environment == null) {
-      return false;
-    }
     String[] active = environment.getActiveProfiles();
     // Spring 约定 getActiveProfiles() 永不为 null，无激活 profile 时返回空数组
     if (EmptyChecks.isEmpty(active)) {
