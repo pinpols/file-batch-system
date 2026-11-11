@@ -31,9 +31,18 @@ class SqlFunctionNameCollectorTest {
   @Test
   @DisplayName("LIMIT 与 OFFSET 中的函数被收集")
   void collect_includesFunctionsInLimitAndOffset() throws Exception {
-    Statement statement = CCJSqlParserUtil.parse("select a from t limit abs(1) offset abs(2)");
+    Statement statement = CCJSqlParserUtil.parse("select a from t limit abs(1) offset ceil(2)");
 
-    assertThat(SqlFunctionNameCollector.collect(statement)).contains("abs");
+    assertThat(SqlFunctionNameCollector.collect(statement)).contains("abs", "ceil");
+  }
+
+  @Test
+  @DisplayName("集合查询 LIMIT 与 OFFSET 中的函数被收集")
+  void collect_includesFunctionsInSetOperationLimitAndOffset() throws Exception {
+    Statement statement =
+        CCJSqlParserUtil.parse("select a from t union select a from u limit abs(1) offset ceil(2)");
+
+    assertThat(SqlFunctionNameCollector.collect(statement)).contains("abs", "ceil");
   }
 
   @Test

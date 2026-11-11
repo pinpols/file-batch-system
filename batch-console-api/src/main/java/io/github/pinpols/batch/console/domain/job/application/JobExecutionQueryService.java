@@ -99,7 +99,9 @@ public class JobExecutionQueryService {
   private List<Stage> withLiveProgress(String tenant, Long pipelineId, List<Stage> stages) {
     if (stages.stream()
         .noneMatch(s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus())
-            && EmptyChecks.isNull(s.rowsProcessed()))) return stages;
+            && EmptyChecks.isNull(s.rowsProcessed()))) {
+      return stages;
+    }
     List<PipelineStepProgressSnapshot> liveSteps =
         filePipelineProgress.stepsAuthorized(tenant, pipelineId);
     if (EmptyChecks.isEmpty(liveSteps)) return stages;

@@ -11,7 +11,7 @@
 - 仓库：`file-batch-system`，revision `29cede911`，工作区干净。
 - 范围：各模块 `src/main/java`，共 3139 个文件（含 `batch-test-support`、`security-scan`）。
 - 方法：去掉注释和字符串后，按花括号做启发式统计，再人工抽查。行数、参数个数和嵌套深度只用于找候选，不作为清理指标（[`coding-conventions.md` §1.3、§1.7](../coding-conventions.md#13-长方法与参数密度)）。
-- 机器统计口径：方法非空行 ≥ 80 的有 79 个（已排除 record/构造器）；花括号嵌套 ≥ 6 层的有 28 个；`catch (Exception|RuntimeException)` 共 593 处，其中 `catch (Exception ignored)` 48 处。参数 ≥ 7 的命中大多是带注解的 Controller 查询参数，属于误报，不列入。
+- 机器统计口径：方法非空行 ≥ 80 的有 79 个（已排除 record/构造器）；花括号嵌套 ≥ 6 层的有 28 个；`catch (Exception|RuntimeException)` 共 593 处，其中 `catch (Exception ignored)` 48 处（注：2d101162f 及 Task 2 之后按实际核对为 32 处，其中 30 处原本已有注释或走 `SwallowedExceptionLogger`，Task 2 补了 2 处注释）。参数 ≥ 7 的命中大多是带注解的 Controller 查询参数，属于误报，不列入。
 
 ## 发现
 
@@ -22,7 +22,7 @@
 | R3 | 超长平铺映射 | `DefaultConsoleQueryApplicationService.buildTimeline`（150 行） | 11 个来源各自 `forEach` 拼一个 `ConsoleTraceTimelineItem`，前 12 行（`traceId` 加 11 个列表）只是解包 | 每类来源一个具名映射方法（或 `Function<T, ConsoleTraceTimelineItem>` 列表），主方法变为“收集 → 合并 → 排序” | 排序键与同时刻的先后顺序不变 |
 | R4 | 空值判断两种写法 | 全仓 | `EmptyChecks.isNull/isNotNull` 3758 处，`== null / != null` 4135 处，同一方法内常混用 | 先在 `coding-conventions.md` 裁定一种写法及例外，再按模块分批统一；不建议一次性全仓替换 | 纯机械替换；规则调整按 project-engineering-review 要求后置于存量盘点 |
 | R5 | 状态字面量 | `DefaultConsoleApprovalApplicationService:89、218`，`DefaultConsoleConfigSyncApplicationService:241`，`AuditAspect:200`，`JobExecutionQueryService:100` 等 21 处 | `"PENDING".equalsIgnoreCase(...)` 等硬编码状态比较 | 改为对应枚举的 `code().equals(...)`（参照 `PartitionStatus.SUCCESS.code()` 的写法）；无枚举时补枚举 | 已持久化字面量值不变（§1.7）；`equalsIgnoreCase` 改为严格比较前须先确认库内大小写 |
-| R6 | 静默吞异常 | `BizExceptionUtils:82、111`，`BatchObjectCryptoService:261`，`AuditAspect:402` 等 48 处 `catch (Exception ignored)` | 读者无法判断是“预期失败可忽略”还是遗漏 | 逐处补一行中文注释说明为什么可以忽略；能缩小异常类型的缩小；需要可观测的改为 debug 日志 | 不改变返回值与异常传播 |
+| R6 | 静默吞异常 | `BizExceptionUtils:82、111`，`BatchObjectCryptoService:261`，`AuditAspect:402` 等 48 处 `catch (Exception ignored)`（实际 32 处，见上文说明） | 读者无法判断是“预期失败可忽略”还是遗漏 | 逐处补一行中文注释说明为什么可以忽略；能缩小异常类型的缩小；需要可观测的改为 debug 日志 | 不改变返回值与异常传播 |
 
 ### 次要候选
 
@@ -253,11 +253,12 @@
 | `BundleArrivalLauncher:409` | `FAILED`（dayStatus） | 不替换 | 同上，比较的是 `BatchDayInstanceEntity.dayStatus()` |
 | `BatchDayReplayService:512` | `FAILED`（回放 entry 状态） | 不替换 | entry 状态为 PENDING/RUNNING/SUCCEEDED/FAILED，没有一个枚举覆盖该值域（`ReplayOperationStatus` 无 PENDING，`SUCCEEDED` 与 entry 的写入也不对应）；同类的 `ENTRY_PENDING` 等常量留给有限域治理计划 |
 | `JobExecutionQueryService`（100、112、113） | `RUNNING`（stage/step 状态） | 已替换为 `PipelineRunStatus` | 状态来自 `pipeline_step_run.step_status`，写入端 `PlatformPipelineRunRepository.startStepRun` 使用 `PipelineRunStatus.RUNNING`；同文件第 73 行的 `NOT_EXECUTED`/`PENDING` 是展示占位，未动 |
+| 未列入计划的同字段字面量 | — | 留待后续 | 计划清单之外，同字段上还有 `DefaultWorkflowDagService` 的 `"SKIPPED"`（约 578、582、607、624）与 `STATUS_SUCCESS="SUCCESS"`（65）、`WorkflowRunStuckReconciler:59` 的 `Set.of("SUCCESS","FAILED","SKIPPED")`、审批的 `"EXECUTED"`/`"APPROVED"`，本任务未动，留作后续整改 |
 | `ResultVersionPromoteService:47、76`、`DefaultConsoleConfigSyncApplicationService:241`、`AuditAspect:200`、`DefaultCompensationService:1171` | — | 不替换 | 没有对应枚举，本计划不新增枚举 |
 
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。执行方式（逐任务子代理 / 本会话直接实施）与提交、推送、开 PR 的授权尚未决定，当前不动工。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；每次合并仍需用户确认。PR-1（Task 1–3）已实施并评审，其余任务未开工。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|
