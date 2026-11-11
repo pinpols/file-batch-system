@@ -275,6 +275,7 @@ final class WorkflowGraphTopologyValidator {
     color.put(node, 2);
   }
 
+  // 祖先计算不与编排器共享：它只服务于 Excel 校验的 V18（DSL 只能引用上游节点），遍历语义专属于该检查。
   /** 给每个节点算出可达的祖先集合。从每个 START 出发,沿 outgoing 边游走,把 source + source 的祖先并入 target 的祖先。 */
   private static Map<String, Set<String>> computeAncestors(
       Set<String> allCodes, Map<String, List<String>> outgoing, Set<String> startCodes) {

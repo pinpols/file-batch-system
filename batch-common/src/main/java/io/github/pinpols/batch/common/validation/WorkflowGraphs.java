@@ -23,7 +23,7 @@ public final class WorkflowGraphs {
 
   private WorkflowGraphs() {}
 
-  /** 从所有 roots 出发，沿邻接表能到达的节点，包括 roots 本身；邻接表缺少的节点视为没有出边，遇到环不会死循环。 */
+  /** 从所有 roots 出发，沿邻接表能到达的节点，包括 roots 本身；邻接表缺少的节点视为没有出边，遇到环不会死循环。roots 与邻接表中的节点编码必须非 null（调用方先过滤空白），不支持 null。 */
   public static Set<String> reachableFrom(
       Collection<String> roots, Map<String, List<String>> adjacency) {
     Set<String> visited = new HashSet<>();
