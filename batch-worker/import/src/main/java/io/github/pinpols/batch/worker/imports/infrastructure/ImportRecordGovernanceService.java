@@ -73,7 +73,7 @@ public class ImportRecordGovernanceService {
   private final BatchSecurityProperties batchSecurityProperties;
 
   public boolean isSkipEnabled() {
-    return skipProperties != null && skipProperties.enabled();
+    return skipProperties.enabled();
   }
 
   public boolean isSkippable(String errorCode) {
