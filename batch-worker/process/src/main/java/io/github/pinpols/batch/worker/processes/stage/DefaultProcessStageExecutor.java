@@ -120,8 +120,7 @@ public class DefaultProcessStageExecutor
    */
   @Override
   protected boolean stageSkipEnabled() {
-    return EmptyChecks.isNotNull(checkpointProperties)
-        && checkpointProperties.getStageSkip().isEnabled();
+    return checkpointProperties.getStageSkip().isEnabled();
   }
 
   @Override

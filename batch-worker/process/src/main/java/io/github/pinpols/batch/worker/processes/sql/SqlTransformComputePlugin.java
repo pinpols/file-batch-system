@@ -92,9 +92,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
       ProcessMetrics metrics) {
     this.businessDataSource = processBusinessDataSource;
     JdbcTemplate template = new JdbcTemplate(processBusinessDataSource);
-    int configuredQueryTimeoutSeconds =
-        EmptyChecks.isNull(security) ? 60 : security.getQueryTimeoutSeconds();
-    int effectiveQueryTimeoutSeconds = Math.max(1, configuredQueryTimeoutSeconds);
+    int effectiveQueryTimeoutSeconds = Math.max(1, security.getQueryTimeoutSeconds());
     template.setQueryTimeout(effectiveQueryTimeoutSeconds);
     this.jdbc = new NamedParameterJdbcTemplate(template);
     this.objectMapper = objectMapper;
@@ -119,8 +117,7 @@ public class SqlTransformComputePlugin implements ProcessComputePlugin {
   public void prepare(ProcessJobContext context) {
     Map<String, Object> stepParams = readComputeStepParams(context);
     SqlTransformComputeSpec spec = SqlTransformComputeSpec.parse(stepParams, objectMapper);
-    JdbcMappedSqlValidator.requireInAllowlist(
-        spec.targetSchema(), EmptyChecks.isNull(security) ? null : security.getAllowedSchemas());
+    JdbcMappedSqlValidator.requireInAllowlist(spec.targetSchema(), security.getAllowedSchemas());
     String validatedSourceSql = sqlValidator.validateSelect(spec.sourceSql());
     Map<String, Object> sqlParams = buildSqlParams(context, spec);
     validateNamedParameters(validatedSourceSql, sqlParams);
