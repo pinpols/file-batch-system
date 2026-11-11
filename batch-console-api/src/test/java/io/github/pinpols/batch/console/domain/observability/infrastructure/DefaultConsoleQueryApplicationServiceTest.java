@@ -128,7 +128,7 @@ class DefaultConsoleQueryApplicationServiceTest {
 
   @Test
   @DisplayName("发生时间相同时, 时间线先按来源名再按引用编号排序, 而不是按来源收集顺序")
-  void traceSnapshot_keepsSourceOrderForEqualTimestamps() {
+  void traceSnapshot_breaksEqualTimestampTiesBySourceThenReferenceId() {
     stubEmptyPages();
     Instant sameTime = Instant.parse("2026-08-02T01:00:00Z");
     when(jobQueryService.jobInstances(any()))

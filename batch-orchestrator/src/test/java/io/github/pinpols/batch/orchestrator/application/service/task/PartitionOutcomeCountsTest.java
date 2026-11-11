@@ -53,6 +53,25 @@ class PartitionOutcomeCountsTest {
   }
 
   @Test
+  @DisplayName("实例计数器各项取值互不相同时逐项映射到对应字段")
+  void fromInstanceCounters_mapsEachCounterToItsOwnField() {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setExpectedPartitionCount(9);
+    instance.setSuccessPartitionCount(4);
+    instance.setFailedPartitionCount(2);
+    instance.setCancelledPartitionCount(1);
+    instance.setTerminatedPartitionCount(2);
+
+    PartitionOutcomeCounts counts = PartitionOutcomeCounts.fromInstanceCounters(instance);
+
+    assertThat(counts.total()).isEqualTo(9);
+    assertThat(counts.success()).isEqualTo(4);
+    assertThat(counts.failed()).isEqualTo(2);
+    assertThat(counts.cancelled()).isEqualTo(1);
+    assertThat(counts.terminated()).isEqualTo(2);
+  }
+
+  @Test
   @DisplayName("全部分区进入终态时判定为全部完成")
   void allFinished_whenEveryPartitionTerminal() {
     assertThat(new PartitionOutcomeCounts(3, 2, 1, 0, 0).allFinished()).isTrue();

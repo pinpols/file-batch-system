@@ -35,6 +35,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.client.authentication.OAuth2AuthenticationToken;
 import org.springframework.security.oauth2.core.oidc.user.OidcUser;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 
 @DisplayName("OIDC 登录成功处理:仅为显式映射的本地账号签发平台会话")
 class ConsoleOidcAuthenticationSuccessHandlerTest {
@@ -149,6 +150,26 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
   }
 
   @Test
+  @DisplayName("registration id 不匹配时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenRegistrationIdMismatches() throws Exception {
+    MockHttpServletResponse response = invoke("external-sub", ISSUER, "other-registration");
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
+  @DisplayName("主体不是 OidcUser 时拒绝身份且不查询映射")
+  void shouldRejectInvalidIdentity_whenPrincipalIsNotOidcUser() throws Exception {
+    OAuth2User user = mock(OAuth2User.class);
+    OAuth2AuthenticationToken authentication = new OAuth2AuthenticationToken(
+        user, List.of(new SimpleGrantedAuthority("OIDC_USER")), REGISTRATION_ID);
+
+    MockHttpServletResponse response = invoke(authentication);
+
+    assertInvalidIdentityRejected(response);
+  }
+
+  @Test
   @DisplayName("issuer 缺失时拒绝身份且不抛出空指针")
   void shouldRejectInvalidIdentity_whenIssuerMissing() throws Exception {
     MockHttpServletResponse response = invoke("external-sub", null, REGISTRATION_ID);
@@ -190,6 +211,7 @@ class ConsoleOidcAuthenticationSuccessHandlerTest {
     invoke(subject, ISSUER, REGISTRATION_ID);
 
     verify(identityMapper).findEnabledAccount(TENANT_ID, ISSUER, subject);
+    verify(loginAudit).failed(TENANT_ID, "OIDC_IDENTITY_UNBOUND");
   }
 
   private void assertInvalidIdentityRejected(MockHttpServletResponse response) {

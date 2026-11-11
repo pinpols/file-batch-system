@@ -159,6 +159,7 @@ public class DefaultLaunchService implements LaunchService {
   /** 按原顺序执行三项启动引用校验；任一校验抛出业务异常时，先把触发请求标记为 REJECTED 再原样抛出。 */
   private void validateLaunchReferences(
       LaunchRequest request, JobType jobType, Map<String, Object> effectiveParams) {
+    // 注意：此 catch 内的参数解析与实例查询目前不会抛出 BizException；若日后抛出，同样会把请求标记为 REJECTED
     try {
       validateBundleParamsBeforeInstanceCreation(request, jobType, effectiveParams);
       validateRelatedFileReference(request, effectiveParams);
