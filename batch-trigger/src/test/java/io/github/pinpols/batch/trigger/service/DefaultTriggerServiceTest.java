@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
@@ -31,6 +32,7 @@ import io.github.pinpols.batch.trigger.domain.command.ExternalEventLaunchCommand
 import io.github.pinpols.batch.trigger.domain.command.PendingCatchUpApprovalCommand;
 import io.github.pinpols.batch.trigger.domain.command.ScheduledTriggerCommand;
 import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchCommand;
+import io.github.pinpols.batch.trigger.domain.command.TriggerLaunchInput;
 import io.github.pinpols.batch.trigger.domain.entity.ExternalEventDeliveryEntity;
 import io.github.pinpols.batch.trigger.event.TriggerOutboxDomainEventPublisher;
 import io.github.pinpols.batch.trigger.mapper.ExternalEventDeliveryMapper;
@@ -851,6 +853,61 @@ class DefaultTriggerServiceTest {
           assertThat(failure.getMessageKey()).isEqualTo("error.trigger.tenant_suspended");
           assertThat(failure.getMessageArgs()).containsExactly("t1");
         });
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "nullCommand",
+        "nullRequest",
+        "blankIdempotencyKey",
+        "blankTenantId",
+        "nullWorkflowDefinitionId",
+        "zeroWorkflowDefinitionId",
+        "nullBizDate",
+        "manualTriggerType"
+      })
+  @DisplayName("补跑提交校验遇到残缺或非 CATCH_UP 命令时统一以 INVALID_ARGUMENT 拒绝且不触达持久化")
+  void verifyCatchUpSubmission_rejectsMalformedCommand(String caseName) {
+    TriggerLaunchInput.TriggerLaunchInputBuilder input = TriggerLaunchInput.builder()
+        .tenantId("t1")
+        .workflowDefinitionId(71L)
+        .bizDate(LocalDate.of(2026, Month.MARCH, 27))
+        .triggerType(TriggerType.CATCH_UP);
+    String idempotencyKey = "idem-catch-up";
+    TriggerLaunchCommand command;
+    switch (caseName) {
+      case "nullCommand" -> command = null;
+      case "nullRequest" ->
+        command = new TriggerLaunchCommand(null, idempotencyKey, "req", "trace");
+      default -> {
+        switch (caseName) {
+          case "blankIdempotencyKey" -> idempotencyKey = " ";
+          case "blankTenantId" -> input.tenantId(" ");
+          case "nullWorkflowDefinitionId" -> input.workflowDefinitionId(null);
+          case "zeroWorkflowDefinitionId" -> input.workflowDefinitionId(0L);
+          case "nullBizDate" -> input.bizDate(null);
+          case "manualTriggerType" -> input.triggerType(TriggerType.MANUAL);
+          default -> throw new IllegalArgumentException(caseName);
+        }
+        command = new TriggerLaunchCommand(input.build(), idempotencyKey, "req", "trace");
+      }
+    }
+    TriggerLaunchCommand submitted = command;
+
+    assertThatThrownBy(() -> service.verifyCatchUpSubmission(submitted))
+        .isInstanceOfSatisfying(BizException.class, failure -> {
+          assertThat(failure.getCode()).isEqualTo(ResultCode.INVALID_ARGUMENT);
+          assertThat(failure.getMessageKey()).isEqualTo("error.common.request_body_required");
+        });
+
+    verifyNoInteractions(
+        launchAdapterService,
+        triggerRequestMapper,
+        externalEventDeliveryMapper,
+        triggerMisfirePendingMapper,
+        triggerOutboxPublisher,
+        occurrenceRecorder);
   }
 
   private TriggerLaunchRequest validRequest() {
