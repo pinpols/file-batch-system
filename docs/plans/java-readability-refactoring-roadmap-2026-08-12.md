@@ -18,7 +18,7 @@
 | 5 测试风格 | 已完成 | 已按阶段 4 影响域统一 fixture、契约命名和协作者窄单测；移除 worker 消费测试对受保护业务入口的反射调用，保留服务级契约测试 | 后续新增测试沿用本阶段规则；不对全仓测试做机械重写，动态 Map 和 test-as-spec inline fixture 按既有边界保留 |
 | 6 例外治理 | 已完成 | #954：suppression 登记表、精确规则守卫、失效编译守卫清理 | 后续新增例外必须登记并通过 CI |
 | 7 最终验收 | 进行中 | 刷新可读性扫描快照；将快照一致性接入 PR/full gate | 完成 Full Gate、关键 sim 与容器启动验收 |
-| 8 控制流语义密度 | 批次 0–4 已在工作区落地，未提交 | 批次 0：文件到达探测与入站扫描周期。批次 1–4：14 处嵌套选择按原短路拆开。原有单测通过 | 嵌套 `if` 不按层数全量改写。未纳入核查清单的跨行选择保持原样 |
+| 8 控制流语义密度 | 批次 0–4 已随 #1342 合入 `main` | 批次 0：文件到达探测与入站扫描周期。批次 1–4：14 处嵌套选择按原短路拆开。原有单测通过 | 嵌套 `if` 不按层数全量改写。未纳入核查清单的跨行选择保持原样 |
 
 近期合入记录：#918 `529b9a319`、#921 `557897f4b`、#922 `c053c4544`、#923 `8e5e1342`、#924 `cfa33e871`、#933 `911fd15d8`、#935 `fb2c7ad59`、#936 `490d02c73`、#938 `a2b5ca682`。#935 后已用 `@Lazy/@Autowired`、`ObjectProvider` 及常见 self/proxy 标识复扫生产源码，结果为 0；#936 保持 batch-day replay 预览 JSON 字段不变，仅将两组固定 SQL 投影移至 record 边界。本批继续保持 wire 字段不变，将文件治理延迟指标的 Controller/调度读取边界改为固定 record，Redis 内部缓存协议保持兼容。
 
@@ -260,9 +260,9 @@
 
 阶段 0–6 已把格式、自注入、固定契约、复杂类和 suppression 收口。2026-11-10 复核看到的阅读成本来自方法内部：校验、查询和状态推进写在一起，互斥阶段用嵌套分支或嵌套三元表达，同一失败翻译边界包住整段调用。`if` 个数、`catch` 个数和行数不作为清理指标。长期规则见 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#17-控制流阶段与异常边界)；调度器三层 catch 继续按 [§11.4](../coding-conventions.md#114-分布式锁的两种用法) 保留。
 
-本阶段按已核查的嵌套选择分批，不按文件数或 `if` 数量推进。批次 0–4 已在工作区落地，未提交。日期化结论见 [控制流可读性审查](../audit/control-flow-readability-2026-11-10.md)。
+本阶段按已核查的嵌套选择分批，不按文件数或 `if` 数量推进。批次 0–4 已随 #1342 合入 `main`。日期化结论见 [控制流可读性审查](../audit/control-flow-readability-2026-11-10.md)。
 
-### 6.1 已完成批次（工作区，未提交）
+### 6.1 已完成批次（#1342 合入）
 
 | 位置 | 拆分 | 保持不变 |
 |---|---|---|
@@ -325,17 +325,17 @@
 
 ### 6.5 2026-11-10 核查后的批次
 
-> 追加复核：批次 2 的 `TriggerGracefulShutdown.status` 曾改变调度器状态与排水状态的读取顺序，现已恢复；重放提交的 8 参数方法已收敛为 6 参数。见[控制流可读性审查的追加复核](../audit/control-flow-readability-2026-11-10.md#追加复核与整改方案2026-11-10)。以下批次为工作区落地记录，验证结果以追加记录为准。
+> 追加复核：批次 2 的 `TriggerGracefulShutdown.status` 曾改变调度器状态与排水状态的读取顺序，现已恢复；重放提交的 8 参数方法已收敛为 6 参数。见[控制流可读性审查的追加复核](../audit/control-flow-readability-2026-11-10.md#追加复核与整改方案2026-11-10)。以下批次已随 #1342 合入 `main`，验证结果以追加记录和该 PR 的门禁为准。
 
 生产 Java 3100 个。去掉注释、字符串和泛型 `?` 后，同一语句里出现两个三元运算符的有 16 处：3 处是并列缺省，保留；13 处是同一行里的嵌套选择。另有 1 处三元分跨两行，是 `ConsoleApiExceptionHandler.handleBizException`。嵌套选择合计 14 处，批次 1–4 已全部按原短路改完。调度器三层 catch、既有失败翻译边界、持久化阶段字符串和大类按行数拆分不进入这些批次。并列缺省保留在 `ConsoleTriggerStatsResponse`、`ConsoleWorkerLoadResponse` 和 `ConfigPackageExcelWorkbookWriter`。
 
 | 批次 | 状态 | 范围 |
 |---|---|---|
-| 0 | 工作区已落地 | `FileArrivalSensorPolicy` 与 `ImportIngressScanner` 的扫描阶段 |
-| 1 | 工作区已落地 | 编排器 6 处状态选择，见 §6.1 |
-| 2 | 工作区已落地 | `TriggerGracefulShutdown.status` 的调度器状态短路；`TaskDispatcher.diagnosticMessage` |
-| 3 | 工作区已落地 | `DispatchDeliveryMetrics`、`LocalOutboxDispatchSupport`、`ExportRegionResolver.firstNonBlank`、`DatasetRuleEvaluator` 的期望行数 |
-| 4 | 工作区已落地 | `ConsoleApiExceptionHandler.handleBizException` 的消息选择；`TenantConfigPackageExcelApplyService` 的单作业定义标识 |
+| 0 | 已合入（#1342） | `FileArrivalSensorPolicy` 与 `ImportIngressScanner` 的扫描阶段 |
+| 1 | 已合入（#1342） | 编排器 6 处状态选择，见 §6.1 |
+| 2 | 已合入（#1342） | `TriggerGracefulShutdown.status` 的调度器状态短路；`TaskDispatcher.diagnosticMessage` |
+| 3 | 已合入（#1342） | `DispatchDeliveryMetrics`、`LocalOutboxDispatchSupport`、`ExportRegionResolver.firstNonBlank`、`DatasetRuleEvaluator` 的期望行数 |
+| 4 | 已合入（#1342） | `ConsoleApiExceptionHandler.handleBizException` 的消息选择；`TenantConfigPackageExcelApplyService` 的单作业定义标识 |
 
 ### 6.6 因素裁定
 
