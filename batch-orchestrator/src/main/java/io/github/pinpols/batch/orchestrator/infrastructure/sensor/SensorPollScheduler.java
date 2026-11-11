@@ -40,7 +40,11 @@ public class SensorPollScheduler {
   // RLS-bypass）解出 tenant，再绑定 holder 跑 probeOne。
   private final WorkflowRunMapper workflowRunMapper;
 
-  @Scheduled(fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
+  // fixedDelay 的第一次会在启动后立刻执行。默认 PT0S 保持该行为；测试把首次扫描推迟，
+  // 才能按显式 scan() 观察仍在 RUNNING 的 WAIT，而不是被启动 tick 提前终结。
+  @Scheduled(
+      initialDelayString = "${batch.sensor.scan-initial-delay:PT0S}",
+      fixedDelayString = "${batch.sensor.scan-interval:PT10S}")
   @SchedulerLock(name = "sensor_poll", lockAtMostFor = "PT5M", lockAtLeastFor = "PT1S")
   public void scheduledScan() {
     scan();
