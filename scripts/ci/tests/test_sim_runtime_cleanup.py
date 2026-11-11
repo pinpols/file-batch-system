@@ -532,6 +532,21 @@ ok() { printf 'OK %s\\n' "$*"; }
         self.assertIn("ingress/ta/bundle-import-{bizDate}.batch.json", script)
         self.assertIn('MANIFEST_KEY = os.environ["SIM_BUNDLE_MANIFEST_TEMPLATE"].replace("{bizDate}", BIZ)', script)
         self.assertNotIn('GROUP = f"bundle-import-{RUN}"', script)
+        self.assertNotIn(
+            "${SIM_BUNDLE_MANIFEST_TEMPLATE:-ingress/ta/bundle-import-{bizDate}.batch.json}",
+            script)
+
+    def test_bundle_manifest_template_default_keeps_biz_date_placeholder(self):
+        script = (ROOT / "scripts/sim/26-bundle-import.sh").read_text()
+        start = script.index('if [[ -z "${SIM_BUNDLE_MANIFEST_TEMPLATE:-}" ]]; then')
+        end = script.index("export SIM_BUNDLE_MANIFEST_TEMPLATE\n", start)
+        snippet = script[start:end] + "export SIM_BUNDLE_MANIFEST_TEMPLATE\n"
+        result = subprocess.run(
+            ["bash", "-c", "unset SIM_BUNDLE_MANIFEST_TEMPLATE\n" + snippet
+             + "printf '%s' \"$SIM_BUNDLE_MANIFEST_TEMPLATE\""],
+            capture_output=True, text=True, check=False)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertEqual("ingress/ta/bundle-import-{bizDate}.batch.json", result.stdout)
 
     def test_runtime_edit_handles_signals_before_mutation(self):
         script = (ROOT / "scripts/sim/30-tenant-config-runtime-edit.sh").read_text()

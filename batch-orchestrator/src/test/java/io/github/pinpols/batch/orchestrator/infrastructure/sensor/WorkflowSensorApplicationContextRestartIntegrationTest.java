@@ -2380,6 +2380,9 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
     properties.put("batch.sensor.enabled", sensorEnabled);
     properties.put("batch.workflow.stuck-reconcile.enabled", stuckReconcileEnabled);
     properties.put("batch.sensor.scan-interval", "PT1H");
+    // 只拉长周期挡不住启动后的第一次 tick。结算调度已有 initial delay，传感器这里同样推迟。
+    properties.put("batch.sensor.scan-initial-delay", "PT1H");
+    properties.put("batch.batch-day.settle-initial-delay-millis", 3_600_000);
     properties.put("batch.file-governance.arrival.enabled", true);
     properties.put("batch.file-governance.arrival.poll-interval-millis", 3_600_000);
     properties.put("batch.batch-day.settle-scan-interval-millis", 3_600_000);

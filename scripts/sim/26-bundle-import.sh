@@ -46,7 +46,12 @@ docker exec -i "$PG_CONTAINER" psql -U "$POSTGRES_USER" -d "$PG_PLATFORM_DB" \
 export MINIO_CONTAINER="${MINIO_CONTAINER:-batch-minio}"
 # 文件组必须与归属绑定一致；清单键只允许一个业务日占位符，不能再把每次运行号写进组编码。
 export SIM_BUNDLE_FILE_GROUP="${SIM_BUNDLE_FILE_GROUP:-simBundleImport}"
-export SIM_BUNDLE_MANIFEST_TEMPLATE="${SIM_BUNDLE_MANIFEST_TEMPLATE:-ingress/ta/bundle-import-{bizDate}.batch.json}"
+# 默认值含 {bizDate}。不能写进 ${VAR:-...}，Bash 会把占位符里的 } 当成展开结束符，
+# 模板会变成 ingress/ta/bundle-import-{bizDate.batch.json，归属 SQL 会拒绝该绑定。
+if [[ -z "${SIM_BUNDLE_MANIFEST_TEMPLATE:-}" ]]; then
+  SIM_BUNDLE_MANIFEST_TEMPLATE='ingress/ta/bundle-import-{bizDate}.batch.json'
+fi
+export SIM_BUNDLE_MANIFEST_TEMPLATE
 export SIM_BUNDLE_SCOPE_PREFIX="${SIM_BUNDLE_SCOPE_PREFIX:-ingress/}"
 export SIM_BUNDLE_BINDING_PREFIX="${SIM_BUNDLE_BINDING_PREFIX:-ingress/ta/}"
 SIM_BUNDLE_SCOPE_ID=""

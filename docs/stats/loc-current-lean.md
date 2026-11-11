@@ -1,20 +1,20 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `cbc2e87d0`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `fa0b4c24f`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,331 | 825,960 | 431,893 | 52.3% |
+| 6,331 | 825,987 | 431,907 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,905 | 410,959 | 220,873 | 53.7% |
-| prod | 3,508 | 326,965 | 156,366 | 47.8% |
-| script | 740 | 69,154 | 42,264 | 61.1% |
+| test | 1,905 | 410,977 | 220,884 | 53.7% |
+| prod | 3,508 | 326,969 | 156,366 | 47.8% |
+| script | 740 | 69,159 | 42,267 | 61.1% |
 | config | 68 | 10,272 | 7,680 | 74.8% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
 | sql | 76 | 2,450 | 231 | 9.4% |
@@ -23,9 +23,9 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,761 | 640,149 | 338,351 | 52.9% |
-| Python | 351 | 53,069 | 29,139 | 54.9% |
-| Shell | 218 | 36,091 | 28,565 | 79.1% |
+| Java | 4,761 | 640,156 | 338,353 | 52.9% |
+| Python | 351 | 53,084 | 29,148 | 54.9% |
+| Shell | 218 | 36,096 | 28,568 | 79.1% |
 | YAML | 109 | 15,009 | 11,608 | 77.3% |
 | XML | 225 | 31,574 | 9,424 | 29.8% |
 | TypeScript | 42 | 8,679 | 4,596 | 53.0% |
@@ -52,7 +52,7 @@
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,581 | 1,323 |
 | `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,409 | 1,293 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,152 | 1,125 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,519 | 1,078 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,522 | 1,080 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,040 | 1,014 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DispatchPipelineE2eIT.java` | test | Java | 2,065 | 988 |
 | `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,531 | 954 |
