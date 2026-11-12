@@ -19,12 +19,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.TestPropertySource;
 
 /**
  * {@link TriggerLaunchRecoveryMapper} 在真实 PostgreSQL 上的幂等登记、到期扫描与状态 CAS 回归。
  *
  * <p>对应用户要求：Kafka 消费重试耗尽后落持久恢复锚点，由周期扫描幂等重投；本测试验证 V348 表与 SQL 语义。
+ *
+ * <p>本类直接写入已到期的 PENDING 恢复锚点，所以把周期恢复扫描调到 1 小时，避免后台重投抢先改写 attempts 与
+ * last_error_code。
  */
+@TestPropertySource(properties = "batch.trigger.launch-recovery.poll-interval-millis=3600000")
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
