@@ -6,6 +6,7 @@ import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import io.github.pinpols.batch.worker.imports.domain.ImportPayload;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -70,46 +71,62 @@ public class FixedWidthFormatParser implements FormatParser {
           line = footerBuffer.remove(0);
         }
         recordNo++;
-        if (recordLength > 0 && line.length() < recordLength) {
-          support.recordParseError(
-              context,
-              recordNo,
-              ERROR_CODE_FIXED_WIDTH_INVALID,
-              "line shorter than record_length",
-              line);
-          continue;
-        }
-        try {
-          Map<String, String> row = new LinkedHashMap<>();
-          for (FixedWidthField field : fields) {
-            if ((long) field.start() + field.length() > line.length()) {
-              throw new IllegalStateException("field overflow: " + field.target());
-            }
-            String fieldText = line.substring(field.start(), field.start() + field.length());
-            String value = fieldText.trim();
-            row.put(field.target(), value);
-          }
-          support.collectSchemaFields(context, row);
-          ParseSupport.ParsedRecordWriteParam writeParam =
-              ParseSupport.ParsedRecordWriteParam.builder()
-                  .context(context)
-                  .writer(writer)
-                  .row(row)
-                  .preserveLogicalRow(preserveLogicalRow)
-                  .recordNo(recordNo)
-                  .errorCode(ERROR_CODE_FIXED_WIDTH_INVALID)
-                  .rawRecord(row)
-                  .build();
-          support.writeParsedRecord(writeParam);
-        } catch (Exception exception) {
-          SwallowedExceptionLogger.warn(FixedWidthFormatParser.class, "catch:Exception", exception);
-
-          support.recordParseError(
-              context, recordNo, ERROR_CODE_FIXED_WIDTH_INVALID, exception.getMessage(), line);
-        }
+        parseRecordLine(context, writer, fields, line, recordNo, recordLength, preserveLogicalRow);
       }
     }
     return recordNo;
+  }
+
+  /** 解析单条记录行：行过短或字段越界按坏行处理，其余切片后写出。 */
+  private void parseRecordLine(
+      ImportJobContext context,
+      BufferedWriter writer,
+      List<FixedWidthField> fields,
+      String line,
+      long recordNo,
+      int recordLength,
+      boolean preserveLogicalRow)
+      throws IOException {
+    if (recordLength > 0 && line.length() < recordLength) {
+      support.recordParseError(
+          context,
+          recordNo,
+          ERROR_CODE_FIXED_WIDTH_INVALID,
+          "line shorter than record_length",
+          line);
+      return;
+    }
+    try {
+      Map<String, String> row = sliceFields(fields, line);
+      support.collectSchemaFields(context, row);
+      ParseSupport.ParsedRecordWriteParam writeParam = ParseSupport.ParsedRecordWriteParam.builder()
+          .context(context)
+          .writer(writer)
+          .row(row)
+          .preserveLogicalRow(preserveLogicalRow)
+          .recordNo(recordNo)
+          .errorCode(ERROR_CODE_FIXED_WIDTH_INVALID)
+          .rawRecord(row)
+          .build();
+      support.writeParsedRecord(writeParam);
+    } catch (Exception exception) {
+      SwallowedExceptionLogger.warn(FixedWidthFormatParser.class, "catch:Exception", exception);
+
+      support.recordParseError(
+          context, recordNo, ERROR_CODE_FIXED_WIDTH_INVALID, exception.getMessage(), line);
+    }
+  }
+
+  private static Map<String, String> sliceFields(List<FixedWidthField> fields, String line) {
+    Map<String, String> row = new LinkedHashMap<>();
+    for (FixedWidthField field : fields) {
+      if ((long) field.start() + field.length() > line.length()) {
+        throw new IllegalStateException("field overflow: " + field.target());
+      }
+      String fieldText = line.substring(field.start(), field.start() + field.length());
+      row.put(field.target(), fieldText.trim());
+    }
+    return row;
   }
 
   private List<FixedWidthField> loadFixedWidthFields(Object fieldMappings) {
