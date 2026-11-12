@@ -88,15 +88,28 @@ public class GracefulKafkaShutdown
     this.eventPublisher = applicationEventPublisher;
   }
 
+  /**
+   * 关闭顺序的意图：
+   *
+   * <ol>
+   *   <li>先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
+   *   <li>再停止 Kafka listener，避免继续拉取新任务
+   *   <li>等待 in-flight 任务自然结束（有超时），避免 RUNNING 长期停滞/重复调度
+   *   <li>排空后主动 deactivate（→OFFLINE），免去心跳超时窗口，计划内重启即时摘除
+   * </ol>
+   */
   @Override
   public void onApplicationEvent(ContextClosedEvent event) {
     publishReadinessRefusal();
-    // 关闭顺序的意图：
-    // 1) 先把 worker 标记为 DRAINING（best-effort），让 orchestrator 在调度层面减少派发
-    // 2) 再停止 Kafka listener，避免继续拉取新任务
-    // 3) 等待 in-flight 任务自然结束（有超时），避免 RUNNING 长期停滞/重复调度
-    // 4) 排空后主动 deactivate（→OFFLINE），免去心跳超时窗口，计划内重启即时摘除
     Collection<WorkerRegistration> registrations = workerRuntimeState.snapshot();
+    markAllDraining(registrations);
+    stopKafkaListeners();
+    awaitDrainAndRecord();
+    deactivateAll(registrations);
+  }
+
+  /** 关闭第 1 步：best-effort 把本进程所有注册标记为 DRAINING，单条失败仅告警。 */
+  private void markAllDraining(Collection<WorkerRegistration> registrations) {
     for (WorkerRegistration registration : registrations) {
       if (!isValidRegistration(registration)) {
         continue;
@@ -110,7 +123,10 @@ public class GracefulKafkaShutdown
             SwallowedExceptionLogger.summary(ex));
       }
     }
+  }
 
+  /** 关闭第 2 步：停止 Kafka listener，不再拉取新任务；失败仅告警，继续后续排空。 */
+  private void stopKafkaListeners() {
     try {
       kafkaListenerEndpointRegistry.stop();
       log.info("kafka listener containers stopped");
@@ -118,9 +134,6 @@ public class GracefulKafkaShutdown
       log.warn(
           "failed to stop kafka listener containers: {}", SwallowedExceptionLogger.summary(ex), ex);
     }
-
-    awaitDrainAndRecord();
-    deactivateAll(registrations);
   }
 
   private void publishReadinessRefusal() {

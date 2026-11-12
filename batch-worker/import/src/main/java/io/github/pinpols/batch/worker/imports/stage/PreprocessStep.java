@@ -133,18 +133,7 @@ public class PreprocessStep implements ImportStageStep {
         objectSource.assertObjectBelongsToTenant(context, importPayload);
       }
 
-      // 大文件流式直载:无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件,
-      // 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破 byte[]/MAX_OBJECT_BYTES 内存上限,
-      // 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退 byte[] 路径。
-      // 仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径
-      // (设 normalizedPayload,无临时文件开销)。
-      long directStreamObjectBytes = (importPayload != null
-              && Texts.hasText(importPayload.storagePath())
-              && !Texts.hasText(importPayload.content())
-              && !Texts.hasText(importPayload.contentBase64())
-              && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig))
-          ? objectSource.objectSizeBytes(importPayload)
-          : -1L;
+      long directStreamObjectBytes = directStreamObjectBytes(importPayload, templateConfig);
       if (directStreamObjectBytes >= payloadProperties.getPreprocessSpoolBytes()) {
         // 分片 + 安全格式(物理换行=记录边界)+ UTF-8 兼容字符集时,只 range 下载本片字节
         // (消除每片 N× 下载/解析放大);否则维持整份流式直载。range 路径任何异常都回退整份(不抛)。
@@ -172,21 +161,8 @@ public class PreprocessStep implements ImportStageStep {
       }
 
       byte[] rawBytes = objectSource.resolveRawBytes(context, importPayload, templateConfigObject);
-      // 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）。
-      // 处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，
-      // 在此处透明解密后再进入预处理 pipeline。
-      //
-      // ⚠2 (2026-05-03): 大文件走 spool 路径避免 byte[] 双倍峰值. 之前 cryptoService.decrypt(rawBytes)
-      // 内部 ByteArrayInputStream → readAllBytes(), 100 MB 输入瞬间 200 MB 堆峰. 现在 > spool 阈值且加密时
-      // 走 Path → Path 流式解密, 完成后释放 rawBytes 引用让 GC 回收, 堆峰降为单 100 MB.
-      if (!batchSecurityProperties.isBypassMode()) {
-        if (rawBytes.length > payloadProperties.getPreprocessSpoolBytes()
-            && cryptoService.isEncryptedContent(rawBytes)) {
-          rawBytes = decryptViaSpool(rawBytes);
-        } else {
-          rawBytes = cryptoService.decrypt(rawBytes);
-        }
-      }
+      // 覆盖同一局部变量，解密后不再持有原始字节引用，保持单份堆峰值。
+      rawBytes = decryptImportBytes(rawBytes);
       byte[] processed = ImportPreprocessPipeline.run(
           rawBytes,
           importPayload,
@@ -212,6 +188,44 @@ public class PreprocessStep implements ImportStageStep {
           fallbackMessage,
           ERROR_OBJECT_MAPPER);
     }
+  }
+
+  /**
+   * 大文件流式直载的对象字节数；不满足直载条件时返回 -1。
+   *
+   * <p>无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件, 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破
+   * byte[]/MAX_OBJECT_BYTES 内存上限, 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退
+   * byte[] 路径。仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径 (设
+   * normalizedPayload,无临时文件开销)。
+   */
+  private long directStreamObjectBytes(
+      ImportPayload importPayload, Map<String, Object> templateConfig) {
+    boolean objectCanStreamDirect = EmptyChecks.isNotNull(importPayload)
+        && Texts.hasText(importPayload.storagePath())
+        && !Texts.hasText(importPayload.content())
+        && !Texts.hasText(importPayload.contentBase64())
+        && ImportPreprocessObjectSource.canStreamObjectDirect(importPayload, templateConfig);
+    return objectCanStreamDirect ? objectSource.objectSizeBytes(importPayload) : -1L;
+  }
+
+  /**
+   * 解密由 BatchObjectCryptoService 产生的 BATCHENC 格式文件（导出存储路径）；bypass-mode 下原样返回。
+   *
+   * <p>处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，在此处透明解密后再进入预处理 pipeline。
+   *
+   * <p>⚠2 (2026-05-03): 大文件走 spool 路径避免 byte[] 双倍峰值. 之前 cryptoService.decrypt(rawBytes) 内部
+   * ByteArrayInputStream → readAllBytes(), 100 MB 输入瞬间 200 MB 堆峰. 现在 > spool 阈值且加密时 走 Path → Path
+   * 流式解密, 完成后释放 rawBytes 引用让 GC 回收, 堆峰降为单 100 MB.
+   */
+  private byte[] decryptImportBytes(byte[] rawBytes) {
+    if (batchSecurityProperties.isBypassMode()) {
+      return rawBytes;
+    }
+    if (rawBytes.length > payloadProperties.getPreprocessSpoolBytes()
+        && cryptoService.isEncryptedContent(rawBytes)) {
+      return decryptViaSpool(rawBytes);
+    }
+    return cryptoService.decrypt(rawBytes);
   }
 
   private boolean hasTemplateConfigSnapshot(Object value) {
