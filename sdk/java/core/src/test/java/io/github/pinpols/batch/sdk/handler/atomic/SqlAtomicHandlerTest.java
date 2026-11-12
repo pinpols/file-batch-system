@@ -299,6 +299,22 @@ class SqlAtomicHandlerTest {
         Arguments.of("empty", " ; ; \n", List.of()),
         Arguments.of("tail", " SELECT 1; SELECT 2 ", List.of("SELECT 1", "SELECT 2")),
         Arguments.of(
+            "dollar-quoted-body",
+            "SELECT $$a;b;c$$ AS v; SELECT 2",
+            List.of("SELECT $$a;b;c$$ AS v", "SELECT 2")),
+        Arguments.of(
+            "tagged-dollar-quote",
+            "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$; SELECT 9",
+            List.of("DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$", "SELECT 9")),
+        Arguments.of(
+            "positional-param-is-not-dollar-quote",
+            "SELECT $1 WHERE a=$1; SELECT 2",
+            List.of("SELECT $1 WHERE a=$1", "SELECT 2")),
+        Arguments.of(
+            "dollar-inside-single-quote",
+            "SELECT '$$;'; SELECT 2",
+            List.of("SELECT '$$;'", "SELECT 2")),
+        Arguments.of(
             "single-quoted-semicolon", "SELECT ';';SELECT 2", List.of("SELECT ';'", "SELECT 2")),
         Arguments.of(
             "escaped-single-quote",

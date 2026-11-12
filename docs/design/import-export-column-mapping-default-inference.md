@@ -241,7 +241,7 @@ if effective.isEmpty():
 
 | 项 | 内容 | 位置 |
 |---|---|---|
-| **B1** Excel 必填↔DB 默认对齐 | 已有 DB 列 `DEFAULT` 的枚举不再 Excel 必填,留空默认回退:`checksum_type`/`compress_type`/`encrypt_type`(NONE)、`priority_policy`(FIFO)、`end_strategy`(FINISH_RUNNING)/`out_of_window_action`(WAIT)、`holiday_roll_rule`(SKIP)/`catch_up_policy`(NONE) | `AbstractSingleSheetExcelService.optionalEnum` + 4 个 `*ExcelRowParser` + 字段说明 sheet |
+| **B1** Excel 必填↔DB 默认对齐 | 已有 DB 列 `DEFAULT` 的枚举不再 Excel 必填,留空默认回退:`checksum_type`/`compress_type`/`encrypt_type`(NONE)、`priority_policy`(FIFO)、`end_strategy`(FINISH_RUNNING)/`out_of_window_action`(WAIT)、`holiday_roll_rule`(SKIP)/`catch_up_policy`(NONE) | `SingleSheetExcelCellParsers.optionalEnum` + 4 个 `*ExcelRowParser` + 字段说明 sheet |
 | **B2** `conflictColumns` 自动补 tenant | 非空但漏 tenant 列时自动前置(多租 UNIQUE 必含 tenant_id);空列表不动 | `JdbcMappedImportSpec.ensureTenantInConflicts` |
 | **B3** `standardAuditBindings` 开关 | `=true` 一键展开标准审计 `systemBindings`(显式项覆盖),省手写 `${...}` 样板 | `JdbcMappedImportSpec.withStandardAuditBindings` |
 

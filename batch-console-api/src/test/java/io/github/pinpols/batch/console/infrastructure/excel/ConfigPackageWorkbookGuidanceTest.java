@@ -663,6 +663,24 @@ class ConfigPackageWorkbookGuidanceTest {
   }
 
   @Test
+  @DisplayName("填写顺序 sheet:每个数据 sheet 都有专属的填写场景与先填原因")
+  void shouldDescribeEverySheet_whenBuildingFillOrderSheet() throws Exception {
+    try (XSSFWorkbook wb = buildTemplate()) {
+      Sheet sheet = wb.getSheet(ConfigPackageWorkbookSupplementWriter.SHEET_NAME_FILL_ORDER);
+      List<String> undescribedSheets = new ArrayList<>();
+      for (int rowIndex = 2; rowIndex <= sheet.getLastRowNum(); rowIndex++) {
+        Row row = sheet.getRow(rowIndex);
+        String scenario = row.getCell(2).getStringCellValue();
+        String reason = row.getCell(3).getStringCellValue();
+        if (scenario.isBlank() || "按业务需要填写。".equals(scenario) || reason.isBlank()) {
+          undescribedSheets.add(row.getCell(1).getStringCellValue());
+        }
+      }
+      assertThat(undescribedSheets).as("缺少专属说明的 sheet").isEmpty();
+    }
+  }
+
+  @Test
   @DisplayName("数据 sheet:必填列通过公式校验强制非空")
   void shouldApplyRequiredColumnValidation_whenBuildingDataSheets() throws Exception {
     try (XSSFWorkbook wb = buildTemplate()) {

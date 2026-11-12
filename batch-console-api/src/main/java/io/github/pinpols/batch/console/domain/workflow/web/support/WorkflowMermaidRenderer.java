@@ -1,12 +1,15 @@
 package io.github.pinpols.batch.console.domain.workflow.web.support;
 
+import io.github.pinpols.batch.common.enums.DictEnum;
+import io.github.pinpols.batch.common.enums.WorkflowEdgeType;
+import io.github.pinpols.batch.common.enums.WorkflowNodeType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowEdgeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowNodeResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.response.WorkflowDefinitionDetailResponse;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -58,12 +61,15 @@ public final class WorkflowMermaidRenderer {
 
   private static String shapeFor(ConsoleWorkflowNodeResponse n) {
     String label = escapeLabel(displayLabel(n));
-    String type = n.nodeType() == null ? "" : n.nodeType().toUpperCase(Locale.ROOT);
+    WorkflowNodeType type = DictEnum.fromCode(WorkflowNodeType.class, n.nodeType());
+    if (EmptyChecks.isNull(type)) {
+      return "[" + label + "]";
+    }
     return switch (type) {
-      case "START", "END" -> "([" + label + "])";
-      case "GATEWAY" -> "{" + label + "}";
-      case "WAIT" -> "[[" + label + "]]";
-      default -> "[" + label + "]";
+      case START, END -> "([" + label + "])";
+      case GATEWAY -> "{" + label + "}";
+      case WAIT -> "[[" + label + "]]";
+      case TASK, JOB -> "[" + label + "]";
     };
   }
 
@@ -75,18 +81,20 @@ public final class WorkflowMermaidRenderer {
   }
 
   private static String arrowFor(ConsoleWorkflowEdgeResponse e) {
-    String type = e.edgeType() == null ? "" : e.edgeType().toUpperCase(Locale.ROOT);
-    if ("CONDITION".equals(type)) {
+    WorkflowEdgeType type = DictEnum.fromCode(WorkflowEdgeType.class, e.edgeType());
+    if (EmptyChecks.isNull(type)) {
+      return " --> ";
+    }
+    if (type == WorkflowEdgeType.CONDITION) {
       String conditionExpr = e.conditionExpr();
       String conditionLabel = Texts.hasText(conditionExpr) ? conditionExpr : "?";
       String escapedConditionLabel = escapeLabel(conditionLabel);
       return " -- \"" + escapedConditionLabel + "\" --> ";
     }
     return switch (type) {
-      case "FAILURE" -> " -. failure .-> ";
-      case "SUCCESS" -> " -- success --> ";
-      case "ALWAYS" -> " --> ";
-      default -> " --> ";
+      case FAILURE -> " -. failure .-> ";
+      case SUCCESS -> " -- success --> ";
+      case ALWAYS, CONDITION -> " --> ";
     };
   }
 

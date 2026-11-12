@@ -1,5 +1,11 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-12 分支、数据结构与设计模式整改
+
+- 按[分支、数据结构与设计模式审查](audit/branching-data-structure-pattern-review-2026-11-12.md)整改：配置包「填写顺序」sheet 的说明改为按 sheet 登记的描述表，补齐作业/工作流监控策略 sheet 的说明；Orchestrator 配置缓存 5 份读穿流程合并为一处；条件表达式的引号扫描、DAG 节点状态判定、Mermaid 渲染和推送标题改为枚举口径。
+- 导出格式 XML 的生成后缀与对外文件名统一为 `.xml`。Java、Python SDK 的原子 SQL 切分与平台一致，PG dollar-quote 体内的 `;` 不再拆开语句；Java SDK 存储过程补齐与平台一致的标量 OUT 类型。审批推送中 `SELF_SERVICE` 类型显示字典标签「自助补救」。
+- 删除没有子类的 `AbstractSingleSheetExcelService`（单元格解析函数移到 `SingleSheetExcelCellParsers`）和 `AuditableEntity`。
+
 ## 2026-11-12 Java 可读性阶段 9 门面删除记录
 
 - ADR-008 补记后续：`DefaultTaskExecutionService` 门面只剩纯转发，已随 `TaskExecutionService` 接口一并删除，调用方直接注入对应子服务（控制器入口只用 `TaskAssignmentService`）。事务边界原本在子服务上，未变化；属于内部重构，对外 API 与发布配置不变。详见 [Java 可读性阶段 9 计划](plans/java-readability-phase-9-plan-2026-11-11.md)。

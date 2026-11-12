@@ -19,6 +19,7 @@ public interface ExportFormatStrategy {
     return contentTypeFor(formatType());
   }
 
+  /** 须与 {@code ExportFileNameResolver} 的默认文件名后缀一致，由 {@code ExportFormatStrategySuffixTest} 守护。 */
   static String fileSuffixFor(String formatType) {
     FileTemplateFormat format = parseFormat(formatType);
     if (EmptyChecks.isNull(format)) {
@@ -28,6 +29,7 @@ public interface ExportFormatStrategy {
       case DELIMITED -> BatchFileConstants.CSV_SUFFIX;
       case EXCEL -> BatchFileConstants.XLSX_SUFFIX;
       case FIXED_WIDTH -> BatchFileConstants.TXT_SUFFIX;
+      case XML -> BatchFileConstants.XML_SUFFIX;
       default -> BatchFileConstants.JSON_SUFFIX;
     };
   }

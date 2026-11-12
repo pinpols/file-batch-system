@@ -219,6 +219,23 @@ class WorkflowConditionEvaluatorTest {
   }
 
   @Test
+  @DisplayName("引号内的逻辑运算符、比较符、逗号与括号按字面量处理")
+  void shouldTreatOperatorsInsideQuotesAsLiterals() {
+    assertThat(evaluator.matches("note = 'a && b || c'", "{\"note\":\"a && b || c\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("note = 'x >= y'", "{\"note\":\"x >= y\"}")).isTrue();
+    assertThat(evaluator.matches("tag in ['a,b', \"c)d\"]", "{\"tag\":\"a,b\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("tag in ['a,b', \"c)d\"]", "{\"tag\":\"c)d\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("tag in ['a,b', \"c)d\"]", "{\"tag\":\"a\"}")).isFalse();
+    assertThat(evaluator.matches("(note = \"it's (ok)\")", "{\"note\":\"it's (ok)\"}"))
+        .isTrue();
+    assertThat(evaluator.matches("(a = 1) && (b = 2)", "{\"a\":1,\"b\":2}")).isTrue();
+    assertThat(evaluator.matches("(a = 1) && (b = 2)", "{\"a\":1,\"b\":3}")).isFalse();
+  }
+
+  @Test
   @DisplayName("载荷中缺少表达式引用的字段时判定不命中")
   void shouldReturnFalseWhenPayloadKeyMissing() {
     assertThat(evaluator.matches("status = 'SUCCESS'", "{}")).isFalse();

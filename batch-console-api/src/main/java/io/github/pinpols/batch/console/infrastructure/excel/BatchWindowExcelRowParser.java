@@ -1,11 +1,11 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.normalize;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.normalize;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalBoolean;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalEnum;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalText;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.requireText;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.resolveTenantField;
 
 import io.github.pinpols.batch.common.enums.BatchWindowEndStrategy;
 import io.github.pinpols.batch.common.enums.DictEnum;

@@ -165,3 +165,20 @@ async def test_split_statements_honours_quotes_and_comments() -> None:
     assert len(stmts2) == 2
     assert stmts2[0] == "SELECT 1"
     assert "UPDATE" in stmts2[1]
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        ("SELECT $$a;b;c$$ AS v; SELECT 2", ["SELECT $$a;b;c$$ AS v", "SELECT 2"]),
+        (
+            "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$; SELECT 9",
+            ["DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$", "SELECT 9"],
+        ),
+        ("SELECT $1 WHERE a=$1; SELECT 2", ["SELECT $1 WHERE a=$1", "SELECT 2"]),
+        ("SELECT '$$;'; SELECT 2", ["SELECT '$$;'", "SELECT 2"]),
+    ],
+)
+def test_split_statements_honours_dollar_quotes(sql: str, expected: list[str]) -> None:
+    # 与平台 SqlTaskExecutor 一致:顶层 dollar-quote 体内的 ``;`` 不切,``$1`` 位置参数不是开标签。
+    assert split_statements(sql) == expected
