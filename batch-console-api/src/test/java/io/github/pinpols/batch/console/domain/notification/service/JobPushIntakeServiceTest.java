@@ -21,6 +21,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
@@ -57,6 +58,30 @@ class JobPushIntakeServiceTest {
     service = new JobPushIntakeService(properties, subscriptions, deliveries);
     properties.setEnabled(true);
     properties.getJobNotify().setEnabled(true);
+  }
+
+  @DisplayName("推送标题按作业终态给出结果措辞, 其余状态展示状态码")
+  @ParameterizedTest
+  @CsvSource({
+    "SUCCESS, 任务 IMPORT 已成功",
+    "FAILED, 任务 IMPORT 已失败",
+    "PARTIAL_FAILED, 任务 IMPORT 部分失败",
+    "CANCELLED, 任务 IMPORT 已取消",
+    "TERMINATED, 任务 IMPORT 已终止",
+    "SUCCESS_DRY_RUN, 任务 IMPORT SUCCESS_DRY_RUN"
+  })
+  void shouldTitleByTerminalStatus(String status, String expectedTitle) {
+    when(deliveries.insertDecision(any(JobPushDecisionInsertParam.class))).thenReturn(1);
+    properties.setEnabled(false);
+    var job = job();
+    job.put("instanceStatus", status);
+    service.accept("ta", KEY, job);
+    var decisionParam = ArgumentCaptor.forClass(JobPushDecisionInsertParam.class);
+    verify(deliveries).insertDecision(decisionParam.capture());
+    assertThat(JsonUtils.fromJson(
+                decisionParam.getValue().payload(), ConsolePushSender.PushPayload.class)
+            .title())
+        .isEqualTo(expectedTitle);
   }
 
   @DisplayName("推送停用时记录决策且不查询设备")

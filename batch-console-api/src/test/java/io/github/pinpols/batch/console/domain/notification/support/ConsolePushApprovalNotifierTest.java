@@ -128,6 +128,25 @@ class ConsolePushApprovalNotifierTest {
   }
 
   @Test
+  @DisplayName("待审批或未登记的审批状态在标题中原样展示状态码")
+  void shouldKeepStatusCodeWhenStatusHasNoPushWording() {
+    PendingApprovalNotification pending =
+        approval("ap-6", "ta", "DOWNLOAD", "PENDING", "alice", null, "ok", null);
+    PendingApprovalNotification unknown =
+        approval("ap-7", "ta", "DOWNLOAD", "ARCHIVED", "alice", null, "ok", null);
+    when(notificationMapper.findPending(10, 50)).thenReturn(List.of(pending, unknown));
+    when(notificationMapper.insertIgnore(any())).thenReturn(1);
+
+    notifier.pollOnce();
+
+    ArgumentCaptor<PushPayload> payload = ArgumentCaptor.forClass(PushPayload.class);
+    verify(pushSender, times(2)).sendToUser(any(), any(), payload.capture());
+    assertThat(payload.getAllValues())
+        .extracting(PushPayload::title)
+        .containsExactly("下载 申请PENDING", "下载 申请ARCHIVED");
+  }
+
+  @Test
   @DisplayName("去重记录写入冲突时跳过推送")
   void shouldSkipPushWhenInsertConflicts() {
     PendingApprovalNotification p =
