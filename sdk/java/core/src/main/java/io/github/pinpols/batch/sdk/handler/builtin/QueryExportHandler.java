@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 
 import io.github.pinpols.batch.sdk.handler.SdkAbstractTaskHandler;
 import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedCodec;
+import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.BufferedWriter;
@@ -62,23 +63,9 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
           ResultSetMetaData meta = rs.getMetaData();
           int cols = meta.getColumnCount();
           if (config.format().header()) {
-            List<String> headers = new ArrayList<>(cols);
-            for (int i = 1; i <= cols; i++) {
-              headers.add(meta.getColumnLabel(i));
-            }
-            writer.write(DelimitedCodec.encode(headers, delim, quote));
-            writer.newLine();
+            writeHeader(writer, meta, cols, delim, quote);
           }
-          while (rs.next()) {
-            List<String> values = new ArrayList<>(cols);
-            for (int i = 1; i <= cols; i++) {
-              Object o = rs.getObject(i);
-              values.add(o == null ? "" : o.toString());
-            }
-            writer.write(DelimitedCodec.encode(values, delim, quote));
-            writer.newLine();
-            rowCount++;
-          }
+          rowCount = writeRows(rs, writer, cols, delim, quote);
         }
       }
       conn.commit();
@@ -90,6 +77,34 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
     out.put("rowCount", rowCount);
     out.put("filePath", path.toString());
     return SdkTaskResult.ok("exported " + rowCount + " rows", out);
+  }
+
+  private void writeHeader(
+      BufferedWriter writer, ResultSetMetaData meta, int cols, char delim, char quote)
+      throws Exception {
+    List<String> headers = new ArrayList<>(cols);
+    for (int i = 1; i <= cols; i++) {
+      headers.add(meta.getColumnLabel(i));
+    }
+    writer.write(DelimitedCodec.encode(headers, delim, quote));
+    writer.newLine();
+  }
+
+  /** 游标流式逐行写出,返回写出的行数。 */
+  private long writeRows(ResultSet rs, BufferedWriter writer, int cols, char delim, char quote)
+      throws Exception {
+    long rowCount = 0;
+    while (rs.next()) {
+      List<String> values = new ArrayList<>(cols);
+      for (int i = 1; i <= cols; i++) {
+        Object o = rs.getObject(i);
+        values.add(EmptyChecks.isNull(o) ? "" : o.toString());
+      }
+      writer.write(DelimitedCodec.encode(values, delim, quote));
+      writer.newLine();
+      rowCount++;
+    }
+    return rowCount;
   }
 
   private Path resolveOutput(SdkTaskContext ctx) {
