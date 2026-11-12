@@ -265,6 +265,35 @@ class BatchDayReplayTerminalReconcilerTest {
   }
 
   @Test
+  @DisplayName("试运行失败终态把条目收敛为失败")
+  void shouldMarkEntryFailed_whenDryRunEndsInFailure() {
+    BatchDayReplaySessionEntity dryRunSession = session(80L, "RUNNING", 1).toBuilder()
+        .executionMode(BatchDayReplayExecutionMode.DRY_RUN.code())
+        .build();
+    stubExistingSession(dryRunSession);
+    BatchDayReplayEntryEntity entry = BatchDayReplayEntryEntity.builder()
+        .id(81L)
+        .sessionId(80L)
+        .tenantId("t1")
+        .jobCode("JOB_DRY")
+        .status("RUNNING")
+        .build();
+    when(entryMapper.selectByCurrentExecution("t1", 80L, "JOB_DRY", 8001L)).thenReturn(entry);
+    when(entryMapper.countBySessionAndStatus(80L, ENTRY_SUCCEEDED)).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(80L, ENTRY_FAILED)).thenReturn(1L);
+    when(entryMapper.countBySessionAndStatus(80L, "PENDING")).thenReturn(0L);
+    when(entryMapper.countBySessionAndStatus(80L, "RUNNING")).thenReturn(0L);
+
+    reconciler.reconcileOnTerminal(
+        "t1", 80L, "JOB_DRY", 8001L, JobInstanceStatus.FAILED_DRY_RUN.code());
+
+    verify(entryMapper)
+        .updateStatus(argThat(param -> param.getId().equals(81L)
+            && param.getToStatus().equals(ENTRY_FAILED)
+            && param.getRerunInstanceId().equals(8001L)));
+  }
+
+  @Test
   @DisplayName("试运行会话收到正式终态时按模式不匹配处理, 不更新会话")
   void shouldSkipNormalStatus_whenSessionRunsInDryRun() {
     BatchDayReplaySessionEntity dryRunSession = session(70L, "RUNNING", 1).toBuilder()

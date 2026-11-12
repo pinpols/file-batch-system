@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
 import java.time.Instant;
 import java.util.Objects;
 import lombok.Getter;
@@ -7,9 +8,6 @@ import lombok.Getter;
 /** 批次日重放条目的状态与关联结果更新参数。id、目标状态和更新时间必填；其余字段为空时由 Mapper 保留原值。 */
 @Getter
 public final class UpdateBatchDayReplayEntryStatusParam {
-  private static final String STATUS_RUNNING = "RUNNING";
-  private static final String STATUS_SUCCEEDED = "SUCCEEDED";
-  private static final String STATUS_FAILED = "FAILED";
 
   private final Long id;
   private final String toStatus;
@@ -37,28 +35,32 @@ public final class UpdateBatchDayReplayEntryStatusParam {
       Long id, Long rerunInstanceId, Instant startedAt, Instant now) {
     EntryStatusDetails details =
         new EntryStatusDetails(rerunInstanceId, null, null, startedAt, null);
-    return new UpdateBatchDayReplayEntryStatusParam(id, STATUS_RUNNING, now, details);
+    return new UpdateBatchDayReplayEntryStatusParam(
+        id, BatchDayReplayEntryStatus.RUNNING.code(), now, details);
   }
 
   public static UpdateBatchDayReplayEntryStatusParam succeededWithResult(
       Long id, Long resultVersionId, Instant completedAt) {
     EntryStatusDetails details =
         new EntryStatusDetails(null, resultVersionId, null, completedAt, completedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(id, STATUS_SUCCEEDED, completedAt, details);
+    return new UpdateBatchDayReplayEntryStatusParam(
+        id, BatchDayReplayEntryStatus.SUCCEEDED.code(), completedAt, details);
   }
 
   public static UpdateBatchDayReplayEntryStatusParam failedWithResult(
       Long id, Long resultVersionId, String failureReason, Instant completedAt) {
     EntryStatusDetails details =
         new EntryStatusDetails(null, resultVersionId, failureReason, completedAt, completedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(id, STATUS_FAILED, completedAt, details);
+    return new UpdateBatchDayReplayEntryStatusParam(
+        id, BatchDayReplayEntryStatus.FAILED.code(), completedAt, details);
   }
 
   public static UpdateBatchDayReplayEntryStatusParam failedOnSubmission(
       Long id, String failureReason, Instant failedAt) {
     EntryStatusDetails details =
         new EntryStatusDetails(null, null, failureReason, failedAt, failedAt);
-    return new UpdateBatchDayReplayEntryStatusParam(id, STATUS_FAILED, failedAt, details);
+    return new UpdateBatchDayReplayEntryStatusParam(
+        id, BatchDayReplayEntryStatus.FAILED.code(), failedAt, details);
   }
 
   public static UpdateBatchDayReplayEntryStatusParam completedRerun(

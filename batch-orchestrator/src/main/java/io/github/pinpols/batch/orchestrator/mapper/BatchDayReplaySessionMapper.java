@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.mapper;
 
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
 import java.time.Instant;
@@ -29,7 +30,7 @@ public interface BatchDayReplaySessionMapper {
   int updateStatus(UpdateBatchDayReplaySessionStatusParam param);
 
   default int reopenPartialFailedForRetry(String tenantId, Long id, Instant now) {
-    String targetStatus = "RUNNING";
+    String targetStatus = BatchDayReplaySessionStatus.RUNNING.code();
     return reopenPartialFailedForRetryWithStatus(tenantId, id, now, targetStatus);
   }
 

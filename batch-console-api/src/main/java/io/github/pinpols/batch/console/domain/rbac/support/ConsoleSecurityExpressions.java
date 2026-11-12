@@ -24,11 +24,6 @@ public final class ConsoleSecurityExpressions {
       + ConsoleRoles.TENANT_ADMIN
       + "') and #request.previewToken != null)"; // empty-check: allow - SpEL role guard requires
   // 此处的空值比较。
-  public static final String ADMIN_OR_TENANT_USER = HAS_ANY_AUTHORITY
-      + ConsoleRoles.ADMIN
-      + AUTHORITY_SEPARATOR
-      + ConsoleRoles.TENANT_USER
-      + EXPRESSION_SUFFIX;
   public static final String ADMIN_OR_TENANT_ADMIN_OR_AUDITOR = HAS_ANY_AUTHORITY
       + ConsoleRoles.ADMIN
       + AUTHORITY_SEPARATOR

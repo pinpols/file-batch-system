@@ -30,6 +30,8 @@ BFS 的下游 readiness 不能只看 `job_instance` 最新 attempt 是否成功�
 
 > **2026-10-13 Mapper 状态写入治理**:`ResultVersionMapper` 的状态写入值由 Java 语义方法集中提供,Mapper SQL 改为接收状态参数；本次仅消除 XML 中重复维护的状态字面量,结果版本流转、EFFECTIVE 判定与 readiness 语义均保持不变。
 
+> **2026-11-12 ResultVersionWriter 状态值收敛**:`ResultVersionWriter` 删除私有的 `STATUS_EFFECTIVE / STATUS_PENDING / STATUS_DRY_RUN` 字面量,改为引用已有的 `ResultVersionMapper.VersionStatus` 枚举；写入数据库的取值、EFFECTIVE 判定和 readiness 物化时机均不变,属于纯字面量来源收敛。
+
 ## 调度与清理迁移边界
 
 - V180 将上游 readiness 未满足时的定时触发改为可重检的 defer，并固定原始 fire 时刻对应的 `bizDate`；就绪、超时或放弃后清空 defer 时间。

@@ -5,7 +5,6 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayCandidateSource;
 import io.github.pinpols.batch.common.enums.BatchDayReplayExecutionMode;
 import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.enums.BatchLifecycleStatus;
-import io.github.pinpols.batch.common.enums.ConfigLifecycleStatus;
 import io.github.pinpols.batch.common.enums.ConfigVersionPolicy;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
@@ -29,6 +28,8 @@ import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionE
 import io.github.pinpols.batch.orchestrator.domain.entity.JobExecutionLogEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplaySessionStatusParam;
@@ -92,13 +93,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDayReplayService {
 
-  static final String STATUS_PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
-  static final String STATUS_RUNNING = BatchLifecycleStatus.RUNNING.code();
-  static final String STATUS_SUCCEEDED = "SUCCEEDED";
-  static final String STATUS_PARTIAL_FAILED = JobInstanceStatus.PARTIAL_FAILED.code();
-  static final String STATUS_CANCELLED = "CANCELLED";
-
-  static final String ENTRY_PENDING = "PENDING";
   private static final Duration PREVIEW_TOKEN_TTL = Duration.ofMinutes(5);
   private static final Duration CONSUMED_PREVIEW_RETENTION = Duration.ofHours(24);
   private static final int EXPIRED_PREVIEW_CLEANUP_LIMIT = 500;
@@ -163,7 +157,9 @@ public class BatchDayReplayService {
     String executionMode = prepared.executionMode();
     String candidateSource = prepared.candidateSource();
     String configVersionPolicy = prepared.configVersionPolicy();
-    String initialStatus = command.autoApprove() ? STATUS_RUNNING : STATUS_PENDING_APPROVAL;
+    String initialStatus = command.autoApprove()
+        ? BatchDayReplaySessionStatus.RUNNING.code()
+        : BatchDayReplaySessionStatus.PENDING_APPROVAL.code();
     if (previewTokenMapper.consume(command.tenantId(), token.tokenHash()) != 1) {
       throw invalidPreviewToken();
     }
@@ -191,7 +187,7 @@ public class BatchDayReplayService {
         .failedCount(0)
         .inFlightCount(0)
         .requestedBy(command.requestedBy())
-        .startedAt(STATUS_RUNNING.equals(initialStatus) ? now : null)
+        .startedAt(BatchDayReplaySessionStatus.RUNNING.code().equals(initialStatus) ? now : null)
         .traceId(command.traceId())
         .createdAt(now)
         .updatedAt(now)
@@ -505,14 +501,14 @@ public class BatchDayReplayService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
     }
     BatchDayReplaySessionEntity session = loadForUpdateWithOperationLock(tenantId, sessionId);
-    if (!STATUS_PARTIAL_FAILED.equals(session.status())
+    if (!BatchDayReplaySessionStatus.PARTIAL_FAILED.code().equals(session.status())
         || BatchDayReplayScope.OUTPUTS_ONLY.code().equals(session.scope())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
     }
     BatchDayReplayEntryEntity entry = entryMapper.selectByIdForUpdate(tenantId, sessionId, entryId);
     boolean replayEntryCannotBeRetried = EmptyChecks.isNull(entry)
-        || !"FAILED".equals(entry.status())
+        || !BatchDayReplayEntryStatus.FAILED.code().equals(entry.status())
         || EmptyChecks.isNotNull(entry.rerunInstanceId());
     if (replayEntryCannotBeRetried) {
       throw BizException.of(
@@ -524,10 +520,14 @@ public class BatchDayReplayService {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.retry_state_invalid");
     }
-    long succeededCount = entryMapper.countBySessionAndStatus(sessionId, "SUCCEEDED");
-    long failedCount = entryMapper.countBySessionAndStatus(sessionId, "FAILED");
-    long pendingCount = entryMapper.countBySessionAndStatus(sessionId, "PENDING");
-    long runningCount = entryMapper.countBySessionAndStatus(sessionId, "RUNNING");
+    long succeededCount =
+        entryMapper.countBySessionAndStatus(sessionId, BatchDayReplayEntryStatus.SUCCEEDED.code());
+    long failedCount =
+        entryMapper.countBySessionAndStatus(sessionId, BatchDayReplayEntryStatus.FAILED.code());
+    long pendingCount =
+        entryMapper.countBySessionAndStatus(sessionId, BatchDayReplayEntryStatus.PENDING.code());
+    long runningCount =
+        entryMapper.countBySessionAndStatus(sessionId, BatchDayReplayEntryStatus.RUNNING.code());
     int inFlightCount = Math.toIntExact(pendingCount + runningCount);
     BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam =
         BatchDayReplaySessionUpdateCountsParam.builder()
@@ -570,14 +570,18 @@ public class BatchDayReplayService {
   @Transactional
   public BatchDayReplaySessionEntity approve(String tenantId, Long sessionId, String approver) {
     BatchDayReplaySessionEntity session = loadForUpdateWithOperationLock(tenantId, sessionId);
-    if (!STATUS_PENDING_APPROVAL.equals(session.status())) {
+    if (!BatchDayReplaySessionStatus.PENDING_APPROVAL.code().equals(session.status())) {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.approve_state_invalid");
     }
     Instant now = dateTimeSupport.nowInstant();
     UpdateBatchDayReplaySessionStatusParam statusUpdate =
         UpdateBatchDayReplaySessionStatusParam.approved(
-            tenantId, sessionId, List.of(STATUS_PENDING_APPROVAL), approver, now);
+            tenantId,
+            sessionId,
+            List.of(BatchDayReplaySessionStatus.PENDING_APPROVAL.code()),
+            approver,
+            now);
     int updated = sessionMapper.updateStatus(statusUpdate);
     if (updated == 0) {
       throw BizException.of(
@@ -597,7 +601,12 @@ public class BatchDayReplayService {
     Instant now = dateTimeSupport.nowInstant();
     UpdateBatchDayReplaySessionStatusParam statusUpdate =
         UpdateBatchDayReplaySessionStatusParam.cancelled(
-            tenantId, sessionId, List.of(STATUS_PENDING_APPROVAL, STATUS_RUNNING), now);
+            tenantId,
+            sessionId,
+            List.of(
+                BatchDayReplaySessionStatus.PENDING_APPROVAL.code(),
+                BatchDayReplaySessionStatus.RUNNING.code()),
+            now);
     int updated = sessionMapper.updateStatus(statusUpdate);
     if (updated == 0) {
       throw BizException.of(
@@ -617,11 +626,11 @@ public class BatchDayReplayService {
       throw BizException.of(
           ResultCode.STATE_CONFLICT, "error.batch_day_replay.outputs_only_scope_required");
     }
-    if (!STATUS_RUNNING.equals(session.status())) {
+    if (!BatchDayReplaySessionStatus.RUNNING.code().equals(session.status())) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.batch_day_replay.not_running");
     }
-    List<BatchDayReplayEntryEntity> entries =
-        entryMapper.selectBySessionAndStatus(sessionId, tenantId, ENTRY_PENDING, Integer.MAX_VALUE);
+    List<BatchDayReplayEntryEntity> entries = entryMapper.selectBySessionAndStatus(
+        sessionId, tenantId, BatchDayReplayEntryStatus.PENDING.code(), Integer.MAX_VALUE);
     Instant now = dateTimeSupport.nowInstant();
     int succeeded = 0;
     int failed = 0;
@@ -664,10 +673,16 @@ public class BatchDayReplayService {
             .now(now)
             .build();
     sessionMapper.updateCounts(batchDayReplaySessionUpdateCountsParam2);
-    String terminalStatus = failed > 0 ? STATUS_PARTIAL_FAILED : STATUS_SUCCEEDED;
+    String terminalStatus = failed > 0
+        ? BatchDayReplaySessionStatus.PARTIAL_FAILED.code()
+        : BatchDayReplaySessionStatus.SUCCEEDED.code();
     UpdateBatchDayReplaySessionStatusParam sessionStatusUpdate =
         UpdateBatchDayReplaySessionStatusParam.completed(
-            tenantId, sessionId, terminalStatus, List.of(STATUS_RUNNING), now);
+            tenantId,
+            sessionId,
+            terminalStatus,
+            List.of(BatchDayReplaySessionStatus.RUNNING.code()),
+            now);
     sessionMapper.updateStatus(sessionStatusUpdate);
     refreshReplayOperation(session, now);
     log.info(
@@ -855,7 +870,7 @@ public class BatchDayReplayService {
           .tenantId(ji.getTenantId())
           .jobCode(ji.getJobCode())
           .sourceInstanceId(ji.getId())
-          .status(ENTRY_PENDING)
+          .status(BatchDayReplayEntryStatus.PENDING.code())
           .createdAt(now)
           .updatedAt(now)
           .build());
@@ -918,7 +933,7 @@ public class BatchDayReplayService {
           .tenantId(entryTenantId)
           .jobCode(entryJobCode)
           .planSnapshot(planSnapshot)
-          .status(ENTRY_PENDING)
+          .status(BatchDayReplayEntryStatus.PENDING.code())
           .createdAt(now)
           .updatedAt(now)
           .build());
@@ -1042,7 +1057,7 @@ public class BatchDayReplayService {
       entries.add(entryBuilder
           .sourceInstanceId(version.jobInstanceId())
           .resultVersionId(versionId)
-          .status(ENTRY_PENDING)
+          .status(BatchDayReplayEntryStatus.PENDING.code())
           .createdAt(now)
           .updatedAt(now)
           .build());
@@ -1179,7 +1194,8 @@ public class BatchDayReplayService {
   }
 
   private boolean isCancellable(String status) {
-    return STATUS_PENDING_APPROVAL.equals(status) || STATUS_RUNNING.equals(status);
+    return BatchDayReplaySessionStatus.PENDING_APPROVAL.code().equals(status)
+        || BatchDayReplaySessionStatus.RUNNING.code().equals(status);
   }
 
   private BatchDayReplaySessionEntity loadOrThrow(String tenantId, Long sessionId) {
