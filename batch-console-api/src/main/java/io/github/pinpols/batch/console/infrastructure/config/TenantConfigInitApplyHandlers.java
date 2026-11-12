@@ -178,44 +178,57 @@ public class TenantConfigInitApplyHandlers {
     for (T spec : specs) {
       String code = handler.code(spec);
       try {
-        ApplyAction action = nested.execute(status -> {
-          Optional<E> existing = handler.find(ctx.tenantId(), spec);
-          if (existing.isPresent()) {
-            if (ctx.mode() != InitMode.UPSERT) {
-              return ApplyAction.SKIPPED;
-            }
-            validate.accept(spec);
-            if (!ctx.dryRun()) {
-              handler.update(ctx, spec, existing.get());
-            }
-            return ApplyAction.UPDATED;
-          }
-          validate.accept(spec);
-          if (!ctx.dryRun()) {
-            handler.insert(ctx, spec);
-          }
-          return ApplyAction.CREATED;
-        });
+        ApplyAction action = nested.execute(status -> applyOne(spec, ctx, handler, validate));
         switch (Objects.requireNonNull(action)) {
           case CREATED -> acc.recordCreated(code);
           case UPDATED -> acc.recordUpdated(code);
           case SKIPPED -> acc.recordSkipped(code);
         }
       } catch (Exception ex) {
-        String handlerTypeForLog = handler.typeName();
-        String codeForLog = LogSanitizer.value(code);
-        String tenantIdForLog = LogSanitizer.value(ctx.tenantId());
-        String exceptionSummaryForLog = SwallowedExceptionLogger.summary(ex);
-        log.warn(
-            "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
-            handlerTypeForLog,
-            codeForLog,
-            tenantIdForLog,
-            exceptionSummaryForLog);
-        acc.recordFailed(code, TenantConfigFailureMessages.forFailure(ex));
+        recordFailure(acc, handler, ctx, code, ex);
       }
     }
     return acc.toItemStats();
+  }
+
+  /** 单条 spec 在嵌套事务内的"查找 → 跳过/更新/创建"判定；校验先于任何写入，dryRun 只判定不落库。 */
+  private <T, E> ApplyAction applyOne(
+      T spec, ApplyContext ctx, SpecHandler<T, E> handler, Consumer<T> validate) {
+    Optional<E> existing = handler.find(ctx.tenantId(), spec);
+    if (existing.isPresent() && ctx.mode() != InitMode.UPSERT) {
+      return ApplyAction.SKIPPED;
+    }
+    validate.accept(spec);
+    if (existing.isPresent()) {
+      if (!ctx.dryRun()) {
+        handler.update(ctx, spec, existing.get());
+      }
+      return ApplyAction.UPDATED;
+    }
+    if (!ctx.dryRun()) {
+      handler.insert(ctx, spec);
+    }
+    return ApplyAction.CREATED;
+  }
+
+  /** 单条 spec 失败：记日志(脱敏)并登记失败原因，不向外抛，保证其余 spec 继续处理。 */
+  private <T, E> void recordFailure(
+      ItemStatsAccumulator acc,
+      SpecHandler<T, E> handler,
+      ApplyContext ctx,
+      String code,
+      Exception ex) {
+    String handlerTypeForLog = handler.typeName();
+    String codeForLog = LogSanitizer.value(code);
+    String tenantIdForLog = LogSanitizer.value(ctx.tenantId());
+    String exceptionSummaryForLog = SwallowedExceptionLogger.summary(ex);
+    log.warn(
+        "[TenantConfigBatchInit] {} code={} tenant={} failed: {}",
+        handlerTypeForLog,
+        codeForLog,
+        tenantIdForLog,
+        exceptionSummaryForLog);
+    acc.recordFailed(code, TenantConfigFailureMessages.forFailure(ex));
   }
 
   // ── 9 个 spec apply 入口 (package-private,被主 service 直接调用) ────────────
