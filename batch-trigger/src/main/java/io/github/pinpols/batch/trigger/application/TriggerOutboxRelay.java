@@ -72,6 +72,9 @@ public class TriggerOutboxRelay {
   /** 退避上限,单条失败后最长 60s 后重试(2^6 = 64 → 60s 截断)。 */
   private static final long MAX_BACKOFF_SECONDS = 60L;
 
+  /** 发布失败原因长度上限，对应 trigger_outbox_event.last_error VARCHAR(2048)，留出余量。 */
+  private static final int LAST_ERROR_MAX_LENGTH = 2000;
+
   private final TriggerOutboxEventMapper mapper;
   private final TriggerEventPublisher publisher;
   private final LockingTaskExecutor lockingTaskExecutor;
@@ -456,7 +459,8 @@ public class TriggerOutboxRelay {
   private void markPublishFailure(
       TriggerOutboxEventEntity event, String claimToken, String errorMessage) {
     int nextAttempt = event.getPublishAttempt() + 1;
-    String safeErrorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 2000);
+    String safeErrorMessage =
+        SwallowedExceptionLogger.safeMessage(errorMessage, LAST_ERROR_MAX_LENGTH);
     if (nextAttempt >= Math.max(1, properties.getMaxPublishAttempts())) {
       boolean gaveUp = markGiveUp(event, claimToken, safeErrorMessage);
       if (gaveUp) {
@@ -496,7 +500,8 @@ public class TriggerOutboxRelay {
       TriggerOutboxEventEntity event, String claimToken, String errorMessage) {
     Long eventId = event.getId();
     String giveUpStatus = OutboxPublishStatus.GIVE_UP.code();
-    String safeErrorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 2000);
+    String safeErrorMessage =
+        SwallowedExceptionLogger.safeMessage(errorMessage, LAST_ERROR_MAX_LENGTH);
     Instant retryBaseTime = BatchDateTimeSupport.utcNow();
     Instant giveUpRetryAt = retryBaseTime.plusSeconds(MAX_BACKOFF_SECONDS);
     TriggerOutboxEventMarkFailedParam triggerOutboxEventMarkFailedParam2 =

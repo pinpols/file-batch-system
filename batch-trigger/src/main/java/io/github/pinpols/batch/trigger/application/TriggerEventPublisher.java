@@ -46,6 +46,9 @@ public interface TriggerEventPublisher {
   /** 发送结果。 */
   record PublishResult(boolean success, String errorMessage) {
 
+    /** 失败原因长度上限；最终写入 trigger_outbox_event.last_error VARCHAR(2048)，留出余量。 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
+
     public static PublishResult ok() {
       return new PublishResult(true, null);
     }
@@ -59,7 +62,9 @@ public interface TriggerEventPublisher {
       if (EmptyChecks.isNull(message)) {
         return null;
       }
-      return message.length() <= 2000 ? message : message.substring(0, 2000);
+      return message.length() <= ERROR_MESSAGE_MAX_LENGTH
+          ? message
+          : message.substring(0, ERROR_MESSAGE_MAX_LENGTH);
     }
   }
 }

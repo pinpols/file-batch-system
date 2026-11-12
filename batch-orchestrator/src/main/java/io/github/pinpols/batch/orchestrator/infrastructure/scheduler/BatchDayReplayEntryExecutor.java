@@ -28,6 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class BatchDayReplayEntryExecutor {
 
+  /** 条目失败原因长度上限，对应 batch_day_replay_entry.failure_reason VARCHAR(1024)。 */
+  private static final int ENTRY_FAILURE_REASON_MAX_LENGTH = 1024;
+
   private record PlanSnapshot(Integer jobDefinitionVersion, Map<String, Object> defaultParams) {}
 
   private final BatchDayReplayEntryMapper entryMapper;
@@ -92,7 +95,7 @@ class BatchDayReplayEntryExecutor {
     Instant now = dateTimeSupport.nowInstant();
     UpdateBatchDayReplayEntryStatusParam statusUpdate =
         UpdateBatchDayReplayEntryStatusParam.failedOnSubmission(
-            entry.id(), truncate(failure.getMessage(), 1024), now);
+            entry.id(), truncate(failure.getMessage(), ENTRY_FAILURE_REASON_MAX_LENGTH), now);
     entryMapper.updateStatus(statusUpdate);
     Long sessionId = session.id();
     Long entryId = entry.id();

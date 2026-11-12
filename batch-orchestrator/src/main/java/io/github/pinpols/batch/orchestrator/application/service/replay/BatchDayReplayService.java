@@ -103,6 +103,9 @@ public class BatchDayReplayService {
   private static final Duration CONSUMED_PREVIEW_RETENTION = Duration.ofHours(24);
   private static final int EXPIRED_PREVIEW_CLEANUP_LIMIT = 500;
 
+  /** 条目失败原因长度上限，对应 batch_day_replay_entry.failure_reason VARCHAR(1024)。 */
+  private static final int ENTRY_FAILURE_REASON_MAX_LENGTH = 1024;
+
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
   private final BatchDayReplayPreviewTokenMapper previewTokenMapper;
@@ -637,7 +640,10 @@ public class BatchDayReplayService {
       } catch (Exception failure) {
         UpdateBatchDayReplayEntryStatusParam statusUpdate =
             UpdateBatchDayReplayEntryStatusParam.failedWithResult(
-                entry.id(), versionId, truncate(failure.getMessage(), 1024), now);
+                entry.id(),
+                versionId,
+                truncate(failure.getMessage(), ENTRY_FAILURE_REASON_MAX_LENGTH),
+                now);
         entryMapper.updateStatus(statusUpdate);
         failed++;
         log.warn(

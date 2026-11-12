@@ -74,6 +74,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
 
+  /** retry_schedule.last_error_message 为 VARCHAR(1024)；截断后含 "…" 共 1023 字符，留 1 位余量。 */
+  private static final int RETRY_LAST_ERROR_MESSAGE_MAX_LENGTH = 1023;
+
+  /** dead_letter_task.dead_letter_reason 为 VARCHAR(1024)；截断后含 "…" 共 1023 字符，留 1 位余量。 */
+  private static final int DEAD_LETTER_REASON_MAX_LENGTH = 1023;
+
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
    * 只会把 dead_letter_task 灌满。
@@ -193,7 +199,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       // retry_schedule.last_error_message 是 varchar(1024)。worker 链路错误消息有时含嵌套
       // SQL detail / stack 摘要,容易越界。Java 侧防御性截断到 1023 字节,加 "…" 标记,
       // 避免 INSERT 失败导致整条重试链长期停滞。
-      retrySchedule.setLastErrorMessage(truncateErrorMessage(errorMessage, 1023));
+      retrySchedule.setLastErrorMessage(
+          truncateErrorMessage(errorMessage, RETRY_LAST_ERROR_MESSAGE_MAX_LENGTH));
       retryScheduleMapper.insert(retrySchedule);
       log.info(
           "retry scheduled: tenantId={}, partitionId={}, retryCount={}",
@@ -844,7 +851,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     // 给 message 留 ~950 字节安全余量;超长一律截断+"…",避免 INSERT 失败把整个 retry
     // → DLQ 链路撑死。
     String reason = code + ": " + message;
-    return truncateErrorMessage(reason, 1023);
+    return truncateErrorMessage(reason, DEAD_LETTER_REASON_MAX_LENGTH);
   }
 
   /**

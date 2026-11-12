@@ -26,6 +26,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class BatchDayCatchupControlService {
 
+  /**
+   * 操作人长度上限，对应 batch_day_catchup_control.paused_by 与 batch_day_catchup_control_event.operator_id
+   * VARCHAR(128)。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 128;
+
+  /**
+   * 原因长度上限，对应 batch_day_catchup_control.pause_reason 与 batch_day_catchup_control_event.reason
+   * VARCHAR(1024)。
+   */
+  private static final int REASON_MAX_LENGTH = 1024;
+
   private static final String CALENDAR_REFERENCE_CONSTRAINT =
       "fk_batch_day_catchup_control_business_calendar";
 
@@ -147,12 +159,12 @@ public class BatchDayCatchupControlService {
           "tenant, calendar, action, operator and reason are required");
     }
     String trimmedOperatorId = command.operatorId().trim();
-    if (trimmedOperatorId.length() > 128) {
+    if (trimmedOperatorId.length() > OPERATOR_ID_MAX_LENGTH) {
       throw new IllegalArgumentException(
           "tenant, calendar, action, operator and reason are required");
     }
     String trimmedReason = command.reason().trim();
-    if (trimmedReason.length() > 1024) {
+    if (trimmedReason.length() > REASON_MAX_LENGTH) {
       throw new IllegalArgumentException(
           "tenant, calendar, action, operator and reason are required");
     }
