@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.kafka.TaskDispatchMessage;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Month;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ class TaskMessageMdcTest {
   @DisplayName("消息字段齐全时逐项写入 MDC, 且不写入各入口独有的字段")
   void putMessageFields_putsEveryMessageField() {
     SchedulingContext context = new SchedulingContext(
-        LocalDate.of(2026, 11, 11), null, null, null, 3, "CRON", "trigger-1", 77L);
+        LocalDate.of(2026, Month.NOVEMBER, 11), null, null, null, 3, "CRON", "trigger-1", 77L);
     TaskDispatchMessage message = new TaskDispatchMessage(
         "2",
         "tenant-A",

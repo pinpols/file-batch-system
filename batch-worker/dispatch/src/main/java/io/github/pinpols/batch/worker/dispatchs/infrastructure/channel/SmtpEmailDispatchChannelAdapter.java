@@ -44,10 +44,10 @@ import org.springframework.stereotype.Component;
 public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
   /** S-1.7：附件大小硬上限 25MB，覆盖大多数企业 SMTP 服务器的消息上限。 */
+  private static final long MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
+
   /** 邮件 header 长度上限，取 RFC 5322 单行 998 字符；不对应数据库列。 */
   private static final int MAX_HEADER_LENGTH = 998;
-
-  private static final long MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
 
   private static final int DEFAULT_SMTP_TIMEOUT_MILLIS = 30_000;
 

@@ -87,7 +87,7 @@ public class ConsoleClusterDiagnosticService {
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleShedLockStatusResponse>() {},
-        () -> loadShedLockStatus());
+        this::loadShedLockStatus);
   }
 
   private ConsoleShedLockStatusResponse loadShedLockStatus() {
