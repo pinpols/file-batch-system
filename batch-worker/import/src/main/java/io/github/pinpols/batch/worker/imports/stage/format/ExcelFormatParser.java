@@ -128,16 +128,7 @@ public class ExcelFormatParser implements FormatParser {
           if (selector.matches(idx, sheetName)) {
             SaxRowAccumulator accumulator = new SaxRowAccumulator(
                 context, writer, preserveLogicalRow, headerRows, bindings, previewRows);
-            XMLReader xml = XMLHelper.newXMLReader();
-            xml.setContentHandler(
-                new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));
-            try {
-              xml.parse(new InputSource(sheetStream));
-            } catch (PreviewLimitReachedException stop) {
-              // preview_rows 早停信号:已抽样到上限,正常返回已解析的 recordNo。
-              SwallowedExceptionLogger.info(
-                  ExcelFormatParser.class, "preview-row-limit-reached", stop);
-            }
+            parseSheetXml(sheetStream, accumulator, styles, strings, formatter);
             return accumulator.recordNo;
           }
         }
@@ -161,6 +152,24 @@ public class ExcelFormatParser implements FormatParser {
       }
     }
     return 0L;
+  }
+
+  /** 用 SAX 流式解析选中的 sheet；命中 preview_rows 上限的早停信号视为正常结束。 */
+  private void parseSheetXml(
+      InputStream sheetStream,
+      SaxRowAccumulator accumulator,
+      StylesTable styles,
+      ReadOnlySharedStringsTable strings,
+      DataFormatter formatter)
+      throws Exception {
+    XMLReader xml = XMLHelper.newXMLReader();
+    xml.setContentHandler(new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));
+    try {
+      xml.parse(new InputSource(sheetStream));
+    } catch (PreviewLimitReachedException stop) {
+      // preview_rows 早停信号:已抽样到上限,正常返回已解析的 recordNo。
+      SwallowedExceptionLogger.info(ExcelFormatParser.class, "preview-row-limit-reached", stop);
+    }
   }
 
   /** OLE2(D0CF11E0...)字节签名 → 旧版二进制 .xls,本解析器不支持,fail-fast 提示转 .xlsx。 */
