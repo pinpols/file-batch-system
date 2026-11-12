@@ -41,6 +41,9 @@ import org.springframework.web.util.HtmlUtils;
 @RequiredArgsConstructor
 public class AlertmanagerNotifyService {
 
+  /** 投递失败原因长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）。 */
+  private static final int FAILURE_TEXT_MAX_LENGTH = 1024;
+
   private static final String CHANNEL_TYPE_WEBHOOK = "WEBHOOK";
   private static final String EVENT_TYPE = "ALERTMANAGER";
 
@@ -305,6 +308,6 @@ public class AlertmanagerNotifyService {
       return null;
     }
     String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
-    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
+    return SwallowedExceptionLogger.safeMessage(normalized, FAILURE_TEXT_MAX_LENGTH);
   }
 }

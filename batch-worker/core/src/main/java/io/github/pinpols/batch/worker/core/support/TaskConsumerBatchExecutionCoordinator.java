@@ -59,7 +59,8 @@ final class TaskConsumerBatchExecutionCoordinator {
             workerType,
             errorSummary);
         BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
-        String safeError = SwallowedExceptionLogger.safeMessage(parseEx.getMessage(), 2000);
+        String safeError = SwallowedExceptionLogger.safeMessage(
+            parseEx.getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
         if (!deadLetterPublisher.apply(payload, safeError)) {
           return false;
         }
@@ -127,8 +128,8 @@ final class TaskConsumerBatchExecutionCoordinator {
             taskId,
             errorSummary);
         BiFunction<String, String, Boolean> deadLetterPublisher = publishToDlq;
-        String safeError =
-            SwallowedExceptionLogger.safeMessage(execution.error().getMessage(), 2000);
+        String safeError = SwallowedExceptionLogger.safeMessage(
+            execution.error().getMessage(), AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH);
         if (!deadLetterPublisher.apply(payload, safeError)) {
           allDlq = false;
         }

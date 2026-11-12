@@ -47,6 +47,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DataQualityCheckExecutor {
 
+  /** 阈值 JSON 解析失败时写日志的预览长度；不对应数据库列。 */
+  private static final int THRESHOLD_JSON_LOG_PREVIEW_LENGTH = 200;
+
   private static final String STATUS_PASS = "PASS";
   private static final String STATUS_FAIL = "FAIL";
   private static final String STATUS_ERROR = "ERROR";
@@ -175,8 +178,9 @@ public class DataQualityCheckExecutor {
       threshold = JsonUtils.fromJson(thresholdJson, Map.class);
     } catch (Exception ex) {
       // thresholdJson 配置坏了不能静默翻转判定语义:留痕后仍走原 fallback(actual > 0)。
-      String thresholdJsonForLog =
-          thresholdJson.length() <= 200 ? thresholdJson : thresholdJson.substring(0, 200) + "...";
+      String thresholdJsonForLog = thresholdJson.length() <= THRESHOLD_JSON_LOG_PREVIEW_LENGTH
+          ? thresholdJson
+          : thresholdJson.substring(0, THRESHOLD_JSON_LOG_PREVIEW_LENGTH) + "...";
       log.warn(
           "DQ thresholdJson parse failed, falling back to 'actual > 0': ruleCode={},"
               + " thresholdJson={}, cause={}",

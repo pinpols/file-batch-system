@@ -37,15 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultTriggerService implements TriggerService {
 
-  /** 外部事件来源长度上限，对应 trigger_request.external_event_source VARCHAR(128)。 */
-  private static final int EXTERNAL_EVENT_SOURCE_MAX_LENGTH = 128;
-
-  /** 外部事件编码长度上限，对应 trigger_request.external_event_code VARCHAR(128)。 */
-  private static final int EXTERNAL_EVENT_CODE_MAX_LENGTH = 128;
-
-  /** 外部事件 ID 长度上限，对应 trigger_request.external_event_id VARCHAR(256)。 */
-  private static final int EXTERNAL_EVENT_ID_MAX_LENGTH = 256;
-
   private final LaunchAdapterService launchAdapterService;
   private final TriggerRequestMapper triggerRequestMapper;
   private final TriggerAdmissionRules admissionRules;
@@ -170,7 +161,8 @@ public class DefaultTriggerService implements TriggerService {
     String externalEventCode = command.request().externalEventCode();
     boolean externalEventCodeIsInvalidForTrigger = EmptyChecks.isNotNull(externalEventCode)
         && (!Texts.hasText(externalEventCode)
-            || externalEventCode.trim().length() > EXTERNAL_EVENT_CODE_MAX_LENGTH
+            || externalEventCode.trim().length()
+                > TriggerExternalEventService.EXTERNAL_EVENT_CODE_MAX_LENGTH
             || command.request().triggerType() != TriggerType.EVENT);
     if (externalEventCodeIsInvalidForTrigger) {
       throw BizException.of(
@@ -183,10 +175,11 @@ public class DefaultTriggerService implements TriggerService {
         || EmptyChecks.isNotNull(eventId);
     boolean providedExternalEventIdentityIsInvalid = externalEventIdentityWasProvided
         && (!Texts.hasText(eventSource)
-            || eventSource.trim().length() > EXTERNAL_EVENT_SOURCE_MAX_LENGTH
+            || eventSource.trim().length()
+                > TriggerExternalEventService.EXTERNAL_EVENT_SOURCE_MAX_LENGTH
             || !eventSource.equals(eventSource.trim())
             || !Texts.hasText(eventId)
-            || eventId.trim().length() > EXTERNAL_EVENT_ID_MAX_LENGTH
+            || eventId.trim().length() > TriggerExternalEventService.EXTERNAL_EVENT_ID_MAX_LENGTH
             || !eventId.equals(eventId.trim())
             || command.request().triggerType() != TriggerType.EVENT
             || !Texts.hasText(externalEventCode));

@@ -32,6 +32,15 @@ import org.springframework.ai.tool.annotation.ToolParam;
  */
 public class ConsoleAiTools {
 
+  /** AI 工具输出中告警标题的截断长度，控制交给模型的上下文篇幅；不对应数据库列。 */
+  private static final int ALERT_TITLE_MAX_LENGTH = 200;
+
+  /** AI 工具输出中作业实例结果摘要的截断长度；不对应数据库列。 */
+  private static final int RESULT_SUMMARY_MAX_LENGTH = 500;
+
+  /** AI 工具输出中单条日志消息的截断长度；不对应数据库列。 */
+  private static final int LOG_MESSAGE_MAX_LENGTH = 500;
+
   private final String tenantId;
   private final ConsoleQueryApplicationService queryService;
   private final ConsoleClusterDiagnosticService diagnosticService;
@@ -238,7 +247,7 @@ public class ConsoleAiTools {
         + " traceId="
         + nullToDash(alert.traceId())
         + " | "
-        + truncate(alert.title(), 200);
+        + truncate(alert.title(), ALERT_TITLE_MAX_LENGTH);
   }
 
   private static String value(Object value) {
@@ -248,7 +257,7 @@ public class ConsoleAiTools {
   private String renderInstance(ConsoleJobInstanceResponse instance) {
     String displayFailureClass = nullToDash(instance.failureClass());
     String displayTraceId = nullToDash(instance.traceId());
-    String displayResultSummary = truncate(instance.resultSummary(), 500);
+    String displayResultSummary = truncate(instance.resultSummary(), RESULT_SUMMARY_MAX_LENGTH);
     String formattedInstance = """
         id=%s
         jobCode=%s
@@ -288,7 +297,7 @@ public class ConsoleAiTools {
         + " partition="
         + log.jobPartitionId()
         + " | "
-        + truncate(log.message(), 500);
+        + truncate(log.message(), LOG_MESSAGE_MAX_LENGTH);
   }
 
   private static String nullToDash(String value) {

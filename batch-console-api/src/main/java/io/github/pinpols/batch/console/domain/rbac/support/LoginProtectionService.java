@@ -24,6 +24,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LoginProtectionService {
 
+  /** 写日志前的截断长度，限制单条登录保护日志的篇幅；不对应数据库列。 */
+  private static final int LOG_VALUE_MAX_LENGTH = 200;
+
   private final LoginProtectionProperties properties;
   private final LoginFailureTracker failureTracker;
   private final CaptchaVerifier captchaVerifier;
@@ -103,6 +106,8 @@ public class LoginProtectionService {
    * 这一条语义,避免改写时把它丢掉。
    */
   private static String truncateForLog(String cleaned) {
-    return cleaned.length() > 200 ? cleaned.substring(0, 200) + "…" : cleaned;
+    return cleaned.length() > LOG_VALUE_MAX_LENGTH
+        ? cleaned.substring(0, LOG_VALUE_MAX_LENGTH) + "…"
+        : cleaned;
   }
 }

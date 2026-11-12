@@ -72,8 +72,11 @@ public class TriggerOutboxRelay {
   /** 退避上限,单条失败后最长 60s 后重试(2^6 = 64 → 60s 截断)。 */
   private static final long MAX_BACKOFF_SECONDS = 60L;
 
-  /** 发布失败原因长度上限，对应 trigger_outbox_event.last_error VARCHAR(2048)，留出余量。 */
-  private static final int LAST_ERROR_MAX_LENGTH = 2000;
+  /**
+   * 发布失败原因长度上限，对应 trigger_outbox_event.last_error VARCHAR(2048)（V80），留出余量；
+   * TriggerEventPublisher.PublishResult 共用。
+   */
+  static final int LAST_ERROR_MAX_LENGTH = 2000;
 
   private final TriggerOutboxEventMapper mapper;
   private final TriggerEventPublisher publisher;

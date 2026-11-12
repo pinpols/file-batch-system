@@ -193,10 +193,10 @@ public class PreprocessStep implements ImportStageStep {
   /**
    * 大文件流式直载的对象字节数；不满足直载条件时返回 -1。
    *
-   * <p>无内联内容 + 带 storagePath + 纯文本无变换 → 把对象「流式」落到 spool 文件, 交 PARSE 流式逐行消费,全程不把整文件读进堆(突破
-   * byte[]/MAX_OBJECT_BYTES 内存上限, 支撑 GB 级 / 百万千万行 / 宽表长字段)。需变换(压缩/加密/preprocess_pipeline)或二进制格式时回退
-   * byte[] 路径。仅大对象(≥ spool 阈值 16MB,本就要落盘)走流式直载;小文件继续走轻量内存 byte[] 路径 (设
-   * normalizedPayload,无临时文件开销)。
+   * <p>无内联内容、带 storagePath、纯文本且无变换时，把对象流式落到 spool 文件，交给 PARSE 逐行消费，全程不把整文件读进堆
+   * （突破 byte[] / MAX_OBJECT_BYTES 内存上限，支撑 GB 级、千万行、宽表长字段）。需要变换（压缩、加密、preprocess_pipeline）
+   * 或二进制格式时回退 byte[] 路径。只有大对象（≥ spool 阈值 16MB，本就要落盘）走流式直载；小文件继续走轻量的内存
+   * byte[] 路径（设置 normalizedPayload，没有临时文件开销）。
    */
   private long directStreamObjectBytes(
       ImportPayload importPayload, Map<String, Object> templateConfig) {
@@ -213,9 +213,9 @@ public class PreprocessStep implements ImportStageStep {
    *
    * <p>处理 KMS 运行时闭合：在导出/入站侧经 BatchObjectCryptoService 加密的文件，在此处透明解密后再进入预处理 pipeline。
    *
-   * <p>⚠2 (2026-05-03): 大文件走 spool 路径避免 byte[] 双倍峰值. 之前 cryptoService.decrypt(rawBytes) 内部
-   * ByteArrayInputStream → readAllBytes(), 100 MB 输入瞬间 200 MB 堆峰. 现在 > spool 阈值且加密时 走 Path → Path
-   * 流式解密, 完成后释放 rawBytes 引用让 GC 回收, 堆峰降为单 100 MB.
+   * <p>⚠2 (2026-05-03)：大文件走 spool 路径，避免 byte[] 双倍峰值。之前 cryptoService.decrypt(rawBytes) 内部
+   * ByteArrayInputStream → readAllBytes()，100 MB 输入瞬间产生 200 MB 堆峰。现在超过 spool 阈值且已加密时，走 Path → Path
+   * 流式解密，完成后释放 rawBytes 引用让 GC 回收，堆峰降为单份 100 MB。
    */
   private byte[] decryptImportBytes(byte[] rawBytes) {
     if (batchSecurityProperties.isBypassMode()) {

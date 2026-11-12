@@ -35,6 +35,13 @@ import org.springframework.web.util.HtmlUtils;
 @Service
 @Slf4j
 public class TerminalNotificationDeliveryService {
+
+  /**
+   * 终态通知投递失败原因长度上限。WEBHOOK 写 webhook_delivery_log.response_body VARCHAR(2048)（V45），
+   * 其他渠道写 notification_delivery_log.error_message VARCHAR(1024)（V49），取较小值。
+   */
+  private static final int DELIVERY_ERROR_MAX_LENGTH = 1024;
+
   private final WorkflowTerminalNotificationMapper deliveries;
   private final ConsoleWebhookSubscriptionMapper subscriptions;
   private final SubscriptionRuleMapper rules;
@@ -210,7 +217,7 @@ public class TerminalNotificationDeliveryService {
       return null;
     }
     String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(error));
-    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
+    return SwallowedExceptionLogger.safeMessage(normalized, DELIVERY_ERROR_MAX_LENGTH);
   }
 
   private Destination destination(TerminalNotificationDelivery row) {

@@ -59,6 +59,12 @@ public abstract class AbstractTaskConsumer
     implements WorkerLoadProvider, WorkerConsumptionControl, ApplicationContextAware {
 
   /**
+   * DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。
+   * TaskConsumerBatchExecutionCoordinator 共用。
+   */
+  static final int DLQ_ERROR_MESSAGE_MAX_LENGTH = 2000;
+
+  /**
    * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
    *
    * <p>消费者使用 {@code MANUAL_IMMEDIATE} 确认模式；仅不调用 acknowledge 不会让当前 poll 的 offset 自动回退。
@@ -402,7 +408,7 @@ public abstract class AbstractTaskConsumer
           payload,
           workerConfiguration().topic(),
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
+          SwallowedExceptionLogger.safeMessage(errorMessage, DLQ_ERROR_MESSAGE_MAX_LENGTH));
       return true;
     } catch (Exception dlqEx) {
       log.error(

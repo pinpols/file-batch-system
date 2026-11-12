@@ -46,6 +46,9 @@ public class DeadLetterPublisher {
    *   <li>未来 vN: 加字段保持向前兼容; 字段语义变更必须 bump version + replay 工具按 version 分支处理
    * </ul>
    */
+  /** DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。 */
+  private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
+
   static final int ENVELOPE_VERSION = 1;
 
   private final MqMessagePublisher mqMessagePublisher;
@@ -104,7 +107,9 @@ public class DeadLetterPublisher {
     envelope.put("originalPayload", originalPayload);
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);
-    envelope.put("errorMessage", SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
+    envelope.put(
+        "errorMessage",
+        SwallowedExceptionLogger.safeMessage(errorMessage, ERROR_MESSAGE_MAX_LENGTH));
     Instant failedAt = BatchDateTimeSupport.utcNow();
     String failedAtText = failedAt.toString();
     envelope.put("failedAt", failedAtText);

@@ -39,6 +39,12 @@ import java.util.function.Function;
 @SuppressWarnings("java:S112")
 public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
+  /** 错误信息中字段值预览的截断长度；不对应数据库列。 */
+  private static final int PREVIEW_VALUE_MAX_LENGTH = 120;
+
+  /** Excel 工作表名称长度上限（Excel 限制 31 字符）；不对应数据库列。 */
+  private static final int MAX_SHEET_NAME_LENGTH = 31;
+
   private static final String KEY_DETAIL_PREFIX = "detail.";
   private static final String KEY_QUERY_PARAM_SCHEMA = "query_param_schema";
 
@@ -176,9 +182,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
     }
     String carriageReturnsEscaped = value.replace("\r", "\\r");
     String lineBreaksEscaped = carriageReturnsEscaped.replace("\n", "\\n");
-    return lineBreaksEscaped.length() <= 120
+    return lineBreaksEscaped.length() <= PREVIEW_VALUE_MAX_LENGTH
         ? "\"" + lineBreaksEscaped + "\""
-        : "\"" + lineBreaksEscaped.substring(0, 120) + "...\"";
+        : "\"" + lineBreaksEscaped.substring(0, PREVIEW_VALUE_MAX_LENGTH) + "...\"";
   }
 
   /** 本次 generate 是否为续跑(已有可用位点 + 残文件)。 */
@@ -427,7 +433,9 @@ public abstract class AbstractExportFormat implements ExportFormatStrategy {
 
   protected String sanitizeSheetName(String value) {
     String cleaned = value.replaceAll("[\\\\/?*\\[\\]:]", "_");
-    return cleaned.length() > 31 ? cleaned.substring(0, 31) : cleaned;
+    return cleaned.length() > MAX_SHEET_NAME_LENGTH
+        ? cleaned.substring(0, MAX_SHEET_NAME_LENGTH)
+        : cleaned;
   }
 
   protected Object resolveDelimitedValue(
