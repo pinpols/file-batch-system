@@ -8,7 +8,6 @@ import io.github.pinpols.batch.console.infrastructure.excel.ConfigPackageExcelVa
 import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * P2-3 god-class-decomposition extract: 从 {@link DefaultConsoleWorkflowExcelApplicationService}
@@ -26,7 +25,6 @@ public final class WorkflowExcelColumnMetadata {
   private static final String FMT_STRING_KEY = "excel.guide.format.string";
 
   // ── sheet 名 ──────────────────────────────────────────────────────────────
-  public static final String DEF_SHEET = ConfigPackageExcelValidator.WF_DEF_SHEET;
   public static final String NODE_SHEET = ConfigPackageExcelValidator.WF_NODE_SHEET;
   public static final String EDGE_SHEET = ConfigPackageExcelValidator.WF_EDGE_SHEET;
 
@@ -81,10 +79,6 @@ public final class WorkflowExcelColumnMetadata {
       COL_EDGE_TYPE,
       "condition_expr",
       COL_ENABLED);
-
-  public static final Set<String> DEF_HEADERS = Set.copyOf(DEF_COLUMNS);
-  public static final Set<String> NODE_HEADERS = Set.copyOf(NODE_COLUMNS);
-  public static final Set<String> EDGE_HEADERS = Set.copyOf(EDGE_COLUMNS);
 
   // ── 列说明(导出 Excel 时写入说明 sheet/批注) ──────────────────────────────
   // description / formatHint 现在用 excel.* i18n key,writer 传 MessageSource+Locale 时按

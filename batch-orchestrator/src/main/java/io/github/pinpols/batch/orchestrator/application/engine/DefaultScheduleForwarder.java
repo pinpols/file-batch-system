@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.OutboxPublishStatus;
 import io.github.pinpols.batch.common.enums.RetryScheduleStatus;
 import io.github.pinpols.batch.common.logging.BatchMdc;
 import io.github.pinpols.batch.common.logging.StructuredLogField;
+import io.github.pinpols.batch.common.observability.BatchMetricsNames;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.outbox.OutboxChildRecordService;
@@ -102,7 +103,7 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
   void initMetrics() {
     giveUpCounter =
         // R7-A6-P1：与 trigger 端 batch.trigger.outbox.give_up.total + 领域字典 GIVE_UP 命名对齐。
-        Counter.builder("batch.outbox.events.give_up.total")
+        Counter.builder(BatchMetricsNames.OUTBOX_GIVE_UP_TOTAL)
             .description(
                 "Outbox events transitioned to GIVE_UP terminal state — should be 0 in steady"
                     + " state; non-zero rate triggers ops alert.")

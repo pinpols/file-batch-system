@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -881,6 +882,53 @@ class BatchDayReplayServiceTest {
             && "SUCCEEDED".equals(update.getToStatus())
             && List.of("RUNNING").equals(update.getExpectedStatuses())));
     assertThat(result.status()).isEqualTo("SUCCEEDED");
+  }
+
+  @Test
+  @DisplayName("仅产出执行遇到单条提升失败时会话置为部分失败")
+  void shouldCompleteAsPartialFailed_whenAnyEntryPromotionFails() {
+    BatchDayReplaySessionEntity running =
+        sessionAt("t1", 6L, "RUNNING", BatchDayReplayScope.OUTPUTS_ONLY.code());
+    BatchDayReplaySessionEntity partialFailed =
+        sessionAt("t1", 6L, "PARTIAL_FAILED", BatchDayReplayScope.OUTPUTS_ONLY.code());
+    when(sessionMapper.selectById("t1", 6L)).thenReturn(running, partialFailed);
+    when(sessionMapper.selectForUpdate("t1", 6L)).thenReturn(running);
+    BatchDayReplayEntryEntity ok = BatchDayReplayEntryEntity.builder()
+        .id(1L)
+        .sessionId(6L)
+        .tenantId("t1")
+        .jobCode("JOB_A")
+        .resultVersionId(21L)
+        .status("PENDING")
+        .build();
+    BatchDayReplayEntryEntity rejected = BatchDayReplayEntryEntity.builder()
+        .id(2L)
+        .sessionId(6L)
+        .tenantId("t1")
+        .jobCode("JOB_B")
+        .resultVersionId(22L)
+        .status("PENDING")
+        .build();
+    when(entryMapper.selectBySessionAndStatus(6L, "t1", "PENDING", Integer.MAX_VALUE))
+        .thenReturn(List.of(ok, rejected));
+    doThrow(new IllegalStateException("promotion rejected"))
+        .when(promoteService)
+        .promote("t1", 22L);
+
+    BatchDayReplaySessionEntity result = service.executeOutputsOnly("t1", 6L);
+
+    verify(sessionMapper)
+        .updateCounts(argThat(update -> Long.valueOf(6L).equals(update.id())
+            && Integer.valueOf(1).equals(update.succeededCount())
+            && Integer.valueOf(1).equals(update.failedCount())));
+    verify(entryMapper)
+        .updateStatus(argThat(update ->
+            Long.valueOf(2L).equals(update.getId()) && "FAILED".equals(update.getToStatus())));
+    verify(sessionMapper)
+        .updateStatus(argThat(update -> Long.valueOf(6L).equals(update.getId())
+            && "PARTIAL_FAILED".equals(update.getToStatus())
+            && List.of("RUNNING").equals(update.getExpectedStatuses())));
+    assertThat(result.status()).isEqualTo("PARTIAL_FAILED");
   }
 
   @Test

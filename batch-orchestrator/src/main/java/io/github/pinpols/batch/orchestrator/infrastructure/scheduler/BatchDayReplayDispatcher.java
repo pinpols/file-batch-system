@@ -11,6 +11,8 @@ import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchPropert
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplayEntryMapper;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayReplaySessionMapper;
@@ -51,9 +53,6 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class BatchDayReplayDispatcher {
 
-  private static final String STATUS_RUNNING = "RUNNING";
-  private static final String ENTRY_PENDING = "PENDING";
-
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
   private final BatchDayReplayEntryExecutor entryExecutor;
@@ -70,8 +69,8 @@ public class BatchDayReplayDispatcher {
     if (!properties.isEnabled() || gracefulShutdown.isDraining()) {
       return;
     }
-    List<BatchDayReplaySessionEntity> running =
-        sessionMapper.selectByStatus(STATUS_RUNNING, properties.getSessionBatchSize());
+    List<BatchDayReplaySessionEntity> running = sessionMapper.selectByStatus(
+        BatchDayReplaySessionStatus.RUNNING.code(), properties.getSessionBatchSize());
     if (EmptyChecks.isEmpty(running)) {
       return;
     }
@@ -112,7 +111,10 @@ public class BatchDayReplayDispatcher {
     entryMapper.resetStaleUnboundRunning(
         session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);
     List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
-        session.id(), session.tenantId(), ENTRY_PENDING, properties.getEntryBatchSize());
+        session.id(),
+        session.tenantId(),
+        BatchDayReplayEntryStatus.PENDING.code(),
+        properties.getEntryBatchSize());
     if (EmptyChecks.isEmpty(pending)) {
       return;
     }

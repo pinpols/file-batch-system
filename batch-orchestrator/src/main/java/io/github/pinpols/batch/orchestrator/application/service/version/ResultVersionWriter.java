@@ -46,9 +46,6 @@ import org.springframework.transaction.annotation.Transactional;
 @SuppressWarnings("java:S2583")
 public class ResultVersionWriter {
 
-  static final String STATUS_EFFECTIVE = "EFFECTIVE";
-  static final String STATUS_PENDING = "PENDING";
-  static final String STATUS_DRY_RUN = "DRY_RUN";
   static final String PROMOTION_AUTO_LATEST = "AUTO_LATEST";
   static final String PROMOTION_MANUAL_APPROVAL = "MANUAL_APPROVAL";
   static final String PAYLOAD_STORAGE_INLINE_JSON = "INLINE_JSON";
@@ -102,7 +99,7 @@ public class ResultVersionWriter {
     boolean dryRun = Boolean.TRUE.equals(instance.getDryRun());
     if (dryRun) {
       // ADR-026 dry-run：不进 EFFECTIVE 链，落 DRY_RUN 状态供运维核对，不超越也不影响实盘版本
-      status = STATUS_DRY_RUN;
+      status = ResultVersionMapper.VersionStatus.DRY_RUN.name();
       effectiveAt = null;
     } else {
       // ADR-021 DQ gate：若 BLOCKER 失败 → 强制 MANUAL_APPROVAL（即使 resultPolicy=CREATE_NEW_VERSION）
@@ -120,7 +117,7 @@ public class ResultVersionWriter {
       boolean versionCannotPromoteAutomatically =
           dqBlocked || partialFailed || PROMOTION_MANUAL_APPROVAL.equals(promotionPolicy);
       if (versionCannotPromoteAutomatically) {
-        status = STATUS_PENDING;
+        status = ResultVersionMapper.VersionStatus.PENDING.name();
         effectiveAt = null;
         if (partialFailed) {
           promotionPolicy = PROMOTION_MANUAL_APPROVAL;
@@ -143,7 +140,7 @@ public class ResultVersionWriter {
       } else {
         // AUTO_LATEST：先把同 business_key 的旧 EFFECTIVE 推到 SUPERSEDED，再插入新 EFFECTIVE
         resultVersionMapper.supersedePriorEffective(tenantId, businessKey, now);
-        status = STATUS_EFFECTIVE;
+        status = ResultVersionMapper.VersionStatus.EFFECTIVE.name();
         effectiveAt = now;
       }
     }
@@ -176,7 +173,7 @@ public class ResultVersionWriter {
           + ", businessKey=" + businessKey
           + ", jobInstanceId=" + instance.getId());
     }
-    if (STATUS_EFFECTIVE.equals(status)) {
+    if (ResultVersionMapper.VersionStatus.EFFECTIVE.name().equals(status)) {
       assetPartitionService.materializeEffectiveJobPartition(instance, persisted);
     }
 

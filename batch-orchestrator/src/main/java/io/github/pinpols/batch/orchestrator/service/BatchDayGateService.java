@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.orchestrator.service;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
 import io.github.pinpols.batch.common.dto.LaunchRequest;
 import io.github.pinpols.batch.common.enums.TriggerRequestStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
@@ -174,13 +173,13 @@ public class BatchDayGateService {
             request.triggerType() == null ? null : request.triggerType().code())
         .waitReason(reason)
         .launchPayload(payload)
-        .waitStatus(BatchStatusConstants.WAITING)
+        .waitStatus(BatchDayWaitingLaunchMapper.WaitStatus.WAITING.name())
         .createdAt(now)
         .updatedAt(now)
         .build();
     waitingLaunchMapper.insert(waiting);
     int updated = triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), BatchStatusConstants.WAITING, null);
+        request.tenantId(), request.requestId(), TriggerRequestStatus.WAITING.code(), null);
     if (updated == 0) {
       log.warn(
           "updateAcceptance(WAITING) affected 0 rows; the row is already terminal: tenantId={} requestId={}",

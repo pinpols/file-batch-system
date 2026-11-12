@@ -14,15 +14,10 @@ public final class CommonErrorMessages {
   public static final String AUTHENTICATION_REQUIRED = "需要登录认证";
   public static final String ACCESS_DENIED = "访问被拒绝";
   public static final String INVALID_CONSOLE_JWT = "Console 令牌无效";
-  public static final String CONSOLE_JWT_EXPIRED = "Console 令牌已过期";
-  public static final String TENANT_REQUIRED = "必须指定租户";
   public static final String TENANT_MISMATCH = "租户不匹配";
   public static final String AI_ASSISTANT_REQUIRES_AUTHENTICATED_USER = "AI 助手需要已登录用户";
   public static final String AI_ASSISTANT_ACCESS_NOT_GRANTED = "未开通 AI 助手访问权限";
-  public static final String AI_ASSISTANT_NOT_CONFIGURED = "AI 助手尚未配置";
   public static final String AI_ASSISTANT_DISABLED = "AI 助手已禁用";
-  public static final String PROMPT_REQUIRED = "必须提供 prompt";
-  public static final String PROMPT_TOO_LONG = "prompt 长度超出限制";
   public static final String PROMPT_VIOLATES_SAFETY_POLICY = "prompt 违反安全策略";
   public static final String PROMPT_OUT_OF_SCOPE = "prompt 超出平台范围";
 

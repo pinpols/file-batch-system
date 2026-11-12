@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.infrastructure;
 
+import io.github.pinpols.batch.common.enums.AlertStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
@@ -23,11 +24,6 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @RequiredArgsConstructor
 public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplicationService {
 
-  private static final String STATUS_OPEN = "OPEN";
-  private static final String STATUS_ACKED = "ACKED";
-  private static final String STATUS_SUPPRESSED = "SUPPRESSED";
-  private static final String STATUS_CLOSED = "CLOSED";
-
   private final TenantIdResolver tenantGuard;
   private final AlertEventMapper alertEventMapper;
   private final ConsoleRealtimeEventPort domainEventPublisher;
@@ -37,21 +33,21 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   @Transactional
   public ConsoleAlertActionResponse ack(
       Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, STATUS_ACKED, "ack");
+    return transition(alertId, request, AlertStatus.ACKED.code(), "ack");
   }
 
   @Override
   @Transactional
   public ConsoleAlertActionResponse silence(
       Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, STATUS_SUPPRESSED, "silence");
+    return transition(alertId, request, AlertStatus.SUPPRESSED.code(), "silence");
   }
 
   @Override
   @Transactional
   public ConsoleAlertActionResponse close(
       Long alertId, AlertActionRequest request, String idempotencyKey) {
-    return transition(alertId, request, STATUS_CLOSED, "close");
+    return transition(alertId, request, AlertStatus.CLOSED.code(), "close");
   }
 
   private ConsoleAlertActionResponse transition(
@@ -65,7 +61,7 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
     }
     // 走到这里 nextStatus 必不等于 currentStatus（上方已同态早返），
     // 因此 closed 状态下任何状态迁移都禁止：告警关闭后不可再打开/确认/静默。
-    if (STATUS_CLOSED.equals(currentStatus)) {
+    if (AlertStatus.CLOSED.code().equals(currentStatus)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.alert.closed_cannot_reopen");
     }
     int updated = alertEventMapper.updateStatus(tenantId, alertId, nextStatus);
@@ -94,16 +90,16 @@ public class DefaultConsoleAlertApplicationService implements ConsoleAlertApplic
   }
 
   private void dispatchBridge(AlertEventEntity entity, String nextStatus) {
-    if (STATUS_SUPPRESSED.equals(nextStatus)) {
+    if (AlertStatus.SUPPRESSED.code().equals(nextStatus)) {
       // 时长走桥接默认(AlertActionRequest 无时长维度);后续如需可扩展请求字段。
       alertmanagerSilenceBridge.silence(entity, null);
-    } else if (STATUS_CLOSED.equals(nextStatus)) {
+    } else if (AlertStatus.CLOSED.code().equals(nextStatus)) {
       // AM 按 fingerprint 区分实体；同组其它告警不应阻止当前实体解除。
       alertmanagerSilenceBridge.resolve(entity);
     }
   }
 
   private String normalizeStatus(String status) {
-    return Texts.hasText(status) ? status.toUpperCase() : STATUS_OPEN;
+    return Texts.hasText(status) ? status.toUpperCase() : AlertStatus.OPEN.code();
   }
 }

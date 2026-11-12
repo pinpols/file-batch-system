@@ -8,6 +8,8 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplayEntryEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayReplaySessionEntity;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplayEntryStatus;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplayEntryFailRejectedLaunchesParam;
 import io.github.pinpols.batch.orchestrator.domain.param.BatchDayReplaySessionUpdateCountsParam;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateBatchDayReplayEntryStatusParam;
@@ -29,14 +31,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class BatchDayReplayTerminalReconciler {
-
-  private static final String ENTRY_SUCCEEDED = "SUCCEEDED";
-  private static final String ENTRY_FAILED = "FAILED";
-  private static final String ENTRY_PENDING = "PENDING";
-  private static final String ENTRY_RUNNING = "RUNNING";
-  private static final String SESSION_RUNNING = "RUNNING";
-  private static final String SESSION_SUCCEEDED = "SUCCEEDED";
-  private static final String SESSION_PARTIAL_FAILED = JobInstanceStatus.PARTIAL_FAILED.code();
 
   private final BatchDayReplaySessionMapper sessionMapper;
   private final BatchDayReplayEntryMapper entryMapper;
@@ -104,7 +98,7 @@ public class BatchDayReplayTerminalReconciler {
             .tenantId(tenantId)
             .sessionId(sessionId)
             .now(now)
-            .failedStatus(ENTRY_FAILED)
+            .failedStatus(BatchDayReplayEntryStatus.FAILED.code())
             .rejectedStatuses(
                 List.of(TriggerRequestStatus.REJECTED.code(), TriggerRequestStatus.GIVE_UP.code()))
             .build();
@@ -121,23 +115,23 @@ public class BatchDayReplayTerminalReconciler {
       BatchDayReplaySessionEntity session, String instanceStatus) {
     boolean dryRun = BatchDayReplayExecutionMode.DRY_RUN.code().equals(session.executionMode());
     if (dryRun && JobInstanceStatus.SUCCESS_DRY_RUN.code().equals(instanceStatus)) {
-      return ENTRY_SUCCEEDED;
+      return BatchDayReplayEntryStatus.SUCCEEDED.code();
     }
     if (dryRun && JobInstanceStatus.FAILED_DRY_RUN.code().equals(instanceStatus)) {
-      return ENTRY_FAILED;
+      return BatchDayReplayEntryStatus.FAILED.code();
     }
     boolean isSuccessfulRealReplayExecution = !dryRun
         && (JobInstanceStatus.SUCCESS.code().equals(instanceStatus)
             || JobInstanceStatus.PARTIAL_FAILED.code().equals(instanceStatus));
     if (isSuccessfulRealReplayExecution) {
-      return ENTRY_SUCCEEDED;
+      return BatchDayReplayEntryStatus.SUCCEEDED.code();
     }
     boolean isNonDryRunFailureTerminalStatus = !dryRun
         && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
             || JobInstanceStatus.CANCELLED.code().equals(instanceStatus)
             || JobInstanceStatus.TERMINATED.code().equals(instanceStatus));
     if (isNonDryRunFailureTerminalStatus) {
-      return ENTRY_FAILED;
+      return BatchDayReplayEntryStatus.FAILED.code();
     }
     log.error(
         "replay terminal mode mismatch: sessionId={}, executionMode={}, instanceStatus={}",
@@ -154,10 +148,14 @@ public class BatchDayReplayTerminalReconciler {
    * 此时 session 可能已经是 PARTIAL_FAILED，必须随最新 entry 真相重新收敛，避免状态与计数永久矛盾。
    */
   private void advanceSessionCounts(BatchDayReplaySessionEntity session, Instant now) {
-    long succeeded = entryMapper.countBySessionAndStatus(session.id(), ENTRY_SUCCEEDED);
-    long failed = entryMapper.countBySessionAndStatus(session.id(), ENTRY_FAILED);
-    long pending = entryMapper.countBySessionAndStatus(session.id(), ENTRY_PENDING);
-    long running = entryMapper.countBySessionAndStatus(session.id(), ENTRY_RUNNING);
+    long succeeded = entryMapper.countBySessionAndStatus(
+        session.id(), BatchDayReplayEntryStatus.SUCCEEDED.code());
+    long failed =
+        entryMapper.countBySessionAndStatus(session.id(), BatchDayReplayEntryStatus.FAILED.code());
+    long pending =
+        entryMapper.countBySessionAndStatus(session.id(), BatchDayReplayEntryStatus.PENDING.code());
+    long running =
+        entryMapper.countBySessionAndStatus(session.id(), BatchDayReplayEntryStatus.RUNNING.code());
     long inFlight = pending + running;
     BatchDayReplaySessionUpdateCountsParam batchDayReplaySessionUpdateCountsParam =
         BatchDayReplaySessionUpdateCountsParam.builder()
@@ -171,16 +169,20 @@ public class BatchDayReplayTerminalReconciler {
             .build();
     sessionMapper.updateCounts(batchDayReplaySessionUpdateCountsParam);
     boolean replaySessionCanComplete = inFlight == 0L
-        && (SESSION_RUNNING.equals(session.status())
-            || SESSION_PARTIAL_FAILED.equals(session.status()));
+        && (BatchDayReplaySessionStatus.RUNNING.code().equals(session.status())
+            || BatchDayReplaySessionStatus.PARTIAL_FAILED.code().equals(session.status()));
     if (replaySessionCanComplete) {
-      String terminalStatus = failed > 0L ? SESSION_PARTIAL_FAILED : SESSION_SUCCEEDED;
+      String terminalStatus = failed > 0L
+          ? BatchDayReplaySessionStatus.PARTIAL_FAILED.code()
+          : BatchDayReplaySessionStatus.SUCCEEDED.code();
       UpdateBatchDayReplaySessionStatusParam statusUpdate =
           UpdateBatchDayReplaySessionStatusParam.completed(
               session.tenantId(),
               session.id(),
               terminalStatus,
-              List.of(SESSION_RUNNING, SESSION_PARTIAL_FAILED),
+              List.of(
+                  BatchDayReplaySessionStatus.RUNNING.code(),
+                  BatchDayReplaySessionStatus.PARTIAL_FAILED.code()),
               now);
       int updated = sessionMapper.updateStatus(statusUpdate);
       if (updated > 0) {
