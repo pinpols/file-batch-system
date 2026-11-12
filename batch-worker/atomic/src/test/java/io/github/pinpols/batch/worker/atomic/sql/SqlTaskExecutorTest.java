@@ -447,11 +447,13 @@ class SqlTaskExecutorTest {
       TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "SELECT doc, nothing, tags")));
 
       assertThat(r.success()).isTrue();
-      Map<?, ?> row = (Map<?, ?>) ((List<?>) r.output().get("lastResultSet")).get(0);
-      assertThat(row.get("doc")).isEqualTo(Map.of("a", 1));
-      assertThat(row.containsKey("nothing")).isTrue();
-      assertThat(row.get("nothing")).isNull();
-      assertThat(row.get("tags")).isEqualTo(new String[] {"x", "y"});
+      @SuppressWarnings("unchecked")
+      Map<String, Object> row =
+          (Map<String, Object>) ((List<?>) r.output().get("lastResultSet")).get(0);
+      assertThat(row).containsEntry("doc", Map.of("a", 1));
+      assertThat(row).containsKey("nothing");
+      assertThat(row).containsEntry("nothing", null);
+      assertThat(row).containsEntry("tags", new String[] {"x", "y"});
       verify(sqlArray).free();
     }
 

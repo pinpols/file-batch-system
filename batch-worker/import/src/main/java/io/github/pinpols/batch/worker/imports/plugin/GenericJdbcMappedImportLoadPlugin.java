@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityPro
 import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
+import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -563,7 +564,8 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
     }
   }
 
-  private void copyDirect(Connection conn, String copySql, String csv, int n) throws Exception {
+  private void copyDirect(Connection conn, String copySql, String csv, int n)
+      throws SQLException, IOException {
     CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
     long copied = copyManager.copyIn(copySql, new StringReader(csv));
     if (copied != n) {

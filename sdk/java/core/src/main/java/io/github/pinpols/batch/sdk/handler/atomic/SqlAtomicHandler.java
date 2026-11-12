@@ -114,7 +114,8 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     Map<String, Object> lastResultSet;
   }
 
-  private void runStatement(Connection conn, String sql, StatementTotals totals) throws Exception {
+  private void runStatement(Connection conn, String sql, StatementTotals totals)
+      throws SQLException {
     try (Statement st = conn.createStatement()) {
       st.setQueryTimeout(config.statementTimeoutSeconds());
       boolean hasRs = st.execute(sql);

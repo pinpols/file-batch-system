@@ -100,7 +100,10 @@ class FixedWidthFormatParserTest {
   @Test
   @DisplayName("没有可用字段映射时抛出非法状态异常")
   void shouldFail_whenFieldMappingsMissing() {
-    assertThatThrownBy(() -> parse(Map.of(), "T001 100\n", new StringWriter()))
+    Map<String, Object> emptyTemplate = Map.of();
+    StringWriter sink = new StringWriter();
+
+    assertThatThrownBy(() -> parse(emptyTemplate, "T001 100\n", sink))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("field_mappings");
   }

@@ -6,12 +6,14 @@ import io.github.pinpols.batch.sdk.internal.EmptyChecks;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -81,7 +83,7 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
 
   private void writeHeader(
       BufferedWriter writer, ResultSetMetaData meta, int cols, char delim, char quote)
-      throws Exception {
+      throws SQLException, IOException {
     List<String> headers = new ArrayList<>(cols);
     for (int i = 1; i <= cols; i++) {
       headers.add(meta.getColumnLabel(i));
@@ -92,7 +94,7 @@ public class QueryExportHandler extends SdkAbstractTaskHandler {
 
   /** 游标流式逐行写出,返回写出的行数。 */
   private long writeRows(ResultSet rs, BufferedWriter writer, int cols, char delim, char quote)
-      throws Exception {
+      throws SQLException, IOException {
     long rowCount = 0;
     while (rs.next()) {
       List<String> values = new ArrayList<>(cols);

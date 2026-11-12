@@ -1,10 +1,12 @@
 package io.github.pinpols.batch.worker.imports.infrastructure;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.worker.core.mapper.BizTableSchemaMapper;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -83,7 +85,8 @@ public class BizTableSchemaRegistrar {
   }
 
   /** 读取一张表的列定义并序列化为 JSON；列循环的结果集在本方法内关闭。 */
-  private TableColumns readTableColumns(DatabaseMetaData md, ResultSet tables) throws Exception {
+  private TableColumns readTableColumns(DatabaseMetaData md, ResultSet tables)
+      throws SQLException, JsonProcessingException {
     String schema = tables.getString("TABLE_SCHEM");
     String table = tables.getString("TABLE_NAME");
     List<Map<String, Object>> cols = new ArrayList<>();

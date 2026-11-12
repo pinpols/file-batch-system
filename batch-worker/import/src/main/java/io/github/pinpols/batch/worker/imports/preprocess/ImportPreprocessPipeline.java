@@ -163,7 +163,7 @@ public final class ImportPreprocessPipeline {
       Map<String, Object> template,
       boolean bypassMode,
       WorkerImportPayloadProperties properties)
-      throws Exception {
+      throws GeneralSecurityException {
     switch (type.toUpperCase(Locale.ROOT)) {
       case ImportPreprocessStepTypes.UNZIP -> {
         return unzip(current, step, payload, properties);

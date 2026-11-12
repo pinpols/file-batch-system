@@ -21,6 +21,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import javax.xml.parsers.ParserConfigurationException;
 import org.apache.poi.openxml4j.opc.OPCPackage;
 import org.apache.poi.openxml4j.opc.PackageAccess;
 import org.apache.poi.poifs.filesystem.FileMagic;
@@ -33,6 +34,7 @@ import org.apache.poi.xssf.eventusermodel.XSSFSheetXMLHandler.SheetContentsHandl
 import org.apache.poi.xssf.model.StylesTable;
 import org.apache.poi.xssf.usermodel.XSSFComment;
 import org.xml.sax.InputSource;
+import org.xml.sax.SAXException;
 import org.xml.sax.XMLReader;
 
 /**
@@ -161,7 +163,7 @@ public class ExcelFormatParser implements FormatParser {
       StylesTable styles,
       ReadOnlySharedStringsTable strings,
       DataFormatter formatter)
-      throws Exception {
+      throws IOException, SAXException, ParserConfigurationException {
     XMLReader xml = XMLHelper.newXMLReader();
     xml.setContentHandler(new XSSFSheetXMLHandler(styles, strings, accumulator, formatter, false));
     try {

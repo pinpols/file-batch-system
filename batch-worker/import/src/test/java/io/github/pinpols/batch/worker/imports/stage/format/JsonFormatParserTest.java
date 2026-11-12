@@ -82,7 +82,7 @@ class JsonFormatParserTest {
 
     assertThat(count).isEqualTo(1L);
     assertThat(lines(sink)).containsExactly("{\"a\":1,\"b\":\"x\"}");
-    assertThat(ctx.getAttributes().get("schemaFields")).isEqualTo(List.of("a", "b"));
+    assertThat(ctx.getAttributes()).containsEntry("schemaFields", List.of("a", "b"));
   }
 
   @Test
