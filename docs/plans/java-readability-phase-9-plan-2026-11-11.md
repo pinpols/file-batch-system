@@ -349,8 +349,8 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 
 - [x] **Step 1：没有测试的 4 个方法先补 characterization 测试。** `JsonFormatParser` 至少覆盖 4 种输入：根是数组、根是含 `records` 字段的对象、根是单个对象、空输入，以及 `records` 中夹 `null` 元素的情况。`FixedWidthFormatParser` 覆盖正常行、短行、空行。另外两个各覆盖一条成功路径和一条跳过路径。先在未改动的代码上跑通。
 - [x] **Step 2：数据通路方法先记录基线计时。** 写一个临时测试（不提交），用同一份生成数据（JSON / 定长各 20 万行，Excel 2 万行）重复解析 5 次，取中位数，记到复评文档。
-- [x] **Step 3：逐个方法拆浅。** 只用三种手法：守卫条件提前返回或 `continue`；把循环体提成私有方法；按输入形态分派到具名方法（如 `JsonFormatParser` 拆成 `parseRootArray`、`parseRecordsEnvelope`、`parseSingleObject`）。资源仍由原来的 try-with-resources 管理，不改异常翻译边界，不改读取顺序。每个方法单独提交。
-- [x] **Step 4：每个方法改完就跑它的测试**，预期 PASS。数据通路方法重跑 Step 2 的计时，中位数退化超过 5% 就回退，并在复评文档写明原因。
+- [x] **Step 3：逐个方法拆浅。** 只用三种手法：守卫条件提前返回或 `continue`；把循环体提成私有方法；按输入形态分派到具名方法（如 `JsonFormatParser` 拆成 `parseRootArray`、`parseRecordsEnvelope`、`parseSingleObject`）。资源仍由原来的 try-with-resources 管理，不改异常翻译边界，不改读取顺序。每个方法单独提交。（SecurityScanOptions.parse 按设计保留，原因见复评文档）
+- [x] **Step 4：每个方法改完就跑它的测试**，预期 PASS。数据通路方法重跑 Step 2 的计时，中位数退化超过 5% 就回退，并在复评文档写明原因。（SqlTaskExecutor 计时结论不确定，未达成 5% 验证，按判断保留，见复评文档）
 - [x] **Step 5：提交**（每个方法一个提交）`refactor(<模块>): flatten <方法名>`。
 
 ### Task 18：空值判断按语义统一（R4，最后执行）
