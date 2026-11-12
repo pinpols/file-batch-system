@@ -213,6 +213,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
         && EmptyChecks.isNotNull(retryContextInstance)
         && retryGovernanceService.scheduleRetryIfNecessary(
             task, partition, retryContextInstance, failure.errorCode(), failure.errorMessage());
+    FailureDisposition disposition = FailureDisposition.of(cancellationOutcome, retryScheduled);
     String resolvedFailureClass = EmptyChecks.isNull(failure) || cancellationOutcome
         ? null
         : failureClassifier.classify(failure.failureClass(), null).code();
@@ -249,10 +250,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // (保留旧值,下次启动时同 IN 不变);仅成功路径推水位,失败/重试不应推进。
       advanceHighWaterMark(outcomeCommand, task, success);
     } else {
-      transitionedInstance = applyFailureOutcome(
-          outcomeCommand, partition, retryScheduled, cancellationOutcome, outputSummary);
+      transitionedInstance =
+          applyFailureOutcome(outcomeCommand, partition, retryScheduled, outputSummary);
     }
-    if (EmptyChecks.isNotNull(partition) && retryScheduled) {
+    if (EmptyChecks.isNotNull(partition) && disposition == FailureDisposition.RETRY_SCHEDULED) {
       // RETRYING 使用独立状态更新；保留 invocation fence，防止迟到报告覆盖下一次执行的输出。
       // SUCCESS/最终 FAILED 已把摘要合并进 markStatus，同一 CAS 原子落库，避免每个终态多一次 UPDATE/WAL。
       jobMappers.jobPartitionMapper.updateOutputSummary(
@@ -262,8 +263,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
           outcomeCommand.partitionInvocationId());
     }
     // step 镜像用于"按 step 维度"看执行状态/重试次数，与 task/partition 状态保持一致口径。
-    updateStepInstanceProgress(
-        outcomeCommand, task, retryScheduled, cancellationOutcome, finishedAt, outputSummary);
+    updateStepInstanceProgress(outcomeCommand, task, disposition, finishedAt, outputSummary);
     // 终态 CTE 会同步递增 job_instance 的分区计数和 version，并直接返回权威快照；虚拟任务、重试路径
     // 或 CAS 未命中时才回读。两条路径都位于 instance advisory lock 保护范围内。
     JobInstanceEntity jobInstance = EmptyChecks.isNotNull(transitionedInstance)
@@ -376,7 +376,6 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       TaskOutcomeCommand command,
       JobPartitionEntity partition,
       boolean retryScheduled,
-      boolean cancellationOutcome,
       String outputSummary) {
     if (EmptyChecks.isNull(partition)) {
       return null;
@@ -425,8 +424,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
   private void updateStepInstanceProgress(
       TaskOutcomeCommand command,
       JobTaskEntity task,
-      boolean retryScheduled,
-      boolean cancellationOutcome,
+      FailureDisposition disposition,
       Instant finishedAt,
       String outputSummary) {
     if (EmptyChecks.isNull(command) || EmptyChecks.isNull(task)) {
@@ -437,8 +435,10 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     if (EmptyChecks.isNull(stepInstance)) {
       return;
     }
-    String nextStatus =
-        retryScheduled ? "RETRYING" : resolveTaskStatus(command, cancellationOutcome);
+    boolean retryScheduled = disposition == FailureDisposition.RETRY_SCHEDULED;
+    String nextStatus = retryScheduled
+        ? "RETRYING"
+        : resolveTaskStatus(command, disposition == FailureDisposition.CANCELLED);
     int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
     int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
     UpdateStepProgressParam.UpdateStepProgressParamBuilder progressBuilder =
