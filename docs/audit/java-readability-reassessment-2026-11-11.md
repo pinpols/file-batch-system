@@ -269,7 +269,7 @@
 
 ## R26 执行范围（Task 24）
 
-处理范围：只处理长度上限和截断长度。第一批（提交 `9af19a2ac`）在 13 个类中命名了 21 处；修订轮按下面的 grep 条件把 `src/main/java` 全部扫了一遍，在 21 个类中又命名了 34 处，另登记 7 处不处理的（取 ID/指纹/前缀格式的 `substring`、取首位数字，以及 `batch-test-support` 里的测试工具）。每处在 [CSV](java-readability-reassessment-2026-11-11-candidates.csv) 中都有一行 R26 记录。常量都是所属类的 `private static final`，数值和类型不变。对应数据库列的常量，注释写出了表.列和迁移文件，并核对过后续迁移里没有改列宽；不对应列的，注释写明限制的是什么。同一包内同一列的重复常量已合并为一个包级常量，放在离实体或 Mapper 最近的类里（`TriggerExternalEventService`、`TriggerOutboxRelay`、`AbstractTaskConsumer`），不新增 public API。`BatchDayReplayService` 与 `BatchDayReplayEntryExecutor`、`DeadLetterPublisher` 与 `AbstractTaskConsumer` 不在同一个包，各自保留私有常量。
+处理范围：只处理长度上限和截断长度。第一批（提交 `9af19a2ac`）在 13 个类中命名了 22 处（当时 CSV 只登记 21 行，漏了 `TriggerOutboxRelay:499` 的 markGiveUp，修订轮补登）；修订轮按下面的 grep 条件把 `src/main/java` 全部扫了一遍，又命名了 34 处，另登记 7 处不处理的（取 ID/指纹/前缀格式的 `substring`、取首位数字，以及 `batch-test-support` 里的测试工具）。[CSV](java-readability-reassessment-2026-11-11-candidates.csv) 中 R26 共 63 行：`named` 56 行（22 + 34，分布在 36 个文件），`skip` 7 行。数值和类型不变。常量可见性规则：默认是所属类的 `private static final`；同一个数据库列的长度上限被同一包内多个类使用时，合并为一个包级（package-private）`static final` 常量，放在离实体或 Mapper 最近的类里（`TriggerExternalEventService` 的 3 个 `EXTERNAL_EVENT_*_MAX_LENGTH`、`TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH`、`AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH`），不新增 public API；跨包的不合并，`BatchDayReplayService` 与 `BatchDayReplayEntryExecutor`、`DeadLetterPublisher` 与 `AbstractTaskConsumer` 各自保留私有常量。对应数据库列的常量，注释写出了表.列和迁移文件，并核对过后续迁移里没有改列宽；不对应列的，注释写明限制的是什么。
 
 扫描条件：`truncate\(|safeMessage\(|abbreviate\(|substring\(0, *[0-9]`，只看两位及以上的字面量；与命中处在同一方法里、上限相同的 `ConsoleTextSanitizer.safeDisplay(..., N)` 一并改用同一常量。
 
@@ -279,6 +279,11 @@
 
 - R26 其余候选：超时、批大小、退避、上限次数等非长度数字，需逐处判断后另开任务；grep 条件之外的 `ConsoleTextSanitizer.safeDisplay(..., 512)` 有 5 处（`ConsoleOpsQueryService` 3 处、`DefaultConsoleApprovalApplicationService` 2 处），也在其中。
 - 疑似缺少租户一致性校验：`DefaultConsoleApprovalApplicationService.batchdayreplayAction` 不检查 `payload.tenantId` 是否等于当前调用方租户，而同类的 `workflowrunreplayAction` 会检查 `tenantId.equals(payload.tenantId())`。R23 删掉的 `tenantId` 参数在删之前就没有被读取，所以这不是本次重构引入的变化，代码也未修改。只读排查结论：审批单本身按调用方租户读取（`loadApproval(tenantId, approvalNo)`）；但转发到 orchestrator 时用的是 `payload.tenantId`（`/internal/orchestrator/batch-day-replay/sessions/{id}/approve?tenantId=`），orchestrator 只按这个租户加载会话。所以如果租户 A 的审批单里 payload 写的是租户 B，批准时推进的会是 B 的会话。目前这条分支走不到：主代码中没有任何地方创建 `BATCH_DAY_REPLAY` 审批单，最新的 `ck_approval_command_action` 约束（V344）也不允许这个 action_type。结论：现在不能被利用；启用这条分支之前，应补上与 `workflowrunreplayAction` 相同的租户一致性校验，或删掉这条分支。已登记 todo-master。
+- `ConfigPackageExcelWorkbookWriter`：R23 删掉 `applyValidations` 的 `registeredImplCodesByModule` 参数后，`writeDataSheet` / `writePreviewSheet` 的同名参数也不再被读取，公共入口里 `copyImplRegistry` 的结果实际没有用处。`copyImplRegistry` 对含 null 元素的列表会在 `List.copyOf` 抛 NPE，连带删除会改变异常时机，所以本轮保留。删参之前这个参数就没有被读取，看起来像“实现编码下拉校验”功能丢失，需产品确认：是接回校验下拉，还是连同 `copyImplRegistry` 一起删掉。
+- `HttpTaskExecutionClient.report` 的注释写着 `batch.worker.report.duration` 带 `tenantId=, workerType=` tag，实际 `recordReportDuration` 只打 `outcome` tag（并注明 tenantId 不作 tag）。注释过时，Task 24 修订轮没有改，待随后续改动更正。
+- `PartitionReclaimUnit.doReclaim` 的长注释里有一句断句（“#768 的”之后接不上），待补全。
+- `AbstractStepBeanRegistrar.registerStepBeansOnStartup` 的长注释放在日志语句前面，与实际登记逻辑 `registerOne` 隔开，待移到对应位置。
+- `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
 
 ## 决策记录（2026-11-11）
 

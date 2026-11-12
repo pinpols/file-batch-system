@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5（Task 15–17）在分支 `chore/java-readability-p9-batch5`，将作为草稿 PR 直接以 main 为目标；Task 19–24 和 18 未开工；R13（Task 12）已撤销。
+**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。文档 PR #1353（9b9f2d8c1）、PR-1 #1354（Task 1–3，51673b1e1）、PR-2 #1355（Task 4–8、13，a2b08f094）、PR-3 #1356（Task 9，c5cd538c2）、PR-4 #1357（Task 10–12、14，9346767fe）和 PR-5 #1358（Task 15–17，3ff888db3）已合入 main；PR-6（Task 19、21、22、24）已在分支 `chore/java-readability-p9-batch6` 完成，草稿 PR 待开；Task 20（PR-7）、23 和 18（拆 2–3 个 PR）未开工；R13（Task 12）已撤销。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 
@@ -373,10 +373,10 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - Modify：`batch-orchestrator/.../application/trigger/TriggerLaunchRecoveryService.java:190`、`batch-orchestrator/.../application/service/forensic/ForensicExportLogTransactionService.java:28`
 - Modify：候选清单 CSV 中 `category = private-pure-forward` 的 39 行
 
-- [ ] **Step 1：R17。** 两处 builder 各自提成局部变量，变量名取参数对象的业务名（如 `retryParam`、`exportLogEntity`），再传给 Mapper。builder 里调用 `Instant.now()` 等有副作用的方法时，提取后位置相对其他语句不变。
-- [ ] **Step 2：R19 逐处判断。** 只转发给静态工具的，改成静态导入后直接调用，删掉私有方法；只转发给注入协作者的（如 `resolveTenant`），调用处直接写 `tenantGuard.resolveTenant(...)`。名字本身带业务含义、包装集合判断的（如 `isActive`、`isTerminal`），保留，在 `decision` 列写明。
-- [ ] **Step 3：跑改动模块的测试**，预期全部 PASS。
-- [ ] **Step 4：提交** `refactor: inline pass-through helpers and name long builders`。
+- [x] **Step 1：R17。** 两处 builder 各自提成局部变量，变量名取参数对象的业务名（如 `retryParam`、`exportLogEntity`），再传给 Mapper。builder 里调用 `Instant.now()` 等有副作用的方法时，提取后位置相对其他语句不变。
+- [x] **Step 2：R19 逐处判断。** 只转发给静态工具的，改成静态导入后直接调用，删掉私有方法；只转发给注入协作者的（如 `resolveTenant`），调用处直接写 `tenantGuard.resolveTenant(...)`。名字本身带业务含义、包装集合判断的（如 `isActive`、`isTerminal`），保留，在 `decision` 列写明。
+- [x] **Step 3：跑改动模块的测试**，预期全部 PASS。
+- [x] **Step 4：提交** `refactor: inline pass-through helpers and name long builders`。
 
 ### Task 20：合并两份 OkHttp 出站适配器（R20 ①）
 
@@ -409,11 +409,11 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - 两处各自独有的部分留在原方法里：`TaskDispatchExecutor` 的 `WORKER_TYPE`（取自 message）和 `WORKER_ID`；`AbstractTaskConsumer` 的 `TOPIC`、`WORKER_TYPE`（取自 `workerConfiguration()`）和 `WORKER_ID`（registration 可能为 null）。
 - MDC 的清理方式不动：两处的 `BatchMdc.removeAll(...)` 字段集合不一样，本任务不合并。
 
-- [ ] **Step 1：写失败测试** `TaskMessageMdcTest.putMessageFields_putsEveryMessageField`：构造一个各字段都有值的 `TaskDispatchMessage`，逐字段断言 `MDC.get(...)` 的值；另加一个 null 字段的用例，断言与 `BatchMdc.put` 对 null 的现有处理一致。
-- [ ] **Step 2：运行，确认编译失败**，然后实现。
-- [ ] **Step 3：两处改为先调用 `TaskMessageMdc.putMessageFields(message)`，再放各自独有的字段。** 放入的顺序与原来一致。
-- [ ] **Step 4：跑 `TaskMessageMdcTest`、`TaskDispatchExecutor*Test`、`AbstractTaskConsumer*Test`、`*TaskConsumer*Test`**，预期 PASS。
-- [ ] **Step 5：提交** `refactor(worker-core): share task message MDC fields`。
+- [x] **Step 1：写失败测试** `TaskMessageMdcTest.putMessageFields_putsEveryMessageField`：构造一个各字段都有值的 `TaskDispatchMessage`，逐字段断言 `MDC.get(...)` 的值；另加一个 null 字段的用例，断言与 `BatchMdc.put` 对 null 的现有处理一致。
+- [x] **Step 2：运行，确认编译失败**，然后实现。
+- [x] **Step 3：两处改为先调用 `TaskMessageMdc.putMessageFields(message)`，再放各自独有的字段。** 放入的顺序与原来一致。
+- [x] **Step 4：跑 `TaskMessageMdcTest`、`TaskDispatchExecutor*Test`、`AbstractTaskConsumer*Test`、`*TaskConsumer*Test`**，预期 PASS。
+- [x] **Step 5：提交** `refactor(worker-core): share task message MDC fields`。
 
 ### Task 22：删除任务执行门面，冗余写法收短（R18、R21）
 
@@ -429,12 +429,12 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - `TaskControllerApplicationService` 改为注入 `TaskCreationService`、`TaskAssignmentService`、`TaskOutcomeService`，每个调用改成直接调用对应的服务（对照 `DefaultTaskExecutionService` 的转发表逐个替换）。
 - Produces：`public final class Nullables`，`public static <T> @Nullable T firstNonNull(@Nullable T preferred, @Nullable T fallback)`：`preferred` 不为 null 返回它，否则返回 `fallback`（可以是 null）。
 
-- [ ] **Step 1：R18。** `DefaultTaskExecutionService` 没有 `@Transactional`（2026-11-11 已核实），事务边界都在三个具体服务上，删除门面不改事务。按转发表替换使用方和测试，删掉门面接口、实现和它的单测。
-- [ ] **Step 2：跑 `TaskControllerApplicationServiceTest`、`TaskControllerTest`，以及 15 个集成测试中能在本地跑的**，预期 PASS；环境不可用的记为未验证。
-- [ ] **Step 3：写 `NullablesTest`**：`(a, b)→a`、`(null, b)→b`、`(null, null)→null`。确认编译失败后，实现 `Nullables`。
-- [ ] **Step 4：R21 替换。** “有值才覆盖”的三元改成 `Nullables.firstNonNull(request.getX(), copied.getX())`；带转换的（如 `toUpperOrNull`）写成 `request.getX() != null ? 转换(request.getX()) : copied.getX()`，不硬套工具。`Optional.ofNullable(x).orElse(d)` 只在 `d` 是非 null 常量或非 null 值时，才改成 `Objects.requireNonNullElse(x, d)`。`Collectors.toList()` 的 4 处，确认结果后续不会被 `add`/`remove`/`sort` 后改成 `.toList()`，会被修改的保留原写法。
-- [ ] **Step 5：跑改动模块的测试**，预期全部 PASS。
-- [ ] **Step 6：提交。** R18 和 R21 分开提交：`refactor(orchestrator): drop pass-through task execution facade`；`refactor: shorten null-default idioms`。
+- [x] **Step 1：R18。** `DefaultTaskExecutionService` 没有 `@Transactional`（2026-11-11 已核实），事务边界都在三个具体服务上，删除门面不改事务。按转发表替换使用方和测试，删掉门面接口、实现和它的单测。
+- [x] **Step 2：跑 `TaskControllerApplicationServiceTest`、`TaskControllerTest`，以及 15 个集成测试中能在本地跑的**，预期 PASS；环境不可用的记为未验证。
+- [x] **Step 3：写 `NullablesTest`**：`(a, b)→a`、`(null, b)→b`、`(null, null)→null`。确认编译失败后，实现 `Nullables`。
+- [x] **Step 4：R21 替换。** “有值才覆盖”的三元改成 `Nullables.firstNonNull(request.getX(), copied.getX())`；带转换的（如 `toUpperOrNull`）写成 `request.getX() != null ? 转换(request.getX()) : copied.getX()`，不硬套工具。`Optional.ofNullable(x).orElse(d)` 只在 `d` 是非 null 常量或非 null 值时，才改成 `Objects.requireNonNullElse(x, d)`。`Collectors.toList()` 的 4 处，确认结果后续不会被 `add`/`remove`/`sort` 后改成 `.toList()`，会被修改的保留原写法。
+- [x] **Step 5：跑改动模块的测试**，预期全部 PASS。
+- [x] **Step 6：提交。** R18 和 R21 分开提交：`refactor(orchestrator): drop pass-through task execution facade`；`refactor: shorten null-default idioms`。
 
 ### Task 23：入口方法只保留流程，细节下沉（R22、R27，全量 302 + Controller 26）
 
@@ -475,11 +475,11 @@ L2–L5 是主链路，测试要求最高：每层除了单测，还要跑覆盖
 **Files:**
 - Modify：R23 的 23 个私有方法参数所在类；R25 的 24 处方法内长注释；R26 中有业务含义的数字
 
-- [ ] **Step 1：R23。** 确认参数在方法体里确实没有读取（包括 lambda 和内部类），再删掉参数和调用处的实参。实参表达式有副作用的（如调用 `Instant.now()`、读取并递增计数器），先赋给局部变量保留调用，再删参数。
-- [ ] **Step 2：R25。** 逐处判断注释讲的是 WHY / 不变量，还是“这段代码在做什么”。前者保留；后者把对应代码抽成以注释主旨命名的私有方法，注释移到该方法的说明里。结论写进 CSV 的 `decision` 列（R25 的清单在执行时由扫描结果补进 CSV）。
-- [ ] **Step 3：R26。** 只处理有业务含义的数字：长度上限、截断长度、位运算掩码、重试上限。提成所属类的 `private static final` 常量，名字说明来源（如 `MAX_ERROR_MESSAGE_LENGTH`）。同一个数值对应数据库列长度时，在常量注释里写出列名。
-- [ ] **Step 4：跑改动模块的测试**，预期全部 PASS。
-- [ ] **Step 5：提交。** 三类分开提交：`refactor: drop unused parameters`、`refactor: name commented code blocks`、`refactor: name magic numbers`。
+- [x] **Step 1：R23。** 确认参数在方法体里确实没有读取（包括 lambda 和内部类），再删掉参数和调用处的实参。实参表达式有副作用的（如调用 `Instant.now()`、读取并递增计数器），先赋给局部变量保留调用，再删参数。
+- [x] **Step 2：R25。** 逐处判断注释讲的是 WHY / 不变量，还是“这段代码在做什么”。前者保留；后者把对应代码抽成以注释主旨命名的私有方法，注释移到该方法的说明里。结论写进 CSV 的 `decision` 列（R25 的清单在执行时由扫描结果补进 CSV）。
+- [x] **Step 3：R26。** 只处理有业务含义的数字：长度上限、截断长度、位运算掩码、重试上限。提成所属类的 `private static final` 常量，名字说明来源（如 `MAX_ERROR_MESSAGE_LENGTH`）。同一个数值对应数据库列长度时，在常量注释里写出列名。
+- [x] **Step 4：跑改动模块的测试**，预期全部 PASS。
+- [x] **Step 5：提交。** 三类分开提交：`refactor: drop unused parameters`、`refactor: name commented code blocks`、`refactor: name magic numbers`。
 
 ## 收尾
 
