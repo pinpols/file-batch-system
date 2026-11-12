@@ -314,18 +314,49 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  MAIN["main"] --> BUILD["CI / 构建"]
-  BUILD --> MAN["Release Manifest<br/>FE + 全部 BE 镜像 digest"]
-  MAN --> STG["部署 staging"]
-  STG --> VERIFY{"健康 / 版本 / digest<br/>BE Smoke / FE E2E / Lighthouse"}
-  VERIFY -->|"失败"| STOP["停止晋级<br/>恢复或修复 staging"]
-  VERIFY -->|"通过"| APPROVE["Production Approval"]
-  APPROVE --> PROD["生产部署<br/>同一 release set"]
-  PROD --> CHECK{"部署后验证"}
-  CHECK -->|"通过"| STABLE["记录稳定版本"]
-  CHECK -->|"失败"| ROLLBACK["回滚上一个稳定 release set"]
-  MAN -. "阶段 1 执行器" .-> COMPOSE["SSH + Compose"]
-  MAN -. "阶段 2 执行器" .-> GITOPS["Ops Repo + Argo CD"]
+
+  MAIN(["main"]):::entry
+  BUILD["CI / 构建"]
+  MAN[("Release Manifest<br/>FE + 全部 BE 镜像 digest")]:::store
+  subgraph STAGING["Staging"]
+    direction TB
+    STG["部署 staging<br/>验证：健康 / 版本 / digest<br/>BE Smoke / FE E2E / Lighthouse"]
+    VERIFY{"验证通过？"}
+    STG --> VERIFY
+  end
+  subgraph PRODUCTION["Production"]
+    direction TB
+    APPROVE["Production Approval"]
+    PROD["生产部署<br/>同一 release set"]
+    CHECK{"部署后验证"}
+    APPROVE --> PROD
+    PROD --> CHECK
+  end
+  STOP["停止晋级<br/>恢复或修复 staging"]:::fail
+  STABLE["记录稳定版本"]:::ok
+  ROLLBACK["回滚上一个稳定 release set"]:::fail
+  COMPOSE["SSH + Compose"]:::ext
+  GITOPS["Ops Repo + Argo CD"]:::ext
+  MAIN --> BUILD
+  BUILD --> MAN
+  MAN --> STAGING
+  VERIFY -->|"失败"| STOP
+  VERIFY -->|"通过"| PRODUCTION
+  CHECK -->|"通过"| STABLE
+  CHECK -->|"失败"| ROLLBACK
+  MAN -. "阶段 1 执行器" .-> COMPOSE
+  MAN -. "阶段 2 执行器" .-> GITOPS
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 这里的长期稳定契约是 Release Manifest，而不是 Compose 或 Argo CD 本身。Phase 1 和 Phase 2 只替换部署执行器，因此当前 Compose CD 的投入可以直接迁移到最终 GitOps 架构。

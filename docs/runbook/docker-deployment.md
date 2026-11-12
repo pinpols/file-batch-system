@@ -14,15 +14,32 @@
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":45,"rankSpacing":55}}}%%
-flowchart TB
-  H["本机访问方 / 单独启动的前端"] -->|"默认回环地址"| A["应用容器 · apps profile<br/>Console API / Trigger / Orchestrator / 五类 Worker"]
+flowchart LR
+  H(["本机访问方<br/>单独启动的前端"]):::entry
   subgraph NET["本地 Compose 网络"]
-    A -->|"按配置访问"| PG[("PostgreSQL primary<br/>平台库 / 业务库")]
-    A --> K["Kafka"]
-    A --> V["Valkey"]
-    A --> S["MinIO"]
-    PG -. "replica profile" .-> RE[("PostgreSQL replica")]
+    A["应用容器 · apps profile<br/>Console API / Trigger / Orchestrator<br/>五类 Worker"]:::control
+    subgraph DEPS["基础依赖"]
+      direction TB
+      PG[("PostgreSQL primary<br/>平台库 / 业务库")]:::store
+      RE[("PostgreSQL replica")]:::store
+      K{{"Kafka"}}:::mq
+      V[("Valkey")]:::store
+      S[("MinIO")]:::store
+    end
   end
+  H -->|"默认回环地址"| A
+  A -->|"按配置访问"| PG
+  A --> K
+  A --> V
+  A --> S
+  PG -. "replica profile" .-> RE
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 图中应用容器为汇总展示，连线表示按各服务职责和配置访问，不表示每个服务都访问全部依赖；具体通信见[模块结构与运行链路](../architecture/project-structure.md)。图中平台库与业务库是不同数据库；本地默认地址可指向同一 PostgreSQL 服务，不代表生产也必须共用实例。部署 overlay 的镜像来源、外部依赖与网络见本文后续章节；Helm 及未来发布路线与此视图分开。

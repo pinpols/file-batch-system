@@ -58,27 +58,62 @@ file-batch-system/
 ### 运行主链
 
 ```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":40,"rankSpacing":58},"sequence":{"mirrorActors":false}}}%%
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  FE["batch-console · 配对前端"] --> C["batch-console-api"]
-  C -->|"发起运行"| T["batch-trigger"]
-  T -->|"Trigger Outbox Relay"| K1["Kafka · launch"] --> O["batch-orchestrator"]
-  O -->|"Task Outbox Relay"| K2["Kafka · task dispatch"] --> W["五类 Worker 应用"]
-  W -->|"HTTP CLAIM / 续租 / REPORT"| O
+
+  FE(["batch-console<br/>配对前端"]):::entry
+  C["batch-console-api"]:::control
+  T["batch-trigger"]:::control
+  K1{{"Kafka · launch"}}:::mq
+  O["batch-orchestrator"]:::control
+  K2{{"Kafka · task dispatch"}}:::mq
+  W["五类 Worker 应用"]:::worker
+  FE --> C
+  C -->|"发起运行"| T
+  T -->|"Trigger Outbox Relay"| K1
+  K1 --> O
   C -->|"审批 / 运维"| O
+  O -->|"Task Outbox Relay"| K2
+  K2 --> W
+  W -->|"HTTP CLAIM / 续租 / REPORT"| O
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 数据访问
 
 ```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":45,"rankSpacing":60},"sequence":{"mirrorActors":false}}}%%
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  C["batch-console-api"] --> DB[("平台 PostgreSQL")]
-  T["batch-trigger"] --> DB
-  O["batch-orchestrator"] --> DB
-  C --> A["AI 附件 · 独立 bucket"]
-  W["五类 Worker 应用"] --> B["业务库 / 批处理对象存储 / 外部通道"]
+
+  subgraph CTRL["控制面"]
+    direction LR
+    C["batch-console-api"]:::control
+    T["batch-trigger"]:::control
+    O["batch-orchestrator"]:::control
+  end
+  W["五类 Worker 应用"]:::worker
+  DB[("平台 PostgreSQL")]:::store
+  A[("AI 附件<br/>独立 bucket")]:::store
+  B["业务库 / 批处理对象存储<br/>外部通道"]:::ext
+  C --> DB
+  T --> DB
+  O --> DB
+  C --> A
+  W --> B
   W -. "部分 Worker 受限访问文件元数据" .-> DB
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 虚线表示部分 Worker 的受限访问；Worker 按类型访问业务数据或外部通道，不能据图推断每类 Worker 访问全部目标。Console API、Trigger、Orchestrator 和五类 Worker 均依赖 `batch-common`；五类 Worker 还依赖 `batch-worker-core`。依赖方向及模块内部结构见[平台模块展开图](#平台模块展开图)。
@@ -153,26 +188,36 @@ batch-e2e-tests
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
+
   subgraph WORKERS["Worker 应用 · 前四类复用文件 Pipeline"]
-    IMP["import"]
-    EXP["export"]
-    PROC["process"]
-    DISP["dispatch"]
-    AT["atomic"]
+    direction TB
+    IMP["import"]:::worker
+    EXP["export"]:::worker
+    PROC["process"]:::worker
+    DISP["dispatch"]:::worker
+    AT["atomic"]:::worker
   end
-  IMP -. "依赖" .-> CORE["batch-worker/core<br/>SPI / 租约 / Pipeline runtime"]
-  EXP -. "依赖" .-> CORE
-  PROC -. "依赖" .-> CORE
-  DISP -. "依赖" .-> CORE
-  AT -. "依赖" .-> CORE
-  CORE -. "依赖" .-> COMMON["batch-common<br/>共享基础设施"]
-  T["batch-trigger<br/>Quartz / Calendar / Outbox"] -. "依赖" .-> COMMON
-  O["batch-orchestrator<br/>应用 / 领域 / 持久化"] -. "依赖" .-> COMMON
+  CORE["batch-worker/core<br/>SPI / 租约 / Pipeline runtime"]:::lib
+  COMMON["batch-common<br/>共享基础设施"]:::lib
+  T["batch-trigger<br/>Quartz / Calendar / Outbox"]:::control
+  O["batch-orchestrator<br/>应用 / 领域 / 持久化"]:::control
+  WORKERS -. "依赖" .-> CORE
+  CORE -. "依赖" .-> COMMON
+  T -. "依赖" .-> COMMON
+  O -. "依赖" .-> COMMON
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
+
   subgraph CONSOLE["batch-console-api · 内部依赖"]
     WEB["web · HTTP / SSE"] --> CONTRACT["application.contract"]
     WEB --> APP["application · 用例"]
@@ -181,7 +226,15 @@ flowchart TB
     INFRA["infrastructure · Port 实现"] -. "实现" .-> DOMAIN
     APP --> SHARED["shared / support"]
   end
-  APP -. "依赖" .-> COMMON["batch-common · 共享基础设施"]
+  COMMON["batch-common · 共享基础设施"]:::lib
+  APP -. "依赖" .-> COMMON
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 辅助模块边界

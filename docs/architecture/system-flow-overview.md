@@ -11,23 +11,53 @@
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  E["日程 / Console / 到达事件"] --> T["Trigger 接纳请求"]
-  T --> TO[("请求 + Trigger Outbox")]
-  TO --> TR["Trigger Relay"] --> K1["Kafka · launch"]
-  K1 --> O["Orchestrator"]
-  subgraph R["顶层运行与按需物化"]
-    WR["WorkflowRun · 冻结图"] --> NR["WorkflowNodeRun"]
-    NR --> C["START / END / GATEWAY / WAIT"]
-    NR --> J["JOB → 独立 JobInstance"] --> PT["Partition / Task"]
+flowchart LR
+
+  E(["日程 / Console<br/>到达事件"]):::entry
+  subgraph TRG["Trigger"]
+    direction TB
+    T["接纳请求"]:::control
+    TO[("请求 +<br/>Trigger Outbox")]:::store
+    TR["Trigger Relay"]:::control
+    T --> TO
+    TO --> TR
   end
-  O --> WR
-  PT --> TX[("运行状态 + Task Outbox")]
-  TX --> OR["Outbox Relay"] --> K2["Kafka · task dispatch"]
-  K2 --> W["五类 Worker"]
-  W -->|"HTTP CLAIM / REPORT"| O
-  W --> B["业务数据 / 文件 / 外部服务"]
-  O -. "按义务与终态证据结算" .-> BD["BatchDay"]
+  K1{{"Kafka · launch"}}:::mq
+  subgraph ORC["Orchestrator · 顶层运行与按需物化"]
+    direction TB
+    WR["WorkflowRun · 冻结图"]
+    NR["WorkflowNodeRun"]
+    C["START / END<br/>GATEWAY / WAIT"]
+    J["JOB → 独立 JobInstance"]
+    PT["Partition / Task"]
+    TX[("运行状态 +<br/>Task Outbox")]:::store
+    OR["Outbox Relay"]:::control
+    WR --> NR
+    NR --> C
+    NR --> J
+    J --> PT
+    PT --> TX
+    TX --> OR
+  end
+  K2{{"Kafka · task dispatch"}}:::mq
+  W["五类 Worker"]:::worker
+  B["业务数据 / 文件<br/>外部服务"]:::ext
+  BD["BatchDay"]
+  E --> TRG
+  TRG --> K1
+  K1 --> ORC
+  ORC --> K2
+  K2 --> W
+  W -->|"HTTP CLAIM / REPORT"| ORC
+  W --> B
+  ORC -. "按义务与终态证据结算" .-> BD
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 一句话叙事
@@ -112,15 +142,33 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  A["控制服务 + 五类 Worker"] -->|"启用 OTLP 时：Trace / Log"| OT["OpenTelemetry Collector"]
-  OT --> T["Tempo · Trace"]
-  OT --> L["Loki · Log"]
-  OT -. "可选兼容后端" .-> J["Jaeger"]
-  P["Prometheus"] -->|"抓取指标"| A
-  P --> AM["Alertmanager"] --> N["通知渠道"]
-  G["Grafana"] -->|"查询"| T
+
+  A["控制服务 + 五类 Worker"]:::control
+  OT["OpenTelemetry Collector"]
+  T[("Tempo · Trace")]:::store
+  L[("Loki · Log")]:::store
+  J[("Jaeger")]:::ext
+  P["Prometheus"]
+  AM["Alertmanager"]
+  N["通知渠道"]:::ext
+  G(["Grafana"]):::entry
+  A -->|"启用 OTLP 时：Trace / Log"| OT
+  OT --> T
+  OT --> L
+  OT -. "可选兼容后端" .-> J
+  P -->|"抓取指标"| A
+  P --> AM
+  AM --> N
+  G -->|"查询"| T
   G -->|"查询"| L
   G -->|"查询"| P
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 一站排障路径（典型）
@@ -142,14 +190,37 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun · 顶层运行"]
-  R --> N["WorkflowNodeRun"]
-  N --> C["控制节点 · 就地推进"]
-  N -->|"JOB 到达"| J["独立 JobInstance"]
-  J --> P["JobPartition"] --> T["JobTask"]
-  J -. "文件类型" .-> PI["系统 Pipeline · 阶段观测"]
-  T -->|"CLAIM / EXECUTE / REPORT"| W["Worker"]
-  J -->|"终态与输出"| N
+
+  D["WorkflowDefinition"]:::lib
+  subgraph WF["Workflow 层"]
+    direction LR
+    R["WorkflowRun · 顶层运行"]
+    N["WorkflowNodeRun"]
+    C["控制节点 · 就地推进"]
+    R --> N
+    N --> C
+  end
+  subgraph JOB["Job 执行层"]
+    direction LR
+    J["独立 JobInstance"]
+    P["JobPartition"]
+    T["JobTask"]
+    J --> P
+    P --> T
+  end
+  PI["系统 Pipeline · 阶段观测"]:::ext
+  W["Worker"]:::worker
+  D -->|"冻结"| WF
+  WF <-->|"JOB 到达 / 终态与输出"| JOB
+  JOB -. "文件类型" .-> PI
+  JOB -->|"CLAIM / EXECUTE / REPORT"| W
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 关键决策点
