@@ -417,6 +417,8 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 
 ### Task 22：删除任务执行门面，冗余写法收短（R18、R21）
 
+> 执行记录（2026-11-12）：`Nullables.coalesce` 已存在且语义一致，复用它，不新增 `firstNonNull`；`TaskControllerApplicationService` 只调用分配类方法，只注入 `TaskAssignmentService`。R21 按同一定义实际命中 52 处“有值才覆盖”三元（复评中的 18 处是抽样数），逐处核实回退对象非 null、取值无副作用后全部改写；另有 20 处 `Optional.ofNullable(x).orElse(常量)`、4 处 `.toList()`。
+
 **Files:**
 - Delete：`batch-orchestrator/.../application/service/task/TaskExecutionService.java`、`DefaultTaskExecutionService.java`、`DefaultTaskExecutionServiceTest.java`
 - Modify：`TaskControllerApplicationService.java` 和另外 15 个引用 `TaskExecutionService` 的测试文件

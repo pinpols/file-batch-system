@@ -32,7 +32,7 @@ DefaultTaskExecutionService（~60 行 Facade）
 
 Facade 实现 `TaskExecutionService` 接口，对外 API 不变，调用方零改动。
 
-> 后续（2026-11-12，可读性阶段 9 R18）：门面只剩纯转发，已删除 `TaskExecutionService` 与 `DefaultTaskExecutionService`，调用方直接注入三个子服务；事务边界本来就在子服务上，未变化。
+> 后续（2026-11-12，可读性阶段 9 R18）：门面只剩纯转发，已删除 `TaskExecutionService` 与 `DefaultTaskExecutionService`，调用方按需直接注入对应子服务（控制器入口只用 `TaskAssignmentService`）；事务边界本来就在子服务上，未变化。
 
 **`DefaultLaunchService` → 职责分离 + T1/T2 拆分**：
 
