@@ -96,40 +96,49 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   /** 抢锁窗口窄,多跑几轮放大命中概率。R*N = 120 对 outcome/reclaim 抢锁。 */
   private static final int ROUNDS = 10;
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private TaskAssignmentService taskAssignmentService;
+  private final TaskAssignmentService taskAssignmentService;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private PartitionReclaimUnit reclaimUnit;
+  private final PartitionReclaimUnit reclaimUnit;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private WorkerRegistryCache workerRegistryCache;
+  private final WorkerRegistryCache workerRegistryCache;
 
   private final JobInstanceTerminalStatusApplicationService terminalStatusService;
   private final PlatformTransactionManager transactionManager;
 
   @Autowired
   OutcomeVsReclaimDeadlockIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      PartitionReclaimUnit reclaimUnit,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      JdbcTemplate jdbcTemplate,
+      WorkerRegistryCache workerRegistryCache,
       JobInstanceTerminalStatusApplicationService terminalStatusService,
       PlatformTransactionManager transactionManager) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.reclaimUnit = reclaimUnit;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.workerRegistryCache = workerRegistryCache;
     this.terminalStatusService = terminalStatusService;
     this.transactionManager = transactionManager;
   }

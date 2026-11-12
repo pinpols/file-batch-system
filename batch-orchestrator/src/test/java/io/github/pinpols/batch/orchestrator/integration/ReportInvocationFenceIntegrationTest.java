@@ -66,32 +66,40 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private TaskAssignmentService taskAssignmentService;
+  private final TaskAssignmentService taskAssignmentService;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
   private final PartitionReclaimUnit partitionReclaimUnit;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  ReportInvocationFenceIntegrationTest(PartitionReclaimUnit partitionReclaimUnit) {
+  ReportInvocationFenceIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      PartitionReclaimUnit partitionReclaimUnit,
+      JdbcTemplate jdbcTemplate) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
     this.partitionReclaimUnit = partitionReclaimUnit;
+    this.jdbcTemplate = jdbcTemplate;
   }
 
   @BeforeEach

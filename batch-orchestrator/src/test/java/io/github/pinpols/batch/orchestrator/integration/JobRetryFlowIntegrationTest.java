@@ -77,31 +77,23 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 25);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private TaskAssignmentService taskAssignmentService;
+  private final TaskAssignmentService taskAssignmentService;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
   private final TaskControllerApplicationService taskControllerApplicationService;
 
-  @Autowired
-  private RetryGovernanceService retryGovernanceService;
+  private final RetryGovernanceService retryGovernanceService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private RetryScheduleMapper retryScheduleMapper;
+  private final RetryScheduleMapper retryScheduleMapper;
 
   private final WorkflowRunMapper workflowRunMapper;
 
@@ -109,19 +101,36 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
 
   private final BatchDayInstanceMapper batchDayInstanceMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
   JobRetryFlowIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       TaskControllerApplicationService taskControllerApplicationService,
+      RetryGovernanceService retryGovernanceService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      RetryScheduleMapper retryScheduleMapper,
       WorkflowRunMapper workflowRunMapper,
       BatchDaySettleScheduler batchDaySettleScheduler,
-      BatchDayInstanceMapper batchDayInstanceMapper) {
+      BatchDayInstanceMapper batchDayInstanceMapper,
+      JdbcTemplate jdbcTemplate) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.taskControllerApplicationService = taskControllerApplicationService;
+    this.retryGovernanceService = retryGovernanceService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.retryScheduleMapper = retryScheduleMapper;
     this.workflowRunMapper = workflowRunMapper;
     this.batchDaySettleScheduler = batchDaySettleScheduler;
     this.batchDayInstanceMapper = batchDayInstanceMapper;
+    this.jdbcTemplate = jdbcTemplate;
   }
 
   @Test

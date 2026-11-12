@@ -47,7 +47,6 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestConstructor;
@@ -78,40 +77,49 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private TaskControllerApplicationService taskControllerApplicationService;
+  private final TaskControllerApplicationService taskControllerApplicationService;
 
-  @Autowired
-  private TaskAssignmentService taskAssignmentService;
+  private final TaskAssignmentService taskAssignmentService;
 
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobPartitionMapper jobPartitionMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobTaskMapper jobTaskMapper;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
-  @Autowired
-  private WorkerRegistryCache workerRegistryCache;
+  private final WorkerRegistryCache workerRegistryCache;
 
   private final PlatformTransactionManager transactionManager;
 
   private final VerifierFailureOutboxService verifierFailureOutboxService;
 
   TaskBatchClaimReportIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskControllerApplicationService taskControllerApplicationService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      JdbcTemplate jdbcTemplate,
+      WorkerRegistryCache workerRegistryCache,
       PlatformTransactionManager transactionManager,
       VerifierFailureOutboxService verifierFailureOutboxService) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskControllerApplicationService = taskControllerApplicationService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.workerRegistryCache = workerRegistryCache;
     this.transactionManager = transactionManager;
     this.verifierFailureOutboxService = verifierFailureOutboxService;
   }

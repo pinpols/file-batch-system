@@ -64,29 +64,41 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
+
+  private final TaskAssignmentService taskAssignmentService;
+
+  private final TaskOutcomeService taskOutcomeService;
+
+  private final JobInstanceMapper jobInstanceMapper;
+
+  private final JobPartitionMapper jobPartitionMapper;
+
+  private final JobTaskMapper jobTaskMapper;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final WorkerRegistryCache workerRegistryCache;
 
   @Autowired
-  private TaskAssignmentService taskAssignmentService;
-
-  @Autowired
-  private TaskOutcomeService taskOutcomeService;
-
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
-
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
-
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private WorkerRegistryCache workerRegistryCache;
+  WorkerClaimProgressCompleteIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      JdbcTemplate jdbcTemplate,
+      WorkerRegistryCache workerRegistryCache) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.workerRegistryCache = workerRegistryCache;
+  }
 
   @BeforeEach
   void refreshWorkersForClaim() {
