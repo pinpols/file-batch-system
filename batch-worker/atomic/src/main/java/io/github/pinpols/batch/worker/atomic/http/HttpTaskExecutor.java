@@ -254,7 +254,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         return TaskResult.ok(
             "dry-run: " + inv.method + " " + plannedEndpoint + " (not sent)", planned);
       }
-      return runWithRetry(ctx, inv);
+      return runWithRetry(inv);
     } catch (HttpValidationException ex) {
       // 域名/IP/SSRF/方法白名单 vs 入参格式问题:都分流到 SECURITY_REJECTED / CONFIG_INVALID
       boolean security = ex.getMessage() != null
@@ -317,7 +317,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
 
     Map<String, String> headers =
-        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m, PARAM_HEADERS) : Map.of();
+        params.get(PARAM_HEADERS) instanceof Map<?, ?> m ? toStringMap(m) : Map.of();
 
     String body = params.get(PARAM_BODY) instanceof String s ? s : null;
     validateRequestBodySize(body);
@@ -486,7 +486,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  private static Map<String, String> toStringMap(Map<?, ?> m, String fieldName) {
+  private static Map<String, String> toStringMap(Map<?, ?> m) {
     Map<String, String> out = new LinkedHashMap<>();
     for (Map.Entry<?, ?> e : m.entrySet()) {
       if (e.getValue() == null) continue;
@@ -517,7 +517,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
 
   // ─── 带重试的执行 ──────────────────────────────────────────────────
 
-  private TaskResult runWithRetry(TaskContext ctx, Invocation inv) {
+  private TaskResult runWithRetry(Invocation inv) {
     boolean idempotent = IDEMPOTENT_METHODS.contains(inv.method);
     int maxAttempts = idempotent ? props.getMaxRetries() + 1 : 1;
 
@@ -525,7 +525,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
     Exception lastException = null;
     for (int attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
-        TaskResult result = runOnce(inv, attempt);
+        TaskResult result = runOnce(inv);
         // 显式接受的状态已满足调用方预期；未指定期望时服务端错误沿原策略重试。
         Integer status = (Integer) result.output().get("statusCode");
         boolean serverFailureCanBeRetried = EmptyChecks.isNotNull(status)
@@ -597,7 +597,7 @@ public class HttpTaskExecutor implements BatchTaskExecutor {
         lastException);
   }
 
-  private TaskResult runOnce(Invocation inv, int attempt) throws IOException {
+  private TaskResult runOnce(Invocation inv) throws IOException {
     // 共享客户端的 dns 回调做 resolve-then-connect SSRF 校验(防 rebinding);followRedirects=false
     // 已在 client() 构造期设定(重定向 target 不会再过 validateHost/dns 校验)。
     OkHttpClient call = client()

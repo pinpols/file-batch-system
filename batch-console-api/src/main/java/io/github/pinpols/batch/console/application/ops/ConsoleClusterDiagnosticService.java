@@ -71,7 +71,7 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private ConsoleClusterDiagnosticResponse loadDiagnose(String resolved) {
-    ConsoleShedLockStatusResponse shedLockStatus = loadShedLockStatus(resolved);
+    ConsoleShedLockStatusResponse shedLockStatus = loadShedLockStatus();
     ConsoleWorkerConsistencyResponse workerConsistency = loadWorkerConsistency(resolved);
     ConsoleOutboxHealthResponse outboxHealth = loadOutboxHealth(resolved);
     ConsoleTerminalChildrenHealthResponse terminalChildrenHealth =
@@ -87,10 +87,10 @@ public class ConsoleClusterDiagnosticService {
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleShedLockStatusResponse>() {},
-        () -> loadShedLockStatus(resolved));
+        () -> loadShedLockStatus());
   }
 
-  private ConsoleShedLockStatusResponse loadShedLockStatus(String resolved) {
+  private ConsoleShedLockStatusResponse loadShedLockStatus() {
     List<ShedLockView> rows = diagnosticMapper.shedlockAll();
     long activeLocks =
         rows.stream().filter(row -> Boolean.TRUE.equals(row.active())).count();

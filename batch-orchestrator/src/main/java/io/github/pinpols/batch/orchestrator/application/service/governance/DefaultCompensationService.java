@@ -626,7 +626,7 @@ public class DefaultCompensationService implements CompensationService {
           ResultCode.STATE_CONFLICT, "error.workflow.replay_target_request_missing");
     }
     ReplayOperationEntity replayOperation =
-        createWorkflowNodeReplayOperation(command, commandNo, traceId, source, targetRequestId);
+        createWorkflowNodeReplayOperation(command, source, targetRequestId);
     result.put("sourceWorkflowRunId", source.sourceRun().getId());
     result.put("sourceWorkflowNodeRunId", source.sourceNodeRun().getId());
     result.put("sourceNodeCode", source.sourceNodeRun().getNodeCode());
@@ -638,8 +638,6 @@ public class DefaultCompensationService implements CompensationService {
 
   private ReplayOperationEntity createWorkflowNodeReplayOperation(
       CompensationSubmitCommand command,
-      String commandNo,
-      String traceId,
       WorkflowNodeReplayTargetResolver.WorkflowNodeReplayTarget source,
       String targetRequestId) {
     Instant now = BatchDateTimeSupport.utcNow();

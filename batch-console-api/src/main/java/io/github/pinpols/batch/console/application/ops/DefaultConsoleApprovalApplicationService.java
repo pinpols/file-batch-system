@@ -153,8 +153,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         request.setApprovalId(approvalNo);
         yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
       }
-      case "BATCH_DAY_REPLAY" ->
-        batchdayreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
+      case "BATCH_DAY_REPLAY" -> batchdayreplayAction(approvalRecord, approvalNo, operatorId);
       case "WORKFLOW_RUN_REPLAY" ->
         workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
       default ->
@@ -166,7 +165,7 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
   }
 
   private String batchdayreplayAction(
-      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
+      ApprovalRecord approvalRecord, String approvalNo, String operatorId) {
     // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。
     // approve 后转发到 orchestrator 推进 session 状态 PENDING_APPROVAL → RUNNING；
     // 复用 batch-day-replay/sessions/{id}/approve 端点，approver 取审批人 operatorId。

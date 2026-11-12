@@ -408,7 +408,7 @@ public class ParseStep implements ImportStageStep {
       Object templateConfig,
       Path stagingFile)
       throws Exception {
-    boolean preserveLogicalRow = preserveLogicalRow(context, templateConfig);
+    boolean preserveLogicalRow = preserveLogicalRow(templateConfig);
     Object binary = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_BINARY_PAYLOAD);
     try (BufferedWriter writer = Files.newBufferedWriter(
         stagingFile,
@@ -521,7 +521,7 @@ public class ParseStep implements ImportStageStep {
     return StandardCharsets.UTF_8;
   }
 
-  private boolean preserveLogicalRow(ImportJobContext context, Object templateConfigObject) {
+  private boolean preserveLogicalRow(Object templateConfigObject) {
     if (!(templateConfigObject instanceof Map<?, ?> templateConfig)) {
       return false;
     }
