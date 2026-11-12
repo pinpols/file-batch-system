@@ -52,6 +52,8 @@ public class FixedWidthFormatParser implements FormatParser {
     }
     long recordNo = 0L;
     List<String> footerBuffer = footerRows > 0 ? new ArrayList<>(footerRows + 1) : List.of();
+    FixedWidthParseScope scope =
+        new FixedWidthParseScope(context, writer, fields, recordLength, preserveLogicalRow);
     try (BufferedReader reader = request.openTextReader()) {
       String line;
       int nonBlankLineNo = 0;
@@ -71,22 +73,27 @@ public class FixedWidthFormatParser implements FormatParser {
           line = footerBuffer.remove(0);
         }
         recordNo++;
-        parseRecordLine(context, writer, fields, line, recordNo, recordLength, preserveLogicalRow);
+        parseRecordLine(scope, line, recordNo);
       }
     }
     return recordNo;
   }
 
-  /** 解析单条记录行：行过短或字段越界按坏行处理，其余切片后写出。 */
-  private void parseRecordLine(
+  /**
+   * 同一次定长解析共享的作业上下文、输出和字段布局。行文本与记录号仍按行传入。
+   */
+  private record FixedWidthParseScope(
       ImportJobContext context,
       BufferedWriter writer,
       List<FixedWidthField> fields,
-      String line,
-      long recordNo,
       int recordLength,
-      boolean preserveLogicalRow)
+      boolean preserveLogicalRow) {}
+
+  /** 解析单条记录行：行过短或字段越界按坏行处理，其余切片后写出。 */
+  private void parseRecordLine(FixedWidthParseScope scope, String line, long recordNo)
       throws IOException {
+    ImportJobContext context = scope.context();
+    int recordLength = scope.recordLength();
     if (recordLength > 0 && line.length() < recordLength) {
       support.recordParseError(
           context,
@@ -97,13 +104,13 @@ public class FixedWidthFormatParser implements FormatParser {
       return;
     }
     try {
-      Map<String, String> row = sliceFields(fields, line);
+      Map<String, String> row = sliceFields(scope.fields(), line);
       support.collectSchemaFields(context, row);
       ParseSupport.ParsedRecordWriteParam writeParam = ParseSupport.ParsedRecordWriteParam.builder()
           .context(context)
-          .writer(writer)
+          .writer(scope.writer())
           .row(row)
-          .preserveLogicalRow(preserveLogicalRow)
+          .preserveLogicalRow(scope.preserveLogicalRow())
           .recordNo(recordNo)
           .errorCode(ERROR_CODE_FIXED_WIDTH_INVALID)
           .rawRecord(row)
