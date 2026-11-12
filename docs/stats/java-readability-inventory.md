@@ -59,10 +59,10 @@
 | `sdk/java/core/src/main/java/io/github/pinpols/batch/sdk/dispatcher/TaskDispatcher.java` | 876 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java` | 858 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleOpsQueryService.java` | 857 |
+| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowRunLaunchService.java` | 844 |
 | `batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java` | 829 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java` | 819 |
 | `batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java` | 814 |
-| `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowRunLaunchService.java` | 801 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/infrastructure/query/ConsoleFileQueryService.java` | 798 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowRunExecutionSnapshot.java` | 786 |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java` | 784 |
