@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.handler.atomic;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -268,6 +269,21 @@ class SqlAtomicHandlerTest {
     verify(connection).rollback();
   }
 
+  @Test
+  @DisplayName("defaultAutoCommit=false + 执行异常且 rollback 也失败 → 仍返回原始执行失败")
+  void shouldKeepOriginalFailure_whenRollbackAlsoFails() throws Exception {
+    stubRoleGateAllows();
+    when(statement.execute(anyString())).thenThrow(new SQLException("boom"));
+    doThrow(new SQLException("rollback failed")).when(connection).rollback();
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("boom").doesNotContain("rollback failed");
+    verify(connection).rollback();
+  }
+
   @ParameterizedTest(name = "{0}")
   @MethodSource("statementSplittingCases")
   @DisplayName("只有引号和注释之外的分号切分 SQL，保留原始片段与非空尾句")
@@ -302,6 +318,17 @@ class SqlAtomicHandlerTest {
             List.of("SELECT /* ; ' \" */ 1", "SELECT 2")),
         Arguments.of("trailing-comment", "SELECT 1;-- tail ;", List.of("SELECT 1", "-- tail ;")),
         Arguments.of(
-            "unterminated-quote", "SELECT 'tail;still quote", List.of("SELECT 'tail;still quote")));
+            "unterminated-quote", "SELECT 'tail;still quote", List.of("SELECT 'tail;still quote")),
+        Arguments.of("top-level-semicolon", "select 1; select 2", List.of("select 1", "select 2")),
+        Arguments.of(
+            "quotes-and-comments-mixed",
+            "select ';' -- a;b\n; select \"x;y\" /* ; */",
+            List.of("select ';' -- a;b", "select \"x;y\" /* ; */")),
+        Arguments.of("drops-empty-statements", ";;select 1;", List.of("select 1")),
+        // 锁定现状: SDK 版不识别反斜杠转义, 反斜杠后的引号直接收尾(与 Worker 版不同)
+        Arguments.of(
+            "backslash-quote-not-escape",
+            "select 'a\\'; select 2'",
+            List.of("select 'a\\'", "select 2'")));
   }
 }

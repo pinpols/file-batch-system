@@ -14,6 +14,7 @@ import io.github.pinpols.batch.worker.imports.config.JdbcMappedImportSecurityPro
 import io.github.pinpols.batch.worker.imports.jdbc.ImportLoadStrategy;
 import io.github.pinpols.batch.worker.imports.jdbc.JdbcMappedImportSpec;
 import io.github.pinpols.batch.worker.imports.stage.format.ParseSupport;
+import java.io.IOException;
 import java.io.StringReader;
 import java.math.BigDecimal;
 import java.sql.Connection;
@@ -506,56 +507,71 @@ public class GenericJdbcMappedImportLoadPlugin implements ImportLoadPlugin {
           DataSourceConnectionLease.acquire(businessDataSource)) {
         Connection conn = lease.connection();
         if (isRowLevelSecurityEnabled(conn, destinationTable)) {
-          UUID tempTableUuid = UUID.randomUUID();
-          String tempTableUuidText = tempTableUuid.toString();
-          String tempTableSuffix = tempTableUuidText.replace("-", "");
-          String tempTable = "batch_import_copy_" + tempTableSuffix;
-          String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
-          try (Statement statement = conn.createStatement()) {
-            String createTempTableSql =
-                "CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
-                    + quotedColumns(insertCols) + " FROM " + destinationTable + " WITH NO DATA";
-            statement.execute(createTempTableSql);
-          }
-          log.info(
-              "jdbc-mapped-import COPY staged before RLS-protected insert:"
-                  + " tenantId={}, table={}, rows={}",
-              context.tenantId(),
-              destinationTable,
-              n);
-          CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-          String tempDestinationTable = "pg_temp." + quotedTempTable;
-          String tempCopySql = buildCopySql(tempDestinationTable, insertCols);
-          long copied = copyManager.copyIn(tempCopySql, new StringReader(csv));
-          if (copied != n) {
-            throw new IllegalStateException(
-                "PostgreSQL temporary COPY row count mismatch: expected=" + n + ", copied="
-                    + copied);
-          }
-          String insertSql = "INSERT INTO " + destinationTable + " ("
-              + quotedColumns(insertCols) + ") SELECT " + quotedColumns(insertCols)
-              + " FROM pg_temp." + quotedTempTable;
-          try (Statement statement = conn.createStatement()) {
-            int inserted = statement.executeUpdate(insertSql);
-            if (inserted != n) {
-              throw new IllegalStateException("RLS-protected insert row count mismatch: expected="
-                  + n + ", inserted=" + inserted);
-            }
-          }
+          copyThroughTempTable(conn, context, destinationTable, insertCols, csv, n);
           return null;
         }
-        CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
-        long copied = copyManager.copyIn(copySql, new StringReader(csv));
-        if (copied != n) {
-          throw new IllegalStateException(
-              "PostgreSQL COPY row count mismatch: expected=" + n + ", copied=" + copied);
-        }
+        copyDirect(conn, copySql, csv, n);
         return null;
       } catch (Exception ex) {
         throw new IllegalStateException("Partition load failed: " + ex.getMessage(), ex);
       }
     });
     return n;
+  }
+
+  /** 目标表启用 RLS 时：先 COPY 进临时表，再 INSERT ... SELECT 到目标表，并核对两步行数。 */
+  private void copyThroughTempTable(
+      Connection conn,
+      ImportLoadContext context,
+      String destinationTable,
+      List<String> insertCols,
+      String csv,
+      int n)
+      throws Exception {
+    UUID tempTableUuid = UUID.randomUUID();
+    String tempTableUuidText = tempTableUuid.toString();
+    String tempTableSuffix = tempTableUuidText.replace("-", "");
+    String tempTable = "batch_import_copy_" + tempTableSuffix;
+    String quotedTempTable = JdbcMappedSqlValidator.quotePg(tempTable);
+    try (Statement statement = conn.createStatement()) {
+      String createTempTableSql =
+          "CREATE TEMP TABLE " + quotedTempTable + " ON COMMIT DROP AS SELECT "
+              + quotedColumns(insertCols) + " FROM " + destinationTable + " WITH NO DATA";
+      statement.execute(createTempTableSql);
+    }
+    log.info(
+        "jdbc-mapped-import COPY staged before RLS-protected insert:"
+            + " tenantId={}, table={}, rows={}",
+        context.tenantId(),
+        destinationTable,
+        n);
+    CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
+    String tempDestinationTable = "pg_temp." + quotedTempTable;
+    String tempCopySql = buildCopySql(tempDestinationTable, insertCols);
+    long copied = copyManager.copyIn(tempCopySql, new StringReader(csv));
+    if (copied != n) {
+      throw new IllegalStateException(
+          "PostgreSQL temporary COPY row count mismatch: expected=" + n + ", copied=" + copied);
+    }
+    String insertSql = "INSERT INTO " + destinationTable + " (" + quotedColumns(insertCols)
+        + ") SELECT " + quotedColumns(insertCols) + " FROM pg_temp." + quotedTempTable;
+    try (Statement statement = conn.createStatement()) {
+      int inserted = statement.executeUpdate(insertSql);
+      if (inserted != n) {
+        throw new IllegalStateException(
+            "RLS-protected insert row count mismatch: expected=" + n + ", inserted=" + inserted);
+      }
+    }
+  }
+
+  private void copyDirect(Connection conn, String copySql, String csv, int n)
+      throws SQLException, IOException {
+    CopyManager copyManager = conn.unwrap(PGConnection.class).getCopyAPI();
+    long copied = copyManager.copyIn(copySql, new StringReader(csv));
+    if (copied != n) {
+      throw new IllegalStateException(
+          "PostgreSQL COPY row count mismatch: expected=" + n + ", copied=" + copied);
+    }
   }
 
   private boolean isRowLevelSecurityEnabled(Connection connection, String destinationTable)

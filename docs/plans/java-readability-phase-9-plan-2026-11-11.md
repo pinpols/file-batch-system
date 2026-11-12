@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。PR-1 #1354（Task 1–3）以 main 为目标，CI 测试分片已通过、已设自动合并，正在补覆盖率测试；PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）为草稿 PR，依次叠在其上；PR-4（Task 10–12、14）在分支 `chore/java-readability-p9-batch4`，将作为草稿 PR 叠在 #1356 之上；Task 15–17、19–24 和 18 未开工；文档 PR #1353 已合入 main（9b9f2d8c1）；R13（Task 12）已撤销。
+**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5（Task 15–17）在分支 `chore/java-readability-p9-batch5`，将作为草稿 PR 直接以 main 为目标；Task 19–24 和 18 未开工；R13（Task 12）已撤销。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 
@@ -302,11 +302,11 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 **Interfaces:**
 - 两个内部类各自新增私有枚举 `LexState { CODE, LINE_COMMENT, BLOCK_COMMENT, SINGLE_QUOTE, DOUBLE_QUOTE }`，替换 `inLineComment` 等 4 个布尔字段；逐字符处理改为 `switch (state)`。SDK 不能依赖 `batch-common`，两份分别改，不合并。
 
-- [ ] **Step 1：补 characterization 测试**（两个测试类各补一组，用同样的输入）：`splits_onTopLevelSemicolonOnly`（`select 1; select 2` → 两句）、`keepsSemicolonInsideQuotesAndComments`（`select ';' -- a;b\n; select "x;y" /* ; */` → 两句）、`dropsEmptyStatements`（`;;select 1;` → 一句）、`keepsBackslashQuoteBehavior`（`select 'a\'; select 2'`：按改动前的实际结果写断言，只锁住现状，不判断对错）。
-- [ ] **Step 2：在改代码前运行，确认通过。** `./mvnw -o -ntp -pl batch-worker/atomic -am -Dtest='SqlTaskExecutorTest' -Dsurefire.failIfNoSpecifiedTests=false test`；`./mvnw -o -ntp -pl sdk/java/core -am -Dtest='SqlAtomicHandlerTest' -Dsurefire.failIfNoSpecifiedTests=false test`
-- [ ] **Step 3：改成状态枚举。** 每个状态的退出条件与原来的布尔分支一一对应，`prev` 的含义不变。
-- [ ] **Step 4：再跑 Step 2 的两条命令，另加 `SqlTaskExecutorHardeningTest`、`SqlTaskExecutorDialectGuardTest`**，预期全部 PASS。
-- [ ] **Step 5：提交** `refactor: model SQL splitting as an explicit lexer state`。
+- [x] **Step 1：补 characterization 测试**（两个测试类各补一组，用同样的输入）：`splits_onTopLevelSemicolonOnly`（`select 1; select 2` → 两句）、`keepsSemicolonInsideQuotesAndComments`（`select ';' -- a;b\n; select "x;y" /* ; */` → 两句）、`dropsEmptyStatements`（`;;select 1;` → 一句）、`keepsBackslashQuoteBehavior`（`select 'a\'; select 2'`：按改动前的实际结果写断言，只锁住现状，不判断对错）。
+- [x] **Step 2：在改代码前运行，确认通过。** `./mvnw -o -ntp -pl batch-worker/atomic -am -Dtest='SqlTaskExecutorTest' -Dsurefire.failIfNoSpecifiedTests=false test`；`./mvnw -o -ntp -pl sdk/java/core -am -Dtest='SqlAtomicHandlerTest' -Dsurefire.failIfNoSpecifiedTests=false test`
+- [x] **Step 3：改成状态枚举。** 每个状态的退出条件与原来的布尔分支一一对应，`prev` 的含义不变。
+- [x] **Step 4：再跑 Step 2 的两条命令，另加 `SqlTaskExecutorHardeningTest`、`SqlTaskExecutorDialectGuardTest`**，预期全部 PASS。
+- [x] **Step 5：提交** `refactor: model SQL splitting as an explicit lexer state`。
 
 ### Task 16：互斥的两个布尔参数改成一个枚举（次要候选）
 
@@ -322,11 +322,11 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - `updateStepInstanceProgress(command, task, FailureDisposition disposition, Instant finishedAt, String outputSummary)` 替换原来的两个布尔参数；方法内 `retryScheduled` 改成 `disposition == RETRY_SCHEDULED`，`cancellationOutcome` 改成 `disposition == CANCELLED`。
 - 不改：`TaskOutcomeStatePolicy.resolveWorkflowEvent`（调用处实参是具名访问器，见复评决策记录）。
 
-- [ ] **Step 1：写失败测试** `FailureDispositionTest`：`(true,false)→CANCELLED`、`(false,true)→RETRY_SCHEDULED`、`(false,false)→NOT_RETRIED`、`(true,true)→CANCELLED`（取消优先，与第 210 行的推导一致）。
-- [ ] **Step 2：运行，确认编译失败。** `-Dtest=FailureDispositionTest`
-- [ ] **Step 3：实现枚举并改两个方法的签名与调用处。** 第 204–216 行算出两个布尔后，紧接着得到 `FailureDisposition disposition = FailureDisposition.of(cancellationOutcome, retryScheduled)`；第 255 行 `partition != null && retryScheduled` 改成读 `disposition`。
-- [ ] **Step 4：跑测试。** `-Dtest='FailureDispositionTest,DefaultTaskOutcomeService*Test,TaskOutcome*Test'`，预期 PASS。
-- [ ] **Step 5：提交** `refactor(orchestrator): pass failure disposition instead of two flags`。
+- [x] **Step 1：写失败测试** `FailureDispositionTest`：`(true,false)→CANCELLED`、`(false,true)→RETRY_SCHEDULED`、`(false,false)→NOT_RETRIED`、`(true,true)→CANCELLED`（取消优先，与第 210 行的推导一致）。
+- [x] **Step 2：运行，确认编译失败。** `-Dtest=FailureDispositionTest`
+- [x] **Step 3：实现枚举并改两个方法的签名与调用处。** 第 204–216 行算出两个布尔后，紧接着得到 `FailureDisposition disposition = FailureDisposition.of(cancellationOutcome, retryScheduled)`；第 255 行 `partition != null && retryScheduled` 改成读 `disposition`。
+- [x] **Step 4：跑测试。** `-Dtest='FailureDispositionTest,DefaultTaskOutcomeService*Test,TaskOutcome*Test'`，预期 PASS。
+- [x] **Step 5：提交** `refactor(orchestrator): pass failure disposition instead of two flags`。
 
 ### Task 17：深嵌套方法拆浅（次要候选）
 
@@ -347,11 +347,11 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 | `KafkaTaskConsumer.refreshConsumerLag:311`（SDK） | `KafkaTaskConsumer*Test` | 否 |
 | `SecurityScanOptions.parse:29` | `SecurityScanOptionsTest` | 否 |
 
-- [ ] **Step 1：没有测试的 4 个方法先补 characterization 测试。** `JsonFormatParser` 至少覆盖 4 种输入：根是数组、根是含 `records` 字段的对象、根是单个对象、空输入，以及 `records` 中夹 `null` 元素的情况。`FixedWidthFormatParser` 覆盖正常行、短行、空行。另外两个各覆盖一条成功路径和一条跳过路径。先在未改动的代码上跑通。
-- [ ] **Step 2：数据通路方法先记录基线计时。** 写一个临时测试（不提交），用同一份生成数据（JSON / 定长各 20 万行，Excel 2 万行）重复解析 5 次，取中位数，记到复评文档。
-- [ ] **Step 3：逐个方法拆浅。** 只用三种手法：守卫条件提前返回或 `continue`；把循环体提成私有方法；按输入形态分派到具名方法（如 `JsonFormatParser` 拆成 `parseRootArray`、`parseRecordsEnvelope`、`parseSingleObject`）。资源仍由原来的 try-with-resources 管理，不改异常翻译边界，不改读取顺序。每个方法单独提交。
-- [ ] **Step 4：每个方法改完就跑它的测试**，预期 PASS。数据通路方法重跑 Step 2 的计时，中位数退化超过 5% 就回退，并在复评文档写明原因。
-- [ ] **Step 5：提交**（每个方法一个提交）`refactor(<模块>): flatten <方法名>`。
+- [x] **Step 1：没有测试的 4 个方法先补 characterization 测试。** `JsonFormatParser` 至少覆盖 4 种输入：根是数组、根是含 `records` 字段的对象、根是单个对象、空输入，以及 `records` 中夹 `null` 元素的情况。`FixedWidthFormatParser` 覆盖正常行、短行、空行。另外两个各覆盖一条成功路径和一条跳过路径。先在未改动的代码上跑通。
+- [x] **Step 2：数据通路方法先记录基线计时。** 写一个临时测试（不提交），用同一份生成数据（JSON / 定长各 20 万行，Excel 2 万行）重复解析 5 次，取中位数，记到复评文档。
+- [x] **Step 3：逐个方法拆浅。** 只用三种手法：守卫条件提前返回或 `continue`；把循环体提成私有方法；按输入形态分派到具名方法（如 `JsonFormatParser` 拆成 `parseRootArray`、`parseRecordsEnvelope`、`parseSingleObject`）。资源仍由原来的 try-with-resources 管理，不改异常翻译边界，不改读取顺序。每个方法单独提交。（SecurityScanOptions.parse 按设计保留，原因见复评文档）
+- [x] **Step 4：每个方法改完就跑它的测试**，预期 PASS。数据通路方法重跑 Step 2 的计时，中位数退化超过 5% 就回退，并在复评文档写明原因。（SqlTaskExecutor 计时结论不确定，未达成 5% 验证，按判断保留，见复评文档）
+- [x] **Step 5：提交**（每个方法一个提交）`refactor(<模块>): flatten <方法名>`。
 
 ### Task 18：空值判断按语义统一（R4，最后执行）
 

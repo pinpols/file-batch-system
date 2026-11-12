@@ -139,46 +139,74 @@ public final class ImportPreprocessPipeline {
         // 若业务需要在解压/解密/转码之后校验，请在 preprocess_pipeline 中显式放置 VERIFY_DIGEST。
         verifyImplicitChecksum(current, payload, template);
       }
+      PreprocessStepContext stepContext =
+          new PreprocessStepContext(payload, template, bypassMode, properties);
       for (Map<String, Object> step : steps) {
         String type = trimToNull(stringProp(step, KEY_TYPE));
         if (type == null) {
           continue;
         }
-        switch (type.toUpperCase(Locale.ROOT)) {
-          case ImportPreprocessStepTypes.UNZIP ->
-            current = unzip(current, step, payload, properties);
-          case ImportPreprocessStepTypes.GUNZIP -> current = gunzip(current, properties);
-          case ImportPreprocessStepTypes.UNTAR ->
-            current = untar(current, step, payload, properties);
-          case ImportPreprocessStepTypes.UNTAR_GZ ->
-            current = untar(gunzip(current, properties), step, payload, properties);
-          case ImportPreprocessStepTypes.AES_GCM_DECRYPT -> {
-            if (!bypassMode) {
-              current = aesGcmDecrypt(current, step, payload);
-            }
-          }
-          case ImportPreprocessStepTypes.VERIFY_DIGEST -> {
-            if (!bypassMode) {
-              verifyDigest(current, step, payload, template);
-            }
-          }
-          case ImportPreprocessStepTypes.VERIFY_RSA_SHA256 -> {
-            if (!bypassMode) {
-              verifyRsaSha256(current, step, payload);
-            }
-          }
-          case ImportPreprocessStepTypes.CHARSET_TRANSCODE ->
-            current = charsetTranscode(current, step);
-          default ->
-            throw new ImportPreprocessException(
-                "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
-        }
+        current = applyStep(current, type, step, stepContext);
       }
       return current;
     } catch (ImportPreprocessException ex) {
       throw ex;
     } catch (Exception ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_FAILED", ex.getMessage(), ex);
+    }
+  }
+
+  /**
+   * 一次预处理运行中不随步骤变化的载荷、模板、bypass 与解压上限。当前字节和步骤配置仍按步传入。
+   */
+  private record PreprocessStepContext(
+      ImportPayload payload,
+      Map<String, Object> template,
+      boolean bypassMode,
+      WorkerImportPayloadProperties properties) {}
+
+  /** 执行单个预处理步骤并返回新的字节内容；bypass 模式下解密与校验类步骤原样透传。 */
+  private static byte[] applyStep(
+      byte[] current, String type, Map<String, Object> step, PreprocessStepContext context)
+      throws GeneralSecurityException {
+    ImportPayload payload = context.payload();
+    Map<String, Object> template = context.template();
+    boolean bypassMode = context.bypassMode();
+    WorkerImportPayloadProperties properties = context.properties();
+    switch (type.toUpperCase(Locale.ROOT)) {
+      case ImportPreprocessStepTypes.UNZIP -> {
+        return unzip(current, step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.GUNZIP -> {
+        return gunzip(current, properties);
+      }
+      case ImportPreprocessStepTypes.UNTAR -> {
+        return untar(current, step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.UNTAR_GZ -> {
+        return untar(gunzip(current, properties), step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.AES_GCM_DECRYPT -> {
+        return bypassMode ? current : aesGcmDecrypt(current, step, payload);
+      }
+      case ImportPreprocessStepTypes.VERIFY_DIGEST -> {
+        if (!bypassMode) {
+          verifyDigest(current, step, payload, template);
+        }
+        return current;
+      }
+      case ImportPreprocessStepTypes.VERIFY_RSA_SHA256 -> {
+        if (!bypassMode) {
+          verifyRsaSha256(current, step, payload);
+        }
+        return current;
+      }
+      case ImportPreprocessStepTypes.CHARSET_TRANSCODE -> {
+        return charsetTranscode(current, step);
+      }
+      default ->
+        throw new ImportPreprocessException(
+            "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
     }
   }
 

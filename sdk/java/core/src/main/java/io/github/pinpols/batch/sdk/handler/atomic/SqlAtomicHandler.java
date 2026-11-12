@@ -78,32 +78,16 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       throws Exception {
     boolean autoCommit = config.defaultAutoCommit();
     boolean originalAutoCommit = conn.getAutoCommit();
-    long totalAffected = 0;
-    Map<String, Object> lastResultSet = null;
+    StatementTotals totals = new StatementTotals();
     try {
       conn.setAutoCommit(autoCommit);
       for (String one : statements) {
-        try (Statement st = conn.createStatement()) {
-          st.setQueryTimeout(config.statementTimeoutSeconds());
-          boolean hasRs = st.execute(one);
-          if (hasRs) {
-            try (ResultSet rs = st.getResultSet()) {
-              lastResultSet = readResultSet(rs);
-            }
-          } else {
-            int affected = st.getUpdateCount();
-            if (affected > 0) totalAffected += affected;
-          }
-        }
+        runStatement(conn, one, totals);
       }
       if (!autoCommit) conn.commit();
     } catch (Exception ex) {
       if (!autoCommit) {
-        try {
-          conn.rollback();
-        } catch (Exception rbEx) {
-          log.warn("rollback failed: {}", ExceptionLogSummary.of(rbEx));
-        }
+        rollbackQuietly(conn);
       }
       throw ex;
     } finally {
@@ -113,15 +97,45 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         log.warn("restore autoCommit failed: {}", ExceptionLogSummary.of(restoreEx));
       }
     }
-    if (lastResultSet != null) {
-      lastResultSet.put("statementCount", statements.size());
-      lastResultSet.put("totalAffectedRows", totalAffected);
-      return lastResultSet;
+    if (EmptyChecks.isNotNull(totals.lastResultSet)) {
+      totals.lastResultSet.put("statementCount", statements.size());
+      totals.lastResultSet.put("totalAffectedRows", totals.totalAffected);
+      return totals.lastResultSet;
     }
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("statementCount", statements.size());
-    out.put("affectedRows", totalAffected);
+    out.put("affectedRows", totals.totalAffected);
     return out;
+  }
+
+  /** 逐条执行的聚合结果:受影响行数累计 + 最后一个 ResultSet。 */
+  private static final class StatementTotals {
+    long totalAffected;
+    Map<String, Object> lastResultSet;
+  }
+
+  private void runStatement(Connection conn, String sql, StatementTotals totals)
+      throws SQLException {
+    try (Statement st = conn.createStatement()) {
+      st.setQueryTimeout(config.statementTimeoutSeconds());
+      boolean hasRs = st.execute(sql);
+      if (!hasRs) {
+        int affected = st.getUpdateCount();
+        if (affected > 0) totals.totalAffected += affected;
+        return;
+      }
+      try (ResultSet rs = st.getResultSet()) {
+        totals.lastResultSet = readResultSet(rs);
+      }
+    }
+  }
+
+  private void rollbackQuietly(Connection conn) {
+    try {
+      conn.rollback();
+    } catch (Exception rbEx) {
+      log.warn("rollback failed: {}", ExceptionLogSummary.of(rbEx));
+    }
   }
 
   /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内的 `;`。简化版,不处理 dollar-quote。 */
@@ -137,27 +151,37 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
   private static final class StatementSplitState {
     private final List<String> statements = new ArrayList<>();
     private final StringBuilder buffer = new StringBuilder();
-    private boolean inSingle;
-    private boolean inDouble;
-    private boolean inLineComment;
-    private boolean inBlockComment;
+    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+    private enum LexState {
+      CODE,
+      LINE_COMMENT,
+      BLOCK_COMMENT,
+      SINGLE_QUOTE,
+      DOUBLE_QUOTE
+    }
+
+    private LexState state = LexState.CODE;
     private char previous;
 
     private void append(char current) {
-      if (inLineComment) {
-        if (current == '\n') inLineComment = false;
-        buffer.append(current);
-      } else if (inBlockComment) {
-        if (previous == '*' && current == '/') inBlockComment = false;
-        buffer.append(current);
-      } else if (inSingle) {
-        if (current == '\'') inSingle = false;
-        buffer.append(current);
-      } else if (inDouble) {
-        if (current == '"') inDouble = false;
-        buffer.append(current);
-      } else {
-        appendSqlCharacter(current);
+      switch (state) {
+        case LINE_COMMENT -> {
+          if (current == '\n') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case BLOCK_COMMENT -> {
+          if (previous == '*' && current == '/') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case SINGLE_QUOTE -> {
+          if (current == '\'') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case DOUBLE_QUOTE -> {
+          if (current == '"') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case CODE -> appendSqlCharacter(current);
       }
       previous = current;
     }
@@ -165,16 +189,16 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     /** 只有普通 SQL 区域的分号可以结束语句；注释起始字符仍原样保留在缓冲区。 */
     private void appendSqlCharacter(char current) {
       if (previous == '-' && current == '-') {
-        inLineComment = true;
+        state = LexState.LINE_COMMENT;
         buffer.append(current);
       } else if (previous == '/' && current == '*') {
-        inBlockComment = true;
+        state = LexState.BLOCK_COMMENT;
         buffer.append(current);
       } else if (current == '\'') {
-        inSingle = true;
+        state = LexState.SINGLE_QUOTE;
         buffer.append(current);
       } else if (current == '"') {
-        inDouble = true;
+        state = LexState.DOUBLE_QUOTE;
         buffer.append(current);
       } else if (current == ';') {
         String rawStatement = buffer.toString();

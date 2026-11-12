@@ -282,40 +282,54 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   private static final class SplitScanner {
     private final List<String> out = new ArrayList<>();
     private final StringBuilder buf = new StringBuilder();
-    private boolean inSingleQuote;
-    private boolean inDoubleQuote;
-    private boolean inLineComment;
-    private boolean inBlockComment;
+    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+    private enum LexState {
+      CODE,
+      LINE_COMMENT,
+      BLOCK_COMMENT,
+      SINGLE_QUOTE,
+      DOUBLE_QUOTE
+    }
+
+    private LexState state = LexState.CODE;
 
     boolean atTopLevel() {
-      return !inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment;
+      return state == LexState.CODE;
     }
 
     void feed(char c, char prev) {
-      if (inLineComment) {
-        if (c == '\n') inLineComment = false;
-      } else if (inBlockComment) {
-        if (prev == '*' && c == '/') inBlockComment = false;
-      } else if (inSingleQuote) {
-        if (c == '\'' && prev != '\\') inSingleQuote = false;
-      } else if (inDoubleQuote) {
-        if (c == '"' && prev != '\\') inDoubleQuote = false;
-      } else if (feedTopLevel(c, prev)) {
-        return; // 分号已切分,不入 buffer
+      switch (state) {
+        case LINE_COMMENT -> {
+          if (c == '\n') state = LexState.CODE;
+        }
+        case BLOCK_COMMENT -> {
+          if (prev == '*' && c == '/') state = LexState.CODE;
+        }
+        case SINGLE_QUOTE -> {
+          if (c == '\'' && prev != '\\') state = LexState.CODE;
+        }
+        case DOUBLE_QUOTE -> {
+          if (c == '"' && prev != '\\') state = LexState.CODE;
+        }
+        case CODE -> {
+          if (feedTopLevel(c, prev)) {
+            return; // 分号已切分,不入 buffer
+          }
+        }
       }
       buf.append(c);
     }
 
-    /** 顶层字符:开注释/开引号置位;遇 `;` 切分并返回 true(调用方不再 append)。 */
+    /** 顶层字符:开注释/开引号切换状态;遇 `;` 切分并返回 true(调用方不再 append)。 */
     private boolean feedTopLevel(char c, char prev) {
       if (c == '-' && prev == '-') {
-        inLineComment = true;
+        state = LexState.LINE_COMMENT;
       } else if (c == '*' && prev == '/') {
-        inBlockComment = true;
+        state = LexState.BLOCK_COMMENT;
       } else if (c == '\'') {
-        inSingleQuote = true;
+        state = LexState.SINGLE_QUOTE;
       } else if (c == '"') {
-        inDoubleQuote = true;
+        state = LexState.DOUBLE_QUOTE;
       } else if (c == ';') {
         flush();
         return true;
@@ -521,33 +535,10 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
           requireNonOsCapableRole(conn);
         }
         if (inv.allSelect) {
-          try (Statement guard = conn.createStatement()) {
-            String setStatementTimeoutSql =
-                "SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L);
-            guard.execute(setStatementTimeoutSql);
-          } catch (SQLException setEx) {
-            String causeSummary = SwallowedExceptionLogger.summary(setEx);
-            log.warn("SET LOCAL statement_timeout failed: {}", causeSummary);
-          }
+          applyReadOnlyStatementTimeout(conn, inv);
         }
         for (String sql : inv.statements) {
-          try (Statement stmt = conn.createStatement()) {
-            stmt.setQueryTimeout(inv.timeoutSec);
-            boolean hasResultSet = stmt.execute(sql);
-            if (hasResultSet) {
-              try (ResultSet rs = stmt.getResultSet()) {
-                FetchResult fr = fetchResults(rs);
-                execResult.lastResultSet = fr.rows;
-                execResult.lastResultRows = fr.actualCount;
-                execResult.truncated = execResult.truncated || fr.truncated;
-              }
-            } else {
-              int affected = stmt.getUpdateCount();
-              if (affected > 0) {
-                execResult.totalAffected += affected;
-              }
-            }
-          }
+          executeStatement(conn, sql, inv, execResult);
         }
         return null;
       });
@@ -577,6 +568,39 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         output);
   }
 
+  /** 全 SELECT 事务内设置 SET LOCAL statement_timeout;失败只告警,不影响后续语句执行。 */
+  private void applyReadOnlyStatementTimeout(Connection conn, SqlInvocation inv) {
+    try (Statement guard = conn.createStatement()) {
+      String setStatementTimeoutSql = "SET LOCAL statement_timeout = " + (inv.timeoutSec * 1000L);
+      guard.execute(setStatementTimeoutSql);
+    } catch (SQLException setEx) {
+      String causeSummary = SwallowedExceptionLogger.summary(setEx);
+      log.warn("SET LOCAL statement_timeout failed: {}", causeSummary);
+    }
+  }
+
+  /** 执行单条语句:有结果集则读取并覆盖"最后结果集",否则累加受影响行数。 */
+  private void executeStatement(
+      Connection conn, String sql, SqlInvocation inv, ExecResult execResult) throws SQLException {
+    try (Statement stmt = conn.createStatement()) {
+      stmt.setQueryTimeout(inv.timeoutSec);
+      boolean hasResultSet = stmt.execute(sql);
+      if (!hasResultSet) {
+        int affected = stmt.getUpdateCount();
+        if (affected > 0) {
+          execResult.totalAffected += affected;
+        }
+        return;
+      }
+      try (ResultSet rs = stmt.getResultSet()) {
+        FetchResult fr = fetchResults(rs);
+        execResult.lastResultSet = fr.rows;
+        execResult.lastResultRows = fr.actualCount;
+        execResult.truncated = execResult.truncated || fr.truncated;
+      }
+    }
+  }
+
   /** 单次执行结果聚合 — 给 lambda 内闭包写。 */
   private static final class ExecResult {
     long totalAffected;
@@ -594,27 +618,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     while (rs.next()) {
       actual++;
       if (rows.size() < props.getMaxResultRows()) {
-        Map<String, Object> row = new LinkedHashMap<>();
-        for (int i = 1; i <= colCount; i++) {
-          String type = md.getColumnTypeName(i);
-          if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
-            String json = rs.getString(i);
-            row.put(
-                md.getColumnLabel(i),
-                EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class));
-          } else {
-            Object value = rs.getObject(i);
-            if (value instanceof Array sqlArray) {
-              try {
-                value = sqlArray.getArray();
-              } finally {
-                sqlArray.free();
-              }
-            }
-            row.put(md.getColumnLabel(i), value);
-          }
-        }
-        rows.add(row);
+        rows.add(readRow(rs, md, colCount));
       } else if (!trunc) {
         log.warn("sql resultSet truncated at maxResultRows={}", props.getMaxResultRows());
         trunc = true;
@@ -622,6 +626,35 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       }
     }
     return new FetchResult(rows, actual, trunc);
+  }
+
+  private Map<String, Object> readRow(ResultSet rs, ResultSetMetaData md, int colCount)
+      throws SQLException {
+    Map<String, Object> row = new LinkedHashMap<>();
+    for (int i = 1; i <= colCount; i++) {
+      // 先取值再取列标签,保持与原实现一致的 JDBC 调用顺序
+      Object value = readColumn(rs, md, i);
+      row.put(md.getColumnLabel(i), value);
+    }
+    return row;
+  }
+
+  /** json/jsonb 列解析为对象;SQL 数组展开为 Java 数组并释放;其余原样返回。 */
+  private Object readColumn(ResultSet rs, ResultSetMetaData md, int index) throws SQLException {
+    String type = md.getColumnTypeName(index);
+    if ("json".equalsIgnoreCase(type) || "jsonb".equalsIgnoreCase(type)) {
+      String json = rs.getString(index);
+      return EmptyChecks.isNull(json) ? null : JsonUtils.fromJson(json, Object.class);
+    }
+    Object value = rs.getObject(index);
+    if (value instanceof Array sqlArray) {
+      try {
+        return sqlArray.getArray();
+      } finally {
+        sqlArray.free();
+      }
+    }
+    return value;
   }
 
   // ─── helper records / exceptions ────────────────────────────────────────────

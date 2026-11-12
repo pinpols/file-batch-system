@@ -13,6 +13,7 @@ import io.github.pinpols.batch.common.spi.task.ResourceKind;
 import io.github.pinpols.batch.common.spi.task.TaskContext;
 import io.github.pinpols.batch.common.spi.task.TaskResult;
 import java.math.BigInteger;
+import java.sql.Array;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
@@ -211,6 +212,33 @@ class SqlTaskExecutorTest {
       assertThat(SqlTaskExecutor.splitStatements("SELECT $1 WHERE a=$1; SELECT 2"))
           .containsExactly("SELECT $1 WHERE a=$1", "SELECT 2");
     }
+
+    @Test
+    @DisplayName("只有顶层分号切分语句, 前后空白被裁掉")
+    void shouldSplitOnTopLevelSemicolonOnly() {
+      assertThat(SqlTaskExecutor.splitStatements("select 1; select 2"))
+          .containsExactly("select 1", "select 2");
+    }
+
+    @Test
+    @DisplayName("引号与注释混用时各自内部的分号都应保留")
+    void shouldKeepSemicolon_whenQuotesAndCommentsMixed() {
+      assertThat(SqlTaskExecutor.splitStatements("select ';' -- a;b\n; select \"x;y\" /* ; */"))
+          .containsExactly("select ';' -- a;b", "select \"x;y\" /* ; */");
+    }
+
+    @Test
+    @DisplayName("纯分号与空白产生的空语句应被丢弃")
+    void shouldDropEmptyStatements() {
+      assertThat(SqlTaskExecutor.splitStatements(";;select 1;")).containsExactly("select 1");
+    }
+
+    @Test
+    @DisplayName("单引号内的反斜杠加引号按转义处理(锁定现状, 不代表正确)")
+    void shouldTreatBackslashQuoteAsEscape_whenInsideSingleQuotes() {
+      assertThat(SqlTaskExecutor.splitStatements("select 'a\\'; select 2'"))
+          .containsExactly("select 'a\\'; select 2'");
+    }
   }
 
   // ─── Type detection ─────────────────────────────────────────────────────────
@@ -387,6 +415,115 @@ class SqlTaskExecutorTest {
       assertThat(r.message()).contains("syntax error");
       verify(conn).rollback();
       verify(conn, never()).commit();
+    }
+
+    @Test
+    @DisplayName("结果列为 json/jsonb 时应解析为对象, 空值保持为空, 数组列应展开并释放")
+    void shouldMapJsonAndArrayColumns_whenSelectExecutes() throws Exception {
+      Connection conn = mock(Connection.class);
+      Statement stmt = mock(Statement.class);
+      ResultSet rs = mock(ResultSet.class);
+      ResultSetMetaData md = mock(ResultSetMetaData.class);
+      Array sqlArray = mock(Array.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(true);
+      when(conn.createStatement()).thenReturn(stmt);
+      when(stmt.execute(anyString())).thenReturn(true);
+      when(stmt.getResultSet()).thenReturn(rs);
+      when(rs.getMetaData()).thenReturn(md);
+      when(md.getColumnCount()).thenReturn(3);
+      when(md.getColumnLabel(1)).thenReturn("doc");
+      when(md.getColumnTypeName(1)).thenReturn("JSONB");
+      when(md.getColumnLabel(2)).thenReturn("nothing");
+      when(md.getColumnTypeName(2)).thenReturn("json");
+      when(md.getColumnLabel(3)).thenReturn("tags");
+      when(md.getColumnTypeName(3)).thenReturn("_text");
+      when(rs.next()).thenReturn(true, false);
+      when(rs.getString(1)).thenReturn("{\"a\":1}");
+      when(rs.getString(2)).thenReturn(null);
+      when(rs.getObject(3)).thenReturn(sqlArray);
+      when(sqlArray.getArray()).thenReturn(new String[] {"x", "y"});
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "SELECT doc, nothing, tags")));
+
+      assertThat(r.success()).isTrue();
+      @SuppressWarnings("unchecked")
+      Map<String, Object> row =
+          (Map<String, Object>) ((List<?>) r.output().get("lastResultSet")).get(0);
+      assertThat(row)
+          .containsEntry("doc", Map.of("a", 1))
+          .containsKey("nothing")
+          .containsEntry("nothing", null)
+          .containsEntry("tags", new String[] {"x", "y"});
+      verify(sqlArray).free();
+    }
+
+    @Test
+    @DisplayName("结果行数超过上限时应只保留上限行, 仍统计真实行数并标记截断")
+    void shouldTruncateResultSet_whenRowsExceedMax() throws Exception {
+      props.setMaxResultRows(2);
+      Connection conn = mock(Connection.class);
+      Statement stmt = mock(Statement.class);
+      ResultSet rs = mock(ResultSet.class);
+      ResultSetMetaData md = mock(ResultSetMetaData.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(true);
+      when(conn.createStatement()).thenReturn(stmt);
+      when(stmt.execute(anyString())).thenReturn(true);
+      when(stmt.getResultSet()).thenReturn(rs);
+      when(rs.getMetaData()).thenReturn(md);
+      when(md.getColumnCount()).thenReturn(1);
+      when(md.getColumnLabel(1)).thenReturn("id");
+      when(rs.next()).thenReturn(true, true, true, true, false);
+      when(rs.getObject(1)).thenReturn(1);
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "SELECT id FROM t")));
+
+      assertThat(r.success()).isTrue();
+      assertThat(r.output()).containsEntry("lastResultRows", 4);
+      assertThat(r.output()).containsEntry("resultTruncated", true);
+      assertThat(r.output().get("lastResultSet")).asInstanceOf(LIST).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("设置只读语句超时失败时应只告警并继续执行语句")
+    void shouldContinue_whenSetLocalTimeoutFails() throws Exception {
+      Connection conn = mock(Connection.class);
+      Statement guard = mock(Statement.class);
+      Statement stmt = mock(Statement.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(false);
+      when(conn.createStatement()).thenReturn(guard, stmt);
+      when(guard.execute(anyString())).thenThrow(new SQLException("no set local"));
+      when(stmt.execute(anyString())).thenReturn(false);
+      when(stmt.getUpdateCount()).thenReturn(0);
+
+      TaskResult r = executor.execute(ctxWithParams(Map.of("sql", "SELECT 1")));
+
+      assertThat(r.success()).isTrue();
+      verify(stmt).setQueryTimeout(30);
+    }
+
+    @Test
+    @DisplayName("语句因超时被取消时应按超时错误码失败, 其它错误按执行失败")
+    void shouldClassifyTimeout_whenStatementCancelled() throws Exception {
+      Connection conn = mock(Connection.class);
+      Statement stmt = mock(Statement.class);
+      when(ds.getConnection()).thenReturn(conn);
+      when(conn.getAutoCommit()).thenReturn(true);
+      when(conn.createStatement()).thenReturn(stmt);
+      when(stmt.execute(anyString()))
+          .thenThrow(new SQLException("canceled", "57014"))
+          .thenThrow(new SQLException("Query Timeout exceeded"))
+          .thenThrow(new SQLException("boom"));
+
+      TaskResult byState = executor.execute(ctxWithParams(Map.of("sql", "UPDATE t SET x = 1")));
+      TaskResult byMessage = executor.execute(ctxWithParams(Map.of("sql", "UPDATE t SET x = 1")));
+      TaskResult other = executor.execute(ctxWithParams(Map.of("sql", "UPDATE t SET x = 1")));
+
+      assertThat(byState.output()).containsEntry("error_code", "TIMEOUT");
+      assertThat(byMessage.output()).containsEntry("error_code", "TIMEOUT");
+      assertThat(other.output()).containsEntry("error_code", "EXECUTION_FAILED");
     }
   }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.enums.FileStatus;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.worker.core.infrastructure.PipelineRuntimeKeys;
 import io.github.pinpols.batch.worker.core.infrastructure.PlatformFileRecordRepository;
@@ -310,27 +311,9 @@ public class ValidateStep implements ImportStageStep {
         } catch (Exception exception) {
           SwallowedExceptionLogger.warn(ValidateStep.class, "catch:Exception", exception);
 
-          ValidationErrorOutcome outcome = recordValidationError(
-              context,
-              recordNo,
-              ImportValidationErrorCode.TYPE_INVALID.code(),
-              exception.getMessage(),
-              line);
-          if (outcome.stop()) {
-            ImportStageResult failureResult = ImportStageResult.failure(
-                stage(),
-                outcome.errorCode(),
-                "error.import.validate.row_invalid",
-                new Object[] {outcome.errorMessage()},
-                outcome.errorMessage(),
-                objectMapper);
-            return new StreamingValidationResult(
-                validatedCount, loadedCandidateCount, failureResult);
-          }
-          if (!recordGovernanceService.withinThreshold(context)) {
-            recordGovernanceService.markThresholdExceeded(context);
-            ImportStageResult failureResult = ImportStageResult.failure(
-                stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
+          ImportStageResult failureResult =
+              handleUnparsableLine(context, recordNo, line, exception);
+          if (EmptyChecks.isNotNull(failureResult)) {
             return new StreamingValidationResult(
                 validatedCount, loadedCandidateCount, failureResult);
           }
@@ -365,6 +348,32 @@ public class ValidateStep implements ImportStageStep {
       }
     }
     return new StreamingValidationResult(validatedCount, loadedCandidateCount, null);
+  }
+
+  /** 行无法反序列化时登记坏行；返回非空表示需终止整个阶段，返回 null 表示跳过该行继续。 */
+  private ImportStageResult handleUnparsableLine(
+      ImportJobContext context, long recordNo, String line, Exception exception) {
+    ValidationErrorOutcome outcome = recordValidationError(
+        context,
+        recordNo,
+        ImportValidationErrorCode.TYPE_INVALID.code(),
+        exception.getMessage(),
+        line);
+    if (outcome.stop()) {
+      return ImportStageResult.failure(
+          stage(),
+          outcome.errorCode(),
+          "error.import.validate.row_invalid",
+          new Object[] {outcome.errorMessage()},
+          outcome.errorMessage(),
+          objectMapper);
+    }
+    if (!recordGovernanceService.withinThreshold(context)) {
+      recordGovernanceService.markThresholdExceeded(context);
+      return ImportStageResult.failure(
+          stage(), ERR_SKIP_THRESHOLD_EXCEEDED, MSG_SKIP_THRESHOLD_EXCEEDED);
+    }
+    return null;
   }
 
   private ImportStageResult chunkFailure(ChunkProcessResult result) {
