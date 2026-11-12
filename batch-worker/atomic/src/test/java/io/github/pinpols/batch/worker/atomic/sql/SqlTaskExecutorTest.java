@@ -450,10 +450,11 @@ class SqlTaskExecutorTest {
       @SuppressWarnings("unchecked")
       Map<String, Object> row =
           (Map<String, Object>) ((List<?>) r.output().get("lastResultSet")).get(0);
-      assertThat(row).containsEntry("doc", Map.of("a", 1));
-      assertThat(row).containsKey("nothing");
-      assertThat(row).containsEntry("nothing", null);
-      assertThat(row).containsEntry("tags", new String[] {"x", "y"});
+      assertThat(row)
+          .containsEntry("doc", Map.of("a", 1))
+          .containsKey("nothing")
+          .containsEntry("nothing", null)
+          .containsEntry("tags", new String[] {"x", "y"});
       verify(sqlArray).free();
     }
 
