@@ -977,11 +977,13 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     for (int c = headerRow.getFirstCellNum(); c < headerRow.getLastCellNum(); c++) {
       String header =
           TenantConfigPackageExcelValueSupport.normalize(fmt.formatCellValue(headerRow.getCell(c)));
-      if (Texts.hasText(header) && EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
-        throw BizException.of(
-            ResultCode.INVALID_ARGUMENT,
-            ResultCode.INVALID_ARGUMENT.detailKey(),
-            "sheet [" + sheetName + "] contains duplicate headers: " + header);
+      if (Texts.hasText(header)) {
+        if (EmptyChecks.isNotNull(index.putIfAbsent(header, c))) {
+          throw BizException.of(
+              ResultCode.INVALID_ARGUMENT,
+              ResultCode.INVALID_ARGUMENT.detailKey(),
+              "sheet [" + sheetName + "] contains duplicate headers: " + header);
+        }
       }
     }
     return index;

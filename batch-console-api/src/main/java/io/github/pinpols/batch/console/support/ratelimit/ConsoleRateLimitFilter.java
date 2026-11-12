@@ -86,14 +86,16 @@ public class ConsoleRateLimitFilter extends OncePerRequestFilter {
       throws IOException {
     // ── 1. 登录接口：IP 限流 ───────────────────────────────────────────────
     boolean passwordLogin = HttpMethod.POST.matches(method) && LOGIN_PATH.equals(path);
-    if (passwordLogin && !loginIpRateLimiter.tryAcquire(request)) {
-      String ip = request.getRemoteAddr();
-      String sanitizedIp = LogSanitizer.value(ip);
-      String sanitizedPath = LogSanitizer.value(path);
-      log.warn("Console login rate limit triggered: ip={} path={}", sanitizedIp, sanitizedPath);
-      responseWriter.write(
-          response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
-      return true;
+    if (passwordLogin) {
+      if (!loginIpRateLimiter.tryAcquire(request)) {
+        String ip = request.getRemoteAddr();
+        String sanitizedIp = LogSanitizer.value(ip);
+        String sanitizedPath = LogSanitizer.value(path);
+        log.warn("Console login rate limit triggered: ip={} path={}", sanitizedIp, sanitizedPath);
+        responseWriter.write(
+            response, HttpStatus.TOO_MANY_REQUESTS, ResultCode.RATE_LIMITED, "登录请求过于频繁，请稍后重试");
+        return true;
+      }
     }
 
     return false;
