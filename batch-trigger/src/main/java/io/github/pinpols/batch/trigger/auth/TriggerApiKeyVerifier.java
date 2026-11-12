@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.InstantSource;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -100,7 +101,7 @@ public class TriggerApiKeyVerifier {
     if (!principalCanAuthorizeExternalEvent) {
       return false;
     }
-    String serializedScopes = Optional.ofNullable(principal.scopes()).orElse("");
+    String serializedScopes = Objects.requireNonNullElse(principal.scopes(), "");
     String[] scopeTokens = serializedScopes.split("[,\\s]+");
     Stream<String> nonBlankScopes =
         Arrays.stream(scopeTokens).filter(scope -> EmptyChecks.isNotBlank(scope));

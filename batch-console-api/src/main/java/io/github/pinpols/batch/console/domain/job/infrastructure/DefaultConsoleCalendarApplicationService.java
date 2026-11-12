@@ -25,7 +25,6 @@ import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.Cal
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -151,7 +150,7 @@ public class DefaultConsoleCalendarApplicationService implements ConsoleCalendar
             .holidayName(item.getHolidayName())
             .description(item.getDescription())
             .build())
-        .collect(Collectors.toList());
+        .toList();
     holidayMapper.batchInsert(list);
     cacheInvalidationService.evictBusinessCalendar(tenantId, calendar.calendarCode());
   }

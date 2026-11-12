@@ -4,8 +4,8 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
-import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.application.config.ConsoleQuotaPolicyApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.QuotaPolicySaveRequest;
@@ -80,28 +80,16 @@ public class DefaultConsoleQuotaPolicyApplicationService
     TenantQuotaPolicyUpdateParam param = TenantQuotaPolicyUpdateParam.builder()
         .tenantId(tenantId)
         .id(id)
-        .maxRunningJobsPerTenant(
-            request.getMaxRunningJobsPerTenant() != null
-                ? request.getMaxRunningJobsPerTenant()
-                : existing.maxRunningJobsPerTenant())
-        .maxPartitionsPerTenant(
-            request.getMaxPartitionsPerTenant() != null
-                ? request.getMaxPartitionsPerTenant()
-                : existing.maxPartitionsPerTenant())
+        .maxRunningJobsPerTenant(Nullables.coalesce(
+            request.getMaxRunningJobsPerTenant(), existing.maxRunningJobsPerTenant()))
+        .maxPartitionsPerTenant(Nullables.coalesce(
+            request.getMaxPartitionsPerTenant(), existing.maxPartitionsPerTenant()))
         .maxQpsPerTenant(
-            request.getMaxQpsPerTenant() != null
-                ? request.getMaxQpsPerTenant()
-                : existing.maxQpsPerTenant())
+            Nullables.coalesce(request.getMaxQpsPerTenant(), existing.maxQpsPerTenant()))
         .fairShareWeight(
-            request.getFairShareWeight() != null
-                ? request.getFairShareWeight()
-                : existing.fairShareWeight())
-        .enabled(
-            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
-        .description(
-            EmptyChecks.isNotNull(request.getDescription())
-                ? request.getDescription()
-                : existing.description())
+            Nullables.coalesce(request.getFairShareWeight(), existing.fairShareWeight()))
+        .enabled(Nullables.coalesce(request.getEnabled(), existing.enabled()))
+        .description(Nullables.coalesce(request.getDescription(), existing.description()))
         .build();
     quotaPolicyMapper.update(param);
     cacheInvalidationService.evictQuotaPolicies(tenantId);

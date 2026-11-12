@@ -38,7 +38,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
@@ -170,7 +169,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         return false;
       }
 
-      int nextRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1;
+      int nextRetryCount = Objects.requireNonNullElse(partition.getRetryCount(), 0) + 1;
       if (nextRetryCount > retryPolicyPlan.maxRetryCount()) {
         // 重试耗尽：落死信（不会回到正常 dispatch）。
         createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
@@ -562,7 +561,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         throw BizException.of(ResultCode.CONFLICT, "error.dead_letter.replay_conflict");
       }
       Instant replayAt = BatchDateTimeSupport.utcNow();
-      int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
+      int replayCount = Objects.requireNonNullElse(deadLetterTask.getReplayCount(), 0) + 1;
       // 业务重排队失败只撤销此保存点之后的复位/Outbox，失败次数和原因仍在本事务提交。
       Object savepoint = status.createSavepoint();
       try {

@@ -30,7 +30,6 @@ import io.github.pinpols.batch.orchestrator.mapper.RetryScheduleMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -148,7 +147,7 @@ public final class RetryRequeueCoordinator {
       JobStepInstanceEntity stepInstance =
           jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
       if (stepInstance != null) {
-        int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+        int nextRetryCount = Objects.requireNonNullElse(stepInstance.getRetryCount(), 0) + 1;
         jobStepInstanceMapper.resetForRetryByJobTaskId(
             tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
       }
@@ -188,7 +187,7 @@ public final class RetryRequeueCoordinator {
     JobStepInstanceEntity stepInstance =
         jobStepInstanceMapper.selectByJobTaskId(tenantId, task.getId());
     if (stepInstance != null) {
-      int nextRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0) + 1;
+      int nextRetryCount = Objects.requireNonNullElse(stepInstance.getRetryCount(), 0) + 1;
       jobStepInstanceMapper.resetForRetryByJobTaskId(
           tenantId, task.getId(), nextRetryCount, StepInstanceStatus.READY.code());
     }

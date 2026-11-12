@@ -12,7 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.Set;
 
 /** Worker 回报后的终态与活动节点纯决策策略。 */
@@ -67,8 +67,8 @@ final class TaskOutcomeStatePolicy {
 
   private static WorkflowNodeRunEntity preferNodeRunWithGreaterOrEqualSequence(
       WorkflowNodeRunEntity existing, WorkflowNodeRunEntity incoming) {
-    Integer incomingRunSequence = Optional.ofNullable(incoming.getRunSeq()).orElse(0);
-    Integer existingRunSequence = Optional.ofNullable(existing.getRunSeq()).orElse(0);
+    Integer incomingRunSequence = Objects.requireNonNullElse(incoming.getRunSeq(), 0);
+    Integer existingRunSequence = Objects.requireNonNullElse(existing.getRunSeq(), 0);
     return incomingRunSequence >= existingRunSequence ? incoming : existing;
   }
 

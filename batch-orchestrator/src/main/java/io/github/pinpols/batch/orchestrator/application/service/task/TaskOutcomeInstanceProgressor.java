@@ -29,7 +29,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -179,7 +178,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     if (progressUpdated <= 0) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
     }
-    Long currentVersion = Optional.ofNullable(jobInstance.getVersion()).orElse(0L);
+    Long currentVersion = Objects.requireNonNullElse(jobInstance.getVersion(), 0L);
     Long nextVersion = currentVersion + 1;
     jobInstance.setVersion(nextVersion);
     jobInstance.setInstanceStatus(instanceStatus);
@@ -228,8 +227,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     WorkflowNodeRunEntity linkedNode =
         workflowMappers.workflowNodeRunMapper.selectByWorkflowRunId(workflowRun.getId()).stream()
             .filter(node -> jobInstanceId.equals(node.getJobInstanceId()))
-            .max(Comparator.comparing(
-                node -> Optional.ofNullable(node.getRunSeq()).orElse(0)))
+            .max(Comparator.comparing(node -> Objects.requireNonNullElse(node.getRunSeq(), 0)))
             .orElse(null);
     boolean linkedNodeIsMissingOrTerminal = EmptyChecks.isNull(linkedNode)
         || WorkflowNodeRunStatus.FAILED.code().equals(linkedNode.getNodeStatus())

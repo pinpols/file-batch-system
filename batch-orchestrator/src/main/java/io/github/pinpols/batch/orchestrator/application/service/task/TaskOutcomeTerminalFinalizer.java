@@ -12,7 +12,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
@@ -63,9 +63,9 @@ final class TaskOutcomeTerminalFinalizer {
           .counter(
               "batch.job.failure",
               "tenant",
-              Optional.ofNullable(command.tenantId()).orElse("unknown"),
+              Objects.requireNonNullElse(command.tenantId(), "unknown"),
               "jobCode",
-              Optional.ofNullable(jobInstance.getJobCode()).orElse("unknown"),
+              Objects.requireNonNullElse(jobInstance.getJobCode(), "unknown"),
               "class",
               instanceFailureClass)
           .increment();

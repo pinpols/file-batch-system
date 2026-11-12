@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
@@ -243,11 +244,8 @@ public class DefaultConsoleJobDefinitionApplicationService
       JobDefinitionMaintenanceUpdateParam param,
       JobDefinitionUpdateRequest request,
       JobDefinitionView existing) {
-    param.setTriggerMode(
-        EmptyChecks.isNotNull(request.getTriggerMode())
-            ? request.getTriggerMode()
-            : existing.getTriggerMode());
-    param.setJobName(request.getJobName() != null ? request.getJobName() : existing.getJobName());
+    param.setTriggerMode(Nullables.coalesce(request.getTriggerMode(), existing.getTriggerMode()));
+    param.setJobName(Nullables.coalesce(request.getJobName(), existing.getJobName()));
     param.setQueueCode(
         request.getQueueCode() != null
             ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
@@ -257,7 +255,7 @@ public class DefaultConsoleJobDefinitionApplicationService
             ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
             : existing.getWorkerGroup());
     param.setScheduleExpr(
-        request.getScheduleExpr() != null ? request.getScheduleExpr() : existing.getScheduleExpr());
+        Nullables.coalesce(request.getScheduleExpr(), existing.getScheduleExpr()));
     param.setCalendarCode(
         request.getCalendarCode() != null
             ? CodeNormalizer.toConfigFormOrNull(request.getCalendarCode())
@@ -266,16 +264,11 @@ public class DefaultConsoleJobDefinitionApplicationService
         request.getWindowCode() != null
             ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
             : existing.getWindowCode());
-    param.setRetryPolicy(
-        request.getRetryPolicy() != null ? request.getRetryPolicy() : existing.getRetryPolicy());
+    param.setRetryPolicy(Nullables.coalesce(request.getRetryPolicy(), existing.getRetryPolicy()));
     param.setRetryMaxCount(
-        request.getRetryMaxCount() != null
-            ? request.getRetryMaxCount()
-            : existing.getRetryMaxCount());
+        Nullables.coalesce(request.getRetryMaxCount(), existing.getRetryMaxCount()));
     param.setTimeoutSeconds(
-        request.getTimeoutSeconds() != null
-            ? request.getTimeoutSeconds()
-            : existing.getTimeoutSeconds());
+        Nullables.coalesce(request.getTimeoutSeconds(), existing.getTimeoutSeconds()));
   }
 
   /** 默认参数仍在监控值装配后解析，保留未提交、脱敏回传和显式覆盖的区别。 */
@@ -284,38 +277,23 @@ public class DefaultConsoleJobDefinitionApplicationService
       JobDefinitionUpdateRequest request,
       JobDefinitionView existing) {
     param.setShardStrategy(
-        request.getShardStrategy() != null
-            ? request.getShardStrategy()
-            : existing.getShardStrategy());
+        Nullables.coalesce(request.getShardStrategy(), existing.getShardStrategy()));
     param.setExecutionMode(
-        request.getExecutionMode() != null
-            ? request.getExecutionMode()
-            : existing.getExecutionMode());
+        Nullables.coalesce(request.getExecutionMode(), existing.getExecutionMode()));
     param.setWatermarkField(
-        request.getWatermarkField() != null
-            ? request.getWatermarkField()
-            : existing.getWatermarkField());
+        Nullables.coalesce(request.getWatermarkField(), existing.getWatermarkField()));
     param.setExecutionHandler(
-        EmptyChecks.isNotNull(request.getExecutionHandler())
-            ? request.getExecutionHandler()
-            : existing.getExecutionHandler());
-    param.setParamSchema(
-        EmptyChecks.isNotNull(request.getParamSchema())
-            ? request.getParamSchema()
-            : existing.getParamSchema());
-    param.setPriority(
-        EmptyChecks.isNotNull(request.getPriority())
-            ? request.getPriority()
-            : existing.getPriority());
+        Nullables.coalesce(request.getExecutionHandler(), existing.getExecutionHandler()));
+    param.setParamSchema(Nullables.coalesce(request.getParamSchema(), existing.getParamSchema()));
+    param.setPriority(Nullables.coalesce(request.getPriority(), existing.getPriority()));
     if (EmptyChecks.isNotNull(request.getDefaultParams())) {
       String defaultParams =
           resolveDefaultParams(request.getDefaultParams(), existing.getDefaultParams());
       param.setDefaultParams(defaultParams);
       param.setDefaultParamsSpecified(true);
     }
-    param.setEnabled(request.getEnabled() != null ? request.getEnabled() : existing.getEnabled());
-    param.setDescription(
-        request.getDescription() != null ? request.getDescription() : existing.getDescription());
+    param.setEnabled(Nullables.coalesce(request.getEnabled(), existing.getEnabled()));
+    param.setDescription(Nullables.coalesce(request.getDescription(), existing.getDescription()));
   }
 
   private void applyCreateExecutionSettings(

@@ -63,7 +63,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.TreeMap;
 import java.util.function.Function;
 import lombok.Builder;
@@ -1007,7 +1006,7 @@ public class DefaultCompensationService implements CompensationService {
     result.put(KEY_ACTION, "DLQ_VERIFIED_UNKNOWN_OUTCOME_NEW_WORKFLOW");
     result.put("deadLetterId", deadLetterId);
     result.put("sourceTaskId", task.getId());
-    int replayCount = Optional.ofNullable(deadLetter.getReplayCount()).orElse(0) + 1;
+    int replayCount = Objects.requireNonNullElse(deadLetter.getReplayCount(), 0) + 1;
     DeadLetterTaskMarkReplaySuccessParam deadLetterTaskMarkReplaySuccessParam =
         DeadLetterTaskMarkReplaySuccessParam.builder()
             .tenantId(tenantId)

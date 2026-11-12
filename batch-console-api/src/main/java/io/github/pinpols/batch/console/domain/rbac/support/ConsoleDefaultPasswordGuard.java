@@ -4,7 +4,6 @@ import io.github.pinpols.batch.common.config.BatchProfileSupport;
 import io.github.pinpols.batch.console.domain.rbac.entity.ConsoleUserAccountEntity;
 import io.github.pinpols.batch.console.domain.rbac.mapper.ConsoleUserAccountMapper;
 import java.util.List;
-import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -55,7 +54,7 @@ public class ConsoleDefaultPasswordGuard {
     List<String> stillDefault = accounts.stream()
         .filter(a -> usesFactoryDefault(a.getPasswordHash()))
         .map(ConsoleUserAccountEntity::getUsername)
-        .collect(Collectors.toList());
+        .toList();
     if (stillDefault.isEmpty()) {
       return;
     }

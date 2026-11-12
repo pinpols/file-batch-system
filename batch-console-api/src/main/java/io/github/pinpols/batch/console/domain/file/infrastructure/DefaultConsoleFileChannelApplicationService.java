@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.common.utils.SecretMasking;
 import io.github.pinpols.batch.console.domain.file.application.ConsoleFileChannelApplicationService;
 import io.github.pinpols.batch.console.domain.file.application.contract.query.FileChannelQueryRequest;
@@ -116,10 +117,7 @@ public class DefaultConsoleFileChannelApplicationService
     FileChannelConfigUpdateParam param = new FileChannelConfigUpdateParam();
     param.setTenantId(tenantId);
     param.setId(id);
-    param.setChannelName(
-        EmptyChecks.isNotNull(request.getChannelName())
-            ? request.getChannelName()
-            : existing.channelName());
+    param.setChannelName(Nullables.coalesce(request.getChannelName(), existing.channelName()));
     String updatedChannelType = EmptyChecks.isNotNull(request.getChannelType())
         ? normalizeChannelType(request.getChannelType())
         : existing.channelType();
@@ -133,8 +131,7 @@ public class DefaultConsoleFileChannelApplicationService
       targetEndpoint = existing.targetEndpoint();
     }
     param.setTargetEndpoint(targetEndpoint);
-    param.setAuthType(
-        EmptyChecks.isNotNull(request.getAuthType()) ? request.getAuthType() : existing.authType());
+    param.setAuthType(Nullables.coalesce(request.getAuthType(), existing.authType()));
     String requestedConfigJson = request.getConfigJson();
     String configJson;
     if (EmptyChecks.isNotNull(requestedConfigJson)) {
@@ -146,15 +143,10 @@ public class DefaultConsoleFileChannelApplicationService
     }
     param.setConfigJson(configJson);
     param.setReceiptPolicy(
-        EmptyChecks.isNotNull(request.getReceiptPolicy())
-            ? request.getReceiptPolicy()
-            : existing.receiptPolicy());
+        Nullables.coalesce(request.getReceiptPolicy(), existing.receiptPolicy()));
     param.setTimeoutSeconds(
-        request.getTimeoutSeconds() != null
-            ? request.getTimeoutSeconds()
-            : existing.timeoutSeconds());
-    param.setEnabled(
-        EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled());
+        Nullables.coalesce(request.getTimeoutSeconds(), existing.timeoutSeconds()));
+    param.setEnabled(Nullables.coalesce(request.getEnabled(), existing.enabled()));
     param.setUpdatedBy(operator);
     mapper.updateFileChannelConfig(param);
     FileChannelConfigQueryView updatedChannelRow = mapper.selectById(tenantId, id);
