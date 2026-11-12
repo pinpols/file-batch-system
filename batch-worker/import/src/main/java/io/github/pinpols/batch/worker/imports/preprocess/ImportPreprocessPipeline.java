@@ -144,41 +144,60 @@ public final class ImportPreprocessPipeline {
         if (type == null) {
           continue;
         }
-        switch (type.toUpperCase(Locale.ROOT)) {
-          case ImportPreprocessStepTypes.UNZIP ->
-            current = unzip(current, step, payload, properties);
-          case ImportPreprocessStepTypes.GUNZIP -> current = gunzip(current, properties);
-          case ImportPreprocessStepTypes.UNTAR ->
-            current = untar(current, step, payload, properties);
-          case ImportPreprocessStepTypes.UNTAR_GZ ->
-            current = untar(gunzip(current, properties), step, payload, properties);
-          case ImportPreprocessStepTypes.AES_GCM_DECRYPT -> {
-            if (!bypassMode) {
-              current = aesGcmDecrypt(current, step, payload);
-            }
-          }
-          case ImportPreprocessStepTypes.VERIFY_DIGEST -> {
-            if (!bypassMode) {
-              verifyDigest(current, step, payload, template);
-            }
-          }
-          case ImportPreprocessStepTypes.VERIFY_RSA_SHA256 -> {
-            if (!bypassMode) {
-              verifyRsaSha256(current, step, payload);
-            }
-          }
-          case ImportPreprocessStepTypes.CHARSET_TRANSCODE ->
-            current = charsetTranscode(current, step);
-          default ->
-            throw new ImportPreprocessException(
-                "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
-        }
+        current = applyStep(current, type, step, payload, template, bypassMode, properties);
       }
       return current;
     } catch (ImportPreprocessException ex) {
       throw ex;
     } catch (Exception ex) {
       throw new ImportPreprocessException("IMPORT_PREPROCESS_FAILED", ex.getMessage(), ex);
+    }
+  }
+
+  /** 执行单个预处理步骤并返回新的字节内容；bypass 模式下解密与校验类步骤原样透传。 */
+  private static byte[] applyStep(
+      byte[] current,
+      String type,
+      Map<String, Object> step,
+      ImportPayload payload,
+      Map<String, Object> template,
+      boolean bypassMode,
+      WorkerImportPayloadProperties properties)
+      throws Exception {
+    switch (type.toUpperCase(Locale.ROOT)) {
+      case ImportPreprocessStepTypes.UNZIP -> {
+        return unzip(current, step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.GUNZIP -> {
+        return gunzip(current, properties);
+      }
+      case ImportPreprocessStepTypes.UNTAR -> {
+        return untar(current, step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.UNTAR_GZ -> {
+        return untar(gunzip(current, properties), step, payload, properties);
+      }
+      case ImportPreprocessStepTypes.AES_GCM_DECRYPT -> {
+        return bypassMode ? current : aesGcmDecrypt(current, step, payload);
+      }
+      case ImportPreprocessStepTypes.VERIFY_DIGEST -> {
+        if (!bypassMode) {
+          verifyDigest(current, step, payload, template);
+        }
+        return current;
+      }
+      case ImportPreprocessStepTypes.VERIFY_RSA_SHA256 -> {
+        if (!bypassMode) {
+          verifyRsaSha256(current, step, payload);
+        }
+        return current;
+      }
+      case ImportPreprocessStepTypes.CHARSET_TRANSCODE -> {
+        return charsetTranscode(current, step);
+      }
+      default ->
+        throw new ImportPreprocessException(
+            "IMPORT_PREPROCESS_UNKNOWN_STEP", "unknown preprocess step type: " + type);
     }
   }
 
