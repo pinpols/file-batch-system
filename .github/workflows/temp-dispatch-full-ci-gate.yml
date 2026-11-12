@@ -1,0 +1,27 @@
+# 临时草稿 PR 专用：当前代理 token 无法 workflow_dispatch，改由仓库 GITHUB_TOKEN 触发 full-ci-gate。
+# 此文件只存在于临时分支，不得合入 main。
+name: Temporary full-ci-gate dispatch
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  dispatch-full-ci-gate:
+    name: Dispatch full-ci-gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Dispatch Backend / Full CI gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run full-ci-gate.yml \
+            --repo "${{ github.repository }}" \
+            --ref chore/java-readability-p9-batch5
