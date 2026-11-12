@@ -112,16 +112,7 @@ public record FrozenDispatchChannelSnapshot(
       if (!(key instanceof String text)) {
         throw invalid();
       }
-      if (value instanceof Map<?, ?> nested) {
-        Map<String, Object> copiedObject = copyObject(nested);
-        copy.put(text, copiedObject);
-      } else if (value instanceof List<?> list) {
-        List<Object> copiedList = copyList(list);
-        copy.put(text, copiedList);
-      } else {
-        Object copiedScalar = copyScalar(value);
-        copy.put(text, copiedScalar);
-      }
+      copy.put(text, copyValue(value));
     });
     return Collections.unmodifiableMap(copy);
   }
@@ -129,18 +120,17 @@ public record FrozenDispatchChannelSnapshot(
   private static List<Object> copyList(List<?> values) {
     List<Object> copy = new ArrayList<>(values.size());
     for (Object value : values) {
-      if (value instanceof Map<?, ?> nested) {
-        Map<String, Object> copiedObject = copyObject(nested);
-        copy.add(copiedObject);
-      } else if (value instanceof List<?> list) {
-        List<Object> copiedList = copyList(list);
-        copy.add(copiedList);
-      } else {
-        Object copiedScalar = copyScalar(value);
-        copy.add(copiedScalar);
-      }
+      copy.add(copyValue(value));
     }
     return Collections.unmodifiableList(copy);
+  }
+
+  private static Object copyValue(Object value) {
+    return switch (value) {
+      case Map<?, ?> nested -> copyObject(nested);
+      case List<?> list -> copyList(list);
+      case null, default -> copyScalar(value);
+    };
   }
 
   private static Object copyScalar(Object value) {

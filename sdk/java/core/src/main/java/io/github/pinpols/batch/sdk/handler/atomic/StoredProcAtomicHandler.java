@@ -316,15 +316,31 @@ public class StoredProcAtomicHandler extends SdkAbstractAtomicHandler<Map<String
     return "{call " + name + "(" + "?,".repeat(total).replaceAll(",$", "") + ")}";
   }
 
+  /**
+   * 标量 OUT 类型与平台 {@code StoredProcTaskExecutor} 对齐。{@code REF_CURSOR} / {@code OTHER} 需要额外的结果集或驱动对象
+   * 读取逻辑，SDK 暂不支持，仍按不支持的类型拒绝。
+   */
   static int toSqlType(String typeName) {
     return switch (typeName) {
-      case "INTEGER" -> Types.INTEGER;
       case "BIGINT" -> Types.BIGINT;
-      case "VARCHAR" -> Types.VARCHAR;
-      case "BOOLEAN" -> Types.BOOLEAN;
+      case "INTEGER" -> Types.INTEGER;
+      case "SMALLINT" -> Types.SMALLINT;
+      case "TINYINT" -> Types.TINYINT;
+      case "DECIMAL" -> Types.DECIMAL;
       case "NUMERIC" -> Types.NUMERIC;
+      case "DOUBLE" -> Types.DOUBLE;
+      case "FLOAT" -> Types.FLOAT;
+      case "REAL" -> Types.REAL;
+      case "VARCHAR" -> Types.VARCHAR;
+      case "CHAR" -> Types.CHAR;
+      case "NVARCHAR" -> Types.NVARCHAR;
+      case "NCHAR" -> Types.NCHAR;
+      case "BOOLEAN" -> Types.BOOLEAN;
+      case "BIT" -> Types.BIT;
       case "DATE" -> Types.DATE;
+      case "TIME" -> Types.TIME;
       case "TIMESTAMP" -> Types.TIMESTAMP;
+      case "TIMESTAMP_WITH_TIMEZONE" -> Types.TIMESTAMP_WITH_TIMEZONE;
       default -> throw new IllegalArgumentException("unsupported SQL type: " + typeName);
     };
   }

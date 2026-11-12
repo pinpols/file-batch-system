@@ -122,7 +122,6 @@ class PositionalArgsConventionTest {
       "CreateSubscriptionCommand",
       "UpdateSubscriptionCommand",
       "PipelineStepDefinition",
-      "ImportAuditContext",
       "JobDefinitionRow",
       "LaunchRequest",
       "CompensationSubmitCommand",

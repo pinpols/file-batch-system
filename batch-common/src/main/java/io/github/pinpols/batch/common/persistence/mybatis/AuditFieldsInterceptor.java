@@ -20,7 +20,7 @@ import org.slf4j.MDC;
  * 拦截 MyBatis Executor.update,反射写 entity 的审计字段(createdAt / updatedAt / createdBy / updatedBy /
  * tenantId)。
  *
- * <p>策略:按字段名匹配,**不要求** entity 继承 {@code AuditableEntity};但字段存在且当前为 null 才填(用户显式赋值优先, 避免 Mapper
+ * <p>策略:按字段名匹配,entity 无需继承公共基类;字段存在且当前为 null 才填(用户显式赋值优先, 避免 Mapper
  * 单测里硬编码时间戳被静默覆盖)。
  *
  * <p>tenantId / operatorId 从 MDC 读(Console-api 由 ConsoleRequestContextFilter 灌入);worker / trigger

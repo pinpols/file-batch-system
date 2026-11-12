@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.notification.service;
 
+import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.security.CryptoAlgorithms;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
@@ -104,13 +105,18 @@ public class JobPushIntakeService {
     return digest(serializedFingerprint);
   }
 
+  /** 推送标题只描述终态结果；非终态或未知状态原样展示，便于排查上游数据。 */
   private static String statusLabel(String status) {
-    return switch (status) {
-      case "SUCCESS" -> "已成功";
-      case "FAILED" -> "已失败";
-      case "PARTIAL_FAILED" -> "部分失败";
-      case "CANCELLED" -> "已取消";
-      case "TERMINATED" -> "已终止";
+    JobInstanceStatus instanceStatus = DictEnum.fromCode(JobInstanceStatus.class, status);
+    if (EmptyChecks.isNull(instanceStatus)) {
+      return status;
+    }
+    return switch (instanceStatus) {
+      case SUCCESS -> "已成功";
+      case FAILED -> "已失败";
+      case PARTIAL_FAILED -> "部分失败";
+      case CANCELLED -> "已取消";
+      case TERMINATED -> "已终止";
       default -> status;
     };
   }

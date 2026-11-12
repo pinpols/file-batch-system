@@ -317,6 +317,44 @@ class DefaultWorkflowDagServiceTest {
   }
 
   @Test
+  @DisplayName("操作员跳过的上游放行无条件边与成功边, 其他跳过原因不放行")
+  void shouldReleaseOnlyOperatorSkippedPredecessor() {
+    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "OPERATOR_SKIPPED"))
+        .isTrue();
+    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "OPERATOR_SKIPPED"))
+        .isTrue();
+    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "SKIPPED", "UPSTREAM_FAILED"))
+        .isFalse();
+    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "SKIPPED", "UPSTREAM_SKIPPED"))
+        .isFalse();
+    assertThat(readyWithSinglePredecessor(Edge.FAILURE, "SKIPPED", "OPERATOR_SKIPPED"))
+        .isFalse();
+  }
+
+  @Test
+  @DisplayName("等待跨日依赖的上游不是 DAG 终态; 状态码大小写不影响判定")
+  void shouldUseDagTerminalStatusesCaseInsensitively() {
+    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "WAITING_DEPENDENCY", null))
+        .isFalse();
+    assertThat(readyWithSinglePredecessor(Edge.ALWAYS, "RUNNING", null)).isFalse();
+    assertThat(readyWithSinglePredecessor(Edge.SUCCESS, "success", null)).isTrue();
+    assertThat(readyWithSinglePredecessor(Edge.FAILURE, "failed", null)).isTrue();
+  }
+
+  private boolean readyWithSinglePredecessor(
+      String edgeType, String predecessorStatus, String skipReasonCode) {
+    WorkflowEdgeEntity incoming = edge("PRED_1", "NODE_A", edgeType, null);
+    when(edgeMapper.selectIncomingEdges(1L, "NODE_A")).thenReturn(List.of(incoming));
+    when(nodeMapper.selectByWorkflowDefinitionIdAndNodeCode(1L, "NODE_A"))
+        .thenReturn(node("NODE_A", WorkflowNodeType.TASK.code()));
+    WorkflowNodeRunEntity predecessor = nodeRun("PRED_1", predecessorStatus);
+    predecessor.setSkipReasonCode(skipReasonCode);
+    when(nodeRunMapper.selectLatestByWorkflowRunIdAndNodeCode(10L, "PRED_1"))
+        .thenReturn(predecessor);
+    return dagService.isNodeReadyForDispatch(10L, 1L, "NODE_A", null);
+  }
+
+  @Test
   @DisplayName("任一汇聚模式下存在命中的上游时判定可以派发")
   void shouldReturnTrueForAnyJoinWhenAtLeastOnePredecessorMatches() {
     WorkflowEdgeEntity edge1 = edge("PRED_1", "NODE_A", Edge.SUCCESS, null);

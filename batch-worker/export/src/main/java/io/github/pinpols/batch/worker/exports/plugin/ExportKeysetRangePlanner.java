@@ -5,10 +5,8 @@ import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.plugin.ExportDataContext;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
-import io.github.pinpols.batch.common.utils.PostgresqlJsonbTexts;
-import io.github.pinpols.batch.common.utils.Texts;
+import io.github.pinpols.batch.worker.exports.config.ExportConfigValueSupport;
 import java.math.BigDecimal;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -72,7 +70,8 @@ public class ExportKeysetRangePlanner {
     if (truthy(templateRangeSetting)) {
       return true;
     }
-    Map<String, Object> qps = toMap(tc.get("query_param_schema"));
+    Map<String, Object> qps = ExportConfigValueSupport.toMap(
+        tc.get("query_param_schema"), OBJECT_MAPPER, ExportKeysetRangePlanner.class);
     Object querySchemaRangeSetting =
         firstNonNull(qps.get("partition_keyset_range"), qps.get("partitionKeysetRange"));
     if (truthy(querySchemaRangeSetting)) {
@@ -81,7 +80,8 @@ public class ExportKeysetRangePlanner {
     Object camelCaseSqlTemplate = qps.get("sqlTemplateExport");
     Object snakeCaseSqlTemplate = qps.get("sql_template_export");
     Object sqlTemplateConfig = firstNonNull(camelCaseSqlTemplate, snakeCaseSqlTemplate);
-    Map<String, Object> sqlTemplate = toMap(sqlTemplateConfig);
+    Map<String, Object> sqlTemplate = ExportConfigValueSupport.toMap(
+        sqlTemplateConfig, OBJECT_MAPPER, ExportKeysetRangePlanner.class);
     Object camelCaseRangeSetting = sqlTemplate.get("partitionKeysetRange");
     Object snakeCaseRangeSetting = sqlTemplate.get("partition_keyset_range");
     Object sqlTemplateRangeSetting = firstNonNull(camelCaseRangeSetting, snakeCaseRangeSetting);
@@ -99,23 +99,5 @@ public class ExportKeysetRangePlanner {
 
   private static boolean truthy(Object value) {
     return Boolean.TRUE.equals(value) || "true".equalsIgnoreCase(String.valueOf(value));
-  }
-
-  @SuppressWarnings("unchecked")
-  private static Map<String, Object> toMap(Object raw) {
-    if (raw instanceof Map<?, ?> m) {
-      Map<String, Object> out = new LinkedHashMap<>();
-      m.forEach((k, v) -> out.put(String.valueOf(k), v));
-      return out;
-    }
-    String text = raw instanceof String s ? s : PostgresqlJsonbTexts.tryExtract(raw);
-    if (Texts.hasText(text)) {
-      try {
-        return OBJECT_MAPPER.readValue(text, Map.class);
-      } catch (Exception ex) {
-        SwallowedExceptionLogger.warn(ExportKeysetRangePlanner.class, "catch:jsonbParse", ex);
-      }
-    }
-    return Map.of();
   }
 }

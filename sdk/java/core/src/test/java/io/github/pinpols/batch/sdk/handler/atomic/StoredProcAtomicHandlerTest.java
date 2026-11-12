@@ -231,6 +231,34 @@ class StoredProcAtomicHandlerTest {
   }
 
   @Test
+  @DisplayName("toSqlType 覆盖与平台存储过程执行器一致的标量 OUT 类型")
+  void shouldMapScalarOutTypesLikePlatformExecutor() {
+    Map<String, Integer> expected = Map.ofEntries(
+        Map.entry("BIGINT", Types.BIGINT),
+        Map.entry("INTEGER", Types.INTEGER),
+        Map.entry("SMALLINT", Types.SMALLINT),
+        Map.entry("TINYINT", Types.TINYINT),
+        Map.entry("DECIMAL", Types.DECIMAL),
+        Map.entry("NUMERIC", Types.NUMERIC),
+        Map.entry("DOUBLE", Types.DOUBLE),
+        Map.entry("FLOAT", Types.FLOAT),
+        Map.entry("REAL", Types.REAL),
+        Map.entry("VARCHAR", Types.VARCHAR),
+        Map.entry("CHAR", Types.CHAR),
+        Map.entry("NVARCHAR", Types.NVARCHAR),
+        Map.entry("NCHAR", Types.NCHAR),
+        Map.entry("BOOLEAN", Types.BOOLEAN),
+        Map.entry("BIT", Types.BIT),
+        Map.entry("DATE", Types.DATE),
+        Map.entry("TIME", Types.TIME),
+        Map.entry("TIMESTAMP", Types.TIMESTAMP),
+        Map.entry("TIMESTAMP_WITH_TIMEZONE", Types.TIMESTAMP_WITH_TIMEZONE));
+
+    expected.forEach((typeName, sqlType) ->
+        assertThat(StoredProcAtomicHandler.toSqlType(typeName)).as(typeName).isEqualTo(sqlType));
+  }
+
+  @Test
   @DisplayName("buildCall 占位符拼接正确")
   void shouldBuildCallPlaceholders() {
     assertThat(StoredProcAtomicHandler.buildCall("batch.foo", 0)).isEqualTo("{call batch.foo()}");

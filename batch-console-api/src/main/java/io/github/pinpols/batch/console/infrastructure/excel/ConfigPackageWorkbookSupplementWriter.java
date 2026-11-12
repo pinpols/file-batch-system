@@ -31,6 +31,7 @@ import io.github.pinpols.batch.console.support.excel.ConsoleExcelStyles;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.apache.poi.common.usermodel.HyperlinkType;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -53,6 +54,49 @@ class ConfigPackageWorkbookSupplementWriter {
   static final String SHEET_NAME_DEPENDENCY = "依赖说明";
   static final String SHEET_NAME_FIVE_WORKER = "五类Worker示例";
   static final String SHEET_NAME_BUNDLE = "文件束示例";
+  /** 填写顺序 sheet 的逐 sheet 说明；新增数据 sheet 时在此登记，缺项由引导测试拦截。 */
+  private record FillGuide(String scenario, String reason) {}
+
+  private static final FillGuide DEFAULT_FILL_GUIDE = new FillGuide("按业务需要填写。", EMPTY);
+
+  private static final String BASE_DICTIONARY_REASON = "基础字典，后续 job / workflow node 会引用。";
+
+  private static final String FILE_REFERENCE_REASON = "文件类作业和派发步骤会引用，建议先于 pipeline step 填。";
+
+  private static final Map<String, FillGuide> FILL_GUIDES = Map.ofEntries(
+      Map.entry(
+          ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
+          new FillGuide("配置资源池/并发/QPS。", BASE_DICTIONARY_REASON)),
+      Map.entry(
+          ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
+          new FillGuide("配置批量日历、时区、节假日。", BASE_DICTIONARY_REASON)),
+      Map.entry(
+          ConfigPackageExcelValidator.BATCH_WINDOW_SHEET,
+          new FillGuide("配置允许执行的时间窗口。", BASE_DICTIONARY_REASON)),
+      Map.entry(
+          ConfigPackageExcelValidator.JOB_SHEET,
+          new FillGuide("配置作业主定义，所有 Worker 共用。", "pipeline 和 workflow node 都会引用 job_code。")),
+      Map.entry(
+          ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET,
+          new FillGuide("配置作业运行时长、启动宽限与完成截止告警。", "按 job_code 关联作业，需在作业定义之后填写。")),
+      Map.entry(
+          ConfigPackageExcelValidator.CHANNEL_SHEET,
+          new FillGuide("配置 SFTP/OSS/S3/API 等文件渠道。", FILE_REFERENCE_REASON)),
+      Map.entry(
+          ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
+          new FillGuide("配置导入/导出文件格式、字段映射、查询。", FILE_REFERENCE_REASON)),
+      Map.entry(
+          ConfigPackageExcelValidator.WF_DEF_SHEET,
+          new FillGuide("配置工作流主定义。", "workflow_node / workflow_edge 共用 workflow_code + version。")),
+      Map.entry(
+          ConfigPackageExcelValidator.WF_NODE_SHEET,
+          new FillGuide("配置工作流节点。", "workflow_edge 需要引用 from/to node_code。")),
+      Map.entry(
+          ConfigPackageExcelValidator.WF_EDGE_SHEET,
+          new FillGuide("配置工作流节点依赖边。", "最后填写，依赖 workflow node 已存在。")),
+      Map.entry(
+          ConfigPackageExcelValidator.WORKFLOW_MONITORING_POLICY_SHEET,
+          new FillGuide("配置工作流运行时长、启动宽限与完成截止告警。", "按 workflow_code + version 关联工作流，需在工作流定义之后填写。")));
   private static final String READONLY_SHEET_HINT =
       "本 sheet 为只读说明，不参与导入解析与 apply；请复制片段到对应数据 sheet 后修改。";
   private static final String DICTIONARY_SHEET_HINT =
@@ -164,8 +208,9 @@ class ConfigPackageWorkbookSupplementWriter {
       writeBodyCell(row, 0, String.valueOf(i + 1), bodyStyle);
       writeBodyCell(row, 1, def.name(), bodyStyle);
       addSheetLink(row.getCell(1), def.name(), creationHelper);
-      writeBodyCell(row, 2, fillScenarioFor(def.name()), bodyStyle);
-      writeBodyCell(row, 3, fillReasonFor(def.name()), bodyStyle);
+      FillGuide fillGuide = FILL_GUIDES.getOrDefault(def.name(), DEFAULT_FILL_GUIDE);
+      writeBodyCell(row, 2, fillGuide.scenario(), bodyStyle);
+      writeBodyCell(row, 3, fillGuide.reason(), bodyStyle);
       writeBodyCell(row, 4, requiredColumns(def), bodyStyle);
       writeBodyCell(
           row, 5, ConfigPackageExcelWorkbookWriter.appliesToFor(def.name(), ""), bodyStyle);
@@ -284,38 +329,6 @@ class ConfigPackageWorkbookSupplementWriter {
         })
         .count();
     return optionalCount == 0 ? "本 sheet 列均为必填，留空会在预览阶段报错。" : "选填列可先留空；具体默认值/留空行为见『字段说明』sheet。";
-  }
-
-  private static String fillScenarioFor(String sheetName) {
-    return switch (sheetName) {
-      case ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET -> "配置资源池/并发/QPS。";
-      case ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET -> "配置批量日历、时区、节假日。";
-      case ConfigPackageExcelValidator.BATCH_WINDOW_SHEET -> "配置允许执行的时间窗口。";
-      case ConfigPackageExcelValidator.JOB_SHEET -> "配置作业主定义，所有 Worker 共用。";
-      case ConfigPackageExcelValidator.CHANNEL_SHEET -> "配置 SFTP/OSS/S3/API 等文件渠道。";
-      case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET -> "配置导入/导出文件格式、字段映射、查询。";
-      case ConfigPackageExcelValidator.PIPELINE_SHEET -> "配置 Worker 流水线主定义。";
-      case ConfigPackageExcelValidator.WF_DEF_SHEET -> "配置工作流主定义。";
-      case ConfigPackageExcelValidator.WF_NODE_SHEET -> "配置工作流节点。";
-      case ConfigPackageExcelValidator.WF_EDGE_SHEET -> "配置工作流节点依赖边。";
-      default -> "按业务需要填写。";
-    };
-  }
-
-  private static String fillReasonFor(String sheetName) {
-    return switch (sheetName) {
-      case ConfigPackageExcelValidator.RESOURCE_QUEUE_SHEET,
-          ConfigPackageExcelValidator.BUSINESS_CALENDAR_SHEET,
-          ConfigPackageExcelValidator.BATCH_WINDOW_SHEET -> "基础字典，后续 job / workflow node 会引用。";
-      case ConfigPackageExcelValidator.FILE_TEMPLATE_SHEET,
-          ConfigPackageExcelValidator.CHANNEL_SHEET -> "文件类作业和派发步骤会引用，建议先于 pipeline step 填。";
-      case ConfigPackageExcelValidator.JOB_SHEET -> "pipeline 和 workflow node 都会引用 job_code。";
-      case ConfigPackageExcelValidator.WF_DEF_SHEET ->
-        "workflow_node / workflow_edge 共用 workflow_code + version。";
-      case ConfigPackageExcelValidator.WF_NODE_SHEET -> "workflow_edge 需要引用 from/to node_code。";
-      case ConfigPackageExcelValidator.WF_EDGE_SHEET -> "最后填写，依赖 workflow node 已存在。";
-      default -> EMPTY;
-    };
   }
 
   private record EnumDictionary(String name, Class<? extends DictEnum> type) {}

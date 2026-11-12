@@ -22,6 +22,9 @@
 
 ### Changed
 
+- Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。
+- 审批推送标题中的申请类型取审批类型字典标签，`SELF_SERVICE` 显示为「自助补救」，未登记的类型码仍原样显示。
+
 - P1-A Stage 1 包结构收尾：Console Controller 与应用契约迁入 `domain.<ctx>` 并新增 `config` 上下文；仅内部 Java 包路径变化，HTTP 路径、请求/响应字段、鉴权与 wire schema 不变。
 
 - 自助服务审批（`SELF_SERVICE`）禁止申请人批准自己的单据，与配置发布一致。拒绝不受影响；已经批准后的执行重试不在这次拦截。
@@ -37,6 +40,10 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+
+- 配置包模板「填写顺序」sheet 为作业监控策略、工作流监控策略补齐填写场景和先填原因，不再显示通用占位文本。
+- Java、Python SDK 的原子 SQL 处理器切分语句时跳过 PG dollar-quote（`$$...$$`、`$tag$...$tag$`）体内的 `;`，与平台原子 SQL 执行器一致，含函数体的脚本不再被拆坏或误计入 `maxStatementsPerJob`。
+- 导出格式为 XML 时，生成阶段的文件后缀改为 `.xml`，与对外文件名一致。
 
 - 修复每日仿真文件束清单模板的 Bash 默认值在 `{bizDate}` 的右花括号处被截断的问题。截断后的键不再满足入站归属 SQL 的日期占位符校验，`26-bundle-import.sh` 在声明清单绑定时以退出码 3 失败。
 - 每日仿真的文件束导入会声明并激活 `ingress/` 入站归属，以及租户 `ta` 的权威清单 `ingress/ta/bundle-import-{bizDate}.batch.json`。扫描器在缺少 ACTIVE 归属时不再登记对象，阶段因此等不到 `TA_BUNDLE_IMPORT`。阶段结束退休该范围，避免默认 Worker 用另一套扫描规则去认领同一范围。

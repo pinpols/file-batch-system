@@ -31,7 +31,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
@@ -204,22 +203,14 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
    *
    * <p>当前覆盖：{@code verifier.failure.v1}（运维告警）与 Job/Workflow 终态事件（可靠血缘/业务通知投递）。
    */
-  private static final Set<String> VERIFIER_FAILURE_EVENT_TYPES = Set.of("verifier.failure.v1");
+  private static final Map<String, String> DEDICATED_TOPICS_BY_EVENT_TYPE = Map.of(
+      "verifier.failure.v1", BatchTopics.VERIFIER_FAILURE_V1,
+      "WORKFLOW_LAUNCH", BatchTopics.TRIGGER_LAUNCH_V1,
+      "JOB_TERMINAL", BatchTopics.JOB_TERMINAL_V1,
+      "WORKFLOW_TERMINAL", BatchTopics.WORKFLOW_TERMINAL_V1);
 
   private static String resolveDedicatedTopic(String eventType) {
-    if (eventType != null && VERIFIER_FAILURE_EVENT_TYPES.contains(eventType)) {
-      return BatchTopics.VERIFIER_FAILURE_V1;
-    }
-    if ("WORKFLOW_LAUNCH".equals(eventType)) {
-      return BatchTopics.TRIGGER_LAUNCH_V1;
-    }
-    if ("JOB_TERMINAL".equals(eventType)) {
-      return BatchTopics.JOB_TERMINAL_V1;
-    }
-    if ("WORKFLOW_TERMINAL".equals(eventType)) {
-      return BatchTopics.WORKFLOW_TERMINAL_V1;
-    }
-    return null;
+    return EmptyChecks.isNull(eventType) ? null : DEDICATED_TOPICS_BY_EVENT_TYPE.get(eventType);
   }
 
   static String dispatchKafkaKey(OutboxEventEntity event, TaskDispatchMessage message) {
