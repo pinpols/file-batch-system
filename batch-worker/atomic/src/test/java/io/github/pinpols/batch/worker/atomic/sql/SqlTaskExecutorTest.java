@@ -211,6 +211,33 @@ class SqlTaskExecutorTest {
       assertThat(SqlTaskExecutor.splitStatements("SELECT $1 WHERE a=$1; SELECT 2"))
           .containsExactly("SELECT $1 WHERE a=$1", "SELECT 2");
     }
+
+    @Test
+    @DisplayName("只有顶层分号切分语句, 前后空白被裁掉")
+    void shouldSplitOnTopLevelSemicolonOnly() {
+      assertThat(SqlTaskExecutor.splitStatements("select 1; select 2"))
+          .containsExactly("select 1", "select 2");
+    }
+
+    @Test
+    @DisplayName("引号与注释混用时各自内部的分号都应保留")
+    void shouldKeepSemicolon_whenQuotesAndCommentsMixed() {
+      assertThat(SqlTaskExecutor.splitStatements("select ';' -- a;b\n; select \"x;y\" /* ; */"))
+          .containsExactly("select ';' -- a;b", "select \"x;y\" /* ; */");
+    }
+
+    @Test
+    @DisplayName("纯分号与空白产生的空语句应被丢弃")
+    void shouldDropEmptyStatements() {
+      assertThat(SqlTaskExecutor.splitStatements(";;select 1;")).containsExactly("select 1");
+    }
+
+    @Test
+    @DisplayName("单引号内的反斜杠加引号按转义处理(锁定现状, 不代表正确)")
+    void shouldTreatBackslashQuoteAsEscape_whenInsideSingleQuotes() {
+      assertThat(SqlTaskExecutor.splitStatements("select 'a\\'; select 2'"))
+          .containsExactly("select 'a\\'; select 2'");
+    }
   }
 
   // ─── Type detection ─────────────────────────────────────────────────────────

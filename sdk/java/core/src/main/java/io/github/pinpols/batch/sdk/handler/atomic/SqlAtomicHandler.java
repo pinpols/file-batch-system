@@ -137,27 +137,37 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
   private static final class StatementSplitState {
     private final List<String> statements = new ArrayList<>();
     private final StringBuilder buffer = new StringBuilder();
-    private boolean inSingle;
-    private boolean inDouble;
-    private boolean inLineComment;
-    private boolean inBlockComment;
+    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+    private enum LexState {
+      CODE,
+      LINE_COMMENT,
+      BLOCK_COMMENT,
+      SINGLE_QUOTE,
+      DOUBLE_QUOTE
+    }
+
+    private LexState state = LexState.CODE;
     private char previous;
 
     private void append(char current) {
-      if (inLineComment) {
-        if (current == '\n') inLineComment = false;
-        buffer.append(current);
-      } else if (inBlockComment) {
-        if (previous == '*' && current == '/') inBlockComment = false;
-        buffer.append(current);
-      } else if (inSingle) {
-        if (current == '\'') inSingle = false;
-        buffer.append(current);
-      } else if (inDouble) {
-        if (current == '"') inDouble = false;
-        buffer.append(current);
-      } else {
-        appendSqlCharacter(current);
+      switch (state) {
+        case LINE_COMMENT -> {
+          if (current == '\n') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case BLOCK_COMMENT -> {
+          if (previous == '*' && current == '/') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case SINGLE_QUOTE -> {
+          if (current == '\'') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case DOUBLE_QUOTE -> {
+          if (current == '"') state = LexState.CODE;
+          buffer.append(current);
+        }
+        case CODE -> appendSqlCharacter(current);
       }
       previous = current;
     }
@@ -165,16 +175,16 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     /** 只有普通 SQL 区域的分号可以结束语句；注释起始字符仍原样保留在缓冲区。 */
     private void appendSqlCharacter(char current) {
       if (previous == '-' && current == '-') {
-        inLineComment = true;
+        state = LexState.LINE_COMMENT;
         buffer.append(current);
       } else if (previous == '/' && current == '*') {
-        inBlockComment = true;
+        state = LexState.BLOCK_COMMENT;
         buffer.append(current);
       } else if (current == '\'') {
-        inSingle = true;
+        state = LexState.SINGLE_QUOTE;
         buffer.append(current);
       } else if (current == '"') {
-        inDouble = true;
+        state = LexState.DOUBLE_QUOTE;
         buffer.append(current);
       } else if (current == ';') {
         String rawStatement = buffer.toString();

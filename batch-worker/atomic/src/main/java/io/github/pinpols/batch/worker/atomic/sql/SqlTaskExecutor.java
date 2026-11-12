@@ -282,40 +282,54 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   private static final class SplitScanner {
     private final List<String> out = new ArrayList<>();
     private final StringBuilder buf = new StringBuilder();
-    private boolean inSingleQuote;
-    private boolean inDoubleQuote;
-    private boolean inLineComment;
-    private boolean inBlockComment;
+    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+    private enum LexState {
+      CODE,
+      LINE_COMMENT,
+      BLOCK_COMMENT,
+      SINGLE_QUOTE,
+      DOUBLE_QUOTE
+    }
+
+    private LexState state = LexState.CODE;
 
     boolean atTopLevel() {
-      return !inSingleQuote && !inDoubleQuote && !inLineComment && !inBlockComment;
+      return state == LexState.CODE;
     }
 
     void feed(char c, char prev) {
-      if (inLineComment) {
-        if (c == '\n') inLineComment = false;
-      } else if (inBlockComment) {
-        if (prev == '*' && c == '/') inBlockComment = false;
-      } else if (inSingleQuote) {
-        if (c == '\'' && prev != '\\') inSingleQuote = false;
-      } else if (inDoubleQuote) {
-        if (c == '"' && prev != '\\') inDoubleQuote = false;
-      } else if (feedTopLevel(c, prev)) {
-        return; // 分号已切分,不入 buffer
+      switch (state) {
+        case LINE_COMMENT -> {
+          if (c == '\n') state = LexState.CODE;
+        }
+        case BLOCK_COMMENT -> {
+          if (prev == '*' && c == '/') state = LexState.CODE;
+        }
+        case SINGLE_QUOTE -> {
+          if (c == '\'' && prev != '\\') state = LexState.CODE;
+        }
+        case DOUBLE_QUOTE -> {
+          if (c == '"' && prev != '\\') state = LexState.CODE;
+        }
+        case CODE -> {
+          if (feedTopLevel(c, prev)) {
+            return; // 分号已切分,不入 buffer
+          }
+        }
       }
       buf.append(c);
     }
 
-    /** 顶层字符:开注释/开引号置位;遇 `;` 切分并返回 true(调用方不再 append)。 */
+    /** 顶层字符:开注释/开引号切换状态;遇 `;` 切分并返回 true(调用方不再 append)。 */
     private boolean feedTopLevel(char c, char prev) {
       if (c == '-' && prev == '-') {
-        inLineComment = true;
+        state = LexState.LINE_COMMENT;
       } else if (c == '*' && prev == '/') {
-        inBlockComment = true;
+        state = LexState.BLOCK_COMMENT;
       } else if (c == '\'') {
-        inSingleQuote = true;
+        state = LexState.SINGLE_QUOTE;
       } else if (c == '"') {
-        inDoubleQuote = true;
+        state = LexState.DOUBLE_QUOTE;
       } else if (c == ';') {
         flush();
         return true;

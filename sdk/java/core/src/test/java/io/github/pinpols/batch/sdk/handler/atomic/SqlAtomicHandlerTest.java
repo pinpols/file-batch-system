@@ -302,6 +302,17 @@ class SqlAtomicHandlerTest {
             List.of("SELECT /* ; ' \" */ 1", "SELECT 2")),
         Arguments.of("trailing-comment", "SELECT 1;-- tail ;", List.of("SELECT 1", "-- tail ;")),
         Arguments.of(
-            "unterminated-quote", "SELECT 'tail;still quote", List.of("SELECT 'tail;still quote")));
+            "unterminated-quote", "SELECT 'tail;still quote", List.of("SELECT 'tail;still quote")),
+        Arguments.of("top-level-semicolon", "select 1; select 2", List.of("select 1", "select 2")),
+        Arguments.of(
+            "quotes-and-comments-mixed",
+            "select ';' -- a;b\n; select \"x;y\" /* ; */",
+            List.of("select ';' -- a;b", "select \"x;y\" /* ; */")),
+        Arguments.of("drops-empty-statements", ";;select 1;", List.of("select 1")),
+        // 锁定现状: SDK 版不识别反斜杠转义, 反斜杠后的引号直接收尾(与 Worker 版不同)
+        Arguments.of(
+            "backslash-quote-not-escape",
+            "select 'a\\'; select 2'",
+            List.of("select 'a\\'", "select 2'")));
   }
 }
