@@ -439,18 +439,37 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
   private WorkflowRunEntity createRunInTransaction(RunPreparation preparation) {
     LaunchRequest request = preparation.request();
-    LaunchRequest deferredRequest = preparation.originalRequest();
-    TriggerRequestEntity triggerRequest = preparation.triggerRequest();
-    WorkflowDefinitionView definition = preparation.definition();
-    String traceId = preparation.traceId();
-    WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = preparation.replaySnapshot();
-    WorkflowLaunchWaitSnapshot capacitySnapshot = preparation.capacitySnapshot();
     replayOperationMapper.setTenantContext(request.tenantId());
     WorkflowRunEntity concurrent = workflowRunMapper.selectByTenantAndTriggerRequestId(
-        request.tenantId(), triggerRequest.getId());
+        request.tenantId(), preparation.triggerRequest().getId());
     if (EmptyChecks.isNotNull(concurrent)) {
       return concurrent;
     }
+    lockPendingTriggerRequest(request);
+    RunAdmission admission = admitRunInTransaction(preparation);
+    Instant startedAt = BatchDateTimeSupport.utcNow();
+    WorkflowRunEntity created = buildRunEntity(preparation, admission);
+    WorkflowLaunchWaitSnapshot snapshotForWait =
+        EmptyChecks.isNotNull(preparation.capacitySnapshot())
+            ? preparation.capacitySnapshot()
+            : WorkflowLaunchWaitSnapshot.capture(preparation.originalRequest(), request, created);
+    int inserted = workflowRunMapper.insertIfActiveSlotFree(created);
+    if (inserted == 0) {
+      // 容量冲突不回滚准入快照；请求与密文等待必须在当前事务一起提交。
+      waitingLaunchService.defer(preparation.originalRequest(), snapshotForWait);
+      return null;
+    }
+    attachReplayOperationTarget(request, created, startedAt);
+    insertStartNodeRun(request, created, startedAt);
+    return created;
+  }
+
+  /** 事务内准入结果：本次运行实际采用的定义与初始节点。 */
+  private record RunAdmission(
+      WorkflowDefinitionView definition, List<DagNodeResolution> initialNodes) {}
+
+  /** 加行锁读取触发请求，并确认它仍是本次启动、且处于待处理状态。 */
+  private void lockPendingTriggerRequest(LaunchRequest request) {
     TriggerRequestEntity pending = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
         request.tenantId(), request.requestId());
     boolean pendingRequestDoesNotMatchLaunch = EmptyChecks.isNull(pending)
@@ -460,60 +479,88 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     if (pendingRequestDoesNotMatchLaunch) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
     }
-    WorkflowDefinitionView transactionDefinition = definition;
-    List<DagNodeResolution> initialNodes;
-    if (EmptyChecks.isNotNull(capacitySnapshot)) {
-      // 请求锁持续持有到根运行插入；等待终态不得被迟到恢复复活。
-      WorkflowLaunchWaitSnapshot lockedSnapshot =
-          waitingLaunchService.findSnapshot(deferredRequest);
-      if (EmptyChecks.isNull(lockedSnapshot)) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
-      }
-      ReplayOperationEntity currentOperation =
-          replayOperationMapper.selectByTargetRequest(request.tenantId(), request.requestId());
-      boolean approvedCapacityReplay =
-          requireCapacityReplayAuthorization(request, capacitySnapshot, currentOperation);
-      if (!approvedCapacityReplay) {
-        transactionDefinition = loadAdmissibleDefinition(request);
-        if (EmptyChecks.isNull(transactionDefinition)) {
-          throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
-        }
-      }
-      initialNodes = initialNodesFromSnapshot(capacitySnapshot.executionSnapshotJson());
-      if (EmptyChecks.isEmpty(initialNodes)) {
-        throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
-      }
-    } else if (EmptyChecks.isNull(replaySnapshot)) {
+  }
+
+  /** 按容量等待快照、实时定义、重放快照三种来源确定事务内定义与初始节点。 */
+  private RunAdmission admitRunInTransaction(RunPreparation preparation) {
+    if (EmptyChecks.isNotNull(preparation.capacitySnapshot())) {
+      return admitFromCapacitySnapshot(preparation);
+    }
+    if (EmptyChecks.isNull(preparation.replaySnapshot())) {
+      return admitFromLiveDefinition(preparation);
+    }
+    return admitFromReplaySnapshot(preparation);
+  }
+
+  private RunAdmission admitFromCapacitySnapshot(RunPreparation preparation) {
+    LaunchRequest request = preparation.request();
+    WorkflowLaunchWaitSnapshot capacitySnapshot = preparation.capacitySnapshot();
+    // 请求锁持续持有到根运行插入；等待终态不得被迟到恢复复活。
+    WorkflowLaunchWaitSnapshot lockedSnapshot =
+        waitingLaunchService.findSnapshot(preparation.originalRequest());
+    if (EmptyChecks.isNull(lockedSnapshot)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
+    }
+    ReplayOperationEntity currentOperation =
+        replayOperationMapper.selectByTargetRequest(request.tenantId(), request.requestId());
+    boolean approvedCapacityReplay =
+        requireCapacityReplayAuthorization(request, capacitySnapshot, currentOperation);
+    WorkflowDefinitionView transactionDefinition = preparation.definition();
+    if (!approvedCapacityReplay) {
       transactionDefinition = loadAdmissibleDefinition(request);
-      if (EmptyChecks.isNull(transactionDefinition)
-          || !Objects.equals(definition.version(), transactionDefinition.version())) {
-        throw BizException.of(
-            ResultCode.STATE_CONFLICT, "error.workflow.definition_changed_during_launch");
-      }
-      if (!scheduledWorkflowVersionMatches(request, transactionDefinition)) {
-        throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
-      }
-      WorkflowValidationResult validation =
-          workflowGraphValidator.validate(transactionDefinition.id());
-      if (validation.hasErrors()) {
-        throw BizException.of(ResultCode.BUSINESS_ERROR, "error.workflow.definition_invalid");
-      }
-      initialNodes = initialNodes(request);
-    } else {
-      if (!Objects.equals(request.workflowDefinitionId(), replaySnapshot.workflowDefinitionId())
-          || !Objects.equals(request.bizDate(), replaySnapshot.bizDate())) {
-        throw BizException.of(
-            ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
-      }
-      initialNodes = initialNodesFromSnapshot(replaySnapshot.executionSnapshotJson());
-      if (EmptyChecks.isEmpty(initialNodes)) {
-        throw BizException.of(
-            ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+      if (EmptyChecks.isNull(transactionDefinition)) {
+        throw BizException.of(ResultCode.NOT_FOUND, "error.workflow.definition_not_found");
       }
     }
-    Instant startedAt = BatchDateTimeSupport.utcNow();
-    WorkflowDefinitionView definitionForSnapshot = transactionDefinition;
-    List<DagNodeResolution> nodesForSnapshot = initialNodes;
+    List<DagNodeResolution> initialNodes =
+        initialNodesFromSnapshot(capacitySnapshot.executionSnapshotJson());
+    if (EmptyChecks.isEmpty(initialNodes)) {
+      throw WorkflowLaunchWaitSnapshot.invalidSnapshot();
+    }
+    return new RunAdmission(transactionDefinition, initialNodes);
+  }
+
+  private RunAdmission admitFromLiveDefinition(RunPreparation preparation) {
+    LaunchRequest request = preparation.request();
+    WorkflowDefinitionView transactionDefinition = loadAdmissibleDefinition(request);
+    if (EmptyChecks.isNull(transactionDefinition)
+        || !Objects.equals(preparation.definition().version(), transactionDefinition.version())) {
+      throw BizException.of(
+          ResultCode.STATE_CONFLICT, "error.workflow.definition_changed_during_launch");
+    }
+    if (!scheduledWorkflowVersionMatches(request, transactionDefinition)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.scheduled_version_stale");
+    }
+    WorkflowValidationResult validation =
+        workflowGraphValidator.validate(transactionDefinition.id());
+    if (validation.hasErrors()) {
+      throw BizException.of(ResultCode.BUSINESS_ERROR, "error.workflow.definition_invalid");
+    }
+    return new RunAdmission(transactionDefinition, initialNodes(request));
+  }
+
+  private RunAdmission admitFromReplaySnapshot(RunPreparation preparation) {
+    LaunchRequest request = preparation.request();
+    WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = preparation.replaySnapshot();
+    if (!Objects.equals(request.workflowDefinitionId(), replaySnapshot.workflowDefinitionId())
+        || !Objects.equals(request.bizDate(), replaySnapshot.bizDate())) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
+    List<DagNodeResolution> initialNodes =
+        initialNodesFromSnapshot(replaySnapshot.executionSnapshotJson());
+    if (EmptyChecks.isEmpty(initialNodes)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
+    }
+    return new RunAdmission(preparation.definition(), initialNodes);
+  }
+
+  /** 组装根运行实体；快照字段优先取容量等待快照，其次重放快照，最后取事务内定义。 */
+  private WorkflowRunEntity buildRunEntity(RunPreparation preparation, RunAdmission admission) {
+    LaunchRequest request = preparation.request();
+    WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot = preparation.replaySnapshot();
+    WorkflowLaunchWaitSnapshot capacitySnapshot = preparation.capacitySnapshot();
+    WorkflowDefinitionView definitionForSnapshot = admission.definition();
+    List<DagNodeResolution> nodesForSnapshot = admission.initialNodes();
     WorkflowRunEntity created = new WorkflowRunEntity();
     created.setTenantId(request.tenantId());
     created.setWorkflowDefinitionId(request.workflowDefinitionId());
@@ -523,7 +570,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         () -> capacitySnapshot.singleJobDefinitionId(),
         () -> replaySnapshot.singleJobDefinitionId(),
         () -> definitionForSnapshot.singleJobDefinitionId()));
-    created.setTriggerRequestId(triggerRequest.getId());
+    created.setTriggerRequestId(preparation.triggerRequest().getId());
     created.setWorkflowVersionSnapshot(preferLaunchSnapshot(
         capacitySnapshot,
         replaySnapshot,
@@ -540,27 +587,24 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         () -> replaySnapshot.executionSnapshotJson(),
         () -> buildExecutionSnapshot(request, definitionForSnapshot, nodesForSnapshot)));
     created.setRunStatus(WorkflowRunStatus.CREATED.code());
-    String currentNodeCode;
-    if (EmptyChecks.isEmpty(initialNodes)) {
-      currentNodeCode = WorkflowNodeCode.START.code();
-    } else {
-      List<String> initialNodeCodes =
-          initialNodes.stream().map(DagNodeResolution::nodeCode).toList();
-      currentNodeCode = String.join(",", initialNodeCodes);
-    }
-    created.setCurrentNodeCode(currentNodeCode);
-    created.setTraceId(traceId);
+    created.setCurrentNodeCode(currentNodeCode(nodesForSnapshot));
+    created.setTraceId(preparation.traceId());
     created.setDryRun(request.dryRun());
-    WorkflowLaunchWaitSnapshot snapshotForWait = EmptyChecks.isNotNull(capacitySnapshot)
-        ? capacitySnapshot
-        : WorkflowLaunchWaitSnapshot.capture(deferredRequest, request, created);
-    int inserted = workflowRunMapper.insertIfActiveSlotFree(created);
-    if (inserted == 0) {
-      // 容量冲突不回滚准入快照；请求与密文等待必须在当前事务一起提交。
-      waitingLaunchService.defer(deferredRequest, snapshotForWait);
-      return null;
+    return created;
+  }
+
+  private String currentNodeCode(List<DagNodeResolution> initialNodes) {
+    if (EmptyChecks.isEmpty(initialNodes)) {
+      return WorkflowNodeCode.START.code();
     }
-    attachReplayOperationTarget(request, created, startedAt);
+    List<String> initialNodeCodes =
+        initialNodes.stream().map(DagNodeResolution::nodeCode).toList();
+    return String.join(",", initialNodeCodes);
+  }
+
+  /** 写入已成功的 START 节点运行，启动参数加密后作为来源载荷保存。 */
+  private void insertStartNodeRun(
+      LaunchRequest request, WorkflowRunEntity created, Instant startedAt) {
     WorkflowNodeRunEntity start = new WorkflowNodeRunEntity();
     start.setWorkflowRunId(created.getId());
     start.setNodeCode(WorkflowNodeCode.START.code());
@@ -575,7 +619,6 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     String protectedLaunchParams = secretPayloadProtector.protect(serializedLaunchParams);
     start.setSourcePayloadProtected(protectedLaunchParams);
     workflowNodeRunMapper.insert(start);
-    return created;
   }
 
   private void dispatchInitialNodes(LaunchRequest request, WorkflowRunEntity run, String traceId) {
