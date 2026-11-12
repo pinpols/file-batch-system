@@ -317,20 +317,25 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
   private void refreshConsumerLag() {
     try {
       for (Map.Entry<MetricName, ? extends Metric> e : consumer.metrics().entrySet()) {
-        if ("records-lag-max".equals(e.getKey().name())) {
-          Object value = e.getValue().metricValue();
-          if (value instanceof Number n) {
-            double d = n.doubleValue();
-            // Kafka 无数据时给 NaN / -Inf,只在拿到有限非负值时更新
-            if (Double.isFinite(d) && d >= 0) {
-              consumerLagMax = (long) d;
-            }
-          }
-          return;
+        if (!"records-lag-max".equals(e.getKey().name())) {
+          continue;
         }
+        applyConsumerLagValue(e.getValue().metricValue());
+        return;
       }
     } catch (RuntimeException ex) {
       log.debug("refreshConsumerLag skipped: {}", ExceptionLogSummary.of(ex));
+    }
+  }
+
+  /** Kafka 无数据时给 NaN / -Inf,只在拿到有限非负数值时更新,其余保持上一次值。 */
+  private void applyConsumerLagValue(Object value) {
+    if (!(value instanceof Number n)) {
+      return;
+    }
+    double d = n.doubleValue();
+    if (Double.isFinite(d) && d >= 0) {
+      consumerLagMax = (long) d;
     }
   }
 
