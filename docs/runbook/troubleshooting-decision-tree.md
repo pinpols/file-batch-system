@@ -177,12 +177,19 @@ SELECT * FROM batch.dead_letter_task
 ```mermaid
 %%{init: {"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant W as Worker
-  participant O as Orchestrator
-  participant P as 平台数据库
-  participant E as 业务库 / 文件 / 外部渠道
-  participant R as 可选 REPORT Outbox
-  participant H as 运维 / 下游确认
+  autonumber
+  box rgba(5,150,105,0.10) 执行侧
+    participant W as Worker
+    participant R as 可选 REPORT Outbox
+  end
+  box rgba(2,132,199,0.10) 平台侧
+    participant O as Orchestrator
+    participant P as 平台数据库
+  end
+  box rgba(100,116,139,0.10) 业务侧与人工
+    participant E as 业务库 / 文件 / 外部渠道
+    participant H as 运维 / 下游确认
+  end
   W->>O: CLAIM 任务
   O->>P: 接纳认领并确定 invocation / lease
   O-->>W: 当前 invocation / lease 与执行配置

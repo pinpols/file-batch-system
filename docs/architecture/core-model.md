@@ -51,15 +51,38 @@
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  D["WorkflowDefinition"] -->|"冻结"| R["WorkflowRun<br/>顶层运行"]
-  R --> N["WorkflowNodeRun"]
-  N --> C["START / END<br/>GATEWAY / WAIT"]
-  N -->|"JOB 节点"| J["JobInstance<br/>独立作业执行"]
-  J --> P["JobPartition<br/>身份 / 租约 / 重试"]
-  P --> T["JobTask<br/>CLAIM / EXECUTE / REPORT"]
-  T --> S["JobStepInstance<br/>步骤审计"]
-  J -. "文件类阶段观测" .-> PI["PipelineInstance<br/>PipelineStepRun"]
+flowchart LR
+
+  D["WorkflowDefinition"]:::lib
+  subgraph WF["Workflow 层"]
+    direction TB
+    R["WorkflowRun<br/>顶层运行"]
+    N["WorkflowNodeRun"]
+    C["START / END<br/>GATEWAY / WAIT"]
+    R --> N
+    N --> C
+  end
+  subgraph JOB["Job 执行层 · JOB 节点物化"]
+    direction TB
+    J["JobInstance<br/>独立作业执行"]
+    P["JobPartition<br/>身份 / 租约 / 重试"]
+    T["JobTask<br/>CLAIM / EXECUTE / REPORT"]
+    S["JobStepInstance<br/>步骤审计"]
+    J --> P
+    P --> T
+    T --> S
+  end
+  PI["PipelineInstance<br/>PipelineStepRun"]:::ext
+  D -->|"冻结"| WF
+  WF -->|"JOB 节点"| JOB
+  JOB -. "文件类阶段观测" .-> PI
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 | 对象 | 原语与身份 | 职责边界 |
@@ -295,6 +318,7 @@ task 没有 WAITING / RETRYING；重试等待由 partition、step 或 retry_sche
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+
   [*] --> CREATED
   CREATED --> RUNNING
   RUNNING --> PAUSED
@@ -304,6 +328,14 @@ stateDiagram-v2
   RUNNING --> SUCCESS_DRY_RUN
   RUNNING --> FAILED_DRY_RUN
   RUNNING --> TERMINATED
+  class SUCCESS ok
+  class FAILED,TERMINATED fail
+  class PAUSED wait
+  class SUCCESS_DRY_RUN,FAILED_DRY_RUN muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 聚合可以在其他被允许的活跃前态完成；暂停只停止推进新节点，已在途的工作可按现有契约完成。实现入口为 `DefaultWorkflowRunLaunchService`、`WorkflowRunManagementApplicationService` 和 `WorkflowNodeTerminalFinalizer`。
@@ -313,6 +345,7 @@ stateDiagram-v2
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+
   [*] --> READY: JOB 节点登记
   READY --> SUCCESS
   READY --> FAILED
@@ -322,6 +355,14 @@ stateDiagram-v2
   WAITING_DEPENDENCY --> FAILED: 依赖超时或解析失败
   [*] --> SKIPPED: 条件分支跳过
   FAILED --> SKIPPED: 受控人工跳过
+  class SUCCESS ok
+  class FAILED fail
+  class WAITING_DEPENDENCY wait
+  class SKIPPED muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 这是分场景的典型路径：不同节点类型可直接以不同初态建记录。跨日依赖满足后重新派发可能创建新 `run_seq` 的节点记录；不能把它画成旧等待记录必然直接变为 READY。`FAILED → SKIPPED` 是具备前态和操作条件的人工跳过，不是失败后自动重试。参考 `WorkflowNodeRunSupport`、`CrossDayDependencyReconciler`、`WorkflowRunManagementApplicationService` 和 `TaskOutcomeNodeRunRecorder`。
@@ -331,6 +372,7 @@ stateDiagram-v2
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+
   [*] --> CREATED: 默认创建
   [*] --> WAITING: 容量不足时创建
   CREATED --> READY: 准入并准备派发
@@ -340,6 +382,13 @@ stateDiagram-v2
   RUNNING --> RETRYING: 安排重试
   RETRYING --> READY: 重试重新派发
   RUNNING --> FAILED: 失败且不再重试
+  class SUCCESS ok
+  class FAILED fail
+  class WAITING,RETRYING wait
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 创建时也可依据计划或调用参数指定初态，容量不足时可能处于 WAITING；租约过期后的回收路径需重新经过调度和派发，不等同于任意直接复位。参考 `DefaultPartitionLifecycleService`、`DefaultTaskOutcomeService` 和 `RetryRequeueCoordinator`。
@@ -349,6 +398,7 @@ stateDiagram-v2
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
+
   [*] --> CREATED: 等待准入时创建
   [*] --> READY: 可派发时创建
   CREATED --> READY: 准备派发
@@ -356,6 +406,13 @@ stateDiagram-v2
   RUNNING --> SUCCESS: 成功报告
   RUNNING --> FAILED: 失败报告
   RUNNING --> CANCELLED: 符合取消条件的报告
+  class SUCCESS ok
+  class FAILED fail
+  class CANCELLED muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 这张图不画 `WAITING` / `RETRYING` 为 Task 状态；它们属于分区、步骤或重试计划。以上仅为典型路径，不能据此穷举取消、终止或 lease 恢复。例如 Worker 返回符合取消条件的报告时，Task 可进入 `CANCELLED`，该报告路径中不再重试的 Partition 按现有失败契约进入 `FAILED`；管理员分区取消走独立路径。参考 `DefaultPartitionLifecycleService`、`JobTaskMapper.assignWorker` 和 `DefaultTaskOutcomeService`。
