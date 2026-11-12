@@ -38,8 +38,7 @@ public class S3GovernanceStorage {
     String bucket = properties.getBucket();
     String effectivePrefix = prefix == null ? "" : prefix;
     String storageId = ownershipIdentity.storageId(properties, JsonUtils.newDefaultMapper());
-    cursorMapper.insertIfAbsent(storageId, effectivePrefix);
-    Cursor cursor = cursorMapper.select(storageId, effectivePrefix);
+    Cursor cursor = openCursor(storageId, effectivePrefix);
     List<Scope> protectedScopes = ownershipRepository.listProtectedScopes(storageId);
     List<StorageObjectView> objects = new ArrayList<>();
     try {
@@ -63,6 +62,12 @@ public class S3GovernanceStorage {
     } catch (Exception exception) {
       throw new IllegalStateException("failed to list objectStore objects", exception);
     }
+  }
+
+  /** 首次扫描该前缀时先补一条游标记录，再读取当前游标。 */
+  private Cursor openCursor(String storageId, String prefix) {
+    cursorMapper.insertIfAbsent(storageId, prefix);
+    return cursorMapper.select(storageId, prefix);
   }
 
   /** 仅在当前页全部处理成功后推进；过期执行者不得覆盖较新的扫描进度。 */

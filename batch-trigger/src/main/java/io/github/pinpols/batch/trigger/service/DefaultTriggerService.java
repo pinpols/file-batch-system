@@ -64,14 +64,15 @@ public class DefaultTriggerService implements TriggerService {
 
   @Override
   public LaunchResponse verifyCatchUpSubmission(TriggerLaunchCommand command) {
-    if (EmptyChecks.isNull(command)
+    // 完整性检查按短路顺序求值，保证 request 为 null 时不读取其字段。
+    boolean catchUpCommandIncomplete = EmptyChecks.isNull(command)
         || EmptyChecks.isNull(command.request())
         || EmptyChecks.isBlank(command.idempotencyKey())
         || EmptyChecks.isBlank(command.request().tenantId())
         || EmptyChecks.isNull(command.request().workflowDefinitionId())
         || command.request().workflowDefinitionId() <= 0
-        || EmptyChecks.isNull(command.request().bizDate())
-        || command.request().triggerType() != TriggerType.CATCH_UP) {
+        || EmptyChecks.isNull(command.request().bizDate());
+    if (catchUpCommandIncomplete || command.request().triggerType() != TriggerType.CATCH_UP) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     return launchQueryService.verifyCatchUpSubmission(

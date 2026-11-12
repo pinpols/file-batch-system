@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-11 计划已定，尚未开工。执行方式与提交授权待用户决定。
+**状态：** 2026-11-11 计划已定。执行方式为子代理驱动，已授权提交、推送与开草稿 PR，合并仍需用户确认。PR-1（Task 1–3）已实施并评审（草稿 PR #1354）；PR-2（Task 4–8、13）已实施并评审，将作为草稿 PR 叠在 #1354 之上；Task 9–12、14–24 尚未开工。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 

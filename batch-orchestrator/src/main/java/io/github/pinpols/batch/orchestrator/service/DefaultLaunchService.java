@@ -108,9 +108,8 @@ public class DefaultLaunchService implements LaunchService {
     LaunchRequest routedRequest = launchBatchDayService.routeLateArrivalIfNeeded(request, loaded);
     Map<String, Object> effectiveParams =
         launchParamResolver.mergeLaunchParams(loaded.jobDefinition(), routedRequest);
-    validateBundleParamsBeforeInstanceCreation(request, loaded, effectiveParams);
-    validateRelatedFileReference(request, effectiveParams);
-    validateParentInstanceReference(request, effectiveParams);
+    JobType jobType = DictEnum.fromCode(JobType.class, loaded.jobDefinition().jobType());
+    validateLaunchReferences(request, jobType, effectiveParams);
     BatchDayGateService.GateDecision gateDecision =
         batchDayGateService.evaluateAndApply(routedRequest, loaded, effectiveParams, traceId);
     if (!gateDecision.allowed()) {
@@ -132,8 +131,7 @@ public class DefaultLaunchService implements LaunchService {
           () -> prepareJobInstanceInTransaction(
               launchRequestWithDependencySnapshot, loaded, effectiveParams, traceId));
     } catch (TemplateCaptureRejected rejection) {
-      jobMappers.triggerRequestMapper.updateAcceptance(
-          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+      rejectAcceptance(request);
       throw rejection.businessFailure;
     } catch (DataIntegrityViolationException exception) {
       SwallowedExceptionLogger.info(
@@ -158,32 +156,38 @@ public class DefaultLaunchService implements LaunchService {
     return new LaunchResponse(prepared.jobInstance().getInstanceNo(), traceId);
   }
 
-  private void validateBundleParamsBeforeInstanceCreation(
-      LaunchRequest request, LaunchLoadResult loaded, Map<String, Object> effectiveParams) {
-    JobType jobType = DictEnum.fromCode(JobType.class, loaded.jobDefinition().jobType());
+  /** 按原顺序执行三项启动引用校验；任一校验抛出业务异常时，先把触发请求标记为 REJECTED 再原样抛出。 */
+  private void validateLaunchReferences(
+      LaunchRequest request, JobType jobType, Map<String, Object> effectiveParams) {
+    // 注意：此 catch 内的参数解析与实例查询目前不会抛出 BizException；若日后抛出，同样会把请求标记为 REJECTED
     try {
-      BundlePlanParams.validate(effectiveParams, jobType);
-      for (BundlePlanParams.BundleFile bundleFile :
-          BundlePlanParams.extract(effectiveParams, jobType)) {
-        relatedFileReferenceValidator.validate(request.tenantId(), bundleFile.sourceFileId());
-      }
-    } catch (BizException ex) {
-      jobMappers.triggerRequestMapper.updateAcceptance(
-          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
-      throw ex;
+      validateBundleParamsBeforeInstanceCreation(request, jobType, effectiveParams);
+      validateRelatedFileReference(request, effectiveParams);
+      validateParentInstanceReference(request, effectiveParams);
+    } catch (BizException exception) {
+      rejectAcceptance(request);
+      throw exception;
+    }
+  }
+
+  private void rejectAcceptance(LaunchRequest request) {
+    jobMappers.triggerRequestMapper.updateAcceptance(
+        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
+  }
+
+  private void validateBundleParamsBeforeInstanceCreation(
+      LaunchRequest request, JobType jobType, Map<String, Object> effectiveParams) {
+    BundlePlanParams.validate(effectiveParams, jobType);
+    for (BundlePlanParams.BundleFile bundleFile :
+        BundlePlanParams.extract(effectiveParams, jobType)) {
+      relatedFileReferenceValidator.validate(request.tenantId(), bundleFile.sourceFileId());
     }
   }
 
   private void validateRelatedFileReference(
       LaunchRequest request, Map<String, Object> effectiveParams) {
     Long relatedFileId = launchParamResolver.resolveRelatedFileId(effectiveParams);
-    try {
-      relatedFileReferenceValidator.validate(request.tenantId(), relatedFileId);
-    } catch (BizException exception) {
-      jobMappers.triggerRequestMapper.updateAcceptance(
-          request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
-      throw exception;
-    }
+    relatedFileReferenceValidator.validate(request.tenantId(), relatedFileId);
   }
 
   private void validateParentInstanceReference(
@@ -198,8 +202,6 @@ public class DefaultLaunchService implements LaunchService {
         && request.tenantId().equals(parentInstance.getTenantId())) {
       return;
     }
-    jobMappers.triggerRequestMapper.updateAcceptance(
-        request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
     throw BizException.of(ResultCode.NOT_FOUND, "error.job.instance_not_found");
   }
 

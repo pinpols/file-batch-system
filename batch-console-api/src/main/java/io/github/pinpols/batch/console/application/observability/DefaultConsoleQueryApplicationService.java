@@ -278,19 +278,32 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
   }
 
   private static List<ConsoleTraceTimelineItem> buildTimeline(TraceTimelineSources sources) {
-    String traceId = sources.traceId();
-    List<ConsoleJobInstanceResponse> jobInstances = sources.jobInstances();
-    List<ConsoleWorkflowRunResponse> workflowRuns = sources.workflowRuns();
-    List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns = sources.workflowNodeRuns();
-    List<ConsoleFileRecordResponse> files = sources.files();
-    List<ConsoleFilePipelineResponse> filePipelines = sources.filePipelines();
-    List<ConsoleAuditLogResponse> auditLogs = sources.auditLogs();
-    List<ConsoleOperationAuditResponse> operationAudits = sources.operationAudits();
-    List<ConsoleJobExecutionLogResponse> executionLogs = sources.executionLogs();
-    List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries = sources.outboxDeliveries();
-    List<ConsoleAlertEventResponse> alerts = sources.alerts();
-    List<ConsoleDeadLetterTaskResponse> deadLetters = sources.deadLetters();
     List<ConsoleTraceTimelineItem> items = new ArrayList<>();
+    addJobInstanceItems(items, sources.traceId(), sources.jobInstances());
+    addWorkflowRunItems(items, sources.traceId(), sources.workflowRuns());
+    addWorkflowNodeRunItems(items, sources.traceId(), sources.workflowNodeRuns());
+    addFileItems(items, sources.traceId(), sources.files());
+    addFilePipelineItems(items, sources.traceId(), sources.filePipelines());
+    addAuditLogItems(items, sources.auditLogs());
+    addOperationAuditItems(items, sources.operationAudits());
+    addExecutionLogItems(items, sources.executionLogs());
+    addOutboxDeliveryItems(items, sources.outboxDeliveries());
+    addAlertItems(items, sources.alerts());
+    addDeadLetterItems(items, sources.deadLetters());
+    Comparator<ConsoleTraceTimelineItem> timelineOrder = Comparator.comparing(
+            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
+        .thenComparing(
+            ConsoleTraceTimelineItem::referenceId, Comparator.nullsLast(Comparator.naturalOrder()));
+    items.sort(timelineOrder);
+    return List.copyOf(items);
+  }
+
+  private static void addJobInstanceItems(
+      List<ConsoleTraceTimelineItem> items,
+      String traceId,
+      List<ConsoleJobInstanceResponse> jobInstances) {
     jobInstances.forEach(item -> {
       Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -303,6 +316,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           traceId);
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addWorkflowRunItems(
+      List<ConsoleTraceTimelineItem> items,
+      String traceId,
+      List<ConsoleWorkflowRunResponse> workflowRuns) {
     workflowRuns.forEach(item -> {
       Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -315,6 +334,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           traceId);
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addWorkflowNodeRunItems(
+      List<ConsoleTraceTimelineItem> items,
+      String traceId,
+      List<ConsoleWorkflowNodeRunResponse> workflowNodeRuns) {
     workflowNodeRuns.forEach(item -> {
       Instant occurredAt = firstNonNull(item.startedAt(), item.finishedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -327,6 +352,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           traceId);
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addFileItems(
+      List<ConsoleTraceTimelineItem> items, String traceId, List<ConsoleFileRecordResponse> files) {
     files.forEach(item -> {
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
           "FILE_RECORD",
@@ -338,6 +367,12 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           traceId);
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addFilePipelineItems(
+      List<ConsoleTraceTimelineItem> items,
+      String traceId,
+      List<ConsoleFilePipelineResponse> filePipelines) {
     filePipelines.forEach(item -> {
       Instant occurredAt = firstNonNull(item.createdAt(), item.startedAt(), item.finishedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -350,6 +385,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           traceId);
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addAuditLogItems(
+      List<ConsoleTraceTimelineItem> items, List<ConsoleAuditLogResponse> auditLogs) {
     auditLogs.forEach(item -> {
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
           "FILE_AUDIT",
@@ -361,6 +400,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addOperationAuditItems(
+      List<ConsoleTraceTimelineItem> items, List<ConsoleOperationAuditResponse> operationAudits) {
     operationAudits.forEach(item -> {
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
           "OPERATION_AUDIT",
@@ -372,6 +415,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addExecutionLogItems(
+      List<ConsoleTraceTimelineItem> items, List<ConsoleJobExecutionLogResponse> executionLogs) {
     executionLogs.forEach(item -> {
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
           "EXECUTION_LOG",
@@ -383,6 +430,11 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addOutboxDeliveryItems(
+      List<ConsoleTraceTimelineItem> items,
+      List<ConsoleOutboxDeliveryLogResponse> outboxDeliveries) {
     outboxDeliveries.forEach(item -> {
       Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -395,6 +447,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addAlertItems(
+      List<ConsoleTraceTimelineItem> items, List<ConsoleAlertEventResponse> alerts) {
     alerts.forEach(item -> {
       Instant occurredAt = firstNonNull(item.lastSeenAt(), item.createdAt(), item.updatedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -407,6 +463,10 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
+  }
+
+  private static void addDeadLetterItems(
+      List<ConsoleTraceTimelineItem> items, List<ConsoleDeadLetterTaskResponse> deadLetters) {
     deadLetters.forEach(item -> {
       Instant occurredAt = firstNonNull(item.createdAt(), item.updatedAt());
       ConsoleTraceTimelineItem timelineItem = new ConsoleTraceTimelineItem(
@@ -419,14 +479,6 @@ public class DefaultConsoleQueryApplicationService implements ConsoleQueryApplic
           item.traceId());
       addTimeline(items, timelineItem);
     });
-    Comparator<ConsoleTraceTimelineItem> timelineOrder = Comparator.comparing(
-            ConsoleTraceTimelineItem::occurredAt, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::source, Comparator.nullsLast(Comparator.naturalOrder()))
-        .thenComparing(
-            ConsoleTraceTimelineItem::referenceId, Comparator.nullsLast(Comparator.naturalOrder()));
-    items.sort(timelineOrder);
-    return List.copyOf(items);
   }
 
   private static void addTimeline(

@@ -10,6 +10,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -339,7 +340,7 @@ class DefaultLaunchServiceTest {
         .hasMessageContaining("error.job.instance_not_found");
 
     verify(jobInstanceMapper).selectById("t1", 999L);
-    verify(triggerRequestMapper)
+    verify(triggerRequestMapper, times(1))
         .updateAcceptance("t1", request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
     verify(jobInstanceMapper, never()).insert(any());
     verify(partitionDispatchService, never()).dispatch(any());
@@ -483,7 +484,7 @@ class DefaultLaunchServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessage("error.partition.dispatch_business_error");
 
-    verify(triggerRequestMapper)
+    verify(triggerRequestMapper, times(1))
         .updateAcceptance("t1", "req-bundle-invalid", TriggerRequestStatus.REJECTED.code(), null);
     verify(jobInstanceMapper, never()).insert(any());
     verify(partitionDispatchService, never()).dispatch(any());
@@ -515,7 +516,7 @@ class DefaultLaunchServiceTest {
         .isInstanceOf(BizException.class)
         .hasMessage("error.file.record_not_found");
 
-    verify(triggerRequestMapper)
+    verify(triggerRequestMapper, times(1))
         .updateAcceptance("t1", "req-foreign-file", TriggerRequestStatus.REJECTED.code(), null);
     verify(jobInstanceMapper, never()).insert(any());
     verify(partitionDispatchService, never()).dispatch(any());

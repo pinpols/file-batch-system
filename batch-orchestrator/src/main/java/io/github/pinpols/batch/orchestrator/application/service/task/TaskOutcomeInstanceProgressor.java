@@ -1,7 +1,6 @@
 package io.github.pinpols.batch.orchestrator.application.service.task;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
-import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeCode;
 import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
@@ -69,44 +68,15 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
         ? jobMappers.jobPartitionMapper.selectStatusRefsByInstance(
             command.tenantId(), task.getJobInstanceId())
         : List.of();
-    long totalPartitionCount = dagInstance
-        ? statusRefs.size()
-        : Optional.ofNullable(jobInstance.getExpectedPartitionCount()).orElse(0);
-    long successCount = dagInstance
-        ? statusRefs.stream()
-            .filter(r -> PartitionStatus.SUCCESS.code().equals(r.partitionStatus()))
-            .count()
-        : Optional.ofNullable(jobInstance.getSuccessPartitionCount()).orElse(0);
-    long failedCount = dagInstance
-        ? statusRefs.stream()
-            .filter(r -> PartitionStatus.FAILED.code().equals(r.partitionStatus()))
-            .count()
-        : Optional.ofNullable(jobInstance.getFailedPartitionCount()).orElse(0);
-    long cancelledCount = dagInstance
-        ? statusRefs.stream()
-            .filter(r -> PartitionStatus.CANCELLED.code().equals(r.partitionStatus()))
-            .count()
-        : Optional.ofNullable(jobInstance.getCancelledPartitionCount()).orElse(0);
-    long terminatedCount = dagInstance
-        ? statusRefs.stream()
-            .filter(r -> PartitionStatus.TERMINATED.code().equals(r.partitionStatus()))
-            .count()
-        : Optional.ofNullable(jobInstance.getTerminatedPartitionCount()).orElse(0);
-    long broadFailedCount = failedCount + cancelledCount + terminatedCount;
-    long finishedPartitionCount = successCount + broadFailedCount;
-    boolean allPartitionsFinished =
-        totalPartitionCount > 0 && finishedPartitionCount == totalPartitionCount;
+    PartitionOutcomeCounts counts = dagInstance
+        ? PartitionOutcomeCounts.fromStatusRefs(statusRefs)
+        : PartitionOutcomeCounts.fromInstanceCounters(jobInstance);
+    boolean allPartitionsFinished = counts.allFinished();
     PartitionStatusSummary terminalVerification = null;
     if (!dagInstance && allPartitionsFinished) {
       terminalVerification = jobMappers.jobPartitionMapper.selectStatusSummaryByInstance(
           command.tenantId(), task.getJobInstanceId());
-      boolean terminalPartitionSummaryIsInconsistent = EmptyChecks.isNull(terminalVerification)
-          || terminalVerification.totalCount() != totalPartitionCount
-          || terminalVerification.successCount() != successCount
-          || terminalVerification.failedCount() != failedCount
-          || terminalVerification.cancelledCount() != cancelledCount
-          || terminalVerification.terminatedCount() != terminatedCount
-          || terminalVerification.broadFailedCount() != broadFailedCount;
+      boolean terminalPartitionSummaryIsInconsistent = !counts.matches(terminalVerification);
       if (terminalPartitionSummaryIsInconsistent) {
         throw BizException.of(ResultCode.STATE_CONFLICT, "error.job.instance_progress_conflict");
       }
@@ -156,18 +126,18 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
     // WorkflowRun 保持活动，但不能让此已完成的 JobInstance 继续占用准入名额。
     boolean jobFullyComplete = allPartitionsFinished;
     String instanceEvent = TaskOutcomeStatePolicy.resolveInstanceEvent(
-        successCount,
-        failedCount,
-        cancelledCount,
-        terminatedCount,
+        counts.success(),
+        counts.failed(),
+        counts.cancelled(),
+        counts.terminated(),
         allPartitionsFinished,
         TaskOutcomeStatePolicy.isDryRun(jobInstance));
     String instanceStatus = lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
     if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
         jobInstance.getInstanceStatus(),
         instanceEvent,
-        successCount,
-        failedCount,
+        counts.success(),
+        counts.failed(),
         allPartitionsFinished)) {
       // 重试/补偿已完成全部分区时，旧失败终态只允许在实时统计证明全成功后收敛。
       instanceStatus = instanceEvent;
@@ -180,7 +150,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
           tenantIdForLog,
           jobInstanceIdForLog,
           previousStatusForLog,
-          successCount);
+          counts.success());
     }
     String instanceFailureClass = TaskOutcomeStatePolicy.isTerminalJobInstanceStatus(instanceStatus)
             && (JobInstanceStatus.FAILED.code().equals(instanceStatus)
@@ -193,12 +163,12 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
             .tenantId(command.tenantId())
             .id(jobInstance.getId())
             .instanceStatus(instanceStatus)
-            .successPartitionCount((int) successCount)
-            .failedPartitionCount((int) failedCount)
-            .cancelledPartitionCount((int) cancelledCount)
-            .terminatedPartitionCount((int) terminatedCount);
+            .successPartitionCount((int) counts.success())
+            .failedPartitionCount((int) counts.failed())
+            .cancelledPartitionCount((int) counts.cancelled())
+            .terminatedPartitionCount((int) counts.terminated());
     String resultSummary = TaskOutcomeSummaryBuilder.buildJobInstanceResultSummary(
-        jobInstance, successCount, broadFailedCount, command);
+        jobInstance, counts.success(), counts.broadFailed(), command);
     UpdateInstanceProgressParam progress = progressBuilder
         .resultSummary(resultSummary)
         .finishedAt(jobFullyComplete ? finishedAt : null)
@@ -226,7 +196,7 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
       workflowFinalizer.finalizeWorkflow(TaskOutcomeWorkflowFinalizer.Context.builder()
           .command(command)
           .workflowRun(workflowRun)
-          .failedPartitionCount(broadFailedCount)
+          .failedPartitionCount(counts.broadFailed())
           .allPartitionsFinished(allPartitionsFinished)
           .dagContinues(dagContinues)
           .jobFullyComplete(jobFullyComplete)

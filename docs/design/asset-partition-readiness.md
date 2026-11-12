@@ -131,3 +131,5 @@ Prometheus / Alertmanager 模板已同步:
 - 物化表缺历史数据时,readiness 仍可回退读取当前 EFFECTIVE result_version。
 - ready 响应必须带 `assetCode/bizDate/partitionKey/businessKey/freshnessStatus/versionNo/jobInstanceId`。
 - 配了 freshness policy 后,缺失产物必须产生 `ASSET_FRESHNESS_MISSING` 或 `ASSET_FRESHNESS_STALE` 告警,但 readiness 仍只按 EFFECTIVE 裁决。
+
+- 2026-11-11 Java 可读性阶段 9 重构只调整了 `AssetPartitionService`(私有方法 `loadDataAssetId` 改名为 `ensureDataAssetId`)与 `DefaultTriggerService`(`verifyCatchUpSubmission` 守卫提取为具名布尔)的内部写法,readiness 判定、接口与数据契约不变,详见 [Java 可读性阶段 9 计划](../plans/java-readability-phase-9-plan-2026-11-11.md)。

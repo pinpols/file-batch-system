@@ -14,6 +14,7 @@ import io.github.pinpols.batch.console.domain.file.infrastructure.query.ConsoleF
 import io.github.pinpols.batch.console.domain.job.application.contract.query.JobExecutionLogQueryRequest;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.workflow.application.contract.query.WorkflowNodeRunQueryRequest;
 import io.github.pinpols.batch.console.domain.workflow.infrastructure.query.ConsoleWorkflowQueryService;
 import io.github.pinpols.batch.console.infrastructure.query.ConsoleJobQueryService;
@@ -123,6 +124,50 @@ class DefaultConsoleQueryApplicationServiceTest {
     assertThat(response.timeline().getFirst().source()).isEqualTo("JOB_INSTANCE");
     assertThat(response.timeline().getFirst().occurredAt())
         .isEqualTo(Instant.parse("2026-08-02T01:00:00Z"));
+  }
+
+  @Test
+  @DisplayName("发生时间相同时, 时间线先按来源名再按引用编号排序, 而不是按来源收集顺序")
+  void traceSnapshot_breaksEqualTimestampTiesBySourceThenReferenceId() {
+    stubEmptyPages();
+    Instant sameTime = Instant.parse("2026-08-02T01:00:00Z");
+    when(jobQueryService.jobInstances(any()))
+        .thenReturn(new PageResponse<>(
+            2, 1, 200, List.of(jobInstanceAt(9L, sameTime), jobInstanceAt(3L, sameTime))));
+    when(opsQueryService.alertEvents(any()))
+        .thenReturn(new PageResponse<>(
+            1,
+            1,
+            200,
+            List.of(ConsoleAlertEventResponse.builder()
+                .id(5L)
+                .alertType("JOB_FAILED")
+                .status("OPEN")
+                .title("alert-title")
+                .lastSeenAt(sameTime)
+                .traceId("trace-1")
+                .build())));
+
+    ConsoleTraceSnapshotResponse response = service.traceSnapshot("t1", "trace-1");
+
+    assertThat(response.timeline())
+        .extracting(item -> item.source() + ":" + item.referenceId())
+        .containsExactly("ALERT:5", "JOB_INSTANCE:3", "JOB_INSTANCE:9");
+  }
+
+  private static ConsoleJobInstanceResponse jobInstanceAt(Long id, Instant startedAt) {
+    return ConsoleJobInstanceResponse.builder()
+        .id(id)
+        .tenantId("t1")
+        .jobCode("job-a")
+        .instanceNo("i-" + id)
+        .triggerType("MANUAL")
+        .instanceStatus("SUCCESS")
+        .rerunFlag(false)
+        .retryFlag(false)
+        .startedAt(startedAt)
+        .dryRun(false)
+        .build();
   }
 
   @Test

@@ -122,7 +122,7 @@ public class AssetPartitionService {
     if (EmptyChecks.isNotNull(committedId)) {
       return committedId;
     }
-    Long assetId = loadDataAssetId(key);
+    Long assetId = ensureDataAssetId(key);
     if (EmptyChecks.isNotNull(assetId)) {
       publishCommittedDataAssetId(key, assetId);
     }
@@ -145,7 +145,7 @@ public class AssetPartitionService {
     });
   }
 
-  private Long loadDataAssetId(DataAssetKey key) {
+  private Long ensureDataAssetId(DataAssetKey key) {
     DataAssetUpsertParam dataAssetUpsertParam = DataAssetUpsertParam.builder()
         .tenantId(key.tenantId())
         .assetCode(key.assetCode())

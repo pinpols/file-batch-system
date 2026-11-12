@@ -256,9 +256,20 @@
 | 未列入计划的同字段字面量 | — | 留待后续 | 计划清单之外，同字段上还有 `DefaultWorkflowDagService` 的 `"SKIPPED"`（约 578、582、607、624）与 `STATUS_SUCCESS="SUCCESS"`（65）、`WorkflowRunStuckReconciler:59` 的 `Set.of("SUCCESS","FAILED","SKIPPED")`、审批的 `"EXECUTED"`/`"APPROVED"`，本任务未动，留作后续整改 |
 | `ResultVersionPromoteService:47、76`、`DefaultConsoleConfigSyncApplicationService:241`、`AuditAspect:200`、`DefaultCompensationService:1171` | — | 不替换 | 没有对应枚举，本计划不新增枚举 |
 
+## R9 逐处结论（Task 8）
+
+判定依据：catch 处理的异常是否可能来自 try 里的任意一步，以及 catch 是否依赖 try 体里逐步更新的状态。两者任一成立就是整段翻译边界，收窄会改变异常归类。
+
+| 位置 | 结论 | 说明 |
+|---|---|---|
+| `DefaultWorkflowRunLaunchService.prepareRun` | 已处理：事务体提成 `createRunInTransaction`，try 只剩一行 | catch 必须留在 `transaction.execute` 外面：唯一键冲突后 PostgreSQL 事务已中止，胜出者查询只能在回滚后执行；已在 catch 上注明。传播行为、隔离级别未改 |
+| `PrepareDispatchStep.execute`（try 约 88 行） | 整段翻译边界，保留；补注释候选 | `catch (Exception)` 把载荷解析、文件/渠道加载、绑定流水线实例中任意一步的异常统一翻译为 `DISPATCH_PREPARE_PARSE_FAILED` 阶段失败；收窄会让仓储异常直接抛出阶段之外。可在 catch 上注明“整段准备阶段的统一失败出口”，或另开批次把 try 体提成具名方法 |
+| `DefaultRetryGovernanceService.replayDeadLetterWithinTransaction`（外层 try 约 87 行） | 整段边界，保留；补注释候选 | 外层是 `try/finally` 的 MDC 作用域，必须包住整个重放过程；内层 try 是保存点边界，catch 回滚到保存点后再记失败次数，覆盖重排队与 `markReplaySuccess` 两步。可另开批次把内层 catch 的失败记账提成具名方法，边界本身不收窄 |
+| `SftpDispatchChannelAdapter.uploadViaSftp`（外层 try-with-resources :223–307 约 82 行，内层 try :229–284 约 56 行） | 整段翻译边界，保留；补注释候选 | catch 依赖 try 体逐步更新的 `tempRemotePath`、`manifestTempRemotePath`、`publicationAttempted`、`publicationConfirmed`，用于清理远端临时文件并区分“外部结果未知”与普通失败；收窄会丢失这一归类。可在 catch 上注明这些标志的含义 |
+
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；每次合并仍需用户确认。PR-1（Task 1–3）已实施并评审，其余任务未开工。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；每次合并仍需用户确认。PR-1（Task 1–3）已实施并评审（草稿 PR #1354），PR-2（Task 4–8、13）已实施并评审，将作为草稿 PR 叠在 #1354 之上，其余任务（Task 9–12、14–24）未开工。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|
