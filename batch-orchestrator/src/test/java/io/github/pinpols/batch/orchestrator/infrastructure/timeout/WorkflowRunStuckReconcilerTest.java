@@ -6,20 +6,26 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.config.TimeoutEnforcerProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
+import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
+import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -83,6 +89,50 @@ class WorkflowRunStuckReconcilerTest {
     verify(resumeProgressor).resume("tenant-a", 1L);
     verify(resumeProgressor).resume("tenant-b", 2L);
     assertThat(RlsTenantContextHolder.get()).isNull();
+  }
+
+  @DisplayName("全部节点终态且存在失败节点时将运行置为失败")
+  @Test
+  void shouldFinalizeAsFailed_whenAllNodesTerminalAndOneFailed() {
+    UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "FAILED");
+
+    assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.FAILED.code());
+  }
+
+  @DisplayName("全部节点终态且无失败节点时将运行置为成功")
+  @Test
+  void shouldFinalizeAsSuccess_whenAllNodesTerminalWithoutFailure() {
+    UpdateWorkflowRunStatusParam param = reconcileWithNodes("SUCCESS", "SKIPPED");
+
+    assertThat(param.getRunStatus()).isEqualTo(WorkflowRunStatus.SUCCESS.code());
+  }
+
+  private UpdateWorkflowRunStatusParam reconcileWithNodes(String... nodeStatuses) {
+    WorkflowRunEntity running = candidate(1L, "tenant-a");
+    running.setRunStatus(WorkflowRunStatus.RUNNING.code());
+    when(gracefulShutdown.isDraining()).thenReturn(false);
+    when(governance.timeout()).thenReturn(timeoutProperties);
+    when(timeoutProperties.getWorkflowStuckThresholdSeconds()).thenReturn(60L);
+    when(timeoutProperties.getBatchSize()).thenReturn(10);
+    when(workflowRunMapper.selectStuckRunningCandidates(any(), eq(10)))
+        .thenReturn(List.of(running));
+    when(workflowRunMapper.selectById("tenant-a", 1L)).thenReturn(running);
+    List<WorkflowNodeRunEntity> nodeRuns = new ArrayList<>();
+    for (String status : nodeStatuses) {
+      WorkflowNodeRunEntity node = new WorkflowNodeRunEntity();
+      node.setNodeStatus(status);
+      nodeRuns.add(node);
+    }
+    when(workflowNodeRunMapper.selectByWorkflowRunId(1L)).thenReturn(nodeRuns);
+    when(workflowRunMapper.updateStatus(any())).thenReturn(1);
+    when(meterRegistry.counter(any(String.class))).thenReturn(Mockito.mock(Counter.class));
+
+    reconciler().reconcile();
+
+    ArgumentCaptor<UpdateWorkflowRunStatusParam> captor =
+        ArgumentCaptor.forClass(UpdateWorkflowRunStatusParam.class);
+    verify(workflowRunMapper).updateStatus(captor.capture());
+    return captor.getValue();
   }
 
   private WorkflowRunStuckReconciler reconciler() {

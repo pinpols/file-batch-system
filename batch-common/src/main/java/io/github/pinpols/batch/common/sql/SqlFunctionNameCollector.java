@@ -66,11 +66,13 @@ final class SqlFunctionNameCollector {
       @Override
       public <S> Void visit(PlainSelect plainSelect, S context) {
         Void r = super.visit(plainSelect, context);
-        acceptScalarClauses(
+        acceptGroupingClauses(
             EmptyChecks.isNull(plainSelect.getGroupBy())
                 ? null
                 : plainSelect.getGroupBy().getGroupByExpressionList(),
             plainSelect.getHaving(),
+            context);
+        acceptOrderingClauses(
             plainSelect.getOrderByElements(),
             plainSelect.getLimit(),
             plainSelect.getOffset(),
@@ -81,26 +83,20 @@ final class SqlFunctionNameCollector {
       @Override
       public <S> Void visit(SetOperationList setOpList, S context) {
         Void r = super.visit(setOpList, context);
-        acceptSetOperationScalarClauses(
+        acceptOrderingClauses(
             setOpList.getOrderByElements(), setOpList.getLimit(), setOpList.getOffset(), context);
         return r;
       }
 
-      private <S> void acceptSetOperationScalarClauses(
-          List<OrderByElement> orderBy, Limit limit, Offset offset, S context) {
-        acceptScalarClauses(null, null, orderBy, limit, offset, context);
+      /** 补走 TablesNamesFinder 缺席的分组子句:GROUP BY / HAVING。 */
+      private <S> void acceptGroupingClauses(Expression groupBy, Expression having, S context) {
+        acceptIfPresent(groupBy, context);
+        acceptIfPresent(having, context);
       }
 
-      /** 补走 TablesNamesFinder 缺席的标量表达式子句:GROUP BY / HAVING / ORDER BY / LIMIT / OFFSET。 */
-      private <S> void acceptScalarClauses(
-          Expression groupByExpressions,
-          Expression having,
-          List<OrderByElement> orderBy,
-          Limit limit,
-          Offset offset,
-          S context) {
-        acceptIfPresent(groupByExpressions, context);
-        acceptIfPresent(having, context);
+      /** 补走 TablesNamesFinder 缺席的排序与分页子句:ORDER BY / LIMIT / OFFSET。 */
+      private <S> void acceptOrderingClauses(
+          List<OrderByElement> orderBy, Limit limit, Offset offset, S context) {
         acceptOrderBy(orderBy, context);
         if (EmptyChecks.isNotNull(limit)) {
           acceptIfPresent(limit.getRowCount(), context);

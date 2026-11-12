@@ -74,6 +74,7 @@ public class DispatchFileContentResolver {
       try {
         inputStream.close();
       } catch (Exception ignored) {
+        // 解密已失败并会重新抛出原异常 e；关闭流的失败不能覆盖它，这里只做尽力释放
       }
       throw e;
     }

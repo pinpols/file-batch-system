@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.console.domain.job.application;
 
 import io.github.pinpols.batch.common.enums.JobInstanceStatus;
+import io.github.pinpols.batch.common.enums.PipelineRunStatus;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.SystemPipelineCatalog;
 import io.github.pinpols.batch.common.enums.SystemPipelineDefinition;
@@ -97,8 +98,10 @@ public class JobExecutionQueryService {
 
   private List<Stage> withLiveProgress(String tenant, Long pipelineId, List<Stage> stages) {
     if (stages.stream()
-        .noneMatch(s -> "RUNNING".equals(s.stageStatus()) && EmptyChecks.isNull(s.rowsProcessed())))
+        .noneMatch(s -> PipelineRunStatus.RUNNING.code().equals(s.stageStatus())
+            && EmptyChecks.isNull(s.rowsProcessed()))) {
       return stages;
+    }
     List<PipelineStepProgressSnapshot> liveSteps =
         filePipelineProgress.stepsAuthorized(tenant, pipelineId);
     if (EmptyChecks.isEmpty(liveSteps)) return stages;
@@ -109,8 +112,8 @@ public class JobExecutionQueryService {
           PipelineStepProgressSnapshot sample = byId.get(stage.stepRunId());
           boolean sameAttempt = EmptyChecks.isNotNull(sample)
               && Objects.equals(sample.runSeq(), stage.runSeq())
-              && "RUNNING".equals(sample.stepStatus());
-          if (!"RUNNING".equals(stage.stageStatus())
+              && PipelineRunStatus.RUNNING.code().equals(sample.stepStatus());
+          if (!PipelineRunStatus.RUNNING.code().equals(stage.stageStatus())
               || EmptyChecks.isNotNull(stage.rowsProcessed())
               || !sameAttempt) return stage;
           Instant heartbeat = EmptyChecks.isNull(sample.lastHeartbeatAt())

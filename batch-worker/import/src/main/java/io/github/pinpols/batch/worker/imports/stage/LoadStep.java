@@ -807,6 +807,7 @@ public class LoadStep implements ImportStageStep {
     try (Stream<String> stream = Files.lines(path, StandardCharsets.UTF_8)) {
       return stream.filter(Texts::hasText).count();
     } catch (Exception ignored) {
+      // dry-run 的落库行数只是预估值：文件读不出来（IO 错误或非 UTF-8）时按 0 展示，不能让预估拖垮 dry-run
       return 0L;
     }
   }

@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.timeout;
 
+import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
@@ -148,7 +149,7 @@ public class WorkflowRunStuckReconciler {
         anyActive = true;
         break;
       }
-      if ("FAILED".equals(n.getNodeStatus())) {
+      if (WorkflowNodeRunStatus.FAILED.code().equals(n.getNodeStatus())) {
         anyFailed = true;
       }
     }

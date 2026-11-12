@@ -359,7 +359,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| R1–R3、R5–R10、R12–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定，未开工；执行方式与提交授权待定 |
+| R1–R3、R5–R10、R12–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定；Task 1–3（R5、R6、R10，PR-1）已在分支 `chore/java-readability-p9-batch1` 实施并评审，将作为草稿 PR 叠在文档 PR #1353 之上，其余未开工；执行方式为子代理驱动（每任务一名实现者加一名评审者），已授权提交、推送与开草稿 PR，合并仍需用户确认 |
 | R4 空值判断写法 | 已裁定：对象判空用 `== null`，字符串/集合用 `EmptyChecks`；规则写入 [`coding-conventions.md`](../coding-conventions.md) §1.8 后按模块替换（计划 Task 18，最后执行） |
 | R11 大类按领域拆分 | 暂缓，登记在 [todo-master](todo-master.md) |
 | R24 用字符串表达有限域的公共参数 | 只登记，由[有限域与常量计划](typed-contract-enum-constant-governance-plan-2026-10-07.md)统一处理 |
