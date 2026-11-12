@@ -722,7 +722,7 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     snapshot.put("triggerRequestId", request.requestId());
     snapshot.put("replaySessionId", request.replaySessionId());
     snapshot.put("nodes", nodes);
-    snapshot.put("edges", EmptyChecks.isNull(edges) ? List.of() : edges);
+    snapshot.put("edges", edges);
     snapshot.put("jobDefinitions", jobVersions);
     snapshot.put(
         "initialNodes",

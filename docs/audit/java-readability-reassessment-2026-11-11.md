@@ -62,7 +62,7 @@
 | 构造器注入的 final 字段被判空 | 55 | 混合。`DefaultRetryGovernanceService:489`（`jobExecutionLogMapper`）、`DefaultTaskAssignmentService:929`（`resourceSchedulerProperties`）、`ConsoleMetaQueryService:172`（`messageSource`）在生产环境不可能为 null，判空只是为了照顾测试里传 null 的构造方式，属于过度防御。`DownstreamFallback:189` 的值来自 `ObjectProvider.getIfAvailable()`，判空合理。见 R12 |
 | MyBatis 返回的 List 被判空 | 27 | MyBatis 查询列表不会返回 null，Mockito 对 List 返回值的默认值也是空列表。例：`DefaultWorkflowDagService:106`、`BatchDayReplayService:620、840、1120、1145`。见 R12 |
 | `requireNonNull` 之后再判空 | 3 | `AtomicExecutorProductionGuard:117、130`、`AckDispatchStep:79`。见 R12 |
-| 同一方法内重复的 if 条件 | 141 | 多数合理：停机标志 `stopping.get()` 在步骤之间反复检查，异常消息按关键字分类。需要改的见 R13 |
+| 同一方法内重复的 if 条件 | 141 | 多数合理：停机标志 `stopping.get()` 在步骤之间反复检查，异常消息按关键字分类。R13 已撤销，不再改 |
 | 可合并的嵌套 if（外层只包一个内层 if，且都没有 else） | 13 | 一部分在两层之间有中文注释说明安全理由（如 `ConsoleTenantGuard:70`），这种保留。其余见 R15 |
 | 名字像查询或校验，实际在写数据 | 11（排除 `updatedAt()` 等 getter 后） | 见 R14 |
 | return/throw 之后跟 else | 7 | 见 R16 |
@@ -72,8 +72,8 @@
 
 | # | 类别 | 位置 | 现象 | 建议 | 行为保持约束 |
 |---|---|---|---|---|---|
-| R12 | 过度防御 | 上表前三行 | 给生产环境不可能为 null 的值判空，读者会误以为这里真有 null 的情况 | 注入依赖：确认所有生产构造路径都传了非 null 值（普通 Spring bean，不是 `ObjectProvider` / `@Nullable` / `required = false` / 条件装配）后删掉判空，测试改成传 mock。Mapper 列表：删掉判空，测试里的 `thenReturn(null)` 改成 `thenReturn(List.of())` | 只删除生产路径走不到的分支；条件装配的依赖保留判空 |
-| R13 | 重复判断 | `ImportIngressScanner.scanCycle:180-186` | `isNotNull(current) && "INDEX/APPLY/CLEAN".equals(current.phase())` 连写三次 | 先判一次 null，再用 `switch (current.phase())` 分派 | 阶段字符串保持原字面量（§1.7）；未知阶段的处理不变 |
+| R12 | 过度防御 | 上表前三行 | 给生产环境不可能为 null 的值判空，读者会误以为这里真有 null 的情况 | 注入依赖：确认所有生产构造路径都传了非 null 值（普通 Spring bean，不是 `ObjectProvider` / `@Nullable` / `required = false` / 条件装配）后删掉判空，测试改成传 mock。Mapper 列表：删掉判空，测试里的 `thenReturn(null)` 改成 `thenReturn(List.of())` | 只删除生产路径走不到的分支；条件装配的依赖保留判空 | **执行记录（2026-11-12）：** Task 10 删除 22 处不同的 CSV 位置（24 行，其中 `TriggerSecurityConfiguration:138`、`LoadStep:580` 各重复一行），另删 CSV 之外的 8 处同字段判空（`SqlTemplateExportDataPlugin` security :118/:131/:181；`GenerateStep` workerConfiguration :439/:443；`LoadStep` checkpointProperties :396/:428；`SqlTransformComputePlugin` security :120），保留 31 处。Task 11 删除 27 处（约 20 处改为 `EmptyChecks.isEmpty(x)`，对 null 仍容忍，符合门禁与 §1.8），保留 3 处。后续候选：测试专用的传 null 构造器仍保留（`StoreStep`、`DefaultStepExecutionAdapter`、`TriggerApiAdmissionGuard`、`ApiKeyVerifier`） |
+| R13 | 重复判断 | `ImportIngressScanner.scanCycle:180-186` | `isNotNull(current) && "INDEX/APPLY/CLEAN".equals(current.phase())` 连写三次 | 先判一次 null，再用 `switch (current.phase())` 分派 | 阶段字符串保持原字面量（§1.7）；未知阶段的处理不变 | **已撤销（2026-11-12）：** `scanCycle`（`ImportIngressScanner.java:176-188`）是顺序的 DISCOVER→INDEX→APPLY→CLEAN 链，每块都重新给 `current` 赋值，一次调用可连续推进多个阶段，改 `switch` 会改变行为 |
 | R14 | 方法职责不清 | `DefaultLaunchService.validateBundleParamsBeforeInstanceCreation:160`、`validateRelatedFileReference:176`、`validateParentInstanceReference:188` | 名字是校验，实际还会把触发请求写成 REJECTED；“写 REJECTED → 重抛”在 `launch` 的 `TemplateCaptureRejected` 分支里又写了一遍，共 4 份 | 三个校验方法只负责校验；在 `launch` 里用一个阶段方法统一捕获 `BizException`，调用一次 `rejectAcceptance(request)` 再重抛 | 只有原来会触发拒绝的异常才写 REJECTED：`DictEnum.fromCode` 不能移进 catch 范围；拒绝写入发生在重抛之前；三个校验的执行顺序不变 |
 | R14 | 方法职责不清 | `AssetPartitionService.loadDataAssetId:148`、`S3GovernanceStorage.listReconcilePage:36` | `load…` 实际会先 upsert；`list…` 会先初始化游标行 | 前者改名为 `ensureDataAssetId`；后者把游标初始化提成私有方法 `openCursor(storageId, prefix)`，让写入从名字上看得出来。公共方法名不改 | 写入顺序和次数不变 |
 | R15 | 可合并的嵌套 if | 扫描列出的 13 处中两层之间没有注释的 | 外层只包一个内层 if | 合并成一个条件；条件达到 3 项时按 §1.5 起名 | 短路顺序不变 |
@@ -145,7 +145,7 @@
 | Long Function / Composed Method / SLAP | R1、R3、R9、R14、R22、R27 | 主要问题，按核心流程逐层处理（见下） |
 | Large Class / Divergent Change | R11 | 已决定暂缓 |
 | Long Parameter List / Flag Argument | 第一轮参数扫描；Task 16 | 7 个以上参数的多为 Controller 注解误报；布尔参数见 R23 |
-| Duplicated Code | R2、R13、R20 | 已排入计划 |
+| Duplicated Code | R2、R13（已撤销）、R20 | 已排入计划（R13 除外） |
 | Middle Man / Lazy Element | R18、R19；补充复核四的小类 | 只有纯转发需要处理；为事务边界单独成 bean 的小类保留 |
 | Speculative Generality / 死代码 | R23（新） | 未使用的私有方法参数 23 个；“未使用的私有方法”扫描误报太多（内部类调用），结论不采用 |
 | Primitive Obsession | R5、R24（新） | 状态字面量已排入计划；公共方法用 `String` 表达有限域的有 126 处，只登记 |
@@ -269,7 +269,7 @@
 
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；每次合并仍需用户确认。PR-1（Task 1–3）已实施并评审（草稿 PR #1354），PR-2（Task 4–8、13）已实施并评审，将作为草稿 PR 叠在 #1354 之上，其余任务（Task 9–12、14–24）未开工。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）以 main 为目标，CI 测试分片已通过、已设自动合并，正在补覆盖率测试；PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）为草稿 PR，依次叠在其上；PR-4（Task 10–12、14）在分支 `chore/java-readability-p9-batch4`，将作为草稿 PR 叠在 #1356 之上；Task 15–17、19–24 和 18 未开工；文档 PR #1353 已合入 main（9b9f2d8c1）；R13（Task 12）已撤销。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|

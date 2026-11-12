@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-11 计划已定。执行方式为子代理驱动，已授权提交、推送与开草稿 PR，合并仍需用户确认。PR-1（Task 1–3）已实施并评审（草稿 PR #1354）；PR-2（Task 4–8、13）已实施并评审，将作为草稿 PR 叠在 #1354 之上；Task 9–12、14–24 尚未开工。
+**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。PR-1 #1354（Task 1–3）以 main 为目标，CI 测试分片已通过、已设自动合并，正在补覆盖率测试；PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）为草稿 PR，依次叠在其上；PR-4（Task 10–12、14）在分支 `chore/java-readability-p9-batch4`，将作为草稿 PR 叠在 #1356 之上；Task 15–17、19–24 和 18 未开工；文档 PR #1353 已合入 main（9b9f2d8c1）；R13（Task 12）已撤销。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 
@@ -42,7 +42,7 @@
 - [ ] 在 worktree `../file-batch-system-readability` 的 `chore/java-readability-phase-9` 分支（基于 `origin/main`）上工作。
 - [ ] 基线编译：`./mvnw -o -ntp -DskipTests install -pl batch-common,batch-orchestrator,batch-console-api,batch-trigger -am`，预期 `BUILD SUCCESS`。
 
-PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 和 Task 13 合成 PR-2；Task 9 单独作为 PR-3；Task 10–12、14 合成 PR-4（去掉多余防御和啰嗦写法）；Task 15–17 合成 PR-5（次要候选）；Task 19、21、22 合成 PR-6（转发和冗余写法）；Task 20 单独作为 PR-7（涉及出站安全代码）；Task 23 先按核心流程 L1–L6 分层、再按支撑功能分包、最后 Controller，每批一个 PR；Task 24 合入 PR-6；Task 18 在以上全部合入后最后执行，按模块拆成多个 PR。逐处候选清单在 [`java-readability-reassessment-2026-11-11-candidates.csv`](../audit/java-readability-reassessment-2026-11-11-candidates.csv)，执行时把每行的结论（删除 / 保留及原因）填进 `decision` 列。提交、推送和合并按 `git-pr-workflow` 执行，每次都要有当次授权。
+PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 和 Task 13 合成 PR-2；Task 9 单独作为 PR-3；Task 10–12、14 合成 PR-4（去掉多余防御和啰嗦写法）；Task 15–17 合成 PR-5（次要候选）；Task 19、21、22 合成 PR-6（转发和冗余写法）；Task 20 单独作为 PR-7（涉及出站安全代码）；Task 23 先按核心流程 L1–L6 分层、再按支撑功能分包、最后 Controller，每批一个 PR；Task 24 合入 PR-6；Task 18 在以上全部合入后最后执行，拆成 2–3 个 PR（如 common+sdk+trigger / orchestrator / console-api+workers），不再每个模块一个 PR。逐处候选清单在 [`java-readability-reassessment-2026-11-11-candidates.csv`](../audit/java-readability-reassessment-2026-11-11-candidates.csv)，执行时把每行的结论（删除 / 保留及原因）填进 `decision` 列。提交、推送和合并按 `git-pr-workflow` 执行，每次都要有当次授权。
 
 ---
 
@@ -247,7 +247,9 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 - [ ] **Step 4：跑改动模块的测试**，预期全部 PASS。
 - [ ] **Step 5：提交** `refactor(<模块>): trust MyBatis empty list results`。
 
-### Task 12：导入扫描的阶段分派只判一次（R13）
+### Task 12：导入扫描的阶段分派只判一次（R13，已撤销）
+
+> **已撤销（2026-11-12）：** `ImportIngressScanner.scanCycle`（`ImportIngressScanner.java:176-188`）是顺序的 DISCOVER→INDEX→APPLY→CLEAN 链，每一块都会重新给 `current` 赋值，一次调用可以连续推进多个阶段；改成 `switch` 会改变行为，因此不改代码。以下步骤作废。
 
 **Files:**
 - Modify：`batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanner.java:175-190`
@@ -340,7 +342,7 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 | `GenericJdbcMappedImportLoadPlugin.copyChunk:492` | `GenericJdbcMappedImportLoadPluginTest` | 是 |
 | `SqlTaskExecutor.runStatements:500`、`fetchResults:587` | `SqlTaskExecutorTest` 等 | 是 |
 | `BizTableSchemaRegistrar.registerOnStartup:49` | 无，先补 | 否 |
-| `TenantConfigInitApplyHandlers.applySpecs:169` | 无，先补 | 否 |
+| `TenantConfigInitApplyHandlers.applySpecs:169` | `DefaultConsoleTenantConfigInitApplicationServiceTest` | 是 |
 | `QueryExportHandler.doExecute:49`、`SqlAtomicHandler.runStatements:75`（SDK） | `QueryExportHandlerTest`、`SqlAtomicHandlerTest` | 是 |
 | `KafkaTaskConsumer.refreshConsumerLag:311`（SDK） | `KafkaTaskConsumer*Test` | 否 |
 | `SecurityScanOptions.parse:29` | `SecurityScanOptionsTest` | 否 |
@@ -355,14 +357,15 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 
 **Files:**
 - Modify：`docs/coding-conventions.md`（新增 §1.8 空值判断写法）
-- Modify：各模块生产代码，每个模块一个 PR
+- Modify：`scripts/ci/check-empty-checks.py`（门禁改为 §1.8 的拆分规则，随第一个 Task 18 PR 一起改）
+- Modify：各模块生产代码，拆成 2–3 个 PR
 
 - [ ] **Step 1：写规则。** §1.8：对象引用判空用 `x == null` / `x != null`；字符串在“空白也算空”时用 `EmptyChecks.isBlank`，只在 null 或长度为 0 时才算空的用 `EmptyChecks.isEmpty`；集合、Map、数组用 `EmptyChecks.isEmpty`；Stream 里用 `Objects::nonNull` / `Objects::isNull`。`EmptyChecks.isNull` / `isNotNull` 保留 API，不再在新代码里使用。写明 `trim().isEmpty()` 与 `isBlank` 结论不同，不能互换。
 - [ ] **Step 2：机械替换对象判空。** 按模块执行：`EmptyChecks.isNull(expr)` → `expr == null`，`EmptyChecks.isNotNull(expr)` → `expr != null`，`EmptyChecks::isNotNull` → `Objects::nonNull`。`expr` 不是简单标识符或方法调用时，给替换结果加括号，并检查周围运算的优先级。替换后删掉不再使用的 import。
 - [ ] **Step 3：替换组合判空。** 只替换静态类型确认是 `String` / `CharSequence` / `Collection` / `Map` / 数组的：`x == null || x.isBlank()` → `EmptyChecks.isBlank(x)`，`x == null || x.isEmpty()` → `EmptyChecks.isEmpty(x)`，对应的 `!=` / `&&` 取反形式同理。`x == null || x.trim().isEmpty()` 不替换。
 - [ ] **Step 4：每个模块跑完整测试和 Spotless。** `./mvnw -o -ntp -pl <模块> -am test`，再跑 `spotless:check`，预期都是 clean。另外跑 `ServiceEntryGuardArchTest`，预期 PASS。
 - [ ] **Step 5：检查有没有漏掉的。** `grep -rn 'EmptyChecks\.is\(Not\)\?Null(' --include='*.java' <模块>/src/main`，预期没有输出。
-- [ ] **Step 6：提交**（每个模块一个提交、一个 PR）`refactor(<模块>): use native null checks per conventions §1.8`。是否为 §1.8 增加防漂移门禁，等全部模块完成后再单独评估，不在本任务内。
+- [ ] **Step 6：提交**（每个模块一个提交、一个 PR）`refactor(<模块>): use native null checks per conventions §1.8`。**门禁先行：** 在第一个 Task 18 PR 中，把 `scripts/ci/check-empty-checks.py` 改成 §1.8 的拆分规则，并与 conventions §1.8 一起提交，必须早于任何 `EmptyChecks.isNull` → `== null` 的替换。阶段 9 内为通过旧门禁而写入、Task 18 必须回头处理的位置：`WorkerTaskLeaseRenewer.java` ~:245、`ConsoleMetaQueryService.java:172`、`ConsoleOidcAuthenticationSuccessHandler` 中 Optional 的 allow 注释、`WorkflowGraphs` 里的 `EmptyChecks.isNotEmpty`。
 
 ### Task 19：超长 builder 先命名，私有薄壳改直接调用（R17、R19）
 

@@ -398,29 +398,28 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       int retryUpdated = jobMappers.jobPartitionMapper.markRetrying(jobPartitionMarkRetryingParam);
       warnIfCasMiss(retryUpdated, "partition markRetrying", partition.getId());
       return null;
-    } else {
-      JobInstanceEntity transitionedInstance =
-          jobMappers.jobPartitionMapper.markTerminalStatusAndLoadInstance(
-              MarkPartitionStatusParam.builder()
-                  .tenantId(command.tenantId())
-                  .id(partition.getId())
-                  // Worker 取消继续采用现有的失败分区契约。显式的
-                  // 管理员分区取消由 InstanceManagement 处理。
-                  .partitionStatus(PartitionStatus.FAILED.code())
-                  .runningStatus(PartitionStatus.RUNNING.code())
-                  .terminalStatus1(PartitionStatus.SUCCESS.code())
-                  .terminalStatus2(PartitionStatus.FAILED.code())
-                  .terminalStatus3(PartitionStatus.CANCELLED.code())
-                  .terminalStatus4(PartitionStatus.TERMINATED.code())
-                  .outputSummary(outputSummary)
-                  .expectedVersion(partition.getVersion())
-                  .build());
-      warnIfCasMiss(
-          EmptyChecks.isNull(transitionedInstance) ? 0 : 1,
-          "partition markStatus(FAILED)",
-          partition.getId());
-      return transitionedInstance;
     }
+    JobInstanceEntity transitionedInstance =
+        jobMappers.jobPartitionMapper.markTerminalStatusAndLoadInstance(
+            MarkPartitionStatusParam.builder()
+                .tenantId(command.tenantId())
+                .id(partition.getId())
+                // Worker 取消继续采用现有的失败分区契约。显式的
+                // 管理员分区取消由 InstanceManagement 处理。
+                .partitionStatus(PartitionStatus.FAILED.code())
+                .runningStatus(PartitionStatus.RUNNING.code())
+                .terminalStatus1(PartitionStatus.SUCCESS.code())
+                .terminalStatus2(PartitionStatus.FAILED.code())
+                .terminalStatus3(PartitionStatus.CANCELLED.code())
+                .terminalStatus4(PartitionStatus.TERMINATED.code())
+                .outputSummary(outputSummary)
+                .expectedVersion(partition.getVersion())
+                .build());
+    warnIfCasMiss(
+        EmptyChecks.isNull(transitionedInstance) ? 0 : 1,
+        "partition markStatus(FAILED)",
+        partition.getId());
+    return transitionedInstance;
   }
 
   private void updateStepInstanceProgress(

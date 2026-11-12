@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.sla;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.view.JobSlaCandidate;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
@@ -91,7 +92,7 @@ public class JobSlaScheduler {
     escalationCount.set(jobMonitoringMapper.countSlaEscalationCandidates(escalationBefore));
     List<JobSlaCandidate> escalations = jobMonitoringMapper.selectSlaEscalationCandidates(
         escalationBefore, governance.sla().getBatchSize());
-    if (escalations == null || escalations.isEmpty()) {
+    if (EmptyChecks.isEmpty(escalations)) {
       return;
     }
     String severity = governance.sla().getEscalationSeverity();

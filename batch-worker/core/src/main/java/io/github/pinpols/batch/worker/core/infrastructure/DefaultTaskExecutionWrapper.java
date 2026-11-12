@@ -552,9 +552,6 @@ public class DefaultTaskExecutionWrapper implements TaskExecutionWrapper {
    */
   private void scheduleThreadLeakWatchdog(PulledTask task, AtomicBoolean executing) {
     long graceSeconds = Math.max(1L, timeoutProperties.getCancelGraceSeconds());
-    if (EmptyChecks.isNull(watchdog)) {
-      return;
-    }
     Runnable watchdogTask = () -> {
       if (executing.get()) {
         if (EmptyChecks.isNotNull(threadLeakedCounter)) {

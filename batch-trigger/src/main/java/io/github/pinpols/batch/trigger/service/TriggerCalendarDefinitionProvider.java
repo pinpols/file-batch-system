@@ -41,9 +41,6 @@ public class TriggerCalendarDefinitionProvider {
     }
     List<CalendarHolidayRule> rules =
         businessCalendarMapper.selectHolidayRulesByCalendarId(calendar.getId());
-    if (EmptyChecks.isNull(rules)) {
-      rules = List.of();
-    }
     Set<LocalDate> holidays = rules.stream()
         .filter(rule -> isDayType(rule, "HOLIDAY"))
         .map(CalendarHolidayRule::getBizDate)

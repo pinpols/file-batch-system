@@ -464,9 +464,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
           .distinct()
           .toList();
     }
-    List<String> failedJobCodes =
-        batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
-    return failedJobCodes == null ? List.of() : failedJobCodes;
+    return batchDayMapper.selectFailedJobCodes(tenantId, calendarCode, bizDate);
   }
 
   private Long resolveManagedWorkflowId(String tenantId, String jobCode) {

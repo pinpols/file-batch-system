@@ -78,7 +78,7 @@ public class DataQualityCheckExecutor {
     }
     List<DataQualityRuleEntity> rules =
         ruleMapper.selectEnabledByBusinessKey(instance.getTenantId(), businessKey);
-    if (rules == null || rules.isEmpty()) {
+    if (EmptyChecks.isEmpty(rules)) {
       return DataQualityGateOutcome.noRules();
     }
 

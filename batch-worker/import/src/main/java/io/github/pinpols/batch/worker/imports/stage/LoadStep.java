@@ -360,7 +360,7 @@ public class LoadStep implements ImportStageStep {
    */
   private void requireIdempotentPluginIfCheckpointEnabled(
       ImportLoadPlugin plugin, IdempotencyCapability capability) {
-    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+    if (!checkpointProperties.isEnabled()) {
       return;
     }
     if (isReplaySafe(capability)) {
@@ -393,7 +393,7 @@ public class LoadStep implements ImportStageStep {
   }
 
   private void requireCheckpointDisabledForPartitionReplace(ImportLoadPlugin plugin) {
-    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+    if (!checkpointProperties.isEnabled()) {
       return;
     }
     throw new WorkerConfigException(
@@ -425,7 +425,7 @@ public class LoadStep implements ImportStageStep {
    */
   private CheckpointHandle openCheckpoint(ImportJobContext context, Path validatedRecordsPath)
       throws Exception {
-    if (checkpointProperties == null || !checkpointProperties.isEnabled()) {
+    if (!checkpointProperties.isEnabled()) {
       return null;
     }
     if (checkpointDegradedByMultiPartition(context)) {
@@ -577,7 +577,7 @@ public class LoadStep implements ImportStageStep {
           && Texts.hasText(tenantId)
           && Texts.hasText(workerId)
           && Texts.hasText(partitionInvocationId);
-      if (!hasPersistedExecutionIdentity || EmptyChecks.isNull(taskExecutionClient)) {
+      if (!hasPersistedExecutionIdentity) {
         return false;
       }
       try {

@@ -48,9 +48,6 @@ public class JobDependencyWaitMetricsScheduler {
     }
     try {
       List<String> tenantIds = tenantDirectoryMapper.selectAllTenantIds();
-      if (EmptyChecks.isNull(tenantIds)) {
-        throw new IllegalStateException("tenant directory returned no tenant list");
-      }
       long totalWaiting = 0L;
       long maxOldestAgeSeconds = 0L;
       for (String tenantId : tenantIds) {

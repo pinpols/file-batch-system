@@ -898,10 +898,9 @@ public class DefaultCompensationService implements CompensationService {
           command.reason(),
           command.externalOutcomeEvidenceReference());
       return replayVerifiedUnknownExternalOutcome(command, commandNo, traceId, entity);
-    } else {
-      retryGovernanceService.replayDeadLetterInCurrentTransaction(
-          command.tenantId(), command.targetId());
     }
+    retryGovernanceService.replayDeadLetterInCurrentTransaction(
+        command.tenantId(), command.targetId());
     Map<String, Object> result = new LinkedHashMap<>();
     result.put(KEY_ACTION, "DLQ_REPLAY");
     result.put("deadLetterId", command.targetId());

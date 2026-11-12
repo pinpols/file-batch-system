@@ -20,6 +20,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.DeadLetterTaskEntity;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -87,7 +88,7 @@ class DeadLetterAutoRetryTest {
         jobTaskMapper,
         retryRequeueCoordinator,
         governance,
-        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */,
+        mock(JobExecutionLogMapper.class),
         transactionManager);
   }
 

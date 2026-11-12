@@ -486,9 +486,6 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     boolean externalActionVerifiedNotExecuted = input.externalActionVerifiedNotExecuted();
     String externalOutcomeEvidenceReference = input.externalOutcomeEvidenceReference();
 
-    if (jobExecutionLogMapper == null) {
-      return;
-    }
     JobExecutionLogEntity audit = new JobExecutionLogEntity();
     audit.setTenantId(tenantId);
     audit.setJobInstanceId(null);

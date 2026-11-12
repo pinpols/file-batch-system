@@ -199,9 +199,6 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private boolean isProductionProfile() {
-    if (environment == null) {
-      return false;
-    }
     return Arrays.stream(environment.getActiveProfiles())
         .anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
   }

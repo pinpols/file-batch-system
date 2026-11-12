@@ -619,9 +619,6 @@ public class BatchDayReplayService {
     }
     List<BatchDayReplayEntryEntity> entries =
         entryMapper.selectBySessionAndStatus(sessionId, tenantId, ENTRY_PENDING, Integer.MAX_VALUE);
-    if (entries == null) {
-      entries = List.of();
-    }
     Instant now = dateTimeSupport.nowInstant();
     int succeeded = 0;
     int failed = 0;
@@ -839,9 +836,6 @@ public class BatchDayReplayService {
             .build();
     List<JobInstanceEntity> candidates =
         jobInstanceMapper.selectBatchDayCandidates(jobInstanceBatchDayCandidatesQuery);
-    if (candidates == null) {
-      return List.of();
-    }
     List<BatchDayReplayEntryEntity> entries = new ArrayList<>(candidates.size());
     for (JobInstanceEntity ji : candidates) {
       boolean candidateCannotBeMaterialized = EmptyChecks.isNull(ji)
@@ -1119,7 +1113,7 @@ public class BatchDayReplayService {
     }
     List<BatchDayReplayAssetPartitionImpactView> rows =
         entryMapper.selectAssetPartitionImpacts(tenantId, businessKeys);
-    if (rows == null || rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       return List.of();
     }
     return rows.stream()
@@ -1144,7 +1138,7 @@ public class BatchDayReplayService {
     }
     List<BatchDayReplayDispatchImpactView> rows =
         entryMapper.selectDispatchImpacts(tenantId, sourceInstanceIds);
-    if (rows == null || rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       return List.of();
     }
     return rows.stream()

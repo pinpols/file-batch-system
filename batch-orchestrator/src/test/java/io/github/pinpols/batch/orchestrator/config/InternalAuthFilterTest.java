@@ -215,17 +215,4 @@ class InternalAuthFilterTest {
 
     verify(chain).doFilter(req, resp);
   }
-
-  @Test
-  @DisplayName("未注入接口密钥校验器时,内部密钥凭据仍可放行以兼容旧部署")
-  void shouldPassWithLegacySecret_whenApiKeyVerifierAbsent() throws Exception {
-    InternalAuthFilter f = new InternalAuthFilter(props, null);
-    MockHttpServletRequest req = new MockHttpServletRequest("POST", "/internal/tasks/1/claim");
-    req.addHeader(CommonConstants.INTERNAL_SECRET_HEADER, "super-secret");
-    MockHttpServletResponse resp = new MockHttpServletResponse();
-    FilterChain chain = mock(FilterChain.class);
-    f.doFilterInternal(req, resp, chain);
-
-    verify(chain).doFilter(req, resp);
-  }
 }

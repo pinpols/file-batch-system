@@ -48,7 +48,7 @@ public class BatchDayOpenScheduler {
     }
     catchupMetrics.beginScan();
     List<BusinessCalendarEntity> calendars = businessCalendarMapper.selectByEnabled(true);
-    if (calendars == null || calendars.isEmpty()) {
+    if (EmptyChecks.isEmpty(calendars)) {
       catchupMetrics.completeScan();
       return;
     }

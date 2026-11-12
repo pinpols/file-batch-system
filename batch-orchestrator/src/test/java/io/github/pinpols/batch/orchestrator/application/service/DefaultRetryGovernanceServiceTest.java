@@ -27,6 +27,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.RetryScheduleEntity;
 import io.github.pinpols.batch.orchestrator.domain.view.JobDefinitionView;
 import io.github.pinpols.batch.orchestrator.mapper.DeadLetterTaskMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobDefinitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobExecutionLogMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobInstanceMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
 import io.github.pinpols.batch.orchestrator.mapper.JobStepInstanceMapper;
@@ -98,7 +99,7 @@ class DefaultRetryGovernanceServiceTest {
         jobTaskMapper,
         retryRequeueCoordinator,
         governance,
-        null /* jobExecutionLogMapper: audit 在本测试不覆盖 */,
+        mock(JobExecutionLogMapper.class),
         transactionManager);
   }
 

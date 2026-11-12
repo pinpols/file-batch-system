@@ -70,9 +70,7 @@ public class ProcessPluginExecutionFence {
         && Texts.hasText(context.getTenantId())
         && Texts.hasText(context.getWorkerId())
         && Texts.hasText(invocationId);
-    boolean executionFenceCannotBeConfirmed =
-        !hasPersistedExecutionIdentity || EmptyChecks.isNull(taskExecutionClient);
-    if (executionFenceCannotBeConfirmed) {
+    if (!hasPersistedExecutionIdentity) {
       return false;
     }
 

@@ -277,9 +277,7 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private long effectiveMaxRows() {
-    return EmptyChecks.isNotNull(workerConfiguration)
-        ? workerConfiguration.effectiveMaxExportRows()
-        : 500_000L;
+    return workerConfiguration.effectiveMaxExportRows();
   }
 
   /** 失败清理仍由原 catch 调用；续跑文件只有成功打开 checkpoint 后才保留。 */
@@ -438,13 +436,11 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private int resolvePageSize(ExportJobContext context) {
-    return resolveTemplateInt(
-        context, "page_size", workerConfiguration == null ? 1000 : workerConfiguration.pageSize());
+    return resolveTemplateInt(context, "page_size", workerConfiguration.pageSize());
   }
 
   private int resolveChunkSize(ExportJobContext context) {
-    return resolveTemplateInt(
-        context, "chunk_size", workerConfiguration == null ? 500 : workerConfiguration.chunkSize());
+    return resolveTemplateInt(context, "chunk_size", workerConfiguration.chunkSize());
   }
 
   private int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
@@ -559,9 +555,7 @@ public class GenerateStep implements ExportStageStep {
    * 不在 P0 做。
    */
   private Long resolveCheckpointInstanceId(ExportJobContext context, String fileFormatType) {
-    boolean exportCheckpointIsUnavailable = EmptyChecks.isNull(checkpointProperties)
-        || !checkpointProperties.isEnabled()
-        || positionStore == null
+    boolean exportCheckpointIsUnavailable = !checkpointProperties.isEnabled()
         || FileTemplateFormat.EXCEL.code().equalsIgnoreCase(fileFormatType);
     if (exportCheckpointIsUnavailable) {
       return null;

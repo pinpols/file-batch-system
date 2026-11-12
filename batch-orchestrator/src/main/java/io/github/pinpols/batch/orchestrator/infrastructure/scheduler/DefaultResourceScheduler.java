@@ -422,7 +422,6 @@ public class DefaultResourceScheduler implements ResourceScheduler {
   private long resolveAgingBonus(ResourceSchedulingRequest request) {
     boolean priorityAgingUnavailable = EmptyChecks.isNull(request)
         || request.getWaitingSince() == null
-        || resourceSchedulerProperties == null
         || !resourceSchedulerProperties.isPriorityAgingEnabled();
     if (priorityAgingUnavailable) {
       return 0L;

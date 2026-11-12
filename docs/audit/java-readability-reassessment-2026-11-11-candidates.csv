@@ -1,122 +1,122 @@
 finding,category,file,line,symbol,decision
-R12,injected-final-field-null-check,batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java,189,meterRegistry,
-R12,injected-final-field-null-check,batch-common/src/main/java/io/github/pinpols/batch/common/verifier/ContentVerifierRegistry.java,101,meterRegistry,
-R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/rbac/ConsoleMetaQueryService.java,172,messageSource,
-R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AlertmanagerSilenceBridge.java,98,executor,
-R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/RedisRateLimitCircuitBreaker.java,77,failureCounter,
-R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/RedisRateLimitCircuitBreaker.java,86,openCounter,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/ratelimit/RedisRateLimitCircuitBreaker.java,107,circuitBreaker,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java,489,jobExecutionLogMapper,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/OutboxOpsApplicationService.java,128,jobExecutionLogMapper,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskAssignmentService.java,929,resourceSchedulerProperties,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,168,meterRegistry,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalAuthFilter.java,87,apiKeyVerifier,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/governance/AlertmanagerEmitPublisher.java,97,executor,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/OrchestratorConfigInvalidationSubscriber.java,235,eventLagTimer,
-R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultResourceScheduler.java,425,resourceSchedulerProperties,
-R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerApiAdmissionGuard.java,134,rejectedCounter,
-R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java,138,apiKeyVerifier,
-R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java,138,apiKeyVerifier,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,121,successCounter,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,126,timeoutCounter,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,137,failureCounter,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,156,publishTimer,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultStepExecutionAdapter.java,123,taskExecutionClient,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,152,meterRegistry,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,501,timeoutCounter,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,555,watchdog,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,560,threadLeakedCounter,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java,481,reportBatcher,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/checkpoint/DefaultProcessingPositionStore.java,122,meterRegistry,
-R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/PipelineCompensationHook.java,147,positionStore,
-R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,94,environment,
-R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,395,sftp,
-R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,418,session,
-R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,202,environment,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java,71,security,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java,190,workerConfiguration,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,280,workerConfiguration,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,562,checkpointProperties,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,564,positionStore,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/RegisterStep.java,341,taskExecutionClient,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,168,fileRecords,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,168,storageProperties,
-R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,271,formatStrategyRegistry,
-R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportRecordGovernanceService.java,76,skipProperties,
-R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,363,checkpointProperties,
-R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,
-R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,166,platformMapper,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,167,businessCleanup,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,168,cleanupFence,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,214,cleanedCounter,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/metrics/ProcessMetrics.java,72,registry,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java,96,security,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/stage/DefaultProcessStageExecutor.java,123,checkpointProperties,
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/stage/ProcessPluginExecutionFence.java,74,taskExecutionClient,
-R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobApprovalService.java,467,failedJobCodes,
-R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/SubscriptionRuleWebhookDispatcher.java,140,rules,
-R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java,775,holidays,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetFreshnessPolicyService.java,44,policies,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java,79,rules,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,620,entries,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,840,candidates,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,1120,rows,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,1145,rows,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,106,outgoingEdges,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,314,outgoing,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,396,incoming,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowRunLaunchService.java,641,edges,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/metrics/JobDependencyWaitMetricsScheduler.java,50,tenantIds,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayCutoffScheduler.java,66,candidates,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayOpenScheduler.java,50,calendars,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayReplayDispatcher.java,72,running,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayReplayDispatcher.java,113,pending,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDaySettleScheduler.java,102,candidates,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDaySettleScheduler.java,437,candidates,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayWaitingReleaseScheduler.java,81,waiting,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/WorkerCapabilityTagsAuditScheduler.java,71,rows,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/WorkflowValidatorReconciler.java,51,enabled,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobSlaScheduler.java,92,escalations,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/startup/NotValidConstraintGuard.java,36,invalid,
-R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayOperationService.java,406,waiting,
-R12,mapper-list-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/TriggerCalendarDefinitionProvider.java,42,rules,
-R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,117,sql,
-R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,130,sp,
-R12,null-check-after-requireNonNull,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/AckDispatchStep.java,79,receiptCode,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/BatchDayCatchUpReconciliation.java,114,frozenAutoCommand,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationService.java,133,persistAndExpand,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserAccountService.java,249,enforceGrantableAuthorities,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,144,patch,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java,294,authenticate,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuard.java,70,authorizeTenant,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java,980,buildHeaderIndex,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/naming/ReservedPrefixGuard.java,93,checkResourceCode,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java,89,rejectLogin,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java,359,collectOptionalNodes,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java,166,reconcileOneBound,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,
-R15,mergeable-nested-if,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,246,releaseUnexecutedClaims,
-R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,329,validateRow,
-R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitApplyHandlers.java,189,applySpecs,
-R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,900,replayDeadLetter,
-R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java,400,applyFailureOutcome,
-R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerTaskLeaseRenewer.java,236,attemptRenew,
-R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java,169,recordFailure,
-R16,else-after-return,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java,289,prepareDeliveryAttempt,
-R16,verbose-boolean-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,772,reaches,
-R16,verbose-boolean-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,278,scopesAllowAny,
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,557,toConfigReleaseResponse,
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitTenantExecutor.java,207,hasChanges,
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java,202,hasChanges,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetPartitionService.java,148,loadDataAssetId,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/S3GovernanceStorage.java,37,listReconcilePage,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,162,validateBundleParamsBeforeInstanceCreation,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,178,validateRelatedFileReference,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,190,validateParentInstanceReference,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,764,resolveConcurrentDuplicate,
-R14,query-or-check-name-with-write,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,151,resolveExecutionTimer,
-R14,query-or-check-name-with-write,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java,203,resolveObjectName,
+R12,injected-final-field-null-check,batch-common/src/main/java/io/github/pinpols/batch/common/resilience/DownstreamFallback.java,189,meterRegistry,保留：meterRegistry 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-common/src/main/java/io/github/pinpols/batch/common/verifier/ContentVerifierRegistry.java,101,meterRegistry,保留：meterRegistry 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/rbac/ConsoleMetaQueryService.java,172,messageSource,删除
+R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AlertmanagerSilenceBridge.java,98,executor,保留：executor 非注入，silence 关闭或 apiBaseUrl 为空时构造器赋 null
+R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/RedisRateLimitCircuitBreaker.java,77,failureCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/RedisRateLimitCircuitBreaker.java,86,openCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/ratelimit/RedisRateLimitCircuitBreaker.java,107,circuitBreaker,保留：circuitBreaker 非注入，enabled=false 时构造器赋 null
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java,489,jobExecutionLogMapper,删除
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/OutboxOpsApplicationService.java,128,jobExecutionLogMapper,删除
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskAssignmentService.java,929,resourceSchedulerProperties,删除
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,168,meterRegistry,保留：类内三参构造器显式传 null（无 registry 路径）
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/config/InternalAuthFilter.java,87,apiKeyVerifier,删除
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/governance/AlertmanagerEmitPublisher.java,97,executor,保留：executor 非注入，emit 关闭时构造器赋 null
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/redis/OrchestratorConfigInvalidationSubscriber.java,235,eventLagTimer,保留：eventLagTimer 由 getIfAvailable() 的 registry 派生，缺失时为 null
+R12,injected-final-field-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultResourceScheduler.java,425,resourceSchedulerProperties,删除
+R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerApiAdmissionGuard.java,134,rejectedCounter,保留：类内单参 public 构造器把计数器赋 null
+R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java,138,apiKeyVerifier,删除
+R12,injected-final-field-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/config/TriggerSecurityConfiguration.java,138,apiKeyVerifier,删除
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,121,successCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,126,timeoutCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,137,failureCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DeadLetterPublisher.java,156,publishTimer,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时 timer 为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultStepExecutionAdapter.java,123,taskExecutionClient,"保留：类内包级构造器 this(registry, null) 显式传 null"
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,152,meterRegistry,保留：meterRegistry 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,501,timeoutCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,555,watchdog,删除
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,560,threadLeakedCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/HttpTaskExecutionClient.java,481,reportBatcher,保留：reportBatcher 非注入，reportBatchEnabled=false 时为 null
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/checkpoint/DefaultProcessingPositionStore.java,122,meterRegistry,保留：meterRegistry 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/PipelineCompensationHook.java,147,positionStore,保留：positionStore 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,94,environment,删除
+R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,395,sftp,保留：sftp 是方法参数（finally 中可能尚未建立的通道），非注入字段
+R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,418,session,保留：session 是方法参数（finally 中可能尚未建立的会话），非注入字段
+R12,injected-final-field-null-check,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,202,environment,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java,71,security,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/plugin/SqlTemplateExportDataPlugin.java,190,workerConfiguration,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,280,workerConfiguration,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,562,checkpointProperties,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,564,positionStore,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/RegisterStep.java,341,taskExecutionClient,删除
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,168,fileRecords,保留：类内 public 双参/三参构造器传 null
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,168,storageProperties,保留：类内 public 双参/三参构造器传 null
+R12,injected-final-field-null-check,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/StoreStep.java,271,formatStrategyRegistry,保留：类内 public 双参构造器传 null
+R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/infrastructure/ImportRecordGovernanceService.java,76,skipProperties,删除
+R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,363,checkpointProperties,删除
+R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,删除
+R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,删除
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,166,platformMapper,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,167,businessCleanup,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,168,cleanupFence,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,214,cleanedCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/metrics/ProcessMetrics.java,72,registry,保留：registry 来自 ObjectProvider.getIfAvailable()
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java,96,security,删除
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/stage/DefaultProcessStageExecutor.java,123,checkpointProperties,删除
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/stage/ProcessPluginExecutionFence.java,74,taskExecutionClient,删除
+R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobApprovalService.java,467,failedJobCodes,删除
+R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/SubscriptionRuleWebhookDispatcher.java,140,rules,删除
+R12,mapper-list-null-check,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java,775,holidays,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetFreshnessPolicyService.java,44,policies,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/dataquality/DataQualityCheckExecutor.java,79,rules,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,620,entries,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,840,candidates,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,1120,rows,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/BatchDayReplayService.java,1145,rows,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,106,outgoingEdges,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,314,outgoing,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowDagService.java,396,incoming,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowRunLaunchService.java,641,edges,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/metrics/JobDependencyWaitMetricsScheduler.java,50,tenantIds,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayCutoffScheduler.java,66,candidates,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayOpenScheduler.java,50,calendars,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayReplayDispatcher.java,72,running,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayReplayDispatcher.java,113,pending,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDaySettleScheduler.java,102,candidates,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDaySettleScheduler.java,437,candidates,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/BatchDayWaitingReleaseScheduler.java,81,waiting,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/WorkerCapabilityTagsAuditScheduler.java,71,rows,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/WorkflowValidatorReconciler.java,51,enabled,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/sla/JobSlaScheduler.java,92,escalations,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/startup/NotValidConstraintGuard.java,36,invalid,删除
+R12,mapper-list-null-check,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/BatchDayOperationService.java,406,waiting,删除
+R12,mapper-list-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/trigger/service/TriggerCalendarDefinitionProvider.java,42,rules,删除
+R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,117,sql,保留：requireNonNull 作用于 sql.getAllowedDataSourceBeans() 而非 sql；sql 为 null 时短路不执行 requireNonNull，后续 isNotNull(sql) 未被支配
+R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,130,sp,保留：requireNonNull 作用于 sp.getAllowedSchemas() 而非 sp；sp 为 null 时短路不执行 requireNonNull，后续 isNotNull(sp) 未被支配
+R12,null-check-after-requireNonNull,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/AckDispatchStep.java,79,receiptCode,保留：判空在 requireNonNull 之前且只在 !pending 分支执行；acknowledged=true 时可跳过，markAcked 处 receiptCode == null 仍可达
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/BatchDayCatchUpReconciliation.java,114,frozenAutoCommand,保留：误报（114 行是单个 if，嵌套的 for 内 if 后还有赋值语句）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationService.java,133,persistAndExpand,保留：误报（133 行是单行 if，非嵌套）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserAccountService.java,249,enforceGrantableAuthorities,保留：误报（249 行是单个 return 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,144,patch,保留：误报（144 行是单个 throw 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java,294,authenticate,已改：if (single) { if (a||!b) throw } 合并为局部布尔 singleSessionIsNotCurrent 再单次 if
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuard.java,70,authorizeTenant,保留：外层 if 内有说明 fail-closed/IDOR 安全原因的注释与 principal 判断，非单一内层 if
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java,980,buildHeaderIndex,保留：内层条件有副作用（index.putIfAbsent）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/naming/ReservedPrefixGuard.java,93,checkResourceCode,保留：误报（93 行是单个 return 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java,89,rejectLogin,保留：内层条件有副作用（loginIpRateLimiter.tryAcquire 消耗令牌）
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java,359,collectOptionalNodes,保留：误报（两层 if 之间是 for 循环，且带 break）
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java,166,reconcileOneBound,保留：内层条件有副作用（markFailed 写库 CAS）
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,保留：内层条件有副作用（hasCapacity 取 pg_advisory_xact_lock）
+R15,mergeable-nested-if,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,246,releaseUnexecutedClaims,保留：误报（246 行是单个 return 守卫，for 内单个 if 不可合并）
+R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,329,validateRow,保留：误报（if 内嵌 if 且外层带 else，不是 return 之后的 else）
+R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitApplyHandlers.java,189,applySpecs,已改：lambda 内 return 之后的 else 去掉，内层改为 != UPSERT 先返回 SKIPPED 后平铺
+R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,900,replayDeadLetter,已改：if 分支以 return 结束，去掉 else，回放调用提到外层
+R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java,400,applyFailureOutcome,已改：retryScheduled 分支 return null 后去掉 else，终态更新提到外层
+R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerTaskLeaseRenewer.java,236,attemptRenew,已改：!renewed 分支全路径 return false 后去掉 else，续期成功逻辑提到外层
+R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java,169,recordFailure,已改：give-up 分支 return true 后去掉 else，重试退避逻辑提到外层
+R16,else-after-return,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java,289,prepareDeliveryAttempt,保留：误报（if/else-if 链的首个分支 newAttempt=true 后落空不 return，不能平铺）
+R16,verbose-boolean-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,772,reaches,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底，不是 if/return true/return false）
+R16,verbose-boolean-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,278,scopesAllowAny,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底）
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,557,toConfigReleaseResponse,保留：误报（publishedAt 等是实体 getter，方法只做响应组装，无写入）
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitTenantExecutor.java,207,hasChanges,保留：误报（只比较统计计数器，无写入）
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java,202,hasChanges,保留：误报（只比较统计计数器，无写入）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetPartitionService.java,148,loadDataAssetId,已改：改名 ensureDataAssetId（Task 13）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/S3GovernanceStorage.java,37,listReconcilePage,已改：抽出 openCursor（Task 13）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,162,validateBundleParamsBeforeInstanceCreation,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,178,validateRelatedFileReference,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,190,validateParentInstanceReference,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,764,resolveConcurrentDuplicate,保留：resolve 动词本就含处理，写 DUPLICATE 验收状态是其职责，不是查询或校验名
+R14,query-or-check-name-with-write,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,151,resolveExecutionTimer,保留：误报（publishPercentiles 是 Timer builder 配置，不写业务数据）
+R14,query-or-check-name-with-write,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java,203,resolveObjectName,保留：误报（只拼对象名，无写入）
 R19,private-pure-forward,batch-common/src/main/java/io/github/pinpols/batch/common/file/ExportFileNameResolver.java,62,hasText -> EmptyChecks.isNotBlank,
 R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,319,cacheTenant -> ConsoleQueryCacheService.keySegment,
 R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,323,isActive -> ACTIVE_INSTANCE_STATUSES.contains,

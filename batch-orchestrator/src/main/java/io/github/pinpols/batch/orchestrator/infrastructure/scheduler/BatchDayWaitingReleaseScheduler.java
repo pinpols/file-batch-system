@@ -80,7 +80,7 @@ public class BatchDayWaitingReleaseScheduler {
     }
     List<BatchDayWaitingLaunchEntity> waiting =
         waitingLaunchMapper.selectWaiting(null, WAITING_SCAN_LIMIT);
-    if (waiting == null || waiting.isEmpty()) {
+    if (EmptyChecks.isEmpty(waiting)) {
       return;
     }
     Set<PreviousDayKey> seen = new HashSet<>();

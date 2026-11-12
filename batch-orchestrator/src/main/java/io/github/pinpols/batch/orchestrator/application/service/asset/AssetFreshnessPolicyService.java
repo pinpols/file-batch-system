@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.asset;
 
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.service.governance.AlertEventService;
@@ -42,7 +43,7 @@ public class AssetFreshnessPolicyService {
       return 0;
     }
     List<AssetFreshnessPolicyEntity> policies = policyMapper.selectEnabledPolicies(policyLimit);
-    if (policies == null || policies.isEmpty()) {
+    if (EmptyChecks.isEmpty(policies)) {
       return 0;
     }
     Instant now = dateTimeSupport.nowInstant();

@@ -181,22 +181,20 @@ public class TenantConfigInitApplyHandlers {
         ApplyAction action = nested.execute(status -> {
           Optional<E> existing = handler.find(ctx.tenantId(), spec);
           if (existing.isPresent()) {
-            if (ctx.mode() == InitMode.UPSERT) {
-              validate.accept(spec);
-              if (!ctx.dryRun()) {
-                handler.update(ctx, spec, existing.get());
-              }
-              return ApplyAction.UPDATED;
-            } else {
+            if (ctx.mode() != InitMode.UPSERT) {
               return ApplyAction.SKIPPED;
             }
-          } else {
             validate.accept(spec);
             if (!ctx.dryRun()) {
-              handler.insert(ctx, spec);
+              handler.update(ctx, spec, existing.get());
             }
-            return ApplyAction.CREATED;
+            return ApplyAction.UPDATED;
           }
+          validate.accept(spec);
+          if (!ctx.dryRun()) {
+            handler.insert(ctx, spec);
+          }
+          return ApplyAction.CREATED;
         });
         switch (Objects.requireNonNull(action)) {
           case CREATED -> acc.recordCreated(code);

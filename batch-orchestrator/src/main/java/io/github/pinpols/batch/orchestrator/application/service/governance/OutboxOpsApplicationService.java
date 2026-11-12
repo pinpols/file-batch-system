@@ -125,9 +125,6 @@ public class OutboxOpsApplicationService {
       String operatorId,
       String reason,
       Map<String, Object> extras) {
-    if (jobExecutionLogMapper == null) {
-      return;
-    }
     JobExecutionLogEntity audit = new JobExecutionLogEntity();
     audit.setTenantId(tenantId);
     audit.setLogLevel("INFO");
