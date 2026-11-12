@@ -13,9 +13,10 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -80,7 +81,10 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   private final TaskControllerApplicationService taskControllerApplicationService;
 
@@ -176,7 +180,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     List<JobPartitionEntity> partitions = jobPartitionMapper.selectByQuery(partitionQuery);
     JobPartitionEntity partition = partitions.getFirst();
 
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     String invocationId =
         jobPartitionMapper.selectById(TENANT, partition.getId()).getCurrentInvocationId();
     TaskOutcomeCommand unknownOutcomeCommand = TaskOutcomeCommand.builder()
@@ -187,7 +191,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .errorMessage("remote side effect may have committed before response loss")
         .partitionInvocationId(invocationId)
         .build();
-    taskExecutionService.applyTaskOutcome(unknownOutcomeCommand);
+    taskOutcomeService.applyTaskOutcome(unknownOutcomeCommand);
 
     Integer selectedRetryScheduleCount =
         jdbcTemplate.queryForObject(selectCountSql, Integer.class, TENANT, partition.getId());
@@ -275,7 +279,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity task = tasks.get(0);
     JobPartitionEntity partition = partitions.get(0);
 
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     JobPartitionEntity firstAttempt = jobPartitionMapper.selectById(TENANT, partition.getId());
     TaskOutcomeCommand firstAttemptOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
@@ -284,7 +288,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .errorMessage("dry-run settlement race")
         .partitionInvocationId(firstAttempt.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(firstAttemptOutcome);
+    taskOutcomeService.applyTaskOutcome(firstAttemptOutcome);
 
     jdbcTemplate.update(updateRetryScheduleSql, partition.getId());
     retryGovernanceService.dispatchDueRetries();
@@ -319,7 +323,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
           .partitionInvocationId(retryClaim.partitionInvocationId())
           .build();
       Future<?> report =
-          executor.submit(() -> taskExecutionService.applyTaskOutcome(retryOutcomeCommand));
+          executor.submit(() -> taskOutcomeService.applyTaskOutcome(retryOutcomeCommand));
       awaitBlockedBy(blockerPid, 2);
       fence.commit();
       report.get(10, TimeUnit.SECONDS);
@@ -413,7 +417,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
     JobPartitionEntity partition = partitions.get(0);
 
     // 2) Claim
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
 
     // 3) 回报失败后应安排重试
     // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(见 R3-P1-10 report invocation fence)。
@@ -426,7 +430,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .errorMessage("retry flow test")
         .partitionInvocationId(claimedPartition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(failureOutcome);
+    taskOutcomeService.applyTaskOutcome(failureOutcome);
 
     // 验证已为该分区创建了 WAITING 状态的 retry_schedule 行
     List<RetryScheduleEntity> retries = retryScheduleMapper.selectByQuery(new RetryScheduleQuery(
@@ -473,7 +477,7 @@ class JobRetryFlowIntegrationTest extends AbstractIntegrationTest {
         .resultSummary("{}")
         .partitionInvocationId(retryClaim.partitionInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(successfulOutcomeCommand);
+    taskOutcomeService.applyTaskOutcome(successfulOutcomeCommand);
 
     JobInstanceEntity completedInstance = jobInstanceMapper.selectById(TENANT, jobInstanceId);
     assertThat(completedInstance.getInstanceStatus())

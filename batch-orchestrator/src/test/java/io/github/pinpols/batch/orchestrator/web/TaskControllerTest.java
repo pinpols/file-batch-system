@@ -19,9 +19,9 @@ import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.RateLimitAction;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService.TaskHeartbeatResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskReportRetryExecutor;
 import io.github.pinpols.batch.orchestrator.config.BundleBatchClaimProperties;
@@ -63,7 +63,7 @@ class TaskControllerTest {
   }
 
   @Mock
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
 
   @Mock
   private TaskOutcomeService taskOutcomeService;
@@ -79,7 +79,7 @@ class TaskControllerTest {
     lenient().when(tenantActionRateLimiter.tryConsume(any(), any())).thenReturn(true);
     TaskControllerApplicationService taskControllerApplicationService =
         new TaskControllerApplicationService(
-            taskExecutionService,
+            taskAssignmentService,
             new ObjectMapper(),
             new BundleBatchClaimProperties(),
             new SimpleMeterRegistry(),
@@ -101,7 +101,7 @@ class TaskControllerTest {
             .content("{\"tenantId\":\"t1\",\"workerId\":\"w1\"}"))
         .andExpect(status().isTooManyRequests());
 
-    verify(taskExecutionService, never()).assignWorker(any(), any(), any());
+    verify(taskAssignmentService, never()).assignWorker(any(), any(), any());
   }
 
   @Test
@@ -124,7 +124,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("t1", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -139,7 +139,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("t1", 10L, "w1")).thenReturn(task);
     EffectiveTaskConfig config = new EffectiveTaskConfig(
         "t1",
         10L,
@@ -176,7 +176,7 @@ class TaskControllerTest {
         List.of(),
         null);
     // PERF(5.2b): claim 复用 assignWorker 返回的 task 实体拉 config
-    when(taskExecutionService.loadEffectiveConfig(eq("t1"), same(task))).thenReturn(config);
+    when(taskAssignmentService.loadEffectiveConfig(eq("t1"), same(task))).thenReturn(config);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -214,7 +214,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("w1");
-    when(taskExecutionService.assignWorker("tenant-a", 10L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("tenant-a", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -223,13 +223,13 @@ class TaskControllerTest {
             .content("{\"workerId\":\"w1\"}"))
         .andExpect(status().isOk());
 
-    verify(taskExecutionService).assignWorker("tenant-a", 10L, "w1");
+    verify(taskAssignmentService).assignWorker("tenant-a", 10L, "w1");
   }
 
   @Test
   @DisplayName("认领的任务不存在时返回未找到")
   void shouldReturn404WhenTaskNotFoundOnClaim() throws Exception {
-    when(taskExecutionService.assignWorker(any(), any(), any())).thenReturn(null);
+    when(taskAssignmentService.assignWorker(any(), any(), any())).thenReturn(null);
 
     mockMvc
         .perform(post("/internal/tasks/99/claim")
@@ -244,7 +244,7 @@ class TaskControllerTest {
     JobTaskEntity task = new JobTaskEntity();
     task.setTaskStatus(TaskStatus.RUNNING.code());
     task.setAssignedWorkerCode("other");
-    when(taskExecutionService.assignWorker("t1", 10L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("t1", 10L, "w1")).thenReturn(task);
 
     mockMvc
         .perform(post("/internal/tasks/10/claim")
@@ -290,7 +290,7 @@ class TaskControllerTest {
   @Test
   @DisplayName("续约处理结果标记无需取消时,响应中取消标记为假")
   void shouldReturn200WithCancelFalseWhenRenewSucceeds() throws Exception {
-    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+    when(taskAssignmentService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(true, false));
 
     mockMvc
@@ -304,7 +304,7 @@ class TaskControllerTest {
   @Test
   @DisplayName("续约处理结果标记需要取消时,响应中取消标记为真")
   void shouldReturnCancelRequestedTrueWhenPlatformCancelled() throws Exception {
-    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+    when(taskAssignmentService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(true, true));
 
     mockMvc
@@ -318,7 +318,7 @@ class TaskControllerTest {
   @Test
   @DisplayName("续约携带进度明细时,明细内容被完整透传给心跳记录")
   void shouldPersistHeartbeatDetailsWhenRenewCarriesDetails() throws Exception {
-    when(taskExecutionService.recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), any()))
+    when(taskAssignmentService.recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
 
     mockMvc
@@ -328,7 +328,7 @@ class TaskControllerTest {
         .andExpect(status().isOk());
 
     ArgumentCaptor<String> details = ArgumentCaptor.forClass(String.class);
-    verify(taskExecutionService)
+    verify(taskAssignmentService)
         .recordHeartbeat(eq("t1"), eq(7L), eq("w1"), any(), details.capture());
     assertThat(details.getValue()).contains("\"processed\":42");
   }
@@ -336,7 +336,7 @@ class TaskControllerTest {
   @Test
   @DisplayName("续约处理结果标记续约失败时返回冲突")
   void shouldReturn409WhenRenewRejected() throws Exception {
-    when(taskExecutionService.recordHeartbeat("t1", 7L, "w1", null, null))
+    when(taskAssignmentService.recordHeartbeat("t1", 7L, "w1", null, null))
         .thenReturn(new TaskHeartbeatResult(false, false));
 
     mockMvc
@@ -349,7 +349,7 @@ class TaskControllerTest {
   @Test
   @DisplayName("取消登记成功时返回成功状态并记录取消请求")
   void shouldReturn200WhenCancelRequested() throws Exception {
-    when(taskExecutionService.requestCancel("t1", 7L)).thenReturn(true);
+    when(taskAssignmentService.requestCancel("t1", 7L)).thenReturn(true);
 
     mockMvc
         .perform(post("/internal/tasks/7/cancel")
@@ -357,14 +357,14 @@ class TaskControllerTest {
             .content("{\"tenantId\":\"t1\",\"reason\":\"manual\"}"))
         .andExpect(status().isOk());
 
-    verify(taskExecutionService).requestCancel("t1", 7L);
+    verify(taskAssignmentService).requestCancel("t1", 7L);
   }
 
   @Test
   @DisplayName("批量续约逐项返回结果,任务编号与续约结果按入参顺序一一对应")
   void shouldReturn200WithPerTaskResultsForRenewBatch() throws Exception {
     // PERF(5.3): renewBatch 走 set-based renewLeaseBatch,一次下发、逐项结果与入参对齐
-    when(taskExecutionService.renewLeaseBatch(any()))
+    when(taskAssignmentService.renewLeaseBatch(any()))
         .thenReturn(
             List.of(new TaskHeartbeatResult(true, false), new TaskHeartbeatResult(false, false)));
 
@@ -385,6 +385,6 @@ class TaskControllerTest {
         .andExpect(jsonPath("$.results[1].taskId").value(8))
         .andExpect(jsonPath("$.results[1].renewed").value(false));
 
-    verify(taskExecutionService).renewLeaseBatch(any());
+    verify(taskAssignmentService).renewLeaseBatch(any());
   }
 }

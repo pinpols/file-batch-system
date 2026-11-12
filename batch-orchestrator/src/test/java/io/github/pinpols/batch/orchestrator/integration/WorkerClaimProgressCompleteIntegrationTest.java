@@ -11,7 +11,8 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.context.TaskOutcomePersistenceContext;
@@ -45,9 +46,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
  * <p>验证完整的 Worker 侧交互流程：
  *
  * <ol>
- *   <li>Worker 调用 <em>claim</em>（{@link TaskExecutionService#assignWorker}）—— 任务转为 RUNNING。
- *   <li>Worker 调用 <em>renew</em>（{@link TaskExecutionService#renewTaskLease}）—— 续约延期。
- *   <li>Worker 调用 <em>report success</em>（{@link TaskExecutionService#applyTaskOutcome}）—— 任务达到
+ *   <li>Worker 调用 <em>claim</em>（{@link TaskAssignmentService#assignWorker}）—— 任务转为 RUNNING。
+ *   <li>Worker 调用 <em>renew</em>（{@link TaskAssignmentService#renewTaskLease}）—— 续约延期。
+ *   <li>Worker 调用 <em>report success</em>（{@link TaskOutcomeService#applyTaskOutcome}）—— 任务达到
  *       SUCCESS。
  *   <li>分区和 job_instance 均达到 SUCCESS 终态。
  * </ol>
@@ -67,7 +68,10 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
@@ -135,7 +139,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     // 2) Worker 认领任务
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity claimed =
-        taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+        taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     assertThat(claimed).isNotNull();
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
@@ -146,13 +150,13 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     assertThat(runningPartition.getCurrentInvocationId()).isNotBlank();
 
     // 3) Worker renews lease (simulates heartbeat / progress ping)
-    boolean renewed = taskExecutionService.renewTaskLease(
+    boolean renewed = taskAssignmentService.renewTaskLease(
         TENANT, task.getId(), seed.workerCode(), runningPartition.getCurrentInvocationId());
     assertThat(renewed).isTrue();
 
     // 其他 Worker 不得抢占该租约。
     boolean stolenByRogue =
-        taskExecutionService.renewTaskLease(TENANT, task.getId(), "rogue-worker", null);
+        taskAssignmentService.renewTaskLease(TENANT, task.getId(), "rogue-worker", null);
     assertThat(stolenByRogue).isFalse();
 
     // 4) Worker reports success (progress complete)
@@ -163,7 +167,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         .resultSummary("{\"records\":100,\"status\":\"processed\"}")
         .partitionInvocationId(runningPartition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(successOutcome);
+    taskOutcomeService.applyTaskOutcome(successOutcome);
 
     // 5) Verify task SUCCESS
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, task.getId());
@@ -216,7 +220,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         insertForeignOutputFileSql, Long.class, foreignOutputStoragePath);
 
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     JobPartitionEntity runningPartition = jobPartitionMapper.selectById(TENANT, partition.getId());
     String resultSummary = "{\"records\":1,\"relatedFileId\":" + foreignFileId + "}";
     TaskOutcomeCommand outcome = TaskOutcomeCommand.builder()
@@ -227,7 +231,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         .partitionInvocationId(runningPartition.getCurrentInvocationId())
         .build();
 
-    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(outcome))
+    assertThatThrownBy(() -> taskOutcomeService.applyTaskOutcome(outcome))
         .isInstanceOf(BizException.class);
 
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
@@ -276,7 +280,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         "fractional-" + seed.requestId(),
         "/fractional/" + seed.requestId());
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-    taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+    taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.getJobPartitionId());
     TaskOutcomeCommand successfulReport = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
@@ -285,7 +289,7 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
         .resultSummary("{\"relatedFileId\":" + fileId + ".9}")
         .partitionInvocationId(partition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(successfulReport);
+    taskOutcomeService.applyTaskOutcome(successfulReport);
 
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
@@ -322,12 +326,12 @@ class WorkerClaimProgressCompleteIntegrationTest extends AbstractIntegrationTest
     // 第一次认领成功
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     JobTaskEntity first =
-        taskExecutionService.assignWorker(TENANT, task.getId(), seed.workerCode());
+        taskAssignmentService.assignWorker(TENANT, task.getId(), seed.workerCode());
     assertThat(first.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
 
     // 不同 Worker 的第二次认领：应返回任务行，但 worker code
     // 应保持为第一个认领者（不会被覆盖）
-    JobTaskEntity second = taskExecutionService.assignWorker(TENANT, task.getId(), "other-worker");
+    JobTaskEntity second = taskAssignmentService.assignWorker(TENANT, task.getId(), "other-worker");
     assertThat(second).isNotNull();
     assertThat(second.getAssignedWorkerCode()).isEqualTo(seed.workerCode());
   }

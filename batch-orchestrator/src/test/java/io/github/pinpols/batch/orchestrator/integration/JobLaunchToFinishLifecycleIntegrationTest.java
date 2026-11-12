@@ -13,8 +13,9 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskCreationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -45,8 +46,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
  *
  * <ol>
  *   <li>{@link WorkflowRunLaunchService#launch} 创建 Workflow Run 并派发 Job 节点。
- *   <li>{@link TaskExecutionService#assignWorker} 将任务转为 RUNNING。
- *   <li>{@link TaskExecutionService#applyTaskOutcome} 以 success=true 推进任务， 最终使 job_instance 达到
+ *   <li>{@link TaskAssignmentService#assignWorker} 将任务转为 RUNNING。
+ *   <li>{@link TaskOutcomeService#applyTaskOutcome} 以 success=true 推进任务， 最终使 job_instance 达到
  *       SUCCESS。
  * </ol>
  */
@@ -63,7 +64,10 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   private final TaskCreationService taskCreationService;
 
@@ -143,7 +147,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         .resultSummary("{\"status\":\"processed ok\"}")
         .partitionInvocationId(invocationId)
         .build();
-    taskExecutionService.applyTaskOutcome(successOutcome);
+    taskOutcomeService.applyTaskOutcome(successOutcome);
 
     // 4) Verify final task status
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, claimed.getId());
@@ -203,7 +207,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         .errorMessage("simulated error")
         .partitionInvocationId(invocationId)
         .build();
-    taskExecutionService.applyTaskOutcome(failureOutcome);
+    taskOutcomeService.applyTaskOutcome(failureOutcome);
 
     JobTaskEntity finishedTask = jobTaskMapper.selectById(TENANT, claimed.getId());
     assertThat(finishedTask.getTaskStatus()).isEqualTo(TaskStatus.FAILED.code());
@@ -518,7 +522,7 @@ class JobLaunchToFinishLifecycleIntegrationTest extends AbstractIntegrationTest 
         continue;
       }
       LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-      claimed = taskExecutionService.assignWorker(TENANT, task.getId(), workerCode);
+      claimed = taskAssignmentService.assignWorker(TENANT, task.getId(), workerCode);
       if (claimed != null && TaskStatus.RUNNING.code().equals(claimed.getTaskStatus())) {
         return claimed;
       }

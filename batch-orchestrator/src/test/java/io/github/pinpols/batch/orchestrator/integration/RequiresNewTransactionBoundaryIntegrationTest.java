@@ -12,7 +12,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -60,7 +61,10 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   @Autowired
   private RetryGovernanceService retryGovernanceService;
@@ -239,7 +243,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(R3-P1-10 report invocation fence)。
         .partitionInvocationId(currentInvocationId(job.partitionId))
         .build();
-    taskExecutionService.applyTaskOutcome(failureOutcome);
+    taskOutcomeService.applyTaskOutcome(failureOutcome);
     return job;
   }
 
@@ -254,7 +258,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   /** 启动任务并让其进入 RUNNING 状态（走完 launch → claim）。 */
   private LaunchedJob launchAndClaim(String prefix) {
     LaunchedJob job = launchJob(prefix);
-    taskExecutionService.assignWorker(TENANT, job.taskId, job.workerCode);
+    taskAssignmentService.assignWorker(TENANT, job.taskId, job.workerCode);
     return job;
   }
 
@@ -266,7 +270,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   /** 启动任务，失败并立即进入死信（retry_policy=NONE）。 */
   private LaunchedJob launchAndExhaustRetries(String prefix) {
     LaunchedJob job = launchWorkflowJob(prefix, "NONE", 0);
-    taskExecutionService.assignWorker(TENANT, job.taskId, job.workerCode);
+    taskAssignmentService.assignWorker(TENANT, job.taskId, job.workerCode);
     TaskOutcomeCommand exhaustOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(job.taskId)
@@ -274,7 +278,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         .errorMessage("exhaust retries")
         .partitionInvocationId(currentInvocationId(job.partitionId))
         .build();
-    taskExecutionService.applyTaskOutcome(exhaustOutcome);
+    taskOutcomeService.applyTaskOutcome(exhaustOutcome);
     return job;
   }
 

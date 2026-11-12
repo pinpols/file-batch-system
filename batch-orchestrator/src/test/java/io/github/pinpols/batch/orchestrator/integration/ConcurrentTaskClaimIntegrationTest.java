@@ -8,7 +8,7 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
@@ -60,7 +60,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
 
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
@@ -128,11 +128,11 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
 
     Future<JobTaskEntity> winnerFuture = pool.submit(() -> {
       startGate.await();
-      return taskExecutionService.assignWorker(TENANT, taskId, winnerWorker);
+      return taskAssignmentService.assignWorker(TENANT, taskId, winnerWorker);
     });
     Future<JobTaskEntity> loserFuture = pool.submit(() -> {
       startGate.await();
-      return taskExecutionService.assignWorker(TENANT, taskId, loserWorker);
+      return taskAssignmentService.assignWorker(TENANT, taskId, loserWorker);
     });
 
     startGate.countDown();
@@ -187,7 +187,7 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     jdbcTemplate.update(updateAssignedWorkerCodeSql, workerPoolCode, TENANT, task.getId());
 
     JobTaskEntity claimed =
-        taskExecutionService.assignWorker(TENANT, task.getId(), workerInstanceId);
+        taskAssignmentService.assignWorker(TENANT, task.getId(), workerInstanceId);
 
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     assertThat(claimed.getAssignedWorkerCode()).isEqualTo(workerInstanceId);
@@ -237,11 +237,11 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     try {
       Future<JobTaskEntity> firstFuture = pool.submit(() -> {
         startGate.await();
-        return taskExecutionService.assignWorker(TENANT, task.getId(), firstInstance);
+        return taskAssignmentService.assignWorker(TENANT, task.getId(), firstInstance);
       });
       Future<JobTaskEntity> secondFuture = pool.submit(() -> {
         startGate.await();
-        return taskExecutionService.assignWorker(TENANT, task.getId(), secondInstance);
+        return taskAssignmentService.assignWorker(TENANT, task.getId(), secondInstance);
       });
 
       startGate.countDown();
@@ -297,11 +297,11 @@ class ConcurrentTaskClaimIntegrationTest extends AbstractIntegrationTest {
     try {
       Future<JobTaskEntity> winnerFuture = pool.submit(() -> {
         startGate.await();
-        return taskExecutionService.assignWorker(TENANT, task.getId(), winnerWorker);
+        return taskAssignmentService.assignWorker(TENANT, task.getId(), winnerWorker);
       });
       Future<JobTaskEntity> loserFuture = pool.submit(() -> {
         startGate.await();
-        return taskExecutionService.assignWorker(TENANT, task.getId(), loserWorker);
+        return taskAssignmentService.assignWorker(TENANT, task.getId(), loserWorker);
       });
 
       startGate.countDown();

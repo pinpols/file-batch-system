@@ -8,7 +8,8 @@ import io.github.pinpols.batch.common.enums.PartitionStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalStatusApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.JobInstanceTerminalStatusCommand;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -99,7 +100,10 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
   private WorkflowRunLaunchService workflowRunLaunchService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   @Autowired
   private PartitionReclaimUnit reclaimUnit;
@@ -178,7 +182,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
                 .resultSummary("{\"records\":1}")
                 .partitionInvocationId(invocation)
                 .build();
-            taskExecutionService.applyTaskOutcome(command);
+            taskOutcomeService.applyTaskOutcome(command);
           }));
       assertThat(reportLocked.await(10, TimeUnit.SECONDS)).isTrue();
       Future<Integer> terminal =
@@ -259,7 +263,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
                   .resultSummary("{\"records\":1}")
                   .partitionInvocationId(invocation)
                   .build();
-              taskExecutionService.applyTaskOutcome(outcome);
+              taskOutcomeService.applyTaskOutcome(outcome);
             } catch (RuntimeException ex) {
               classify(ex, deadlocks, benignConflicts);
             }
@@ -330,7 +334,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
           .resultSummary("{\"records\":1}")
           .partitionInvocationId(settleInvocations[i])
           .build();
-      taskExecutionService.applyTaskOutcome(outcome);
+      taskOutcomeService.applyTaskOutcome(outcome);
     }
 
     for (Shard shard : shards) {
@@ -433,7 +437,7 @@ class OutcomeVsReclaimDeadlockIntegrationTest extends AbstractIntegrationTest {
         new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
     List<Shard> shards = new ArrayList<>();
     for (JobTaskEntity task : tasks) {
-      JobTaskEntity claimed = taskExecutionService.assignWorker(
+      JobTaskEntity claimed = taskAssignmentService.assignWorker(
           TENANT, task.getId(), fannedOut.seed().workerCode());
       assertThat(claimed).isNotNull();
       shards.add(new Shard(task.getId(), task.getJobPartitionId()));

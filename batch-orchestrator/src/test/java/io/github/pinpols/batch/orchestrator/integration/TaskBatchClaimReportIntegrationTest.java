@@ -9,6 +9,7 @@ import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.engine.VerifierFailureOutboxService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimItemCommand;
@@ -18,7 +19,7 @@ import io.github.pinpols.batch.orchestrator.application.service.task.TaskControl
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportBatchResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskReportItemResult;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -84,7 +85,10 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   private TaskControllerApplicationService taskControllerApplicationService;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
+
+  @Autowired
+  private TaskOutcomeService taskOutcomeService;
 
   @Autowired
   private JobInstanceMapper jobInstanceMapper;
@@ -255,7 +259,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
 
     // 先让 a 被它自己的 worker 单条认领(模拟并发对手已领走)
     JobTaskEntity claimedA =
-        taskExecutionService.assignWorker(TENANT, a.taskId(), a.seed().workerCode());
+        taskAssignmentService.assignWorker(TENANT, a.taskId(), a.seed().workerCode());
     assertThat(claimedA).isNotNull();
 
     // claim-batch 用「另一个 worker」尝试认领 a + b:a 已被领走 → claimed=false;b 正常 → claimed=true
@@ -285,7 +289,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     LaunchedTask task = launchOne(9);
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     String worker = task.seed().workerCode();
-    JobTaskEntity claimed = taskExecutionService.assignWorker(TENANT, task.taskId(), worker);
+    JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, task.partitionId());
     String invocation = partition.getCurrentInvocationId();
@@ -296,11 +300,11 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
         {"executionStarted":true,"executionAttemptId":"attempt-second"}
         """;
 
-    var first = taskExecutionService.recordHeartbeat(
+    var first = taskAssignmentService.recordHeartbeat(
         TENANT, task.taskId(), worker, invocation, firstDetails);
-    var retry = taskExecutionService.recordHeartbeat(
+    var retry = taskAssignmentService.recordHeartbeat(
         TENANT, task.taskId(), worker, invocation, firstDetails);
-    var duplicate = taskExecutionService.recordHeartbeat(
+    var duplicate = taskAssignmentService.recordHeartbeat(
         TENANT, task.taskId(), worker, invocation, secondDetails);
 
     assertThat(first.leaseRenewed()).isTrue();
@@ -316,7 +320,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     LaunchedTask task = launchOne(10);
     LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
     String worker = task.seed().workerCode();
-    JobTaskEntity claimed = taskExecutionService.assignWorker(TENANT, task.taskId(), worker);
+    JobTaskEntity claimed = taskAssignmentService.assignWorker(TENANT, task.taskId(), worker);
     assertThat(claimed.getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     String invocation =
         jobPartitionMapper.selectById(TENANT, task.partitionId()).getCurrentInvocationId();
@@ -326,7 +330,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
       String details = """
           {"executionStarted":true,"executionAttemptId":"attempt-a"}
           """;
-      return taskExecutionService
+      return taskAssignmentService
           .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
           .leaseRenewed();
     });
@@ -335,7 +339,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
       String details = """
           {"executionStarted":true,"executionAttemptId":"attempt-b"}
           """;
-      return taskExecutionService
+      return taskAssignmentService
           .recordHeartbeat(TENANT, task.taskId(), worker, invocation, details)
           .leaseRenewed();
     });
@@ -366,8 +370,8 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     LaunchedTask launched = launchOne(8);
     TaskOutcomeCommand report = claimedReport(launched);
 
-    taskExecutionService.applyTaskOutcome(report);
-    taskExecutionService.applyTaskOutcome(report);
+    taskOutcomeService.applyTaskOutcome(report);
+    taskOutcomeService.applyTaskOutcome(report);
 
     assertThat(jobTaskMapper.selectById(TENANT, launched.taskId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
@@ -394,7 +398,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
 
     assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-          taskExecutionService.applyTaskOutcome(report);
+          taskOutcomeService.applyTaskOutcome(report);
           assertThat(verifierEventCount(launched)).isEqualTo(2L);
           throw new IllegalStateException("failure after outcome writes");
         }))
@@ -417,7 +421,7 @@ class TaskBatchClaimReportIntegrationTest extends AbstractIntegrationTest {
   }
 
   private TaskOutcomeCommand claimedReport(LaunchedTask launched) {
-    assertThat(taskExecutionService.assignWorker(
+    assertThat(taskAssignmentService.assignWorker(
             TENANT, launched.taskId(), launched.seed().workerCode()))
         .isNotNull();
     JobPartitionEntity partition = jobPartitionMapper.selectById(TENANT, launched.partitionId());
