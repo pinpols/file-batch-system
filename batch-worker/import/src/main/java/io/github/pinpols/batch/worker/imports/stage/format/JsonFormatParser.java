@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.imports.domain.ImportJobContext;
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -43,59 +44,105 @@ public class JsonFormatParser implements FormatParser {
         return parseJsonArray(context, parser, writer, preserveLogicalRow);
       }
       if (token == JsonToken.START_OBJECT) {
-        // R2-P0-6 streaming envelope：之前 mapper.readTree(parser) 把整个对象树（含 records 数组）
-        // 全量加载进堆；100 MB JSON → ~300-500 MB JsonNode 内存（Jackson tree model 3-5× 膨胀）→ OOM。
-        // 现在：peek 第一个字段，若是 "records" + 数组 → 走流式 parseJsonArray 一条一条 readTree；
-        // 否则（非典型 envelope 或单对象）回退 readTree 一次性加载，由 ReceiveStep payload size 上限回退。
-        JsonToken firstFieldToken = parser.nextToken();
-        if (firstFieldToken == JsonToken.END_OBJECT) {
-          return 0L; // 空对象 {}
-        }
-        if (firstFieldToken == JsonToken.FIELD_NAME && KEY_RECORDS.equals(parser.currentName())) {
-          JsonToken arrayStart = parser.nextToken();
-          if (arrayStart == JsonToken.START_ARRAY) {
-            long recordNo = parseJsonArray(context, parser, writer, preserveLogicalRow);
-            // 流式跳过 envelope 内 records 之后的兄弟字段（metadata/version 等），不再消耗内存
-            JsonToken tail;
-            while ((tail = parser.nextToken()) != null && tail != JsonToken.END_OBJECT) {
-              if (tail == JsonToken.FIELD_NAME) {
-                parser.nextToken(); // 移到 value start
-              }
-              parser.skipChildren(); // 跳过 value 子树（对标量是 no-op）
-            }
-            return recordNo;
-          }
-        }
-        // 非 records-first envelope / 单对象：回退树模型。payload 安全由 ReceiveStep size 上限保证。
-        JsonNode rootObj = mapper.readTree(parser);
-        JsonNode recordsNode = rootObj == null ? null : rootObj.get(KEY_RECORDS);
-        if (recordsNode != null && recordsNode.isArray()) {
-          long recordNo = 0L;
-          for (JsonNode item : recordsNode) {
-            if (item == null || item.isNull()) {
-              continue;
-            }
-            recordNo++;
-            support.collectSchemaFields(context, item);
-            writeJsonRecord(context, writer, item, recordNo, preserveLogicalRow);
-          }
-          return recordNo;
-        }
-        if (rootObj == null || rootObj.isNull()) {
-          return 0L;
-        }
-        support.collectSchemaFields(context, rootObj);
-        writeJsonRecord(context, writer, rootObj, 1L, preserveLogicalRow);
-        return 1L;
+        return parseRootObject(context, parser, writer, preserveLogicalRow);
       }
-      JsonNode node = mapper.readTree(parser);
-      if (node == null || node.isNull()) {
-        return 0L;
-      }
-      support.collectSchemaFields(context, node);
-      writeJsonRecord(context, writer, node, 1L, preserveLogicalRow);
-      return 1L;
+      return parseSingleNode(context, parser, writer, preserveLogicalRow);
     }
+  }
+
+  /**
+   * 根为对象：records 在首位且是数组时流式解析，否则回退树模型。
+   *
+   * <p>R2-P0-6 streaming envelope：之前 mapper.readTree(parser) 把整个对象树（含 records 数组）
+   * 全量加载进堆；100 MB JSON → ~300-500 MB JsonNode 内存（Jackson tree model 3-5× 膨胀）→ OOM。
+   * 现在：peek 第一个字段，若是 "records" + 数组 → 走流式 parseJsonArray 一条一条 readTree；
+   * 否则（非典型 envelope 或单对象）回退 readTree 一次性加载，由 ReceiveStep payload size 上限回退。
+   */
+  private long parseRootObject(
+      ImportJobContext context,
+      JsonParser parser,
+      BufferedWriter writer,
+      boolean preserveLogicalRow)
+      throws IOException {
+    JsonToken firstFieldToken = parser.nextToken();
+    if (firstFieldToken == JsonToken.END_OBJECT) {
+      return 0L; // 空对象 {}
+    }
+    if (firstFieldToken == JsonToken.FIELD_NAME
+        && KEY_RECORDS.equals(parser.currentName())
+        && parser.nextToken() == JsonToken.START_ARRAY) {
+      long recordNo = parseJsonArray(context, parser, writer, preserveLogicalRow);
+      skipEnvelopeTail(parser);
+      return recordNo;
+    }
+    // 非 records-first envelope / 单对象：回退树模型。payload 安全由 ReceiveStep size 上限保证。
+    return parseObjectTree(context, parser, writer, preserveLogicalRow);
+  }
+
+  /** 流式跳过 envelope 内 records 之后的兄弟字段（metadata/version 等），不再消耗内存。 */
+  private void skipEnvelopeTail(JsonParser parser) throws IOException {
+    JsonToken tail = parser.nextToken();
+    while (EmptyChecks.isNotNull(tail) && tail != JsonToken.END_OBJECT) {
+      if (tail == JsonToken.FIELD_NAME) {
+        parser.nextToken(); // 移到 value start
+      }
+      parser.skipChildren(); // 跳过 value 子树（对标量是 no-op）
+      tail = parser.nextToken();
+    }
+  }
+
+  private long parseObjectTree(
+      ImportJobContext context,
+      JsonParser parser,
+      BufferedWriter writer,
+      boolean preserveLogicalRow)
+      throws IOException {
+    JsonNode rootObj = support.objectMapper().readTree(parser);
+    JsonNode recordsNode = EmptyChecks.isNull(rootObj) ? null : rootObj.get(KEY_RECORDS);
+    if (EmptyChecks.isNotNull(recordsNode) && recordsNode.isArray()) {
+      return writeRecordsNode(context, writer, recordsNode, preserveLogicalRow);
+    }
+    return writeSingleRecord(context, writer, rootObj, preserveLogicalRow);
+  }
+
+  private long writeRecordsNode(
+      ImportJobContext context,
+      BufferedWriter writer,
+      JsonNode recordsNode,
+      boolean preserveLogicalRow)
+      throws IOException {
+    long recordNo = 0L;
+    for (JsonNode item : recordsNode) {
+      if (EmptyChecks.isNull(item) || item.isNull()) {
+        continue;
+      }
+      recordNo++;
+      support.collectSchemaFields(context, item);
+      writeJsonRecord(context, writer, item, recordNo, preserveLogicalRow);
+    }
+    return recordNo;
+  }
+
+  /** 根既不是数组也不是对象（标量等）：整体读成一个节点。 */
+  private long parseSingleNode(
+      ImportJobContext context,
+      JsonParser parser,
+      BufferedWriter writer,
+      boolean preserveLogicalRow)
+      throws IOException {
+    JsonNode node = support.objectMapper().readTree(parser);
+    return writeSingleRecord(context, writer, node, preserveLogicalRow);
+  }
+
+  private long writeSingleRecord(
+      ImportJobContext context, BufferedWriter writer, JsonNode node, boolean preserveLogicalRow)
+      throws IOException {
+    if (EmptyChecks.isNull(node) || node.isNull()) {
+      return 0L;
+    }
+    support.collectSchemaFields(context, node);
+    writeJsonRecord(context, writer, node, 1L, preserveLogicalRow);
+    return 1L;
   }
 
   private long parseJsonArray(
@@ -108,7 +155,7 @@ public class JsonFormatParser implements FormatParser {
     long recordNo = 0L;
     while (parser.nextToken() != JsonToken.END_ARRAY) {
       JsonNode node = mapper.readTree(parser);
-      if (node == null || node.isNull()) {
+      if (EmptyChecks.isNull(node) || node.isNull()) {
         continue;
       }
       recordNo++;
