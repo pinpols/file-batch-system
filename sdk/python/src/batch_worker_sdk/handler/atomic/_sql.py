@@ -185,57 +185,101 @@ class SqlAtomicHandler(SdkAbstractAtomicHandler):
 # ── 语句切分 ──────────────────────────────────────────────────────────────
 
 
-def split_statements(sql: str) -> list[str]:  # noqa: PLR0912 — 1:1 mirror of Java state machine
-    """按 ``;`` 切多语句 SQL,正确处理引号 / 注释。
+def split_statements(sql: str) -> list[str]:
+    """按 ``;`` 切多语句 SQL,正确处理引号 / 注释 / PG dollar-quote。
 
-    行为对齐 Java ``SqlAtomicHandler.splitStatements`` —— 简单实现,
-    **不**处理 PG dollar-quoting(Java 也不处理)。
+    行为对齐 Java ``SqlAtomicHandler.splitStatements`` 与平台 ``SqlTaskExecutor``:
+    顶层 ``$tag$ ... $tag$`` 体内的 ``;`` 不切,``$1`` 位置参数不是开标签。
     """
-    out: list[str] = []
-    buf: list[str] = []
-    in_single = in_double = in_line = in_block = False
-    prev = ""
-    for c in sql:
-        if in_line:
+    state = _SplitState()
+    i = 0
+    while i < len(sql):
+        c = sql[i]
+        tag = _match_dollar_tag(sql, i) if c == "$" and state.at_code() else None
+        if tag is not None:
+            i = state.feed_dollar_quoted(sql, i, tag)
+            continue
+        state.feed(c)
+        i += 1
+    return state.complete()
+
+
+class _SplitState:
+    """引号、注释与前一个字符属于同一词法状态;只有普通 SQL 区域的 ``;`` 结束语句。"""
+
+    def __init__(self) -> None:
+        self._out: list[str] = []
+        self._buf: list[str] = []
+        self._lex = "code"  # code | line | block | single | double
+        self._prev = ""
+
+    def at_code(self) -> bool:
+        return self._lex == "code"
+
+    def feed(self, c: str) -> None:
+        if self._lex == "line":
             if c == "\n":
-                in_line = False
-            buf.append(c)
-        elif in_block:
-            if prev == "*" and c == "/":
-                in_block = False
-            buf.append(c)
-        elif in_single:
+                self._lex = "code"
+            self._buf.append(c)
+        elif self._lex == "block":
+            if self._prev == "*" and c == "/":
+                self._lex = "code"
+            self._buf.append(c)
+        elif self._lex == "single":
             if c == "'":
-                in_single = False
-            buf.append(c)
-        elif in_double:
+                self._lex = "code"
+            self._buf.append(c)
+        elif self._lex == "double":
             if c == '"':
-                in_double = False
-            buf.append(c)
-        elif prev == "-" and c == "-":
-            in_line = True
-            buf.append(c)
-        elif prev == "/" and c == "*":
-            in_block = True
-            buf.append(c)
-        elif c == "'":
-            in_single = True
-            buf.append(c)
-        elif c == '"':
-            in_double = True
-            buf.append(c)
-        elif c == ";":
-            stmt = "".join(buf).strip()
-            if stmt:
-                out.append(stmt)
-            buf.clear()
+                self._lex = "code"
+            self._buf.append(c)
         else:
-            buf.append(c)
-        prev = c
-    tail = "".join(buf).strip()
-    if tail:
-        out.append(tail)
-    return out
+            self._feed_code(c)
+        self._prev = c
+
+    def _feed_code(self, c: str) -> None:
+        if self._prev == "-" and c == "-":
+            self._lex = "line"
+        elif self._prev == "/" and c == "*":
+            self._lex = "block"
+        elif c == "'":
+            self._lex = "single"
+        elif c == '"':
+            self._lex = "double"
+        elif c == ";":
+            self._flush()
+            return
+        self._buf.append(c)
+
+    def feed_dollar_quoted(self, sql: str, start: int, tag: str) -> int:
+        """整段写入 dollar-quote(含开/闭标签),返回闭标签之后的索引;未闭合时写到串尾。"""
+        close = sql.find(tag, start + len(tag))
+        end = len(sql) if close < 0 else close + len(tag)
+        self._buf.append(sql[start:end])
+        self._prev = "$"
+        return end
+
+    def _flush(self) -> None:
+        stmt = "".join(self._buf).strip()
+        if stmt:
+            self._out.append(stmt)
+        self._buf.clear()
+
+    def complete(self) -> list[str]:
+        self._flush()
+        return self._out
+
+
+def _match_dollar_tag(sql: str, start: int) -> str | None:
+    """返回 ``start`` 处的 dollar-quote 开标签(含两端 ``$``);不是合法标签时返回 None。"""
+    for j in range(start + 1, len(sql)):
+        c = sql[j]
+        if c == "$":
+            tag = sql[start + 1 : j]
+            return sql[start : j + 1] if not tag or not tag[0].isdigit() else None
+        if not (c.isalnum() or c == "_"):
+            return None
+    return None
 
 
 _SELECT_RE = re.compile(r"^\s*(select|with|show|values)\b", re.IGNORECASE)

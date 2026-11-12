@@ -4,6 +4,7 @@
 
 | 文档 | 范围 |
 |---|---|
+| [分支、数据结构与设计模式审查](branching-data-structure-pattern-review-2026-11-12.md) | 2026-11-12 全量生产 Java 静态审查：if/switch、集合选型、模式使用；8 项 P3、5 项 P4，整改见本记录「整改记录」 |
 | [Java 可读性复评](java-readability-reassessment-2026-11-11.md) / [候选清单](java-readability-reassessment-2026-11-11-candidates.csv) | 2026-11-11 阶段 9 复评：在 `29cede911` 基线确认 R1–R27；R4 空值写法已裁定、R11 大类拆分暂缓、R24 转有限域计划；整改未开工 |
 | [控制流可读性审查](control-flow-readability-2026-11-10.md) | 2026-11-10 阶段 8 批次 0–4：14 处嵌套选择按原短路拆开，88 项原有单测通过；薄壳与未纳入清单的跨行选择只记录、不另开清零 |
 | [架构适配性评估文档复核](architecture-suitability-assessment-review-2026-11-04.md) | 复核 11-02 评估的事实陈述、链接与后续闭环：结论与代码一致，优化候选未进入待办、派发服务注释漂移未修；只读文档核对 |

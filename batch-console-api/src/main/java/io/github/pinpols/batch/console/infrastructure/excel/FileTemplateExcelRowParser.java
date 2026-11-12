@@ -1,13 +1,13 @@
 package io.github.pinpols.batch.console.infrastructure.excel;
 
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalBoolean;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalEnum;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalInteger;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalJson;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.optionalText;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireEnum;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.requireText;
-import static io.github.pinpols.batch.console.infrastructure.excel.AbstractSingleSheetExcelService.resolveTenantField;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalBoolean;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalEnum;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalInteger;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalJson;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.optionalText;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.requireEnum;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.requireText;
+import static io.github.pinpols.batch.console.infrastructure.excel.SingleSheetExcelCellParsers.resolveTenantField;
 
 import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.enums.FileChecksumType;

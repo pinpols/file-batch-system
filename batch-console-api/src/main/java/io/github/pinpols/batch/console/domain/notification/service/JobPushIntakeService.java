@@ -63,8 +63,7 @@ public class JobPushIntakeService {
       }
     }
     Object jobCode = job.get("jobCode");
-    String instanceStatus = (String) job.get("instanceStatus");
-    String title = "任务 " + jobCode + " " + statusLabel(instanceStatus);
+    String title = "任务 " + jobCode + " " + statusLabel(state);
     String body = "tenant=" + tenant + " · instance #" + jobId;
     String tag = "job-" + digest(eventKey);
     String url =
@@ -104,14 +103,15 @@ public class JobPushIntakeService {
     return digest(serializedFingerprint);
   }
 
-  private static String statusLabel(String status) {
-    return switch (status) {
-      case "SUCCESS" -> "已成功";
-      case "FAILED" -> "已失败";
-      case "PARTIAL_FAILED" -> "部分失败";
-      case "CANCELLED" -> "已取消";
-      case "TERMINATED" -> "已终止";
-      default -> status;
+  /** 推送标题只描述终态结果；其余状态原样展示状态码，便于排查上游数据。 */
+  private static String statusLabel(JobInstanceStatus state) {
+    return switch (state) {
+      case SUCCESS -> "已成功";
+      case FAILED -> "已失败";
+      case PARTIAL_FAILED -> "部分失败";
+      case CANCELLED -> "已取消";
+      case TERMINATED -> "已终止";
+      default -> state.code();
     };
   }
 

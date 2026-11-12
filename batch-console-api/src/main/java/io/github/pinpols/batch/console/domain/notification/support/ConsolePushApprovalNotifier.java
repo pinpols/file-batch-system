@@ -1,5 +1,8 @@
 package io.github.pinpols.batch.console.domain.notification.support;
 
+import io.github.pinpols.batch.common.enums.ApprovalCommandStatus;
+import io.github.pinpols.batch.common.enums.ApprovalType;
+import io.github.pinpols.batch.common.enums.DictEnum;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.config.ConsolePushProperties;
@@ -147,21 +150,21 @@ public class ConsolePushApprovalNotifier {
   }
 
   private static String typeLabel(String type) {
-    return switch (type) {
-      case "CATCH_UP" -> "补跑";
-      case "COMPENSATION" -> "补偿";
-      case "DLQ_REPLAY" -> "死信重放";
-      case "DOWNLOAD" -> "下载";
-      default -> type;
-    };
+    ApprovalType approvalType = DictEnum.fromCode(ApprovalType.class, type);
+    return EmptyChecks.isNull(approvalType) ? type : approvalType.label();
   }
 
+  /** 推送标题使用面向结果的措辞（已批准/已驳回），与审批台账字典标签分开维护。 */
   private static String statusLabel(String status) {
-    return switch (status) {
-      case "APPROVED" -> "已批准";
-      case "REJECTED" -> "已驳回";
-      case "EXECUTED" -> "已执行";
-      default -> status;
+    ApprovalCommandStatus approvalStatus = DictEnum.fromCode(ApprovalCommandStatus.class, status);
+    if (EmptyChecks.isNull(approvalStatus)) {
+      return status;
+    }
+    return switch (approvalStatus) {
+      case APPROVED -> "已批准";
+      case REJECTED -> "已驳回";
+      case EXECUTED -> "已执行";
+      case PENDING -> status;
     };
   }
 

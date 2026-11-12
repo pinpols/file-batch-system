@@ -138,13 +138,45 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     }
   }
 
-  /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内的 `;`。简化版,不处理 dollar-quote。 */
+  /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内以及 PG dollar-quote 体内的 `;`。 */
   static List<String> splitStatements(String sql) {
     StatementSplitState state = new StatementSplitState();
-    for (int i = 0; i < sql.length(); i++) {
-      state.append(sql.charAt(i));
+    int i = 0;
+    while (i < sql.length()) {
+      char current = sql.charAt(i);
+      String dollarTag = current == '$' && state.atCode() ? matchDollarTag(sql, i) : null;
+      if (EmptyChecks.isNotNull(dollarTag)) {
+        i = state.appendDollarQuoted(sql, i, dollarTag);
+        continue;
+      }
+      state.append(current);
+      i++;
     }
     return state.complete();
+  }
+
+  /**
+   * 识别 PG dollar-quote 开标签 {@code $tag$}（tag 可空，合法标识符 {@code [A-Za-z_][A-Za-z0-9_]*}）。返回含两端
+   * {@code $} 的完整标签；位置参数 {@code $1} 或普通 {@code $} 返回 null。规则与平台 {@code SqlTaskExecutor} 一致。
+   */
+  private static String matchDollarTag(String sql, int start) {
+    for (int j = start + 1; j < sql.length(); j++) {
+      char c = sql.charAt(j);
+      if (c == '$') {
+        String tag = sql.substring(start + 1, j);
+        return EmptyChecks.isEmpty(tag) || isValidDollarTag(tag)
+            ? sql.substring(start, j + 1)
+            : null;
+      }
+      if (!(Character.isLetterOrDigit(c) || c == '_')) {
+        return null;
+      }
+    }
+    return null;
+  }
+
+  private static boolean isValidDollarTag(String tag) {
+    return !Character.isDigit(tag.charAt(0));
   }
 
   /** 引号、注释与前一个字符属于同一词法状态，不能在语句边界单独重置其中一项。 */
@@ -208,6 +240,19 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       } else {
         buffer.append(current);
       }
+    }
+
+    private boolean atCode() {
+      return state == LexState.CODE;
+    }
+
+    /** 整段写入 dollar-quote（含开/闭标签），返回闭标签之后的索引；未闭合时写到串尾。 */
+    private int appendDollarQuoted(String sql, int start, String tag) {
+      int close = sql.indexOf(tag, start + tag.length());
+      int end = close < 0 ? sql.length() : close + tag.length();
+      buffer.append(sql, start, end);
+      previous = '$';
+      return end;
     }
 
     private List<String> complete() {

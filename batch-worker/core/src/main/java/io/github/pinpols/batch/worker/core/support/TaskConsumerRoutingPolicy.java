@@ -69,38 +69,37 @@ final class TaskConsumerRoutingPolicy {
     WorkerKafkaSubscribeProperties.Mode mode = EmptyChecks.isNull(properties)
         ? WorkerKafkaSubscribeProperties.Mode.PATTERN
         : properties.getSubscribeMode();
-    String suffixAlt;
-    switch (mode) {
-      case DIRECT_ONLY:
-        if (EmptyChecks.isNull(nodeDirect)) {
-          throw new IllegalStateException(
-              "batch.worker.kafka.subscribe-mode=DIRECT_ONLY requires a worker code");
-        }
-        return "^" + safeBase + nodeDirect + "$";
-      case FIXED:
-        suffixAlt = nodeDirect;
-        break;
-      case TENANT_SCOPED:
-        List<String> allow =
-            EmptyChecks.isNull(properties) || EmptyChecks.isNull(properties.getTenantAllowlist())
-                ? List.of()
-                : properties.getTenantAllowlist();
-        String tenantAlt = allow.stream()
-            .filter(EmptyChecks::isNotBlank)
-            .map(TaskConsumerRoutingPolicy::escapeRegex)
-            .reduce((left, right) -> left + "|" + right)
-            .orElse(null);
-        suffixAlt =
-            joinAlt(nodeDirect, EmptyChecks.isNull(tenantAlt) ? null : "\\.(" + tenantAlt + ")");
-        break;
-      case PATTERN:
-      default:
-        suffixAlt = joinAlt(nodeDirect, "\\.[^.]+");
+    if (mode == WorkerKafkaSubscribeProperties.Mode.DIRECT_ONLY) {
+      if (EmptyChecks.isNull(nodeDirect)) {
+        throw new IllegalStateException(
+            "batch.worker.kafka.subscribe-mode=DIRECT_ONLY requires a worker code");
+      }
+      return "^" + safeBase + nodeDirect + "$";
     }
+    String suffixAlt =
+        switch (mode) {
+          case FIXED -> nodeDirect;
+          case TENANT_SCOPED -> tenantScopedSuffix(nodeDirect, properties);
+          default -> joinAlt(nodeDirect, "\\.[^.]+");
+        };
     if (EmptyChecks.isNull(suffixAlt)) {
       return "^" + safeBase + "$";
     }
     return "^" + safeBase + "(" + suffixAlt + ")?$";
+  }
+
+  private static String tenantScopedSuffix(
+      String nodeDirect, WorkerKafkaSubscribeProperties properties) {
+    List<String> allow =
+        EmptyChecks.isNull(properties) || EmptyChecks.isNull(properties.getTenantAllowlist())
+            ? List.of()
+            : properties.getTenantAllowlist();
+    String tenantAlt = allow.stream()
+        .filter(EmptyChecks::isNotBlank)
+        .map(TaskConsumerRoutingPolicy::escapeRegex)
+        .reduce((left, right) -> left + "|" + right)
+        .orElse(null);
+    return joinAlt(nodeDirect, EmptyChecks.isNull(tenantAlt) ? null : "\\.(" + tenantAlt + ")");
   }
 
   static boolean accepts(

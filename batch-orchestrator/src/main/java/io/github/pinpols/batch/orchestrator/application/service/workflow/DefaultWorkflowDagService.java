@@ -26,6 +26,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -62,7 +63,12 @@ import org.springframework.stereotype.Service;
 public class DefaultWorkflowDagService implements WorkflowDagService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
-  private static final String STATUS_SUCCESS = "SUCCESS";
+  /** 操作员手工跳过的上游按「已完成」放行下游，区别于条件不命中或级联跳过。 */
+  private static final String OPERATOR_SKIPPED_REASON = "OPERATOR_SKIPPED";
+
+  /** DAG 推进口径的终态：等待依赖、就绪与运行中的节点都不能放行下游。 */
+  private static final Set<WorkflowNodeRunStatus> DAG_TERMINAL_STATUSES = EnumSet.of(
+      WorkflowNodeRunStatus.SUCCESS, WorkflowNodeRunStatus.FAILED, WorkflowNodeRunStatus.SKIPPED);
 
   private final WorkflowEdgeMapper workflowEdgeMapper;
   private final WorkflowNodeMapper workflowNodeMapper;
@@ -461,7 +467,8 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       if (EmptyChecks.isNull(predecessor)
           && WorkflowNodeCode.START.code().equalsIgnoreCase(edge.getFromNodeCode())) {
         terminalCount++;
-        if (matchesIncomingEdge(edge, STATUS_SUCCESS, null, sourcePayloadJson)) {
+        if (matchesIncomingEdge(
+            edge, WorkflowNodeRunStatus.SUCCESS.code(), null, sourcePayloadJson)) {
           matchedCount++;
         }
         continue;
@@ -506,7 +513,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     row.setNodeCode(nodeCode);
     row.setNodeType(EmptyChecks.isNull(node) ? WorkflowNodeType.TASK.code() : node.getNodeType());
     row.setRunSeq(1);
-    row.setNodeStatus("SKIPPED");
+    row.setNodeStatus(WorkflowNodeRunStatus.SKIPPED.code());
     row.setSkipReasonCode(skipReason.code());
     row.setRetryCount(0);
     Instant now = BatchDateTimeSupport.utcNow();
@@ -533,7 +540,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     row.setNodeCode(nodeCode);
     row.setNodeType(nodeType);
     row.setRunSeq(1);
-    row.setNodeStatus("SKIPPED");
+    row.setNodeStatus(WorkflowNodeRunStatus.SKIPPED.code());
     row.setSkipReasonCode(skipReason.code());
     row.setRetryCount(0);
     Instant now = BatchDateTimeSupport.utcNow();
@@ -572,18 +579,18 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     // 旧行为：所有终态（含 SKIPPED）都触发 ALWAYS，使 ALL 模式下 "全部 SKIPPED 上游 + ALWAYS 边" 误 fire。
     // 现在 ALWAYS 只在真正完成（SUCCESS / FAILED）时认账；SKIPPED 上游被视为未触发，
     // ALL 模式的 join 节点会一并被 cascadeSkipDownstream 标 SKIPPED，避免漏过空跑下游。
+    WorkflowNodeRunStatus predecessor = nodeRunStatus(predecessorStatus);
+    boolean operatorSkipped = OPERATOR_SKIPPED_REASON.equals(predecessorSkipReasonCode);
     return switch (type) {
       case ALWAYS ->
-        isTerminal(predecessorStatus)
-            && (!"SKIPPED".equalsIgnoreCase(predecessorStatus)
-                || "OPERATOR_SKIPPED".equals(predecessorSkipReasonCode));
+        isTerminal(predecessor)
+            && (predecessor != WorkflowNodeRunStatus.SKIPPED || operatorSkipped);
       case SUCCESS ->
-        STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
-            || ("SKIPPED".equalsIgnoreCase(predecessorStatus)
-                && "OPERATOR_SKIPPED".equals(predecessorSkipReasonCode));
-      case FAILURE -> WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(predecessorStatus);
+        predecessor == WorkflowNodeRunStatus.SUCCESS
+            || (predecessor == WorkflowNodeRunStatus.SKIPPED && operatorSkipped);
+      case FAILURE -> predecessor == WorkflowNodeRunStatus.FAILED;
       case CONDITION ->
-        STATUS_SUCCESS.equalsIgnoreCase(predecessorStatus)
+        predecessor == WorkflowNodeRunStatus.SUCCESS
             && workflowConditionEvaluator.matches(edge.getConditionExpr(), payloadJson);
     };
   }
@@ -601,16 +608,17 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
             workflowRunId, predecessorCodes);
     boolean hasSkippedPredecessor = false;
     for (WorkflowNodeRunEntity predecessor : predecessors) {
-      if (WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(predecessor.getNodeStatus())) {
+      WorkflowNodeRunStatus predecessorStatus = nodeRunStatus(predecessor.getNodeStatus());
+      if (predecessorStatus == WorkflowNodeRunStatus.FAILED) {
         return new SkipReason("UPSTREAM_FAILED");
       }
-      hasSkippedPredecessor |= "SKIPPED".equalsIgnoreCase(predecessor.getNodeStatus());
+      hasSkippedPredecessor |= predecessorStatus == WorkflowNodeRunStatus.SKIPPED;
     }
     if (hasSkippedPredecessor) {
       return new SkipReason("UPSTREAM_SKIPPED");
     }
-    boolean hasConditionEdge =
-        incomingEdges.stream().anyMatch(edge -> "CONDITION".equalsIgnoreCase(edge.getEdgeType()));
+    boolean hasConditionEdge = incomingEdges.stream()
+        .anyMatch(edge -> WorkflowEdgeType.CONDITION.code().equalsIgnoreCase(edge.getEdgeType()));
     return hasConditionEdge
         ? new SkipReason("CONDITION_NOT_MATCHED")
         : new SkipReason("NO_MATCHING_INCOMING_EDGE");
@@ -618,10 +626,16 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
 
   private record SkipReason(String code) {}
 
-  private boolean isTerminal(String nodeStatus) {
-    return STATUS_SUCCESS.equalsIgnoreCase(nodeStatus)
-        || WorkflowNodeRunStatus.FAILED.code().equalsIgnoreCase(nodeStatus)
-        || "SKIPPED".equalsIgnoreCase(nodeStatus);
+  private static boolean isTerminal(String nodeStatus) {
+    return isTerminal(nodeRunStatus(nodeStatus));
+  }
+
+  private static boolean isTerminal(WorkflowNodeRunStatus nodeStatus) {
+    return EmptyChecks.isNotNull(nodeStatus) && DAG_TERMINAL_STATUSES.contains(nodeStatus);
+  }
+
+  private static WorkflowNodeRunStatus nodeRunStatus(String nodeStatus) {
+    return DictEnum.fromCode(WorkflowNodeRunStatus.class, nodeStatus);
   }
 
   /** joinMode 写入 workflow_node.node_params，避免为 join 规则单独扩表。 */

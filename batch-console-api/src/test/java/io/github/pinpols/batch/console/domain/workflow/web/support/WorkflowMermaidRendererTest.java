@@ -13,6 +13,23 @@ import org.junit.jupiter.api.Test;
 class WorkflowMermaidRendererTest {
 
   @Test
+  @DisplayName("未登记或缺失的节点与连线类型按普通矩形和实线渲染, 类型大小写不敏感")
+  void shouldRenderUnknownTypesAsPlainShapes() {
+    WorkflowDefinitionDetailResponse detail = detail(
+        List.of(node("A", null, "LEGACY"), node("B", null, null), node("C", null, "gateway")),
+        List.of(edge("A", "B", "LEGACY", null), edge("B", "C", null, null)));
+
+    String mermaid = WorkflowMermaidRenderer.render(detail);
+
+    assertThat(mermaid)
+        .contains("A[A]")
+        .contains("B[B]")
+        .contains("C{C}")
+        .contains("A --> B")
+        .contains("B --> C");
+  }
+
+  @Test
   @DisplayName("起点、任务与终点渲染为对应形状, 成功连线带小写标签")
   void shouldRenderStartTaskEndChain_whenRenderingNodesAndEdges() {
     WorkflowDefinitionDetailResponse detail = detail(

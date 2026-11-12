@@ -236,15 +236,10 @@ public class WorkflowConditionEvaluator {
     List<String> items = new ArrayList<>();
     StringBuilder current = new StringBuilder();
     int depth = 0;
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
+    QuoteState quotes = new QuoteState();
     for (int index = 0; index < value.length(); index++) {
       char ch = value.charAt(index);
-      if (ch == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-      } else if (ch == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-      } else if (!inSingleQuote && !inDoubleQuote) {
+      if (quotes.outsideAfter(ch)) {
         if (ch == '[' || ch == '(') {
           depth++;
         } else if (ch == ']' || ch == ')') {
@@ -271,16 +266,10 @@ public class WorkflowConditionEvaluator {
     List<String> parts = new ArrayList<>();
     StringBuilder current = new StringBuilder();
     int depth = 0;
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
+    QuoteState quotes = new QuoteState();
     for (int index = 0; index < expression.length(); index++) {
       char ch = expression.charAt(index);
-      if (ch == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-      } else if (ch == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-      }
-      if (!inSingleQuote && !inDoubleQuote) {
+      if (quotes.outsideAfter(ch)) {
         if (ch == '(') {
           depth++;
         } else if (ch == ')') {
@@ -396,16 +385,10 @@ public class WorkflowConditionEvaluator {
 
   private boolean isWrappedBySinglePair(String expression) {
     int depth = 0;
-    boolean inSingleQuote = false;
-    boolean inDoubleQuote = false;
+    QuoteState quotes = new QuoteState();
     for (int index = 0; index < expression.length(); index++) {
       char ch = expression.charAt(index);
-      if (ch == '\'' && !inDoubleQuote) {
-        inSingleQuote = !inSingleQuote;
-      } else if (ch == '"' && !inSingleQuote) {
-        inDoubleQuote = !inDoubleQuote;
-      }
-      if (inSingleQuote || inDoubleQuote) {
+      if (!quotes.outsideAfter(ch)) {
         continue;
       }
       if (ch == '(') {
@@ -487,16 +470,10 @@ public class WorkflowConditionEvaluator {
 
     private static int indexOfTopLevel(String expression, String operator) {
       int depth = 0;
-      boolean inSingleQuote = false;
-      boolean inDoubleQuote = false;
+      QuoteState quotes = new QuoteState();
       for (int index = 0; index <= expression.length() - operator.length(); index++) {
         char ch = expression.charAt(index);
-        if (ch == '\'' && !inDoubleQuote) {
-          inSingleQuote = !inSingleQuote;
-        } else if (ch == '"' && !inSingleQuote) {
-          inDoubleQuote = !inDoubleQuote;
-        }
-        if (inSingleQuote || inDoubleQuote) {
+        if (!quotes.outsideAfter(ch)) {
           continue;
         }
         if (ch == '(') {
@@ -529,6 +506,22 @@ public class WorkflowConditionEvaluator {
         case "endsWith" -> OperatorType.ENDS_WITH;
         default -> throw new IllegalArgumentException("Unsupported operator: " + operator);
       };
+    }
+  }
+
+  /** 单/双引号的嵌套状态：一种引号内的另一种引号按字面量处理。四个顶层扫描共用，保证引号规则一致。 */
+  private static final class QuoteState {
+    private boolean inSingleQuote;
+    private boolean inDoubleQuote;
+
+    /** 读入一个字符，返回读入之后是否处于引号之外（闭合引号本身视为引号外）。 */
+    boolean outsideAfter(char ch) {
+      if (ch == '\'' && !inDoubleQuote) {
+        inSingleQuote = !inSingleQuote;
+      } else if (ch == '"' && !inSingleQuote) {
+        inDoubleQuote = !inDoubleQuote;
+      }
+      return !inSingleQuote && !inDoubleQuote;
     }
   }
 }
