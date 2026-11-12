@@ -106,7 +106,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
     }
     List<WorkflowEdgeEntity> outgoingEdges =
         workflowEdgeMapper.selectOutgoingEdges(workflowDefinitionId, currentNodeCode);
-    if (outgoingEdges == null || outgoingEdges.isEmpty()) {
+    if (EmptyChecks.isEmpty(outgoingEdges)) {
       return List.of();
     }
     // S3 / R3-P1-1：批量预取 — 把所有 match 的 toNodeCode 一次性查回来，替代每条 edge 一次 SQL 的 N+1。
@@ -314,7 +314,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
       }
       List<WorkflowEdgeEntity> outgoing =
           workflowEdgeMapper.selectOutgoingEdges(workflowDefinitionId, cur);
-      if (outgoing == null || outgoing.isEmpty()) {
+      if (EmptyChecks.isEmpty(outgoing)) {
         continue;
       }
       for (WorkflowEdgeEntity edge : outgoing) {
@@ -396,7 +396,7 @@ public class DefaultWorkflowDagService implements WorkflowDagService {
   private boolean canNeverFire(Long workflowRunId, Long workflowDefinitionId, String nodeCode) {
     List<WorkflowEdgeEntity> incoming =
         workflowEdgeMapper.selectIncomingEdges(workflowDefinitionId, nodeCode);
-    if (incoming == null || incoming.isEmpty()) {
+    if (EmptyChecks.isEmpty(incoming)) {
       return false;
     }
     // S3 / R3-P1-2：批量预取替代 N 次 selectLatestByWorkflowRunIdAndNodeCode

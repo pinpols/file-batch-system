@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.infrastructure.startup;
 
 import io.github.pinpols.batch.common.mapper.InformationSchemaMapper;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,7 +35,7 @@ public class NotValidConstraintGuard {
   @EventListener(ApplicationReadyEvent.class)
   public void checkOnStartup() {
     List<String> invalid = informationSchemaMapper.listInvalidConstraints();
-    if (invalid == null || invalid.isEmpty()) {
+    if (EmptyChecks.isEmpty(invalid)) {
       log.info("NOT VALID constraint guard passed: no convalidated=false constraints");
       return;
     }

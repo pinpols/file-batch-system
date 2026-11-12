@@ -405,7 +405,7 @@ public class BatchDayOperationService {
     }
     List<BatchDayWaitingLaunchEntity> waiting = waitingLaunchMapper.selectWaitingByCalendarBizDate(
         releasedDay.tenantId(), releasedDay.calendarCode(), waitingBizDate, RELEASE_WAITING_LIMIT);
-    if (waiting == null || waiting.isEmpty()) {
+    if (EmptyChecks.isEmpty(waiting)) {
       return 0;
     }
     int released = 0;

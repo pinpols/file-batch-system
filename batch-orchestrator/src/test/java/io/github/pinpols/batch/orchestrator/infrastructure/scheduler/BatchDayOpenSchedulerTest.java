@@ -662,9 +662,9 @@ class BatchDayOpenSchedulerTest {
   }
 
   @Test
-  @DisplayName("启用日历查询返回 null 时按空扫描结束")
-  void shouldCompleteScanWhenCalendarQueryReturnsNull() {
-    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(null);
+  @DisplayName("按指定时间开日时启用日历查询返回空列表则按空扫描结束")
+  void shouldCompleteScanWhenCalendarQueryReturnsEmptyForGivenTime() {
+    when(businessCalendarMapper.selectByEnabled(true)).thenReturn(List.of());
 
     scheduler.openDueBatchDays(Instant.parse("2026-05-05T00:30:00Z"));
 

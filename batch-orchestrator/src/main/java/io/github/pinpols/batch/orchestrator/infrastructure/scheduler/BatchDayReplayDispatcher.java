@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.BatchDayReplayScope;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.application.service.governance.CompensationService;
 import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayReplayTerminalReconciler;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
@@ -71,7 +72,7 @@ public class BatchDayReplayDispatcher {
     }
     List<BatchDayReplaySessionEntity> running =
         sessionMapper.selectByStatus(STATUS_RUNNING, properties.getSessionBatchSize());
-    if (running == null || running.isEmpty()) {
+    if (EmptyChecks.isEmpty(running)) {
       return;
     }
     for (BatchDayReplaySessionEntity session : running) {
@@ -112,7 +113,7 @@ public class BatchDayReplayDispatcher {
         session.id(), now.minusMillis(properties.getClaimTimeoutMillis()), now);
     List<BatchDayReplayEntryEntity> pending = entryMapper.selectBySessionAndStatus(
         session.id(), session.tenantId(), ENTRY_PENDING, properties.getEntryBatchSize());
-    if (pending == null || pending.isEmpty()) {
+    if (EmptyChecks.isEmpty(pending)) {
       return;
     }
     for (BatchDayReplayEntryEntity entry : pending) {

@@ -64,7 +64,7 @@ public class BatchDayCutoffScheduler {
     List<String> tracked = List.of("OPEN");
 
     List<BatchDayInstanceEntity> candidates = batchDayInstanceMapper.selectByDayStatusIn(tracked);
-    if (candidates == null || candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       return;
     }
 

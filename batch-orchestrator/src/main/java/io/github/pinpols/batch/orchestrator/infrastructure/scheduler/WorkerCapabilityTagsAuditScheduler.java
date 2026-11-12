@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.config.WorkerCapabilityTagsAuditProperties;
 import io.github.pinpols.batch.orchestrator.domain.param.InvalidCapabilityTagsParam;
@@ -69,7 +70,7 @@ public class WorkerCapabilityTagsAuditScheduler {
     }
     int logSampleLimit = auditProperties.getCapabilityTagsLogSampleLimit();
     List<InvalidCapabilityTagsParam> rows = workerRegistryMapper.selectInvalidCapabilityTags();
-    if (rows == null || rows.isEmpty()) {
+    if (EmptyChecks.isEmpty(rows)) {
       invalidCount.set(0L);
       return;
     }

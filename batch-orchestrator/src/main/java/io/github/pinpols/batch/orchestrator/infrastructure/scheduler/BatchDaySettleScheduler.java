@@ -101,7 +101,7 @@ public class BatchDaySettleScheduler {
     }
     List<BatchDayInstanceEntity> candidates =
         batchDayInstanceMapper.selectByDayStatusIn(TRACKED_STATUSES);
-    if (candidates == null || candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       recoverFailedCatchUps();
       return;
     }
@@ -436,7 +436,7 @@ public class BatchDaySettleScheduler {
     }
     List<JobInstanceEntity> candidates = jobInstanceMapper.selectBatchDayCatchUpCandidates(
         batchDay.tenantId(), batchDay.calendarCode(), batchDay.bizDate());
-    if (candidates == null || candidates.isEmpty()) {
+    if (EmptyChecks.isEmpty(candidates)) {
       return;
     }
     for (JobInstanceEntity candidate : candidates) {
