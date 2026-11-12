@@ -291,11 +291,11 @@ public class ConsoleJwtService {
     String username = jwt.getSubject();
     String tenantId = jwt.getClaimAsString(CLAIM_TENANT_ID);
     Long sessionVersion = jwt.getClaim(CLAIM_SESSION_VERSION);
-    if (properties.isSingleSessionEnabled()) {
-      if (EmptyChecks.isNull(sessionVersion)
-          || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion)) {
-        throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
-      }
+    boolean singleSessionIsNotCurrent = properties.isSingleSessionEnabled()
+        && (EmptyChecks.isNull(sessionVersion)
+            || !sessionRegistry.isCurrentSession(username, tenantId, sessionVersion));
+    if (singleSessionIsNotCurrent) {
+      throw BizException.of(ResultCode.UNAUTHORIZED, "error.console_jwt.invalid");
     }
     // P0-3:logout 后写入的 jti 黑名单,命中即拒绝(token TTL 内即时失效)。
     String jti = jwt.getClaimAsString(CLAIM_JTI);

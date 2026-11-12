@@ -163,10 +163,8 @@ public class CrossDayDependencyReconciler {
       return;
     }
     Instant deadline = nodeRun.getStartedAt().plus(Duration.ofSeconds(timeoutSeconds));
-    if (now.isAfter(deadline)) {
-      if (markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now)) {
-        emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
-      }
+    if (now.isAfter(deadline) && markFailed(nodeRun, "CROSS_DAY_DEP_TIMEOUT", now)) {
+      emitTimeoutAlert(workflowRun, nodeRun, "TIMEOUT");
     }
   }
 

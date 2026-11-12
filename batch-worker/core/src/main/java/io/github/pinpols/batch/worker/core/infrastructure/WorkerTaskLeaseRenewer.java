@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.infrastructure;
 
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.worker.core.config.WorkerLeaseProperties;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionClient;
 import io.github.pinpols.batch.worker.core.support.TaskLeaseRenewItem;
@@ -234,21 +235,20 @@ public class WorkerTaskLeaseRenewer {
         }
         trackFailure(activeTaskLease, "rejected");
         return false;
-      } else {
-        if (!activeTaskLeaseRegistry.markRenewedIfCurrent(activeTaskLease)) {
-          return false;
-        }
-        if (fastRetry && consecutiveFailures.containsKey(activeTaskLease)) {
-          // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
-          MeterRegistry registry = meterRegistryProvider.getIfAvailable();
-          if (registry != null) {
-            // tenantId 不作 metric tag(高基数 → Prometheus 内存耗尽),日志 MDC 已带租户便于追溯
-            Counter.builder(METRIC_FAST_RETRY).register(registry).increment();
-          }
-        }
-        consecutiveFailures.remove(activeTaskLease);
-        return true;
       }
+      if (!activeTaskLeaseRegistry.markRenewedIfCurrent(activeTaskLease)) {
+        return false;
+      }
+      if (fastRetry && consecutiveFailures.containsKey(activeTaskLease)) {
+        // fast-retry 救回了之前失败的续期：记 metric 让运维感知抖动恢复速率
+        MeterRegistry registry = meterRegistryProvider.getIfAvailable();
+        if (EmptyChecks.isNotNull(registry)) {
+          // tenantId 不作 metric tag(高基数 → Prometheus 内存耗尽),日志 MDC 已带租户便于追溯
+          Counter.builder(METRIC_FAST_RETRY).register(registry).increment();
+        }
+      }
+      consecutiveFailures.remove(activeTaskLease);
+      return true;
     } catch (Exception exception) {
       log.warn(
           "task lease renew failed: tenantId={}, taskId={}, workerId={}, fastRetry={}, error={}",

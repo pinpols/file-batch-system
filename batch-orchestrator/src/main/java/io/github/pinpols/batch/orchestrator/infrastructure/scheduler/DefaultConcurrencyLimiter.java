@@ -99,14 +99,12 @@ public class DefaultConcurrencyLimiter implements ConcurrencyLimiter {
     boolean fairShareGroupLimitIsConfigured = Texts.hasText(quotaPolicy.fairShareGroup())
         && quotaPolicy.groupSharedMaxRunningJobs() != null
         && quotaPolicy.groupSharedMaxRunningJobs() > 0;
-    if (fairShareGroupLimitIsConfigured) {
-      if (!fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
-        QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
-        return applyStrategy(
-            strategy,
-            "FAIR_SHARE_GROUP_JOB_LIMIT",
-            "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup());
-      }
+    if (fairShareGroupLimitIsConfigured && !fairShareGroupAdmissionGuard.hasCapacity(quotaPolicy)) {
+      QuotaExceededStrategy strategy = resolveStrategy(quotaPolicy.exceededStrategy());
+      return applyStrategy(
+          strategy,
+          "FAIR_SHARE_GROUP_JOB_LIMIT",
+          "fair-share group job cap reached for group " + quotaPolicy.fairShareGroup());
     }
     return ResourceCheck.allow();
   }

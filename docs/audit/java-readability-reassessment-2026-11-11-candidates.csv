@@ -84,28 +84,28 @@ R12,mapper-list-null-check,batch-trigger/src/main/java/io/github/pinpols/batch/t
 R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,117,sql,保留：requireNonNull 作用于 sql.getAllowedDataSourceBeans() 而非 sql；sql 为 null 时短路不执行 requireNonNull，后续 isNotNull(sql) 未被支配
 R12,null-check-after-requireNonNull,batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/runtime/AtomicExecutorProductionGuard.java,130,sp,保留：requireNonNull 作用于 sp.getAllowedSchemas() 而非 sp；sp 为 null 时短路不执行 requireNonNull，后续 isNotNull(sp) 未被支配
 R12,null-check-after-requireNonNull,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/AckDispatchStep.java,79,receiptCode,保留：判空在 requireNonNull 之前且只在 !pending 分支执行；acknowledged=true 时可跳过，markAcked 处 receiptCode == null 仍可达
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/BatchDayCatchUpReconciliation.java,114,frozenAutoCommand,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationService.java,133,persistAndExpand,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserAccountService.java,249,enforceGrantableAuthorities,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,144,patch,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java,294,authenticate,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuard.java,70,authorizeTenant,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java,980,buildHeaderIndex,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/naming/ReservedPrefixGuard.java,93,checkResourceCode,
-R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java,89,rejectLogin,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java,359,collectOptionalNodes,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java,166,reconcileOneBound,
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,
-R15,mergeable-nested-if,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,246,releaseUnexecutedClaims,
-R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,329,validateRow,
-R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitApplyHandlers.java,189,applySpecs,
-R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,900,replayDeadLetter,
-R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java,400,applyFailureOutcome,
-R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerTaskLeaseRenewer.java,236,attemptRenew,
-R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java,169,recordFailure,
-R16,else-after-return,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java,289,prepareDeliveryAttempt,
-R16,verbose-boolean-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,772,reaches,
-R16,verbose-boolean-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,278,scopesAllowAny,
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/BatchDayCatchUpReconciliation.java,114,frozenAutoCommand,保留：误报（114 行是单个 if，嵌套的 for 内 if 后还有赋值语句）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WorkflowTerminalNotificationService.java,133,persistAndExpand,保留：误报（133 行是单行 if，非嵌套）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserAccountService.java,249,enforceGrantableAuthorities,保留：误报（249 行是单个 return 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,144,patch,保留：误报（144 行是单个 throw 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleJwtService.java,294,authenticate,已改：if (single) { if (a||!b) throw } 合并为局部布尔 singleSessionIsNotCurrent 再单次 if
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/support/ConsoleTenantGuard.java,70,authorizeTenant,保留：外层 if 内有说明 fail-closed/IDOR 安全原因的注释与 principal 判断，非单一内层 if
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java,980,buildHeaderIndex,已改：if (hasText) { if (putIfAbsent!=null) throw } 合并为 if (hasText && putIfAbsent!=null)，短路顺序不变
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/naming/ReservedPrefixGuard.java,93,checkResourceCode,保留：误报（93 行是单个 return 守卫 if）
+R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java,89,rejectLogin,已改：if (passwordLogin) { if (!tryAcquire) {...} } 合并为 if (passwordLogin && !tryAcquire)
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java,359,collectOptionalNodes,保留：误报（两层 if 之间是 for 循环，且带 break）
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java,166,reconcileOneBound,已改：if (isAfter) { if (markFailed) emit } 合并为 if (isAfter && markFailed)
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,已改：if (configured) { if (!hasCapacity) return } 合并为 if (configured && !hasCapacity)
+R15,mergeable-nested-if,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,246,releaseUnexecutedClaims,保留：误报（246 行是单个 return 守卫，for 内单个 if 不可合并）
+R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,329,validateRow,保留：误报（if 内嵌 if 且外层带 else，不是 return 之后的 else）
+R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitApplyHandlers.java,189,applySpecs,已改：lambda 内 return 之后的 else 去掉，内层改为 != UPSERT 先返回 SKIPPED 后平铺
+R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,900,replayDeadLetter,已改：if 分支以 return 结束，去掉 else，回放调用提到外层
+R16,else-after-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java,400,applyFailureOutcome,已改：retryScheduled 分支 return null 后去掉 else，终态更新提到外层
+R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/WorkerTaskLeaseRenewer.java,236,attemptRenew,已改：!renewed 分支全路径 return false 后去掉 else，续期成功逻辑提到外层
+R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/reportoutbox/WorkerReportOutboxRepository.java,169,recordFailure,已改：give-up 分支 return true 后去掉 else，重试退避逻辑提到外层
+R16,else-after-return,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java,289,prepareDeliveryAttempt,保留：误报（if/else-if 链的首个分支 newAttempt=true 后落空不 return，不能平铺）
+R16,verbose-boolean-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,772,reaches,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底，不是 if/return true/return false）
+R16,verbose-boolean-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,278,scopesAllowAny,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底）
 R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,557,toConfigReleaseResponse,
 R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitTenantExecutor.java,207,hasChanges,
 R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java,202,hasChanges,

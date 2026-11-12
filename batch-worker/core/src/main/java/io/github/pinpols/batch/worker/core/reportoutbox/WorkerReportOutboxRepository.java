@@ -192,29 +192,28 @@ public class WorkerReportOutboxRepository {
           id,
           SwallowedExceptionLogger.summary(cause));
       return true;
-    } else {
-      long backoff = computeBackoffMillis(nextAttempts);
-      long jitterMax = Math.max(0L, props.getJitterMillis());
-      long jitter = jitterMax == 0
-          ? 0L
-          : jitterMax == Long.MAX_VALUE
-              ? ThreadLocalRandom.current().nextLong() & Long.MAX_VALUE
-              : ThreadLocalRandom.current().nextLong(jitterMax + 1);
-      long nextAt = saturatedAdd(saturatedAdd(nowEpochMillis, backoff), jitter);
-      int updated = store.updateRetry(row, nextAttempts, nextAt, nowEpochMillis);
-      if (updated == 0) {
-        log.debug("worker report outbox claim no longer current; ignored retry: id={}", id);
-        return false;
-      }
-      log.warn(
-          "worker report outbox publish failed: id={}, attempt={}/{}, nextAttemptAt={}, cause={}",
-          id,
-          nextAttempts,
-          props.getMaxPublishAttempts(),
-          nextAt,
-          SwallowedExceptionLogger.summary(cause));
+    }
+    long backoff = computeBackoffMillis(nextAttempts);
+    long jitterMax = Math.max(0L, props.getJitterMillis());
+    long jitter = jitterMax == 0
+        ? 0L
+        : jitterMax == Long.MAX_VALUE
+            ? ThreadLocalRandom.current().nextLong() & Long.MAX_VALUE
+            : ThreadLocalRandom.current().nextLong(jitterMax + 1);
+    long nextAt = saturatedAdd(saturatedAdd(nowEpochMillis, backoff), jitter);
+    int updated = store.updateRetry(row, nextAttempts, nextAt, nowEpochMillis);
+    if (updated == 0) {
+      log.debug("worker report outbox claim no longer current; ignored retry: id={}", id);
       return false;
     }
+    log.warn(
+        "worker report outbox publish failed: id={}, attempt={}/{}, nextAttemptAt={}, cause={}",
+        id,
+        nextAttempts,
+        props.getMaxPublishAttempts(),
+        nextAt,
+        SwallowedExceptionLogger.summary(cause));
+    return false;
   }
 
   boolean markGiveUp(WorkerReportOutboxRow row, String reason) {
