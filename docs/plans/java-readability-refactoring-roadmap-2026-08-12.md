@@ -359,7 +359,7 @@
 
 | 范围 | 状态 |
 |---|---|
-| R1–R3、R5–R10、R12、R14–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定；PR-1 #1354（Task 1–3）以 main 为目标，CI 测试分片已通过、已设自动合并，正在补覆盖率测试；PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）为草稿 PR，依次叠在其上；PR-4（Task 10–12、14）在分支 `chore/java-readability-p9-batch4`，将作为草稿 PR 叠在 #1356 之上；Task 15–17、19–24 和 18 未开工；文档 PR #1353 已合入 main（9b9f2d8c1）；R13（Task 12）已撤销；执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链 |
+| R1–R3、R5–R10、R12、R14–R23、R25–R27 与次要候选（计划 Task 1–17、19–24） | 计划已定；PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已就绪并设好 squash 自动合并；PR-5（Task 15–17）在分支 `chore/java-readability-p9-batch5`，将作为草稿 PR 叠在 #1357 之上；Task 19–24 和 18 未开工；R13（Task 12）已撤销；执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链 |
 | R13 重复判断（Task 12） | 已撤销：`scanCycle` 是顺序的 DISCOVER→INDEX→APPLY→CLEAN 链，改 `switch` 会改变行为 |
 | R4 空值判断写法 | 已裁定：对象判空用 `== null`，字符串/集合用 `EmptyChecks`；规则写入 [`coding-conventions.md`](../coding-conventions.md) §1.8 后按模块替换（计划 Task 18，最后执行） |
 | R11 大类按领域拆分 | 暂缓，登记在 [todo-master](todo-master.md) |

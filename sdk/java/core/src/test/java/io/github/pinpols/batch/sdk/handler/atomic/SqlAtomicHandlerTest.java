@@ -2,6 +2,7 @@ package io.github.pinpols.batch.sdk.handler.atomic;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -265,6 +266,21 @@ class SqlAtomicHandlerTest {
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
 
     assertThat(result.success()).isFalse();
+    verify(connection).rollback();
+  }
+
+  @Test
+  @DisplayName("defaultAutoCommit=false + 执行异常且 rollback 也失败 → 仍返回原始执行失败")
+  void shouldKeepOriginalFailure_whenRollbackAlsoFails() throws Exception {
+    stubRoleGateAllows();
+    when(statement.execute(anyString())).thenThrow(new SQLException("boom"));
+    doThrow(new SQLException("rollback failed")).when(connection).rollback();
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, false, true);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource).execute(ctx("UPDATE t SET x=1"));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("boom").doesNotContain("rollback failed");
     verify(connection).rollback();
   }
 

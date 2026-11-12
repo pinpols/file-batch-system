@@ -165,7 +165,7 @@
 
 | # | 类别 | 位置 | 现象 | 建议 | 行为保持约束 |
 |---|---|---|---|---|---|
-| R23 | 未使用的参数 | 23 个私有方法参数，例：`DefaultTaskOutcomeService.applyFailureOutcome` 的 `cancellationOutcome`、`DefaultCompensationService.createWorkflowNodeReplayOperation` 的 `commandNo` 和 `traceId`、`DefaultLaunchValidationService.rejectInvalidExecutionSnapshot` 的 `triggerRequest` | 读者会以为这个参数影响结果，其实没有 | 删掉参数，调用处同步删除。`applyFailureOutcome` 删掉之后，Task 16 不再需要为它引入枚举 | 只删真正没有读取的参数；调用处删除实参时，实参表达式本身如果有副作用要保留 |
+| R23 | 未使用的参数 | 23 个私有方法参数，例：`DefaultTaskOutcomeService.applyFailureOutcome` 的 `cancellationOutcome`（已在 Task 16（PR-5）中移除，Task 24 跳过它）、`DefaultCompensationService.createWorkflowNodeReplayOperation` 的 `commandNo` 和 `traceId`、`DefaultLaunchValidationService.rejectInvalidExecutionSnapshot` 的 `triggerRequest` | 读者会以为这个参数影响结果，其实没有 | 删掉参数，调用处同步删除。`applyFailureOutcome` 删掉之后，Task 16 不再需要为它引入枚举 | 只删真正没有读取的参数；调用处删除实参时，实参表达式本身如果有副作用要保留 |
 | R24 | 用字符串表达有限域 | 126 个 public 方法参数，例：`JobLifecycleMetrics.recordCompletion(jobType, terminalStatus)`、`WorkflowNodeRunSupport.recordReady(nodeType)` | 调用方可以传任意字符串 | 只登记，不在本阶段改。持久化和跨进程传递的状态字符串按 §1.7 保持原样；如要改，由[有限域与常量计划](../plans/typed-contract-enum-constant-governance-plan-2026-10-07.md)统一处理 | — |
 | R25 | 注释掩盖代码 | 方法体内 ≥ 5 行连续注释的 24 处，例：`HttpTaskExecutionClient.report`（16 行）、`PartitionReclaimUnit.doReclaim`（8 行）、`DefaultRetryGovernanceService.dispatchDueRetries` | 需要大段注释才能看懂的代码块 | 逐处判断：解释 WHY 或不变量的保留；解释“这段代码在做什么”的，把那段代码抽成以注释主旨命名的方法，注释改为方法的类注释 | 纯形式改动 |
 | R26 | 魔法数字 | 207 处候选，例：`DefaultRetryGovernanceService:191、848` 的 `1023`，多个服务里的 `128` | 读者不知道数字的来源 | 有业务含义的（长度上限、截断长度）提成所属类的命名常量；同一个上限在多个类里出现时，先确认是不是同一个数据库列的长度，是的话放到该实体或 Mapper 附近 | 数值不变 |
@@ -269,7 +269,7 @@
 
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）以 main 为目标，CI 测试分片已通过、已设自动合并，正在补覆盖率测试；PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）为草稿 PR，依次叠在其上；PR-4（Task 10–12、14）在分支 `chore/java-readability-p9-batch4`，将作为草稿 PR 叠在 #1356 之上；Task 15–17、19–24 和 18 未开工；文档 PR #1353 已合入 main（9b9f2d8c1）；R13（Task 12）已撤销。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已就绪并设好 squash 自动合并；PR-5（Task 15–17）在分支 `chore/java-readability-p9-batch5`，将作为草稿 PR 叠在 #1357 之上；Task 19–24 和 18 未开工；R13（Task 12）已撤销。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|
@@ -285,8 +285,12 @@
 - 次要候选的复核结果：
   - else-if 长链实为 SQL 拆语句的字符状态机，Worker 的 `SqlTaskExecutor.SplitScanner` 和 SDK 的 `SqlAtomicHandler.StatementSplitState` 各有一份。SDK 是独立发布的，不能依赖 `batch-common`，所以两份分别整理，不合并。
   - 多布尔参数：`DefaultTaskOutcomeService` 的 `retryScheduled` 与 `cancellationOutcome` 互斥（第 210 行 `retryScheduled` 以 `!cancellationOutcome` 开头），适合换成一个枚举。`TaskOutcomeStatePolicy.resolveWorkflowEvent` 的调用处实参都是具名访问器（`context.allPartitionsFinished()` 等），读起来没有歧义，保留不改。
-  - 深嵌套的 15 处中，`JsonFormatParser`、`FixedWidthFormatParser`、`BizTableSchemaRegistrar`、`TenantConfigInitApplyHandlers` 没有单测，改之前要先补 characterization 测试。仓库里没有解析器的微基准（`load-tests` 只有 Gatling 接口压测），数据通路上的改动只能做本地前后计时对比，记为粗略证据。
-- 疑似行为问题（另案，不在可读性提交里修）：两份 SQL 拆分器都把单引号里的 `\'` 当作转义。PostgreSQL 在 `standard_conforming_strings = on`（默认值）时，普通字符串里的反斜杠不是转义符，`'C:\'; DROP …` 这类输入可能拆错。需要单独复现后再定性。
+  - 深嵌套的 15 处中，`JsonFormatParser`、`FixedWidthFormatParser`、`BizTableSchemaRegistrar` 原先没有单测，已在 Task 17a 补 characterization 测试；`TenantConfigInitApplyHandlers` 本来就有测试覆盖。仓库里没有解析器的微基准（`load-tests` 只有 Gatling 接口压测），数据通路上的改动只能做本地前后计时对比，记为粗略证据。
+- Task 17 实施记录（计时为本地前后对比的粗略证据，非微基准）：
+  - 17a（`batch-worker/import`）：均未出现超过 5% 的退化。JSON 解析 284→268/283 ms；定长 126→130/127 ms；Excel 220→181 ms；`ValidateStep` 1091→1104/1067 ms（噪声大，通过 `execute` 计时，因 `processValidationBatch` 为私有）；`ImportPreprocessPipeline` 48→31/29 ms；`copyChunk` 受数据库噪声主导，交错重跑结果相同（288/301 对 278/303 ms），改动只是每块多一次方法调用；`BizTableSchemaRegistrar` 只在启动时执行，未计时。
+  - 17b：`QueryExportHandler`（41/34/34→33/36/37 ms）与 `SqlAtomicHandler`（107/118/155→98/94/92 ms）均在噪声范围内。`SqlTaskExecutor`：结论不确定，机器负载高，中位数 1952/3311/2347 对 2638/2047/4591 ms，最小值持平；按判断保留，未达成 5% 验证。
+  - `SecurityScanOptions.parse` 保留不改：它是一个 for 套 switch、default 里再套 switch、操作约 20 个可变局部变量的结构；拆平需要一个 20 字段的状态对象或 20 个参数，代价大于收益，而且现在已经读起来像一张平铺的选项表。
+- 疑似行为问题（另案，不在可读性提交里修）：Worker 的 `SqlTaskExecutor.SplitScanner` 把单引号里的 `\'` 当作转义；SDK 的 `SqlAtomicHandler.StatementSplitState` 不这样处理（`select 'a\'; select 2'` 会拆成两句）。两种现状都已由 Task 15 的测试锁定。PostgreSQL 在 `standard_conforming_strings = on`（默认值）时，普通字符串里的反斜杠不是转义符，`'C:\'; DROP …` 这类输入在 Worker 侧可能拆错。这仍是独立的疑似缺陷，需单独复现后定性，不在可读性 PR 里修。
 
 ## 整改计划
 
