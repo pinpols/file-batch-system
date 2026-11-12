@@ -24,22 +24,15 @@ public final class BatchMetricsNames {
   public static final String JOB_COMPLETION_TOTAL = "batch.orchestrator.job.completion.total";
   public static final String JOB_FAILURE_TOTAL = "batch.orchestrator.job.failure.total";
 
-  // ─── workflow 生命周期(orchestrator 主导) ──────────────────────────
-  public static final String WORKFLOW_DURATION_SECONDS =
-      "batch.orchestrator.workflow.duration.seconds";
-  public static final String WORKFLOW_COMPLETION_TOTAL =
-      "batch.orchestrator.workflow.completion.total";
-
   // ─── outbox 共用(各模块自有 outbox 表都用,加 module tag 区分) ─────
-  public static final String OUTBOX_BACKLOG_GAUGE = "batch.outbox.backlog";
   // 注:OUTBOX_PUBLISH_LATENCY 常量已删(2026-06-03 audit) — 实际 Timer 用
   // "batch.outbox.publish.duration"(DefaultScheduleForwarder @Timed),
   // 字符串从未被 import,保留只会误导后续接入,以 @Timed 字面量为单一权威源.
   public static final String OUTBOX_GIVE_UP_TOTAL = "batch.outbox.events.give_up.total";
 
-  // ─── claim 链路(worker 抢任务) ────────────────────────────────────
-  public static final String CLAIM_LATENCY_MS = "batch.worker.claim.latency.ms";
-  public static final String CLAIM_FAILURE_TOTAL = "batch.worker.claim.failure.total";
+  // 注:WORKFLOW_DURATION_SECONDS / WORKFLOW_COMPLETION_TOTAL / OUTBOX_BACKLOG_GAUGE /
+  // CLAIM_LATENCY_MS / CLAIM_FAILURE_TOTAL 已删(2026-11-12):从未注册,也无告警或看板引用;
+  // 接入对应指标时再按实际注册名补回。
 
   // ─── ADR-046 P2 多行 claim/report 批量(控制面 churn O(N)→O(N/K)) ───
   /** 单次 claim-batch 的 partition 数分布(DistributionSummary):看 K 实际多大 = churn 省了多少。 */

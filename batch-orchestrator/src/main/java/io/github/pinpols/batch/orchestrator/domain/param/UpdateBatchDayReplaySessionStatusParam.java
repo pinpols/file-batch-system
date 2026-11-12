@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.orchestrator.domain.param;
 
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.domain.enums.BatchDayReplaySessionStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
@@ -9,8 +10,6 @@ import lombok.Getter;
 /** 批次日重放会话状态 CAS 更新参数；必填字段在构造边界校验。 */
 @Getter
 public final class UpdateBatchDayReplaySessionStatusParam {
-  private static final String STATUS_RUNNING = "RUNNING";
-  private static final String STATUS_CANCELLED = "CANCELLED";
 
   private final String tenantId;
   private final Long id;
@@ -51,12 +50,18 @@ public final class UpdateBatchDayReplaySessionStatusParam {
       Instant approvedAt) {
     SessionStatusDetails details = new SessionStatusDetails(approvedAt, null, approvedBy);
     return new UpdateBatchDayReplaySessionStatusParam(
-        tenantId, id, STATUS_RUNNING, expectedStatuses, approvedAt, details);
+        tenantId,
+        id,
+        BatchDayReplaySessionStatus.RUNNING.code(),
+        expectedStatuses,
+        approvedAt,
+        details);
   }
 
   public static UpdateBatchDayReplaySessionStatusParam cancelled(
       String tenantId, Long id, List<String> expectedStatuses, Instant cancelledAt) {
-    return completed(tenantId, id, STATUS_CANCELLED, expectedStatuses, cancelledAt);
+    return completed(
+        tenantId, id, BatchDayReplaySessionStatus.CANCELLED.code(), expectedStatuses, cancelledAt);
   }
 
   public static UpdateBatchDayReplaySessionStatusParam completed(

@@ -28,8 +28,6 @@ public class RuntimeInfrastructureInspector {
   public static final String REDIS_HOST_KEY = "spring.data.redis.host";
   public static final String REDIS_PORT_KEY = "spring.data.redis.port";
   public static final String REDIS_DATABASE_KEY = "spring.data.redis.database";
-  public static final String REDIS_SENTINEL_MASTER_KEY = "spring.data.redis.sentinel.master";
-  public static final String REDIS_SENTINEL_NODES_KEY = "spring.data.redis.sentinel.nodes";
 
   private final Environment environment;
   private final ObjectProvider<DataRedisConnectionDetails> redisConnectionDetails;

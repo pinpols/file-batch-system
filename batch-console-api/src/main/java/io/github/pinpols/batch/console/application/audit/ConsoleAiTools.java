@@ -1,6 +1,6 @@
 package io.github.pinpols.batch.console.application.audit;
 
-import io.github.pinpols.batch.common.constants.BatchStatusConstants;
+import io.github.pinpols.batch.common.enums.JobInstanceStatus;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.application.observability.ConsoleQueryApplicationService;
@@ -77,7 +77,7 @@ public class ConsoleAiTools {
   public String listRecentFailedJobInstances() {
     JobInstanceQueryRequest request = new JobInstanceQueryRequest();
     request.setTenantId(tenantId);
-    request.setInstanceStatus(BatchStatusConstants.FAILED);
+    request.setInstanceStatus(JobInstanceStatus.FAILED.code());
     request.setPageNo(1);
     request.setPageSize(maxRows);
     PageResponse<ConsoleJobInstanceResponse> page = queryService.jobInstances(request);
