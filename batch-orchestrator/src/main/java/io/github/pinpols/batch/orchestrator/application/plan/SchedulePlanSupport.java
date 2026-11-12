@@ -41,13 +41,13 @@ public final class SchedulePlanSupport {
       return List.of();
     }
     Set<String> channels = new LinkedHashSet<>();
-    if (hasText(plan.getDownstreamChannelCode())) {
+    if (EmptyChecks.isNotBlank(plan.getDownstreamChannelCode())) {
       channels.add(plan.getDownstreamChannelCode());
     }
     if (EmptyChecks.isNotNull(plan.getPartitions())) {
       plan.getPartitions().stream()
           .map(SchedulePlan.PartitionPlan::getTargetRef)
-          .filter(SchedulePlanSupport::hasText)
+          .filter(EmptyChecks::isNotBlank)
           .forEach(channels::add);
     }
     return List.copyOf(channels);
@@ -58,10 +58,10 @@ public final class SchedulePlanSupport {
     if (plan == null || decision == null) {
       return;
     }
-    if (hasText(decision.getQueueCode())) {
+    if (EmptyChecks.isNotBlank(decision.getQueueCode())) {
       plan.setQueueCode(decision.getQueueCode());
     }
-    if (hasText(decision.getWorkerGroup())) {
+    if (EmptyChecks.isNotBlank(decision.getWorkerGroup())) {
       plan.setWorkerGroup(decision.getWorkerGroup());
     }
     if (decision.getPriority() != null) {
@@ -79,9 +79,5 @@ public final class SchedulePlanSupport {
         partitionPlan.setWorkerRoute(decision.getRoute());
       }
     }
-  }
-
-  private static boolean hasText(String value) {
-    return EmptyChecks.isNotBlank(value);
   }
 }

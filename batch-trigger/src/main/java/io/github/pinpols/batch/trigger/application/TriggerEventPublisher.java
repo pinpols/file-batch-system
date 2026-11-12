@@ -59,7 +59,9 @@ public interface TriggerEventPublisher {
       if (EmptyChecks.isNull(message)) {
         return null;
       }
-      return message.length() <= 2000 ? message : message.substring(0, 2000);
+      return message.length() <= TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH
+          ? message
+          : message.substring(0, TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH);
     }
   }
 }

@@ -145,7 +145,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
             inv.procName);
         return TaskResult.ok("dry-run: CALL " + inv.procName + " (not invoked)", planned);
       }
-      return runCall(ctx, inv);
+      return runCall(inv);
     } catch (StoredProcValidationException ex) {
       // schema/SECURITY DEFINER/角色等安全闸 vs 入参非法
       String msg = ex.getMessage();
@@ -347,7 +347,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
   // ─── execution ──────────────────────────────────────────────────────────────
 
-  private TaskResult runCall(TaskContext ctx, Invocation inv) {
+  private TaskResult runCall(Invocation inv) {
     long start = System.currentTimeMillis();
     int totalParams = inv.inParams.size() + inv.outTypes.size();
     AtomicConnectionManager.Options opts = AtomicConnectionManager.Options.defaults()

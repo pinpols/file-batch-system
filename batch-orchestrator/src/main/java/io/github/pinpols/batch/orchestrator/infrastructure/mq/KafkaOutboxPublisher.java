@@ -60,6 +60,9 @@ import org.springframework.web.util.HtmlUtils;
 @Component
 public class KafkaOutboxPublisher implements OutboxPublisher {
 
+  /** 为命中目标分区而追加盐值的最大尝试次数；超过后回退为不加盐的基础 key。 */
+  private static final int MAX_PARTITION_KEY_SALT_ATTEMPTS = 1024;
+
   private final MqMessagePublisher mqMessagePublisher;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OutboxChildRecordService outboxChildRecordService;
@@ -262,7 +265,7 @@ public class KafkaOutboxPublisher implements OutboxPublisher {
         + partitionNo
         + "of"
         + partitionCount;
-    for (int salt = 0; salt < 1024; salt++) {
+    for (int salt = 0; salt < MAX_PARTITION_KEY_SALT_ATTEMPTS; salt++) {
       String candidate = base + ":k" + salt;
       if (partitionFor(candidate, partitionCount) == targetPartition) {
         return candidate;

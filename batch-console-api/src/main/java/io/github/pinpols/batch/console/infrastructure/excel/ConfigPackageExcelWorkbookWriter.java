@@ -348,7 +348,7 @@ public class ConfigPackageExcelWorkbookWriter {
     }
     int lastDataRow = Math.max(0, idx - 1);
     sheet.setAutoFilter(new CellRangeAddress(0, lastDataRow, 0, def.columns().size() - 1));
-    applyValidations(def, sheet, locale, registeredImplCodesByModule);
+    applyValidations(def, sheet, locale);
     applyRequiredColumnValidations(def, sheet);
     setWidths(sheet, def.columns());
   }
@@ -378,7 +378,7 @@ public class ConfigPackageExcelWorkbookWriter {
     }
     int lastDataRow = Math.max(0, idx - 1);
     sheet.setAutoFilter(new CellRangeAddress(0, lastDataRow, 0, def.columns().size() - 1));
-    applyValidations(def, sheet, locale, registeredImplCodesByModule);
+    applyValidations(def, sheet, locale);
     applyRequiredColumnValidations(def, sheet);
     ConsoleExcelPreviewWorkbookSupport.addIssueComments(sheet, def.columns(), sheetIssues, 0);
     setWidths(sheet, def.columns());
@@ -411,11 +411,7 @@ public class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-  private void applyValidations(
-      ConfigPackageSheetSpecs.SheetDef def,
-      Sheet sheet,
-      Locale locale,
-      Map<String, List<String>> registeredImplCodesByModule) {
+  private void applyValidations(ConfigPackageSheetSpecs.SheetDef def, Sheet sheet, Locale locale) {
     def.validationApplier().accept(sheet, locale);
   }
 

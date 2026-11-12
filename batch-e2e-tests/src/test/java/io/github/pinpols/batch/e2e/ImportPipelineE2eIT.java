@@ -20,9 +20,10 @@ import io.github.pinpols.batch.e2e.support.E2eScenarioFixture.LaunchSeed;
 import io.github.pinpols.batch.e2e.support.E2eStatusLogger;
 import io.github.pinpols.batch.e2e.support.E2eTestSql;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControlPayloads.TaskClaimCommand;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskControllerApplicationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
@@ -117,7 +118,8 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
 
   private final BatchDaySettleScheduler batchDaySettleScheduler;
 
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
 
   private final RetryGovernanceService retryGovernanceService;
 
@@ -142,13 +144,15 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
   ImportPipelineE2eIT(
       FileGovernanceScheduler fileGovernanceScheduler,
       BatchDaySettleScheduler batchDaySettleScheduler,
-      TaskExecutionService taskExecutionService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       RetryGovernanceService retryGovernanceService,
       KafkaTemplate<String, String> kafkaTemplate,
       WorkerCheckpointProperties checkpointProperties) {
     this.fileGovernanceScheduler = fileGovernanceScheduler;
     this.batchDaySettleScheduler = batchDaySettleScheduler;
-    this.taskExecutionService = taskExecutionService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.retryGovernanceService = retryGovernanceService;
     this.kafkaTemplate = kafkaTemplate;
     this.checkpointProperties = checkpointProperties;
@@ -802,10 +806,10 @@ class ImportPipelineE2eIT extends AbstractIntegrationTest {
           assertThat(selectedTaskStatus).isEqualTo("READY");
         });
 
-    taskExecutionService.assignWorker(TENANT, taskId, "e2e-import-1");
+    taskAssignmentService.assignWorker(TENANT, taskId, "e2e-import-1");
     String firstInvocationId = jdbcTemplate.queryForObject(
         selectCurrentInvocationIdSql, String.class, TENANT, partitionId);
-    taskExecutionService.applyTaskOutcome(TaskOutcomeCommand.builder()
+    taskOutcomeService.applyTaskOutcome(TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(taskId)
         .errorCode("R16_TRANSIENT_TEST_FAILURE")

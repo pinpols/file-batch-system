@@ -34,6 +34,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsolePushApprovalNotifier {
 
+  /** 推送通知正文中审批原因的截断长度，控制移动端通知篇幅；不对应数据库列。 */
+  private static final int PUSH_REASON_MAX_LENGTH = 80;
+
   private final ConsolePushProperties properties;
   private final ConsolePushApprovalNotificationMapper notificationMapper;
   private final ConsolePushSender pushSender;
@@ -138,7 +141,7 @@ public class ConsolePushApprovalNotifier {
     String approverId = nullToDash(p.getApproverId());
     String body = reasonMissing
         ? String.format("approver=%s · %s", approverId, p.getApprovalNo())
-        : String.format("approver=%s · %s", approverId, truncate(reason, 80));
+        : String.format("approver=%s · %s", approverId, truncate(reason, PUSH_REASON_MAX_LENGTH));
     String tag = "approval-" + p.getApprovalNo();
     // 前端 /m/approvals 是列表页;带 ?id 让列表页打开后高亮/滚动到目标条。
     // 如果未来 FE 加了详情页 /m/approvals/:no,把这里改成 path 段即可。

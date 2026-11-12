@@ -33,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Slf4j
 public class PlatformPipelineRunRepository {
 
+  /** 对应 pipeline_step_run.error_message VARCHAR(1024)。 */
+  private static final int STEP_RUN_ERROR_MESSAGE_MAX_LENGTH = 1024;
+
   private final PlatformFileRuntimeMapper mapper;
 
   public PipelineRunFence createPipelineInstance(CreatePipelineInstanceParam param) {
@@ -236,7 +239,7 @@ public class PlatformPipelineRunRepository {
       return;
     }
     String outputSummaryJson = toJson(param.outputSummary());
-    String boundedErrorMessage = truncate(param.errorMessage(), 1024);
+    String boundedErrorMessage = truncate(param.errorMessage(), STEP_RUN_ERROR_MESSAGE_MAX_LENGTH);
     PlatformStepRunFinishParam statementParams = PlatformStepRunFinishParam.builder()
         .stepRunId(param.stepRunId())
         .status(param.status())

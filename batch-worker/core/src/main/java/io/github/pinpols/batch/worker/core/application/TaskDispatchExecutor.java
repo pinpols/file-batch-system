@@ -10,6 +10,7 @@ import io.github.pinpols.batch.worker.core.domain.WorkerExecutionResult;
 import io.github.pinpols.batch.worker.core.support.TaskClaimItem;
 import io.github.pinpols.batch.worker.core.support.TaskClaimResult;
 import io.github.pinpols.batch.worker.core.support.TaskExecutionWrapper;
+import io.github.pinpols.batch.worker.core.support.TaskMessageMdc;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -212,36 +213,7 @@ public class TaskDispatchExecutor {
   }
 
   private static void putExecutionMdc(TaskDispatchMessage message, String workerId) {
-    BatchMdc.put(StructuredLogField.TENANT_ID, message.tenantId());
-    BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
-    Object rawTaskId = message.taskId();
-    String mdcTaskId = EmptyChecks.isNull(rawTaskId) ? null : String.valueOf(message.taskId());
-    BatchMdc.put(StructuredLogField.TASK_ID, mdcTaskId);
-    Object rawJobInstanceId = message.jobInstanceId();
-    String mdcJobInstanceId =
-        EmptyChecks.isNull(rawJobInstanceId) ? null : String.valueOf(message.jobInstanceId());
-    BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, mdcJobInstanceId);
-    Object rawPartitionId = message.jobPartitionId();
-    String mdcPartitionId =
-        EmptyChecks.isNull(rawPartitionId) ? null : String.valueOf(message.jobPartitionId());
-    BatchMdc.put(StructuredLogField.PARTITION_ID, mdcPartitionId);
-    if (EmptyChecks.isNotNull(message.schedulingContext())) {
-      Object rawWorkflowRunId = message.schedulingContext().workflowRunId();
-      String mdcWorkflowRunId = EmptyChecks.isNull(rawWorkflowRunId)
-          ? null
-          : String.valueOf(message.schedulingContext().workflowRunId());
-      BatchMdc.put(StructuredLogField.WORKFLOW_RUN_ID, mdcWorkflowRunId);
-      Object rawBizDate = message.schedulingContext().bizDate();
-      String mdcBizDate = EmptyChecks.isNull(rawBizDate)
-          ? null
-          : message.schedulingContext().bizDate().toString();
-      BatchMdc.put(StructuredLogField.BATCH_DAY, mdcBizDate);
-      Object rawAttempt = message.schedulingContext().attemptNo();
-      String mdcAttempt = EmptyChecks.isNull(rawAttempt)
-          ? null
-          : String.valueOf(message.schedulingContext().attemptNo());
-      BatchMdc.put(StructuredLogField.ATTEMPT, mdcAttempt);
-    }
+    TaskMessageMdc.putMessageFields(message);
     BatchMdc.put(StructuredLogField.WORKER_TYPE, message.workerType());
     BatchMdc.put(StructuredLogField.WORKER_ID, workerId);
   }

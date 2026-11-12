@@ -40,15 +40,11 @@ public class ConsoleRealtimeMetrics {
   }
 
   public void recordPubSubDecodeFailure() {
-    counter("batch.console.realtime.pubsub.decode.failures").increment();
+    meterRegistry.counter("batch.console.realtime.pubsub.decode.failures").increment();
   }
 
   public void recordPubSubHandleFailure(String stream, String eventType) {
     counter("batch.console.realtime.pubsub.handle.failures", stream, eventType).increment();
-  }
-
-  private Counter counter(String name) {
-    return meterRegistry.counter(name);
   }
 
   private Counter counter(String name, String stream) {

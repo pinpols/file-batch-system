@@ -6,6 +6,10 @@
 - 导出格式 XML 的生成后缀与对外文件名统一为 `.xml`。Java、Python SDK 的原子 SQL 切分与平台一致，PG dollar-quote 体内的 `;` 不再拆开语句；Java SDK 存储过程补齐与平台一致的标量 OUT 类型。审批推送中 `SELF_SERVICE` 类型显示字典标签「自助补救」。
 - 删除没有子类的 `AbstractSingleSheetExcelService`（单元格解析函数移到 `SingleSheetExcelCellParsers`）和 `AuditableEntity`。
 
+## 2026-11-12 Java 可读性阶段 9 门面删除记录
+
+- ADR-008 补记后续：`DefaultTaskExecutionService` 门面只剩纯转发，已随 `TaskExecutionService` 接口一并删除，调用方直接注入对应子服务（控制器入口只用 `TaskAssignmentService`）。事务边界原本在子服务上，未变化；属于内部重构，对外 API 与发布配置不变。详见 [Java 可读性阶段 9 计划](plans/java-readability-phase-9-plan-2026-11-11.md)。
+
 ## 2026-11-10 Workflow 槽位等待与结算竞态测试稳定性
 
 - `JobNodeDispatchIntegrationTest#capacityWaitRecoveryRacingSettlement_shouldKeepBatchDayInFlight` 在围栏释放后用 Awaitility 等待 `RESUMED` / 单恢复 RootRun `RUNNING` / 业务日 `IN_FLIGHT`。生产 `WorkflowLaunchWaitReconciler` 的 5s 扫描可能先于显式 `reconcileTenant` 认领等待并阻塞在结算围栏上，显式 Future 会提前返回；根运行的独立事务先提交，`RESUMED` 仍未可见。main full gate run 42804543630 因此读到 `WAITING`。断言口径与围栏同步不变，不改变生产逻辑。

@@ -508,7 +508,7 @@ public class HttpTaskExecutionClient
             SwallowedExceptionLogger.summary(rex));
       }
     } finally {
-      recordReportDuration(report, outcome, System.nanoTime() - reportStartNanos);
+      recordReportDuration(outcome, System.nanoTime() - reportStartNanos);
     }
   }
 
@@ -587,8 +587,7 @@ public class HttpTaskExecutionClient
     reportInternal(report, false);
   }
 
-  private void recordReportDuration(
-      TaskExecutionReport report, String outcome, long durationNanos) {
+  private void recordReportDuration(String outcome, long durationNanos) {
     // tenantId 不作 metric tag(高基数,随租户线性膨胀);只保留 outcome(枚举型,低基数)
     meterRegistry.ifPresent(registry -> Timer.builder("batch.worker.report.duration")
         .tags(Tags.of("outcome", outcome))

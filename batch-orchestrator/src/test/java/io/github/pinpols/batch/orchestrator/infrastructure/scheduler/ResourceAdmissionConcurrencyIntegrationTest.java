@@ -14,7 +14,8 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.scheduler.PartitionThrottle;
 import io.github.pinpols.batch.orchestrator.application.scheduler.ResourceScheduler;
 import io.github.pinpols.batch.orchestrator.application.service.task.OrchestratorJobMappers;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
@@ -89,7 +90,8 @@ class ResourceAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTes
   private final WorkflowRunManagementApplicationService workflowManagement;
   private final WaitingPartitionDispatcher dispatcher;
   private final WaitingPartitionDispatchScheduler waitingScheduler;
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
   private final JobPartitionMapper partitionMapper;
   private final JobTaskMapper taskMapper;
   private final WorkerRegistryCache workerRegistryCache;
@@ -105,7 +107,8 @@ class ResourceAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTes
       WorkflowRunManagementApplicationService workflowManagement,
       WaitingPartitionDispatcher dispatcher,
       WaitingPartitionDispatchScheduler waitingScheduler,
-      TaskExecutionService taskExecutionService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       JobPartitionMapper partitionMapper,
       JobTaskMapper taskMapper,
       WorkerRegistryCache workerRegistryCache,
@@ -119,7 +122,8 @@ class ResourceAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTes
     this.workflowManagement = workflowManagement;
     this.dispatcher = dispatcher;
     this.waitingScheduler = waitingScheduler;
-    this.taskExecutionService = taskExecutionService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.partitionMapper = partitionMapper;
     this.taskMapper = taskMapper;
     this.workerRegistryCache = workerRegistryCache;
@@ -153,7 +157,7 @@ class ResourceAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTes
       assertThat(instanceMapper.selectById(lowTenant, low.instance().getId()).getInstanceStatus())
           .isEqualTo("WAITING");
     });
-    assertThat(taskExecutionService.assignWorker(
+    assertThat(taskAssignmentService.assignWorker(
             highTenant, high.task().getId(), high.seed().workerCode()))
         .isNotNull();
     JobPartitionEntity runningPartition =
@@ -164,7 +168,7 @@ class ResourceAdmissionConcurrencyIntegrationTest extends AbstractIntegrationTes
         .partitionInvocationId(runningPartition.getCurrentInvocationId())
         .success(true)
         .build();
-    taskExecutionService.applyTaskOutcome(highTenantOutcome);
+    taskOutcomeService.applyTaskOutcome(highTenantOutcome);
     await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
       waitingScheduler.dispatchWaitingPartitions();
       assertThat(instanceMapper.selectById(highTenant, high.instance().getId()).getInstanceStatus())

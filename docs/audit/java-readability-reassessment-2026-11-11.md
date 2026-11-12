@@ -267,9 +267,28 @@
 | `DefaultRetryGovernanceService.replayDeadLetterWithinTransaction`（外层 try 约 87 行） | 整段边界，保留；补注释候选 | 外层是 `try/finally` 的 MDC 作用域，必须包住整个重放过程；内层 try 是保存点边界，catch 回滚到保存点后再记失败次数，覆盖重排队与 `markReplaySuccess` 两步。可另开批次把内层 catch 的失败记账提成具名方法，边界本身不收窄 |
 | `SftpDispatchChannelAdapter.uploadViaSftp`（外层 try-with-resources :223–307 约 82 行，内层 try :229–284 约 56 行） | 整段翻译边界，保留；补注释候选 | catch 依赖 try 体逐步更新的 `tempRemotePath`、`manifestTempRemotePath`、`publicationAttempted`、`publicationConfirmed`，用于清理远端临时文件并区分“外部结果未知”与普通失败；收窄会丢失这一归类。可在 catch 上注明这些标志的含义 |
 
+## R26 执行范围（Task 24）
+
+处理范围：只处理长度上限和截断长度。第一批（提交 `9af19a2ac`）在 13 个类中命名了 22 处（当时 CSV 只登记 21 行，漏了 `TriggerOutboxRelay:499` 的 markGiveUp，修订轮补登）；修订轮按下面的 grep 条件把 `src/main/java` 全部扫了一遍，又命名了 34 处，另登记 7 处不处理的（取 ID/指纹/前缀格式的 `substring`、取首位数字，以及 `batch-test-support` 里的测试工具）。[CSV](java-readability-reassessment-2026-11-11-candidates.csv) 中 R26 共 63 行：`named` 56 行（22 + 34，分布在 36 个文件），`skip` 7 行。数值和类型不变。常量可见性规则：默认是所属类的 `private static final`；同一个数据库列的长度上限被同一包内多个类使用时，合并为一个包级（package-private）`static final` 常量，放在离实体或 Mapper 最近的类里（`TriggerExternalEventService` 的 3 个 `EXTERNAL_EVENT_*_MAX_LENGTH`、`TriggerOutboxRelay.LAST_ERROR_MAX_LENGTH`、`AbstractTaskConsumer.DLQ_ERROR_MESSAGE_MAX_LENGTH`），不新增 public API；跨包的不合并，`BatchDayReplayService` 与 `BatchDayReplayEntryExecutor`、`DeadLetterPublisher` 与 `AbstractTaskConsumer` 各自保留私有常量。对应数据库列的常量，注释写出了表.列和迁移文件，并核对过后续迁移里没有改列宽；不对应列的，注释写明限制的是什么。
+
+扫描条件：`truncate\(|safeMessage\(|abbreviate\(|substring\(0, *[0-9]`，只看两位及以上的字面量；与命中处在同一方法里、上限相同的 `ConsoleTextSanitizer.safeDisplay(..., N)` 一并改用同一常量。
+
+暂缓：审计统计的 207 处候选中，其余多是超时、批大小、分页、退避、端口、比例等非长度数字。这些数字是否“有业务含义”要逐处结合配置和调用方判断，不能按 grep 机械处理；本阶段计划只要求长度上限这类，所以列入下面的后续事项，不在本任务里做。测试代码、HTTP 状态码、枚举编码不在范围内。
+
+### 后续事项
+
+- R26 其余候选：超时、批大小、退避、上限次数等非长度数字，需逐处判断后另开任务；grep 条件之外的 `ConsoleTextSanitizer.safeDisplay(..., 512)` 有 5 处（`ConsoleOpsQueryService` 3 处、`DefaultConsoleApprovalApplicationService` 2 处），也在其中。
+- 疑似缺少租户一致性校验：`DefaultConsoleApprovalApplicationService.batchdayreplayAction` 不检查 `payload.tenantId` 是否等于当前调用方租户，而同类的 `workflowrunreplayAction` 会检查 `tenantId.equals(payload.tenantId())`。R23 删掉的 `tenantId` 参数在删之前就没有被读取，所以这不是本次重构引入的变化，代码也未修改。只读排查结论：审批单本身按调用方租户读取（`loadApproval(tenantId, approvalNo)`）；但转发到 orchestrator 时用的是 `payload.tenantId`（`/internal/orchestrator/batch-day-replay/sessions/{id}/approve?tenantId=`），orchestrator 只按这个租户加载会话。所以如果租户 A 的审批单里 payload 写的是租户 B，批准时推进的会是 B 的会话。目前这条分支走不到：主代码中没有任何地方创建 `BATCH_DAY_REPLAY` 审批单，最新的 `ck_approval_command_action` 约束（V344）也不允许这个 action_type。结论：现在不能被利用；启用这条分支之前，应补上与 `workflowrunreplayAction` 相同的租户一致性校验，或删掉这条分支。已登记 todo-master。
+- `ConfigPackageExcelWorkbookWriter`：R23 删掉 `applyValidations` 的 `registeredImplCodesByModule` 参数后，`writeDataSheet` / `writePreviewSheet` 的同名参数也不再被读取，公共入口里 `copyImplRegistry` 的结果实际没有用处。`copyImplRegistry` 对含 null 元素的列表会在 `List.copyOf` 抛 NPE，连带删除会改变异常时机，所以本轮保留。删参之前这个参数就没有被读取，看起来像“实现编码下拉校验”功能丢失，需产品确认：是接回校验下拉，还是连同 `copyImplRegistry` 一起删掉。
+- `HttpTaskExecutionClient.report` 的注释写着 `batch.worker.report.duration` 带 `tenantId=, workerType=` tag，实际 `recordReportDuration` 只打 `outcome` tag（并注明 tenantId 不作 tag）。注释过时，Task 24 修订轮没有改，待随后续改动更正。
+- `PartitionReclaimUnit.doReclaim` 的长注释里有一句断句（“#768 的”之后接不上），待补全。
+- `AbstractStepBeanRegistrar.registerStepBeansOnStartup` 的长注释放在日志语句前面，与实际登记逻辑 `registerOne` 隔开，待移到对应位置。
+- 叠放的 Javadoc：`DefaultCompensationService.executeAndMarkSuccess`、`SqlTaskExecutor.consumeDollarQuote`、`PreprocessStep.decryptViaSpool` 前面各有一段说明已不存在方法的旧 Javadoc，与当前方法的 Javadoc 叠在一起。main 上本来如此，不是本阶段引入；需逐处判断旧说明该并入当前方法还是删除。（本 PR 自己在 `SmtpEmailDispatchChannelAdapter`、`DeadLetterPublisher` 中把新常量插进了已有 Javadoc 与字段之间，已改回。）
+- `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
+
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5（Task 15–17）在分支 `chore/java-readability-p9-batch5`，将作为草稿 PR 直接以 main 为目标；Task 19–24 和 18 未开工；R13（Task 12）已撤销。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5 #1358（Task 15–17）已合入 main（3ff888db3）；PR-6（Task 19、21、22、24）在分支 `chore/java-readability-p9-batch6`；Task 20、23 和 18 未开工；R13（Task 12）已撤销。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|

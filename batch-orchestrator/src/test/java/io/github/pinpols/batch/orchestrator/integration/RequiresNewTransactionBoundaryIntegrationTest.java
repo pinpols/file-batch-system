@@ -12,7 +12,8 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -56,29 +57,45 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, 12, 24);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
+
+  private final TaskAssignmentService taskAssignmentService;
+
+  private final TaskOutcomeService taskOutcomeService;
+
+  private final RetryGovernanceService retryGovernanceService;
+
+  private final JobInstanceMapper jobInstanceMapper;
+
+  private final JobPartitionMapper jobPartitionMapper;
+
+  private final JobTaskMapper jobTaskMapper;
+
+  private final JdbcTemplate jdbcTemplate;
+
+  private final PlatformTransactionManager transactionManager;
 
   @Autowired
-  private TaskExecutionService taskExecutionService;
-
-  @Autowired
-  private RetryGovernanceService retryGovernanceService;
-
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
-
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
-
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
-
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
-
-  @Autowired
-  private PlatformTransactionManager transactionManager;
+  RequiresNewTransactionBoundaryIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      RetryGovernanceService retryGovernanceService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      JdbcTemplate jdbcTemplate,
+      PlatformTransactionManager transactionManager) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.retryGovernanceService = retryGovernanceService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
+    this.jdbcTemplate = jdbcTemplate;
+    this.transactionManager = transactionManager;
+  }
 
   // ── retryTask: REQUIRES_NEW 内部提交独立于外部回滚 ────────────────────────
 
@@ -239,7 +256,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         // 镜像生产:CLAIM 确立的 invocationId 随 report 回填(R3-P1-10 report invocation fence)。
         .partitionInvocationId(currentInvocationId(job.partitionId))
         .build();
-    taskExecutionService.applyTaskOutcome(failureOutcome);
+    taskOutcomeService.applyTaskOutcome(failureOutcome);
     return job;
   }
 
@@ -254,7 +271,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   /** 启动任务并让其进入 RUNNING 状态（走完 launch → claim）。 */
   private LaunchedJob launchAndClaim(String prefix) {
     LaunchedJob job = launchJob(prefix);
-    taskExecutionService.assignWorker(TENANT, job.taskId, job.workerCode);
+    taskAssignmentService.assignWorker(TENANT, job.taskId, job.workerCode);
     return job;
   }
 
@@ -266,7 +283,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
   /** 启动任务，失败并立即进入死信（retry_policy=NONE）。 */
   private LaunchedJob launchAndExhaustRetries(String prefix) {
     LaunchedJob job = launchWorkflowJob(prefix, "NONE", 0);
-    taskExecutionService.assignWorker(TENANT, job.taskId, job.workerCode);
+    taskAssignmentService.assignWorker(TENANT, job.taskId, job.workerCode);
     TaskOutcomeCommand exhaustOutcome = TaskOutcomeCommand.builder()
         .tenantId(TENANT)
         .taskId(job.taskId)
@@ -274,7 +291,7 @@ class RequiresNewTransactionBoundaryIntegrationTest extends AbstractIntegrationT
         .errorMessage("exhaust retries")
         .partitionInvocationId(currentInvocationId(job.partitionId))
         .build();
-    taskExecutionService.applyTaskOutcome(exhaustOutcome);
+    taskOutcomeService.applyTaskOutcome(exhaustOutcome);
     return job;
   }
 

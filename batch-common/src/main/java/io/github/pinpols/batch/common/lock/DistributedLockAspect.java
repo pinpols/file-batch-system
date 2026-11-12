@@ -44,7 +44,7 @@ public class DistributedLockAspect {
     MethodSignature signature = (MethodSignature) pjp.getSignature();
     Method method = signature.getMethod();
     DistributedLock ann = method.getAnnotation(DistributedLock.class);
-    String lockKey = resolveKey(ann, method, pjp.getArgs(), signature);
+    String lockKey = resolveKey(ann, method, pjp.getArgs());
 
     Instant now = BatchDateTimeSupport.utcNow();
     Duration lockAtMostFor = Duration.ofSeconds(ann.leaseSeconds());
@@ -78,8 +78,7 @@ public class DistributedLockAspect {
     return result[0];
   }
 
-  private String resolveKey(
-      DistributedLock ann, Method method, Object[] args, MethodSignature signature) {
+  private String resolveKey(DistributedLock ann, Method method, Object[] args) {
     String prefix =
         ann.prefix().isEmpty() ? method.getDeclaringClass().getSimpleName() : ann.prefix();
     if (ann.key().isEmpty()) {

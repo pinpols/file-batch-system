@@ -25,7 +25,7 @@ public final class ExportFileNameResolver {
   public static String resolve(Input input) {
     String normalizedBatchNo = defaultText(input.batchNo(), "batch");
     String normalizedVersion = defaultText(input.version(), "v1");
-    if (hasText(input.namingRule())) {
+    if (EmptyChecks.isNotBlank(input.namingRule())) {
       String normalizedBizType = defaultText(input.bizType(), "export");
       String normalizedBizDate = defaultText(input.bizDate(), "");
       String normalizedTenantId = defaultText(input.tenantId(), "");
@@ -60,11 +60,7 @@ public final class ExportFileNameResolver {
     };
   }
 
-  private static boolean hasText(String value) {
-    return EmptyChecks.isNotBlank(value);
-  }
-
   private static String defaultText(String value, String fallback) {
-    return hasText(value) ? value : fallback;
+    return EmptyChecks.isNotBlank(value) ? value : fallback;
   }
 }

@@ -60,6 +60,9 @@ import org.springframework.web.util.HtmlUtils;
 @Service
 public class SubscriptionRuleWebhookDispatcher {
 
+  /** 投递失败原因长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）。 */
+  private static final int DELIVERY_ERROR_MAX_LENGTH = 1024;
+
   private static final int MAX_ATTEMPTS = 3;
   private static final long BACKOFF_BASE_MILLIS = 250L;
 
@@ -417,7 +420,7 @@ public class SubscriptionRuleWebhookDispatcher {
     }
     // error_message 列 VARCHAR(1024);先还原实体并遮罩凭据，再截断。
     String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(value));
-    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
+    return SwallowedExceptionLogger.safeMessage(normalized, DELIVERY_ERROR_MAX_LENGTH);
   }
 
   /** 一次真实投递落审计日志所需的最小上下文(投递前从规则/事件抽取,喂给投递线程)。 */

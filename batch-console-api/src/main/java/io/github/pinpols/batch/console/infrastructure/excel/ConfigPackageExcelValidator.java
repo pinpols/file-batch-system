@@ -443,9 +443,9 @@ public class ConfigPackageExcelValidator {
     SheetResult wfDefs = validateWfDefRows(tid, session.workflowDefinitionRows());
     SheetResult workflowMonitoringPolicies = validateWorkflowMonitoringPolicyRows(
         tid, session.workflowMonitoringPolicyRows(), wfDefs.validRows());
-    SheetResult wfNodes = validateWfNodeRows(tid, session.workflowNodeRows(), wfDefs.validRows());
-    SheetResult wfEdges = validateWfEdgeRows(
-        tid, session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
+    SheetResult wfNodes = validateWfNodeRows(session.workflowNodeRows(), wfDefs.validRows());
+    SheetResult wfEdges =
+        validateWfEdgeRows(session.workflowEdgeRows(), wfDefs.validRows(), wfNodes.validRows());
     ValidatedReferenceRows referenceRows = ValidatedReferenceRows.builder()
         .resourceQueues(resourceQueues.validRows())
         .businessCalendars(businessCalendars.validRows())
@@ -825,7 +825,7 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateWfNodeRows(
-      String tenantId, List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
+      List<Map<String, String>> rows, List<Map<String, String>> validWfDefs) {
     Set<String> wfKeys = validWfDefs.stream()
         .map(r ->
             normalize(r.get(COL_WORKFLOW_CODE)) + KEY_SEP_COLON + normalize(r.get(COL_VERSION)))
@@ -839,7 +839,6 @@ public class ConfigPackageExcelValidator {
   }
 
   private SheetResult validateWfEdgeRows(
-      String tenantId,
       List<Map<String, String>> rows,
       List<Map<String, String>> validWfDefs,
       List<Map<String, String>> validNodes) {

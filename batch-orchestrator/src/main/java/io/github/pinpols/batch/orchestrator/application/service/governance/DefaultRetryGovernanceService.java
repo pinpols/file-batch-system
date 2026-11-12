@@ -38,7 +38,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import lombok.RequiredArgsConstructor;
@@ -74,6 +73,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class DefaultRetryGovernanceService implements RetryGovernanceService {
+
+  /** retry_schedule.last_error_message 为 VARCHAR(1024)；截断后含 "…" 共 1023 字符，留 1 位余量。 */
+  private static final int RETRY_LAST_ERROR_MESSAGE_MAX_LENGTH = 1023;
+
+  /** dead_letter_task.dead_letter_reason 为 VARCHAR(1024)；截断后含 "…" 共 1023 字符，留 1 位余量。 */
+  private static final int DEAD_LETTER_REASON_MAX_LENGTH = 1023;
 
   /**
    * 一次性硬错——即使作业配置了 retry_policy 也不重试，直接进死信。 这类错误说明请求 payload 本身缺字段或引用的资源根本不存在，再等一等不会自愈， 指数 backoff
@@ -170,7 +175,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         return false;
       }
 
-      int nextRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0) + 1;
+      int nextRetryCount = Objects.requireNonNullElse(partition.getRetryCount(), 0) + 1;
       if (nextRetryCount > retryPolicyPlan.maxRetryCount()) {
         // 重试耗尽：落死信（不会回到正常 dispatch）。
         createDeadLetter(task, partition, jobInstance, errorCode, errorMessage);
@@ -194,7 +199,8 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
       // retry_schedule.last_error_message 是 varchar(1024)。worker 链路错误消息有时含嵌套
       // SQL detail / stack 摘要,容易越界。Java 侧防御性截断到 1023 字节,加 "…" 标记,
       // 避免 INSERT 失败导致整条重试链长期停滞。
-      retrySchedule.setLastErrorMessage(truncateErrorMessage(errorMessage, 1023));
+      retrySchedule.setLastErrorMessage(
+          truncateErrorMessage(errorMessage, RETRY_LAST_ERROR_MESSAGE_MAX_LENGTH));
       retryScheduleMapper.insert(retrySchedule);
       log.info(
           "retry scheduled: tenantId={}, partitionId={}, retryCount={}",
@@ -562,7 +568,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
         throw BizException.of(ResultCode.CONFLICT, "error.dead_letter.replay_conflict");
       }
       Instant replayAt = BatchDateTimeSupport.utcNow();
-      int replayCount = Optional.ofNullable(deadLetterTask.getReplayCount()).orElse(0) + 1;
+      int replayCount = Objects.requireNonNullElse(deadLetterTask.getReplayCount(), 0) + 1;
       // 业务重排队失败只撤销此保存点之后的复位/Outbox，失败次数和原因仍在本事务提交。
       Object savepoint = status.createSavepoint();
       try {
@@ -845,7 +851,7 @@ public class DefaultRetryGovernanceService implements RetryGovernanceService {
     // 给 message 留 ~950 字节安全余量;超长一律截断+"…",避免 INSERT 失败把整个 retry
     // → DLQ 链路撑死。
     String reason = code + ": " + message;
-    return truncateErrorMessage(reason, 1023);
+    return truncateErrorMessage(reason, DEAD_LETTER_REASON_MAX_LENGTH);
   }
 
   /**

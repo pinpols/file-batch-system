@@ -122,7 +122,7 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
-        .collect(Collectors.toList());
+        .toList();
   }
 
   private String dependencyBizDateAlignments(JobDefinitionView entity) {
@@ -279,7 +279,7 @@ public class TenantConfigPackageRowProjections {
           m.put(COL_DESCRIPTION, e.getDescription());
           return m;
         })
-        .collect(Collectors.toList());
+        .toList();
   }
 
   List<Map<String, Object>> collectWorkflowNodes(

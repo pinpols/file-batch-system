@@ -366,7 +366,7 @@ public class JobDependencyWaitingLaunchService {
       String tenantId, String jobCode, LocalDate bizDate, List<JobDependencyRule> dependencies) {
     List<DependencySnapshot> dependencySnapshots =
         snapshotDependencies(tenantId, jobCode, bizDate, dependencies);
-    return evaluateDependencies(tenantId, jobCode, bizDate, dependencySnapshots);
+    return evaluateDependencies(tenantId, bizDate, dependencySnapshots);
   }
 
   public String findNotReadyReason(
@@ -374,11 +374,11 @@ public class JobDependencyWaitingLaunchService {
     List<DependencySnapshot> dependencies = decodeDependencies(dependencySnapshot, bizDate);
     return EmptyChecks.isEmpty(dependencies)
         ? INVALID_DEPENDENCY_SNAPSHOT
-        : evaluateDependencies(tenantId, jobCode, bizDate, dependencies);
+        : evaluateDependencies(tenantId, bizDate, dependencies);
   }
 
   private String evaluateDependencies(
-      String tenantId, String jobCode, LocalDate bizDate, List<DependencySnapshot> dependencies) {
+      String tenantId, LocalDate bizDate, List<DependencySnapshot> dependencies) {
     if (EmptyChecks.isEmpty(dependencies)) {
       return null;
     }

@@ -70,14 +70,14 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("已结束的任务不能再次认领")
   void shouldRejectClaimForCompletedTask(TaskStatus status) {
     JobTaskEntity current = task(status.code(), "w1");
-    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(current);
+    when(taskAssignmentService.assignWorker("ta", 100L, "w1")).thenReturn(current);
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
-    verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
+    verify(taskAssignmentService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 
   @Mock
-  private TaskExecutionService taskExecutionService;
+  private TaskAssignmentService taskAssignmentService;
 
   @Mock
   private TaskOutcomeService taskOutcomeService;
@@ -96,7 +96,7 @@ class TaskControllerApplicationServiceTest {
         .when(tenantActionRateLimiter.tryConsume(nullable(String.class), any()))
         .thenReturn(true);
     service = new TaskControllerApplicationService(
-        taskExecutionService,
+        taskAssignmentService,
         new ObjectMapper(),
         batchClaimProperties,
         meterRegistry,
@@ -109,31 +109,33 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("claim: assignWorker 返 null → NOT_FOUND")
   void shouldThrowNotFound_whenClaimAssignReturnsNothing() {
-    when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(null);
+    when(taskAssignmentService.assignWorker(anyString(), anyLong(), anyString()))
+        .thenReturn(null);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class)
         .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
             .isEqualTo("error.task.claim_not_available"));
-    verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
+    verify(taskAssignmentService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 
   @Test
   @DisplayName("claim: 状态非 RUNNING → CONFLICT,不返 config")
   void shouldThrowConflict_whenClaimedTaskNotRunning() {
     JobTaskEntity task = task(TaskStatus.READY.code(), "w1");
-    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("ta", 100L, "w1")).thenReturn(task);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
-    verify(taskExecutionService, never()).loadEffectiveConfig(anyString(), anyLong());
+    verify(taskAssignmentService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 
   @Test
   @DisplayName("claim: workerId 不匹配 → CONFLICT")
   void shouldThrowConflict_whenClaimWorkerMismatch() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w-other");
-    when(taskExecutionService.assignWorker(anyString(), anyLong(), anyString())).thenReturn(task);
+    when(taskAssignmentService.assignWorker(anyString(), anyLong(), anyString()))
+        .thenReturn(task);
 
     assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
         .isInstanceOf(BizException.class);
@@ -143,13 +145,13 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("claim: 状态 RUNNING + workerId 匹配 → 返回 effective config")
   void shouldReturnConfig_whenClaimSucceeds() {
     JobTaskEntity task = task(TaskStatus.RUNNING.code(), "w1");
-    when(taskExecutionService.assignWorker("ta", 100L, "w1")).thenReturn(task);
+    when(taskAssignmentService.assignWorker("ta", 100L, "w1")).thenReturn(task);
     // PERF(5.2b): claim 成功后复用 assignWorker 返回的 task 实体拉 config,不再按 id 重查
-    when(taskExecutionService.loadEffectiveConfig(eq("ta"), same(task))).thenReturn(null);
+    when(taskAssignmentService.loadEffectiveConfig(eq("ta"), same(task))).thenReturn(null);
 
     EffectiveTaskConfig result = service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1"));
     assertThat(result).isNull();
-    verify(taskExecutionService).loadEffectiveConfig(eq("ta"), same(task));
+    verify(taskAssignmentService).loadEffectiveConfig(eq("ta"), same(task));
   }
 
   // ===== claimBatch (ADR-046 P2 切片 2.1) =====
@@ -159,14 +161,14 @@ class TaskControllerApplicationServiceTest {
   void shouldReturnPerItemResults_whenClaimingBatch() {
     // task 1:领到(RUNNING + w1)
     JobTaskEntity claimedTask = task(TaskStatus.RUNNING.code(), "w1");
-    when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
+    when(taskAssignmentService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
         .thenReturn(claimedTask);
-    when(taskExecutionService.loadEffectiveConfig(eq("ta"), same(claimedTask))).thenReturn(null);
+    when(taskAssignmentService.loadEffectiveConfig(eq("ta"), same(claimedTask))).thenReturn(null);
     // task 2:被并发对手抢走(RUNNING + 别的 worker)
-    when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
+    when(taskAssignmentService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
     // task 3:不存在(assignWorker 返 null)
-    when(taskExecutionService.assignWorker(eq("ta"), eq(3L), eq("w1"), any())).thenReturn(null);
+    when(taskAssignmentService.assignWorker(eq("ta"), eq(3L), eq("w1"), any())).thenReturn(null);
 
     TaskClaimBatchResult resp = service.claimBatch(new TaskClaimBatchCommand(List.of(
         new TaskClaimItemCommand("ta", 1L, "w1", "inv-1"),
@@ -179,8 +181,8 @@ class TaskControllerApplicationServiceTest {
     assertThat(resp.results().get(1).claimed()).isFalse();
     assertThat(resp.results().get(2).claimed()).isFalse();
     // 只对领到的 task 1 拉 config(且复用 assignWorker 返回的实体)
-    verify(taskExecutionService).loadEffectiveConfig(eq("ta"), same(claimedTask));
-    verify(taskExecutionService, times(1))
+    verify(taskAssignmentService).loadEffectiveConfig(eq("ta"), same(claimedTask));
+    verify(taskAssignmentService, times(1))
         .loadEffectiveConfig(anyString(), any(JobTaskEntity.class));
   }
 
@@ -194,8 +196,8 @@ class TaskControllerApplicationServiceTest {
             new TaskClaimItemCommand("ta", 2L, "w1", "i2"),
             new TaskClaimItemCommand("ta", 3L, "w1", "i3")))))
         .isInstanceOf(BizException.class);
-    verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString());
-    verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
+    verify(taskAssignmentService, never()).assignWorker(anyString(), anyLong(), anyString());
+    verify(taskAssignmentService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
   }
 
   @Test
@@ -218,7 +220,7 @@ class TaskControllerApplicationServiceTest {
       assertThat(item.claimed()).isFalse();
       assertThat(item.config()).isNull();
     });
-    verify(taskExecutionService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
+    verify(taskAssignmentService, never()).assignWorker(anyString(), anyLong(), anyString(), any());
   }
 
   // ===== reportBatch (ADR-046 P2 切片 2.2) =====
@@ -287,9 +289,9 @@ class TaskControllerApplicationServiceTest {
   @DisplayName("批量指标:claim/report 记录批大小分布 + 逐项 outcome 计数")
   void shouldRecordBatchMetrics_whenClaimingAndReporting() {
     // claim:1 领到(taskId=1)+ 1 跳过(taskId=2 被抢)
-    when(taskExecutionService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
+    when(taskAssignmentService.assignWorker(eq("ta"), eq(1L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w1"));
-    when(taskExecutionService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
+    when(taskAssignmentService.assignWorker(eq("ta"), eq(2L), eq("w1"), any()))
         .thenReturn(task(TaskStatus.RUNNING.code(), "w-other"));
     service.claimBatch(new TaskClaimBatchCommand(List.of(
         new TaskClaimItemCommand("ta", 1L, "w1", "i1"),
@@ -406,7 +408,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("renew: 续租失败(leaseRenewed=false)→ 抛 CONFLICT")
   void shouldThrowConflict_whenLeaseRenewRejected() {
-    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+    when(taskAssignmentService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(false, false));
     assertThatThrownBy(
             () -> service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null)))
@@ -416,7 +418,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("renew: 续租成功且未取消 → 返回 cancelRequested=false")
   void shouldReturnNoCancel_whenRenewSucceeds() {
-    when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
+    when(taskAssignmentService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isFalse();
@@ -425,7 +427,7 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("renew: 平台已请求取消 → 返回 cancelRequested=true(cancel push)")
   void shouldReturnCancelRequested_whenCancelPending() {
-    when(taskExecutionService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
+    when(taskAssignmentService.recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), any()))
         .thenReturn(new TaskHeartbeatResult(true, true));
     var resp = service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
     assertThat(resp.cancelRequested()).isTrue();
@@ -434,13 +436,13 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("renew: details 非空 → 序列化为 JSON 文本透传给 recordHeartbeat")
   void shouldSerializeDetails_whenRenewingWithProgress() {
-    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+    when(taskAssignmentService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     service.renew(
         100L,
         new TaskHeartbeatCommand("ta", "w1", "inv-1", Map.of("processed", 5000, "total", 50000)));
     ArgumentCaptor<String> detailsCaptor = ArgumentCaptor.forClass(String.class);
-    verify(taskExecutionService)
+    verify(taskAssignmentService)
         .recordHeartbeat(eq("ta"), eq(100L), eq("w1"), eq("inv-1"), detailsCaptor.capture());
     assertThat(detailsCaptor.getValue()).contains("\"processed\":5000").contains("\"total\":50000");
   }
@@ -448,10 +450,10 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("renew: details 为 null → 传 null,仅续租不写进度")
   void shouldPassNullDetails_whenRenewingWithoutProgress() {
-    when(taskExecutionService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
+    when(taskAssignmentService.recordHeartbeat(anyString(), anyLong(), anyString(), any(), any()))
         .thenReturn(new TaskHeartbeatResult(true, false));
     service.renew(100L, new TaskHeartbeatCommand("ta", "w1", "inv-1", null));
-    verify(taskExecutionService).recordHeartbeat("ta", 100L, "w1", "inv-1", null);
+    verify(taskAssignmentService).recordHeartbeat("ta", 100L, "w1", "inv-1", null);
   }
 
   // ===== cancel (ORCH-P4-1) =====
@@ -459,9 +461,9 @@ class TaskControllerApplicationServiceTest {
   @Test
   @DisplayName("cancel: 委托 requestCancel;非 RUNNING / 不存在也不抛(幂等)")
   void shouldDelegateAndSwallow_whenCancellingTask() {
-    when(taskExecutionService.requestCancel("ta", 100L)).thenReturn(false);
+    when(taskAssignmentService.requestCancel("ta", 100L)).thenReturn(false);
     service.cancel(100L, new TaskCancelCommand("ta", "manual abort"));
-    verify(taskExecutionService).requestCancel("ta", 100L);
+    verify(taskAssignmentService).requestCancel("ta", 100L);
   }
 
   // ===== renewBatch =====
@@ -474,13 +476,13 @@ class TaskControllerApplicationServiceTest {
         .isEmpty();
     assertThat(service.renewBatch(new TaskLeaseRenewBatchCommand(List.of())).results())
         .isEmpty();
-    verify(taskExecutionService, never()).renewLeaseBatch(any());
+    verify(taskAssignmentService, never()).renewLeaseBatch(any());
   }
 
   @Test
   @DisplayName("renewBatch: PERF(5.3) set-based 一次下发,逐项结果与入参对齐")
   void renewBatch_independent_results() {
-    when(taskExecutionService.renewLeaseBatch(any()))
+    when(taskAssignmentService.renewLeaseBatch(any()))
         .thenReturn(List.of(
             new TaskAssignmentService.TaskHeartbeatResult(true, false),
             new TaskAssignmentService.TaskHeartbeatResult(false, false),
@@ -501,18 +503,18 @@ class TaskControllerApplicationServiceTest {
 
     // 整批只调一次底层(set-based),且 command 逐位映射入参
     ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap = ArgumentCaptor.captor();
-    verify(taskExecutionService).renewLeaseBatch(cap.capture());
+    verify(taskAssignmentService).renewLeaseBatch(cap.capture());
     assertThat(cap.getValue()).hasSize(3);
     assertThat(cap.getValue().get(1).taskId()).isEqualTo(2L);
     assertThat(cap.getValue().get(1).partitionInvocationId()).isEqualTo("inv-2");
-    verify(taskExecutionService, never())
+    verify(taskAssignmentService, never())
         .recordHeartbeat(anyString(), anyLong(), anyString(), any(), any());
   }
 
   @Test
   @DisplayName("renewBatch: null 项保持结果位置,只把有效项下发到底层")
   void shouldPreserveOrder_whenRenewBatchItemMissing() {
-    when(taskExecutionService.renewLeaseBatch(any()))
+    when(taskAssignmentService.renewLeaseBatch(any()))
         .thenReturn(List.of(new TaskAssignmentService.TaskHeartbeatResult(true, false)));
     List<TaskLeaseRenewItemCommand> items = new ArrayList<>();
     items.add(new TaskLeaseRenewItemCommand("ta", 1L, "w1", "inv-1"));
@@ -526,7 +528,7 @@ class TaskControllerApplicationServiceTest {
     assertThat(result.results().get(1).taskId()).isNull();
     assertThat(result.results().get(1).renewed()).isFalse();
     ArgumentCaptor<List<TaskAssignmentService.LeaseRenewCommand>> cap = ArgumentCaptor.captor();
-    verify(taskExecutionService).renewLeaseBatch(cap.capture());
+    verify(taskAssignmentService).renewLeaseBatch(cap.capture());
     assertThat(cap.getValue()).hasSize(1);
   }
 

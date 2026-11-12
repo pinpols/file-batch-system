@@ -68,6 +68,9 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @RequiredArgsConstructor
 public class AuditAspect {
 
+  /** 审计失败原因长度上限，对应 console_operation_audit.error_message VARCHAR(1024)（V130）。 */
+  private static final int AUDIT_ERROR_MESSAGE_MAX_LENGTH = 1024;
+
   private static final int MAX_PARAMS_JSON_BYTES = 2048;
 
   private final OperationAuditMapper mapper;
@@ -173,7 +176,7 @@ public class AuditAspect {
           .operatorRole(op.operatorRole())
           .result(EmptyChecks.isNull(errorCode) ? "SUCCESS" : "FAILED")
           .errorCode(errorCode)
-          .errorMessage(truncate(errorMsg, 1024))
+          .errorMessage(truncate(errorMsg, AUDIT_ERROR_MESSAGE_MAX_LENGTH))
           .paramsJson(paramsJson)
           .traceId(req.traceId())
           .requestId(req.requestId())

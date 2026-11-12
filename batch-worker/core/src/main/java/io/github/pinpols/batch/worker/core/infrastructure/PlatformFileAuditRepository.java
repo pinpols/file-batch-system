@@ -17,6 +17,12 @@ import org.springframework.stereotype.Repository;
 @RequiredArgsConstructor
 public class PlatformFileAuditRepository {
 
+  /** 对应 file_error_record.error_message VARCHAR(1024)。 */
+  private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+
+  /** 对应 file_error_record.source_column VARCHAR(256)。 */
+  private static final int SOURCE_COLUMN_MAX_LENGTH = 256;
+
   private final PlatformFileRuntimeMapper mapper;
 
   public Long insertFileErrorRecord(FileErrorRecordParam param) {
@@ -26,13 +32,13 @@ public class PlatformFileAuditRepository {
     Long pipelineStepRunId = param.getPipelineStepRunId();
     Long recordNo = param.getRecordNo();
     String errorCode = param.getErrorCode();
-    String errorMessage = truncate(param.getErrorMessage(), 1024);
+    String errorMessage = truncate(param.getErrorMessage(), ERROR_MESSAGE_MAX_LENGTH);
     String errorStage = param.getErrorStage();
     boolean skipped = param.isSkipped();
     String skipAction = param.getSkipAction();
     String rawRecordJson = toJson(param.getRawRecord());
     Long sourceRowNum = param.getSourceRowNum();
-    String sourceColumn = truncate(param.getSourceColumn(), 256);
+    String sourceColumn = truncate(param.getSourceColumn(), SOURCE_COLUMN_MAX_LENGTH);
     PlatformFileErrorInsertParam values = PlatformFileErrorInsertParam.builder()
         .tenantId(tenantId)
         .fileId(fileId)

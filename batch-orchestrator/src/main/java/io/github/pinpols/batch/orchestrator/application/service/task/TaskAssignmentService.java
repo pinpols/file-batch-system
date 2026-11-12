@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
 
-/** 处理 Worker 分配、任务租约管理、状态更新及日志追加，从 {@link DefaultTaskExecutionService} 中拆分。 */
+/** 处理 Worker 分配、任务租约管理、状态更新及日志追加，从原任务执行门面中拆分。 */
 public interface TaskAssignmentService {
 
   JobTaskEntity assignWorker(String tenantId, Long taskId, String workerCode);

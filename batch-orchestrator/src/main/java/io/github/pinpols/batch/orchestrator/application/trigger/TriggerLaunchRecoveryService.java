@@ -196,7 +196,7 @@ public class TriggerLaunchRecoveryService {
   }
 
   private boolean retryOrGiveUp(TriggerLaunchRecoveryView row, String errorCode) {
-    String status = mapper.markRetryOrDead(TriggerLaunchRecoveryRetryParam.builder()
+    TriggerLaunchRecoveryRetryParam retryParam = TriggerLaunchRecoveryRetryParam.builder()
         .tenantId(row.getTenantId())
         .requestId(row.getRequestId())
         .recoveryGeneration(row.getRecoveryGeneration())
@@ -205,7 +205,8 @@ public class TriggerLaunchRecoveryService {
         .maxAttempts(properties.getMaxAttempts())
         .baseBackoffSeconds(properties.getBaseBackoffSeconds())
         .maxBackoffSeconds(Math.max(1L, properties.getMaxBackoffSeconds()))
-        .build());
+        .build();
+    String status = mapper.markRetryOrDead(retryParam);
     if (STATUS_DEAD.equals(status)) {
       counter(METRIC_RECOVERED, "outcome", "dead").increment();
       log.error(

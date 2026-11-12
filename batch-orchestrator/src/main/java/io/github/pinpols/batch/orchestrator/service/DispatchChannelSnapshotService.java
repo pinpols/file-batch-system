@@ -121,7 +121,7 @@ public class DispatchChannelSnapshotService {
         continue;
       }
       String protectedSnapshot = policy == ConfigVersionPolicy.USE_ORIGINAL_CONFIG
-          ? originalSnapshot(tenantId, channelCode, originalEffectiveParams)
+          ? originalSnapshot(channelCode, originalEffectiveParams)
           : captureLatestOne(tenantId, channelCode);
       if (EmptyChecks.isBlank(protectedSnapshot)
           && EmptyChecks.isNotNull(selectedChannel)
@@ -242,8 +242,7 @@ public class DispatchChannelSnapshotService {
     return secretPayloadProtector.protect(serializedSnapshot);
   }
 
-  private String originalSnapshot(
-      String tenantId, String channelCode, Map<String, Object> originalEffectiveParams) {
+  private String originalSnapshot(String channelCode, Map<String, Object> originalEffectiveParams) {
     Map<String, Object> original =
         EmptyChecks.isNull(originalEffectiveParams) ? Map.of() : originalEffectiveParams;
     Object rawSnapshots = original.get(FrozenDispatchChannelSnapshot.COLLECTION_KEY);

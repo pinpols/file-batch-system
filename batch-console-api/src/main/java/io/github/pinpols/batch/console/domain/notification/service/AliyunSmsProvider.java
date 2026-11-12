@@ -102,8 +102,8 @@ public class AliyunSmsProvider implements SmsProvider {
     String templateCode;
     try {
       JsonNode config = objectMapper.readTree(message.configJson());
-      signName = textOrNull(config, "signName");
-      templateCode = textOrNull(config, "templateCode");
+      signName = ConsoleNotificationCryptoSupport.textOrNull(config, "signName");
+      templateCode = ConsoleNotificationCryptoSupport.textOrNull(config, "templateCode");
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
@@ -303,7 +303,7 @@ public class AliyunSmsProvider implements SmsProvider {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
       byte[] hash = digest.digest(encodedInput);
-      return toHex(hash);
+      return ConsoleNotificationCryptoSupport.toHex(hash);
     } catch (Exception ex) {
       throw new IllegalStateException("sha256 unavailable", ex);
     }
@@ -316,15 +316,7 @@ public class AliyunSmsProvider implements SmsProvider {
     mac.init(signingKey);
     byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
     byte[] digest = mac.doFinal(signingData);
-    return toHex(digest);
-  }
-
-  private static String toHex(byte[] bytes) {
-    return ConsoleNotificationCryptoSupport.toHex(bytes);
-  }
-
-  private static String textOrNull(JsonNode config, String field) {
-    return ConsoleNotificationCryptoSupport.textOrNull(config, field);
+    return ConsoleNotificationCryptoSupport.toHex(digest);
   }
 
   /** 手机号脱敏：只暴露收件人数量,绝不打明文。 */

@@ -15,7 +15,8 @@ import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.task.InstanceManagementApplicationService;
 import io.github.pinpols.batch.orchestrator.application.service.task.JobInstanceTerminalChildStateReconciler;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -59,7 +60,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  *
  * <p>区别于 {@code TaskOutcomeSummaryBuilderTest}(手搓 entity 的纯单测),本测起真 orchestrator + Testcontainers
  * PG,走 ADR-046 束作业 {@code DYNAMIC} 展开出 <b>一个 job_instance + K 个异构 partition/task</b> 的真实路径,再用生产
- * REPORT 入口 {@link TaskExecutionService#applyTaskOutcome} 逐分片回报,直接压 {@code
+ * REPORT 入口 {@link TaskOutcomeService#applyTaskOutcome} 逐分片回报,直接压 {@code
  * DefaultTaskOutcomeService.advancePartitionAndInstance} 里对 FOR-UPDATE 锁定分区做 join + 状态机晋级的那段。此前该
  * join 只被手搓 entity 的单测覆盖;真状态机只有单分片 happy-path IT。
  *
@@ -83,7 +84,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
 
   private final WorkflowRunLaunchService workflowRunLaunchService;
   private final InstanceManagementApplicationService instanceManagementApplicationService;
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
   private final RetryGovernanceService retryGovernanceService;
   private final JobInstanceTerminalChildStateReconciler terminalChildStateReconciler;
   private final JobInstanceMapper jobInstanceMapper;
@@ -97,7 +99,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
   PartitionJoinPromotionIntegrationTest(
       WorkflowRunLaunchService workflowRunLaunchService,
       InstanceManagementApplicationService instanceManagementApplicationService,
-      TaskExecutionService taskExecutionService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       RetryGovernanceService retryGovernanceService,
       JobInstanceTerminalChildStateReconciler terminalChildStateReconciler,
       JobInstanceMapper jobInstanceMapper,
@@ -109,7 +112,8 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
       PlatformTransactionManager transactionManager) {
     this.workflowRunLaunchService = workflowRunLaunchService;
     this.instanceManagementApplicationService = instanceManagementApplicationService;
-    this.taskExecutionService = taskExecutionService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.retryGovernanceService = retryGovernanceService;
     this.terminalChildStateReconciler = terminalChildStateReconciler;
     this.jobInstanceMapper = jobInstanceMapper;
@@ -199,7 +203,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
             .orElseThrow();
     JobTaskEntity releasedTask =
         jobTaskMapper.selectByPartitionAndSeq(tenantId, releasedPartition.getId(), 1);
-    JobTaskEntity claimedTask = taskExecutionService.assignWorker(
+    JobTaskEntity claimedTask = taskAssignmentService.assignWorker(
         tenantId, releasedTask.getId(), fannedOut.seed().workerCode());
     assertThat(claimedTask).isNotNull();
     JobPartitionEntity claimedPartition =
@@ -211,7 +215,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .resultSummary("{\"records\":10}")
         .partitionInvocationId(claimedPartition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(releasedPartitionOutcome);
+    taskOutcomeService.applyTaskOutcome(releasedPartitionOutcome);
 
     Awaitility.await().atMost(30, TimeUnit.SECONDS).untilAsserted(() -> {
       waitingPartitionDispatchScheduler.dispatchWaitingPartitions();
@@ -248,7 +252,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .outputs(Map.of("failedOnly", 999))
         .partitionInvocationId(partition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(failedReport);
+    taskOutcomeService.applyTaskOutcome(failedReport);
 
     assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
         .isEqualTo(JobInstanceStatus.PARTIAL_FAILED.code());
@@ -416,15 +420,15 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .outputs(Map.of("oldAttempt", "failed"))
         .partitionInvocationId(oldInvocation)
         .build();
-    taskExecutionService.applyTaskOutcome(oldReport);
+    taskOutcomeService.applyTaskOutcome(oldReport);
     retryGovernanceService.retryPartition(
         TENANT, retryShard.partitionId(), TENANT + ":it-output-retry:" + retryShard.partitionId());
-    taskExecutionService.assignWorker(
+    taskAssignmentService.assignWorker(
         TENANT, retryShard.taskId(), fannedOut.seed().workerCode());
     String newInvocation =
         jobPartitionMapper.selectById(TENANT, retryShard.partitionId()).getCurrentInvocationId();
     assertThat(newInvocation).isNotBlank().isNotEqualTo(oldInvocation);
-    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(oldReport))
+    assertThatThrownBy(() -> taskOutcomeService.applyTaskOutcome(oldReport))
         .isInstanceOf(BizException.class)
         .hasMessageContaining("error.task.invocation_mismatch");
     TaskOutcomeCommand retriedReport = TaskOutcomeCommand.builder()
@@ -434,7 +438,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .outputs(Map.of("newAttempt", "success"))
         .partitionInvocationId(newInvocation)
         .build();
-    taskExecutionService.applyTaskOutcome(retriedReport);
+    taskOutcomeService.applyTaskOutcome(retriedReport);
     reportOutcome(shards.get(1), true);
     reportOutcome(shards.get(2), true);
 
@@ -470,7 +474,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
     assertThat(successPartitionCount(fannedOut.instanceId())).isEqualTo(1);
     assertThat(failedPartitionCount(fannedOut.instanceId())).isZero();
 
-    taskExecutionService.assignWorker(
+    taskAssignmentService.assignWorker(
         TENANT, failedShard.taskId(), fannedOut.seed().workerCode());
     reportOutcome(failedShard, true);
     assertThat(jobInstanceMapper.selectById(TENANT, fannedOut.instanceId()).getInstanceStatus())
@@ -576,7 +580,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .isEqualTo(JobInstanceStatus.RUNNING.code());
 
     JobTaskEntity remainingTask = tasks.get(1);
-    JobTaskEntity claimed = taskExecutionService.assignWorker(
+    JobTaskEntity claimed = taskAssignmentService.assignWorker(
         TENANT, remainingTask.getId(), fannedOut.seed().workerCode());
     assertThat(claimed).isNotNull();
     reportOutcome(new Shard(remainingTask.getId(), remainingTask.getJobPartitionId()), true);
@@ -630,7 +634,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         jdbcTemplate.queryForObject(selectIdSql, Long.class, TENANT, task.getId());
         taskLocked.countDown();
         awaitBarrier(releaseClaim);
-        return taskExecutionService.assignWorker(
+        return taskAssignmentService.assignWorker(
             TENANT, task.getId(), fannedOut.seed().workerCode());
       }));
       assertThat(taskLocked.await(10, TimeUnit.SECONDS)).isTrue();
@@ -697,7 +701,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
       Future<JobTaskEntity> claim = pool.submit(() -> transactionTemplate.execute(status -> {
         jdbcTemplate.execute(setLocalSql);
         claimPid.complete(jdbcTemplate.queryForObject(selectPgBackendPidSql, Integer.class));
-        return taskExecutionService.assignWorker(
+        return taskAssignmentService.assignWorker(
             TENANT, task.getId(), fannedOut.seed().workerCode());
       }));
       awaitDatabaseLockWait(claimPid.get(5, TimeUnit.SECONDS));
@@ -784,7 +788,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         new JobTaskQuery(TENANT, fannedOut.instanceId(), null, null, null));
     List<Shard> shards = new ArrayList<>();
     for (JobTaskEntity task : tasks) {
-      JobTaskEntity claimed = taskExecutionService.assignWorker(
+      JobTaskEntity claimed = taskAssignmentService.assignWorker(
           TENANT, task.getId(), fannedOut.seed().workerCode());
       assertThat(claimed).isNotNull();
       JobPartitionEntity partition =
@@ -808,7 +812,7 @@ class PartitionJoinPromotionIntegrationTest extends AbstractIntegrationTest {
         .errorMessage(success ? null : "intentional shard failure for join gate")
         .partitionInvocationId(partition.getCurrentInvocationId())
         .build();
-    taskExecutionService.applyTaskOutcome(command);
+    taskOutcomeService.applyTaskOutcome(command);
   }
 
   private String partitionStatus(Shard shard) {

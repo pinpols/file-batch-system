@@ -161,47 +161,47 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       LaunchRequest request, TriggerRequestEntity triggerRequest) {
     if (EmptyChecks.isNull(triggerRequest.getParentWorkflowRunId())
         || EmptyChecks.isNull(triggerRequest.getParentNodeCode())) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     WorkflowRunEntity run =
         workflowRunMapper.selectById(request.tenantId(), triggerRequest.getParentWorkflowRunId());
     WorkflowRunExecutionSnapshot snapshot = WorkflowRunExecutionSnapshot.from(run);
     if (EmptyChecks.isNull(snapshot)) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     Integer schemaVersion = snapshot.schemaVersion();
     if (EmptyChecks.isNull(schemaVersion) || schemaVersion < 2) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     boolean snapshotTenantMatches = request.tenantId().equals(run.getTenantId());
     if (!snapshotTenantMatches) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     boolean snapshotWorkflowMatches =
         Objects.equals(run.getWorkflowDefinitionId(), snapshot.workflowDefinitionId());
     if (!snapshotWorkflowMatches) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     WorkflowNodeEntity node = snapshot.node(triggerRequest.getParentNodeCode());
     JobDefinitionView definition = snapshot.jobDefinition(triggerRequest.getParentNodeCode());
     if (EmptyChecks.isNull(node)) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     boolean nodeReferencesRequestedJob =
         Objects.equals(node.getRelatedJobCode(), request.jobCode());
     if (!nodeReferencesRequestedJob) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     if (EmptyChecks.isNull(definition)) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     boolean definitionTenantMatches = request.tenantId().equals(definition.tenantId());
     if (!definitionTenantMatches) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     boolean definitionJobMatches = request.jobCode().equals(definition.jobCode());
     if (!definitionJobMatches) {
-      rejectInvalidExecutionSnapshot(request, triggerRequest);
+      rejectInvalidExecutionSnapshot(request);
     }
     WorkflowReplayExecutionBinding replayBinding = null;
     if (EmptyChecks.isNotNull(snapshot.replayOperationId())) {
@@ -234,8 +234,7 @@ public class DefaultLaunchValidationService implements LaunchValidationService {
       String workflowCalendarCode,
       WorkflowReplayExecutionBinding workflowReplayExecutionBinding) {}
 
-  private void rejectInvalidExecutionSnapshot(
-      LaunchRequest request, TriggerRequestEntity triggerRequest) {
+  private void rejectInvalidExecutionSnapshot(LaunchRequest request) {
     int updatedRows = triggerRequestMapper.updateAcceptance(
         request.tenantId(), request.requestId(), TriggerRequestStatus.REJECTED.code(), null);
     warnIfNotUpdated(updatedRows, request);

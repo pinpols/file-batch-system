@@ -35,7 +35,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.annotation.PostConstruct;
 import java.time.Instant;
-import java.util.Optional;
+import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -384,7 +384,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
       // 进入 RETRYING：partition 先标记为 RETRYING，实际重排队由 retry scheduler → outbox 完成。
       String tenantId = command.tenantId();
       Long partitionId = partition.getId();
-      Integer currentRetryCount = Optional.ofNullable(partition.getRetryCount()).orElse(0);
+      Integer currentRetryCount = Objects.requireNonNullElse(partition.getRetryCount(), 0);
       Integer nextRetryCount = currentRetryCount + 1;
       JobPartitionMarkRetryingParam jobPartitionMarkRetryingParam =
           JobPartitionMarkRetryingParam.builder()
@@ -439,7 +439,7 @@ public class DefaultTaskOutcomeService implements TaskOutcomeService {
     String nextStatus = retryScheduled
         ? "RETRYING"
         : resolveTaskStatus(command, disposition == FailureDisposition.CANCELLED);
-    int currentRetryCount = Optional.ofNullable(stepInstance.getRetryCount()).orElse(0);
+    int currentRetryCount = Objects.requireNonNullElse(stepInstance.getRetryCount(), 0);
     int nextRetryCount = retryScheduled ? currentRetryCount + 1 : currentRetryCount;
     UpdateStepProgressParam.UpdateStepProgressParamBuilder progressBuilder =
         UpdateStepProgressParam.builder()

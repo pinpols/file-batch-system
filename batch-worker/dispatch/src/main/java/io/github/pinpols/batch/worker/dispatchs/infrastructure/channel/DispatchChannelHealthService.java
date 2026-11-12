@@ -60,6 +60,9 @@ public class DispatchChannelHealthService {
   private static final int PROBE_PARALLELISM = 8;
   private static final long PROBE_TIMEOUT_SECONDS = 5L;
 
+  /** 指数退避的指数上限，防止 2^n 溢出；与原 SQL least(greatest(...,0),30) 一致。 */
+  private static final long MAX_BACKOFF_EXPONENT = 30L;
+
   private final DispatchChannelHealthRepository repository;
   private final DispatchChannelHealthProperties properties;
   private final DispatchCircuitBreakerProperties circuitBreakerProperties;
@@ -260,7 +263,7 @@ public class DispatchChannelHealthService {
    */
   private Instant computeExponentialBackoffNextProbeAt(Instant now, long failures) {
     long minimumExponent = Math.max(failures - 1L, 0L);
-    long exponent = Math.min(minimumExponent, 30L);
+    long exponent = Math.min(minimumExponent, MAX_BACKOFF_EXPONENT);
     long backoffMillis = Math.min(properties.getMaxBackoffMillis(), (long)
         (properties.getProbeIntervalMillis() * Math.pow(2, exponent)));
     return now.plusMillis(backoffMillis);
