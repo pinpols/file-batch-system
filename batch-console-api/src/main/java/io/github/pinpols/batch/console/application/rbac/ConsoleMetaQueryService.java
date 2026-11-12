@@ -82,6 +82,7 @@ import io.github.pinpols.batch.common.enums.WorkflowNodeRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowNodeType;
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
 import io.github.pinpols.batch.common.enums.WorkflowType;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaEnumItem;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleMetaOption;
@@ -169,7 +170,7 @@ public class ConsoleMetaQueryService {
   private static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
     String key = item.messageKey();
     String fallback = item.label();
-    if (key == null) {
+    if (EmptyChecks.isNull(key)) {
       return fallback;
     }
     return messageSource.getMessage(key, null, fallback, locale);

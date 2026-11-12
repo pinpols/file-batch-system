@@ -46,9 +46,9 @@ R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/
 R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,363,checkpointProperties,删除
 R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,删除
 R12,injected-final-field-null-check,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,580,taskExecutionClient,删除
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,166,platformMapper,保留：类内包级构造器传 null；bean 本身 @ConditionalOnProperty
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,167,businessCleanup,保留：类内包级构造器传 null；bean 本身 @ConditionalOnProperty
-R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,168,cleanupFence,保留：类内包级构造器传 null；bean 本身 @ConditionalOnProperty
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,166,platformMapper,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,167,businessCleanup,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
+R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,168,cleanupFence,保留：类内包级构造器传 null；包级构造器（:90-94）传 null 的测试构造方式仍在使用
 R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/cleanup/ProcessStagingOrphanCleaner.java,214,cleanedCounter,保留：registry 来自 ObjectProvider.getIfAvailable()，缺失时计数器为 null
 R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/metrics/ProcessMetrics.java,72,registry,保留：registry 来自 ObjectProvider.getIfAvailable()
 R12,injected-final-field-null-check,batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/sql/SqlTransformComputePlugin.java,96,security,删除
@@ -95,7 +95,7 @@ R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/
 R15,mergeable-nested-if,batch-console-api/src/main/java/io/github/pinpols/batch/console/support/ratelimit/ConsoleRateLimitFilter.java,89,rejectLogin,保留：内层条件有副作用（loginIpRateLimiter.tryAcquire 消耗令牌）
 R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/WorkflowGraphValidator.java,359,collectOptionalNodes,保留：误报（两层 if 之间是 for 循环，且带 break）
 R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/CrossDayDependencyReconciler.java,166,reconcileOneBound,保留：内层条件有副作用（markFailed 写库 CAS）
-R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,已改：if (configured) { if (!hasCapacity) return } 合并为 if (configured && !hasCapacity)
+R15,mergeable-nested-if,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/scheduler/DefaultConcurrencyLimiter.java,102,checkFairShareLimit,保留：内层条件有副作用（hasCapacity 取 pg_advisory_xact_lock）
 R15,mergeable-nested-if,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,246,releaseUnexecutedClaims,保留：误报（246 行是单个 return 守卫，for 内单个 if 不可合并）
 R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/rbac/service/ConsoleUserBatchProvisioningService.java,329,validateRow,保留：误报（if 内嵌 if 且外层带 else，不是 return 之后的 else）
 R16,else-after-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitApplyHandlers.java,189,applySpecs,已改：lambda 内 return 之后的 else 去掉，内层改为 != UPSERT 先返回 SKIPPED 后平铺
@@ -106,17 +106,17 @@ R16,else-after-return,batch-worker/core/src/main/java/io/github/pinpols/batch/wo
 R16,else-after-return,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/stage/DeliverDispatchStep.java,289,prepareDeliveryAttempt,保留：误报（if/else-if 链的首个分支 newAttempt=true 后落空不 return，不能平铺）
 R16,verbose-boolean-return,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,772,reaches,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底，不是 if/return true/return false）
 R16,verbose-boolean-return,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/auth/ApiKeyVerifier.java,278,scopesAllowAny,保留：误报（return true 位于 for 循环内，末尾 return false 是循环兜底）
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,557,toConfigReleaseResponse,
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitTenantExecutor.java,207,hasChanges,
-R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java,202,hasChanges,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetPartitionService.java,148,loadDataAssetId,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/S3GovernanceStorage.java,37,listReconcilePage,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,162,validateBundleParamsBeforeInstanceCreation,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,178,validateRelatedFileReference,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,190,validateParentInstanceReference,
-R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,764,resolveConcurrentDuplicate,
-R14,query-or-check-name-with-write,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,151,resolveExecutionTimer,
-R14,query-or-check-name-with-write,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java,203,resolveObjectName,
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,557,toConfigReleaseResponse,保留：误报（publishedAt 等是实体 getter，方法只做响应组装，无写入）
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigInitTenantExecutor.java,207,hasChanges,保留：误报（只比较统计计数器，无写入）
+R14,query-or-check-name-with-write,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/TenantConfigPackageExcelApplyService.java,202,hasChanges,保留：误报（只比较统计计数器，无写入）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/asset/AssetPartitionService.java,148,loadDataAssetId,已改：改名 ensureDataAssetId（Task 13）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/file/S3GovernanceStorage.java,37,listReconcilePage,已改：抽出 openCursor（Task 13）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,162,validateBundleParamsBeforeInstanceCreation,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,178,validateRelatedFileReference,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,190,validateParentInstanceReference,已改（Task 13，PR-2）
+R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,764,resolveConcurrentDuplicate,保留：resolve 动词本就含处理，写 DUPLICATE 验收状态是其职责，不是查询或校验名
+R14,query-or-check-name-with-write,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,151,resolveExecutionTimer,保留：误报（publishPercentiles 是 Timer builder 配置，不写业务数据）
+R14,query-or-check-name-with-write,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java,203,resolveObjectName,保留：误报（只拼对象名，无写入）
 R19,private-pure-forward,batch-common/src/main/java/io/github/pinpols/batch/common/file/ExportFileNameResolver.java,62,hasText -> EmptyChecks.isNotBlank,
 R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,319,cacheTenant -> ConsoleQueryCacheService.keySegment,
 R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,323,isActive -> ACTIVE_INSTANCE_STATUSES.contains,
