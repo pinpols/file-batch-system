@@ -8,7 +8,7 @@ import java.time.Instant;
 import lombok.Builder;
 
 /**
- * 处理任务完成上报及工作流节点生命周期跟踪，从 {@link DefaultTaskExecutionService} 中拆分， 隔离高复杂度的结果处理逻辑（重试调度、分区/实例进度推进、DAG
+ * 处理任务完成上报及工作流节点生命周期跟踪，从原任务执行门面中拆分， 隔离高复杂度的结果处理逻辑（重试调度、分区/实例进度推进、DAG
  * 继续流转）。
  */
 public interface TaskOutcomeService {

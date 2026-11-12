@@ -58,7 +58,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public PageResponse<ConsoleFileTemplateResponse> list(FileTemplateQueryRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     PageRequest pageRequest = new PageRequest(request.getPageNo(), request.getPageSize());
     FileTemplateConfigQuery query = new FileTemplateConfigQuery(
         tenantId,
@@ -80,7 +80,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public ConsoleFileTemplateResponse get(Long id, String tenantId) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
     FileTemplateConfigQueryView templateRow = mapper.selectById(resolved, id);
     FileTemplateConfigQueryView requiredTemplateRow =
         Guard.requireFound(templateRow, "file template not found: " + id);
@@ -89,7 +89,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public ConsoleFileTemplateResponse create(FileTemplateCreateRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     int version = request.getVersion() != null ? request.getVersion() : 1;
     FileTemplateConfigQueryView existing =
         mapper.selectByUniqueKey(tenantId, request.getTemplateCode(), version);
@@ -111,7 +111,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public ConsoleFileTemplateResponse update(Long id, FileTemplateUpdateRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     FileTemplateConfigQueryView existing =
         Guard.requireFound(mapper.selectById(tenantId, id), "file template not found: " + id);
     String operator = requestMetadataResolver.current().operatorId();
@@ -130,7 +130,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public void toggle(Long id, String tenantId, Boolean enabled) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
     if (Boolean.TRUE.equals(enabled)) {
       FileTemplateConfigQueryView existing =
           Guard.requireFound(mapper.selectById(resolved, id), "file template not found: " + id);
@@ -162,7 +162,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public FileTemplateMappingDraftResult draftMapping(FileTemplateMappingDraftCommand command) {
-    resolveTenant(command.tenantId());
+    tenantGuard.resolveTenant(command.tenantId());
     String direction = normalizeDirection(command.direction());
     return "EXPORT".equals(direction)
         ? FileTemplateMappingDraftBuilder.draftExportMapping(objectMapper, command)
@@ -171,7 +171,7 @@ public class DefaultConsoleFileTemplateApplicationService
 
   @Override
   public FileNamePreviewResponse previewFileName(FileNamePreviewRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ExportFileNameResolver.Input input = ExportFileNameResolver.Input.builder()
         .namingRule(request.getNamingRule())
         .fileFormatType(request.getFileFormatType())
@@ -184,10 +184,6 @@ public class DefaultConsoleFileTemplateApplicationService
         .build();
     String resolvedFileName = ExportFileNameResolver.resolve(input);
     return new FileNamePreviewResponse(resolvedFileName);
-  }
-
-  private String resolveTenant(String tenantId) {
-    return tenantGuard.resolveTenant(tenantId);
   }
 
   private void validateFixedWidthMappings(

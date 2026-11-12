@@ -116,7 +116,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       if (ctx.isDryRun()) {
         return buildDryRunResult(ctx, inv);
       }
-      return runStatements(ctx, inv);
+      return runStatements(inv);
     } catch (SqlValidationException ex) {
       // SqlValidationException 同时承担「输入非法」和「OS-capable role 闸拒绝」语义,后者走 SECURITY_REJECTED
       boolean security = ex.getMessage() != null && ex.getMessage().contains("OS-capable");
@@ -515,7 +515,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
   // ─── execution ──────────────────────────────────────────────────────────────
 
   @SuppressWarnings("java:S2077")
-  private TaskResult runStatements(TaskContext ctx, SqlInvocation inv) {
+  private TaskResult runStatements(SqlInvocation inv) {
     long start = System.currentTimeMillis();
     ExecResult execResult = new ExecResult();
 

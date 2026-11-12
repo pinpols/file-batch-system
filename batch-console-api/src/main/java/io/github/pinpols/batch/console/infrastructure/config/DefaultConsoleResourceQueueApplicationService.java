@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConsoleResourceQueueApplicationService;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
@@ -94,46 +95,19 @@ public class DefaultConsoleResourceQueueApplicationService
     ResourceQueueUpdateParam params = ResourceQueueUpdateParam.builder()
         .tenantId(tenantId)
         .id(id)
-        .queueName(
-            EmptyChecks.isNotNull(request.getQueueName())
-                ? request.getQueueName()
-                : existing.queueName())
-        .queueType(
-            EmptyChecks.isNotNull(request.getQueueType())
-                ? request.getQueueType()
-                : existing.queueType())
-        .maxRunningJobs(
-            EmptyChecks.isNotNull(request.getMaxRunningJobs())
-                ? request.getMaxRunningJobs()
-                : existing.maxRunningJobs())
+        .queueName(Nullables.coalesce(request.getQueueName(), existing.queueName()))
+        .queueType(Nullables.coalesce(request.getQueueType(), existing.queueType()))
+        .maxRunningJobs(Nullables.coalesce(request.getMaxRunningJobs(), existing.maxRunningJobs()))
         .maxRunningPartitions(
-            EmptyChecks.isNotNull(request.getMaxRunningPartitions())
-                ? request.getMaxRunningPartitions()
-                : existing.maxRunningPartitions())
-        .maxQps(
-            EmptyChecks.isNotNull(request.getMaxQps()) ? request.getMaxQps() : existing.maxQps())
-        .workerGroup(
-            EmptyChecks.isNotNull(request.getWorkerGroup())
-                ? request.getWorkerGroup()
-                : existing.workerGroup())
-        .resourceTag(
-            EmptyChecks.isNotNull(request.getResourceTag())
-                ? request.getResourceTag()
-                : existing.resourceTag())
-        .priorityPolicy(
-            EmptyChecks.isNotNull(request.getPriorityPolicy())
-                ? request.getPriorityPolicy()
-                : existing.priorityPolicy())
+            Nullables.coalesce(request.getMaxRunningPartitions(), existing.maxRunningPartitions()))
+        .maxQps(Nullables.coalesce(request.getMaxQps(), existing.maxQps()))
+        .workerGroup(Nullables.coalesce(request.getWorkerGroup(), existing.workerGroup()))
+        .resourceTag(Nullables.coalesce(request.getResourceTag(), existing.resourceTag()))
+        .priorityPolicy(Nullables.coalesce(request.getPriorityPolicy(), existing.priorityPolicy()))
         .fairShareWeight(
-            EmptyChecks.isNotNull(request.getFairShareWeight())
-                ? request.getFairShareWeight()
-                : existing.fairShareWeight())
-        .enabled(
-            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
-        .description(
-            EmptyChecks.isNotNull(request.getDescription())
-                ? request.getDescription()
-                : existing.description())
+            Nullables.coalesce(request.getFairShareWeight(), existing.fairShareWeight()))
+        .enabled(Nullables.coalesce(request.getEnabled(), existing.enabled()))
+        .description(Nullables.coalesce(request.getDescription(), existing.description()))
         .build();
     resourceQueueMapper.update(params);
     ResourceQueueRow updatedQueue = resourceQueueMapper.selectById(tenantId, id);

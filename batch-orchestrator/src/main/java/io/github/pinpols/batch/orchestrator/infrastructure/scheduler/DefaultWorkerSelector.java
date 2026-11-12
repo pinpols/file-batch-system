@@ -20,7 +20,7 @@ import io.micrometer.core.instrument.Tags;
 import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -180,7 +180,7 @@ public class DefaultWorkerSelector implements WorkerSelector {
   }
 
   private static int currentLoadOrZero(WorkerRegistryEntity worker) {
-    return Optional.ofNullable(worker.currentLoad()).orElse(0);
+    return Objects.requireNonNullElse(worker.currentLoad(), 0);
   }
 
   /** V87 反压: 已 fully loaded 的 worker 不再被选中. NULL max_concurrent (老数据回退) 视为无上限通过. */

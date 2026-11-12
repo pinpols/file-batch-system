@@ -59,6 +59,9 @@ import org.springframework.stereotype.Service;
 @SuppressWarnings("java:S2583")
 public class WebhookDispatcher {
 
+  /** 失败响应摘要长度上限，对应 webhook_delivery_log.response_body VARCHAR(2048)（V45）。 */
+  private static final int RESPONSE_SUMMARY_MAX_LENGTH = 2048;
+
   private static final int MAX_ATTEMPTS = 3;
 
   private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
@@ -371,8 +374,9 @@ public class WebhookDispatcher {
 
   private String sanitize(String text) {
     String normalized = ConsoleTextSanitizer.normalize(text);
-    String safeMessage = SwallowedExceptionLogger.safeMessage(normalized, 2048);
-    return ConsoleTextSanitizer.safeDisplay(safeMessage, 2048);
+    String safeMessage =
+        SwallowedExceptionLogger.safeMessage(normalized, RESPONSE_SUMMARY_MAX_LENGTH);
+    return ConsoleTextSanitizer.safeDisplay(safeMessage, RESPONSE_SUMMARY_MAX_LENGTH);
   }
 
   private static String readBoundedErrorBody(ResponseBody body) throws IOException {

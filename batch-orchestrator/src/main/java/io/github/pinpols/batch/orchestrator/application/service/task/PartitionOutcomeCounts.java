@@ -6,7 +6,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.domain.query.PartitionStatusRef;
 import io.github.pinpols.batch.orchestrator.domain.view.PartitionStatusSummary;
 import java.util.List;
-import java.util.Optional;
+import java.util.Objects;
 
 /**
  * 一次 worker 回报推进时使用的实例分区计数快照。
@@ -27,12 +27,12 @@ record PartitionOutcomeCounts(
   }
 
   static PartitionOutcomeCounts fromInstanceCounters(JobInstanceEntity instance) {
-    return new PartitionOutcomeCounts(
-        Optional.ofNullable(instance.getExpectedPartitionCount()).orElse(0),
-        Optional.ofNullable(instance.getSuccessPartitionCount()).orElse(0),
-        Optional.ofNullable(instance.getFailedPartitionCount()).orElse(0),
-        Optional.ofNullable(instance.getCancelledPartitionCount()).orElse(0),
-        Optional.ofNullable(instance.getTerminatedPartitionCount()).orElse(0));
+    int expected = Objects.requireNonNullElse(instance.getExpectedPartitionCount(), 0);
+    int success = Objects.requireNonNullElse(instance.getSuccessPartitionCount(), 0);
+    int failed = Objects.requireNonNullElse(instance.getFailedPartitionCount(), 0);
+    int cancelled = Objects.requireNonNullElse(instance.getCancelledPartitionCount(), 0);
+    int terminated = Objects.requireNonNullElse(instance.getTerminatedPartitionCount(), 0);
+    return new PartitionOutcomeCounts(expected, success, failed, cancelled, terminated);
   }
 
   /** 失败、取消和终止都算作广义失败。 */

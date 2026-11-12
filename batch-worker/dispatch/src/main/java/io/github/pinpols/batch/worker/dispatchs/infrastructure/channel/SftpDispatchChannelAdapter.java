@@ -157,7 +157,7 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
     ConnectionConfig connConfig = resolveConnectionConfig(channelConfig);
     if (connConfig == null) {
-      String host = stringProp(channelConfig, "sftp_host");
+      String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
       if (!Texts.hasText(host)) {
         return DispatchResult.failureWithoutReceipt("sftp_host missing");
       }
@@ -184,13 +184,13 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private ConnectionConfig resolveConnectionConfig(Map<String, Object> channelConfig) {
-    String host = stringProp(channelConfig, "sftp_host");
+    String host = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_host");
     if (!Texts.hasText(host)) {
       return null;
     }
-    int port = intProp(channelConfig, "sftp_port", 22);
-    String user = stringProp(channelConfig, "sftp_user");
-    String password = stringProp(channelConfig, "sftp_password");
+    int port = DispatchChannelConfigSupport.intProp(channelConfig, "sftp_port", 22);
+    String user = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_user");
+    String password = DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_password");
     if (!Texts.hasText(user) || !Texts.hasText(password)) {
       return null;
     }
@@ -199,14 +199,16 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
   private RemoteTarget resolveRemoteTarget(
       Map<String, Object> channelConfig, Map<String, Object> fileRecord) {
-    String remoteDir = stringProp(channelConfig, "sftp_remote_directory");
+    String remoteDir =
+        DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_directory");
     if (!Texts.hasText(remoteDir)) {
       remoteDir = "/";
     }
     if (!remoteDir.endsWith("/")) {
       remoteDir = remoteDir + "/";
     }
-    String remoteName = stringProp(channelConfig, "sftp_remote_file_name");
+    String remoteName =
+        DispatchChannelConfigSupport.stringProp(channelConfig, "sftp_remote_file_name");
     if (!Texts.hasText(remoteName)) {
       String originalFileName = String.valueOf(fileRecord.getOrDefault("original_file_name", ""));
       String fileName = String.valueOf(fileRecord.getOrDefault("file_name", "file.bin"));
@@ -334,8 +336,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       // dev/test/e2e/local 允许通过 channel 配置 sftp_strict_host_key_checking=no 关闭。
       // 判定方式：只要当前有 "prod" / "production" active profile，则 prodMode=true。
       boolean prodMode = isProductionProfile();
-      String strictHostKeyChecking =
-          stringProp(ctx.channelConfig(), "sftp_strict_host_key_checking");
+      String strictHostKeyChecking = DispatchChannelConfigSupport.stringProp(
+          ctx.channelConfig(), "sftp_strict_host_key_checking");
       boolean strictMode = prodMode || !"no".equalsIgnoreCase(strictHostKeyChecking);
       if (!strictMode) {
         log.warn(
@@ -349,7 +351,8 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
                   + " forces strict mode — overriding to yes for host {}",
               ctx.connConfig().host());
         }
-        String knownHostsPath = stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
+        String knownHostsPath =
+            DispatchChannelConfigSupport.stringProp(ctx.channelConfig(), "sftp_known_hosts_path");
         if (Texts.hasText(knownHostsPath)) {
           jsch.setKnownHosts(knownHostsPath);
         }
@@ -434,14 +437,6 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
       // 其他 disconnect 异常捕获并抑制（原语义）
     }
-  }
-
-  private static String stringProp(Map<String, Object> map, String key) {
-    return DispatchChannelConfigSupport.stringProp(map, key);
-  }
-
-  private static int intProp(Map<String, Object> map, String key, int def) {
-    return DispatchChannelConfigSupport.intProp(map, key, def);
   }
 
   private static String firstNonBlank(String a, String b) {

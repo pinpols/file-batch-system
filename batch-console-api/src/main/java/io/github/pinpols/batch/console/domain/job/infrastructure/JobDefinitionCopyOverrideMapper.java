@@ -2,9 +2,11 @@ package io.github.pinpols.batch.console.domain.job.infrastructure;
 
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDefinitionCopyRequest;
 import io.github.pinpols.batch.console.domain.job.param.JobDefinitionMaintenanceUpdateParam;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
+import java.util.Objects;
 
 /** 根据已复制的作业和请求生成维护更新参数。 */
 final class JobDefinitionCopyOverrideMapper {
@@ -19,8 +21,7 @@ final class JobDefinitionCopyOverrideMapper {
     param.setTenantId(resolved);
     param.setJobCode(request.getNewJobCode());
     param.setDependsOnJobCode(copied.getDependsOnJobCode());
-    param.setJobName(
-        EmptyChecks.isNotNull(request.getJobName()) ? request.getJobName() : copied.getJobName());
+    param.setJobName(Nullables.coalesce(request.getJobName(), copied.getJobName()));
     param.setQueueCode(
         EmptyChecks.isNotNull(request.getQueueCode())
             ? CodeNormalizer.toConfigFormOrNull(request.getQueueCode())
@@ -29,10 +30,7 @@ final class JobDefinitionCopyOverrideMapper {
         EmptyChecks.isNotNull(request.getWorkerGroup())
             ? CodeNormalizer.toUpperOrNull(request.getWorkerGroup())
             : copied.getWorkerGroup());
-    param.setScheduleExpr(
-        EmptyChecks.isNotNull(request.getScheduleExpr())
-            ? request.getScheduleExpr()
-            : copied.getScheduleExpr());
+    param.setScheduleExpr(Nullables.coalesce(request.getScheduleExpr(), copied.getScheduleExpr()));
     param.setTriggerMode(copied.getTriggerMode());
     param.setCalendarCode(
         EmptyChecks.isNotNull(request.getCalendarCode())
@@ -42,18 +40,11 @@ final class JobDefinitionCopyOverrideMapper {
         EmptyChecks.isNotNull(request.getWindowCode())
             ? CodeNormalizer.toConfigFormOrNull(request.getWindowCode())
             : copied.getWindowCode());
-    param.setRetryPolicy(
-        EmptyChecks.isNotNull(request.getRetryPolicy())
-            ? request.getRetryPolicy()
-            : copied.getRetryPolicy());
+    param.setRetryPolicy(Nullables.coalesce(request.getRetryPolicy(), copied.getRetryPolicy()));
     param.setRetryMaxCount(
-        EmptyChecks.isNotNull(request.getRetryMaxCount())
-            ? request.getRetryMaxCount()
-            : copied.getRetryMaxCount());
+        Nullables.coalesce(request.getRetryMaxCount(), copied.getRetryMaxCount()));
     param.setTimeoutSeconds(
-        EmptyChecks.isNotNull(request.getTimeoutSeconds())
-            ? request.getTimeoutSeconds()
-            : copied.getTimeoutSeconds());
+        Nullables.coalesce(request.getTimeoutSeconds(), copied.getTimeoutSeconds()));
     param.setShardStrategy(copied.getShardStrategy());
     param.setExecutionMode(copied.getExecutionMode());
     param.setWatermarkField(copied.getWatermarkField());
@@ -61,14 +52,10 @@ final class JobDefinitionCopyOverrideMapper {
     // 否则 priority 被写成 null 触发非空约束，执行器和参数模板也会被清空。
     param.setExecutionHandler(copied.getExecutionHandler());
     param.setParamSchema(copied.getParamSchema());
-    param.setPriority(EmptyChecks.isNull(copied.getPriority()) ? 5 : copied.getPriority());
+    param.setPriority(Objects.requireNonNullElse(copied.getPriority(), 5));
     param.setDefaultParams(copied.getDefaultParams());
-    param.setEnabled(
-        EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : copied.getEnabled());
-    param.setDescription(
-        EmptyChecks.isNotNull(request.getDescription())
-            ? request.getDescription()
-            : copied.getDescription());
+    param.setEnabled(Nullables.coalesce(request.getEnabled(), copied.getEnabled()));
+    param.setDescription(Nullables.coalesce(request.getDescription(), copied.getDescription()));
     param.setUpdatedBy(operator);
     return param;
   }

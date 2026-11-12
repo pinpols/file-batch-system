@@ -77,8 +77,8 @@ public class ValidateStep implements ImportStageStep {
 
   @Override
   public ImportStageResult execute(ImportJobContext context) {
-    String parsedRecordsPath =
-        stringValue(context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
+    String parsedRecordsPath = ImportStageSupport.stringValue(
+        context.getAttributes().get(PipelineRuntimeKeys.PARSED_RECORDS_PATH));
     if (!Texts.hasText(parsedRecordsPath)) {
       return ImportStageResult.failure(
           stage(),
@@ -111,7 +111,7 @@ public class ValidateStep implements ImportStageStep {
       if (datasetResult != null) {
         return datasetResult;
       }
-      validatedRecordsPath = createValidatedFile(context);
+      validatedRecordsPath = ImportStageSupport.createValidatedFile(context);
       // R-4.3: processValidationBatch 内部的 writer 在 try-with-resources 里；
       // 失败标记只记到 StreamingValidationResult，不在 writer 还开着时 delete 文件
       // （旧实现 failStreaming 直接 delete 会导致 writer 还在写的 fd 被 unlink，
@@ -120,7 +120,7 @@ public class ValidateStep implements ImportStageStep {
           processValidationBatch(context, session, parsedRecordsPath, validatedRecordsPath);
       if (streamResult.failure() != null) {
         // writer 此时已随 processValidationBatch 的 try-with-resources 关闭，安全 delete
-        deleteQuietly(validatedRecordsPath);
+        ImportStageSupport.deleteQuietly(validatedRecordsPath);
         return streamResult.failure();
       }
       // ADR-041 Phase1.2:全量记录累加完毕,控制金额对账(声明总额 vs 实际累加和)。
@@ -137,7 +137,7 @@ public class ValidateStep implements ImportStageStep {
           streamResult.loadedCandidateCount());
       if (!recordGovernanceService.withinThreshold(context)) {
         recordGovernanceService.markThresholdExceeded(context);
-        deleteQuietly(validatedRecordsPath);
+        ImportStageSupport.deleteQuietly(validatedRecordsPath);
         return ImportStageResult.failure(
             stage(),
             ERR_SKIP_THRESHOLD_EXCEEDED,
@@ -150,7 +150,7 @@ public class ValidateStep implements ImportStageStep {
       return result;
     } catch (Exception exception) {
       if (validatedRecordsPath != null) {
-        deleteQuietly(validatedRecordsPath);
+        ImportStageSupport.deleteQuietly(validatedRecordsPath);
       }
       log.error(
           "validate stage failed: tenantId={}, fileId={}, message={}",
@@ -175,8 +175,8 @@ public class ValidateStep implements ImportStageStep {
   private ValidationSession openValidationSession(ImportJobContext context) {
     List<String> schemaFields =
         stringList(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS));
-    long totalCount =
-        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
+    long totalCount = ImportStageSupport.numberValue(
+        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT));
     injectManifestExpectedCount(context);
     ValidationSession session =
         dataQualityService.beginValidation(context, totalCount, schemaFields);
@@ -267,7 +267,7 @@ public class ValidateStep implements ImportStageStep {
     ValidationErrorOutcome outcome =
         recordValidationError(context, 0L, issue.errorCode(), issue.errorMessage(), null);
     if (outcome.stop()) {
-      deleteQuietly(validatedRecordsPath);
+      ImportStageSupport.deleteQuietly(validatedRecordsPath);
       return ImportStageResult.failure(
           stage(),
           outcome.errorCode(),
@@ -401,8 +401,8 @@ public class ValidateStep implements ImportStageStep {
         .getAttributes()
         .put(PipelineRuntimeKeys.IMPORT_CUSTOMER_PAYLOAD_COUNT, loadedCandidateCount);
     String validatedStatus = FileStatus.VALIDATED.code();
-    long skippedCount =
-        numberValue(context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
+    long skippedCount = ImportStageSupport.numberValue(
+        context.getAttributes().get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT));
     long badRecordCount = badRecordCount(context);
     boolean manualReviewRequired =
         Boolean.TRUE.equals(context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
@@ -528,10 +528,6 @@ public class ValidateStep implements ImportStageStep {
     return 0L;
   }
 
-  private long numberValue(Object value) {
-    return ImportStageSupport.numberValue(value);
-  }
-
   private List<String> stringList(Object value) {
     if (value instanceof List<?> list) {
       List<String> result = new ArrayList<>();
@@ -545,20 +541,8 @@ public class ValidateStep implements ImportStageStep {
     return List.of();
   }
 
-  private String stringValue(Object value) {
-    return ImportStageSupport.stringValue(value);
-  }
-
   private int resolveChunkSize(ImportJobContext context) {
     return ImportStageSupport.resolveChunkSize(context, workerConfiguration);
-  }
-
-  private Path createValidatedFile(ImportJobContext context) throws Exception {
-    return ImportStageSupport.createValidatedFile(context);
-  }
-
-  private void deleteQuietly(Path path) {
-    ImportStageSupport.deleteQuietly(path);
   }
 
   private record ChunkProcessResult(

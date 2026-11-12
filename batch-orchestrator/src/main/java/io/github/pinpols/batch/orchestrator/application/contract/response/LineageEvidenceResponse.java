@@ -127,9 +127,12 @@ public record LineageEvidenceResponse(
       @JsonProperty("ack_at") Instant ackAt,
       @JsonProperty("created_at") Instant createdAt,
       @JsonProperty("updated_at") Instant updatedAt) {
+    /** 回显分发错误信息长度上限，与 file_dispatch_record.error_message VARCHAR(1024)（V6）一致。 */
+    private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+
     public DispatchRecord {
       dispatchTarget = SensitiveEvidenceMasking.maskText(dispatchTarget);
-      errorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, 1024);
+      errorMessage = SwallowedExceptionLogger.safeMessage(errorMessage, ERROR_MESSAGE_MAX_LENGTH);
     }
   }
 

@@ -6,6 +6,7 @@ import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.common.model.PageResponse;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.Nullables;
 import io.github.pinpols.batch.console.application.config.ConsoleConfigCacheInvalidationService;
 import io.github.pinpols.batch.console.domain.job.application.ConsoleBatchWindowApplicationService;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.BatchWindowCreateRequest;
@@ -91,16 +92,10 @@ public class DefaultConsoleBatchWindowApplicationService
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     BatchWindowRow selectedWindow = batchWindowMapper.selectById(tenantId, id);
     BatchWindowRow existing = Guard.requireFound(selectedWindow, "batch window not found");
-    String windowName = EmptyChecks.isNotNull(request.getWindowName())
-        ? request.getWindowName()
-        : existing.windowName();
-    String timezone =
-        EmptyChecks.isNotNull(request.getTimezone()) ? request.getTimezone() : existing.timezone();
-    String effectiveStartTime = EmptyChecks.isNotNull(request.getStartTime())
-        ? request.getStartTime()
-        : existing.startTime();
-    String effectiveEndTime =
-        EmptyChecks.isNotNull(request.getEndTime()) ? request.getEndTime() : existing.endTime();
+    String windowName = Nullables.coalesce(request.getWindowName(), existing.windowName());
+    String timezone = Nullables.coalesce(request.getTimezone(), existing.timezone());
+    String effectiveStartTime = Nullables.coalesce(request.getStartTime(), existing.startTime());
+    String effectiveEndTime = Nullables.coalesce(request.getEndTime(), existing.endTime());
     BatchWindowUpdateParam params = BatchWindowUpdateParam.builder()
         .tenantId(tenantId)
         .id(id)
@@ -108,24 +103,12 @@ public class DefaultConsoleBatchWindowApplicationService
         .timezone(timezone)
         .startTime(effectiveStartTime)
         .endTime(effectiveEndTime)
-        .endStrategy(
-            EmptyChecks.isNotNull(request.getEndStrategy())
-                ? request.getEndStrategy()
-                : existing.endStrategy())
+        .endStrategy(Nullables.coalesce(request.getEndStrategy(), existing.endStrategy()))
         .outOfWindowAction(
-            EmptyChecks.isNotNull(request.getOutOfWindowAction())
-                ? request.getOutOfWindowAction()
-                : existing.outOfWindowAction())
-        .allowCrossDay(
-            EmptyChecks.isNotNull(request.getAllowCrossDay())
-                ? request.getAllowCrossDay()
-                : existing.allowCrossDay())
-        .enabled(
-            EmptyChecks.isNotNull(request.getEnabled()) ? request.getEnabled() : existing.enabled())
-        .description(
-            EmptyChecks.isNotNull(request.getDescription())
-                ? request.getDescription()
-                : existing.description())
+            Nullables.coalesce(request.getOutOfWindowAction(), existing.outOfWindowAction()))
+        .allowCrossDay(Nullables.coalesce(request.getAllowCrossDay(), existing.allowCrossDay()))
+        .enabled(Nullables.coalesce(request.getEnabled(), existing.enabled()))
+        .description(Nullables.coalesce(request.getDescription(), existing.description()))
         .build();
     BatchWindowRules.validate(
         params.timezone(), params.startTime(), params.endTime(), params.allowCrossDay());

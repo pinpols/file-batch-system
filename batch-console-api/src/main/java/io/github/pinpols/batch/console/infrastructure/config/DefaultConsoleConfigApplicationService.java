@@ -114,7 +114,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   public List<ConsoleConfigReleaseResponse> configReleases(ConfigReleaseQueryRequest request) {
     ConfigReleaseQuery query = new ConfigReleaseQuery();
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     query.setTenantId(tenantId);
     query.setConfigType(request.getConfigType());
     query.setConfigKey(request.getConfigKey());
@@ -129,7 +129,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   @Transactional
   public Long createConfigRelease(ConfigReleaseUpsertRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     String configType = configReleaseApplyService.canonicalType(request.getConfigType());
     validateJson(request.getConfigPayloadJson(), "configPayloadJson");
     configReleaseApplyService.validate(
@@ -182,7 +182,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   @Transactional
   public String rollbackConfigRelease(Long releaseId, ConfigReleaseActionRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     ConfigReleaseEntity release = loadRelease(tenantId, releaseId);
     acquireReleaseLock(release);
     release = loadRelease(tenantId, releaseId);
@@ -203,7 +203,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   public List<ConsoleSecretVersionResponse> secretVersions(SecretVersionQueryRequest request) {
     SecretVersionQuery query = new SecretVersionQuery();
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     query.setTenantId(tenantId);
     query.setSecretRef(request.getSecretRef());
     query.setSecretStatus(request.getSecretStatus());
@@ -217,7 +217,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   @Transactional
   public Long rotateSecretVersion(SecretVersionRotateRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     String secretPayloadJson = resolveSecretPayload(request);
     validateJson(secretPayloadJson, "secretPayloadJson");
     String safeSecretRef = ConsoleTextSanitizer.safeInput(request.getSecretRef(), 128);
@@ -299,7 +299,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   @Transactional
   public void revokeSecretVersion(Long secretVersionId, SecretVersionRevokeRequest request) {
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
 
     SecretVersionEntity selectedVersion = secretVersionMapper.selectById(tenantId, secretVersionId);
     SecretVersionEntity version =
@@ -331,7 +331,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   public List<ConsoleConfigChangeLogResponse> configChangeLogs(
       ConfigChangeLogQueryRequest request) {
     ConfigChangeLogQuery query = new ConfigChangeLogQuery();
-    String tenantId = resolveTenant(request.getTenantId());
+    String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     query.setTenantId(tenantId);
     query.setConfigType(request.getConfigType());
     query.setConfigKey(request.getConfigKey());
@@ -449,10 +449,6 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     configChangeLogMapper.insertConfigChangeLog(changeLog);
   }
 
-  private String resolveTenant(String requestTenantId) {
-    return tenantGuard.resolveTenant(requestTenantId);
-  }
-
   private void validateJson(String value, String fieldName) {
     if (!Texts.hasText(value)) {
       return;
@@ -536,7 +532,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
   @Override
   public ConsoleConfigReleaseResponse configReleaseDetail(String tenantId, Long releaseId) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
 
     ConfigReleaseEntity release = configReleaseMapper.selectById(resolved, releaseId);
     ConfigReleaseEntity entity =
@@ -546,7 +542,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
 
   @Override
   public ConsoleSecretVersionResponse secretVersionDetail(String tenantId, Long secretVersionId) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
 
     SecretVersionEntity secretVersion = secretVersionMapper.selectById(resolved, secretVersionId);
     SecretVersionEntity entity =
@@ -661,7 +657,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   public ConfigDependenciesResponse configDependencies(
       String tenantId, String configType, String configCode) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
     Map<String, DependencyQuery> dependencyQueryByType = dependencyQueries();
     String canonicalType = canonicalDependencyType(configType);
     DependencyQuery dependencyQuery = dependencyQueryByType.get(canonicalType);
@@ -712,7 +708,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   @Override
   public ConfigReleaseDiffResponse diffConfigReleases(
       String tenantId, Long releaseIdA, Long releaseIdB) {
-    String resolved = resolveTenant(tenantId);
+    String resolved = tenantGuard.resolveTenant(tenantId);
     ConfigReleaseEntity a = loadRelease(resolved, releaseIdA);
     ConfigReleaseEntity b = loadRelease(resolved, releaseIdB);
     // JSON payload diff:容忍历史坏 JSON,坏数据按 null 比较(否则穿透 500)。

@@ -14,7 +14,7 @@ import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.e2e.apps.E2eOrchestratorApplication;
 import io.github.pinpols.batch.e2e.support.E2eOutboxPublishSupport;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
 import io.github.pinpols.batch.orchestrator.application.service.task.WorkflowRunResumeProgressor;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -87,7 +87,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
 
   private final E2eOutboxPublishSupport outboxPublishSupport;
 
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
 
   private final JobInstanceMapper jobInstanceMapper;
 
@@ -108,7 +108,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
       JdbcTemplate jdbcTemplate,
       WorkflowRunLaunchService launchService,
       E2eOutboxPublishSupport outboxPublishSupport,
-      TaskExecutionService taskExecutionService,
+      TaskAssignmentService taskAssignmentService,
       JobInstanceMapper jobInstanceMapper,
       JobPartitionMapper jobPartitionMapper,
       JobTaskMapper jobTaskMapper,
@@ -116,7 +116,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
     this.jdbcTemplate = jdbcTemplate;
     this.launchService = launchService;
     this.outboxPublishSupport = outboxPublishSupport;
-    this.taskExecutionService = taskExecutionService;
+    this.taskAssignmentService = taskAssignmentService;
     this.jobInstanceMapper = jobInstanceMapper;
     this.jobPartitionMapper = jobPartitionMapper;
     this.jobTaskMapper = jobTaskMapper;
@@ -1726,7 +1726,7 @@ class StaleWorkerReportFenceE2eIT extends AbstractIntegrationTest {
   private JobTaskEntity awaitClaim(Long taskId) {
     final JobTaskEntity[] claimed = new JobTaskEntity[1];
     await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
-      claimed[0] = taskExecutionService.assignWorker(TENANT, taskId, WORKER);
+      claimed[0] = taskAssignmentService.assignWorker(TENANT, taskId, WORKER);
       assertThat(claimed[0]).isNotNull();
       assertThat(claimed[0].getTaskStatus()).isEqualTo(TaskStatus.RUNNING.code());
     });

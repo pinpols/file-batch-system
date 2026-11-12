@@ -24,6 +24,9 @@ public record WebhookDeliveryLogResponse(
     Instant nextRetryAt,
     Instant createdAt) {
 
+  /** 回显响应体长度上限，与 webhook_delivery_log.response_body VARCHAR(2048)（V45）一致。 */
+  private static final int RESPONSE_BODY_MAX_LENGTH = 2048;
+
   public static WebhookDeliveryLogResponse from(WebhookDeliveryLogEntity entity) {
     Long id = entity.getId();
     String tenantId = entity.getTenantId();
@@ -36,8 +39,10 @@ public record WebhookDeliveryLogResponse(
     String decodedResponseBody =
         EmptyChecks.isNull(storedResponseBody) ? null : HtmlUtils.htmlUnescape(storedResponseBody);
     String normalizedResponseBody = ConsoleTextSanitizer.normalize(decodedResponseBody);
-    String maskedResponseBody = SwallowedExceptionLogger.safeMessage(normalizedResponseBody, 2048);
-    String responseBody = ConsoleTextSanitizer.safeDisplay(maskedResponseBody, 2048);
+    String maskedResponseBody =
+        SwallowedExceptionLogger.safeMessage(normalizedResponseBody, RESPONSE_BODY_MAX_LENGTH);
+    String responseBody =
+        ConsoleTextSanitizer.safeDisplay(maskedResponseBody, RESPONSE_BODY_MAX_LENGTH);
     String deliveryStatus = entity.getDeliveryStatus();
     Integer attempt = entity.getAttempt();
     Instant nextRetryAt = entity.getNextRetryAt();

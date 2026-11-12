@@ -14,8 +14,10 @@ import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueCreateRequest;
 import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueListRequest;
+import io.github.pinpols.batch.console.application.contract.request.config.ResourceQueueUpdateRequest;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueInsertParam;
+import io.github.pinpols.batch.console.domain.ops.param.ResourceQueueUpdateParam;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleTenantGuard;
@@ -119,6 +121,59 @@ class DefaultConsoleResourceQueueApplicationServiceTest {
 
     verify(mapper).countByQuery(expected);
     verify(mapper).selectByQuery(expected);
+  }
+
+  @DisplayName("更新时请求里给出的字段覆盖原值，未给出的字段保留原值")
+  @Test
+  void shouldOverrideOnlyProvidedFieldsOnUpdate() {
+    ResourceQueueRow existing = new ResourceQueueRow(
+        9L,
+        "ta",
+        "dispatch_queue",
+        "旧名称",
+        "MIXED",
+        3,
+        6,
+        50,
+        "group-a",
+        "tag-a",
+        "FIFO",
+        2,
+        true,
+        "旧说明",
+        null,
+        null,
+        null,
+        null,
+        null,
+        null);
+    when(mapper.selectById("ta", 9L)).thenReturn(existing);
+    ResourceQueueUpdateRequest request = new ResourceQueueUpdateRequest();
+    request.setTenantId("ta");
+    request.setQueueName("新名称");
+    request.setMaxRunningJobs(8);
+    request.setPriorityPolicy("PRIORITY");
+    request.setEnabled(false);
+
+    service.update(9L, request);
+
+    ArgumentCaptor<ResourceQueueUpdateParam> captor =
+        ArgumentCaptor.forClass(ResourceQueueUpdateParam.class);
+    verify(mapper).update(captor.capture());
+    ResourceQueueUpdateParam params = captor.getValue();
+    assertThat(params.tenantId()).isEqualTo("ta");
+    assertThat(params.id()).isEqualTo(9L);
+    assertThat(params.queueName()).isEqualTo("新名称");
+    assertThat(params.maxRunningJobs()).isEqualTo(8);
+    assertThat(params.priorityPolicy()).isEqualTo("PRIORITY");
+    assertThat(params.enabled()).isFalse();
+    assertThat(params.queueType()).isEqualTo("MIXED");
+    assertThat(params.maxRunningPartitions()).isEqualTo(6);
+    assertThat(params.maxQps()).isEqualTo(50);
+    assertThat(params.workerGroup()).isEqualTo("group-a");
+    assertThat(params.resourceTag()).isEqualTo("tag-a");
+    assertThat(params.fairShareWeight()).isEqualTo(2);
+    assertThat(params.description()).isEqualTo("旧说明");
   }
 
   private static ResourceQueueCreateRequest request(String code) {

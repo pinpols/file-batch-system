@@ -26,6 +26,12 @@ public class CalendarDependencyWaitGovernanceService {
 
   private static final int MAX_PAGE_SIZE = 200;
 
+  /** 人工处置操作人长度上限，对应 calendar_dependency_wait.manual_operator_id VARCHAR(128)。 */
+  private static final int MANUAL_OPERATOR_ID_MAX_LENGTH = 128;
+
+  /** 人工处置原因长度上限，对应 calendar_dependency_wait.manual_reason VARCHAR(1024)。 */
+  private static final int MANUAL_REASON_MAX_LENGTH = 1024;
+
   private final CalendarDependencyWaitMapper waitMapper;
   private final PlatformTransactionManager transactionManager;
   private final BatchDateTimeSupport dateTimeSupport;
@@ -111,8 +117,8 @@ public class CalendarDependencyWaitGovernanceService {
         || EmptyChecks.isNull(command.bizDate())
         || !Texts.hasText(command.operatorId())
         || !Texts.hasText(command.reason())
-        || command.operatorId().trim().length() > 128
-        || command.reason().trim().length() > 1024;
+        || command.operatorId().trim().length() > MANUAL_OPERATOR_ID_MAX_LENGTH
+        || command.reason().trim().length() > MANUAL_REASON_MAX_LENGTH;
     if (manualActionCommandIsInvalid) {
       throw new IllegalArgumentException(
           "tenant, calendar, bizDate, operator and reason are required");

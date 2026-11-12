@@ -46,6 +46,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   /** S-1.7：附件大小硬上限 25MB，覆盖大多数企业 SMTP 服务器的消息上限。 */
   private static final long MAX_ATTACHMENT_BYTES = 25L * 1024L * 1024L;
 
+  /** 邮件 header 长度上限，取 RFC 5322 单行 998 字符；不对应数据库列。 */
+  private static final int MAX_HEADER_LENGTH = 998;
+
   private static final int DEFAULT_SMTP_TIMEOUT_MILLIS = 30_000;
 
   private static final class SmtpOutcomeUnknownException extends Exception {
@@ -98,7 +101,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
 
     MailConfig mailConfig = resolveMailConfig(channelConfig);
     if (mailConfig == null) {
-      String host = stringProp(channelConfig, "smtp_host");
+      String host = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_host");
       if (!Texts.hasText(host)) {
         return DispatchResult.failureWithoutReceipt("smtp_host missing");
       }
@@ -146,13 +149,13 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
   }
 
   private MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
-    String host = stringProp(channelConfig, "smtp_host");
+    String host = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_host");
     if (!Texts.hasText(host)) {
       return null;
     }
-    int port = intProp(channelConfig, "smtp_port", 587);
-    String smtpUser = stringProp(channelConfig, "smtp_username");
-    String smtpPass = stringProp(channelConfig, "smtp_password");
+    int port = DispatchChannelConfigSupport.intProp(channelConfig, "smtp_port", 587);
+    String smtpUser = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_username");
+    String smtpPass = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_password");
     boolean startTls = boolProp(channelConfig, "smtp_starttls", true);
     int connectTimeoutMillis = positiveIntProp(
         channelConfig, "smtp_connection_timeout_millis", DEFAULT_SMTP_TIMEOUT_MILLIS);
@@ -165,10 +168,11 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
       startTls = true;
     }
 
-    String configuredMailFrom = stringProp(channelConfig, "mail_from");
+    String configuredMailFrom = DispatchChannelConfigSupport.stringProp(channelConfig, "mail_from");
     String from = firstNonBlank(configuredMailFrom, smtpUser);
-    String configuredMailTo = stringProp(channelConfig, "mail_to");
-    String configuredTargetEndpoint = stringProp(channelConfig, "target_endpoint");
+    String configuredMailTo = DispatchChannelConfigSupport.stringProp(channelConfig, "mail_to");
+    String configuredTargetEndpoint =
+        DispatchChannelConfigSupport.stringProp(channelConfig, "target_endpoint");
     String to = firstNonBlank(configuredMailTo, configuredTargetEndpoint);
     if (!Texts.hasText(from) || !Texts.hasText(to)) {
       return null;
@@ -195,7 +199,7 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     String carriageReturnsRemoved = raw.replace("\r", "");
     String lineFeedsRemoved = carriageReturnsRemoved.replace("\n", "");
     String cleaned = lineFeedsRemoved.trim();
-    return cleaned.length() > 998 ? cleaned.substring(0, 998) : cleaned;
+    return cleaned.length() > MAX_HEADER_LENGTH ? cleaned.substring(0, MAX_HEADER_LENGTH) : cleaned;
   }
 
   private boolean isProductionProfile() {
@@ -226,7 +230,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     Session session = Session.getInstance(props, null);
 
     Map<String, Object> channelConfig = command.channelConfig();
-    String subject = sanitizeHeader(stringProp(channelConfig, "mail_subject"));
+    String subject =
+        sanitizeHeader(DispatchChannelConfigSupport.stringProp(channelConfig, "mail_subject"));
     if (!Texts.hasText(subject)) {
       subject = "File dispatch " + externalRequestId;
     }
@@ -317,16 +322,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
   }
 
-  private static String stringProp(Map<String, Object> map, String key) {
-    return DispatchChannelConfigSupport.stringProp(map, key);
-  }
-
-  private static int intProp(Map<String, Object> map, String key, int def) {
-    return DispatchChannelConfigSupport.intProp(map, key, def);
-  }
-
   private static int positiveIntProp(Map<String, Object> map, String key, int def) {
-    int value = intProp(map, key, def);
+    int value = DispatchChannelConfigSupport.intProp(map, key, def);
     return value > 0 ? value : def;
   }
 

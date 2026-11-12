@@ -11,7 +11,7 @@ import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
@@ -66,29 +66,40 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
   private static final String TENANT = "t1";
   private static final LocalDate BIZ_DATE = LocalDate.of(2026, Month.JANUARY, 15);
 
-  @Autowired
-  private WorkflowRunLaunchService workflowRunLaunchService;
+  private final WorkflowRunLaunchService workflowRunLaunchService;
 
-  @Autowired
-  private TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
 
-  @Autowired
-  private JobInstanceMapper jobInstanceMapper;
+  private final TaskOutcomeService taskOutcomeService;
 
-  @Autowired
-  private JobPartitionMapper jobPartitionMapper;
+  private final JobInstanceMapper jobInstanceMapper;
 
-  @Autowired
-  private JobTaskMapper jobTaskMapper;
+  private final JobPartitionMapper jobPartitionMapper;
+
+  private final JobTaskMapper jobTaskMapper;
 
   private final PartitionReclaimUnit partitionReclaimUnit;
 
-  @Autowired
-  private JdbcTemplate jdbcTemplate;
+  private final JdbcTemplate jdbcTemplate;
 
   @Autowired
-  ReportInvocationFenceIntegrationTest(PartitionReclaimUnit partitionReclaimUnit) {
+  ReportInvocationFenceIntegrationTest(
+      WorkflowRunLaunchService workflowRunLaunchService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
+      JobInstanceMapper jobInstanceMapper,
+      JobPartitionMapper jobPartitionMapper,
+      JobTaskMapper jobTaskMapper,
+      PartitionReclaimUnit partitionReclaimUnit,
+      JdbcTemplate jdbcTemplate) {
+    this.workflowRunLaunchService = workflowRunLaunchService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
+    this.jobInstanceMapper = jobInstanceMapper;
+    this.jobPartitionMapper = jobPartitionMapper;
+    this.jobTaskMapper = jobTaskMapper;
     this.partitionReclaimUnit = partitionReclaimUnit;
+    this.jdbcTemplate = jdbcTemplate;
   }
 
   @BeforeEach
@@ -135,7 +146,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     String firstStartDetails = """
         {"executionStarted":true,"executionAttemptId":"attempt-before-reclaim"}
         """;
-    var firstStart = taskExecutionService.recordHeartbeat(
+    var firstStart = taskAssignmentService.recordHeartbeat(
         TENANT, task.getId(), seed.workerCode(), invocationI1, firstStartDetails);
     assertThat(firstStart.leaseRenewed()).isTrue();
 
@@ -174,13 +185,13 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     String secondStartDetails = """
         {"executionStarted":true,"executionAttemptId":"attempt-after-reclaim"}
         """;
-    var secondStart = taskExecutionService.recordHeartbeat(
+    var secondStart = taskAssignmentService.recordHeartbeat(
         TENANT, task.getId(), seed.workerCode(), invocationI2, secondStartDetails);
     assertThat(secondStart.leaseRenewed()).isTrue();
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getExecutionAttemptId())
         .isEqualTo("attempt-after-reclaim");
     List<TaskAssignmentService.TaskHeartbeatResult> oldRenewal =
-        taskExecutionService.renewLeaseBatch(List.of(new TaskAssignmentService.LeaseRenewCommand(
+        taskAssignmentService.renewLeaseBatch(List.of(new TaskAssignmentService.LeaseRenewCommand(
             TENANT, task.getId(), seed.workerCode(), invocationI1)));
     assertThat(oldRenewal).hasSize(1);
     assertThat(oldRenewal.get(0).leaseRenewed()).isFalse();
@@ -193,7 +204,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         .resultSummary("{\"stale\":\"I1 result must be dropped\"}")
         .partitionInvocationId(invocationI1)
         .build();
-    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(staleWithOldInvocation))
+    assertThatThrownBy(() -> taskOutcomeService.applyTaskOutcome(staleWithOldInvocation))
         .isInstanceOfSatisfying(BizException.class, ex -> {
           assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
           assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
@@ -206,7 +217,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         .success(true)
         .resultSummary("{\"stale\":\"missing invocation must be dropped\"}")
         .build();
-    assertThatThrownBy(() -> taskExecutionService.applyTaskOutcome(staleMissingInvocation))
+    assertThatThrownBy(() -> taskOutcomeService.applyTaskOutcome(staleMissingInvocation))
         .isInstanceOfSatisfying(BizException.class, ex -> {
           assertThat(ex.getCode()).isEqualTo(ResultCode.CONFLICT);
           assertThat(ex.getMessageKey()).isEqualTo("error.task.invocation_mismatch");
@@ -227,7 +238,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         .resultSummary("{\"records\":42,\"invocation\":\"I2 real result\"}")
         .partitionInvocationId(invocationI2)
         .build();
-    taskExecutionService.applyTaskOutcome(i2Report);
+    taskOutcomeService.applyTaskOutcome(i2Report);
 
     assertThat(jobTaskMapper.selectById(TENANT, task.getId()).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
@@ -244,7 +255,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
         .resultSummary("{\"invocation\":\"I1 stale failure\"}")
         .partitionInvocationId(invocationI1)
         .build();
-    assertThat(taskExecutionService.applyTaskOutcome(lateConflictingI1Report).getTaskStatus())
+    assertThat(taskOutcomeService.applyTaskOutcome(lateConflictingI1Report).getTaskStatus())
         .isEqualTo(TaskStatus.SUCCESS.code());
     String taskResultInvocationSql = """
         select result_summary ->> 'invocation' from batch.job_task
@@ -342,7 +353,7 @@ class ReportInvocationFenceIntegrationTest extends AbstractIntegrationTest {
     JobTaskEntity claimed = null;
     while (System.currentTimeMillis() < deadline) {
       LaunchIntegrationFixture.refreshAssignableWorkersForTenant(jdbcTemplate, TENANT);
-      claimed = taskExecutionService.assignWorker(TENANT, taskId, workerCode);
+      claimed = taskAssignmentService.assignWorker(TENANT, taskId, workerCode);
       if (claimed != null && TaskStatus.RUNNING.code().equals(claimed.getTaskStatus())) {
         return claimed;
       }

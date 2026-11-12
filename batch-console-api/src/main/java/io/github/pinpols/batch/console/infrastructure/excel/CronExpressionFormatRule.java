@@ -32,13 +32,15 @@ public final class CronExpressionFormatRule {
       return issues;
     }
     for (Map<String, Object> row : rows) {
-      String scheduleType = upper(asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_TYPE)));
-      String expr = asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_EXPR));
+      String scheduleType = ConsoleExcelValueSupport.upper(ConsoleExcelValueSupport.asString(
+          row.get(ConfigPackageExcelValidator.COL_SCHEDULE_TYPE)));
+      String expr =
+          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_SCHEDULE_EXPR));
       int rowNo = parseRowNo(row.get("__excel_row_no"));
       if (!SCHEDULE_TYPE_CRON.equals(scheduleType)) {
         continue;
       }
-      if (isBlank(expr)) {
+      if (ConsoleExcelValueSupport.isBlank(expr)) {
         issues.add(new WorkbookIssue(
             SHEET,
             rowNo,
@@ -62,18 +64,6 @@ public final class CronExpressionFormatRule {
       }
     }
     return issues;
-  }
-
-  private static String asString(Object o) {
-    return ConsoleExcelValueSupport.asString(o);
-  }
-
-  private static String upper(String s) {
-    return ConsoleExcelValueSupport.upper(s);
-  }
-
-  private static boolean isBlank(String s) {
-    return ConsoleExcelValueSupport.isBlank(s);
   }
 
   private static int parseRowNo(Object o) {

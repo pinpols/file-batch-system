@@ -72,6 +72,12 @@ public class DefaultConsoleNotificationApplicationService
     implements ConsoleNotificationApplicationService {
 
   // ── duplicate literal constants ─────────────────────────────────────────
+  /**
+   * 测试投递错误摘要长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）；
+   * 回显给调用方时用同一上限。
+   */
+  private static final int TEST_ERROR_SUMMARY_MAX_LENGTH = 1024;
+
   private static final String ERR_CHANNEL_NOT_FOUND = "notification channel not found: ";
   private static final String KEY_MESSAGE = "message";
   private static final String KEY_CONFIG_JSON = "configJson";
@@ -378,7 +384,8 @@ public class DefaultConsoleNotificationApplicationService
     WebhookDeliveryResult result =
         deliverTest(resolved, channelCode, channelType, configJson, payload, payloadJson);
     String safeErrorSummary = safeTestError(result.errorSummary());
-    String displayErrorSummary = ConsoleTextSanitizer.safeDisplay(safeErrorSummary, 1024);
+    String displayErrorSummary =
+        ConsoleTextSanitizer.safeDisplay(safeErrorSummary, TEST_ERROR_SUMMARY_MAX_LENGTH);
 
     // 真实投递结果落审计日志(成功 SUCCESS / 失败 FAILED + 错误摘要)。
     String deliveryStatus = result.success() ? "SUCCESS" : "FAILED";
@@ -414,7 +421,7 @@ public class DefaultConsoleNotificationApplicationService
       return null;
     }
     String normalized = ConsoleTextSanitizer.normalize(HtmlUtils.htmlUnescape(errorSummary));
-    return SwallowedExceptionLogger.safeMessage(normalized, 1024);
+    return SwallowedExceptionLogger.safeMessage(normalized, TEST_ERROR_SUMMARY_MAX_LENGTH);
   }
 
   private WebhookDeliveryResult deliverTest(

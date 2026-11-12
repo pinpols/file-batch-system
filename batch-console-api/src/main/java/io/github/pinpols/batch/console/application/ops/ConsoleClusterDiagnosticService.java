@@ -62,7 +62,7 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleClusterDiagnosticResponse diagnose(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":all";
+    String cacheKey = "diagnostic:" + ConsoleQueryCacheService.keySegment(resolved) + ":all";
     return cacheService.getOrLoad(
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
@@ -71,7 +71,7 @@ public class ConsoleClusterDiagnosticService {
   }
 
   private ConsoleClusterDiagnosticResponse loadDiagnose(String resolved) {
-    ConsoleShedLockStatusResponse shedLockStatus = loadShedLockStatus(resolved);
+    ConsoleShedLockStatusResponse shedLockStatus = loadShedLockStatus();
     ConsoleWorkerConsistencyResponse workerConsistency = loadWorkerConsistency(resolved);
     ConsoleOutboxHealthResponse outboxHealth = loadOutboxHealth(resolved);
     ConsoleTerminalChildrenHealthResponse terminalChildrenHealth =
@@ -82,15 +82,15 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleShedLockStatusResponse shedLockStatus(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":shedlock";
+    String cacheKey = "diagnostic:" + ConsoleQueryCacheService.keySegment(resolved) + ":shedlock";
     return cacheService.getOrLoad(
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
         new TypeReference<ConsoleShedLockStatusResponse>() {},
-        () -> loadShedLockStatus(resolved));
+        this::loadShedLockStatus);
   }
 
-  private ConsoleShedLockStatusResponse loadShedLockStatus(String resolved) {
+  private ConsoleShedLockStatusResponse loadShedLockStatus() {
     List<ShedLockView> rows = diagnosticMapper.shedlockAll();
     long activeLocks =
         rows.stream().filter(row -> Boolean.TRUE.equals(row.active())).count();
@@ -103,7 +103,7 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleWorkerConsistencyResponse workerConsistency(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":workers";
+    String cacheKey = "diagnostic:" + ConsoleQueryCacheService.keySegment(resolved) + ":workers";
     return cacheService.getOrLoad(
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
@@ -154,7 +154,7 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleOutboxHealthResponse outboxHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":outbox";
+    String cacheKey = "diagnostic:" + ConsoleQueryCacheService.keySegment(resolved) + ":outbox";
     return cacheService.getOrLoad(
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
@@ -187,7 +187,8 @@ public class ConsoleClusterDiagnosticService {
 
   public ConsoleTerminalChildrenHealthResponse terminalChildrenHealth(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String cacheKey = "diagnostic:" + cacheTenant(resolved) + ":terminal-children";
+    String cacheKey =
+        "diagnostic:" + ConsoleQueryCacheService.keySegment(resolved) + ":terminal-children";
     return cacheService.getOrLoad(
         cacheKey,
         ConsoleQueryCacheService.DIAGNOSTIC_TTL,
@@ -315,10 +316,6 @@ public class ConsoleClusterDiagnosticService {
 
   private static long valueOrZero(Long value) {
     return value == null ? 0L : value;
-  }
-
-  private static String cacheTenant(String tenantId) {
-    return ConsoleQueryCacheService.keySegment(tenantId);
   }
 
   private static boolean isActive(String status) {

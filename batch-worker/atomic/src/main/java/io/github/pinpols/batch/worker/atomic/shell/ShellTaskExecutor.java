@@ -83,6 +83,12 @@ import org.springframework.stereotype.Component;
     havingValue = "true")
 public class ShellTaskExecutor implements BatchTaskExecutor {
 
+  /** 演练结果中 command 与单个 arg 的展示长度上限；不对应数据库列。 */
+  private static final int DRY_RUN_TEXT_MAX_LENGTH = 4096;
+
+  /** 进程输出摘要的截断长度，用于错误信息；不对应数据库列。 */
+  private static final int OUTPUT_SUMMARY_MAX_LENGTH = 200;
+
   static final String PARAM_COMMAND = "command";
   static final String PARAM_ARGS = "args";
   static final String PARAM_TIMEOUT_SECONDS = "timeoutSeconds";
@@ -148,12 +154,13 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
         Map<String, Object> planned = new LinkedHashMap<>();
         planned.put(PipelineRuntimeKeys.DRY_RUN, true);
         planned.put("plannedAction", "shell");
-        String visibleCommand = SwallowedExceptionLogger.safeMessage(inv.command, 4096);
+        String visibleCommand =
+            SwallowedExceptionLogger.safeMessage(inv.command, DRY_RUN_TEXT_MAX_LENGTH);
         planned.put(PARAM_COMMAND, visibleCommand);
         planned.put(
             PARAM_ARGS,
             inv.args.stream()
-                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, 4096))
+                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, DRY_RUN_TEXT_MAX_LENGTH))
                 .toList());
         planned.put(PARAM_TIMEOUT_SECONDS, inv.timeout.toSeconds());
         // env 只暴露 key(白名单过滤过),value 不出库以防泄密
@@ -508,7 +515,9 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
     if (r == null || r.text == null) {
       return "";
     }
-    return r.text.length() <= 200 ? r.text : r.text.substring(0, 200) + "...";
+    return r.text.length() <= OUTPUT_SUMMARY_MAX_LENGTH
+        ? r.text
+        : r.text.substring(0, OUTPUT_SUMMARY_MAX_LENGTH) + "...";
   }
 
   // ─── helper records / exceptions ────────────────────────────────────────────

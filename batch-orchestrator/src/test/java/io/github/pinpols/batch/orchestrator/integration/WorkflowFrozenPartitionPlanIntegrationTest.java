@@ -12,7 +12,8 @@ import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.BatchOrchestratorApplication;
 import io.github.pinpols.batch.orchestrator.application.scheduler.TenantSchedulerSnapshotService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowGraphValidator;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.domain.command.TaskOutcomeCommand;
@@ -47,7 +48,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
 
   private final JdbcTemplate jdbc;
   private final WorkflowRunLaunchService launchService;
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
   private final JobInstanceMapper jobInstanceMapper;
   private final TenantSchedulerSnapshotService snapshotService;
   private final OrchestratorConfigCacheService configCache;
@@ -57,7 +59,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
   WorkflowFrozenPartitionPlanIntegrationTest(
       JdbcTemplate jdbc,
       WorkflowRunLaunchService launchService,
-      TaskExecutionService taskExecutionService,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       JobInstanceMapper jobInstanceMapper,
       TenantSchedulerSnapshotService snapshotService,
       OrchestratorConfigCacheService configCache,
@@ -65,7 +68,8 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
       WorkflowGraphValidator graphValidator) {
     this.jdbc = jdbc;
     this.launchService = launchService;
-    this.taskExecutionService = taskExecutionService;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.jobInstanceMapper = jobInstanceMapper;
     this.snapshotService = snapshotService;
     this.configCache = configCache;
@@ -126,10 +130,10 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     String taskSql = "select id from batch.job_task where tenant_id = ? and job_instance_id = ?";
     Long taskId = jdbc.queryForObject(taskSql, Long.class, scenario.tenant(), jobId);
     JobTaskEntity claimed =
-        taskExecutionService.assignWorker(scenario.tenant(), taskId, next.workerCode());
+        taskAssignmentService.assignWorker(scenario.tenant(), taskId, next.workerCode());
     assertThat(claimed).isNotNull();
     EffectiveTaskConfig config =
-        taskExecutionService.loadEffectiveConfig(scenario.tenant(), claimed);
+        taskAssignmentService.loadEffectiveConfig(scenario.tenant(), claimed);
     assertThat(config.timeoutSeconds()).isEqualTo(900);
     assertThat(config.partitionCount()).isEqualTo(1);
     String invocationSql =
@@ -143,7 +147,7 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
         .resultSummary("{}")
         .partitionInvocationId(invocation)
         .build();
-    taskExecutionService.applyTaskOutcome(nextRunOutcome);
+    taskOutcomeService.applyTaskOutcome(nextRunOutcome);
     assertCapacity(scenario.tenant(), 0, 0);
     String versionsSql = """
         select job_definition_version from batch.job_instance
@@ -383,9 +387,9 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
     List<Long> tasks = jdbc.queryForList(selectTasksSql, Long.class, tenant, instanceId);
     assertThat(tasks).hasSize(2);
     for (Long taskId : tasks) {
-      JobTaskEntity claimed = taskExecutionService.assignWorker(tenant, taskId, worker);
+      JobTaskEntity claimed = taskAssignmentService.assignWorker(tenant, taskId, worker);
       assertThat(claimed).isNotNull();
-      EffectiveTaskConfig config = taskExecutionService.loadEffectiveConfig(tenant, claimed);
+      EffectiveTaskConfig config = taskAssignmentService.loadEffectiveConfig(tenant, claimed);
       assertThat(config.timeoutSeconds()).isEqualTo(600);
       assertThat(config.partitionCount()).isEqualTo(2);
       assertThat(config.partitionPlanVersion()).isEqualTo(1);
@@ -401,7 +405,7 @@ class WorkflowFrozenPartitionPlanIntegrationTest extends AbstractIntegrationTest
           .resultSummary("{}")
           .partitionInvocationId(invocation)
           .build();
-      taskExecutionService.applyTaskOutcome(frozenPartitionOutcome);
+      taskOutcomeService.applyTaskOutcome(frozenPartitionOutcome);
     }
   }
 

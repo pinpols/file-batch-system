@@ -23,7 +23,7 @@ public class JobResourceAssignmentGuard {
       return;
     }
     requireTenantAdmin();
-    if (hasText(queueCode) || hasText(workerGroup)) {
+    if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
       throw forbidden();
     }
   }
@@ -53,7 +53,7 @@ public class JobResourceAssignmentGuard {
       return;
     }
     requireTenantAdmin();
-    if (hasText(queueCode) || hasText(workerGroup)) {
+    if (Texts.hasText(queueCode) || Texts.hasText(workerGroup)) {
       throw forbidden();
     }
   }
@@ -105,10 +105,6 @@ public class JobResourceAssignmentGuard {
   private static boolean hasAuthority(Authentication authentication, String authority) {
     return authentication.getAuthorities().stream()
         .anyMatch(grantedAuthority -> authority.equals(grantedAuthority.getAuthority()));
-  }
-
-  private static boolean hasText(String value) {
-    return Texts.hasText(value);
   }
 
   private static BizException forbidden() {

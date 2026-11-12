@@ -20,7 +20,8 @@ import io.github.pinpols.batch.orchestrator.application.service.replay.BatchDayR
 import io.github.pinpols.batch.orchestrator.application.service.replay.ReplayOperationPreviewResponse;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowNodeReplayCommand;
 import io.github.pinpols.batch.orchestrator.application.service.replay.WorkflowNodeReplayOperationService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.version.ResultVersionPromoteService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.BatchDayReplayDispatchProperties;
@@ -99,7 +100,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
 
   private final ApprovalWorkflowService approvalWorkflowService;
 
-  private final TaskExecutionService execution;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
 
   private final ResultVersionPromoteService resultVersionPromoteService;
 
@@ -131,7 +133,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
       CompensationService compensation,
       WorkflowNodeReplayOperationService workflowNodeReplayOperationService,
       ApprovalWorkflowService approvalWorkflowService,
-      TaskExecutionService execution,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       ResultVersionPromoteService resultVersionPromoteService,
       JobTaskMapper tasks,
       JobInstanceMapper jobs,
@@ -152,7 +155,8 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     this.compensation = compensation;
     this.workflowNodeReplayOperationService = workflowNodeReplayOperationService;
     this.approvalWorkflowService = approvalWorkflowService;
-    this.execution = execution;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.resultVersionPromoteService = resultVersionPromoteService;
     this.tasks = tasks;
     this.jobs = jobs;
@@ -1412,7 +1416,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
     var task = tasks.selectByQuery(JobTaskQuery.ofJobInstance(tenant, job)).getFirst();
     String worker =
         task.getAssignedWorkerCode() == null ? seed.workerCode() : task.getAssignedWorkerCode();
-    execution.assignWorker(tenant, task.getId(), worker);
+    taskAssignmentService.assignWorker(tenant, task.getId(), worker);
     TaskOutcomeCommand sourceFailure = TaskOutcomeCommand.builder()
         .tenantId(tenant)
         .taskId(task.getId())
@@ -1423,7 +1427,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .errorCode("R25_SOURCE_FAILED")
         .errorMessage("source fixture failed through REPORT")
         .build();
-    execution.applyTaskOutcome(sourceFailure);
+    taskOutcomeService.applyTaskOutcome(sourceFailure);
     assertThat(jobs.selectById(tenant, job).getInstanceStatus()).isEqualTo("FAILED");
     return new Source(tenant, seed.jobCode(), job, worker);
   }
@@ -1567,7 +1571,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
         .getFirst();
     String worker =
         task.getAssignedWorkerCode() == null ? source.worker() : task.getAssignedWorkerCode();
-    task = execution.assignWorker(source.tenant(), task.getId(), worker);
+    task = taskAssignmentService.assignWorker(source.tenant(), task.getId(), worker);
     return new Replay(source, session, entry, job.getId(), command, task);
   }
 
@@ -1582,7 +1586,7 @@ class ReplayExecutionIdentityIntegrationTest extends AbstractIntegrationTest {
             .selectById(source.tenant(), replay.task().getJobPartitionId())
             .getCurrentInvocationId())
         .build();
-    execution.applyTaskOutcome(replaySuccess);
+    taskOutcomeService.applyTaskOutcome(replaySuccess);
   }
 
   private String entryStatus(Replay replay) {

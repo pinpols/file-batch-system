@@ -42,6 +42,15 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 final class TriggerExternalEventService {
 
+  /** 外部事件来源长度上限，对应 trigger_request.external_event_source VARCHAR(128)；DefaultTriggerService 共用。 */
+  static final int EXTERNAL_EVENT_SOURCE_MAX_LENGTH = 128;
+
+  /** 外部事件编码长度上限，对应 trigger_request.external_event_code VARCHAR(128)；DefaultTriggerService 共用。 */
+  static final int EXTERNAL_EVENT_CODE_MAX_LENGTH = 128;
+
+  /** 外部事件 ID 长度上限，对应 trigger_request.external_event_id VARCHAR(256)；DefaultTriggerService 共用。 */
+  static final int EXTERNAL_EVENT_ID_MAX_LENGTH = 256;
+
   private final TriggerRequestMapper triggerRequestMapper;
   private final ExternalEventDeliveryMapper externalEventDeliveryMapper;
   private final PlatformTransactionManager transactionManager;
@@ -178,7 +187,7 @@ final class TriggerExternalEventService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     String trimmedEventSource = eventSource.trim();
-    if (trimmedEventSource.length() > 128) {
+    if (trimmedEventSource.length() > EXTERNAL_EVENT_SOURCE_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     String externalEventCode = request.externalEventCode();
@@ -186,7 +195,7 @@ final class TriggerExternalEventService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     String trimmedExternalEventCode = externalEventCode.trim();
-    if (trimmedExternalEventCode.length() > 128) {
+    if (trimmedExternalEventCode.length() > EXTERNAL_EVENT_CODE_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     String externalEventId = request.externalEventId();
@@ -194,7 +203,7 @@ final class TriggerExternalEventService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     String trimmedExternalEventId = externalEventId.trim();
-    if (trimmedExternalEventId.length() > 256) {
+    if (trimmedExternalEventId.length() > EXTERNAL_EVENT_ID_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REQUEST_BODY_REQUIRED);
     }
     boolean externalEventRequestIdentityIsIncomplete = EmptyChecks.isNull(request.bizDate())

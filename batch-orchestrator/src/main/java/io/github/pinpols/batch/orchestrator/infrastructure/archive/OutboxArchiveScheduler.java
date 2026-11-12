@@ -55,11 +55,11 @@ public class OutboxArchiveScheduler {
       return;
     }
     int batchSize = properties.getBatchSize();
-    long publishedTotal = drain(outboxArchiveService::archivePublished, batchSize, "PUBLISHED");
+    long publishedTotal = drain(outboxArchiveService::archivePublished, batchSize);
     if (gracefulShutdown.isDraining()) {
       return;
     }
-    long giveUpTotal = drain(outboxArchiveService::archiveGiveUp, batchSize, "GIVE_UP");
+    long giveUpTotal = drain(outboxArchiveService::archiveGiveUp, batchSize);
     if (publishedTotal > 0 || giveUpTotal > 0) {
       log.info(
           "outbox archive completed: PUBLISHED={}, GIVE_UP={}, publishedRetention={}d,"
@@ -72,7 +72,7 @@ public class OutboxArchiveScheduler {
     schedulerHealthMetrics.markSuccess("outbox");
   }
 
-  private long drain(Supplier<ArchiveBatchResult> archiver, int batchSize, String label) {
+  private long drain(Supplier<ArchiveBatchResult> archiver, int batchSize) {
     long total = 0;
     for (int i = 0; i < MAX_BATCHES_PER_TICK; i++) {
       ArchiveBatchResult result = archiver.get();

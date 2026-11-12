@@ -8,13 +8,17 @@ import java.util.Map;
 
 /** 面向只读证据的凭据脱敏；不修改原始存储数据。 */
 public final class SensitiveEvidenceMasking {
+
+  /** 含凭据语法的证据文本遮罩后的长度上限，限制只读证据回显篇幅；不对应数据库列。 */
+  private static final int CREDENTIAL_TEXT_MAX_LENGTH = 2048;
+
   private SensitiveEvidenceMasking() {}
 
   /** 遮蔽端点和已识别的凭据表达式，普通文本原样保留。 */
   public static String maskText(String value) {
     String masked = SecretMasking.maskEndpoint(value);
     return SwallowedExceptionLogger.containsCredentialSyntax(masked)
-        ? SwallowedExceptionLogger.safeMessage(masked, 2048)
+        ? SwallowedExceptionLogger.safeMessage(masked, CREDENTIAL_TEXT_MAX_LENGTH)
         : masked;
   }
 

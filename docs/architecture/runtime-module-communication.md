@@ -109,7 +109,7 @@ flowchart TB
 - worker 任务认领、续租、回报：`batch-worker-core` 的 `HttpTaskExecutionClient`
 - trigger → orchestrator（ADR-010 固化路径）：`batch-trigger` 的 `KafkaTriggerEventPublisher` + `TriggerOutboxRelay` 发到 `batch.trigger.launch.v1`；orchestrator 端 `TriggerLaunchConsumer` 消费；同步 HTTP 桥已于 2026-05-02 删除
 - launch 初始化运行态：`batch-orchestrator` 的 `DefaultWorkflowRunLaunchService`（顶层）与 `DefaultLaunchService`（节点Job）
-- task report / claim / renew：`batch-orchestrator` 的 `DefaultTaskExecutionService`
+- task claim / renew / cancel：`batch-orchestrator` 的 `TaskControllerApplicationService` → `TaskAssignmentService`；task report：`TaskReportRetryExecutor` → `TaskOutcomeService`
 - retry / dead-letter / replay：`batch-orchestrator` 的 `DefaultRetryGovernanceService`
 - orchestrator 出 Kafka：`TaskDispatchOutboxService` + `KafkaOutboxPublisher`
 - export 写对象存储：`batch-worker-export` 的 `S3ExportStorage` → `batch-common` 的 `BatchObjectStore`

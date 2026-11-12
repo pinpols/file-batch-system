@@ -72,12 +72,12 @@ public class DefaultDispatchStageExecutor
     boolean overallSuccess =
         EmptyChecks.isNull(DispatchStageOutcome.failure(results, retryRecovered));
     if (overallSuccess) {
-      recordDispatchReceiptMetric(context);
+      recordDispatchReceiptMetric();
     }
     return results;
   }
 
-  private void recordDispatchReceiptMetric(DispatchJobContext context) {
+  private void recordDispatchReceiptMetric() {
     Counter.builder("dispatch.receipt.total")
         .description("Total successfully dispatched file receipts")
         .tag("workerType", DispatchWorkerType.DISPATCH)

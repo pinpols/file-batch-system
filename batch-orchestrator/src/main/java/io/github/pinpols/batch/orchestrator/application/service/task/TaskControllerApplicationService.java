@@ -47,15 +47,15 @@ import org.springframework.stereotype.Service;
  * 防止在并发场景下错误地响应成功。上报时对请求字段进行兼容处理——同时支持新版 {@code errorCode/errorMessage} 和旧版 {@code code/message}
  * 字段，缺失时降级为 {@code "UNKNOWN"}， 保证向后兼容。续期失败时抛出业务异常，要求 Worker 重新认领或放弃任务。
  *
- * <p>该类作为 HTTP Controller 与 {@link TaskExecutionService} 之间的薄适配层， 不包含任务状态机核心逻辑，复杂业务逻辑下沉至 {@code
- * TaskExecutionService}。
+ * <p>该类作为 HTTP Controller 与 {@link TaskAssignmentService} 之间的薄适配层， 不包含任务状态机核心逻辑：认领、续租与取消直接调用
+ * {@link TaskAssignmentService}，结果上报经 {@link TaskReportRetryExecutor} 交给 {@link TaskOutcomeService}。
  */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class TaskControllerApplicationService {
 
-  private final TaskExecutionService taskExecutionService;
+  private final TaskAssignmentService taskAssignmentService;
   private final ObjectMapper objectMapper;
   private final BundleBatchClaimProperties batchClaimProperties;
   private final MeterRegistry meterRegistry;
@@ -69,7 +69,7 @@ public class TaskControllerApplicationService {
   public EffectiveTaskConfig claim(Long taskId, TaskClaimCommand request) {
     enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
     JobTaskEntity task =
-        taskExecutionService.assignWorker(request.tenantId(), taskId, request.workerId());
+        taskAssignmentService.assignWorker(request.tenantId(), taskId, request.workerId());
     if (EmptyChecks.isNull(task)) {
       throw BizException.of(
           ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
@@ -79,13 +79,13 @@ public class TaskControllerApplicationService {
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
     // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉 loadEffectiveConfig 内的重复 selectById。
-    return taskExecutionService.loadEffectiveConfig(request.tenantId(), task);
+    return taskAssignmentService.loadEffectiveConfig(request.tenantId(), task);
   }
 
   public void markNonIdempotentExecutionStarted(
       Long taskId, TaskNonIdempotentStartCommand request) {
     enforceRateLimit(request.tenantId(), RateLimitAction.TASK_CLAIM);
-    if (!taskExecutionService.markNonIdempotentExecutionStarted(
+    if (!taskAssignmentService.markNonIdempotentExecutionStarted(
         request.tenantId(), taskId, request.workerId(), request.partitionInvocationId())) {
       throw BizException.of(ResultCode.CONFLICT, "error.task.invocation_mismatch");
     }
@@ -127,12 +127,12 @@ public class TaskControllerApplicationService {
         results.add(new TaskClaimItemResult(null, false, null));
         continue;
       }
-      JobTaskEntity task = taskExecutionService.assignWorker(
+      JobTaskEntity task = taskAssignmentService.assignWorker(
           item.tenantId(), item.taskId(), item.workerId(), workerMemo);
       if (EmptyChecks.isNotNull(task) && isClaimedBy(task, item.workerId())) {
         // PERF(5.2b): 复用 assignWorker 返回的最新 task 行,省掉重复 selectById。
         EffectiveTaskConfig config =
-            taskExecutionService.loadEffectiveConfig(item.tenantId(), task);
+            taskAssignmentService.loadEffectiveConfig(item.tenantId(), task);
         results.add(new TaskClaimItemResult(item.taskId(), true, config));
         claimed++;
       } else {
@@ -232,7 +232,7 @@ public class TaskControllerApplicationService {
    */
   public TaskControlPayloads.TaskHeartbeatResult renew(Long taskId, TaskHeartbeatCommand request) {
     String detailsJson = serializeDetails(taskId, request.details());
-    TaskHeartbeatResult result = taskExecutionService.recordHeartbeat(
+    TaskHeartbeatResult result = taskAssignmentService.recordHeartbeat(
         request.tenantId(),
         taskId,
         request.workerId(),
@@ -246,7 +246,7 @@ public class TaskControllerApplicationService {
 
   /** ORCH-P4-1：运维 / 平台请求取消 RUNNING task;非 RUNNING / 不存在则静默成功(幂等,无需让运维区分)。 */
   public void cancel(Long taskId, TaskCancelCommand request) {
-    boolean marked = taskExecutionService.requestCancel(request.tenantId(), taskId);
+    boolean marked = taskAssignmentService.requestCancel(request.tenantId(), taskId);
     log.info(
         "task cancel requested: tenant={} taskId={} reason={} marked={}",
         request.tenantId(),
@@ -299,7 +299,7 @@ public class TaskControllerApplicationService {
       results.add(null);
     }
     List<TaskAssignmentService.TaskHeartbeatResult> outcomes =
-        EmptyChecks.isEmpty(commands) ? List.of() : taskExecutionService.renewLeaseBatch(commands);
+        EmptyChecks.isEmpty(commands) ? List.of() : taskAssignmentService.renewLeaseBatch(commands);
     if (EmptyChecks.isNull(outcomes)) {
       outcomes = List.of();
     }

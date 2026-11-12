@@ -40,6 +40,9 @@ public record ConsoleNotificationDeliveryLogResponse(
     Integer attempt,
     @JsonProperty("created_at") Instant createdAt) {
 
+  /** 回显错误信息长度上限，与 notification_delivery_log.error_message VARCHAR(1024)（V49）一致。 */
+  private static final int ERROR_MESSAGE_MAX_LENGTH = 1024;
+
   public static ConsoleNotificationDeliveryLogResponse from(NotificationDeliveryLogRow row) {
     if (EmptyChecks.isNull(row)) {
       return null;
@@ -73,7 +76,7 @@ public record ConsoleNotificationDeliveryLogResponse(
     }
     String decoded = HtmlUtils.htmlUnescape(storedErrorMessage);
     String normalized = ConsoleTextSanitizer.normalize(decoded);
-    String masked = SwallowedExceptionLogger.safeMessage(normalized, 1024);
-    return ConsoleTextSanitizer.safeDisplay(masked, 1024);
+    String masked = SwallowedExceptionLogger.safeMessage(normalized, ERROR_MESSAGE_MAX_LENGTH);
+    return ConsoleTextSanitizer.safeDisplay(masked, ERROR_MESSAGE_MAX_LENGTH);
   }
 }

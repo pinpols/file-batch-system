@@ -54,7 +54,8 @@ public class ConsoleDashboardQueryService {
   public JobStatsView jobStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":job-stats:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":job-stats:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         JobStatsView.class,
         () -> loadJobStats(resolved, days));
@@ -75,7 +76,8 @@ public class ConsoleDashboardQueryService {
   public TriggerStatsView triggerStats(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":trigger-stats:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":trigger-stats:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         TriggerStatsView.class,
         () -> loadTriggerStats(resolved, days));
@@ -90,7 +92,7 @@ public class ConsoleDashboardQueryService {
   public WorkerLoadView workerLoad(String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":worker-load",
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":worker-load",
         ConsoleQueryCacheService.DASHBOARD_TTL,
         WorkerLoadView.class,
         () -> loadWorkerLoad(resolved));
@@ -107,7 +109,8 @@ public class ConsoleDashboardQueryService {
   public AlertTrendView alertTrend(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":alert-trend:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":alert-trend:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         AlertTrendView.class,
         () -> loadAlertTrend(resolved, days));
@@ -130,7 +133,8 @@ public class ConsoleDashboardQueryService {
   public TenantUsageView tenantUsage(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":tenant-usage:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":tenant-usage:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         TenantUsageView.class,
         () -> loadTenantUsage(resolved, days));
@@ -161,7 +165,8 @@ public class ConsoleDashboardQueryService {
   public SlaReportView slaReport(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":sla-report:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":sla-report:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         SlaReportView.class,
         () -> loadSlaReport(resolved, days));
@@ -175,7 +180,8 @@ public class ConsoleDashboardQueryService {
   public SlaComplianceView slaCompliance(String tenantId, int days) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return cacheService.getOrLoad(
-        DASHBOARD_CACHE_PREFIX + cacheTenant(resolved) + ":sla-compliance:" + days,
+        DASHBOARD_CACHE_PREFIX + ConsoleQueryCacheService.keySegment(resolved) + ":sla-compliance:"
+            + days,
         ConsoleQueryCacheService.DASHBOARD_TTL,
         SlaComplianceView.class,
         () -> loadSlaCompliance(resolved, days));
@@ -192,9 +198,5 @@ public class ConsoleDashboardQueryService {
     BigDecimal avgDurationSeconds = EmptyChecks.isNull(stats) ? null : stats.avgDurationSeconds();
     List<SlaDayView> dailyTrend = repository.slaDailyTrend(resolved, days);
     return new SlaComplianceView(breached, onTime, totalWithSla, avgDurationSeconds, dailyTrend);
-  }
-
-  private static String cacheTenant(String tenantId) {
-    return ConsoleQueryCacheService.keySegment(tenantId);
   }
 }

@@ -117,8 +117,8 @@ public class LoadStep implements ImportStageStep {
       long expected = estimateDryRunLoadedCount(context);
       return markLoaded(context, expected);
     }
-    String validatedRecordsPath =
-        stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
+    String validatedRecordsPath = ImportStageSupport.stringValue(
+        context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
     if (Texts.hasText(validatedRecordsPath)) {
       Path validatedRecordsFile = Path.of(validatedRecordsPath);
       return executeStreaming(context, validatedRecordsFile);
@@ -134,11 +134,12 @@ public class LoadStep implements ImportStageStep {
     try {
       boolean validatedFileIsEmpty = Files.size(validatedRecordsPath) == 0L;
       if (validatedFileIsEmpty
-          && numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT)) > 0) {
+          && ImportStageSupport.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT))
+              > 0) {
         return missingPayload();
       }
       boolean hasSkippedRowsAndNoValidatedPayload =
-          numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0 && validatedFileIsEmpty;
+          ImportStageSupport.numberValue(attrs.get(KEY_SKIPPED_COUNT)) > 0 && validatedFileIsEmpty;
       if (hasSkippedRowsAndNoValidatedPayload) {
         return markLoaded(context, 0L);
       }
@@ -190,10 +191,10 @@ public class LoadStep implements ImportStageStep {
       completeCheckpoint(ckpt);
       commit(context, loadedCount);
       progressRegistry.clear(context, stage().name());
-      deleteQuietly(validatedRecordsPath);
+      ImportStageSupport.deleteQuietly(validatedRecordsPath);
       Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
       Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
-      deleteQuietly(parsedRecordsPath);
+      ImportStageSupport.deleteQuietly(parsedRecordsPath);
       return ImportStageResult.success(stage());
     } catch (Exception ex) {
       return streamingFailure(context, attrs, ex);
@@ -206,16 +207,17 @@ public class LoadStep implements ImportStageStep {
     requireValidatedRecordCount(attrs, checkpoint.processedCount());
     // 同一上下文状态写入失败后重试时，不重复计入已加载的记录。
     if (!attrs.containsKey(KEY_LOADED_COUNT)) {
-      long previousSuccessCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+      long previousSuccessCount =
+          ImportStageSupport.numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
       attrs.put(
           ImportRuntimeKeys.SUCCESS_COUNT, previousSuccessCount + checkpoint.processedCount());
       attrs.put(KEY_LOADED_COUNT, checkpoint.processedCount());
     }
     ImportStageResult recovered = markLoaded(context, checkpoint.processedCount());
-    deleteQuietly(validatedRecordsPath);
+    ImportStageSupport.deleteQuietly(validatedRecordsPath);
     Object parsedRecordsPathValue = attrs.get(PipelineRuntimeKeys.PARSED_RECORDS_PATH);
     Path parsedRecordsPath = resolvePath(parsedRecordsPathValue);
-    deleteQuietly(parsedRecordsPath);
+    ImportStageSupport.deleteQuietly(parsedRecordsPath);
     return recovered;
   }
 
@@ -304,7 +306,7 @@ public class LoadStep implements ImportStageStep {
     Object validatedCount =
         loadExecution.context().getAttributes().get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
     if (EmptyChecks.isNotNull(validatedCount)) {
-      long expected = numberValue(validatedCount);
+      long expected = ImportStageSupport.numberValue(validatedCount);
       if (loadedCount > expected || chunk.size() > expected - loadedCount) {
         throw new IllegalStateException("Import LOAD chunk exceeds validated record count");
       }
@@ -321,10 +323,11 @@ public class LoadStep implements ImportStageStep {
 
   private void requireValidatedRecordCount(Map<String, Object> attributes, long loadedCount) {
     Object validatedCount = attributes.get(PipelineRuntimeKeys.IMPORT_VALIDATED_COUNT);
-    if (EmptyChecks.isNotNull(validatedCount) && numberValue(validatedCount) != loadedCount) {
+    if (EmptyChecks.isNotNull(validatedCount)
+        && ImportStageSupport.numberValue(validatedCount) != loadedCount) {
       throw new IllegalStateException(
           "Import LOAD record count does not match validation: expected="
-              + numberValue(validatedCount)
+              + ImportStageSupport.numberValue(validatedCount)
               + ", loaded="
               + loadedCount);
     }
@@ -405,8 +408,8 @@ public class LoadStep implements ImportStageStep {
   }
 
   private void requireSinglePartitionForPartitionReplace(ImportJobContext context) {
-    long partitionCount =
-        numberValue(context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
+    long partitionCount = ImportStageSupport.numberValue(
+        context.getAttributes().get(PipelineRuntimeKeys.PARTITION_COUNT));
     if (partitionCount <= 1L) {
       return;
     }
@@ -629,12 +632,13 @@ public class LoadStep implements ImportStageStep {
   private void commit(ImportJobContext context, long loadedCount) {
     Map<String, Object> attrs = context.getAttributes();
     attrs.put(KEY_LOADED_COUNT, loadedCount);
-    long previousSuccessCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long previousSuccessCount =
+        ImportStageSupport.numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
     long updatedSuccessCount = previousSuccessCount + loadedCount;
     attrs.put(ImportRuntimeKeys.SUCCESS_COUNT, updatedSuccessCount);
     String loadedStatus = FileStatus.LOADED.code();
-    long successCount = numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
-    long skippedCount = numberValue(attrs.get(KEY_SKIPPED_COUNT));
+    long successCount = ImportStageSupport.numberValue(attrs.get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long skippedCount = ImportStageSupport.numberValue(attrs.get(KEY_SKIPPED_COUNT));
     long badRecordCount = badRecordCount(context);
     boolean manualReviewRequired =
         Boolean.TRUE.equals(attrs.get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
@@ -733,8 +737,10 @@ public class LoadStep implements ImportStageStep {
 
   private ImportStageResult markLoaded(ImportJobContext context, long loadedCount) {
     String loadedStatus = FileStatus.LOADED.code();
-    long successCount = numberValue(context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT));
-    long skippedCount = numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
+    long successCount = ImportStageSupport.numberValue(
+        context.getAttributes().get(ImportRuntimeKeys.SUCCESS_COUNT));
+    long skippedCount =
+        ImportStageSupport.numberValue(context.getAttributes().get(KEY_SKIPPED_COUNT));
     long badRecordCount = badRecordCount(context);
     boolean manualReviewRequired =
         Boolean.TRUE.equals(context.getAttributes().get(ImportRuntimeKeys.MANUAL_REVIEW_REQUIRED));
@@ -763,24 +769,12 @@ public class LoadStep implements ImportStageStep {
     return 0L;
   }
 
-  private long numberValue(Object value) {
-    return ImportStageSupport.numberValue(value);
-  }
-
   private int resolveChunkSize(ImportJobContext context) {
     return ImportStageSupport.resolveChunkSize(context, workerConfiguration);
   }
 
-  private String stringValue(Object value) {
-    return ImportStageSupport.stringValue(value);
-  }
-
-  private void deleteQuietly(Path path) {
-    ImportStageSupport.deleteQuietly(path);
-  }
-
   private Path resolvePath(Object value) {
-    String text = stringValue(value);
+    String text = ImportStageSupport.stringValue(value);
     if (!Texts.hasText(text)) {
       return null;
     }
@@ -795,8 +789,8 @@ public class LoadStep implements ImportStageStep {
     if (context == null) {
       return 0L;
     }
-    String validatedPath =
-        stringValue(context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
+    String validatedPath = ImportStageSupport.stringValue(
+        context.getAttributes().get(PipelineRuntimeKeys.VALIDATED_RECORDS_PATH));
     if (!Texts.hasText(validatedPath)) {
       return 0L;
     }

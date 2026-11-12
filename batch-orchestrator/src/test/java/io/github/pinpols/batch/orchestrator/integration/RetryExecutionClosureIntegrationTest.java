@@ -18,7 +18,8 @@ import io.github.pinpols.batch.orchestrator.application.service.governance.Compe
 import io.github.pinpols.batch.orchestrator.application.service.governance.DeadLetterReplayInput;
 import io.github.pinpols.batch.orchestrator.application.service.governance.FileGovernanceService;
 import io.github.pinpols.batch.orchestrator.application.service.governance.RetryGovernanceService;
-import io.github.pinpols.batch.orchestrator.application.service.task.TaskExecutionService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskAssignmentService;
+import io.github.pinpols.batch.orchestrator.application.service.task.TaskOutcomeService;
 import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowRunLaunchService;
 import io.github.pinpols.batch.orchestrator.config.RetryGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.command.CompensationSubmitCommand;
@@ -86,7 +87,8 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
 
   private final WorkflowRunLaunchService launchService;
 
-  private final TaskExecutionService execution;
+  private final TaskAssignmentService taskAssignmentService;
+  private final TaskOutcomeService taskOutcomeService;
 
   private final RetryGovernanceService retries;
 
@@ -120,7 +122,8 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
   RetryExecutionClosureIntegrationTest(
       JdbcTemplate jdbc,
       WorkflowRunLaunchService launchService,
-      TaskExecutionService execution,
+      TaskAssignmentService taskAssignmentService,
+      TaskOutcomeService taskOutcomeService,
       RetryGovernanceService retries,
       RetryGovernanceProperties retryProperties,
       RetryScheduleMapper retrySchedules,
@@ -134,7 +137,8 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
       PlatformTransactionManager transactionManager) {
     this.jdbc = jdbc;
     this.launchService = launchService;
-    this.execution = execution;
+    this.taskAssignmentService = taskAssignmentService;
+    this.taskOutcomeService = taskOutcomeService;
     this.retries = retries;
     this.retryProperties = retryProperties;
     this.retrySchedules = retrySchedules;
@@ -677,7 +681,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     List<Map<String, Object>> before = executionRows(scenario);
     long outboxBefore = outboxCount(scenario);
     // 重投旧报告和运行到期扫描，不能产生新的业务执行/死信。
-    execution.applyTaskOutcome(failure(scenario));
+    taskOutcomeService.applyTaskOutcome(failure(scenario));
     retries.autoRetryDueDeadLetters();
     retries.autoRetryDueDeadLetters();
     assertThat(executionRows(scenario)).isEqualTo(before);
@@ -716,7 +720,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
         .success(true)
         .partitionInvocationId(partition(scenario).getCurrentInvocationId())
         .build();
-    execution.applyTaskOutcome(successfulRetry);
+    taskOutcomeService.applyTaskOutcome(successfulRetry);
     assertThat(instanceStatus(scenario)).isEqualTo("SUCCESS");
     assertThat(workflowStatus(scenario)).isEqualTo("SUCCESS");
     String selectedParamsSnapshot =
@@ -1147,10 +1151,10 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     Scenario source = launch("NONE", 0);
     claim(source);
     String sourceInvocation = partition(source).getCurrentInvocationId();
-    boolean sourceStarted = execution.markNonIdempotentExecutionStarted(
+    boolean sourceStarted = taskAssignmentService.markNonIdempotentExecutionStarted(
         source.tenant(), source.taskId(), source.worker(), sourceInvocation);
     assertThat(sourceStarted).isTrue();
-    execution.applyTaskOutcome(failure(source));
+    taskOutcomeService.applyTaskOutcome(failure(source));
     Awaitility.await()
         .atMost(10, TimeUnit.SECONDS)
         .untilAsserted(() -> assertThat(workflowStatus(source)).isEqualTo("FAILED"));
@@ -1175,7 +1179,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     prepareResolutionRootRequest(source, unrelatedRequestId);
     Scenario unrelated = launchResolutionRoot(source, unrelatedRequestId, parameters);
     claim(unrelated);
-    boolean unrelatedStarted = execution.markNonIdempotentExecutionStarted(
+    boolean unrelatedStarted = taskAssignmentService.markNonIdempotentExecutionStarted(
         unrelated.tenant(),
         unrelated.taskId(),
         unrelated.worker(),
@@ -1185,7 +1189,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     assertThat(stillUnconsumed.getExternalOutcomeResolutionConsumedAt()).isNull();
     JobTaskEntity unrelatedTask = tasks.selectById(unrelated.tenant(), unrelated.taskId());
     assertThat(unrelatedTask.getNonIdempotentStartedAt()).isNull();
-    execution.applyTaskOutcome(failure(unrelated));
+    taskOutcomeService.applyTaskOutcome(failure(unrelated));
     Awaitility.await()
         .atMost(10, TimeUnit.SECONDS)
         .untilAsserted(() -> assertThat(workflowStatus(unrelated)).isEqualTo("FAILED"));
@@ -1208,7 +1212,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     jdbc.execute(createFaultFunctionSql);
     jdbc.execute(createFaultTriggerSql);
     try {
-      assertThatThrownBy(() -> execution.markNonIdempotentExecutionStarted(
+      assertThatThrownBy(() -> taskAssignmentService.markNonIdempotentExecutionStarted(
               approved.tenant(), approved.taskId(), approved.worker(), invocation))
           .hasStackTraceContaining("WR04 injected start write failure");
       JobTaskEntity rolledBackSource = tasks.selectById(source.tenant(), source.taskId());
@@ -1219,13 +1223,13 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
       jdbc.execute(dropFaultTriggerSql);
       jdbc.execute(dropFaultFunctionSql);
     }
-    boolean approvedStarted = execution.markNonIdempotentExecutionStarted(
+    boolean approvedStarted = taskAssignmentService.markNonIdempotentExecutionStarted(
         approved.tenant(), approved.taskId(), approved.worker(), invocation);
     assertThat(approvedStarted).isTrue();
     JobTaskEntity consumed = tasks.selectById(source.tenant(), source.taskId());
     assertThat(consumed.getExternalOutcomeResolutionConsumedAt()).isNotNull();
     assertThat(consumed.getExternalOutcomeResolutionTriggerRequestId()).isEqualTo(approvedRequest);
-    boolean repeatedStart = execution.markNonIdempotentExecutionStarted(
+    boolean repeatedStart = taskAssignmentService.markNonIdempotentExecutionStarted(
         approved.tenant(), approved.taskId(), approved.worker(), invocation);
     assertThat(repeatedStart).isTrue();
     JobTaskEntity consumedAgain = tasks.selectById(source.tenant(), source.taskId());
@@ -1417,14 +1421,15 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
   void shouldObserveCancellationFlag_whenFailureRacesWithCancelRequest() {
     Scenario scenario = launch("FIXED", 1);
     claim(scenario);
-    assertThat(execution.requestCancel(scenario.tenant(), scenario.taskId())).isTrue();
-    execution.applyTaskOutcome(failure(scenario));
+    assertThat(taskAssignmentService.requestCancel(scenario.tenant(), scenario.taskId()))
+        .isTrue();
+    taskOutcomeService.applyTaskOutcome(failure(scenario));
     assertThat(retryStatus(scenario)).isEqualTo("WAITING");
     makeRetriesDue(scenario);
     retries.dispatchDueRetries();
     assertThat(retryStatus(scenario)).isEqualTo("SUCCESS");
     claim(scenario);
-    var result = execution.recordHeartbeat(
+    var result = taskAssignmentService.recordHeartbeat(
         scenario.tenant(),
         scenario.taskId(),
         scenario.worker(),
@@ -1734,7 +1739,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
         .errorMessage("external system response was lost")
         .partitionInvocationId(sourcePartition.getCurrentInvocationId())
         .build();
-    execution.applyTaskOutcome(unknown);
+    taskOutcomeService.applyTaskOutcome(unknown);
     Map<String, Object> firstDeadLetter = deadLetter(scenario);
     Long firstId = ((Number) firstDeadLetter.get("id")).longValue();
     Long secondId = seedDueDeadLetter(scenario);
@@ -1971,7 +1976,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     claim(scenario);
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     assertThatThrownBy(() -> transaction.executeWithoutResult(status -> {
-          execution.applyTaskOutcome(failure(scenario));
+          taskOutcomeService.applyTaskOutcome(failure(scenario));
           throw new IllegalStateException("SIM_REPORT_ROLLBACK");
         }))
         .isInstanceOf(IllegalStateException.class)
@@ -1982,7 +1987,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
     assertThat(selectedDeadLetterTaskCount).isZero();
     assertThat(captured.getAll()).doesNotContain(warning);
 
-    execution.applyTaskOutcome(failure(scenario));
+    taskOutcomeService.applyTaskOutcome(failure(scenario));
 
     assertThat(captured.getAll().split(Pattern.quote(warning), -1)).hasSize(2);
   }
@@ -2043,7 +2048,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
   }
 
   private void claim(Scenario scenario) {
-    assertThat(execution
+    assertThat(taskAssignmentService
             .assignWorker(scenario.tenant(), scenario.taskId(), scenario.worker())
             .getTaskStatus())
         .isEqualTo("RUNNING");
@@ -2051,7 +2056,7 @@ class RetryExecutionClosureIntegrationTest extends AbstractIntegrationTest {
 
   private void fail(Scenario scenario) {
     claim(scenario);
-    execution.applyTaskOutcome(failure(scenario));
+    taskOutcomeService.applyTaskOutcome(failure(scenario));
   }
 
   private TaskOutcomeCommand failure(Scenario scenario) {

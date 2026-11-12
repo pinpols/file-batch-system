@@ -48,6 +48,9 @@ public class DeadLetterPublisher {
    */
   static final int ENVELOPE_VERSION = 1;
 
+  /** DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。 */
+  private static final int ERROR_MESSAGE_MAX_LENGTH = 2000;
+
   private final MqMessagePublisher mqMessagePublisher;
   private final BatchKafkaTopicNamespace topicNamespace;
   private final Counter successCounter;
@@ -104,7 +107,9 @@ public class DeadLetterPublisher {
     envelope.put("originalPayload", originalPayload);
     envelope.put("sourceTopic", sourceTopic);
     envelope.put("workerType", workerType);
-    envelope.put("errorMessage", SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
+    envelope.put(
+        "errorMessage",
+        SwallowedExceptionLogger.safeMessage(errorMessage, ERROR_MESSAGE_MAX_LENGTH));
     Instant failedAt = BatchDateTimeSupport.utcNow();
     String failedAtText = failedAt.toString();
     envelope.put("failedAt", failedAtText);

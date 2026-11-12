@@ -59,6 +59,12 @@ public abstract class AbstractTaskConsumer
     implements WorkerLoadProvider, WorkerConsumptionControl, ApplicationContextAware {
 
   /**
+   * DLQ 信封 errorMessage 字段的长度上限，限制死信消息体积；不对应数据库列。
+   * TaskConsumerBatchExecutionCoordinator 共用。
+   */
+  static final int DLQ_ERROR_MESSAGE_MAX_LENGTH = 2000;
+
+  /**
    * 平台端短暂不可达时，显式回退 Kafka offset 的等待时间。
    *
    * <p>消费者使用 {@code MANUAL_IMMEDIATE} 确认模式；仅不调用 acknowledge 不会让当前 poll 的 offset 自动回退。
@@ -402,7 +408,7 @@ public abstract class AbstractTaskConsumer
           payload,
           workerConfiguration().topic(),
           workerConfiguration().workerType(),
-          SwallowedExceptionLogger.safeMessage(errorMessage, 2000));
+          SwallowedExceptionLogger.safeMessage(errorMessage, DLQ_ERROR_MESSAGE_MAX_LENGTH));
       return true;
     } catch (Exception dlqEx) {
       log.error(
@@ -414,36 +420,7 @@ public abstract class AbstractTaskConsumer
   }
 
   private void injectMdc(TaskDispatchMessage message, WorkerRegistration registration) {
-    BatchMdc.put(StructuredLogField.TENANT_ID, message.tenantId());
-    BatchMdc.put(StructuredLogField.TRACE_ID, message.traceId());
-    Object rawTaskId = message.taskId();
-    String mdcTaskId = EmptyChecks.isNull(rawTaskId) ? null : String.valueOf(message.taskId());
-    BatchMdc.put(StructuredLogField.TASK_ID, mdcTaskId);
-    Object rawJobInstanceId = message.jobInstanceId();
-    String mdcJobInstanceId =
-        EmptyChecks.isNull(rawJobInstanceId) ? null : String.valueOf(message.jobInstanceId());
-    BatchMdc.put(StructuredLogField.JOB_INSTANCE_ID, mdcJobInstanceId);
-    Object rawPartitionId = message.jobPartitionId();
-    String mdcPartitionId =
-        EmptyChecks.isNull(rawPartitionId) ? null : String.valueOf(message.jobPartitionId());
-    BatchMdc.put(StructuredLogField.PARTITION_ID, mdcPartitionId);
-    if (EmptyChecks.isNotNull(message.schedulingContext())) {
-      Object rawWorkflowRunId = message.schedulingContext().workflowRunId();
-      String mdcWorkflowRunId = EmptyChecks.isNull(rawWorkflowRunId)
-          ? null
-          : String.valueOf(message.schedulingContext().workflowRunId());
-      BatchMdc.put(StructuredLogField.WORKFLOW_RUN_ID, mdcWorkflowRunId);
-      Object rawBizDate = message.schedulingContext().bizDate();
-      String mdcBizDate = EmptyChecks.isNull(rawBizDate)
-          ? null
-          : message.schedulingContext().bizDate().toString();
-      BatchMdc.put(StructuredLogField.BATCH_DAY, mdcBizDate);
-      Object rawAttempt = message.schedulingContext().attemptNo();
-      String mdcAttempt = EmptyChecks.isNull(rawAttempt)
-          ? null
-          : String.valueOf(message.schedulingContext().attemptNo());
-      BatchMdc.put(StructuredLogField.ATTEMPT, mdcAttempt);
-    }
+    TaskMessageMdc.putMessageFields(message);
     String baseTopic = TaskConsumerRoutingPolicy.resolveBaseTopic(workerConfiguration());
     BatchMdc.put(StructuredLogField.TOPIC, baseTopic);
     BatchMdc.put(StructuredLogField.WORKER_TYPE, workerConfiguration().workerType());

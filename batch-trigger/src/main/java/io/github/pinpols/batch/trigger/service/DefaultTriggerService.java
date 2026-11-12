@@ -161,7 +161,8 @@ public class DefaultTriggerService implements TriggerService {
     String externalEventCode = command.request().externalEventCode();
     boolean externalEventCodeIsInvalidForTrigger = EmptyChecks.isNotNull(externalEventCode)
         && (!Texts.hasText(externalEventCode)
-            || externalEventCode.trim().length() > 128
+            || externalEventCode.trim().length()
+                > TriggerExternalEventService.EXTERNAL_EVENT_CODE_MAX_LENGTH
             || command.request().triggerType() != TriggerType.EVENT);
     if (externalEventCodeIsInvalidForTrigger) {
       throw BizException.of(
@@ -174,10 +175,11 @@ public class DefaultTriggerService implements TriggerService {
         || EmptyChecks.isNotNull(eventId);
     boolean providedExternalEventIdentityIsInvalid = externalEventIdentityWasProvided
         && (!Texts.hasText(eventSource)
-            || eventSource.trim().length() > 128
+            || eventSource.trim().length()
+                > TriggerExternalEventService.EXTERNAL_EVENT_SOURCE_MAX_LENGTH
             || !eventSource.equals(eventSource.trim())
             || !Texts.hasText(eventId)
-            || eventId.trim().length() > 256
+            || eventId.trim().length() > TriggerExternalEventService.EXTERNAL_EVENT_ID_MAX_LENGTH
             || !eventId.equals(eventId.trim())
             || command.request().triggerType() != TriggerType.EVENT
             || !Texts.hasText(externalEventCode));

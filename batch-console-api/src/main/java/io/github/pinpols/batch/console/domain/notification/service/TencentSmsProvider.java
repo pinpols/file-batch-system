@@ -99,9 +99,9 @@ public class TencentSmsProvider implements SmsProvider {
     String templateId;
     try {
       JsonNode config = objectMapper.readTree(message.configJson());
-      sdkAppId = textOrNull(config, "sdkAppId");
-      signName = textOrNull(config, "signName");
-      templateId = textOrNull(config, "templateId");
+      sdkAppId = ConsoleNotificationCryptoSupport.textOrNull(config, "sdkAppId");
+      signName = ConsoleNotificationCryptoSupport.textOrNull(config, "signName");
+      templateId = ConsoleNotificationCryptoSupport.textOrNull(config, "templateId");
     } catch (Exception ex) {
       String channelCodeForLog = LogSanitizer.value(message.channelCode());
       String reasonForLog = ex.getClass().getSimpleName();
@@ -298,7 +298,8 @@ public class TencentSmsProvider implements SmsProvider {
     byte[] secretDate = hmacSha256(secretSeedBytes, date);
     byte[] secretService = hmacSha256(secretDate, SERVICE);
     byte[] secretSigning = hmacSha256(secretService, "tc3_request");
-    String signature = toHex(hmacSha256(secretSigning, stringToSign));
+    String signature =
+        ConsoleNotificationCryptoSupport.toHex(hmacSha256(secretSigning, stringToSign));
 
     return ALGORITHM
         + " Credential="
@@ -316,7 +317,7 @@ public class TencentSmsProvider implements SmsProvider {
       MessageDigest digest = MessageDigest.getInstance(CryptoAlgorithms.SHA_256);
       byte[] encodedInput = input.getBytes(StandardCharsets.UTF_8);
       byte[] hash = digest.digest(encodedInput);
-      return toHex(hash);
+      return ConsoleNotificationCryptoSupport.toHex(hash);
     } catch (Exception ex) {
       throw new IllegalStateException("sha256 unavailable", ex);
     }
@@ -328,14 +329,6 @@ public class TencentSmsProvider implements SmsProvider {
     mac.init(signingKey);
     byte[] signingData = data.getBytes(StandardCharsets.UTF_8);
     return mac.doFinal(signingData);
-  }
-
-  private static String toHex(byte[] bytes) {
-    return ConsoleNotificationCryptoSupport.toHex(bytes);
-  }
-
-  private static String textOrNull(JsonNode config, String field) {
-    return ConsoleNotificationCryptoSupport.textOrNull(config, field);
   }
 
   /** 当前 epoch 秒（UTC），抽出便于单测固定签名输入。 */

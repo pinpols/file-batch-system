@@ -82,6 +82,9 @@ import org.springframework.stereotype.Component;
     havingValue = "true")
 public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
 
+  /** 演练结果中单个 argv 的展示长度上限；不对应数据库列。 */
+  private static final int DRY_RUN_ARG_MAX_LENGTH = 4096;
+
   static final String PARAM_APP_RESOURCE = "appResource";
   static final String PARAM_MAIN_CLASS = "mainClass";
   static final String PARAM_MASTER = "master";
@@ -149,7 +152,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
         planned.put(
             "argv",
             inv.argv.stream()
-                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, 4096))
+                .map(arg -> SwallowedExceptionLogger.safeMessage(arg, DRY_RUN_ARG_MAX_LENGTH))
                 .toList());
         if (!inv.outputPath.isBlank()) {
           planned.put("outputUri", SecretMasking.maskEndpoint(inv.outputPath));

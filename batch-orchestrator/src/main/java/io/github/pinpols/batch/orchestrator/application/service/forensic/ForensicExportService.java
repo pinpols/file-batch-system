@@ -72,6 +72,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ForensicExportService {
 
+  /** 导出失败原因长度上限；写入 forensic_export_log.error_message VARCHAR(2048)（V116），留出余量。 */
+  private static final int FAILURE_MESSAGE_MAX_LENGTH = 2000;
+
   private static final String EXPORT_PREFIX = "fex";
 
   // Bundle 被 SQL/CLI 读取，业务日和时间必须保持 ISO 文本，不能写 Jackson 数组/数值日期。
@@ -143,7 +146,7 @@ public class ForensicExportService {
       log.warn("forensic export failed exportId={}", exportId, e);
       String tenantId = request.tenantId();
       String failureMessage = e.getMessage();
-      String truncatedFailureMessage = truncate(failureMessage, 2000);
+      String truncatedFailureMessage = truncate(failureMessage, FAILURE_MESSAGE_MAX_LENGTH);
       Instant failedAt = dateTimeSupport.nowInstant();
       forensicExportLogMapper.markFailed(tenantId, exportId, truncatedFailureMessage, failedAt);
       if (e instanceof RuntimeException re) {
