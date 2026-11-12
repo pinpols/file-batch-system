@@ -27,12 +27,12 @@ record PartitionOutcomeCounts(
   }
 
   static PartitionOutcomeCounts fromInstanceCounters(JobInstanceEntity instance) {
-    return new PartitionOutcomeCounts(
-        Objects.requireNonNullElse(instance.getExpectedPartitionCount(), 0),
-        Objects.requireNonNullElse(instance.getSuccessPartitionCount(), 0),
-        Objects.requireNonNullElse(instance.getFailedPartitionCount(), 0),
-        Objects.requireNonNullElse(instance.getCancelledPartitionCount(), 0),
-        Objects.requireNonNullElse(instance.getTerminatedPartitionCount(), 0));
+    int expected = Objects.requireNonNullElse(instance.getExpectedPartitionCount(), 0);
+    int success = Objects.requireNonNullElse(instance.getSuccessPartitionCount(), 0);
+    int failed = Objects.requireNonNullElse(instance.getFailedPartitionCount(), 0);
+    int cancelled = Objects.requireNonNullElse(instance.getCancelledPartitionCount(), 0);
+    int terminated = Objects.requireNonNullElse(instance.getTerminatedPartitionCount(), 0);
+    return new PartitionOutcomeCounts(expected, success, failed, cancelled, terminated);
   }
 
   /** 失败、取消和终止都算作广义失败。 */
