@@ -78,32 +78,16 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
       throws Exception {
     boolean autoCommit = config.defaultAutoCommit();
     boolean originalAutoCommit = conn.getAutoCommit();
-    long totalAffected = 0;
-    Map<String, Object> lastResultSet = null;
+    StatementTotals totals = new StatementTotals();
     try {
       conn.setAutoCommit(autoCommit);
       for (String one : statements) {
-        try (Statement st = conn.createStatement()) {
-          st.setQueryTimeout(config.statementTimeoutSeconds());
-          boolean hasRs = st.execute(one);
-          if (hasRs) {
-            try (ResultSet rs = st.getResultSet()) {
-              lastResultSet = readResultSet(rs);
-            }
-          } else {
-            int affected = st.getUpdateCount();
-            if (affected > 0) totalAffected += affected;
-          }
-        }
+        runStatement(conn, one, totals);
       }
       if (!autoCommit) conn.commit();
     } catch (Exception ex) {
       if (!autoCommit) {
-        try {
-          conn.rollback();
-        } catch (Exception rbEx) {
-          log.warn("rollback failed: {}", ExceptionLogSummary.of(rbEx));
-        }
+        rollbackQuietly(conn);
       }
       throw ex;
     } finally {
@@ -113,15 +97,44 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         log.warn("restore autoCommit failed: {}", ExceptionLogSummary.of(restoreEx));
       }
     }
-    if (lastResultSet != null) {
-      lastResultSet.put("statementCount", statements.size());
-      lastResultSet.put("totalAffectedRows", totalAffected);
-      return lastResultSet;
+    if (EmptyChecks.isNotNull(totals.lastResultSet)) {
+      totals.lastResultSet.put("statementCount", statements.size());
+      totals.lastResultSet.put("totalAffectedRows", totals.totalAffected);
+      return totals.lastResultSet;
     }
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("statementCount", statements.size());
-    out.put("affectedRows", totalAffected);
+    out.put("affectedRows", totals.totalAffected);
     return out;
+  }
+
+  /** 逐条执行的聚合结果:受影响行数累计 + 最后一个 ResultSet。 */
+  private static final class StatementTotals {
+    long totalAffected;
+    Map<String, Object> lastResultSet;
+  }
+
+  private void runStatement(Connection conn, String sql, StatementTotals totals) throws Exception {
+    try (Statement st = conn.createStatement()) {
+      st.setQueryTimeout(config.statementTimeoutSeconds());
+      boolean hasRs = st.execute(sql);
+      if (!hasRs) {
+        int affected = st.getUpdateCount();
+        if (affected > 0) totals.totalAffected += affected;
+        return;
+      }
+      try (ResultSet rs = st.getResultSet()) {
+        totals.lastResultSet = readResultSet(rs);
+      }
+    }
+  }
+
+  private void rollbackQuietly(Connection conn) {
+    try {
+      conn.rollback();
+    } catch (Exception rbEx) {
+      log.warn("rollback failed: {}", ExceptionLogSummary.of(rbEx));
+    }
   }
 
   /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内的 `;`。简化版,不处理 dollar-quote。 */
