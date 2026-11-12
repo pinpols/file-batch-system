@@ -137,7 +137,7 @@
 | CONV-6 | Java SDK、Python SDK 的 SQL 切分支持 PG dollar-quote，规则与 `SqlTaskExecutor` 一致；Python 改成状态类结构，没有放宽 ruff。Java SDK 存储过程补齐平台的标量 OUT 类型；`REF_CURSOR` / `OTHER` 需要另行读取，SDK 仍拒绝。Python 的 `outParams` 是保留字段，没有类型表 | Java 新增 4 个切分用例（修复前失败 2 个）、类型映射用例；Python 新增 4 个参数化用例（修复前失败 2 个） |
 | CONV-7 | 专用 topic 改成 `DEDICATED_TOPICS_BY_EVENT_TYPE` | 由模块单测覆盖 |
 | CONV-8 | 冒号式 switch 改成提前返回加 switch 表达式；租户白名单拼接提取为 `tenantScopedSuffix` | 由模块单测覆盖 |
-| CONV-9 | 复用 `ExportConfigValueSupport.toMap`；吞异常日志标签由 `catch:jsonbParse` 变为 `catch:Exception` | 由模块单测覆盖 |
+| CONV-9 | 撤回，不改。`ExportKeysetRangePlanner.optedIn` 当前不可达：`resolve` 在多分片时提前返回，`compute` 在单分片时直接返回；类注释说明这段区间规划代码是为后续共享计划有意保留的。CI 差异覆盖率门禁也指出这几行无法覆盖。等这段代码重新启用时再复用 `toMap` | — |
 | CONV-10 | 新增 `copyValue` 模式 switch，标量规则不变 | 由快照服务相关测试覆盖 |
 | CONV-11 | 删除 `AbstractSingleSheetExcelService`；4 个 RowParser 使用的解析函数原样移到包内 `SingleSheetExcelCellParsers`；删除 `PositionalArgsConventionTest` 中失效的 `ImportAuditContext` 白名单项；同步更新设计文档引用 | 4 个 parser 相关测试 |
 | CONV-12 | 删除 `AuditableEntity`，同步修改拦截器注释 | 编译验证 |
