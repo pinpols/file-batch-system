@@ -139,7 +139,7 @@ public class SubscriptionRuleWebhookDispatcher {
     String normalizedEventType = dispatchPolicy.normalizeEventType(eventType);
     List<EnabledSubscriptionRuleRow> rules =
         subscriptionRuleMapper.selectEnabledByEventType(tenantId, normalizedEventType);
-    if (rules == null || rules.isEmpty()) {
+    if (EmptyChecks.isEmpty(rules)) {
       return;
     }
     Map<String, Object> dataMap = dispatchPolicy.asDataMap(data);

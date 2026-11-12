@@ -773,7 +773,7 @@ public class DefaultConsoleTenantConfigCopyService implements ConsoleTenantConfi
       Long calendarId = r.id();
       if (calendarId != null) {
         List<CalendarHolidayRow> holidays = calendarHolidayMapper.selectByCalendarId(calendarId);
-        if (holidays != null && !holidays.isEmpty()) {
+        if (EmptyChecks.isNotEmpty(holidays)) {
           List<String> dates = new ArrayList<>(holidays.size());
           for (CalendarHolidayRow h : holidays) {
             if (EmptyChecks.isNotNull(h.bizDate())) {
