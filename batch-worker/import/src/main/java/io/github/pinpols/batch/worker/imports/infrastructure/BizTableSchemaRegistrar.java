@@ -60,22 +60,7 @@ public class BizTableSchemaRegistrar {
       DatabaseMetaData md = conn.getMetaData();
       try (ResultSet tables = md.getTables(null, "biz", "%", new String[] {"TABLE"})) {
         while (tables.next()) {
-          String schema = tables.getString("TABLE_SCHEM");
-          String table = tables.getString("TABLE_NAME");
-          List<Map<String, Object>> cols = new ArrayList<>();
-          try (ResultSet colsRs = md.getColumns(null, schema, table, "%")) {
-            while (colsRs.next()) {
-              Map<String, Object> col = new LinkedHashMap<>();
-              col.put("name", colsRs.getString("COLUMN_NAME"));
-              col.put("type", colsRs.getString("TYPE_NAME"));
-              String nullableText = colsRs.getString("IS_NULLABLE");
-              boolean nullable = "YES".equalsIgnoreCase(nullableText);
-              col.put("nullable", nullable);
-              cols.add(col);
-            }
-          }
-          String columnsJson = objectMapper.writeValueAsString(cols);
-          snapshot.add(new TableColumns(schema, table, columnsJson));
+          snapshot.add(readTableColumns(md, tables));
         }
       }
     } catch (Exception ex) {
@@ -95,5 +80,25 @@ public class BizTableSchemaRegistrar {
     } catch (Exception ex) {
       log.error("biz_table_schema snapshot failed while writing registry", ex);
     }
+  }
+
+  /** 读取一张表的列定义并序列化为 JSON；列循环的结果集在本方法内关闭。 */
+  private TableColumns readTableColumns(DatabaseMetaData md, ResultSet tables) throws Exception {
+    String schema = tables.getString("TABLE_SCHEM");
+    String table = tables.getString("TABLE_NAME");
+    List<Map<String, Object>> cols = new ArrayList<>();
+    try (ResultSet colsRs = md.getColumns(null, schema, table, "%")) {
+      while (colsRs.next()) {
+        Map<String, Object> col = new LinkedHashMap<>();
+        col.put("name", colsRs.getString("COLUMN_NAME"));
+        col.put("type", colsRs.getString("TYPE_NAME"));
+        String nullableText = colsRs.getString("IS_NULLABLE");
+        boolean nullable = "YES".equalsIgnoreCase(nullableText);
+        col.put("nullable", nullable);
+        cols.add(col);
+      }
+    }
+    String columnsJson = objectMapper.writeValueAsString(cols);
+    return new TableColumns(schema, table, columnsJson);
   }
 }
