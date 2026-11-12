@@ -132,7 +132,7 @@ public class ParseStep implements ImportStageStep {
           attrs.get(PipelineRuntimeKeys.IMPORT_PAYLOAD) instanceof ImportPayload payload
               ? payload
               : null;
-      stagingFile = createStagingFile(context, "parsed");
+      stagingFile = ImportStageSupport.createStagingFile(context, "parsed");
       long totalCount = parsePayloads(
           context,
           payloadText,
@@ -155,7 +155,7 @@ public class ParseStep implements ImportStageStep {
       attrs.put(PipelineRuntimeKeys.IMPORT_TOTAL_COUNT, totalCount);
       if (totalCount == 0
           && support.numberValue(attrs.get(PipelineRuntimeKeys.IMPORT_SKIPPED_COUNT)) == 0) {
-        deleteQuietly(stagingFile);
+        ImportStageSupport.deleteQuietly(stagingFile);
         return ImportStageResult.failure(
             stage(),
             "IMPORT_PARSE_EMPTY",
@@ -166,7 +166,7 @@ public class ParseStep implements ImportStageStep {
       }
       if (!support.withinThreshold(context)) {
         support.markThresholdExceeded(context);
-        deleteQuietly(stagingFile);
+        ImportStageSupport.deleteQuietly(stagingFile);
         return ImportStageResult.failure(
             stage(),
             "IMPORT_SKIP_THRESHOLD_EXCEEDED",
@@ -200,7 +200,7 @@ public class ParseStep implements ImportStageStep {
       // 保留 i18n key + args,转 BUSINESS_ERROR 让 orchestrator retry/dead-letter 政策接管;
       // 不当 infra 异常吞成 error.import.parse.failed 丢失本地化消息。
       if (stagingFile != null) {
-        deleteQuietly(stagingFile);
+        ImportStageSupport.deleteQuietly(stagingFile);
       }
       String tid = context == null ? null : context.getTenantId();
       Object fid =
@@ -213,7 +213,7 @@ public class ParseStep implements ImportStageStep {
       return ImportStageResult.failure(stage(), ERROR_CODE_PARSE_FAILED, biz, ERROR_OBJECT_MAPPER);
     } catch (Exception ex) {
       if (stagingFile != null) {
-        deleteQuietly(stagingFile);
+        ImportStageSupport.deleteQuietly(stagingFile);
       }
       // 解析失败多为输入数据问题(畸形行/格式错),message 已表达根因;ERROR 只留一行,完整堆栈降 DEBUG,
       // 避免大量输入级失败产生日志噪音。失败已封装进 ImportStageResult + 死信,不丢信息。
@@ -239,7 +239,7 @@ public class ParseStep implements ImportStageStep {
     } finally {
       // spool 临时文件生命周期结束于 PARSE：下游 VALIDATE / LOAD 只消费 parsed records staging file。
       if (spoolFile != null) {
-        deleteQuietly(spoolFile);
+        ImportStageSupport.deleteQuietly(spoolFile);
         if (context != null) {
           context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_PATH);
           context.getAttributes().remove(PipelineRuntimeKeys.IMPORT_LARGE_TEXT_CHARSET);
@@ -553,10 +553,6 @@ public class ParseStep implements ImportStageStep {
     return 0L;
   }
 
-  private void deleteQuietly(Path path) {
-    ImportStageSupport.deleteQuietly(path);
-  }
-
   /**
    * 按 PARTITION_NO / PARTITION_COUNT 流式过滤 staging 文件,只保留本 partition 应处理的行。
    *
@@ -609,7 +605,7 @@ public class ParseStep implements ImportStageStep {
           context.getAttributes().get(PipelineRuntimeKeys.FILE_ID));
       return totalCount;
     }
-    Path filtered = createStagingFile(context, "parsed-p" + partitionNo);
+    Path filtered = ImportStageSupport.createStagingFile(context, "parsed-p" + partitionNo);
     long lineNo = 0;
     long kept = 0;
     int targetMod = partitionNo - 1;
@@ -658,9 +654,5 @@ public class ParseStep implements ImportStageStep {
 
       return null;
     }
-  }
-
-  private Path createStagingFile(ImportJobContext context, String phase) throws Exception {
-    return ImportStageSupport.createStagingFile(context, phase);
   }
 }

@@ -31,7 +31,7 @@ class ForensicExportLogTransactionService {
         JsonUtils.toJson(List.of("job_instances", "batch_day_operation_audits", "manifest"));
     String jobCodesJson =
         EmptyChecks.isEmpty(request.jobCodes()) ? null : JsonUtils.toJson(request.jobCodes());
-    forensicExportLogMapper.insert(ForensicExportLogEntity.builder()
+    ForensicExportLogEntity exportLogEntity = ForensicExportLogEntity.builder()
         .tenantId(request.tenantId())
         .exportId(exportId)
         .bizDateFrom(request.bizDateFrom())
@@ -43,6 +43,7 @@ class ForensicExportLogTransactionService {
         .requestedBy(Texts.hasText(request.requestedBy()) ? request.requestedBy() : "UNKNOWN")
         .requestedAt(requestedAt)
         .traceId(request.traceId())
-        .build());
+        .build();
+    forensicExportLogMapper.insert(exportLogEntity);
   }
 }

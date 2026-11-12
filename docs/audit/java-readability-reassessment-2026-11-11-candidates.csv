@@ -117,45 +117,45 @@ R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pi
 R14,query-or-check-name-with-write,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/service/DefaultLaunchService.java,764,resolveConcurrentDuplicate,保留：resolve 动词本就含处理，写 DUPLICATE 验收状态是其职责，不是查询或校验名
 R14,query-or-check-name-with-write,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/DefaultTaskExecutionWrapper.java,151,resolveExecutionTimer,保留：误报（publishPercentiles 是 Timer builder 配置，不写业务数据）
 R14,query-or-check-name-with-write,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/PrepareStep.java,203,resolveObjectName,保留：误报（只拼对象名，无写入）
-R19,private-pure-forward,batch-common/src/main/java/io/github/pinpols/batch/common/file/ExportFileNameResolver.java,62,hasText -> EmptyChecks.isNotBlank,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,319,cacheTenant -> ConsoleQueryCacheService.keySegment,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,323,isActive -> ACTIVE_INSTANCE_STATUSES.contains,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,327,isTerminal -> TERMINAL_INSTANCE_STATUSES.contains,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileTemplateApplicationService.java,188,resolveTenant -> tenantGuard.resolveTenant,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,776,replaceDependencyRules -> dependencyRuleWriter.replace,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/support/JobResourceAssignmentGuard.java,109,hasText -> Texts.hasText,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AliyunSmsProvider.java,321,toHex -> ConsoleNotificationCryptoSupport.toHex,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AliyunSmsProvider.java,325,textOrNull -> ConsoleNotificationCryptoSupport.textOrNull,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/TencentSmsProvider.java,332,toHex -> ConsoleNotificationCryptoSupport.toHex,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/TencentSmsProvider.java,336,textOrNull -> ConsoleNotificationCryptoSupport.textOrNull,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDispatcher.java,345,matches -> SubscriptionRuleDispatchPolicy.eventTypeMatches,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeMetrics.java,49,counter -> meterRegistry.counter,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/service/ConsoleDashboardQueryService.java,196,cacheTenant -> ConsoleQueryCacheService.keySegment,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,139,asString -> ConsoleExcelValueSupport.asString,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,143,upper -> ConsoleExcelValueSupport.upper,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,147,isBlank -> ConsoleExcelValueSupport.isBlank,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,151,parseRowNo -> ConsoleExcelValueSupport.parseRowNo,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,451,resolveTenant -> tenantGuard.resolveTenant,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,66,asString -> ConsoleExcelValueSupport.asString,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,70,upper -> ConsoleExcelValueSupport.upper,
-R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,74,isBlank -> ConsoleExcelValueSupport.isBlank,
-R19,private-pure-forward,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/SchedulePlanSupport.java,83,hasText -> EmptyChecks.isNotBlank,
-R19,private-pure-forward,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java,540,markRenewed -> lastConfirmedNanos.set,
-R19,private-pure-forward,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java,376,isTransientOrchestratorFailure -> TaskConsumerFailurePolicy.isTransientOrchestratorFailure,
-R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,441,stringProp -> DispatchChannelConfigSupport.stringProp,
-R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,445,intProp -> DispatchChannelConfigSupport.intProp,
-R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,322,stringProp -> DispatchChannelConfigSupport.stringProp,
-R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,326,intProp -> DispatchChannelConfigSupport.intProp,
-R19,private-pure-forward,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,449,resolveTemplateInt -> ExportConfigValueSupport.resolveTemplateInt,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,765,numberValue -> ImportStageSupport.numberValue,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,773,stringValue -> ImportStageSupport.stringValue,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,777,deleteQuietly -> ImportStageSupport.deleteQuietly,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java,555,deleteQuietly -> ImportStageSupport.deleteQuietly,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java,662,createStagingFile -> ImportStageSupport.createStagingFile,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,521,numberValue -> ImportStageSupport.numberValue,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,538,stringValue -> ImportStageSupport.stringValue,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,546,createValidatedFile -> ImportStageSupport.createValidatedFile,
-R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,550,deleteQuietly -> ImportStageSupport.deleteQuietly,
+R19,private-pure-forward,batch-common/src/main/java/io/github/pinpols/batch/common/file/ExportFileNameResolver.java,62,hasText -> EmptyChecks.isNotBlank,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,319,cacheTenant -> ConsoleQueryCacheService.keySegment,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,323,isActive -> ACTIVE_INSTANCE_STATUSES.contains,保留：isActive 命名了“实例处于活跃状态”的业务判定，且被 3 处诊断规则复用
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/ConsoleClusterDiagnosticService.java,327,isTerminal -> TERMINAL_INSTANCE_STATUSES.contains,保留：isTerminal 命名了“实例处于终态”的业务判定，被诊断规则复用，比 TERMINAL_INSTANCE_STATUSES.contains 更表意
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/file/infrastructure/DefaultConsoleFileTemplateApplicationService.java,188,resolveTenant -> tenantGuard.resolveTenant,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/infrastructure/DefaultConsoleJobDefinitionApplicationService.java,776,replaceDependencyRules -> dependencyRuleWriter.replace,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/job/support/JobResourceAssignmentGuard.java,109,hasText -> Texts.hasText,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AliyunSmsProvider.java,321,toHex -> ConsoleNotificationCryptoSupport.toHex,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/AliyunSmsProvider.java,325,textOrNull -> ConsoleNotificationCryptoSupport.textOrNull,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/TencentSmsProvider.java,332,toHex -> ConsoleNotificationCryptoSupport.toHex,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/TencentSmsProvider.java,336,textOrNull -> ConsoleNotificationCryptoSupport.textOrNull,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/notification/service/WebhookDispatcher.java,345,matches -> SubscriptionRuleDispatchPolicy.eventTypeMatches,保留：WebhookDispatcherTest 通过反射调用该私有方法（测试接缝），内联会令 3 个用例 NoSuchMethodError
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/realtime/ConsoleRealtimeMetrics.java,49,counter -> meterRegistry.counter,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/observability/service/ConsoleDashboardQueryService.java,196,cacheTenant -> ConsoleQueryCacheService.keySegment,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,139,asString -> ConsoleExcelValueSupport.asString,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,143,upper -> ConsoleExcelValueSupport.upper,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,147,isBlank -> ConsoleExcelValueSupport.isBlank,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/domain/workflow/infrastructure/excel/WorkflowNodeStartEndCodeRule.java,151,parseRowNo -> ConsoleExcelValueSupport.parseRowNo,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java,451,resolveTenant -> tenantGuard.resolveTenant,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,66,asString -> ConsoleExcelValueSupport.asString,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,70,upper -> ConsoleExcelValueSupport.upper,已改
+R19,private-pure-forward,batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/CronExpressionFormatRule.java,74,isBlank -> ConsoleExcelValueSupport.isBlank,已改
+R19,private-pure-forward,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/plan/SchedulePlanSupport.java,83,hasText -> EmptyChecks.isNotBlank,已改
+R19,private-pure-forward,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/infrastructure/ActiveTaskLeaseRegistry.java,540,markRenewed -> lastConfirmedNanos.set,保留：嵌套租约类的行为方法，命名“续约确认”这一业务动作并封装私有字段 lastConfirmedNanos，2 处调用
+R19,private-pure-forward,batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractTaskConsumer.java,376,isTransientOrchestratorFailure -> TaskConsumerFailurePolicy.isTransientOrchestratorFailure,保留：方法 Javadoc 承载 R1-P2-7/S1-7 的 transient 分类契约说明，2 处调用点依赖该语义，内联会丢失就近文档
+R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,441,stringProp -> DispatchChannelConfigSupport.stringProp,已改
+R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SftpDispatchChannelAdapter.java,445,intProp -> DispatchChannelConfigSupport.intProp,已改
+R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,322,stringProp -> DispatchChannelConfigSupport.stringProp,已改
+R19,private-pure-forward,batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/SmtpEmailDispatchChannelAdapter.java,326,intProp -> DispatchChannelConfigSupport.intProp,已改
+R19,private-pure-forward,batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/GenerateStep.java,449,resolveTemplateInt -> ExportConfigValueSupport.resolveTemplateInt,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,765,numberValue -> ImportStageSupport.numberValue,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,773,stringValue -> ImportStageSupport.stringValue,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/LoadStep.java,777,deleteQuietly -> ImportStageSupport.deleteQuietly,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java,555,deleteQuietly -> ImportStageSupport.deleteQuietly,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ParseStep.java,662,createStagingFile -> ImportStageSupport.createStagingFile,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,521,numberValue -> ImportStageSupport.numberValue,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,538,stringValue -> ImportStageSupport.stringValue,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,546,createValidatedFile -> ImportStageSupport.createValidatedFile,已改
+R19,private-pure-forward,batch-worker/import/src/main/java/io/github/pinpols/batch/worker/imports/stage/ValidateStep.java,550,deleteQuietly -> ImportStageSupport.deleteQuietly,已改
 R23,unused-private-param,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskOutcomeService.java,373,applyFailureOutcome(cancellationOutcome),
 R23,unused-private-param,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,639,createWorkflowNodeReplayOperation(commandNo),
 R23,unused-private-param,batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultCompensationService.java,639,createWorkflowNodeReplayOperation(traceId),

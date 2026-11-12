@@ -436,15 +436,13 @@ public class GenerateStep implements ExportStageStep {
   }
 
   private int resolvePageSize(ExportJobContext context) {
-    return resolveTemplateInt(context, "page_size", workerConfiguration.pageSize());
+    return ExportConfigValueSupport.resolveTemplateInt(
+        context, "page_size", workerConfiguration.pageSize());
   }
 
   private int resolveChunkSize(ExportJobContext context) {
-    return resolveTemplateInt(context, "chunk_size", workerConfiguration.chunkSize());
-  }
-
-  private int resolveTemplateInt(ExportJobContext context, String key, int fallback) {
-    return ExportConfigValueSupport.resolveTemplateInt(context, key, fallback);
+    return ExportConfigValueSupport.resolveTemplateInt(
+        context, "chunk_size", workerConfiguration.chunkSize());
   }
 
   /** 导出编码选项（charset / BOM / 行分隔符），由模板 target_charset / with_bom / line_separator 解析。 */

@@ -150,7 +150,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     entity.setCreatedBy(operator);
     entity.setUpdatedBy(operator);
     jobDefinitionMapper.insert(entity);
-    replaceDependencyRules(tenantId, entity.getJobCode(), dependencyRules);
+    dependencyRuleWriter.replace(tenantId, entity.getJobCode(), dependencyRules);
     cacheInvalidationService.evictJobDefinition(tenantId, entity.getJobCode());
     singleJobWorkflowProvisioner.provision(entity);
     JobMonitoringPolicyUpsertParam monitoringPolicy = JobMonitoringPolicyUpsertParam.builder()
@@ -216,7 +216,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     applyUpdateExecutionSettings(param, request, existing);
     param.setUpdatedBy(operator);
     jobDefinitionMapper.updateJobDefinitionMaintenance(param);
-    replaceDependencyRules(tenantId, existing.getJobCode(), dependencyRules);
+    dependencyRuleWriter.replace(tenantId, existing.getJobCode(), dependencyRules);
     cacheInvalidationService.evictJobDefinition(tenantId, existing.getJobCode());
     JobMonitoringPolicyUpsertParam.JobMonitoringPolicyUpsertParamBuilder monitoringPolicyBuilder =
         JobMonitoringPolicyUpsertParam.builder();
@@ -497,7 +497,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionView selectedCopy = jobDefinitionMapper.selectByUniqueKey(resolved, newJobCode);
     JobDefinitionView copied = Guard.requireFound(selectedCopy, "source job definition not found");
     List<JobDependencyRuleRequest> sourceDependencyRules = resolveExistingDependencyRules(source);
-    replaceDependencyRules(resolved, newJobCode, sourceDependencyRules);
+    dependencyRuleWriter.replace(resolved, newJobCode, sourceDependencyRules);
     cacheInvalidationService.evictJobDefinition(resolved, newJobCode);
     singleJobWorkflowProvisioner.provision(copied);
     jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
@@ -536,7 +536,7 @@ public class DefaultConsoleJobDefinitionApplicationService
     JobDefinitionView copied = Guard.requireFound(selectedCopy, "source job definition not found");
     String newJobCode = request.getNewJobCode();
     List<JobDependencyRuleRequest> sourceDependencyRules = resolveExistingDependencyRules(source);
-    replaceDependencyRules(resolved, newJobCode, sourceDependencyRules);
+    dependencyRuleWriter.replace(resolved, newJobCode, sourceDependencyRules);
     cacheInvalidationService.evictJobDefinition(resolved, request.getNewJobCode());
     singleJobWorkflowProvisioner.provision(copied);
     jobDefinitionMapper.copyJobMonitoringPolicy(resolved, id, copied.getId(), operator);
@@ -772,11 +772,6 @@ public class DefaultConsoleJobDefinitionApplicationService
       if (reaches(graph, next, target, visited)) return true;
     }
     return false;
-  }
-
-  private void replaceDependencyRules(
-      String tenantId, String downstream, List<JobDependencyRuleRequest> rules) {
-    dependencyRuleWriter.replace(tenantId, downstream, rules);
   }
 
   private static String resolveDefaultParams(String submitted, String stored) {

@@ -47,18 +47,23 @@ public final class WorkflowNodeStartEndCodeRule {
       List<Map<String, Object>> rows, List<WorkbookIssue> issues) {
     Map<String, GroupStat> grouped = new LinkedHashMap<>();
     for (Map<String, Object> row : rows) {
-      String tenant = asString(row.get(ConfigPackageExcelValidator.COL_TENANT_ID));
-      String wfCode = asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_CODE));
-      String wfVer = asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_VERSION));
-      if (isBlank(tenant) || isBlank(wfCode)) {
+      String tenant =
+          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_TENANT_ID));
+      String wfCode =
+          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_WORKFLOW_CODE));
+      String wfVer = ConsoleExcelValueSupport.asString(
+          row.get(ConfigPackageExcelValidator.COL_WORKFLOW_VERSION));
+      if (ConsoleExcelValueSupport.isBlank(tenant) || ConsoleExcelValueSupport.isBlank(wfCode)) {
         continue;
       }
       String key = tenant + "::" + wfCode + "::" + (wfVer == null ? "" : wfVer);
       GroupStat stat = grouped.computeIfAbsent(key, k -> new GroupStat(tenant, wfCode, wfVer));
 
-      String nodeCode = asString(row.get(ConfigPackageExcelValidator.COL_NODE_CODE));
-      String nodeType = upper(asString(row.get(ConfigPackageExcelValidator.COL_NODE_TYPE)));
-      int rowNo = parseRowNo(row.get("__excel_row_no"));
+      String nodeCode =
+          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_CODE));
+      String nodeType = ConsoleExcelValueSupport.upper(
+          ConsoleExcelValueSupport.asString(row.get(ConfigPackageExcelValidator.COL_NODE_TYPE)));
+      int rowNo = ConsoleExcelValueSupport.parseRowNo(row.get("__excel_row_no"));
 
       if (NODE_TYPE_START.equals(nodeType)) {
         stat.startCount++;
@@ -135,22 +140,6 @@ public final class WorkflowNodeStartEndCodeRule {
                 + stat.endCount));
       }
     }
-  }
-
-  private static String asString(Object o) {
-    return ConsoleExcelValueSupport.asString(o);
-  }
-
-  private static String upper(String s) {
-    return ConsoleExcelValueSupport.upper(s);
-  }
-
-  private static boolean isBlank(String s) {
-    return ConsoleExcelValueSupport.isBlank(s);
-  }
-
-  private static int parseRowNo(Object o) {
-    return ConsoleExcelValueSupport.parseRowNo(o);
   }
 
   private static final class GroupStat {
