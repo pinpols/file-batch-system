@@ -3,9 +3,11 @@ package io.github.pinpols.batch.sdk.handler.builtin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import io.github.pinpols.batch.sdk.handler.builtin.support.DelimitedFormat;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +16,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.Map;
 import javax.sql.DataSource;
@@ -73,5 +76,53 @@ class QueryExportHandlerTest {
 
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("output directory");
+  }
+
+  @Test
+  @DisplayName("关闭表头且查询无数据:只产生空文件,行数为 0 并提交事务")
+  void shouldWriteEmptyFileAndCommit_whenNoHeaderAndNoRows() throws Exception {
+    Path out = tempDir.resolve("empty.csv");
+    DataSource ds = mock(DataSource.class);
+    Connection conn = mock(Connection.class);
+    Statement st = mock(Statement.class);
+    ResultSet rs = mock(ResultSet.class);
+    ResultSetMetaData meta = mock(ResultSetMetaData.class);
+    when(ds.getConnection()).thenReturn(conn);
+    when(conn.createStatement()).thenReturn(st);
+    when(st.executeQuery("select 1")).thenReturn(rs);
+    when(rs.getMetaData()).thenReturn(meta);
+    when(meta.getColumnCount()).thenReturn(1);
+    when(rs.next()).thenReturn(false);
+    QueryExportConfig config = new QueryExportConfig(
+        "exp", "select 1", new DelimitedFormat('|', '"', false), "outputPath", 1000);
+
+    SdkTaskResult result = new QueryExportHandler(config, ds)
+        .execute(new SdkTaskContext(
+            "t1", "job1", "ti1", 1L, "w1", Map.of("outputPath", out.toString()), Map.of()));
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.output()).containsEntry("rowCount", 0L);
+    assertThat(Files.readString(out, StandardCharsets.UTF_8)).isEmpty();
+    verify(conn).commit();
+  }
+
+  @Test
+  @DisplayName("查询执行抛异常:任务失败且不提交事务")
+  void shouldFailWithoutCommit_whenQueryThrows() throws Exception {
+    Path out = tempDir.resolve("broken.csv");
+    DataSource ds = mock(DataSource.class);
+    Connection conn = mock(Connection.class);
+    Statement st = mock(Statement.class);
+    when(ds.getConnection()).thenReturn(conn);
+    when(conn.createStatement()).thenReturn(st);
+    when(st.executeQuery("select 1")).thenThrow(new SQLException("query broken"));
+
+    SdkTaskResult result = new QueryExportHandler(QueryExportConfig.defaults("exp", "select 1"), ds)
+        .execute(new SdkTaskContext(
+            "t1", "job1", "ti1", 1L, "w1", Map.of("outputPath", out.toString()), Map.of()));
+
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("query broken");
+    verify(conn, never()).commit();
   }
 }
