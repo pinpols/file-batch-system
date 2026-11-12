@@ -57,12 +57,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** 从实际 Service/Mapper 验证身份、行锁与事务回滚，测试数据只用于建立原请求。 */
+/**
+ * 从实际 Service/Mapper 验证身份、行锁与事务回滚，测试数据只用于建立原请求。
+ *
+ * <p>本类直接驱动等待记录的 defer/reject/resume，所以把两个等待对账器的周期扫描调到 1 小时，避免后台抢先认领或拒绝同一行。
+ */
+@TestPropertySource(
+    properties = {
+      "batch.workflow.launch-wait.poll-interval-millis=3600000",
+      "batch.job-dependency-wait.reconcile-interval-millis=3600000"
+    })
 @SpringBootTest(
     classes = BatchOrchestratorApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.NONE)
