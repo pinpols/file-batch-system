@@ -63,6 +63,12 @@ import org.springframework.stereotype.Component;
 public class DefaultResourceScheduler implements ResourceScheduler {
 
   /**
+   * 未配置或非正时的优先级老化步长秒数，
+   * 与 ResourceSchedulerProperties.priorityAgingStepSeconds 默认值一致。
+   */
+  private static final long DEFAULT_PRIORITY_AGING_STEP_SECONDS = 60L;
+
+  /**
    * tick 级别活跃计数缓存:在一个调度 tick 内 (如 WaitingPartitionDispatchScheduler 批量评估若干 partition) 对相同
    * (tenantId, queueCode/workerGroup) 的 4 个 COUNT 查询去重,消除重复 DB round-trip。
    *
@@ -432,7 +438,8 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     long elapsedSeconds = waitedDuration.toSeconds();
     long waitedSeconds = Math.max(0L, elapsedSeconds);
     long configuredStepSeconds = resourceSchedulerProperties.getPriorityAgingStepSeconds();
-    long stepSeconds = configuredStepSeconds > 0 ? configuredStepSeconds : 60L;
+    long stepSeconds =
+        configuredStepSeconds > 0 ? configuredStepSeconds : DEFAULT_PRIORITY_AGING_STEP_SECONDS;
     long steps = waitedSeconds / stepSeconds;
     long configuredBonusPerStep = resourceSchedulerProperties.getPriorityAgingBonusPerStep();
     long bonusPerStep = Math.max(0L, configuredBonusPerStep);

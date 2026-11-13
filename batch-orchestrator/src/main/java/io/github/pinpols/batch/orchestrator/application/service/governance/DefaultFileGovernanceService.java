@@ -79,6 +79,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultFileGovernanceService implements FileGovernanceService {
 
+  /** 预签名下载链接有效期下限（秒）。 */
+  private static final int MIN_PRESIGN_EXPIRY_SECONDS = 60;
+
+  /** 文件包绑定允许声明的必需文件数上限。 */
+  private static final int MAX_REQUIRED_FILE_NAMES = 100;
+
   // ── duplicate literal constants ─────────────────────────────────────────
   private static final String STATUS_SUCCESS = "SUCCESS";
   private static final DateTimeFormatter OBJECT_KEY_DATE =
@@ -186,8 +192,8 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (EmptyChecks.isBlank(storagePath)) {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.file.storage_path_missing");
     }
-    int expirySeconds =
-        Math.max(60, fileGovernanceProperties.getAccess().getPresignExpirySeconds());
+    int expirySeconds = Math.max(
+        MIN_PRESIGN_EXPIRY_SECONDS, fileGovernanceProperties.getAccess().getPresignExpirySeconds());
     String presignedUrl =
         s3GovernanceStorage.createPresignedDownloadUrl(storageBucket, storagePath, expirySeconds);
     Map<String, Object> auditDetail = new LinkedHashMap<>();
@@ -787,7 +793,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         || !Texts.hasText(command.fileGroupCode())
         || EmptyChecks.isNull(command.bizDate())
         || EmptyChecks.isEmpty(command.requiredFileNames())
-        || command.requiredFileNames().size() > 100
+        || command.requiredFileNames().size() > MAX_REQUIRED_FILE_NAMES
         || !Texts.hasText(command.bundleTemplateCode())
         || command.bundleTemplateCode().trim().length() > 128;
     if (bindingIsInvalid) {

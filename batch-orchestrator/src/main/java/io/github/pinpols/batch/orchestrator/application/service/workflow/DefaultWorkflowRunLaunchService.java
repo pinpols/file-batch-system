@@ -72,6 +72,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService {
 
+  /** 准入事务遇到序列化冲突（SQLSTATE 40001）时的最大尝试次数（含首次）。 */
+  private static final int SERIALIZATION_RETRY_MAX_ATTEMPTS = 3;
+
   /** 解析 workflow-run replay 的实际启动参数与快照，避免 launch 主流程过长。 */
   private ReplayResolution resolveReplayResolution(
       LaunchRequest request,
@@ -382,11 +385,12 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   private WorkflowRunEntity prepareRunWithSerializationRetry(RunPreparation preparation) {
     // PostgreSQL 的 REPEATABLE READ 在等待同一请求的行锁后可能以 40001 结束事务。
     // 只重试已回滚的准入事务，让下一次快照读取先完成的同一请求；其他约束错误继续上抛。
-    for (int attempt = 1; attempt <= 3; attempt++) {
+    for (int attempt = 1; attempt <= SERIALIZATION_RETRY_MAX_ATTEMPTS; attempt++) {
       try {
         return prepareRun(preparation);
       } catch (DataAccessException databaseFailure) {
-        if (!JdbcExceptionSupport.hasSqlState(databaseFailure, "40001") || attempt == 3) {
+        if (!JdbcExceptionSupport.hasSqlState(databaseFailure, "40001")
+            || attempt == SERIALIZATION_RETRY_MAX_ATTEMPTS) {
           throw databaseFailure;
         }
       }

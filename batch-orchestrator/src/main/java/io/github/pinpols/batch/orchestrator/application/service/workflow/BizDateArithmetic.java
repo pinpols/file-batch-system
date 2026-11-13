@@ -30,6 +30,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class BizDateArithmetic {
 
+  /** LAST_N_WEEKS 标签允许的最大周数（一个季度）。 */
+  private static final int MAX_LAST_WEEKS = 13;
+
   private static final int RANGE_MAX_DAYS = 90;
 
   /**
@@ -112,7 +115,7 @@ public class BizDateArithmetic {
     if (tag.startsWith("LAST_") && tag.endsWith("_WEEKS")) {
       String weekCountText = tag.substring("LAST_".length());
       int weeks = parseLeadingInt(weekCountText);
-      if (weeks <= 0 || weeks > 13) {
+      if (weeks <= 0 || weeks > MAX_LAST_WEEKS) {
         return Collections.emptyList();
       }
       LocalDate end = bizDate.minusDays(1);

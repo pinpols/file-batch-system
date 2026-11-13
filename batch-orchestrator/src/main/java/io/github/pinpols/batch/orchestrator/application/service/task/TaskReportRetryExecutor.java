@@ -15,12 +15,26 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class TaskReportRetryExecutor {
 
+  /** 任务结果上报遇到锁冲突/瞬时数据库异常的最大尝试次数（含首次）。 */
+  private static final int REPORT_RETRY_MAX_ATTEMPTS = 5;
+
+  /** 重试首次退避毫秒数，此后按 2 倍随机递增。 */
+  private static final int REPORT_RETRY_INITIAL_DELAY_MILLIS = 50;
+
+  /** 重试退避上限毫秒数。 */
+  private static final int REPORT_RETRY_MAX_DELAY_MILLIS = 1000;
+
   private final TaskOutcomeService taskOutcomeService;
 
   @Retryable(
       retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
-      maxAttempts = 5,
-      backoff = @Backoff(delay = 50, maxDelay = 1000, multiplier = 2.0, random = true))
+      maxAttempts = REPORT_RETRY_MAX_ATTEMPTS,
+      backoff =
+          @Backoff(
+              delay = REPORT_RETRY_INITIAL_DELAY_MILLIS,
+              maxDelay = REPORT_RETRY_MAX_DELAY_MILLIS,
+              multiplier = 2.0,
+              random = true))
   public void report(Long taskId, TaskExecutionReportCommand request) {
     String errorCode = resolveFailureField(request.errorCode(), request.code(), request.success());
     String errorMessage =

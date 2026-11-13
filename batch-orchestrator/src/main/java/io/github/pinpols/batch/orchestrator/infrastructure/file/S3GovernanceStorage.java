@@ -26,6 +26,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class S3GovernanceStorage {
 
+  /** 预签名下载链接有效期下限（秒）。 */
+  private static final int MIN_PRESIGN_EXPIRY_SECONDS = 60;
+
   private final S3StorageProperties properties;
   private final BatchObjectStore objectStore;
   private final ImportIngressOwnershipRepository ownershipRepository;
@@ -115,7 +118,7 @@ public class S3GovernanceStorage {
   public String createPresignedDownloadUrl(String bucket, String objectName, int expirySeconds) {
     try {
       String targetBucket = bucket == null || bucket.isBlank() ? properties.getBucket() : bucket;
-      int minimumExpirySeconds = Math.max(60, expirySeconds);
+      int minimumExpirySeconds = Math.max(MIN_PRESIGN_EXPIRY_SECONDS, expirySeconds);
       Duration expiry = Duration.ofSeconds(minimumExpirySeconds);
       return objectStore.presign(targetBucket, objectName, expiry);
     } catch (Exception exception) {

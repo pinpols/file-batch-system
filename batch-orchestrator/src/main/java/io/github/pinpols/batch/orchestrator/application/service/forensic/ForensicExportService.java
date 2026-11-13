@@ -72,6 +72,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ForensicExportService {
 
+  /** 每个业务日最多取回的批次日治理审计条数，总量另受 auditRowCap 限制。 */
+  private static final int DAILY_AUDIT_LIMIT = 1000;
+
   /** 导出失败原因长度上限；写入 forensic_export_log.error_message VARCHAR(2048)（V116），留出余量。 */
   private static final int FAILURE_MESSAGE_MAX_LENGTH = 2000;
 
@@ -214,7 +217,7 @@ public class ForensicExportService {
         }
         // calendar_code 在 v0.1 不参与过滤 — 同 tenant 同 bizDate 下所有 calendar 的治理动作一并取
         // limit 1000 / 天足以覆盖正常运维节奏；总量再受 auditRowCap 保护
-        int dailyAuditLimit = Math.min(1000, remaining);
+        int dailyAuditLimit = Math.min(DAILY_AUDIT_LIMIT, remaining);
         List<BatchDayOperationAuditEntity> dailyAudits =
             batchDayOperationAuditMapper.selectByCalendarBizDate(
                 request.tenantId(), null, cursor, dailyAuditLimit);

@@ -74,6 +74,15 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class DefaultScheduleForwarder implements ScheduleForwarder {
 
+  /** 推进 outbox 时遇到锁冲突/瞬时数据库异常的最大尝试次数（含首次）。 */
+  private static final int ADVANCE_RETRY_MAX_ATTEMPTS = 3;
+
+  /** 重试首次退避毫秒数，此后按 2 倍递增。 */
+  private static final int ADVANCE_RETRY_INITIAL_DELAY_MILLIS = 100;
+
+  /** 重试退避上限毫秒数。 */
+  private static final int ADVANCE_RETRY_MAX_DELAY_MILLIS = 1000;
+
   private final OutboxEventMapper outboxEventMapper;
   private final OutboxChildRecordService outboxChildRecordService;
   private final OutboxPublisher outboxPublisher;
@@ -139,8 +148,12 @@ public class DefaultScheduleForwarder implements ScheduleForwarder {
       // 已处理。Kafka at-least-once + 重新触发会造成重复消费。超时让 resetStalePublishing 负责
       // 自愈即可,不在此处重试。
       retryFor = {CannotAcquireLockException.class, TransientDataAccessException.class},
-      maxAttempts = 3,
-      backoff = @Backoff(delay = 100, multiplier = 2, maxDelay = 1000))
+      maxAttempts = ADVANCE_RETRY_MAX_ATTEMPTS,
+      backoff =
+          @Backoff(
+              delay = ADVANCE_RETRY_INITIAL_DELAY_MILLIS,
+              multiplier = 2,
+              maxDelay = ADVANCE_RETRY_MAX_DELAY_MILLIS))
   public ScheduleForwarderResult advance(SchedulePlan plan) {
     List<OutboxEventEntity> pendingEvents = pollPending(plan);
     // ── 阶段一：set-based markPublishing + 并行触发 Kafka 发送 ──────────────────

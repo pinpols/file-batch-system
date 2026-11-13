@@ -52,6 +52,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class BatchDayOpenService {
 
+  /** 顺延到前/后一个工作日时最多向前或向后查找的天数（一年）。 */
+  private static final int MAX_WORKDAY_SEARCH_DAYS = 365;
+
+  /** 每轮最多处理的日历依赖等待条数。 */
+  private static final int DEPENDENCY_WAIT_BATCH_SIZE = 100;
+
   private static final LocalTime DEFAULT_CUTOFF_TIME = LocalTime.of(6, 0);
   private static final List<String> UNLAUNCHED_REQUEST_STATUSES = List.of(
       TriggerRequestStatus.PENDING.code(),
@@ -239,7 +245,7 @@ public class BatchDayOpenService {
     if (!"PREV_WORKDAY".equals(rule) && !"NEXT_WORKDAY".equals(rule)) return rawBizDate;
 
     LocalDate candidate = rawBizDate.plusDays(direction);
-    for (int day = 0; day < 365; day++) {
+    for (int day = 0; day < MAX_WORKDAY_SEARCH_DAYS; day++) {
       String candidateType = planCalendarMapper.selectEffectiveDayType(
           calendar.tenantId(), calendar.calendarCode(), candidate);
       if (!"HOLIDAY".equalsIgnoreCase(candidateType)) return candidate;
@@ -408,7 +414,7 @@ public class BatchDayOpenService {
   private void reconcileDependencyWaits(BusinessCalendarEntity calendar, Instant now) {
     List<CalendarDependencyWaitEntity> pending =
         calendarDependencyWaitMapper.selectWaitingForUpdate(
-            calendar.tenantId(), calendar.calendarCode(), now, 100);
+            calendar.tenantId(), calendar.calendarCode(), now, DEPENDENCY_WAIT_BATCH_SIZE);
     if (EmptyChecks.isEmpty(pending)) return;
     for (CalendarDependencyWaitEntity wait : pending) {
       BatchDayInstanceEntity existing = batchDayInstanceMapper.selectByTenantCalendarBizDate(

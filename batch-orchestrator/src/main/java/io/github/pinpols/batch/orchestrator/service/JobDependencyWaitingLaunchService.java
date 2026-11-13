@@ -44,6 +44,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class JobDependencyWaitingLaunchService {
 
+  /** 查询依赖等待中的启动请求时单页条数上限。 */
+  private static final int MAX_PAGE_SIZE = 200;
+
   private static final String INVALID_DEPENDENCY_SNAPSHOT = "DEPENDENCY_SNAPSHOT_INVALID";
   private static final Set<String> DEPENDENCY_SNAPSHOT_FIELDS =
       Set.of("upstreamJobCode", "bizDateAlignment", "upstreamBizDate", "resolutionError");
@@ -81,7 +84,7 @@ public class JobDependencyWaitingLaunchService {
       throw new IllegalArgumentException("Unsupported job dependency wait status");
     }
     String normalizedJobCode = EmptyChecks.isBlank(jobCode) ? null : jobCode.trim();
-    int pageSize = Math.max(1, Math.min(limit, 200));
+    int pageSize = Math.max(1, Math.min(limit, MAX_PAGE_SIZE));
     return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
       TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
       return transactionTemplate.execute(tx -> {

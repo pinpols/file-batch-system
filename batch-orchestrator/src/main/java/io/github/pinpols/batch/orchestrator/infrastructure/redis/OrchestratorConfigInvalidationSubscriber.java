@@ -42,13 +42,16 @@ public class OrchestratorConfigInvalidationSubscriber implements MessageListener
   static final String CHANNEL = "batch:config:invalidation";
   private static final int REVISION_TRACKER_MAX_SIZE = 100_000;
 
+  /** 配置键修订号在最后一次访问后保留的时长。 */
+  private static final Duration REVISION_TRACKER_EXPIRE_AFTER_ACCESS = Duration.ofHours(12);
+
   private final StringRedisTemplate redisTemplate;
   private final BatchRedisNamespace redisNamespace;
   private final OrchestratorConfigCacheService cacheService;
   private final AtomicBoolean running = new AtomicBoolean(false);
   private final AtomicLong appliedRevision = new AtomicLong(0);
   private final Cache<String, Long> keyRevisions = Caffeine.newBuilder()
-      .expireAfterAccess(Duration.ofHours(12))
+      .expireAfterAccess(REVISION_TRACKER_EXPIRE_AFTER_ACCESS)
       .maximumSize(REVISION_TRACKER_MAX_SIZE)
       .build();
 

@@ -93,6 +93,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class BatchDayReplayService {
 
+  /** 查询最近重放会话时的条数上限。 */
+  private static final int MAX_RECENT_SESSIONS = 200;
+
   private static final Duration PREVIEW_TOKEN_TTL = Duration.ofMinutes(5);
   private static final Duration CONSUMED_PREVIEW_RETENTION = Duration.ofHours(24);
   private static final int EXPIRED_PREVIEW_CLEANUP_LIMIT = 500;
@@ -472,7 +475,7 @@ public class BatchDayReplayService {
     if (!Texts.hasText(tenantId) || limit <= 0) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
     }
-    int safeLimit = Math.min(limit, 200);
+    int safeLimit = Math.min(limit, MAX_RECENT_SESSIONS);
     return sessionMapper.selectRecentByTenant(tenantId, defaultIfBlank(status, null), safeLimit);
   }
 

@@ -42,6 +42,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class BatchDayReplayRangeOperationService {
+
+  /** 查询最近区间重放操作时的条数上限。 */
+  private static final int MAX_RECENT_OPERATIONS = 200;
+
   private static final String REPLAY_INVALID_ARGUMENT = "error.batch_day_replay.invalid_argument";
 
   private static final String OPERATION_TYPE = ReplayOperationType.BATCH_DAY_RANGE.code();
@@ -224,7 +228,7 @@ public class BatchDayReplayRangeOperationService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, REPLAY_INVALID_ARGUMENT);
     }
     operationMapper.setTenantContext(tenantId);
-    return operationMapper.selectRecentByTenant(tenantId, Math.min(limit, 200));
+    return operationMapper.selectRecentByTenant(tenantId, Math.min(limit, MAX_RECENT_OPERATIONS));
   }
 
   @Transactional(readOnly = true)

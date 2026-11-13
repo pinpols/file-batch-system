@@ -41,6 +41,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
 
+  /** 单次运行的分区数上限；未配置或非正时也取该值。WorkerBasedPartitionCountResolver 共用。 */
+  static final int MAX_PARTITION_COUNT = 256;
+
   private final OrchestratorConfigCacheService configCacheService;
 
   /** 有序的解析器链；第一个返回正值的结果胜出。由 Spring 通过 @Order 注入。 */
@@ -266,7 +269,9 @@ public class DefaultSchedulePlanBuilder implements SchedulePlanBuilder {
   }
 
   private int clampMaxPartitionCount(int partitionCount) {
-    return partitionCount <= 0 ? 256 : Math.min(partitionCount, 256);
+    return partitionCount <= 0
+        ? MAX_PARTITION_COUNT
+        : Math.min(partitionCount, MAX_PARTITION_COUNT);
   }
 
   private int firstPositiveInt(Object... values) {
