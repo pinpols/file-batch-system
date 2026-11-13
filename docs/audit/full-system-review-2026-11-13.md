@@ -21,6 +21,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 - `/api/console/**` 的基线是"四种角色之一即可访问"（`ConsoleSecurityConfiguration`：ADMIN、TENANT_ADMIN、AUDITOR、TENANT_USER）。381 个接口中 302 个另有 `@PreAuthorize`；其余 79 个只有基线，其中 47 个在 `ConsoleQueryController`。
 - 已确认一例：`menu.yml` 中"审计日志""操作审计"只对 ADMIN、TENANT_ADMIN、AUDITOR 开放，对应的 `GET /audits`、`GET /operation-audits` 没有角色检查。`OperationAuditQueryService` 只按租户过滤，因此 TENANT_USER 直接调接口能读到本租户的操作审计，包括管理员的操作记录。未找到拒绝 TENANT_USER 的测试。
 - 其余 45 个只有基线的查询接口未逐个与菜单比对。
+- **2026-11-14 复核与部分实施**：`/operation-audits` 已加 `ADMIN_OR_TENANT_ADMIN_OR_AUDITOR`，并有 `ConsoleQueryControllerAuthorizationTest` 守护。上文对 `/audits` 的判断有误：它查的是文件审计 `file_audit_log`，前端文件中心、执行日志、作业定义详情和自助服务「我的审计」都在用，TENANT_USER 本就可见，维持基线。`/execution-logs` 同为文件审计别名，用于 VIEWER 可见的综合查询页，同样维持。其余接口（审批、Outbox、Worker、文件模板与渠道等）前端存在 TENANT_USER 可见页面的复用调用，需逐页确认后再收紧，仍开放。
 - 不受影响的：`ConsoleAiController` 的 13 个接口虽无 `@PreAuthorize`，但服务层 `ConsoleAiAuthorizationService.assertAllowed` 按配置白名单校验。
 
 ### ARCH-20261113-10 / P2 / 有当前证据：平台库的租户隔离只在应用层
