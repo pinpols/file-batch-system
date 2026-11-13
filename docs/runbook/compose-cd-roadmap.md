@@ -252,47 +252,84 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  CI["GitHub Actions"] --> REG["GHCR<br/>不可变镜像 digest"]
-  CI --> OPS["Ops Repo<br/>staging / production 期望状态"]
-  OPS --> ARGO["Argo CD"]
-  USER["用户 / 运维"] --> ING["LB / Ingress / TLS"]
+
+  USER(["用户 / 运维"]):::entry
+  ING["LB / Ingress / TLS"]
   subgraph K8S["目标：Kubernetes / 多故障域"]
-    FE["batch-console × N"]
-    API["console-api × N"]
-    TR["Trigger × N"]
-    OR["Orchestrator × N"]
-    FILE["文件 Worker 池 × N"]
-    ATOMIC["Atomic Worker × N<br/>独立权限 / NetworkPolicy"]
-    ING --> FE
-    ING --> API
-    API --> TR
-    API --> OR
-    FILE -->|"claim / report"| OR
-    ATOMIC -->|"claim / report"| OR
-  end
-  ARGO -. "同步声明" .-> K8S
-  REG -. "按 digest 拉取" .-> K8S
-  subgraph DATA["目标：HA 数据平面"]
-    PG["PgBouncer / PostgreSQL HA<br/>备份 / PITR"]
-    subgraph KF["Kafka HA"]
-      LAUNCH["触发通道"]
-      TASK["派单通道"]
+    FE["batch-console × N"]:::entry
+    subgraph CTRL["控制面"]
+      direction LR
+      API["console-api × N"]:::control
+      TR["Trigger × N"]:::control
+      OR["Orchestrator × N"]:::control
     end
-    CACHE["Valkey / Redis HA"]
-    OBJ["分布式 S3"]
+    subgraph EXEC["执行面"]
+      direction LR
+      FILE["文件 Worker 池 × N"]:::worker
+      ATOMIC["Atomic Worker × N<br/>独立权限 / NetworkPolicy"]:::worker
+    end
   end
-  TR --> LAUNCH --> OR
+  subgraph KF["Kafka HA"]
+    direction LR
+    LAUNCH{{"触发通道"}}:::mq
+    TASK{{"派单通道"}}:::mq
+  end
+  subgraph DATA["目标：HA 数据平面"]
+    direction LR
+    PG[("PgBouncer / PostgreSQL HA<br/>备份 / PITR")]:::store
+    CACHE[("Valkey / Redis HA")]:::store
+    OBJ[("分布式 S3")]:::store
+  end
+  USER --> ING
+  ING --> FE
+  ING --> API
+  API --> TR
+  API --> OR
+  TR --> LAUNCH
+  LAUNCH --> OR
   OR --> TASK
-  TASK --> FILE
-  TASK --> ATOMIC
-  API --> PG
-  TR --> PG
-  OR --> PG
+  TASK --> EXEC
+  EXEC -->|"claim / report"| OR
+  CTRL --> PG
   API --> CACHE
   OR --> CACHE
   FILE --> OBJ
-  OBS["指标 / 日志 / 链路"] -. "观测" .-> K8S
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+```
+
+交付与观测链路单独成图：镜像与期望状态经 GitOps 同步到上面的 Kubernetes 工作负载，观测覆盖工作负载与数据平面。
+
+```mermaid
+%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
+flowchart LR
+
+  CI["GitHub Actions"]
+  REG[("GHCR<br/>不可变镜像 digest")]:::store
+  OPS["Ops Repo<br/>staging / production 期望状态"]
+  ARGO["Argo CD"]
+  K8S["Kubernetes 工作负载"]:::control
+  DATA[("HA 数据平面")]:::store
+  OBS["指标 / 日志 / 链路"]:::ext
+  CI --> REG
+  CI --> OPS
+  OPS --> ARGO
+  ARGO -. "同步声明" .-> K8S
+  REG -. "按 digest 拉取" .-> K8S
+  OBS -. "观测" .-> K8S
   OBS -. "观测" .-> DATA
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 目标职责边界：
