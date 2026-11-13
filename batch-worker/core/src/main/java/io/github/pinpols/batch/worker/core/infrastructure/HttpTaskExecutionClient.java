@@ -461,8 +461,8 @@ public class HttpTaskExecutionClient
   public void report(TaskExecutionReport report) {
     // A-3.6 a: REPORT 不入 pipeline_step_run（保留 step_run 纯业务语义），但需要可观测性。
     // 用 micrometer Timer 记录 REPORT 调用耗时 + 结果 tag，运维可通过
-    //   batch.worker.report.duration{tenantId=, workerType=, outcome=success|failure}
-    // 的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
+    //   batch.worker.report.duration{outcome=success|failure}
+    // （tenantId 高基数，不作 tag；见 recordReportDuration）的 P95/P99 发现 Orchestrator 侧 report 瓶颈或链路中断。
     //
     // P0 #16 (2026-05-23): 三段式失败链。
     //   1) HTTP 重试耗尽 → 尝试 outbox.enqueue（ADR-015），由 pollDeferredReports 后台重投。

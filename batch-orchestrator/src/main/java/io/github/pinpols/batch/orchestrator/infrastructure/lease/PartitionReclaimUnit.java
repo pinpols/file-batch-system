@@ -131,8 +131,9 @@ public class PartitionReclaimUnit {
     // reclaim 是 partition(上面 resetForDispatch 已锁)→ task;outcome 是 task(finishTask)→
     // partition(markStatus)。
     // 若这里直接 resetForRetry(task 行锁)采用默认「等待」语义,当 outcome 正持有该 task 行、并反向等待本事务已持有的
-    // partition 行时,构成 40P01 行锁反转死锁(OutcomeVsReclaimDeadlockIntegrationTest 已真复现)。#768 的
-    // 当前 reclaim 和 outcome 在各自行锁操作前共用 instance advisory lock；NOWAIT 仍保留，
+    // partition 行时,构成 40P01 行锁反转死锁(OutcomeVsReclaimDeadlockIntegrationTest 已真复现)。当时 #768 的
+    // instance advisory lock 只串行化 outcome 之间，reclaim 不取该锁，挡不住这条 2 行反转。
+    // 现在 reclaim 和 outcome 在各自行锁操作前共用 instance advisory lock；NOWAIT 仍保留，
     // 对未使用该围栏且持有 task 行锁的并发操作主动让路，并回滚上面的 partition reset，等待下一轮重试。
     // reclaim 因此永不「等待」task 行锁,不再参与任何等待环。CAS/version/前态条件一律不变。
     try {

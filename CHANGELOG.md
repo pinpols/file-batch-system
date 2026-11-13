@@ -25,6 +25,7 @@
 - 导入模板的加密类型选 `PGP` 或 `CUSTOM`、又没有显式 `preprocess_pipeline` 时，Console 在创建、更新、启用和配置包/批量初始化写入时直接拒绝。此前这种模板能保存，到运行时才以 `IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED` 失败。未启用的草稿、导出模板和已配置显式流水线的模板不受影响。
 - Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。
 - 审批推送标题中的申请类型取审批类型字典标签，`SELF_SERVICE` 显示为「自助补救」，未登记的类型码仍原样显示。
+- 后端状态值统一改用权威枚举：新增 `BatchDayReplaySessionStatus` / `BatchDayReplayEntryStatus`，并清理 `AlertStatus`、`OutboxPublishStatus`、`ResultVersionMapper.VersionStatus` 的私有复写字面量；删除与 `BatchLifecycleStatus` 重复的 `BatchStatusConstants`、5 个从未注册的指标名和 5 个无引用错误文案常量。持久化取值、HTTP 契约和已注册指标名均不变。
 
 - P1-A Stage 1 包结构收尾：Console Controller 与应用契约迁入 `domain.<ctx>` 并新增 `config` 上下文；仅内部 Java 包路径变化，HTTP 路径、请求/响应字段、鉴权与 wire schema 不变。
 
@@ -43,6 +44,7 @@
 ### Fixed
 
 - 配置包模板「填写顺序」sheet 为作业监控策略、工作流监控策略补齐填写场景和先填原因，不再显示通用占位文本。
+- 平台原子 SQL 执行器切分语句时，普通单引号字符串和双引号标识符里的反斜杠按字面字符处理（PostgreSQL `standard_conforming_strings=on` 默认语义），`insert ... values ('C:\'); delete ...` 不再被并成一条；平台执行器与 Java、Python SDK 原子 SQL 处理器同时识别 `E'...'` 转义字符串，其中 `\'` 不结束字符串。三处切分规则现已一致。
 - Java、Python SDK 的原子 SQL 处理器切分语句时跳过 PG dollar-quote（`$$...$$`、`$tag$...$tag$`）体内的 `;`，与平台原子 SQL 执行器一致，含函数体的脚本不再被拆坏或误计入 `maxStatementsPerJob`。
 - 导出格式为 XML 时，生成阶段的文件后缀改为 `.xml`，与对外文件名一致。
 

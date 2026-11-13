@@ -370,7 +370,6 @@ public class DefaultCompensationService implements CompensationService {
     return value;
   }
 
-  /** INSERT command row in REQUIRES_NEW 独立提交;handler 失败也留住命令行(审计 + unblock 后续提交)。 */
   /** Handler 业务写 + SUCCESS 状态/日志,默认 @Transactional:handler 抛错回滚业务写入。 */
   private void executeAndMarkSuccess(
       CompensationSubmitCommand command,

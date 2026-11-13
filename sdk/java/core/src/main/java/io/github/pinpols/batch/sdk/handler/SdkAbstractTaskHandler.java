@@ -96,7 +96,6 @@ public abstract class SdkAbstractTaskHandler implements SdkTaskHandler {
    */
   protected abstract SdkTaskResult doExecute(SdkTaskContext ctx);
 
-  /** 不能把 JVM 级故障伪装成单个任务失败。 */
   /** doExecute 成功完成后调(异常路径不调)。默认 no-op。 */
   protected void after(SdkTaskContext ctx, SdkTaskResult result) {
     // 无操作

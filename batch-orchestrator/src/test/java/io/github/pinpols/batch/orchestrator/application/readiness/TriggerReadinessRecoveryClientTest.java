@@ -3,10 +3,10 @@ package io.github.pinpols.batch.orchestrator.application.readiness;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.domain.entity.ReadinessWaitEntity;
-import io.github.pinpols.batch.orchestrator.infrastructure.http.OkHttpOrchestratorExternalHttpTransport;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -40,7 +40,7 @@ class TriggerReadinessRecoveryClientTest {
       BatchSecurityProperties security = new BatchSecurityProperties();
       security.setInternalSecret("test-readiness-secret");
       TriggerReadinessRecoveryClient client = new TriggerReadinessRecoveryClient(
-          properties, security, new OkHttpOrchestratorExternalHttpTransport());
+          properties, security, new OkHttpOutboundHttpTransport());
       ReadinessWaitEntity wait = new ReadinessWaitEntity();
       wait.setTenantId("tenant-recovery");
       wait.setWorkflowDefinitionId(7L);

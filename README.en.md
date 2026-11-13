@@ -53,22 +53,36 @@ The lifecycle of a single task:
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
+flowchart LR
+
   subgraph Control["Control plane"]
-    direction LR
-    Trigger["Trigger<br/>API · schedule · arrival"] -->|"Launch outbox event · Kafka"| Orch["Orchestrator<br/>WorkflowRun → Job → Task"]
+    direction TB
+    Trigger["Trigger<br/>API · schedule · arrival"]:::control
+    Orch["Orchestrator<br/>WorkflowRun → Job → Task"]:::control
+    Trigger -->|"Launch outbox event · Kafka"| Orch
   end
   subgraph Delivery["Reliable dispatch"]
-    direction LR
-    DB[("PostgreSQL<br/>Runtime state + task outbox")] -->|"Asynchronous publisher"| Kafka["Kafka task topic"]
+    direction TB
+    DB[("PostgreSQL<br/>Runtime state + task outbox")]:::store
+    Kafka{{"Kafka task topic"}}:::mq
+    DB -->|"Asynchronous publisher"| Kafka
   end
   subgraph Execution["Execution plane"]
-    direction LR
-    Worker["Built-in Worker / tenant SDK<br/>CLAIM → EXECUTE → REPORT"] --> Target["Business DB / file store / receiver"]
+    direction TB
+    Worker["Built-in Worker / tenant SDK<br/>CLAIM → EXECUTE → REPORT"]:::worker
+    Target["Business DB / file store / receiver"]:::ext
+    Worker --> Target
   end
   Control -->|"Orchestrator writes state + outbox atomically"| Delivery
   Delivery -->|"Kafka task delivery"| Execution
-  Execution -.->|"HTTP to Orchestrator: CLAIM / renew / REPORT"| Control
+  Control <-.->|"HTTP to Orchestrator: CLAIM / renew / REPORT"| Execution
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 The five worker types:

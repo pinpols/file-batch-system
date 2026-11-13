@@ -206,7 +206,8 @@ public class WebhookDispatcher {
     for (WebhookSubscriptionEntity subscription : subscriptions) {
       boolean subscriptionCannotReceiveEvent = EmptyChecks.isNull(subscription)
           || subscription.getId() == null
-          || !matches(subscription.getEventTypes(), payload.eventType());
+          || !SubscriptionRuleDispatchPolicy.eventTypeMatches(
+              subscription.getEventTypes(), payload.eventType());
       if (subscriptionCannotReceiveEvent) {
         continue;
       }
@@ -344,10 +345,6 @@ public class WebhookDispatcher {
     String responseBody() {
       return responseBody;
     }
-  }
-
-  private boolean matches(String configuredEventTypes, String eventType) {
-    return SubscriptionRuleDispatchPolicy.eventTypeMatches(configuredEventTypes, eventType);
   }
 
   private String normalizeEventType(String eventType) {

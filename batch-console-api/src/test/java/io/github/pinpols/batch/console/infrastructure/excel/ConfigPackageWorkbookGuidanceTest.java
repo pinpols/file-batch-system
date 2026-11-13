@@ -22,7 +22,6 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import org.apache.poi.ss.SpreadsheetVersion;
 import org.apache.poi.ss.usermodel.DataValidation;
@@ -161,7 +160,7 @@ class ConfigPackageWorkbookGuidanceTest {
         new ConfigPackageExcelWorkbookWriter(ms, List.of("IMPORT"));
     byte[] bytes;
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      writer.writeFocusedTemplateWorkbook(out, Map.of());
+      writer.writeFocusedTemplateWorkbook(out);
       bytes = out.toByteArray();
     }
     try (XSSFWorkbook workbook = new XSSFWorkbook(new ByteArrayInputStream(bytes))) {

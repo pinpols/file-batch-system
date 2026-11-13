@@ -4,11 +4,11 @@ import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
-import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
@@ -99,7 +99,7 @@ class WeComNotificationSenderTest {
   @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenHostResolvesToInternalAddress() {
     WeComNotificationSender sender =
-        new WeComNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
+        new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(messageWith("{\"url\":\"https://localhost/robot?key=x\"}"));
@@ -112,7 +112,7 @@ class WeComNotificationSenderTest {
   @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenUrlIsLiteralInternalIp() {
     WeComNotificationSender sender =
-        new WeComNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
+        new WeComNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(messageWith("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));

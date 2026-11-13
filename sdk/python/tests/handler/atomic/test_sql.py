@@ -182,3 +182,29 @@ async def test_split_statements_honours_quotes_and_comments() -> None:
 def test_split_statements_honours_dollar_quotes(sql: str, expected: list[str]) -> None:
     # 与平台 SqlTaskExecutor 一致:顶层 dollar-quote 体内的 ``;`` 不切,``$1`` 位置参数不是开标签。
     assert split_statements(sql) == expected
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        # standard_conforming_strings=on(PG 默认): 普通字符串与双引号标识符里的反斜杠是字面字符
+        (
+            "insert into t values ('C:\\'); delete from t",
+            ["insert into t values ('C:\\')", "delete from t"],
+        ),
+        ('select 1 as "x\\"; select 2', ['select 1 as "x\\"', "select 2"]),
+        ("select 'it''s;ok\\'; select 2", ["select 'it''s;ok\\'", "select 2"]),
+        # E'...' 转义字符串: 反斜杠转义下一个字符
+        ("select E'it\\'s;ok'; select 2", ["select E'it\\'s;ok'", "select 2"]),
+        ("select e'a\\\\'; select 2", ["select e'a\\\\'", "select 2"]),
+        ("select E'it''s\\';x'; select 2", ["select E'it''s\\';x'", "select 2"]),
+        ("select time'12:00\\'; select 2", ["select time'12:00\\'", "select 2"]),
+        (
+            "select $$a\\';$$ /* \\' ; */ -- \\' ;\n; select 2",
+            ["select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2"],
+        ),
+    ],
+)
+def test_split_statements_follows_pg_backslash_semantics(sql: str, expected: list[str]) -> None:
+    # 与 Java SDK、平台 SqlTaskExecutor 一致: 只有 E'...' 内反斜杠是转义符。
+    assert split_statements(sql) == expected

@@ -2,6 +2,7 @@ package io.github.pinpols.batch.console.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.model.PageRequest;
 import io.github.pinpols.batch.console.BatchConsoleApiApplication;
@@ -11,7 +12,6 @@ import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionU
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionInsertParam;
 import io.github.pinpols.batch.console.domain.workflow.param.WorkflowDefinitionVersionUpdateParam;
 import io.github.pinpols.batch.console.domain.workflow.query.WorkflowDefinitionQuery;
-import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import java.util.List;
 import java.util.UUID;
@@ -61,7 +61,9 @@ class BatchConsoleApiApplicationIntegrationTest extends AbstractIntegrationTest 
   void shouldLoadContextAndWireHttpTransport_whenApplicationStarts() {
     assertThat(applicationContext).isNotNull();
     assertThat(applicationContext.getBean(OutboundHttpTransport.class))
-        .isInstanceOf(OkHttpConsoleExternalHttpTransport.class);
+        .isInstanceOf(OkHttpOutboundHttpTransport.class);
+    assertThat(applicationContext.getBeanNamesForType(OutboundHttpTransport.class))
+        .containsExactly("okHttpConsoleExternalHttpTransport");
   }
 
   @Test

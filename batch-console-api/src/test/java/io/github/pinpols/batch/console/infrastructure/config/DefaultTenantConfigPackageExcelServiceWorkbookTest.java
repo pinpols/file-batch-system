@@ -117,6 +117,13 @@ class DefaultTenantConfigPackageExcelServiceWorkbookTest {
         .hasSize(11);
   }
 
+  @Test
+  @DisplayName("下载完整模板返回固定文件名")
+  void shouldDownloadTemplate() {
+    assertThat(service.downloadTemplate().fileName())
+        .isEqualTo("tenant-config-package-template.xlsx");
+  }
+
   private static byte[] minimalWorkbook() throws Exception {
     try (XSSFWorkbook workbook = new XSSFWorkbook();
         ByteArrayOutputStream output = new ByteArrayOutputStream()) {

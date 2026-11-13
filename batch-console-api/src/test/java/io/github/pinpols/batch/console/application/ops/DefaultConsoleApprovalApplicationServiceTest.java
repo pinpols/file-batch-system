@@ -3,6 +3,7 @@ package io.github.pinpols.batch.console.application.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
@@ -363,6 +364,52 @@ class DefaultConsoleApprovalApplicationServiceTest {
     verify(orchestratorClient).approveWorkflowRunReplayOperation(46L, TENANT_ID, "operator");
     verify(orchestratorClient).markApprovalExecuted(TENANT_ID, approvalNo);
     verify(orchestratorClient, never()).approveApproval(any(), any(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("批量日重放审批 payload 租户与调用方一致时转发到 orchestrator 推进 session")
+  void shouldForwardBatchDayReplayApproval_whenPayloadTenantMatchesCaller() {
+    stubPendingBatchDayReplayApproval("approval-bdr", TENANT_ID);
+
+    assertThat(service.approve(TENANT_ID, "approval-bdr", "approver-1", "approve"))
+        .isEqualTo("approval-bdr");
+
+    verify(orchestratorClient).approveBatchDayReplay(77L, TENANT_ID, "approver-1");
+    verify(orchestratorClient).markApprovalExecuted(TENANT_ID, "approval-bdr");
+  }
+
+  @Test
+  @DisplayName("批量日重放审批 payload 租户与调用方不一致时拒绝且不转发到 orchestrator")
+  void shouldRejectBatchDayReplayApproval_whenPayloadTenantDiffersFromCaller() {
+    stubPendingBatchDayReplayApproval("approval-bdr-x", "tenant-b");
+
+    Throwable thrown =
+        catchThrowable(() -> service.approve(TENANT_ID, "approval-bdr-x", "approver-1", "ok"));
+
+    assertThat(thrown)
+        .isInstanceOf(BizException.class)
+        .hasFieldOrPropertyWithValue("messageKey", "error.batch_day_replay.invalid_argument");
+    verify(orchestratorClient, never()).approveBatchDayReplay(anyLong(), any(), any());
+    verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
+  }
+
+  private void stubPendingBatchDayReplayApproval(String approvalNo, String payloadTenantId) {
+    String payloadJson = JsonUtils.toJson(Map.of("sessionId", 77L, "tenantId", payloadTenantId));
+    String approvalJson = JsonUtils.toJson(Map.of(
+        "record",
+        Map.of(
+            "approvalStatus", "PENDING",
+            "actionType", "BATCH_DAY_REPLAY",
+            "payloadJson", payloadJson)));
+    when(orchestratorClient.loadApproval(eq(TENANT_ID), eq(approvalNo), any()))
+        .thenAnswer(invocation -> {
+          Class<?> responseType = invocation.getArgument(2);
+          return JsonUtils.fromJson(approvalJson, responseType);
+        });
+    ApprovalDecision decision = remoteDecision(approvalNo, "APPROVED", approvalJson, "approver-1");
+    when(orchestratorClient.approveApproval(
+            eq(TENANT_ID), eq(approvalNo), any(), any(), any(), any()))
+        .thenReturn(decision);
   }
 
   private static ApprovalDecision remoteDecision(

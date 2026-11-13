@@ -1,9 +1,5 @@
-package io.github.pinpols.batch.console.support.http;
+package io.github.pinpols.batch.common.http;
 
-import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
-import io.github.pinpols.batch.common.http.OutboundHttpRequest;
-import io.github.pinpols.batch.common.http.OutboundHttpResponse;
-import io.github.pinpols.batch.common.http.OutboundHttpTransport;
 import io.github.pinpols.batch.common.security.DnsResolveGuard;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import jakarta.annotation.PreDestroy;
@@ -21,13 +17,13 @@ import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
 import okhttp3.ResponseBody;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
 
-/** Console 的 OkHttp 出站适配器；业务 provider 仅依赖 {@link OutboundHttpTransport}。 */
-@Component
-@ConsoleOutboundTransport
-public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport {
+/**
+ * Console 与 Orchestrator 共用的 OkHttp 出站适配器；业务 provider 仅依赖 {@link OutboundHttpTransport}。
+ *
+ * <p>本类不注册为组件：各模块在自己的配置类里以模块限定注解装配，保持原有 bean 名称与注入隔离。
+ */
+public class OkHttpOutboundHttpTransport implements OutboundHttpTransport {
 
   private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
 
@@ -35,16 +31,15 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
   private final OkHttpClient trustedClient;
   private final Dns guardedDns;
 
-  @Autowired
-  public OkHttpConsoleExternalHttpTransport() {
+  public OkHttpOutboundHttpTransport() {
     this(guardedClient(), trustedClient(), DnsResolveGuard::resolveAllAndValidate);
   }
 
-  OkHttpConsoleExternalHttpTransport(OkHttpClient guardedClient, OkHttpClient trustedClient) {
+  OkHttpOutboundHttpTransport(OkHttpClient guardedClient, OkHttpClient trustedClient) {
     this(guardedClient, trustedClient, DnsResolveGuard::resolveAllAndValidate);
   }
 
-  OkHttpConsoleExternalHttpTransport(
+  OkHttpOutboundHttpTransport(
       OkHttpClient guardedClient, OkHttpClient trustedClient, Dns guardedDns) {
     this.guardedClient = guardedClient;
     this.trustedClient = trustedClient;
@@ -79,9 +74,10 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
       case GET -> builder.get();
       case HEAD -> builder.head();
       case POST -> {
-        String body = EmptyChecks.isNull(request.body()) ? "" : request.body();
+        boolean bodyIsNull = EmptyChecks.isNull(request.body());
+        String bodyText = bodyIsNull ? "" : request.body();
         MediaType mediaType = MediaType.get(request.mediaType());
-        RequestBody requestBody = RequestBody.create(body, mediaType);
+        RequestBody requestBody = RequestBody.create(bodyText, mediaType);
         builder.post(requestBody);
       }
     }
@@ -103,7 +99,8 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
   private void applyGuardedRoute(OkHttpClient.Builder clientBuilder, OutboundHttpRequest request)
       throws UnknownHostException {
     String requestHost = request.uri().getHost();
-    List<InetAddress> validatedAddresses = List.copyOf(guardedDns.lookup(requestHost));
+    List<InetAddress> resolvedAddresses = guardedDns.lookup(requestHost);
+    List<InetAddress> validatedAddresses = List.copyOf(resolvedAddresses);
     if (EmptyChecks.isEmpty(validatedAddresses)) {
       throw new UnknownHostException("guarded DNS returned no address for " + requestHost);
     }
@@ -115,9 +112,7 @@ public class OkHttpConsoleExternalHttpTransport implements OutboundHttpTransport
   }
 
   private static boolean sameHost(String left, String right) {
-    String normalizedLeftHost = stripIpv6Brackets(left);
-    String normalizedRightHost = stripIpv6Brackets(right);
-    return normalizedLeftHost.equalsIgnoreCase(normalizedRightHost);
+    return stripIpv6Brackets(left).equalsIgnoreCase(stripIpv6Brackets(right));
   }
 
   private static String stripIpv6Brackets(String host) {

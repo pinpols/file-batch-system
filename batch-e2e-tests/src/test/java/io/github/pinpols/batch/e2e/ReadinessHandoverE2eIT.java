@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.common.enums.TriggerType;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.e2e.apps.E2eReportRecoveryOrchestratorApplication;
 import io.github.pinpols.batch.e2e.apps.E2eTriggerApplication;
 import io.github.pinpols.batch.e2e.support.E2eScenarioFixture;
@@ -11,7 +12,6 @@ import io.github.pinpols.batch.orchestrator.application.readiness.ReadinessWaitS
 import io.github.pinpols.batch.orchestrator.application.readiness.TriggerInternalProperties;
 import io.github.pinpols.batch.orchestrator.application.readiness.TriggerReadinessRecoveryClient;
 import io.github.pinpols.batch.orchestrator.application.service.readiness.ReadinessService;
-import io.github.pinpols.batch.orchestrator.infrastructure.http.OkHttpOrchestratorExternalHttpTransport;
 import io.github.pinpols.batch.orchestrator.mapper.ReadinessWaitMapper;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.github.pinpols.batch.trigger.domain.TriggerDefinitionLoader;
@@ -279,8 +279,8 @@ class ReadinessHandoverE2eIT extends AbstractIntegrationTest {
     int triggerPort = ((WebServerApplicationContext) trigger).getWebServer().getPort();
     TriggerInternalProperties properties = new TriggerInternalProperties();
     properties.setBaseUrl("http://127.0.0.1:" + triggerPort);
-    TriggerReadinessRecoveryClient recovery = new TriggerReadinessRecoveryClient(
-        properties, security, new OkHttpOrchestratorExternalHttpTransport());
+    TriggerReadinessRecoveryClient recovery =
+        new TriggerReadinessRecoveryClient(properties, security, new OkHttpOutboundHttpTransport());
     return new ReadinessWaitService(waits, readiness, recovery, metrics);
   }
 

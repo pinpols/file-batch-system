@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-12 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。文档 PR #1353（9b9f2d8c1）、PR-1 #1354（Task 1–3，51673b1e1）、PR-2 #1355（Task 4–8、13，a2b08f094）、PR-3 #1356（Task 9，c5cd538c2）、PR-4 #1357（Task 10–12、14，9346767fe）和 PR-5 #1358（Task 15–17，3ff888db3）已合入 main；PR-6（Task 19、21、22、24）已在分支 `chore/java-readability-p9-batch6` 完成，草稿 PR 待开；Task 20（PR-7）、23 和 18（拆 2–3 个 PR）未开工；R13（Task 12）已撤销。
+**状态：** 2026-11-13 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。文档 PR #1353（9b9f2d8c1）、PR-1 #1354（Task 1–3，51673b1e1）、PR-2 #1355（Task 4–8、13，a2b08f094）、PR-3 #1356（Task 9，c5cd538c2）、PR-4 #1357（Task 10–12、14，9346767fe）和 PR-5 #1358（Task 15–17，3ff888db3）、PR-6 #1362（Task 19、21、22、24，78fc033b2）和状态枚举与无引用常量复核 #1360（da24538cd）已合入 main；Task 20（PR-7）已在分支 `chore/java-readability-p9-batch7` 完成，PR 待开；Task 23 和 18（拆 2–3 个 PR）未开工；R13（Task 12）已撤销。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 
@@ -390,12 +390,14 @@ PR 划分：Task 1–3 合成 PR-1（低风险）；PR-1 合入后，Task 4–8 
 **Interfaces:**
 - Produces：`public class OkHttpOutboundHttpTransport implements OutboundHttpTransport`，构造参数与两个旧类相同。2026-11-11 的 diff 显示，两份除了类名、包名和类注释，只有局部变量命名不同，不需要再加区分模块的构造参数。如果实现时发现日志或指标里带了模块名，停下来记录，不要自行加参数。
 
-- [ ] **Step 1：先确认 `batch-common` 能加 OkHttp。** 跑 `./mvnw -o -ntp -pl batch-common dependency:tree`，并看依赖收敛和许可证门禁（`docs/standards/open-source-governance.md`）。不允许加的话，停下来，在复评文档里写明，换成另设小模块的方案，并请用户确认。
-- [ ] **Step 2：把两个旧类的现有测试复制一份，指向新类**，作为 `OkHttpOutboundHttpTransportTest`，覆盖：拒绝私有地址、DNS 解析结果固定、超时、不跟随重定向、空 body 的处理。确认新测试编译失败。
-- [ ] **Step 3：实现新类。** 以 orchestrator 版本为准；两版只差局部变量命名的那 16 行，任选一种写法，语义必须相同。
-- [ ] **Step 4：两个模块改为装配新类，删掉旧类。** 配置项名称和默认值保持不变。
-- [ ] **Step 5：跑测试。** `batch-common` 的新测试，加上两个模块中所有名字含 `Outbound`、`ExternalHttp`、`Transport` 的测试，预期全部 PASS。
-- [ ] **Step 6：提交** `refactor: share the OkHttp outbound transport`。
+- [x] **Step 1：先确认 `batch-common` 能加 OkHttp。** 跑 `./mvnw -o -ntp -pl batch-common dependency:tree`，并看依赖收敛和许可证门禁（`docs/standards/open-source-governance.md`）。不允许加的话，停下来，在复评文档里写明，换成另设小模块的方案，并请用户确认。
+- [x] **Step 2：把两个旧类的现有测试复制一份，指向新类**，作为 `OkHttpOutboundHttpTransportTest`，覆盖：拒绝私有地址、DNS 解析结果固定、超时、不跟随重定向、空 body 的处理。确认新测试编译失败。
+- [x] **Step 3：实现新类。** 以 orchestrator 版本为准；两版只差局部变量命名的那 16 行，任选一种写法，语义必须相同。
+- [x] **Step 4：两个模块改为装配新类，删掉旧类。** 配置项名称和默认值保持不变。
+- [x] **Step 5：跑测试。** `batch-common` 的新测试，加上两个模块中所有名字含 `Outbound`、`ExternalHttp`、`Transport` 的测试，预期全部 PASS。
+- [x] **Step 6：提交** `refactor: share the OkHttp outbound transport`。
+
+实施记录（2026-11-13，分支 `chore/java-readability-p9-batch7`）：Step 1 门禁结论为可加。`okhttp-jvm` 5.5.1 早已经 `spring-boot-starter-opentelemetry` → `opentelemetry-exporter-sender-okhttp` 以 runtime 传递进 `batch-common` 及全部依赖方（trigger、各 worker、test-support），改为编译期直依赖不新增运行时工件，许可证（Apache-2.0）已在白名单内；SDK 不依赖 `batch-common`；`check-dependency-boundaries.py` 的 `batch-common` 禁用清单不含 OkHttp。两份旧类 diff 只差类名、包名、类注释、模块限定注解和局部变量，日志与指标里没有模块名。旧类原是 `@Component` 加模块限定注解；由于两个应用都扫描 `io.github.pinpols.batch.common`，新类不加 `@Component`，改由 `ConsoleOutboundTransportConfiguration`、`OrchestratorOutboundTransportConfiguration`（放在原包下）用 `@Bean` 加原限定注解装配，bean 名称沿用 `okHttpConsoleExternalHttpTransport` / `okHttpOrchestratorExternalHttpTransport`，启动集成测试补了 bean 名断言。两个旧测试合并为 `OkHttpOutboundHttpTransportTest`（14 例），另补空请求体、无 Content-Type、DNS 无结果和关闭释放的用例。Step 2 的“确认新测试编译失败”未单独执行：测试随类一起 `git mv`，属于纯搬移。
 
 ### Task 21：Worker 任务消息的 MDC 字段提成共用方法（R20 ②）
 

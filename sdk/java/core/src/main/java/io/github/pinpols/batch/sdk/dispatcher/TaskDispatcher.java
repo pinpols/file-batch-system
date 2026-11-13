@@ -81,11 +81,6 @@ public class TaskDispatcher {
       new TypeReference<>() {};
 
   /**
-   * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
-   * 如果发送普通文本("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
-   * {code,message}} 对象(对齐内建 worker DefaultTaskExecutionWrapper 契约)。
-   */
-  /**
    * P0 backpressure 关键约束:把「已提交到 executor 但尚未跑完」的消息计入容量。{@link Executors#newFixedThreadPool}
    * 的工作队列无界,单看 {@link #inFlight}(CLAIM 成功后才加)在平台 5xx / claim 慢 / HTTP 阻塞时无法限流——worker 线程全部阻塞在
    * claim,inFlight 始终低,consumer 仍会持续把消息写入无界队列并提交 offset;一旦进程崩溃,这些 「已提交 offset 但从未 CLAIM」的任务没有
@@ -778,7 +773,11 @@ public class TaskDispatcher {
   }
 
   /**
-   * 把 {@code (code,message)} 序列化成 JSONB 列要求的合法 JSON 字符串。序列化失败时返回一个最小合法 JSON 对象(永不发普通文本,否则平台 JSONB 解析
+   * 平台 {@code result_summary} 是 JSONB 列(mapper {@code #{resultSummary}::jsonb}):必须是合法 JSON,
+   * 如果发送普通文本("boom")会触发 {@code invalid input syntax for type json} → report 500。统一序列化成 {@code
+   * {code,message}} 对象(对齐内建 worker DefaultTaskExecutionWrapper 契约)。
+   *
+   * <p>把 {@code (code,message)} 序列化成 JSONB 列要求的合法 JSON 字符串。序列化失败时返回一个最小合法 JSON 对象(永不发普通文本,否则平台 JSONB 解析
    * 500)。
    */
   private static String resultSummaryJson(String code, String message) {
