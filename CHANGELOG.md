@@ -22,6 +22,7 @@
 
 ### Changed
 
+- 原子任务 Worker 默认不再暴露可写的 `/actuator/loggers`，只保留 `health,info,prometheus,atomicruntime`，与其他 Worker 一致。该 Worker 管理端点没有认证，网络策略默认关闭，原先集群内任意 Pod 都能改它的日志级别。临时排障可设 `BATCH_WORKER_ATOMIC_ACTUATOR_EXPOSURE` 加回。
 - 导入模板的加密类型选 `PGP` 或 `CUSTOM`、又没有显式 `preprocess_pipeline` 时，Console 在创建、更新、启用和配置包/批量初始化写入时直接拒绝。此前这种模板能保存，到运行时才以 `IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED` 失败。未启用的草稿、导出模板和已配置显式流水线的模板不受影响。
 - Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。
 - 审批推送标题中的申请类型取审批类型字典标签，`SELF_SERVICE` 显示为「自助补救」，未登记的类型码仍原样显示。

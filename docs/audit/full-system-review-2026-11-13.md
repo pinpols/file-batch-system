@@ -47,6 +47,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 
 - Helm 的 `networkPolicy.enabled` 全局默认 `false`；原子任务 Worker 的网络策略只限制出站（`policyTypes: Egress`）。
 - 原子任务 Worker 暴露 `health,info,prometheus,loggers,atomicruntime`，没有接入 Spring Security。Helm 为它设置了独立的管理端口，但网络策略未开启时，集群内任何 Pod 都能访问，包括通过 `POST /actuator/loggers` 修改日志级别。对比：Console 把 `/actuator/loggers` 限定为 ADMIN；Orchestrator 内部接口有 `InternalAuthFilter` 和请求签名；Import Worker 的内部接口有共享密钥校验。
+- **2026-11-14 部分实施**：原子任务 Worker 默认暴露改为 `health,info,prometheus,atomicruntime`，不再包含可写的 `loggers`，需要时用 `BATCH_WORKER_ATOMIC_ACTUATOR_EXPOSURE` 临时加回；`AtomicRuntimeLocalProfileTest` 守护默认与 local 两种配置。仓库没有生产 values 文件，`networkPolicy.enabled` 默认值仍为 `false`，是否默认开启需运维按目标集群的 CNI 与放行规则决定，仍开放。
 
 ### ARCH-20261113-14 / P3 / 有当前证据：测试依赖时序
 
