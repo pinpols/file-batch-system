@@ -136,3 +136,4 @@ Prometheus / Alertmanager 模板已同步:
 
 - 2026-11-11 Java 可读性阶段 9 重构只调整了 `AssetPartitionService`(私有方法 `loadDataAssetId` 改名为 `ensureDataAssetId`)与 `DefaultTriggerService`(`verifyCatchUpSubmission` 守卫提取为具名布尔)的内部写法,readiness 判定、接口与数据契约不变,详见 [Java 可读性阶段 9 计划](../plans/java-readability-phase-9-plan-2026-11-11.md)。
 - 2026-11-12 Java 可读性阶段 9 R26 把 `DefaultTriggerService` 外部事件字段的长度字面量 128 / 128 / 256 改为引用 `TriggerExternalEventService.EXTERNAL_EVENT_CODE_MAX_LENGTH`、`EXTERNAL_EVENT_SOURCE_MAX_LENGTH`、`EXTERNAL_EVENT_ID_MAX_LENGTH`;取值、校验语义与 readiness 判定均不变。
+- 2026-11-14 R26 后续轮把 `ReadinessWaitReconciler` 每轮 sweep 的批大小字面量 100 改为私有常量 `SWEEP_BATCH_SIZE`;取值与 readiness 判定不变,详见 [Java 可读性复评](../audit/java-readability-reassessment-2026-11-11.md)。
