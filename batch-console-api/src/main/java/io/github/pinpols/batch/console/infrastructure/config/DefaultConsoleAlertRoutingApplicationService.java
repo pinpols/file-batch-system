@@ -26,6 +26,12 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleAlertRoutingApplicationService
     implements ConsoleAlertRoutingApplicationService {
 
+  /** 请求未指定时的 group_interval 秒数（5 分钟）。 */
+  private static final int DEFAULT_GROUP_INTERVAL_SECONDS = 300;
+
+  /** 请求未指定时的 repeat_interval 秒数（1 小时）。 */
+  private static final int DEFAULT_REPEAT_INTERVAL_SECONDS = 3600;
+
   private final AlertRoutingConfigMapper alertRoutingConfigMapper;
   private final ConsoleTenantGuard tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -159,9 +165,11 @@ public class DefaultConsoleAlertRoutingApplicationService
     param.setGroupBy(request.getGroupBy());
     Integer groupWaitSeconds = defaultInt(request.getGroupWaitSeconds(), 0);
     param.setGroupWaitSeconds(groupWaitSeconds);
-    Integer groupIntervalSeconds = defaultInt(request.getGroupIntervalSeconds(), 300);
+    Integer groupIntervalSeconds =
+        defaultInt(request.getGroupIntervalSeconds(), DEFAULT_GROUP_INTERVAL_SECONDS);
     param.setGroupIntervalSeconds(groupIntervalSeconds);
-    Integer repeatIntervalSeconds = defaultInt(request.getRepeatIntervalSeconds(), 3600);
+    Integer repeatIntervalSeconds =
+        defaultInt(request.getRepeatIntervalSeconds(), DEFAULT_REPEAT_INTERVAL_SECONDS);
     param.setRepeatIntervalSeconds(repeatIntervalSeconds);
     param.setEnabled(request.getEnabled() == null || request.getEnabled());
     param.setDescription(request.getDescription());

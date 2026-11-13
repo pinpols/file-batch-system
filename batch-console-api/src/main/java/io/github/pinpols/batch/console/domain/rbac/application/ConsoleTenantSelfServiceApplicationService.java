@@ -17,6 +17,10 @@ import org.springframework.stereotype.Service;
 @Service
 @RequiredArgsConstructor
 public class ConsoleTenantSelfServiceApplicationService {
+
+  /** 租户自助查看配额时一次取回的策略条数（只取第一页）。 */
+  private static final int QUOTA_POLICY_PAGE_SIZE = 100;
+
   private final ConsoleQuotaPolicyApplicationService quotaPolicyService;
   private final ConsoleSystemParameterService parameterService;
   private final ConsoleTenantGuard tenantGuard;
@@ -24,7 +28,7 @@ public class ConsoleTenantSelfServiceApplicationService {
   private final ConsoleRequestMetadataResolver metadataResolver;
 
   public PageResponse<QuotaPolicyResponse> quota(String tenantId) {
-    return quotaPolicyService.listAll(tenantId, 1, 100);
+    return quotaPolicyService.listAll(tenantId, 1, QUOTA_POLICY_PAGE_SIZE);
   }
 
   public ConsoleTenantUsageSummaryResponse usage(String tenantId) {

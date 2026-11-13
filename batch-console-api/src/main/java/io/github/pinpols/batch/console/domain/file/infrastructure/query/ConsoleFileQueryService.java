@@ -90,6 +90,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleFileQueryService implements FilePipelineProgressSnapshotService {
 
+  /** PostgreSQL timestamp 精度为微秒；“当天结束”取次日零点前 1 微秒（1000 纳秒）。 */
+  private static final int TIMESTAMP_RESOLUTION_NANOS = 1_000;
+
   // 查询条件字段名常量
   private static final String KEY_FROM_TIME = "fromTime";
   private static final String KEY_TO_TIME = "toTime";
@@ -120,7 +123,8 @@ public class ConsoleFileQueryService implements FilePipelineProgressSnapshotServ
       ZoneId zone = dateTimeSupport.defaultBusinessZone();
       LocalDate today = dateTimeSupport.todayInDefaultBusinessZone();
       Instant dayStart = today.atStartOfDay(zone).toInstant();
-      Instant dayEnd = today.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(1_000);
+      Instant dayEnd =
+          today.plusDays(1).atStartOfDay(zone).toInstant().minusNanos(TIMESTAMP_RESOLUTION_NANOS);
       if (EmptyChecks.isNull(fromTime) || fromTime.isBefore(dayStart)) {
         fromTime = dayStart;
       }

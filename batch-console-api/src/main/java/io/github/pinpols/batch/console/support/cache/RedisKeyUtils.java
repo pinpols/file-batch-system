@@ -25,6 +25,9 @@ import org.springframework.data.redis.core.StringRedisTemplate;
  */
 public final class RedisKeyUtils {
 
+  /** batchSize 非正时每次 SCAN 的 COUNT 提示值。 */
+  private static final int DEFAULT_SCAN_BATCH_SIZE = 500;
+
   private RedisKeyUtils() {}
 
   /**
@@ -57,7 +60,7 @@ public final class RedisKeyUtils {
     if (pattern == null || pattern.isBlank()) {
       return 0L;
     }
-    int safeBatch = batchSize <= 0 ? 500 : batchSize;
+    int safeBatch = batchSize <= 0 ? DEFAULT_SCAN_BATCH_SIZE : batchSize;
     ScanOptions options = ScanOptions.scanOptions()
         .match(namespace.scanPattern(pattern))
         .count(safeBatch)

@@ -90,6 +90,12 @@ import org.springframework.web.util.HtmlUtils;
 @Transactional(readOnly = true)
 public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
 
+  /**
+   * AI 审计列表展示 prompt/response 预览与拒绝原因时的截断长度；
+   * 写入侧同样截到 512 字符（console_ai_audit_log.refusal_reason 为 VARCHAR(512)，V11）。
+   */
+  private static final int AI_AUDIT_PREVIEW_DISPLAY_MAX_LENGTH = 512;
+
   private final TenantIdResolver tenantGuard;
   private final ConsoleOpsQueryMappers opsMappers;
   private final LocalizedErrorRenderer localizedErrorRenderer;
@@ -495,13 +501,16 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
     row.setPromptDecision(entity.getPromptDecision());
     row.setModelName(entity.getModelName());
     String promptPreview = entity.getPromptPreview();
-    String safePromptPreview = ConsoleTextSanitizer.safeDisplay(promptPreview, 512);
+    String safePromptPreview =
+        ConsoleTextSanitizer.safeDisplay(promptPreview, AI_AUDIT_PREVIEW_DISPLAY_MAX_LENGTH);
     row.setPromptPreview(safePromptPreview);
     String responsePreview = entity.getResponsePreview();
-    String safeResponsePreview = ConsoleTextSanitizer.safeDisplay(responsePreview, 512);
+    String safeResponsePreview =
+        ConsoleTextSanitizer.safeDisplay(responsePreview, AI_AUDIT_PREVIEW_DISPLAY_MAX_LENGTH);
     row.setResponsePreview(safeResponsePreview);
     String refusalReason = entity.getRefusalReason();
-    String safeRefusalReason = ConsoleTextSanitizer.safeDisplay(refusalReason, 512);
+    String safeRefusalReason =
+        ConsoleTextSanitizer.safeDisplay(refusalReason, AI_AUDIT_PREVIEW_DISPLAY_MAX_LENGTH);
     row.setRefusalReason(safeRefusalReason);
     row.setPromptTokens(entity.getPromptTokens());
     row.setCompletionTokens(entity.getCompletionTokens());

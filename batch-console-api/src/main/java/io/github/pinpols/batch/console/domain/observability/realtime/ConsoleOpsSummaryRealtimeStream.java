@@ -35,6 +35,12 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
   private static final long REFRESH_DEBOUNCE_MILLIS = 300L;
   private static final long SUMMARY_CACHE_TTL_MILLIS = 1_000L;
 
+  /** 摘要缓存条目写入后保留的秒数。 */
+  private static final int SUMMARY_CACHE_EXPIRE_SECONDS = 10;
+
+  /** 摘要缓存最多保留的租户条目数。 */
+  private static final int SUMMARY_CACHE_MAX_ENTRIES = 1000;
+
   private final ConsoleOpsSummaryPort opsApplicationService;
   private final ConsoleRealtimeEventHub realtimeEventHub;
   private final RealtimeEventBus realtimeEventBusPublisher;
@@ -48,8 +54,8 @@ public class ConsoleOpsSummaryRealtimeStream implements ConsoleOpsSummaryRealtim
   // P0:summaryCache 原裸 ConcurrentHashMap 仅在读路径判 TTL,从不删除,租户基数大时永久驻留。
   // 改 Caffeine expireAfterWrite(10s) + maximumSize(1000),与 SUMMARY_CACHE_TTL_MILLIS 对齐。
   private final Cache<String, CachedSummary> summaryCache = Caffeine.newBuilder()
-      .expireAfterWrite(10, TimeUnit.SECONDS)
-      .maximumSize(1000)
+      .expireAfterWrite(SUMMARY_CACHE_EXPIRE_SECONDS, TimeUnit.SECONDS)
+      .maximumSize(SUMMARY_CACHE_MAX_ENTRIES)
       .build();
   private final TaskScheduler scheduler;
 

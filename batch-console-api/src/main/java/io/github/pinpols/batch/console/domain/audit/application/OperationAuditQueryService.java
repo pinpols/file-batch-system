@@ -33,6 +33,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class OperationAuditQueryService {
 
+  /** 请求未指定 pageSize 时的默认每页条数。 */
+  private static final int DEFAULT_PAGE_SIZE = 20;
+
   private final OperationAuditMapper mapper;
   private final TenantIdResolver tenantGuard;
   private final ObjectMapper objectMapper;
@@ -44,7 +47,8 @@ public class OperationAuditQueryService {
     mapper.bindTenant(tenantId);
     boolean cursorMode = EmptyChecks.isNotNull(req.getCursor());
     int requestedPageNo = EmptyChecks.isNull(req.getPageNo()) ? 1 : req.getPageNo();
-    int requestedPageSize = EmptyChecks.isNull(req.getPageSize()) ? 20 : req.getPageSize();
+    int requestedPageSize =
+        EmptyChecks.isNull(req.getPageSize()) ? DEFAULT_PAGE_SIZE : req.getPageSize();
     PageRequest pageRequest = new PageRequest(cursorMode ? 1 : requestedPageNo, requestedPageSize);
     OperationAuditQuery operationAuditQuery = OperationAuditQuery.builder()
         .tenantId(tenantId)

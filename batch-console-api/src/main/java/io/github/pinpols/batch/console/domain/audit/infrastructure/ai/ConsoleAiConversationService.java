@@ -41,6 +41,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleAiConversationService {
 
+  /** 单次查询会话轮次的条数上限。 */
+  private static final int MAX_TURNS_PER_QUERY = 100;
+
   private static final String SUPPORTED_CONTEXT_VERSION = "v1";
   private static final String IN_PROGRESS = "IN_PROGRESS";
   private static final String COMPLETE = "COMPLETE";
@@ -277,7 +280,7 @@ public class ConsoleAiConversationService {
       throw BizException.of(ResultCode.NOT_FOUND, ResultCode.NOT_FOUND.detailKey());
     }
     int atLeastOneTurn = Math.max(requestedLimit, 1);
-    int limit = Math.min(atLeastOneTurn, 100);
+    int limit = Math.min(atLeastOneTurn, MAX_TURNS_PER_QUERY);
     ConsoleAiConversationTurnsQuery consoleAiConversationTurnsQuery =
         ConsoleAiConversationTurnsQuery.builder()
             .tenantId(tenantId)

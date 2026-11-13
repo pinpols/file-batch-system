@@ -18,6 +18,9 @@ import org.springframework.kafka.listener.ContainerProperties;
 /** 配置 Console 侧 Kafka 消费与序列化约定。 */
 class ConsoleKafkaConfiguration {
 
+  /** 终端通知消费者单次 poll 最多取回的记录数。 */
+  private static final int TERMINAL_NOTIFICATION_MAX_POLL_RECORDS = 50;
+
   @Bean
   ConcurrentKafkaListenerContainerFactory<String, String> terminalNotificationKafkaFactory(
       @Value("${spring.kafka.bootstrap-servers}") String bootstrapServers,
@@ -36,7 +39,7 @@ class ConsoleKafkaConfiguration {
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG,
         "earliest",
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG,
-        50)));
+        TERMINAL_NOTIFICATION_MAX_POLL_RECORDS)));
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
     factory.setAutoStartup(autoStartup);
     return factory;

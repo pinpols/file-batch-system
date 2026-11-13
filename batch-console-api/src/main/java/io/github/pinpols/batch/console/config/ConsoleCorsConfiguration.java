@@ -24,6 +24,9 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 @RequiredArgsConstructor
 public class ConsoleCorsConfiguration {
 
+  /** 浏览器缓存 CORS 预检结果的秒数（1 小时）。 */
+  private static final long PREFLIGHT_MAX_AGE_SECONDS = 3600L;
+
   private final ConsoleSecurityProperties properties;
 
   @Bean
@@ -54,7 +57,7 @@ public class ConsoleCorsConfiguration {
     cfg.setExposedHeaders(List.of(
         CommonConstants.DEFAULT_REQUEST_ID_HEADER, CommonConstants.DEFAULT_TRACE_ID_HEADER));
     cfg.setAllowCredentials(true); // HttpOnly cookie 必需
-    cfg.setMaxAge(3600L); // preflight 缓存 1h
+    cfg.setMaxAge(PREFLIGHT_MAX_AGE_SECONDS);
     source.registerCorsConfiguration("/api/console/**", cfg);
     return source;
   }

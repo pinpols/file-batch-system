@@ -36,6 +36,15 @@ import lombok.experimental.Accessors;
  */
 public final class FileTemplateExcelRowParser {
 
+  /** 单元格留空时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
+  private static final int DEFAULT_PAGE_SIZE = 1000;
+
+  /** 单元格留空时的 fetch_size，与 file_template_config.fetch_size 列默认值一致（V6）。 */
+  private static final int DEFAULT_FETCH_SIZE = 1000;
+
+  /** 单元格留空时的 chunk_size，与 file_template_config.chunk_size 列默认值一致（V6、V14）。 */
+  private static final int DEFAULT_CHUNK_SIZE = 500;
+
   /** file_template_config 表名（与 sheet 名一致）。 */
   public static final String SHEET_NAME = "file_template_config";
 
@@ -288,11 +297,11 @@ public final class FileTemplateExcelRowParser {
     builder.queryParamSchemaJson(queryParamSchemaJson);
     Boolean streamingEnabled = optionalBoolean(values, COL_STREAMING_ENABLED, true, issues);
     builder.streamingEnabled(streamingEnabled);
-    Integer pageSize = optionalInteger(values, COL_PAGE_SIZE, 0, 1000, issues);
+    Integer pageSize = optionalInteger(values, COL_PAGE_SIZE, 0, DEFAULT_PAGE_SIZE, issues);
     builder.pageSize(pageSize);
-    Integer fetchSize = optionalInteger(values, COL_FETCH_SIZE, 0, 1000, issues);
+    Integer fetchSize = optionalInteger(values, COL_FETCH_SIZE, 0, DEFAULT_FETCH_SIZE, issues);
     builder.fetchSize(fetchSize);
-    Integer chunkSize = optionalInteger(values, COL_CHUNK_SIZE, 0, 500, issues);
+    Integer chunkSize = optionalInteger(values, COL_CHUNK_SIZE, 0, DEFAULT_CHUNK_SIZE, issues);
     builder.chunkSize(chunkSize);
   }
 

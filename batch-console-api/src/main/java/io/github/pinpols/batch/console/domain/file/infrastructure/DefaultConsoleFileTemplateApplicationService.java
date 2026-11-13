@@ -52,6 +52,15 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleFileTemplateApplicationService
     implements ConsoleFileTemplateApplicationService {
 
+  /** 未指定时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
+  private static final int DEFAULT_PAGE_SIZE = 1000;
+
+  /** 未指定时的 fetch_size，与 file_template_config.fetch_size 列默认值一致（V6）。 */
+  private static final int DEFAULT_FETCH_SIZE = 1000;
+
+  /** 未指定时的 chunk_size，与 file_template_config.chunk_size 列默认值一致（V6、V14）。 */
+  private static final int DEFAULT_CHUNK_SIZE = 500;
+
   private final FileTemplateConfigMapper mapper;
   private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -246,11 +255,11 @@ public class DefaultConsoleFileTemplateApplicationService
         ? request.getStreamingEnabled()
         : Boolean.TRUE;
     Integer effectivePageSize =
-        EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : 1000;
+        EmptyChecks.isNotNull(request.getPageSize()) ? request.getPageSize() : DEFAULT_PAGE_SIZE;
     Integer effectiveFetchSize =
-        EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : 1000;
+        EmptyChecks.isNotNull(request.getFetchSize()) ? request.getFetchSize() : DEFAULT_FETCH_SIZE;
     Integer effectiveChunkSize =
-        EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : 500;
+        EmptyChecks.isNotNull(request.getChunkSize()) ? request.getChunkSize() : DEFAULT_CHUNK_SIZE;
     FileTemplateConfigUpsertParam.RuntimeOptions runtimeOptions = runtimeOptions(
         effectiveStreamingEnabled, effectivePageSize, effectiveFetchSize, effectiveChunkSize);
     param.setRuntime(runtimeOptions);

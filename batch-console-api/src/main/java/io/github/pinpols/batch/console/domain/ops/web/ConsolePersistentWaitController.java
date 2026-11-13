@@ -31,6 +31,10 @@ import org.springframework.web.bind.annotation.RestController;
 @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsolePersistentWaitController {
+
+  /** 请求未指定 pageSize 时的默认每页条数，与列表默认分页 15 条一致。 */
+  private static final int DEFAULT_PAGE_SIZE = 15;
+
   private final ConsoleOrchestratorPort orchestrator;
   private final ConsoleResponseFactory responseFactory;
 
@@ -45,7 +49,7 @@ public class ConsolePersistentWaitController {
         request.bizDateFrom(),
         request.bizDateTo(),
         EmptyChecks.isNull(request.pageNo()) ? 1 : request.pageNo(),
-        EmptyChecks.isNull(request.pageSize()) ? 15 : request.pageSize());
+        EmptyChecks.isNull(request.pageSize()) ? DEFAULT_PAGE_SIZE : request.pageSize());
     return responseFactory.success(orchestrator.listPersistentWaits(query));
   }
 

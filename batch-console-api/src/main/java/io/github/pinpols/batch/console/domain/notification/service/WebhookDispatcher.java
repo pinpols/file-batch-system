@@ -64,6 +64,21 @@ public class WebhookDispatcher {
 
   private static final int MAX_ATTEMPTS = 3;
 
+  /** 出站 Webhook 建连超时秒数。 */
+  private static final int CONNECT_TIMEOUT_SECONDS = 5;
+
+  /** 出站 Webhook 读超时秒数。 */
+  private static final int READ_TIMEOUT_SECONDS = 10;
+
+  /** 出站 Webhook 写超时秒数。 */
+  private static final int WRITE_TIMEOUT_SECONDS = 10;
+
+  /** 单次 Webhook 调用的总超时秒数。 */
+  private static final int CALL_TIMEOUT_SECONDS = 15;
+
+  /** 同步重试的首次退避毫秒数，此后每次翻倍。 */
+  private static final long INITIAL_RETRY_BACKOFF_MILLIS = 250L;
+
   private static final int MAX_ERROR_RESPONSE_BYTES = 8192;
 
   private static final MediaType JSON = MediaType.get("application/json; charset=utf-8");
@@ -94,10 +109,10 @@ public class WebhookDispatcher {
     this.webhookService = webhookService;
     this.deliveryLogRepository = deliveryLogRepository;
     this.httpClient = new OkHttpClient.Builder()
-        .connectTimeout(5, TimeUnit.SECONDS)
-        .readTimeout(10, TimeUnit.SECONDS)
-        .writeTimeout(10, TimeUnit.SECONDS)
-        .callTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .readTimeout(READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .writeTimeout(WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
         .dns(ssrfGuardedDns)
         .followRedirects(false)
         .followSslRedirects(false)
@@ -228,7 +243,7 @@ public class WebhookDispatcher {
   }
 
   private void deliverPersisted(PendingWebhookDelivery pending) {
-    long backoffMillis = 250L;
+    long backoffMillis = INITIAL_RETRY_BACKOFF_MILLIS;
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       WebhookDeliveryResult result =
           attemptDelivery(pending.subscription(), pending.payload(), pending.payloadJson());

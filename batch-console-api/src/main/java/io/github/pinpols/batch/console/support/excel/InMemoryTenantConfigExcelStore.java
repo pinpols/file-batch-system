@@ -8,21 +8,27 @@ import java.util.concurrent.TimeUnit;
 
 public class InMemoryTenantConfigExcelStore implements TenantConfigPackageExcelImportStore {
 
+  /** Excel 会话、预览令牌与预览版本的保留分钟数，对齐上传会话的预期寿命。 */
+  private static final int SESSION_EXPIRE_MINUTES = 30;
+
+  /** 三类缓存各自最多保留的条目数。 */
+  private static final int SESSION_MAX_ENTRIES = 1000;
+
   // P0:原 ConcurrentHashMap 无 TTL / 无上限,大 Excel 会话(多 sheet 完整解析后驻内存)
   // 在用户放弃 preview/apply 时永久驻留,高并发可累积到 OOM。
   // 改 Caffeine:expireAfterWrite 30 分钟 + maximumSize 1000(对齐预期上传 session 寿命)。
   private final Cache<String, PackageExcelSession> sessions = Caffeine.newBuilder()
-      .expireAfterWrite(30, TimeUnit.MINUTES)
-      .maximumSize(1000)
+      .expireAfterWrite(SESSION_EXPIRE_MINUTES, TimeUnit.MINUTES)
+      .maximumSize(SESSION_MAX_ENTRIES)
       .build();
   private final ConcurrentHashMap<String, String> applying = new ConcurrentHashMap<>();
   private final Cache<String, String> previewTokens = Caffeine.newBuilder()
-      .expireAfterWrite(30, TimeUnit.MINUTES)
-      .maximumSize(1000)
+      .expireAfterWrite(SESSION_EXPIRE_MINUTES, TimeUnit.MINUTES)
+      .maximumSize(SESSION_MAX_ENTRIES)
       .build();
   private final Cache<String, Long> previewRevisions = Caffeine.newBuilder()
-      .expireAfterWrite(30, TimeUnit.MINUTES)
-      .maximumSize(1000)
+      .expireAfterWrite(SESSION_EXPIRE_MINUTES, TimeUnit.MINUTES)
+      .maximumSize(SESSION_MAX_ENTRIES)
       .build();
 
   @Override

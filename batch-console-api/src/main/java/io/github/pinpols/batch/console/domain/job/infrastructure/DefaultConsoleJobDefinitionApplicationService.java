@@ -66,6 +66,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class DefaultConsoleJobDefinitionApplicationService
     implements ConsoleJobDefinitionApplicationService {
 
+  /** 单个作业可声明的上游依赖数上限；TenantJobDefinitionApplySupport 导入路径使用同一上限。 */
+  private static final int MAX_UPSTREAM_DEPENDENCIES = 32;
+
   private static final String INVALID_ARGUMENT_KEY = "error.common.invalid_argument";
 
   private final JobDefinitionMapper jobDefinitionMapper;
@@ -680,7 +683,7 @@ public class DefaultConsoleJobDefinitionApplicationService
       String value = CodeNormalizer.trimToNull(legacyCode);
       if (EmptyChecks.isNotNull(value)) normalized.add(value);
     }
-    if (normalized.size() > 32) {
+    if (normalized.size() > MAX_UPSTREAM_DEPENDENCIES) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, INVALID_ARGUMENT_KEY);
     }
     return List.copyOf(normalized);

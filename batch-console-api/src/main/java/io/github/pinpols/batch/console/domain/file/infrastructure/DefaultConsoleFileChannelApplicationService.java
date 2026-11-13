@@ -35,6 +35,9 @@ import org.springframework.stereotype.Service;
 public class DefaultConsoleFileChannelApplicationService
     implements ConsoleFileChannelApplicationService {
 
+  /** 请求未指定 timeoutSeconds 时的默认渠道超时秒数。 */
+  private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+
   private final FileChannelConfigMapper mapper;
   private final TenantIdResolver tenantGuard;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -95,7 +98,10 @@ public class DefaultConsoleFileChannelApplicationService
     param.setConfigJson(normalizedConfigJson);
     param.setReceiptPolicy(
         request.getReceiptPolicy() != null ? request.getReceiptPolicy() : "NONE");
-    param.setTimeoutSeconds(request.getTimeoutSeconds() != null ? request.getTimeoutSeconds() : 30);
+    param.setTimeoutSeconds(
+        EmptyChecks.isNotNull(request.getTimeoutSeconds())
+            ? request.getTimeoutSeconds()
+            : DEFAULT_TIMEOUT_SECONDS);
     param.setEnabled(request.getEnabled() == null || request.getEnabled());
     param.setCreatedBy(operator);
     param.setUpdatedBy(operator);

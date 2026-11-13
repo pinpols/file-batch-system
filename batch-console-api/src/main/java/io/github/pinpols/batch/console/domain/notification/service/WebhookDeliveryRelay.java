@@ -72,6 +72,12 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
   /** 退避基数 = dispatcher burst 完后的初次 relay 延迟,与 dispatcher 的 INITIAL_RELAY_DELAY_SECONDS 对齐。 */
   private static final long BACKOFF_BASE_SECONDS = 5L * 60L;
 
+  /** 停止时等待投递任务结束的秒数，超时后强制中断。 */
+  private static final int SHUTDOWN_AWAIT_SECONDS = 15;
+
+  /** 退避指数上限，防止左移溢出；实际等待另受 MAX_BACKOFF_SECONDS 限制。 */
+  private static final int MAX_BACKOFF_EXPONENT = 10;
+
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private final WebhookDispatcher dispatcher;
@@ -167,7 +173,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
     log.info("WebhookDeliveryRelay stopping: source={}", source);
     executor.shutdown();
     try {
-      if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
+      if (!executor.awaitTermination(SHUTDOWN_AWAIT_SECONDS, TimeUnit.SECONDS)) {
         log.warn("WebhookDeliveryRelay did not shut down within 15s; forcing interruption");
         executor.shutdownNow();
       }
@@ -364,7 +370,7 @@ public class WebhookDeliveryRelay implements SmartLifecycle {
    */
   long computeBackoffSeconds(int nextAttempt) {
     int exponent = Math.max(0, nextAttempt - 4);
-    long backoff = BACKOFF_BASE_SECONDS << Math.min(exponent, 10);
+    long backoff = BACKOFF_BASE_SECONDS << Math.min(exponent, MAX_BACKOFF_EXPONENT);
     return Math.min(MAX_BACKOFF_SECONDS, backoff);
   }
 

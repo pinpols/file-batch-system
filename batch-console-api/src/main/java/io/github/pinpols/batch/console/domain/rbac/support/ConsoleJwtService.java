@@ -71,6 +71,15 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 @Service
 public class ConsoleJwtService {
 
+  /** 绑定漂移日志的抑制窗口：同一组合在窗口内只记一次 WARN。 */
+  private static final Duration DRIFT_LOG_SUPPRESS_WINDOW = Duration.ofMinutes(5);
+
+  /** 绑定漂移日志抑制器最多记住的组合数。 */
+  private static final int DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES = 10_000;
+
+  /** jwt-secret 最短字符数：HS256 要求至少 256 bit，即 32 个 ASCII 字符。 */
+  private static final int MIN_JWT_SECRET_LENGTH = 32;
+
   private static final String TOKEN_TYPE = "console_access";
   private static final String CLAIM_TENANT_ID = "tenantId";
   private static final String CLAIM_AUTHORITIES = "authorities";
@@ -141,8 +150,8 @@ public class ConsoleJwtService {
   // 5 分钟内只记一次 WARN,避免 e2e 同 token 多 tab 反复产生日志噪音(实测一轮 e2e 8000+ 行噪音)。
   // 10k 上限够覆盖任何合理量级会话规模。
   private final Cache<String, Boolean> driftLogSuppressor = Caffeine.newBuilder()
-      .expireAfterWrite(Duration.ofMinutes(5))
-      .maximumSize(10_000)
+      .expireAfterWrite(DRIFT_LOG_SUPPRESS_WINDOW)
+      .maximumSize(DRIFT_LOG_SUPPRESSOR_MAX_ENTRIES)
       .build();
 
   // P2-8：encoder / decoder 在 PostConstruct 一次性构建，避免每次请求重新派生 HMAC key（SHA-256 + SecretKeySpec）。
@@ -166,7 +175,7 @@ public class ConsoleJwtService {
                 + "production requires a real secret injected through an environment variable or secret manager");
       }
       // P1-8：jwt-secret 长度强度回退（HS256 最小 256 bit / 32 ASCII 字符）
-      if (jwtSecret.length() < 32) {
+      if (jwtSecret.length() < MIN_JWT_SECRET_LENGTH) {
         throw new IllegalStateException(
             "FATAL: batch.console.security.jwt-secret is shorter than 32 characters; HS256 secret is too weak");
       }
@@ -178,7 +187,7 @@ public class ConsoleJwtService {
       boolean jwtSecretIsEmptyOrWeak = !Texts.hasText(jwtSecret)
           || lower.contains("change-me")
           || lower.contains("change_me")
-          || jwtSecret.length() < 32;
+          || jwtSecret.length() < MIN_JWT_SECRET_LENGTH;
       if (jwtSecretIsEmptyOrWeak) {
         log.warn(
             "Non-production profile: batch.console.security.jwt-secret still uses a default or weak secret; inject a real secret via env / "

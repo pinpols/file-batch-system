@@ -25,18 +25,33 @@ public class ConsoleAsyncConfiguration {
   public static final String PUSH_TASK_EXECUTOR = "pushTaskExecutor";
   public static final String REALTIME_SCHEDULER = "consoleRealtimeScheduler";
 
+  /** 推送异步线程池核心线程数。 */
+  private static final int PUSH_CORE_POOL_SIZE = 4;
+
+  /** 推送异步线程池最大线程数。 */
+  private static final int PUSH_MAX_POOL_SIZE = 16;
+
+  /** 推送异步队列容量；队列满后由调用线程执行（CallerRunsPolicy）。 */
+  private static final int PUSH_QUEUE_CAPACITY = 200;
+
+  /** 超出核心数的空闲线程存活秒数。 */
+  private static final int PUSH_KEEP_ALIVE_SECONDS = 60;
+
+  /** 关闭时等待在途推送完成的最长秒数。 */
+  private static final int PUSH_AWAIT_TERMINATION_SECONDS = 30;
+
   @Bean(name = PUSH_TASK_EXECUTOR)
   public Executor pushTaskExecutor() {
     ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-    executor.setCorePoolSize(4);
-    executor.setMaxPoolSize(16);
-    executor.setQueueCapacity(200);
-    executor.setKeepAliveSeconds(60);
+    executor.setCorePoolSize(PUSH_CORE_POOL_SIZE);
+    executor.setMaxPoolSize(PUSH_MAX_POOL_SIZE);
+    executor.setQueueCapacity(PUSH_QUEUE_CAPACITY);
+    executor.setKeepAliveSeconds(PUSH_KEEP_ALIVE_SECONDS);
     executor.setThreadNamePrefix("push-async-");
     // queue 满了让调用线程自己跑,而不是默认 AbortPolicy 丢任务/抛异常静默漏推送
     executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     executor.setWaitForTasksToCompleteOnShutdown(true);
-    executor.setAwaitTerminationSeconds(30);
+    executor.setAwaitTerminationSeconds(PUSH_AWAIT_TERMINATION_SECONDS);
     return executor;
   }
 
