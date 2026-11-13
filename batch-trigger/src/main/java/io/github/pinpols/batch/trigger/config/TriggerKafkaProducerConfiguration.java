@@ -31,6 +31,12 @@ import org.springframework.kafka.core.ProducerFactory;
 @RequiredArgsConstructor
 public class TriggerKafkaProducerConfiguration {
 
+  /** send timeout 与 max.block.ms 的下限（1 秒）。 */
+  private static final long MIN_PRODUCER_TIMEOUT_MILLIS = 1_000L;
+
+  /** max.block.ms 占 send timeout 的比例，给外层 sendTimeout 回退留出余量。 */
+  private static final double MAX_BLOCK_RATIO_OF_SEND_TIMEOUT = 0.8;
+
   /**
    * Spring Kafka 标准 bootstrap servers key。与 Spring Boot {@code KafkaProperties} 同源，不重复登记为自定义
    * properties；集中定义只为让生产 {@code @Value} 与测试夹具引用同一份字符串。
@@ -56,8 +62,10 @@ public class TriggerKafkaProducerConfiguration {
     // trigger 专属覆盖:max.block.ms 不取全局(默认 5s),而按本模块 sendTimeoutSeconds 推导更紧的
     // 内部阻塞上限——取 sendTimeout 的 80%(最少 1s),超出由 KafkaTriggerEventPublisher 外层
     // sendTimeout 回退取消 future,避免双层超时叠加。
-    long sendTimeoutMillis = Math.max(1_000L, kafkaProperties.getSendTimeoutSeconds() * 1_000L);
-    long maxBlockMillis = Math.max(1_000L, (long) (sendTimeoutMillis * 0.8));
+    long sendTimeoutMillis =
+        Math.max(MIN_PRODUCER_TIMEOUT_MILLIS, kafkaProperties.getSendTimeoutSeconds() * 1_000L);
+    long maxBlockMillis = Math.max(
+        MIN_PRODUCER_TIMEOUT_MILLIS, (long) (sendTimeoutMillis * MAX_BLOCK_RATIO_OF_SEND_TIMEOUT));
     properties.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMillis);
     return new DefaultKafkaProducerFactory<>(properties);
   }
