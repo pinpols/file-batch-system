@@ -4,10 +4,10 @@ import static io.github.pinpols.batch.testing.TestHttpTransports.failOnRequest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.http.OutboundAddressPolicy;
 import io.github.pinpols.batch.common.http.OutboundHttpRequest;
 import io.github.pinpols.batch.common.http.OutboundHttpResponse;
-import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -82,7 +82,7 @@ class SlackNotificationSenderTest {
   @DisplayName("域名解析到内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenHostResolvesToInternalAddress() {
     SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
+        new SlackNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://localhost/services/FAKE_WEBHOOK\"}"));
@@ -95,7 +95,7 @@ class SlackNotificationSenderTest {
   @DisplayName("地址为字面量元数据内网地址时拦截, 不发起真实投递")
   void shouldBlock_whenUrlIsLiteralInternalIp() {
     SlackNotificationSender sender =
-        new SlackNotificationSender(objectMapper, new OkHttpConsoleExternalHttpTransport());
+        new SlackNotificationSender(objectMapper, new OkHttpOutboundHttpTransport());
 
     WebhookDeliveryResult result =
         sender.send(message("{\"url\":\"https://169.254.169.254/latest/meta-data/\"}"));

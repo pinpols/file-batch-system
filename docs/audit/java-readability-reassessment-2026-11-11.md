@@ -284,11 +284,12 @@
 - `PartitionReclaimUnit.doReclaim` 的长注释里有一句断句（“#768 的”之后接不上），待补全。
 - `AbstractStepBeanRegistrar.registerStepBeansOnStartup` 的长注释放在日志语句前面，与实际登记逻辑 `registerOne` 隔开，待移到对应位置。
 - 叠放的 Javadoc：`DefaultCompensationService.executeAndMarkSuccess`、`SqlTaskExecutor.consumeDollarQuote`、`PreprocessStep.decryptViaSpool` 前面各有一段说明已不存在方法的旧 Javadoc，与当前方法的 Javadoc 叠在一起。main 上本来如此，不是本阶段引入；需逐处判断旧说明该并入当前方法还是删除。（本 PR 自己在 `SmtpEmailDispatchChannelAdapter`、`DeadLetterPublisher` 中把新常量插进了已有 Javadoc 与字段之间，已改回。）
+- 已处理（2026-11-13，Task 20，分支 `chore/java-readability-p9-batch7`）：R20 ① 两份 OkHttp 出站适配器已合并为 `batch-common` 的 `OkHttpOutboundHttpTransport`，`batch-common` 可加 OkHttp 的核实结论见[阶段 9 计划 Task 20 实施记录](../plans/java-readability-phase-9-plan-2026-11-11.md)；两个模块各用一个配置类以原 bean 名和原限定注解装配，地址校验、DNS 固定、超时和重定向策略不变。
 - `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
 
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5 #1358（Task 15–17）已合入 main（3ff888db3）；PR-6（Task 19、21、22、24）在分支 `chore/java-readability-p9-batch6`；Task 20、23 和 18 未开工；R13（Task 12）已撤销。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5 #1358（Task 15–17）已合入 main（3ff888db3）；PR-6（Task 19、21、22、24）在分支 `chore/java-readability-p9-batch6`；Task 20（PR-7）已在分支 `chore/java-readability-p9-batch7` 完成，PR 待开；Task 23 和 18 未开工；R13（Task 12）已撤销。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|
