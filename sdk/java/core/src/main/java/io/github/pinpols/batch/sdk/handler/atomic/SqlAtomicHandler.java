@@ -179,21 +179,37 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     return !Character.isDigit(tag.charAt(0));
   }
 
-  /** 引号、注释与前一个字符属于同一词法状态，不能在语句边界单独重置其中一项。 */
+  /**
+   * 引号、注释与前一个字符属于同一词法状态，不能在语句边界单独重置其中一项。
+   *
+   * <p>引号词法按 PostgreSQL（standard_conforming_strings=on，自 9.1 起默认）处理：普通 {@code '...'} 与 {@code
+   * "..."} 内反斜杠是字面字符，唯一的引号转义是连写两个引号；只有 {@code E'...'}/{@code e'...'} 转义字符串里反斜杠转义下一个字符。规则与平台
+   * {@code SqlTaskExecutor} 一致，但 SDK 不依赖平台模块，故独立实现。
+   */
   private static final class StatementSplitState {
     private final List<String> statements = new ArrayList<>();
     private final StringBuilder buffer = new StringBuilder();
-    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+
+    /** 词法状态：同一时刻只处于其一。 */
     private enum LexState {
       CODE,
       LINE_COMMENT,
       BLOCK_COMMENT,
       SINGLE_QUOTE,
+      ESCAPE_STRING,
+      ESCAPE_STRING_BACKSLASH,
       DOUBLE_QUOTE
     }
 
     private LexState state = LexState.CODE;
+
+    /** 最近一次收尾的单引号字符串种类；紧跟的引号属于连写引号转义，需回到同一种字符串。 */
+    private LexState lastSingleQuoteKind = LexState.SINGLE_QUOTE;
+
     private char previous;
+
+    /** {@code previous} 之前的字符，用于判断 {@code E'} 前缀是否独立成词（而非标识符结尾的 e）。 */
+    private char beforePrevious;
 
     private void append(char current) {
       switch (state) {
@@ -205,8 +221,8 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
           if (previous == '*' && current == '/') state = LexState.CODE;
           buffer.append(current);
         }
-        case SINGLE_QUOTE -> {
-          if (current == '\'') state = LexState.CODE;
+        case SINGLE_QUOTE, ESCAPE_STRING, ESCAPE_STRING_BACKSLASH -> {
+          appendSingleQuoted(current);
           buffer.append(current);
         }
         case DOUBLE_QUOTE -> {
@@ -215,7 +231,34 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         }
         case CODE -> appendSqlCharacter(current);
       }
+      beforePrevious = previous;
       previous = current;
+    }
+
+    /** 单引号字符串内部：只有转义字符串识别反斜杠，收尾时记下种类以便处理连写引号。 */
+    private void appendSingleQuoted(char current) {
+      if (state == LexState.ESCAPE_STRING_BACKSLASH) {
+        state = LexState.ESCAPE_STRING;
+      } else if (state == LexState.ESCAPE_STRING && current == '\\') {
+        state = LexState.ESCAPE_STRING_BACKSLASH;
+      } else if (current == '\'') {
+        lastSingleQuoteKind = state;
+        state = LexState.CODE;
+      }
+    }
+
+    /** 判断新出现的单引号开启哪种字符串：连写引号延续上一段，独立的 E/e 前缀开启转义字符串。 */
+    private LexState openingSingleQuoteKind() {
+      if (previous == '\'') {
+        return lastSingleQuoteKind;
+      }
+      boolean escapePrefix =
+          (previous == 'E' || previous == 'e') && !isIdentifierPart(beforePrevious);
+      return escapePrefix ? LexState.ESCAPE_STRING : LexState.SINGLE_QUOTE;
+    }
+
+    private static boolean isIdentifierPart(char c) {
+      return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
     /** 只有普通 SQL 区域的分号可以结束语句；注释起始字符仍原样保留在缓冲区。 */
@@ -227,7 +270,7 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         state = LexState.BLOCK_COMMENT;
         buffer.append(current);
       } else if (current == '\'') {
-        state = LexState.SINGLE_QUOTE;
+        state = openingSingleQuoteKind();
         buffer.append(current);
       } else if (current == '"') {
         state = LexState.DOUBLE_QUOTE;

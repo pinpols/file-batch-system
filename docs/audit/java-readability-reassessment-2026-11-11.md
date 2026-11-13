@@ -311,6 +311,7 @@
   - 17b：`QueryExportHandler`（41/34/34→33/36/37 ms）与 `SqlAtomicHandler`（107/118/155→98/94/92 ms）均在噪声范围内。`SqlTaskExecutor`：结论不确定，机器负载高，中位数 1952/3311/2347 对 2638/2047/4591 ms，最小值持平；按判断保留，未达成 5% 验证。
   - `SecurityScanOptions.parse` 保留不改：它是一个 for 套 switch、default 里再套 switch、操作约 20 个可变局部变量的结构；拆平需要一个 20 字段的状态对象或 20 个参数，代价大于收益，而且现在已经读起来像一张平铺的选项表。
 - 疑似行为问题（另案，不在可读性提交里修）：Worker 的 `SqlTaskExecutor.SplitScanner` 把单引号里的 `\'` 当作转义；SDK 的 `SqlAtomicHandler.StatementSplitState` 不这样处理（`select 'a\'; select 2'` 会拆成两句）。两种现状都已由 Task 15 的测试锁定。PostgreSQL 在 `standard_conforming_strings = on`（默认值）时，普通字符串里的反斜杠不是转义符，`'C:\'; DROP …` 这类输入在 Worker 侧可能拆错。这仍是独立的疑似缺陷，需单独复现后定性，不在可读性 PR 里修。
+  - 已解决（2026-11-13，分支 `fix/worker-sql-splitter-backslash`）：用 postgres:17.11 实测 `SHOW standard_conforming_strings` 为 `on`，`select 'C:\' as a; select 1` 执行为两条语句，`E'it\'s'` 才把 `\'` 当转义；仓库内未发现设置 `standard_conforming_strings` 或 `backslash_quote` 的配置。定性为 Worker 侧缺陷：普通 `'...'` 与 `"..."` 中反斜杠改按字面字符处理；Worker、Java SDK、Python SDK 三个切分器同时支持 `E'...'`/`e'...'` 转义字符串（前一字符为标识符字符时不算前缀，如 `time'...'`），连写引号在两种字符串里都延续原字符串。三处实现仍各自独立，新增用例覆盖普通字符串、双引号、连写引号、转义字符串、dollar-quote 与注释，并用 psql 逐条核对过 PostgreSQL 的实际切分。非 PostgreSQL 方言（如 MySQL 默认把反斜杠当转义）不在支持范围：Worker 在非 PG 下默认拒绝执行。
 
 ## 整改计划
 
