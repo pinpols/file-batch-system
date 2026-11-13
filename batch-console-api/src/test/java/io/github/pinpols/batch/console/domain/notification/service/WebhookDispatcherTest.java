@@ -66,11 +66,7 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("订阅事件类型为通配符时, 任意事件都匹配")
   void shouldMatchWildcardEventType() throws Exception {
-    Method matches =
-        WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
-    matches.setAccessible(true);
-
-    boolean result = (boolean) matches.invoke(dispatcher, "*", "JOB_SUCCESS");
+    boolean result = SubscriptionRuleDispatchPolicy.eventTypeMatches("*", "JOB_SUCCESS");
 
     assertThat(result).isTrue();
   }
@@ -78,11 +74,8 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("订阅事件类型清单包含该事件时, 判定为匹配")
   void shouldMatchSpecificEventType() throws Exception {
-    Method matches =
-        WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
-    matches.setAccessible(true);
-
-    boolean result = (boolean) matches.invoke(dispatcher, "JOB_SUCCESS,JOB_FAILED", "JOB_SUCCESS");
+    boolean result =
+        SubscriptionRuleDispatchPolicy.eventTypeMatches("JOB_SUCCESS,JOB_FAILED", "JOB_SUCCESS");
 
     assertThat(result).isTrue();
   }
@@ -90,11 +83,8 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("订阅事件类型清单不含该事件时, 判定为不匹配")
   void shouldNotMatchUnrelatedEventType() throws Exception {
-    Method matches =
-        WebhookDispatcher.class.getDeclaredMethod("matches", String.class, String.class);
-    matches.setAccessible(true);
-
-    boolean result = (boolean) matches.invoke(dispatcher, "JOB_SUCCESS", "WORKFLOW_FAILED");
+    boolean result =
+        SubscriptionRuleDispatchPolicy.eventTypeMatches("JOB_SUCCESS", "WORKFLOW_FAILED");
 
     assertThat(result).isFalse();
   }

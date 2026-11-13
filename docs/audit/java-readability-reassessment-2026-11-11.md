@@ -291,6 +291,7 @@
   - 已处理：`DefaultCompensationService`（旧文描述已删除的 `insertCommandInNewTx`，内容已在 `submit` Javadoc 中，删除）；`SqlTaskExecutor`（旧文属 `matchDollarTag`，移回）；`PreprocessStep`（三段旧文分别属 `decodeWithGuards`、`spoolLargePayload`、`decryptViaSpool`，移回各自方法，字段 Javadoc 紧贴字段）。全仓扫描另发现并修复：`OrchestratorKafkaConsumerConfiguration`（移到 `triggerLaunchErrorHandler`）、`OutboxProperties`（分片说明移到 `shardTotal`）、`TaskExecutionReport`（删除指向已迁入基类字段的孤立 Javadoc）、`SdkAbstractTaskHandler`（删除孤立单行）、`TaskDispatcher`（并入 `resultSummaryJson`）、`KafkaTaskConsumer`（改为行内注释）。
 - `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
   - 保持现状：补按类型日志属行为变更，且无证据表明原意如此；如需要另开任务。
+- 已处理（反射测试）：`WebhookDispatcherTest` 的 3 个匹配用例改为直接调用 `SubscriptionRuleDispatchPolicy.eventTypeMatches`，`WebhookDispatcher.matches` 纯转发器已内联删除；`ConsoleMetaLabelLocalizationTest` 改为直接调用包可见的 `ConsoleMetaQueryService.localizedLabel`（所有已注册枚举的 messageKey 非空，经 `enums()` 无法覆盖 key 为 null 的分支，故放宽为包可见）。
 
 ## 决策记录（2026-11-11）
 
