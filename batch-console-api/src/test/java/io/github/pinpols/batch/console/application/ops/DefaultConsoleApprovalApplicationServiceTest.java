@@ -3,7 +3,6 @@ package io.github.pinpols.batch.console.application.ops;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
@@ -367,29 +366,18 @@ class DefaultConsoleApprovalApplicationServiceTest {
   }
 
   @Test
-  @DisplayName("批量日重放审批 payload 租户与调用方一致时转发到 orchestrator 推进 session")
-  void shouldForwardBatchDayReplayApproval_whenPayloadTenantMatchesCaller() {
+  @DisplayName("BATCH_DAY_REPLAY 已非审批动作，审批通过后按不支持动作拒绝且不标记已执行")
+  void shouldRejectBatchDayReplayAction_asUnsupportedApprovalAction() {
     stubPendingBatchDayReplayApproval("approval-bdr", TENANT_ID);
 
-    assertThat(service.approve(TENANT_ID, "approval-bdr", "approver-1", "approve"))
-        .isEqualTo("approval-bdr");
-
-    verify(orchestratorClient).approveBatchDayReplay(77L, TENANT_ID, "approver-1");
-    verify(orchestratorClient).markApprovalExecuted(TENANT_ID, "approval-bdr");
-  }
-
-  @Test
-  @DisplayName("批量日重放审批 payload 租户与调用方不一致时拒绝且不转发到 orchestrator")
-  void shouldRejectBatchDayReplayApproval_whenPayloadTenantDiffersFromCaller() {
-    stubPendingBatchDayReplayApproval("approval-bdr-x", "tenant-b");
-
     Throwable thrown =
-        catchThrowable(() -> service.approve(TENANT_ID, "approval-bdr-x", "approver-1", "ok"));
+        catchThrowable(() -> service.approve(TENANT_ID, "approval-bdr", "approver-1", "ok"));
 
     assertThat(thrown)
         .isInstanceOf(BizException.class)
-        .hasFieldOrPropertyWithValue("messageKey", "error.batch_day_replay.invalid_argument");
-    verify(orchestratorClient, never()).approveBatchDayReplay(anyLong(), any(), any());
+        .hasFieldOrPropertyWithValue("messageKey", "error.common.invalid_argument_detail");
+    assertThat(((BizException) thrown).getMessageArgs())
+        .containsExactly("unsupported approval action: BATCH_DAY_REPLAY");
     verify(orchestratorClient, never()).markApprovalExecuted(any(), any());
   }
 

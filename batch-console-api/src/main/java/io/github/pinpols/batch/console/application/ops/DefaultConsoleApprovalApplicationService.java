@@ -50,9 +50,7 @@ import org.springframework.stereotype.Service;
  *         <li>{@code RETRY} → 按已批准的任务或分区目标派发重放
  *         <li>{@code DOWNLOAD} → {@link ConsoleFileApplicationService#presignDownload}
  *         <li>{@code CATCH_UP} → {@link ConsoleJobApprovalService#approveCatchUp}
- *         <li>{@code BATCH_DAY_REPLAY} → orchestrator {@code
- *             /internal/orchestrator/batch-day-replay/sessions/{id}/approve}（ADR-020 Stage 3
- *             审批接入；payload 含 sessionId / tenantId）
+ *         <li>{@code WORKFLOW_RUN_REPLAY} → orchestrator 整 Workflow Replay 审批推进
  *       </ul>
  *   <li>业务执行成功后调 {@code /executed} 把审批推进为 EXECUTED——失败则不推进，允许重试同一 approvalNo。
  * </ol>
@@ -153,8 +151,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
         request.setApprovalId(approvalNo);
         yield consoleJobApprovalService.approveCatchUp(request, approvalNo);
       }
-      case "BATCH_DAY_REPLAY" ->
-        batchdayreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
       case "WORKFLOW_RUN_REPLAY" ->
         workflowrunreplayAction(approvalRecord, tenantId, approvalNo, operatorId);
       default ->
@@ -163,26 +159,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             ResultCode.INVALID_ARGUMENT.detailKey(),
             "unsupported approval action: " + actionType);
     };
-  }
-
-  private String batchdayreplayAction(
-      ApprovalRecord approvalRecord, String tenantId, String approvalNo, String operatorId) {
-    // ADR-020 Stage 3 审批接入：payload = {"sessionId":<long>, "tenantId":<str>}。
-    // approve 后转发到 orchestrator 推进 session 状态 PENDING_APPROVAL → RUNNING；
-    // 复用 batch-day-replay/sessions/{id}/approve 端点，approver 取审批人 operatorId。
-    // 审批单按调用方租户加载，payload 租户必须与之一致（与整 Workflow Replay 同口径），
-    // 否则租户 A 的审批会推进租户 B 的 session；空/空白租户同样不等于调用方租户而被拒绝。
-    BatchDayReplayApprovalPayload payload =
-        JsonUtils.fromJson(approvalRecord.getPayloadJson(), BatchDayReplayApprovalPayload.class);
-    boolean batchDayReplayPayloadIsInvalid = EmptyChecks.isNull(payload)
-        || EmptyChecks.isNull(payload.getSessionId())
-        || !tenantId.equals(payload.getTenantId());
-    if (batchDayReplayPayloadIsInvalid) {
-      throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.batch_day_replay.invalid_argument");
-    }
-    orchestratorInternalRestClient.approveBatchDayReplay(
-        payload.getSessionId(), tenantId, EmptyChecks.isNull(operatorId) ? "system" : operatorId);
-    return approvalNo;
   }
 
   private String workflowrunreplayAction(
@@ -443,20 +419,6 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     private String approvalReason;
     private String sourceTraceId;
     private String sourceIdempotencyKey;
-  }
-
-  /**
-   * ADR-020 Stage 3 审批接入：BATCH_DAY_REPLAY 类型的 approval_command 在 payload_json 中携带的字段。 提交者
-   * (BatchDayReplayService.submit) 在 PENDING_APPROVAL 创建 session 时同步创建 approval_command， 把
-   * sessionId / tenantId 写到 payload；approver 走 /api/console/approvals/{no}/approve 时 dispatch 到
-   * orchestrator 的 batch-day-replay/sessions/{id}/approve 推进 RUNNING。
-   */
-  @NoArgsConstructor
-  @Getter
-  @Setter
-  private static class BatchDayReplayApprovalPayload {
-    private Long sessionId;
-    private String tenantId;
   }
 
   private record WorkflowRunReplayApprovalPayload(String tenantId, Long replayOperationId) {}
