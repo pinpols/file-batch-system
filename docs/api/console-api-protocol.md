@@ -7,6 +7,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-11-13 | **鉴权收紧**：`GET /api/console/queries/audits`、`GET /api/console/queries/operation-audits` 与 `GET /api/console/reports/excel/audits` 仅允许 `ROLE_ADMIN`、`ROLE_TENANT_ADMIN`、`ROLE_AUDITOR`，与菜单口径一致；`ROLE_TENANT_USER` 返回 403。路径、请求与响应字段不变；OpenAPI 补充 403 说明。`GET /api/console/queries/execution-logs` 未变。 |
 | 2026-11-12 | 文档更正：`X-Operator-Id` 不是操作人身份来源，服务端忽略该请求头，写操作与审计一律使用认证身份（`ConsoleRequestContextFilterTest`、相关 E2E 已覆盖伪造头被忽略）。服务端行为不变。 |
 | 2026-11-08 | **P1-A Stage 1 包结构收尾**：Controller 与查询/响应契约迁入 `domain.<ctx>` 包，新增 config 上下文；HTTP 路径、请求/响应字段、鉴权、状态码与 wire schema 均不变。 |
 | 2026-11-03 | `/auth/me` 菜单的中文展示名称与控制台当前菜单对齐；路径、角色与授权规则不变。控制台根据后端返回的路径收口可见性，再使用本地词条显示中英文。 |

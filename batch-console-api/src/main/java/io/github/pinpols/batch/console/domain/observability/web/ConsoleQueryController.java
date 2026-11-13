@@ -127,6 +127,7 @@ public class ConsoleQueryController {
 
   /** GET /audits — 审计日志列表(文件操作专用历史接口,沿用 file_audit_log)。 */
   @GetMapping("/audits")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleAuditLogResponse>> audits(
       @Valid @ModelAttribute AuditLogQueryRequest request) {
     return responseFactory.success(applicationService.auditLogs(request));
@@ -137,6 +138,7 @@ public class ConsoleQueryController {
    * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
    */
   @GetMapping("/operation-audits")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleOperationAuditResponse>> operationAudits(
       @Valid @ModelAttribute OperationAuditQueryRequest request) {
     return responseFactory.success(operationAuditQueryService.query(request));

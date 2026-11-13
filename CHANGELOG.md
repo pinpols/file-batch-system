@@ -670,6 +670,8 @@
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
 ### Security
+- Console 审计日志 `GET /api/console/queries/audits`、操作审计 `GET /api/console/queries/operation-audits` 和审计 Excel 导出 `GET /api/console/reports/excel/audits` 改为仅管理员、租户管理员和审计员可访问，与菜单一致；普通租户用户调用返回 403。
+- 原子任务 Worker 不再通过 Actuator 暴露 `loggers` 端点，避免在管理端口无鉴权时被集群内其他 Pod 修改日志级别。
 - 配置包 Excel 上传的工作簿暂存改为使用 owner-only 私有临时目录，避免在共享系统临时根目录落盘；成功和解析失败路径均验证清理。
 - Console 文件错误记录的 `rawRecord` 响应现按模板 `preview_masking_enabled` 执行脱敏；`error_line_masking_enabled` 仍负责错误消息和原始行，两项策略可独立配置。
 - 配置包 Excel 解析失败时不再将 POI 原始异常文本回显给调用方；服务端保留经过清理的诊断摘要。

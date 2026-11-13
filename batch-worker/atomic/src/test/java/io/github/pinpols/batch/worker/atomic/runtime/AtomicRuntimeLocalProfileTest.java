@@ -24,4 +24,17 @@ class AtomicRuntimeLocalProfileTest {
         .contains("health", "info", "prometheus", "atomicruntime")
         .doesNotContain("loggers");
   }
+
+  @Test
+  @DisplayName("基础配置同样不暴露日志级别写入端点，管理端口无鉴权时不能被集群内任意 Pod 修改")
+  void shouldNotExposeLoggersEndpointInBaseProfile() {
+    YamlPropertiesFactoryBean loader = new YamlPropertiesFactoryBean();
+    loader.setResources(new ClassPathResource("application.yml"));
+    Properties properties = loader.getObject();
+    assertThat(properties).isNotNull();
+    String include = properties.getProperty("management.endpoints.web.exposure.include");
+    assertThat(Arrays.asList(include.split(",")))
+        .contains("health", "info", "prometheus", "atomicruntime")
+        .doesNotContain("loggers");
+  }
 }

@@ -3320,6 +3320,8 @@ paths:
               schema:
                 type: string
                 format: binary
+        '403':
+          description: Requires ROLE_ADMIN, ROLE_AUDITOR, or ROLE_TENANT_ADMIN
   /api/console/reports/excel/scheduler-snapshot:
     get:
       tags: [Reports]
@@ -4425,6 +4427,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseConsoleAuditLogList'
+        '403':
+          description: Requires ROLE_ADMIN, ROLE_AUDITOR, or ROLE_TENANT_ADMIN
   /api/console/admin/test-data:
     delete:
       tags: [Admin]
@@ -4569,6 +4573,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommonResponseObject'
+        '403':
+          description: Requires ROLE_ADMIN, ROLE_AUDITOR, or ROLE_TENANT_ADMIN
   /api/console/queries/execution-logs:
     get:
       tags: [Queries]

@@ -21,6 +21,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 - `/api/console/**` 的基线是"四种角色之一即可访问"（`ConsoleSecurityConfiguration`：ADMIN、TENANT_ADMIN、AUDITOR、TENANT_USER）。381 个接口中 302 个另有 `@PreAuthorize`；其余 79 个只有基线，其中 47 个在 `ConsoleQueryController`。
 - 已确认一例：`menu.yml` 中"审计日志""操作审计"只对 ADMIN、TENANT_ADMIN、AUDITOR 开放，对应的 `GET /audits`、`GET /operation-audits` 没有角色检查。`OperationAuditQueryService` 只按租户过滤，因此 TENANT_USER 直接调接口能读到本租户的操作审计，包括管理员的操作记录。未找到拒绝 TENANT_USER 的测试。
 - 其余 45 个只有基线的查询接口未逐个与菜单比对。
+- 【部分处理 2026-11-13】`GET /audits`、`GET /operation-audits` 和审计 Excel 导出 `GET /api/console/reports/excel/audits` 已按菜单口径加 `@PreAuthorize(ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)`，普通租户用户调接口返回 403；约束由 `ConsoleAuditQueryAuthorizationTest` 守护。`GET /execution-logs` 也读同一审计日志，但被可观测查询页的执行日志页签使用，收紧前需确认该页面的角色范围，未改。其余 45 个接口的逐个比对仍开放。
 - 不受影响的：`ConsoleAiController` 的 13 个接口虽无 `@PreAuthorize`，但服务层 `ConsoleAiAuthorizationService.assertAllowed` 按配置白名单校验。
 
 ### ARCH-20261113-10 / P2 / 有当前证据：平台库的租户隔离只在应用层
@@ -47,6 +48,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 
 - Helm 的 `networkPolicy.enabled` 全局默认 `false`；原子任务 Worker 的网络策略只限制出站（`policyTypes: Egress`）。
 - 原子任务 Worker 暴露 `health,info,prometheus,loggers,atomicruntime`，没有接入 Spring Security。Helm 为它设置了独立的管理端口，但网络策略未开启时，集群内任何 Pod 都能访问，包括通过 `POST /actuator/loggers` 修改日志级别。对比：Console 把 `/actuator/loggers` 限定为 ADMIN；Orchestrator 内部接口有 `InternalAuthFilter` 和请求签名；Import Worker 的内部接口有共享密钥校验。
+- 【部分处理 2026-11-13】原子任务 Worker 不再暴露 `loggers`，与其他应用的默认暴露一致；代码、脚本和前端均无调用方。基础配置与本地配置的暴露列表由 `AtomicRuntimeLocalProfileTest` 守护。网络策略默认关闭、管理端口无鉴权本身仍开放。
 
 ### ARCH-20261113-14 / P3 / 有当前证据：测试依赖时序
 

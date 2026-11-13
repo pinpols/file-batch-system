@@ -53,8 +53,9 @@ public class ConsoleReportExcelController {
     return ConsoleExcelDownloadResponse.from(applicationService.exportConfigChangeLogs(request));
   }
 
-  /** 导出审计日志 Excel。 */
+  /** 导出审计日志 Excel；与审计日志菜单同口径，普通租户用户不可导出。 */
   @GetMapping("/audits")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR_OR_TENANT_ADMIN)
   public ResponseEntity<StreamingResponseBody> audits(
       @ModelAttribute AuditLogQueryRequest request) {
     return ConsoleExcelDownloadResponse.from(applicationService.exportAuditLogs(request));
