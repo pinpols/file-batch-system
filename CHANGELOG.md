@@ -24,6 +24,7 @@
 
 - Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。
 - 审批推送标题中的申请类型取审批类型字典标签，`SELF_SERVICE` 显示为「自助补救」，未登记的类型码仍原样显示。
+- 后端状态值统一改用权威枚举：新增 `BatchDayReplaySessionStatus` / `BatchDayReplayEntryStatus`，并清理 `AlertStatus`、`OutboxPublishStatus`、`ResultVersionMapper.VersionStatus` 的私有复写字面量；删除与 `BatchLifecycleStatus` 重复的 `BatchStatusConstants`、5 个从未注册的指标名和 5 个无引用错误文案常量。持久化取值、HTTP 契约和已注册指标名均不变。
 
 - P1-A Stage 1 包结构收尾：Console Controller 与应用契约迁入 `domain.<ctx>` 并新增 `config` 上下文；仅内部 Java 包路径变化，HTTP 路径、请求/响应字段、鉴权与 wire schema 不变。
 
