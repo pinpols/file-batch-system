@@ -4512,6 +4512,7 @@ paths:
     get:
       tags: [Queries]
       summary: Query console operation audits (general user-action audit, written by @AuditAction Aspect)
+      description: 仅 ROLE_ADMIN、ROLE_TENANT_ADMIN、ROLE_AUDITOR 可调用，与菜单「操作审计」一致；ROLE_TENANT_USER 返回 403。
       operationId: queryOperationAudits
       parameters:
         - $ref: '#/components/parameters/TenantIdQuery'
