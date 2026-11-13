@@ -387,11 +387,6 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  /**
-   * 在 {@code pos}(此处字符为 {@code $})尝试匹配 PG dollar-quote 开标签 {@code $tag$}: tag 为空或 {@code
-   * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
-   * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
-   */
   /** 从 dollar-quote 开标签处把整段(含开/闭标签)写入 {@code buf},返回闭标签之后的索引; 未闭合(到串尾仍无闭标签)则全部写入并返回串尾。 */
   private static int consumeDollarQuote(String sql, int start, String tag, StringBuilder buf) {
     buf.append(tag);
@@ -408,6 +403,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return n;
   }
 
+  /**
+   * 在 {@code pos}(此处字符为 {@code $})尝试匹配 PG dollar-quote 开标签 {@code $tag$}: tag 为空或 {@code
+   * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
+   * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
+   */
   private static String matchDollarTag(String sql, int pos) {
     int n = sql.length();
     for (int j = pos + 1; j < n; j++) {

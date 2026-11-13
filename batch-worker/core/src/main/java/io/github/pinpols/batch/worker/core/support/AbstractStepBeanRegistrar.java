@@ -92,11 +92,6 @@ public abstract class AbstractStepBeanRegistrar<T> {
         log.info("step registry snapshot refreshed: module={}, count=0 (no beans found)", module);
         return;
       }
-      // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时
-      // DefaultImportStageExecutor / DefaultDispatchStageExecutor 用的就是 step.implCode()
-      // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
-      // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
-      // 下拉的 impl_code 跟运行时脱节。
       log.info(
           "step registry snapshot refreshed: module={}, count={}, implCodes={}",
           module,
@@ -114,6 +109,11 @@ public abstract class AbstractStepBeanRegistrar<T> {
       List<Object> collected) {
     Map<String, B> beans = applicationContext.getBeansOfType(binding.beanType());
     for (B bean : beans.values()) {
+      // 关键：用业务侧的 step.implCode() 做登记键而非 Spring bean name。运行时
+      // DefaultImportStageExecutor / DefaultDispatchStageExecutor 用的就是 step.implCode()
+      // 做 Map key（默认返回 "MODULE_STAGENAME" 比如 DISPATCH_PREPARE），而不是 Spring
+      // camelCase 的 bean name（prepareDispatchStep）。登记必须对齐，否则 Excel 校验 /
+      // 下拉的 impl_code 跟运行时脱节。
       String code = binding.implCodeExtractor().apply(bean);
       if (code == null || code.isBlank()) {
         continue;

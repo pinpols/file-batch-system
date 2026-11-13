@@ -108,10 +108,6 @@ public class OrchestratorKafkaConsumerConfiguration {
   }
 
   /**
-   * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
-   * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
-   */
-  /**
    * 瞬时错误重试耗尽时登记持久恢复锚点：该记录随后会被跳过(offset 提交)，若请求尚未落任何持久等待/prepare
    * 记录，这里是唯一能阻止"永久失去执行机会"的位置。登记失败必须抛回 error handler，禁止跳过未持久化的请求。
    */
@@ -139,6 +135,10 @@ public class OrchestratorKafkaConsumerConfiguration {
     }
   }
 
+  /**
+   * Poison-pill 防护用 ErrorHandler。瞬时错误重试 N 次后放行；业务错（BizException /
+   * IllegalArgumentException）不重试直接放行。429 已由 listener 的 nack 分支处理，不会进入本 handler。
+   */
   private DefaultErrorHandler triggerLaunchErrorHandler() {
     TriggerConsumerProperties.ErrorHandler eh = consumerProperties.getErrorHandler();
     ConsumerRecordRecoverer recoverer = (consumerRecord, exception) -> {

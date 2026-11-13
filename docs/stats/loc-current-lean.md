@@ -1,34 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-<<<<<<< HEAD
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `13a8b6546`。
-=======
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `182c7ff58`。
->>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `a203082c0` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-<<<<<<< HEAD
-| 6,348 | 828,356 | 433,145 | 52.3% |
-=======
-| 6,348 | 828,214 | 433,075 | 52.3% |
->>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
+| 6,348 | 828,309 | 433,120 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-<<<<<<< HEAD
-| test | 1,920 | 413,306 | 222,288 | 53.8% |
+| test | 1,920 | 413,259 | 222,263 | 53.8% |
 | prod | 3,510 | 327,009 | 156,200 | 47.8% |
-=======
-| test | 1,920 | 413,256 | 222,260 | 53.8% |
-| prod | 3,510 | 326,917 | 156,158 | 47.8% |
->>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
 | script | 740 | 69,159 | 42,267 | 61.1% |
-| config | 68 | 10,286 | 7,687 | 74.7% |
+| config | 68 | 10,272 | 7,680 | 74.8% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
 | sql | 76 | 2,450 | 231 | 9.4% |
 
@@ -36,15 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-<<<<<<< HEAD
-| Java | 4,778 | 642,464 | 339,556 | 52.9% |
-=======
-| Java | 4,778 | 642,322 | 339,486 | 52.9% |
->>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
+| Java | 4,778 | 642,417 | 339,531 | 52.9% |
 | Python | 351 | 53,145 | 29,183 | 54.9% |
 | Shell | 218 | 36,096 | 28,568 | 79.1% |
 | YAML | 109 | 15,009 | 11,608 | 77.3% |
-| XML | 225 | 31,588 | 9,431 | 29.9% |
+| XML | 225 | 31,574 | 9,424 | 29.8% |
 | TypeScript | 42 | 8,679 | 4,596 | 53.0% |
 | Rust | 24 | 9,854 | 3,529 | 35.8% |
 | Properties | 5 | 3,187 | 2,647 | 83.1% |

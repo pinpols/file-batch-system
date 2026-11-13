@@ -425,36 +425,16 @@ public class PreprocessStep implements ImportStageStep {
   }
 
   /**
-   * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
-   *
-   * <ul>
-   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED}, 避免默认 REPLACE 让
-   *       U+FFFD 静默入库
-   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入 {@code charsetSuspect=LIKELY_UTF8},
-   *       让下游把标记写进 {@code file_record.metadata}
-   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
-   *       replacementCount}
-   *   <li>D2 — 编码探测回退（保守默认，opt-in）：模板 {@code charset_detect=true} 且未显式配置 charset、UTF-8 严格解码
-   *       失败、字节含非 ASCII 时，尝试 GB18030（GBK 超集）；命中则 context 写入 {@code detectedCharset}，解码继续。
-   *       默认关闭——GB18030 解码接受度远高于 UTF-8，自动回退可能把 Shift-JIS/Latin-1 等静默解成乱码，宁可失败让人工配 charset。
-   * </ul>
-   */
-  /**
-   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码， 避免 byte[] → UTF-16 String 的
-   * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
-   * {@link ImportPreprocessException} 以对齐主链路异常语义。
-   */
-  /**
-   * ⚠2 (2026-05-03): 大文件加密内容走 Path → Path 流式解密. 之前 cryptoService.decrypt(rawBytes) 内部
-   * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
-   * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
-   */
-  /**
    * P1-11 流式 buffer 大小:8KB,与 BufferedInputStream / ByteArrayOutputStream 配合避免 readAllBytes
    * 的一次性巨块分配。
    */
   private static final int DECRYPT_STREAM_BUFFER_BYTES = 8 * 1024;
 
+  /**
+   * ⚠2 (2026-05-03): 大文件加密内容走 Path → Path 流式解密. 之前 cryptoService.decrypt(rawBytes) 内部
+   * readAllBytes() 把结果再分配一次 byte[], 100 MB 输入瞬间 200 MB 堆峰. 现在写 temp file 后立刻让 caller GC rawBytes,
+   * 解密结果只占单次 byte[] 大小. 失败按原 IOException 透传成 IllegalStateException, 保持调用方语义.
+   */
   private byte[] decryptViaSpool(byte[] rawBytes) {
     Path encrypted = null;
     Path decrypted = null;
@@ -501,6 +481,11 @@ public class PreprocessStep implements ImportStageStep {
     }
   }
 
+  /**
+   * 大文件 spool：把原始字节写临时文件，PARSE 阶段用 InputStreamReader 按 charset 流式按行解码， 避免 byte[] → UTF-16 String 的
+   * 1.5-2x 内存放大。A 严格解码在 PARSE 阶段读时隐式触发（charset decoder REPORT 行为）；B/D1 为观测层，大文件场景下跳过以换取内存。IO 错误转为
+   * {@link ImportPreprocessException} 以对齐主链路异常语义。
+   */
   private void spoolLargePayload(byte[] processed, Charset charset, ImportJobContext context) {
     Path spool;
     try {
@@ -524,6 +509,21 @@ public class PreprocessStep implements ImportStageStep {
         charset);
   }
 
+  /**
+   * 文本解码三层守卫：把原始字节变成已归一化的 UTF-16 字符串，同时把可疑信号写入 context。
+   *
+   * <ul>
+   *   <li>A — 严格解码：非法字节 / 非 mappable 字符抛 {@code IMPORT_PREPROCESS_DECODE_FAILED}, 避免默认 REPLACE 让
+   *       U+FFFD 静默入库
+   *   <li>D1 — 反向错检测：声明非 UTF-8 但字节同时通过 UTF-8 严格解码 → context 写入 {@code charsetSuspect=LIKELY_UTF8},
+   *       让下游把标记写进 {@code file_record.metadata}
+   *   <li>B — 残留 U+FFFD 扫描：解码结果仍含 U+FFFD (源文件自带 / charset 内置替换) → context 写入 {@code
+   *       replacementCount}
+   *   <li>D2 — 编码探测回退（保守默认，opt-in）：模板 {@code charset_detect=true} 且未显式配置 charset、UTF-8 严格解码
+   *       失败、字节含非 ASCII 时，尝试 GB18030（GBK 超集）；命中则 context 写入 {@code detectedCharset}，解码继续。
+   *       默认关闭——GB18030 解码接受度远高于 UTF-8，自动回退可能把 Shift-JIS/Latin-1 等静默解成乱码，宁可失败让人工配 charset。
+   * </ul>
+   */
   private String decodeWithGuards(byte[] processed, DecodingSpec spec, ImportJobContext context) {
     Charset charset = spec.charset();
     String decoded;
