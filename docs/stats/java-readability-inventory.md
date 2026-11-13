@@ -15,13 +15,8 @@
 | public Map 契约候选文件 | 44 |
 | `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 175 |
-<<<<<<< HEAD
 | `@Configuration` 类 | 53 |
 | 大于等于 700 行的源文件 | 35 |
-=======
-| `@Configuration` 类 | 51 |
-| 大于等于 700 行的源文件 | 34 |
->>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
 | `PMD.ExcessiveParameterList` 显式例外 | 29 |
 
 ## 模块源文件
@@ -76,6 +71,7 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleConfigApplicationService.java` | 765 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/workflow/DefaultWorkflowDefinitionService.java` | 765 |
 | `batch-worker/export/src/main/java/io/github/pinpols/batch/worker/exports/stage/format/AbstractExportFormat.java` | 736 |
+| `batch-worker/atomic/src/main/java/io/github/pinpols/batch/worker/atomic/sql/SqlTaskExecutor.java` | 719 |
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 712 |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java` | 707 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/batchday/BatchDayOpenService.java` | 705 |
