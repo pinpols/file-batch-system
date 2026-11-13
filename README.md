@@ -53,22 +53,36 @@ File Batch System（BFS）是一套**自托管的分布式批处理平台**，�
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
+flowchart LR
+
   subgraph Control["控制面"]
-    direction LR
-    Trigger["Trigger<br/>API · 计划 · 到达事件"] -->|"启动出箱事件 · Kafka"| Orch["Orchestrator<br/>WorkflowRun → Job → Task"]
+    direction TB
+    Trigger["Trigger<br/>API · 计划 · 到达事件"]:::control
+    Orch["Orchestrator<br/>WorkflowRun → Job → Task"]:::control
+    Trigger -->|"启动出箱事件 · Kafka"| Orch
   end
   subgraph Delivery["可靠派发"]
-    direction LR
-    DB[("PostgreSQL<br/>运行状态 + 任务 Outbox")] -->|"发布器异步投递"| Kafka["Kafka 任务主题"]
+    direction TB
+    DB[("PostgreSQL<br/>运行状态 + 任务 Outbox")]:::store
+    Kafka{{"Kafka 任务主题"}}:::mq
+    DB -->|"发布器异步投递"| Kafka
   end
   subgraph Execution["执行面"]
-    direction LR
-    Worker["内建 Worker / 租户 SDK<br/>CLAIM → EXECUTE → REPORT"] --> Target["业务库 / 文件存储 / 接收端"]
+    direction TB
+    Worker["内建 Worker / 租户 SDK<br/>CLAIM → EXECUTE → REPORT"]:::worker
+    Target["业务库 / 文件存储 / 接收端"]:::ext
+    Worker --> Target
   end
   Control -->|"Orchestrator 同事务写状态与 Outbox"| Delivery
   Delivery -->|"Kafka 派发任务"| Execution
-  Execution -.->|"HTTP 回到 Orchestrator：CLAIM / 续租 / REPORT"| Control
+  Control <-.->|"HTTP 回到 Orchestrator：CLAIM / 续租 / REPORT"| Execution
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 五类 Worker：
