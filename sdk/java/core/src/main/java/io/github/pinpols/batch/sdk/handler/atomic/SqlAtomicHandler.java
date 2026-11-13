@@ -26,7 +26,10 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p><b>安全闸</b>:默认 {@link SqlAtomicConfig#forbidOsCapableRole()} 为 true,执行前检测当前 DB 角色是否具备 superuser
  * 或 {@code pg_execute_server_program} / {@code pg_read_server_files} / {@code
- * pg_write_server_files} 等 OS 能力,命中则拒绝执行(dual-use RCE 隔离)。
+ * pg_write_server_files} 等 OS 能力,命中则拒绝执行(dual-use RCE 隔离)。该探测只适用于 PostgreSQL;连 MySQL 等其他库时探测 SQL
+ * 本身会失败,须显式关闭 {@code forbidOsCapableRole} 并由库侧最小权限账号兜底。
+ *
+ * <p><b>多语句切分</b>:按连接的产品名选择词法(PostgreSQL 默认,MySQL / MariaDB 单独处理),见 {@link SqlSplitDialect}。
  */
 @Slf4j
 public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
@@ -55,8 +58,19 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
   @Override
   protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
     String sql = readSql(ctx);
-    List<String> statements = splitStatements(sql);
-    if (statements.isEmpty()) {
+    try (Connection conn = dataSource.getConnection()) {
+      // 切分规则取决于连接的方言,所以先取连接再切分与校验语句数
+      List<String> statements = SqlSplitDialect.detect(conn).split(sql);
+      requireStatementCountWithinLimit(statements);
+      if (config.forbidOsCapableRole()) {
+        assertNotOsCapableRole(conn);
+      }
+      return runStatements(conn, statements);
+    }
+  }
+
+  private void requireStatementCountWithinLimit(List<String> statements) {
+    if (EmptyChecks.isEmpty(statements)) {
       throw new IllegalArgumentException("no executable SQL statement found");
     }
     if (statements.size() > config.maxStatementsPerJob()) {
@@ -64,12 +78,6 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
           + statements.size()
           + " > maxStatementsPerJob="
           + config.maxStatementsPerJob());
-    }
-    try (Connection conn = dataSource.getConnection()) {
-      if (config.forbidOsCapableRole()) {
-        assertNotOsCapableRole(conn);
-      }
-      return runStatements(conn, statements);
     }
   }
 
@@ -138,7 +146,10 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     }
   }
 
-  /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内以及 PG dollar-quote 体内的 `;`。 */
+  /**
+   * 按 PostgreSQL 词法用 `;` 切多语句,跳过单/双引号内、行/块注释内以及 PG dollar-quote 体内的 `;`。执行时按连接方言选择规则,见
+   * {@link SqlSplitDialect}。
+   */
   static List<String> splitStatements(String sql) {
     StatementSplitState state = new StatementSplitState();
     int i = 0;

@@ -8,6 +8,11 @@ import java.util.List;
  * {@link SqlTaskExecutor} 的多语句切分器:按顶层 `;` 把 SQL 文本切成有序语句列表。
  *
  * <p>词法按 PostgreSQL 规则处理引号、注释与 dollar-quote,详见 {@link #split(String)}。无状态工具类,不可实例化。
+ *
+ * <p><b>只实现 PostgreSQL 词法,不做方言选择</b>:Worker 镜像只打包 PostgreSQL JDBC 驱动({@code batch-worker/atomic/pom.xml}),数据源由
+ * Spring 配置的 bean 提供,标准部署连不上其他库;默认 {@code forbidOsCapableRole=true} 时,{@link
+ * SqlTaskExecutor#requireNonOsCapableRole} 对非 PostgreSQL 连接 fail-closed 拒绝执行。只有自建镜像追加驱动并显式关闭该闸时才会连到其他库,
+ * 此时按 PostgreSQL 规则切分(如 MySQL 默认的反斜杠转义不识别)由运维自行承担;切分发生在取连接之前(dry-run 不取连接),也无法按连接选方言。
  */
 final class SqlStatementSplitter {
 

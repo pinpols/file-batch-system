@@ -27,6 +27,7 @@
 - `GET /api/console/queries/operation-audits` 改为只对平台管理员、租户管理员和审计员开放，与菜单「操作审计」一致；普通租户用户此前可直接调接口读到本租户管理员的操作记录，现在返回 403。文件审计 `/queries/audits` 不变，自助服务「我的审计」等页面仍在使用。
 - 原子任务 Worker 默认不再暴露可写的 `/actuator/loggers`，只保留 `health,info,prometheus,atomicruntime`，与其他 Worker 一致。该 Worker 管理端点没有认证，网络策略默认关闭，原先集群内任意 Pod 都能改它的日志级别。临时排障可设 `BATCH_WORKER_ATOMIC_ACTUATOR_EXPOSURE` 加回。
 - 导入模板的加密类型选 `PGP` 或 `CUSTOM`、又没有显式 `preprocess_pipeline` 时，Console 在创建、更新、启用和配置包/批量初始化写入时直接拒绝。此前这种模板能保存，到运行时才以 `IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED` 失败。未启用的草稿、导出模板和已配置显式流水线的模板不受影响。
+- Java SDK `SqlAtomicHandler` 改为先取连接再切分语句：按 `DatabaseMetaData.getDatabaseProductName()` 选择词法，MySQL / MariaDB 连接按 MySQL 规则切分（`'...'`/`"..."` 默认反斜杠转义，读取会话 `sql_mode` 识别 `NO_BACKSLASH_ESCAPES`、`ANSI_QUOTES`；反引号标识符；`#` 与后跟空白的 `-- ` 行注释；块注释不嵌套；无 dollar-quote），其余或无法识别的库仍按 PostgreSQL 规则。空 SQL 与超 `maxStatementsPerJob` 现在在取得连接后才拒绝，仍不执行任何语句。平台原子 SQL 执行器与 Python SDK 只连 PostgreSQL，保持 PG 词法。
 - Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。
 - 审批推送标题中的申请类型取审批类型字典标签，`SELF_SERVICE` 显示为「自助补救」，未登记的类型码仍原样显示。
 - 后端状态值统一改用权威枚举：新增 `BatchDayReplaySessionStatus` / `BatchDayReplayEntryStatus`，并清理 `AlertStatus`、`OutboxPublishStatus`、`ResultVersionMapper.VersionStatus` 的私有复写字面量；删除与 `BatchLifecycleStatus` 重复的 `BatchStatusConstants`、5 个从未注册的指标名和 5 个无引用错误文案常量。持久化取值、HTTP 契约和已注册指标名均不变。

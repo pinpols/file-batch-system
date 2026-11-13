@@ -188,8 +188,12 @@ class SqlAtomicHandler(SdkAbstractAtomicHandler):
 def split_statements(sql: str) -> list[str]:
     """按 ``;`` 切多语句 SQL,正确处理引号 / 注释 / PG dollar-quote。
 
-    行为对齐 Java ``SqlAtomicHandler.splitStatements`` 与平台 ``SqlTaskExecutor``:
+    行为对齐 Java ``SqlAtomicHandler.splitStatements`` 与平台 ``SqlStatementSplitter``:
     顶层 ``$tag$ ... $tag$`` 体内的 ``;`` 不切,``$1`` 位置参数不是开标签。
+
+    只实现 PostgreSQL 词法:连接按 asyncpg 形状的 :class:`SqlConnection` 传入,
+    ``asyncpg`` 只支持 PostgreSQL,角色探测也查 ``pg_roles``。Java SDK 因接受任意
+    ``DataSource`` 才额外按产品名支持 MySQL / MariaDB 词法,Python 版没有这种连接来源。
     """
     state = _SplitState()
     i = 0

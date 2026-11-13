@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import io.github.pinpols.batch.sdk.task.SdkTaskContext;
 import io.github.pinpols.batch.sdk.task.SdkTaskResult;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -206,13 +207,24 @@ class SqlAtomicHandlerTest {
   // ─── 对齐平台:maxStatementsPerJob + 多语句 + autoCommit ──────────────────────
 
   @Test
-  @DisplayName("超 maxStatementsPerJob → fail(不连 DB)")
-  void shouldRejectTooManyStatements_whenExceedMax() {
+  @DisplayName("超 maxStatementsPerJob → fail(不执行任何语句)")
+  void shouldRejectTooManyStatements_whenExceedMax() throws Exception {
     var cfg = new SqlAtomicConfig("sql", 30, 10000, 2, false, true);
     SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource)
         .execute(ctx("UPDATE a SET x=1; UPDATE b SET y=2; UPDATE c SET z=3;"));
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("too many statements");
+    verify(connection, never()).createStatement();
+  }
+
+  @Test
+  @DisplayName("只有分号与空白时 → fail(无可执行语句)")
+  void shouldReject_whenNoExecutableStatement() throws Exception {
+    SdkTaskResult result =
+        new SqlAtomicHandler(SqlAtomicConfig.defaults("sql"), dataSource).execute(ctx(" ; ; "));
+    assertThat(result.success()).isFalse();
+    assertThat(result.message()).contains("no executable SQL statement");
+    verify(connection, never()).createStatement();
   }
 
   @Test
@@ -282,6 +294,211 @@ class SqlAtomicHandlerTest {
     assertThat(result.success()).isFalse();
     assertThat(result.message()).contains("boom").doesNotContain("rollback failed");
     verify(connection).rollback();
+  }
+
+  // ─── 方言:按 DatabaseMetaData 选择切分词法 ─────────────────────────────────
+
+  /** 连接报告为 MySQL,会话 sql_mode 为给定值;返回之后执行业务语句用的 Statement。 */
+  private Statement stubMySqlConnection(String sqlMode) throws Exception {
+    DatabaseMetaData meta = mock(DatabaseMetaData.class);
+    when(connection.getMetaData()).thenReturn(meta);
+    when(meta.getDatabaseProductName()).thenReturn("MySQL");
+    Statement modeQuery = mock(Statement.class);
+    ResultSet modeRs = mock(ResultSet.class);
+    when(modeQuery.executeQuery(anyString())).thenReturn(modeRs);
+    when(modeRs.next()).thenReturn(true);
+    when(modeRs.getString(1)).thenReturn(sqlMode);
+    Statement business = mock(Statement.class);
+    when(business.execute(anyString())).thenReturn(false);
+    when(connection.createStatement()).thenReturn(modeQuery).thenReturn(business);
+    return business;
+  }
+
+  @Test
+  @DisplayName("连接为 MySQL 时单引号内的反斜杠转义引号, 分号不切断语句")
+  void shouldUseMySqlBackslashEscapes_whenDatabaseIsMySql() throws Exception {
+    Statement business = stubMySqlConnection("STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION");
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, true, false);
+
+    SdkTaskResult result =
+        new SqlAtomicHandler(cfg, dataSource).execute(ctx("insert into t values ('a\\';b')"));
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.output()).containsEntry("statementCount", 1);
+    verify(business).execute("insert into t values ('a\\';b')");
+  }
+
+  @Test
+  @DisplayName("MySQL 会话开启 NO_BACKSLASH_ESCAPES 时反斜杠按字面字符处理")
+  void shouldTreatBackslashAsLiteral_whenMySqlNoBackslashEscapes() throws Exception {
+    Statement business = stubMySqlConnection("NO_BACKSLASH_ESCAPES,STRICT_TRANS_TABLES");
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, true, false);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource)
+        .execute(ctx("insert into t values ('C:\\'); delete from t"));
+
+    assertThat(result.success()).isTrue();
+    assertThat(result.output()).containsEntry("statementCount", 2);
+    verify(business).execute("delete from t");
+  }
+
+  @Test
+  @DisplayName("连接为 PostgreSQL 时按 PG 规则切分, 不查询 sql_mode")
+  void shouldKeepPostgresRules_whenDatabaseIsPostgres() throws Exception {
+    DatabaseMetaData meta = mock(DatabaseMetaData.class);
+    when(connection.getMetaData()).thenReturn(meta);
+    when(meta.getDatabaseProductName()).thenReturn("PostgreSQL");
+    when(connection.createStatement()).thenReturn(statement);
+    when(statement.execute(anyString())).thenReturn(false);
+    var cfg = new SqlAtomicConfig("sql", 30, 10000, 50, true, false);
+
+    SdkTaskResult result = new SqlAtomicHandler(cfg, dataSource)
+        .execute(ctx("insert into t values ('C:\\'); delete from t"));
+
+    assertThat(result.output()).containsEntry("statementCount", 2);
+    verify(statement, never()).executeQuery(anyString());
+  }
+
+  @Test
+  @DisplayName("读取数据库产品名失败时回落到 PG 规则")
+  void shouldFallBackToPostgresRules_whenMetadataUnavailable() throws Exception {
+    when(connection.getMetaData()).thenThrow(new SQLException("no metadata"));
+
+    assertThat(SqlSplitDialect.detect(connection)).isEqualTo(SqlSplitDialect.POSTGRESQL);
+  }
+
+  @Test
+  @DisplayName("MariaDB 按 MySQL 规则切分; 读取 sql_mode 失败时按默认模式处理")
+  void shouldUseMySqlDefaults_whenMariaDbSqlModeUnreadable() throws Exception {
+    DatabaseMetaData meta = mock(DatabaseMetaData.class);
+    when(connection.getMetaData()).thenReturn(meta);
+    when(meta.getDatabaseProductName()).thenReturn("MariaDB");
+    when(connection.createStatement()).thenThrow(new SQLException("denied"));
+
+    assertThat(SqlSplitDialect.detect(connection)).isEqualTo(SqlSplitDialect.mysql(""));
+    assertThat(SqlSplitDialect.mysql(""))
+        .returns(true, SqlSplitDialect::mysql)
+        .returns(true, SqlSplitDialect::backslashEscapes)
+        .returns(false, SqlSplitDialect::ansiQuotes);
+  }
+
+  @Test
+  @DisplayName("MySQL 会话 sql_mode 无结果行时按默认模式处理")
+  void shouldUseMySqlDefaults_whenSqlModeHasNoRow() throws Exception {
+    DatabaseMetaData meta = mock(DatabaseMetaData.class);
+    when(connection.getMetaData()).thenReturn(meta);
+    when(meta.getDatabaseProductName()).thenReturn("MySQL");
+    Statement modeQuery = mock(Statement.class);
+    ResultSet modeRs = mock(ResultSet.class);
+    when(modeQuery.executeQuery(anyString())).thenReturn(modeRs);
+    when(connection.createStatement()).thenReturn(modeQuery);
+
+    assertThat(SqlSplitDialect.detect(connection)).isEqualTo(SqlSplitDialect.mysql(null));
+  }
+
+  @Test
+  @DisplayName("ANSI_QUOTES 与 NO_BACKSLASH_ESCAPES 从 sql_mode 中识别, 大小写不敏感")
+  void shouldParseSqlModeFlags() {
+    assertThat(SqlSplitDialect.mysql("real_as_float,ansi_quotes,no_backslash_escapes"))
+        .returns(false, SqlSplitDialect::backslashEscapes)
+        .returns(true, SqlSplitDialect::ansiQuotes);
+  }
+
+  @ParameterizedTest(name = "{0}")
+  @MethodSource("mySqlSplittingCases")
+  @DisplayName("MySQL 词法: 反斜杠转义, 反引号标识符, # 与 -- 注释, 无美元引用")
+  void shouldSplitWithMySqlRules(
+      String scenario, SqlSplitDialect dialect, String sql, List<String> expected) {
+    assertThat(dialect.split(sql)).containsExactlyElementsOf(expected);
+  }
+
+  private static Stream<Arguments> mySqlSplittingCases() {
+    SqlSplitDialect byDefault = SqlSplitDialect.mysql("STRICT_TRANS_TABLES");
+    SqlSplitDialect noBackslash = SqlSplitDialect.mysql("NO_BACKSLASH_ESCAPES");
+    SqlSplitDialect ansiQuotes = SqlSplitDialect.mysql("ANSI_QUOTES");
+    return Stream.of(
+        Arguments.of(
+            "backslash-escapes-single-quote",
+            byDefault,
+            "select 'it\\'s;ok'; select 2",
+            List.of("select 'it\\'s;ok'", "select 2")),
+        Arguments.of(
+            "backslash-escapes-double-quote-string",
+            byDefault,
+            "select \"a\\\";b\"; select 2",
+            List.of("select \"a\\\";b\"", "select 2")),
+        Arguments.of(
+            "escaped-backslash-then-close",
+            byDefault,
+            "select 'a\\\\'; select 2",
+            List.of("select 'a\\\\'", "select 2")),
+        Arguments.of(
+            "doubled-quote",
+            byDefault,
+            "select 'it''s;ok'; select 2",
+            List.of("select 'it''s;ok'", "select 2")),
+        Arguments.of(
+            "no-backslash-escapes",
+            noBackslash,
+            "insert into t values ('C:\\'); delete from t",
+            List.of("insert into t values ('C:\\')", "delete from t")),
+        Arguments.of(
+            "ansi-quotes-identifier-backslash-literal",
+            ansiQuotes,
+            "select 1 as \"x\\\"; select 2",
+            List.of("select 1 as \"x\\\"", "select 2")),
+        Arguments.of(
+            "ansi-quotes-single-quote-still-escapes",
+            ansiQuotes,
+            "select 'a\\';b'; select 2",
+            List.of("select 'a\\';b'", "select 2")),
+        Arguments.of(
+            "backtick-identifier",
+            byDefault,
+            "select 1 as `a;b``c\\`; select 2",
+            List.of("select 1 as `a;b``c\\`", "select 2")),
+        Arguments.of(
+            "hash-comment",
+            byDefault,
+            "select 1 # a;b\n; select 2",
+            List.of("select 1 # a;b", "select 2")),
+        Arguments.of(
+            "dash-dash-space-comment",
+            byDefault,
+            "select 1 -- a;b\n; select 2",
+            List.of("select 1 -- a;b", "select 2")),
+        Arguments.of(
+            "dash-dash-without-space-is-not-comment",
+            byDefault,
+            "select 1--1; select 2",
+            List.of("select 1--1", "select 2")),
+        Arguments.of("dash-dash-at-end", byDefault, "select 1; --", List.of("select 1", "--")),
+        Arguments.of(
+            "block-comment-does-not-nest",
+            byDefault,
+            "select 1 /* a /* b */ ; select 2",
+            List.of("select 1 /* a /* b */", "select 2")),
+        Arguments.of(
+            "executable-comment-skipped",
+            byDefault,
+            "select 1 /*! ; */; select 2",
+            List.of("select 1 /*! ; */", "select 2")),
+        Arguments.of(
+            "dollar-is-not-quote",
+            byDefault,
+            "select $$a; select 2$$",
+            List.of("select $$a", "select 2$$")),
+        Arguments.of(
+            "unterminated-comment-and-quote",
+            byDefault,
+            "select 1; /* tail ; 'x",
+            List.of("select 1", "/* tail ; 'x")),
+        Arguments.of(
+            "unterminated-quote-trailing-backslash",
+            byDefault,
+            "select 1; select 'a\\",
+            List.of("select 1", "select 'a\\")),
+        Arguments.of("empty", byDefault, " ; ;\n", List.of()));
   }
 
   @ParameterizedTest(name = "{0}")
