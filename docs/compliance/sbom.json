@@ -8332,6 +8332,190 @@
     },
     {
       "type" : "library",
+      "bom-ref" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
+      "group" : "com.squareup.okhttp3",
+      "name" : "okhttp-jvm",
+      "version" : "5.5.1",
+      "description" : "Square’s meticulous HTTP client for Java and Kotlin.",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "d34672bd0b04a600c37fc4173b982d67"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "1df922f9db18f897722b7e566c21bcaf0a73d484"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "4039527bd1f2e40b66e20b0e52c689cf56074b938ea02678141495f5160f1047"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "155bc9f40c3667ccb4be16f93ba5ed92b1cf8b76688e12bd553fa71945a64fe250674a53a6555c07ace949b46278b9acb6c9b38db3bf135d8a538858dd628901"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "00a63aaadb0d1d3a420e78ddd918ebbd6c8a3aa9f8577e0ddcbf9b3ccd7ebf5490b5d37474d6ff844c539c3a53280ec9"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "67085a986c31cd155a22a591bfe7c422d540e073c2caded17218571f4648b4407ba953caeec87e94573df218f652d62b"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "696fb05376f082d3b03a4925a748b5d1e0491cf8ff4dc47050ad05912916407e"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "eec5f403f195ac6f045e598cfef4e564d7f482ae08b626dbc56dc9de0ff7f314edd1310b912e77f94b359a2f077e45194cb065d2e8e1c9b0ab16b9b2ff260fba"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://lysine.dev/okhttp/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/lysine-dev/okhttp"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
+      "group" : "org.jetbrains.kotlin",
+      "name" : "kotlin-stdlib",
+      "version" : "2.3.21",
+      "description" : "Kotlin Standard Library",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "67d962e3bcffbbb88f84b4d49e47fc56"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "a2ee2c4e220fee522f0451b723bab2a43f3481a7"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "6f64eac736db9434dd6925b4a518b9d1d17177652320c37916cf9ba3ce7d7d7a"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "5564b17f006a9fdf93c93439b357e1fb82742c72d23b7aaa2e50d6db730d0b40426257e4e40eca7c70f9d514367b0057e51b84e1d0e49817002bc463939fee59"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "f035eb7c781464e1355ee0b82e73eb7eabce67c37f469b35573c3047e46198904498110a05b4e207c78fb7766cf3524a"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "3fbc298ec3e9f816a889f69fa9fb95599866993059d16fdd108241ae70d70f0960fa2901081d0ebbb9a091c9964559c9"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "ac878d6d6b3394c66b0f5082d965649c243633d4fd8ba6a0926da346e3e23f0b"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "95fa621de32a1cf23c9aad2a872afada708a8feb8c554cc37c2730fe43c64a324ffb9262f62782bbb9558f7c1c22abec2ce26379f9b798b328f13f46fdc9eff1"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0",
+            "url" : "https://www.apache.org/licenses/LICENSE-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://kotlinlang.org/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/JetBrains/kotlin"
+        }
+      ]
+    },
+    {
+      "type" : "library",
+      "bom-ref" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
+      "group" : "com.squareup.okio",
+      "name" : "okio-jvm",
+      "version" : "3.18.2",
+      "description" : "A modern I/O library for Android, Java, and Kotlin Multiplatform.",
+      "scope" : "required",
+      "hashes" : [
+        {
+          "alg" : "MD5",
+          "content" : "15600a0c4a79bf929f22ee349148dd8c"
+        },
+        {
+          "alg" : "SHA-1",
+          "content" : "4cd37b59c55955e8706a9fd09e22a903efb47641"
+        },
+        {
+          "alg" : "SHA-256",
+          "content" : "681fed549d1d2c63710f42c9eab433d642c71af778babd67035c50f8c425aaff"
+        },
+        {
+          "alg" : "SHA-512",
+          "content" : "27270cd289f1079a3982d233e6ea126bde339cd103ac6d853c7176649dbb445fe1c00cd4115c53ee99ed281fd7a5d9cfb2b7b2359f92851a4cfcb9aca860e4ec"
+        },
+        {
+          "alg" : "SHA-384",
+          "content" : "c5b7ea1e2e56340790252c7a4496cd9ca43ff83064732f12bdddd8c506b5d46a06e647eb85886de6aa46a30f34a92512"
+        },
+        {
+          "alg" : "SHA3-384",
+          "content" : "2da4a95470ca6b8a0be66040cabe54f31da01cf1af1a092a3e2974dafea26192ee19641c10eb0971551fa2a6f9692bf3"
+        },
+        {
+          "alg" : "SHA3-256",
+          "content" : "10cffdae851cf7f8d72561d66260b5a84e4d89c4be3d61a516f750cbb825208a"
+        },
+        {
+          "alg" : "SHA3-512",
+          "content" : "3fdfb460f0e1b7fca8df7a065a4322b1714119bcc4f964e24ad6322de962cc04db0623deb3e907c285b861f671ba632ba086eb7d8f73b34fc463bf225d26b591"
+        }
+      ],
+      "licenses" : [
+        {
+          "license" : {
+            "id" : "Apache-2.0"
+          }
+        }
+      ],
+      "purl" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
+      "externalReferences" : [
+        {
+          "type" : "website",
+          "url" : "https://github.com/lysine-dev/okio/"
+        },
+        {
+          "type" : "vcs",
+          "url" : "https://github.com/lysine-dev/okio/"
+        }
+      ]
+    },
+    {
+      "type" : "library",
       "bom-ref" : "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar",
       "group" : "org.jetbrains",
       "name" : "annotations",
@@ -10013,190 +10197,6 @@
         {
           "type" : "website",
           "url" : "https://github.com/open-telemetry/opentelemetry-java"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
-      "group" : "com.squareup.okhttp3",
-      "name" : "okhttp-jvm",
-      "version" : "5.5.1",
-      "description" : "Square’s meticulous HTTP client for Java and Kotlin.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "d34672bd0b04a600c37fc4173b982d67"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "1df922f9db18f897722b7e566c21bcaf0a73d484"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "4039527bd1f2e40b66e20b0e52c689cf56074b938ea02678141495f5160f1047"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "155bc9f40c3667ccb4be16f93ba5ed92b1cf8b76688e12bd553fa71945a64fe250674a53a6555c07ace949b46278b9acb6c9b38db3bf135d8a538858dd628901"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "00a63aaadb0d1d3a420e78ddd918ebbd6c8a3aa9f8577e0ddcbf9b3ccd7ebf5490b5d37474d6ff844c539c3a53280ec9"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "67085a986c31cd155a22a591bfe7c422d540e073c2caded17218571f4648b4407ba953caeec87e94573df218f652d62b"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "696fb05376f082d3b03a4925a748b5d1e0491cf8ff4dc47050ad05912916407e"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "eec5f403f195ac6f045e598cfef4e564d7f482ae08b626dbc56dc9de0ff7f314edd1310b912e77f94b359a2f077e45194cb065d2e8e1c9b0ab16b9b2ff260fba"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://lysine.dev/okhttp/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/lysine-dev/okhttp"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
-      "group" : "org.jetbrains.kotlin",
-      "name" : "kotlin-stdlib",
-      "version" : "2.3.21",
-      "description" : "Kotlin Standard Library",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "67d962e3bcffbbb88f84b4d49e47fc56"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "a2ee2c4e220fee522f0451b723bab2a43f3481a7"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "6f64eac736db9434dd6925b4a518b9d1d17177652320c37916cf9ba3ce7d7d7a"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "5564b17f006a9fdf93c93439b357e1fb82742c72d23b7aaa2e50d6db730d0b40426257e4e40eca7c70f9d514367b0057e51b84e1d0e49817002bc463939fee59"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "f035eb7c781464e1355ee0b82e73eb7eabce67c37f469b35573c3047e46198904498110a05b4e207c78fb7766cf3524a"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "3fbc298ec3e9f816a889f69fa9fb95599866993059d16fdd108241ae70d70f0960fa2901081d0ebbb9a091c9964559c9"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "ac878d6d6b3394c66b0f5082d965649c243633d4fd8ba6a0926da346e3e23f0b"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "95fa621de32a1cf23c9aad2a872afada708a8feb8c554cc37c2730fe43c64a324ffb9262f62782bbb9558f7c1c22abec2ce26379f9b798b328f13f46fdc9eff1"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0",
-            "url" : "https://www.apache.org/licenses/LICENSE-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://kotlinlang.org/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/JetBrains/kotlin"
-        }
-      ]
-    },
-    {
-      "type" : "library",
-      "bom-ref" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
-      "group" : "com.squareup.okio",
-      "name" : "okio-jvm",
-      "version" : "3.18.2",
-      "description" : "A modern I/O library for Android, Java, and Kotlin Multiplatform.",
-      "scope" : "required",
-      "hashes" : [
-        {
-          "alg" : "MD5",
-          "content" : "15600a0c4a79bf929f22ee349148dd8c"
-        },
-        {
-          "alg" : "SHA-1",
-          "content" : "4cd37b59c55955e8706a9fd09e22a903efb47641"
-        },
-        {
-          "alg" : "SHA-256",
-          "content" : "681fed549d1d2c63710f42c9eab433d642c71af778babd67035c50f8c425aaff"
-        },
-        {
-          "alg" : "SHA-512",
-          "content" : "27270cd289f1079a3982d233e6ea126bde339cd103ac6d853c7176649dbb445fe1c00cd4115c53ee99ed281fd7a5d9cfb2b7b2359f92851a4cfcb9aca860e4ec"
-        },
-        {
-          "alg" : "SHA-384",
-          "content" : "c5b7ea1e2e56340790252c7a4496cd9ca43ff83064732f12bdddd8c506b5d46a06e647eb85886de6aa46a30f34a92512"
-        },
-        {
-          "alg" : "SHA3-384",
-          "content" : "2da4a95470ca6b8a0be66040cabe54f31da01cf1af1a092a3e2974dafea26192ee19641c10eb0971551fa2a6f9692bf3"
-        },
-        {
-          "alg" : "SHA3-256",
-          "content" : "10cffdae851cf7f8d72561d66260b5a84e4d89c4be3d61a516f750cbb825208a"
-        },
-        {
-          "alg" : "SHA3-512",
-          "content" : "3fdfb460f0e1b7fca8df7a065a4322b1714119bcc4f964e24ad6322de962cc04db0623deb3e907c285b861f671ba632ba086eb7d8f73b34fc463bf225d26b591"
-        }
-      ],
-      "licenses" : [
-        {
-          "license" : {
-            "id" : "Apache-2.0"
-          }
-        }
-      ],
-      "purl" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
-      "externalReferences" : [
-        {
-          "type" : "website",
-          "url" : "https://github.com/lysine-dev/okio/"
-        },
-        {
-          "type" : "vcs",
-          "url" : "https://github.com/lysine-dev/okio/"
         }
       ]
     },
@@ -26178,6 +26178,7 @@
         "pkg:maven/org.aspectj/aspectjweaver@1.9.25.1?type=jar",
         "pkg:maven/software.amazon.awssdk/s3@2.55.11?type=jar",
         "pkg:maven/software.amazon.awssdk/apache5-client@2.55.11?type=jar",
+        "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
         "pkg:maven/io.micrometer/micrometer-core@1.17.2?type=jar",
         "pkg:maven/org.springframework.boot/spring-boot-starter-opentelemetry@4.1.2?type=jar",
         "pkg:maven/io.opentelemetry.instrumentation/opentelemetry-logback-appender-1.0@2.28.0-alpha?type=jar",
@@ -27156,6 +27157,29 @@
       ]
     },
     {
+      "ref" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
+        "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar"
+      ]
+    },
+    {
+      "ref" : "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar",
+      "dependsOn" : [ ]
+    },
+    {
+      "ref" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
+      "dependsOn" : [
+        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar"
+      ]
+    },
+    {
       "ref" : "pkg:maven/io.micrometer/micrometer-core@1.17.2?type=jar",
       "dependsOn" : [
         "pkg:maven/org.jspecify/jspecify@1.0.1?type=jar",
@@ -27374,29 +27398,6 @@
         "pkg:maven/io.opentelemetry/opentelemetry-exporter-common@1.62.0?type=jar",
         "pkg:maven/io.opentelemetry/opentelemetry-sdk-common@1.62.0?type=jar",
         "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/com.squareup.okhttp3/okhttp-jvm@5.5.1?type=jar",
-      "dependsOn" : [
-        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
-        "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar",
-      "dependsOn" : [
-        "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar"
-      ]
-    },
-    {
-      "ref" : "pkg:maven/org.jetbrains/annotations@26.1.0?type=jar",
-      "dependsOn" : [ ]
-    },
-    {
-      "ref" : "pkg:maven/com.squareup.okio/okio-jvm@3.18.2?type=jar",
-      "dependsOn" : [
-        "pkg:maven/org.jetbrains.kotlin/kotlin-stdlib@2.3.21?type=jar"
       ]
     },
     {

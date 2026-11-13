@@ -205,13 +205,23 @@ def split_statements(sql: str) -> list[str]:
 
 
 class _SplitState:
-    """引号、注释与前一个字符属于同一词法状态;只有普通 SQL 区域的 ``;`` 结束语句。"""
+    """引号、注释与前一个字符属于同一词法状态;只有普通 SQL 区域的 ``;`` 结束语句。
+
+    引号词法按 PostgreSQL(standard_conforming_strings=on,自 9.1 起默认)处理:普通 ``'...'`` 与
+    ``"..."`` 内反斜杠是字面字符,唯一的引号转义是连写两个引号;只有 ``E'...'`` / ``e'...'``
+    转义字符串里反斜杠转义下一个字符。
+    """
 
     def __init__(self) -> None:
         self._out: list[str] = []
         self._buf: list[str] = []
-        self._lex = "code"  # code | line | block | single | double
+        # code | line | block | single | escape | escape_backslash | double
+        self._lex = "code"
+        # 最近一次收尾的单引号字符串种类;紧跟的引号属于连写引号转义,需回到同一种字符串
+        self._last_single_kind = "single"
         self._prev = ""
+        # _prev 之前的字符,用于判断 E' 前缀是否独立成词(而非标识符结尾的 e)
+        self._before_prev = ""
 
     def at_code(self) -> bool:
         return self._lex == "code"
@@ -225,9 +235,8 @@ class _SplitState:
             if self._prev == "*" and c == "/":
                 self._lex = "code"
             self._buf.append(c)
-        elif self._lex == "single":
-            if c == "'":
-                self._lex = "code"
+        elif self._lex in ("single", "escape", "escape_backslash"):
+            self._feed_single_quoted(c)
             self._buf.append(c)
         elif self._lex == "double":
             if c == '"':
@@ -235,7 +244,25 @@ class _SplitState:
             self._buf.append(c)
         else:
             self._feed_code(c)
+        self._before_prev = self._prev
         self._prev = c
+
+    def _feed_single_quoted(self, c: str) -> None:
+        """单引号字符串内部:只有转义字符串识别反斜杠,收尾时记下种类以便处理连写引号。"""
+        if self._lex == "escape_backslash":
+            self._lex = "escape"
+        elif self._lex == "escape" and c == "\\":
+            self._lex = "escape_backslash"
+        elif c == "'":
+            self._last_single_kind = self._lex
+            self._lex = "code"
+
+    def _opening_single_kind(self) -> str:
+        """判断新出现的单引号开启哪种字符串:连写引号延续上一段,独立的 E/e 前缀开启转义字符串。"""
+        if self._prev == "'":
+            return self._last_single_kind
+        escape_prefix = self._prev in ("E", "e") and not _is_identifier_part(self._before_prev)
+        return "escape" if escape_prefix else "single"
 
     def _feed_code(self, c: str) -> None:
         if self._prev == "-" and c == "-":
@@ -243,7 +270,7 @@ class _SplitState:
         elif self._prev == "/" and c == "*":
             self._lex = "block"
         elif c == "'":
-            self._lex = "single"
+            self._lex = self._opening_single_kind()
         elif c == '"':
             self._lex = "double"
         elif c == ";":
@@ -268,6 +295,10 @@ class _SplitState:
     def complete(self) -> list[str]:
         self._flush()
         return self._out
+
+
+def _is_identifier_part(c: str) -> bool:
+    return c != "" and (c.isalnum() or c in "_$")
 
 
 def _match_dollar_tag(sql: str, start: int) -> str | None:

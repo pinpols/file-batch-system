@@ -4,15 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import io.github.pinpols.batch.common.http.OkHttpOutboundHttpTransport;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.common.utils.AlertFingerprints;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.console.config.AlertmanagerNotifyProperties;
 import io.github.pinpols.batch.console.domain.notification.service.AlertmanagerSilenceBridge;
-import io.github.pinpols.batch.console.support.http.OkHttpConsoleExternalHttpTransport;
 import io.github.pinpols.batch.orchestrator.config.AlertmanagerEmitProperties;
 import io.github.pinpols.batch.orchestrator.infrastructure.governance.AlertmanagerEmitPublisher;
-import io.github.pinpols.batch.orchestrator.infrastructure.http.OkHttpOrchestratorExternalHttpTransport;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -58,10 +57,10 @@ class JobSlaAlertmanagerIdentityE2eIT {
       AlertmanagerNotifyProperties consoleProperties = new AlertmanagerNotifyProperties();
       consoleProperties.getSilence().setEnabled(true);
       consoleProperties.getSilence().setApiBaseUrl(endpoint);
-      AlertmanagerEmitPublisher publisher = new AlertmanagerEmitPublisher(
-          emitProperties, meters, new OkHttpOrchestratorExternalHttpTransport());
+      AlertmanagerEmitPublisher publisher =
+          new AlertmanagerEmitPublisher(emitProperties, meters, new OkHttpOutboundHttpTransport());
       AlertmanagerSilenceBridge bridge = new AlertmanagerSilenceBridge(
-          consoleProperties, meters, new OkHttpConsoleExternalHttpTransport());
+          consoleProperties, meters, new OkHttpOutboundHttpTransport());
       try {
         AlertEventEntity first = alert(101L);
         AlertEventEntity second = alert(102L);
@@ -112,7 +111,7 @@ class JobSlaAlertmanagerIdentityE2eIT {
         // 真实 Alertmanager 身份和实体级治理，不连接外部接收端或共享基础设施。
         second.setSeverity("CRITICAL");
         AlertmanagerEmitPublisher escalationPublisher = new AlertmanagerEmitPublisher(
-            emitProperties, meters, new OkHttpOrchestratorExternalHttpTransport());
+            emitProperties, meters, new OkHttpOutboundHttpTransport());
         try {
           escalationPublisher.publishFiring(second);
           escalationPublisher.shutdown();

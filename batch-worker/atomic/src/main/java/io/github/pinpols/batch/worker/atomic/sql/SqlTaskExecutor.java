@@ -278,26 +278,41 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return sc.finish();
   }
 
-  /** {@link #splitStatements} 的逐字符状态机,把引号/注释/分号状态与 buffer 封装,避免单方法 NCSS 过高。 */
+  /**
+   * {@link #splitStatements} 的逐字符状态机,把引号/注释/分号状态与 buffer 封装,避免单方法 NCSS 过高。
+   *
+   * <p>引号词法按 PostgreSQL(standard_conforming_strings=on,自 9.1 起默认)处理:普通 {@code '...'} 与 {@code
+   * "..."} 内反斜杠是字面字符,唯一的引号转义是连写两个引号;只有 {@code E'...'}/{@code e'...'} 转义字符串里反斜杠转义下一个字符。
+   */
   private static final class SplitScanner {
     private final List<String> out = new ArrayList<>();
     private final StringBuilder buf = new StringBuilder();
-    /** 词法状态:同一时刻只处于其一,与原四个互斥布尔标志一一对应。 */
+
+    /** 词法状态:同一时刻只处于其一。 */
     private enum LexState {
       CODE,
       LINE_COMMENT,
       BLOCK_COMMENT,
       SINGLE_QUOTE,
+      ESCAPE_STRING,
+      ESCAPE_STRING_BACKSLASH,
       DOUBLE_QUOTE
     }
 
     private LexState state = LexState.CODE;
+
+    /** 最近一次收尾的单引号字符串种类;紧跟的引号属于连写引号转义,需回到同一种字符串。 */
+    private LexState lastSingleQuoteKind = LexState.SINGLE_QUOTE;
+
+    /** {@code prev} 之前的字符,用于判断 {@code E'} 前缀是否独立成词(而非标识符结尾的 e)。 */
+    private char beforePrev;
 
     boolean atTopLevel() {
       return state == LexState.CODE;
     }
 
     void feed(char c, char prev) {
+      boolean split = false;
       switch (state) {
         case LINE_COMMENT -> {
           if (c == '\n') state = LexState.CODE;
@@ -305,19 +320,28 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         case BLOCK_COMMENT -> {
           if (prev == '*' && c == '/') state = LexState.CODE;
         }
-        case SINGLE_QUOTE -> {
-          if (c == '\'' && prev != '\\') state = LexState.CODE;
-        }
+        case SINGLE_QUOTE, ESCAPE_STRING, ESCAPE_STRING_BACKSLASH -> feedSingleQuoted(c);
         case DOUBLE_QUOTE -> {
-          if (c == '"' && prev != '\\') state = LexState.CODE;
+          if (c == '"') state = LexState.CODE;
         }
-        case CODE -> {
-          if (feedTopLevel(c, prev)) {
-            return; // 分号已切分,不入 buffer
-          }
-        }
+        case CODE -> split = feedTopLevel(c, prev);
       }
-      buf.append(c);
+      beforePrev = prev;
+      if (!split) {
+        buf.append(c); // 分号已切分时不入 buffer
+      }
+    }
+
+    /** 单引号字符串内部:只有转义字符串识别反斜杠,收尾时记下种类以便处理连写引号。 */
+    private void feedSingleQuoted(char c) {
+      if (state == LexState.ESCAPE_STRING_BACKSLASH) {
+        state = LexState.ESCAPE_STRING;
+      } else if (state == LexState.ESCAPE_STRING && c == '\\') {
+        state = LexState.ESCAPE_STRING_BACKSLASH;
+      } else if (c == '\'') {
+        lastSingleQuoteKind = state;
+        state = LexState.CODE;
+      }
     }
 
     /** 顶层字符:开注释/开引号切换状态;遇 `;` 切分并返回 true(调用方不再 append)。 */
@@ -327,7 +351,7 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
       } else if (c == '*' && prev == '/') {
         state = LexState.BLOCK_COMMENT;
       } else if (c == '\'') {
-        state = LexState.SINGLE_QUOTE;
+        state = openingSingleQuoteKind(prev);
       } else if (c == '"') {
         state = LexState.DOUBLE_QUOTE;
       } else if (c == ';') {
@@ -335,6 +359,19 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
         return true;
       }
       return false;
+    }
+
+    /** 判断新出现的单引号开启哪种字符串:连写引号延续上一段,独立的 E/e 前缀开启转义字符串。 */
+    private LexState openingSingleQuoteKind(char prev) {
+      if (prev == '\'') {
+        return lastSingleQuoteKind;
+      }
+      boolean escapePrefix = (prev == 'E' || prev == 'e') && !isIdentifierPart(beforePrev);
+      return escapePrefix ? LexState.ESCAPE_STRING : LexState.SINGLE_QUOTE;
+    }
+
+    private static boolean isIdentifierPart(char c) {
+      return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
     private void flush() {
@@ -350,11 +387,6 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     }
   }
 
-  /**
-   * 在 {@code pos}(此处字符为 {@code $})尝试匹配 PG dollar-quote 开标签 {@code $tag$}: tag 为空或 {@code
-   * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
-   * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
-   */
   /** 从 dollar-quote 开标签处把整段(含开/闭标签)写入 {@code buf},返回闭标签之后的索引; 未闭合(到串尾仍无闭标签)则全部写入并返回串尾。 */
   private static int consumeDollarQuote(String sql, int start, String tag, StringBuilder buf) {
     buf.append(tag);
@@ -371,6 +403,11 @@ public class SqlTaskExecutor implements BatchTaskExecutor {
     return n;
   }
 
+  /**
+   * 在 {@code pos}(此处字符为 {@code $})尝试匹配 PG dollar-quote 开标签 {@code $tag$}: tag 为空或 {@code
+   * [A-Za-z_][A-Za-z0-9_]*}。返回含两端 {@code $} 的完整标签串(如 {@code $$} / {@code $body$}); 不是合法
+   * dollar-quote(如位置参数 {@code $1}、运算)返回 null。
+   */
   private static String matchDollarTag(String sql, int pos) {
     int n = sql.length();
     for (int j = pos + 1; j < n; j++) {

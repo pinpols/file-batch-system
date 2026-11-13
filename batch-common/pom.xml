@@ -162,6 +162,15 @@
             <groupId>software.amazon.awssdk</groupId>
             <artifactId>apache5-client</artifactId>
         </dependency>
+        <!--
+          OkHttpOutboundHttpTransport:Console 与 Orchestrator 共用的出站适配器(按请求固定已校验 IP)。
+          okhttp-jvm 已由 opentelemetry-exporter-sender-okhttp 以 runtime 传递进所有依赖方,此处仅改为
+          编译期直依赖,不新增运行时工件;版本由根 pom dependencyManagement 统管。
+        -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp-jvm</artifactId>
+        </dependency>
         <!-- @Contract/@Nullable(Guard/Texts 编译期注解)。注解 CLASS 保留,provided 不入运行时 jar。 -->
         <dependency>
             <groupId>org.jetbrains</groupId>
@@ -229,6 +238,11 @@
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>mockwebserver3</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

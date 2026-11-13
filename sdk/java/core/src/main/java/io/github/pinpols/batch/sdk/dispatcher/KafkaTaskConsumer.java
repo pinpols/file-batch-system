@@ -202,6 +202,7 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
       // 不静默停止。K8s liveness probe / 运维监控由此感知到 worker 实质已停消费。
       crashed.set(true);
       running.set(false);
+      // poll 线程可以隔离普通运行时故障，但不能吞掉 JVM 级故障。
       if (t instanceof Error error) {
         throw error;
       }
@@ -216,7 +217,6 @@ public class KafkaTaskConsumer implements Runnable, AutoCloseable {
     }
   }
 
-  /** poll 线程可以隔离普通运行时故障，但不能吞掉 JVM 级故障。 */
   /**
    * 处理一次 poll 返回的批次。某分区遇到 RETRY_LATER 后,seek 回失败 offset 并跳过该分区在本批内的剩余记录;其它分区继续处理。 Kafka poll
    * 已推进所有返回分区的 position,若直接 break 整个批次,其它分区未处理记录可能被后续 commit 跨过。

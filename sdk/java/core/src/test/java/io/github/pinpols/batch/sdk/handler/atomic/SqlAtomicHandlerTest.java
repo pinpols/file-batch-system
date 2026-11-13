@@ -341,10 +341,39 @@ class SqlAtomicHandlerTest {
             "select ';' -- a;b\n; select \"x;y\" /* ; */",
             List.of("select ';' -- a;b", "select \"x;y\" /* ; */")),
         Arguments.of("drops-empty-statements", ";;select 1;", List.of("select 1")),
-        // 锁定现状: SDK 版不识别反斜杠转义, 反斜杠后的引号直接收尾(与 Worker 版不同)
+        // standard_conforming_strings=on(PG 默认): 普通字符串里的反斜杠是字面字符
         Arguments.of(
-            "backslash-quote-not-escape",
-            "select 'a\\'; select 2'",
-            List.of("select 'a\\'", "select 2'")));
+            "backslash-literal-in-standard-string",
+            "insert into t values ('C:\\'); delete from t",
+            List.of("insert into t values ('C:\\')", "delete from t")),
+        Arguments.of(
+            "backslash-literal-in-double-quotes",
+            "select 1 as \"x\\\"; select 2",
+            List.of("select 1 as \"x\\\"", "select 2")),
+        Arguments.of(
+            "doubled-quote-before-backslash",
+            "select 'it''s;ok\\'; select 2",
+            List.of("select 'it''s;ok\\'", "select 2")),
+        // E'...' 转义字符串: 反斜杠转义下一个字符
+        Arguments.of(
+            "escape-string-backslash-quote",
+            "select E'it\\'s;ok'; select 2",
+            List.of("select E'it\\'s;ok'", "select 2")),
+        Arguments.of(
+            "escape-string-escaped-backslash",
+            "select e'a\\\\'; select 2",
+            List.of("select e'a\\\\'", "select 2")),
+        Arguments.of(
+            "escape-string-doubled-quote",
+            "select E'it''s\\';x'; select 2",
+            List.of("select E'it''s\\';x'", "select 2")),
+        Arguments.of(
+            "identifier-ending-with-e-is-not-escape-prefix",
+            "select time'12:00\\'; select 2",
+            List.of("select time'12:00\\'", "select 2")),
+        Arguments.of(
+            "backslash-in-dollar-quote-and-comments",
+            "select $$a\\';$$ /* \\' ; */ -- \\' ;\n; select 2",
+            List.of("select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2")));
   }
 }

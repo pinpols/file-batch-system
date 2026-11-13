@@ -165,9 +165,9 @@ public class ConsoleMetaQueryService {
 
   /**
    * 按当前 Locale 解析枚举 label。messageSource 命中 {@link DictEnum#messageKey()} 返回翻译值,缺失回退到 {@link
-   * DictEnum#label()} (中文硬编码)。
+   * DictEnum#label()} (中文硬编码)。包可见，供同包测试直接覆盖两条分支。
    */
-  private static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
+  static String localizedLabel(DictEnum item, MessageSource messageSource, Locale locale) {
     String key = item.messageKey();
     String fallback = item.label();
     if (EmptyChecks.isNull(key)) {

@@ -20,8 +20,6 @@ import io.github.pinpols.batch.console.support.excel.TenantConfigPackageExcelImp
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.Collections;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -140,19 +138,13 @@ public class ConfigPackageExcelWorkbookWriter {
         .toList();
   }
 
-  public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
-    return buildExportWorkbook(sheetDataList, Map.of());
-  }
-
   /**
    * R2-P1-9 兼容入口：保留 byte[] 签名给老调用方；底层走 streaming 路径，但仍在内存里 buffer 一次。 新代码请改用 {@link
-   * #writeExportWorkbook(OutputStream, List, Map)} 避免 double-copy。
+   * #writeExportWorkbook(OutputStream, List)} 避免 double-copy。
    */
-  public byte[] buildExportWorkbook(
-      List<List<Map<String, Object>>> sheetDataList,
-      Map<String, List<String>> registeredImplCodesByModule) {
+  public byte[] buildExportWorkbook(List<List<Map<String, Object>>> sheetDataList) {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      writeExportWorkbook(out, sheetDataList, registeredImplCodesByModule);
+      writeExportWorkbook(out, sheetDataList);
       return out.toByteArray();
     } catch (IOException e) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.export_workbook_failed");
@@ -163,17 +155,13 @@ public class ConfigPackageExcelWorkbookWriter {
    * R2-P1-9 流式导出：直接把 SXSSF workbook 写到调用方的 {@link OutputStream}（通常是 HTTP response）， 不在堆里缓
    * byte[]。SXSSF 自己用 50 行窗口 + 临时磁盘 spool，内存压力恒定。
    */
-  public void writeExportWorkbook(
-      OutputStream out,
-      List<List<Map<String, Object>>> sheetDataList,
-      Map<String, List<String>> registeredImplCodesByModule)
+  public void writeExportWorkbook(OutputStream out, List<List<Map<String, Object>>> sheetDataList)
       throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
-    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
       for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         int sourceIndex = sheetIndex(def.name());
-        writeDataSheet(wb, def, sheetDataList.get(sourceIndex), locale, implRegistry);
+        writeDataSheet(wb, def, sheetDataList.get(sourceIndex), locale);
       }
       supplementWriter.createReadmeSheet(wb, locale);
       supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
@@ -196,14 +184,10 @@ public class ConfigPackageExcelWorkbookWriter {
     throw new IllegalArgumentException("unknown configuration sheet: " + sheetName);
   }
 
+  /** R2-P1-9 兼容入口：底层走 streaming。新代码请改用 {@link #writeTemplateWorkbook(OutputStream)}。 */
   public byte[] buildTemplateWorkbook() {
-    return buildTemplateWorkbook(Map.of());
-  }
-
-  /** R2-P1-9 兼容入口：底层走 streaming。新代码请改用 {@link #writeTemplateWorkbook(OutputStream, Map)}。 */
-  public byte[] buildTemplateWorkbook(Map<String, List<String>> registeredImplCodesByModule) {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      writeTemplateWorkbook(out, registeredImplCodesByModule);
+      writeTemplateWorkbook(out);
       return out.toByteArray();
     } catch (IOException e) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.template_workbook_failed");
@@ -211,13 +195,11 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   /** R2-P1-9 流式模板导出，直接把 workbook 写到调用方 stream。 */
-  public void writeTemplateWorkbook(
-      OutputStream out, Map<String, List<String>> registeredImplCodesByModule) throws IOException {
+  public void writeTemplateWorkbook(OutputStream out) throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
-    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
       for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
-        writeDataSheet(wb, def, List.of(), locale, implRegistry);
+        writeDataSheet(wb, def, List.of(), locale);
       }
       supplementWriter.createReadmeSheet(wb, locale);
       supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
@@ -232,13 +214,11 @@ public class ConfigPackageExcelWorkbookWriter {
   }
 
   /** 生成仅包含当前场景工作表的模板。 */
-  public void writeFocusedTemplateWorkbook(
-      OutputStream out, Map<String, List<String>> registeredImplCodesByModule) throws IOException {
+  public void writeFocusedTemplateWorkbook(OutputStream out) throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
-    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     try (SXSSFWorkbook wb = new SXSSFWorkbook(50)) {
       for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
-        writeDataSheet(wb, def, List.of(), locale, implRegistry);
+        writeDataSheet(wb, def, List.of(), locale);
       }
       supplementWriter.createFocusedReadmeSheet(wb, locale, exportSheetDefs);
       supplementWriter.createFillOrderSheet(wb, exportSheetDefs);
@@ -249,17 +229,10 @@ public class ConfigPackageExcelWorkbookWriter {
     }
   }
 
-  public byte[] buildPreviewWorkbook(PackageExcelSession session, PackageValidationResult result) {
-    return buildPreviewWorkbook(session, result, Map.of());
-  }
-
   /** R2-P1-9 兼容入口：底层走 streaming。新代码请改用 {@link #writePreviewWorkbook}。 */
-  public byte[] buildPreviewWorkbook(
-      PackageExcelSession session,
-      PackageValidationResult result,
-      Map<String, List<String>> registeredImplCodesByModule) {
+  public byte[] buildPreviewWorkbook(PackageExcelSession session, PackageValidationResult result) {
     try (ByteArrayOutputStream out = new ByteArrayOutputStream()) {
-      writePreviewWorkbook(out, session, result, registeredImplCodesByModule);
+      writePreviewWorkbook(out, session, result);
       return out.toByteArray();
     } catch (IOException e) {
       throw BizException.of(ResultCode.SYSTEM_ERROR, "error.excel.preview_failed");
@@ -271,13 +244,9 @@ public class ConfigPackageExcelWorkbookWriter {
    * write 到响应流。
    */
   public void writePreviewWorkbook(
-      OutputStream out,
-      PackageExcelSession session,
-      PackageValidationResult result,
-      Map<String, List<String>> registeredImplCodesByModule)
+      OutputStream out, PackageExcelSession session, PackageValidationResult result)
       throws IOException {
     Locale locale = LocaleContextHolder.getLocale();
-    Map<String, List<String>> implRegistry = copyImplRegistry(registeredImplCodesByModule);
     List<List<Map<String, String>>> sessionData = List.of(
         session.resourceQueueRows(),
         session.businessCalendarRows(),
@@ -306,12 +275,7 @@ public class ConfigPackageExcelWorkbookWriter {
       for (ConfigPackageSheetSpecs.SheetDef def : exportSheetDefs) {
         int sourceIndex = sheetIndex(def.name());
         writePreviewSheet(
-            wb,
-            def,
-            sessionData.get(sourceIndex),
-            results.get(sourceIndex).issues(),
-            locale,
-            implRegistry);
+            wb, def, sessionData.get(sourceIndex), results.get(sourceIndex).issues(), locale);
       }
       ConsoleExcelPreviewWorkbookSupport.populateValidationSheet(wb, result.allIssues());
       wb.write(out);
@@ -322,8 +286,7 @@ public class ConfigPackageExcelWorkbookWriter {
       Workbook wb,
       ConfigPackageSheetSpecs.SheetDef def,
       List<Map<String, Object>> dataRows,
-      Locale locale,
-      Map<String, List<String>> registeredImplCodesByModule) {
+      Locale locale) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     writeTemplateHeaders(sheet, def.columns(), def.guides(), wb, messageSource, locale);
@@ -358,8 +321,7 @@ public class ConfigPackageExcelWorkbookWriter {
       ConfigPackageSheetSpecs.SheetDef def,
       List<Map<String, String>> dataRows,
       List<WorkbookIssue> sheetIssues,
-      Locale locale,
-      Map<String, List<String>> registeredImplCodesByModule) {
+      Locale locale) {
     Sheet sheet = wb.createSheet(def.name());
     sheet.createFreezePane(0, 1, 0, 1);
     CellStyle headerStyle = ConsoleExcelStyles.createHeaderStyle(wb);
@@ -413,21 +375,6 @@ public class ConfigPackageExcelWorkbookWriter {
 
   private void applyValidations(ConfigPackageSheetSpecs.SheetDef def, Sheet sheet, Locale locale) {
     def.validationApplier().accept(sheet, locale);
-  }
-
-  private static Map<String, List<String>> copyImplRegistry(
-      Map<String, List<String>> registeredImplCodesByModule) {
-    if (registeredImplCodesByModule == null || registeredImplCodesByModule.isEmpty()) {
-      return Map.of();
-    }
-    Map<String, List<String>> copied = new LinkedHashMap<>();
-    registeredImplCodesByModule.forEach((module, beans) -> {
-      if (module == null || beans == null || beans.isEmpty()) {
-        return;
-      }
-      copied.put(module, List.copyOf(beans));
-    });
-    return copied.isEmpty() ? Map.of() : Collections.unmodifiableMap(copied);
   }
 
   private void createFieldGuideSheet(Workbook wb) {

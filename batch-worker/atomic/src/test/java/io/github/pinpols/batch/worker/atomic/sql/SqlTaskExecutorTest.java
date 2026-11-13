@@ -234,10 +234,61 @@ class SqlTaskExecutorTest {
     }
 
     @Test
-    @DisplayName("单引号内的反斜杠加引号按转义处理(锁定现状, 不代表正确)")
-    void shouldTreatBackslashQuoteAsEscape_whenInsideSingleQuotes() {
-      assertThat(SqlTaskExecutor.splitStatements("select 'a\\'; select 2'"))
-          .containsExactly("select 'a\\'; select 2'");
+    @DisplayName("普通单引号字符串内的反斜杠是字面字符, 其后的引号照常收尾")
+    void shouldTreatBackslashAsLiteral_whenInsideStandardString() {
+      // standard_conforming_strings=on(PG 默认): 'C:\' 是完整字面量, 后面的 delete 是独立语句
+      assertThat(SqlTaskExecutor.splitStatements("insert into t values ('C:\\'); delete from t"))
+          .containsExactly("insert into t values ('C:\\')", "delete from t");
+    }
+
+    @Test
+    @DisplayName("双引号标识符内的反斜杠是字面字符, 其后的双引号照常收尾")
+    void shouldTreatBackslashAsLiteral_whenInsideDoubleQuotes() {
+      assertThat(SqlTaskExecutor.splitStatements("select 1 as \"x\\\"; select 2"))
+          .containsExactly("select 1 as \"x\\\"", "select 2");
+    }
+
+    @Test
+    @DisplayName("两个连续单引号仍是普通字符串内的引号转义")
+    void shouldKeepDoubledQuote_whenInsideStandardString() {
+      assertThat(SqlTaskExecutor.splitStatements("select 'it''s;ok\\'; select 2"))
+          .containsExactly("select 'it''s;ok\\'", "select 2");
+    }
+
+    @Test
+    @DisplayName("转义字符串内的反斜杠加引号按转义处理, 分号不触发切分")
+    void shouldTreatBackslashQuoteAsEscape_whenInsideEscapeString() {
+      assertThat(SqlTaskExecutor.splitStatements("select E'it\\'s;ok'; select 2"))
+          .containsExactly("select E'it\\'s;ok'", "select 2");
+    }
+
+    @Test
+    @DisplayName("小写前缀的转义字符串中, 转义后的反斜杠不再吞掉收尾引号")
+    void shouldCloseEscapeString_whenBackslashItselfEscaped() {
+      assertThat(SqlTaskExecutor.splitStatements("select e'a\\\\'; select 2"))
+          .containsExactly("select e'a\\\\'", "select 2");
+    }
+
+    @Test
+    @DisplayName("转义字符串内连续两个单引号后仍保持转义语义")
+    void shouldKeepEscapeSemantics_whenEscapeStringContainsDoubledQuote() {
+      assertThat(SqlTaskExecutor.splitStatements("select E'it''s\\';x'; select 2"))
+          .containsExactly("select E'it''s\\';x'", "select 2");
+    }
+
+    @Test
+    @DisplayName("以 e 结尾的标识符后紧跟引号时仍是普通字符串")
+    void shouldTreatAsStandardString_whenQuoteFollowsIdentifierEndingWithE() {
+      assertThat(SqlTaskExecutor.splitStatements("select time'12:00\\'; select 2"))
+          .containsExactly("select time'12:00\\'", "select 2");
+    }
+
+    @Test
+    @DisplayName("美元引用与注释内的反斜杠不影响切分")
+    void shouldIgnoreBackslash_whenInsideDollarQuoteOrComment() {
+      assertThat(
+              SqlTaskExecutor.splitStatements("select $$a\\';$$ /* \\' ; */ -- \\' ;\n; select 2"))
+          .containsExactly("select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2");
     }
   }
 

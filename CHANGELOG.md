@@ -43,6 +43,7 @@
 ### Fixed
 
 - 配置包模板「填写顺序」sheet 为作业监控策略、工作流监控策略补齐填写场景和先填原因，不再显示通用占位文本。
+- 平台原子 SQL 执行器切分语句时，普通单引号字符串和双引号标识符里的反斜杠按字面字符处理（PostgreSQL `standard_conforming_strings=on` 默认语义），`insert ... values ('C:\'); delete ...` 不再被并成一条；平台执行器与 Java、Python SDK 原子 SQL 处理器同时识别 `E'...'` 转义字符串，其中 `\'` 不结束字符串。三处切分规则现已一致。
 - Java、Python SDK 的原子 SQL 处理器切分语句时跳过 PG dollar-quote（`$$...$$`、`$tag$...$tag$`）体内的 `;`，与平台原子 SQL 执行器一致，含函数体的脚本不再被拆坏或误计入 `maxStatementsPerJob`。
 - 导出格式为 XML 时，生成阶段的文件后缀改为 `.xml`，与对外文件名一致。
 
