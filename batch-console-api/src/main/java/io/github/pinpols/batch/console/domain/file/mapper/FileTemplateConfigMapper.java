@@ -26,6 +26,12 @@ public interface FileTemplateConfigMapper {
   FileTemplateConfigQueryView selectEnabledByTenantAndCode(
       @Param("tenantId") String tenantId, @Param("templateCode") String templateCode);
 
+  /** 模板是否配置了非空的显式预处理流水线；Console 不写该列，只在校验加密类型时读取。 */
+  boolean hasPreprocessPipeline(
+      @Param("tenantId") String tenantId,
+      @Param("templateCode") String templateCode,
+      @Param("version") Integer version);
+
   FileTemplateConfigQueryView selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 
   int toggleEnabled(

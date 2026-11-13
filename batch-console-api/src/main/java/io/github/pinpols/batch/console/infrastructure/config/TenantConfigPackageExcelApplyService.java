@@ -24,6 +24,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileChannelConfigMappe
 import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapper;
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
+import io.github.pinpols.batch.console.domain.file.support.ImportEncryptTypeValidation;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.application.contract.request.JobDependencyRuleRequest;
@@ -858,6 +859,7 @@ public class TenantConfigPackageExcelApplyService {
       template = FileTemplateExcelRowParser.parseRow(ctx.tenantId(), 0, values, issues);
       FileTemplateConfigUpsertParam templateParam =
           FileTemplateExcelRowParser.toUpsertParam(ctx.tenantId(), template, ctx.operatorId());
+      ImportEncryptTypeValidation.validate(fileTemplateConfigMapper, ctx.tenantId(), templateParam);
       fileTemplateConfigMapper.upsertFileTemplateConfig(templateParam);
       if (EmptyChecks.isNull(existing)) {
         inserted++;

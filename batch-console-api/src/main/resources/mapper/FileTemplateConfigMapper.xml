@@ -278,6 +278,19 @@
         limit 1
     </select>
 
+    <select id="hasPreprocessPipeline" resultType="boolean">
+        select exists(
+            select 1
+            from batch.file_template_config
+            where tenant_id = #{tenantId}
+              and template_code = #{templateCode}
+              and version = #{version}
+              and is_deleted = false
+              and preprocess_pipeline is not null
+              and preprocess_pipeline not in ('null'::jsonb, '[]'::jsonb, '""'::jsonb)
+        )
+    </select>
+
     <update id="toggleEnabled">
         update batch.file_template_config
         set enabled = #{enabled}, updated_at = current_timestamp
