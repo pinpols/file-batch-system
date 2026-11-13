@@ -58,7 +58,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   @DisplayName("导出工作簿:数据与说明 sheet 的数量和顺序保持稳定")
   void shouldKeepStableSheetOrder_whenBuildingExportWorkbook() throws Exception {
     List<List<Map<String, Object>>> sheetData = exportDataRows();
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData, Map.of()))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
       assertThat(sheetNames(wb))
           .containsExactlyElementsOf(concat(DATA_SHEET_NAMES, SUPPLEMENT_SHEET_NAMES));
       for (int i = 0; i < DATA_SHEET_NAMES.size(); i++) {
@@ -75,7 +75,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
     List<List<Map<String, Object>>> sheetData = emptyExportData();
     sheetData.set(3, jobRows);
 
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData, Map.of()))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
       Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       // 表头 = schema 列
       assertThat(jobSheet.getRow(0).getCell(0).getStringCellValue())
@@ -102,7 +102,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
             "soft_runtime_seconds", 900,
             "soft_runtime_severity", "ERROR")));
 
-    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData, Map.of()))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
       Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
       assertThat(policySheet.getRow(0).getCell(2).getStringCellValue())
           .isEqualTo("soft_runtime_seconds");
@@ -115,8 +115,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
   @Test
   @DisplayName("监控策略模板:严重级别下拉只应用到三个级别列")
   void shouldApplySeverityDropdownsToSeverityColumns() throws Exception {
-    try (XSSFWorkbook wb =
-        read(workbookWriter().buildExportWorkbook(emptyExportData(), Map.of()))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(emptyExportData()))) {
       Sheet policySheet = wb.getSheet(ConfigPackageExcelValidator.JOB_MONITORING_POLICY_SHEET);
       List<Integer> validatedColumns = new ArrayList<>();
       for (DataValidation validation : policySheet.getDataValidations()) {
@@ -137,8 +136,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
     sheetData.set(
         8, List.of(row("job_code", "JOB_PROCESS", "version", "1", "impl_code", "sqlCompute")));
 
-    try (XSSFWorkbook wb = read(workbookWriter()
-        .buildExportWorkbook(sheetData, Map.of("PROCESS", List.of("sqlCompute"))))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildExportWorkbook(sheetData))) {
       assertThat(wb.getSheet(ConfigPackageExcelValidator.PIPELINE_SHEET)).isNull();
       assertThat(wb.getSheet(ConfigPackageExcelValidator.STEP_SHEET)).isNull();
     }
@@ -190,7 +188,7 @@ class ConfigPackageExcelWorkbookWriterExportPreviewTest {
         emptySheet(ConfigPackageExcelValidator.WF_EDGE_SHEET),
         crossRefIssues);
 
-    try (XSSFWorkbook wb = read(workbookWriter().buildPreviewWorkbook(session, result, Map.of()))) {
+    try (XSSFWorkbook wb = read(workbookWriter().buildPreviewWorkbook(session, result))) {
       Sheet jobSheet = wb.getSheet(ConfigPackageExcelValidator.JOB_SHEET);
       assertThat(jobSheet.getRow(1).getCell(1).getStringCellValue()).isEqualTo("JOB_MISSING_QUEUE");
       Comment comment = jobSheet.getRow(1).getCell(5).getCellComment();

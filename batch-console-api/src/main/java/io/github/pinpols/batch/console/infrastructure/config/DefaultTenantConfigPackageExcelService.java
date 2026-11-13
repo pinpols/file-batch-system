@@ -33,13 +33,11 @@ import io.github.pinpols.batch.console.domain.job.mapper.BatchWindowMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.BusinessCalendarMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.CalendarHolidayMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.JobDefinitionMapper;
-import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.job.query.JobDefinitionQuery;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.BatchWindowRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarHolidayRow;
 import io.github.pinpols.batch.console.domain.job.view.ConsoleJobConfigViews.CalendarQueryRow;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionView;
-import io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ResourceQueueMapper;
 import io.github.pinpols.batch.console.domain.ops.query.ResourceQueueQuery;
 import io.github.pinpols.batch.console.domain.ops.view.ResourceQueueRow;
@@ -140,7 +138,6 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   private final FileTemplateConfigMapper fileTemplateConfigMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
   private final WorkflowMonitoringPolicyMapper workflowMonitoringPolicyMapper;
-  private final StepRegistryQueryMapper stepRegistryQueryMapper;
   private final TenantConfigPackageRowProjections rowProjections;
   private final BatchDateTimeSupport dateTimeSupport;
   private final MessageSource messageSource;
@@ -231,12 +228,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
         wfNodes,
         wfEdges,
         workflowMonitoringPolicies);
-    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
         "tenant-config-package-" + tid + "-" + dateTimeSupport.currentFileTimestamp() + ".xlsx";
-    return new ExcelDownload(
-        fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
+    return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
   }
 
   private static List<Map<String, Object>> toWorkflowMonitoringPolicyRows(
@@ -285,10 +280,7 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   @Override
   public ExcelDownload downloadTemplate() {
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
-    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
-    return new ExcelDownload(
-        "tenant-config-package-template.xlsx",
-        out -> writer.writeTemplateWorkbook(out, implRegistry));
+    return new ExcelDownload("tenant-config-package-template.xlsx", writer::writeTemplateWorkbook);
   }
 
   @Override
@@ -298,11 +290,9 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
             .sorted()
             .toList();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter(selectedScenarios);
-    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     String scenarioName = String.join("-", selectedScenarios).toLowerCase(Locale.ROOT);
     return new ExcelDownload(
-        "tenant-config-package-" + scenarioName + ".xlsx",
-        out -> writer.writeFocusedTemplateWorkbook(out, implRegistry));
+        "tenant-config-package-" + scenarioName + ".xlsx", writer::writeFocusedTemplateWorkbook);
   }
 
   @Override
@@ -313,13 +303,11 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
     List<String> normalizedScenarios =
         ConfigPackageSampleDataFactory.normalizeScenarios(rawScenarios).stream().toList();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter(normalizedScenarios);
-    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     List<List<Map<String, Object>>> sheets =
         ConfigPackageSampleDataFactory.sampleSheets(normalizedScenarios);
     String scenarioName = String.join("-", normalizedScenarios).toLowerCase(Locale.ROOT);
     String fileName = "tenant-config-package-sample-" + scenarioName + ".xlsx";
-    return new ExcelDownload(
-        fileName, out -> writer.writeExportWorkbook(out, sheets, implRegistry));
+    return new ExcelDownload(fileName, out -> writer.writeExportWorkbook(out, sheets));
   }
 
   @Override
@@ -354,31 +342,6 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
           sheet.name(), sheetAppliesTo, columns));
     }
     return new TenantConfigPackageExcelGuideResponse(sheets);
-  }
-
-  /**
-   * 从 {@code batch.step_registry} 查 (module → bean 列表)，供 Excel 模板 / 导出的 impl_code 下拉用。
-   * 查询失败或结果为空时返回空 map，writer 会降级为不加下拉（首次部署无 worker 启动的兼容路径）。
-   */
-  private Map<String, List<String>> loadRegisteredImplCodesByModule() {
-    Map<String, List<String>> result = new LinkedHashMap<>();
-    try {
-      for (StepRegistryEntryView row : stepRegistryQueryMapper.selectAllImplEntries()) {
-        String module = row.module();
-        String implCode = row.implCode();
-        if (module == null || implCode == null) {
-          continue;
-        }
-        List<String> moduleImplCodes = result.computeIfAbsent(module, k -> new ArrayList<>());
-        moduleImplCodes.add(implCode);
-      }
-    } catch (RuntimeException ignored) {
-      SwallowedExceptionLogger.warn(
-          DefaultTenantConfigPackageExcelService.class, "catch:RuntimeException", ignored);
-
-      // step_registry 表尚未创建 / 查询失败时降级为空，writer 跳过 impl_code 下拉
-    }
-    return result;
   }
 
   private List<Map<String, Object>> withCalendarHolidayValues(List<CalendarQueryRow> rows) {
@@ -553,12 +516,10 @@ public class DefaultTenantConfigPackageExcelService implements TenantConfigPacka
   public ExcelDownload downloadPreviewWorkbook(String uploadToken) {
     PackageExcelSession session = loadSession(uploadToken);
     PackageValidationResult result = validator().validate(session);
-    Map<String, List<String>> implRegistry = loadRegisteredImplCodesByModule();
     ConfigPackageExcelWorkbookWriter writer = workbookWriter();
     String fileName =
         ConsoleExcelPreviewWorkbookSupport.previewWorkbookFileName(session.fileName());
-    return new ExcelDownload(
-        fileName, out -> writer.writePreviewWorkbook(out, session, result, implRegistry));
+    return new ExcelDownload(fileName, out -> writer.writePreviewWorkbook(out, session, result));
   }
 
   @Override

@@ -9,14 +9,19 @@
 |---|---:|
 | 生产 Java 源文件 | 3108 |
 | CGLIB 自注入类 | 0 |
-| `Map<String, Object>` 出现次数 | 2099 |
+| `Map<String, Object>` 出现次数 | 2098 |
 | 含 Map 的源文件 | 417 |
 | public Map 契约候选 | 60 |
 | public Map 契约候选文件 | 44 |
 | `@SuppressWarnings` | 237 |
 | 含 suppression 的源文件 | 175 |
+<<<<<<< HEAD
 | `@Configuration` 类 | 53 |
 | 大于等于 700 行的源文件 | 35 |
+=======
+| `@Configuration` 类 | 51 |
+| 大于等于 700 行的源文件 | 34 |
+>>>>>>> d861a757e (refactor(console): remove unused impl-code registry plumbing)
 | `PMD.ExcessiveParameterList` 显式例外 | 29 |
 
 ## 模块源文件
@@ -49,8 +54,8 @@
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelValidator.java` | 1242 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/application/ops/infrastructure/DefaultConsoleOrchestratorProxyService.java` | 1115 |
 | `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultConsoleTenantConfigCopyService.java` | 1059 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 1036 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/replay/WorkflowRunReplayPreviewService.java` | 1024 |
+| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/config/DefaultTenantConfigPackageExcelService.java` | 997 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/workflow/DefaultWorkflowNodeDispatchService.java` | 989 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/task/DefaultTaskAssignmentService.java` | 950 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/governance/DefaultRetryGovernanceService.java` | 925 |
@@ -74,7 +79,6 @@
 | `batch-worker/dispatch/src/main/java/io/github/pinpols/batch/worker/dispatchs/infrastructure/channel/RemoteFilesystemDispatchSupport.java` | 712 |
 | `batch-worker/core/src/main/java/io/github/pinpols/batch/worker/core/support/AbstractPipelineStepExecutionAdapter.java` | 707 |
 | `batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/application/service/batchday/BatchDayOpenService.java` | 705 |
-| `batch-console-api/src/main/java/io/github/pinpols/batch/console/infrastructure/excel/ConfigPackageExcelWorkbookWriter.java` | 700 |
 
 ## Public Map 契约候选
 
