@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-14 job_instance 状态机按源码重画
+
+- [状态机汇总](design/status-state-machines.md#31-jobinstance-状态机) §3.1 改为 stateDiagram 并逐条注明写入方：取消只来自 CREATED/WAITING/READY，终止与暂停只来自 RUNNING，超时落 FAILED，失败终态在全部分区成功后可修正为 SUCCESS；READY 当前无写入路径。疑似暂停被在途回报撤销已登记待办。
+
 ## 2026-11-14 图例入规范与首批 P1 图
 
 - [文档治理](standards/document-governance.md) §9 规定着色与形状统一采用[架构导航图例](architecture/README.md#图例)，图例未定义的语义不着色；图例补充双向虚线表示一方发起的请求与响应。

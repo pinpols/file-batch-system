@@ -10,6 +10,7 @@
 ## 进度
 
 - 2026-11-14：B0 完成，图例要求写入[文档治理](../standards/document-governance.md) §9，图例补充双向虚线约定。B1 的 README 中英文总图按导航主链风格重画为横向三段，回连改为双向虚线以避免成环打乱读向。B3 的 §12 K8s 目标架构拆为「运行拓扑」与「交付与观测」两张。三项 P1 中剩余 B2 的 job_instance 状态机口径待对照代码核对。
+- 2026-11-14：B2 的 job_instance 状态机按源码重画为 stateDiagram，逐条注明写入方；P1 全部完成。核对中发现：`READY` 当前无写入路径；`RUNNING` 发起取消最终落 `FAILED`/`PARTIAL_FAILED` 而非 `CANCELLED`；疑似 `PAUSED` 会被在途分区回报改回 `RUNNING`，已登记待办，需集成测试确认。
 
 ## 与既有工作的关系
 
@@ -28,7 +29,7 @@
 | 优先级 | 发现 | 位置 |
 |---|---|---|
 | P1 | 首页总图把执行面放在最上、箭头向上回流，与导航「运行主链」重复且读向相反 | `README.md`、`README.en.md` |
-| P1 | job_instance 状态机用 flowchart 画，状态集合比核心模型状态路径多 WAITING/READY/PARTIAL_FAILED/CANCELLED；两处并存但未说明主从 | `design/status-state-machines.md` §3.1 |
+| P1 | job_instance 状态机用 flowchart 画，取消、终止的来源状态与代码不符，且未画终态修正与超时（2026-11-14 更正：核心模型的四张典型路径图不含 job_instance，原「两处口径并存」的比较对象有误） | `design/status-state-machines.md` §3.1 |
 | P1 | K8s + GitOps 目标架构 21 条连线大面积交叉，基本不可读 | `runbook/compose-cd-roadmap.md` §12 |
 | P2 | 端到端时序 6 个参与方、宽约 1450–1544px，文档站正文约 690px，缩放后字过小 | `system-flow-overview` §4.1–4.3、`workflow-dependency-guide` §3.1 |
 | P2 | 细高图：排障决策树 1567px、时间语义 1110/1406px、回路图 354×1127、ER 480×1210 | 见附录 |
@@ -81,7 +82,7 @@
 |---|---|---|---|---|---|---|---|
 | 000 | [`README.en.md`](../../README.en.md) 第 1 张（L54） | flowchart | 1037×702 | B1 | P1 | 首页总图把执行面放在最上、箭头向上回流，与导航主链图口径重复 | 按导航主链图重绘中英文两份，保持中英结构一致 |
 | 001 | [`README.md`](../../README.md) 第 1 张（L54） | flowchart | 962×652 | B1 | P1 | 首页总图把执行面放在最上、箭头向上回流，与导航主链图口径重复 | 按导航主链图重绘中英文两份，保持中英结构一致 |
-| 071 | [`design/status-state-machines.md`](../design/status-state-machines.md) 第 1 张（L67） | flowchart | 1017×550 | B2 | P1 | 用 flowchart 表达状态机；比核心模型状态图多 WAITING/READY/PARTIAL_FAILED/CANCELLED，两处口径并存 | 对照代码迁移点核对后改 stateDiagram；明确与核心模型「典型路径」的主从关系并互链 |
+| 071 | [`design/status-state-machines.md`](../design/status-state-machines.md) 第 1 张（L67） | flowchart | 1017×550 | B2 | P1 | 用 flowchart 表达状态机；取消、终止来源与代码不符，缺终态修正与超时（核心模型不含 job_instance，原比较对象有误） | 对照代码迁移点核对后改 stateDiagram；明确与核心模型「典型路径」的主从关系并互链 |
 | 039 | [`architecture/system-flow-overview.md`](../architecture/system-flow-overview.md) 第 21 张（L659） | stateDiagram-v2 | 611×754 | B2 | P2 | 17 条迁移的总状态图，较拥挤 | 核对代码后按实体拆分或分组，结果着色 |
 | 072 | [`design/status-state-machines.md`](../design/status-state-machines.md) 第 2 张（L84） | flowchart | 686×262 | B2 | P2 | 用 flowchart 表达状态机 | 核对代码迁移后改 stateDiagram，结果着色 |
 | 073 | [`design/status-state-machines.md`](../design/status-state-machines.md) 第 3 张（L98） | flowchart | 625×472 | B2 | P2 | 用 flowchart 表达状态机 | 核对代码迁移后改 stateDiagram，结果着色 |
