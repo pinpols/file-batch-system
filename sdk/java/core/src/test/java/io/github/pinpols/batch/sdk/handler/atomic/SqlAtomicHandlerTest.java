@@ -374,6 +374,27 @@ class SqlAtomicHandlerTest {
         Arguments.of(
             "backslash-in-dollar-quote-and-comments",
             "select $$a\\';$$ /* \\' ; */ -- \\' ;\n; select 2",
-            List.of("select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2")));
+            List.of("select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2")),
+        // PostgreSQL 块注释可嵌套: 内层收尾后仍在外层注释里
+        Arguments.of(
+            "nested-block-comment",
+            "select 1 /* outer ; /* inner ; */ still comment ; */ ; select 2",
+            List.of("select 1 /* outer ; /* inner ; */ still comment ; */", "select 2")),
+        Arguments.of(
+            "nested-block-comment-several-levels",
+            "select 3 /* a /* b /* c ; */ d ; */ e ; */; select 4",
+            List.of("select 3 /* a /* b /* c ; */ d ; */ e ; */", "select 4")),
+        Arguments.of(
+            "comment-opener-star-not-reused-for-closer",
+            "select 1 /*/ ; */ ; select 2",
+            List.of("select 1 /*/ ; */", "select 2")),
+        Arguments.of(
+            "comment-closer-slash-not-reused-for-opener",
+            "select 3 /* x */*2 as v; select 4",
+            List.of("select 3 /* x */*2 as v", "select 4")),
+        Arguments.of(
+            "comment-opener-inside-quote-or-line-comment",
+            "select '/*' as d; select 6 -- /*\n; select 7",
+            List.of("select '/*' as d", "select 6 -- /*", "select 7")));
   }
 }

@@ -34,8 +34,7 @@ final class SqlStatementSplitter {
           continue;
         }
       }
-      sc.feed(c, prev);
-      prev = c;
+      prev = sc.feed(c, prev);
       i++;
     }
     return sc.finish();
@@ -46,6 +45,10 @@ final class SqlStatementSplitter {
    *
    * <p>引号词法按 PostgreSQL(standard_conforming_strings=on,自 9.1 起默认)处理:普通 {@code '...'} 与 {@code
    * "..."} 内反斜杠是字面字符,唯一的引号转义是连写两个引号;只有 {@code E'...'}/{@code e'...'} 转义字符串里反斜杠转义下一个字符。
+   *
+   * <p>块注释按 PostgreSQL 规则可嵌套:{@code /* a /* b *}{@code / c *}{@code /} 整体是一段注释,注释内每个 {@code /*}
+   * 加一层、每个 {@code *}{@code /} 减一层,回到 0 层才结束。{@code /*}、{@code *}{@code /}、{@code --} 是两字符记号,已组成记号的
+   * 第二个字符不再与下一个字符配对(如 {@code /*}{@code /} 不是开即闭,{@code *}{@code /*} 是收尾后跟乘号)。
    */
   private static final class SplitScanner {
     private final List<String> out = new ArrayList<>();
@@ -64,6 +67,9 @@ final class SqlStatementSplitter {
 
     private LexState state = LexState.CODE;
 
+    /** 当前块注释嵌套层数;仅在 {@link LexState#BLOCK_COMMENT} 下大于 0。 */
+    private int blockCommentDepth;
+
     /** 最近一次收尾的单引号字符串种类;紧跟的引号属于连写引号转义,需回到同一种字符串。 */
     private LexState lastSingleQuoteKind = LexState.SINGLE_QUOTE;
 
@@ -74,25 +80,45 @@ final class SqlStatementSplitter {
       return state == LexState.CODE;
     }
 
-    void feed(char c, char prev) {
+    /**
+     * 消费一个字符,返回下一个字符应看到的"前一字符":{@code c} 与 {@code prev} 组成两字符记号时返回 0,避免记号的第二个字符被重复配对。
+     */
+    char feed(char c, char prev) {
       boolean split = false;
+      boolean pairConsumed = false;
       switch (state) {
         case LINE_COMMENT -> {
           if (c == '\n') state = LexState.CODE;
         }
-        case BLOCK_COMMENT -> {
-          if (prev == '*' && c == '/') state = LexState.CODE;
-        }
+        case BLOCK_COMMENT -> pairConsumed = feedBlockComment(c, prev);
         case SINGLE_QUOTE, ESCAPE_STRING, ESCAPE_STRING_BACKSLASH -> feedSingleQuoted(c);
         case DOUBLE_QUOTE -> {
           if (c == '"') state = LexState.CODE;
         }
-        case CODE -> split = feedTopLevel(c, prev);
+        case CODE -> {
+          split = c == ';';
+          pairConsumed = feedTopLevel(c, prev);
+        }
       }
       beforePrev = prev;
       if (!split) {
         buf.append(c); // 分号已切分时不入 buffer
       }
+      return pairConsumed ? 0 : c;
+    }
+
+    /** 块注释内部:{@code /*} 加一层、{@code *}{@code /} 减一层,回到 0 层时结束注释;返回是否组成了两字符记号。 */
+    private boolean feedBlockComment(char c, char prev) {
+      if (prev == '/' && c == '*') {
+        blockCommentDepth++;
+        return true;
+      }
+      if (prev == '*' && c == '/') {
+        blockCommentDepth--;
+        if (blockCommentDepth == 0) state = LexState.CODE;
+        return true;
+      }
+      return false;
     }
 
     /** 单引号字符串内部:只有转义字符串识别反斜杠,收尾时记下种类以便处理连写引号。 */
@@ -107,19 +133,21 @@ final class SqlStatementSplitter {
       }
     }
 
-    /** 顶层字符:开注释/开引号切换状态;遇 `;` 切分并返回 true(调用方不再 append)。 */
+    /** 顶层字符:开注释/开引号切换状态,遇 `;` 收尾当前语句;返回是否组成了注释开记号。 */
     private boolean feedTopLevel(char c, char prev) {
       if (c == '-' && prev == '-') {
         state = LexState.LINE_COMMENT;
+        return true;
       } else if (c == '*' && prev == '/') {
         state = LexState.BLOCK_COMMENT;
+        blockCommentDepth = 1;
+        return true;
       } else if (c == '\'') {
         state = openingSingleQuoteKind(prev);
       } else if (c == '"') {
         state = LexState.DOUBLE_QUOTE;
       } else if (c == ';') {
         flush();
-        return true;
       }
       return false;
     }

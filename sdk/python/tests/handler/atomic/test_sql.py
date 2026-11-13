@@ -208,3 +208,29 @@ def test_split_statements_honours_dollar_quotes(sql: str, expected: list[str]) -
 def test_split_statements_follows_pg_backslash_semantics(sql: str, expected: list[str]) -> None:
     # 与 Java SDK、平台 SqlTaskExecutor 一致: 只有 E'...' 内反斜杠是转义符。
     assert split_statements(sql) == expected
+
+
+@pytest.mark.parametrize(
+    ("sql", "expected"),
+    [
+        # PostgreSQL 块注释可嵌套: 内层收尾后仍在外层注释里
+        (
+            "select 1 /* outer ; /* inner ; */ still comment ; */ ; select 2",
+            ["select 1 /* outer ; /* inner ; */ still comment ; */", "select 2"],
+        ),
+        (
+            "select 3 /* a /* b /* c ; */ d ; */ e ; */; select 4",
+            ["select 3 /* a /* b /* c ; */ d ; */ e ; */", "select 4"],
+        ),
+        # 两字符记号的第二个字符不与下一个字符再配对
+        ("select 1 /*/ ; */ ; select 2", ["select 1 /*/ ; */", "select 2"]),
+        ("select 3 /* x */*2 as v; select 4", ["select 3 /* x */*2 as v", "select 4"]),
+        (
+            "select '/*' as d; select 6 -- /*\n; select 7",
+            ["select '/*' as d", "select 6 -- /*", "select 7"],
+        ),
+    ],
+)
+def test_split_statements_tracks_nested_block_comments(sql: str, expected: list[str]) -> None:
+    # 与 Java SDK、平台 SqlStatementSplitter 一致: 块注释按层数收尾。
+    assert split_statements(sql) == expected

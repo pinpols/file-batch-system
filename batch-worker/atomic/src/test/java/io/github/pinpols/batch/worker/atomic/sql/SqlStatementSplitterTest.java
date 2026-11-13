@@ -159,4 +159,40 @@ class SqlStatementSplitterTest {
     assertThat(SqlStatementSplitter.split("select $$a\\';$$ /* \\' ; */ -- \\' ;\n; select 2"))
         .containsExactly("select $$a\\';$$ /* \\' ; */ -- \\' ;", "select 2");
   }
+
+  @Test
+  @DisplayName("嵌套块注释整体是一段注释, 内层注释收尾后的分号仍不触发切分")
+  void shouldKeepSemicolon_whenInsideNestedBlockComment() {
+    assertThat(SqlStatementSplitter.split(
+            "select 1 /* outer ; /* inner ; */ still comment ; */ ; select 2"))
+        .containsExactly("select 1 /* outer ; /* inner ; */ still comment ; */", "select 2");
+  }
+
+  @Test
+  @DisplayName("多层嵌套块注释应逐层收尾, 全部收尾后分号恢复切分")
+  void shouldTrackDepth_whenBlockCommentsNestSeveralLevels() {
+    assertThat(SqlStatementSplitter.split("select 3 /* a /* b /* c ; */ d ; */ e ; */; select 4"))
+        .containsExactly("select 3 /* a /* b /* c ; */ d ; */ e ; */", "select 4");
+  }
+
+  @Test
+  @DisplayName("注释开标签的星号不能与后面的斜杠组成收尾标记")
+  void shouldNotCloseComment_whenOpeningStarIsFollowedBySlash() {
+    assertThat(SqlStatementSplitter.split("select 1 /*/ ; */ ; select 2"))
+        .containsExactly("select 1 /*/ ; */", "select 2");
+  }
+
+  @Test
+  @DisplayName("注释收尾标记的斜杠不能与后面的星号组成新的注释开标签")
+  void shouldNotReopenComment_whenClosingSlashIsFollowedByStar() {
+    assertThat(SqlStatementSplitter.split("select 3 /* x */*2 as v; select 4"))
+        .containsExactly("select 3 /* x */*2 as v", "select 4");
+  }
+
+  @Test
+  @DisplayName("引号与行注释内的注释开标签不计入嵌套层数")
+  void shouldIgnoreCommentOpener_whenInsideQuoteOrLineComment() {
+    assertThat(SqlStatementSplitter.split("select '/*' as d; select 6 -- /*\n; select 7"))
+        .containsExactly("select '/*' as d", "select 6 -- /*", "select 7");
+  }
 }

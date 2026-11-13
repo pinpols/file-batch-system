@@ -210,6 +210,10 @@ class _SplitState:
     引号词法按 PostgreSQL(standard_conforming_strings=on,自 9.1 起默认)处理:普通 ``'...'`` 与
     ``"..."`` 内反斜杠是字面字符,唯一的引号转义是连写两个引号;只有 ``E'...'`` / ``e'...'``
     转义字符串里反斜杠转义下一个字符。
+
+    块注释按 PostgreSQL 规则可嵌套:注释内每个 ``/*`` 加一层、每个 ``*/`` 减一层,回到 0 层才结束。
+    ``/*``、``*/``、``--`` 是两字符记号,已组成记号的第二个字符不再与下一个字符配对
+    (如 ``/*/`` 不是开即闭,``*/*`` 是收尾后跟乘号)。
     """
 
     def __init__(self) -> None:
@@ -217,6 +221,10 @@ class _SplitState:
         self._buf: list[str] = []
         # code | line | block | single | escape | escape_backslash | double
         self._lex = "code"
+        # 当前块注释嵌套层数;仅在 block 状态下大于 0
+        self._block_depth = 0
+        # 本字符是否与 _prev 组成了两字符记号;组成时下一个字符看不到本字符
+        self._pair_consumed = False
         # 最近一次收尾的单引号字符串种类;紧跟的引号属于连写引号转义,需回到同一种字符串
         self._last_single_kind = "single"
         self._prev = ""
@@ -227,13 +235,13 @@ class _SplitState:
         return self._lex == "code"
 
     def feed(self, c: str) -> None:
+        self._pair_consumed = False
         if self._lex == "line":
             if c == "\n":
                 self._lex = "code"
             self._buf.append(c)
         elif self._lex == "block":
-            if self._prev == "*" and c == "/":
-                self._lex = "code"
+            self._feed_block_comment(c)
             self._buf.append(c)
         elif self._lex in ("single", "escape", "escape_backslash"):
             self._feed_single_quoted(c)
@@ -245,7 +253,18 @@ class _SplitState:
         else:
             self._feed_code(c)
         self._before_prev = self._prev
-        self._prev = c
+        self._prev = "" if self._pair_consumed else c
+
+    def _feed_block_comment(self, c: str) -> None:
+        """块注释内部:``/*`` 加一层、``*/`` 减一层,回到 0 层时结束注释。"""
+        if self._prev == "/" and c == "*":
+            self._block_depth += 1
+            self._pair_consumed = True
+        elif self._prev == "*" and c == "/":
+            self._block_depth -= 1
+            self._pair_consumed = True
+            if self._block_depth == 0:
+                self._lex = "code"
 
     def _feed_single_quoted(self, c: str) -> None:
         """单引号字符串内部:只有转义字符串识别反斜杠,收尾时记下种类以便处理连写引号。"""
@@ -267,8 +286,11 @@ class _SplitState:
     def _feed_code(self, c: str) -> None:
         if self._prev == "-" and c == "-":
             self._lex = "line"
+            self._pair_consumed = True
         elif self._prev == "/" and c == "*":
             self._lex = "block"
+            self._block_depth = 1
+            self._pair_consumed = True
         elif c == "'":
             self._lex = self._opening_single_kind()
         elif c == '"':
