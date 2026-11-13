@@ -9,6 +9,7 @@ import io.github.pinpols.batch.console.domain.file.mapper.FileTemplateConfigMapp
 import io.github.pinpols.batch.console.domain.file.param.FileChannelConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpsertParam;
 import io.github.pinpols.batch.console.domain.file.support.FixedWidthMappingValidation;
+import io.github.pinpols.batch.console.domain.file.support.ImportEncryptTypeValidation;
 import io.github.pinpols.batch.console.domain.file.view.FileChannelConfigQueryView;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import lombok.RequiredArgsConstructor;
@@ -128,6 +129,7 @@ final class TenantFileConfigApplySupport {
     audit.setCreatedBy(operator);
     audit.setUpdatedBy(operator);
     param.setAudit(audit);
+    ImportEncryptTypeValidation.validate(fileTemplateConfigMapper, tenantId, param);
     fileTemplateConfigMapper.upsertFileTemplateConfig(param);
   }
 }

@@ -24,6 +24,7 @@ import io.github.pinpols.batch.console.domain.file.param.FileTemplateConfigUpser
 import io.github.pinpols.batch.console.domain.file.param.FileTemplateEnableFence;
 import io.github.pinpols.batch.console.domain.file.query.FileTemplateConfigQuery;
 import io.github.pinpols.batch.console.domain.file.support.FixedWidthMappingValidation;
+import io.github.pinpols.batch.console.domain.file.support.ImportEncryptTypeValidation;
 import io.github.pinpols.batch.console.domain.file.view.FileTemplateConfigQueryView;
 import io.github.pinpols.batch.console.domain.job.infrastructure.DefaultConsoleJobDefinitionApplicationService;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -102,6 +103,7 @@ public class DefaultConsoleFileTemplateApplicationService
     String operator = requestMetadataResolver.current().operatorId();
     FileTemplateConfigUpsertParam param = buildCreateParam(tenantId, version, operator, request);
     validateFixedWidthMappings(param.getBasicInfo(), param.getFormat());
+    ImportEncryptTypeValidation.validate(mapper, tenantId, param);
     mapper.upsertFileTemplateConfig(param);
     String templateCode = request.getTemplateCode();
     FileTemplateConfigQueryView createdTemplateRow =
@@ -123,6 +125,7 @@ public class DefaultConsoleFileTemplateApplicationService
     FileTemplateConfigUpsertParam param =
         buildUpdateParam(tenantId, templateCode, version, operator, request, existing);
     validateFixedWidthMappings(param.getBasicInfo(), param.getFormat());
+    ImportEncryptTypeValidation.validate(mapper, tenantId, param);
     mapper.upsertFileTemplateConfig(param);
     FileTemplateConfigQueryView updatedTemplateRow = mapper.selectById(tenantId, id);
     return ConsoleFileProjectionMapper.templateView(updatedTemplateRow);
@@ -140,6 +143,7 @@ public class DefaultConsoleFileTemplateApplicationService
           existing.templateType(),
           existing.fileFormatType(),
           stringValue(existing.fieldMappings()));
+      ImportEncryptTypeValidation.validateEnabling(mapper, resolved, existing);
       FileTemplateEnableFence fence = new FileTemplateEnableFence(
           resolved,
           id,
