@@ -22,6 +22,7 @@
 
 ### Changed
 
+- Outbox 查询（`/queries/outbox-retries`、`/queries/outbox-deliveries`）及其实时流（`/stream/outbox-*/events`）、补跑审批查询 `/queries/catch-up-approvals` 改为只对平台管理员和租户管理员开放，与菜单「Outbox」「审批中心」及移动端路由一致；审计员与普通租户用户调用返回 403。
 - `GET /api/console/queries/operation-audits` 改为只对平台管理员、租户管理员和审计员开放，与菜单「操作审计」一致；普通租户用户此前可直接调接口读到本租户管理员的操作记录，现在返回 403。文件审计 `/queries/audits` 不变，自助服务「我的审计」等页面仍在使用。
 - 导入模板的加密类型选 `PGP` 或 `CUSTOM`、又没有显式 `preprocess_pipeline` 时，Console 在创建、更新、启用和配置包/批量初始化写入时直接拒绝。此前这种模板能保存，到运行时才以 `IMPORT_PREPROCESS_ENCRYPT_UNSUPPORTED` 失败。未启用的草稿、导出模板和已配置显式流水线的模板不受影响。
 - Java SDK 存储过程处理器的 OUT 类型补齐平台支持的标量类型（SMALLINT、TINYINT、DECIMAL、DOUBLE、FLOAT、REAL、CHAR、NVARCHAR、NCHAR、BIT、TIME、TIMESTAMP_WITH_TIMEZONE）；`REF_CURSOR`、`OTHER` 仍不支持。

@@ -22,6 +22,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 - 已确认一例：`menu.yml` 中"审计日志""操作审计"只对 ADMIN、TENANT_ADMIN、AUDITOR 开放，对应的 `GET /audits`、`GET /operation-audits` 没有角色检查。`OperationAuditQueryService` 只按租户过滤，因此 TENANT_USER 直接调接口能读到本租户的操作审计，包括管理员的操作记录。未找到拒绝 TENANT_USER 的测试。
 - 其余 45 个只有基线的查询接口未逐个与菜单比对。
 - **2026-11-14 复核与部分实施**：`/operation-audits` 已加 `ADMIN_OR_TENANT_ADMIN_OR_AUDITOR`，并有 `ConsoleQueryControllerAuthorizationTest` 守护。上文对 `/audits` 的判断有误：它查的是文件审计 `file_audit_log`，前端文件中心、执行日志、作业定义详情和自助服务「我的审计」都在用，TENANT_USER 本就可见，维持基线。`/execution-logs` 同为文件审计别名，用于 VIEWER 可见的综合查询页，同样维持。其余接口（审批、Outbox、Worker、文件模板与渠道等）前端存在 TENANT_USER 可见页面的复用调用，需逐页确认后再收紧，仍开放。
+- **2026-11-14 第二轮**：逐个核对前端调用页与菜单、移动端路由后，Outbox 查询与实时流、`/catch-up-approvals` 只在「Outbox」「审批中心」（及对应移动端 OPERATOR 路由）使用，已收紧为 `ADMIN_OR_TENANT_ADMIN`。维持基线的及原因：`/approvals` 被自助服务页（TENANT_USER）调用；`/dead-letters`、`/retries` 在 VIEWER 可见的综合查询页；`/workers` 经共享 composable 多页复用；`/file-templates`、`/file-channels` 被作业向导与文件中心调用；`/ai-audits` 的可用身份由 `batch.console.ai.allowed-authorities` 配置决定，按角色收紧会与配置冲突。至此 ARCH-20261113-09 关闭；其余基线接口均为 VIEWER 可见页面使用，与菜单一致。
 - 不受影响的：`ConsoleAiController` 的 13 个接口虽无 `@PreAuthorize`，但服务层 `ConsoleAiAuthorizationService.assertAllowed` 按配置白名单校验。
 
 ### ARCH-20261113-10 / P2 / 有当前证据：平台库的租户隔离只在应用层

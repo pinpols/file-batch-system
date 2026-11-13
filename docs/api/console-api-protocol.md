@@ -7,6 +7,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-11-14 | **权限收紧**：`GET /api/console/queries/outbox-retries`、`/outbox-deliveries`、`/catch-up-approvals` 及 `GET /api/console/stream/outbox-retries/events`、`/outbox-deliveries/events` 改为 `ADMIN_OR_TENANT_ADMIN`，与菜单和移动端路由一致；ROLE_AUDITOR、ROLE_TENANT_USER 返回 403。路径、参数与响应不变（ARCH-20261113-09）。 |
 | 2026-11-14 | **权限收紧**：`GET /api/console/queries/operation-audits` 增加 `@PreAuthorize(ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)`，与菜单「操作审计」一致；TENANT_USER 调用返回 403。路径、参数与响应不变；`/queries/audits`（文件审计）不变（ARCH-20261113-09）。 |
 | 2026-11-12 | 文档更正：`X-Operator-Id` 不是操作人身份来源，服务端忽略该请求头，写操作与审计一律使用认证身份（`ConsoleRequestContextFilterTest`、相关 E2E 已覆盖伪造头被忽略）。服务端行为不变。 |
 | 2026-11-08 | **P1-A Stage 1 包结构收尾**：Controller 与查询/响应契约迁入 `domain.<ctx>` 包，新增 config 上下文；HTTP 路径、请求/响应字段、鉴权、状态码与 wire schema 均不变。 |

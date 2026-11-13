@@ -224,6 +224,7 @@ public class ConsoleQueryController {
 
   /** GET /outbox-retries — Outbox 重试日志。 */
   @GetMapping("/outbox-retries")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleOutboxRetryLogResponse>> outboxRetries(
       @Valid @ModelAttribute OutboxRetryLogQueryRequest request) {
     return responseFactory.success(applicationService.outboxRetries(request));
@@ -231,6 +232,7 @@ public class ConsoleQueryController {
 
   /** GET /outbox-deliveries — Outbox 投递日志。 */
   @GetMapping("/outbox-deliveries")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsoleOutboxDeliveryLogResponse>> outboxDeliveries(
       @Valid @ModelAttribute OutboxDeliveryLogQueryRequest request) {
     return responseFactory.success(applicationService.outboxDeliveries(request));
@@ -421,6 +423,7 @@ public class ConsoleQueryController {
 
   /** GET /catch-up-approvals — 待审批 Catch-Up。 */
   @GetMapping("/catch-up-approvals")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
   public CommonResponse<PageResponse<ConsolePendingCatchUpResponse>> catchUpApprovals(
       @Valid @ModelAttribute PendingCatchUpQueryRequest request) {
     return responseFactory.success(applicationService.pendingCatchUps(request));
