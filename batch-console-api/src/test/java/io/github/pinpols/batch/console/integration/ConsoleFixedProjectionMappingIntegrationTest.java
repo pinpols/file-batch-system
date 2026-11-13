@@ -33,7 +33,6 @@ import io.github.pinpols.batch.console.domain.job.mapper.JobExecutionMapper;
 import io.github.pinpols.batch.console.domain.job.mapper.StepRegistryQueryMapper;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionCodeNameView;
 import io.github.pinpols.batch.console.domain.job.view.JobDefinitionQueueRefView;
-import io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView;
 import io.github.pinpols.batch.console.domain.ops.mapper.ConsoleClusterDiagnosticMapper;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ActiveTaskWorkerIssueView;
 import io.github.pinpols.batch.console.domain.ops.view.cluster.ClusterStatusCountView;
@@ -311,7 +310,7 @@ class ConsoleFixedProjectionMappingIntegrationTest extends AbstractIntegrationTe
   }
 
   @Test
-  @DisplayName("作业选项、队列引用与步骤注册表使用具名列，不依赖Map键名猜测")
+  @DisplayName("作业选项、队列引用与步骤注册表按模块查询使用具名列，不依赖Map键名猜测")
   void shouldMapJobOptionsQueueReferencesAndStepRegistry() {
     String tenant = tenant();
     insertJob(tenant);
@@ -322,17 +321,14 @@ class ConsoleFixedProjectionMappingIntegrationTest extends AbstractIntegrationTe
     jdbc.update(insertRegistrySql, tenant);
     List<JobDefinitionCodeNameView> names = jobs.selectActiveCodeNames(tenant);
     List<JobDefinitionQueueRefView> queues = jobs.selectEnabledJobQueueRefs(tenant);
-    List<StepRegistryEntryView> entries = registry.selectAllImplEntries();
+    List<String> importImplCodes = registry.selectImplCodesByModule("IMPORT");
     assertThat(names).hasSize(1);
     assertThat(names.getFirst().code()).isEqualTo("JOB_A");
     assertThat(names.getFirst().name()).isEqualTo("投影作业");
     assertThat(queues).hasSize(1);
     assertThat(queues.getFirst().jobCode()).isEqualTo("JOB_A");
     assertThat(queues.getFirst().queueCode()).isNull();
-    assertThat(entries).anySatisfy(entry -> {
-      assertThat(entry.module()).isEqualTo("IMPORT");
-      assertThat(entry.implCode()).isEqualTo(tenant);
-    });
+    assertThat(importImplCodes).contains(tenant);
   }
 
   @Test
