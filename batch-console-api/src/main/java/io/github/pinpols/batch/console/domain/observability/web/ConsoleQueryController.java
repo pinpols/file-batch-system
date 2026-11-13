@@ -135,8 +135,11 @@ public class ConsoleQueryController {
   /**
    * GET /operation-audits — 通用控制台用户操作审计列表(由 @AuditAction Aspect 写入数据库)。 跟 /audits 不同:这是
    * console_operation_audit 表,覆盖告警/审批/Job/Worker/Outbox 等所有写操作。
+   *
+   * <p>与菜单"操作审计"一致，只对平台管理员、租户管理员和审计员开放；普通租户用户不能读到管理员的操作记录。
    */
   @GetMapping("/operation-audits")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)
   public CommonResponse<PageResponse<ConsoleOperationAuditResponse>> operationAudits(
       @Valid @ModelAttribute OperationAuditQueryRequest request) {
     return responseFactory.success(operationAuditQueryService.query(request));
