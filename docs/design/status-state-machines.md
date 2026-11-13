@@ -66,18 +66,45 @@ job_instance、workflow_run、pipeline_instance、task、partition 和 step inst
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  C[CREATED] --> W[WAITING]
-  W --> R[READY]
-  R --> X[RUNNING]
-  X <--> P[PAUSED]
-  X --> T[SUCCESS / FAILED / PARTIAL_FAILED]
-  X --> D[SUCCESS_DRY_RUN / FAILED_DRY_RUN]
-  C -. 受控取消或终止 .-> E[CANCELLED / TERMINATED]
-  W -. 受控取消或终止 .-> E
-  R -. 受控取消或终止 .-> E
-  X -. 受控取消或终止 .-> E
+stateDiagram-v2
+  [*] --> CREATED: 创建
+  CREATED --> RUNNING: 可派发
+  CREATED --> WAITING: 容量或窗口不足
+  WAITING --> RUNNING: 等待派发重试成功
+  RUNNING --> PAUSED: 人工暂停
+  PAUSED --> RUNNING: 人工恢复
+  RUNNING --> SUCCESS: 全部分区成功
+  RUNNING --> PARTIAL_FAILED: 部分分区不成功
+  RUNNING --> FAILED: 全部分区不成功或执行超时
+  RUNNING --> SUCCESS_DRY_RUN: 演练全部成功
+  RUNNING --> FAILED_DRY_RUN: 演练不成功或超时
+  RUNNING --> TERMINATED: 人工终止
+  CREATED --> CANCELLED: 人工取消
+  WAITING --> CANCELLED: 人工取消
+  FAILED --> SUCCESS: 重试或补偿后全部分区成功
+  PARTIAL_FAILED --> SUCCESS: 重试或补偿后全部分区成功
+  FAILED_DRY_RUN --> SUCCESS_DRY_RUN: 重试或补偿后全部分区成功
+  class SUCCESS ok
+  class FAILED,PARTIAL_FAILED,TERMINATED fail
+  class WAITING,PAUSED wait
+  class CANCELLED,SUCCESS_DRY_RUN,FAILED_DRY_RUN muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
+
+以上迁移按 2026-11-14 源码核对，状态写入集中在 `JobInstanceMapper.xml`（`markRunning`、`updateLifecycleStatus`、`updateStatus`、`updateStatusWhenTaskRunning`、`updateProgress`），目标状态由调用方决定：
+
+- **创建与派发**：`DefaultLaunchService` 以 `CREATED` 建记录；`DefaultPartitionDispatchService` 可派发时置 `RUNNING`，容量或窗口不足时置 `WAITING`；`WaitingPartitionDispatcher` 把 `WAITING` 推进为 `RUNNING`。
+- **结果汇总**：`TaskOutcomeStatePolicy.resolveInstanceEvent` 在全部分区结束后汇总。取消和终止的分区都计为不成功，有成功也有不成功为 `PARTIAL_FAILED`，全部不成功为 `FAILED`；演练实例只落 `SUCCESS_DRY_RUN` 或 `FAILED_DRY_RUN`。
+- **超时**：`JobInstanceTimeoutEnforcer` 只处理 `RUNNING` 且仍有运行中任务的超时实例，置 `FAILED`（演练为 `FAILED_DRY_RUN`）。
+- **人工操作**（`InstanceManagementApplicationService`）：取消只接受 `CREATED`、`WAITING`、`READY`，直接置 `CANCELLED`；对 `RUNNING` 发起取消不改实例状态，而是请求取消任务，实例随后按结果汇总落到 `FAILED` 或 `PARTIAL_FAILED`。终止只接受 `RUNNING`；暂停只接受 `RUNNING`，恢复只接受 `PAUSED`。
+- **终态之间唯一的迁移**：`FAILED`、`PARTIAL_FAILED`、`FAILED_DRY_RUN` 在重试或补偿使全部分区成功后，可改写为 `SUCCESS` 或 `SUCCESS_DRY_RUN`（`TaskOutcomeStatePolicy.shouldPromoteTerminalFailure` 与 SQL 片段 `NotFromTerminalAllowSelfForProgress` 双重限定）。其余终态不再变化，SQL 片段 `NotFromTerminal` 拒绝从终态写入。
+- **`READY`**：仍在枚举、CHECK 约束、取消前态和若干查询条件中，但当前代码没有把 job_instance 写成 `READY` 的路径，图中不画为必经状态。
+- **待核实**：实例 `PAUSED` 期间，在途分区回报且分区尚未全部结束时，`resolveInstanceEvent` 返回 `RUNNING`，`DefaultLifecycleEventMapper` 与 `updateProgress` 都不阻止从 `PAUSED` 改写，暂停可能被在途回报撤销。图中未画此路径，结论需要集成测试确认，见[图审查与修改计划](../plans/diagram-review-remediation-plan-2026-11-13.md#进度)。
+
+核心模型的[典型状态路径](../architecture/core-model.md#421-各对象的典型状态路径)覆盖 WorkflowRun、WorkflowNodeRun、Partition 与 Task，不含 job_instance；job_instance 的完整迁移以本节为准。
 
 ### 3.2 outbox_event 状态机
 
