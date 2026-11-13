@@ -64,6 +64,21 @@ class WebhookDispatcherTest {
   }
 
   @Test
+  @DisplayName("订阅事件类型不匹配时跳过该订阅, 不写投递日志")
+  void shouldSkipSubscriptionWhenEventTypeDoesNotMatch() {
+    WebhookSubscriptionEntity subscription = new WebhookSubscriptionEntity();
+    subscription.setId(7L);
+    subscription.setTenantId("tenant-a");
+    subscription.setEventTypes("JOB_FAILED");
+    when(webhookService.findEnabledSubscriptions("tenant-a")).thenReturn(List.of(subscription));
+
+    dispatcher.dispatchAsync("tenant-a", "JOB_SUCCESS", "stream-1", "cursor-1", "data", null);
+
+    verifyNoInteractions(deliveryLogRepository);
+    dispatcher.shutdown();
+  }
+
+  @Test
   @DisplayName("订阅事件类型为通配符时, 任意事件都匹配")
   void shouldMatchWildcardEventType() throws Exception {
     boolean result = SubscriptionRuleDispatchPolicy.eventTypeMatches("*", "JOB_SUCCESS");
