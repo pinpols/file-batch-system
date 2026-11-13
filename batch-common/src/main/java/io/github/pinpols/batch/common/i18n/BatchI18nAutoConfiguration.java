@@ -22,6 +22,9 @@ import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 @AutoConfiguration
 public class BatchI18nAutoConfiguration {
 
+  /** 消息资源缓存秒数：每 60 秒检查一次词条文件变化。 */
+  private static final int MESSAGE_CACHE_SECONDS = 60;
+
   @Bean
   @ConditionalOnMissingBean
   public BizMessageResolver bizMessageResolver(MessageSource messageSource) {
@@ -46,7 +49,7 @@ public class BatchI18nAutoConfiguration {
     // useCodeAsDefaultMessage=false:key 不存在时返回 null,让 ExceptionHandler 走 fallback 字面量,
     // 不会把 key 字符串当 message 暴露给前端。
     source.setUseCodeAsDefaultMessage(false);
-    source.setCacheSeconds(60);
+    source.setCacheSeconds(MESSAGE_CACHE_SECONDS);
     return source;
   }
 

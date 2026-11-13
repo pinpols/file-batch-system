@@ -27,6 +27,12 @@ import java.util.Collection;
  */
 public class EncryptingObjectStore implements BatchObjectStore {
 
+  /**
+   * 未指定时加密前允许整体放入内存的字节数上限（32 MiB），
+   * 与 batch.storage.encryption.max-in-memory-encrypt-bytes 默认值一致。
+   */
+  private static final long DEFAULT_MAX_IN_MEMORY_BYTES = 32L * 1024 * 1024;
+
   private final BatchObjectStore delegate;
   private final BatchObjectCryptoService cryptoService;
   private final BatchSecurityProperties securityProperties;
@@ -38,7 +44,7 @@ public class EncryptingObjectStore implements BatchObjectStore {
       BatchObjectCryptoService cryptoService,
       BatchSecurityProperties securityProperties,
       String defaultKeyRef) {
-    this(delegate, cryptoService, securityProperties, defaultKeyRef, 32L * 1024 * 1024);
+    this(delegate, cryptoService, securityProperties, defaultKeyRef, DEFAULT_MAX_IN_MEMORY_BYTES);
   }
 
   public EncryptingObjectStore(

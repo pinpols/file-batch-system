@@ -27,6 +27,9 @@ import org.springframework.boot.ApplicationRunner;
 @Slf4j
 public class ObjectStoreStartupCheck implements ApplicationRunner {
 
+  /** 启动探针 list 一次最多取回的对象数；探针前缀下只有本次写入的少量对象，100 足够命中。 */
+  private static final int PROBE_LIST_MAX_KEYS = 100;
+
   private static final String PROBE_PREFIX = "__batch-startup-probe__/";
 
   private final BatchObjectStore objectStore;
@@ -65,7 +68,7 @@ public class ObjectStoreStartupCheck implements ApplicationRunner {
           throw fail("get 取回内容与写入不一致", key, null);
         }
       }
-      ObjectListing listing = objectStore.list(bucket, PROBE_PREFIX, null, 100);
+      ObjectListing listing = objectStore.list(bucket, PROBE_PREFIX, null, PROBE_LIST_MAX_KEYS);
       boolean listed = listing.objects().stream().anyMatch(o -> key.equals(o.key()));
       if (!listed) {
         throw fail("list 未列出刚写入的探针对象", key, null);
