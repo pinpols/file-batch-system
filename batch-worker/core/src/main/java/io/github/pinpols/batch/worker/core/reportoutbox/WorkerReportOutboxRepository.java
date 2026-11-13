@@ -26,6 +26,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @Slf4j
 public class WorkerReportOutboxRepository {
 
+  /** 退避指数上限，防止 1L 左移溢出；实际等待另受 maxBackoffMillis 限制。 */
+  private static final int MAX_BACKOFF_EXPONENT = 30;
+
   private final WorkerReportOutboxProperties props;
   private final WorkerReportOutboxStore store;
 
@@ -231,7 +234,7 @@ public class WorkerReportOutboxRepository {
     long initial = Math.max(1L, props.getInitialBackoffMillis());
     long cap = Math.max(initial, props.getMaxBackoffMillis());
     int exponent = Math.max(0, completedAttempts - 1);
-    long multiplier = 1L << Math.min(exponent, 30);
+    long multiplier = 1L << Math.min(exponent, MAX_BACKOFF_EXPONENT);
     return initial > cap / multiplier ? cap : initial * multiplier;
   }
 

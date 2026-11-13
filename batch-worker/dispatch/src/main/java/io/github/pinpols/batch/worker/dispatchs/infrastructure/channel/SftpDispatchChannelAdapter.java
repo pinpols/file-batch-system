@@ -47,6 +47,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
 
+  /** SFTP 会话与通道的建连超时毫秒数。 */
+  private static final int SFTP_CONNECT_TIMEOUT_MILLIS = 30_000;
+
   private final DispatchFileContentResolver fileContentResolver;
   private final BatchSecurityProperties securityProperties;
   // S-1.2 a: 读 active profile 判定是否处于生产
@@ -374,9 +377,9 @@ public class SftpDispatchChannelAdapter implements DispatchChannelAdapter {
       // M-8: JSch API 仅支持 String 密码，无法使用 char[] + 显式擦除；生产环境建议改用密钥认证
       session.setPassword(ctx.connConfig().password());
       session.setConfig("StrictHostKeyChecking", strictMode ? "yes" : "no");
-      session.connect(30_000);
+      session.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
       sftp = (ChannelSftp) session.openChannel("sftp");
-      sftp.connect(30_000);
+      sftp.connect(SFTP_CONNECT_TIMEOUT_MILLIS);
       return new SftpConnection(session, sftp, ctx.connConfig().host());
     } catch (Exception ex) {
       disconnectWithTimeout(sftp, "sftp-channel", ctx.connConfig().host());

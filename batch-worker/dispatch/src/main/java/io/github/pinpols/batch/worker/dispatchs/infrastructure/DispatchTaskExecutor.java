@@ -26,6 +26,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class DispatchTaskExecutor implements BatchTaskExecutor {
 
+  /**
+   * 兼容构造器使用的能力超时秒数，
+   * 与 dispatch worker 的 capability-timeout-seconds 默认值 900 一致。
+   */
+  private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 900L;
+
   private final DispatchStepExecutionAdapter delegate;
   private final WorkerExecutionTimeoutProperties timeoutProperties;
 
@@ -43,7 +49,7 @@ public class DispatchTaskExecutor implements BatchTaskExecutor {
 
   private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
-    properties.setCapabilityTimeoutSeconds(900L);
+    properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
     return properties;
   }
 

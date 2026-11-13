@@ -35,6 +35,9 @@ import org.springframework.stereotype.Component;
 public class ExportStepExecutionAdapter
     extends AbstractPipelineStepExecutionAdapter<ExportJobContext, ExportStageResult> {
 
+  /** 按 pipeline 分段加锁的锁数量。 */
+  private static final int PIPELINE_LOCK_STRIPES = 64;
+
   private final ExportStageExecutor exportStageExecutor;
   private final ObjectMapper objectMapper;
 
@@ -43,7 +46,7 @@ public class ExportStepExecutionAdapter
   private static final ReentrantLock[] PIPELINE_LOCKS = createPipelineLocks();
 
   private static ReentrantLock[] createPipelineLocks() {
-    ReentrantLock[] locks = new ReentrantLock[64];
+    ReentrantLock[] locks = new ReentrantLock[PIPELINE_LOCK_STRIPES];
     for (int i = 0; i < locks.length; i++) {
       locks[i] = new ReentrantLock();
     }

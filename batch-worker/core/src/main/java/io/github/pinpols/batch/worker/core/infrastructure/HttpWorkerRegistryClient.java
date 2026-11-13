@@ -32,6 +32,12 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class HttpWorkerRegistryClient implements WorkerRegistryClient {
 
+  /** 注册中心调用的建连超时。 */
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
+
+  /** 注册中心调用的读超时。 */
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(10);
+
   private final OrchestratorClientProperties properties;
   private final BatchSecurityProperties securityProperties;
   private final ObjectProvider<RestClient.Builder> restClientBuilderProvider;
@@ -102,10 +108,8 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
         // 阻塞都会让 worker loop 永久挂起 — orchestrator 端 lease 又会过期 → 同 task
         // 被另一 worker 重抢，造成 double-exec。给 5s/10s 短超时让 worker 快速回退。
         HttpClientSettings clientSettings = HttpClientSettings.defaults();
-        Duration connectTimeout = Duration.ofSeconds(5);
-        clientSettings = clientSettings.withConnectTimeout(connectTimeout);
-        Duration readTimeout = Duration.ofSeconds(10);
-        clientSettings = clientSettings.withReadTimeout(readTimeout);
+        clientSettings = clientSettings.withConnectTimeout(CONNECT_TIMEOUT);
+        clientSettings = clientSettings.withReadTimeout(READ_TIMEOUT);
         ClientHttpRequestFactoryBuilder<?> requestFactoryBuilder =
             ClientHttpRequestFactoryBuilder.detect();
         ClientHttpRequestFactory requestFactory = requestFactoryBuilder.build(clientSettings);

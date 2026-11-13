@@ -26,6 +26,12 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
 
+  /** 关闭时同步 Worker 状态的最大尝试次数（含首次）。 */
+  private static final int STATUS_SYNC_MAX_ATTEMPTS = 3;
+
+  /** 状态同步重试的退避步长毫秒数，第 n 次失败后等待 n 倍。 */
+  private static final long STATUS_SYNC_BACKOFF_STEP_MILLIS = 200L;
+
   private final WorkerSelfRegistrationService workerRegistryService;
   private final WorkerRuntimeState workerRuntimeState;
   private final ActiveTaskLeaseRegistry activeTaskLeaseRegistry;
@@ -83,7 +89,7 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
   private void updateStatusWithRetry(
       WorkerRegistration registration, String targetStatus, String workerId) {
     Exception lastError = null;
-    for (int attempt = 1; attempt <= 3; attempt++) {
+    for (int attempt = 1; attempt <= STATUS_SYNC_MAX_ATTEMPTS; attempt++) {
       try {
         workerRegistryService.updateStatus(registration, targetStatus);
         return;
@@ -97,9 +103,9 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
             workerId,
             targetStatus,
             causeSummary);
-        if (attempt < 3) {
+        if (attempt < STATUS_SYNC_MAX_ATTEMPTS) {
           try {
-            Thread.sleep(200L * attempt); // 200ms / 400ms 退避
+            Thread.sleep(STATUS_SYNC_BACKOFF_STEP_MILLIS * attempt); // 200ms / 400ms 退避
           } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
             return;

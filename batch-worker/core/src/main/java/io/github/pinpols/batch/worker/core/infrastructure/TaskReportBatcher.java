@@ -21,6 +21,9 @@ import java.util.function.Function;
  */
 final class TaskReportBatcher implements AutoCloseable {
 
+  /** 攒批等待时间上限（毫秒），配置更大时按此截断，避免上报延迟过高。 */
+  private static final long MAX_BATCH_WAIT_MILLIS = 100L;
+
   private final Object monitor = new Object();
   private final ArrayDeque<PendingReport> pendingReports = new ArrayDeque<>();
   private final int maxBatchItems;
@@ -35,7 +38,7 @@ final class TaskReportBatcher implements AutoCloseable {
       long waitMillis,
       Function<List<TaskExecutionReport>, Set<Long>> submitBatch) {
     this.maxBatchItems = Math.max(1, maxBatchItems);
-    long boundedWaitMillis = Math.min(100L, Math.max(0L, waitMillis));
+    long boundedWaitMillis = Math.min(MAX_BATCH_WAIT_MILLIS, Math.max(0L, waitMillis));
     this.waitNanos = TimeUnit.MILLISECONDS.toNanos(boundedWaitMillis);
     this.submitBatch = Objects.requireNonNull(submitBatch);
   }
