@@ -360,7 +360,8 @@ public class ReceiveStep implements ImportStageStep {
     return security;
   }
 
-  private ImportPayload resolvePayload(ImportJobContext context) {
+  /** 包内可见供测试直接调用。 */
+  ImportPayload resolvePayload(ImportJobContext context) {
     Object existing = context.getAttributes().get(PipelineRuntimeKeys.IMPORT_PAYLOAD);
     if (existing instanceof ImportPayload importPayload) {
       return importPayload;

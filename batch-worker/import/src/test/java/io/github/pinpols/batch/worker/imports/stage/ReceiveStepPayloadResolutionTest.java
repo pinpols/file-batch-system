@@ -19,7 +19,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("导入载荷解析:非法 JSON 与空对象使用具名空载荷")
@@ -69,7 +68,7 @@ class ReceiveStepPayloadResolutionTest {
     ImportJobContext context = new ImportJobContext();
     context.setRawPayload(rawPayload);
     context.setAttributes(new HashMap<>());
-    return ReflectionTestUtils.invokeMethod(step, "resolvePayload", context);
+    return step.resolvePayload(context);
   }
 
   private static void assertEmpty(ImportPayload payload) {

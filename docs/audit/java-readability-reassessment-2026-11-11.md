@@ -292,6 +292,11 @@
 - `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
   - 保持现状：补按类型日志属行为变更，且无证据表明原意如此；如需要另开任务。
 - 已处理（反射测试）：`WebhookDispatcherTest` 的 3 个匹配用例改为直接调用 `SubscriptionRuleDispatchPolicy.eventTypeMatches`，`WebhookDispatcher.matches` 纯转发器已内联删除；`ConsoleMetaLabelLocalizationTest` 改为直接调用包可见的 `ConsoleMetaQueryService.localizedLabel`（所有已注册枚举的 messageKey 非空，经 `enums()` 无法覆盖 key 为 null 的分支，故放宽为包可见）。
+  - 已处理（2026-11-13，分支 `chore/reflection-tests`，剩余反射调用私有方法的测试）：
+    - 改为直接调用（方法放宽为包可见，Javadoc 注明「包内可见供测试直接调用」）：`WebhookDispatcher.normalizeEventType/sign`、`ReceiveStep.resolvePayload`、`SmtpEmailDispatchChannelAdapter.resolveMailConfig/buildMimeMessage`（`MailConfig` 记录同步包可见）。
+    - 改为直接调用已有的包可见/受保护方法：`ConsoleJwtService.validateSecuritySecrets`、`MaintenanceStateHolder.refreshAfterApplicationReady`（本就是 public）、`AbstractTaskConsumer.doConsume/doConsumeBatch`、`DispatchFileContentResolver.init`。
+    - 跨包调用方改走测试支撑类，不放宽为 public：`MaintenanceStateHolderTestSupport`（standalone MockMvc 场景完成 `@PostConstruct` 初始化）、`TriggerLaunchErrorHandlerTestSupport`（经公开的 listener 容器工厂 Bean 取得错误处理器，替代反射私有的 `triggerLaunchErrorHandler`）、`CrossDayDependencyReconcilerTestSupport`（同包转发 `reconcileOne`）。
+    - 有意保留：读取 `@Transactional` / `@SchedulerLock` 注解元数据的用例（`TaskDispatchOutboxServiceMandatoryTest`、`BatchDayReplayDispatcherTest`、`SensorProbeTransactionExecutorTest`、`QuotaRuntimeStateSnapshotSchedulerTest`、`DefaultConsoleTenantConfigInitApplicationServiceTest`），属元数据断言而非调用私有方法。
 
 ## 决策记录（2026-11-11）
 

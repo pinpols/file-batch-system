@@ -36,7 +36,6 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.mock.env.MockEnvironment;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("任务消费者背压: 任务许可耗尽时的暂停与恢复")
 class AbstractTaskConsumerBackpressureTest {
@@ -129,7 +128,7 @@ class AbstractTaskConsumerBackpressureTest {
         "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
     Future<?> f1 = pool.submit(() -> {
-      ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg);
+      consumer.doConsume(msg);
     });
 
     // 全 reactor 跑时 JVM 忙，2s pool thread 启动可能不够；放宽到 10s 防 timing flake
@@ -137,7 +136,7 @@ class AbstractTaskConsumerBackpressureTest {
 
     // 第二次调用应触发 pause 并立即返回（无可用 permit）
     when(container.isPauseRequested()).thenReturn(false).thenReturn(true);
-    Future<?> f2 = pool.submit(() -> ReflectionTestUtils.invokeMethod(consumer, "doConsume", msg));
+    Future<?> f2 = pool.submit(() -> consumer.doConsume(msg));
     f2.get();
     verify(container, times(1)).pause();
 
@@ -172,8 +171,7 @@ class AbstractTaskConsumerBackpressureTest {
     String msg2 = JsonUtils.toJson(new TaskDispatchMessage(
         "v2", "t1", 2L, null, 2L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
-    boolean result =
-        (boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(msg1, msg2));
+    boolean result = consumer.doConsumeBatch(List.of(msg1, msg2));
 
     assertThat(result).isFalse();
     verify(batchContainer, times(1)).pause();
@@ -199,11 +197,8 @@ class AbstractTaskConsumerBackpressureTest {
     String payload = JsonUtils.toJson(new TaskDispatchMessage(
         "v2", "t1", 1L, null, 1L, null, null, "IMPORT", null, null, "tr", "k", null, null));
 
-    assertThat((boolean) ReflectionTestUtils.invokeMethod(consumer, "doConsume", payload))
-        .isFalse();
-    assertThat((boolean)
-            ReflectionTestUtils.invokeMethod(consumer, "doConsumeBatch", List.of(payload)))
-        .isFalse();
+    assertThat(consumer.doConsume(payload)).isFalse();
+    assertThat(consumer.doConsumeBatch(List.of(payload))).isFalse();
     verify(executor, never()).execute(any(), anyString());
     verify(executor, never()).executeBatchDetailed(any(), anyString());
     verify(singleContainer).pause();

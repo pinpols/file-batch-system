@@ -14,7 +14,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
-import java.lang.reflect.Method;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
@@ -56,14 +55,8 @@ class SmtpEmailDispatchChannelAdapterTest {
         "smtp_write_timeout_millis",
         3456);
 
-    Object mailConfig = invoke(adapter, "resolveMailConfig", new Class<?>[] {Map.class}, config);
-    MimeMessage message = (MimeMessage) invoke(
-        adapter,
-        "buildMimeMessage",
-        new Class<?>[] {mailConfig.getClass(), DispatchCommand.class, String.class},
-        mailConfig,
-        command(config),
-        "req-1");
+    SmtpEmailDispatchChannelAdapter.MailConfig mailConfig = adapter.resolveMailConfig(config);
+    MimeMessage message = adapter.buildMimeMessage(mailConfig, command(config), "req-1");
 
     assertThat(message
             .getSession()
@@ -202,13 +195,6 @@ class SmtpEmailDispatchChannelAdapterTest {
       server.close();
       executor.shutdownNow();
     }
-  }
-
-  private static Object invoke(
-      Object target, String name, Class<?>[] parameterTypes, Object... args) throws Exception {
-    Method method = target.getClass().getDeclaredMethod(name, parameterTypes);
-    method.setAccessible(true);
-    return method.invoke(target, args);
   }
 
   private static DispatchCommand command(Map<String, Object> channelConfig) {

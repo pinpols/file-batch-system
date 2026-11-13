@@ -22,9 +22,9 @@ import io.github.pinpols.batch.orchestrator.application.service.task.LaunchAppli
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
+import io.github.pinpols.batch.orchestrator.config.TriggerLaunchErrorHandlerTestSupport;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.Consumer;
@@ -98,10 +98,8 @@ class TriggerLaunchRetryExhaustionReproTest {
     when(recoveryService.park(JsonUtils.toJson(envelope), null)).thenReturn(true);
     OrchestratorKafkaConsumerConfiguration configuration =
         new OrchestratorKafkaConsumerConfiguration(properties, meterRegistry, recoveryProvider);
-    Method factory =
-        OrchestratorKafkaConsumerConfiguration.class.getDeclaredMethod("triggerLaunchErrorHandler");
-    factory.setAccessible(true);
-    DefaultErrorHandler handler = (DefaultErrorHandler) factory.invoke(configuration);
+    DefaultErrorHandler handler =
+        TriggerLaunchErrorHandlerTestSupport.errorHandlerOf(configuration);
 
     @SuppressWarnings("unchecked")
     Consumer<String, String> kafkaConsumer = mock(Consumer.class);
@@ -145,10 +143,8 @@ class TriggerLaunchRetryExhaustionReproTest {
     when(recoveryProvider.getIfAvailable()).thenReturn(recoveryService);
     OrchestratorKafkaConsumerConfiguration configuration =
         new OrchestratorKafkaConsumerConfiguration(properties, meterRegistry, recoveryProvider);
-    Method factory =
-        OrchestratorKafkaConsumerConfiguration.class.getDeclaredMethod("triggerLaunchErrorHandler");
-    factory.setAccessible(true);
-    DefaultErrorHandler handler = (DefaultErrorHandler) factory.invoke(configuration);
+    DefaultErrorHandler handler =
+        TriggerLaunchErrorHandlerTestSupport.errorHandlerOf(configuration);
 
     ConsumerRecord<String, String> record =
         new ConsumerRecord<>(BatchTopics.TRIGGER_LAUNCH_V1, 0, 1L, "key", "valid-envelope-json");

@@ -82,8 +82,9 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     return channelType != null && "EMAIL".equalsIgnoreCase(channelType);
   }
 
+  /** 包内可见供测试直接调用。 */
   @Builder
-  private record MailConfig(
+  record MailConfig(
       String host,
       int port,
       String smtpUser,
@@ -148,7 +149,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
     }
   }
 
-  private MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
+  /** 包内可见供测试直接调用。 */
+  MailConfig resolveMailConfig(Map<String, Object> channelConfig) {
     String host = DispatchChannelConfigSupport.stringProp(channelConfig, "smtp_host");
     if (!Texts.hasText(host)) {
       return null;
@@ -207,7 +209,8 @@ public class SmtpEmailDispatchChannelAdapter implements DispatchChannelAdapter {
         .anyMatch(p -> "prod".equalsIgnoreCase(p) || "production".equalsIgnoreCase(p));
   }
 
-  private MimeMessage buildMimeMessage(
+  /** 包内可见供测试直接调用。 */
+  MimeMessage buildMimeMessage(
       MailConfig mailConfig, DispatchCommand command, String externalRequestId)
       throws MessagingException {
     Properties props = new Properties();
