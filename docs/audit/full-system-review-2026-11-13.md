@@ -37,6 +37,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 - 普通 `CREATE INDEX` 会在建索引期间阻塞该表写入。383 个迁移中没有一个设置 `lock_timeout`，应用配置里也没有找到 Flyway 层面的锁超时。表大时，部署期间可能长时间阻塞调度主链路，或在锁等待中排队。
 - 做得好的：59/133 个 CHECK 约束和 36/56 个外键以 `NOT VALID` 方式添加，避免了全表校验锁。
 - 未核实：各表在目标环境的实际行数。
+- **2026-11-14 复核：按当前部署模型不适用，不加门禁**。[ADR-048](../architecture/adr/ADR-048-workflow-fresh-database-cutover.md) 规定部署到全新数据库、停旧启新，不支持旧库就地升级；`.squawk.toml` 已于 2026-10-25 据此停用 `require-concurrent-index-creation` 与 `require-timeout-settings`。迁移只在空表上执行，普通 `CREATE INDEX` 不会阻塞业务写入，本条的锁风险不成立。若将来支持存量库升级或在线滚动迁移，重新启用这两条 squawk 规则，并按 [迁移清单](../runbook/db-migration-checklist.md) 第 9 条处理大表索引。
 
 ### ARCH-20261113-12 / P2 / 有当前证据（运行影响为推断）：Redis 是多条关键路径的硬依赖
 
@@ -70,7 +71,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 ## 建议顺序（未授权实施）
 
 1. ARCH-20261113-09：逐个比对 79 个只有基线的接口与菜单，补 `@PreAuthorize` 和拒绝测试。改动小，直接收紧权限。
-2. ARCH-20261113-11：迁移门禁要求热表建索引用 `CONCURRENTLY`（或显式豁免），并统一设置 `lock_timeout`。
+2. ARCH-20261113-11：~~迁移门禁要求热表建索引用 `CONCURRENTLY` 并设置 `lock_timeout`~~。2026-11-14 复核：当前只支持空库部署，不适用；支持存量库升级时再启用对应 squawk 规则。
 3. ARCH-20261113-13：生产 values 默认开启网络策略，或给原子任务 Worker 的管理端点加认证；至少不暴露可写的 `loggers`。
 4. ARCH-20261113-12：整理 Redis 故障模式表，在测试环境做一次演练，再决定 ShedLock 默认是否改为 JDBC。
 5. ARCH-20261113-10：决定是否给平台库热表补租户 RLS，或明确接受应用层隔离并记入架构文档。

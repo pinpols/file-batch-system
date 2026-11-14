@@ -10,6 +10,7 @@
 
 ### Added
 
+- 新增 `GET /api/console/tasks/{taskId}/execution-audit`：按任务查看派单时实际生效的参数（原子任务的 shell 命令与参数、SQL 文本等）和执行结果，供取证。只对平台管理员和审计员开放；`env`、`headers` 只返回键名，`auth` 与敏感键整体遮蔽，其余文本遮蔽端点与凭据表达式。数据来自已有的 `job_task.effective_parameters`，不新增表。
 - 控制台菜单新增审计页 `/observability/audit` 和平台设置 `/system/settings`。文件审计、操作审计及其他旧路径保留，等前端页面和重定向上线后再删。`/runs` 未改。
 - 审批查询新增 `excludeApprovalTypes`：逗号分隔，最多 8 个类型代码。普通审批列表用它排除 `CATCH_UP`。
 
@@ -46,6 +47,7 @@
 
 ### Fixed
 
+- 作业实例 `PAUSED` 后在途分区回报不再撤销暂停：分区尚未全部结束时实例保持 `PAUSED`，只有人工恢复才回到 `RUNNING`；分区全部结束仍按汇总终态收口（`SUCCESS` / `FAILED` / `PARTIAL_FAILED` 等）。此前未结束的汇总解析为 `RUNNING` 并直接写回，人工暂停会被在途回报改回运行并恢复派发。真实 PostgreSQL 集成测试覆盖「暂停 → 在途任务失败并安排重试 → 仍为 `PAUSED` → 人工恢复后 `RUNNING`」，修复前在“仍 `PAUSED`”断言处失败。
 - 配置包模板「填写顺序」sheet 为作业监控策略、工作流监控策略补齐填写场景和先填原因，不再显示通用占位文本。
 - 平台原子 SQL 执行器切分语句时，普通单引号字符串和双引号标识符里的反斜杠按字面字符处理（PostgreSQL `standard_conforming_strings=on` 默认语义），`insert ... values ('C:\'); delete ...` 不再被并成一条；平台执行器与 Java、Python SDK 原子 SQL 处理器同时识别 `E'...'` 转义字符串，其中 `\'` 不结束字符串。三处切分规则现已一致。
 - Java、Python SDK 的原子 SQL 处理器切分语句时跳过 PG dollar-quote（`$$...$$`、`$tag$...$tag$`）体内的 `;`，与平台原子 SQL 执行器一致，含函数体的脚本不再被拆坏或误计入 `maxStatementsPerJob`。

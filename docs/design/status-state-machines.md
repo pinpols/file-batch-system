@@ -102,7 +102,7 @@ stateDiagram-v2
 - **人工操作**（`InstanceManagementApplicationService`）：取消只接受 `CREATED`、`WAITING`、`READY`，直接置 `CANCELLED`；对 `RUNNING` 发起取消不改实例状态，而是请求取消任务，实例随后按结果汇总落到 `FAILED` 或 `PARTIAL_FAILED`。终止只接受 `RUNNING`；暂停只接受 `RUNNING`，恢复只接受 `PAUSED`。
 - **终态之间唯一的迁移**：`FAILED`、`PARTIAL_FAILED`、`FAILED_DRY_RUN` 在重试或补偿使全部分区成功后，可改写为 `SUCCESS` 或 `SUCCESS_DRY_RUN`（`TaskOutcomeStatePolicy.shouldPromoteTerminalFailure` 与 SQL 片段 `NotFromTerminalAllowSelfForProgress` 双重限定）。其余终态不再变化，SQL 片段 `NotFromTerminal` 拒绝从终态写入。
 - **`READY`**：仍在枚举、CHECK 约束、取消前态和若干查询条件中，但当前代码没有把 job_instance 写成 `READY` 的路径，图中不画为必经状态。
-- **待核实**：实例 `PAUSED` 期间，在途分区回报且分区尚未全部结束时，`resolveInstanceEvent` 返回 `RUNNING`，`DefaultLifecycleEventMapper` 与 `updateProgress` 都不阻止从 `PAUSED` 改写，暂停可能被在途回报撤销。图中未画此路径，结论需要集成测试确认，见[图审查与修改计划](../plans/diagram-review-remediation-plan-2026-11-13.md#进度)。
+- **暂停期间的在途回报**（`TaskOutcomeStatePolicy.preserveManualPause`）：实例 `PAUSED` 期间，在途分区回报且分区尚未全部结束时，汇总结果 `RUNNING` 不写回实例，保持 `PAUSED`；分区全部结束后仍按汇总终态收口（`SUCCESS` / `FAILED` / `PARTIAL_FAILED` 等）。真实 PostgreSQL 集成测试 `JobInstancePauseDuringReportIntegrationTest` 覆盖「暂停 → 在途任务失败并安排重试 → 仍 `PAUSED` → 人工恢复后 `RUNNING`」，修复前在“仍 `PAUSED`”断言处失败。
 
 核心模型的[典型状态路径](../architecture/core-model.md#421-各对象的典型状态路径)覆盖 WorkflowRun、WorkflowNodeRun、Partition 与 Task，不含 job_instance；job_instance 的完整迁移以本节为准。
 
