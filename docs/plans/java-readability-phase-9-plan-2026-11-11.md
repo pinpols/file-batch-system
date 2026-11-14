@@ -10,7 +10,7 @@
 
 **Spec:** [Java 可读性复评（2026-11-11）](../audit/java-readability-reassessment-2026-11-11.md)。规则来自 [`coding-conventions.md` §1.3–§1.7](../coding-conventions.md#13-长方法与参数密度) 和[可读性路线图](java-readability-refactoring-roadmap-2026-08-12.md)的“不变红线”。
 
-**状态：** 2026-11-13 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。文档 PR #1353（9b9f2d8c1）、PR-1 #1354（Task 1–3，51673b1e1）、PR-2 #1355（Task 4–8、13，a2b08f094）、PR-3 #1356（Task 9，c5cd538c2）、PR-4 #1357（Task 10–12、14，9346767fe）和 PR-5 #1358（Task 15–17，3ff888db3）、PR-6 #1362（Task 19、21、22、24，78fc033b2）和状态枚举与无引用常量复核 #1360（da24538cd）已合入 main；Task 20（PR-7）已在分支 `chore/java-readability-p9-batch7` 完成，PR 待开；Task 23 和 18（拆 2–3 个 PR）未开工；R13（Task 12）已撤销。
+**状态：** 2026-11-13 更新。执行方式为子代理驱动，已授权提交、推送、开草稿 PR 和合并 PR 链。文档 PR #1353（9b9f2d8c1）、PR-1 #1354（Task 1–3，51673b1e1）、PR-2 #1355（Task 4–8、13，a2b08f094）、PR-3 #1356（Task 9，c5cd538c2）、PR-4 #1357（Task 10–12、14，9346767fe）和 PR-5 #1358（Task 15–17，3ff888db3）、PR-6 #1362（Task 19、21、22、24，78fc033b2）和状态枚举与无引用常量复核 #1360（da24538cd）已合入 main；Task 20（PR-7）#1370（80614b669）已合入 main；R26 非长度与长度类余项分别由 #1385、#1386 完成；Task 23 和 18（拆 2–3 个 PR）未开工；R13（Task 12）已撤销。
 
 **裁定（见[复评决策记录](../audit/java-readability-reassessment-2026-11-11.md#决策记录2026-11-11)）：** R4 按语义区分写法，放在最后的 Task 18；次要候选纳入本轮，作为 Task 15–17。
 
