@@ -131,7 +131,9 @@ public final class TaskOutcomeInstanceProgressor implements TimedOutWorkflowNode
         counts.terminated(),
         allPartitionsFinished,
         TaskOutcomeStatePolicy.isDryRun(jobInstance));
-    String instanceStatus = lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
+    String mappedStatus = lifecycleEventMapper.map(jobInstance, instanceEvent).toState();
+    String instanceStatus =
+        TaskOutcomeStatePolicy.preserveManualPause(jobInstance.getInstanceStatus(), mappedStatus);
     if (TaskOutcomeStatePolicy.shouldPromoteTerminalFailure(
         jobInstance.getInstanceStatus(),
         instanceEvent,

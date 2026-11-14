@@ -31,6 +31,20 @@ class TaskOutcomeStatePolicyTest {
   }
 
   @Test
+  @DisplayName("人工暂停的实例在分区未结束时保持暂停, 分区全部结束或非暂停实例按汇总结果推进")
+  void shouldPreservePause_onlyWhileInstanceIsStillRunning() {
+    String paused = JobInstanceStatus.PAUSED.code();
+    String running = JobInstanceStatus.RUNNING.code();
+    assertThat(TaskOutcomeStatePolicy.preserveManualPause(paused, running)).isEqualTo(paused);
+    assertThat(TaskOutcomeStatePolicy.preserveManualPause(paused, JobInstanceStatus.FAILED.code()))
+        .isEqualTo(JobInstanceStatus.FAILED.code());
+    assertThat(TaskOutcomeStatePolicy.preserveManualPause(running, running)).isEqualTo(running);
+    assertThat(
+            TaskOutcomeStatePolicy.preserveManualPause(JobInstanceStatus.WAITING.code(), running))
+        .isEqualTo(running);
+  }
+
+  @Test
   @DisplayName("取消和终止分区均计为非成功终态")
   void shouldClassifyCancelledAndTerminatedPartitionsAsUnsuccessful_whenAllPartitionsTerminal() {
     assertThat(TaskOutcomeStatePolicy.resolveInstanceEvent(1, 0, 1, 0, true, false))
