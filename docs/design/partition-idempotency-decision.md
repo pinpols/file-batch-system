@@ -5,11 +5,15 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S[聚合状态变更] --> L[同事务占用幂等台账]
+  S[聚合状态变更]:::control --> L[同事务占用幂等台账]:::store
   L --> C{tenant + event_key 已存在？}
-  C -->|否| E[写分区 outbox_event]
-  C -->|是| D[复用既有逻辑事件]
-  E --> K[至少一次发布 + 幂等消费]
+  C -->|否| E[写分区 outbox_event]:::store
+  C -->|是| D[复用既有逻辑事件]:::store
+  E --> K[至少一次发布 + 幂等消费]:::mq
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 - `outbox_event_dedup_key`以tenant/event_key全局唯一；Mapper的claimed_key CTE先占键，仅成功占键者插入事件，两者同事务。

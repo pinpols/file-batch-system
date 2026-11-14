@@ -18,23 +18,26 @@ Workflow 不支持 `APPROVAL` 人工审批节点；设计器与保存接口均�
 flowchart TB
   subgraph SINGLE["单上游"]
     direction LR
-    A1["JOB A"] -->|"SUCCESS"| A2["JOB B"]
-    A1 -->|"FAILURE"| A3["错误处理 Job"]
+    A1["JOB A"]:::worker -->|"SUCCESS"| A2["JOB B"]:::worker
+    A1 -->|"FAILURE"| A3["错误处理 Job"]:::control
   end
   subgraph ALL["多上游 · 全部满足"]
     direction LR
-    B1["JOB A"] --> BG{"ALL"}
-    B2["JOB B"] --> BG
-    B3["JOB C"] --> BG
-    BG --> B4["JOB D"]
+    B1["JOB A"]:::worker --> BG{"ALL"}:::control
+    B2["JOB B"]:::worker --> BG
+    B3["JOB C"]:::worker --> BG
+    BG --> B4["JOB D"]:::worker
   end
   subgraph N["多上游 · 3 中 2"]
     direction LR
-    C1["JOB A"] --> CG{"N_OF · 2"}
-    C2["JOB B"] --> CG
-    C3["JOB C"] --> CG
-    CG --> C4["JOB D"]
+    C1["JOB A"]:::worker --> CG{"N_OF · 2"}:::control
+    C2["JOB B"]:::worker --> CG
+    C3["JOB C"]:::worker --> CG
+    CG --> C4["JOB D"]:::worker
   end
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 | 形态 | 用法 | 何时选 |
@@ -398,7 +401,10 @@ WAIT表示等待文件到达、HTTP条件、Kafka offset或业务库信号。Sen
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S["START"] --> I["JOB · 导入风险分"] --> E["JOB · 导出预警"] --> D["JOB · 分发复核"] --> F["END"]
+  S["START"]:::control --> I["JOB · 导入风险分"]:::worker --> E["JOB · 导出预警"]:::worker --> D["JOB · 分发复核"]:::worker --> F["END"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 边全是 `SUCCESS`，3 个 JOB 节点串行依赖。
@@ -408,12 +414,15 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S["START"] --> F{"FORK"}
-  F --> A["BRANCH A · 旧 TASK"]
-  F --> B["BRANCH B · 旧 TASK"]
-  A -->|"SUCCESS"| M{"MERGE · ANY"}
+  S["START"]:::control --> F{"FORK"}:::control
+  F --> A["BRANCH A · 旧 TASK"]:::worker
+  F --> B["BRANCH B · 旧 TASK"]:::worker
+  A -->|"SUCCESS"| M{"MERGE · ANY"}:::control
   B -->|"SUCCESS"| M
-  M --> E["END"]
+  M --> E["END"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 两个分支并行，任一成功 MERGE 就 fire。

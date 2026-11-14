@@ -173,14 +173,18 @@ flowchart LR
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph O["Orchestrator"]
-    P["partition_no<br/>partition_key"] --> CFG["EffectiveTaskConfig"]
-    J["expected_partition_count"] --> CFG
+    P["partition_no<br/>partition_key"]:::store --> CFG["EffectiveTaskConfig"]:::control
+    J["expected_partition_count"]:::store --> CFG
   end
-  CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]
-  T --> W["DefaultTaskExecutionWrapper"]
-  W --> C["执行上下文<br/>分区序号 / 总数 / 键"]
-  C --> PL["Worker step / 业务插件"]
-  PL --> S["行号 / Hash / ID 范围<br/>输入快照切分"]
+  CFG -->|"HTTP CLAIM 响应"| T["PulledTask"]:::worker
+  T --> W["DefaultTaskExecutionWrapper"]:::worker
+  W --> C["执行上下文<br/>分区序号 / 总数 / 键"]:::worker
+  C --> PL["Worker step / 业务插件"]:::worker
+  PL --> S["行号 / Hash / ID 范围<br/>输入快照切分"]:::store
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 **字段语义**（`PipelineRuntimeKeys`）：

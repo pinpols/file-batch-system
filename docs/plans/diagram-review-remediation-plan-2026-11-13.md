@@ -12,6 +12,7 @@
 - 2026-11-14：B0 完成，图例要求写入[文档治理](../standards/document-governance.md) §9，图例补充双向虚线约定。B1 的 README 中英文总图按导航主链风格重画为横向三段，回连改为双向虚线以避免成环打乱读向。B3 的 §12 K8s 目标架构拆为「运行拓扑」与「交付与观测」两张。三项 P1 中剩余 B2 的 job_instance 状态机口径待对照代码核对。
 - 2026-11-14：B2 的 job_instance 状态机按源码重画为 stateDiagram，逐条注明写入方；P1 全部完成。核对中发现：`READY` 当前无写入路径；`RUNNING` 发起取消最终落 `FAILED`/`PARTIAL_FAILED` 而非 `CANCELLED`；疑似 `PAUSED` 会被在途分区回报改回 `RUNNING`，已登记待办，需集成测试确认。
 - 2026-11-14：P2 23 张完成。状态图先对照代码重画：分区状态机补上 DAG 节点 `CREATED` 起点、普通计划直接 `READY`、租约过期退回 `WAITING`、人工重试重开，去掉不存在的 `RUNNING → CANCELLED`；outbox_event 补人工重新发布；trigger_request 更正 `PROCESSING` 为 Workflow 容量等待（原写「人工补跑审批」不符），补等待被拒绝路径，注明 `PENDING`、`FORWARD_FAILED`、`GIVE_UP` 当前无写入路径。端到端时序按入口/控制面/消息/执行面分组并编号；§4.4 三张小图合并；Compose 两节点图改为客户端连向 Infra 服务的连接语义以消除回流；§7.8.2 水位回路、时间语义、ER 图改为横向；其余按图例着色。剩余 P3。
+- 2026-11-14：P3 完成 61 张需实际处理的图（计划内 58 + 计划外 3；B8 的 6 张 ER/类图和 B10 的 16 张 ADR/阶段计划按约定不着色/不改原貌）。按图例使用内联 `:::role`、状态结果类、时序 `autonumber + box`，并对决策树/拓扑做必要的横向布局。修改文件内 95 个 Mermaid 块在 neutral/dark 共 190 次渲染 0 失败；统一文档站 `docs:build`（含 `docs:size`）通过。
 
 ## 与既有工作的关系
 
@@ -40,6 +41,8 @@
 | 观察 | ADR-046 恢复流程高 1901px，超过 10-25 记录的 1700px 筛查线（ADR 为决策记录，默认不改） | `adr/ADR-046` |
 
 ## 统一约定
+
+执行时按[制图检查表](../../.agents/skills/documentation-governance/references/mermaid-diagram-style.md)逐图检查；本计划的图例、批次范围和验收条件仍是批次权威。
 
 - 沿用[架构导航图例](../architecture/README.md#图例)：入口、控制面、消息、执行面、持久化、外部/可选、共享库；状态与决策图用成功/失败/等待/跳过四色；半透明填充以适配明暗主题。
 - 子图表达分层或信任边界；外部节点连到子图本身，避免子图方向失效和标题遮挡。

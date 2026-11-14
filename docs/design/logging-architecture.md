@@ -12,19 +12,24 @@
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph browser[Console 浏览器]
-    L[logger.ts：环形缓冲 500 条]
-    S[localStorage 快照 / 用户导出]
+    L[logger.ts：环形缓冲 500 条]:::entry
+    S[localStorage 快照 / 用户导出]:::store
     L --> S
   end
-  L -->|启用遥测后批量上报| T[ConsoleTelemetryController]
-  B[后端应用] --> R[SLF4J + MDC]
+  L -->|启用遥测后批量上报| T[ConsoleTelemetryController]:::control
+  B[后端应用]:::control --> R[SLF4J + MDC]:::control
   T --> R
-  R --> SOUT[结构化 stdout]
-  R --> OT[OTLP logs]
-  OT --> C[OTel Collector]
-  C --> K[Loki]
-  K --> G[Grafana]
-  B -->|业务审计事件| A[PostgreSQL 业务审计表]
+  R --> SOUT[结构化 stdout]:::store
+  R --> OT[OTLP logs]:::ext
+  OT --> C[OTel Collector]:::ext
+  C --> K[Loki]:::ext
+  K --> G[Grafana]:::ext
+  B -->|业务审计事件| A[PostgreSQL 业务审计表]:::store
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ---
@@ -94,11 +99,15 @@ WARN，默认抑制完整转储（可能包含敏感配置）；运行状态由�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  L[Logback] --> S[结构化 stdout]
-  L --> O[OTLP logs]
-  O --> C[OTel Collector<br/>批量、队列与重试]
-  C --> K[Loki]
-  K --> G[Grafana]
+  L[Logback]:::control --> S[结构化 stdout]:::store
+  L --> O[OTLP logs]:::ext
+  O --> C[OTel Collector<br/>批量、队列与重试]:::ext
+  C --> K[Loki]:::ext
+  K --> G[Grafana]:::ext
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 不存数据库的原因：
@@ -186,14 +195,19 @@ management:
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  L[前端 logger.ts] --> S[localStorage 快照]
-  L -->|POST telemetry/events| T[ConsoleTelemetryController]
-  T --> M[SLF4J + MDC]
-  M --> SOUT[结构化 stdout]
-  M --> OT[OTLP logs]
-  OT --> C[OTel Collector]
-  C --> K[Loki]
-  K --> G[Grafana]
+  L[前端 logger.ts]:::entry --> S[localStorage 快照]:::store
+  L -->|POST telemetry/events| T[ConsoleTelemetryController]:::control
+  T --> M[SLF4J + MDC]:::control
+  M --> SOUT[结构化 stdout]:::store
+  M --> OT[OTLP logs]:::ext
+  OT --> C[OTel Collector]:::ext
+  C --> K[Loki]:::ext
+  K --> G[Grafana]:::ext
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ### 4.4 上报策略

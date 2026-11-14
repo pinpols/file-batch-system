@@ -24,15 +24,19 @@
 flowchart TB
   NEED{"需要协调什么？"}
   NEED --> MAINT{"周期维护任务<br/>业务是否幂等？"}
-  MAINT -->|"是"| SHED["ShedLock"]
-  MAINT -->|"否，要求严格串行"| ADVISORY["PG advisory lock<br/>+ 幂等键 / 终态 CAS"]
+  MAINT -->|"是"| SHED["ShedLock"]:::control
+  MAINT -->|"否，要求严格串行"| ADVISORY["PG advisory lock<br/>+ 幂等键 / 终态 CAS"]:::control
   NEED --> QUEUE{"竞争消费"}
-  QUEUE -->|"PostgreSQL 表"| PG["FOR UPDATE SKIP LOCKED"]
-  QUEUE -->|"Kafka"| KAFKA["Consumer group"]
-  NEED --> ROW["单行状态读改写"]
-  ROW --> CAS["version CAS<br/>调用方决定冲突重试"]
-  NEED --> COUNTER["计数 / 限流 / 幂等键"]
-  COUNTER --> ATOMIC["Redis 单 key 原子操作<br/>不作为通用锁"]
+  QUEUE -->|"PostgreSQL 表"| PG["FOR UPDATE SKIP LOCKED"]:::control
+  QUEUE -->|"Kafka"| KAFKA["Consumer group"]:::mq
+  NEED --> ROW["单行状态读改写"]:::control
+  ROW --> CAS["version CAS<br/>调用方决定冲突重试"]:::control
+  NEED --> COUNTER["计数 / 限流 / 幂等键"]:::store
+  COUNTER --> ATOMIC["Redis 单 key 原子操作<br/>不作为通用锁"]:::store
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 ---

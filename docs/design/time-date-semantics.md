@@ -59,12 +59,17 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  S[上海 Trigger：计划时区] --> I[UTC Instant<br/>2026-09-27T15:00:00Z]
-  I --> R[WorkflowRun：冻结 bizDate / batchDayId]
-  C[业务日历：timezone / cutoff] --> R
-  R --> W[东京 Worker：使用冻结值]
-  R --> U[纽约 Console：按展示时区格式化]
-  I -. 同一时刻传递 .-> P[PostgreSQL / Kafka]
+  S[上海 Trigger：计划时区]:::entry --> I[UTC Instant<br/>2026-09-27T15:00:00Z]:::control
+  I --> R[WorkflowRun：冻结 bizDate / batchDayId]:::control
+  C[业务日历：timezone / cutoff]:::store --> R
+  R --> W[东京 Worker：使用冻结值]:::worker
+  R --> U[纽约 Console：按展示时区格式化]:::control
+  I -. 同一时刻传递 .-> P[PostgreSQL / Kafka]:::store
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 ```text
@@ -115,10 +120,14 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  I[API Instant] --> Z[Console 展示时区]
-  Z --> T[格式化日期时间]
-  U[用户切换展示时区] --> Z
-  D[API bizDate：LocalDate] --> B[原日期展示]
+  I[API Instant]:::control --> Z[Console 展示时区]:::control
+  Z --> T[格式化日期时间]:::control
+  U[用户切换展示时区]:::entry --> Z
+  D[API bizDate：LocalDate]:::store --> B[原日期展示]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 Console 时间戳的展示时区按以下顺序确定：浏览器本地保存的用户选择、前端部署默认 `VITE_DISPLAY_TIMEZONE`、浏览器检测到的时区；无法检测时回退 UTC。用户可从页面顶部切换展示时区，选择保存在当前浏览器。

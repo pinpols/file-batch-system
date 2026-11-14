@@ -28,6 +28,10 @@ description: 整理 README、文档索引、Changelog、归档、日期策略、
 - 当前事实、设计决策、运行手册、验收报告、压测结果和历史归档要分开。不要把一次性验证报告写成长期设计真相。
 - 归档文档可以保留当时结论，但若存在明显误导、术语不专业或链接失效，也要加注或修正。
 
+## 图表维护
+
+- 修改 Mermaid 图或执行图审查/美化批次前，读取[制图检查表](references/mermaid-diagram-style.md)。图例、颜色语义和批次验收仍以[架构导航图例](../../../docs/architecture/README.md#图例)、[文档治理](../../../docs/standards/document-governance.md)和[图审查计划](../../../docs/plans/diagram-review-remediation-plan-2026-11-13.md)为准；检查表不替代修改授权。
+
 ## 日期与 Changelog
 
 - 持续维护的规范、架构说明、运行手册通常不在文件名中带日期；一次性验收、压测、审计和里程碑报告应带日期并按归档策略管理。

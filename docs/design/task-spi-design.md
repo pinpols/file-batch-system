@@ -43,13 +43,17 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  E[StepExecutionAdapter：单步入口] --> P[AbstractPipelineStepExecutionAdapter]
-  E --> A[DefaultStepExecutionAdapter]
-  P --> F[IMPORT / EXPORT / PROCESS / DISPATCH]
-  A --> R[Executor Registry：按 taskType 路由]
-  R --> B[BatchTaskExecutor SPI]
-  B --> I[Shell / SQL / StoredProc / HTTP 等]
-  F -. 多阶段模板 .-> S[Stage SPI]
+  E[StepExecutionAdapter：单步入口]:::control --> P[AbstractPipelineStepExecutionAdapter]:::control
+  E --> A[DefaultStepExecutionAdapter]:::control
+  P --> F[IMPORT / EXPORT / PROCESS / DISPATCH]:::worker
+  A --> R[Executor Registry：按 taskType 路由]:::control
+  R --> B[BatchTaskExecutor SPI]:::lib
+  B --> I[Shell / SQL / StoredProc / HTTP 等]:::worker
+  F -. 多阶段模板 .-> S[Stage SPI]:::worker
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 2.1 分层职责

@@ -8,15 +8,18 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  APP["应用"] -->|"/actuator/prometheus"| PROM["Prometheus"]
-  PROM --> GRAFANA["Grafana"]
-  PROM --> ALERT["Alertmanager"]
-  APP -->|"OTLP 日志与链路"| OTEL["OTel Collector"]
-  OTEL -->|"日志"| LOKI["Loki"]
-  OTEL -->|"链路"| TRACES["Tempo / Jaeger"]
+  APP["应用"]:::control -->|"/actuator/prometheus"| PROM["Prometheus"]:::ext
+  PROM --> GRAFANA["Grafana"]:::ext
+  PROM --> ALERT["Alertmanager"]:::ext
+  APP -->|"OTLP 日志与链路"| OTEL["OTel Collector"]:::ext
+  OTEL -->|"日志"| LOKI["Loki"]:::ext
+  OTEL -->|"链路"| TRACES["Tempo / Jaeger"]:::ext
   LOKI --> GRAFANA
   TRACES --> GRAFANA
-  APP -. "应急排障" .-> STDOUT["stdout / 容器轮转日志"]
+  APP -. "应急排障" .-> STDOUT["stdout / 容器轮转日志"]:::store
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 应用侧由 `spring-boot-starter-opentelemetry` 创建 SDK、Trace/Log provider 和 exporter；

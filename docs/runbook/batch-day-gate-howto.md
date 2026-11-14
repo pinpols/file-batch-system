@@ -60,14 +60,19 @@ WHERE tenant_id = 'tenantA'
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  READY["前一业务日达到结算条件"] --> CLAIM["BatchDaySettleScheduler<br/>tx1：CAS 到 SETTLING"]
-  CLAIM --> FINAL["tx2：重读工作与指标"]
-  FINAL -->|"成功收敛"| SETTLED["SETTLED + 审计"]
-  FINAL -->|"仍有工作 / 失败"| HOLD["回到活动态或 FAILED<br/>继续等待 / 补救"]
-  SETTLED --> SCAN["BatchDayWaitingReleaseScheduler<br/>扫描 WAITING 并按前一日去重"]
-  MANUAL["SKIPPED / MANUAL_RELEASED"] --> SCAN
-  SCAN --> RELEASE["releaseWaitingLaunchesForBatchDay"]
-  RELEASE --> LAUNCH["重投 launch<br/>成功后标记 RELEASED / AUTO_RELEASE"]
+  READY["前一业务日达到结算条件"]:::wait --> CLAIM["BatchDaySettleScheduler<br/>tx1：CAS 到 SETTLING"]:::control
+  CLAIM --> FINAL["tx2：重读工作与指标"]:::control
+  FINAL -->|"成功收敛"| SETTLED["SETTLED + 审计"]:::ok
+  FINAL -->|"仍有工作 / 失败"| HOLD["回到活动态或 FAILED<br/>继续等待 / 补救"]:::wait
+  SETTLED --> SCAN["BatchDayWaitingReleaseScheduler<br/>扫描 WAITING 并按前一日去重"]:::control
+  MANUAL["SKIPPED / MANUAL_RELEASED"]:::muted --> SCAN
+  SCAN --> RELEASE["releaseWaitingLaunchesForBatchDay"]:::control
+  RELEASE --> LAUNCH["重投 launch<br/>成功后标记 RELEASED / AUTO_RELEASE"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 **释放延迟** ≈ settle 间隔 + waiting-release 间隔(默认上限约 2 分钟)。可调:

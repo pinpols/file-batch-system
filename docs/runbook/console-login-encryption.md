@@ -28,9 +28,14 @@ helm Secret 模板守护（`helm/batch-platform/templates/secret.yaml`）：`req
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant FE as 浏览器
-  participant A as Pod A（密钥 A）
-  participant B as Pod B（密钥 B）
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant FE as 浏览器
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant A as Pod A（密钥 A）
+    participant B as Pod B（密钥 B）
+  end
   Note over A,B: 错误示例：实例各自生成不同密钥
   FE->>A: 获取登录公钥
   A-->>FE: 公钥 A

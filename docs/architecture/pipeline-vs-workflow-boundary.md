@@ -12,16 +12,19 @@
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph WF["Workflow · 跨 Job 编排"]
-    D["workflow_definition"] --> N["workflow_node"]
-    D --> E["workflow_edge"]
-    N -->|"JOB 引用"| J["job_definition"]
+    D["workflow_definition"]:::worker --> N["workflow_node"]:::worker
+    D --> E["workflow_edge"]:::worker
+    N -->|"JOB 引用"| J["job_definition"]:::worker
   end
   subgraph FILE["Pipeline · 文件 Job 内部阶段"]
-    CAT["SystemPipelineCatalog · 代码目录"] --> S["IMPORT / EXPORT / PROCESS / DISPATCH"]
-    PI["pipeline_instance"] --> PS["pipeline_step_run"]
+    CAT["SystemPipelineCatalog · 代码目录"]:::control --> S["IMPORT / EXPORT / PROCESS / DISPATCH"]:::worker
+    PI["pipeline_instance"]:::worker --> PS["pipeline_step_run"]:::worker
   end
   J -->|"文件类型"| CAT
   J -. "按运行实例化" .-> PI
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 **关系一句话**：Workflow 节点引用 Job；文件类 Job 的类型决定系统 Pipeline。旧租户Pipeline定义及步骤表在V347退役；系统固定阶段只来自代码目录和Job业务参数，不提供旧定义查询或执行回退。

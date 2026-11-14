@@ -7,12 +7,17 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  PHONE["手机浏览器"] -->|"HTTPS"| PUBLIC["Cloudflare Quick Tunnel"]
-  PUBLIC --> CLIENT["本机 cloudflared"]
-  CLIENT -->|"localhost:5173"| NGINX["本机 Nginx"]
-  NGINX -->|"静态页面"| DIST["/tmp/fe-share<br/>前端 dist"]
-  NGINX -->|"/api/*"| API["本机 console-api<br/>127.0.0.1:18080"]
-  API --> LOCAL["本地平台服务与基础设施"]
+  PHONE["手机浏览器"]:::entry -->|"HTTPS"| PUBLIC["Cloudflare Quick Tunnel"]:::ext
+  PUBLIC --> CLIENT["本机 cloudflared"]:::ext
+  CLIENT -->|"localhost:5173"| NGINX["本机 Nginx"]:::control
+  NGINX -->|"静态页面"| DIST["/tmp/fe-share<br/>前端 dist"]:::store
+  NGINX -->|"/api/*"| API["本机 console-api<br/>127.0.0.1:18080"]:::control
+  API --> LOCAL["本地平台服务与基础设施"]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ## 前置

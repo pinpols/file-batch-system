@@ -1,5 +1,15 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-14 Mermaid 制图检查表
+
+- 新增 [Mermaid 制图检查表](../.agents/skills/documentation-governance/references/mermaid-diagram-style.md)，作为图审查与批量美化批次的执行入口；颜色、形状与语义仍以[架构导航图例](architecture/README.md#图例)和[文档治理](standards/document-governance.md) §9 为准。
+- [图审查计划](plans/diagram-review-remediation-plan-2026-11-13.md)和当前待办已链接该检查表；未新增顶层 Skill。
+
+## 2026-11-14 P3 文档图按图例统一
+
+- 完成 P3 的 61 张实际需处理图（计划内 58 + 计划外 3）：按图例统一角色与结果颜色，时序图补 `autonumber` 与角色分组，决策树保留判断菱形、只给结论着色，并对必要图调整横向布局。B8 的 6 张 ER/类图和 B10 的 16 张 ADR/阶段计划按约定不着色或保留原貌。
+- 修改文件内 95 个 Mermaid 块在 neutral/dark 共 190 次渲染 0 失败；统一文档站 `docs:build`（含 `docs:size`）通过，文档结构、日期和引用检查通过。逐图进程见[图审查与修改计划](plans/diagram-review-remediation-plan-2026-11-13.md#进度)。
+
 ## 2026-11-14 P2 文档图按图例统一并核对状态机
 
 - 分区、outbox_event、trigger_request 三张状态图按源码重画为 stateDiagram：分区去掉不存在的 `RUNNING → CANCELLED`，补租约回收与人工重开；trigger_request 的 `PROCESSING` 更正为 Workflow 容量等待。[系统流程总览](architecture/system-flow-overview.md) §5 的 job_instance 聚合改为链接[状态机汇总](design/status-state-machines.md#31-jobinstance-状态机)。

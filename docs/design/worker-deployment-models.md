@@ -66,13 +66,16 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  W[Workflow 定义] --> N[JOB 节点引用 Job]
-  N --> P[平台标准任务类型]
-  N --> T[租户自定义 taskType]
-  P --> I[平台 Import / Export 等 Worker]
-  T --> S[租户自托管 SDK]
-  I --> R[CLAIM / lease / REPORT]
+  W[Workflow 定义]:::control --> N[JOB 节点引用 Job]:::control
+  N --> P[平台标准任务类型]:::control
+  N --> T[租户自定义 taskType]:::control
+  P --> I[平台 Import / Export 等 Worker]:::worker
+  T --> S[租户自托管 SDK]:::worker
+  I --> R[CLAIM / lease / REPORT]:::worker
   S --> R
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 orchestrator 派单按 `taskType` 路由到对应 worker pool / Kafka topic:
@@ -131,14 +134,19 @@ trigger 不感知下游 worker 是谁,按 `taskType` 路由:
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  T[Trigger：cron / fixed-rate / event] --> O[trigger_outbox_event]
-  O --> K[Kafka 触发消息]
-  K --> W[Orchestrator：WorkflowRun / JOB]
-  W --> D[任务 Outbox → Kafka dispatch]
-  D --> P[平台 Worker]
-  D --> S[租户自托管 SDK]
-  P --> C[CLAIM 后执行与 REPORT]
+  T[Trigger：cron / fixed-rate / event]:::control --> O[trigger_outbox_event]:::store
+  O --> K[Kafka 触发消息]:::mq
+  K --> W[Orchestrator：WorkflowRun / JOB]:::control
+  W --> D[任务 Outbox → Kafka dispatch]:::mq
+  D --> P[平台 Worker]:::worker
+  D --> S[租户自托管 SDK]:::worker
+  P --> C[CLAIM 后执行与 REPORT]:::worker
   S --> C
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 **自托管节点跟平台节点对 trigger / workflow 引擎完全无差别**。
@@ -166,13 +174,18 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  T[Trigger 请求与 Trigger Outbox] --> K[Kafka 触发消息]
-  K --> O[Orchestrator：相关启动门禁]
-  O --> G{BatchDayGateService}
-  G -->|ALLOW| A[创建执行任务与任务 Outbox]
-  A --> D[Kafka 任务派发 → 平台 Worker / SDK]
-  G -->|WAIT| W[等待台账 + trigger_request WAITING]
-  G -->|REJECT| R[trigger_request REJECTED]
+  T[Trigger 请求与 Trigger Outbox]:::control --> K[Kafka 触发消息]:::mq
+  K --> O[Orchestrator：相关启动门禁]:::control
+  O --> G{BatchDayGateService}:::control
+  G -->|ALLOW| A[创建执行任务与任务 Outbox]:::control
+  A --> D[Kafka 任务派发 → 平台 Worker / SDK]:::mq
+  G -->|WAIT| W[等待台账 + trigger_request WAITING]:::wait
+  G -->|REJECT| R[trigger_request REJECTED]:::fail
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 WAIT/REJECT 路径**根本不会发出 Kafka 消息**,SDK 自然收不到。所以:
@@ -500,14 +513,18 @@ public SdkTaskResult execute(SdkTaskContext ctx) {
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  X[租户任务需求] --> P{数据驻留、专属运行时或<br/>代码须在租户域执行？}
-  P -->|是| S[自托管 SDK]
+flowchart LR
+  X[租户任务需求]:::entry --> P{数据驻留、专属运行时或<br/>代码须在租户域执行？}
+  P -->|是| S[自托管 SDK]:::worker
   P -->|否| C{执行租户自定义 shell / SQL？}
   C -->|是| S
   C -->|否| F{平台固定文件 Pipeline？}
-  F -->|是| W[平台文件 Worker]
-  F -->|否| D[平台 Worker 为默认，按部署约束评估]
+  F -->|是| W[平台文件 Worker]:::worker
+  F -->|否| D[平台 Worker 为默认，按部署约束评估]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 ---

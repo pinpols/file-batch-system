@@ -19,14 +19,14 @@
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
   subgraph control[平台控制面]
-    O[Orchestrator / Console]
-    T[Trigger]
-    W[文件 Worker 运行记录]
+    O[Orchestrator / Console]:::control
+    T[Trigger]:::control
+    W[文件 Worker 运行记录]:::worker
   end
   subgraph platform[平台 PostgreSQL]
-    B[batch：配置与运行态]
-    A[archive：冷表镜像]
-    Q[quartz：Quartz JobStore]
+    B[batch：配置与运行态]:::store
+    A[archive：冷表镜像]:::store
+    Q[quartz：Quartz JobStore]:::store
   end
   O --> B
   O --> A
@@ -34,11 +34,15 @@ flowchart LR
   T --> Q
   W --> B
   subgraph business[业务数据库]
-    D[biz：租户业务数据]
-    S[batch.process_staging]
+    D[biz：租户业务数据]:::store
+    S[batch.process_staging]:::store
   end
-  I[Import / Export / Process] --> D
-  P[Process Worker] --> S
+  I[Import / Export / Process]:::worker --> D
+  P[Process Worker]:::worker --> S
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 `batch` 与 `archive` 位于平台数据库；`biz` 和 `batch.process_staging` 位于业务数据库。两个数据库中的 schema 名可以相同，但它们是不同连接上的对象。Worker 访问业务数据时使用受 RLS 约束的 writer 账号；平台跨租户聚合使用专用管理员账号，详见 [多租户 RLS 手册](../runbook/multi-tenant-rls.md)。
@@ -51,21 +55,23 @@ flowchart LR
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph definition[定义]
-    WD[workflow_definition] --> N[workflow_node / workflow_edge]
-    N -. related_job_code .-> JD[job_definition]
+    WD[workflow_definition]:::store --> N[workflow_node / workflow_edge]:::store
+    N -. related_job_code .-> JD[job_definition]:::store
   end
-  TR[trigger_request] -. 接纳根运行 .-> WR[workflow_run]
-  TR -. 同事务待投递 .-> TO[trigger_outbox_event]
+  TR[trigger_request]:::store -. 接纳根运行 .-> WR[workflow_run]:::store
+  TR -. 同事务待投递 .-> TO[trigger_outbox_event]:::store
   WD --> WR
-  WR --> NR[workflow_node_run]
-  NR -. JOB 节点 .-> JI[job_instance]
+  WR --> NR[workflow_node_run]:::store
+  NR -. JOB 节点 .-> JI[job_instance]:::store
   JD --> JI
-  JI --> JP[job_partition]
-  JP --> JT[job_task]
-  JP --> JL[job_execution_log]
-  JS[job_step_instance] --> JT
-  JI -. 同事务状态事件 .-> OB[outbox_event]
-  OB --> OD[event_outbox_retry / event_delivery_log]
+  JI --> JP[job_partition]:::store
+  JP --> JT[job_task]:::store
+  JP --> JL[job_execution_log]:::store
+  JS[job_step_instance]:::store --> JT
+  JI -. 同事务状态事件 .-> OB[outbox_event]:::store
+  OB --> OD[event_outbox_retry / event_delivery_log]:::store
+
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 文件与业务结果关系：
@@ -74,19 +80,22 @@ flowchart TB
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
   subgraph files[文件运行]
-    F[file_record] --> PI[pipeline_instance]
-    C[SystemPipelineCatalog] -. code / version .-> PI
-    PI --> PS[pipeline_step_run]
-    F --> FD[file_dispatch_record / file_audit_log]
+    F[file_record]:::store --> PI[pipeline_instance]:::store
+    C[SystemPipelineCatalog]:::control -. code / version .-> PI
+    PI --> PS[pipeline_step_run]:::store
+    F --> FD[file_dispatch_record / file_audit_log]:::store
   end
   subgraph results[业务日与结果]
-    WF[workflow_definition] -. calendar_code .-> BC[business_calendar]
-    BC --> BD[batch_day_instance]
-    J[job_instance] -. 批次关联 .-> BD
-    J --> RV[result_version]
-    RV --> AP[asset_partition]
-    DA[data_asset] --> AP
+    WF[workflow_definition]:::store -. calendar_code .-> BC[business_calendar]:::store
+    BC --> BD[batch_day_instance]:::store
+    J[job_instance]:::store -. 批次关联 .-> BD
+    J --> RV[result_version]:::store
+    RV --> AP[asset_partition]:::store
+    DA[data_asset]:::store --> AP
   end
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 其他表组不属于执行主链：外部事件投递由 `external_event_delivery` 与 `external_event_delivery_alias` 关联；Console AI 的 `console_ai_conversation` 与 `console_ai_turn` 使用租户和会话复合外键，审计、月用量、维护状态及 `console_usage_daily` 各自服务控制台治理，详见下方表目录。
