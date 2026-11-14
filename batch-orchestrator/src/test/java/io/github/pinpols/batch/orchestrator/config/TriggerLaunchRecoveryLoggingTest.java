@@ -14,7 +14,6 @@ import io.github.pinpols.batch.common.kafka.BatchTopics;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Method;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -75,10 +74,8 @@ class TriggerLaunchRecoveryLoggingTest {
     try {
       OrchestratorKafkaConsumerConfiguration configuration =
           new OrchestratorKafkaConsumerConfiguration(properties, registry, recoveryProvider);
-      Method factory = OrchestratorKafkaConsumerConfiguration.class.getDeclaredMethod(
-          "triggerLaunchErrorHandler");
-      factory.setAccessible(true);
-      DefaultErrorHandler handler = (DefaultErrorHandler) factory.invoke(configuration);
+      DefaultErrorHandler handler =
+          TriggerLaunchErrorHandlerTestSupport.errorHandlerOf(configuration);
       Logger logger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
       ListAppender<ILoggingEvent> appender = new ListAppender<>();
       appender.start();

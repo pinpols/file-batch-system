@@ -14,7 +14,6 @@ import java.time.Instant;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 @DisplayName("维护状态读取与应用启动时序")
 class MaintenanceStateHolderTest {
@@ -48,7 +47,7 @@ class MaintenanceStateHolderTest {
     verifyNoInteractions(mapper);
     assertThat(stateHolder.sharedStateAvailable()).isFalse();
 
-    ReflectionTestUtils.invokeMethod(stateHolder, "refreshAfterApplicationReady");
+    stateHolder.refreshAfterApplicationReady();
 
     verify(mapper).selectSingleton();
     assertThat(stateHolder.sharedStateAvailable()).isTrue();

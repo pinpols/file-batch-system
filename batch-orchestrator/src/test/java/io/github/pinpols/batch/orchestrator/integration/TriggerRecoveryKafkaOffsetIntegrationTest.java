@@ -15,11 +15,11 @@ import io.github.pinpols.batch.orchestrator.application.service.task.LaunchAppli
 import io.github.pinpols.batch.orchestrator.application.trigger.TriggerLaunchRecoveryService;
 import io.github.pinpols.batch.orchestrator.config.OrchestratorKafkaConsumerConfiguration;
 import io.github.pinpols.batch.orchestrator.config.TriggerConsumerProperties;
+import io.github.pinpols.batch.orchestrator.config.TriggerLaunchErrorHandlerTestSupport;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.trigger.TriggerLaunchConsumer;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import java.lang.reflect.Method;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -106,10 +106,8 @@ class TriggerRecoveryKafkaOffsetIntegrationTest extends AbstractIntegrationTest 
       SimpleMeterRegistry meters = new SimpleMeterRegistry();
       var configuration = new OrchestratorKafkaConsumerConfiguration(
           props, meters, context.getBeanProvider(TriggerLaunchRecoveryService.class));
-      Method factory = OrchestratorKafkaConsumerConfiguration.class.getDeclaredMethod(
-          "triggerLaunchErrorHandler");
-      factory.setAccessible(true);
-      DefaultErrorHandler handler = (DefaultErrorHandler) factory.invoke(configuration);
+      DefaultErrorHandler handler =
+          TriggerLaunchErrorHandlerTestSupport.errorHandlerOf(configuration);
       ContainerProperties containerProperties = new ContainerProperties(topic);
       containerProperties.setAckMode(ContainerProperties.AckMode.MANUAL_IMMEDIATE);
       containerProperties.setPollTimeout(200);

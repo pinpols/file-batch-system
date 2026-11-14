@@ -19,6 +19,7 @@ import io.github.pinpols.batch.console.infrastructure.cron.QuartzCronPreviewServ
 import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder;
 import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolder.MaintenanceState;
+import io.github.pinpols.batch.console.support.maintenance.MaintenanceStateHolderTestSupport;
 import io.github.pinpols.batch.console.support.web.ConsoleApiExceptionHandler;
 import io.github.pinpols.batch.console.support.web.ConsoleRequestMetadataResolver;
 import java.time.Clock;
@@ -32,7 +33,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -60,8 +60,7 @@ class ConsoleSystemControllerTest {
 
     properties = new ConsoleMaintenanceProperties();
     mapper = mock(MaintenanceStateMapper.class);
-    stateHolder = new MaintenanceStateHolder(properties, mapper, new ObjectMapper());
-    ReflectionTestUtils.invokeMethod(stateHolder, "initFromProperties");
+    stateHolder = MaintenanceStateHolderTestSupport.initialized(properties, mapper);
 
     // 固定时钟:Quartz 预览的「当前时刻」来自统一入口 BatchDateTimeSupport.nowInstant(),固定后结果确定。
     Clock fixedClock = Clock.fixed(Instant.parse("2026-05-20T15:00:00Z"), ZoneOffset.UTC);

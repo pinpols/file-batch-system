@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.ResultVersionEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.CrossDayDependencyReconciler;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.CrossDayDependencyReconcilerTestSupport;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowChildTriggerSeed;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
@@ -41,7 +42,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * ADR-018 §决策 §实施分阶段 Stage 6 — 跨批量日依赖端到端 IT。
@@ -883,8 +883,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     snapshot.setStartedAt(Instant.now().minusSeconds(60));
     assertThat(jdbcTemplate.update(updateRunningSql, snapshot.getId())).isEqualTo(1);
 
-    ReflectionTestUtils.invokeMethod(
-        crossDayDependencyReconciler, "reconcileOne", snapshot, Instant.now());
+    CrossDayDependencyReconcilerTestSupport.reconcileOne(
+        crossDayDependencyReconciler, snapshot, Instant.now());
 
     assertThat(jdbcTemplate.queryForObject(selectNodeStatusSql, String.class, snapshot.getId()))
         .isEqualTo("RUNNING");
@@ -951,8 +951,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
         TENANT,
         seed.workflowDefinitionId());
 
-    ReflectionTestUtils.invokeMethod(
-        crossDayDependencyReconciler, "reconcileOne", waiting, Instant.now());
+    CrossDayDependencyReconcilerTestSupport.reconcileOne(
+        crossDayDependencyReconciler, waiting, Instant.now());
 
     assertThat(jdbcTemplate.queryForObject(selectStatusSql, String.class, waiting.getId()))
         .isEqualTo("WAITING_DEPENDENCY");
@@ -1036,8 +1036,8 @@ class CrossDayDependencyReconcilerIntegrationTest extends AbstractIntegrationTes
     Long expectedVersionId = jdbcTemplate.queryForObject(
         selectUpstreamVersionSql, Long.class, TENANT, version.businessKey());
 
-    ReflectionTestUtils.invokeMethod(
-        crossDayDependencyReconciler, "reconcileOne", waiting, Instant.now());
+    CrossDayDependencyReconcilerTestSupport.reconcileOne(
+        crossDayDependencyReconciler, waiting, Instant.now());
 
     Long childId =
         jdbcTemplate.queryForObject(selectChildSql, Long.class, waiting.getWorkflowRunId());

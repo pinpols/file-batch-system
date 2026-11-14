@@ -347,7 +347,8 @@ public class WebhookDispatcher {
     }
   }
 
-  private String normalizeEventType(String eventType) {
+  /** 包内可见供测试直接调用。 */
+  String normalizeEventType(String eventType) {
     if (EmptyChecks.isNull(eventType)) {
       return "UNKNOWN";
     }
@@ -355,7 +356,8 @@ public class WebhookDispatcher {
     return trimmedEventType.toUpperCase(Locale.ROOT);
   }
 
-  private String sign(String payloadJson, String secret) {
+  /** 包内可见供测试直接调用。 */
+  String sign(String payloadJson, String secret) {
     try {
       Mac mac = Mac.getInstance(CryptoAlgorithms.HMAC_SHA256);
       byte[] secretBytes = secret.getBytes(StandardCharsets.UTF_8);

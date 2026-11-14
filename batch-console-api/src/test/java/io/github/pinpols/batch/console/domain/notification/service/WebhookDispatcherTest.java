@@ -10,7 +10,6 @@ import io.github.pinpols.batch.common.config.BatchSecurityProperties;
 import io.github.pinpols.batch.console.domain.notification.entity.WebhookSubscriptionEntity;
 import io.github.pinpols.batch.console.domain.notification.mapper.ConsoleWebhookDeliveryLogMapper;
 import io.github.pinpols.batch.console.support.security.SsrfGuardedDns;
-import java.lang.reflect.Method;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
@@ -107,11 +106,7 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("事件类型统一转为大写后, 再参与匹配")
   void shouldNormalizeEventTypeToUpperCase() throws Exception {
-    Method normalizeEventType =
-        WebhookDispatcher.class.getDeclaredMethod("normalizeEventType", String.class);
-    normalizeEventType.setAccessible(true);
-
-    String result = (String) normalizeEventType.invoke(dispatcher, "job_success");
+    String result = dispatcher.normalizeEventType("job_success");
 
     assertThat(result).isEqualTo("JOB_SUCCESS");
   }
@@ -119,11 +114,7 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("事件类型为空时, 归一为未知类型")
   void shouldNormalizeNullEventTypeToUnknown() throws Exception {
-    Method normalizeEventType =
-        WebhookDispatcher.class.getDeclaredMethod("normalizeEventType", String.class);
-    normalizeEventType.setAccessible(true);
-
-    String result = (String) normalizeEventType.invoke(dispatcher, (String) null);
+    String result = dispatcher.normalizeEventType(null);
 
     assertThat(result).isEqualTo("UNKNOWN");
   }
@@ -258,10 +249,7 @@ class WebhookDispatcherTest {
   @Test
   @DisplayName("载荷签名带算法前缀, 摘要为十六进制定长")
   void shouldSignPayloadWithHmacSha256() throws Exception {
-    Method sign = WebhookDispatcher.class.getDeclaredMethod("sign", String.class, String.class);
-    sign.setAccessible(true);
-
-    String result = (String) sign.invoke(dispatcher, "{\"event\":\"test\"}", "my-secret");
+    String result = dispatcher.sign("{\"event\":\"test\"}", "my-secret");
 
     assertThat(result).startsWith("sha256=");
     assertThat(result).hasSize("sha256=".length() + 64); // sha256 hex = 64 chars
