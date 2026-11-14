@@ -88,17 +88,16 @@ public final class FileTemplateExcelRowParser {
   private static final int DEFAULT_QUERY_SQL_MAX_LENGTH = 10000;
 
   /**
-   * 加密密钥引用的导入上限；列 file_template_config.encryption_key_ref 为 VARCHAR(256)
-   * （V18__file_template_security_flags.sql），导入上限更严，保持原值。
+   * 加密密钥引用的导入上限，与列 file_template_config.encryption_key_ref 的 VARCHAR(256)
+   * （V18__file_template_security_flags.sql）一致。
    */
-  private static final int ENCRYPTION_KEY_REF_MAX_LENGTH = 128;
+  private static final int ENCRYPTION_KEY_REF_MAX_LENGTH = 256;
 
   /**
-   * 脱敏规则集的导入上限；注意列 file_template_config.masking_rule_set 只有 VARCHAR(128)
-   * （V18__file_template_security_flags.sql），129～256 字符会在写库时失败，保持原值待核对
-   * （见审计 R26 后续事项）。
+   * 脱敏规则集的导入上限，与列 file_template_config.masking_rule_set 的 VARCHAR(128)
+   * （V18__file_template_security_flags.sql）一致，避免 129～256 字符通过校验后写库失败。
    */
-  private static final int MASKING_RULE_SET_MAX_LENGTH = 256;
+  private static final int MASKING_RULE_SET_MAX_LENGTH = 128;
 
   /** 单元格留空时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
   private static final int DEFAULT_PAGE_SIZE = 1000;

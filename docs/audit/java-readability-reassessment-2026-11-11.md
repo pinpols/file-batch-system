@@ -304,7 +304,7 @@
 - `HttpTaskExecutionClient.report` 的注释写着 `batch.worker.report.duration` 带 `tenantId=, workerType=` tag，实际 `recordReportDuration` 只打 `outcome` tag（并注明 tenantId 不作 tag）。注释过时，Task 24 修订轮没有改，待随后续改动更正。
 - R26 长度类余项：Task 24 的 grep 条件没有覆盖 `ConsoleTextSanitizer.safeInput(..., N)`、`valid(x, N)`、Excel 行解析器 `requireText/optionalText/optionalEnum(..., N, ...)`、`.length() > N` 等写法，本轮扫描中这类长度上限约 190 处，按范围未处理、未逐行登记 CSV。需要时另开任务，按列宽逐一对照迁移文件。
 - 【已解决 2026-11-14，分支 `chore/r26-length-caps-remaining`】见上方“R26 长度类余项（后续轮）”：可复现扫描 202 处，命名 196 处（37 个文件、125 个常量），保留 6 处（均有原因），CSV 逐行登记。上一轮推迟的 `DefaultConsoleApprovalApplicationService` 2 处 `safeDisplay(..., 512)` 已命名为 `BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH`（批量审批逐条失败消息的回显截断，与 `ConsoleOpsQueryService` 的 AI 审计预览含义不同，未合并）。提交为 `refactor(common): name remaining length caps` 与 `refactor: name remaining length caps`（后一提交包含 console、orchestrator、worker；配置治理门禁要求生产 Java 全量同时暂存）。
-- `FileTemplateExcelRowParser` 的 `masking_rule_set` 导入上限 256 大于列宽 VARCHAR(128)（V18__file_template_security_flags.sql），`encryption_key_ref` 导入上限 128 小于列宽 256，疑似写反。R26 长度类余项轮只命名、未改值；需确认后另行修正（改上限会改变导入校验行为，应先写失败测试）。
+- 【已修复 2026-11-14】`FileTemplateExcelRowParser` 的 `masking_rule_set` 导入上限由 256 收紧到列宽 VARCHAR(128)，`encryption_key_ref` 由 128 放宽到列宽 VARCHAR(256)（V18__file_template_security_flags.sql）；补 `FileTemplateExcelRowParserLengthTest` 覆盖 128/129 与 256/257 边界，修复前两例均失败。
   - 已处理（chore/readability-followup-cleanup）：注释改为 `batch.worker.report.duration{outcome=success|failure}`，并注明 tenantId 不作 tag。
 - `PartitionReclaimUnit.doReclaim` 的长注释里有一句断句（“#768 的”之后接不上），待补全。
   - 已处理：据 git 历史（22d979f9b 原文、6e3e9668e 改写）补全：#768 的 advisory lock 当时只串行化 outcome 之间，reclaim 不取；现在两者共用该锁，NOWAIT 保留。
@@ -324,7 +324,7 @@
 
 ## 决策记录（2026-11-11）
 
-用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5 #1358（Task 15–17）已合入 main（3ff888db3）；PR-6（Task 19、21、22、24）在分支 `chore/java-readability-p9-batch6`；Task 20（PR-7）已在分支 `chore/java-readability-p9-batch7` 完成，PR 待开；Task 23 和 18 未开工；R13（Task 12）已撤销。
+用户裁定以下三项。2026-11-11 用户另裁定执行方式为子代理驱动（每任务一名实现者加一名评审者），并授权提交、推送与开草稿 PR；2026-11-12 另授权合并叠放的 PR 链，每个 PR 须必需 CI 检查通过后经 squash 自动合并。PR-1 #1354（Task 1–3）、PR-2 #1355（Task 4–8、13）和 PR-3 #1356（Task 9）已合入 main，文档 PR #1353 已合入 main（9b9f2d8c1）；PR-4 #1357（Task 10–12、14）已合入 main（9346767fe）；PR-5 #1358（Task 15–17）已合入 main（3ff888db3）；PR-6（Task 19、21、22、24）在分支 `chore/java-readability-p9-batch6`；Task 20（PR-7）#1370（80614b669）已合入 main；R26 非长度与长度类余项分别由 #1385、#1386 完成；Task 23 和 18 未开工；R13（Task 12）已撤销。
 
 | 事项 | 裁定 | 落地方式 |
 |---|---|---|
