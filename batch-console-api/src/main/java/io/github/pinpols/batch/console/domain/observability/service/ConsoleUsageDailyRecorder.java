@@ -23,6 +23,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
 
+  /** console_usage_daily.metric_code VARCHAR(96)（V216__create_console_usage_daily.sql）。 */
+  private static final int METRIC_CODE_MAX_LENGTH = 96;
+
   private static final String SOURCE = "OPERATION_AUDIT";
   private static final String OTHER_METRIC = "operation.other";
   private static final Pattern ACTION_PATTERN = Pattern.compile("^[A-Za-z0-9_.-]{1,80}$");
@@ -65,7 +68,7 @@ public class ConsoleUsageDailyRecorder implements ConsoleUsageRecorder {
     }
     String normalized = action.toLowerCase(Locale.ROOT);
     String metric = "operation." + normalized;
-    int maxMetricEndIndex = Math.min(96, metric.length());
+    int maxMetricEndIndex = Math.min(METRIC_CODE_MAX_LENGTH, metric.length());
     return metric.substring(0, maxMetricEndIndex);
   }
 }

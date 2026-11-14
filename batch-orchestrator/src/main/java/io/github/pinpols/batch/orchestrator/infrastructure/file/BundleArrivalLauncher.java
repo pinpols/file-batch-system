@@ -64,6 +64,12 @@ import org.springframework.transaction.support.TransactionTemplate;
 @SuppressWarnings("java:S2583")
 public class BundleArrivalLauncher {
 
+  /**
+   * 可读 requestId 的长度上限，对应 trigger_request.request_id VARCHAR(128)
+   * （V5__create_runtime_tables.sql）；超长时改用哈希形式。
+   */
+  private static final int READABLE_REQUEST_ID_MAX_LENGTH = 128;
+
   private static final String META_BUNDLE_WORKFLOW_CODE = "bundleWorkflowCode";
   private static final String META_BUNDLE_TEMPLATE_CODE = "bundleTemplateCode";
   // ADR-046 Phase3:分发束 per-file 绑定下游渠道(channel_code),落 file_record metadata.bundleTargetRef。
@@ -473,7 +479,7 @@ public class BundleArrivalLauncher {
       String tenantId, Long workflowDefinitionId, String fileGroupCode, LocalDate bizDate) {
     String readable = "bundle-arrival-" + tenantId + "-" + workflowDefinitionId + "-"
         + fileGroupCode + "-" + bizDate;
-    if (readable.length() <= 128) {
+    if (readable.length() <= READABLE_REQUEST_ID_MAX_LENGTH) {
       return readable;
     }
     List<String> identityComponents =

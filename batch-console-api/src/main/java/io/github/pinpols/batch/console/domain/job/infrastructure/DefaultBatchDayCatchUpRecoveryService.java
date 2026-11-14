@@ -14,6 +14,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class DefaultBatchDayCatchUpRecoveryService implements BatchDayCatchUpRecoveryService {
+
+  /**
+   * business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql），
+   * 与 BatchDayCatchUpAbandonRequest.calendarCode 的 @Size(max = 128) 一致。
+   */
+  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+
   private final TenantIdResolver tenantGuard;
   private final BatchDayCatchUpReconciliation reconciliation;
   private final ConsoleJobApprovalService approvalService;
@@ -24,7 +31,7 @@ public class DefaultBatchDayCatchUpRecoveryService implements BatchDayCatchUpRec
   public BatchDayCatchUpRequestStatusResponse abandonUnprepared(
       String tenantId, String requestKey, LocalDate bizDate, String calendarCode) {
     String resolvedTenant = tenantGuard.resolveTenant(tenantId);
-    String safeCalendar = ConsoleTextSanitizer.safeInput(calendarCode, 128);
+    String safeCalendar = ConsoleTextSanitizer.safeInput(calendarCode, CALENDAR_CODE_MAX_LENGTH);
     operationStore.abandonUnprepared(resolvedTenant, requestKey, bizDate.toString(), safeCalendar);
     return approvalService.batchDayCatchUpStatus(resolvedTenant, requestKey);
   }

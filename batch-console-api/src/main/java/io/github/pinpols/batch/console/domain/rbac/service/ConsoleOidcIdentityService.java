@@ -22,6 +22,12 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleOidcIdentityService {
 
+  /**
+   * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql），
+   * 与 ConsoleOidcIdentityRequest.subject 的 @Size(max = 255) 一致。
+   */
+  private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
+
   private final ConsoleOidcIdentityMapper identityMapper;
   private final ConsoleUserAccountMapper userAccountMapper;
   private final ConsoleOidcProperties properties;
@@ -39,8 +45,9 @@ public class ConsoleOidcIdentityService {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }
     String subject = request.subject();
-    boolean oidcSubjectIsInvalid =
-        EmptyChecks.isBlank(subject) || subject.length() > 255 || !isAscii(subject);
+    boolean oidcSubjectIsInvalid = EmptyChecks.isBlank(subject)
+        || subject.length() > OIDC_SUBJECT_MAX_LENGTH
+        || !isAscii(subject);
     if (oidcSubjectIsInvalid) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.console.oidc.identity_invalid");
     }

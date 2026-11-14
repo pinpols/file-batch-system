@@ -34,6 +34,24 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class FileGroupExpectationService {
 
+  /**
+   * file_group_expectation_definition.tenant_id VARCHAR(64)
+   * （V264__file_group_expectation_definition.sql）。
+   */
+  private static final int TENANT_ID_MAX_LENGTH = 64;
+
+  /**
+   * file_group_expectation_definition.calendar_code VARCHAR(128)
+   * （V264__file_group_expectation_definition.sql）。
+   */
+  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+
+  /**
+   * file_group_expectation_definition.file_group_code VARCHAR(128)
+   * （V264__file_group_expectation_definition.sql）。
+   */
+  private static final int FILE_GROUP_CODE_MAX_LENGTH = 128;
+
   private final FileGroupExpectationDefinitionMapper definitionMapper;
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final ExpectedWorkOccurrenceMapper occurrenceMapper;
@@ -72,7 +90,7 @@ public class FileGroupExpectationService {
 
   /** 返回租户内可用于人工文件入站的启用文件组绑定。 */
   public List<FileGroupUploadTarget> listEnabledUploadTargets(String tenantId) {
-    if (!valid(tenantId, 64)) {
+    if (!valid(tenantId, TENANT_ID_MAX_LENGTH)) {
       throw new IllegalArgumentException("tenant is required");
     }
     return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
@@ -93,11 +111,11 @@ public class FileGroupExpectationService {
   /** 校验上传请求精确匹配唯一启用的文件组到 Workflow 绑定。 */
   public FileGroupUploadTarget requireEnabledUploadTarget(
       String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
-    if (!valid(tenantId, 64)
-        || !valid(calendarCode, 128)
+    if (!valid(tenantId, TENANT_ID_MAX_LENGTH)
+        || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
         || EmptyChecks.isNull(workflowDefinitionId)
         || workflowDefinitionId <= 0
-        || !valid(fileGroupCode, 128)) {
+        || !valid(fileGroupCode, FILE_GROUP_CODE_MAX_LENGTH)) {
       throw new IllegalArgumentException("tenant, calendar, workflow and file group are required");
     }
     return RlsTenantContextHolder.runWithTenant(tenantId, () -> {
@@ -152,11 +170,11 @@ public class FileGroupExpectationService {
   /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
   public boolean deleteDefinition(
       String tenantId, String calendarCode, Long workflowDefinitionId, String fileGroupCode) {
-    boolean fileGroupDefinitionIdentityIsInvalid = !valid(tenantId, 64)
-        || !valid(calendarCode, 128)
+    boolean fileGroupDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
+        || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
         || EmptyChecks.isNull(workflowDefinitionId)
         || workflowDefinitionId <= 0
-        || !valid(fileGroupCode, 128);
+        || !valid(fileGroupCode, FILE_GROUP_CODE_MAX_LENGTH);
     if (fileGroupDefinitionIdentityIsInvalid) {
       throw new IllegalArgumentException(
           "tenant, calendar, workflowDefinitionId and fileGroupCode are required");
@@ -230,11 +248,11 @@ public class FileGroupExpectationService {
 
   private static void validate(DefinitionRequest request) {
     boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), 64)
-        && valid(request.calendarCode(), 128)
+        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.workflowDefinitionId())
         && request.workflowDefinitionId() > 0
-        && valid(request.fileGroupCode(), 128)
+        && valid(request.fileGroupCode(), FILE_GROUP_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.expectedLocalTime());
     boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
         || EmptyChecks.isNull(request.dueLocalTime())

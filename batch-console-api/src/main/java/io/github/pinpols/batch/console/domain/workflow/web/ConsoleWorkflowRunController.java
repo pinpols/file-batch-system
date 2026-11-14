@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.*;
 @Idempotent
 public class ConsoleWorkflowRunController {
 
+  /** workflow_node_run.skip_reason VARCHAR(1024)（V250__record_workflow_node_skip_reason.sql）。 */
+  private static final int SKIP_REASON_MAX_LENGTH = 1024;
+
   private final ConsoleOrchestratorPort orchestratorProxyService;
   private final ConsoleResponseFactory responseFactory;
 
@@ -91,7 +94,8 @@ public class ConsoleWorkflowRunController {
       @RequestParam("nodeCode") String nodeCode,
       @RequestParam("reason") String reason) {
     Guard.requireText(reason, "skip reason is required");
-    Guard.require(reason.length() <= 1024, "skip reason must not exceed 1024 characters");
+    Guard.require(
+        reason.length() <= SKIP_REASON_MAX_LENGTH, "skip reason must not exceed 1024 characters");
     String operatorId = currentUsername();
     return responseFactory.success(
         orchestratorProxyService.workflowRunSkipNode(id, tenantId, nodeCode, operatorId, reason));

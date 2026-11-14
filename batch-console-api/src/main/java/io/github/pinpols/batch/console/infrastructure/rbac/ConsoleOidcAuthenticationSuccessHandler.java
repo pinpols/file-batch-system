@@ -28,6 +28,11 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
 
+  /**
+   * console_external_identity.subject VARCHAR(255)（V222__console_oidc_external_identity.sql）。
+   */
+  private static final int OIDC_SUBJECT_MAX_LENGTH = 255;
+
   private final ConsoleOidcProperties properties;
   private final ConsoleOidcIdentityMapper identityMapper;
   private final ConsoleAuthApplicationService authApplicationService;
@@ -85,7 +90,7 @@ public class ConsoleOidcAuthenticationSuccessHandler implements AuthenticationSu
     }
     // subject 判空白必须先于长度与 ASCII 检查
     if (EmptyChecks.isBlank(oidcUser.getSubject())
-        || oidcUser.getSubject().length() > 255
+        || oidcUser.getSubject().length() > OIDC_SUBJECT_MAX_LENGTH
         || !isAscii(oidcUser.getSubject())) {
       return Optional.empty();
     }

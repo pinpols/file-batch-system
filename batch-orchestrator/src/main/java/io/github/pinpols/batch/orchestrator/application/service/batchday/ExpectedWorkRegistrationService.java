@@ -21,6 +21,18 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class ExpectedWorkRegistrationService {
 
+  /** expected_work_occurrence.tenant_id VARCHAR(64)（V263__expected_work_occurrence.sql）。 */
+  private static final int TENANT_ID_MAX_LENGTH = 64;
+
+  /** expected_work_occurrence.calendar_code VARCHAR(128)（V263__expected_work_occurrence.sql）。 */
+  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 文件组编码写入 expected_work_occurrence.source_key，该列为 VARCHAR(256)
+   * （V263__expected_work_occurrence.sql）。
+   */
+  private static final int FILE_GROUP_CODE_MAX_LENGTH = 256;
+
   private final ExpectedWorkOccurrenceMapper occurrenceMapper;
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final WorkflowDefinitionMapper workflowDefinitionMapper;
@@ -74,11 +86,11 @@ public class ExpectedWorkRegistrationService {
 
   private static void validate(FileGroupExpectation request) {
     boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), 64)
-        && valid(request.calendarCode(), 128)
+        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.workflowDefinitionId())
         && request.workflowDefinitionId() > 0
-        && valid(request.fileGroupCode(), 256)
+        && valid(request.fileGroupCode(), FILE_GROUP_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.bizDate())
         && EmptyChecks.isNotNull(request.expectedAt());
     boolean dueAtIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid

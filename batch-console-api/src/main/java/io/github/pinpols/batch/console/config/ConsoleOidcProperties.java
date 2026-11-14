@@ -14,6 +14,24 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "batch.console.sso.oidc")
 public class ConsoleOidcProperties {
 
+  /** 绑定租户 ID 长度上限，对应 tenant.tenant_id VARCHAR(64)（V50__create_tenant.sql）。 */
+  private static final int TENANT_ID_MAX_LENGTH = 64;
+
+  /**
+   * issuer-uri 长度上限，对应 console_external_identity.issuer VARCHAR(512)
+   * （V222__console_oidc_external_identity.sql）。
+   */
+  private static final int ISSUER_URI_MAX_LENGTH = 512;
+
+  /** client-id 配置长度上限（只做启动校验，不落库）。 */
+  private static final int CLIENT_ID_MAX_LENGTH = 512;
+
+  /** client-secret 配置长度上限（只做启动校验，不落库）。 */
+  private static final int CLIENT_SECRET_MAX_LENGTH = 2048;
+
+  /** redirect-uri 配置长度上限（只做启动校验，不落库）。 */
+  private static final int REDIRECT_URI_MAX_LENGTH = 2048;
+
   private boolean enabled;
   private String registrationId = "";
   private String tenantId = "";
@@ -34,11 +52,11 @@ public class ConsoleOidcProperties {
     requireText(clientId, "client-id");
     requireText(clientSecret, "client-secret");
     requireText(redirectUri, "redirect-uri");
-    requireMaxLength(tenantId, 64, "tenant-id");
-    requireMaxLength(issuerUri, 512, "issuer-uri");
-    requireMaxLength(clientId, 512, "client-id");
-    requireMaxLength(clientSecret, 2048, "client-secret");
-    requireMaxLength(redirectUri, 2048, "redirect-uri");
+    requireMaxLength(tenantId, TENANT_ID_MAX_LENGTH, "tenant-id");
+    requireMaxLength(issuerUri, ISSUER_URI_MAX_LENGTH, "issuer-uri");
+    requireMaxLength(clientId, CLIENT_ID_MAX_LENGTH, "client-id");
+    requireMaxLength(clientSecret, CLIENT_SECRET_MAX_LENGTH, "client-secret");
+    requireMaxLength(redirectUri, REDIRECT_URI_MAX_LENGTH, "redirect-uri");
     if (!registrationId.matches("[a-z0-9][a-z0-9-]{0,63}")) {
       throw invalid("registration-id must be a lowercase URL-safe identifier");
     }

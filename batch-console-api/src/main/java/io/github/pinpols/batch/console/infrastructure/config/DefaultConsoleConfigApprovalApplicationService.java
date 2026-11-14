@@ -57,6 +57,27 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultConsoleConfigApprovalApplicationService
     implements ConsoleConfigApprovalApplicationService {
+  /**
+   * config_approval.review_comment VARCHAR(1024)
+   * （V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int REVIEW_COMMENT_MAX_LENGTH = 1024;
+
+  /**
+   * 写入变更日志摘要的审批原因，与 ConfigApprovalActionRequest.reason 的 @Size(max = 512) 一致。
+   */
+  private static final int REASON_MAX_LENGTH = 512;
+
+  /**
+   * config_change_log.operator_id / config_release.updated_by VARCHAR(64)
+   * （V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
+  /**
+   * config_change_log.trace_id VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int TRACE_ID_MAX_LENGTH = 128;
 
   private static final String PENDING_APPROVAL = ConfigLifecycleStatus.PENDING_APPROVAL.code();
 
@@ -92,7 +113,8 @@ public class DefaultConsoleConfigApprovalApplicationService
       throw BizException.of(ResultCode.CONFLICT, "error.config_approval.already_pending");
     }
     String submittedBy = currentOperator();
-    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    String reviewComment =
+        ConsoleTextSanitizer.safeInput(request.getReason(), REVIEW_COMMENT_MAX_LENGTH);
     ConfigApprovalInsertParam insertParam =
         new ConfigApprovalInsertParam(tenantId, releaseId, submittedBy, reviewComment, null);
     configApprovalMapper.insert(insertParam);
@@ -163,7 +185,8 @@ public class DefaultConsoleConfigApprovalApplicationService
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.config_approval.release_not_pending");
     }
     String reviewedBy = currentOperator();
-    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    String reviewComment =
+        ConsoleTextSanitizer.safeInput(request.getReason(), REVIEW_COMMENT_MAX_LENGTH);
     ConfigApprovalTransitionParam transitionParam =
         ConfigApprovalTransitionParam.approved(tenantId, approvalId, reviewedBy, reviewComment);
     int rows = configApprovalMapper.transition(transitionParam);
@@ -202,7 +225,8 @@ public class DefaultConsoleConfigApprovalApplicationService
     release = loadRelease(tenantId, releaseId);
     validateLatestVersion(tenantId, release);
     String reviewedBy = currentOperator();
-    String reviewComment = ConsoleTextSanitizer.safeInput(request.getReason(), 1024);
+    String reviewComment =
+        ConsoleTextSanitizer.safeInput(request.getReason(), REVIEW_COMMENT_MAX_LENGTH);
     ConfigApprovalTransitionParam transitionParam =
         ConfigApprovalTransitionParam.rejected(tenantId, approvalId, reviewedBy, reviewComment);
     int rows = configApprovalMapper.transition(transitionParam);
@@ -256,7 +280,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         .versionNo(release.getVersionNo())
         .action(action)
         .operatorType(AuditLogConstants.OPERATOR_TYPE_API);
-    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, REASON_MAX_LENGTH);
     Map<String, Object> changeSummary =
         ConsoleMapSupport.mapOf("reason", safeReason, "detail", detail);
     String summaryJson = JsonUtils.toJson(changeSummary);
@@ -267,13 +291,13 @@ public class DefaultConsoleConfigApprovalApplicationService
   private String currentOperator() {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
-    return ConsoleTextSanitizer.safeInput(operatorId, 64);
+    return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
   }
 
   private String currentTraceId() {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String traceId = metadata.traceId();
-    return ConsoleTextSanitizer.safeInput(traceId, 128);
+    return ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH);
   }
 
   private void validateLatestVersion(String tenantId, ConfigReleaseEntity release) {
@@ -303,7 +327,7 @@ public class DefaultConsoleConfigApprovalApplicationService
         .expectedVersionNo(release.getVersionNo())
         .publishedAt(publishedAt)
         .rolledBackAt(null)
-        .updatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64))
+        .updatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH))
         .build();
     int rows = configReleaseMapper.updateConfigReleaseStatus(releaseStatusUpdate);
     if (rows != 1) {

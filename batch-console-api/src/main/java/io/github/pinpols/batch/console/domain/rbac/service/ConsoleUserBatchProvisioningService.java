@@ -52,6 +52,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class ConsoleUserBatchProvisioningService {
 
+  /** console_user_account.display_name VARCHAR(256)（V34__create_console_user_account.sql）。 */
+  private static final int DISPLAY_NAME_MAX_LENGTH = 256;
+
   /** 初始密码的随机字节数；24 字节经 Base64URL 编码为 32 个字符。 */
   private static final int RANDOM_PASSWORD_BYTES = 24;
 
@@ -319,8 +322,8 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   private String validateRow(AccountRow row, ConsolePrincipal principal, Set<String> usernames) {
-    if (!USERNAME.matcher(row.username()).matches() || row.displayName().length() > 256)
-      return "INVALID_ACCOUNT";
+    if (!USERNAME.matcher(row.username()).matches()
+        || row.displayName().length() > DISPLAY_NAME_MAX_LENGTH) return "INVALID_ACCOUNT";
     String normalizedUsernameForDuplicateCheck = row.username().toLowerCase(Locale.ROOT);
     boolean usernameIsUniqueInFile = usernames.add(normalizedUsernameForDuplicateCheck);
     if (!usernameIsUniqueInFile) return "DUPLICATE_IN_FILE";

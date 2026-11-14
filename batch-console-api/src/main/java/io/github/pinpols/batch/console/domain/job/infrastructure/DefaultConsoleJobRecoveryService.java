@@ -45,6 +45,69 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryService {
 
+  /**
+   * 补偿类型，与 CompensationCommandRequest.compensationType 的 @Size(max = 64) 一致
+   * （取值为固定枚举，落库列 compensation_command.compensation_type 为 VARCHAR(32)，V13）。
+   */
+  private static final int COMPENSATION_TYPE_MAX_LENGTH = 64;
+
+  /** 目标实例号，对应 job_instance.instance_no VARCHAR(128)（V5__create_runtime_tables.sql）。 */
+  private static final int TARGET_INSTANCE_NO_MAX_LENGTH = 128;
+
+  /**
+   * compensation_command.job_code VARCHAR(128)（V13__create_compensation_and_step_runtime.sql），
+   * 与 CompensationCommandRequest.jobCode 的 @Size(max = 128) 一致。
+   */
+  private static final int JOB_CODE_MAX_LENGTH = 128;
+
+  /**
+   * compensation_command.batch_no VARCHAR(128)（V13__create_compensation_and_step_runtime.sql）。
+   */
+  private static final int BATCH_NO_MAX_LENGTH = 128;
+
+  /**
+   * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
+   * 。
+   */
+  private static final int CHANNEL_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 重放/补偿原因，
+   * 与 TaskReplayRequest / PartitionReplayRequest / DeadLetterReplayRequest / WorkflowRunReplayRequest.reason 的 @Size(max = 512) 一致；
+   * 落库列 compensation_command.reason 为 VARCHAR(1024)（V13）。
+   */
+  private static final int REASON_MAX_LENGTH = 512;
+
+  /**
+   * compensation_command.operator_id VARCHAR(64)（V13__create_compensation_and_step_runtime.sql），
+   * 与重放请求 operatorId 的 @Size(max = 64) 一致。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
+  /**
+   * 审批单号，与重放请求 approvalId 的 @Size(max = 64) 一致
+   * （落库列 compensation_command.approval_id 为 VARCHAR(128)，V13）。
+   */
+  private static final int APPROVAL_ID_MAX_LENGTH = 64;
+
+  /**
+   * 重放策略，与重放请求 strategy 的 @Size(max = 32) 一致
+   * （落库列 compensation_command.strategy 为 VARCHAR(64)，V13）。
+   */
+  private static final int STRATEGY_MAX_LENGTH = 32;
+
+  /** 结果策略，与 WorkflowRunReplayRequest.resultPolicy 的 @Size(max = 64) 一致。 */
+  private static final int RESULT_POLICY_MAX_LENGTH = 64;
+
+  /** 配置版本策略，与 WorkflowRunReplayRequest.configVersionPolicy 的 @Size(max = 64) 一致。 */
+  private static final int CONFIG_VERSION_POLICY_MAX_LENGTH = 64;
+
+  /**
+   * 外部结果核实凭证引用，
+   * 与 DeadLetterReplayRequest.externalOutcomeEvidenceReference 的 @Size(max = 512) 一致。
+   */
+  private static final int EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH = 512;
+
   private static final String JOB_TYPE_COMPENSATION =
       ConsoleJobOperationsPort.JOB_TYPE_COMPENSATION;
   private static final String ACTION_WORKFLOW_RUN_REPLAY = "WORKFLOW_RUN_REPLAY";
@@ -97,22 +160,27 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
     CompensationPayload.CompensationPayloadBuilder compensationPayloadBuilder =
         CompensationPayload.builder()
             .tenantId(tenantId)
-            .compensationType(ConsoleTextSanitizer.safeInput(request.getCompensationType(), 64))
+            .compensationType(ConsoleTextSanitizer.safeInput(
+                request.getCompensationType(), COMPENSATION_TYPE_MAX_LENGTH))
             .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
+                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
         .relatedFileId(request.getRelatedFileId())
-        .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128))
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
-        .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .channelCode(
+            ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
+        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+        .resultPolicy(
+            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
         .configVersion(request.getConfigVersion())
         .sourceWorkflowRunId(request.getSourceWorkflowRunId())
         .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
@@ -152,7 +220,7 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .targetType("WORKFLOW_RUN")
         .targetId(String.valueOf(request.getWorkflowRunId()))
         .payload(new WorkflowRunReplayApprovalPayload(tenantId, replayOperationId))
-        .approvalReason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
+        .approvalReason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
         .idempotencyKey(idempotencyKey)
         .build();
     String approvalNo = operations.submitApproval(approvalContext);
@@ -182,20 +250,24 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             .tenantId(tenantId)
             .compensationType(compensationType)
             .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
+                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
         .relatedFileId(request.getRelatedFileId())
-        .channelCode(ConsoleTextSanitizer.safeInput(request.getChannelCode(), 128))
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
-        .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .channelCode(
+            ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH))
+        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+        .resultPolicy(
+            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
         .configVersion(request.getConfigVersion())
         .sourceWorkflowRunId(request.getSourceWorkflowRunId())
         .sourceWorkflowNodeRunId(request.getSourceWorkflowNodeRunId())
@@ -223,19 +295,22 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
             .tenantId(tenantId)
             .compensationType(compensationType)
             .targetId(request.getTargetId())
-            .targetInstanceNo(ConsoleTextSanitizer.safeInput(request.getTargetInstanceNo(), 128))
-            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), 128));
+            .targetInstanceNo(ConsoleTextSanitizer.safeInput(
+                request.getTargetInstanceNo(), TARGET_INSTANCE_NO_MAX_LENGTH))
+            .jobCode(ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH));
     LocalDate parsedBizDate = ops.parseOptionalBizDate(request.getBizDate());
     CompensationPayload compensationPayload = compensationPayloadBuilder
         .bizDate(parsedBizDate)
-        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), 128))
+        .batchNo(ConsoleTextSanitizer.safeInput(request.getBatchNo(), BATCH_NO_MAX_LENGTH))
         .relatedFileId(request.getRelatedFileId())
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
-        .resultPolicy(ConsoleTextSanitizer.safeInput(request.getResultPolicy(), 64))
-        .configVersionPolicy(ConsoleTextSanitizer.safeInput(request.getConfigVersionPolicy(), 64))
+        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
+        .resultPolicy(
+            ConsoleTextSanitizer.safeInput(request.getResultPolicy(), RESULT_POLICY_MAX_LENGTH))
+        .configVersionPolicy(ConsoleTextSanitizer.safeInput(
+            request.getConfigVersionPolicy(), CONFIG_VERSION_POLICY_MAX_LENGTH))
         .configVersion(request.getConfigVersion())
         .build();
     String result = ops.submitCompensation(compensationPayload, idempotencyKey);
@@ -277,13 +352,14 @@ public class DefaultConsoleJobRecoveryService implements ConsoleJobRecoveryServi
         .tenantId(tenantId)
         .compensationType("DLQ")
         .targetId(request.getDeadLetterId())
-        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), 512))
-        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), 64))
-        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), 64))
-        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), 32))
+        .reason(ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH))
+        .operatorId(ConsoleTextSanitizer.safeInput(request.getOperatorId(), OPERATOR_ID_MAX_LENGTH))
+        .approvalId(ConsoleTextSanitizer.safeInput(request.getApprovalId(), APPROVAL_ID_MAX_LENGTH))
+        .strategy(ConsoleTextSanitizer.safeInput(request.getStrategy(), STRATEGY_MAX_LENGTH))
         .externalActionVerifiedNotExecuted(request.getExternalActionVerifiedNotExecuted())
-        .externalOutcomeEvidenceReference(
-            ConsoleTextSanitizer.safeInput(request.getExternalOutcomeEvidenceReference(), 512))
+        .externalOutcomeEvidenceReference(ConsoleTextSanitizer.safeInput(
+            request.getExternalOutcomeEvidenceReference(),
+            EXTERNAL_OUTCOME_EVIDENCE_REFERENCE_MAX_LENGTH))
         .build();
     String result = operations.submitCompensation(payload, idempotencyKey);
     ops.publishRefresh(tenantId);

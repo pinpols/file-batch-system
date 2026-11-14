@@ -63,6 +63,31 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class DefaultConsoleFileApplicationService implements ConsoleFileApplicationService {
 
+  /**
+   * 转发给 orchestrator 文件操作的操作人 ID 长度上限，
+   * 与控制台请求侧操作人 ID 的 @Size(max = 64) 口径一致；
+   * 落库列 file_audit_log.operator_id 已在 V349__file_audit_log_operator_id_widen.sql 放宽到 VARCHAR(128)。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
+  /**
+   * 文件操作原因，
+   * 与 DeleteFileRequest / ArchiveFileRequest / RedispatchFileRequest / PresignDownloadFileRequest.reason 的 @Size(max = 512) 一致。
+   */
+  private static final int REASON_MAX_LENGTH = 512;
+
+  /**
+   * 文件渠道编码，对应 file_channel_config.channel_code VARCHAR(128)（V6__create_file_tables.sql）
+   * ，与 RedispatchFileRequest.channelCode 的 @Size(max = 128) 一致。
+   */
+  private static final int CHANNEL_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 预签名上传的文件名长度上限，取常见文件系统单个文件名上限 255；
+   * file_record.file_name 为 VARCHAR(512)（V6__create_file_tables.sql）。
+   */
+  private static final int UPLOAD_FILE_NAME_MAX_LENGTH = 255;
+
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final OrchestratorApprovalClient approvalClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -137,9 +162,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
         tenantId, request.getApprovalId(), ApprovalTargetBinding.file(request.getFileId()));
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
-    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String operatorId =
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
     String traceId = requestMetadata.traceId();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     String approvalId = request.getApprovalId();
     FileOperationRequest fileOperation =
         new FileOperationRequest(tenantId, null, operatorId, traceId, reason, approvalId);
@@ -164,9 +190,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
     String action = request.getAction();
-    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String operatorId =
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
     String traceId = requestMetadata.traceId();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     Long extendWaitSeconds = request.getExtendWaitSeconds();
     ArrivalGroupOperationRequest arrivalGroupOperation = new ArrivalGroupOperationRequest(
         tenantId, action, operatorId, traceId, reason, extendWaitSeconds);
@@ -192,9 +219,10 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
-    String safeChannelCode = ConsoleTextSanitizer.safeInput(channelCode, 128);
-    String safeFileName = ConsoleTextSanitizer.safeInput(fileName, 255);
-    String operatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String safeChannelCode = ConsoleTextSanitizer.safeInput(channelCode, CHANNEL_CODE_MAX_LENGTH);
+    String safeFileName = ConsoleTextSanitizer.safeInput(fileName, UPLOAD_FILE_NAME_MAX_LENGTH);
+    String operatorId =
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
     String traceId = requestMetadata.traceId();
     if (EmptyChecks.isNotNull(binding)) {
       FileTemplateConfigQueryView template = fileTemplateConfigMapper.selectEnabledByTenantAndCode(
@@ -341,10 +369,12 @@ public class DefaultConsoleFileApplicationService implements ConsoleFileApplicat
     ConsoleRequestMetadata requestMetadata = requestMetadataResolver.current();
     RestClient restClient = orchestratorInternalRestClient.client();
     String tenantId = ctx.tenantId();
-    String sanitizedChannelCode = ConsoleTextSanitizer.safeInput(ctx.channelCode(), 128);
-    String sanitizedOperatorId = ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), 64);
+    String sanitizedChannelCode =
+        ConsoleTextSanitizer.safeInput(ctx.channelCode(), CHANNEL_CODE_MAX_LENGTH);
+    String sanitizedOperatorId =
+        ConsoleTextSanitizer.safeInput(requestMetadata.operatorId(), OPERATOR_ID_MAX_LENGTH);
     String traceId = requestMetadata.traceId();
-    String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), 512);
+    String sanitizedReason = ConsoleTextSanitizer.safeInput(ctx.reason(), REASON_MAX_LENGTH);
     String approvalId = ctx.approvalId();
     FileOperationRequest fileOperation = new FileOperationRequest(
         tenantId, sanitizedChannelCode, sanitizedOperatorId, traceId, sanitizedReason, approvalId);

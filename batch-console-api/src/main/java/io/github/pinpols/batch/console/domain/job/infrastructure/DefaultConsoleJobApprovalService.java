@@ -56,6 +56,43 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalService {
 
+  /**
+   * 补跑原因，
+   * 与 ConsoleCatchUpApprovalRequest / BatchDayCatchUpRequest.reason 的 @Size(max = 512) 一致。
+   */
+  private static final int REASON_MAX_LENGTH = 512;
+
+  /** job_definition.job_code VARCHAR(128)（V4__create_definition_tables.sql）。 */
+  private static final int JOB_CODE_MAX_LENGTH = 128;
+
+  /** business_calendar.calendar_code VARCHAR(128)（V3__create_config_tables.sql）。 */
+  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 自动补跑逐项幂等键的长度上限，
+   * 对应 trigger_request_idempotency_alias.idempotency_key VARCHAR(256)
+   * （V278__trigger_request_idempotency_alias.sql）；超长时改用缩短形式。
+   */
+  private static final int AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 256;
+
+  /**
+   * 需审批补跑逐项幂等键的长度上限，对应 approval_command.source_idempotency_key VARCHAR(128)
+   * （V27__approval_command.sql）；超长时改用缩短形式。
+   */
+  private static final int APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
+
+  /**
+   * 审批申请人 ID，对应 approval_command.requester_id VARCHAR(64)（V27__approval_command.sql）。
+   */
+  private static final int REQUESTER_ID_MAX_LENGTH = 64;
+
+  /**
+   * 补跑审批引用的触发请求 ID，对应 trigger_request.request_id VARCHAR(128)
+   * （V5__create_runtime_tables.sql），
+   * 与 ConsoleCatchUpApprovalRequest.requestId 的 @Size(max = 128) 一致。
+   */
+  private static final int REQUEST_ID_MAX_LENGTH = 128;
+
   private static final String CATCH_UP = "CATCH_UP";
   private static final String CONFLICT_MESSAGE = "error.common.conflict";
 
@@ -99,11 +136,13 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     params.put("operationType", "CATCH_UP_APPROVAL");
     params.put("approvalMode", "MANUAL_APPROVAL");
     params.put("catchUpApproved", true);
-    params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), 512));
+    params.put("reason", ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH));
     params.put("scheduledAt", request.getScheduledAt());
-    String sanitizedJobCode = ConsoleTextSanitizer.safeInput(request.getJobCode(), 128);
+    String sanitizedJobCode =
+        ConsoleTextSanitizer.safeInput(request.getJobCode(), JOB_CODE_MAX_LENGTH);
     if (ops.hasText(request.getBatchDayCalendarCode())) {
-      String calendarCode = ConsoleTextSanitizer.safeInput(request.getBatchDayCalendarCode(), 128);
+      String calendarCode = ConsoleTextSanitizer.safeInput(
+          request.getBatchDayCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
       params.put("batchDayCatchUp", true);
       params.put("batchDayCalendarCode", calendarCode);
       params.put("batchDayBizDate", request.getBizDate());
@@ -131,9 +170,10 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     if (!Texts.hasText(idempotencyKey)) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
     }
-    String calendarCode = ConsoleTextSanitizer.safeInput(request.getCalendarCode(), 128);
+    String calendarCode =
+        ConsoleTextSanitizer.safeInput(request.getCalendarCode(), CALENDAR_CODE_MAX_LENGTH);
     LocalDate parsedBizDate = ops.parseBizDate(bizDate);
-    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     List<String> requested = sanitizedRequestedJobCodes(request.getJobCodes());
     String requestJson =
         JsonUtils.toJson(new BatchRequestIdentity(bizDate, calendarCode, requested, safeReason));
@@ -162,7 +202,8 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     List<BatchDayCatchUpProgress.Item> pending = new ArrayList<>();
     for (String jobCode : jobCodes) {
       String itemIdempotencyKey = idempotencyKey + ":" + jobCode;
-      if (policyType == CatchUpPolicyType.AUTO && itemIdempotencyKey.length() > 256) {
+      if (policyType == CatchUpPolicyType.AUTO
+          && itemIdempotencyKey.length() > AUTO_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
         itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-auto-");
       }
       ApprovalSubmitCommand approval = null;
@@ -173,11 +214,11 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         approvalRequest.setBizDate(bizDate);
         approvalRequest.setBatchDayCalendarCode(calendarCode);
         approvalRequest.setReason(safeReason);
-        if (itemIdempotencyKey.length() > 128) {
+        if (itemIdempotencyKey.length() > APPROVAL_ITEM_IDEMPOTENCY_KEY_MAX_LENGTH) {
           itemIdempotencyKey = shortenItemKey(idempotencyKey, jobCode, "batchday-");
         }
-        String requester =
-            ConsoleTextSanitizer.safeInput(requestMetadataResolver.current().operatorId(), 64);
+        String requester = ConsoleTextSanitizer.safeInput(
+            requestMetadataResolver.current().operatorId(), REQUESTER_ID_MAX_LENGTH);
         approval = ApprovalSubmitCommand.builder()
             .tenantId(tenantId)
             .approvalType(CATCH_UP)
@@ -240,7 +281,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     }
     return jobCodes.stream()
         .filter(ops::hasText)
-        .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
+        .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
         .distinct()
         .toList();
   }
@@ -441,8 +482,9 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
         .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, idempotencyKey)
         .header(CommonConstants.DEFAULT_REQUEST_ID_HEADER, requestMetadata.requestId())
         .header(CommonConstants.DEFAULT_TRACE_ID_HEADER, requestMetadata.traceId());
-    String safeRequestId = ConsoleTextSanitizer.safeInput(request.getRequestId(), 128);
-    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String safeRequestId =
+        ConsoleTextSanitizer.safeInput(request.getRequestId(), REQUEST_ID_MAX_LENGTH);
+    String safeReason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     CatchUpApprovalPayload payload =
         new CatchUpApprovalPayload(tenantId, safeRequestId, safeReason);
     CommonResponse<LaunchResponse> response = requestBody
@@ -460,7 +502,7 @@ public class DefaultConsoleJobApprovalService implements ConsoleJobApprovalServi
     if (requestedJobCodes != null && !requestedJobCodes.isEmpty()) {
       return requestedJobCodes.stream()
           .filter(ops::hasText)
-          .map(code -> ConsoleTextSanitizer.safeInput(code, 128))
+          .map(code -> ConsoleTextSanitizer.safeInput(code, JOB_CODE_MAX_LENGTH))
           .distinct()
           .toList();
     }

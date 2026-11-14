@@ -72,6 +72,12 @@ import org.springframework.web.client.RestClient;
 @RequiredArgsConstructor
 public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
 
+  /**
+   * 工作流重放原因，
+   * 与 WorkflowNodeReplayPreviewRequest / WorkflowRunReplayRequest.reason 的 @Size(max = 512) 一致。
+   */
+  private static final int REPLAY_REASON_MAX_LENGTH = 512;
+
   // P2-1(2026-05-16):删除 RestClient.Builder 字段直接注入 — 所有 client 构造都走专用
   // OrchestratorInternalRestClient / TriggerInternalRestClient,后者已是 ObjectProvider 模式。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
@@ -240,7 +246,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     Long workflowRunId = request.getWorkflowRunId();
     Long workflowNodeRunId = request.getWorkflowNodeRunId();
     String reason = request.getReason();
-    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, REPLAY_REASON_MAX_LENGTH);
     String operatorId = requestMetadata.operatorId();
     String traceId = requestMetadata.traceId();
     WorkflowNodeReplayPreviewCommand previewCommand = WorkflowNodeReplayPreviewCommand.builder()
@@ -361,7 +367,7 @@ public class ConsoleJobOpsSupport implements ConsoleJobOperationsPort {
     UUID operationKey = submission ? UUID.fromString(request.getOperationKey()) : null;
     Long workflowRunId = request.getWorkflowRunId();
     String reason = request.getReason();
-    String safeReason = ConsoleTextSanitizer.safeInput(reason, 512);
+    String safeReason = ConsoleTextSanitizer.safeInput(reason, REPLAY_REASON_MAX_LENGTH);
     String requestedBy = requestMetadata.operatorId();
     String resultPolicy = request.getResultPolicy();
     String configVersionPolicy = request.getConfigVersionPolicy();

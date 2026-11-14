@@ -22,6 +22,24 @@ import lombok.Builder;
 /** batch_window Excel 行共用的解析与新增或更新辅助逻辑。 */
 public final class BatchWindowExcelRowParser {
 
+  /** batch_window.window_code VARCHAR(128)（V3__create_config_tables.sql）。 */
+  private static final int WINDOW_CODE_MAX_LENGTH = 128;
+
+  /** batch_window.window_name VARCHAR(256)（V3__create_config_tables.sql）。 */
+  private static final int WINDOW_NAME_MAX_LENGTH = 256;
+
+  /** batch_window.timezone VARCHAR(64)（V3__create_config_tables.sql）。 */
+  private static final int TIMEZONE_MAX_LENGTH = 64;
+
+  /** batch_window.end_strategy VARCHAR(32)（V3__create_config_tables.sql）。 */
+  private static final int END_STRATEGY_MAX_LENGTH = 32;
+
+  /** batch_window.out_of_window_action VARCHAR(32)（V3__create_config_tables.sql）。 */
+  private static final int OUT_OF_WINDOW_ACTION_MAX_LENGTH = 32;
+
+  /** batch_window.description VARCHAR(512)（V3__create_config_tables.sql）。 */
+  private static final int DESCRIPTION_MAX_LENGTH = 512;
+
   public static final String SHEET_NAME = "batch_window";
 
   private static final Pattern TIME_PATTERN = Pattern.compile("^\\d{2}:\\d{2}(:\\d{2})?$");
@@ -35,29 +53,34 @@ public final class BatchWindowExcelRowParser {
     String effectiveTenant = resolveTenantField(values, tenantId, issues);
     WindowRow.WindowRowBuilder rowBuilder =
         WindowRow.builder().rowNo(rowNo).tenantId(effectiveTenant);
-    String windowCodeText = requireText(values, "window_code", 128, issues);
+    String windowCodeText = requireText(values, "window_code", WINDOW_CODE_MAX_LENGTH, issues);
     String windowCode = CodeNormalizer.toConfigFormOrNull(windowCodeText);
     rowBuilder.windowCode(windowCode);
 
-    String windowName = requireText(values, "window_name", 256, issues);
+    String windowName = requireText(values, "window_name", WINDOW_NAME_MAX_LENGTH, issues);
     rowBuilder.windowName(windowName);
-    String timezone = requireText(values, "timezone", 64, issues);
+    String timezone = requireText(values, "timezone", TIMEZONE_MAX_LENGTH, issues);
     rowBuilder.timezone(timezone);
     String startTime = requireTime(values, "start_time", issues);
     rowBuilder.startTime(startTime);
     String endTime = requireTime(values, "end_time", issues);
     rowBuilder.endTime(endTime);
-    String endStrategy =
-        optionalEnum(values, "end_strategy", END_STRATEGIES, 32, "FINISH_RUNNING", issues);
+    String endStrategy = optionalEnum(
+        values, "end_strategy", END_STRATEGIES, END_STRATEGY_MAX_LENGTH, "FINISH_RUNNING", issues);
     rowBuilder.endStrategy(endStrategy);
-    String outOfWindowAction =
-        optionalEnum(values, "out_of_window_action", OUT_OF_WINDOW_ACTIONS, 32, "WAIT", issues);
+    String outOfWindowAction = optionalEnum(
+        values,
+        "out_of_window_action",
+        OUT_OF_WINDOW_ACTIONS,
+        OUT_OF_WINDOW_ACTION_MAX_LENGTH,
+        "WAIT",
+        issues);
     rowBuilder.outOfWindowAction(outOfWindowAction);
     Boolean allowCrossDay = optionalBoolean(values, "allow_cross_day", false, issues);
     rowBuilder.allowCrossDay(allowCrossDay);
     Boolean enabled = optionalBoolean(values, "enabled", true, issues);
     rowBuilder.enabled(enabled);
-    String description = optionalText(values, "description", 512, issues);
+    String description = optionalText(values, "description", DESCRIPTION_MAX_LENGTH, issues);
     rowBuilder.description(description);
     return rowBuilder.build();
   }
