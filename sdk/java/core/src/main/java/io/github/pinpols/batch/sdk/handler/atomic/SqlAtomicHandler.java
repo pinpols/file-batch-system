@@ -26,7 +26,10 @@ import lombok.extern.slf4j.Slf4j;
  *
  * <p><b>安全闸</b>:默认 {@link SqlAtomicConfig#forbidOsCapableRole()} 为 true,执行前检测当前 DB 角色是否具备 superuser
  * 或 {@code pg_execute_server_program} / {@code pg_read_server_files} / {@code
- * pg_write_server_files} 等 OS 能力,命中则拒绝执行(dual-use RCE 隔离)。
+ * pg_write_server_files} 等 OS 能力,命中则拒绝执行(dual-use RCE 隔离)。该探测只适用于 PostgreSQL;连 MySQL 等其他库时探测 SQL
+ * 本身会失败,须显式关闭 {@code forbidOsCapableRole} 并由库侧最小权限账号兜底。
+ *
+ * <p><b>多语句切分</b>:按连接的产品名选择词法(PostgreSQL 默认,MySQL / MariaDB 单独处理),见 {@link SqlSplitDialect}。
  */
 @Slf4j
 public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Object>> {
@@ -55,8 +58,19 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
   @Override
   protected Map<String, Object> doInvoke(SdkTaskContext ctx) throws Exception {
     String sql = readSql(ctx);
-    List<String> statements = splitStatements(sql);
-    if (statements.isEmpty()) {
+    try (Connection conn = dataSource.getConnection()) {
+      // 切分规则取决于连接的方言,所以先取连接再切分与校验语句数
+      List<String> statements = SqlSplitDialect.detect(conn).split(sql);
+      requireStatementCountWithinLimit(statements);
+      if (config.forbidOsCapableRole()) {
+        assertNotOsCapableRole(conn);
+      }
+      return runStatements(conn, statements);
+    }
+  }
+
+  private void requireStatementCountWithinLimit(List<String> statements) {
+    if (EmptyChecks.isEmpty(statements)) {
       throw new IllegalArgumentException("no executable SQL statement found");
     }
     if (statements.size() > config.maxStatementsPerJob()) {
@@ -64,12 +78,6 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
           + statements.size()
           + " > maxStatementsPerJob="
           + config.maxStatementsPerJob());
-    }
-    try (Connection conn = dataSource.getConnection()) {
-      if (config.forbidOsCapableRole()) {
-        assertNotOsCapableRole(conn);
-      }
-      return runStatements(conn, statements);
     }
   }
 
@@ -138,7 +146,10 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     }
   }
 
-  /** 按 `;` 切多语句,跳过单/双引号内、行/块注释内以及 PG dollar-quote 体内的 `;`。 */
+  /**
+   * 按 PostgreSQL 词法用 `;` 切多语句,跳过单/双引号内、行/块注释内以及 PG dollar-quote 体内的 `;`。执行时按连接方言选择规则,见
+   * {@link SqlSplitDialect}。
+   */
   static List<String> splitStatements(String sql) {
     StatementSplitState state = new StatementSplitState();
     int i = 0;
@@ -185,6 +196,9 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
    * <p>引号词法按 PostgreSQL（standard_conforming_strings=on，自 9.1 起默认）处理：普通 {@code '...'} 与 {@code
    * "..."} 内反斜杠是字面字符，唯一的引号转义是连写两个引号；只有 {@code E'...'}/{@code e'...'} 转义字符串里反斜杠转义下一个字符。规则与平台
    * {@code SqlTaskExecutor} 一致，但 SDK 不依赖平台模块，故独立实现。
+   *
+   * <p>块注释按 PostgreSQL 规则可嵌套：注释内每个 {@code /*} 加一层、每个 {@code *}{@code /} 减一层，回到 0 层才结束。{@code /*}、{@code
+   * *}{@code /}、{@code --} 是两字符记号，已组成记号的第二个字符不再与下一个字符配对（如 {@code /*}{@code /} 不是开即闭）。
    */
   private static final class StatementSplitState {
     private final List<String> statements = new ArrayList<>();
@@ -203,6 +217,12 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
 
     private LexState state = LexState.CODE;
 
+    /** 当前块注释嵌套层数；仅在 {@link LexState#BLOCK_COMMENT} 下大于 0。 */
+    private int blockCommentDepth;
+
+    /** 本字符是否与 {@code previous} 组成了两字符记号；组成时下一个字符看不到本字符。 */
+    private boolean pairConsumed;
+
     /** 最近一次收尾的单引号字符串种类；紧跟的引号属于连写引号转义，需回到同一种字符串。 */
     private LexState lastSingleQuoteKind = LexState.SINGLE_QUOTE;
 
@@ -212,13 +232,14 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     private char beforePrevious;
 
     private void append(char current) {
+      pairConsumed = false;
       switch (state) {
         case LINE_COMMENT -> {
           if (current == '\n') state = LexState.CODE;
           buffer.append(current);
         }
         case BLOCK_COMMENT -> {
-          if (previous == '*' && current == '/') state = LexState.CODE;
+          appendBlockComment(current);
           buffer.append(current);
         }
         case SINGLE_QUOTE, ESCAPE_STRING, ESCAPE_STRING_BACKSLASH -> {
@@ -232,7 +253,19 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
         case CODE -> appendSqlCharacter(current);
       }
       beforePrevious = previous;
-      previous = current;
+      previous = pairConsumed ? 0 : current;
+    }
+
+    /** 块注释内部：{@code /*} 加一层、{@code *}{@code /} 减一层，回到 0 层时结束注释。 */
+    private void appendBlockComment(char current) {
+      if (previous == '/' && current == '*') {
+        blockCommentDepth++;
+        pairConsumed = true;
+      } else if (previous == '*' && current == '/') {
+        blockCommentDepth--;
+        pairConsumed = true;
+        if (blockCommentDepth == 0) state = LexState.CODE;
+      }
     }
 
     /** 单引号字符串内部：只有转义字符串识别反斜杠，收尾时记下种类以便处理连写引号。 */
@@ -265,9 +298,12 @@ public class SqlAtomicHandler extends SdkAbstractAtomicHandler<Map<String, Objec
     private void appendSqlCharacter(char current) {
       if (previous == '-' && current == '-') {
         state = LexState.LINE_COMMENT;
+        pairConsumed = true;
         buffer.append(current);
       } else if (previous == '/' && current == '*') {
         state = LexState.BLOCK_COMMENT;
+        blockCommentDepth = 1;
+        pairConsumed = true;
         buffer.append(current);
       } else if (current == '\'') {
         state = openingSingleQuoteKind();

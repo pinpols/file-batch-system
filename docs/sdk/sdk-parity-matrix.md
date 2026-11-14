@@ -82,6 +82,8 @@
 | typed 模板 | Import/Export/Process/Dispatch | `_typed_import/export/process/dispatch.py` |
 | 幂等件 | Idempotent/KeyResolver/Entity/Store/Handler | `_handler/_key_resolver/_entity/_store.py` |
 
+> 差异(2026-11-14):Java `SqlAtomicHandler` 按连接的数据库产品切换语句切分规则,MySQL / MariaDB 用 MySQL 规则,其余用 PostgreSQL 规则;Python `_sql.py` 的连接为 asyncpg 形态,只支持 PostgreSQL 规则。两端对 PostgreSQL 的切分结果一致。
+
 ## 4.5 Kafka offset-commit 契约
 
 每条派单消息的处置决定一个 disposition,consumer 据此决定是否提交 offset。**权威源**:[`wire-protocol.md`](wire-protocol.md) §A、契约 fixture [`16/17/18-kafka-schema-version-*`](../api/sdk-contract-fixtures) + [`28-kafka-paused-task-type-drop`](../api/sdk-contract-fixtures)。命名:Java `DispatchDecision` / Go `MessageDisposition` / Python `DispatchDisposition` / Rust `MessageOutcome` / TS `PipelineOutcome`。
