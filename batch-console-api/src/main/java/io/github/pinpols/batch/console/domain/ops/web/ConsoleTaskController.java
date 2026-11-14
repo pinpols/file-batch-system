@@ -1,7 +1,9 @@
 package io.github.pinpols.batch.console.domain.ops.web;
 
 import io.github.pinpols.batch.common.dto.CommonResponse;
+import io.github.pinpols.batch.console.domain.ops.dto.TaskExecutionAuditResponse;
 import io.github.pinpols.batch.console.domain.ops.dto.TaskHeartbeatDetailsResponse;
+import io.github.pinpols.batch.console.domain.ops.service.ConsoleTaskExecutionAuditService;
 import io.github.pinpols.batch.console.domain.ops.service.ConsoleTaskHeartbeatService;
 import io.github.pinpols.batch.console.domain.rbac.support.ConsoleSecurityExpressions;
 import io.github.pinpols.batch.console.shared.query.TenantIdResolver;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConsoleTaskController {
 
   private final ConsoleTaskHeartbeatService heartbeatService;
+  private final ConsoleTaskExecutionAuditService executionAuditService;
   private final TenantIdResolver tenantGuard;
   private final ConsoleResponseFactory responseFactory;
 
@@ -40,5 +43,19 @@ public class ConsoleTaskController {
       @RequestParam(value = "tenantId", required = false) String tenantId) {
     String resolved = tenantGuard.resolveTenant(tenantId);
     return responseFactory.success(heartbeatService.getHeartbeatDetails(resolved, taskId));
+  }
+
+  /**
+   * GET /api/console/tasks/{taskId}/execution-audit?tenantId=xxx — 任务派单期生效参数（含 shell 命令、SQL 文本）与执行结果，已脱敏。
+   *
+   * <p>取证用途，只对平台管理员和审计员开放（覆盖类级角色）；不存在或不属于该租户返回 404。
+   */
+  @GetMapping("/{taskId}/execution-audit")
+  @PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_AUDITOR)
+  public CommonResponse<TaskExecutionAuditResponse> executionAudit(
+      @PathVariable("taskId") Long taskId,
+      @RequestParam(value = "tenantId", required = false) String tenantId) {
+    String resolved = tenantGuard.resolveTenant(tenantId);
+    return responseFactory.success(executionAuditService.getExecutionAudit(resolved, taskId));
   }
 }

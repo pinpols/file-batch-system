@@ -3738,6 +3738,55 @@ paths:
                       cancelRequested: { type: boolean }
         '404':
           description: Task not found for tenant
+  /api/console/tasks/{taskId}/execution-audit:
+    get:
+      tags: [Workers]
+      summary: Effective parameters (shell command, SQL text, ...) and outcome of a task, masked
+      description: 取证用途，仅 ROLE_ADMIN、ROLE_AUDITOR 可调用；ROLE_TENANT_ADMIN、ROLE_TENANT_USER 返回 403。`env`、`headers` 只保留键名，`auth` 与敏感键整体遮蔽，其余文本遮蔽端点与凭据表达式。
+      operationId: getTaskExecutionAudit
+      parameters:
+        - name: taskId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: tenantId
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Masked execution audit of the task
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  code: { type: string }
+                  message: { type: string }
+                  data:
+                    type: object
+                    properties:
+                      taskId: { type: integer, format: int64 }
+                      jobInstanceId: { type: integer, format: int64 }
+                      jobCode: { type: string }
+                      taskStatus: { type: string }
+                      effectiveParameters: { type: object, additionalProperties: true, nullable: true }
+                      outcome:
+                        type: object
+                        properties:
+                          assignedWorkerCode: { type: string, nullable: true }
+                          startedAt: { type: string, format: date-time, nullable: true }
+                          finishedAt: { type: string, format: date-time, nullable: true }
+                          resultSummary: { type: object, additionalProperties: true, nullable: true }
+                          errorCode: { type: string, nullable: true }
+                          errorMessage: { type: string, nullable: true }
+        '403':
+          description: Caller is not ADMIN or AUDITOR
+        '404':
+          description: Task not found for tenant
   /api/console/workers/{workerCode}/drain:
     post:
       tags: [Workers]
