@@ -10,19 +10,19 @@ class FileArrivalChannelCodeTest {
 
   @Test
   @DisplayName("空值视为未配置渠道,直接通过")
-  void acceptsNull() {
+  void accepts_null() {
     assertThat(FileArrivalChannelCode.isValid(null)).isTrue();
   }
 
   @Test
   @DisplayName("非字符串类型不接受")
-  void rejectsNonString() {
+  void rejects_non_string() {
     assertThat(FileArrivalChannelCode.isValid(128)).isFalse();
   }
 
   @Test
   @DisplayName("长度 128 的编码通过,129 被拒绝")
-  void enforcesChannelCodeLengthLimit() {
+  void enforces_channel_code_length_limit() {
     assertThat(FileArrivalChannelCode.isValid("c".repeat(128))).isTrue();
     assertThat(FileArrivalChannelCode.isValid("c".repeat(129))).isFalse();
   }
