@@ -108,12 +108,21 @@ Worker，而是由 Orchestrator 持有 DAG 游标，按节点逐步物化任务�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant C as 调用方
-  participant T as Trigger / Trigger Relay
-  participant DB as 平台数据库
-  participant K as Kafka
-  participant O as Orchestrator / Task Relay
-  participant W as Worker
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant C as 调用方
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant T as Trigger / Trigger Relay
+    participant O as Orchestrator / Task Relay
+  end
+  box rgba(124,58,237,0.08) 数据与消息
+    participant DB as 平台数据库
+    participant K as Kafka
+  end
+  box rgba(5,150,105,0.08) 执行面
+    participant W as Worker
+  end
   C->>T: Workflow 目标 + 稳定来源身份
   T->>DB: 请求与 Trigger Outbox 同事务
   T->>K: Relay 发布 launch
@@ -141,6 +150,7 @@ sequenceDiagram
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 erDiagram
+  direction LR
   workflow_definition ||--o{ workflow_run : freezes
   workflow_run ||--o{ workflow_node_run : owns
   workflow_node_run o|--o| job_instance : "JOB 按需物化"

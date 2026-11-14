@@ -196,40 +196,51 @@ staging 已验收 manifest 的 workflow 仍是独立待办。
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  USER["用户 / 运维"] --> EDGE["HTTPS / Nginx"]
+flowchart LR
+  USER(["用户 / 运维"]):::entry --> EDGE["HTTPS / Nginx"]:::entry
   subgraph APP["当前基线：App Node / Compose"]
-    FE["batch-console"]
-    API["console-api"]
-    TR["Trigger"]
-    OR["Orchestrator"]
-    FILE["文件 Worker 池<br/>import / export / process / dispatch"]
-    ATOMIC["Atomic Worker<br/>独立权限边界"]
-    EDGE --> FE
-    EDGE --> API
-    API --> TR
-    API --> OR
-    FILE -->|"HTTP claim / report"| OR
-    ATOMIC -->|"HTTP claim / report"| OR
+    direction TB
+    FE["batch-console"]:::entry
+    API["console-api"]:::control
+    TR["Trigger"]:::control
+    OR["Orchestrator"]:::control
+    FILE["文件 Worker 池<br/>import / export / process / dispatch"]:::worker
+    ATOMIC["Atomic Worker<br/>独立权限边界"]:::worker
   end
   subgraph INFRA["Infra Node / 私网访问"]
+    direction TB
     subgraph KAFKA["同一 Kafka 集群"]
-      LAUNCH["触发请求通道"]
-      TASK["任务派单通道"]
+      direction TB
+      LAUNCH{{"触发请求通道"}}:::mq
+      TASK{{"任务派单通道"}}:::mq
     end
-    PG["PostgreSQL"]
-    CACHE["Valkey"]
-    OBJ["MinIO / S3"]
+    PG[("PostgreSQL")]:::store
+    CACHE[("Valkey")]:::store
+    OBJ[("MinIO / S3")]:::store
   end
-  TR --> LAUNCH --> OR
-  OR --> TASK
-  TASK --> FILE
-  TASK --> ATOMIC
+  EDGE --> FE
+  EDGE --> API
+  API --> TR
+  API --> OR
+  FILE -->|"HTTP claim / report"| OR
+  ATOMIC -->|"HTTP claim / report"| OR
+  TR -->|"生产"| LAUNCH
+  OR -->|"消费"| LAUNCH
+  OR -->|"生产"| TASK
+  FILE -->|"消费"| TASK
+  ATOMIC -->|"消费"| TASK
   API --> PG
   TR --> PG
   OR --> PG
   OR --> CACHE
   FILE --> OBJ
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 建议起步规格：

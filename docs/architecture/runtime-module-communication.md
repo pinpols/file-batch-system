@@ -16,20 +16,39 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  C["Console API"] -->|"运行发起"| T["Trigger"]
-  C -->|"审批 / 补偿 / 重放"| O["Orchestrator"]
-  C -->|"配置 / 查询"| DB[("平台 PostgreSQL")]
-  T -->|"请求 + Outbox"| DB
-  T --> Q[("Quartz 表")]
-  DB -->|"读取待发事件"| TR["Trigger Relay"] --> KL["Kafka · launch"] --> O
-  O -->|"运行状态 + Outbox"| DB
-  DB -->|"读取待发事件"| OR["Task Outbox Relay"] --> KT["Kafka · task dispatch"]
-  KT --> W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]
+  C["Console API"]:::entry
+  T["Trigger"]:::control
+  DBT[("平台 PostgreSQL<br/>trigger_request + Trigger Outbox")]:::store
+  Q[("Quartz 表")]:::store
+  TR["Trigger Relay"]:::control
+  KL{{"Kafka · launch"}}:::mq
+  O["Orchestrator"]:::control
+  DBO[("平台 PostgreSQL<br/>运行状态 + Task Outbox")]:::store
+  OR["Task Outbox Relay"]:::control
+  KT{{"Kafka · task dispatch"}}:::mq
+  W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]:::worker
+  B[("业务数据源")]:::ext
+  S["对象存储 / 外部通道"]:::ext
+  FM[("平台文件元数据")]:::store
+  C -->|"运行发起"| T
+  C -->|"审批 / 补偿 / 重放"| O
+  C -.->|"配置 / 查询"| DBO
+  T -->|"同事务写入"| DBT
+  T --> Q
+  DBT -->|"读取待发事件"| TR --> KL --> O
+  O -->|"同事务写入"| DBO
+  DBO -->|"读取待发事件"| OR --> KT --> W
   W -->|"HTTP CLAIM / REPORT / 续租"| O
-  W --> B[("业务数据源")]
-  W --> S["对象存储 / 外部通道"]
-  W -->|"受限文件元数据"| FM[("平台文件元数据")]
-  FM --- DB
+  W --> B
+  W --> S
+  W -->|"受限文件元数据"| FM
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ## Orchestrator 写表细化图

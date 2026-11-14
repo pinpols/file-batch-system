@@ -110,29 +110,62 @@ stateDiagram-v2
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart LR
-  N[NEW] --> P[PUBLISHING]
-  P -->|发布确认| D[PUBLISHED]
-  P -->|可重试失败| F[FAILED]
-  F -->|到达 next_publish_at，CAS 领取| P
-  P -->|重试耗尽| G[GIVE_UP]
+stateDiagram-v2
+  direction LR
+  [*] --> NEW: 与业务状态同事务写入
+  NEW --> PUBLISHING: CAS 领取
+  FAILED --> PUBLISHING: 到达 next_publish_at 后 CAS 领取
+  PUBLISHING --> PUBLISHED: Kafka 确认
+  PUBLISHING --> FAILED: 可重试失败或陈旧回收
+  PUBLISHING --> GIVE_UP: 重试耗尽
+  FAILED --> NEW: 人工重新发布
+  GIVE_UP --> NEW: 人工重新发布
+  PUBLISHED --> [*]
+  class PUBLISHED ok
+  class GIVE_UP fail
+  class FAILED wait
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
+
+`PUBLISHING` 超过 `publishing-timeout-seconds` 未确认时由陈旧回收拨回 `FAILED`。运维经 Orchestrator 内部接口重新发布时，只把 `FAILED` 或 `GIVE_UP` 重置为 `NEW`（`OutboxOpsApplicationService`）。`trigger_outbox_event` 由 `TriggerOutboxRelay` 按同一迁移推进，达到最大发布次数后同样进入 `GIVE_UP`。
 
 ### 3.3 trigger_request 状态机（ADR-010）
 
-主路径示意：普通新请求在同一事务写入 `ACCEPTED` 与 Trigger Outbox；人工补跑审批才会 CAS 到 `PROCESSING`。上表的 `PENDING`、`FORWARD_FAILED`、`GIVE_UP` 不能据此理解为每个请求的必经状态，发布重试由 Outbox 状态机单独承载。
+普通新请求在同一事务写入 `ACCEPTED` 与 Trigger Outbox；发布重试由 Outbox 状态机单独承载。以下迁移按 2026-11-14 源码核对：
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  A[ACCEPTED：请求与 Outbox 已入库] -->|Orchestrator 创建根运行| L[LAUNCHED]
-  A -->|门禁要求持久化等待| W[WAITING]
-  W -->|条件满足并创建根运行| L
-  A -->|接纳校验拒绝| R[REJECTED / DUPLICATE]
-  A -->|人工补跑审批 CAS| P[PROCESSING]
-  P -->|创建根运行| L
-  P -->|仍须等待| W
+stateDiagram-v2
+  direction TB
+  [*] --> ACCEPTED: 请求与 Outbox 同事务入库
+  ACCEPTED --> LAUNCHED: 创建根运行
+  ACCEPTED --> WAITING: 业务日门禁或作业依赖等待
+  ACCEPTED --> PROCESSING: Workflow 容量等待
+  WAITING --> LAUNCHED: 条件满足后创建根运行
+  PROCESSING --> LAUNCHED: 容量释放后创建根运行
+  ACCEPTED --> REJECTED: 接纳校验拒绝或错过触发过期
+  ACCEPTED --> DUPLICATE: 幂等命中
+  WAITING --> REJECTED: 等待被拒绝或取消
+  PROCESSING --> REJECTED: 等待被拒绝
+  LAUNCHED --> [*]
+  REJECTED --> [*]
+  DUPLICATE --> [*]
+  class LAUNCHED ok
+  class REJECTED fail
+  class WAITING,PROCESSING wait
+  class DUPLICATE muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
+
+- **等待**：业务日门禁（`BatchDayGateService`）与作业依赖等待（`JobDependencyWaitingLaunchService`）写 `WAITING`；Workflow 容量等待（`WorkflowLaunchWaitService.defer`）写 `PROCESSING`。两类等待在条件满足后都创建根运行并转为 `LAUNCHED`，等待被拒绝或取消时转为 `REJECTED`。
+- **拒绝与重复**：接纳校验不通过、错过触发的补偿请求过期（`TriggerMisfirePendingMapper`）时为 `REJECTED`；幂等命中为 `DUPLICATE`。
+- **未写入的枚举值**：`PENDING`、`FORWARD_FAILED`、`GIVE_UP` 仍在枚举与 CHECK 约束中，查询会把它们视为未启动或未接纳，但当前代码没有写入这些状态的路径，图中不画。
 
 ## 4. 状态推进的硬约束
 

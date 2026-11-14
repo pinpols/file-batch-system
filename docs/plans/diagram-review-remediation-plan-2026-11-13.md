@@ -11,6 +11,7 @@
 
 - 2026-11-14：B0 完成，图例要求写入[文档治理](../standards/document-governance.md) §9，图例补充双向虚线约定。B1 的 README 中英文总图按导航主链风格重画为横向三段，回连改为双向虚线以避免成环打乱读向。B3 的 §12 K8s 目标架构拆为「运行拓扑」与「交付与观测」两张。三项 P1 中剩余 B2 的 job_instance 状态机口径待对照代码核对。
 - 2026-11-14：B2 的 job_instance 状态机按源码重画为 stateDiagram，逐条注明写入方；P1 全部完成。核对中发现：`READY` 当前无写入路径；`RUNNING` 发起取消最终落 `FAILED`/`PARTIAL_FAILED` 而非 `CANCELLED`；疑似 `PAUSED` 会被在途分区回报改回 `RUNNING`，已登记待办，需集成测试确认。
+- 2026-11-14：P2 23 张完成。状态图先对照代码重画：分区状态机补上 DAG 节点 `CREATED` 起点、普通计划直接 `READY`、租约过期退回 `WAITING`、人工重试重开，去掉不存在的 `RUNNING → CANCELLED`；outbox_event 补人工重新发布；trigger_request 更正 `PROCESSING` 为 Workflow 容量等待（原写「人工补跑审批」不符），补等待被拒绝路径，注明 `PENDING`、`FORWARD_FAILED`、`GIVE_UP` 当前无写入路径。端到端时序按入口/控制面/消息/执行面分组并编号；§4.4 三张小图合并；Compose 两节点图改为客户端连向 Infra 服务的连接语义以消除回流；§7.8.2 水位回路、时间语义、ER 图改为横向；其余按图例着色。剩余 P3。
 
 ## 与既有工作的关系
 
