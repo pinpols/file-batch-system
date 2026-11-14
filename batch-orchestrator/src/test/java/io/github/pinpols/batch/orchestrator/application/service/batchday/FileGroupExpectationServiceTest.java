@@ -2,6 +2,7 @@ package io.github.pinpols.batch.orchestrator.application.service.batchday;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -51,7 +52,8 @@ class FileGroupExpectationServiceTest {
 
   @BeforeEach
   void setUp() {
-    when(transactionManager.getTransaction(ArgumentMatchers.any()))
+    lenient()
+        .when(transactionManager.getTransaction(ArgumentMatchers.any()))
         .thenReturn(mock(TransactionStatus.class));
     service = new FileGroupExpectationService(
         definitionMapper,
@@ -121,6 +123,26 @@ class FileGroupExpectationServiceTest {
         .isInstanceOf(OperationFailure.class)
         .satisfies(error -> assertThat(((OperationFailure) error).kind())
             .isEqualTo(OperationFailure.Kind.INVALID_CONFIGURATION));
+  }
+
+  @Test
+  @DisplayName("列取上传目标时租户标识为空或超长被拒绝")
+  void shouldRejectInvalidTenant_whenListingUploadTargets() {
+    assertThatThrownBy(() -> service.listEnabledUploadTargets(" "))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> service.listEnabledUploadTargets("t".repeat(129)))
+        .isInstanceOf(IllegalArgumentException.class);
+  }
+
+  @Test
+  @DisplayName("匹配上传目标时缺失或越界身份字段被拒绝")
+  void shouldRejectIncompleteIdentity_whenRequiringUploadTarget() {
+    assertThatThrownBy(() -> service.requireEnabledUploadTarget("t1", null, 1L, "g"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> service.requireEnabledUploadTarget("t1", "CAL_A", 0L, "g"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> service.requireEnabledUploadTarget("t1", "CAL_A", 1L, "g".repeat(129)))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 
   @DisplayName("删除预期定义只移除当前周期配置")
