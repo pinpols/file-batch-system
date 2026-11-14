@@ -95,6 +95,17 @@ final class TaskOutcomeStatePolicy {
   }
 
   /**
+   * ADR-044：暂停期间在途分区照常回报但不推进下一波，PAUSED 只能由人工恢复回到 RUNNING。
+   *
+   * <p>分区尚未全部结束时汇总结果为 RUNNING，此时保留 PAUSED；分区已全部结束时按汇总终态收口。
+   */
+  static String preserveManualPause(String currentStatus, String resolvedStatus) {
+    boolean pausedInstanceStillRunning = JobInstanceStatus.PAUSED.code().equals(currentStatus)
+        && JobInstanceStatus.RUNNING.code().equals(resolvedStatus);
+    return pausedInstanceStillRunning ? currentStatus : resolvedStatus;
+  }
+
+  /**
    * 允许把陈旧的失败终态收敛为成功。
    *
    * <p>失败终态通常不可复活，但重试/补偿可能在旧失败写入后完成最后一个分区。只有当本次实时分区
