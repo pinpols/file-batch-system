@@ -87,13 +87,15 @@ flowchart LR
 
 The five worker types:
 
-| Worker | Purpose | Stage / execution model |
-|---|---|
+| Worker | Purpose | Stage chain |
+|---|---|---|
 | import | File receive, parse, validate, load | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | export | Query, render, sharded export, object-store sink | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
 | process | Staging, compute/aggregate, validate, commit, idempotent rerun | PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK |
-| dispatch | SFTP / NAS / HTTP / S3 delivery | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| atomic | Controlled shell / SQL / stored-proc / HTTP atomic tasks | No file pipeline; isolated executor with allowlist / timeout / RCE boundaries |
+| dispatch | SFTP / NAS / HTTP / S3 delivery | PREPARE → DISPATCH → ACK → RETRY → COMPENSATE → COMPLETE |
+| atomic | Controlled shell / SQL / stored-proc / HTTP atomic tasks | No file pipeline; isolated per-type executors |
+
+For dispatch, `RETRY` / `COMPENSATE` are failure-path steps: `RETRY` runs only when `retryRequested=true`, otherwise the chain goes straight to compensation; `COMPENSATE` records the compensation and audit entry after a terminal failure. `atomic` has no stage package — its four executors live in the `shell`, `sql`, `storedproc` and `http` packages under `batch-worker/atomic`, all bounded by the allowlist / timeout / RCE rules.
 
 For the detailed state chain and key constraints see [Architecture constraints](#architecture-constraints); for end-to-end flow diagrams see [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md).
 
@@ -144,13 +146,21 @@ Getting started and operations:
 
 | Layer | Choice |
 |---|---|
-| Runtime | JDK 21 (LTS), Spring Boot 4.1.0 |
+| Runtime | JDK 21 (LTS), Spring Boot 4.1.2 (Spring MVC) |
 | Messaging | Apache Kafka (version managed by the Spring Boot BOM) |
-| Database | PostgreSQL 17 (JSONB, TIMESTAMPTZ) |
-| Object storage | MinIO (S3-compatible) |
+| Database | PostgreSQL 17 (JSONB, TIMESTAMPTZ) with HikariCP |
+| Cache / coordination | Valkey 8 (Redis protocol, Sentinel HA) via Spring Data Redis: query cache, session and token revocation, idempotency, token-bucket rate limiting; ShedLock distributed locks; in-process Caffeine |
+| Object storage | S3-compatible storage (AWS SDK for Java v2; MinIO by default locally) |
 | Scheduler | Quartz Scheduler + JDBC JobStore cluster |
+| Security | Spring Security + OAuth2 / OIDC (Nimbus JOSE); JWT sessions, CSRF protection, menu-level RBAC |
+| Resilience | Resilience4j (downstream circuit breaker and fallback) |
 | Migrations | Flyway |
 | ORM | MyBatis (`mapper` + XML; same set for config-time and runtime) |
+| Observability | Micrometer + Prometheus metrics, OpenTelemetry (OTLP) to Tempo / Loki, Grafana dashboards |
+| Multi-language SDK | Java / Python / TypeScript / Go / Rust (ADR-035, shared contract fixtures) |
+| Console frontend | Vue 3 + TypeScript + Vite + Pinia + Element Plus (paired repo `../batch-console`) |
+| Testing and load | JUnit 5, Testcontainers (PostgreSQL / Kafka / Redis), ArchUnit, Mockito / AssertJ, Gatling, Jazzer, PIT |
+| Build and deploy | Maven 3.9+ (Spotless / PMD / SpotBugs / JaCoCo / Enforcer), Docker Compose, Kubernetes + Helm |
 
 ## Quick start
 
