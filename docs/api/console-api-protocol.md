@@ -7,6 +7,7 @@ API 契约发生变化时，请同步更新本文档与 [console-api.openapi.yam
 
 | 日期       | 变更摘要                                                                                                                                      |
 |------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| 2026-11-14 | **新增** `GET /api/console/tasks/{taskId}/execution-audit`：返回任务派单期生效参数（含 shell 命令、SQL 文本）与执行结果，已脱敏；仅 ROLE_ADMIN、ROLE_AUDITOR（BIZ-20261113-02）。 |
 | 2026-11-14 | **权限收紧**：`GET /api/console/queries/outbox-retries`、`/outbox-deliveries`、`/catch-up-approvals` 及 `GET /api/console/stream/outbox-retries/events`、`/outbox-deliveries/events` 改为 `ADMIN_OR_TENANT_ADMIN`，与菜单和移动端路由一致；ROLE_AUDITOR、ROLE_TENANT_USER 返回 403。路径、参数与响应不变（ARCH-20261113-09）。 |
 | 2026-11-14 | **权限收紧**：`GET /api/console/queries/operation-audits` 增加 `@PreAuthorize(ADMIN_OR_TENANT_ADMIN_OR_AUDITOR)`，与菜单「操作审计」一致；TENANT_USER 调用返回 403。路径、参数与响应不变；`/queries/audits`（文件审计）不变（ARCH-20261113-09）。 |
 | 2026-11-12 | 文档更正：`X-Operator-Id` 不是操作人身份来源，服务端忽略该请求头，写操作与审计一律使用认证身份（`ConsoleRequestContextFilterTest`、相关 E2E 已覆盖伪造头被忽略）。服务端行为不变。 |

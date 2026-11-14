@@ -10,6 +10,7 @@
 
 ### Added
 
+- 新增 `GET /api/console/tasks/{taskId}/execution-audit`：按任务查看派单时实际生效的参数（原子任务的 shell 命令与参数、SQL 文本等）和执行结果，供取证。只对平台管理员和审计员开放；`env`、`headers` 只返回键名，`auth` 与敏感键整体遮蔽，其余文本遮蔽端点与凭据表达式。数据来自已有的 `job_task.effective_parameters`，不新增表。
 - 控制台菜单新增审计页 `/observability/audit` 和平台设置 `/system/settings`。文件审计、操作审计及其他旧路径保留，等前端页面和重定向上线后再删。`/runs` 未改。
 - 审批查询新增 `excludeApprovalTypes`：逗号分隔，最多 8 个类型代码。普通审批列表用它排除 `CATCH_UP`。
 

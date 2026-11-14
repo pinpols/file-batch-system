@@ -630,6 +630,7 @@
             "batch-console-api/src/main/resources/mapper/FileRecordMapper.xml",
             "batch-console-api/src/main/resources/mapper/JobExecutionMapper.xml",
             "batch-console-api/src/main/resources/mapper/JobInstanceMapper.xml",
+            "batch-console-api/src/main/resources/mapper/JobTaskMapper.xml",
             "batch-console-api/src/main/resources/mapper/WorkflowExecutionMapper.xml"
           ]
         },
