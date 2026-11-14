@@ -16658,6 +16658,8 @@ components:
           type: string
         jobType:
           type: string
+        bizType:
+          type: string
         queueCode:
           type: string
         workerGroup:
@@ -16675,6 +16677,8 @@ components:
           type: string
         triggerMode:
           type: string
+        dagEnabled:
+          type: boolean
           enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
           description: 作业定义声明的触发入口分类；不代表某次实例的实际触发来源，后者见 triggerType。
         retryPolicy:
@@ -16735,8 +16739,16 @@ components:
           type: string
         defaultParams:
           type: string
+        priority:
+          type: integer
+          format: int32
+        version:
+          type: integer
+          format: int64
         enabled:
           type: boolean
+        description:
+          type: string
         createdAt:
           type: string
           format: date-time
@@ -16889,10 +16901,12 @@ components:
           type: string
         skipReasonCode:
           type: string
-          description: Stable reason category when the node status is SKIPPED.
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
         skipReason:
           type: string
-          description: Operator-supplied explanation for a manual skip, when present.
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
         relatedPipelineInstanceId:
           type: integer
           format: int64
@@ -19005,6 +19019,8 @@ components:
         pipelineDefinitionId:
           type: integer
           format: int64
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
         jobCode:
           type: string
         pipelineType:
@@ -19424,6 +19440,12 @@ components:
           type: boolean
         description:
           type: string
+        createdBy:
+          type: string
+        updatedBy:
+          type: string
+        isDeleted:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -19564,11 +19586,16 @@ components:
     ConsoleTenantResponse:
       type: object
       properties:
+        id:
+          type: integer
+          format: int64
         tenantId:
           type: string
         tenantName:
           type: string
         description:
+          type: string
+        createdBy:
           type: string
           nullable: true
         status:
