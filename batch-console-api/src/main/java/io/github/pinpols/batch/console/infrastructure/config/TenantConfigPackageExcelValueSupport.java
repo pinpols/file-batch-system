@@ -10,6 +10,12 @@ import java.util.Set;
 @SuppressWarnings("java:S2583")
 final class TenantConfigPackageExcelValueSupport {
 
+  /**
+   * 配置包导入写入的 created_by / updated_by，各配置表该列为 VARCHAR(64)（如 file_template_config，
+   * V6__create_file_tables.sql）。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
   private TenantConfigPackageExcelValueSupport() {}
 
   static String normalize(String value) {
@@ -52,6 +58,6 @@ final class TenantConfigPackageExcelValueSupport {
   }
 
   static String safeOp(String operatorId) {
-    return ConsoleTextSanitizer.safeInput(operatorId, 64);
+    return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
   }
 }

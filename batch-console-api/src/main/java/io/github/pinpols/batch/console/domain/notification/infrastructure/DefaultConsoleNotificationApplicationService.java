@@ -70,6 +70,40 @@ import org.springframework.web.util.HtmlUtils;
 @RequiredArgsConstructor
 public class DefaultConsoleNotificationApplicationService
     implements ConsoleNotificationApplicationService {
+  /**
+   * notification_channel.channel_code VARCHAR(64)
+   * （V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int CHANNEL_CODE_MAX_LENGTH = 64;
+
+  /**
+   * notification_channel.channel_name VARCHAR(128)
+   * （V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int CHANNEL_NAME_MAX_LENGTH = 128;
+
+  /**
+   * subscription_rule.event_types VARCHAR(512)（V49__create_notification_approval_config_sync.sql）
+   * 。
+   */
+  private static final int EVENT_TYPES_MAX_LENGTH = 512;
+
+  /**
+   * subscription_rule.rule_name VARCHAR(128)（V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int RULE_NAME_MAX_LENGTH = 128;
+
+  /**
+   * subscription_rule.severity_filter VARCHAR(128)
+   * （V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int SEVERITY_FILTER_MAX_LENGTH = 128;
+
+  /**
+   * subscription_rule.job_code_filter VARCHAR(512)
+   * （V49__create_notification_approval_config_sync.sql）。
+   */
+  private static final int JOB_CODE_FILTER_MAX_LENGTH = 512;
 
   /** 投递日志单次查询条数上限。 */
   private static final int MAX_DELIVERY_LOG_LIMIT = 500;
@@ -145,7 +179,8 @@ public class DefaultConsoleNotificationApplicationService
   @Transactional
   public void createChannel(String tenantId, NotificationChannelUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String channelCode = ConsoleTextSanitizer.safeInput(request.getChannelCode(), 64);
+    String channelCode =
+        ConsoleTextSanitizer.safeInput(request.getChannelCode(), CHANNEL_CODE_MAX_LENGTH);
     Guard.requireText(channelCode, "channelCode is required");
     Guard.requireText(request.getChannelName(), "channelName is required");
     String channelType = request.getChannelType();
@@ -156,7 +191,8 @@ public class DefaultConsoleNotificationApplicationService
           ResultCode.CONFLICT, "error.file_channel.code_already_exists", channelCode);
     }
     String operator = metadataResolver.current().operatorId();
-    String sanitizedChannelName = ConsoleTextSanitizer.safeInput(request.getChannelName(), 128);
+    String sanitizedChannelName =
+        ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
     String configJson = request.getConfigJson();
     Boolean enabled = enabledOrDefault(request.getEnabled());
     int inserted = channelMapper.insert(NotificationChannelInsertParam.builder()
@@ -189,7 +225,8 @@ public class DefaultConsoleNotificationApplicationService
         : null;
     validateWebhookChannelUrl(request.getChannelType(), configJson);
     String operator = metadataResolver.current().operatorId();
-    String sanitizedChannelName = ConsoleTextSanitizer.safeInput(request.getChannelName(), 128);
+    String sanitizedChannelName =
+        ConsoleTextSanitizer.safeInput(request.getChannelName(), CHANNEL_NAME_MAX_LENGTH);
     String channelType = request.getChannelType();
     Boolean enabled = enabledOrDefault(request.getEnabled());
     channelMapper.update(NotificationChannelUpdateParam.builder()
@@ -273,17 +310,20 @@ public class DefaultConsoleNotificationApplicationService
   @Transactional
   public void createRule(String tenantId, SubscriptionRuleUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), 512);
+    String eventTypes =
+        ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
     Guard.requireText(eventTypes, "eventTypes is required");
     NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
     String channelCode = request.getChannelCode();
     NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
     Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
     String operator = metadataResolver.current().operatorId();
-    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), 128);
+    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
     Guard.requireText(ruleName, "ruleName is required");
-    String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), 128);
-    String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), 512);
+    String severityFilter =
+        ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
+    String jobCodeFilter =
+        ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
     Boolean enabled = enabledOrDefault(request.getEnabled());
     SubscriptionRuleInsertParam ruleParameters = SubscriptionRuleInsertParam.builder()
         .tenantId(resolved)
@@ -303,7 +343,8 @@ public class DefaultConsoleNotificationApplicationService
   @Transactional
   public void updateRule(String tenantId, Long ruleId, SubscriptionRuleUpsertRequest request) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    String eventTypes = ConsoleTextSanitizer.safeInput(request.getEventTypes(), 512);
+    String eventTypes =
+        ConsoleTextSanitizer.safeInput(request.getEventTypes(), EVENT_TYPES_MAX_LENGTH);
     Guard.requireText(eventTypes, "eventTypes is required");
     NotificationEventTypePolicy.requireBusinessEventTypes(eventTypes);
     SubscriptionRuleRow selectedRule = ruleMapper.selectById(resolved, ruleId);
@@ -315,10 +356,12 @@ public class DefaultConsoleNotificationApplicationService
     NotificationChannelRow selectedChannel = channelMapper.selectByCode(resolved, channelCode);
     Guard.requireFound(selectedChannel, ERR_CHANNEL_NOT_FOUND + channelCode);
     String operator = metadataResolver.current().operatorId();
-    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), 128);
+    String ruleName = ConsoleTextSanitizer.safeInput(request.getRuleName(), RULE_NAME_MAX_LENGTH);
     Guard.requireText(ruleName, "ruleName is required");
-    String severityFilter = ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), 128);
-    String jobCodeFilter = ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), 512);
+    String severityFilter =
+        ConsoleTextSanitizer.safeInput(request.getSeverityFilter(), SEVERITY_FILTER_MAX_LENGTH);
+    String jobCodeFilter =
+        ConsoleTextSanitizer.safeInput(request.getJobCodeFilter(), JOB_CODE_FILTER_MAX_LENGTH);
     Boolean enabled = enabledOrDefault(request.getEnabled());
     SubscriptionRuleUpdateParam ruleParameters = SubscriptionRuleUpdateParam.builder()
         .tenantId(resolved)

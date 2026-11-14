@@ -979,6 +979,29 @@ class DefaultFileGovernanceServiceTest {
 
   // ── helpers ──────────────────────────────────────────────────────────────
 
+  @Test
+  @DisplayName("上传文件名超过存储段上限时保留末尾 128 字符")
+  void shouldTruncateStorageFileName_whenOversized() {
+    when(s3GovernanceStorage.defaultBucket()).thenReturn("bucket-a");
+    when(fileGovernanceRepository.createReconciledFileRecord(any())).thenReturn(42L);
+    when(fileGovernanceRepository.isEnabledFileChannel("t1", "ch-1")).thenReturn(true);
+    String longFileName = "a".repeat(200) + ".csv";
+    FileUploadSessionCommand command = FileUploadSessionCommand.builder()
+        .tenantId("t1")
+        .channelCode("ch-1")
+        .fileName(longFileName)
+        .operatorId("op")
+        .traceId("trace")
+        .build();
+
+    service.createUploadSession(command);
+
+    ArgumentCaptor<FileGovernanceRepository.ReconciledFileRecordCommand> captor =
+        ArgumentCaptor.forClass(FileGovernanceRepository.ReconciledFileRecordCommand.class);
+    verify(fileGovernanceRepository).createReconciledFileRecord(captor.capture());
+    assertThat(captor.getValue().storage().storagePath()).endsWith("a".repeat(124) + ".csv");
+  }
+
   private static FileRecordRow fileRow(String status, String bucket, String path) {
     return new FileRecordRow(1L, status, bucket, path);
   }

@@ -79,6 +79,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultFileGovernanceService implements FileGovernanceService {
 
+  /**
+   * bundle 模板编码长度上限，引用 file_template_config.template_code VARCHAR(128)
+   * （V6__create_file_tables.sql）；值写入文件 metadata。
+   */
+  private static final int BUNDLE_TEMPLATE_CODE_MAX_LENGTH = 128;
+
+  /** 对象存储 key 中文件名段的长度上限；超长时保留末尾（扩展名），不对应数据库列。 */
+  private static final int STORAGE_FILE_NAME_MAX_LENGTH = 128;
+
   /** 预签名下载链接有效期下限（秒）。 */
   private static final int MIN_PRESIGN_EXPIRY_SECONDS = 60;
 
@@ -795,7 +804,7 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
         || EmptyChecks.isEmpty(command.requiredFileNames())
         || command.requiredFileNames().size() > MAX_REQUIRED_FILE_NAMES
         || !Texts.hasText(command.bundleTemplateCode())
-        || command.bundleTemplateCode().trim().length() > 128;
+        || command.bundleTemplateCode().trim().length() > BUNDLE_TEMPLATE_CODE_MAX_LENGTH;
     if (bindingIsInvalid) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
@@ -859,7 +868,9 @@ public class DefaultFileGovernanceService implements FileGovernanceService {
     if (storagePathSegmentIsInvalid) {
       return "upload.bin";
     }
-    return cleaned.length() <= 128 ? cleaned : cleaned.substring(cleaned.length() - 128);
+    return cleaned.length() <= STORAGE_FILE_NAME_MAX_LENGTH
+        ? cleaned
+        : cleaned.substring(cleaned.length() - STORAGE_FILE_NAME_MAX_LENGTH);
   }
 
   private String safeKeySegment(String value) {

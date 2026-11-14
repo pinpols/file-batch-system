@@ -25,6 +25,12 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 /** 解析并校验批量开户工作簿，供预览流程使用。 */
 final class ConsoleUserBatchWorkbookParser {
 
+  /**
+   * 单元格文本长度上限，取账户列中最宽的 console_user_account.display_name VARCHAR(256)
+   * （V34__create_console_user_account.sql）。
+   */
+  private static final int CELL_VALUE_MAX_LENGTH = 256;
+
   /** 批量开户工作簿允许的最大行号（getLastRowNum 从 0 起计，第 0 行为表头）。 */
   private static final int MAX_ROW_NUM = 5000;
 
@@ -94,7 +100,7 @@ final class ConsoleUserBatchWorkbookParser {
     if (EmptyChecks.isNull(cell)) return "";
     if (cell.getCellType() == CellType.FORMULA) throw invalid("Formula cells are not allowed");
     String value = formatter.formatCellValue(cell).trim();
-    if (value.length() > 256) throw invalid("Cell value exceeds 256 characters");
+    if (value.length() > CELL_VALUE_MAX_LENGTH) throw invalid("Cell value exceeds 256 characters");
     return value;
   }
 }

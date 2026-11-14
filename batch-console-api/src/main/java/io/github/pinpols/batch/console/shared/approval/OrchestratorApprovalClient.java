@@ -41,6 +41,15 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class OrchestratorApprovalClient {
 
+  /** approval_command.requester_id VARCHAR(64)（V27__approval_command.sql）。 */
+  private static final int REQUESTER_ID_MAX_LENGTH = 64;
+
+  /**
+   * 提交审批的原因，与各审批类请求 reason 的 @Size(max = 512) 一致；
+   * 落库列 approval_command.approval_reason 为 VARCHAR(1024)（V27__approval_command.sql）。
+   */
+  private static final int APPROVAL_REASON_MAX_LENGTH = 512;
+
   private static final String DEFAULT_EMPTY_RESPONSE_MESSAGE = "error.approval.empty_response";
   private static final String FILE_TARGET_MISMATCH_MESSAGE = "error.approval.target_file_mismatch";
 
@@ -55,7 +64,10 @@ public class OrchestratorApprovalClient {
   public String submitApproval(ApprovalSubmitCommand command) {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String requesterId = ConsoleTextSanitizer.safeInput(
-        command.requesterId() != null ? command.requesterId() : metadata.operatorId(), 64);
+        EmptyChecks.isNotNull(command.requesterId())
+            ? command.requesterId()
+            : metadata.operatorId(),
+        REQUESTER_ID_MAX_LENGTH);
     String tenantId = command.tenantId();
     String approvalType = command.approvalType();
     String actionType = command.actionType();
@@ -64,7 +76,8 @@ public class OrchestratorApprovalClient {
     String payloadJson = command.payloadJson();
     String traceId = metadata.traceId();
     String idempotencyKey = command.idempotencyKey();
-    String approvalReason = ConsoleTextSanitizer.safeInput(command.approvalReason(), 512);
+    String approvalReason =
+        ConsoleTextSanitizer.safeInput(command.approvalReason(), APPROVAL_REASON_MAX_LENGTH);
     ApprovalSubmitBody body = ApprovalSubmitBody.builder()
         .tenantId(tenantId)
         .approvalType(approvalType)

@@ -36,6 +36,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class JobDependencyWaitingLaunchReconciler {
 
+  /**
+   * 重试失败原因写入 job_dependency_waiting_launch.last_not_ready_reason，该列为 VARCHAR(512)
+   * （V257__job_dependency_waiting_launch.sql），截到 500 留余量。
+   */
+  private static final int WAIT_CHECK_REASON_MAX_LENGTH = 500;
+
   private static final int TENANT_BATCH_SIZE = 100;
 
   private final TenantDirectoryMapper tenantDirectoryMapper;
@@ -156,7 +162,8 @@ public class JobDependencyWaitingLaunchReconciler {
       }
     } catch (Exception failure) {
       String reason = "LAUNCH_RETRY:" + SwallowedExceptionLogger.summary(failure);
-      String boundedReason = reason.substring(0, Math.min(reason.length(), 500));
+      String boundedReason =
+          reason.substring(0, Math.min(reason.length(), WAIT_CHECK_REASON_MAX_LENGTH));
       waitingLaunchService.recordWaitCheck(tenantId, entry.requestId(), boundedReason);
       log.warn(
           "deferred job launch retry failed: tenantId={}, requestId={}, error={}",

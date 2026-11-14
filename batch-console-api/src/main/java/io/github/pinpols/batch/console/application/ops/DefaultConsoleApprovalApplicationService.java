@@ -62,6 +62,19 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class DefaultConsoleApprovalApplicationService implements ConsoleApprovalApplicationService {
 
+  /** 批量审批逐条失败时回显给调用方的错误消息截断长度，只用于展示，不落库。 */
+  private static final int BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH = 512;
+
+  /** 审批人 ID，对应 approval_command.approver_id VARCHAR(64)（V27__approval_command.sql）。 */
+  private static final int APPROVER_ID_MAX_LENGTH = 64;
+
+  /**
+   * 审批/驳回意见长度上限，与 ApprovalActionRequest.reason 的 @Size(max = 512) 一致；
+   * 落库列 approval_command.approval_reason / rejection_reason 为 VARCHAR(1024)
+   * （V27__approval_command.sql）。
+   */
+  private static final int DECISION_REASON_MAX_LENGTH = 512;
+
   // P2-1(2026-05-16):删除未实际使用的 RestClient.Builder 字段(原本就是空注入,死代码)。
   private final OrchestratorInternalRestClient orchestratorInternalRestClient;
   private final ConsoleRequestMetadataResolver requestMetadataResolver;
@@ -260,7 +273,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
         String errorMessage = ex.getMessage();
-        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(errorMessage, 512);
+        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(
+            errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
         results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
       }
     }
@@ -283,7 +297,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
             DefaultConsoleApprovalApplicationService.class, "catch:Exception", ex);
 
         String errorMessage = ex.getMessage();
-        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(errorMessage, 512);
+        String safeErrorMessage = ConsoleTextSanitizer.safeDisplay(
+            errorMessage, BATCH_FAILURE_MESSAGE_DISPLAY_MAX_LENGTH);
         results.add(new ConsoleBatchApprovalResultResponse(approvalNo, false, safeErrorMessage));
       }
     }
@@ -304,8 +319,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     return orchestratorInternalRestClient.approveApproval(
         tenantId,
         approvalNo,
-        ConsoleTextSanitizer.safeInput(operatorId, 64),
-        ConsoleTextSanitizer.safeInput(reason, 512),
+        ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
+        ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
         metadata.requestId(),
         metadata.traceId());
   }
@@ -332,8 +347,8 @@ public class DefaultConsoleApprovalApplicationService implements ConsoleApproval
     return orchestratorInternalRestClient.rejectApproval(
         tenantId,
         approvalNo,
-        ConsoleTextSanitizer.safeInput(operatorId, 64),
-        ConsoleTextSanitizer.safeInput(reason, 512),
+        ConsoleTextSanitizer.safeInput(operatorId, APPROVER_ID_MAX_LENGTH),
+        ConsoleTextSanitizer.safeInput(reason, DECISION_REASON_MAX_LENGTH),
         metadata.requestId(),
         metadata.traceId());
   }

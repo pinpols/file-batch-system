@@ -41,6 +41,15 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleAiConversationService {
 
+  /** 会话分页游标文本的长度上限，解码前先拒绝超长输入；游标不落库。 */
+  private static final int CURSOR_MAX_LENGTH = 512;
+
+  /**
+   * 游标中的会话 ID，对应 console_ai_conversation.id VARCHAR(128)
+   * （V218__console_ai_conversations_and_cost_usage.sql）。
+   */
+  private static final int CONVERSATION_ID_MAX_LENGTH = 128;
+
   /** 单次查询会话轮次的条数上限。 */
   private static final int MAX_TURNS_PER_QUERY = 100;
 
@@ -248,14 +257,14 @@ public class ConsoleAiConversationService {
     if (!Texts.hasText(cursor)) {
       return new CursorPosition(null, null);
     }
-    if (cursor.length() > 512) {
+    if (cursor.length() > CURSOR_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     Map<String, Object> values = CursorCodec.decode(cursor);
     if (!(values.get("updatedAt") instanceof String updatedAt)
         || !(values.get("id") instanceof String id)
         || EmptyChecks.isBlank(id)
-        || id.length() > 128) {
+        || id.length() > CONVERSATION_ID_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     try {

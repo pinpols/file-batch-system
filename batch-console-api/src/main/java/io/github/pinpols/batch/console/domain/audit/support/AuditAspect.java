@@ -73,6 +73,12 @@ public class AuditAspect {
 
   private static final int MAX_PARAMS_JSON_BYTES = 2048;
 
+  /** 参数超长时保留的预览最小长度。 */
+  private static final int PARAMS_PREVIEW_MIN_LENGTH = 64;
+
+  /** 参数超长时为包装字段（_truncated、_originalLength、_keys）预留的长度。 */
+  private static final int PARAMS_PREVIEW_ENVELOPE_RESERVE = 64;
+
   private final OperationAuditMapper mapper;
   private final ObjectMapper objectMapper;
   private final PlatformTransactionManager transactionManager;
@@ -278,7 +284,8 @@ public class AuditAspect {
       // 超长截断:原 substring 拼 `","_trunc":1}` 可能截在字符串转义/数组/对象中间,
       // 写 jsonb 直接 invalid_text_representation → 审计静默丢失。
       // 改为构造合法 JSON,保留 preview(纯文本字段)+ 显式标记 truncated=true
-      int previewLen = Math.max(64, MAX_PARAMS_JSON_BYTES - 64);
+      int previewLen = Math.max(
+          PARAMS_PREVIEW_MIN_LENGTH, MAX_PARAMS_JSON_BYTES - PARAMS_PREVIEW_ENVELOPE_RESERVE);
       String preview = json.substring(0, Math.min(previewLen, json.length()));
       Map<String, Object> truncated = new LinkedHashMap<>();
       truncated.put("_truncated", true);

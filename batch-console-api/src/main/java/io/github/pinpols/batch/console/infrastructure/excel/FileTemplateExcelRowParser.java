@@ -36,6 +36,70 @@ import lombok.experimental.Accessors;
  */
 public final class FileTemplateExcelRowParser {
 
+  /** file_template_config.created_by / updated_by VARCHAR(64)（V6__create_file_tables.sql）。 */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
+  /** file_template_config.template_code VARCHAR(128)（V6__create_file_tables.sql）。 */
+  private static final int TEMPLATE_CODE_MAX_LENGTH = 128;
+
+  /** file_template_config.template_name VARCHAR(256)（V6__create_file_tables.sql）。 */
+  private static final int TEMPLATE_NAME_MAX_LENGTH = 256;
+
+  /** file_template_config.template_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int TEMPLATE_TYPE_MAX_LENGTH = 32;
+
+  /** file_template_config.biz_type VARCHAR(64)（V6__create_file_tables.sql）。 */
+  private static final int BIZ_TYPE_MAX_LENGTH = 64;
+
+  /** file_template_config.file_format_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int FILE_FORMAT_TYPE_MAX_LENGTH = 32;
+
+  /** file_template_config.description VARCHAR(1024)（V6__create_file_tables.sql）。 */
+  private static final int DESCRIPTION_MAX_LENGTH = 1024;
+
+  /** file_template_config.charset VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int CHARSET_MAX_LENGTH = 32;
+
+  /** file_template_config.target_charset VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int TARGET_CHARSET_MAX_LENGTH = 32;
+
+  /** file_template_config.line_separator VARCHAR(16)（V6__create_file_tables.sql）。 */
+  private static final int LINE_SEPARATOR_MAX_LENGTH = 16;
+
+  /** file_template_config.checksum_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int CHECKSUM_TYPE_MAX_LENGTH = 32;
+
+  /** file_template_config.compress_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int COMPRESS_TYPE_MAX_LENGTH = 32;
+
+  /** file_template_config.encrypt_type VARCHAR(32)（V6__create_file_tables.sql）。 */
+  private static final int ENCRYPT_TYPE_MAX_LENGTH = 32;
+
+  /** file_template_config.naming_rule VARCHAR(512)（V6__create_file_tables.sql）。 */
+  private static final int NAMING_RULE_MAX_LENGTH = 512;
+
+  /** file_template_config.default_query_code VARCHAR(128)（V6__create_file_tables.sql）。 */
+  private static final int DEFAULT_QUERY_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 导入时 default_query_sql 的长度上限；列 file_template_config.default_query_sql 为 TEXT
+   * （V6__create_file_tables.sql），此上限是导入策略，不是列宽。
+   */
+  private static final int DEFAULT_QUERY_SQL_MAX_LENGTH = 10000;
+
+  /**
+   * 加密密钥引用的导入上限；列 file_template_config.encryption_key_ref 为 VARCHAR(256)
+   * （V18__file_template_security_flags.sql），导入上限更严，保持原值。
+   */
+  private static final int ENCRYPTION_KEY_REF_MAX_LENGTH = 128;
+
+  /**
+   * 脱敏规则集的导入上限；注意列 file_template_config.masking_rule_set 只有 VARCHAR(128)
+   * （V18__file_template_security_flags.sql），129～256 字符会在写库时失败，保持原值待核对
+   * （见审计 R26 后续事项）。
+   */
+  private static final int MASKING_RULE_SET_MAX_LENGTH = 256;
+
   /** 单元格留空时的 page_size，与 file_template_config.page_size 列默认值一致（V6）。 */
   private static final int DEFAULT_PAGE_SIZE = 1000;
 
@@ -215,8 +279,8 @@ public final class FileTemplateExcelRowParser {
 
     FileTemplateConfigUpsertParam.AuditOptions audit =
         new FileTemplateConfigUpsertParam.AuditOptions();
-    audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
-    audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, 64));
+    audit.setCreatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
+    audit.setUpdatedBy(ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH));
     param.setAudit(audit);
     return param;
   }
@@ -225,35 +289,39 @@ public final class FileTemplateExcelRowParser {
 
   private static void extractBasicFields(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String templateCodeText = requireText(values, COL_TEMPLATE_CODE, 128, issues);
+    String templateCodeText =
+        requireText(values, COL_TEMPLATE_CODE, TEMPLATE_CODE_MAX_LENGTH, issues);
     String templateCode = CodeNormalizer.toConfigFormOrNull(templateCodeText);
     builder.templateCode(templateCode);
-    String templateName = requireText(values, COL_TEMPLATE_NAME, 256, issues);
+    String templateName = requireText(values, COL_TEMPLATE_NAME, TEMPLATE_NAME_MAX_LENGTH, issues);
     builder.templateName(templateName);
-    String templateType = requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, 32, issues);
+    String templateType =
+        requireEnum(values, COL_TEMPLATE_TYPE, TEMPLATE_TYPES, TEMPLATE_TYPE_MAX_LENGTH, issues);
     builder.templateType(templateType);
-    String bizType = optionalText(values, COL_BIZ_TYPE, 64, issues);
+    String bizType = optionalText(values, COL_BIZ_TYPE, BIZ_TYPE_MAX_LENGTH, issues);
     builder.bizType(bizType);
-    String fileFormatType =
-        requireEnum(values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, 32, issues);
+    String fileFormatType = requireEnum(
+        values, COL_FILE_FORMAT_TYPE, FILE_FORMAT_TYPES, FILE_FORMAT_TYPE_MAX_LENGTH, issues);
     builder.fileFormatType(fileFormatType);
     Boolean enabled = optionalBoolean(values, COL_ENABLED, true, issues);
     builder.enabled(enabled);
     Integer version = optionalInteger(values, COL_VERSION, 1, 1, issues);
     builder.version(version);
-    String description = optionalText(values, COL_DESCRIPTION, 1024, issues);
+    String description = optionalText(values, COL_DESCRIPTION, DESCRIPTION_MAX_LENGTH, issues);
     builder.description(description);
   }
 
   private static void extractFieldMappings(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String charset = optionalText(values, COL_CHARSET, 32, issues);
+    String charset = optionalText(values, COL_CHARSET, CHARSET_MAX_LENGTH, issues);
     builder.charset(charset);
-    String targetCharset = optionalText(values, COL_TARGET_CHARSET, 32, issues);
+    String targetCharset =
+        optionalText(values, COL_TARGET_CHARSET, TARGET_CHARSET_MAX_LENGTH, issues);
     builder.targetCharset(targetCharset);
     Boolean withBom = optionalBoolean(values, COL_WITH_BOM, false, issues);
     builder.withBom(withBom);
-    String lineSeparator = optionalText(values, COL_LINE_SEPARATOR, 16, issues);
+    String lineSeparator =
+        optionalText(values, COL_LINE_SEPARATOR, LINE_SEPARATOR_MAX_LENGTH, issues);
     builder.lineSeparator(lineSeparator);
     String delimiter = optionalText(values, COL_DELIMITER, 8, issues);
     builder.delimiter(delimiter);
@@ -271,15 +339,16 @@ public final class FileTemplateExcelRowParser {
     builder.headerTemplateJson(headerTemplateJson);
     String trailerTemplateJson = optionalJson(values, COL_TRAILER_TEMPLATE, issues);
     builder.trailerTemplateJson(trailerTemplateJson);
-    String checksumType =
-        optionalEnum(values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, 32, "NONE", issues);
+    String checksumType = optionalEnum(
+        values, COL_CHECKSUM_TYPE, CHECKSUM_TYPES, CHECKSUM_TYPE_MAX_LENGTH, "NONE", issues);
     builder.checksumType(checksumType);
-    String compressType =
-        optionalEnum(values, COL_COMPRESS_TYPE, COMPRESS_TYPES, 32, "NONE", issues);
+    String compressType = optionalEnum(
+        values, COL_COMPRESS_TYPE, COMPRESS_TYPES, COMPRESS_TYPE_MAX_LENGTH, "NONE", issues);
     builder.compressType(compressType);
-    String encryptType = optionalEnum(values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, 32, "NONE", issues);
+    String encryptType = optionalEnum(
+        values, COL_ENCRYPT_TYPE, ENCRYPT_TYPES, ENCRYPT_TYPE_MAX_LENGTH, "NONE", issues);
     builder.encryptType(encryptType);
-    String namingRule = optionalText(values, COL_NAMING_RULE, 512, issues);
+    String namingRule = optionalText(values, COL_NAMING_RULE, NAMING_RULE_MAX_LENGTH, issues);
     builder.namingRule(namingRule);
     String fieldMappingsJson = optionalJson(values, COL_FIELD_MAPPINGS, issues);
     builder.fieldMappingsJson(fieldMappingsJson);
@@ -289,9 +358,11 @@ public final class FileTemplateExcelRowParser {
 
   private static void extractStepConfig(
       TemplateRow.TemplateRowBuilder builder, Map<String, String> values, List<String> issues) {
-    String defaultQueryCode = optionalText(values, COL_DEFAULT_QUERY_CODE, 128, issues);
+    String defaultQueryCode =
+        optionalText(values, COL_DEFAULT_QUERY_CODE, DEFAULT_QUERY_CODE_MAX_LENGTH, issues);
     builder.defaultQueryCode(defaultQueryCode);
-    String defaultQuerySql = optionalText(values, COL_DEFAULT_QUERY_SQL, 10000, issues);
+    String defaultQuerySql =
+        optionalText(values, COL_DEFAULT_QUERY_SQL, DEFAULT_QUERY_SQL_MAX_LENGTH, issues);
     builder.defaultQuerySql(defaultQuerySql);
     String queryParamSchemaJson = optionalJson(values, COL_QUERY_PARAM_SCHEMA, issues);
     builder.queryParamSchemaJson(queryParamSchemaJson);
@@ -318,12 +389,14 @@ public final class FileTemplateExcelRowParser {
     Boolean contentEncryptionEnabled =
         optionalBoolean(values, COL_CONTENT_ENCRYPTION_ENABLED, false, issues);
     builder.contentEncryptionEnabled(contentEncryptionEnabled);
-    String encryptionKeyRef = optionalText(values, COL_ENCRYPTION_KEY_REF, 128, issues);
+    String encryptionKeyRef =
+        optionalText(values, COL_ENCRYPTION_KEY_REF, ENCRYPTION_KEY_REF_MAX_LENGTH, issues);
     builder.encryptionKeyRef(encryptionKeyRef);
     Boolean downloadRequiresApproval =
         optionalBoolean(values, COL_DOWNLOAD_REQUIRES_APPROVAL, false, issues);
     builder.downloadRequiresApproval(downloadRequiresApproval);
-    String maskingRuleSet = optionalText(values, COL_MASKING_RULE_SET, 256, issues);
+    String maskingRuleSet =
+        optionalText(values, COL_MASKING_RULE_SET, MASKING_RULE_SET_MAX_LENGTH, issues);
     builder.maskingRuleSet(maskingRuleSet);
   }
 

@@ -112,6 +112,19 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationService {
 
+  /**
+   * 拒答/失败原因，对应 console_ai_audit_log.refusal_reason VARCHAR(512)
+   * （V11__create_console_ai_audit_log.sql）；回显给调用方时用同一上限。
+   */
+  private static final int REFUSAL_REASON_MAX_LENGTH = 512;
+
+  /**
+   * 审计记录中 prompt/response 预览的截断长度；
+   * 列 console_ai_audit_log.prompt_preview / response_preview 为 VARCHAR(1024)
+   * （V11__create_console_ai_audit_log.sql），预览只保留 512。
+   */
+  private static final int AUDIT_PREVIEW_MAX_LENGTH = 512;
+
   /** 模型调用线程池的最大并发线程数；SynchronousQueue 不排队，超出即拒绝。 */
   private static final int MODEL_CALL_MAX_THREADS = 16;
 
@@ -864,7 +877,7 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String degraded = messageSource.getMessage(
         "error.ai.model_unavailable", null, LocaleContextHolder.getLocale());
     String reason = ConsoleTextSanitizer.safeInput(
-        "model_call_failed:" + exception.getClass().getSimpleName(), 512);
+        "model_call_failed:" + exception.getClass().getSimpleName(), REFUSAL_REASON_MAX_LENGTH);
 
     AiChatResponse response = new AiChatResponse();
     response.setRequestId(request.requestId());
@@ -955,7 +968,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String safeRefusal =
         ConsoleTextSanitizer.safeDisplay(localizedRefusal, aiProperties.getMaxResponseLength());
     response.setAnswer(safeRefusal);
-    String safeRefusalReason = ConsoleTextSanitizer.safeDisplay(gateResult.reason(), 512);
+    String safeRefusalReason =
+        ConsoleTextSanitizer.safeDisplay(gateResult.reason(), REFUSAL_REASON_MAX_LENGTH);
     response.setRefusalReason(safeRefusalReason);
     return response;
   }
@@ -987,7 +1001,8 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
     String sanitizedAnswer = ConsoleTextSanitizer.safeInput(rejectedAnswer, maxResponseLength);
     auditResultBuilder.response(sanitizedAnswer);
     String refusalReason = gateResult.reason();
-    String sanitizedRefusalReason = ConsoleTextSanitizer.safeInput(refusalReason, 512);
+    String sanitizedRefusalReason =
+        ConsoleTextSanitizer.safeInput(refusalReason, REFUSAL_REASON_MAX_LENGTH);
     auditResultBuilder.refusalReason(sanitizedRefusalReason);
     AuditResult auditResult = auditResultBuilder.build();
     AuditContext auditContext =
@@ -1005,11 +1020,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
 
   private AiAuditCommand buildAuditCommand(AuditContext context) {
     String promptDigest = hash(context.result().prompt());
-    String promptPreview =
-        aiProperties.isAuditPreviewEnabled() ? preview(context.result().prompt(), 512) : null;
+    String promptPreview = aiProperties.isAuditPreviewEnabled()
+        ? preview(context.result().prompt(), AUDIT_PREVIEW_MAX_LENGTH)
+        : null;
     String responseDigest = hash(context.result().response());
-    String responsePreview =
-        aiProperties.isAuditPreviewEnabled() ? preview(context.result().response(), 512) : null;
+    String responsePreview = aiProperties.isAuditPreviewEnabled()
+        ? preview(context.result().response(), AUDIT_PREVIEW_MAX_LENGTH)
+        : null;
     String tenantId = context.request().tenantId();
     String requestId = context.request().requestId();
     String traceId = context.request().traceId();

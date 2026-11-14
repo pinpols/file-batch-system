@@ -13,6 +13,12 @@ import java.util.Set;
 /** 限制并清洗由调用方提供、将发送给外部模型的 JSON 上下文。 */
 final class ConsoleAiContextSanitizer {
 
+  /** v1 页面上下文 objectId 的长度上限；上下文整体序列化为 JSON，不对应单独的列。 */
+  private static final int OBJECT_ID_MAX_LENGTH = 128;
+
+  /** v1 页面上下文 pageType / objectType 的长度上限；上下文整体序列化为 JSON，不对应单独的列。 */
+  private static final int CONTEXT_FIELD_MAX_LENGTH = 64;
+
   private static final int HARD_MAX_CONTEXT_CHARS = 8000;
   private static final Set<String> V1_FIELDS = Set.of("pageType", "objectType", "objectId");
 
@@ -45,7 +51,7 @@ final class ConsoleAiContextSanitizer {
       if (!V1_FIELDS.contains(key) || !(entry.getValue() instanceof String value)) {
         throw invalid("v1 context accepts only pageType, objectType and objectId strings");
       }
-      int maxLength = "objectId".equals(key) ? 128 : 64;
+      int maxLength = "objectId".equals(key) ? OBJECT_ID_MAX_LENGTH : CONTEXT_FIELD_MAX_LENGTH;
       String sanitized = ConsoleTextSanitizer.safeInput(value);
       if (sanitized.length() > maxLength) {
         throw invalid("v1 context field exceeds maximum length");

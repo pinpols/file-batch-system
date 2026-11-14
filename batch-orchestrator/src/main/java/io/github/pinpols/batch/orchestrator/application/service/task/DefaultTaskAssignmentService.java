@@ -81,6 +81,9 @@ import org.springframework.transaction.interceptor.TransactionAspectSupport;
 @Slf4j
 public class DefaultTaskAssignmentService implements TaskAssignmentService {
 
+  /** job_task.execution_attempt_id VARCHAR(64)（V379__fence_task_execution_attempt.sql）。 */
+  private static final int EXECUTION_ATTEMPT_ID_MAX_LENGTH = 64;
+
   private final JobTaskMapper jobTaskMapper;
   private final JobPartitionMapper jobPartitionMapper;
   private final JobInstanceMapper jobInstanceMapper;
@@ -396,7 +399,7 @@ public class DefaultTaskAssignmentService implements TaskAssignmentService {
     }
     if (!attempt.isTextual()
         || EmptyChecks.isBlank(attempt.textValue())
-        || attempt.textValue().length() > 64) {
+        || attempt.textValue().length() > EXECUTION_ATTEMPT_ID_MAX_LENGTH) {
       throw BizException.of(ResultCode.INVALID_ARGUMENT, ResultCode.INVALID_ARGUMENT.detailKey());
     }
     return attempt.textValue();

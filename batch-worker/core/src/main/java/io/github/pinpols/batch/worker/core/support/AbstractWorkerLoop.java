@@ -55,6 +55,18 @@ import org.springframework.core.env.Environment;
 @Slf4j
 public abstract class AbstractWorkerLoop implements EnvironmentAware {
 
+  /**
+   * workerId（池编码 + "-" + 实例 ID）的长度上限，对应 worker_registry.worker_code VARCHAR(128)
+   * （V3__create_config_tables.sql）。
+   */
+  private static final int WORKER_ID_MAX_LENGTH = 128;
+
+  /** workerId 超长时保留的实例 ID 后缀长度上限；剩余长度留给池编码前缀和连接符。 */
+  private static final int INSTANCE_ID_SUFFIX_MAX_LENGTH = 64;
+
+  /** 注册失败单行日志沿 cause 链拼接摘要时的长度上限，只限制日志长度，不落库。 */
+  private static final int REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH = 500;
+
   private final WorkerLifecycleManager workerLifecycleManager;
   private final HeartbeatService heartbeatService;
   private final BatchDateTimeSupport dateTimeSupport;
@@ -284,12 +296,13 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
     }
     String normalizedInstanceId = instanceId.replaceAll("[^a-zA-Z0-9._-]", "_");
     String combined = poolCode + "-" + normalizedInstanceId;
-    if (combined.length() <= 128) {
+    if (combined.length() <= WORKER_ID_MAX_LENGTH) {
       return combined;
     }
-    int suffixLength = Math.min(normalizedInstanceId.length(), 64);
+    int suffixLength = Math.min(normalizedInstanceId.length(), INSTANCE_ID_SUFFIX_MAX_LENGTH);
     String suffix = normalizedInstanceId.substring(normalizedInstanceId.length() - suffixLength);
-    int poolLength = Math.max(1, 127 - suffixLength);
+    // 减 1 留给池编码与实例后缀之间的连接符 "-"。
+    int poolLength = Math.max(1, WORKER_ID_MAX_LENGTH - 1 - suffixLength);
     int poolPrefixEnd = Math.min(poolCode.length(), poolLength);
     return poolCode.substring(0, poolPrefixEnd) + "-" + suffix;
   }
@@ -335,7 +348,9 @@ public abstract class AbstractWorkerLoop implements EnvironmentAware {
       return top + registrationFailureHint(ex);
     }
     StringBuilder sb = new StringBuilder();
-    for (Throwable t = ex; t != null && sb.length() < 500; t = t.getCause()) {
+    for (Throwable t = ex;
+        EmptyChecks.isNotNull(t) && sb.length() < REGISTRATION_FAILURE_SUMMARY_MAX_LENGTH;
+        t = t.getCause()) {
       if (EmptyChecks.isNotEmpty(sb)) {
         sb.append(" <- ");
       }

@@ -35,6 +35,30 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 public class ExternalEventExpectationService {
 
+  /**
+   * external_event_expectation_definition.tenant_id VARCHAR(64)
+   * （V265__external_event_expectation_definition.sql）。
+   */
+  private static final int TENANT_ID_MAX_LENGTH = 64;
+
+  /**
+   * external_event_expectation_definition.calendar_code VARCHAR(128)
+   * （V265__external_event_expectation_definition.sql）。
+   */
+  private static final int CALENDAR_CODE_MAX_LENGTH = 128;
+
+  /**
+   * external_event_expectation_definition.event_code VARCHAR(128)
+   * （V265__external_event_expectation_definition.sql）。
+   */
+  private static final int EVENT_CODE_MAX_LENGTH = 128;
+
+  /**
+   * 满足期望时记录的触发请求 ID，对应 expected_work_occurrence.trigger_request_id VARCHAR(128)
+   * （V263__expected_work_occurrence.sql）。
+   */
+  private static final int TRIGGER_REQUEST_ID_MAX_LENGTH = 128;
+
   private final ExternalEventExpectationDefinitionMapper definitionMapper;
   private final BatchDayInstanceMapper batchDayInstanceMapper;
   private final ExpectedWorkOccurrenceMapper occurrenceMapper;
@@ -95,11 +119,11 @@ public class ExternalEventExpectationService {
   /** 明确只删除周期性定义；已经生成的 occurrence 仍保留以供审计。 */
   public boolean deleteDefinition(
       String tenantId, String calendarCode, Long workflowDefinitionId, String eventCode) {
-    boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, 64)
-        || !valid(calendarCode, 128)
+    boolean eventDefinitionIdentityIsInvalid = !valid(tenantId, TENANT_ID_MAX_LENGTH)
+        || !valid(calendarCode, CALENDAR_CODE_MAX_LENGTH)
         || EmptyChecks.isNull(workflowDefinitionId)
         || workflowDefinitionId <= 0
-        || !valid(eventCode, 128);
+        || !valid(eventCode, EVENT_CODE_MAX_LENGTH);
     if (eventDefinitionIdentityIsInvalid) {
       throw new IllegalArgumentException(
           "tenant, calendar, workflowDefinitionId and eventCode are required");
@@ -277,11 +301,11 @@ public class ExternalEventExpectationService {
 
   private static void validate(DefinitionRequest request) {
     boolean requiredFieldsAreValid = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), 64)
-        && valid(request.calendarCode(), 128)
+        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.workflowDefinitionId())
         && request.workflowDefinitionId() > 0
-        && valid(request.eventCode(), 128)
+        && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.expectedLocalTime());
     boolean dueLocalTimeIsValidWhenRequiredFieldsAreValid = !requiredFieldsAreValid
         || EmptyChecks.isNull(request.dueLocalTime())
@@ -296,12 +320,12 @@ public class ExternalEventExpectationService {
 
   private static void validate(SatisfactionRequest request) {
     boolean requestHasRequiredFields = EmptyChecks.isNotNull(request)
-        && valid(request.tenantId(), 64)
-        && valid(request.calendarCode(), 128)
+        && valid(request.tenantId(), TENANT_ID_MAX_LENGTH)
+        && valid(request.calendarCode(), CALENDAR_CODE_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.workflowDefinitionId())
         && request.workflowDefinitionId() > 0
-        && valid(request.eventCode(), 128)
-        && valid(request.triggerRequestId(), 128)
+        && valid(request.eventCode(), EVENT_CODE_MAX_LENGTH)
+        && valid(request.triggerRequestId(), TRIGGER_REQUEST_ID_MAX_LENGTH)
         && EmptyChecks.isNotNull(request.bizDate());
     if (!requestHasRequiredFields) {
       throw new IllegalArgumentException(

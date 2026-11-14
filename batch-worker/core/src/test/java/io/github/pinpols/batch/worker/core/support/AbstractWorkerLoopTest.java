@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.worker.core.config.WorkerConfiguration;
 import io.github.pinpols.batch.worker.core.config.WorkerIdentityProperties;
+import io.github.pinpols.batch.worker.core.config.WorkerRegistryStartupProperties;
 import io.github.pinpols.batch.worker.core.domain.WorkerRegistration;
 import java.time.Clock;
 import org.junit.jupiter.api.BeforeEach;
@@ -276,6 +277,39 @@ class AbstractWorkerLoopTest {
     verify(workerLifecycleManager, times(1)).shutdown("test-worker-001");
   }
 
+  @Test
+  @DisplayName("实例标识过长时 Worker 标识截断为池前缀加 64 位实例后缀")
+  void ensureStarted_truncatesOversizedWorkerId() {
+    WorkerIdentityProperties identity = new WorkerIdentityProperties();
+    identity.setInstanceId("i".repeat(200));
+    TestWorkerLoop instanceLoop =
+        new TestWorkerLoop(workerLifecycleManager, heartbeatService, dateTimeSupport, identity);
+
+    instanceLoop.ensureStarted();
+
+    ArgumentCaptor<WorkerRegistration> captor = ArgumentCaptor.forClass(WorkerRegistration.class);
+    verify(workerLifecycleManager).start(captor.capture());
+    assertThat(captor.getValue().getWorkerId())
+        .isEqualTo("fixed-worker-code-" + "i".repeat(64))
+        .hasSize(82);
+  }
+
+  @Test
+  @DisplayName("注册失败且异常链没有消息时仍容忍启动, 不向调用方抛出")
+  void ensureStarted_toleratesFailureWithoutMessages() {
+    WorkerRegistryStartupProperties startupProperties = new WorkerRegistryStartupProperties();
+    startupProperties.setFailFastOnStartup(false);
+    TestWorkerLoop tolerantLoop = new TestWorkerLoop(
+        workerLifecycleManager, heartbeatService, dateTimeSupport, startupProperties);
+    RuntimeException failure =
+        new RuntimeException((String) null, new IllegalStateException((String) null));
+    doThrow(failure).when(workerLifecycleManager).start(any());
+
+    assertThatCode(tolerantLoop::onReady).doesNotThrowAnyException();
+
+    verify(workerLifecycleManager).start(any());
+  }
+
   // ── 用于测试的最小具体子类 ──────────────────────────────
 
   private static class TestWorkerLoop extends AbstractWorkerLoop {
@@ -294,6 +328,21 @@ class AbstractWorkerLoopTest {
         BatchDateTimeSupport dateTimeSupport,
         WorkerIdentityProperties identityProperties) {
       super(lifecycleManager, heartbeatService, dateTimeSupport, 8, identityProperties);
+      setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
+    }
+
+    TestWorkerLoop(
+        WorkerLifecycleManager lifecycleManager,
+        HeartbeatService heartbeatService,
+        BatchDateTimeSupport dateTimeSupport,
+        WorkerRegistryStartupProperties startupProperties) {
+      super(
+          lifecycleManager,
+          heartbeatService,
+          dateTimeSupport,
+          8,
+          new WorkerIdentityProperties(),
+          startupProperties);
       setEnvironment(new MockEnvironment().withProperty("local.server.port", "9999"));
     }
 

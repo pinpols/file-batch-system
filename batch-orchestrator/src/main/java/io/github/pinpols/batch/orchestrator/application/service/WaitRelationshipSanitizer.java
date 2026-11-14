@@ -19,6 +19,14 @@ import org.springframework.stereotype.Component;
 @Component
 @RequiredArgsConstructor
 public class WaitRelationshipSanitizer {
+
+  /**
+   * 快照里编码类字段（上游作业/日历编码、就绪与解析原因码）的长度上限；
+   * 上游编码对应 job_definition.job_code（V4__create_definition_tables.sql）
+   * 与 business_calendar.calendar_code（V3__create_config_tables.sql），均为 VARCHAR(128)。
+   */
+  private static final int CODE_MAX_LENGTH = 128;
+
   private static final int MAX_SNAPSHOT_LENGTH = 524288;
   private static final int MAX_DEPENDENCIES = 5000;
   private static final Set<String> CALENDAR_FIELDS = Set.of("upstreamCode", "rule");
@@ -139,7 +147,7 @@ public class WaitRelationshipSanitizer {
 
   private static String code(String value) {
     if (EmptyChecks.isBlank(value)
-        || value.length() > 128
+        || value.length() > CODE_MAX_LENGTH
         || value.chars().anyMatch(Character::isISOControl)) throw new IllegalArgumentException();
     return value;
   }

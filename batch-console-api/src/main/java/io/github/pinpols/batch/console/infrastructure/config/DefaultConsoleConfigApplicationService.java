@@ -83,6 +83,45 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class DefaultConsoleConfigApplicationService implements ConsoleConfigApplicationService {
 
+  /**
+   * config_release.config_key VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int CONFIG_KEY_MAX_LENGTH = 128;
+
+  /**
+   * config_release.config_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql），
+   * 与 ConfigReleaseUpsertRequest.configName 的 @Size(max = 256) 一致。
+   */
+  private static final int CONFIG_NAME_MAX_LENGTH = 256;
+
+  /**
+   * secret_version.secret_ref VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int SECRET_REF_MAX_LENGTH = 128;
+
+  /**
+   * secret_version.secret_name VARCHAR(256)（V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int SECRET_NAME_MAX_LENGTH = 256;
+
+  /**
+   * 变更/轮换/吊销原因，对应 secret_version.rotation_reason VARCHAR(512)
+   * （V22__create_config_release_and_secret_version.sql），
+   * 与各配置请求 reason 的 @Size(max = 512) 一致。
+   */
+  private static final int REASON_MAX_LENGTH = 512;
+
+  /**
+   * config_change_log.operator_id VARCHAR(64)（V22__create_config_release_and_secret_version.sql）
+   * 。
+   */
+  private static final int OPERATOR_ID_MAX_LENGTH = 64;
+
+  /**
+   * config_change_log.trace_id VARCHAR(128)（V22__create_config_release_and_secret_version.sql）。
+   */
+  private static final int TRACE_ID_MAX_LENGTH = 128;
+
   // ── 重复使用的字段名常量 ───────────────────────────────────────────────
   private static final String KEY_EFFECTIVE_FROM_AT = "effectiveFromAt";
   private static final String KEY_EFFECTIVE_TO_AT = "effectiveToAt";
@@ -140,8 +179,10 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     Integer latestVersionNo =
         configReleaseMapper.selectLatestVersionNo(tenantId, configType, request.getConfigKey());
     int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
-    String safeConfigKey = ConsoleTextSanitizer.safeInput(request.getConfigKey(), 128);
-    String safeConfigName = ConsoleTextSanitizer.safeInput(request.getConfigName(), 256);
+    String safeConfigKey =
+        ConsoleTextSanitizer.safeInput(request.getConfigKey(), CONFIG_KEY_MAX_LENGTH);
+    String safeConfigName =
+        ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
     String draftStatus = ConfigLifecycleStatus.DRAFT.code();
     String configPayloadJson = request.getConfigPayloadJson();
     Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
@@ -170,7 +211,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
     ChangeLogTarget changeTarget =
         new ChangeLogTarget(configType, request.getConfigKey(), nextVersionNo);
-    String safeChangeLogConfigName = ConsoleTextSanitizer.safeInput(request.getConfigName(), 256);
+    String safeChangeLogConfigName =
+        ConsoleTextSanitizer.safeInput(request.getConfigName(), CONFIG_NAME_MAX_LENGTH);
     Map<String, Object> changeDetails = Map.of(
         "configName", safeChangeLogConfigName, "configStatus", ConfigLifecycleStatus.DRAFT.code());
     ChangeLogChange change = new ChangeLogChange("CREATE", "SUCCESS", changeDetails);
@@ -220,7 +262,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     String tenantId = tenantGuard.resolveTenant(request.getTenantId());
     String secretPayloadJson = resolveSecretPayload(request);
     validateJson(secretPayloadJson, "secretPayloadJson");
-    String safeSecretRef = ConsoleTextSanitizer.safeInput(request.getSecretRef(), 128);
+    String safeSecretRef =
+        ConsoleTextSanitizer.safeInput(request.getSecretRef(), SECRET_REF_MAX_LENGTH);
     secretVersionMapper.acquireVersionLock(tenantId, safeSecretRef);
     Integer latestVersionNo = secretVersionMapper.selectLatestVersionNo(tenantId, safeSecretRef);
     int nextVersionNo = EmptyChecks.isNull(latestVersionNo) ? 1 : latestVersionNo + 1;
@@ -254,14 +297,16 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
           ResultCode.INVALID_ARGUMENT.detailKey(),
           exception.getMessage());
     }
-    String safeSecretName = ConsoleTextSanitizer.safeInput(request.getSecretName(), 256);
+    String safeSecretName =
+        ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
     Instant rotationWindowStart =
         parseInstant(request.getRotationWindowStartAt(), "rotationWindowStartAt");
     Instant rotationWindowEnd =
         parseInstant(request.getRotationWindowEndAt(), "rotationWindowEndAt");
     Instant effectiveFrom = parseInstant(request.getEffectiveFromAt(), KEY_EFFECTIVE_FROM_AT);
     Instant effectiveTo = parseInstant(request.getEffectiveToAt(), KEY_EFFECTIVE_TO_AT);
-    String safeRotationReason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String safeRotationReason =
+        ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     String createdBy = currentOperator();
     String updatedBy = currentOperator();
     SecretVersionInsertParam secretVersionParameters = SecretVersionInsertParam.builder()
@@ -287,7 +332,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
     ChangeLogContext changeContext =
         new ChangeLogContext(tenantId, changeOperator, changeTraceId, changeReason);
     ChangeLogTarget changeTarget = new ChangeLogTarget("SECRET", safeSecretRef, nextVersionNo);
-    String safeChangeLogSecretName = ConsoleTextSanitizer.safeInput(request.getSecretName(), 256);
+    String safeChangeLogSecretName =
+        ConsoleTextSanitizer.safeInput(request.getSecretName(), SECRET_NAME_MAX_LENGTH);
     Map<String, Object> changeDetails =
         Map.of("secretName", safeChangeLogSecretName, KEY_SECRET_STATUS, nextStatus);
     ChangeLogChange change = new ChangeLogChange("ROTATE", "SUCCESS", changeDetails);
@@ -311,7 +357,7 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
       return;
     }
     String operator = currentOperator();
-    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), 512);
+    String reason = ConsoleTextSanitizer.safeInput(request.getReason(), REASON_MAX_LENGTH);
     int updated =
         secretVersionMapper.revokeSecretVersion(tenantId, secretVersionId, operator, reason);
     if (updated == 0) {
@@ -441,7 +487,8 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
         .action(command.change().action())
         .result(command.change().result())
         .operatorType(AuditLogConstants.OPERATOR_TYPE_API);
-    String safeReason = ConsoleTextSanitizer.safeInput(command.context().reason(), 512);
+    String safeReason =
+        ConsoleTextSanitizer.safeInput(command.context().reason(), REASON_MAX_LENGTH);
     Object changeDetails = command.change().detail();
     Map<String, Object> summaryDetails = detailOf(safeReason, changeDetails);
     String summaryJson = JsonUtils.toJson(summaryDetails);
@@ -499,13 +546,13 @@ public class DefaultConsoleConfigApplicationService implements ConsoleConfigAppl
   private String currentOperator() {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String operatorId = Texts.hasText(metadata.operatorId()) ? metadata.operatorId() : "system";
-    return ConsoleTextSanitizer.safeInput(operatorId, 64);
+    return ConsoleTextSanitizer.safeInput(operatorId, OPERATOR_ID_MAX_LENGTH);
   }
 
   private String currentTraceId() {
     ConsoleRequestMetadata metadata = requestMetadataResolver.current();
     String traceId = metadata.traceId();
-    return ConsoleTextSanitizer.safeInput(traceId, 128);
+    return ConsoleTextSanitizer.safeInput(traceId, TRACE_ID_MAX_LENGTH);
   }
 
   private String resolveSecretPayload(SecretVersionRotateRequest request) {
