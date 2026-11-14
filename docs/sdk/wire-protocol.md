@@ -13,15 +13,20 @@
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
   subgraph Tenant["租户环境"]
-    SDK["Worker SDK"] --> Handler["业务 Handler"]
+    SDK["Worker SDK"]:::worker --> Handler["业务 Handler"]:::worker
   end
   subgraph Platform["平台控制面"]
-    API["Orchestrator<br/>/internal/*"] --> State[("平台状态与 Outbox")]
-    State -->|"发布器异步投递"| Kafka["Kafka 任务主题"]
+    API["Orchestrator<br/>/internal/*"]:::control --> State[("平台状态与 Outbox")]:::store
+    State -->|"发布器异步投递"| Kafka["Kafka 任务主题"]:::mq
   end
   SDK -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| API
   API -->|"执行配置 / 指令 / 回执"| SDK
   Kafka -->|"异步派发"| SDK
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 SDK 在 CLAIM 成功并确认当前执行入口后调用业务，REPORT 由 Orchestrator 收敛平台状态；租户 SDK 不直连平台数据库。

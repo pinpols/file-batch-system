@@ -9,12 +9,17 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  TENANT["租户"] --> BUSINESS["Workflow / 作业<br/>日历 / 窗口"]
-  TENANT --> TEMPLATE["文件模板<br/>IMPORT / EXPORT / SHARED"]
+  TENANT["租户"]:::entry --> BUSINESS["Workflow / 作业<br/>日历 / 窗口"]:::control
+  TENANT --> TEMPLATE["文件模板<br/>IMPORT / EXPORT / SHARED"]:::store
   BUSINESS -. "按场景引用" .-> TEMPLATE
-  TEMPLATE -. "外部文件交付" .-> CHANNEL["获准渠道"]
-  BUSINESS --> POLICY["平台资源策略"]
-  POLICY --> ROUTE["物理队列 / Worker 路由"]
+  TEMPLATE -. "外部文件交付" .-> CHANNEL["获准渠道"]:::ext
+  BUSINESS --> POLICY["平台资源策略"]:::control
+  POLICY --> ROUTE["物理队列 / Worker 路由"]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 - **业务配置**:作业、文件模板、Pipeline/Workflow、日历和窗口按实际场景维护；按需生成单场景或组合配置包，不要求每个作业都维护无关 Sheet。

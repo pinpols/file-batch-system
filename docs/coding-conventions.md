@@ -487,10 +487,14 @@ public CommonResponse<List<JobDefinitionDto>> listJobs(...) {
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TD
   Reference{"存在运行态引用？<br/>外键或稳定业务标识"}
-  Reference -->|"是"| Disable["禁用并保留历史关联<br/>PATCH enabled=false"]
-  Reference -->|"否"| Policy["核对实体删除策略与其他依赖"]
-  Policy -->|"允许物理删除"| Delete["DELETE"]
+  Reference -->|"是"| Disable["禁用并保留历史关联<br/>PATCH enabled=false"]:::wait
+  Reference -->|"否"| Policy["核对实体删除策略与其他依赖"]:::control
+  Policy -->|"允许物理删除"| Delete["DELETE"]:::ok
   Policy -->|"需要留存"| Disable
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 ### 7.3 软删除的 Request 复用

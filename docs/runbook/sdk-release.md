@@ -18,12 +18,16 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  CONFORMANCE["conformance-gate<br/>五语言协议一致性"] --> PACKAGE["package + smoke<br/>TS / Python / Java / Go / Rust"]
-  BREAKING["breaking-change-gate<br/>与上一版本比较"] --> PACKAGE
-  PACKAGE --> SUPPLY["supply-chain<br/>SBOM / changelog，best effort"]
-  SUPPLY --> RELEASE{"正式 release 条件<br/>与环境审批满足？"}
-  RELEASE -->|"是"| PUBLISH["publish-*<br/>严格发布门禁"]
-  RELEASE -->|"否 / 手动验证"| STOP["保留验证制品"]
+  CONFORMANCE["conformance-gate<br/>五语言协议一致性"]:::control --> PACKAGE["package + smoke<br/>TS / Python / Java / Go / Rust"]:::worker
+  BREAKING["breaking-change-gate<br/>与上一版本比较"]:::fail --> PACKAGE
+  PACKAGE --> SUPPLY["supply-chain<br/>SBOM / changelog，best effort"]:::control
+  SUPPLY --> RELEASE{"正式 release 条件<br/>与环境审批满足？"}:::control
+  RELEASE -->|"是"| PUBLISH["publish-*<br/>严格发布门禁"]:::control
+  RELEASE -->|"否 / 手动验证"| STOP["保留验证制品"]:::fail
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
 ```
 
 1. **conformance-gate**:复跑 5 语言 contract job(Java/Python/TS/Go/Rust),任一红即拒。

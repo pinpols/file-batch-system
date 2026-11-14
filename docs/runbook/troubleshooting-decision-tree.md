@@ -96,15 +96,19 @@ kubectl scale deployment/batch-worker-import -n batch-prod --replicas=4
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  BACKLOG["Outbox 积压"] --> STALE{"publishing stale 持续？"}
-  STALE -->|"是"| POLL["核查 poll / 发布租约<br/>发送超时与恢复日志"]
+  BACKLOG["Outbox 积压"]:::wait --> STALE{"publishing stale 持续？"}
+  STALE -->|"是"| POLL["核查 poll / 发布租约<br/>发送超时与恢复日志"]:::control
   STALE -->|"否"| CIRCUIT{"dispatch circuit 打开？"}
-  CIRCUIT -->|"是"| DEP["核查 Kafka 与发布异常"]
-  CIRCUIT -->|"否"| CAP["核查发送速率、分片<br/>限流与数据库瓶颈"]
-  POLL --> VERIFY["修复后观察指标与业务收敛"]
+  CIRCUIT -->|"是"| DEP["核查 Kafka 与发布异常"]:::control
+  CIRCUIT -->|"否"| CAP["核查发送速率、分片<br/>限流与数据库瓶颈"]:::control
+  POLL --> VERIFY["修复后观察指标与业务收敛"]:::ok
   DEP --> VERIFY
-  CAP --> SCALE["确认容量不足后<br/>按分片模式扩容"]
+  CAP --> SCALE["确认容量不足后<br/>按分片模式扩容"]:::wait
   SCALE --> VERIFY
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 ### 应急回退
@@ -155,18 +159,23 @@ kubectl exec batch-orchestrator-0 -- printenv | grep -i lazy
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  SAMPLE["查看 dead_letter_task<br/>按 last_replay_result 聚类"] --> UNKNOWN{"外部执行结果是否明确？"}
-  UNKNOWN -->|"未知 / 可能已提交"| RECON["先对账与核实幂等凭据"]
+  SAMPLE["查看 dead_letter_task<br/>按 last_replay_result 聚类"]:::control --> UNKNOWN{"外部执行结果是否明确？"}
+  UNKNOWN -->|"未知 / 可能已提交"| RECON["先对账与核实幂等凭据"]:::wait
   RECON --> SAFE{"确认可安全重放？"}
   UNKNOWN -->|"明确失败"| ROOT{"主要失败原因"}
-  ROOT -->|"代码缺陷"| FIX["修复并发布验证版本"]
-  ROOT -->|"下游依赖"| RESTORE["恢复依赖并验证"]
-  ROOT -->|"分散 / 不明"| INVESTIGATE["扩大诊断证据"]
+  ROOT -->|"代码缺陷"| FIX["修复并发布验证版本"]:::ok
+  ROOT -->|"下游依赖"| RESTORE["恢复依赖并验证"]:::ok
+  ROOT -->|"分散 / 不明"| INVESTIGATE["扩大诊断证据"]:::wait
   FIX --> SAFE
   RESTORE --> SAFE
   INVESTIGATE --> RECON
-  SAFE -->|"是"| REPLAY["正式重放预览 / 审批 / 执行"]
-  SAFE -->|"否"| HOLD["保留待处理并升级人工核查"]
+  SAFE -->|"是"| REPLAY["正式重放预览 / 审批 / 执行"]:::ok
+  SAFE -->|"否"| HOLD["保留待处理并升级人工核查"]:::fail
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 样本查询保持只读：
@@ -251,13 +260,15 @@ bash scripts/ops/inspect-dead-letters.sh --tenant t1 --dry-run
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  LOG["查看当前与 previous 启动日志"] --> ERROR{"首个有效错误"}
-  ERROR -->|"连接耗尽"| PG["核对数据库连接预算<br/>与所有实例连接池总量"]
-  ERROR -->|"Connection refused"| DEP["检查依赖健康与网络"]
-  ERROR -->|"Flyway 错误"| MIGRATION["比对迁移文件 / schema history<br/>修复首个迁移错误"]
-  ERROR -->|"startup probe failed"| PROBE["核查完整启动探针预算<br/>与实际启动耗时"]
-  ERROR -->|"启动自检失败"| SELF["按自检缺失项修复"]
-  PROBE --> COST["定位初始化与迁移耗时<br/>按实测调整探针"]
+  LOG["查看当前与 previous 启动日志"]:::control --> ERROR{"首个有效错误"}
+  ERROR -->|"连接耗尽"| PG["核对数据库连接预算<br/>与所有实例连接池总量"]:::control
+  ERROR -->|"Connection refused"| DEP["检查依赖健康与网络"]:::control
+  ERROR -->|"Flyway 错误"| MIGRATION["比对迁移文件 / schema history<br/>修复首个迁移错误"]:::control
+  ERROR -->|"startup probe failed"| PROBE["核查完整启动探针预算<br/>与实际启动耗时"]:::control
+  ERROR -->|"启动自检失败"| SELF["按自检缺失项修复"]:::control
+  PROBE --> COST["定位初始化与迁移耗时<br/>按实测调整探针"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
 ```
 
 ---

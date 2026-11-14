@@ -56,15 +56,20 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  T["Trigger · launch 消息"] --> O["Orchestrator · 唯一运行状态主机"]
-  W["五类 Worker · HTTP"] -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| O
-  C["Console · 审批运维请求"] --> O
-  O --> L[("WorkflowRun / NodeRun / Job / Partition / Task")]
-  O --> R[("worker_registry")]
-  O --> E[("retry_schedule / dead_letter_task")]
-  O --> TX[("outbox_event")]
+  T["Trigger · launch 消息"]:::mq --> O["Orchestrator · 唯一运行状态主机"]:::control
+  W["五类 Worker · HTTP"]:::worker -->|"注册 / 心跳 / CLAIM / 续租 / REPORT"| O
+  C["Console · 审批运维请求"]:::control --> O
+  O --> L[("WorkflowRun / NodeRun / Job / Partition / Task")]:::control
+  O --> R[("worker_registry")]:::store
+  O --> E[("retry_schedule / dead_letter_task")]:::store
+  O --> TX[("outbox_event")]:::store
   E -. "新尝试保留来源，旧终态不复活" .-> L
   L -. "同事务" .-> TX
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 ### 内部 Task HTTP 协议要点（联调用）

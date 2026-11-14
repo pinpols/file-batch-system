@@ -79,13 +79,18 @@ quota 决策按"最严格者优先" pipeline：
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 %% 决策示意；实施范围以本文状态记录为准。
 flowchart TB
-  L["launch request"] --> T["TenantQuota"] --> Q["QueueQuota"] --> D["DomainQuota"] --> J["JobQuota"] --> R["ResourceQuota"]
-  R -->|"全部通过"| OK["DISPATCH"]
-  T -->|"不通过"| NO["REJECT / QUEUE"]
+  L["launch request"]:::entry --> T["TenantQuota"]:::control --> Q["QueueQuota"]:::control --> D["DomainQuota"]:::control --> J["JobQuota"]:::control --> R["ResourceQuota"]:::control
+  R -->|"全部通过"| OK["DISPATCH"]:::ok
+  T -->|"不通过"| NO["REJECT / QUEUE"]:::fail
   Q -->|"不通过"| NO
   D -->|"不通过"| NO
   J -->|"不通过"| NO
   R -->|"不通过"| NO
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
 ```
 
 `DomainQuota.check` 命中条件：

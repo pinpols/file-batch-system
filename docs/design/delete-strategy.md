@@ -21,10 +21,14 @@
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   R{存在运行态引用？<br/>包括 FK 与业务标识引用}
-  R -->|是| S[禁用或退役配置，保留历史可追溯性]
+  R -->|是| S[禁用或退役配置，保留历史可追溯性]:::wait
   R -->|否| P{实体策略允许物理删除？}
-  P -->|是| D[完成依赖校验后物理删除]
-  P -->|否或尚不明确| K[保留配置，按实体规则处理]
+  P -->|是| D[完成依赖校验后物理删除]:::ok
+  P -->|否或尚不明确| K[保留配置，按实体规则处理]:::muted
+
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ### 2.2 各实体策略

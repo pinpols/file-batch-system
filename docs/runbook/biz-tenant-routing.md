@@ -38,13 +38,17 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  REQUEST["请求的 RLS 租户上下文"] --> ROUTING["BusinessRoutingDataSource"]
-  ROUTING --> MODE{"Placement resolver 模式"}
-  MODE -->|"CONFIG"| CONFIG["HashAndSiloPlacementResolver<br/>哈希 + silo 覆盖"]
-  MODE -->|"TABLE"| TABLE["DbTablePlacementResolver<br/>表覆盖 + 哈希回退"]
-  CONFIG --> KEY["placement key"]
+  REQUEST["请求的 RLS 租户上下文"]:::entry --> ROUTING["BusinessRoutingDataSource"]:::control
+  ROUTING --> MODE{"Placement resolver 模式"}:::control
+  MODE -->|"CONFIG"| CONFIG["HashAndSiloPlacementResolver<br/>哈希 + silo 覆盖"]:::control
+  MODE -->|"TABLE"| TABLE["DbTablePlacementResolver<br/>表覆盖 + 哈希回退"]:::control
+  CONFIG --> KEY["placement key"]:::control
   TABLE --> KEY
-  KEY --> POOL["对应业务分片 HikariDataSource"]
+  KEY --> POOL["对应业务分片 HikariDataSource"]:::store
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 | 关注点 | 类 / 文件 | 位置 |
@@ -145,9 +149,12 @@ BATCH_DATASOURCE_BUSINESS_ROUTING_SHARDS_1_URL=...
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  SECRET["外部密钥服务 / K8s Secret"] --> INJECT["环境变量 / 挂载文件"]
-  INJECT --> BIND["Spring 配置绑定"]
-  BIND --> PROPS["BusinessRoutingProperties<br/>shards 配置"]
+  SECRET["外部密钥服务 / K8s Secret"]:::ext --> INJECT["环境变量 / 挂载文件"]:::control
+  INJECT --> BIND["Spring 配置绑定"]:::control
+  BIND --> PROPS["BusinessRoutingProperties<br/>shards 配置"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 **绝不**把账密写进 placement 表 / shard catalog 表(catalog 的 `secret_ref` 只是引用名,指向后端里的条目,不是密钥)。

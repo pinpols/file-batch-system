@@ -98,14 +98,19 @@ CREATE TABLE IF NOT EXISTS batch.batch_day_instance (
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  O[OPEN] -->|到达 cutoff| C[CUTOFF]
-  C -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I[IN_FLIGHT]
-  C -->|满足结算前置条件，CAS 占位| S[SETTLING]
+  O[OPEN]:::wait -->|到达 cutoff| C[CUTOFF]:::wait
+  C -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I[IN_FLIGHT]:::worker
+  C -->|满足结算前置条件，CAS 占位| S[SETTLING]:::wait
   I -->|满足结算前置条件，CAS 占位| S
   S -->|仍有活跃根运行 / 子 JOB 或未收敛义务| I
   S -->|无根运行，继续等待| C
-  S -->|根运行 FAILED / TERMINATED| F[FAILED]
-  S -->|根运行已结束且无失败，义务已收敛| D[SETTLED]
+  S -->|根运行 FAILED / TERMINATED| F[FAILED]:::fail
+  S -->|根运行已结束且无失败，义务已收敛| D[SETTLED]:::ok
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 当前实现由 Orchestrator 的 `BatchDayOpenScheduler` 按租户日历主动打开业务日；`BatchDayCutoffScheduler` 推进 cutoff，`BatchDaySettleScheduler` 汇总作业终态。作业实例仍由定时、事件、API 或 Workflow 按需创建；首次作业创建路径保留 upsert 作为回退。业务日状态推进与 Worker 执行链路解耦。

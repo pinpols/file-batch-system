@@ -23,9 +23,12 @@ Worker 的 CPU 使用率不能独立代表消费积压；I/O 等待、下游限�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  BACKLOG["任务积压上升"] --> IO["I/O 等待较多<br/>CPU 仍低"]
-  IO --> CPU["CPU HPA 未触发"]
-  CPU --> SLA["等待继续增长<br/>SLA 风险"]
+  BACKLOG["任务积压上升"]:::wait --> IO["I/O 等待较多<br/>CPU 仍低"]:::control
+  IO --> CPU["CPU HPA 未触发"]:::control
+  CPU --> SLA["等待继续增长<br/>SLA 风险"]:::wait
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 **KEDA by Kafka lag** 直接读 consumer group 的未消费消息数：
@@ -33,10 +36,14 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  LAG["Kafka lag 超过阈值"] --> KEDA["KEDA 增加副本"]
-  KEDA --> GROUP["加入 consumer group"]
-  GROUP --> PART["分区重新分配"]
-  PART --> CAP["可并行分区获得消费容量"]
+  LAG["Kafka lag 超过阈值"]:::wait --> KEDA["KEDA 增加副本"]:::control
+  KEDA --> GROUP["加入 consumer group"]:::worker
+  GROUP --> PART["分区重新分配"]:::worker
+  PART --> CAP["可并行分区获得消费容量"]:::worker
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 这是**业务感知**的伸缩，不是机器指标的伸缩。
@@ -48,10 +55,13 @@ Trigger 使用 **Quartz JDBC 集群模式**，通过数据库协调触发获取�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  FIRE["同一次 Quartz fire"] --> ACQUIRE["集群协调触发获取"]
-  ACQUIRE --> OWNER["一个实例取得该 fire"]
-  OWNER --> EXEC["执行该次触发"]
-  OTHER["其他独立 fire"] --> PEER["其他实例可并行执行"]
+  FIRE["同一次 Quartz fire"]:::control --> ACQUIRE["集群协调触发获取"]:::control
+  ACQUIRE --> OWNER["一个实例取得该 fire"]:::control
+  OWNER --> EXEC["执行该次触发"]:::worker
+  OTHER["其他独立 fire"]:::control --> PEER["其他实例可并行执行"]:::worker
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 增加副本可提高可用性并分担不同 fire，但不会把同一次 fire 拆成多份执行。是否扩容应结合触发延迟、各实例线程池和数据库锁等待评估；CPU 不能单独代表调度容量。
@@ -73,11 +83,17 @@ shardTotal=2
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  SCALE["副本从 2 增至 3<br/>shardTotal 仍为 2"] --> UNIQUE["新实例使用 index=2"]
-  SCALE --> DUP["新实例复用 index=0"]
-  UNIQUE --> EMPTY["索引超出范围<br/>没有有效分片"]
-  DUP --> OVERLAP["分片重叠<br/>增加重复竞争"]
-  OVERLAP --> FENCE["仍需数据库 claim / CAS<br/>与消息幂等防护"]
+  SCALE["副本从 2 增至 3<br/>shardTotal 仍为 2"]:::wait --> UNIQUE["新实例使用 index=2"]:::ok
+  SCALE --> DUP["新实例复用 index=0"]:::fail
+  UNIQUE --> EMPTY["索引超出范围<br/>没有有效分片"]:::muted
+  DUP --> OVERLAP["分片重叠<br/>增加重复竞争"]:::fail
+  OVERLAP --> FENCE["仍需数据库 claim / CAS<br/>与消息幂等防护"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 因此 STATIC 模式只允许通过 `helm upgrade --set orchestrator.replicaCount=N` 扩缩。需要自动扩缩时，切换到下节已落地的 Redis 成员租约动态重排；模板会阻止 STATIC 与 HPA/KEDA 组合。
@@ -105,11 +121,14 @@ batch:
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  HEART["周期写入成员心跳"] --> MEMBERS["发布版本内的成员集合"]
-  POLL["每轮 Outbox poll"] --> CLEAN["清理超时成员"]
+  HEART["周期写入成员心跳"]:::control --> MEMBERS["发布版本内的成员集合"]:::store
+  POLL["每轮 Outbox poll"]:::control --> CLEAN["清理超时成员"]:::control
   MEMBERS --> CLEAN
-  CLEAN --> SORT["读取并排序存活实例"]
-  SORT --> SHARD["序号为 shardIndex<br/>数量为 shardTotal"]
+  CLEAN --> SORT["读取并排序存活实例"]:::control
+  SORT --> SHARD["序号为 shardIndex<br/>数量为 shardTotal"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 **rebalance 触发**：成员心跳超时或新 Pod 加入后，各实例在后续 poll 中读取并重算成员视图与 shardIndex；不是跨实例同时生效的强一致屏障。重排期间仍依赖数据库 claim、CAS 和消息幂等防护。

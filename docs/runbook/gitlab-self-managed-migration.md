@@ -21,15 +21,21 @@
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  DEV["开发者"] --> GL["GitLab Self-Managed<br/>Git / MR / CI"]
-  GL --> RUNNER["受信 Docker Runner"]
-  RUNNER --> JOB["隔离 Job 容器"]
-  JOB --> ENGINE["Docker Engine<br/>Compose / Testcontainers"]
-  ENGINE --> DEPS["PostgreSQL / Kafka<br/>Valkey / MinIO"]
-  JOB --> MIRROR["内网依赖镜像"]
-  JOB --> REG["Container Registry"]
-  JOB --> ART["报告与制品存储"]
-  JOB -. "受保护部署" .-> STG["staging"]
+  DEV["开发者"]:::entry --> GL["GitLab Self-Managed<br/>Git / MR / CI"]:::ext
+  GL --> RUNNER["受信 Docker Runner"]:::worker
+  RUNNER --> JOB["隔离 Job 容器"]:::worker
+  JOB --> ENGINE["Docker Engine<br/>Compose / Testcontainers"]:::worker
+  ENGINE --> DEPS["PostgreSQL / Kafka<br/>Valkey / MinIO"]:::store
+  JOB --> MIRROR["内网依赖镜像"]:::store
+  JOB --> REG["Container Registry"]:::store
+  JOB --> ART["报告与制品存储"]:::store
+  JOB -. "受保护部署" .-> STG["staging"]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 推荐至少划分三类 Runner：

@@ -124,19 +124,24 @@
 flowchart TB
   subgraph C0["触发与编排"]
     direction LR
-    T["逐 Workflow · 独立幂等身份"] --> O["根运行 · 业务日 / 配置冻结"] --> K["任务 Outbox → Kafka"]
+    T["逐 Workflow · 独立幂等身份"]:::control --> O["根运行 · 业务日 / 配置冻结"]:::control --> K["任务 Outbox → Kafka"]:::mq
   end
   subgraph W0["Worker"]
     direction LR
-    C["单条 / 批量 CLAIM · 身份核对"] --> L["登记已领租约"] --> E["批内串行 · 跨 listener 并发"]
-    L -.-> N["排队 / 执行中续租 · 原 CAS"]
+    C["单条 / 批量 CLAIM · 身份核对"]:::worker --> L["登记已领租约"]:::store --> E["批内串行 · 跨 listener 并发"]:::worker
+    L -.-> N["排队 / 执行中续租 · 原 CAS"]:::worker
     N -.-> E
   end
   subgraph R0["结果交付"]
     direction LR
-    R["逐项同步报告 · 可选微批"] --> S["逐项事务 · 终态 / 幂等保护"] --> A["确认 / Outbox 交接 · 原确认规则"]
+    R["逐项同步报告 · 可选微批"]:::control --> S["逐项事务 · 终态 / 幂等保护"]:::store --> A["确认 / Outbox 交接 · 原确认规则"]:::store
   end
   C0 --> W0 --> R0
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 HTTP与Outbox同时失败时仍保留原丢报告日志、指标和租约恢复路径，不能称为已交付。启用条件、逐项事务及详细恢复流程统一见 [ADR-046 当前批量传输实现](adr/ADR-046-file-bundle-aggregation.md#当前批量传输实现2026-10-25-源码核对)。更新运行包已完成受影响SIM10/10及REPORT开/关定向场景：均4/4分区SUCCESS，claim1次/4项，report分别0次/4次；详见[本地收尾记录](../verifications/wdi-local-closure-2026-10-25.md)。批内串行场景不证明report合批增益，原始告警与其它会话新增范围另记。

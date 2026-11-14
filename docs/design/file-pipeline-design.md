@@ -156,13 +156,16 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  R[RECEIVE] --> P[PREPROCESS]
-  P --> A[PARSE]
-  A --> V[VALIDATE]
+  R[RECEIVE]:::worker --> P[PREPROCESS]:::worker
+  P --> A[PARSE]:::worker
+  A --> V[VALIDATE]:::worker
   V --> C{校验通过？}
-  C -->|是| L[LOAD]
-  L --> F[FEEDBACK]
-  C -->|否| X[错误报告与失败回报]
+  C -->|是| L[LOAD]:::worker
+  L --> F[FEEDBACK]:::worker
+  C -->|否| X[错误报告与失败回报]:::fail
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
 ```
 
 #### 导入扩展点
@@ -494,10 +497,12 @@ VALIDATE 阶段跨 chunk 累加金额列,全量记录处理完后与声明总额
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  P[PREPARE] --> G[GENERATE]
-  G --> S[STORE]
-  S --> R[REGISTER]
-  R --> C[COMPLETE]
+  P[PREPARE]:::worker --> G[GENERATE]:::worker
+  G --> S[STORE]:::worker
+  S --> R[REGISTER]:::worker
+  R --> C[COMPLETE]:::worker
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 #### 导出扩展点
@@ -766,15 +771,18 @@ Import scanner 与对象对账使用同一份入口归属声明。已声明范�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  P[PREPARE] --> D[DISPATCH]
-  D --> A[ACK]
-  A -->|成功| C[COMPLETE]
-  A -->|失败且允许重试| R[RETRY]
+  P[PREPARE]:::worker --> D[DISPATCH]:::worker
+  D --> A[ACK]:::worker
+  A -->|成功| C[COMPLETE]:::worker
+  A -->|失败且允许重试| R[RETRY]:::worker
   D -->|已知失败且允许重试| R
   R -->|重试恢复| A
-  A -->|不重试| X[COMPENSATE]
+  A -->|不重试| X[COMPENSATE]:::worker
   R -->|已知失败| X
-  D -. 外部结果不明 .-> U[保留证据，先核对外部结果]
+  D -. 外部结果不明 .-> U[保留证据，先核对外部结果]:::wait
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 #### 分发扩展点
@@ -923,10 +931,19 @@ public interface ImportStageStep {
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant O as Orchestrator
-  participant DB as PostgreSQL
-  participant K as Kafka
-  participant W as 文件 Worker
+  autonumber
+  box rgba(2,132,199,0.08) 控制面
+    participant O as Orchestrator
+  end
+  box rgba(124,58,237,0.08) 持久化
+    participant DB as PostgreSQL
+  end
+  box rgba(217,119,6,0.08) 消息
+    participant K as Kafka
+  end
+  box rgba(5,150,105,0.08) 执行面
+    participant W as 文件 Worker
+  end
   O->>DB: 同事务写任务与 Outbox
   O->>K: Outbox 发布器异步投递任务提示
   K-->>W: 至少一次投递
@@ -1025,12 +1042,16 @@ filePipelines:
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  K[Kafka 任务提示 + CLAIM] --> F[IMPORT / EXPORT / PROCESS / DISPATCH]
-  K --> A[ATOMIC]
-  F --> S[文件 Stage SPI]
-  A --> T[BatchTaskExecutor SPI]
-  F -. 依赖共享库 .-> C[batch-worker-core]
+  K[Kafka 任务提示 + CLAIM]:::mq --> F[IMPORT / EXPORT / PROCESS / DISPATCH]:::worker
+  K --> A[ATOMIC]:::worker
+  F --> S[文件 Stage SPI]:::worker
+  A --> T[BatchTaskExecutor SPI]:::worker
+  F -. 依赖共享库 .-> C[batch-worker-core]:::lib
   A -. 依赖共享库 .-> C
+
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ---

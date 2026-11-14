@@ -414,9 +414,12 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  DEV["开发 / Demo<br/>单机 Compose"] --> BASE["当前基线<br/>App Node + Infra Node<br/>Actions / GHCR / SSH Compose"]
-  BASE -->|"容量增长"| SPLIT["Compose 横向拆分<br/>按压力拆 Worker 与数据服务"]
-  SPLIT -->|"HA / SLA / 运维条件满足"| TARGET["目标生产形态<br/>Kubernetes / Helm / Argo CD<br/>应用与数据平面 HA"]
+  DEV["开发 / Demo<br/>单机 Compose"]:::entry --> BASE["当前基线<br/>App Node + Infra Node<br/>Actions / GHCR / SSH Compose"]:::control
+  BASE -->|"容量增长"| SPLIT["Compose 横向拆分<br/>按压力拆 Worker 与数据服务"]:::control
+  SPLIT -->|"HA / SLA / 运维条件满足"| TARGET["目标生产形态<br/>Kubernetes / Helm / Argo CD<br/>应用与数据平面 HA"]:::control
+
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
 ```
 
 进入最终架构必须由 SLA、故障域、多节点、自动恢复、滚动升级、弹性或容量需求触发；不能只因为 Helm 文件已经存在就提前迁移。

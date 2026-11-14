@@ -77,12 +77,21 @@ trigger → orchestrator 调度链走 outbox + Kafka 异步模式（2026-05-02 �
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant Caller as 日程 / Console
-  participant T as Trigger
-  participant DB as 平台数据库
-  participant Relay as Trigger Relay
-  participant K as Kafka
-  participant O as Orchestrator
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant Caller as 日程 / Console
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant T as Trigger
+    participant Relay as Trigger Relay
+    participant O as Orchestrator
+  end
+  box rgba(124,58,237,0.08) 持久化
+    participant DB as 平台数据库
+  end
+  box rgba(217,119,6,0.08) 消息
+    participant K as Kafka
+  end
   Caller->>T: 来源身份 + Workflow 目标
   T->>DB: 同事务保存请求与 Outbox
   T-->>Caller: requestId / 接纳结果
@@ -282,6 +291,12 @@ stateDiagram-v2
   FAILED --> GIVE_UP: 自动预算耗尽
   SUCCESS --> [*]
   GIVE_UP --> [*]
+  class SUCCESS ok
+  class FAILED,GIVE_UP fail
+  class NEW,REPLAYING wait
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 `FAILED` 可在满足条件时直接再次进入 `REPLAYING`；自动重放预算耗尽时 `NEW` 或 `FAILED` 也可能转为 `GIVE_UP`。`SUCCESS` 表示重放请求已受理，不能单独证明后续业务执行成功。
@@ -305,20 +320,26 @@ Trigger 的 Quartz 集群锁协调日程触发，辅助调度使用 ShedLock；O
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
   subgraph CONTROL["控制服务"]
-    T["Trigger 副本"] --- Q["Quartz 数据库锁"]
-    O["Orchestrator 副本"] --- SH["Outbox 分片 / 持久化 CAS"]
-    C["Console API 副本"]
+    T["Trigger 副本"]:::control --- Q["Quartz 数据库锁"]:::store
+    O["Orchestrator 副本"]:::control --- SH["Outbox 分片 / 持久化 CAS"]:::store
+    C["Console API 副本"]:::control
   end
   subgraph EXEC["执行服务"]
-    W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]
-    CG["Kafka consumer group + Partition lease"]
+    W["IMPORT / EXPORT / PROCESS / DISPATCH / ATOMIC"]:::worker
+    CG["Kafka consumer group + Partition lease"]:::mq
     W --- CG
   end
-  P["Prometheus 指标"] --> H["HPA · 资源 / 自定义指标"]
-  K["Kafka lag"] --> KE["KEDA · 事件指标"]
+  P["Prometheus 指标"]:::ext --> H["HPA · 资源 / 自定义指标"]:::control
+  K["Kafka lag"]:::mq --> KE["KEDA · 事件指标"]:::control
   H -. "按部署配置选择" .-> W
   KE -. "按部署配置选择" .-> W
   H -. "按服务配置" .-> CONTROL
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ### 关键约束（按"为什么这样扩"分类）
@@ -353,7 +374,9 @@ IMPORT、EXPORT、PROCESS、DISPATCH 四类文件 Worker 按固定阶段契约�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  A["RECEIVE"] --> B["PREPROCESS"] --> C["PARSE"] --> D["VALIDATE"] --> E["LOAD"] --> F["FEEDBACK"]
+  A["RECEIVE"]:::worker --> B["PREPROCESS"]:::worker --> C["PARSE"]:::worker --> D["VALIDATE"]:::worker --> E["LOAD"]:::worker --> F["FEEDBACK"]:::worker
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -370,7 +393,9 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  A["PREPARE"] --> B["GENERATE"] --> C["STORE"] --> D["REGISTER"] --> E["COMPLETE"]
+  A["PREPARE"]:::worker --> B["GENERATE"]:::worker --> C["STORE"]:::worker --> D["REGISTER"]:::worker --> E["COMPLETE"]:::worker
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -386,13 +411,16 @@ flowchart LR
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  P["PREPARE"] --> D["DISPATCH"] -->|"已发送"| A["ACK"] -->|"确认完成"| C["COMPLETE"]
-  D -->|"明确可重试"| R["RETRY"]
+  P["PREPARE"]:::worker --> D["DISPATCH"]:::worker -->|"已发送"| A["ACK"]:::worker -->|"确认完成"| C["COMPLETE"]:::worker
+  D -->|"明确可重试"| R["RETRY"]:::worker
   A -->|"请求重试"| R
   R -->|"重试成功"| A
-  R -->|"失败 / 不满足重试条件"| CP["COMPENSATE · 终止本轮"]
-  D -. "外部结果未知" .-> U["先核对外部结果 · 禁止盲目重投"]
+  R -->|"失败 / 不满足重试条件"| CP["COMPENSATE · 终止本轮"]:::worker
+  D -. "外部结果未知" .-> U["先核对外部结果 · 禁止盲目重投"]:::ext
   R -. "外部结果未知" .-> U
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 | Stage | 关键动作 | 触发条件 |
@@ -418,10 +446,14 @@ PROCESS 解决"系统内部加工"（聚合 / 清洗 / 状态推进），**Write
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  A["PREPARE"] --> B["COMPUTE"] --> C["VALIDATE"] --> D["COMMIT"] --> E["FEEDBACK"]
-  B -. "JSONB 模式" .-> S[("业务 staging")]
-  D --> T[("业务 target")]
-  C -->|"失败"| F["失败报告 / 保留核查证据"]
+  A["PREPARE"]:::worker --> B["COMPUTE"]:::worker --> C["VALIDATE"]:::worker --> D["COMMIT"]:::worker --> E["FEEDBACK"]:::worker
+  B -. "JSONB 模式" .-> S[("业务 staging")]:::store
+  D --> T[("业务 target")]:::store
+  C -->|"失败"| F["失败报告 / 保留核查证据"]:::fail
+
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
 ```
 
 | Stage | 关键动作 | 输入 | 输出 |
@@ -446,13 +478,19 @@ ATOMIC 使用独立 Worker 和 `BatchTaskExecutor` SPI，不经过文件 Pipelin
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":42},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  O["Orchestrator · Task Outbox"] --> K["Kafka · 任务派发"]
-  K --> C["Worker · CLAIM 认领"]
-  C --> P["检查租约与取消条件<br/>重放请求按需校验能力"]
-  P --> S["按 taskType 选择执行器"]
-  S --> M["不能安全重放时<br/>确认执行开始标记"]
-  M --> E["执行器调用"]
-  E --> T["租约有效时报告结果<br/>REPORT · Orchestrator"]
+  O["Orchestrator · Task Outbox"]:::control --> K["Kafka · 任务派发"]:::mq
+  K --> C["Worker · CLAIM 认领"]:::worker
+  C --> P["检查租约与取消条件<br/>重放请求按需校验能力"]:::control
+  P --> S["按 taskType 选择执行器"]:::worker
+  S --> M["不能安全重放时<br/>确认执行开始标记"]:::wait
+  M --> E["执行器调用"]:::worker
+  E --> T["租约有效时报告结果<br/>REPORT · Orchestrator"]:::control
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
 ```
 
 图中为各步骤条件满足的主线，并非每个任务都能执行到最后：
@@ -470,13 +508,17 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  WD["Workflow 定义"] --> WR["WorkflowRun · 冻结图"]
-  JD["Job 定义"] --> CFG["有效执行配置"]
-  TC["模板 / 通道 / Secret 版本"] --> CFG
+  WD["Workflow 定义"]:::control --> WR["WorkflowRun · 冻结图"]:::control
+  JD["Job 定义"]:::control --> CFG["有效执行配置"]:::control
+  TC["模板 / 通道 / Secret 版本"]:::store --> CFG
   WR -->|"JOB 节点快照"| CFG
-  CAT["SystemPipelineCatalog · 固定阶段"] -->|"四类文件 Job"| W["对应文件 Worker"]
+  CAT["SystemPipelineCatalog · 固定阶段"]:::control -->|"四类文件 Job"| W["对应文件 Worker"]:::worker
   CFG --> W
-  CFG --> A["ATOMIC Worker · 独立执行"]
+  CFG --> A["ATOMIC Worker · 独立执行"]:::worker
+
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
 ```
 
 ### 3.1 关键映射
