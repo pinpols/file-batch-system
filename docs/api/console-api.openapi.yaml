@@ -19058,7 +19058,7 @@ components:
         updatedAt:
           type: string
           format: date-time
-      required: [id, tenantId, jobCode, pipelineType, runStatus, createdAt, updatedAt]
+      required: [id, tenantId, pipelineDefinitionId, jobCode, pipelineType, runStatus, createdAt, updatedAt]
     ConsoleFilePipelineStepResponse:
       type: object
       properties:
