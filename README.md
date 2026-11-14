@@ -87,13 +87,15 @@ flowchart LR
 
 五类 Worker：
 
-| Worker | 定位 | 阶段 / 执行模型 |
-|---|---|
+| Worker | 定位 | 阶段链 |
+|---|---|---|
 | import | 文件接收、解析、校验、装载 | RECEIVE → PREPROCESS → PARSE → VALIDATE → LOAD → FEEDBACK |
 | export | 查询、渲染、分片导出、对象存储落地 | PREPARE → GENERATE → STORE → REGISTER → COMPLETE |
 | process | staging、计算/聚合、校验、commit、幂等重跑 | PREPARE → COMPUTE → VALIDATE → COMMIT → FEEDBACK |
-| dispatch | SFTP / NAS / HTTP / S3 等下游交付 | PREPARE → DISPATCH → ACK → RETRY/COMPENSATE → COMPLETE |
-| atomic | 受控 shell / SQL / stored-proc / HTTP 原子任务 | 无文件 pipeline，独立隔离执行器，遵守 allowlist / timeout / RCE 边界 |
+| dispatch | SFTP / NAS / HTTP / S3 等下游交付 | PREPARE → DISPATCH → ACK → RETRY → COMPENSATE → COMPLETE |
+| atomic | 受控 shell / SQL / stored-proc / HTTP 原子任务 | 无文件 pipeline，独立隔离执行器 |
+
+dispatch 的 `RETRY` / `COMPENSATE` 是失败分支步骤：`RETRY` 仅在 `retryRequested=true` 时执行，否则直接进入补偿；`COMPENSATE` 在彻底失败后标记补偿并写审计。atomic 没有 stage 目录，四类执行器分别位于 `batch-worker/atomic` 的 `shell`、`sql`、`storedproc`、`http` 包，统一遵守 allowlist / timeout / RCE 边界。
 
 更详细的状态主链与关键约束见[架构约束](#架构约束)；端到端流程图见 [docs/architecture/system-flow-overview.md](docs/architecture/system-flow-overview.md)。
 
@@ -146,13 +148,21 @@ flowchart LR
 
 | 层次 | 选型 |
 |------|------|
-| 运行时 | JDK 21(LTS), Spring Boot 4.1.1 |
+| 运行时 | JDK 21(LTS), Spring Boot 4.1.2(Spring MVC) |
 | 消息队列 | Apache Kafka(版本由 Spring Boot BOM 管理) |
-| 数据库 | PostgreSQL 17（JSONB、TIMESTAMPTZ） |
-| 对象存储 | S3 兼容对象存储（本地默认 MinIO） |
+| 数据库 | PostgreSQL 17（JSONB、TIMESTAMPTZ），HikariCP 连接池 |
+| 缓存 / 协调 | Valkey 8（Redis 协议，Sentinel 高可用）+ Spring Data Redis：查询缓存、会话与令牌撤销、幂等、限流令牌桶；ShedLock 分布式锁；进程内 Caffeine |
+| 对象存储 | S3 兼容对象存储（AWS SDK for Java v2；本地默认 MinIO） |
 | 调度器 | Quartz Scheduler + JDBC JobStore 集群 |
+| 安全 | Spring Security + OAuth2 / OIDC（Nimbus JOSE）；JWT 会话、CSRF 防护、菜单级 RBAC |
+| 容错 | Resilience4j（下游熔断与回退） |
 | 数据迁移 | Flyway |
 | ORM | MyBatis（`mapper` + XML；配置态与运行态同一套） |
+| 可观测性 | Micrometer + Prometheus 指标，OpenTelemetry（OTLP）→ Tempo / Loki，Grafana 看板 |
+| 多语言 SDK | Java / Python / TypeScript / Go / Rust（ADR-035，共享契约 fixture） |
+| 前端控制台 | Vue 3 + TypeScript + Vite + Pinia + Element Plus（配对仓库 `../batch-console`） |
+| 测试与压测 | JUnit 5、Testcontainers（PostgreSQL / Kafka / Redis）、ArchUnit、Mockito / AssertJ、Gatling、Jazzer、PIT |
+| 构建与部署 | Maven 3.9+（Spotless / PMD / SpotBugs / JaCoCo / Enforcer）、Docker Compose、Kubernetes + Helm |
 
 ## 快速开始
 
