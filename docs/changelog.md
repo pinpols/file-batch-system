@@ -1,5 +1,11 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-14 README 技术栈与 Worker 阶段表补齐
+
+- README 中英文技术栈补齐主要层次：缓存/协调（Valkey 8 + Spring Data Redis、ShedLock、Caffeine）、安全（Spring Security + OAuth2/OIDC）、容错（Resilience4j）、可观测性（Micrometer/Prometheus、OpenTelemetry → Tempo/Loki、Grafana）、多语言 SDK、前端控制台、测试与构建部署；Spring Boot 补丁版本与根 POM 对齐为 4.1.2（文档此前停留在 4.1.1 / 4.1.0）。
+- 五类 Worker 表改为阶段链列；dispatch 按 `DispatchStage` 顺序展开为 `PREPARE → DISPATCH → ACK → RETRY → COMPENSATE → COMPLETE`，并注明 `RETRY` / `COMPENSATE` 为失败分支步骤；atomic 的 `shell` / `sql` / `storedproc` / `http` 执行器与 allowlist / timeout / RCE 边界移到表下说明。
+- [智能体基线](agent-baseline.md) §4 固定技术栈的 Spring Boot 版本同步为 4.1.2。
+
 ## 2026-11-14 job_instance 状态机按源码重画
 
 - [状态机汇总](design/status-state-machines.md#31-jobinstance-状态机) §3.1 改为 stateDiagram 并逐条注明写入方：取消只来自 CREATED/WAITING/READY，终止与暂停只来自 RUNNING，超时落 FAILED，失败终态在全部分区成功后可修正为 SUCCESS；READY 当前无写入路径。疑似暂停被在途回报撤销已登记待办。
