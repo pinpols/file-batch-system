@@ -73,13 +73,12 @@ class ConsoleTaskExecutionAuditServiceTest {
   @SuppressWarnings("unchecked")
   void shouldMaskEnvHeadersAuthAndSensitiveKeys() {
     when(jobTaskMapper.selectExecutionAuditByTenantAndId("tx", 7L))
-        .thenReturn(task(
-            "{\"env\":{\"DB_URL\":\"jdbc:x\",\"MODE\":\"full\"},"
-                + "\"headers\":{\"X-Trace\":\"abc\"},"
-                + "\"auth\":{\"type\":\"basic\",\"user\":\"u\"},"
-                + "\"apiToken\":\"plain-token\",\"sql\":\"select 1\"}",
-            null,
-            null));
+        .thenReturn(task("""
+                {"env": {"DB_URL": "jdbc:x", "MODE": "full"},
+                 "headers": {"X-Trace": "abc"},
+                 "auth": {"type": "basic", "user": "u"},
+                 "apiToken": "plain-token", "sql": "select 1"}
+                """, null, null));
 
     Map<String, Object> parameters =
         (Map<String, Object>) service().getExecutionAudit("tx", 7L).effectiveParameters();
