@@ -13,11 +13,13 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.github.pinpols.batch.common.config.BatchTimezoneProperties;
 import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.JsonUtils;
+import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobInstanceEntity;
 import io.github.pinpols.batch.orchestrator.mapper.BatchDayOperationAuditMapper;
 import io.github.pinpols.batch.orchestrator.mapper.ForensicExportLogMapper;
@@ -145,6 +147,77 @@ class ForensicExportServiceTest {
             && Objects.equals(parameters.storagePath(), zipPath.toString())
             && Objects.equals(parameters.sha256(), response.sha256())
             && parameters.rowCountsJson() != null));
+  }
+
+  @Test
+  @DisplayName("取证包导出遮蔽运行参数、结果、审计载荷和自由文本中的凭据")
+  void shouldMaskSensitiveEvidenceWhenExporting() throws IOException {
+    JobInstanceEntity instance = new JobInstanceEntity();
+    instance.setId(1L);
+    instance.setTenantId("t1");
+    instance.setJobCode("DAILY_PNL");
+    instance.setBizDate(LocalDate.of(2026, Month.MARCH, 15));
+    instance.setInstanceStatus("FAILED");
+    instance.setParamsSnapshot(
+        "{\"password\":\"raw-pass\",\"endpoint\":\"https://user:pass@example.test/run\"}");
+    instance.setResultSummary("{\"token\":\"raw-token\",\"rows\":3}");
+    when(jobInstanceMapper.selectForensicByBizDateRange(ArgumentMatchers.argThat(
+            parameters -> parameters != null && Objects.equals(parameters.tenantId(), "t1"))))
+        .thenReturn(List.of(instance));
+    BatchDayOperationAuditEntity audit = BatchDayOperationAuditEntity.builder()
+        .id(2L)
+        .tenantId("t1")
+        .calendarCode("CAL")
+        .bizDate(LocalDate.of(2026, Month.MARCH, 15))
+        .operationType("REOPEN")
+        .reasonCode("MANUAL")
+        .requestPayload("{\"password\":\"raw-pass\"}")
+        .comment("sftp://operator:raw@example.test/inbox")
+        .build();
+    when(auditMapper.selectByCalendarBizDate(eq("t1"), isNull(), any(), anyInt()))
+        .thenReturn(List.of(audit));
+
+    ForensicExportResponse response = service.export(ForensicExportRequest.builder()
+        .tenantId("t1")
+        .bizDateFrom(LocalDate.of(2026, Month.MARCH, 15))
+        .bizDateTo(LocalDate.of(2026, Month.MARCH, 15))
+        .requestedBy("ops")
+        .build());
+
+    try (ZipFile zip = new ZipFile(response.storagePath())) {
+      String instancesJson = readEntry(zip, "job-instances.json");
+      String auditsJson = readEntry(zip, "batch-day-operation-audits.json");
+      assertThat(instancesJson).doesNotContain("raw-pass", "raw-token", "user:pass");
+      var instanceNode = JsonUtils.newDefaultMapper().readTree(instancesJson).get(0);
+      assertThat(fieldText(instanceNode, "paramsSnapshot"))
+          .contains("\"password\":\"****\"")
+          .contains("https://****@example.test/run")
+          .doesNotContain("raw-pass", "user:pass");
+      assertThat(fieldText(instanceNode, "resultSummary"))
+          .contains("\"token\":\"****\"")
+          .contains("\"rows\":3")
+          .doesNotContain("raw-token");
+
+      assertThat(auditsJson).doesNotContain("raw-pass", "operator:raw");
+      var auditNode = JsonUtils.newDefaultMapper().readTree(auditsJson).get(0);
+      assertThat(fieldText(auditNode, "requestPayload"))
+          .contains("\"password\":\"****\"")
+          .doesNotContain("raw-pass");
+      assertThat(fieldText(auditNode, "comment"))
+          .contains("sftp://****@example.test/inbox")
+          .doesNotContain("operator:raw");
+    }
+  }
+
+  private static String fieldText(JsonNode node, String field) {
+    var value = node.path(field);
+    return value.isTextual() ? value.asText() : value.toString();
+  }
+
+  private static String readEntry(ZipFile zip, String entryName) throws IOException {
+    try (var input = zip.getInputStream(zip.getEntry(entryName))) {
+      return new String(input.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+    }
   }
 
   @Test

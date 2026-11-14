@@ -8,7 +8,10 @@ import io.github.pinpols.batch.common.config.BatchTimezoneProvider;
 import io.github.pinpols.batch.common.i18n.LocalizedErrorRenderer;
 import io.github.pinpols.batch.common.persistence.entity.AlertEventEntity;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
+import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.WorkerRegistryQueryRequest;
+import io.github.pinpols.batch.console.domain.audit.mapper.AuditLogMapper;
+import io.github.pinpols.batch.console.domain.audit.view.FileAuditLogRow;
 import io.github.pinpols.batch.console.domain.job.application.contract.query.BatchDayWindowQueryRequest;
 import io.github.pinpols.batch.console.domain.job.mapper.BatchDayMapper;
 import io.github.pinpols.batch.console.domain.job.view.BatchDayScheduledOccurrenceView;
@@ -32,6 +35,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 @DisplayName("控制台运维查询服务")
 class ConsoleOpsQueryServiceTest {
+
+  @Mock
+  private AuditLogMapper auditLogMapper;
 
   @Mock
   private WorkerRegistryMapper workerRegistryMapper;
@@ -134,6 +140,52 @@ class ConsoleOpsQueryServiceTest {
         .contains("\"action\":\"retry\"")
         .contains("\"apiToken\":\"****\"")
         .doesNotContain("raw");
+  }
+
+  @Test
+  @DisplayName("审计日志查询和导出遮蔽证据引用与自由文本凭据")
+  void shouldMaskAuditLogEvidenceInReadResponses() {
+    FileAuditLogRow row = new FileAuditLogRow(
+        4L,
+        "tenant-a",
+        1L,
+        "FILE_DOWNLOAD",
+        "SUCCESS",
+        "USER",
+        "operator-a",
+        "trace-a",
+        "https://user:pass@example.test/evidence",
+        "{\"password\":\"raw-pass\",\"path\":\"/tmp/a\"}",
+        Instant.parse("2026-11-14T00:00:00Z"));
+    when(auditLogMapper.selectByQuery(any())).thenReturn(List.of(row));
+    when(auditLogMapper.countByQuery(any())).thenReturn(1L);
+    ConsoleOpsQueryMappers mappers = new ConsoleOpsQueryMappers(
+        auditLogMapper,
+        null,
+        null,
+        null,
+        null,
+        null,
+        workerRegistryMapper,
+        null,
+        null,
+        null,
+        null,
+        null);
+    ConsoleOpsQueryService service = new ConsoleOpsQueryService(
+        requestTenantId -> requestTenantId, mappers, localizedErrorRenderer, timezoneProvider);
+    AuditLogQueryRequest request = new AuditLogQueryRequest();
+    request.setTenantId("tenant-a");
+
+    var response = service.auditLogs(request).items().getFirst();
+
+    assertThat(response.evidenceRef())
+        .isEqualTo("https://****@example.test/evidence")
+        .doesNotContain("user:pass");
+    assertThat(response.detailSummary())
+        .contains("\"password\":\"****\"")
+        .contains("\"path\":\"/tmp/a\"")
+        .doesNotContain("raw-pass");
   }
 
   @Test
