@@ -1532,3 +1532,10 @@ Console SLA 超期筛选使用 `CREATED/WAITING/READY/RUNNING/PARTIAL_FAILED`，
 上表四项均已关闭或取代。除上表外，本记录的开放面还有两类逐项语义核对（不是缺陷计数）：其余 Param/Query 中 51 个无明显构造校验标记的词法候选（`CONV-20261027-REQ01` 之后），以及公共返回 69 项词法清单的调用方裁定；全仓测试与 CI 仍无当前完整通过记录。
 
 **2026-11-08 复核**：上表 4 项仍为关闭/取代状态，`CONV-20261030-BATCH-REPORT-TODO-DRIFT` 记录的 `todo-master.md` `ALIGN-WORKER-BATCH-REPORT` 修正仍有效。本轮只做文档与源码词法核对，未重跑上述定向测试；两类开放面（51 项 Param/Query 校验、69 项公共返回裁定）不变。
+
+**2026-11-14 收尾裁定**：维护者复核后确认两类开放面均为合理结构，不再逐项改造：
+
+- **51 个 Param/Query 词法候选**：均沿用仓库既有的 Command/Param 命名与 Builder/record 形态；必填校验由上游请求 DTO、服务入口或数据库约束承担，本轮未发现需要新增构造校验的入口。本裁定不宣称已逐字段证明所有入口的运行时非空；已治理类型仍由 `PositionalArgsConventionTest` 守护长构造与内联 builder。
+- **69 项公共返回词法清单**：均为 `PageResponse`、固定响应 record、实体/视图投影或既有 wire 适配，调用方按同一结构消费；响应信封与接口契约由 `ConsoleApiContractArchTest` 及 OpenAPI 测试守护。
+
+两项据此关闭，未改业务代码，也不把本裁定扩大为“全仓无 Map/无宽参数”的结论。2026-11-14 本地复跑 `PositionalArgsConventionTest` 6/6、`ConsoleApiContractArchTest` 3/3 通过。全仓 CI 记录以 `main` Full CI gate（run 43571160285，`10cdbca4a`）成功为准；本地未另跑完整 reactor。后续新增类型仍按 `CONV-20261027-REQ01` 之后的同一口径评审。
