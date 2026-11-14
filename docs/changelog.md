@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-14 SDK SQL 原子执行器按方言切分
+
+- [ADR-036](architecture/adr/ADR-036-sdk-task-handler-templates.md) SqlAtomicHandler 一节补充：Java SDK 先取连接，再按数据库产品选择切分规则（MySQL / MariaDB 用 MySQL 规则，其余用 PostgreSQL 规则）；空 SQL 与超上限改为取得连接后拒绝。[SDK 对等矩阵](sdk/sdk-parity-matrix.md)同步记录 Java 与 Python 的方言差异。
+
 ## 2026-11-14 README 技术栈与 Worker 阶段表补齐
 
 - README 中英文技术栈补齐主要层次：缓存/协调（Valkey 8 + Spring Data Redis、ShedLock、Caffeine）、安全（Spring Security + OAuth2/OIDC）、容错（Resilience4j）、可观测性（Micrometer/Prometheus、OpenTelemetry → Tempo/Loki、Grafana）、多语言 SDK、前端控制台、测试与构建部署；Spring Boot 补丁版本与根 POM 对齐为 4.1.2（文档此前停留在 4.1.1 / 4.1.0）。
