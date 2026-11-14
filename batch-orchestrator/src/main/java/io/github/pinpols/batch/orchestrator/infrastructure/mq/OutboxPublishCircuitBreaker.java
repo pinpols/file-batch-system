@@ -36,6 +36,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class OutboxPublishCircuitBreaker {
 
+  /**
+   * 熔断打开状态在 Redis 中的 TTL 下限（60 秒），
+   * 与 batch.outbox.circuit-breaker-cooldown-millis 默认值相同。
+   */
+  private static final long MIN_OPEN_STATE_TTL_MILLIS = 60_000L;
+
   private static final String FIELD_FAILED_POLLS = "failedPolls";
   private static final String FIELD_OPEN_UNTIL_MS = "openUntilMs";
   // 返回 openUntilMs 原始值：<= now 表示熔断关闭，> now 表示熔断开启中
@@ -195,7 +201,8 @@ public class OutboxPublishCircuitBreaker {
       return;
     }
     long now = BatchDateTimeSupport.utcEpochMillis();
-    long ttlMillis = Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), 60_000L);
+    long ttlMillis =
+        Math.max(outboxProperties.getCircuitBreakerCooldownMillis(), MIN_OPEN_STATE_TTL_MILLIS);
     Long openUntilMs;
     try {
       int nonNegativeFailedPolls = Math.max(publishFailed, 0);

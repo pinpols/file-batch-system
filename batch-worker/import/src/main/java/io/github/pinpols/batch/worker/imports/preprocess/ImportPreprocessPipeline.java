@@ -559,6 +559,9 @@ public final class ImportPreprocessPipeline {
    */
   private static final long CHARSET_TRANSCODE_MIN_CAP_BYTES = 16L * 1024L * 1024L;
 
+  /** 转码输出上限在输入两倍之外额外预留的字节数（1 MiB）。 */
+  private static final long CHARSET_TRANSCODE_HEADROOM_BYTES = 1_048_576L;
+
   private static byte[] charsetTranscode(byte[] input, Map<String, Object> step) {
     String from = firstNonBlank(stringProp(step, "fromCharset"), EncodingUtils.UTF_8);
     String to = firstNonBlank(stringProp(step, "toCharset"), EncodingUtils.UTF_8);
@@ -569,7 +572,8 @@ public final class ImportPreprocessPipeline {
     if (StandardCharsets.UTF_8.equals(fromCs)) {
       input = EncodingUtils.stripUtf8Bom(input);
     }
-    long computedCap = Math.max(input.length * 2L + 1_048_576L, CHARSET_TRANSCODE_MIN_CAP_BYTES);
+    long computedCap = Math.max(
+        input.length * 2L + CHARSET_TRANSCODE_HEADROOM_BYTES, CHARSET_TRANSCODE_MIN_CAP_BYTES);
     long cap = parseLong(stringProp(step, "outputSizeCap"), computedCap);
     // ⚠3 (2026-05-03): 之前 new String(input, fromCs) 把整个文件物化为 UTF-16 String, 100 MB 输入 = 200 MB
     // 中间堆峰 (input byte[] + UTF-16 String) + 100 MB 输出 byte[] = 总 300 MB+ 峰值. 现在改 reader/writer

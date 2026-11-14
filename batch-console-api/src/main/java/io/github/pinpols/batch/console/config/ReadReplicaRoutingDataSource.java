@@ -46,6 +46,9 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Slf4j
 public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
 
+  /** 只读副本隔离时长下限（1 秒），防止配置过小导致故障副本被频繁重试。 */
+  private static final long MIN_QUARANTINE_MILLIS = 1_000L;
+
   enum Route {
     PRIMARY,
     REPLICA
@@ -75,7 +78,7 @@ public class ReadReplicaRoutingDataSource extends AbstractRoutingDataSource {
       ObjectProvider<MeterRegistry> meterRegistryProvider) {
     this.primary = primary;
     this.failureThreshold = Math.max(1, failureThreshold);
-    this.quarantineMillis = Math.max(1_000L, quarantineMillis);
+    this.quarantineMillis = Math.max(MIN_QUARANTINE_MILLIS, quarantineMillis);
     this.meterRegistryProvider = meterRegistryProvider;
   }
 

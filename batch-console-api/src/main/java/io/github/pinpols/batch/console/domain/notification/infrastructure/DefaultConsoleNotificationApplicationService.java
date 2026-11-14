@@ -71,6 +71,9 @@ import org.springframework.web.util.HtmlUtils;
 public class DefaultConsoleNotificationApplicationService
     implements ConsoleNotificationApplicationService {
 
+  /** 投递日志单次查询条数上限。 */
+  private static final int MAX_DELIVERY_LOG_LIMIT = 500;
+
   // ── duplicate literal constants ─────────────────────────────────────────
   /**
    * 测试投递错误摘要长度上限，对应 notification_delivery_log.error_message VARCHAR(1024)（V49）；
@@ -343,7 +346,7 @@ public class DefaultConsoleNotificationApplicationService
   public List<ConsoleNotificationDeliveryLogResponse> deliveryLogs(String tenantId, int limit) {
     String resolvedTenantId = tenantGuard.resolveTenant(tenantId);
     deliveryLogMapper.bindTenant(resolvedTenantId);
-    int boundedLimit = Math.min(limit, 500);
+    int boundedLimit = Math.min(limit, MAX_DELIVERY_LOG_LIMIT);
     List<NotificationDeliveryLogRow> deliveryLogRows =
         deliveryLogMapper.selectByTenant(resolvedTenantId, boundedLimit);
     return deliveryLogRows.stream()

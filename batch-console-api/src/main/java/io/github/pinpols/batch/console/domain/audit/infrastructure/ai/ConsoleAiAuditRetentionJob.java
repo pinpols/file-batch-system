@@ -23,6 +23,9 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ConsoleAiAuditRetentionJob {
 
+  /** AI 审计保留清理任务的执行间隔（小时）。 */
+  private static final int PURGE_INTERVAL_HOURS = 24;
+
   private final ConsoleAiProperties properties;
   private final ConsoleAiAuditLogMapper mapper;
   private ScheduledExecutorService executor;
@@ -37,7 +40,7 @@ public class ConsoleAiAuditRetentionJob {
       thread.setDaemon(true);
       return thread;
     });
-    executor.scheduleWithFixedDelay(this::purge, 1, 24, TimeUnit.HOURS);
+    executor.scheduleWithFixedDelay(this::purge, 1, PURGE_INTERVAL_HOURS, TimeUnit.HOURS);
   }
 
   @PreDestroy

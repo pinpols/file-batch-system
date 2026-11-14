@@ -28,6 +28,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class AssetFreshnessPolicyService {
 
+  /** 新鲜度回看天数上限；console 侧 ConsoleAssetFreshnessPolicyService 校验同一上限。 */
+  private static final int MAX_LOOKBACK_DAYS = 31;
+
   static final String ALERT_TYPE_MISSING = "ASSET_FRESHNESS_MISSING";
   static final String ALERT_TYPE_STALE = "ASSET_FRESHNESS_STALE";
   private static final String DEFAULT_TIMEZONE = "UTC";
@@ -143,7 +146,7 @@ public class AssetFreshnessPolicyService {
       return 1;
     }
     int minimumLookbackDays = Math.max(1, value);
-    return Math.min(31, minimumLookbackDays);
+    return Math.min(MAX_LOOKBACK_DAYS, minimumLookbackDays);
   }
 
   private ZoneId resolveZone(String timezone) {

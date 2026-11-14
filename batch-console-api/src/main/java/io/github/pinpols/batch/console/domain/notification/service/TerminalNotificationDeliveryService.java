@@ -36,6 +36,15 @@ import org.springframework.web.util.HtmlUtils;
 @Slf4j
 public class TerminalNotificationDeliveryService {
 
+  /** 重试退避基数（秒）：第 n 次重试等待 5·2^n 秒。 */
+  private static final long RETRY_BACKOFF_BASE_SECONDS = 5L;
+
+  /** 退避指数上限，attempt 超过 8 后不再翻倍。 */
+  private static final int MAX_RETRY_BACKOFF_EXPONENT = 8;
+
+  /** 单次重试等待上限（30 分钟）。 */
+  private static final long MAX_RETRY_DELAY_SECONDS = 1800L;
+
   /**
    * 终态通知投递失败原因长度上限。WEBHOOK 写 webhook_delivery_log.response_body VARCHAR(2048)（V45），
    * 其他渠道写 notification_delivery_log.error_message VARCHAR(1024)（V49），取较小值。
@@ -157,8 +166,9 @@ public class TerminalNotificationDeliveryService {
     Instant nextRetry = null;
     if (retry) {
       Instant retryScheduledAt = BatchDateTimeSupport.utcNow();
-      int boundedBackoffExponent = Math.min(row.attempt(), 8);
-      long retryDelaySeconds = Math.min(1800L, 5L << boundedBackoffExponent);
+      int boundedBackoffExponent = Math.min(row.attempt(), MAX_RETRY_BACKOFF_EXPONENT);
+      long retryDelaySeconds =
+          Math.min(MAX_RETRY_DELAY_SECONDS, RETRY_BACKOFF_BASE_SECONDS << boundedBackoffExponent);
       nextRetry = retryScheduledAt.plusSeconds(retryDelaySeconds);
     }
     String boundedError = safeDeliveryError(result.errorSummary());

@@ -53,6 +53,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class AlertmanagerSilenceBridge {
 
+  /** 待同步静默请求队列容量，队列满后按拒绝策略处理。 */
+  private static final int SILENCE_QUEUE_CAPACITY = 256;
+
   private static final String METRIC = "batch.alert.am_silence";
   private static final String SILENCES_PATH = "/api/v2/silences";
   private static final String ALERTS_PATH = "/api/v2/alerts";
@@ -76,7 +79,7 @@ public class AlertmanagerSilenceBridge {
           1,
           30L,
           TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(256),
+          new LinkedBlockingQueue<>(SILENCE_QUEUE_CAPACITY),
           r -> {
             Thread t = new Thread(r, "am-silence-bridge");
             t.setDaemon(true);

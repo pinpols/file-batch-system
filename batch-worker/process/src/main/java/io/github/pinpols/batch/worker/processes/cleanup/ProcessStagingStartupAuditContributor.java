@@ -31,12 +31,14 @@ public class ProcessStagingStartupAuditContributor implements WorkerStartupAudit
   public WorkerStartupAuditResult audit() {
     Map<String, Object> details = new LinkedHashMap<>();
     int retentionHours = Math.max(1, properties.getRetentionHours());
-    int reportedBatchSize = Math.max(100, properties.getBatchSize());
+    int reportedBatchSize =
+        Math.max(ProcessStagingOrphanCleaner.MIN_BATCH_SIZE, properties.getBatchSize());
     details.put("cleanupEnabled", properties.isEnabled());
     details.put("deletionEnabled", properties.isDeletionEnabled());
     details.put("retentionHours", retentionHours);
     details.put("batchSize", reportedBatchSize);
-    int cleanupBatchSize = Math.max(100, properties.getBatchSize());
+    int cleanupBatchSize =
+        Math.max(ProcessStagingOrphanCleaner.MIN_BATCH_SIZE, properties.getBatchSize());
     long orphanRows = 0;
     long candidateGenerations = 0;
     long scannedGenerations = 0;

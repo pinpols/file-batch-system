@@ -41,6 +41,15 @@ import org.springframework.stereotype.Component;
     matchIfMissing = true)
 public class ConsolePipelineProgressDirtyPublisher {
 
+  /** 首轮扫描的回看秒数：启动时把最近 30 秒内更新过的 pipeline 视为脏数据。 */
+  private static final int INITIAL_LOOKBACK_SECONDS = 30;
+
+  /** 轮询间隔下限（1 秒），防止配置过小压垮 pipeline_progress 查询。 */
+  private static final long MIN_INTERVAL_MILLIS = 1_000L;
+
+  /** 单轮扫描条数上限；配置默认 500，超出按 2000 截断。 */
+  private static final int MAX_BATCH_SIZE = 2_000;
+
   private static final String STREAM = "pipeline-progress";
   private static final String EVENT_TYPE = "pipeline-progress-dirty";
   private static final String REASON_STEP_PROGRESS = "STEP_PROGRESS";
@@ -54,7 +63,7 @@ public class ConsolePipelineProgressDirtyPublisher {
   private final Map<String, Instant> lastEmittedAtByPipeline = new ConcurrentHashMap<>();
 
   private ScheduledExecutorService scheduler;
-  private volatile Instant lastSeen = Instant.now().minusSeconds(30);
+  private volatile Instant lastSeen = Instant.now().minusSeconds(INITIAL_LOOKBACK_SECONDS);
   private DirtyCursor scanCursor;
 
   private long intervalMillis;
@@ -67,11 +76,11 @@ public class ConsolePipelineProgressDirtyPublisher {
   void start() {
     // Flyway 初始化会先于 ApplicationReadyEvent 完成。若从
     // @PostConstruct 启动轮询器，新数据库仍在迁移时就可能查询 pipeline_progress。
-    intervalMillis = Math.max(1_000L, properties.getIntervalMillis());
+    intervalMillis = Math.max(MIN_INTERVAL_MILLIS, properties.getIntervalMillis());
     initialDelayMillis = Math.max(0L, properties.getInitialDelayMillis());
     lookbackOverlapMillis = Math.max(0L, properties.getLookbackOverlapMillis());
     throttleMillis = Math.max(intervalMillis, properties.getThrottleMillis());
-    batchSize = Math.clamp(properties.getBatchSize(), 1, 2_000);
+    batchSize = Math.clamp(properties.getBatchSize(), 1, MAX_BATCH_SIZE);
 
     scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
       Thread t = new Thread(r, "pipeline-progress-dirty-publisher");

@@ -32,6 +32,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LineageEvidenceService {
 
+  /** 血缘证据中最多返回的分发记录数。 */
+  private static final int MAX_DISPATCH_RECORDS = 100;
+
   private static final String FILE_RECORD_REF_PREFIX = "file_record:";
   private static final String HOT = "HOT";
   private static final String ARCHIVE = "ARCHIVE";
@@ -112,7 +115,7 @@ public class LineageEvidenceService {
     hotDispatches.forEach(dispatch -> dispatchesById.put(dispatch.id(), dispatch));
     archivedDispatches.forEach(dispatch -> dispatchesById.putIfAbsent(dispatch.id(), dispatch));
     List<DispatchRecord> dispatches =
-        dispatchesById.values().stream().limit(100).toList();
+        dispatchesById.values().stream().limit(MAX_DISPATCH_RECORDS).toList();
     Set<Long> hotDispatchIds =
         hotDispatches.stream().map(DispatchRecord::id).collect(Collectors.toSet());
     boolean hotDispatchUsed =

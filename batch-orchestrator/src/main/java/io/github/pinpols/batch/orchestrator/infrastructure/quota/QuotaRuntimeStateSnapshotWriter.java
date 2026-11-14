@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 class QuotaRuntimeStateSnapshotWriter {
 
+  /** 配额运行态快照统计借用峰值的滑动窗口小时数。 */
+  private static final int SNAPSHOT_SLIDING_WINDOW_HOURS = 24;
+
   private final QuotaRuntimeStateService quotaRuntimeStateService;
   private final QuotaRuntimeStateMapper quotaRuntimeStateMapper;
 
@@ -30,7 +33,8 @@ class QuotaRuntimeStateSnapshotWriter {
     QuotaRuntimeStateService.QuotaReservationOwner owner =
         new QuotaRuntimeStateService.QuotaReservationOwner(tenantId, scope, ownerCode);
     QuotaRuntimeStateService.QuotaDescribeRequest request =
-        new QuotaRuntimeStateService.QuotaDescribeRequest(owner, policy, burstLimit, 24);
+        new QuotaRuntimeStateService.QuotaDescribeRequest(
+            owner, policy, burstLimit, SNAPSHOT_SLIDING_WINDOW_HOURS);
     QuotaRuntimeStateService.QuotaRuntimeSnapshot snap = quotaRuntimeStateService.describe(request);
     boolean hasNoActiveBorrowedQuota = EmptyChecks.isNull(snap)
         || snap.peakBorrowedCount() == null

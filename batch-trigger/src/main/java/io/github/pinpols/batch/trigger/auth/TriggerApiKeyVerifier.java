@@ -26,13 +26,19 @@ public class TriggerApiKeyVerifier {
   public static final int KEY_PREFIX_LENGTH = 8;
 
   private static final Duration CACHE_TTL = Duration.ofMinutes(1);
+
+  /** 已验证 API Key 缓存最多保留的条目数。 */
+  private static final int VERIFIED_KEY_CACHE_MAX_ENTRIES = 10_000;
+
   private static final Duration TOUCH_INTERVAL = Duration.ofSeconds(60);
   private static final long TOUCH_INTERVAL_NANOS = TOUCH_INTERVAL.toNanos();
 
   private final TriggerApiKeyAuthMapper mapper;
   private final InstantSource instantSource;
-  private final Cache<String, TriggerApiKeyPrincipal> verifiedKeys =
-      Caffeine.newBuilder().maximumSize(10_000).expireAfterWrite(CACHE_TTL).build();
+  private final Cache<String, TriggerApiKeyPrincipal> verifiedKeys = Caffeine.newBuilder()
+      .maximumSize(VERIFIED_KEY_CACHE_MAX_ENTRIES)
+      .expireAfterWrite(CACHE_TTL)
+      .build();
   private final ConcurrentHashMap<Long, AtomicLong> lastTouchNanos = new ConcurrentHashMap<>();
 
   @Autowired

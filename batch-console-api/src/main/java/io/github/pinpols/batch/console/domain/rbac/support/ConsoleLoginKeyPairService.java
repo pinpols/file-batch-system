@@ -47,6 +47,9 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class ConsoleLoginKeyPairService {
 
+  /** 登录加密 RSA 密钥长度（bit）。 */
+  private static final int RSA_KEY_SIZE_BITS = 2048;
+
   private static final String RSA_TRANSFORM = "RSA/ECB/OAEPWithSHA-256AndMGF1Padding";
   private static final String AES_TRANSFORM = CryptoAlgorithms.AES_GCM_NO_PADDING;
   private static final int GCM_TAG_BITS = 128;
@@ -135,7 +138,7 @@ public class ConsoleLoginKeyPairService {
   private KeyPair generateKeyPair() {
     try {
       KeyPairGenerator gen = KeyPairGenerator.getInstance("RSA");
-      gen.initialize(2048);
+      gen.initialize(RSA_KEY_SIZE_BITS);
       return gen.generateKeyPair();
     } catch (NoSuchAlgorithmException e) {
       throw new IllegalStateException("RSA not available", e);

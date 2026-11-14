@@ -49,6 +49,15 @@ import org.springframework.stereotype.Component;
     "SpringJavaInjectionPointsAutowiringInspection") // Mapper 由应用启动类的业务库 @MapperScan 注册。
 public class ProcessStagingOrphanCleaner {
 
+  /**
+   * 清理批大小下限，配置更小时按 100 执行；
+   * ProcessStagingStartupAuditContributor 上报时使用同一下限。
+   */
+  static final int MIN_BATCH_SIZE = 100;
+
+  /** 查询每个租户最早暂存时间时最多扫描的行数。 */
+  private static final int OLDEST_STAGED_SCAN_LIMIT = 500;
+
   private final ProcessStagingMapper processStagingMapper;
   private final ProcessStagingCleanupProperties properties;
   private final Counter cleanedCounter;
@@ -162,7 +171,7 @@ public class ProcessStagingOrphanCleaner {
       return 0;
     }
     int retentionHours = Math.max(1, properties.getRetentionHours());
-    int batchSize = Math.max(100, properties.getBatchSize());
+    int batchSize = Math.max(MIN_BATCH_SIZE, properties.getBatchSize());
     boolean stagingCleanupDependenciesAreUnavailable = EmptyChecks.isNull(platformMapper)
         || EmptyChecks.isNull(businessCleanup)
         || EmptyChecks.isNull(cleanupFence);
@@ -231,7 +240,8 @@ public class ProcessStagingOrphanCleaner {
       }
       Instant oldest = null;
       for (String tenantId : platformMapper.listCleanupTenants()) {
-        Instant tenantOldest = businessCleanup.selectOldestStagedAt(tenantId, 500);
+        Instant tenantOldest =
+            businessCleanup.selectOldestStagedAt(tenantId, OLDEST_STAGED_SCAN_LIMIT);
         boolean tenantHasEarlierStagedRow = EmptyChecks.isNotNull(tenantOldest)
             && (EmptyChecks.isNull(oldest) || tenantOldest.isBefore(oldest));
         if (tenantHasEarlierStagedRow) {

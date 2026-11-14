@@ -18,6 +18,9 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ReadinessWaitReconciler {
 
+  /** 每轮 readiness 等待扫描最多处理的条数。 */
+  private static final int SWEEP_BATCH_SIZE = 100;
+
   private final ReadinessWaitService readinessWaitService;
   private final OrchestratorGracefulShutdown gracefulShutdown;
 
@@ -31,7 +34,7 @@ public class ReadinessWaitReconciler {
       return;
     }
     try {
-      ReadinessWaitService.SweepOutcome outcome = readinessWaitService.sweep(100);
+      ReadinessWaitService.SweepOutcome outcome = readinessWaitService.sweep(SWEEP_BATCH_SIZE);
       if (outcome.released() > 0 || outcome.timedOut() > 0) {
         log.info(
             "readiness wait sweep completed: released={}, timedOut={}, deferred={}",

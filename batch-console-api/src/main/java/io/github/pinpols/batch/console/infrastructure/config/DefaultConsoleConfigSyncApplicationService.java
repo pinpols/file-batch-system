@@ -78,6 +78,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Slf4j
 public class DefaultConsoleConfigSyncApplicationService
     implements ConsoleConfigSyncApplicationService {
+
+  /** 配置同步结束时写审计的尝试次数：瞬时数据库异常重试一次。 */
+  private static final int FINAL_AUDIT_MAX_ATTEMPTS = 2;
+
   private static final String SYSTEM_ERROR = "error.common.system_error";
 
   // ── duplicate literal constants ─────────────────────────────────────────
@@ -326,7 +330,7 @@ public class DefaultConsoleConfigSyncApplicationService
       String tenantId,
       ConfigSyncImportRequest request,
       TenantConfigBatchInitResponse response) {
-    for (int attempt = 0; attempt < 2; attempt++) {
+    for (int attempt = 0; attempt < FINAL_AUDIT_MAX_ATTEMPTS; attempt++) {
       try {
         auditTransaction(tenantId, () -> {
           int targetTenantCount = request.getTargetTenantIds().size();
@@ -339,7 +343,7 @@ public class DefaultConsoleConfigSyncApplicationService
         });
         return;
       } catch (TransientDataAccessException transientFailure) {
-        if (attempt == 1) {
+        if (attempt == FINAL_AUDIT_MAX_ATTEMPTS - 1) {
           log.error(
               "config sync final audit retry exhausted tenant={} logId={}",
               LogSanitizer.value(tenantId),

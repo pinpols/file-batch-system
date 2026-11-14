@@ -35,7 +35,8 @@ public class WorkerBasedPartitionCountResolver implements PartitionCountResolver
         configuredPartitionFactor,
         legacyPartitionFactor,
         shardStrategy == ShardStrategy.DYNAMIC ? 2 : 1);
-    return (int) Math.min(256L, onlineWorkerCount * partitionFactor);
+    return (int) Math.min(
+        DefaultSchedulePlanBuilder.MAX_PARTITION_COUNT, onlineWorkerCount * partitionFactor);
   }
 
   private long resolveOnlineWorkerCount(

@@ -55,6 +55,9 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Slf4j
 public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort {
 
+  /** SSE 心跳间隔下限（10 秒），配置更小时按下限执行。 */
+  private static final long MIN_HEARTBEAT_MILLIS = 10_000L;
+
   private static final long DEFAULT_HEARTBEAT_MILLIS = 25_000L;
   private static final String DEFAULT_STREAM = "job-definitions";
 
@@ -285,7 +288,7 @@ public class ConsoleRealtimeEventHub implements ConsoleRealtimeSubscriptionPort 
     if (heartbeatMillis == null || heartbeatMillis <= 0) {
       return DEFAULT_HEARTBEAT_MILLIS;
     }
-    return Math.max(10_000L, heartbeatMillis);
+    return Math.max(MIN_HEARTBEAT_MILLIS, heartbeatMillis);
   }
 
   private String normalizeStream(String stream) {

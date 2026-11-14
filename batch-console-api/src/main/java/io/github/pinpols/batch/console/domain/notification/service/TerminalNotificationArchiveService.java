@@ -19,6 +19,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 复用既有 relay 调度和租户审计保留策略，整族迁移已闭合事实；不永久删除证据。 */
 @Service
 public class TerminalNotificationArchiveService {
+
+  /** 每轮最多扫描的租户数。 */
+  private static final int TENANT_PAGE_SIZE = 100;
+
   private static final List<Family> COPY_ORDER =
       List.of(Family.RECEIPT, Family.WEBHOOK, Family.RULE, Family.PUSH, Family.AUDIT);
   private static final List<Family> DELETE_ORDER =
@@ -48,7 +52,7 @@ public class TerminalNotificationArchiveService {
     }
     int moved = 0;
     int remaining = Math.max(1, properties.getBatchSize());
-    int tenantLimit = Math.min(100, remaining);
+    int tenantLimit = Math.min(TENANT_PAGE_SIZE, remaining);
     List<String> tenants = archive.enabledTenants(afterTenant, tenantLimit);
     if (EmptyChecks.isEmpty(Objects.requireNonNull(tenants))) {
       afterTenant = "";

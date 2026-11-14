@@ -18,13 +18,17 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class PipelineProgressQueryService {
+
+  /** 一次批量查询进度时允许的 pipeline id 数上限。 */
+  private static final int MAX_IDS_PER_QUERY = 100;
+
   private final TenantIdResolver tenantGuard;
   private final FilePipelineStepRunMapper mapper;
   private final ConsoleFileQueryService files;
 
   public static List<Long> normalize(List<Long> ids) {
     if (EmptyChecks.isEmpty(ids)
-        || ids.size() > 100
+        || ids.size() > MAX_IDS_PER_QUERY
         || ids.stream().anyMatch(id -> EmptyChecks.isNull(id) || id <= 0))
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,

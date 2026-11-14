@@ -35,6 +35,22 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @Slf4j
 public class JobPushDeliveryService {
+
+  /** 每轮最多扫描的租户数。 */
+  private static final int TENANT_PAGE_SIZE = 100;
+
+  /** 订阅端未就绪（NOT_READY）时的重新投递间隔秒数。 */
+  private static final int NOT_READY_RETRY_DELAY_SECONDS = 30;
+
+  /** 重试退避基数（秒）：第 n 次重试等待 5·2^n 秒。 */
+  private static final long RETRY_BACKOFF_BASE_SECONDS = 5L;
+
+  /** 退避指数上限，attempt 超过 8 后不再翻倍。 */
+  private static final int MAX_RETRY_BACKOFF_EXPONENT = 8;
+
+  /** 单次重试等待上限（30 分钟）。 */
+  private static final long MAX_RETRY_DELAY_SECONDS = 1800L;
+
   private final JobPushDeliveryMapper deliveries;
   private final ConsolePushSubscriptionMapper subscriptions;
   private final ConsolePushSender sender;
@@ -64,10 +80,11 @@ public class JobPushDeliveryService {
         || !properties.getJobNotify().isEnabled();
     if (pollingUnavailable) return;
     int remaining = Math.max(1, properties.getJobNotify().getBatchSize());
-    List<String> tenants = deliveries.tenantPage(afterTenant, Math.min(100, remaining));
+    List<String> tenants =
+        deliveries.tenantPage(afterTenant, Math.min(TENANT_PAGE_SIZE, remaining));
     if (EmptyChecks.isEmpty(Objects.requireNonNull(tenants))) {
       afterTenant = "";
-      tenants = deliveries.tenantPage(afterTenant, Math.min(100, remaining));
+      tenants = deliveries.tenantPage(afterTenant, Math.min(TENANT_PAGE_SIZE, remaining));
     }
     for (String tenant : tenants) {
       boolean tenantScanShouldStop = stopped(stopping) || remaining <= 0;
@@ -131,11 +148,12 @@ public class JobPushDeliveryService {
       boolean notReady = result.outcome() == DeliveryOutcome.NOT_READY;
       Instant next = null;
       if (notReady) {
-        next = BatchDateTimeSupport.utcNow().plusSeconds(30);
+        next = BatchDateTimeSupport.utcNow().plusSeconds(NOT_READY_RETRY_DELAY_SECONDS);
       } else if (retry) {
         Instant retryScheduledAt = BatchDateTimeSupport.utcNow();
-        int boundedBackoffExponent = Math.min(row.attempt(), 8);
-        long retryDelaySeconds = Math.min(1800L, 5L << boundedBackoffExponent);
+        int boundedBackoffExponent = Math.min(row.attempt(), MAX_RETRY_BACKOFF_EXPONENT);
+        long retryDelaySeconds =
+            Math.min(MAX_RETRY_DELAY_SECONDS, RETRY_BACKOFF_BASE_SECONDS << boundedBackoffExponent);
         next = retryScheduledAt.plusSeconds(retryDelaySeconds);
       }
       String status =

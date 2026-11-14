@@ -79,6 +79,9 @@ import org.springframework.stereotype.Component;
     havingValue = "true")
 public class StoredProcTaskExecutor implements BatchTaskExecutor {
 
+  /** 结果集 fetch size 上限；行数上限更小时取行数上限。 */
+  private static final int MAX_FETCH_SIZE = 1000;
+
   static final String PARAM_PROC = "procedureName";
   static final String PARAM_IN = "inParams";
   static final String PARAM_OUT = "outParams";
@@ -511,7 +514,7 @@ public class StoredProcTaskExecutor implements BatchTaskExecutor {
     try (ResultSet r = rs) {
       try {
         // 提示驱动分批取,避免无界堆读。容量从上限和一个合理批量中取较小值。
-        r.setFetchSize(Math.min(cap > 0 ? cap : 1000, 1000));
+        r.setFetchSize(Math.min(cap > 0 ? cap : MAX_FETCH_SIZE, MAX_FETCH_SIZE));
       } catch (SQLException ignore) {
         // 部分驱动/REFCURSOR 不支持 setFetchSize,忽略(仍由下面的行数上限回退)。
       }

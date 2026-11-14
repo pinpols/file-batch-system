@@ -16,12 +16,16 @@ import org.springframework.transaction.annotation.Transactional;
 public class PersistentWaitReadService {
   private static final int MAX_PAGE_SIZE = 100;
 
+  /** 请求未指定 pageSize 时的默认每页条数，与列表默认分页 15 条一致。 */
+  private static final int DEFAULT_PAGE_SIZE = 15;
+
   private final PersistentWaitReadMapper mapper;
 
   @Transactional(readOnly = true)
   public PersistentWaitPage list(PersistentWaitReadQuery query) {
     int normalizedPageNo = Math.max(1, EmptyChecks.isNull(query.pageNo()) ? 1 : query.pageNo());
-    int requestedPageSize = EmptyChecks.isNull(query.pageSize()) ? 15 : query.pageSize();
+    int requestedPageSize =
+        EmptyChecks.isNull(query.pageSize()) ? DEFAULT_PAGE_SIZE : query.pageSize();
     int normalizedPageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, requestedPageSize));
     long offset = ((long) normalizedPageNo - 1L) * normalizedPageSize;
     PersistentWaitReadFilter filter = new PersistentWaitReadFilter(

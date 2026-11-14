@@ -49,6 +49,12 @@ public record WorkerHeartbeatDto(
     // Replay 预览用的插件能力目录；仅 register 上报，heartbeat/status 不更新。
     List<ReplayCapabilityDeclaration> replayCapabilities) {
 
+  /**
+   * 单次心跳可上报的能力条目上限，taskCapabilities 与 replayCapabilities 共用，
+   * 防止异常 Worker 撑大心跳载荷。
+   */
+  private static final int MAX_CAPABILITY_ENTRIES = 128;
+
   public WorkerHeartbeatDto {
     Integer normalizedCurrentLoad = currentLoad;
     if (normalizedCurrentLoad == null || normalizedCurrentLoad < 0) {
@@ -63,13 +69,13 @@ public record WorkerHeartbeatDto(
       port = null;
     }
     if (EmptyChecks.isNotNull(taskCapabilities)) {
-      if (taskCapabilities.size() > 128) {
+      if (taskCapabilities.size() > MAX_CAPABILITY_ENTRIES) {
         throw new IllegalArgumentException("taskCapabilities must contain at most 128 entries");
       }
       taskCapabilities = List.copyOf(taskCapabilities);
     }
     if (EmptyChecks.isNotNull(replayCapabilities)) {
-      if (replayCapabilities.size() > 128) {
+      if (replayCapabilities.size() > MAX_CAPABILITY_ENTRIES) {
         throw new IllegalArgumentException("replayCapabilities must contain at most 128 entries");
       }
       replayCapabilities = List.copyOf(replayCapabilities);

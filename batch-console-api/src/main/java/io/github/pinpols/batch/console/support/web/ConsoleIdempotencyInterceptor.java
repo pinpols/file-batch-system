@@ -51,6 +51,13 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
   private static final Duration IDEMPOTENCY_TTL = Duration.ofHours(24);
   private static final Duration STREAM_PENDING_TTL = Duration.ofMinutes(10);
+
+  /** PENDING 租约续期间隔，同时作为首次续期延迟。 */
+  private static final Duration PENDING_LEASE_RENEW_INTERVAL = Duration.ofSeconds(10);
+
+  /** 非流式请求 PENDING 占位的 TTL；流式请求使用 STREAM_PENDING_TTL。 */
+  private static final Duration PENDING_TTL = Duration.ofSeconds(30);
+
   private static final Set<String> MUTATING_METHODS = Set.of("POST", "PUT", "PATCH", "DELETE");
   private static final String PENDING = "PENDING";
   private static final String DONE = "DONE";
@@ -107,7 +114,9 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
   void startRenewal() {
     // Console 未开启全局 @EnableScheduling，显式复用受 Spring 管理的调度器。
     renewal = scheduler.scheduleWithFixedDelay(
-        this::renewPendingLeases, Instant.now().plusSeconds(10), Duration.ofSeconds(10));
+        this::renewPendingLeases,
+        Instant.now().plus(PENDING_LEASE_RENEW_INTERVAL),
+        PENDING_LEASE_RENEW_INTERVAL);
   }
 
   @PreDestroy
@@ -200,7 +209,7 @@ public class ConsoleIdempotencyInterceptor implements HandlerInterceptor {
 
     boolean streamRequest = request.getRequestURI().equals("/api/console/ai/chat/stream");
     String owner = PENDING + ":" + UUID.randomUUID();
-    Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : Duration.ofSeconds(30);
+    Duration pendingTtl = streamRequest ? STREAM_PENDING_TTL : PENDING_TTL;
     Boolean isNew = reservePending(redisKey, owner, pendingTtl, response);
     if (EmptyChecks.isNull(isNew)) {
       return false;

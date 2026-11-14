@@ -677,7 +677,13 @@
 - 新增受控的前后端 Compose CD：同一 release manifest 固定两仓 commit 与全部镜像 digest；可手动部署 staging 并执行 health/version、Playwright、视觉/跨浏览器 smoke 与 Lighthouse 验收，失败时恢复上一稳定 release。真实主机配置和 production 晋级仍待外部接入。
 - 修复临时 Sonar 首次扫描无法设置 30 天新代码基线的问题：为扫描管理账号补齐项目级管理权限，并按项目实际主分支回读验证，避免 Sonar API 空响应掩盖配置未生效。
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
+### Removed
+
+- 控制台审批执行删除 `BATCH_DAY_REPLAY` 动作分支及其仅用于此处的 orchestrator 内部客户端方法：主代码从不创建该类审批单，V344 起 `ck_approval_command_action` 也不允许该动作。V344 已对该约束执行 `VALIDATE CONSTRAINT`，库中不会存在此类审批单；若收到该动作，按“不支持的审批动作”拒绝（`INVALID_ARGUMENT`），不标记为已执行。
+- 删除 Console 未被生产代码使用的 `StepRegistryQueryMapper.selectAllImplEntries` 查询及 `StepRegistryEntryView`。
+
 ### Security
+- Rust SDK 及其自托管示例的锁文件升级传递依赖 `quinn-proto` 0.11.18 → 0.11.19、`quinn-udp` → 0.5.16，修复 RUSTSEC-2026-0523、RUSTSEC-2026-0524（QUIC 对端可致内存耗尽或进程中止）和 RUSTSEC-2026-0538（部分平台收到截断数据报时接收循环空转）。依赖声明未改，Rust SDK 测试通过。
 - 配置包 Excel 上传的工作簿暂存改为使用 owner-only 私有临时目录，避免在共享系统临时根目录落盘；成功和解析失败路径均验证清理。
 - Console 文件错误记录的 `rawRecord` 响应现按模板 `preview_masking_enabled` 执行脱敏；`error_line_masking_enabled` 仍负责错误消息和原始行，两项策略可独立配置。
 - 配置包 Excel 解析失败时不再将 POI 原始异常文本回显给调用方；服务端保留经过清理的诊断摘要。

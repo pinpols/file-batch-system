@@ -83,6 +83,9 @@ import org.springframework.stereotype.Component;
     havingValue = "true")
 public class ShellTaskExecutor implements BatchTaskExecutor {
 
+  /** 进程结束后等待 stdout/stderr 读取线程收尾的毫秒数。 */
+  private static final int STREAM_READER_JOIN_TIMEOUT_MILLIS = 1000;
+
   /** 演练结果中 command 与单个 arg 的展示长度上限；不对应数据库列。 */
   private static final int DRY_RUN_TEXT_MAX_LENGTH = 4096;
 
@@ -408,8 +411,8 @@ public class ShellTaskExecutor implements BatchTaskExecutor {
       if (!finished) {
         destroyProcessTree(proc);
       }
-      stdoutReader.thread().join(1000);
-      stderrReader.thread().join(1000);
+      stdoutReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
+      stderrReader.thread().join(STREAM_READER_JOIN_TIMEOUT_MILLIS);
 
       ReaderResult stdout = stdoutReader.result().get();
       ReaderResult stderr = stderrReader.result().get();

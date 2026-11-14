@@ -35,6 +35,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public final class ImportStageSupport {
 
+  /**
+   * config 为 null 时的分块大小回退值（注意与 ImportWorkerConfiguration 默认 2000 不同，
+   * 保持原值）。
+   */
+  private static final int FALLBACK_CHUNK_SIZE = 500;
+
+  /** config 为 null 时的分块上限，与 ImportWorkerConfiguration.DEFAULT_MAX_CHUNK_SIZE 相同。 */
+  private static final int FALLBACK_MAX_CHUNK_SIZE = 10000;
+
   private ImportStageSupport() {}
 
   /** 把任意 Number / String 数值解析为 long,空白或 null 返回 0。非数值字符串抛 {@link NumberFormatException}。 */
@@ -66,8 +75,9 @@ public final class ImportStageSupport {
    * 且不超过 {@link ImportWorkerConfiguration#maxChunkSize()}。
    */
   public static int resolveChunkSize(ImportJobContext context, ImportWorkerConfiguration config) {
-    int fallback = config == null ? 500 : config.chunkSize();
-    int max = config == null ? 10000 : Math.max(1, config.maxChunkSize());
+    int fallback = EmptyChecks.isNull(config) ? FALLBACK_CHUNK_SIZE : config.chunkSize();
+    int max =
+        EmptyChecks.isNull(config) ? FALLBACK_MAX_CHUNK_SIZE : Math.max(1, config.maxChunkSize());
     int chunkSize = fallback;
     Object templateConfigObject =
         context == null ? null : context.getAttributes().get(PipelineRuntimeKeys.TEMPLATE_CONFIG);

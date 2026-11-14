@@ -24,6 +24,10 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
 /** 解析并校验批量开户工作簿，供预览流程使用。 */
 final class ConsoleUserBatchWorkbookParser {
+
+  /** 批量开户工作簿允许的最大行号（getLastRowNum 从 0 起计，第 0 行为表头）。 */
+  private static final int MAX_ROW_NUM = 5000;
+
   private ConsoleUserBatchWorkbookParser() {}
 
   static List<AccountRow> parse(byte[] bytes) {
@@ -39,7 +43,7 @@ final class ConsoleUserBatchWorkbookParser {
         throw invalid("Expected one Accounts sheet");
       }
       Sheet sheet = workbook.getSheetAt(0);
-      if (sheet.getLastRowNum() > 5000) throw invalid("Workbook has too many rows");
+      if (sheet.getLastRowNum() > MAX_ROW_NUM) throw invalid("Workbook has too many rows");
       DataFormatter formatter = new DataFormatter(Locale.ROOT);
       validateHeader(sheet, formatter);
       return parseRows(sheet, formatter);

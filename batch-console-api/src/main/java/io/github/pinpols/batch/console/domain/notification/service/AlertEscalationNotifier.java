@@ -72,6 +72,9 @@ import org.springframework.stereotype.Component;
     matchIfMissing = false)
 public class AlertEscalationNotifier {
 
+  /** 停止时等待升级任务结束的秒数，超时后强制中断。 */
+  private static final int SHUTDOWN_AWAIT_SECONDS = 15;
+
   /**
    * 升级通知发往的 SSE / webhook 流与事件类型。流沿用告警的 {@code alerts} 流(与 ack 的 {@code alert-updated} 同流); 事件类型用
    * {@code ALERT_ESCALATED}(UPPER_UNDERSCORE),对齐 {@code ConsoleEventCatalogController}
@@ -163,7 +166,7 @@ public class AlertEscalationNotifier {
     log.info("AlertEscalationNotifier stopping: source={}", source);
     executor.shutdown();
     try {
-      if (!executor.awaitTermination(15, TimeUnit.SECONDS)) {
+      if (!executor.awaitTermination(SHUTDOWN_AWAIT_SECONDS, TimeUnit.SECONDS)) {
         log.warn("AlertEscalationNotifier did not shut down within 15s; forcing interruption");
         executor.shutdownNow();
       }

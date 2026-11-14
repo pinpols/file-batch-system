@@ -35,6 +35,9 @@ import javax.crypto.spec.SecretKeySpec;
  */
 public class BatchObjectCryptoService {
 
+  /** 偷看头部用的回退缓冲字节数：远大于 8 字节魔数，给版本头扩展留空间。 */
+  private static final int HEADER_PUSHBACK_BUFFER_BYTES = 64;
+
   private static final byte[] MAGIC = "BATCHENC".getBytes(StandardCharsets.US_ASCII);
   private static final byte VERSION = 1;
   private static final int GCM_TAG_BITS = 128;
@@ -204,7 +207,8 @@ public class BatchObjectCryptoService {
     try (closeGuard) {
       // 用 PushbackInputStream 偷看头部字节，若不是魔数则 unread 还原，对调用方透明；
       // 缓冲 64B 远大于魔数 8B，预留版本头扩展空间
-      PushbackInputStream pushbackInputStream = new PushbackInputStream(inputStream, 64);
+      PushbackInputStream pushbackInputStream =
+          new PushbackInputStream(inputStream, HEADER_PUSHBACK_BUFFER_BYTES);
       closeGuard.replace(pushbackInputStream);
       byte[] magic = pushbackInputStream.readNBytes(MAGIC.length);
       if (magic.length < MAGIC.length || !Arrays.equals(magic, MAGIC)) {

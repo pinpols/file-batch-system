@@ -1,6 +1,5 @@
 package io.github.pinpols.batch.console.domain.job.mapper;
 
-import io.github.pinpols.batch.console.domain.job.view.StepRegistryEntryView;
 import java.util.List;
 import org.apache.ibatis.annotations.Param;
 
@@ -14,10 +13,4 @@ public interface StepRegistryQueryMapper {
 
   /** 所有模块的 impl_code 并集；模板下载时用作跨模块的总下拉选项。 */
   List<String> selectAllImplCodes();
-
-  /**
-   * 全部 (module, impl_code) 行。模板下载时下拉项格式化为 {@code MODULE:beanName}，方便用户辨识模块归属； 上传校验时对照 pipeline_type
-   * 验证前缀匹配。
-   */
-  List<StepRegistryEntryView> selectAllImplEntries();
 }

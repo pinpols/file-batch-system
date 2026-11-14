@@ -64,6 +64,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 @RequiredArgsConstructor
 public class BatchDaySettleScheduler {
 
+  /** 每轮最多检查的逾期预期工作条数。 */
+  private static final int OVERDUE_EXPECTED_WORK_BATCH_SIZE = 100;
+
   private static final String STATUS_SETTLING = "SETTLING";
   private static final String STATUS_IN_FLIGHT = "IN_FLIGHT";
   private static final List<String> TRACKED_STATUSES =
@@ -366,7 +369,7 @@ public class BatchDaySettleScheduler {
                 .calendarCode(batchDay.calendarCode())
                 .bizDate(batchDay.bizDate())
                 .now(now)
-                .limit(100)
+                .limit(OVERDUE_EXPECTED_WORK_BATCH_SIZE)
                 .build();
     List<ExpectedWorkOccurrenceOverride> overdue =
         expectedWorkOccurrenceMapper.selectDueExpectedWithoutMissingAlert(

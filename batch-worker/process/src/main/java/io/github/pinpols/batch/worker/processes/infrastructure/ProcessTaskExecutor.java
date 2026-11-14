@@ -25,6 +25,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class ProcessTaskExecutor implements BatchTaskExecutor {
 
+  /**
+   * 兼容构造器使用的能力超时秒数，
+   * 与 process worker 的 capability-timeout-seconds 默认值 1200 一致。
+   */
+  private static final long COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS = 1200L;
+
   private final ProcessStepExecutionAdapter delegate;
   private final WorkerExecutionTimeoutProperties timeoutProperties;
 
@@ -42,7 +48,7 @@ public class ProcessTaskExecutor implements BatchTaskExecutor {
 
   private static WorkerExecutionTimeoutProperties compatibilityDefaults() {
     WorkerExecutionTimeoutProperties properties = new WorkerExecutionTimeoutProperties();
-    properties.setCapabilityTimeoutSeconds(1200L);
+    properties.setCapabilityTimeoutSeconds(COMPATIBILITY_CAPABILITY_TIMEOUT_SECONDS);
     return properties;
   }
 

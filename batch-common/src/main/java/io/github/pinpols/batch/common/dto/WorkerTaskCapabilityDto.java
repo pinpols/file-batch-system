@@ -11,11 +11,14 @@ public record WorkerTaskCapabilityDto(
     boolean cancellable,
     long recommendedTimeoutMillis) {
 
+  /** 单个任务能力可声明的资源种类上限。 */
+  private static final int MAX_RESOURCE_KINDS = 16;
+
   public WorkerTaskCapabilityDto {
     if (EmptyChecks.isBlank(taskType) || taskType.length() > 128) {
       throw new IllegalArgumentException("taskType must contain 1 to 128 characters");
     }
-    if (EmptyChecks.isEmpty(resourceKinds) || resourceKinds.size() > 16) {
+    if (EmptyChecks.isEmpty(resourceKinds) || resourceKinds.size() > MAX_RESOURCE_KINDS) {
       throw new IllegalArgumentException("resourceKinds must contain 1 to 16 values");
     }
     if (resourceKinds.stream().anyMatch(EmptyChecks::isBlank)) {

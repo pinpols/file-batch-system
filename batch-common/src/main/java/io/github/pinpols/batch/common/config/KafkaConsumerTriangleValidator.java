@@ -31,6 +31,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @ConditionalOnProperty(prefix = "spring.kafka", name = "bootstrap-servers")
 public class KafkaConsumerTriangleValidator {
 
+  /** 未配置时的会话超时，与 batch-defaults.yml 中 session.timeout.ms 默认值 45000 一致。 */
+  private static final int DEFAULT_SESSION_TIMEOUT_MS = 45_000;
+
+  /** 未配置时的心跳间隔，与 batch-defaults.yml 中 heartbeat.interval.ms 默认值 15000 一致。 */
+  private static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 15_000;
+
   private final int sessionTimeoutMs;
   private final int heartbeatIntervalMs;
   private final int maxPollIntervalMs;
@@ -38,8 +44,10 @@ public class KafkaConsumerTriangleValidator {
 
   public KafkaConsumerTriangleValidator(KafkaConsumerTimingProperties kafkaProperties) {
     Map<String, String> properties = kafkaProperties.getProperties();
-    sessionTimeoutMs = integerProperty(properties, "session.timeout.ms", 45_000);
-    heartbeatIntervalMs = integerProperty(properties, "heartbeat.interval.ms", 15_000);
+    sessionTimeoutMs =
+        integerProperty(properties, "session.timeout.ms", DEFAULT_SESSION_TIMEOUT_MS);
+    heartbeatIntervalMs =
+        integerProperty(properties, "heartbeat.interval.ms", DEFAULT_HEARTBEAT_INTERVAL_MS);
     int legacyMaxPollIntervalMs =
         integerProperty(properties, "max-poll-interval-ms", kafkaProperties.getMaxPollIntervalMs());
     maxPollIntervalMs =

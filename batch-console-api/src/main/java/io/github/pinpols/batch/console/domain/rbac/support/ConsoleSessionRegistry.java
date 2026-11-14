@@ -46,6 +46,15 @@ import org.springframework.stereotype.Service;
 @Service
 public class ConsoleSessionRegistry {
 
+  /** 本地会话镜像最多缓存的会话数。 */
+  private static final int LOCAL_MIRROR_MAX_ENTRIES = 100_000;
+
+  /**
+   * 未配置或配置非正时的会话状态 TTL，
+   * 与 batch.console.security.session-state-ttl 默认值 P30D 一致。
+   */
+  private static final Duration DEFAULT_SESSION_STATE_TTL = Duration.ofDays(30);
+
   private static final String KEY_PREFIX = "batch:console:auth:session:";
 
   private final ConsoleSessionStore sessionStore;
@@ -65,7 +74,7 @@ public class ConsoleSessionRegistry {
     // batch.console.session.* 指标判断容量是否需要调整。
     this.localMirror = Caffeine.newBuilder()
         .expireAfterWrite(resolveTtl(securityProperties))
-        .maximumSize(100_000)
+        .maximumSize(LOCAL_MIRROR_MAX_ENTRIES)
         .recordStats()
         .build();
     registerCacheMetrics(meterRegistryProvider);
@@ -183,7 +192,9 @@ public class ConsoleSessionRegistry {
 
   private static Duration resolveTtl(ConsoleSecurityProperties props) {
     Duration ttl = props == null ? null : props.getSessionStateTtl();
-    return ttl == null || ttl.isNegative() || ttl.isZero() ? Duration.ofDays(30) : ttl;
+    return EmptyChecks.isNull(ttl) || ttl.isNegative() || ttl.isZero()
+        ? DEFAULT_SESSION_STATE_TTL
+        : ttl;
   }
 
   private String key(String username, String tenantId) {

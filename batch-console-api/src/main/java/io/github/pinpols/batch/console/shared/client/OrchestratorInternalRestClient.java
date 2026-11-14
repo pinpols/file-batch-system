@@ -144,20 +144,6 @@ public class OrchestratorInternalRestClient {
         .toBodilessEntity();
   }
 
-  /** 批次日 replay 审批命令由基础设施客户端封装，避免 application 层直接依赖 HTTP SDK。 */
-  public void approveBatchDayReplay(long sessionId, String tenantId, String approver) {
-    client()
-        .post()
-        .uri(
-            "/internal/orchestrator/batch-day-replay/sessions/{id}/approve"
-                + "?tenantId={tenantId}&approver={approver}",
-            sessionId,
-            tenantId,
-            approver)
-        .retrieve()
-        .toBodilessEntity();
-  }
-
   public void rejectWorkflowNodeReplayOperation(Long operationId, String tenantId) {
     client()
         .post()

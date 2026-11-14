@@ -27,6 +27,9 @@ import java.util.Set;
  */
 public class DelimitedFormatParser implements FormatParser {
 
+  /** 解析器允许的最大列数；字段长度不设限，整体大小由预处理落盘阈值约束。 */
+  private static final int MAX_COLUMNS = 10_000;
+
   private static final String KEY_SCHEMA_FIELDS = PipelineRuntimeKeys.IMPORT_SCHEMA_FIELDS;
   private static final String ERROR_CODE_LINE_INVALID = "IMPORT_PARSE_LINE_INVALID";
 
@@ -142,7 +145,7 @@ public class DelimitedFormatParser implements FormatParser {
     // 任何字段长度 / 列数 的硬限都由 PreprocessStep.SPOOL_THRESHOLD_BYTES / ReceiveStep 的堆联动回退；
     // 解析器自身放开上限避免宽字段/宽表误拒
     settings.setMaxCharsPerColumn(-1);
-    settings.setMaxColumns(10_000);
+    settings.setMaxColumns(MAX_COLUMNS);
     // 对齐原手写实现的 `current.toString().trim()` 语义
     settings.trimValues(true);
     return settings;

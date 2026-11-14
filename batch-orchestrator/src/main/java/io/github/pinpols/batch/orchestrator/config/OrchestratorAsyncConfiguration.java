@@ -19,6 +19,12 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 @Configuration(proxyBeanMethods = false)
 public class OrchestratorAsyncConfiguration {
 
+  /** outbox 轮询调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
+  private static final int OUTBOX_POLL_MAX_AWAIT_SECONDS = 30;
+
+  /** 作业监控调度器关闭时等待的最长秒数，配置值更大时按此截断。 */
+  private static final int JOB_MONITORING_MAX_AWAIT_SECONDS = 15;
+
   // 2026-05-24:常量值从 "outboxPollScheduler" 改为 "outboxPollTaskScheduler",
   // 避免与 OutboxPollScheduler @Component bean(默认 bean 名 outboxPollScheduler)
   // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
@@ -41,7 +47,7 @@ public class OrchestratorAsyncConfiguration {
     scheduler.setDaemon(false);
     scheduler.setRemoveOnCancelPolicy(true);
     // outbox 事件已经落库，关闭时允许当前投递轮次完成；未投递事件会由下一副本继续扫描。
-    configureShutdown(scheduler, properties, 30);
+    configureShutdown(scheduler, properties, OUTBOX_POLL_MAX_AWAIT_SECONDS);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
     return scheduler;
   }
@@ -54,7 +60,7 @@ public class OrchestratorAsyncConfiguration {
     scheduler.setThreadNamePrefix("job-monitoring-scheduler-");
     scheduler.setDaemon(false);
     scheduler.setRemoveOnCancelPolicy(true);
-    configureShutdown(scheduler, properties, 15);
+    configureShutdown(scheduler, properties, JOB_MONITORING_MAX_AWAIT_SECONDS);
     scheduler.setRejectedExecutionHandler(new ThreadPoolExecutor.AbortPolicy());
     return scheduler;
   }

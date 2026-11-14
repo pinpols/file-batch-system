@@ -82,6 +82,9 @@ import org.springframework.stereotype.Component;
     havingValue = "true")
 public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
 
+  /** 进程退出后等待输出读取线程收尾的秒数，防止孙进程占住管道时永久阻塞。 */
+  private static final int STREAM_READER_JOIN_TIMEOUT_SECONDS = 30;
+
   /** 演练结果中单个 argv 的展示长度上限；不对应数据库列。 */
   private static final int DRY_RUN_ARG_MAX_LENGTH = 4096;
 
@@ -503,7 +506,7 @@ public class SparkSubmitTaskExecutor implements BatchTaskExecutor {
     String await() throws InterruptedException {
       // 进程已退出(waitFor 已返回)/被 destroy → 流很快 EOF,reader 自然收尾。给 30s 生成性上限
       // 防孙进程占住管道时永久阻塞;真超时也因 StringBuffer 线程安全而读取安全。
-      thread.join(TimeUnit.SECONDS.toMillis(30));
+      thread.join(TimeUnit.SECONDS.toMillis(STREAM_READER_JOIN_TIMEOUT_SECONDS));
       return buf.toString();
     }
   }

@@ -35,6 +35,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Service
 @RequiredArgsConstructor
 public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
+
+  /** 读取加密附件时在明文上限之外多读的字节数，容纳加密头与认证标签。 */
+  private static final int CIPHERTEXT_OVERHEAD_ALLOWANCE_BYTES = 1024;
+
+  /** 单个租户一轮清理最多处理的过期附件对象数。 */
+  private static final int CLEANUP_BATCH_SIZE = 100;
+
   private final ConsoleAiAttachmentMapper mapper;
   private final ConsoleAiProperties aiProperties;
   private final BatchObjectCryptoService cryptoService;
@@ -146,7 +153,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     ConsoleAiAttachmentEntity row = owned(tenantId, ownerUserId, id);
     if (!"BOUND".equals(row.getStatus())) throw notFound();
     try (InputStream stream = objectStore.get(attachmentBucket(), row.getObjectKey())) {
-      int limit = aiProperties.getImage().getMaxFileBytes() + 1024;
+      int limit = aiProperties.getImage().getMaxFileBytes() + CIPHERTEXT_OVERHEAD_ALLOWANCE_BYTES;
       byte[] encrypted = stream.readNBytes(limit + 1);
       boolean ciphertextExceedsReadLimit = encrypted.length > limit;
       if (ciphertextExceedsReadLimit) {
@@ -272,7 +279,7 @@ public class ConsoleAiAttachmentService implements ConsoleAiAttachmentUseCase {
     });
     List<String> keys = template().execute(status -> {
       mapper.setTenantContext(tenantId);
-      return mapper.cleanupKeys(tenantId, 100);
+      return mapper.cleanupKeys(tenantId, CLEANUP_BATCH_SIZE);
     });
     if (EmptyChecks.isNull(keys)) return;
     for (String key : keys) {

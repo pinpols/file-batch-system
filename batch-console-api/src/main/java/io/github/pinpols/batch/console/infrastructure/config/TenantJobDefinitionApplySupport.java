@@ -41,6 +41,12 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 final class TenantJobDefinitionApplySupport {
 
+  /**
+   * 单个作业可声明的上游依赖规则数上限；
+   * DefaultConsoleJobDefinitionApplicationService 使用同一上限。
+   */
+  private static final int MAX_UPSTREAM_DEPENDENCIES = 32;
+
   private static final String INVALID_ARGUMENT_KEY = "error.common.invalid_argument";
   private static final Set<String> JOB_DEPENDENCY_BIZ_DATE_ALIGNMENTS =
       Set.of("SAME_DAY", "PREVIOUS_BIZ_DAY");
@@ -389,7 +395,7 @@ final class TenantJobDefinitionApplySupport {
 
   private static List<JobDependencyRuleRequest> normalizeJobDependencyRules(
       List<JobDependencyRuleRequest> rules) {
-    if (rules.size() > 32) {
+    if (rules.size() > MAX_UPSTREAM_DEPENDENCIES) {
       throw invalidJobDependency();
     }
     Set<String> upstreamCodes = new LinkedHashSet<>();

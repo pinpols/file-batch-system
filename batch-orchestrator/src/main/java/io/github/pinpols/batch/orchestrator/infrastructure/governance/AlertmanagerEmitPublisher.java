@@ -51,6 +51,12 @@ import org.springframework.stereotype.Component;
 @Component
 public class AlertmanagerEmitPublisher {
 
+  /** 超出核心数的告警发送线程空闲回收秒数。 */
+  private static final long EMIT_KEEP_ALIVE_SECONDS = 30L;
+
+  /** 待发送告警队列容量，队列满后按拒绝策略处理。 */
+  private static final int EMIT_QUEUE_CAPACITY = 512;
+
   private static final String METRIC = "batch.alert.am_emit";
   private static final String ALERTS_PATH = "/api/v2/alerts";
 
@@ -71,9 +77,9 @@ public class AlertmanagerEmitPublisher {
       ThreadPoolExecutor pool = new ThreadPoolExecutor(
           1,
           Math.max(1, props.getEmitThreads()),
-          30L,
+          EMIT_KEEP_ALIVE_SECONDS,
           TimeUnit.SECONDS,
-          new LinkedBlockingQueue<>(512),
+          new LinkedBlockingQueue<>(EMIT_QUEUE_CAPACITY),
           r -> {
             Thread t = new Thread(r, "am-emit");
             t.setDaemon(true);

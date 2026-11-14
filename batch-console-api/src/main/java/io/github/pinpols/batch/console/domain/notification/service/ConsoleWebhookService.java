@@ -28,6 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class ConsoleWebhookService {
 
+  /** Webhook 投递日志单次查询条数上限。 */
+  private static final int MAX_DELIVERY_LOG_LIMIT = 200;
+
   private final ConsoleWebhookSubscriptionMapper subscriptionRepository;
   private final ConsoleWebhookDeliveryLogMapper deliveryLogRepository;
   private final TenantIdResolver tenantGuard;
@@ -116,7 +119,7 @@ public class ConsoleWebhookService {
   public List<WebhookDeliveryLogEntity> deliveryLogs(
       String tenantId, Long subscriptionId, int limit) {
     String resolved = tenantGuard.resolveTenant(tenantId);
-    int effectiveLimit = Math.min(Math.max(limit, 1), 200);
+    int effectiveLimit = Math.min(Math.max(limit, 1), MAX_DELIVERY_LOG_LIMIT);
     deliveryLogRepository.bindTenant(resolved);
     if (subscriptionId != null) {
       return deliveryLogRepository.findBySubscription(resolved, subscriptionId, effectiveLimit);

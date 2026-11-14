@@ -67,6 +67,15 @@ import reactor.core.publisher.Sinks;
 @Idempotent
 public class ConsoleAiController {
 
+  /** 流式对话线程池的最大并发线程数；SynchronousQueue 不排队，超出即拒绝。 */
+  private static final int STREAM_MAX_THREADS = 16;
+
+  /** 流式对话空闲线程的回收秒数。 */
+  private static final long STREAM_KEEP_ALIVE_SECONDS = 60L;
+
+  /** SSE 超时比模型请求超时多留的毫秒数，让模型请求超时先于 SSE 连接超时发生。 */
+  private static final int SSE_TIMEOUT_MARGIN_MILLIS = 10_000;
+
   private final ConsoleAiApplicationService applicationService;
   private final ConsoleResponseFactory responseFactory;
   private final ConsoleAiAuthorizationService authorizationService;
@@ -74,8 +83,13 @@ public class ConsoleAiController {
   private final ConsoleAiProperties aiProperties;
   private final ConsoleAiImageApplicationService imageService;
   private final ConsoleAiStreamRegistry streamRegistry;
-  private final ExecutorService streamExecutor =
-      new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+  private final ExecutorService streamExecutor = new ThreadPoolExecutor(
+      0,
+      STREAM_MAX_THREADS,
+      STREAM_KEEP_ALIVE_SECONDS,
+      TimeUnit.SECONDS,
+      new SynchronousQueue<>(),
+      runnable -> {
         Thread thread = new Thread(runnable, "console-ai-stream");
         thread.setDaemon(true);
         return thread;
@@ -143,7 +157,7 @@ public class ConsoleAiController {
     Locale requestLocale = LocaleContextHolder.getLocale();
     long configuredRequestTimeoutMillis = aiProperties.getRequestTimeout().toMillis();
     long minimumRequestTimeoutMillis = Math.max(1, configuredRequestTimeoutMillis);
-    long timeout = minimumRequestTimeoutMillis + 10_000;
+    long timeout = minimumRequestTimeoutMillis + SSE_TIMEOUT_MARGIN_MILLIS;
     SseEmitter emitter = new SseEmitter(timeout);
     ActiveStream active = new ActiveStream(emitter);
     Registration registration = streamRegistry.register(requestId, active::cancel);

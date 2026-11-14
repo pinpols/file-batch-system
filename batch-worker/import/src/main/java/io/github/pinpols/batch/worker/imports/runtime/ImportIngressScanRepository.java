@@ -21,6 +21,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 /** 保存跨实例可恢复的入站扫描进度；对象存储读取不在数据库事务内执行。 */
 @Repository
 public class ImportIngressScanRepository {
+
+  /** 未指定时的扫描租约时长毫秒数。 */
+  private static final long DEFAULT_LEASE_MILLIS = 30000L;
+
+  /** 排队等待的宽限毫秒数下限；轮询间隔更长时取轮询间隔。 */
+  private static final long MIN_QUEUE_GRACE_MILLIS = 120000L;
+
   private final ImportIngressScanMapper mapper;
   private final ImportIngressOwnershipRepository ownership;
   private final TransactionTemplate transaction;
@@ -46,7 +53,7 @@ public class ImportIngressScanRepository {
 
   public Optional<Lease> claim(
       String storageId, String scopeId, String bucket, String prefix, String configDigest) {
-    return claim(storageId, scopeId, bucket, prefix, configDigest, 30000L);
+    return claim(storageId, scopeId, bucket, prefix, configDigest, DEFAULT_LEASE_MILLIS);
   }
 
   public Optional<Lease> claim(
@@ -81,7 +88,7 @@ public class ImportIngressScanRepository {
         throw new IllegalStateException("同一入站存储范围存在不一致的扫描规则，须停止扫描后完成配置切换");
       }
       long interval = Math.max(0, pollIntervalMillis);
-      long grace = Math.max(interval, 120000L);
+      long grace = Math.max(interval, MIN_QUEUE_GRACE_MILLIS);
       long waitingMillis = interval > Long.MAX_VALUE - grace ? Long.MAX_VALUE : interval + grace;
       mapper.queueScope(scopeId, waitingMillis);
       List<String> eligible = mapper.eligibleScopes(storageId);

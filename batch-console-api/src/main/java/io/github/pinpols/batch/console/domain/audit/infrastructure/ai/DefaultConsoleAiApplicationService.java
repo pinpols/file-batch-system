@@ -112,6 +112,12 @@ import reactor.core.publisher.Flux;
 @RequiredArgsConstructor
 public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationService {
 
+  /** 模型调用线程池的最大并发线程数；SynchronousQueue 不排队，超出即拒绝。 */
+  private static final int MODEL_CALL_MAX_THREADS = 16;
+
+  /** 模型调用空闲线程的回收秒数。 */
+  private static final long MODEL_CALL_KEEP_ALIVE_SECONDS = 60L;
+
   /** AiPromptDecision → 拒绝文案（展示层文案，归属 service 而非 batch-common 枚举）。 */
   private static final Map<AiPromptDecision, String> REFUSAL_MESSAGE_KEYS = Map.of(
       AiPromptDecision.REJECTED_DISABLED, "error.ai.rejected_disabled",
@@ -139,8 +145,13 @@ public class DefaultConsoleAiApplicationService implements ConsoleAiApplicationS
    * 模型调用超时用的有界线程池:0 常驻 + 上限 16 + SynchronousQueue,provider 卡死时并发被封顶,超过即拒绝(当降级处理), 空闲线程 60s
    * 回收,daemon 线程不阻塞 JVM 退出。仅用于给 blocking 的 SDK 调用套一层应用层硬超时,防 Tomcat 线程被拖住。
    */
-  private final ExecutorService modelCallExecutor =
-      new ThreadPoolExecutor(0, 16, 60L, TimeUnit.SECONDS, new SynchronousQueue<>(), runnable -> {
+  private final ExecutorService modelCallExecutor = new ThreadPoolExecutor(
+      0,
+      MODEL_CALL_MAX_THREADS,
+      MODEL_CALL_KEEP_ALIVE_SECONDS,
+      TimeUnit.SECONDS,
+      new SynchronousQueue<>(),
+      runnable -> {
         Thread thread = new Thread(runnable, "console-ai-model-call");
         thread.setDaemon(true);
         return thread;

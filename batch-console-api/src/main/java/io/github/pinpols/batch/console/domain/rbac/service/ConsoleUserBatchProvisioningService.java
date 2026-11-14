@@ -52,6 +52,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 public class ConsoleUserBatchProvisioningService {
 
+  /** 初始密码的随机字节数；24 字节经 Base64URL 编码为 32 个字符。 */
+  private static final int RANDOM_PASSWORD_BYTES = 24;
+
   static final int MAX_ROWS = 500;
   private static final long MAX_BYTES = 2L * 1024 * 1024;
   private static final Duration PREVIEW_TTL = Duration.ofMinutes(15);
@@ -398,7 +401,7 @@ public class ConsoleUserBatchProvisioningService {
   }
 
   private static String randomPassword() {
-    byte[] bytes = new byte[24];
+    byte[] bytes = new byte[RANDOM_PASSWORD_BYTES];
     RANDOM.nextBytes(bytes);
     return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
   }

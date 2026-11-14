@@ -28,13 +28,17 @@ import org.springframework.stereotype.Component;
 final class NasCopyExecutor {
 
   static final int MAX_THREADS = 8;
+
+  /** NAS 复制空闲线程的回收秒数。 */
+  private static final long KEEP_ALIVE_SECONDS = 60L;
+
   private static final AtomicLong THREAD_INDEX = new AtomicLong();
 
   private final AtomicBoolean stopping = new AtomicBoolean();
   private final ThreadPoolExecutor executor = new ThreadPoolExecutor(
       0,
       MAX_THREADS,
-      60L,
+      KEEP_ALIVE_SECONDS,
       TimeUnit.SECONDS,
       new SynchronousQueue<>(),
       runnable -> {

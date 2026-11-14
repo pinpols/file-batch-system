@@ -41,6 +41,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @RequiredArgsConstructor
 public class MaintenanceModeFilter extends OncePerRequestFilter {
 
+  /** 未设置预计恢复时间时返回的 Retry-After 秒数。 */
+  private static final long DEFAULT_RETRY_AFTER_SECONDS = 60L;
+
+  /** Retry-After 秒数下限，避免临近恢复时客户端密集重试。 */
+  private static final long MIN_RETRY_AFTER_SECONDS = 30L;
+
   /** 维护期间始终放行的路径(健康检查 + 维护状态本身 + 登录后探活 + admin 热更新端点)。 */
   private static final Set<String> ALWAYS_ALLOWED = Set.of(
       "/actuator/**",
@@ -166,11 +172,11 @@ public class MaintenanceModeFilter extends OncePerRequestFilter {
 
   private long computeRetryAfterSeconds(Instant eta) {
     if (eta == null) {
-      return 60L;
+      return DEFAULT_RETRY_AFTER_SECONDS;
     }
     long etaEpochSecond = eta.getEpochSecond();
     long currentEpochSecond = Instant.now().getEpochSecond();
     long secondsUntilEta = etaEpochSecond - currentEpochSecond;
-    return Math.max(secondsUntilEta, 30L);
+    return Math.max(secondsUntilEta, MIN_RETRY_AFTER_SECONDS);
   }
 }

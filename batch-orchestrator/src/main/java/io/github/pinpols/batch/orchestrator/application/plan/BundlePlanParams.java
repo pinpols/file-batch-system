@@ -31,6 +31,9 @@ import java.util.Set;
  */
 public final class BundlePlanParams {
 
+  /** 单个文件包计划允许绑定的文件数上限。 */
+  private static final int MAX_BUNDLE_FILES = 256;
+
   /** launch params 里承载文件束清单的键。 */
   public static final String PARAM_BUNDLE_FILES = "bundleFiles";
 
@@ -77,7 +80,7 @@ public final class BundlePlanParams {
     if (EmptyChecks.isEmpty(bundleFiles)) {
       throw invalidBundle("bundleFiles must contain usable bindings for " + bundleType);
     }
-    if (bundleFiles.size() > 256) {
+    if (bundleFiles.size() > MAX_BUNDLE_FILES) {
       throw invalidBundle("bundleFiles exceeds the maximum of 256 items for " + bundleType);
     }
   }

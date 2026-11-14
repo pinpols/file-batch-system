@@ -33,6 +33,10 @@ public class ConsoleAssetFreshnessPolicyService {
   private static final String DEFAULT_SEVERITY = AlertSeverity.WARN.code();
   private static final int DEFAULT_STALE_AFTER_SECONDS = 0;
   private static final int DEFAULT_LOOKBACK_DAYS = 1;
+
+  /** 新鲜度回看天数上限；orchestrator 侧 AssetFreshnessPolicyService 同样按 31 天截断。 */
+  private static final int MAX_LOOKBACK_DAYS = 31;
+
   private static final Set<String> VALID_SEVERITIES = DictEnum.codes(AlertSeverity.class);
 
   private final ConsoleAssetFreshnessPolicyMapper mapper;
@@ -141,7 +145,7 @@ public class ConsoleAssetFreshnessPolicyService {
           "staleAfterSeconds must be >= 0");
     }
     int lookbackDays = param.lookbackDays() == null ? DEFAULT_LOOKBACK_DAYS : param.lookbackDays();
-    if (lookbackDays < 1 || lookbackDays > 31) {
+    if (lookbackDays < 1 || lookbackDays > MAX_LOOKBACK_DAYS) {
       throw BizException.of(
           ResultCode.INVALID_ARGUMENT,
           ResultCode.INVALID_ARGUMENT.detailKey(),

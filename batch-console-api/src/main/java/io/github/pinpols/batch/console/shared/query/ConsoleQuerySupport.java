@@ -29,6 +29,9 @@ import javax.annotation.Nullable;
 /** 控制台查询子服务的共享工具方法。 */
 public final class ConsoleQuerySupport {
 
+  /** PostgreSQL timestamp 精度为微秒；“当天结束”取次日零点前 1 微秒（1000 纳秒）。 */
+  private static final int TIMESTAMP_RESOLUTION_NANOS = 1_000;
+
   private ConsoleQuerySupport() {}
 
   public static <S, T> PageResponse<T> page(
@@ -155,7 +158,7 @@ public final class ConsoleQuerySupport {
         LocalDate nextDate = date.plusDays(1);
         ZonedDateTime nextDateStartInZone = nextDate.atStartOfDay(zone);
         Instant nextDateStart = nextDateStartInZone.toInstant();
-        Instant inclusiveEndOfDay = nextDateStart.minusNanos(1_000);
+        Instant inclusiveEndOfDay = nextDateStart.minusNanos(TIMESTAMP_RESOLUTION_NANOS);
         return inclusiveEndOfDay;
       } catch (DateTimeParseException ignored) {
         SwallowedExceptionLogger.info(

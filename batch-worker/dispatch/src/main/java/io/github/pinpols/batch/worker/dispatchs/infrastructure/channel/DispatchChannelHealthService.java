@@ -52,6 +52,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class DispatchChannelHealthService {
 
+  /** 半开探测通行证持有时长下限（1 秒）。 */
+  private static final long MIN_HALF_OPEN_HOLD_MILLIS = 1_000L;
+
   // 单次探针查询上限，防止渠道数量过大时探针调度器阻塞 DB 连接池
   private static final int MAX_PROBE_CHANNEL_BATCH = 1000;
 
@@ -180,7 +183,7 @@ public class DispatchChannelHealthService {
     // 失败即说明另一线程已抢到通行证。holdMillis 覆盖典型 dispatch 最长耗时，
     // 防止本线程还没 recordDispatchOutcome 就又有新线程通过。
     long configuredHoldMillis = properties.getHalfOpenHoldMillis();
-    long halfOpenHoldMillis = Math.max(1_000L, configuredHoldMillis);
+    long halfOpenHoldMillis = Math.max(MIN_HALF_OPEN_HOLD_MILLIS, configuredHoldMillis);
     Instant hold = now.plusMillis(halfOpenHoldMillis);
     boolean claimed =
         repository.tryClaimHalfOpenProbe(channel.tenantId(), channel.channelCode(), now, hold);

@@ -45,6 +45,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ConsoleClusterDiagnosticService {
 
+  /** outbox 积压低于该条数且无卡住的 PUBLISHING 时判定健康。 */
+  private static final int HEALTHY_PENDING_OUTBOX_THRESHOLD = 1000;
+
   private static final long WORKER_STALE_SECONDS = 120L;
   private static final long OUTBOX_STALE_SECONDS = 120L;
   private static final long TASK_HEARTBEAT_STALE_SECONDS = 120L;
@@ -182,7 +185,7 @@ public class ConsoleClusterDiagnosticService {
         activeCount,
         stalePublishing,
         stats,
-        pendingCount < 1000 && stalePublishing == 0);
+        pendingCount < HEALTHY_PENDING_OUTBOX_THRESHOLD && stalePublishing == 0);
   }
 
   public ConsoleTerminalChildrenHealthResponse terminalChildrenHealth(String tenantId) {

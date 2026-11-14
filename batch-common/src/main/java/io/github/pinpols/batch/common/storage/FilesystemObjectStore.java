@@ -49,6 +49,15 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class FilesystemObjectStore implements BatchObjectStore {
 
+  /** 未指定时的预签名有效期，与 batch.storage.filesystem.default-presign-ttl 默认值 5m 一致。 */
+  private static final Duration DEFAULT_PRESIGN_TTL = Duration.ofMinutes(5);
+
+  /**
+   * 未指定时 list 最多扫描的目录项数，
+   * 与 batch.storage.filesystem.max-list-scan-entries 默认值一致。
+   */
+  private static final long DEFAULT_MAX_LIST_SCAN_ENTRIES = 200_000L;
+
   /** 临时文件名后缀前缀；list 时跳过这些与 . 开头的隐藏文件（§4③）。 */
   static final String TEMP_SUFFIX_MARKER = ".tmp.";
 
@@ -60,12 +69,12 @@ public class FilesystemObjectStore implements BatchObjectStore {
   private final AtomicFileMover atomicFileMover;
 
   public FilesystemObjectStore(String root, String downloadBaseUrl, String presignSecret) {
-    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), 200_000L);
+    this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, DEFAULT_MAX_LIST_SCAN_ENTRIES);
   }
 
   public FilesystemObjectStore(
       String root, String downloadBaseUrl, String presignSecret, long maxListScanEntries) {
-    this(root, downloadBaseUrl, presignSecret, Duration.ofMinutes(5), maxListScanEntries);
+    this(root, downloadBaseUrl, presignSecret, DEFAULT_PRESIGN_TTL, maxListScanEntries);
   }
 
   public FilesystemObjectStore(
