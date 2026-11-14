@@ -30,17 +30,22 @@
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  S[Workflow 日程与计划时区] --> I[计算触发 Instant]
-  I --> C[按 Workflow 业务日历解析业务日]
-  C --> Z{日历已配置时区？}
-  Z -->|是| T[business_calendar.timezone]
-  Z -->|否| D[BATCH_TIMEZONE_DEFAULT_ZONE]
-  T --> B[按 cutoff 与日历规则计算 bizDate]
+flowchart LR
+  S["Workflow 日程与计划时区"]:::entry --> I["计算触发 Instant"]:::control
+  I --> C["按 Workflow 业务日历解析业务日"]:::control
+  C --> Z{"日历已配置时区？"}
+  Z -->|"是"| T["business_calendar.timezone"]:::store
+  Z -->|"否"| D["BATCH_TIMEZONE_DEFAULT_ZONE"]:::lib
+  T --> B["按 cutoff 与日历规则计算 bizDate"]:::control
   D --> B
-  B --> R[WorkflowRun 冻结业务日与时间快照]
-  R --> J[JOB 实例继承]
-  J --> W[Worker 使用冻结值]
+  B --> R[("WorkflowRun 冻结业务日与时间快照<br/>JOB 实例继承 · Worker 使用冻结值")]:::store
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 - `business_calendar.timezone` 配置日历的 IANA 时区；批量日打开、cutoff 和相关业务日期按日历时区处理。
@@ -75,17 +80,28 @@ flowchart LR
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  F[扫描器发现文件] --> T[记录 detectedAt / created_at]
-  F --> E{导出清单触发路径？}
-  E -->|是| M{manifest 有合法 bizDate？}
-  E -->|否| N{文件名能解析 bizDate？}
-  M -->|是| R[登记文件业务日]
-  M -->|缺失或无效| N
-  N -->|是| R
-  N -->|否| D{已配置合法 defaultBizDate？}
-  D -->|是| R
-  D -->|否| X[不登记为可处理文件]
+flowchart LR
+  F["扫描器发现文件"]:::entry --> T["记录 detectedAt / created_at"]:::control
+  F --> E{"导出清单触发路径？"}
+  E -->|"是"| M{"manifest 有合法 bizDate？"}
+  E -->|"否"| N{"文件名能解析 bizDate？"}
+  M -->|"是"| R["登记文件业务日"]:::ok
+  M -->|"缺失或无效"| N
+  N -->|"是"| R
+  N -->|"否"| D{"已配置合法 defaultBizDate？"}
+  D -->|"是"| R
+  D -->|"否"| X["不登记为可处理文件"]:::fail
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 对象存储导入扫描器从文件名或 `defaultBizDate` 取得 `bizDate`；导出清单触发路径优先使用 manifest 的 `bizDate`，缺失时再走扫描器规则。平台发现时刻另记为 `detectedAt`，文件记录写入时刻为 `created_at`。这两个时间不会自动替代 `bizDate`。

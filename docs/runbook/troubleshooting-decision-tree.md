@@ -25,18 +25,29 @@ curl -s localhost:9090/api/v1/alerts | jq .data.alerts  # Prometheus 当前告�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  START["作业不推进"] --> POD{"Worker Pod 就绪？"}
-  POD -->|"否"| FIX["先处理 Pod / 依赖错误"]
+  START["作业不推进"]:::entry --> POD{"Worker Pod 就绪？"}
+  POD -->|"否"| FIX["先处理 Pod / 依赖错误"]:::fail
   POD -->|"是"| LAG{"Kafka lag 持续超阈值？"}
-  LAG -->|"是"| S2["症状 2：消费积压"]
+  LAG -->|"是"| S2["症状 2：消费积压"]:::wait
   LAG -->|"否"| WORKER{"Worker 在线且租约有效？"}
-  WORKER -->|"DRAINING 超时"| DRAIN["核查 drain 接管与超时调度器"]
+  WORKER -->|"DRAINING 超时"| DRAIN["核查 drain 接管与超时调度器"]:::wait
   WORKER -->|"是"| OUTBOX{"Outbox 指标异常？"}
-  OUTBOX -->|"pending 持续增长"| S3["症状 3：发送积压"]
-  OUTBOX -->|"publishing stale 持续"| S4["症状 4：轮询 / 租约 / 发送异常"]
+  OUTBOX -->|"pending 持续增长"| S3["症状 3：发送积压"]:::wait
+  OUTBOX -->|"publishing stale 持续"| S4["症状 4：轮询 / 租约 / 发送异常"]:::wait
   OUTBOX -->|"否"| JOB{"实例是否已经创建？"}
-  JOB -->|"RUNNING 停滞"| SLA["核查 SLA / lease / report"]
-  JOB -->|"尚未创建"| TRIGGER["核查 Trigger 与 launch 接收"]
+  JOB -->|"RUNNING 停滞"| SLA["核查 SLA / lease / report"]:::wait
+  JOB -->|"尚未创建"| TRIGGER["核查 Trigger 与 launch 接收"]:::wait
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ### 动作

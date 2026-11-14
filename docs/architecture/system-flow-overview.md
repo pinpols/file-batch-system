@@ -109,18 +109,25 @@ sequenceDiagram
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart LR
-  U["Console 前端"] --> C["Console API<br/>认证 / 租户 / 授权"]
-  C --> CFG["配置"] --> DB[("平台库")]
-  C --> Q["查询"] --> DB
-  C --> AI["AI 会话与只读工具"]
+  U["Console 前端"]:::entry --> C["Console API<br/>认证 / 租户 / 授权"]:::entry
+  C --> CFG["配置"]:::control --> DB[("平台库")]:::store
+  C --> Q["查询"]:::control --> DB
+  C --> AI["AI 会话与只读工具"]:::control
   AI --> DB
-  AI --> M["受控模型服务"]
-  AI --> A["独立附件存储"]
-  C --> RT["SSE 事件桥"]
-  RT <--> R["Redis 消息与回放"]
-  RT --> U
-  C --> L["发起"] --> T["Trigger"]
-  C --> OPS["审批 / 补偿 / 重放"] --> O["Orchestrator"]
+  AI --> M["受控模型服务"]:::ext
+  AI --> A[("独立附件存储")]:::store
+  C --> RT["SSE 事件桥"]:::control
+  RT <--> R[("Redis 消息与回放")]:::store
+  RT -.->|"推送事件"| U
+  C --> L["发起"]:::control --> T["Trigger"]:::control
+  C --> OPS["审批 / 补偿 / 重放"]:::control --> O["Orchestrator"]:::control
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 各入口均经过 Console 的认证、租户与授权边界；SSE 回放受实际配置和缓冲窗口约束。
@@ -238,16 +245,23 @@ DLQ 有两条独立路径：Kafka 隔离不可恢复的消息，数据库记录�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  W["Worker"] -->|"毒消息"| P["DLQ 发布器"] --> K["Kafka DLQ"]
-  W -->|"失败报告"| O["Orchestrator"]
-  O -->|"可重试"| R[("retry_schedule")]
+  W["Worker"]:::worker -->|"毒消息"| P["DLQ 发布器"]:::worker --> K{{"Kafka DLQ"}}:::mq
+  W -->|"失败报告"| O["Orchestrator"]:::control
+  O -->|"可重试"| R[("retry_schedule")]:::store
   R -->|"到期重试"| O
-  O -->|"无法重试"| D[("dead_letter_task")]
-  C["Console 重放 / 审批"] --> O
+  O -->|"无法重试"| D[("dead_letter_task")]:::store
+  C["Console 重放 / 审批"]:::entry --> O
   D -. "失败证据" .-> O
-  O -->|"分区重排"| B[("派发 Outbox")]
-  B --> REL["Outbox Relay"] --> DIS["Kafka 派发"] --> W
-  O -->|"核实未知结果"| T["Trigger<br/>创建新根请求"]
+  O -->|"分区重排"| B[("派发 Outbox")]:::store
+  B --> REL["Outbox Relay"]:::control --> DIS{{"Kafka 派发"}}:::mq --> W
+  O -->|"核实未知结果"| T["Trigger<br/>创建新根请求"]:::control
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 图中分别表示普通分区重排和经核实的未知外部结果路径；不是每条死信都满足任一路径的准入条件。执行结果需继续查看新尝试或新根运行。
@@ -495,12 +509,21 @@ flowchart TB
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant C as 调用方
-  participant T as Trigger
-  participant O as Orchestrator
-  participant K as Kafka
-  participant W as Export Worker
-  participant B as 业务资源 / 文件存储
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant C as 调用方
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant T as Trigger
+    participant O as Orchestrator
+  end
+  box rgba(217,119,6,0.08) 消息
+    participant K as Kafka
+  end
+  box rgba(5,150,105,0.08) 执行面
+    participant W as Export Worker
+    participant B as 业务资源 / 文件存储
+  end
   C->>T: Workflow 目标与来源身份
   T->>T: 保存请求 + Trigger Outbox
   T->>K: Relay 发布 launch
@@ -535,12 +558,21 @@ EXPORT_COMPLETE  SUCCESS  11ms
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant C as 调用方
-  participant T as Trigger
-  participant O as Orchestrator
-  participant K as Kafka
-  participant W as Import Worker
-  participant B as 业务资源 / 文件存储
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant C as 调用方
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant T as Trigger
+    participant O as Orchestrator
+  end
+  box rgba(217,119,6,0.08) 消息
+    participant K as Kafka
+  end
+  box rgba(5,150,105,0.08) 执行面
+    participant W as Import Worker
+    participant B as 业务资源 / 文件存储
+  end
   C->>T: Workflow 目标与来源身份
   T->>T: 保存请求 + Trigger Outbox
   T->>K: Relay 发布 launch
@@ -578,12 +610,21 @@ DISPATCH 的输入是已存在的 `file_record`（通常是上游 EXPORT 的产�
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 sequenceDiagram
-  participant C as 调用方
-  participant T as Trigger
-  participant O as Orchestrator
-  participant K as Kafka
-  participant W as Dispatch Worker
-  participant B as 业务资源 / 文件存储
+  autonumber
+  box rgba(99,102,241,0.08) 入口
+    participant C as 调用方
+  end
+  box rgba(2,132,199,0.08) 控制面
+    participant T as Trigger
+    participant O as Orchestrator
+  end
+  box rgba(217,119,6,0.08) 消息
+    participant K as Kafka
+  end
+  box rgba(5,150,105,0.08) 执行面
+    participant W as Dispatch Worker
+    participant B as 业务资源 / 文件存储
+  end
   C->>T: Workflow 目标与来源身份
   T->>T: 保存请求 + Trigger Outbox
   T->>K: Relay 发布 launch
@@ -617,31 +658,31 @@ DISPATCH_COMPLETE  SUCCESS  8ms
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  subgraph EXPORT["EXPORT · 生成文件"]
-    EB[("业务数据")] --> EW["Export Worker"]
-    EW --> ES["对象存储"]
-    EW --> EF[("文件元数据")]
-  end
-```
-
-```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  subgraph IMPORT["IMPORT · 消费文件"]
-    IS["输入文件"] --> IW["Import Worker"]
-    IW --> IB[("业务数据")]
-    IW --> IF[("文件元数据")]
-  end
-```
-
-```mermaid
-%%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
   subgraph DISPATCH["DISPATCH · 投递文件"]
-    DS["对象存储"] --> DW["Dispatch Worker"]
-    DW --> DC["外部通道"]
-    DW --> DF[("投递元数据")]
+    direction TB
+    DS[("对象存储")]:::store --> DW["Dispatch Worker"]:::worker
+    DW --> DC["外部通道"]:::ext
+    DW --> DF[("投递元数据")]:::store
   end
+  subgraph IMPORT["IMPORT · 消费文件"]
+    direction TB
+    IS[("输入文件")]:::store --> IW["Import Worker"]:::worker
+    IW --> IB[("业务数据")]:::store
+    IW --> IF[("文件元数据")]:::store
+  end
+  subgraph EXPORT["EXPORT · 生成文件"]
+    direction TB
+    EB[("业务数据")]:::store --> EW["Export Worker"]:::worker
+    EW --> ES[("对象存储")]:::store
+    EW --> EF[("文件元数据")]:::store
+  end
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 | 类型 | 数据流向 | 输入 | 输出 |
@@ -654,38 +695,45 @@ flowchart TB
 
 ## 5. 状态机视角
 
-每个 partition 在生命周期里穿过这些状态：
+每个 partition 的状态迁移如下（2026-11-14 按源码核对）：
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 stateDiagram-v2
-  [*] --> CREATED
-  CREATED --> WAITING: 等待准入
-  CREATED --> READY: 直接准入
-  WAITING --> READY: 条件满足
-  READY --> RUNNING: CLAIM
+  direction TB
+  [*] --> CREATED: DAG 节点建分区
+  [*] --> READY: 普通计划可派发
+  [*] --> WAITING: 容量或窗口不足
+  CREATED --> READY: 节点派发
+  WAITING --> READY: 等待队列释放
+  READY --> RUNNING: Worker CLAIM
+  RUNNING --> WAITING: 租约过期回收
   RUNNING --> SUCCESS: 执行成功
   RUNNING --> RETRYING: 可重试失败
-  RETRYING --> READY: 到期再派发
-  RETRYING --> FAILED: 耗尽
-  RUNNING --> FAILED: 不可重试
-  WAITING --> CANCELLED: 取消
-  RUNNING --> CANCELLED: 取消生效
-  RUNNING --> TERMINATED: 强制终止
-  SUCCESS --> [*]
-  FAILED --> [*]
-  CANCELLED --> [*]
-  TERMINATED --> [*]
+  RUNNING --> FAILED: 不可重试或取消回报
+  RETRYING --> READY: 到期重排
+  CREATED --> CANCELLED: 人工取消
+  WAITING --> CANCELLED: 人工取消
+  READY --> CANCELLED: 人工取消
+  RUNNING --> TERMINATED: 实例终止收口
+  FAILED --> READY: 人工重试或文件重派
+  class SUCCESS ok
+  class FAILED,TERMINATED fail
+  class WAITING,RETRYING wait
+  class CANCELLED muted
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
-job_instance 的状态聚合：
+- **初始状态**：普通计划可派发时直接以 `READY` 落库，容量或窗口不足时为 `WAITING`；DAG 节点物化的分区以 `CREATED` 创建，节点派发时推进为 `READY`（`DefaultPartitionDispatchService`、`DefaultWorkflowNodeDispatchService`）。
+- **租约回收**：`READY` 或 `RUNNING` 的租约过期后由 `reclaimExpiredPartitions` 退回 `WAITING`，再经等待队列释放重新派发。
+- **取消**：人工取消只作用于 `CREATED`、`WAITING`、`READY` 分区；Worker 按取消条件回报时任务为 `CANCELLED`，分区记为 `FAILED`。
+- **实例终态收口**：实例进入终态后，`JobInstanceTerminalChildStateReconciler` 把残留的非终态分区统一收口为与实例终态对应的分区状态，图中只画出终止路径。
+- **重开**：`FAILED` 等终态分区经人工重试或文件重派由 `resetForDispatch` 重置为 `READY`，并回退实例计数。
 
-```
-INSTANCE_STATUS = CREATED → WAITING → READY → RUNNING →
-                  SUCCESS / FAILED / PARTIAL_FAILED / CANCELLED / TERMINATED
-```
-
-`PARTIAL_FAILED` 表示作业实例的多个分区结果混合；具体触发条件由各类型聚合策略决定，不能等同于整 Workflow 成功。
+job_instance 由分区结果汇总，完整迁移见[状态机汇总 §3.1](../design/status-state-machines.md#31-jobinstance-状态机)。`PARTIAL_FAILED` 表示作业实例的多个分区结果混合，不能等同于整 Workflow 成功。
 
 ---
 
@@ -820,15 +868,20 @@ Outbox 是**业务事务和 Kafka 投递之间的桥**——双方完全解耦�
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  PREV["上次成功 Job · highWaterMarkOut"] -->|"INCREMENTAL"| IN["本次 highWaterMarkIn"]
-  IN --> O["Orchestrator · 有效任务配置"]
-  O --> TX[("Task Outbox")]
-  TX --> R["Relay"] --> K["Kafka"] --> W["Worker · 执行上下文"]
-  W --> B["业务插件 · 读取 IN / 生成 OUT"]
-  B -->|"成功 REPORT + 非空 OUT"| O2["Orchestrator · 受控持久化"]
-  O2 --> NEXT["Job highWaterMarkOut"]
+flowchart LR
+  PREV[("上次成功 Job<br/>highWaterMarkOut")]:::store -->|"INCREMENTAL"| IN["本次 highWaterMarkIn"]:::control
+  IN --> O["Orchestrator<br/>有效任务配置"]:::control
+  O -->|"Task Outbox → Relay → Kafka"| W["Worker 执行上下文<br/>业务插件读取 IN / 生成 OUT"]:::worker
+  W -->|"成功 REPORT + 非空 OUT"| O2["Orchestrator<br/>受控持久化"]:::control
+  O2 --> NEXT[("Job highWaterMarkOut")]:::store
   NEXT -. "下次增量运行" .-> IN
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ### 7.8.3 关键不变量
@@ -896,19 +949,30 @@ PROCESS 是 IMPORT/EXPORT/DISPATCH 之外的第四类文件 Worker,定位"系统
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  CFG["Job 冻结参数 / 有效 spec"] --> A["PREPARE"]
-  A --> B["COMPUTE"] --> C["VALIDATE"] --> D["COMMIT"] --> E["FEEDBACK"]
-  SRC[("业务源表")] -->|"JSONB 读取"| B
-  B -->|"JSONB 写入"| ST[("业务 staging")]
+flowchart LR
+  CFG["Job 冻结参数 / 有效 spec"]:::control --> A["PREPARE"]:::worker
+  A --> B["COMPUTE"]:::worker --> C["VALIDATE"]:::worker --> D["COMMIT"]:::worker --> E["FEEDBACK"]:::worker
+  SRC[("业务源表")]:::store -->|"JSONB 读取"| B
+  B -->|"JSONB 写入"| ST[("业务 staging")]:::store
   ST --> C
   ST --> D
   SRC -->|"DIRECT 读取并发布"| D
-  D --> TGT[("业务目标表")]
-  C -->|"未通过"| F["失败与核查证据"]
-  E -->|"REPORT / 输出水位"| O["Orchestrator"]
-  O --> STATE[("平台运行状态")]
+  D --> TGT[("业务目标表")]:::store
+  C -->|"未通过"| F["失败与核查证据"]:::fail
+  E -->|"REPORT / 输出水位"| O["Orchestrator"]:::control
+  O --> STATE[("平台运行状态")]:::store
   E -->|"JSONB 清理当前 generation"| ST
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 ### 7.9.3 关键不变量

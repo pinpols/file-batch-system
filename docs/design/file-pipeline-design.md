@@ -21,20 +21,27 @@
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  J[JOB 执行配置] --> T{系统 Pipeline 类型}
-  T --> I[IMPORT：接收与入库]
-  T --> E[EXPORT：生成与登记]
-  T --> P[PROCESS：内部数据加工]
-  T --> D[DISPATCH：投递与回执]
-  I --> R[pipeline_instance / pipeline_step_run]
+flowchart LR
+  J["JOB 执行配置"]:::control --> T{"系统 Pipeline 类型"}
+  T --> I["IMPORT：接收与入库"]:::worker
+  T --> E["EXPORT：生成与登记"]:::worker
+  T --> P["PROCESS：内部数据加工"]:::worker
+  T --> D["DISPATCH：投递与回执"]:::worker
+  I --> R[("pipeline_instance / pipeline_step_run")]:::store
   E --> R
   P --> R
   D --> R
-  I -. 文件资产 .-> F[file_record]
+  I -. 文件资产 .-> F[("file_record")]:::store
   E -. 文件资产 .-> F
   D -. 文件资产 .-> F
-  R --> O[Worker REPORT → Orchestrator 推进运行状态]
+  R --> O["Worker REPORT → Orchestrator 推进运行状态"]:::control
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 ---
@@ -815,15 +822,26 @@ filePipelines:
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
 flowchart TB
-  J[Job 冻结参数 + SystemPipelineCatalog] --> O[Orchestrator：Task / Outbox]
-  O --> K[Kafka 任务提示]
-  K --> W[文件 Worker：CLAIM 后执行]
-  W --> A[AbstractPipelineStepExecutionAdapter]
-  A --> S[AbstractStageExecutor]
-  S --> B[Import / Export / Process / Dispatch Stage]
-  A --> R[文件与 Pipeline 运行记录]
-  A --> F[REPORT：结果、审计与指标]
-  F --> O
+  J["Job 冻结参数 + SystemPipelineCatalog"]:::control --> O["Orchestrator：Task / Outbox"]:::control
+  O --> K{{"Kafka 任务提示"}}:::mq
+  K --> W["文件 Worker：CLAIM 后执行"]:::worker
+  subgraph RT["Worker 执行骨架"]
+    direction LR
+    A["AbstractPipelineStepExecutionAdapter"]:::lib
+    S["AbstractStageExecutor"]:::lib
+    B["Import / Export / Process / Dispatch Stage"]:::worker
+    A --> S --> B
+  end
+  W --> RT
+  RT --> R[("文件与 Pipeline 运行记录")]:::store
+  RT -->|"REPORT：结果、审计与指标"| O2["Orchestrator：推进运行状态"]:::control
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
 ```
 
 #### 核心抽象建议
@@ -1068,16 +1086,27 @@ flowchart TB
 
 ```mermaid
 %%{init: {"flowchart":{"curve":"linear","nodeSpacing":32,"rankSpacing":48},"sequence":{"mirrorActors":false}}}%%
-flowchart TB
-  F[步骤失败] --> K{外部执行结果已知？}
-  K -->|否| U[保留证据并核对外部结果]
+flowchart LR
+  F["步骤失败"]:::fail --> K{"外部执行结果已知？"}
+  K -->|"否"| U["保留证据并核对外部结果"]:::wait
   U --> K
-  K -->|是| R{满足该步骤恢复契约？}
-  R -->|是| E[按幂等键与恢复点受控重试]
-  R -->|否| M[按声明策略审批、补偿或重新发起]
-  E --> V[核验持久化结果]
+  K -->|"是"| R{"满足该步骤恢复契约？"}
+  R -->|"是"| E["按幂等键与恢复点受控重试"]:::control
+  R -->|"否"| M["按声明策略审批、补偿或重新发起"]:::control
+  E --> V["核验持久化结果"]:::control
   M --> V
-  V --> A[审计与告警闭环]
+  V --> A["审计与告警闭环"]:::ok
+  classDef entry fill:#6366f11f,stroke:#6366f1,stroke-width:1.5px
+  classDef control fill:#0284c71f,stroke:#0284c7,stroke-width:1.5px
+  classDef mq fill:#d977061f,stroke:#d97706,stroke-width:1.5px
+  classDef worker fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef store fill:#7c3aed1f,stroke:#7c3aed,stroke-width:1.5px
+  classDef ext fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
+  classDef lib fill:#64748b14,stroke:#64748b,stroke-width:1.2px
+  classDef ok fill:#0596691f,stroke:#059669,stroke-width:1.5px
+  classDef fail fill:#dc26261a,stroke:#dc2626,stroke-width:1.5px
+  classDef wait fill:#d977061a,stroke:#d97706,stroke-width:1.5px
+  classDef muted fill:#64748b14,stroke:#64748b,stroke-width:1.2px,stroke-dasharray:4 3
 ```
 
 
