@@ -16899,6 +16899,14 @@ components:
           type: string
         errorMessage:
           type: string
+        skipReasonCode:
+          type: string
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
+        skipReason:
+          type: string
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
         relatedPipelineInstanceId:
           type: integer
           format: int64
@@ -19008,6 +19016,11 @@ components:
           format: int64
         tenantId:
           type: string
+        pipelineDefinitionId:
+          type: integer
+          format: int64
+          deprecated: true
+          description: 后端响应 record 不返回该字段，仅为兼容既有生成类型保留；新代码勿读取。
         jobCode:
           type: string
         pipelineType:
