@@ -5,6 +5,10 @@
 - 分区、outbox_event、trigger_request 三张状态图按源码重画为 stateDiagram：分区去掉不存在的 `RUNNING → CANCELLED`，补租约回收与人工重开；trigger_request 的 `PROCESSING` 更正为 Workflow 容量等待。[系统流程总览](architecture/system-flow-overview.md) §5 的 job_instance 聚合改为链接[状态机汇总](design/status-state-machines.md#31-jobinstance-状态机)。
 - 端到端时序分组编号，§4.4 三张小图合并，Compose 两节点图改为连接语义，细高图改横向；进度见[图审查与修改计划](plans/diagram-review-remediation-plan-2026-11-13.md#进度)。
 
+## 2026-11-14 SDK SQL 原子执行器按方言切分
+
+- [ADR-036](architecture/adr/ADR-036-sdk-task-handler-templates.md) SqlAtomicHandler 一节补充：Java SDK 先取连接，再按数据库产品选择切分规则（MySQL / MariaDB 用 MySQL 规则，其余用 PostgreSQL 规则）；空 SQL 与超上限改为取得连接后拒绝。[SDK 对等矩阵](sdk/sdk-parity-matrix.md)同步记录 Java 与 Python 的方言差异。
+
 ## 2026-11-14 README 技术栈与 Worker 阶段表补齐
 
 - README 中英文技术栈补齐主要层次：缓存/协调（Valkey 8 + Spring Data Redis、ShedLock、Caffeine）、安全（Spring Security + OAuth2/OIDC）、容错（Resilience4j）、可观测性（Micrometer/Prometheus、OpenTelemetry → Tempo/Loki、Grafana）、多语言 SDK、前端控制台、测试与构建部署；Spring Boot 补丁版本与根 POM 对齐为 4.1.2（文档此前停留在 4.1.1 / 4.1.0）。

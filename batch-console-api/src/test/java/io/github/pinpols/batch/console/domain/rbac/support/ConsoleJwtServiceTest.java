@@ -29,7 +29,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.mock.env.MockEnvironment;
 import org.springframework.security.oauth2.jwt.JwtException;
-import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * R3-P1-12 补：覆盖 ConsoleJwtService 的安全关键路径。
@@ -71,7 +70,7 @@ class ConsoleJwtServiceTest {
   private ConsoleJwtService newService() {
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
     // 模拟 Spring PostConstruct
-    ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets");
+    svc.validateSecuritySecrets();
     return svc;
   }
 
@@ -246,7 +245,7 @@ class ConsoleJwtServiceTest {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("change-me-jwt-secret-not-real");
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
+    assertThatThrownBy(() -> svc.validateSecuritySecrets())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("still contains the default placeholder");
   }
@@ -257,7 +256,7 @@ class ConsoleJwtServiceTest {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("only31charsxxxxxxxxxxxxxxxxxxxx"); // 31 < 32
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
+    assertThatThrownBy(() -> svc.validateSecuritySecrets())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("shorter than 32 characters");
   }
@@ -268,7 +267,7 @@ class ConsoleJwtServiceTest {
     environment.setActiveProfiles("prod");
     properties.setJwtSecret("");
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
+    assertThatThrownBy(() -> svc.validateSecuritySecrets())
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("is empty");
   }
@@ -279,7 +278,7 @@ class ConsoleJwtServiceTest {
     environment.setActiveProfiles("staging");
     properties.setJwtSecret("change-me-jwt");
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
-    assertThatThrownBy(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
+    assertThatThrownBy(() -> svc.validateSecuritySecrets())
         .isInstanceOf(IllegalStateException.class);
   }
 
@@ -290,8 +289,7 @@ class ConsoleJwtServiceTest {
     properties.setJwtSecret("change-me-anything-goes-locally");
     ConsoleJwtService svc = new ConsoleJwtService(properties, sessionRegistry, environment);
 
-    assertThatCode(() -> ReflectionTestUtils.invokeMethod(svc, "validateSecuritySecrets"))
-        .doesNotThrowAnyException();
+    assertThatCode(() -> svc.validateSecuritySecrets()).doesNotThrowAnyException();
   }
 
   // ─── encoder/decoder 缓存 + clock skew ───────────────────────────────

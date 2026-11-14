@@ -292,6 +292,11 @@
 - `OutboxArchiveScheduler.drain` 的 `label` 参数删前就没有被读取（实参是字面量），R23 已删除。若本意是按 outbox 类型记日志，补上属于行为变更，需另行决定。
   - 保持现状：补按类型日志属行为变更，且无证据表明原意如此；如需要另开任务。
 - 已处理（反射测试）：`WebhookDispatcherTest` 的 3 个匹配用例改为直接调用 `SubscriptionRuleDispatchPolicy.eventTypeMatches`，`WebhookDispatcher.matches` 纯转发器已内联删除；`ConsoleMetaLabelLocalizationTest` 改为直接调用包可见的 `ConsoleMetaQueryService.localizedLabel`（所有已注册枚举的 messageKey 非空，经 `enums()` 无法覆盖 key 为 null 的分支，故放宽为包可见）。
+  - 已处理（2026-11-13，分支 `chore/reflection-tests`，剩余反射调用私有方法的测试）：
+    - 改为直接调用（方法放宽为包可见，Javadoc 注明「包内可见供测试直接调用」）：`WebhookDispatcher.normalizeEventType/sign`、`ReceiveStep.resolvePayload`、`SmtpEmailDispatchChannelAdapter.resolveMailConfig/buildMimeMessage`（`MailConfig` 记录同步包可见）。
+    - 改为直接调用已有的包可见/受保护方法：`ConsoleJwtService.validateSecuritySecrets`、`MaintenanceStateHolder.refreshAfterApplicationReady`（本就是 public）、`AbstractTaskConsumer.doConsume/doConsumeBatch`、`DispatchFileContentResolver.init`。
+    - 跨包调用方改走测试支撑类，不放宽为 public：`MaintenanceStateHolderTestSupport`（standalone MockMvc 场景完成 `@PostConstruct` 初始化）、`TriggerLaunchErrorHandlerTestSupport`（经公开的 listener 容器工厂 Bean 取得错误处理器，替代反射私有的 `triggerLaunchErrorHandler`）、`CrossDayDependencyReconcilerTestSupport`（同包转发 `reconcileOne`）。
+    - 有意保留：读取 `@Transactional` / `@SchedulerLock` 注解元数据的用例（`TaskDispatchOutboxServiceMandatoryTest`、`BatchDayReplayDispatcherTest`、`SensorProbeTransactionExecutorTest`、`QuotaRuntimeStateSnapshotSchedulerTest`、`DefaultConsoleTenantConfigInitApplicationServiceTest`），属元数据断言而非调用私有方法。
 
 ## 决策记录（2026-11-11）
 
@@ -318,6 +323,9 @@
   - `SecurityScanOptions.parse` 保留不改：它是一个 for 套 switch、default 里再套 switch、操作约 20 个可变局部变量的结构；拆平需要一个 20 字段的状态对象或 20 个参数，代价大于收益，而且现在已经读起来像一张平铺的选项表。
 - 疑似行为问题（另案，不在可读性提交里修）：Worker 的 `SqlTaskExecutor.SplitScanner` 把单引号里的 `\'` 当作转义；SDK 的 `SqlAtomicHandler.StatementSplitState` 不这样处理（`select 'a\'; select 2'` 会拆成两句）。两种现状都已由 Task 15 的测试锁定。PostgreSQL 在 `standard_conforming_strings = on`（默认值）时，普通字符串里的反斜杠不是转义符，`'C:\'; DROP …` 这类输入在 Worker 侧可能拆错。这仍是独立的疑似缺陷，需单独复现后定性，不在可读性 PR 里修。
   - 已解决（2026-11-13，分支 `fix/worker-sql-splitter-backslash`）：用 postgres:17.11 实测 `SHOW standard_conforming_strings` 为 `on`，`select 'C:\' as a; select 1` 执行为两条语句，`E'it\'s'` 才把 `\'` 当转义；仓库内未发现设置 `standard_conforming_strings` 或 `backslash_quote` 的配置。定性为 Worker 侧缺陷：普通 `'...'` 与 `"..."` 中反斜杠改按字面字符处理；Worker、Java SDK、Python SDK 三个切分器同时支持 `E'...'`/`e'...'` 转义字符串（前一字符为标识符字符时不算前缀，如 `time'...'`），连写引号在两种字符串里都延续原字符串。三处实现仍各自独立，新增用例覆盖普通字符串、双引号、连写引号、转义字符串、dollar-quote 与注释，并用 psql 逐条核对过 PostgreSQL 的实际切分。非 PostgreSQL 方言（如 MySQL 默认把反斜杠当转义）不在支持范围：Worker 在非 PG 下默认拒绝执行。
+  - 后续一（结构）已解决（2026-11-14，分支 `chore/sql-splitter-dialects`，提交 `refactor(worker-atomic): extract SQL statement splitter`）：`SqlTaskExecutor` 719 行超过 700 行阈值，切分状态机原样提取为同包 `SqlStatementSplitter.split(String)`，测试迁到 `SqlStatementSplitterTest`，执行器降到 533 行，行为不变。
+  - 后续二（嵌套块注释）已解决（同分支，提交 `fix(atomic-sql): track nested block comments when splitting statements`）：postgres:17.11 服务端实测 `/* a /* b */ c */` 是一段注释、`/* a /* b */ ; select 2` 报 `unterminated /* comment`，并确认 `/*/ ; */` 不是开即闭、`/* x */*2` 收尾后是乘号。三个切分器改为按层数收尾，两字符记号的第二个字符不再与下一个字符配对；各自先补失败用例再修。
+  - 后续三（非 PostgreSQL 方言）已裁定（同分支，提交 `feat(sdk): split SQL with MySQL rules on MySQL connections`）：Worker 只打包 PostgreSQL JDBC 驱动、数据源来自 Spring bean，默认 `forbidOsCapableRole=true` 时非 PG 连接 fail-closed，且切分发生在取连接之前（dry-run 不取连接），标准部署连不到其他库，保持 PG 词法，只在 `SqlStatementSplitter` Javadoc 写明原因，不改策略。Python SDK 连接是 asyncpg 形状，只支持 PostgreSQL，同样只写 docstring。Java SDK 的 `DataSource` 由租户传入（ADR-036“租户在自家 DB 跑 SQL”），关闭角色闸后可连任意 JDBC 库，因此新增 `SqlSplitDialect`：产品名含 mysql/mariadb 时用 `MySqlStatementSplitter`（反斜杠转义随会话 `sql_mode` 的 `NO_BACKSLASH_ESCAPES`，`ANSI_QUOTES` 下双引号为标识符，反引号、`#`、`-- `，块注释不嵌套，无 dollar-quote），其余回落 PG 规则。Oracle、SQL Server 未实现：PL/SQL 块与 `GO`/`/` 批分隔本就不能靠 `;` 切，`q'[...]'` 与 `[...]` 标识符也不在范围。MySQL 规则只有 mock JDBC 单测，没有真实 MySQL 实测（本地拉取 mysql 镜像失败）。
 
 ## 整改计划
 

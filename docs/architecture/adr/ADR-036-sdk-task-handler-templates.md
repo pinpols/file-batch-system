@@ -313,6 +313,7 @@ ADR-035 §8.B 留口 + 用户决策(2026-05-31):除了 `SdkAbstractAtomicHandler
 - 之前 `st.execute(sql)` 直执行,PG simple query protocol 允许 `;` 分隔多语句一次跑且**无上限** → 现拆语句 + 超 maxStatementsPerJob 拒绝
 - 显式事务(全部成功 commit / 任一失败 rollback)
 - `allowedDataSourceBeans` 结构上 N/A(SDK DataSource 构造器注入,无 bean 名覆盖攻击面)
+- 2026-11-14 补:先取连接再切分。按 `DatabaseMetaData.getDatabaseProductName()` 选词法:MySQL / MariaDB 走 MySQL 规则(读取 `@@SESSION.sql_mode` 判断 `NO_BACKSLASH_ESCAPES` / `ANSI_QUOTES`),其余及元数据读取失败按 PostgreSQL 规则(块注释可嵌套、`E'...'` 反斜杠转义、dollar-quote)。空 SQL 与超 `maxStatementsPerJob` 改为在取得连接后拒绝,仍不执行任何语句。
 
 **StoredProcAtomicHandler** — 补 `verifyExecutePrivilege`(opt-in 第 4 闸)+ `maxOutBytesPerParam`(默认 64k)+ `defaultAutoCommit`:
 - 第 4 闸:执行前 `has_function_privilege(current_user, proc, 'EXECUTE')` 校验,无权限拒
