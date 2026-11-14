@@ -679,7 +679,7 @@
 - 修复批次日回放详情默认“全部”筛选因空状态被 SQL 等值过滤而显示空列表的问题；保留指定状态筛选及租户隔离。
 ### Removed
 
-- 控制台审批执行删除 `BATCH_DAY_REPLAY` 动作分支及其仅用于此处的 orchestrator 内部客户端方法：主代码从不创建该类审批单，V344 起 `ck_approval_command_action` 也不允许该动作。若历史数据中仍存在此类审批单，批准时按“不支持的审批动作”拒绝，不再推进批次日回放会话；批次日回放会话仍通过 `/api/console/ops/batch-day-replay/sessions/{sessionId}/approve` 审批，行为不变。
+- 控制台审批执行删除 `BATCH_DAY_REPLAY` 动作分支及其仅用于此处的 orchestrator 内部客户端方法：主代码从不创建该类审批单，V344 起 `ck_approval_command_action` 也不允许该动作。V344 已对该约束执行 `VALIDATE CONSTRAINT`，库中不会存在此类审批单；若收到该动作，按“不支持的审批动作”拒绝（`INVALID_ARGUMENT`），不标记为已执行。
 - 删除 Console 未被生产代码使用的 `StepRegistryQueryMapper.selectAllImplEntries` 查询及 `StepRegistryEntryView`。
 
 ### Security
