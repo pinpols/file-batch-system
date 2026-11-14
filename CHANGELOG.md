@@ -50,6 +50,7 @@
 - OpenAPI 响应 schema 与 Java 响应 record 对齐：`ConsoleJobDefinitionResponse` 补 `bizType`、`dagEnabled`、`priority`、`version`、`description`；`ConsoleTenantResponse`、`ConsoleAlertRoutingResponse` 补已序列化字段；`ConsoleFilePipelineResponse`、`ConsoleJobStepInstanceResponse` 中后端不返回的字段标记为 `deprecated`，保留生成类型兼容，不走破坏性删除。新增 `ConsoleResponseOpenApiSchemaTest` 做字段级漂移守护。
 - 导入模板的 `masking_rule_set` 与 `encryption_key_ref` 校验上限改为与列宽一致：前者由 256 收紧到 VARCHAR(128)，129～256 字符不再通过校验后在写库时失败；后者由 128 放宽到 VARCHAR(256)，与列宽等长的密钥引用不再被误拒。`FileTemplateExcelRowParserLengthTest` 覆盖两组边界。
 
+- JSON 批量初始化 `fileTemplates.maskingRuleSet` 增加 `@Size(max = 128)`，与 `file_template_config.masking_rule_set` 列宽一致；129 字符以上现在在请求校验阶段返回参数错误，不再等到写库才失败。
 - 作业实例 `PAUSED` 后在途分区回报不再撤销暂停：分区尚未全部结束时实例保持 `PAUSED`，只有人工恢复才回到 `RUNNING`；分区全部结束仍按汇总终态收口（`SUCCESS` / `FAILED` / `PARTIAL_FAILED` 等）。此前未结束的汇总解析为 `RUNNING` 并直接写回，人工暂停会被在途回报改回运行并恢复派发。真实 PostgreSQL 集成测试覆盖「暂停 → 在途任务失败并安排重试 → 仍为 `PAUSED` → 人工恢复后 `RUNNING`」，修复前在“仍 `PAUSED`”断言处失败。
 - 配置包模板「填写顺序」sheet 为作业监控策略、工作流监控策略补齐填写场景和先填原因，不再显示通用占位文本。
 - 平台原子 SQL 执行器与 Java、Python SDK 原子 SQL 处理器切分语句时按 PostgreSQL 规则识别嵌套块注释：`/* a /* b */ c */` 整体是一段注释，内层注释收尾后的 `;` 不再把语句切断；`/*/` 不再被当成开即闭的注释，`/* x */*2` 收尾后的 `*` 也不再开启新注释。已用 postgres:17.11 核对服务端实际切分。

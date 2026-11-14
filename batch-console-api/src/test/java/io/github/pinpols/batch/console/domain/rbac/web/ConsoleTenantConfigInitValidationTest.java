@@ -1,5 +1,6 @@
 package io.github.pinpols.batch.console.domain.rbac.web;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -16,6 +17,7 @@ import io.github.pinpols.batch.console.shared.web.ConsoleResponseFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -101,5 +103,21 @@ class ConsoleTenantConfigInitValidationTest {
 
     verify(applicationService)
         .batchInit(any(TenantConfigBatchInitRequest.class), eq("system"), anyString());
+  }
+
+  @Test
+  @DisplayName("文件模板 maskingRuleSet 长度上限与列宽一致")
+  void shouldValidateMaskingRuleSetAgainstColumnWidth() {
+    TenantConfigBatchInitRequest.FileTemplateSpec spec =
+        new TenantConfigBatchInitRequest.FileTemplateSpec();
+    spec.setMaskingRuleSet("x".repeat(128));
+    assertThat(validator.validate(spec))
+        .noneMatch(
+            violation -> "maskingRuleSet".equals(violation.getPropertyPath().toString()));
+
+    spec.setMaskingRuleSet("x".repeat(129));
+    assertThat(validator.validate(spec))
+        .anyMatch(
+            violation -> "maskingRuleSet".equals(violation.getPropertyPath().toString()));
   }
 }

@@ -310,7 +310,10 @@ public class TenantConfigBatchInitRequest {
     private String encryptionKeyRef;
 
     private Boolean downloadRequiresApproval;
+
+    @Size(max = 128)
     private String maskingRuleSet;
+
     private Boolean enabled;
     private Integer version;
 
