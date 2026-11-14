@@ -151,11 +151,6 @@ APPROVED_REQUEST_CONSTRAINTS
       >> "$clarification_ignore_tmp"
     grep -E 'in API (POST /api/console/pipeline-definitions|PUT /api/console/pipeline-definitions/\{id\}|PATCH /api/console/pipeline-definitions/\{id\}/enabled) .*response with the status `200`.*\[response-success-status-removed\]' "$raw_diff_tmp" \
       >> "$clarification_ignore_tmp" || true
-    # Console 响应 schema 漂移修正：`pipelineDefinitionId` 从未出现在 Java 响应 record，
-    # trace-snapshot 实际 wire 也从未返回；删除该必填声明属于 spec 纠偏，不是运行时破坏。
-    # 仅精确匹配该端点与字段，其他必填属性删除仍由门禁阻断。
-    grep -E 'in API GET /api/console/queries/trace-snapshot .*removed the required property `data/filePipelines/items/pipelineDefinitionId`.*\[response-required-property-removed\]' "$raw_diff_tmp" \
-      >> "$clarification_ignore_tmp" || true
     # claimed-task 响应仅暴露安全摘要；不再向 Console 返回载荷、结果摘要、错误文本或租户标识。
     grep -E 'in API GET /api/console/workers/\{workerCode\}/claimed-tasks .*removed the required property `allOf\[subschema #2\]/data/items/(errorMessage|resultSummary|taskPayload|tenantId)`.*\[response-required-property-removed\]' "$raw_diff_tmp" \
       >> "$clarification_ignore_tmp" || true
