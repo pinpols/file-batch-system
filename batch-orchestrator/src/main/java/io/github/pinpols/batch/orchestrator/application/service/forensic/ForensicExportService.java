@@ -10,6 +10,7 @@ import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.IdGenerator;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.OwnerOnlyFiles;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.domain.entity.BatchDayOperationAuditEntity;
 import io.github.pinpols.batch.orchestrator.domain.entity.ForensicExportLogEntity;
@@ -148,7 +149,7 @@ public class ForensicExportService {
     } catch (RuntimeException | IOException | NoSuchAlgorithmException e) {
       log.warn("forensic export failed exportId={}", exportId, e);
       String tenantId = request.tenantId();
-      String failureMessage = e.getMessage();
+      String failureMessage = SensitiveEvidenceMasking.maskText(e.getMessage());
       String truncatedFailureMessage = truncate(failureMessage, FAILURE_MESSAGE_MAX_LENGTH);
       Instant failedAt = dateTimeSupport.nowInstant();
       forensicExportLogMapper.markFailed(tenantId, exportId, truncatedFailureMessage, failedAt);
@@ -156,7 +157,9 @@ public class ForensicExportService {
         throw re;
       }
       throw BizException.of(
-          ResultCode.SYSTEM_ERROR, "error.forensic.export_failed", e.getMessage());
+          ResultCode.SYSTEM_ERROR,
+          "error.forensic.export_failed",
+          SensitiveEvidenceMasking.maskText(e.getMessage()));
     }
   }
 
@@ -202,7 +205,7 @@ public class ForensicExportService {
               .build();
       List<JobInstanceEntity> instances =
           jobInstanceMapper.selectForensicByBizDateRange(jobInstanceForensicByBizDateRangeQuery);
-      String instancesJson = BUNDLE_JSON.writeValueAsString(instances);
+      String instancesJson = maskBundleJson(instances);
       writeEntry(zip, "job-instances.json", instancesJson);
       rowCounts.put("job_instances", instances.size());
 
@@ -223,7 +226,7 @@ public class ForensicExportService {
                 request.tenantId(), null, cursor, dailyAuditLimit);
         allAudits.addAll(dailyAudits);
       }
-      String auditsJson = BUNDLE_JSON.writeValueAsString(allAudits);
+      String auditsJson = maskBundleJson(allAudits);
       writeEntry(zip, "batch-day-operation-audits.json", auditsJson);
       rowCounts.put("batch_day_operation_audits", allAudits.size());
 
@@ -243,7 +246,7 @@ public class ForensicExportService {
       Instant generatedAt = dateTimeSupport.nowInstant();
       String generatedAtText = generatedAt.toString();
       manifest.put("generatedAt", generatedAtText);
-      manifest.put("requestedBy", request.requestedBy());
+      manifest.put("requestedBy", SensitiveEvidenceMasking.maskText(request.requestedBy()));
       manifest.put("traceId", request.traceId());
       String manifestJson = BUNDLE_JSON.writeValueAsString(manifest);
       writeEntry(zip, "manifest.json", manifestJson);
@@ -253,6 +256,12 @@ public class ForensicExportService {
     byte[] digestBytes = digest.digest();
     String sha = HexFormat.of().formatHex(digestBytes);
     return new ExportResult(outFile, size, sha, rowCounts);
+  }
+
+  private static String maskBundleJson(Object value) throws IOException {
+    String json = BUNDLE_JSON.writeValueAsString(value);
+    Object parsed = JsonUtils.fromJson(json, Object.class);
+    return BUNDLE_JSON.writeValueAsString(SensitiveEvidenceMasking.maskJsonValue(parsed));
   }
 
   private void writeEntry(ZipOutputStream zip, String entryName, String content)

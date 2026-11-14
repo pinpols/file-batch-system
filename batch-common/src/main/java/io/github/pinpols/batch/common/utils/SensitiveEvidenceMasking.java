@@ -33,10 +33,27 @@ public final class SensitiveEvidenceMasking {
     return masked;
   }
 
+  /** 对 JSON 文本做结构化脱敏；非 JSON 文本按自由文本处理。无效 JSON 不原样回显凭据语法。 */
+  public static String maskJsonOrText(String value) {
+    if (EmptyChecks.isNull(value)) {
+      return null;
+    }
+    String trimmed = value.stripLeading();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try {
+        Object parsed = JsonUtils.fromJson(value, Object.class);
+        return JsonUtils.toJson(maskJsonValue(parsed));
+      } catch (IllegalArgumentException ignored) {
+        // 非法或历史 JSON 按自由文本兜底，不把原文直接当作安全文本返回。
+      }
+    }
+    return maskText(value);
+  }
+
   /** 递归处理 JSON 对象、数组与文本，其余标量保持原类型。 */
   public static Object maskJsonValue(Object value) {
     if (value instanceof String text) {
-      return maskText(text);
+      return maskJsonOrText(text);
     }
     if (value instanceof Map<?, ?> map) {
       Map<String, Object> masked = new LinkedHashMap<>();

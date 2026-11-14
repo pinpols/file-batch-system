@@ -7,6 +7,7 @@ import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.utils.CodeNormalizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleClusterDiagnosticResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse;
 import io.github.pinpols.batch.console.domain.ops.application.contract.response.ConsoleInstanceDiagnosisResponse.DiagnosisSummary;
@@ -419,6 +420,11 @@ public class ConsoleClusterDiagnosticService {
       String message,
       List<String> suggestedActions,
       Map<String, Object> evidence) {
-    return new Finding(severity, reasonCode, message, suggestedActions, evidence);
+    return new Finding(
+        severity,
+        reasonCode,
+        message,
+        suggestedActions,
+        SensitiveEvidenceMasking.maskMetadata(evidence));
   }
 }

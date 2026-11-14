@@ -43,3 +43,29 @@ Collector 当前使用 `allow_all_keys` 并按键名模式拦截属性。该规�
 - 本轮新增 Console 下游错误边界测试覆盖无法解析响应体和已解析 5xx 的安全默认文案；测试执行结果单独记录在本次交付，不据此宣称导出/诊断全量分级完成。
 - 本次没有执行真实 Loki 查询、生产 profile 配置核实、全量 API/导出响应数据分级，也没有执行配置变更与运行实例并发的真实 PostgreSQL 端到端复现。
 - 因而敏感日志改动是针对已确认路径的修正，不代表全仓敏感数据审计完成；配置漂移结论是源代码行为证据，不代表已观测到生产数据损坏。
+
+## 2026-11-14 只读导出/诊断载荷收口
+
+本批只处理 TCFG-S2 中“导出/诊断载荷的动态 JSON 与自由文本”一层，不改变持久化原值、Worker claim/report 载荷或任意业务自由文本。
+
+| 出口 | 原行为 | 本批处理 |
+|---|---|---|
+| `ForensicExportService` 取证 ZIP 的 `job-instances.json` / `batch-day-operation-audits.json` | 直接序列化 Mapper 查询结果，`paramsSnapshot`、`resultSummary`、审计 `requestPayload`、`comment` 明文可含凭据或带 userinfo 的 endpoint | 先序列化、解析，再经 `SensitiveEvidenceMasking.maskJsonValue` 递归脱敏后回写；free text 同样遮蔽凭据表达式 |
+| 取证导出失败原因（`forensic_export_log` 与抛出的 `BizException`） | 原样写库/回传异常文本 | 统一经 `maskText` 遮蔽 endpoint 与凭据语法 |
+| 取证 `manifest.json` 的 `requestedBy` | 调用方自由文本原样写入 | 经 `maskText` 处理；`traceId`、业务日与统计字段保持原值 |
+| `ConsoleOpsQueryService` 运维审计日志 | `evidenceRef`、`detailSummary` 原样返回 | `evidenceRef` 走 `maskText`，`detailSummary` 按 JSON/自由文本自动判定（`maskJsonOrText`） |
+| `ConsoleClusterDiagnosticService` finding 的 `evidence` | 动态 Map 直接进入诊断响应 | 统一经 `SensitiveEvidenceMasking.maskMetadata` 递归脱敏 |
+
+`SensitiveEvidenceMasking.maskJsonOrText` 对合法 JSON 结构化递归脱敏，对非法/历史 JSON 回退自由文本脱敏，避免把原文直接当作安全文本返回；原 `maskJsonValue(String)` 改为复用该入口，修复 JSON 字符串先被自由文本正则破坏引号的问题。
+
+### 证据
+
+- `./mvnw -o -ntp -pl batch-common,batch-console-api,batch-orchestrator -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=SensitiveEvidenceMaskingTest,SecretMaskingTest,ConsoleOpsQueryServiceTest,ForensicExportServiceTest,ConsoleClusterDiagnosticServiceTest test` → BUILD SUCCESS；batch-common 14/14（`SecretMaskingTest` 10、`SensitiveEvidenceMaskingTest` 4），batch-orchestrator `ForensicExportServiceTest` 10/10，batch-console-api 16/16（`ConsoleOpsQueryServiceTest` 4、`ConsoleClusterDiagnosticServiceTest` 12）。
+- `./mvnw -o -ntp -pl batch-console-api -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=DefaultConsoleReportExcelApplicationServiceTest test` → 2/2 通过；报表导出复用查询 DTO，自动继承脱敏结果。
+- 取证导出测试断言解析 ZIP 内层 JSON 后再检查字段，避免只做宽泛字符串匹配。
+
+### 边界
+
+- 普通查询 API（作业实例详情/列表、Outbox payload、审批 detail 等）继续使用 `SecretMasking.maskSensitiveJson` 按键名分级，本批未改动其 JSON 结构与格式，避免破坏客户端解析。
+- 持久化原值、运行中任务载荷和下游业务自由文本不在本批范围；本批不构成“全仓任意业务字段自动脱敏”的结论。
+- 未执行真实 Loki 查询、生产 profile 或 staging 环境验证；上述证据均为本地 Maven 定向测试。

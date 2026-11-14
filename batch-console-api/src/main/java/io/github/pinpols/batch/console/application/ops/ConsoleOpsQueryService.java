@@ -15,6 +15,7 @@ import io.github.pinpols.batch.common.utils.ConsoleTextSanitizer;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.JsonUtils;
 import io.github.pinpols.batch.common.utils.SecretMasking;
+import io.github.pinpols.batch.common.utils.SensitiveEvidenceMasking;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalCommandQueryRequest;
 import io.github.pinpols.batch.console.application.contract.query.ApprovalTypeExclusions;
 import io.github.pinpols.batch.console.application.contract.query.AuditLogQueryRequest;
@@ -433,8 +434,8 @@ public class ConsoleOpsQueryService implements ConsoleOpsQueryPort {
         .operatorType(row.operatorType())
         .operatorId(row.operatorId())
         .traceId(row.traceId())
-        .evidenceRef(row.evidenceRef())
-        .detailSummary(row.detailSummary())
+        .evidenceRef(SensitiveEvidenceMasking.maskText(row.evidenceRef()))
+        .detailSummary(SensitiveEvidenceMasking.maskJsonOrText(row.detailSummary()))
         .createdAt(row.createdAt())
         .build();
   }
