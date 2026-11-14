@@ -21,6 +21,8 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 - `/api/console/**` 的基线是"四种角色之一即可访问"（`ConsoleSecurityConfiguration`：ADMIN、TENANT_ADMIN、AUDITOR、TENANT_USER）。381 个接口中 302 个另有 `@PreAuthorize`；其余 79 个只有基线，其中 47 个在 `ConsoleQueryController`。
 - 已确认一例：`menu.yml` 中"审计日志""操作审计"只对 ADMIN、TENANT_ADMIN、AUDITOR 开放，对应的 `GET /audits`、`GET /operation-audits` 没有角色检查。`OperationAuditQueryService` 只按租户过滤，因此 TENANT_USER 直接调接口能读到本租户的操作审计，包括管理员的操作记录。未找到拒绝 TENANT_USER 的测试。
 - 其余 45 个只有基线的查询接口未逐个与菜单比对。
+- **2026-11-14 复核与部分实施**：`/operation-audits` 已加 `ADMIN_OR_TENANT_ADMIN_OR_AUDITOR`，并有 `ConsoleQueryControllerAuthorizationTest` 守护。上文对 `/audits` 的判断有误：它查的是文件审计 `file_audit_log`，前端文件中心、执行日志、作业定义详情和自助服务「我的审计」都在用，TENANT_USER 本就可见，维持基线。`/execution-logs` 同为文件审计别名，用于 VIEWER 可见的综合查询页，同样维持。其余接口（审批、Outbox、Worker、文件模板与渠道等）前端存在 TENANT_USER 可见页面的复用调用，需逐页确认后再收紧，仍开放。
+- **2026-11-14 第二轮**：逐个核对前端调用页与菜单、移动端路由后，Outbox 查询与实时流、`/catch-up-approvals` 只在「Outbox」「审批中心」（及对应移动端 OPERATOR 路由）使用，已收紧为 `ADMIN_OR_TENANT_ADMIN`。维持基线的及原因：`/approvals` 被自助服务页（TENANT_USER）调用；`/dead-letters`、`/retries` 在 VIEWER 可见的综合查询页；`/workers` 经共享 composable 多页复用；`/file-templates`、`/file-channels` 被作业向导与文件中心调用；`/ai-audits` 的可用身份由 `batch.console.ai.allowed-authorities` 配置决定，按角色收紧会与配置冲突。至此 ARCH-20261113-09 关闭；其余基线接口均为 VIEWER 可见页面使用，与菜单一致。
 - 不受影响的：`ConsoleAiController` 的 13 个接口虽无 `@PreAuthorize`，但服务层 `ConsoleAiAuthorizationService.assertAllowed` 按配置白名单校验。
 
 ### ARCH-20261113-10 / P2 / 有当前证据：平台库的租户隔离只在应用层
@@ -48,6 +50,7 @@ Console 内部与前后端接口契约的结论在[同日审查](architecture-re
 
 - Helm 的 `networkPolicy.enabled` 全局默认 `false`；原子任务 Worker 的网络策略只限制出站（`policyTypes: Egress`）。
 - 原子任务 Worker 暴露 `health,info,prometheus,loggers,atomicruntime`，没有接入 Spring Security。Helm 为它设置了独立的管理端口，但网络策略未开启时，集群内任何 Pod 都能访问，包括通过 `POST /actuator/loggers` 修改日志级别。对比：Console 把 `/actuator/loggers` 限定为 ADMIN；Orchestrator 内部接口有 `InternalAuthFilter` 和请求签名；Import Worker 的内部接口有共享密钥校验。
+- **2026-11-14 部分实施**：原子任务 Worker 默认暴露改为 `health,info,prometheus,atomicruntime`，不再包含可写的 `loggers`，需要时用 `BATCH_WORKER_ATOMIC_ACTUATOR_EXPOSURE` 临时加回；`AtomicRuntimeLocalProfileTest` 守护默认与 local 两种配置。仓库没有生产 values 文件，`networkPolicy.enabled` 默认值仍为 `false`，是否默认开启需运维按目标集群的 CNI 与放行规则决定，仍开放。
 
 ### ARCH-20261113-14 / P3 / 有当前证据：测试依赖时序
 

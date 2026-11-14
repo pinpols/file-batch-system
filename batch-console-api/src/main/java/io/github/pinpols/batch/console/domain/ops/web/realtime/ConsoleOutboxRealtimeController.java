@@ -16,12 +16,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 /**
  * Outbox 相关实时订阅入口。
  *
- * <p>包含重试视图和投递视图，两条流都直接消费统一实时事件总线。
+ * <p>包含重试视图和投递视图，两条流都直接消费统一实时事件总线。与菜单「Outbox」一致，只对平台管理员和租户管理员开放。
  */
 @RestController
 @Validated
 @RequestMapping("/api/console/stream")
-@PreAuthorize(ConsoleSecurityExpressions.ANY_CONSOLE_ROLE)
+@PreAuthorize(ConsoleSecurityExpressions.ADMIN_OR_TENANT_ADMIN)
 @RequiredArgsConstructor
 public class ConsoleOutboxRealtimeController {
 
