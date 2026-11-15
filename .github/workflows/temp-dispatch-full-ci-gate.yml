@@ -16,10 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch full-ci-gate for the lock-scope branch
+      - name: Dispatch full-ci-gate for the fair admission branch
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api --method POST \
             repos/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/dispatches \
-            -f ref='cursor/shrink-admission-locks-8612'
+            -f ref='cursor/fair-trigger-admission-8612'
