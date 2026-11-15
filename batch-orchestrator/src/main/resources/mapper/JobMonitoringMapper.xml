@@ -561,13 +561,28 @@
                 AND tr.id = #{triggerRequestId}
                 FOR UPDATE OF tr SKIP LOCKED
             </when>
+            <when test="jobInstanceId != null and violationType == 'NOT_STARTED'">
+                SELECT candidate.*
+                FROM (
+                    <include refid="candidateNotStarted"/>
+                    AND ji.tenant_id = #{tenantId}
+                    AND ji.id = #{jobInstanceId}
+                    <if test="triggerRequestId != null">
+                        AND tr.id = #{triggerRequestId}
+                    </if>
+                    UNION ALL
+                    <include refid="candidateNotStartedLateStart"/>
+                    AND ji.tenant_id = #{tenantId}
+                    AND ji.id = #{jobInstanceId}
+                    <if test="triggerRequestId != null">
+                        AND tr.id = #{triggerRequestId}
+                    </if>
+                ) candidate
+            </when>
             <otherwise>
                 <choose>
             <when test="violationType == 'RUNNING_TOO_LONG'">
                 <include refid="candidateRunningTooLong"/>
-            </when>
-            <when test="violationType == 'NOT_STARTED'">
-                <include refid="candidateNotStarted"/>
             </when>
             <when test="violationType == 'NOT_COMPLETED_BY_DEADLINE'">
                 <include refid="candidateNotCompletedByDeadline"/>
