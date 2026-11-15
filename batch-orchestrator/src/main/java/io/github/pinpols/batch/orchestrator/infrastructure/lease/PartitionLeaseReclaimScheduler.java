@@ -7,8 +7,10 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -51,8 +53,11 @@ public class PartitionLeaseReclaimScheduler {
   private final PartitionReclaimUnit reclaimUnit;
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;
+  private final JobTaskMapper jobTaskMapper;
+  private final UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
   private final AtomicBoolean reclaimRunning = new AtomicBoolean(false);
   private final AtomicBoolean sweepRunning = new AtomicBoolean(false);
+  private final AtomicBoolean unclaimedRunning = new AtomicBoolean(false);
 
   // P1-5：lockAtMostFor 是 ShedLock 持锁上限。超过这个时间，二号实例可拿同名锁同时跑循环 →
   // partition 已被 reclaim 后 version 已 +1 → 二号实例算出的 eventKey 不同（含 version） →
@@ -165,6 +170,48 @@ public class PartitionLeaseReclaimScheduler {
       }
     } finally {
       sweepRunning.set(false);
+    }
+  }
+
+  /**
+   * 重发已发布但超过宽限仍未被认领的 READY 任务。不调用 {@link PartitionReclaimUnit#reclaim}，
+   * 那条路径在没有 RUNNING 任务时不会写 outbox。
+   */
+  @Scheduled(fixedDelayString = "${batch.partition-lease.unclaimed-dispatch-interval-millis:15000}")
+  @SchedulerLock(
+      name = "partition_unclaimed_dispatch",
+      lockAtMostFor = "PT2M",
+      lockAtLeastFor = "PT10S")
+  public void redispatchUnclaimedReadyTasks() {
+    if (!governance.partitionLease().isUnclaimedDispatchEnabled()) {
+      return;
+    }
+    if (gracefulShutdown.isDraining()) {
+      return;
+    }
+    if (!unclaimedRunning.compareAndSet(false, true)) {
+      return;
+    }
+    try {
+      Instant olderThan = BatchDateTimeSupport.utcNow()
+          .minusSeconds(governance.partitionLease().getUnclaimedDispatchGraceSeconds());
+      int batchSize = governance.partitionLease().getUnclaimedDispatchBatchSize();
+      List<JobTaskEntity> unclaimed =
+          jobTaskMapper.selectUnclaimedPublishedReady(olderThan, batchSize);
+      for (JobTaskEntity task : unclaimed) {
+        try {
+          RlsTenantContextHolder.runWithTenant(
+              task.getTenantId(), () -> unclaimedReadyDispatchUnit.redispatch(task));
+        } catch (RuntimeException unexpected) {
+          log.error(
+              "unclaimed READY redispatch failed: tenantId={}, taskId={}",
+              task.getTenantId(),
+              task.getId(),
+              unexpected);
+        }
+      }
+    } finally {
+      unclaimedRunning.set(false);
     }
   }
 }

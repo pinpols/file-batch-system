@@ -651,6 +651,58 @@
           and cancel_requested = false
     </update>
 
+    <select id="selectUnclaimedPublishedReady" resultMap="JobTaskResultMap">
+        select job_task.*
+        from batch.job_task job_task
+        join batch.job_partition partition
+          on partition.tenant_id = job_task.tenant_id
+         and partition.id = job_task.job_partition_id
+        where job_task.task_status = 'READY'
+          and job_task.assigned_worker_code is null
+          and job_task.non_idempotent_started_at is null
+          and partition.partition_status = 'READY'
+          and partition.lease_expire_at is null
+          and job_task.updated_at &lt; #{olderThan}
+          and exists (
+              select 1
+              from batch.outbox_event published_dispatch
+              where published_dispatch.tenant_id = job_task.tenant_id
+                and published_dispatch.event_key =
+                    job_task.tenant_id || ':dispatch:' || job_task.id::text
+                and published_dispatch.publish_status = 'PUBLISHED'
+          )
+          and exists (
+              select 1 from batch.job_instance parent_instance
+              where parent_instance.tenant_id = job_task.tenant_id
+                and parent_instance.id = job_task.job_instance_id
+                and parent_instance.instance_status in
+                    ('CREATED', 'WAITING', 'READY', 'RUNNING', 'PAUSED')
+          )
+          and not exists (
+              select 1 from batch.workflow_node_run parent_node
+              join batch.workflow_run parent_workflow
+                on parent_workflow.id = parent_node.workflow_run_id
+              where parent_workflow.tenant_id = job_task.tenant_id
+                and parent_node.job_instance_id = job_task.job_instance_id
+                and parent_workflow.run_status not in ('CREATED', 'RUNNING', 'PAUSED')
+          )
+        order by job_task.updated_at, job_task.id
+        limit #{limit}
+    </select>
+
+    <update id="bumpVersionIfUnclaimedReady">
+        update batch.job_task
+        set version = version + 1,
+            updated_at = current_timestamp
+        where tenant_id = #{tenantId}
+          and id = #{id}
+          and version = #{expectedVersion}
+          and task_status = 'READY'
+          and assigned_worker_code is null
+          and non_idempotent_started_at is null
+          <include refid="LeaseReclaimableParentPredicate"/>
+    </update>
+
     <update id="closeNonTerminalTasksForTerminalInstance">
         update batch.job_task
         set task_status = #{targetTaskStatus},

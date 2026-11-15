@@ -16,6 +16,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.pinpols.batch.common.dto.EffectiveTaskConfig;
+import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.TaskStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.orchestrator.application.ratelimit.TenantActionRateLimiter;
@@ -116,6 +117,19 @@ class TaskControllerApplicationServiceTest {
         .isInstanceOf(BizException.class)
         .satisfies(exception -> assertThat(((BizException) exception).getMessageKey())
             .isEqualTo("error.task.claim_not_available"));
+    verify(taskAssignmentService, never()).loadEffectiveConfig(anyString(), anyLong());
+  }
+
+  @Test
+  @DisplayName("claim: READY 且没有 assignee 时返回可重试错误，避免提交掉唯一派发消息")
+  void shouldAskWorkerToRetry_whenTaskIsStillUnclaimedReady() {
+    JobTaskEntity task = task(TaskStatus.READY.code(), null);
+    when(taskAssignmentService.assignWorker("ta", 100L, "w1")).thenReturn(task);
+
+    assertThatThrownBy(() -> service.claim(100L, new TaskClaimCommand("ta", "w1", "inv-1")))
+        .isInstanceOf(BizException.class)
+        .satisfies(exception -> assertThat(((BizException) exception).getCode())
+            .isEqualTo(ResultCode.SERVICE_UNAVAILABLE));
     verify(taskAssignmentService, never()).loadEffectiveConfig(anyString(), anyLong());
   }
 

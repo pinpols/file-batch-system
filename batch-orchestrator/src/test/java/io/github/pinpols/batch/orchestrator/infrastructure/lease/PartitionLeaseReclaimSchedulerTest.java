@@ -21,8 +21,10 @@ import io.github.pinpols.batch.common.rls.RlsTenantContextHolder;
 import io.github.pinpols.batch.orchestrator.config.PartitionLeaseProperties;
 import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorGovernanceProperties;
 import io.github.pinpols.batch.orchestrator.domain.entity.JobPartitionEntity;
+import io.github.pinpols.batch.orchestrator.domain.entity.JobTaskEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.mapper.JobPartitionMapper;
+import io.github.pinpols.batch.orchestrator.mapper.JobTaskMapper;
 import java.time.Instant;
 import java.util.List;
 import org.assertj.core.api.Assertions;
@@ -36,6 +38,8 @@ class PartitionLeaseReclaimSchedulerTest {
 
   private JobPartitionMapper jobPartitionMapper;
   private PartitionReclaimUnit reclaimUnit;
+  private JobTaskMapper jobTaskMapper;
+  private UnclaimedReadyDispatchUnit unclaimedReadyDispatchUnit;
   private OrchestratorGracefulShutdown gracefulShutdown;
   private PartitionLeaseProperties props;
   private PartitionLeaseReclaimScheduler scheduler;
@@ -44,6 +48,8 @@ class PartitionLeaseReclaimSchedulerTest {
   void setUp() {
     jobPartitionMapper = mock(JobPartitionMapper.class);
     reclaimUnit = mock(PartitionReclaimUnit.class);
+    jobTaskMapper = mock(JobTaskMapper.class);
+    unclaimedReadyDispatchUnit = mock(UnclaimedReadyDispatchUnit.class);
     gracefulShutdown = mock(OrchestratorGracefulShutdown.class);
 
     props = new PartitionLeaseProperties();
@@ -57,7 +63,12 @@ class PartitionLeaseReclaimSchedulerTest {
     when(governance.partitionLease()).thenReturn(props);
 
     scheduler = new PartitionLeaseReclaimScheduler(
-        jobPartitionMapper, reclaimUnit, governance, gracefulShutdown);
+        jobPartitionMapper,
+        reclaimUnit,
+        governance,
+        gracefulShutdown,
+        jobTaskMapper,
+        unclaimedReadyDispatchUnit);
   }
 
   @Test
@@ -209,6 +220,32 @@ class PartitionLeaseReclaimSchedulerTest {
     scheduler.reclaimExpiredPartitions();
 
     verify(reclaimUnit, times(2)).reclaim(any());
+  }
+
+  @Test
+  @DisplayName("超过宽限仍未认领的 READY 任务交给重发单元，不走租约回收")
+  void shouldRedispatchUnclaimedReadyTasksWithoutLeaseReclaim() {
+    props.setUnclaimedDispatchGraceSeconds(120L);
+    props.setUnclaimedDispatchBatchSize(200);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setTenantId("ta");
+    task.setId(9L);
+    when(jobTaskMapper.selectUnclaimedPublishedReady(any(), eq(200))).thenReturn(List.of(task));
+
+    scheduler.redispatchUnclaimedReadyTasks();
+
+    verify(unclaimedReadyDispatchUnit).redispatch(task);
+    verify(reclaimUnit, never()).reclaim(any());
+  }
+
+  @Test
+  @DisplayName("未认领重发关闭时不扫描")
+  void shouldSkipUnclaimedScanWhenDisabled() {
+    props.setUnclaimedDispatchEnabled(false);
+
+    scheduler.redispatchUnclaimedReadyTasks();
+
+    verify(jobTaskMapper, never()).selectUnclaimedPublishedReady(any(), anyInt());
   }
 
   // ── 辅助方法 ───────────────────────────────────────────────────────────────
