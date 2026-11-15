@@ -2,6 +2,12 @@ name: Backend / Full CI gate
 
 on:
   workflow_dispatch:
+  # 仅临时草稿 PR 使用：当前集成令牌无法 workflow_dispatch。此触发不得合入 main。
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
   schedule:
     # 每周无条件运行一次，发现 paths-ignore 与范围路由漂移。
     - cron: '0 2 * * 0'
