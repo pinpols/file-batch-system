@@ -7,12 +7,13 @@ import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,11 +29,20 @@ import org.springframework.transaction.annotation.Transactional;
  * insert 由 outbox_event 的唯一约束回退（见 V61 迁移）。
  */
 @Service
-@RequiredArgsConstructor
 public class WorkflowTerminalOutboxService {
 
   private final DomainEventPublisher domainEventPublisher;
   private final ReplayOperationMapper replayOperationMapper;
+  private final WorkflowLaunchWaitResumeTrigger launchWaitResumeTrigger;
+
+  public WorkflowTerminalOutboxService(
+      DomainEventPublisher domainEventPublisher,
+      ReplayOperationMapper replayOperationMapper,
+      @Lazy WorkflowLaunchWaitResumeTrigger launchWaitResumeTrigger) {
+    this.domainEventPublisher = domainEventPublisher;
+    this.replayOperationMapper = replayOperationMapper;
+    this.launchWaitResumeTrigger = launchWaitResumeTrigger;
+  }
 
   /** workflow_run 终态枚举集合（白名单），调用方先行判断后再触发本写入。 */
   public static boolean isTerminal(String runStatus) {
@@ -82,6 +92,7 @@ public class WorkflowTerminalOutboxService {
     eventBuilder.traceId(eventTraceId);
     DomainEvent terminalEvent = eventBuilder.build();
     domainEventPublisher.publish(terminalEvent);
+    launchWaitResumeTrigger.resumeAfterCommit(workflowRun.getTenantId());
   }
 
   private void updateReplayOperationOutcome(

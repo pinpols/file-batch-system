@@ -11,6 +11,7 @@ import io.github.pinpols.batch.common.event.DomainEvent;
 import io.github.pinpols.batch.common.event.DomainEventPublisher;
 import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.ReplayOperationWorkflowOutcomeParam;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.mapper.ReplayOperationMapper;
 import java.time.Instant;
 import org.junit.jupiter.api.BeforeEach;
@@ -43,7 +44,8 @@ class WorkflowTerminalOutboxServiceTest {
   @BeforeEach
   void setUp() {
     replayOperationMapper = mock(ReplayOperationMapper.class);
-    service = new WorkflowTerminalOutboxService(domainEventPublisher, replayOperationMapper);
+    service = new WorkflowTerminalOutboxService(
+        domainEventPublisher, replayOperationMapper, mock(WorkflowLaunchWaitResumeTrigger.class));
   }
 
   // ===== isTerminal =====

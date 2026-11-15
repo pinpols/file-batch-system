@@ -11,6 +11,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -65,6 +66,7 @@ public class WorkflowRunStuckReconciler {
   private final BatchOrchestratorGovernanceProperties governance;
   private final OrchestratorGracefulShutdown gracefulShutdown;
   private final MeterRegistry meterRegistry;
+  private final WorkflowLaunchWaitResumeTrigger launchWaitResumeTrigger;
   private final AtomicBoolean running = new AtomicBoolean(false);
 
   @Scheduled(fixedDelayString = "${batch.workflow.stuck-reconcile.poll-interval-millis:120000}")
@@ -179,6 +181,7 @@ public class WorkflowRunStuckReconciler {
         .build();
     int rows = workflowRunMapper.updateStatus(param);
     if (rows > 0) {
+      launchWaitResumeTrigger.resumeAfterCommit(wr.getTenantId());
       log.warn(
           "workflow_run stuck finalized: id={} tenant={} → {} (all nodes terminal)",
           wr.getId(),
