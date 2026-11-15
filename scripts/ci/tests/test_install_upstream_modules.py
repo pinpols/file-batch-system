@@ -41,7 +41,7 @@ class InstallUpstreamModulesTest(unittest.TestCase):
     def test_plugin_resolution_failure_blocks_after_retries(self):
         result, calls = self.run_installer(1)
         self.assertNotEqual(0, result.returncode)
-        self.assertEqual(3, sum("spring-boot:help" in call for call in calls))
+        self.assertEqual(4, sum("spring-boot:help" in call for call in calls))
 
 
 if __name__ == "__main__":
