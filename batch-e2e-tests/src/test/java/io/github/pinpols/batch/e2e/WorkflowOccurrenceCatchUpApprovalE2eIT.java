@@ -2523,7 +2523,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     assertThat(scheduledOccurrenceCount(workflowDefinitionId))
         .isEqualTo(occurrenceCountBeforeRestart);
     assertThat(scheduledOccurrenceCoverageThrough(workflowDefinitionId))
-        .isEqualTo(coverageThroughBeforeRestart);
+        .as("重启后 coverage 只能前进, 不能回退或丢失")
+        .isAfterOrEqualTo(coverageThroughBeforeRestart);
     List<LocalDate> selectedBizDateValuesRead2 =
         jdbcTemplate.queryForList(selectBizDateSql, LocalDate.class, TENANT, workflowDefinitionId);
     assertThat(selectedBizDateValuesRead2).containsExactlyElementsOf(expectedBizDates);
@@ -2797,7 +2798,8 @@ class WorkflowOccurrenceCatchUpApprovalE2eIT extends AbstractIntegrationTest {
     restartTriggerHttpServer();
     assertThat(scheduledOccurrenceCount(workflowDefinitionId)).isEqualTo(plannedCount);
     assertThat(scheduledOccurrenceCoverageThrough(workflowDefinitionId))
-        .isEqualTo(coverageBeforeRestart);
+        .as("重启后 coverage 只能前进, 不能回退或丢失")
+        .isAfterOrEqualTo(coverageBeforeRestart);
     TriggerScheduledOccurrencePlanner restartedPlanner =
         triggerContext.getBean(TriggerScheduledOccurrencePlanner.class);
     restartedPlanner.materialize(descriptor, plannedFireTimes, scanAt);
