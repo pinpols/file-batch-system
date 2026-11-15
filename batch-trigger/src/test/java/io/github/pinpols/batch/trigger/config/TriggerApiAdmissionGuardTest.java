@@ -282,11 +282,14 @@ class TriggerApiAdmissionGuardTest {
       if (!entered.await(2, TimeUnit.SECONDS)) {
         throw new AssertionError("admission holder did not enter");
       }
-      assertThat(registry.get("batch.trigger.api_launch.admission.active").gauge().value())
+      assertThat(
+              registry.get("batch.trigger.api_launch.admission.active").gauge().value())
           .isEqualTo(1);
-      assertThat(registry.get("batch.trigger.api_launch.admission.queued").gauge().value())
+      assertThat(
+              registry.get("batch.trigger.api_launch.admission.queued").gauge().value())
           .isZero();
-      assertThat(registry.get("batch.trigger.api_launch.admission.limit").gauge().value())
+      assertThat(
+              registry.get("batch.trigger.api_launch.admission.limit").gauge().value())
           .isEqualTo(2);
     } finally {
       release.countDown();
