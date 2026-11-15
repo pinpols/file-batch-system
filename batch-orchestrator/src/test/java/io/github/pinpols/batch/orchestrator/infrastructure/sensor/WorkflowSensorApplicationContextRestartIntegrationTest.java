@@ -17,6 +17,7 @@ import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
 import io.github.pinpols.batch.orchestrator.infrastructure.file.FileGovernanceScheduler;
 import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.BatchDaySettleScheduler;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.infrastructure.timeout.WorkflowRunStuckReconciler;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture;
 import io.github.pinpols.batch.orchestrator.integration.support.LaunchIntegrationFixture.WorkflowLaunchSeed;
@@ -2311,7 +2312,8 @@ class WorkflowSensorApplicationContextRestartIntegrationTest extends AbstractInt
             application.getBean(WorkflowRunResumeProgressor.class),
             application.getBean(BatchOrchestratorGovernanceProperties.class),
             application.getBean(OrchestratorGracefulShutdown.class),
-            application.getBean(MeterRegistry.class))
+            application.getBean(MeterRegistry.class),
+            application.getBean(WorkflowLaunchWaitResumeTrigger.class))
         .reconcile();
   }
 

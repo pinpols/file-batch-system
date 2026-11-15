@@ -51,6 +51,7 @@
 - 同日 launch 的批次日结算栅栏改为在幂等查询之后取得，查询不再占着同日事务锁。Orchestrator 选 worker、下游准入和派发速率也改到租户准入锁之前；锁内仍重新计数并提交会改变活跃配额的状态。
 - Trigger 手工 launch 的本地准入改为按到达顺序发放许可。已经在排队的请求不会再被后到请求插队；并发上限、队列容量、等待超时、自适应收缩和原有拒绝计数保持不变。
 - 已发布但超过宽限仍未被 worker 认领的 READY 任务会重新写入 outbox。默认宽限 120 秒，可用 `BATCH_PARTITION_LEASE_UNCLAIMED_DISPATCH_GRACE_SECONDS` 调整。重发只推进任务版本，晚到的认领先提交时不再写第二条消息。仍是无人认领的 READY 时，认领接口返回 503，worker 不会把唯一派发消息当作已处理提交掉。READY/RUNNING 仍占用运行配额。
+- Workflow 根运行离开 `CREATED`/`RUNNING` 并提交后，立刻恢复该租户所有空闲 launch-wait 槽位，不再只等 5 秒轮询。同一 Workflow、业务日和 dry-run 仍只允许一个活跃 run。`selectNotStarted` 把未启动和已启动拆成两条查询，并为未启动实例、父工作流请求增加索引。
 - 压测清理脚本先回收按 `request_id` 引用 `trigger_request` 的等待/别名记录（`workflow_launch_wait`、`batch_day_waiting_launch`、`job_dependency_waiting_launch`、幂等别名、`expected_work_occurrence`、`trigger_misfire_pending`、`scheduled_occurrence_catch_up_audit`），再删除 `trigger_request`；修复四类 Worker 压测结束后清理被外键阻塞并重试失败的问题。
 - 修正 #1388 引入的 OpenAPI schema 偏差：`ConsoleJobDefinitionResponse.triggerMode` 恢复 `SCHEDULED/API/MANUAL/EVENT/MIXED` 枚举与说明，`dagEnabled` 改为独立 boolean；`ConsoleTenantResponse.description` 恢复 nullable，`createdBy` 独立声明。
 - OpenAPI 响应 schema 与 Java 响应 record 对齐：`ConsoleJobDefinitionResponse` 补 `bizType`、`dagEnabled`、`priority`、`version`、`description`；`ConsoleTenantResponse`、`ConsoleAlertRoutingResponse` 补已序列化字段；`ConsoleFilePipelineResponse`、`ConsoleJobStepInstanceResponse` 中后端不返回的字段标记为 `deprecated`，保留生成类型兼容，不走破坏性删除。新增 `ConsoleResponseOpenApiSchemaTest` 做字段级漂移守护。

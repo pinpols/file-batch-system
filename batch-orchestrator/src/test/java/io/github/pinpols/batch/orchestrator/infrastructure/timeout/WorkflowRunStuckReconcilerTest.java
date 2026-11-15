@@ -15,6 +15,7 @@ import io.github.pinpols.batch.orchestrator.config.governance.BatchOrchestratorG
 import io.github.pinpols.batch.orchestrator.domain.entity.WorkflowNodeRunEntity;
 import io.github.pinpols.batch.orchestrator.domain.param.UpdateWorkflowRunStatusParam;
 import io.github.pinpols.batch.orchestrator.infrastructure.OrchestratorGracefulShutdown;
+import io.github.pinpols.batch.orchestrator.infrastructure.scheduler.WorkflowLaunchWaitResumeTrigger;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowNodeRunMapper;
 import io.github.pinpols.batch.orchestrator.mapper.WorkflowRunMapper;
 import io.micrometer.core.instrument.Counter;
@@ -142,7 +143,8 @@ class WorkflowRunStuckReconcilerTest {
         resumeProgressor,
         governance,
         gracefulShutdown,
-        meterRegistry);
+        meterRegistry,
+        Mockito.mock(WorkflowLaunchWaitResumeTrigger.class));
   }
 
   private WorkflowRunEntity candidate(Long id, String tenantId) {

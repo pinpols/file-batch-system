@@ -348,11 +348,7 @@
         LIMIT #{limit}
     </select>
 
-    <sql id="candidateNotStarted">
-        SELECT <include refid="candidateColumns"/>,
-               eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
-               mp.start_grace_seconds AS threshold_seconds,
-               mp.start_grace_severity AS severity
+    <sql id="candidateNotStartedSource">
         FROM batch.job_instance ji
         <include refid="triggerWorkflowContextJoin"/>
         JOIN batch.job_monitoring_policy mp
@@ -360,11 +356,9 @@
         JOIN batch.job_definition jd
           ON jd.tenant_id = ji.tenant_id AND jd.id = ji.job_definition_id
         <include refid="jobMonitoringEligibilityJoins"/>
-        WHERE (
-              (ji.execution_started_at IS NULL AND ji.finished_at IS NULL
-               AND ji.instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING'))
-              OR ji.execution_started_at IS NOT NULL
-          )
+    </sql>
+
+    <sql id="candidateNotStartedPredicates">
           AND ji.dry_run = false
           AND mp.start_grace_seconds &gt; 0
           AND eligibility.eligible_at IS NOT NULL
@@ -378,6 +372,29 @@
                 AND c.job_instance_id = ji.id
                 AND c.violation_type = 'NOT_STARTED'
           )
+    </sql>
+
+    <!-- 未启动与已启动拆开，使未启动分支可以走部分索引；两支合起来与原先的 OR 相同。 -->
+    <sql id="candidateNotStarted">
+        SELECT <include refid="candidateColumns"/>,
+               eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
+               mp.start_grace_seconds AS threshold_seconds,
+               mp.start_grace_severity AS severity
+        <include refid="candidateNotStartedSource"/>
+        WHERE ji.execution_started_at IS NULL
+          AND ji.finished_at IS NULL
+          AND ji.instance_status IN ('CREATED', 'WAITING', 'READY', 'RUNNING')
+        <include refid="candidateNotStartedPredicates"/>
+    </sql>
+
+    <sql id="candidateNotStartedLateStart">
+        SELECT <include refid="candidateColumns"/>,
+               eligibility.eligible_at + (mp.start_grace_seconds * interval '1 second') AS monitoring_deadline_at,
+               mp.start_grace_seconds AS threshold_seconds,
+               mp.start_grace_severity AS severity
+        <include refid="candidateNotStartedSource"/>
+        WHERE ji.execution_started_at IS NOT NULL
+        <include refid="candidateNotStartedPredicates"/>
     </sql>
 
     <sql id="candidateWorkflowChildRequestNotStarted">
@@ -398,6 +415,8 @@
         SELECT candidate.*
         FROM (
             <include refid="candidateNotStarted"/>
+            UNION ALL
+            <include refid="candidateNotStartedLateStart"/>
             UNION ALL
             <include refid="candidateWorkflowChildRequestNotStarted"/>
         ) candidate
