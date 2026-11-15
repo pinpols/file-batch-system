@@ -65,4 +65,16 @@ public class PartitionLeaseProperties {
 
   /** 单次回退扫描处理上限。 */
   private int orphanSweepBatchSize = 200;
+
+  /**
+   * 已发布但从未被 worker 认领的 READY 任务，超过宽限后重新写入 outbox。默认 120 秒，高于正常 claim 重试预算，
+   * 与租约过期和孤儿扫描宽限一致。
+   */
+  private boolean unclaimedDispatchEnabled = true;
+
+  private long unclaimedDispatchGraceSeconds = 120L;
+
+  private long unclaimedDispatchIntervalMillis = 15000L;
+
+  private int unclaimedDispatchBatchSize = 200;
 }

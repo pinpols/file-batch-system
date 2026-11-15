@@ -209,6 +209,11 @@ batch:
     expire-seconds: ${BATCH_PARTITION_LEASE_EXPIRE_SECONDS:120}
     # 租约回收扫描间隔（毫秒）
     reclaim-interval-millis: ${BATCH_PARTITION_LEASE_RECLAIM_INTERVAL_MILLIS:15000}
+    # 已发布且仍未被认领的 READY 任务，超过宽限后用新的 outbox 键重发。
+    unclaimed-dispatch-enabled: ${BATCH_PARTITION_LEASE_UNCLAIMED_DISPATCH_ENABLED:true}
+    unclaimed-dispatch-grace-seconds: ${BATCH_PARTITION_LEASE_UNCLAIMED_DISPATCH_GRACE_SECONDS:120}
+    unclaimed-dispatch-interval-millis: ${BATCH_PARTITION_LEASE_UNCLAIMED_DISPATCH_INTERVAL_MILLIS:15000}
+    unclaimed-dispatch-batch-size: ${BATCH_PARTITION_LEASE_UNCLAIMED_DISPATCH_BATCH_SIZE:200}
   retry:
     # 重试任务拉取批大小
     batch-size: ${BATCH_RETRY_BATCH_SIZE:100}

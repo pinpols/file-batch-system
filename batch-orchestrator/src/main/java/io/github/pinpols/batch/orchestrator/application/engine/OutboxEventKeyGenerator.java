@@ -82,6 +82,14 @@ public final class OutboxEventKeyGenerator {
   }
 
   /**
+   * 已发布但从未认领的 READY 任务重发：{@code <tenant>:unclaimed-redispatch:<taskId>:v<version>}。
+   * 版本来自本次 CAS 之后的值，避免与首次 {@code dispatch} 键冲突，也避免重复插入被唯一约束吞掉。
+   */
+  public static String forUnclaimedRedispatch(String tenantId, Long taskId, long taskVersion) {
+    return build(tenantId, "unclaimed-redispatch", String.valueOf(taskId), "v" + taskVersion);
+  }
+
+  /**
    * 补偿命令再派发:{@code <tenant>:cmp:<commandNo>:<taskId>}。commandNo 是
    * compensation_command.command_no,确保同 task 在不同补偿命令下独立去重。
    */

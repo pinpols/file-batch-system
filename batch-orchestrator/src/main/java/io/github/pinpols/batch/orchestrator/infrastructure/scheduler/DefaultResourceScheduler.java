@@ -49,9 +49,9 @@ import org.springframework.stereotype.Component;
  *   <li>{@code resourceQueueManager.resolveQueue} — 解析租户队列配置。
  *   <li>{@code priorityScheduler.resolvePriority / resolvePriorityBand} — 计算有效优先级与分档。
  *   <li>{@link #checkBatchWindow} — 当前时间是否在业务窗口内。
- *   <li>{@code concurrencyLimiter.check} — 租户/队列级并发未超限。
- *   <li>{@code partitionThrottle.check} — 分区吞吐未触顶。
- *   <li>{@code workerSelector.select} — 有在线 worker 匹配路由。
+ *   <li>{@code workerSelector.select}、下游准入和派发速率 — 不取租户准入锁。
+ *   <li>{@code concurrencyLimiter.check} — 取租户准入锁后确认租户/队列级并发未超限。
+ *   <li>{@code partitionThrottle.check} — 仍在同一事务锁内确认分区吞吐未触顶。
  *   <li>{@code enrichFairnessScore} — 公平分数（供 {@code WaitingPartitionDispatchScheduler} 排序用）。
  * </ol>
  *
@@ -131,16 +131,7 @@ public class DefaultResourceScheduler implements ResourceScheduler {
     if (!windowCheck.allowed()) {
       return blockedDecision(request, queue, priority, priorityBand, windowCheck);
     }
-    if (!preview) {
-      ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
-      if (!concurrencyCheck.allowed()) {
-        return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
-      }
-      ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
-      if (!partitionCheck.allowed()) {
-        return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
-      }
-    }
+    // worker、下游和派发速率都不改变活跃计数。放在租户准入锁之前，避免选路和外部检查占着事务锁。
     WorkerRouteModel route = workerSelector.select(request, queue, priority);
     if (route == null || !Boolean.TRUE.equals(route.getAvailable())) {
       return blockedDecision(
@@ -159,6 +150,14 @@ public class DefaultResourceScheduler implements ResourceScheduler {
       ResourceCheck dispatchRateCheck = dispatchAdmissionLimiter.check(request, queue);
       if (!dispatchRateCheck.allowed()) {
         return blockedDecision(request, queue, priority, priorityBand, dispatchRateCheck);
+      }
+      ResourceCheck concurrencyCheck = concurrencyLimiter.check(request, queue);
+      if (!concurrencyCheck.allowed()) {
+        return blockedDecision(request, queue, priority, priorityBand, concurrencyCheck);
+      }
+      ResourceCheck partitionCheck = partitionThrottle.check(request, queue);
+      if (!partitionCheck.allowed()) {
+        return blockedDecision(request, queue, priority, priorityBand, partitionCheck);
       }
     }
     ResourceSchedulingDecision decision = new ResourceSchedulingDecision();

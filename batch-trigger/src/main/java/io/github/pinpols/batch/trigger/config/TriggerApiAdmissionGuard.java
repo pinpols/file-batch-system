@@ -2,10 +2,14 @@ package io.github.pinpols.batch.trigger.config;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.util.ArrayDeque;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -16,19 +20,22 @@ import org.springframework.stereotype.Component;
  * <p>Trigger 的异步写入仍必须先落库再返回；当应用线程在等待数据库连接或事务时，继续接收请求只会把
  * 排队压力转移到 Servlet 线程和连接池。该闸门在进入 launch 事务前快速拒绝超出本实例预算的请求，
  * 不参与 Quartz、outbox relay 或内部 scheduled launch，跨实例总量仍由租户 quota 负责。
+ *
+ * <p>排队按到达顺序发放许可。已有等待者时，新请求进入队尾，不能在许可释放时插到先到请求前面。
+ * 并发上限、队列容量、等待超时和可选的 AIMD 收缩仍按配置生效。
  */
 @Component
 public class TriggerApiAdmissionGuard {
 
   private final TriggerRuntimeProperties properties;
-  private final Object admissionLock = new Object();
+  private final ReentrantLock admissionLock = new ReentrantLock(true);
+  private final ArrayDeque<AdmissionWaiter> waitQueue = new ArrayDeque<>();
   private final Counter rejectedCounter;
   private final Counter queueFullRejectedCounter;
   private final Counter queueTimeoutRejectedCounter;
   private final Counter interruptedRejectedCounter;
   private int activeRequests;
   private int adaptiveLimit;
-  private int queuedRequests;
 
   @Autowired
   public TriggerApiAdmissionGuard(
@@ -89,44 +96,76 @@ public class TriggerApiAdmissionGuard {
   }
 
   private void acquire() {
-    synchronized (admissionLock) {
-      int limit = effectiveLimit();
-      if (activeRequests < limit) {
-        activeRequests++;
+    admissionLock.lock();
+    try {
+      if (takePermitWhenIdle()) {
         return;
       }
-      if (queuedRequests >= properties.getApiLaunchQueueCapacity()) {
+      if (waitQueue.size() >= properties.getApiLaunchQueueCapacity()) {
         reject(RejectionReason.QUEUE_FULL);
       }
-      queuedRequests++;
-      try {
-        long remainingNanos =
-            TimeUnit.MILLISECONDS.toNanos(properties.getApiLaunchQueueWaitMillis());
-        while (activeRequests >= effectiveLimit()) {
-          if (remainingNanos <= 0L) {
-            reject(RejectionReason.QUEUE_TIMEOUT);
-          }
-          long startedNanos = System.nanoTime();
-          try {
-            TimeUnit.NANOSECONDS.timedWait(admissionLock, remainingNanos);
-          } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
+      waitForPermit();
+    } finally {
+      admissionLock.unlock();
+    }
+  }
+
+  /**
+   * 只有队列为空时才能直接占用许可。否则后到的请求会在先到请求被唤醒前抢走刚释放的名额。
+   */
+  private boolean takePermitWhenIdle() {
+    if (activeRequests < effectiveLimit() && EmptyChecks.isEmpty(waitQueue)) {
+      activeRequests++;
+      return true;
+    }
+    return false;
+  }
+
+  private void waitForPermit() {
+    AdmissionWaiter waiter = new AdmissionWaiter(admissionLock.newCondition());
+    waitQueue.addLast(waiter);
+    long remainingNanos = TimeUnit.MILLISECONDS.toNanos(properties.getApiLaunchQueueWaitMillis());
+    try {
+      while (!waiter.granted) {
+        if (remainingNanos <= 0L) {
+          reject(RejectionReason.QUEUE_TIMEOUT);
+        }
+        long startedNanos = System.nanoTime();
+        try {
+          waiter.condition.awaitNanos(remainingNanos);
+        } catch (InterruptedException exception) {
+          Thread.currentThread().interrupt();
+          if (!waiter.granted) {
             reject(RejectionReason.INTERRUPTED);
           }
-          remainingNanos -= System.nanoTime() - startedNanos;
         }
-        activeRequests++;
-      } finally {
-        queuedRequests--;
+        remainingNanos -= System.nanoTime() - startedNanos;
+      }
+    } finally {
+      if (!waiter.granted) {
+        waitQueue.remove(waiter);
       }
     }
   }
 
   private void release(long elapsedNanos) {
-    synchronized (admissionLock) {
+    admissionLock.lock();
+    try {
       activeRequests--;
       adjustAdaptiveLimit(elapsedNanos);
-      admissionLock.notifyAll();
+      grantQueuedPermits();
+    } finally {
+      admissionLock.unlock();
+    }
+  }
+
+  /** 按入队顺序把当前空闲许可发给队头，直到并发上限或队列耗尽。 */
+  private void grantQueuedPermits() {
+    while (activeRequests < effectiveLimit() && EmptyChecks.isNotEmpty(waitQueue)) {
+      AdmissionWaiter waiter = waitQueue.removeFirst();
+      waiter.granted = true;
+      activeRequests++;
+      waiter.condition.signal();
     }
   }
 
@@ -182,32 +221,47 @@ public class TriggerApiAdmissionGuard {
   }
 
   int effectiveConcurrencyForTest() {
-    synchronized (admissionLock) {
+    admissionLock.lock();
+    try {
       return effectiveLimit();
+    } finally {
+      admissionLock.unlock();
     }
   }
 
   int queuedForTest() {
-    synchronized (admissionLock) {
-      return queuedRequests;
+    admissionLock.lock();
+    try {
+      return waitQueue.size();
+    } finally {
+      admissionLock.unlock();
     }
   }
 
   private int active() {
-    synchronized (admissionLock) {
+    admissionLock.lock();
+    try {
       return activeRequests;
+    } finally {
+      admissionLock.unlock();
     }
   }
 
   private int queued() {
-    synchronized (admissionLock) {
-      return queuedRequests;
+    admissionLock.lock();
+    try {
+      return waitQueue.size();
+    } finally {
+      admissionLock.unlock();
     }
   }
 
   private int effectiveConcurrencyForMetrics() {
-    synchronized (admissionLock) {
+    admissionLock.lock();
+    try {
       return effectiveLimit();
+    } finally {
+      admissionLock.unlock();
     }
   }
 
@@ -215,5 +269,14 @@ public class TriggerApiAdmissionGuard {
     QUEUE_FULL,
     QUEUE_TIMEOUT,
     INTERRUPTED
+  }
+
+  private static final class AdmissionWaiter {
+    private final Condition condition;
+    private boolean granted;
+
+    private AdmissionWaiter(Condition condition) {
+      this.condition = condition;
+    }
   }
 }

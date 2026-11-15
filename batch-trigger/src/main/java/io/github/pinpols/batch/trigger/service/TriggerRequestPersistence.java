@@ -70,13 +70,14 @@ final class TriggerRequestPersistence {
           launchRequest.externalEventSource(),
           launchRequest.externalEventId());
     }
+    // 幂等读取只依赖前面的幂等栅栏，不依赖批次日结算栅栏。先读再取结算锁，避免全表扫描占着同日栅栏。
+    TriggerRequestEntity existing =
+        triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
     triggerRequestMapper.acquireBatchDaySettlementFence(
         launchRequest.tenantId(),
         launchRequest.workflowDefinitionId(),
         launchRequest.jobCode(),
         launchRequest.bizDate());
-    TriggerRequestEntity existing =
-        triggerRequestMapper.selectByTenantAndDedupKey(launchRequest.tenantId(), dedupKey);
     if (EmptyChecks.isNotNull(existing)) {
       TriggerCatchUpIdentity.requireMatchingIfCatchUp(existing, launchRequest);
       assertSameExternalEvent(existing, launchRequest);
