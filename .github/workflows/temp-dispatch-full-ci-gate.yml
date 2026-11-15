@@ -22,6 +22,7 @@ jobs:
         run: |
           for ref in \
             cursor/fair-trigger-admission-8612 \
+            cursor/reclaim-unclaimed-ready-8612 \
             cursor/launch-wait-batch-resume-8612
           do
             gh api --method POST \
