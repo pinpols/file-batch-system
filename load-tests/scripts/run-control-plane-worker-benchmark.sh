@@ -364,7 +364,8 @@ pg_pressure_sampler() {
   local error_file="$2"
   local sample_header
   sample_header="sampled_at|database_size_bytes|active_connections|active_waiting_connections"
-  sample_header+="|lock_waiters|xact_commit|xact_rollback|wal_bytes|wal_records|wal_fpi"
+  sample_header+="|lock_waiters|advisory_lock_waiters|advisory_lock_max_wait_seconds"
+  sample_header+="|xact_commit|xact_rollback|wal_bytes|wal_records|wal_fpi"
   sample_header+="|wal_buffers_full|wal_write|wal_sync|checkpoints_timed|checkpoints_requested"
   sample_header+="|checkpoint_buffers_written|host_load_1m"
   : > "$output_file"

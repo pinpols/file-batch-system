@@ -207,7 +207,7 @@ Dispatch 压测会按虚拟用户数创建独立文件记录，并为每档压�
 控制面混合压测会根据各模块速率和持续时间计算期望 launch 数，根据 Dispatch 请求数预建唯一文件记录，并自包含准备只读 Atomic SQL 作业。每个 trigger request 都必须关联实例，且所有实例最终为 `SUCCESS`；仅有部分实例进入终态不再视为通过。
 写入 p95 门槛分别针对本次实际启用且速率大于零的各模块 launch 请求计算，读请求不会稀释写入延迟；全局错误率仍覆盖画像中的全部请求。该门槛只衡量 Trigger 的 launch 接口，不代表 claim、report 或端到端完成延迟。用本机模拟服务运行 [test-control-mixed-slo.py](scripts/test-control-mixed-slo.py)，可复核慢写被快读掩盖的反例和单模块放行；不访问真实服务。
 启用 Trigger 压测时，报告记录调度积压采样状态；采样进程失败会保留本轮数据并使画像退出非零。混合画像仍尝试收集已发起请求的终态，若 Gatling 同时失败则保留其退出码。采样文件即使已生成，也需结合状态判断是否完整。
-PostgreSQL 压力采样的每次查询失败会记入本轮 `pg-pressure-sample-errors.log`，报告标明完整、缺失、无样本或进程提前退出；不完整时保留本轮数据并返回非零。采样完整仅表示查询没有报告缺失且至少有一个样本，不代表采样频率足以支持性能结论。
+压力采样同时记录 `advisory_lock_waiters` 与 `advisory_lock_max_wait_seconds`（`wait_event='advisory'`），用于观察租户准入/结算栅栏的事务级 advisory 锁等待；该锁在 `#1405` 后只覆盖计数与提交，不做无锁化。PostgreSQL 压力采样的每次查询失败会记入本轮 `pg-pressure-sample-errors.log`，报告标明完整、缺失、无样本或进程提前退出；不完整时保留本轮数据并返回非零。采样完整仅表示查询没有报告缺失且至少有一个样本，不代表采样频率足以支持性能结论。
 Process 故障画像重启本地 Worker 时会通过公共环境转换函数使用宿主机 PostgreSQL/Redis 地址，避免把 Compose 服务名传给本地 JVM。
 
 结算导出夹具通过 `query_param_schema.csvColumns` 指定九个业务输出列，`id` 仅用作分页游标。可运行 `python3 -m unittest scripts.ci.tests.test_export_load_fixture` 核对配置；真实导出还需对账文件内容与业务源数据。
