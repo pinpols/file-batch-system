@@ -75,6 +75,9 @@ public class TaskControllerApplicationService {
           ResultCode.NOT_FOUND, "error.task.claim_not_available", String.valueOf(taskId));
     }
     if (!isClaimedBy(task, request.workerId())) {
+      if (isStillUnclaimedReady(task)) {
+        throw BizException.of(ResultCode.SERVICE_UNAVAILABLE, "error.task.claim_not_ready");
+      }
       throw BizException.of(ResultCode.CONFLICT, "error.task.already_claimed");
     }
     // P1-2.1:认领成功后返回 effective config 快照,worker 优先用本对象的字段。
@@ -327,6 +330,12 @@ public class TaskControllerApplicationService {
         && TaskStatus.RUNNING.code().equals(task.getTaskStatus())
         && EmptyChecks.isNotNull(workerId)
         && workerId.equals(task.getAssignedWorkerCode());
+  }
+
+  /** 仍是无人认领的 READY。此时 409 会让 worker 提交 offset，消息丢失后没有第二次投递。 */
+  private static boolean isStillUnclaimedReady(JobTaskEntity task) {
+    return TaskStatus.READY.code().equals(task.getTaskStatus())
+        && EmptyChecks.isNull(task.getAssignedWorkerCode());
   }
 
   private void enforceRateLimit(String tenantId, RateLimitAction action) {

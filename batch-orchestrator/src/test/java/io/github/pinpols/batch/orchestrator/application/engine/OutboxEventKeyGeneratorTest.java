@@ -34,6 +34,10 @@ class OutboxEventKeyGeneratorTest {
     assertThat(OutboxEventKeyGenerator.forRetry("t1", 100L, 3)).isEqualTo("t1:retry:100:3");
     assertThat(OutboxEventKeyGenerator.forReclaim("t1", 100L, "worker-x"))
         .isEqualTo("t1:reclaim:100:worker-x");
+    assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
+        .isEqualTo("t1:unclaimed-redispatch:100:v4");
+    assertThat(OutboxEventKeyGenerator.forUnclaimedRedispatch("t1", 100L, 4L))
+        .isNotEqualTo(OutboxEventKeyGenerator.forDispatch("t1", 100L));
     assertThat(OutboxEventKeyGenerator.forCompensation("t1", "cmp-001", 100L))
         .isEqualTo("t1:cmp:cmp-001:100");
     assertThat(OutboxEventKeyGenerator.forWorkflowNodeDispatch("t1", 50L, "JOB_A", 100L))

@@ -2462,6 +2462,7 @@
             "batch-orchestrator/src/main/resources/mapper/AdminTestDataCleanupMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/EventDeliveryLogMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/EventOutboxRetryMapper.xml",
+            "batch-orchestrator/src/main/resources/mapper/JobTaskMapper.xml",
             "batch-orchestrator/src/main/resources/mapper/OutboxEventMapper.xml"
           ]
         },

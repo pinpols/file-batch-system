@@ -206,4 +206,16 @@ public interface JobTaskMapper {
       @Param("tenantId") String tenantId,
       @Param("jobInstanceId") Long jobInstanceId,
       @Param("targetTaskStatus") String targetTaskStatus);
+
+  /**
+   * 已发布、仍为 READY、没有 worker 和租约，且超过宽限的任务。全局扫描，调用方再按租户写入。
+   */
+  List<JobTaskEntity> selectUnclaimedPublishedReady(
+      @Param("olderThan") java.time.Instant olderThan, @Param("limit") int limit);
+
+  /** 只推进版本，不改变 READY 状态和空的 assignee。0 行表示认领已经胜出或任务已离开该窗口。 */
+  int bumpVersionIfUnclaimedReady(
+      @Param("tenantId") String tenantId,
+      @Param("id") Long id,
+      @Param("expectedVersion") Long expectedVersion);
 }
