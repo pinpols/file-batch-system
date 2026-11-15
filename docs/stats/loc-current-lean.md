@@ -1,12 +1,12 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `1ae2e4d2e` + 当前工作区改动。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `43e0578d1` + 当前工作区改动。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,377 | 833,329 | 435,528 | 52.3% |
+| 6,377 | 833,333 | 435,529 | 52.3% |
 
 ## 按用途
 
@@ -14,10 +14,10 @@
 |---|---:|---:|---:|---:|
 | test | 1,940 | 416,030 | 223,945 | 53.8% |
 | prod | 3,519 | 329,202 | 156,916 | 47.7% |
-| script | 740 | 69,157 | 42,263 | 61.1% |
+| script | 740 | 69,158 | 42,264 | 61.1% |
 | config | 68 | 10,286 | 7,687 | 74.7% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
-| sql | 76 | 2,494 | 238 | 9.5% |
+| sql | 76 | 2,497 | 238 | 9.5% |
 
 ## 按语言
 
@@ -25,13 +25,13 @@
 |---|---:|---:|---:|---:|
 | Java | 4,807 | 647,122 | 341,861 | 52.8% |
 | Python | 351 | 53,254 | 29,221 | 54.9% |
-| Shell | 218 | 36,094 | 28,564 | 79.1% |
+| Shell | 218 | 36,095 | 28,565 | 79.1% |
 | YAML | 109 | 15,017 | 11,612 | 77.3% |
 | XML | 225 | 31,728 | 9,455 | 29.8% |
 | TypeScript | 42 | 8,679 | 4,596 | 53.0% |
 | Rust | 24 | 9,854 | 3,529 | 35.8% |
 | Properties | 5 | 3,189 | 2,649 | 83.1% |
-| SQL | 551 | 19,675 | 2,205 | 11.2% |
+| SQL | 551 | 19,678 | 2,205 | 11.2% |
 | Go | 37 | 8,364 | 1,604 | 19.2% |
 | TOML | 8 | 353 | 232 | 65.7% |
 
@@ -57,7 +57,7 @@
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DispatchPipelineE2eIT.java` | test | Java | 2,065 | 988 |
 | `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,531 | 954 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigBatchInitStrictAtomicityIntegrationTest.java` | test | Java | 1,570 | 951 |
-| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 1,030 | 939 |
+| `load-tests/scripts/run-control-plane-worker-benchmark.sh` | script | Shell | 1,031 | 940 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/TenantConfigDependencyRlsIntegrationTest.java` | test | Java | 1,854 | 929 |
 
 ## 复跑
