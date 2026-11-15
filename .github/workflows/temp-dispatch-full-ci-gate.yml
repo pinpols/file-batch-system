@@ -19,5 +19,7 @@ jobs:
       - name: Rerun Maven 429 jobs on the launch-wait pull request
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: pinpols/file-batch-system
         run: |
           gh run rerun 43694199335 --failed
+          gh run rerun 43694279747 --failed
