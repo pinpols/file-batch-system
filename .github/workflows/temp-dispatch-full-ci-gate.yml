@@ -16,10 +16,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch full-ci-gate for the fair admission branch
+      - name: Dispatch full-ci-gate for reclaim and launch-wait
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api --method POST \
             repos/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/dispatches \
-            -f ref='cursor/fair-trigger-admission-8612'
+            -f ref='cursor/reclaim-unclaimed-ready-8612'
+          gh api --method POST \
+            repos/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/dispatches \
+            -f ref='cursor/launch-wait-batch-resume-8612'
