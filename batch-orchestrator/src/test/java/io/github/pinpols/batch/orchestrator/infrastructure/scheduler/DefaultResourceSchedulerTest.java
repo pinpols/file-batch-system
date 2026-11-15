@@ -3,6 +3,7 @@ package io.github.pinpols.batch.orchestrator.infrastructure.scheduler;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -38,9 +40,9 @@ import org.mockito.junit.jupiter.MockitoExtension;
  * 守护 ResourceScheduler 的 short-circuit pipeline:
  *
  * <ul>
- *   <li>concurrency block → 返 dispatchable=false,后续 partition/worker check 不再调
- *   <li>partition block → 同样 short-circuit
- *   <li>worker 不可用 → blocked,reasonCode=NO_AVAILABLE_WORKER
+ *   <li>worker 不可用 → blocked,reasonCode=NO_AVAILABLE_WORKER，且不取并发锁
+ *   <li>concurrency block → 返 dispatchable=false,不再做 partition check
+ *   <li>partition block → dispatchable=false；选路已经完成，因为它发生在租户锁之前
  *   <li>全通过 → dispatchable=true + 决策字段齐全
  *   <li>limiter reasonCode 含 _DEGRADED → 优先级降为最低 LOW
  * </ul>
@@ -114,6 +116,20 @@ class DefaultResourceSchedulerTest {
     when(priorityScheduler.resolvePriorityBand(any())).thenReturn("MEDIUM");
   }
 
+  private void preparePassingAdmission() {
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
+    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
+  }
+
+  private static WorkerRouteModel availableRoute() {
+    WorkerRouteModel route = new WorkerRouteModel();
+    route.setAvailable(true);
+    route.setWorkerCode("w-1");
+    return route;
+  }
+
   private ResourceSchedulingRequest req() {
     ResourceSchedulingRequest r = new ResourceSchedulingRequest();
     r.setTenantId("ta");
@@ -124,8 +140,33 @@ class DefaultResourceSchedulerTest {
   }
 
   @Test
-  @DisplayName("concurrency block → dispatchable=false, short-circuit (不再调 partition/worker)")
+  @DisplayName("选路和下游检查完成前不调用会取得租户准入锁的并发检查")
+  void shouldSelectWorkerBeforeTakingTenantAdmissionLock() {
+    preparePassingAdmission();
+    WorkerRouteModel route = availableRoute();
+    when(workerSelector.select(any(), any(), any())).thenReturn(route);
+
+    assertThat(scheduler.schedule(req()).isDispatchable()).isTrue();
+
+    InOrder order = inOrder(
+        workerSelector,
+        downstreamAdmissionGuard,
+        dispatchAdmissionLimiter,
+        concurrencyLimiter,
+        partitionThrottle);
+    order.verify(workerSelector).select(any(), any(), any());
+    order.verify(downstreamAdmissionGuard).check(any());
+    order.verify(dispatchAdmissionLimiter).check(any(), any());
+    order.verify(concurrencyLimiter).check(any(), any());
+    order.verify(partitionThrottle).check(any(), any());
+  }
+
+  @Test
+  @DisplayName("concurrency block → dispatchable=false, 不再做 partition check")
   void shouldDeferAndSkipLaterChecks_whenConcurrencyLimited() {
+    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT", "max running reached"));
 
@@ -134,12 +175,14 @@ class DefaultResourceSchedulerTest {
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("CONCURRENCY_LIMIT");
     verify(partitionThrottle, never()).check(any(), any());
-    verify(workerSelector, never()).select(any(), any(), any());
   }
 
   @Test
-  @DisplayName("partition block → dispatchable=false, short-circuit (不再调 worker)")
-  void shouldDeferAndSkipWorkerSelection_whenPartitionThrottled() {
+  @DisplayName("partition block → dispatchable=false；选路已在取锁前完成")
+  void shouldDeferAfterWorkerSelection_whenPartitionThrottled() {
+    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(partitionThrottle.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("PARTITION_THROTTLE", "throttled"));
@@ -148,27 +191,24 @@ class DefaultResourceSchedulerTest {
     assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("PARTITION_THROTTLE");
-    verify(workerSelector, never()).select(any(), any(), any());
+    verify(workerSelector).select(any(), any(), any());
   }
 
   @Test
-  @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER")
+  @DisplayName("worker 不可用 → blocked + reasonCode=NO_AVAILABLE_WORKER，且不取租户准入锁")
   void shouldDefer_whenNoWorkerRouteAvailable() {
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(workerSelector.select(any(), any(), any())).thenReturn(null);
 
     ResourceSchedulingDecision d = scheduler.schedule(req());
     assertThat(d.getAdmissionAction()).isEqualTo(ResourceAdmissionAction.DEFER);
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
+    verify(concurrencyLimiter, never()).check(any(), any());
   }
 
   @Test
   @DisplayName("worker.available=false → 同样 blocked")
   void shouldDefer_whenWorkerRouteMarkedUnavailable() {
-    when(concurrencyLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
-    when(partitionThrottle.check(any(), any())).thenReturn(ResourceCheck.allow());
     WorkerRouteModel route = new WorkerRouteModel();
     route.setAvailable(false);
     when(workerSelector.select(any(), any(), any())).thenReturn(route);
@@ -176,6 +216,7 @@ class DefaultResourceSchedulerTest {
     ResourceSchedulingDecision d = scheduler.schedule(req());
     assertThat(d.isDispatchable()).isFalse();
     assertThat(d.getReasonCode()).isEqualTo("NO_AVAILABLE_WORKER");
+    verify(concurrencyLimiter, never()).check(any(), any());
   }
 
   @Test
@@ -212,6 +253,9 @@ class DefaultResourceSchedulerTest {
   @Test
   @DisplayName("blocker reasonCode 含 _DEGRADED 后缀 → 决策 priority 降到 1 / band=LOW (fairness 沉到队尾)")
   void shouldLowerPriorityToMinimum_whenBlockerDegraded() {
+    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.waitForCapacity("CONCURRENCY_LIMIT_DEGRADED", "degraded"));
 
@@ -321,6 +365,9 @@ class DefaultResourceSchedulerTest {
   @Test
   @DisplayName("阻塞项属于快速失败类型时候准入动作直接拒绝,且不再进入后续资源检查")
   void shouldRejectAdmission_whenBlockerIsFailFast() {
+    when(workerSelector.select(any(), any(), any())).thenReturn(availableRoute());
+    when(downstreamAdmissionGuard.check(any())).thenReturn(ResourceCheck.allow());
+    when(dispatchAdmissionLimiter.check(any(), any())).thenReturn(ResourceCheck.allow());
     when(concurrencyLimiter.check(any(), any()))
         .thenReturn(ResourceCheck.reject("TENANT_JOB_LIMIT", "tenant quota exceeded"));
 

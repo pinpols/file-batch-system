@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -57,6 +58,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -290,6 +292,40 @@ class DefaultTriggerServiceTest {
     verify(triggerRequestMapper, never()).insert(any());
     verify(triggerOutboxPublisher, never())
         .publishLaunch(anyString(), anyString(), anyString(), any(LaunchEnvelope.class));
+    InOrder duplicateOrder = inOrder(triggerRequestMapper);
+    duplicateOrder.verify(triggerRequestMapper).selectByTenantAndDedupKey("t1", "idem-001");
+    duplicateOrder
+        .verify(triggerRequestMapper)
+        .acquireBatchDaySettlementFence(
+            "t1", null, "IMPORT_JOB", LocalDate.of(2026, Month.MARCH, 27));
+  }
+
+  @Test
+  @DisplayName("新请求先按幂等键读取，再取得批次日结算栅栏")
+  void shouldReadDedupKeyBeforeAcquiringBatchDaySettlementFence() {
+    TriggerLaunchCommand command = new TriggerLaunchCommand(
+        TriggerCommandInputMapper.toInput(validRequest()),
+        "idem-order",
+        "req-order",
+        "trace-order");
+    LaunchRequest launchRequest = LaunchRequest.builder()
+        .tenantId("t1")
+        .workflowDefinitionId(71L)
+        .bizDate(LocalDate.of(2026, Month.MARCH, 27))
+        .triggerType(TriggerType.API)
+        .requestId("req-order")
+        .traceId("trace-order")
+        .build();
+    when(launchAdapterService.fromApiRequest(command)).thenReturn(launchRequest);
+    when(triggerRequestMapper.insert(any())).thenReturn(1);
+
+    service.launch(command);
+
+    InOrder order = inOrder(triggerRequestMapper);
+    order.verify(triggerRequestMapper).selectByTenantAndDedupKey("t1", "idem-order");
+    order
+        .verify(triggerRequestMapper)
+        .acquireBatchDaySettlementFence("t1", 71L, null, LocalDate.of(2026, Month.MARCH, 27));
   }
 
   @Test
