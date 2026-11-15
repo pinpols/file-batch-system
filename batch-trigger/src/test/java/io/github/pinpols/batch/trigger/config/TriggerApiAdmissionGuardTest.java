@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -90,6 +91,66 @@ class TriggerApiAdmissionGuardTest {
   }
 
   @Test
+  @DisplayName("排队中的请求按到达顺序获得许可，后到的请求不能插到先到请求前面")
+  void shouldGrantQueuedRequestsInArrivalOrder() throws Exception {
+    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+    properties.setApiLaunchMaxConcurrency(1);
+    properties.setApiLaunchQueueCapacity(4);
+    properties.setApiLaunchQueueWaitMillis(5_000);
+    TriggerApiAdmissionGuard guard = new TriggerApiAdmissionGuard(properties);
+    CountDownLatch holderEntered = new CountDownLatch(1);
+    CountDownLatch releaseHolder = new CountDownLatch(1);
+    AtomicInteger turn = new AtomicInteger();
+    int[] entryOrder = new int[4];
+    CountDownLatch[] entered = latches(4);
+    CountDownLatch[] release = latches(4);
+    Thread holder = new Thread(() -> guard.execute(() -> {
+      holderEntered.countDown();
+      await(releaseHolder);
+      return null;
+    }));
+    Thread[] waiters = new Thread[4];
+    for (int index = 0; index < waiters.length; index++) {
+      int waiterIndex = index;
+      waiters[index] = new Thread(() -> guard.execute(() -> {
+        entryOrder[waiterIndex] = turn.incrementAndGet();
+        entered[waiterIndex].countDown();
+        await(release[waiterIndex]);
+        return null;
+      }));
+    }
+
+    holder.start();
+    try {
+      if (!holderEntered.await(2, TimeUnit.SECONDS)) {
+        throw new AssertionError("admission holder did not enter");
+      }
+      for (int index = 0; index < waiters.length; index++) {
+        waiters[index].start();
+        awaitQueued(guard, index + 1);
+      }
+      releaseHolder.countDown();
+      for (int index = 0; index < waiters.length; index++) {
+        if (!entered[index].await(2, TimeUnit.SECONDS)) {
+          throw new AssertionError("queued request " + index + " did not enter in order");
+        }
+        assertThat(guard.queuedForTest()).isEqualTo(waiters.length - index - 1);
+        assertThat(entryOrder[index]).isEqualTo(index + 1);
+        release[index].countDown();
+      }
+    } finally {
+      releaseHolder.countDown();
+      for (CountDownLatch waiterRelease : release) {
+        waiterRelease.countDown();
+      }
+      holder.join(2_000);
+      for (Thread waiter : waiters) {
+        waiter.join(2_000);
+      }
+    }
+  }
+
+  @Test
   @DisplayName("自适应开启时慢请求把许可从 8 减半到 4,紧接的快请求再回升到 5")
   void shouldShrinkAdaptiveBudgetAfterSlowRequestAndRecoverAfterFastRequest() {
     TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
@@ -130,12 +191,25 @@ class TriggerApiAdmissionGuardTest {
   }
 
   private static void awaitQueued(TriggerApiAdmissionGuard guard) throws InterruptedException {
-    for (int attempt = 0; attempt < 20; attempt++) {
-      if (guard.queuedForTest() == 1) {
+    awaitQueued(guard, 1);
+  }
+
+  private static void awaitQueued(TriggerApiAdmissionGuard guard, int queued)
+      throws InterruptedException {
+    for (int attempt = 0; attempt < 50; attempt++) {
+      if (guard.queuedForTest() == queued) {
         return;
       }
       Thread.sleep(10);
     }
-    throw new AssertionError("admission request did not enter the bounded queue");
+    throw new AssertionError("admission queue did not reach " + queued);
+  }
+
+  private static CountDownLatch[] latches(int count) {
+    CountDownLatch[] latches = new CountDownLatch[count];
+    for (int index = 0; index < count; index++) {
+      latches[index] = new CountDownLatch(1);
+    }
+    return latches;
   }
 }
