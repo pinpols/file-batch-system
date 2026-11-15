@@ -54,6 +54,9 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
   void resetQueue() {
     relay.stop();
     tenant = "cache-" + UUID.randomUUID().toString().substring(0, 8);
+    // lockNext 按到期时间全局领取。共享库里其他用例留下的意图会排在本次行前面，
+    // 或在本次行被并发领走后成为下一条。领取栅栏用例开始前先清掉不属于本租户的行。
+    deleteOtherTenantOutboxRows();
   }
 
   @AfterEach
@@ -118,6 +121,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
     String newToken = UUID.randomUUID().toString();
     TransactionTemplate transaction = new TransactionTemplate(manager);
     ConfigCacheInvalidationIntent first = transaction.execute(status -> {
+      deleteOtherTenantOutboxRows();
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
       assertThat(intent.tenantId()).isEqualTo(tenant);
@@ -131,7 +135,10 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
         """;
     jdbc.update(expireClaimSql, first.id());
     ConfigCacheInvalidationIntent second = transaction.execute(status -> {
+      deleteOtherTenantOutboxRows();
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
+      assertThat(intent).isNotNull();
+      assertThat(intent.tenantId()).isEqualTo(tenant);
       assertThat(intent.id()).isEqualTo(first.id());
       assertThat(outbox.claim(intent.id(), intent.tenantId(), newToken)).isOne();
       return intent;
@@ -204,6 +211,7 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
     createdPolicy = policy;
     String token = UUID.randomUUID().toString();
     transaction.executeWithoutResult(status -> {
+      deleteOtherTenantOutboxRows();
       jdbc.execute(setRoleSql);
       ConfigCacheInvalidationIntent intent = outbox.lockNext();
       assertThat(intent).isNotNull();
@@ -212,6 +220,13 @@ class ConfigCacheInvalidationOutboxIntegrationTest extends AbstractIntegrationTe
       assertThat(outbox.acknowledge(intent.id(), intent.tenantId(), token)).isOne();
     });
     assertThat(count(tenant)).isZero();
+  }
+
+  private void deleteOtherTenantOutboxRows() {
+    String deleteOtherTenantOutboxSql = """
+        delete from batch.config_cache_invalidation_outbox where tenant_id <> ?
+        """;
+    jdbc.update(deleteOtherTenantOutboxSql, tenant);
   }
 
   private int count(String tenant) {
