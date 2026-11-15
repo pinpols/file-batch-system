@@ -16,10 +16,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Rerun Maven 429 jobs on the launch-wait pull request
+      - name: Dispatch full-ci-gate for launch-wait after READY merged
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: pinpols/file-batch-system
         run: |
-          gh run rerun 43694199335 --failed
-          gh run rerun 43694279747 --failed
+          gh api --method POST \
+            repos/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/dispatches \
+            -f ref='cursor/launch-wait-batch-resume-8612'
