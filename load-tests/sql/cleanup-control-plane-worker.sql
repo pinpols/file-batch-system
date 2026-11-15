@@ -279,6 +279,50 @@ WHERE event.payload #>> '{launchRequest,params,metadata,runId}' = :'run_id'
          AND request.launch_payload #>> '{params,metadata,runId}' = :'run_id'
    );
 
+-- 等待/别名记录以 (tenant_id, request_id) 引用 trigger_request。它们不是本轮业务结果，
+-- 但会阻止 trigger_request 删除；必须按本轮请求精确回收，不能按时间或租户范围清理。
+DELETE FROM batch.workflow_launch_wait wait
+USING batch.trigger_request request
+WHERE wait.tenant_id = request.tenant_id
+  AND wait.request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.batch_day_waiting_launch wait
+USING batch.trigger_request request
+WHERE wait.tenant_id = request.tenant_id
+  AND wait.request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.job_dependency_waiting_launch wait
+USING batch.trigger_request request
+WHERE wait.tenant_id = request.tenant_id
+  AND wait.request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.trigger_request_idempotency_alias alias
+USING batch.trigger_request request
+WHERE alias.tenant_id = request.tenant_id
+  AND alias.request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.expected_work_occurrence occurrence
+USING batch.trigger_request request
+WHERE occurrence.tenant_id = request.tenant_id
+  AND occurrence.trigger_request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.trigger_misfire_pending pending
+USING batch.trigger_request request
+WHERE pending.tenant_id = request.tenant_id
+  AND pending.catch_up_request_id = request.id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
+DELETE FROM batch.scheduled_occurrence_catch_up_audit audit
+USING batch.trigger_request request
+WHERE audit.tenant_id = request.tenant_id
+  AND audit.request_id = request.request_id
+  AND request.id IN (SELECT id FROM p2_cleanup_trigger_request_ids);
+
 DELETE FROM batch.trigger_request
 WHERE launch_payload #>> '{params,metadata,runId}' = :'run_id';
 
