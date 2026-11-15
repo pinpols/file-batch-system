@@ -338,10 +338,17 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
   """;
 
     Instant now = Instant.now();
+    // 整点 cron 的下一次触发可能落在下面的 20s 等待里。Quartz 会把它当成一次正常
+    // SCHEDULED 执行，request/outbox 就会比已持久化的 misfire 多 1（CI 上期望 4 实际 5）。
+    // 把分钟拨到至少 4 分钟之后，统计窗口里就只有这些已经错过的 fire。
+    int safeMinute = (now.atZone(ZoneOffset.UTC).getMinute() + 5) % 60;
+    String cron = "0 " + safeMinute + " * * * ?";
     Date triggerStart = Date.from(now.minus(Duration.ofHours(3)).truncatedTo(ChronoUnit.HOURS));
+    JobDataMap jobData = workflowJobData();
+    jobData.put(QuartzLaunchJob.SCHEDULE_EXPRESSION, cron);
     JobDetail job = JobBuilder.newJob(QuartzLaunchJob.class)
         .withIdentity(jobKey)
-        .usingJobData(workflowJobData())
+        .usingJobData(jobData)
         .storeDurably()
         .build();
     CronTrigger trigger = TriggerBuilder.newTrigger()
@@ -349,7 +356,7 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         .forJob(job)
         .usingJobData(misfireIdentityData())
         .startAt(triggerStart)
-        .withSchedule(CronScheduleBuilder.cronSchedule("0 0 * * * ?")
+        .withSchedule(CronScheduleBuilder.cronSchedule(cron)
             .inTimeZone(TimeZone.getTimeZone("UTC"))
             .withMisfireHandlingInstructionDoNothing())
         .build();
@@ -369,13 +376,22 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
       fire = trigger.getFireTimeAfter(fire);
     }
     assertThat(missedFires).hasSizeGreaterThanOrEqualTo(3);
+    String alignScheduleSql = """
+        update batch.workflow_definition set schedule_expr = ? where tenant_id = ? and id = ?
+        """;
+    jdbcTemplate.update(alignScheduleSql, cron, tenantId, workflowDefinitionId);
     scheduler.scheduleJob(job, trigger);
     scheduler.start();
     await()
         .atMost(Duration.ofSeconds(20))
         .untilAsserted(
             () -> assertThat(occurrenceStatus(missedFires.getFirst())).isEqualTo("REQUESTED"));
-    assertThat(scheduler.getTrigger(trigger.getKey()).getNextFireTime()).isAfter(Date.from(now));
+    Date nextFire = scheduler.getTrigger(trigger.getKey()).getNextFireTime();
+    assertThat(nextFire)
+        .as("Quartz DO_NOTHING must leave the next fire after the missed window")
+        .isAfter(Date.from(now));
+    // 暂停主 cron，避免等待恢复完成时又吃进下一次正常触发。恢复 trigger 在另一个组里，不受影响。
+    scheduler.pauseTrigger(trigger.getKey());
 
     // 不同于 Worker REPORT，此处不得再次改写
     // JobInstance；只复用标准 DAG 失败传播和 Workflow 收尾逻辑。
@@ -405,17 +421,10 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
         .as(
             "Every persisted fire already skipped by Quartz must enter recovery or a policy terminal")
         .isZero();
-    await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
-      for (Instant scheduledFire : missedFires) {
-        assertThat(occurrenceStatus(scheduledFire)).isEqualTo("REQUESTED");
-      }
-      Integer selectedTriggerRequestCount =
-          jdbcTemplate.queryForObject(selectCountSql2, Integer.class, tenantId);
-      assertThat(selectedTriggerRequestCount).isEqualTo(missedFires.size());
-      Integer selectedTriggerOutboxEventCount =
-          jdbcTemplate.queryForObject(selectCountSql3, Integer.class, tenantId);
-      assertThat(selectedTriggerOutboxEventCount).isEqualTo(missedFires.size());
-    });
+    await()
+        .atMost(Duration.ofSeconds(20))
+        .untilAsserted(() ->
+            assertPersistedMissedFiresAccounted(missedFires, selectCountSql2, selectCountSql3));
   }
 
   @Test
@@ -1176,6 +1185,41 @@ class QuartzMisfireRecoveryIntegrationTest extends AbstractIntegrationTest {
       jdbcTemplate.update(deleteScheduledOccurrenceCoverageSql, tenantId, newerId);
       jdbcTemplate.update(deleteWorkflowDefinitionSql, tenantId, newerId);
     }
+  }
+
+  private void assertPersistedMissedFiresAccounted(
+      List<Instant> missedFires, String requestCountSql, String outboxCountSql) {
+    final String selectDedupSql = """
+        select dedup_key from batch.trigger_request
+         where tenant_id = ? and workflow_definition_id = ?
+        """;
+
+    for (Instant scheduledFire : missedFires) {
+      assertThat(occurrenceStatus(scheduledFire)).isEqualTo("REQUESTED");
+    }
+    List<String> dedupKeys =
+        jdbcTemplate.queryForList(selectDedupSql, String.class, tenantId, workflowDefinitionId);
+    for (Instant scheduledFire : missedFires) {
+      String expectedKey = scheduledDedupKey(scheduledFire);
+      int matches = 0;
+      for (String dedupKey : dedupKeys) {
+        if (expectedKey.equals(dedupKey)) {
+          matches++;
+        }
+      }
+      assertThat(matches).as("requests for missed fire %s", scheduledFire).isEqualTo(1);
+    }
+    assertThat(dedupKeys).hasSize(missedFires.size());
+    Integer selectedTriggerRequestCount =
+        jdbcTemplate.queryForObject(requestCountSql, Integer.class, tenantId);
+    assertThat(selectedTriggerRequestCount).isEqualTo(missedFires.size());
+    Integer selectedTriggerOutboxEventCount =
+        jdbcTemplate.queryForObject(outboxCountSql, Integer.class, tenantId);
+    assertThat(selectedTriggerOutboxEventCount).isEqualTo(missedFires.size());
+  }
+
+  private String scheduledDedupKey(Instant scheduledFire) {
+    return tenantId + ":workflow:" + workflowDefinitionId + ":" + scheduledFire.toEpochMilli();
   }
 
   private String occurrenceStatus(Instant scheduledFireTime) {
