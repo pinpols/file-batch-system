@@ -16,15 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Dispatch full-ci-gate for the four optimization branches
+      - name: Rerun Maven 429 jobs on the launch-wait pull request
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          for ref in \
-            cursor/reclaim-unclaimed-ready-8612 \
-            cursor/launch-wait-batch-resume-8612
-          do
-            gh api --method POST \
-              repos/pinpols/file-batch-system/actions/workflows/full-ci-gate.yml/dispatches \
-              -f ref="$ref"
-          done
+          gh run rerun 43694199335 --failed
