@@ -12,6 +12,7 @@
 - Worker 四类业务链路：20 用户/类全部 20/20 成功；50 用户/类全部 50/50 成功（IMPORT 50,000 行、DISPATCH 50 文件），p95 2.4–3.0 s，清理残留 0。整轮 50 用户耗时 16.5 分钟，主要受单 Workflow 同日串行排队影响。
 - 调度混合场景 2 rps 下无 WAITING/READY 积压，launch p95 130 ms、scheduler snapshot p99 110 ms。
 - ATOMIC 派发 2 用户/秒：122 请求、0 错误，p95 193 ms；122 个实例与任务全部 SUCCESS，`workflow_launch_wait` 峰值 54 后全部排空。
+- 与 2026-10-31 历史压测相比：100/s 吞吐 74.3 vs 75.31 rps，天花板一致；50/s p95 1,707 ms vs 216 ms，**未达到历史延迟水平**，差异集中在排队/延迟，归因于宿主负载、开发 JVM 参数与同日结算栅栏，未证明代码回归。
 - Console 读路径 Gatling 场景 p99 达 2.3–4.2 s；但受控并发下 20 并发达 **189 rps、p99 125 ms**，80 并发仍约 180 rps、p99 666 ms，说明 Gatling 读数字主要受客户端调度影响。
 
 本轮没有修改业务代码，也没有把本地数字外推为 staging/生产容量。
@@ -229,6 +230,28 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 | 80 | 300 | 300 | 180.2 rps | 345 ms | 452 ms | 666 ms |
 
 读路径在受控并发下同样没有错误，20 并发时达到约 189 rps、p99 125 ms；80 并发仍维持约 180 rps，p99 666 ms。Gatling 读场景出现 2–4 s p99 与这里的差距，进一步说明其客户端在高负载宿主机上不能作为延迟基准。
+
+### 与历史压测对比（2026-10-31）
+
+历史记录：`docs/verifications/load-test-local-capacity-2026-10-31.md`，同一 `JobLaunchSimulation`，租户 `ta`、固定业务日、`BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS=5000`。本轮用 Python 开放模型按绝对时间发送，避免 Gatling 客户端调度抖动：
+
+| 注入 | 历史结果 | 本轮结果 |
+|---|---|---|
+| 50/s | 3,050 请求、0 KO，p95 **216 ms** | 3,000 请求、28 KO（0.9%），p95 **1,707 ms**，send lag p95 479 ms |
+| 100/s | 6,100 请求、0 KO，吞吐 75.31 rps，p95 554 ms（D 轮） | 3,000 请求、209 KO（7.0%），吞吐 **74.3 rps**，p95 5,003 ms |
+
+**结论**：吞吐天花板与历史一致（约 74–75 rps），但 50 rps 下没有达到历史的 p95 216 ms，且 100 rps 下尾部直接顶到 5 s 队列上限。差异集中在延迟/排队，而不是受理能力总量。
+
+补充：三租户/三业务日并行（`ta`/`tb`/`tc` 各 20 并发、300 请求）聚合 **69.5 rps**，单 lane 23–26 rps、p95 2.0–2.4 s，仅 3 次 429。把锁分散到不同租户和业务日后聚合吞吐没有超过单 lane 的约 75 rps 上限，说明当前瓶颈是共享的宿主/Trigger 资源，而不只是同日栅栏。
+
+本轮环境与历史的主要差异：
+
+- 宿主机 8 核、load average 10–26，同时运行 8 个 JVM、Docker Desktop 与 OrbStack；历史记录未给出同等负载基线。
+- 本地应用使用 `-XX:TieredStopAtLevel=1 -XX:+UseSerialGC` 的开发参数；历史记录未记录 JVM 参数，无法确认是否一致。
+- 同日 launch 事务被 `batch.acquire_batch_day_settlement_fence` 串行化；本轮并发探测中 PostgreSQL 出现成批 `Lock/advisory` 等待，历史记录未采集该指标。
+- 本轮数据库已累积数千条压测请求；历史每轮数据量更小。
+
+因此当前不能宣称“达到历史 50 rps 延迟水平”，也不能据此判定为代码回归；需要在空闲 runner、生产类 JVM 参数和干净数据上复跑同一开放模型，才能做同条件对比。
 
 ## 诊断
 
