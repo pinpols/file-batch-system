@@ -14,7 +14,9 @@ clear_negative_resolution_cache() {
   [[ -d "$repository" ]] || return 0
   # 失败解析会留下 *.lastUpdated 负缓存；即使同目录已有 pom、缺 jar 时也一样。
   # Central 恢复后必须全部清掉，否则下一轮会直接命中负缓存、不再重新下载。
-  find "$repository" -name '*.lastUpdated' -delete
+  while IFS= read -r -d '' marker; do
+    rm -f -- "$marker"
+  done < <(find "$repository" -name '*.lastUpdated' -print0)
 }
 
 for attempt in $(seq 1 "$attempts"); do
