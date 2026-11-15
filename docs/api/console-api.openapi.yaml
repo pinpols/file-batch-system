@@ -16677,10 +16677,10 @@ components:
           type: string
         triggerMode:
           type: string
+          description: 作业定义声明的触发入口分类；不代表某次实例的实际触发来源，后者见 triggerType。
+          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
         dagEnabled:
           type: boolean
-          enum: [SCHEDULED, API, MANUAL, EVENT, MIXED]
-          description: 作业定义声明的触发入口分类；不代表某次实例的实际触发来源，后者见 triggerType。
         retryPolicy:
           type: string
         retryMaxCount:
@@ -19595,9 +19595,9 @@ components:
           type: string
         description:
           type: string
+          nullable: true
         createdBy:
           type: string
-          nullable: true
         status:
           type: string
           enum: [ACTIVE, SUSPENDED]
