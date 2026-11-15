@@ -47,6 +47,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 同业务日受理的幂等查询按直接 `dedup_key` 与幂等别名分两路走索引，直接键仍优先于别名。原先 `OR` 连接别名使 `idx_trigger_request_tenant_dedup` 失效，查询在结算栅栏内顺序扫描 `trigger_request`。租户隔离、空父运行过滤，以及未知键或空键不命中保持不变。
 - 压测清理脚本先回收按 `request_id` 引用 `trigger_request` 的等待/别名记录（`workflow_launch_wait`、`batch_day_waiting_launch`、`job_dependency_waiting_launch`、幂等别名、`expected_work_occurrence`、`trigger_misfire_pending`、`scheduled_occurrence_catch_up_audit`），再删除 `trigger_request`；修复四类 Worker 压测结束后清理被外键阻塞并重试失败的问题。
 - 修正 #1388 引入的 OpenAPI schema 偏差：`ConsoleJobDefinitionResponse.triggerMode` 恢复 `SCHEDULED/API/MANUAL/EVENT/MIXED` 枚举与说明，`dagEnabled` 改为独立 boolean；`ConsoleTenantResponse.description` 恢复 nullable，`createdBy` 独立声明。
 - OpenAPI 响应 schema 与 Java 响应 record 对齐：`ConsoleJobDefinitionResponse` 补 `bizType`、`dagEnabled`、`priority`、`version`、`description`；`ConsoleTenantResponse`、`ConsoleAlertRoutingResponse` 补已序列化字段；`ConsoleFilePipelineResponse`、`ConsoleJobStepInstanceResponse` 中后端不返回的字段标记为 `deprecated`，保留生成类型兼容，不走破坏性删除。新增 `ConsoleResponseOpenApiSchemaTest` 做字段级漂移守护。
