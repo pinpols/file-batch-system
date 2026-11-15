@@ -6,10 +6,11 @@
 
 可采信的本轮证据：
 
-- 受控并发探测（10 并发、200 次 launch）达到 **42.2 rps，p50 157 ms，p95 811 ms，0 错误**。
+- 受控并发探测（5–100 并发、每档 200 次 launch）在 100 并发下仍全部 200、无 429；吞吐约 **75–90 rps**，30 并发时 p95 **363 ms**，50 并发起 p95 超过 2 s。
 - Gatling 1 用户/秒时 launch **p95 62 ms、0 错误**，说明单请求链路本身正常。
 - 同一租户、日历和业务日的 launch 由 **批次日结算 advisory fence** 串行化；并发时 PostgreSQL 出现最多 30 个会话等待同一 `Lock/advisory`。这是设计内的结算协调栅栏，也构成同日 launch 的容量上限来源。
-- Worker 四类业务链路（IMPORT/EXPORT/DISPATCH/PROCESS，各 20 用户）全部 20/20 成功，p95 2.6–3.4 s；调度混合场景 2 rps 下无 WAITING/READY 积压，launch p95 130 ms、scheduler snapshot p99 110 ms。
+- Worker 四类业务链路：20 用户/类全部 20/20 成功；50 用户/类全部 50/50 成功（IMPORT 50,000 行、DISPATCH 50 文件），p95 2.4–3.0 s，清理残留 0。整轮 50 用户耗时 16.5 分钟，主要受单 Workflow 同日串行排队影响。
+- 调度混合场景 2 rps 下无 WAITING/READY 积压，launch p95 130 ms、scheduler snapshot p99 110 ms。
 - ATOMIC 派发 2 用户/秒：122 请求、0 错误，p95 193 ms；122 个实例与任务全部 SUCCESS，`workflow_launch_wait` 峰值 54 后全部排空。
 - Console 读路径在高负载下 p99 达 2.3–4.2 s，未达到 `p99 < 300 ms` 的脚本断言；同轮次 0 错误。
 
@@ -153,6 +154,29 @@ WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
 
 清理阶段暴露并修复了 `cleanup-control-plane-worker.sql` 的外键顺序问题：脚本先删 `trigger_request`，被 `workflow_launch_wait` 的 `(tenant_id, request_id)` 外键阻塞。修复后先按本轮请求回收等待/别名记录，再删除 `trigger_request`；用本轮 RUN_ID 复跑清理脚本退出 0，`trigger_request` 残留归零。
 
+### Worker 业务端到端（各 50 用户，容量阶梯）
+
+```bash
+BATCH_CONSOLE_TOKEN=... BATCH_CONSOLE_CSRF_TOKEN=... \
+RUN_ID=ltw-four50-20261115b WORKER_MODULES_CSV=import,export,dispatch,process \
+USERS_PER_WORKER=50 IMPORT_PROFILE=medium PIPELINE_MAX_POLLS=300 \
+WAIT_TERMINAL_TIMEOUT_SECONDS=1800 \
+  bash load-tests/scripts/run-worker-load-tests.sh
+```
+
+结果（报告：`load-tests/target/worker-load-report-ltw-four50-20261115b.md`，窗口 02:25:46–02:42:17 UTC）：
+
+| 作业 | 实例 | SUCCESS | 失败/未终态 | avg | p95 |
+|---|---:|---:|---:|---:|---:|
+| `import_customer_job` | 50 | 50 | 0 | 1.421 s | 2.609 s |
+| `export_settlement_job` | 50 | 50 | 0 | 1.577 s | 3.032 s |
+| `lt_dispatch_local_job` | 50 | 50 | 0 | 1.058 s | 2.408 s |
+| `lt_process_sql_job` | 50 | 50 | 0 | 1.548 s | 2.742 s |
+
+业务计数：`import_loaded_rows=50,000`，`dispatch_records=50`，`dispatch_files_dispatched=50`；四类任务全部 SUCCESS，清理后 `trigger_request` 残留为 0。
+
+首次 50 用户尝试使用 90 次轮询（180 s），IMPORT 只完成 36/50；延长到 300 次（600 s）后 50/50 全部收敛。每实例数据库侧 avg/p95 约 1–3 s，整轮 16.5 分钟主要消耗在单 Workflow 对同日运行的串行排队，而不是单个任务执行时间。
+
 ### ATOMIC 派发（2 用户/秒）
 
 Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务日 `2026-01-15`：
@@ -173,11 +197,19 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 
 ### 受控并发探测（curl）
 
+每档 200 次 launch，唯一幂等键，记录 HTTP 状态与 `time_total`：
+
 | 并发 | 请求 | 成功 | 吞吐 | p50 | p95 | max |
 |---:|---:|---:|---:|---:|---:|---:|
-| 10 | 200 | 200 | 42.2 rps | 157 ms | 811 ms | 1,193 ms |
+| 5 | 200 | 200 | 43.7 rps | 66 ms | 265 ms | 517 ms |
+| 10 | 200 | 200 | 34.8 rps | 231 ms | 564 ms | 693 ms |
+| 20 | 200 | 200 | 52.1 rps | 331 ms | 673 ms | 717 ms |
+| 30 | 200 | 200 | **88.1 rps** | 297 ms | **363 ms** | 389 ms |
+| 50 | 200 | 200 | 88.6 rps | 306 ms | 1,977 ms | 2,113 ms |
+| 80 | 200 | 200 | 74.9 rps | 450 ms | 2,298 ms | 2,499 ms |
+| 100 | 200 | 200 | 75.5 rps | 631 ms | 2,357 ms | 2,499 ms |
 
-该结果说明服务端在 10 并发下仍能稳定受理，Gatling 5 用户/秒的 36.7% 拒绝与受控探测不一致。
+受控阶梯下 100 并发仍全部 200，没有 429；服务端受理吞吐稳定在约 75–90 rps。p95 在 30 并发内低于 500 ms，50 并发起尾部超过 2 s。宿主机负载使各档之间有波动（10 并发反而低于 5 并发），不宜把单档当作精确拐点；但“服务端远高于 Gatling 5 用户/秒 36.7% 拒绝所暗示的容量”可以确认。Gatling 的 429 是客户端调度抖动后集中补发，不是服务端在 5 rps 就饱和。
 
 ## 诊断
 
@@ -191,7 +223,7 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 - 本轮 Gatling 产生 `batch.trigger_request` 中 `trace_id like 'lt-%'` 共 1,462 条，`batch.job_instance` 同条件 74 条；受控 curl 探测另有约 4,300 条当日 `trigger_request`。
 - 未执行运行态清理，避免影响本地既有租户和定义数据；这些记录仅存在于本地开发库。
 - 8 个应用、PostgreSQL、Kafka、Valkey、MinIO 仍在运行，供继续压测或手工排查。
-- 四类 Worker 负载（IMPORT/EXPORT/DISPATCH/PROCESS，各 20 用户）已运行并通过，报告 `load-tests/target/worker-load-report-ltw-four20-20261115b.md`；其夹具与运行数据已按 RUN_ID 清理，`trigger_request` 残留为 0。
+- 四类 Worker 负载已运行 20 用户/类与 50 用户/类两档（IMPORT/EXPORT/DISPATCH/PROCESS），全部实例 SUCCESS；报告分别为 `worker-load-report-ltw-four20-20261115b.md` 与 `worker-load-report-ltw-four50-20261115b.md`，夹具与运行数据均按 RUN_ID 清理，`trigger_request` 残留为 0。
 - ATOMIC 派发已运行（2 用户/秒，122 实例/任务全部 SUCCESS）；受控加压的实例/任务按 `trace_id like 'lt-spi-%'` 保留，未按 RUN_ID 清理。
 - 未运行五类 Worker 的 1w/10w 容量画像、ATOMIC task storm 与 soak；这些需要独立数据集和更长稳定窗口。
 
