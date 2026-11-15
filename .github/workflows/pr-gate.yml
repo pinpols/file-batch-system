@@ -933,7 +933,7 @@ jobs:
           [[ "$A_MAIN_RESULT" == "success" || "$A_MAIN_RESULT" == "skipped" ]]
           [[ "$A_EXTRA_RESULT" == "success" || "$A_EXTRA_RESULT" == "skipped" ]]
           if [[ "$A_REQUIRED" == "true" ]]; then
-            [[ "$A_MAIN_RESULT" == "success" && "$A_EXTRA_RESULT" == "success" ]]
+            [[ "$A_MAIN_RESULT" == "success" && "$A_EXTRA_RESULT" == "success" ]] || exit 1
           fi
       - name: Checkout for combined coverage
         if: needs.changes.outputs.unit-a-required == 'true'
@@ -1097,7 +1097,7 @@ jobs:
           [[ "$MAIN_RESULT" == "success" || "$MAIN_RESULT" == "skipped" ]]
           [[ "$EXTRA_RESULT" == "success" || "$EXTRA_RESULT" == "skipped" ]]
           if [[ "$REQUIRED" == "true" ]]; then
-            [[ "$MAIN_RESULT" == "success" && "$EXTRA_RESULT" == "success" ]]
+            [[ "$MAIN_RESULT" == "success" && "$EXTRA_RESULT" == "success" ]] || exit 1
           fi
       - name: Checkout for combined coverage
         if: needs.changes.outputs.unit-b1-required == 'true'
@@ -1362,7 +1362,7 @@ jobs:
           [[ "$CONSOLE_RESULT" == "success" || "$CONSOLE_RESULT" == "skipped" ]]
           [[ "$CONSOLE_EXTRA_RESULT" == "success" || "$CONSOLE_EXTRA_RESULT" == "skipped" ]]
           if [[ "$CONSOLE_REQUIRED" == "true" ]]; then
-            [[ "$CONSOLE_RESULT" == "success" && "$CONSOLE_EXTRA_RESULT" == "success" ]]
+            [[ "$CONSOLE_RESULT" == "success" && "$CONSOLE_EXTRA_RESULT" == "success" ]] || exit 1
           fi
           [[ "$GOVERNANCE_RESULT" == "success" || "$GOVERNANCE_RESULT" == "skipped" ]]
 
