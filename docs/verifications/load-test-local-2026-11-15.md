@@ -10,6 +10,7 @@
 - Gatling 1 用户/秒时 launch **p95 62 ms、0 错误**，说明单请求链路本身正常。
 - 同一租户、日历和业务日的 launch 由 **批次日结算 advisory fence** 串行化；并发时 PostgreSQL 出现最多 30 个会话等待同一 `Lock/advisory`。这是设计内的结算协调栅栏，也构成同日 launch 的容量上限来源。
 - Worker 四类业务链路（IMPORT/EXPORT/DISPATCH/PROCESS，各 20 用户）全部 20/20 成功，p95 2.6–3.4 s；调度混合场景 2 rps 下无 WAITING/READY 积压，launch p95 130 ms、scheduler snapshot p99 110 ms。
+- ATOMIC 派发 2 用户/秒：122 请求、0 错误，p95 193 ms；122 个实例与任务全部 SUCCESS，`workflow_launch_wait` 峰值 54 后全部排空。
 - Console 读路径在高负载下 p99 达 2.3–4.2 s，未达到 `p99 < 300 ms` 的脚本断言；同轮次 0 错误。
 
 本轮没有修改业务代码，也没有把本地数字外推为 staging/生产容量。
@@ -152,6 +153,24 @@ WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
 
 清理阶段暴露并修复了 `cleanup-control-plane-worker.sql` 的外键顺序问题：脚本先删 `trigger_request`，被 `workflow_launch_wait` 的 `(tenant_id, request_id)` 外键阻塞。修复后先按本轮请求回收等待/别名记录，再删除 `trigger_request`；用本轮 RUN_ID 复跑清理脚本退出 0，`trigger_request` 残留归零。
 
+### ATOMIC 派发（2 用户/秒）
+
+Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务日 `2026-01-15`：
+
+```bash
+../mvnw -o -ntp gatling:test \
+  -Dsimulation=io.github.pinpols.batch.loadtest.simulations.AtomicTaskDispatchSimulation \
+  -DworkflowDefinitionId=61 -DtenantId=default-tenant -DbizDate=2026-01-15 \
+  -Dusers.peak=2 -Dduration.seconds=60 -Dramp.seconds=10 \
+  -Dload.runId=load-20261115-atomic2
+```
+
+结果：122 请求、0 错误；p50 15 ms、p95 **193 ms**、p99 380 ms，写 SLO 通过。业务侧 122 个实例和 122 个原子任务全部 `SUCCESS`。
+
+单作业 Workflow 会把并发 launch 放入 `workflow_launch_wait`：峰值 54 条 `WAITING`，随后全部转为 `RESUMED` 并执行完成，没有 429 或任务失败。这是该 Workflow 的串行执行语义，不是拒绝。
+
+该场景没有把 `runId` 写入 launch 参数，无法用通用 RUN_ID 清理；本轮保留 `trace_id like 'lt-spi-%'` 的 122 个实例/任务作为残留，后续对 ATOMIC 加压时应补充运行标识以便自动回收。
+
 ### 受控并发探测（curl）
 
 | 并发 | 请求 | 成功 | 吞吐 | p50 | p95 | max |
@@ -173,7 +192,8 @@ WAIT_TERMINAL_TIMEOUT_SECONDS=900 \
 - 未执行运行态清理，避免影响本地既有租户和定义数据；这些记录仅存在于本地开发库。
 - 8 个应用、PostgreSQL、Kafka、Valkey、MinIO 仍在运行，供继续压测或手工排查。
 - 四类 Worker 负载（IMPORT/EXPORT/DISPATCH/PROCESS，各 20 用户）已运行并通过，报告 `load-tests/target/worker-load-report-ltw-four20-20261115b.md`；其夹具与运行数据已按 RUN_ID 清理，`trigger_request` 残留为 0。
-- 未运行 ATOMIC 任务风暴、五类 Worker 的 1w/10w 容量画像与 soak；这些需要独立数据集和更长稳定窗口。
+- ATOMIC 派发已运行（2 用户/秒，122 实例/任务全部 SUCCESS）；受控加压的实例/任务按 `trace_id like 'lt-spi-%'` 保留，未按 RUN_ID 清理。
+- 未运行五类 Worker 的 1w/10w 容量画像、ATOMIC task storm 与 soak；这些需要独立数据集和更长稳定窗口。
 
 ## 复现边界
 
