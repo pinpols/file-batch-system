@@ -45,12 +45,12 @@ class WorkflowLaunchWaitResumeTriggerTest {
     WorkflowLaunchWaitReconciler reconciler = reconciler();
     when(waitingService.claimDue(eq("ta"), eq(100), any()))
         .thenReturn(List.of(claim("req-a", 1L), claim("req-b", 2L)));
-    when(waitingService.restoreRequest(eq("ta"), any()))
-        .thenReturn(LaunchRequest.builder()
-            .tenantId("ta")
-            .requestId("req")
-            .traceId("trace")
-            .build());
+    LaunchRequest restored = LaunchRequest.builder()
+        .tenantId("ta")
+        .requestId("req")
+        .traceId("trace")
+        .build();
+    when(waitingService.restoreRequest(eq("ta"), any())).thenReturn(restored);
 
     reconciler.reconcileTenant("ta");
 
