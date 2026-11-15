@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import io.github.pinpols.batch.common.enums.ResultCode;
+import io.github.pinpols.batch.common.exception.BizException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.DisplayName;
@@ -168,6 +171,129 @@ class TriggerApiAdmissionGuardTest {
 
     guard.execute(() -> null);
     assertThat(guard.effectiveConcurrencyForTest()).isEqualTo(5);
+  }
+
+  @Test
+  @DisplayName("排队等待超时后离开队列，并以限流错误拒绝")
+  void shouldRejectAndLeaveQueueWhenWaitExpires() throws Exception {
+    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+    properties.setApiLaunchMaxConcurrency(1);
+    properties.setApiLaunchQueueCapacity(1);
+    properties.setApiLaunchQueueWaitMillis(30);
+    TriggerApiAdmissionGuard guard = new TriggerApiAdmissionGuard(properties);
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread holder = new Thread(() -> guard.execute(() -> {
+      entered.countDown();
+      await(release);
+      return null;
+    }));
+    AtomicReference<Throwable> waiterFailure = new AtomicReference<>();
+    Thread waiter = new Thread(() -> {
+      try {
+        guard.execute(() -> null);
+      } catch (Throwable throwable) {
+        waiterFailure.set(throwable);
+      }
+    });
+
+    holder.start();
+    try {
+      if (!entered.await(2, TimeUnit.SECONDS)) {
+        throw new AssertionError("admission holder did not enter");
+      }
+      waiter.start();
+      waiter.join(2_000);
+      assertThat(waiterFailure.get()).isInstanceOf(BizException.class);
+      assertThat(((BizException) waiterFailure.get()).getCode()).isEqualTo(ResultCode.RATE_LIMITED);
+      assertThat(guard.queuedForTest()).isZero();
+    } finally {
+      release.countDown();
+      holder.join(2_000);
+      waiter.join(2_000);
+    }
+  }
+
+  @Test
+  @DisplayName("排队线程被中断时离开队列，并保留中断标记")
+  void shouldRejectAndLeaveQueueWhenWaitingThreadIsInterrupted() throws Exception {
+    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+    properties.setApiLaunchMaxConcurrency(1);
+    properties.setApiLaunchQueueCapacity(1);
+    properties.setApiLaunchQueueWaitMillis(5_000);
+    TriggerApiAdmissionGuard guard = new TriggerApiAdmissionGuard(properties);
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread holder = new Thread(() -> guard.execute(() -> {
+      entered.countDown();
+      await(release);
+      return null;
+    }));
+    AtomicReference<Throwable> waiterFailure = new AtomicReference<>();
+    AtomicBoolean interrupted = new AtomicBoolean();
+    Thread waiter = new Thread(() -> {
+      try {
+        guard.execute(() -> null);
+      } catch (Throwable throwable) {
+        interrupted.set(Thread.currentThread().isInterrupted());
+        waiterFailure.set(throwable);
+      }
+    });
+
+    holder.start();
+    try {
+      if (!entered.await(2, TimeUnit.SECONDS)) {
+        throw new AssertionError("admission holder did not enter");
+      }
+      waiter.start();
+      awaitQueued(guard);
+      waiter.interrupt();
+      waiter.join(2_000);
+      assertThat(waiterFailure.get()).isInstanceOf(BizException.class);
+      assertThat(((BizException) waiterFailure.get()).getCode()).isEqualTo(ResultCode.RATE_LIMITED);
+      assertThat(interrupted).isTrue();
+      assertThat(guard.queuedForTest()).isZero();
+    } finally {
+      release.countDown();
+      holder.join(2_000);
+      waiter.join(2_000);
+    }
+  }
+
+  @Test
+  @DisplayName("指标读取当前活跃数、排队数和有效并发上限")
+  void shouldExposeActiveQueuedAndLimitGauges() throws Exception {
+    TriggerRuntimeProperties properties = new TriggerRuntimeProperties();
+    properties.setApiLaunchMaxConcurrency(2);
+    properties.setApiLaunchQueueCapacity(1);
+    properties.setApiLaunchQueueWaitMillis(1_000);
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    TriggerApiAdmissionGuard guard = new TriggerApiAdmissionGuard(properties, registry);
+    CountDownLatch entered = new CountDownLatch(1);
+    CountDownLatch release = new CountDownLatch(1);
+    Thread holder = new Thread(() -> guard.execute(() -> {
+      entered.countDown();
+      await(release);
+      return null;
+    }));
+
+    holder.start();
+    try {
+      if (!entered.await(2, TimeUnit.SECONDS)) {
+        throw new AssertionError("admission holder did not enter");
+      }
+      assertThat(registry.get("batch.trigger.api_launch.admission.active").gauge().value())
+          .isEqualTo(1);
+      assertThat(registry.get("batch.trigger.api_launch.admission.queued").gauge().value())
+          .isZero();
+      assertThat(registry.get("batch.trigger.api_launch.admission.limit").gauge().value())
+          .isEqualTo(2);
+    } finally {
+      release.countDown();
+      holder.join(2_000);
+    }
+    assertThat(registry.get("batch.trigger.api_launch.admission.active").gauge().value())
+        .isZero();
   }
 
   private static void await(CountDownLatch latch) {
