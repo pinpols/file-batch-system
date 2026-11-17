@@ -269,6 +269,30 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 - ATOMIC 派发已运行（2 用户/秒，122 实例/任务全部 SUCCESS）；受控加压的实例/任务按 `trace_id like 'lt-spi-%'` 保留，未按 RUN_ID 清理。
 - 未运行五类 Worker 的 1w/10w 容量画像、ATOMIC task storm 与 soak；这些需要独立数据集和更长稳定窗口。
 
+## 2026-11-16/17 专用 benchmark 1w 复核
+
+按 [benchmark.yml](../../deploy/docker/compose/benchmark.yml) 与 [benchmark.env](../../config/ops-governance/benchmark.env) 启动隔离拓扑：2 Orchestrator、Trigger、Atomic Worker、Console，Kafka launch 12 分区 / dispatch 24 分区；PostgreSQL 使用 `synchronous_commit=off`、`max_wal_size=4GB`、`checkpoint_timeout=15min`、`wal_compression=pglz`。host→container 切换需要一次性 `BATCH_STORAGE_BACKEND_CUTOVER_ID` 和 `BATCH_QUOTA_BACKEND_CUTOVER_ID`。
+
+### 30 req/s（10,020 请求，100 业务日）
+
+- HTTP：10,018 成功，2 次 60 s 客户端超时（0.02%），p95 **546 ms**
+- 终态：脚本停止时 220/320 实例终态，10 FAILED、98 RUNNING
+- 失败原因：`EXTERNAL_OUTCOME_UNKNOWN`；Worker 日志显示 REPORT 到 Orchestrator 返回 500 或 `Request cancelled`，benchmark 关闭了 report outbox，租约回收后标记为结果未知
+
+### 25 req/s（10,000 请求，100 业务日）
+
+- HTTP：10,000 成功，0 KO，p95 **631 ms**，p99 3,071 ms
+- 终态：脚本停止时 SUCCESS 277、RUNNING 75、FAILED 21
+- 同样出现 REPORT 500 / I/O timeout，`non_idempotent_started_at` 为空，executor 未执行
+- 仅 373/10,000 实例被创建，其余仍在 `workflow_launch_wait` / PROCESSING，说明 run 推进和 REPORT 能力已成为瓶颈
+
+### 结论与边界
+
+- benchmark PG 调优消除了上一轮普通 `.env.local` 下的连接池打满和 8.5% 429，但没有让 1w 达到“0 错误 + 全终态 SUCCESS”。
+- 失败集中在 Orchestrator REPORT 路径和 run 推进吞吐，不是 atomic SQL 业务失败；未发现可归因于 #1400/#1405/#1408/#1409 的新增回归。
+- 当前 8 核 / 8 GB Docker 拓扑不足以作为 1w 通过证据；10w 未尝试。若要继续，需要增加 Orchestrator/Worker 容量或独立 runner，并保留 `benchmark.env` 的 PG/Kafka 参数。
+- 本轮结束后已停止 benchmark 应用、恢复普通 `.env.local` 基础设施与本地宿主栈；`p2capacity` 运行态已清理，定义/租户保留。
+
 ## 复现边界
 
 - 本轮是本地开发环境证据，不是 staging/生产容量结论；宿主机负载和本地 JVM 参数使其不适合作为发布门禁。
