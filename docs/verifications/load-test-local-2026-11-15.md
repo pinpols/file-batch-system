@@ -293,6 +293,24 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 - 当前 8 核 / 8 GB Docker 拓扑不足以作为 1w 通过证据；10w 未尝试。若要继续，需要增加 Orchestrator/Worker 容量或独立 runner，并保留 `benchmark.env` 的 PG/Kafka 参数。
 - 本轮结束后已停止 benchmark 应用、恢复普通 `.env.local` 基础设施与本地宿主栈；`p2capacity` 运行态已清理，定义/租户保留。
 
+### 2026-11-17 行锁车队取证与修复
+
+100 rps、100 业务日短压后采样 `pg_stat_activity`：
+
+- 多个 `SELECT ... FROM trigger_request ... FOR UPDATE` 等待 36 秒以上
+- 持有者处于 `idle in transaction`，最后一条 SQL 是 `workflow_run` 查询
+- 线程栈显示 `WorkflowLaunchWaitReconciler` 与 Kafka launch 重复处理同一请求
+
+根因是同一 `trigger_request` 被 Kafka 投递和 launch-wait 恢复同时 launch，后来者阻塞等待行锁；`claimDue` 的 5 秒重试租约短于一次 launch 的排队时间，进一步放大重复认领。
+
+修复（#1424）：
+
+- 准入行锁改为 `FOR UPDATE NOWAIT`，重复 launch 快速让出
+- launch-wait 认领增加独立 `claimLeaseSeconds`（默认 120s），可重试失败时释放
+- 容量等待快照在取锁前加密，锁内复核不再做 KMS 解密
+
+修复后同条件复测：50/100 rps 各 3,000 请求全部成功，100 rps p95 144ms；`pg_blocking_pids` 为 0，`idle in transaction` 采样为 0。
+
 ## 复现边界
 
 - 本轮是本地开发环境证据，不是 staging/生产容量结论；宿主机负载和本地 JVM 参数使其不适合作为发布门禁。
