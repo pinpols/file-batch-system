@@ -99,6 +99,13 @@
                   waiting.biz_date, waiting.dry_run, waiting.launch_payload::text
     </select>
 
+    <update id="release">
+        update batch.workflow_launch_wait
+        set next_attempt_at = #{nextAttemptAt}, updated_at = CURRENT_TIMESTAMP
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+          and wait_status = 'WAITING'
+    </update>
+
     <update id="updateStatus">
         update batch.workflow_launch_wait set wait_status = #{targetStatus}, updated_at = CURRENT_TIMESTAMP
         where tenant_id = #{tenantId} and request_id = #{requestId} and wait_status = #{expectedStatus}

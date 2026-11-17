@@ -47,6 +47,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 修复同一 trigger_request 的并发 launch 争用行锁：准入事务改用 `SELECT ... FOR UPDATE NOWAIT`，重复的 Kafka 投递或 launch-wait 恢复直接让出，不再阻塞等待；launch-wait 认领增加独立租约并在可重试失败时释放；容量等待快照的加密移到取锁之前，锁内复核不再做 KMS 解密。100 rps、100 业务日复测中 `pg_blocking_pids` 和 `idle in transaction` 均为 0。
 - 同业务日受理的幂等查询按直接 `dedup_key` 与幂等别名分两路走索引，直接键仍优先于别名。原先 `OR` 连接别名使 `idx_trigger_request_tenant_dedup` 失效，查询在结算栅栏内顺序扫描 `trigger_request`。租户隔离、空父运行过滤，以及未知键或空键不命中保持不变。
 - 同日 launch 的批次日结算栅栏改为在幂等查询之后取得，查询不再占着同日事务锁。Orchestrator 选 worker、下游准入和派发速率也改到租户准入锁之前；锁内仍重新计数并提交会改变活跃配额的状态。
 - Trigger 手工 launch 的本地准入改为按到达顺序发放许可。已经在排队的请求不会再被后到请求插队；并发上限、队列容量、等待超时、自适应收缩和原有拒绝计数保持不变。

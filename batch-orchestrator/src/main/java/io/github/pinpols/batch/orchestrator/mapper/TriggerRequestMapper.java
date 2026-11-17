@@ -38,6 +38,10 @@ public interface TriggerRequestMapper {
   TriggerRequestEntity selectByTenantAndRequestIdForUpdate(
       @Param("tenantId") String tenantId, @Param("requestId") String requestId);
 
+  /** 已由其他 launch 线程/实例持有时立即返回 55P03，不排队等行锁。 */
+  TriggerRequestEntity selectByTenantAndRequestIdForUpdateNoWait(
+      @Param("tenantId") String tenantId, @Param("requestId") String requestId);
+
   String selectLaunchedExternalEventRequestId(
       @Param("tenantId") String tenantId,
       @Param("workflowDefinitionId") Long workflowDefinitionId,

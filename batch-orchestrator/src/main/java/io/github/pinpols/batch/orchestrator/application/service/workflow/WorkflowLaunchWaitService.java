@@ -41,6 +41,18 @@ public class WorkflowLaunchWaitService {
 
   @Transactional
   public void defer(LaunchRequest request, WorkflowLaunchWaitSnapshot snapshot) {
+    // 先在取任何行锁之前完成快照序列化和加密，避免 KMS 耗时占着 trigger_request/wait 行锁。
+    boolean dryRun = Boolean.TRUE.equals(request.dryRun());
+    Envelope preparedEnvelope = new Envelope(
+        request.tenantId(),
+        request.requestId(),
+        request.workflowDefinitionId(),
+        request.bizDate(),
+        dryRun,
+        FORMAT,
+        secretPayloadProtector.protect(JsonUtils.toJson(snapshot)));
+    String preparedLaunchPayload = JsonUtils.toJson(preparedEnvelope);
+
     waitingMapper.setTenantContext(request.tenantId());
     String lookupTenantId = request.tenantId();
     String lookupRequestId = request.requestId();
@@ -51,24 +63,13 @@ public class WorkflowLaunchWaitService {
     snapshot.validate();
     WorkflowLaunchWaitClaim previous =
         waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
-    boolean dryRun = Boolean.TRUE.equals(request.dryRun());
     String launchPayload;
     if (EmptyChecks.isNotNull(previous)) {
       WorkflowLaunchWaitSnapshot first = restore(previous);
       first.requireSameRequest(request);
       launchPayload = previous.launchPayload();
     } else {
-      String snapshotJson = JsonUtils.toJson(snapshot);
-      String sealedSnapshot = secretPayloadProtector.protect(snapshotJson);
-      Envelope envelope = new Envelope(
-          request.tenantId(),
-          request.requestId(),
-          request.workflowDefinitionId(),
-          request.bizDate(),
-          dryRun,
-          FORMAT,
-          sealedSnapshot);
-      launchPayload = JsonUtils.toJson(envelope);
+      launchPayload = preparedLaunchPayload;
     }
     String tenantId = request.tenantId();
     String requestId = request.requestId();
@@ -102,6 +103,23 @@ public class WorkflowLaunchWaitService {
     WorkflowLaunchWaitSnapshot snapshot = restore(waiting);
     snapshot.requireSameRequest(request);
     return snapshot;
+  }
+
+  /**
+   * 调用方已经持有原请求行锁时，只复核等待行仍为 WAITING；快照已在外层事务前解密校验，
+   * 这里不再做 KMS 解密，避免长事务占着行锁。
+   */
+  @Transactional
+  public void requireStillWaiting(LaunchRequest request) {
+    waitingMapper.setTenantContext(request.tenantId());
+    TriggerRequestEntity original = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
+        request.tenantId(), request.requestId());
+    LaunchRequestIdentityGuard.requirePending(request, original);
+    WorkflowLaunchWaitClaim waiting =
+        waitingMapper.selectWaitingForUpdate(request.tenantId(), request.requestId());
+    if (EmptyChecks.isNull(waiting)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
+    }
   }
 
   public LaunchRequest restoreRequest(String tenantId, WorkflowLaunchWaitClaim claim) {
@@ -164,6 +182,12 @@ public class WorkflowLaunchWaitService {
   public List<WorkflowLaunchWaitClaim> claimDue(String tenantId, int limit, Instant nextAttemptAt) {
     waitingMapper.setTenantContext(tenantId);
     return waitingMapper.claimDue(tenantId, limit, nextAttemptAt);
+  }
+
+  @Transactional
+  public void release(String tenantId, String requestId, Instant nextAttemptAt) {
+    waitingMapper.setTenantContext(tenantId);
+    waitingMapper.release(tenantId, requestId, nextAttemptAt);
   }
 
   @Transactional

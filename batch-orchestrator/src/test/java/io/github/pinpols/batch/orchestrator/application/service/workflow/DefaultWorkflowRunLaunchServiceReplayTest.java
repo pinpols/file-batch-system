@@ -167,7 +167,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         .thenReturn(null, null, null);
     when(replayOperations.selectByTargetRequest(TENANT, REQUEST_ID)).thenReturn(operation);
     when(replaySnapshotResolver.resolve(operation, REQUEST_ID)).thenReturn(snapshot);
-    when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
+    when(triggerRequests.selectByTenantAndRequestIdForUpdateNoWait(TENANT, REQUEST_ID))
         .thenReturn(accepted);
     when(replayOperations.attachTargetWorkflowRun(
             ArgumentMatchers.eq(TENANT),
@@ -358,7 +358,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
         .thenReturn(null, null, null, null);
     when(replayOperations.selectByTargetRequest(TENANT, REQUEST_ID)).thenReturn(operation);
     when(replaySnapshotResolver.resolve(operation, REQUEST_ID)).thenReturn(snapshot);
-    when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
+    when(triggerRequests.selectByTenantAndRequestIdForUpdateNoWait(TENANT, REQUEST_ID))
         .thenReturn(accepted);
     when(workflowRuns.insertIfActiveSlotFree(ArgumentMatchers.any(WorkflowRunEntity.class)))
         .thenReturn(0);
@@ -422,7 +422,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     String serializedParams = JsonUtils.toJson(rootParams);
     when(launchParams.resolveParentInstanceId(rootParams)).thenReturn(null);
     when(triggerRequests.selectByTenantAndRequestId(TENANT, REQUEST_ID)).thenReturn(accepted);
-    when(triggerRequests.selectByTenantAndRequestIdForUpdate(TENANT, REQUEST_ID))
+    when(triggerRequests.selectByTenantAndRequestIdForUpdateNoWait(TENANT, REQUEST_ID))
         .thenReturn(accepted);
     when(workflowDefinitions.selectByTenantAndIdAndEnabled(TENANT, 81L, true))
         .thenReturn(definition);

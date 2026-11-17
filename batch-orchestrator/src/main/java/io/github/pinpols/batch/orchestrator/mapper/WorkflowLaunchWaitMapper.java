@@ -17,6 +17,11 @@ public interface WorkflowLaunchWaitMapper {
 
   List<WorkflowLaunchWaitClaim> claimDue(String tenantId, int limit, Instant nextAttemptAt);
 
+  int release(
+      @Param("tenantId") String tenantId,
+      @Param("requestId") String requestId,
+      @Param("nextAttemptAt") Instant nextAttemptAt);
+
   default int markResumed(String tenantId, String requestId) {
     return updateStatus(
         tenantId,
