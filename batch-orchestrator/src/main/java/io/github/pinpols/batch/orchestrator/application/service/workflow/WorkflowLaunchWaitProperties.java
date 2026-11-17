@@ -15,4 +15,11 @@ public class WorkflowLaunchWaitProperties {
 
   @Min(1)
   private long retryDelaySeconds = 5;
+
+  /**
+   * 认领等待行后的租约时长。扫描和“终态后立即补槽”可能并发，租约必须覆盖一次 launch 的排队与准入时间，
+   * 否则同一请求会在上一轮尚未结束时被再次认领，形成行锁车队。
+   */
+  @Min(1)
+  private long claimLeaseSeconds = 120;
 }

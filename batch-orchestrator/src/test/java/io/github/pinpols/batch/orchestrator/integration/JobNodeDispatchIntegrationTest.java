@@ -3107,8 +3107,9 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     CapacityWaitSeed seed = seedCapacityWait();
 
     assertThat(admissionTransactions).hasSize(2);
-    String admissionTransaction = admissionTransactions.getLast();
-    assertThat(waitTransactions).containsExactly(admissionTransaction);
+    // 容量冲突先回滚准入事务，再由独立的等待事务落库；两者不能是同一事务。
+    assertThat(waitTransactions).hasSize(1);
+    assertThat(admissionTransactions).doesNotContain(waitTransactions.getFirst());
     String waitStatus =
         jdbcTemplate.queryForObject(waitStatusSql, String.class, testTenantId, seed.requestId());
     String requestStatus =

@@ -81,6 +81,14 @@
         for update
     </select>
 
+    <!-- 同一请求只允许一个 launch 持有者；后来者 NOWAIT 快速失败，避免行锁车队。 -->
+    <select id="selectByTenantAndRequestIdForUpdateNoWait" resultMap="TriggerRequestResultMap"
+            flushCache="true" useCache="false">
+        select * from batch.trigger_request
+        where tenant_id = #{tenantId} and request_id = #{requestId}
+        for update nowait
+    </select>
+
     <select id="selectLaunchedExternalEventRequestId" resultType="string">
         select request_id
           from batch.trigger_request

@@ -382,6 +382,33 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
       WorkflowRunReplaySnapshotResolver.Snapshot replaySnapshot,
       WorkflowLaunchWaitSnapshot capacitySnapshot) {}
 
+  /** 同一 trigger_request 已被其它 launch 线程/实例持有，当前重复调用不应排队。 */
+  private static final class LaunchInProgress extends RuntimeException {
+    private LaunchInProgress() {
+      super("workflow launch already in progress", null, false, false);
+    }
+  }
+
+  /** 当前业务日已有活跃根运行，需要退出准入事务后再落容量等待。 */
+  private static final class CapacityWaitRequired extends RuntimeException {
+    private final transient LaunchRequest request;
+    private final transient WorkflowLaunchWaitSnapshot snapshot;
+
+    private CapacityWaitRequired(LaunchRequest request, WorkflowLaunchWaitSnapshot snapshot) {
+      super("workflow capacity wait required", null, false, false);
+      this.request = request;
+      this.snapshot = snapshot;
+    }
+
+    private LaunchRequest request() {
+      return request;
+    }
+
+    private WorkflowLaunchWaitSnapshot snapshot() {
+      return snapshot;
+    }
+  }
+
   private WorkflowRunEntity prepareRunWithSerializationRetry(RunPreparation preparation) {
     // PostgreSQL 的 REPEATABLE READ 在等待同一请求的行锁后可能以 40001 结束事务。
     // 只重试已回滚的准入事务，让下一次快照读取先完成的同一请求；其他约束错误继续上抛。
@@ -426,6 +453,12 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
     transaction.setIsolationLevel(TransactionDefinition.ISOLATION_REPEATABLE_READ);
     try {
       return transaction.execute(ignored -> createRunInTransaction(preparation));
+    } catch (LaunchInProgress inProgress) {
+      // 同一请求已有 launch 持有行锁；本次重复投递/恢复直接让出，由持有者推进。
+      return null;
+    } catch (CapacityWaitRequired capacityWait) {
+      waitingLaunchService.defer(capacityWait.request(), capacityWait.snapshot());
+      return null;
     } catch (DuplicateKeyException duplicate) {
       // 唯一键冲突后 PostgreSQL 事务已中止，只有等 transaction.execute 回滚后才能查询胜出者，
       // 所以这个 catch 必须留在事务外面，不能收进事务体。
@@ -459,9 +492,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
             : WorkflowLaunchWaitSnapshot.capture(preparation.originalRequest(), request, created);
     int inserted = workflowRunMapper.insertIfActiveSlotFree(created);
     if (inserted == 0) {
-      // 容量冲突不回滚准入快照；请求与密文等待必须在当前事务一起提交。
-      waitingLaunchService.defer(preparation.originalRequest(), snapshotForWait);
-      return null;
+      // 退出当前事务后再持久化等待；加密在 defer 内、取行锁之前完成，避免锁内做 KMS。
+      throw new CapacityWaitRequired(preparation.originalRequest(), snapshotForWait);
     }
     attachReplayOperationTarget(request, created, startedAt);
     insertStartNodeRun(request, created, startedAt);
@@ -474,8 +506,16 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
 
   /** 加行锁读取触发请求，并确认它仍是本次启动、且处于待处理状态。 */
   private void lockPendingTriggerRequest(LaunchRequest request) {
-    TriggerRequestEntity pending = triggerRequestMapper.selectByTenantAndRequestIdForUpdate(
-        request.tenantId(), request.requestId());
+    TriggerRequestEntity pending;
+    try {
+      pending = triggerRequestMapper.selectByTenantAndRequestIdForUpdateNoWait(
+          request.tenantId(), request.requestId());
+    } catch (DataAccessException lockNotAvailable) {
+      if (JdbcExceptionSupport.hasSqlState(lockNotAvailable, "55P03")) {
+        throw new LaunchInProgress();
+      }
+      throw lockNotAvailable;
+    }
     boolean pendingRequestDoesNotMatchLaunch = EmptyChecks.isNull(pending)
         || !LaunchRequestIdentityGuard.matches(request, pending)
         || !(TriggerRequestStatus.ACCEPTED.code().equals(pending.getRequestStatus())
@@ -499,12 +539,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   private RunAdmission admitFromCapacitySnapshot(RunPreparation preparation) {
     LaunchRequest request = preparation.request();
     WorkflowLaunchWaitSnapshot capacitySnapshot = preparation.capacitySnapshot();
-    // 请求锁持续持有到根运行插入；等待终态不得被迟到恢复复活。
-    WorkflowLaunchWaitSnapshot lockedSnapshot =
-        waitingLaunchService.findSnapshot(preparation.originalRequest());
-    if (EmptyChecks.isNull(lockedSnapshot)) {
-      throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.launch_not_pending");
-    }
+    // 请求锁已由 createRunInTransaction 持有；这里只确认等待行仍为 WAITING，快照已在事务前解密校验。
+    waitingLaunchService.requireStillWaiting(preparation.originalRequest());
     ReplayOperationEntity currentOperation =
         replayOperationMapper.selectByTargetRequest(request.tenantId(), request.requestId());
     boolean approvedCapacityReplay =

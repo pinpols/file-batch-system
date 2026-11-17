@@ -56,15 +56,16 @@ public class WorkflowLaunchWaitReconciler {
     int batchSize = properties.getBatchSize();
     Instant retryCutoffBaseTime = BatchDateTimeSupport.utcNow();
     long retryDelaySeconds = properties.getRetryDelaySeconds();
-    Instant claimCutoff = retryCutoffBaseTime.plusSeconds(retryDelaySeconds);
+    Instant claimLease = retryCutoffBaseTime.plusSeconds(properties.getClaimLeaseSeconds());
     List<WorkflowLaunchWaitClaim> waiting =
-        waitingService.claimDue(tenantId, batchSize, claimCutoff);
+        waitingService.claimDue(tenantId, batchSize, claimLease);
     for (WorkflowLaunchWaitClaim entry : waiting) {
-      reconcileClaimInTenant(tenantId, entry);
+      reconcileClaimInTenant(tenantId, entry, retryDelaySeconds);
     }
   }
 
-  private void reconcileClaimInTenant(String tenantId, WorkflowLaunchWaitClaim entry) {
+  private void reconcileClaimInTenant(
+      String tenantId, WorkflowLaunchWaitClaim entry, long retryDelaySeconds) {
     LaunchRequest request;
     try {
       request = waitingService.restoreRequest(tenantId, entry);
@@ -77,6 +78,7 @@ public class WorkflowLaunchWaitReconciler {
           SwallowedExceptionLogger.summary(malformedPayload));
       return;
     } catch (RuntimeException unavailableProtection) {
+      releaseForRetry(tenantId, entry.requestId(), retryDelaySeconds);
       log.warn(
           "workflow launch wait decrypt deferred: tenantId={}, requestId={}, error={}",
           tenantId,
@@ -94,11 +96,17 @@ public class WorkflowLaunchWaitReconciler {
           entry.requestId(),
           SwallowedExceptionLogger.summary(rejected));
     } catch (RuntimeException retryable) {
+      releaseForRetry(tenantId, entry.requestId(), retryDelaySeconds);
       log.warn(
           "workflow launch wait retry deferred: tenantId={}, requestId={}, error={}",
           tenantId,
           entry.requestId(),
           SwallowedExceptionLogger.summary(retryable));
     }
+  }
+
+  private void releaseForRetry(String tenantId, String requestId, long retryDelaySeconds) {
+    waitingService.release(
+        tenantId, requestId, BatchDateTimeSupport.utcNow().plusSeconds(retryDelaySeconds));
   }
 }

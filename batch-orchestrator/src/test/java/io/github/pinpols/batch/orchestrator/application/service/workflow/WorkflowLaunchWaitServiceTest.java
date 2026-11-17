@@ -108,6 +108,24 @@ class WorkflowLaunchWaitServiceTest {
   }
 
   @Test
+  @DisplayName("快照加密发生在 trigger_request 行锁之前")
+  void shouldSealSnapshotBeforeLockingTriggerRequest() {
+    LaunchRequest request = request();
+    WorkflowLaunchWaitSnapshot snapshot = WorkflowLaunchWaitFixtures.snapshot(request);
+    when(requestMapper.selectByTenantAndRequestIdForUpdate("tenant-a", "root-request"))
+        .thenReturn(pending(request));
+    when(waitingMapper.defer(any())).thenReturn(1);
+    when(requestMapper.updateAcceptance("tenant-a", "root-request", "PROCESSING", null))
+        .thenReturn(1);
+
+    service.defer(request, snapshot);
+
+    InOrder order = inOrder(protector, requestMapper);
+    order.verify(protector).protect(any());
+    order.verify(requestMapper).selectByTenantAndRequestIdForUpdate("tenant-a", "root-request");
+  }
+
+  @Test
   @DisplayName("同请求变参重投不能替换或拒绝首个已冻结等待")
   void shouldRejectChangedRedeliveryWithoutReplacingFirstSnapshot() {
     LaunchRequest original =
