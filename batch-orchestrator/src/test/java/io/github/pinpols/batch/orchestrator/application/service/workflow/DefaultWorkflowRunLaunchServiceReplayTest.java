@@ -360,6 +360,7 @@ class DefaultWorkflowRunLaunchServiceReplayTest {
     when(replaySnapshotResolver.resolve(operation, REQUEST_ID)).thenReturn(snapshot);
     when(triggerRequests.selectByTenantAndRequestIdForUpdateNoWait(TENANT, REQUEST_ID))
         .thenReturn(accepted);
+    // ADR-050：槽位唯一约束判定名额；这里模拟唯一槽位已被占用。
     when(workflowRuns.insertIfActiveSlotFree(ArgumentMatchers.any(WorkflowRunEntity.class)))
         .thenReturn(0);
 

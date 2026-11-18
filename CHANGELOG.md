@@ -9,6 +9,9 @@
 ## [Unreleased]
 
 ### Added
+- 新增 Workflow 定义级活跃运行上限 `max_active_runs_per_biz_date`（1..64，默认 1）：同一租户、Workflow、业务日与执行模式允许并存多个
+  `CREATED`/`RUNNING` 根运行，超出上限的 launch 仍进入 `workflow_launch_wait`。实现用 `workflow_run.active_slot` + 部分唯一索引替代原先
+  “一天一个活跃 run”的唯一索引；默认 1 时行为不变。容量画像可用 `CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE` 显式调高。见 ADR-050。
 
 - 新增内部接口 `POST /internal/workers/{workerCode}/resume`：把 `DRAINING` / `DECOMMISSIONED` / `OFFLINE` 的注册恢复为 `ONLINE` 并清空 drain 标记。运维 drain 会被重启保留，误排空或维护提前结束时需要显式恢复；`DRAINING` 仍有在途任务时返回 409。
 - 新增 `GET /api/console/tasks/{taskId}/execution-audit`：按任务查看派单时实际生效的参数（原子任务的 shell 命令与参数、SQL 文本等）和执行结果，供取证。只对平台管理员和审计员开放；`env`、`headers` 只返回键名，`auth` 与敏感键整体遮蔽，其余文本遮蔽端点与凭据表达式。数据来自已有的 `job_task.effective_parameters`，不新增表。

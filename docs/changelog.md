@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-18 同一业务日多个活跃 Workflow 运行（ADR-050）
+
+- 新增 [ADR-050](architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)：`workflow_definition.max_active_runs_per_biz_date`（1..64，默认 1）控制同一租户、Workflow、业务日与执行模式的活跃根运行数；用 `workflow_run.active_slot` + 部分唯一索引替代原先“一天一个活跃 run”的唯一索引，超出上限仍进入 `workflow_launch_wait`。
+- [核心模型](architecture/core-model.md) 与容量 runbook 同步该不变量；默认 1 时行为不变，Console/前端尚未暴露该字段。
+
 ## 2026-11-14 Mermaid 制图检查表
 
 - 新增 [Mermaid 制图检查表](../.agents/skills/documentation-governance/references/mermaid-diagram-style.md)，作为图审查与批量美化批次的执行入口；颜色、形状与语义仍以[架构导航图例](architecture/README.md#图例)和[文档治理](standards/document-governance.md) §9 为准。

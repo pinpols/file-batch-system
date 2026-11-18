@@ -53,6 +53,11 @@ profile、入口许可、连接池、启动期保留连接预算、PostgreSQL �
 宿主 JVM 与容器使用同一批 `worker_code`，并且可以分别绑定 IPv4/IPv6 的同一端口，Docker 侧检查
 看不到它们，但会一起消耗 CPU、PostgreSQL 连接和注册状态。
 
+容量画像默认按“同一 Workflow、业务日只允许一个活跃根运行”测量。需要测量“业务日 × 上限”的容量时，
+显式设置 `CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE`（1..64，默认 1，对应
+`workflow_definition.max_active_runs_per_biz_date`）；提高上限后同日可并行多个根运行，结算会等待
+全部活跃根运行结束。见 [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)。
+
 PostgreSQL 参数的期望值由 `CAPACITY_EXPECT_*` 声明，默认对齐 `local` 口径
 （`synchronous_commit=on`、`max_wal_size=1GB`、`checkpoint_timeout=5min`）。要先按
 `config/ops-governance/benchmark.env` 重建数据库再跑 benchmark 口径，并显式传

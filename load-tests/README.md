@@ -574,6 +574,7 @@ select id as taskId, tenant_id as tenantId, 'synthetic-worker-1' as workerId
 | [sql/p2-run-task-summary.sql](sql/p2-run-task-summary.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
 | [sql/p2-terminate-backend.sql](sql/p2-terminate-backend.sql) | 供 [run-p2-process-failure-profile.sh](scripts/run-p2-process-failure-profile.sh) 使用的配套 SQL。 |
 | [sql/prepare-p2-capacity-atomic.sql](sql/prepare-p2-capacity-atomic.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
+| [sql/set-p2-capacity-active-runs.sql](sql/set-p2-capacity-active-runs.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 设置同一业务日活跃根运行上限（ADR-050）；默认 1。 |
 | [sql/prepare-p2-multitenant-atomic.sql](sql/prepare-p2-multitenant-atomic.sql) | 供 [run-p2-capacity-profile.sh](scripts/run-p2-capacity-profile.sh) 使用的配套 SQL。 |
 | [sql/prepare-worker-load-business.sql](sql/prepare-worker-load-business.sql) | DANGER: 执行前会清理/重建压测业务夹具。仅限专用本地压测库；禁止连接生产或共享验收库。 |
 | [sql/prepare-worker-load-platform.sql](sql/prepare-worker-load-platform.sql) | DANGER: 执行前会清理/重建压测平台夹具。仅限专用本地压测库；禁止连接生产或共享验收库。 |

@@ -76,4 +76,10 @@
          order by id asc
          limit #{limit}
     </select>
+    <select id="selectMaxActiveRunsPerBizDate" resultType="java.lang.Integer">
+        select max_active_runs_per_biz_date
+          from batch.workflow_definition
+         where tenant_id = #{tenantId}
+           and id = #{id}
+    </select>
 </mapper>

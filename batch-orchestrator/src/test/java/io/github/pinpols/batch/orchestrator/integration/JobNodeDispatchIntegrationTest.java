@@ -3266,7 +3266,65 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @Test
-  @DisplayName("专用容量插入不得吞掉请求唯一键和外键约束错误")
+  @DisplayName("定义级上限调高后允许同日多个活跃运行，超出上限的请求进入容量等待")
+  void capacityWait_shouldAllowMultipleActiveRuns_whenDefinitionLimitRaised() {
+    DirectWorkflowSeed seed =
+        seedDirectWorkflow(seedChildJob("WG_MULTI_ACTIVE_" + System.nanoTime()));
+    jdbcTemplate.update("""
+        update batch.workflow_definition set max_active_runs_per_biz_date = 2
+        where tenant_id = ? and id = ?
+        """, testTenantId, seed.workflowDefinitionId());
+    String insertRequestSql = """
+        insert into batch.trigger_request (
+            tenant_id, request_id, trigger_type, workflow_definition_id, biz_date, dedup_key, request_status)
+        values (?, ?, 'API', ?, ?, ?, 'ACCEPTED')
+        """;
+    String activeCountSql = """
+        select count(*) from batch.workflow_run where tenant_id = ? and workflow_definition_id = ?
+            and biz_date = ? and dry_run = false and run_status in ('CREATED', 'RUNNING')
+        """;
+    String waitCountSql = """
+        select count(*) from batch.workflow_launch_wait where tenant_id = ? and workflow_definition_id = ?
+            and wait_status = 'WAITING'
+        """;
+    String secondRequestId = seed.requestId() + "-second";
+    String thirdRequestId = seed.requestId() + "-third";
+    jdbcTemplate.update(
+        insertRequestSql,
+        testTenantId,
+        secondRequestId,
+        seed.workflowDefinitionId(),
+        BIZ_DATE,
+        secondRequestId);
+    jdbcTemplate.update(
+        insertRequestSql,
+        testTenantId,
+        thirdRequestId,
+        seed.workflowDefinitionId(),
+        BIZ_DATE,
+        thirdRequestId);
+    LaunchRequest base = LaunchRequest.builder()
+        .tenantId(testTenantId)
+        .requestId(seed.requestId())
+        .workflowDefinitionId(seed.workflowDefinitionId())
+        .bizDate(BIZ_DATE)
+        .triggerType(TriggerType.API)
+        .build();
+
+    workflowRunLaunchService.launch(base);
+    workflowRunLaunchService.launch(base.toBuilder().requestId(secondRequestId).build());
+    workflowRunLaunchService.launch(base.toBuilder().requestId(thirdRequestId).build());
+
+    Long activeCount = jdbcTemplate.queryForObject(
+        activeCountSql, Long.class, testTenantId, seed.workflowDefinitionId(), BIZ_DATE);
+    Long waitCount = jdbcTemplate.queryForObject(
+        waitCountSql, Long.class, testTenantId, seed.workflowDefinitionId());
+    assertThat(activeCount).isEqualTo(2L);
+    assertThat(waitCount).isEqualTo(1L);
+  }
+
+  @Test
+  @DisplayName("重插入不得吞掉请求唯一键和外键约束错误")
   void capacityWait_shouldPropagateNonCapacityConstraints() {
     CapacityWaitSeed seed = seedCapacityWait();
     WorkflowRunEntity original = workflowRunMapper.selectById(testTenantId, seed.ownerRunId());

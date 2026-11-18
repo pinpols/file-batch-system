@@ -13,6 +13,9 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface WorkflowDefinitionMapper {
 
+  /** ADR-050：同一业务日允许的活跃根运行上限；定义为空时按 1 处理。 */
+  Integer selectMaxActiveRunsPerBizDate(@Param("tenantId") String tenantId, @Param("id") Long id);
+
   /** 按 (tenantId, workflowCode, enabled) 取首条；用于 cache 服务回源。 */
   WorkflowDefinitionView selectFirstByTenantAndCodeAndEnabled(
       @Param("tenantId") String tenantId,

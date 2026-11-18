@@ -16,6 +16,7 @@
 - `V370` 替换 `batch_day_catchup_operation` 的状态检查，保留旧状态并增加 `ABANDONED`；不删除表或行，不使用级联删除。该表由 `V367` 创建，替换失败时迁移事务回滚，按空库部署重新执行迁移。
 
 两项各登记一次约束移除，登记仅覆盖上述迁移和操作类型，其他变更仍按高风险操作清单审查。
+- `V386` 删除 `uk_workflow_run_active`（同租户/Workflow/业务日/模式只允许一个活跃根运行），替换为 `uk_workflow_run_active_slot`（多一个 `active_slot` 列）；同一迁移给 `workflow_run.active_slot` 默认 1，并补齐 `archive.workflow_run_archive.active_slot` 以通过归档漂移检查。回滚：先把同一键的活跃运行收敛到上限以内，再按旧定义重建 `uk_workflow_run_active` 并删除新索引；迁移失败时事务回滚，不留下半成品。
 
 ## 仓库内入口与防护
 

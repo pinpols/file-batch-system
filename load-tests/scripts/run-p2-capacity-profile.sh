@@ -102,6 +102,9 @@ CAPACITY_TRIGGER_API_MAX_CONCURRENCY="${CAPACITY_TRIGGER_API_MAX_CONCURRENCY:-32
 CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE="${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE:-40}"
 CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS="${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS:-http://orchestrator:18082}"
 CAPACITY_ATOMIC_WORKER_CODE="${CAPACITY_ATOMIC_WORKER_CODE:-atomic-node-1}"
+# ADR-050：同一 Workflow + 业务日的活跃根运行上限。默认 1 保持历史口径；
+# 需要测量“业务日 × 上限”容量时显式调高，报告会记录该值。
+CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE="${CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE:-1}"
 SKIP_AUTO_CLEANUP="${SKIP_AUTO_CLEANUP:-0}"
 CAPACITY_REQUIRE_TRIGGER_BUDGET="${CAPACITY_REQUIRE_TRIGGER_BUDGET:-1}"
 # 被测 Trigger 的 Relay 发布上限。默认对齐隔离 benchmark 的 400/s；A/B 轮次必须显式声明，
@@ -1262,6 +1265,9 @@ run_10w_storm() {
     psql_platform -v tenant_id="$CAPACITY_TENANT_ID" -v job_code=atomic_sql_demo \
       -v fixture_tag=p2-capacity \
       -f "$ROOT_DIR/scripts/local/sql/provision-single-job-workflow.sql"
+    psql_platform -v capacity_tenant_id="$CAPACITY_TENANT_ID" \
+      -v max_active_runs="$CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE" \
+      -f "$LOAD_DIR/sql/set-p2-capacity-active-runs.sql"
     evict_capacity_config_cache
     storm_tenant_id="$CAPACITY_TENANT_ID"
   fi

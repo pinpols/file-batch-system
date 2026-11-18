@@ -57,6 +57,7 @@
 | 047 | [ADR-047-workflow-scheduling-and-daily-obligations.md](./ADR-047-workflow-scheduling-and-daily-obligations.md) | 历史共同契约；Superseded by ADR-048，旧兼容及旧库升级要求已退出范围 |
 | 048 | [ADR-048-workflow-fresh-database-cutover.md](./ADR-048-workflow-fresh-database-cutover.md) | 当前契约 2026-10-14.2：全新库、单一 Workflow 运行与恢复；已有分支实现，正式状态见验收矩阵 |
 | 049 | [ADR-049-replay-operation-scopes.md](ADR-049-replay-operation-scopes.md) | 已批准并有分支实现：区间/失败节点/整图 Replay 身份、快照与副作用合同；能力与验收边界见正文 |
+| 050 | [ADR-050-multiple-active-runs-per-biz-date.md](ADR-050-multiple-active-runs-per-biz-date.md) | 同一 Workflow + 业务日的活跃根运行上限改为定义级 `max_active_runs_per_biz_date`（1..64，默认 1），删除唯一索引，改用活跃槽位 + 部分唯一索引准入 |
 
 ### 历史优先级与范围边界
 

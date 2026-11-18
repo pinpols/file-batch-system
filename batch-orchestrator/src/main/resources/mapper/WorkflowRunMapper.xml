@@ -21,6 +21,7 @@
         <result column="data_interval_start" property="dataIntervalStart"/>
         <result column="data_interval_end" property="dataIntervalEnd"/>
         <result column="execution_snapshot" property="executionSnapshot"/>
+        <result column="active_slot" property="activeSlot"/>
     </resultMap>
 
     <sql id="insertWorkflowRun">
@@ -38,7 +39,8 @@
             workflow_version_snapshot,
             data_interval_start,
             data_interval_end,
-            execution_snapshot
+            execution_snapshot,
+            active_slot
         ) values (
             #{tenantId},
             #{workflowDefinitionId},
@@ -56,7 +58,11 @@
             #{workflowVersionSnapshot},
             #{dataIntervalStart},
             #{dataIntervalEnd},
-            CAST(#{executionSnapshot} AS jsonb)
+            CAST(#{executionSnapshot} AS jsonb),
+            <choose>
+                <when test="activeSlot != null">#{activeSlot}</when>
+                <otherwise>1</otherwise>
+            </choose>
         )
     </sql>
 
@@ -68,7 +74,7 @@
     <insert id="insertIfActiveSlotFree" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
             useGeneratedKeys="true" keyProperty="id" keyColumn="id">
         <include refid="insertWorkflowRun"/>
-        on conflict (tenant_id, workflow_definition_id, biz_date, dry_run)
+        on conflict (tenant_id, workflow_definition_id, biz_date, dry_run, active_slot)
             where run_status in ('CREATED', 'RUNNING')
         do nothing
     </insert>
