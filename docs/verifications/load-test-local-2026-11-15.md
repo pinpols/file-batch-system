@@ -311,6 +311,54 @@ Workflow `JOB-WF-44`（`atomic_sql_demo`，租户 `default-tenant`），业务�
 
 修复后同条件复测：50/100 rps 各 3,000 请求全部成功，100 rps p95 144ms；`pg_blocking_pids` 为 0，`idle in transaction` 采样为 0。
 
+### 2026-11-18 修复后 1w 终态收敛复核
+
+目的：确认 #1424 合并后，10,000 请求 / 100 业务日的 1w 是否从“能受理但不收敛”变为可收敛。
+
+环境：
+
+| 项 | 值 |
+|---|---|
+| 代码版本 | `main` @ `715a18159` |
+| 应用镜像 | 按 HEAD 重建，4 个容器 `org.opencontainers.image.revision` = `715a18159…` |
+| 拓扑 | `benchmark.yml` + `benchmark.env`：2 Orchestrator × 6 consumer、Trigger、Atomic Worker、Console；Kafka launch 12 分区 / dispatch 24 分区 |
+| PostgreSQL | `synchronous_commit=off`、`max_wal_size=4GB`、`checkpoint_timeout=15min`、`wal_compression=pglz` |
+| 宿主机 | 8 核；host load 1m 均值 20.5、峰值 69.2（压测脚本判定不具备基线可比资格） |
+
+命令（admin 会话同时提供 `BATCH_CONSOLE_TOKEN` / `BATCH_CONSOLE_CSRF_TOKEN`）：
+
+```bash
+RUN_ID=p2-atomic-1w-20261118a STORM_TOTAL_REQUESTS=10000 STORM_RPS=25 \
+  RUN_10W_STORM=1 RUN_FAIRNESS=0 CAPACITY_BIZ_DATE_CARDINALITY=100 \
+  SKIP_AUTO_CLEANUP=1 bash load-tests/scripts/run-p2-capacity-profile.sh
+```
+
+结果：
+
+| 指标 | 值 |
+|---|---|
+| launch HTTP | 10,000 请求 / 10,000 OK / 0 KO，吞吐 24.81 rps，p95 2,458 ms、p99 5,388 ms、max 13.6 s |
+| 根运行 | 10,000 创建、10,000 终态（`control-run-terminal-counts.sql` 四项均 10,000） |
+| 业务结果 | `job_instance` 10,000 全部 `SUCCESS`，0 FAILED；非成功分区 0 |
+| REPORT 错误 | Orchestrator 0 次 5xx / `Request cancelled`；Atomic Worker 0 ERROR |
+| 收敛时长 | 流量 07:16:52–07:23:35（+08），最后一个实例 08:14:46 完成 → 流量结束后约 51 分钟 |
+| 脚本判定 | 2,400 s 等待窗口在 9,952/10,000 结束（`exit_code=1`），剩余 48 个在窗口后约 6.5 分钟收敛 |
+
+启动链路与锁：
+
+- launch 阶段均值：validation 139 ms、prepare 236 ms、dispatch 344 ms、plan 18 ms、resource 49 ms、materialize 134 ms、transition 75 ms（主 Orchestrator 3,387 次）
+- `pg_blocking_pids` 采样基本为 0，偶发 1–3 个瞬时行锁等待；无 `FOR UPDATE` 车龙，无 `idle in transaction` 堆积
+- advisory 锁峰值等待 12.7 s、lock waiters 峰值 23，均为批次日结算栅栏与调度器既有串行点，不是请求行锁
+- claim 延迟 avg 4.5 s / p95 17.2 s；实例时长 avg 6.0 s / p95 22.6 s
+- 每次 launch 都至少被 defer 一次（10,000 API + 10,000 EVENT 重放），说明单 Workflow × 业务日只允许一个活跃运行的约束决定了 1w 的吞吐：100 个业务日槽位 × 运行时长
+
+结论与边界：
+
+- 修复后 1w **可以 100% 收敛且 0 失败**，与此前 1w 的失败形态（REPORT 500、`EXTERNAL_OUTCOME_UNKNOWN`、大量未终态）不同。
+- 但默认 2,400 s 等待窗口不足；同等条件复跑需把 `STORM_WAIT_SECONDS` 提高到 3,600 s 才能让脚本自身判定通过。
+- 本轮 host load 峰值 69.2、数据库 CPU 约 3 核，脚本已标记不具备基线可比资格，不能作为 staging/生产容量结论。
+- 10w 与多租户公平性未在本轮执行；`p2capacity` 运行态按 `SKIP_AUTO_CLEANUP=1` 保留。
+
 ## 复现边界
 
 - 本轮是本地开发环境证据，不是 staging/生产容量结论；宿主机负载和本地 JVM 参数使其不适合作为发布门禁。
