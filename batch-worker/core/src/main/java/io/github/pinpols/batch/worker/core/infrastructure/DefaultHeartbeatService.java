@@ -62,7 +62,8 @@ public class DefaultHeartbeatService implements HeartbeatService {
   }
 
   private void applyPlatformDirective(WorkerRegistration registration) {
-    boolean draining = WorkerRegistryStatus.DRAINING.code().equals(registration.getStatus())
+    boolean draining = registration.isPlatformDraining()
+        || WorkerRegistryStatus.DRAINING.code().equals(registration.getStatus())
         || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registration.getStatus());
     consumptionControls.orderedStream().forEach(control -> {
       try {

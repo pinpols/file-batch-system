@@ -48,6 +48,18 @@ profile、入口许可、连接池、启动期保留连接预算、PostgreSQL �
 （OS/架构/CPU/内存/JDK）和实际运行容器集合的环境签名。换机器或升级 Docker/JDK 后可以运行，但必须
 建立新容量基线；签名不同或被标记为不可比时，不能直接做跨环境性能增减结论。
 
+预检还会拒绝宿主模式的应用进程：18080–18087 上除 Docker 端口代理之外的监听者（例如
+`scripts/local/start-all.sh` 起的 JVM）会让预检以 `host application stack to be stopped` 失败。
+宿主 JVM 与容器使用同一批 `worker_code`，并且可以分别绑定 IPv4/IPv6 的同一端口，Docker 侧检查
+看不到它们，但会一起消耗 CPU、PostgreSQL 连接和注册状态。
+
+PostgreSQL 参数的期望值由 `CAPACITY_EXPECT_*` 声明，默认对齐 `local` 口径
+（`synchronous_commit=on`、`max_wal_size=1GB`、`checkpoint_timeout=5min`）。要先按
+`config/ops-governance/benchmark.env` 重建数据库再跑 benchmark 口径，并显式传
+`CAPACITY_EXPECT_SYNCHRONOUS_COMMIT=off`、`CAPACITY_EXPECT_WAL_COMPRESSION=pglz`、
+`CAPACITY_EXPECT_MAX_WAL_SIZE_BYTES=4294967296`、`CAPACITY_EXPECT_CHECKPOINT_TIMEOUT_SECONDS=900`；
+脚本按声明值严格比对，两套口径不能混用，也不能把 local 口径的结果当作 benchmark 基线。
+
 ## 变更守则
 
 1. 新增环境专用参数先确定唯一所有者，再添加配置；不得通过 `.env.local` 临时覆盖并形成隐式基线。

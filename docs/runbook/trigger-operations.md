@@ -163,9 +163,11 @@ Workflow 首次建档时会加密保存 START 载荷；该运行的入口节点�
 | `batch.workflow.launch-wait.poll-interval-millis` | 5000 | 扫描周期 |
 | `batch.workflow.launch-wait.batch-size` | 100 | 每租户每轮最多领取数 |
 | `batch.workflow.launch-wait.retry-delay-seconds` | 5 | 领取后失败或中断的最早再次尝试间隔 |
+| `batch.workflow.launch-wait.parallelism` | 4 | 每轮并发启动数；一条等待就是一次完整 launch 事务，串行会限制单租户恢复吞吐 |
+| `batch.workflow.launch-wait.resume-batch-size` | 8 | 终态提交后立即补槽的单次上限；其余交给定时扫描 |
 
 持续等待时先查看对应活跃 WorkflowRun、Worker/分区和资源准入原因；不要删除等待行或重新生成 requestId。
-该机制不提高一个槽位的业务吞吐上限。根运行离开 `CREATED`/`RUNNING` 并提交后会立刻再扫该租户的空闲槽位，不必等到下一次 5 秒轮询；同一槽位仍然一次只恢复最早的一条等待。长期积压的容量和告警仍须按业务量与追平时限验收。
+该机制不提高一个槽位的业务吞吐上限。根运行离开 `CREATED`/`RUNNING` 并提交后会立刻再扫该租户的空闲槽位，不必等到下一次 5 秒轮询；补槽提交到独立有界线程池并按租户合并，同一租户已有一轮在执行时不叠加，丢掉的触发由 5 秒扫描兜底。同一槽位仍然一次只恢复最早的一条等待。长期积压的容量和告警仍须按业务量与追平时限验收。
 
 Job依赖等待若已CANCELLED、原请求已REJECTED而根仍活跃，恢复器会按原请求固定的节点尝试继续传播失败；失败分支、跳过、根终态和终态Outbox共用原有DAG事务。一次节点写入失败会留下可重扫状态，下一轮继续，不需要重建requestId。暂停期间暂缓，恢复后再扫；旧拒绝不会覆盖新尝试或已绑定实例。原请求和等待清理必须保留尚未完成的传播证据，本地保留期入口已按[专题§2.11](../plans/database-reference-integrity-remediation-2026-10-18.md)排除尚保留的冷热Workflow关联，完整弱引用并发、热冷恢复与目标部署仍开放；不要手改节点终态或删账本来消除告警。
 

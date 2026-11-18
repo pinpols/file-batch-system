@@ -174,6 +174,12 @@ public class HttpWorkerRegistryClient implements WorkerRegistryClient {
     }
     boolean responseRequiresDrain = response.shouldDrain()
         || WorkerHeartbeatResponse.STATUS_DRAINING.equals(response.platformStatus());
+    registration.setPlatformDraining(responseRequiresDrain);
+    // 平台已终止该注册：只停止认领，不把本进程状态改写成 DRAINING。否则心跳会持续上报 DRAINING，
+    // 服务端把它固化成非终止的掉空态，进程重启后也无法重新上线（只能改库）。
+    if (WorkerHeartbeatResponse.STATUS_DECOMMISSIONED.equals(response.platformStatus())) {
+      return;
+    }
     if (responseRequiresDrain) {
       registration.setStatus(WorkerRegistryStatus.DRAINING.code());
     } else if (WorkerHeartbeatResponse.STATUS_NORMAL.equals(response.platformStatus())) {

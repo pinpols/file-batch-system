@@ -12,9 +12,10 @@ import java.util.List;
  * <p>字段语义:
  *
  * <ul>
- *   <li>{@code platformStatus}:平台对该 worker 的期望态;当前取值 {@code NORMAL} / {@code DRAINING}
- *       (worker_registry.status 为 DRAINING/DECOMMISSIONED 时)。{@code PAUSED} / {@code DEGRADED}
- *       预留给后续租户级暂停 / 降级基础设施。
+ *   <li>{@code platformStatus}:平台对该 worker 的期望态;当前取值 {@code NORMAL} / {@code DRAINING} / {@code
+ *       DECOMMISSIONED}(worker_registry.status 分别为 ONLINE / DRAINING / DECOMMISSIONED)。{@code PAUSED} / {@code DEGRADED}
+ *       预留给后续租户级暂停 / 降级基础设施。{@code DECOMMISSIONED} 必须与 {@code DRAINING} 区分:它表示注册已终止,worker
+ *       应停止认领但不要把自己的上报状态改写成 DRAINING,否则重新注册时会把终止态固化成可持续的 DRAINING。
  *   <li>{@code desiredMaxConcurrent}:平台当前生效的最大并发(取自 worker_registry.max_concurrent,V87
  *       反压字段；支持上报的 worker 注册时先以本地许可数校准); null = 不下发,SDK 用本地配置。
  *   <li>{@code shouldDrain}:true = worker 应停止认领新任务、跑完在手任务后下线(DRAINING/DECOMMISSIONED)。
@@ -38,15 +39,23 @@ public record WorkerHeartbeatResponse(
   /** 平台期望态:排空中。 */
   public static final String STATUS_DRAINING = "DRAINING";
 
+  /** 平台期望态:注册已终止;停止认领,但不改写本进程上报的注册状态。 */
+  public static final String STATUS_DECOMMISSIONED = "DECOMMISSIONED";
+
   /**
    * 从 worker_registry 当前状态 + 并发上限构造指令。仅依赖 batch-common 内的 {@link WorkerRegistryStatus},不引
    * orchestrator 类型。
+   *
+   * <p>DRAINING 与 DECOMMISSIONED 都要求停止认领({@code shouldDrain=true}),但 {@code platformStatus} 保留差异:
+   * 前者要求 worker 把上报状态改成 DRAINING,后者要求保留存活状态,让进程重启后的新注册能重新上线。
    */
   public static WorkerHeartbeatResponse fromWorkerState(
       String workerStatus, Integer maxConcurrent) {
-    boolean draining = WorkerRegistryStatus.DRAINING.name().equals(workerStatus)
-        || WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
+    boolean decommissioned = WorkerRegistryStatus.DECOMMISSIONED.name().equals(workerStatus);
+    boolean draining = WorkerRegistryStatus.DRAINING.name().equals(workerStatus);
+    String platformStatus =
+        decommissioned ? STATUS_DECOMMISSIONED : draining ? STATUS_DRAINING : STATUS_NORMAL;
     return new WorkerHeartbeatResponse(
-        draining ? STATUS_DRAINING : STATUS_NORMAL, maxConcurrent, draining, List.of(), null);
+        platformStatus, maxConcurrent, draining || decommissioned, List.of(), null);
   }
 }

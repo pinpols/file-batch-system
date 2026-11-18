@@ -45,6 +45,8 @@ public class DefaultWorkerLifecycleManager implements WorkerLifecycleManager {
       activeRegistration.setWorkerId("worker-" + UUID.randomUUID());
     }
     activeRegistration.setStatus(WorkerRegistryStatus.ONLINE.code());
+    // 新进程的注册不继承上一代进程收到的停机指令。
+    activeRegistration.setPlatformDraining(false);
     OffsetDateTime now = dateTimeSupport.nowOffsetUtc();
     activeRegistration.setRegisteredAt(now);
     activeRegistration.setLastHeartbeatAt(now);

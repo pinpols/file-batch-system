@@ -36,6 +36,35 @@
 | 架构适配性候选 | 2026-11-02 评估提出、尚未排期的候选，均需先有业务 SLO 或目标负载再定范围：ASSESS-20261102-01 结果未知恢复合同（延续 ADR-049，逐类核对副作用确认与 REPORT Outbox 部署）；-02 积压容量与接纳语义（WAITING 硬上限、派发 lag gate 先定接纳/拒绝/公平语义）；-03 保留期与恢复窗口联动（Kafka retention、Outbox、去重账本、归档与重放窗口）；-04 以现有 Helm/HPA/KEDA 与 SLI 降低运维复杂度。候选 3（状态所有权）已由[架构设计审查](../audit/architecture-design-review-2026-11-03.md)承接。ASSESS-20261102-DEC-01 已于 2026-11-04 裁定：保留为登记的受限复位例外，边界与守护见 [`core-model.md`](../architecture/core-model.md) 及 `BoundedRetryResetCallerArchTest`、`BoundedRetryResetSqlContractTest`。见[评估](../audit/architecture-suitability-assessment-2026-11-02.md#可考虑的架构优化顺序)与[复核](../audit/architecture-suitability-assessment-review-2026-11-04.md)。 |
 | 三租户覆盖验收 | 本机已通过（2026-11-03）：三包经真实 HTTP 导入回读，`coverage-harness.sh all --include-trigger-matrix` 基础 36 + 触发矩阵 8 个场景 SUCCESS、前后清理证据完整、`test_coverage_harness.py` 8/8。仍开放：浏览器向导路径、Quartz 自身写入拒绝 occurrence 的端到端、staging/目标环境执行，见[覆盖包计划](tenant-coverage-packages-2026-11-03.md#harness-固化)。 |
 | 条件暂缓与业务触发项 | 只有满足所引业务/容量/合规条件才推进的事项，见[待做与暂缓](#三-待做)、[条件暂缓](#条件暂缓与范围护栏)和[延期复核入口](#文档收敛后保留的延期与历史复核入口2026-10-24)；不得当作当前编码 blocker 重复立项。 |
+| Worker 生命周期与压测门禁（2026-11-18） | 三项可执行缺陷已修复/处理（drain 撤销接口、注册 CAS 可观测性、压测宿主监听门禁），一项复核关闭；四项结构瓶颈（同日单活跃运行、批次日结算栅栏、派发 outbox 延迟、积压时单请求延迟）待业务/容量决策，见[Worker 生命周期与压测门禁](#worker-生命周期与压测门禁2026-11-18)。 |
+
+## Worker 生命周期与压测门禁（2026-11-18）
+
+2026-11-18 修完 launch-wait 恢复串行与 Worker 重启卡 `DRAINING` 后复核。可执行缺陷已逐项复核并按结论收口（下方 A 组），结构瓶颈保留待决策（B 组）。前后对比与运行环境见[本地压测记录](../verifications/load-test-local-2026-11-15.md)。本批代码改动已在工作区通过单测与两轮 1w（修复前 `ed5d28d57`、修复后），**尚未提交/合入**。
+
+### 可执行缺陷
+
+| 编号 | 缺陷 | 结论与证据 |
+|---|---|---|
+| **WL-20261118-01** | 运维 drain 不可撤销 | ✅ 2026-11-18 完成。新增 `POST /internal/workers/{code}/resume`：`DRAINING`/`DECOMMISSIONED`/`OFFLINE` → `ONLINE` 并清空 drain 标记，`ONLINE` 幂等；`DRAINING` 仍有在途任务时 409。单测覆盖四种状态与并发冲突，实测内部接口返回 200/`ONLINE`。文档见[滚动升级手册](../runbook/rolling-upgrade-workers.md#撤销排空内部接口)。 |
+| **WL-20261118-02** | 注册 CAS 静默失败 | ✅ 2026-11-18 处理，不重试。复核后确认“保留并发 drain 胜出”是正确语义，重试成 `ONLINE` 会撤销运维决定；只补了 WARN 日志便于排查。 |
+| **WL-20261118-03** | 压测隔离门禁看不到宿主 JVM | ✅ 2026-11-18 完成。预检新增宿主监听检查（18080–18087，`CAPACITY_APP_PORTS` 可覆盖），非 Docker 监听者以 `host application stack to be stopped` 失败；实测用 18083 上的临时监听进程验证 exit 2，停止后预检恢复通过。 |
+| **WL-20261118-04** | 容量脚本 PG 期望默认 local | ❌ 关闭（非缺陷）。脚本按 `CAPACITY_EXPECT_*` 严格比对并在不符时失败；默认值对齐 local 是刻意口径。benchmark 口径必须先按 `benchmark.env` 重建数据库并显式传期望值，已在[环境画像边界](../runbook/environment-profile-boundaries.md)写明，两套口径不得混用。 |
+
+### 结构瓶颈（需业务或容量决策）
+
+| 编号 | 项 | 现状与证据 |
+|---|---|---|
+| **BF-20261118-01** | 单 Workflow × 业务日仅一个活跃运行 | `WorkflowRunMapper.insertIfActiveSlotFree` 的唯一部分索引；容量 = 业务日数 × 1/运行时长。1w（100 业务日）峰值 25–28 完成/s |
+| **BF-20261118-02** | 批次日结算 advisory 栅栏 | 同日 launch 串行；历史采样最大等待 12.7 s。多业务日可分散，单日洪峰会排队 |
+| **BF-20261118-03** | 派发 outbox 发布延迟 | 任务事件创建→发布 avg 1–2 s、p95 ≈ 6 s，48% < 1 s；批处理与 CPU 争用，不是空闲退避 |
+| **BF-20261118-04** | 积压时单请求延迟 | `parallelism=8` 时 launch p95 585 ms、实例 p95 5.97 s；`parallelism=4` 延迟更低但排空更慢。可考虑按 `workflow_launch_wait` 深度自适应，当前不建议 |
+
+### 本轮已修复（供追溯，待合入）
+
+- launch-wait 恢复按 `parallelism` 并发、终态补槽异步并按租户合并、单次只处理 `resume-batch-size`
+- Worker 重启复活：`DECOMMISSIONED` 不再被翻译成 `DRAINING`；注册对无 `drain_started_at` 的终止态按新进程复活，运维 drain 保留
+
 
 ## 文件等待与入口扫描（2026-11-09）
 

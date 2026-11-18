@@ -29,6 +29,15 @@ public interface WorkerDrainGovernanceService {
    */
   WorkerRegistryEntity warmup(String tenantId, String workerCode);
 
+  /**
+   * 撤销排空/退役，把注册恢复为 ONLINE。
+   *
+   * <p>状态转移：DRAINING / DECOMMISSIONED / OFFLINE → ONLINE；ONLINE 幂等返回。DRAINING 且仍有活跃任务时拒绝，
+   * 保持“跑完在途再下线”的语义；DECOMMISSIONED 允许恢复，因为接管流程已经回收过它的任务。运维误排空或维护提前结束时
+   * 使用，不需要改库，也不依赖 worker 重启（重启会被注册侧的“运维 drain 保留”规则挡回）。
+   */
+  WorkerRegistryEntity resume(String tenantId, String workerCode);
+
   List<JobTaskEntity> listClaimedTasks(String tenantId, String workerCode);
 
   void takeoverAfterDrainTimeout(String tenantId, String workerCode);

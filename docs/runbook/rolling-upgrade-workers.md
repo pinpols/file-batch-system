@@ -36,6 +36,22 @@
 
 **说明**：控制台将请求转发到 Orchestrator 内部接口 `/internal/workers/...`；生产应通过网络策略仅允许 Console 访问 Orchestrator。
 
+### 撤销排空（内部接口）
+
+排空和退役是运维决定，不会被 worker 重启清除（新进程重新注册时保留 `drain_started_at`）。误排空、
+维护提前结束或需要把已退役的注册拉回时，调用内部接口：
+
+```bash
+curl -X POST "http://<orchestrator>/internal/workers/<workerCode>/resume" \
+  -H "X-Internal-Secret: $BATCH_INTERNAL_SECRET" \
+  -H 'Content-Type: application/json' \
+  -d '{"tenantId":"<tenant>"}'
+```
+
+- 允许 `DRAINING` / `DECOMMISSIONED` / `OFFLINE` → `ONLINE`，并清空 `drain_started_at` / `drain_deadline_at`；`ONLINE` 幂等返回。
+- `DRAINING` 仍有在途任务时返回 409：等它跑完，或先执行 `takeover` 回收任务再恢复。
+- 该接口只对内部调用开放，Console 未暴露；恢复不改变已派发任务的归属。
+
 ## 推荐滚动步骤（单 Worker 实例）
 
 1. **确认实例 identity**：从运维侧确认要替换的 Pod/进程对应的 `workerCode`（与注册表一致）。

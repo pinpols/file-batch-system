@@ -120,6 +120,17 @@ public class WorkerController {
     return WorkerRegistryResponse.from(worker);
   }
 
+  /** 撤销排空/退役：误排空或维护提前结束时使用，DRAINING 仍有在途任务时拒绝。 */
+  @PostMapping("/{workerCode}/resume")
+  public WorkerRegistryResponse resume(
+      @PathVariable String workerCode,
+      @RequestBody(required = false) WorkerTenantRequest request,
+      HttpServletRequest httpRequest) {
+    String tenantId = resolveTenant(request, httpRequest);
+    WorkerRegistryEntity worker = workerDrainGovernanceService.resume(tenantId, workerCode);
+    return WorkerRegistryResponse.from(worker);
+  }
+
   @GetMapping("/{workerCode}/claimed-tasks")
   public List<ClaimedTaskSummaryResponse> claimedTasks(
       @PathVariable String workerCode,
