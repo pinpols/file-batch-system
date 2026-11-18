@@ -490,14 +490,32 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         EmptyChecks.isNotNull(preparation.capacitySnapshot())
             ? preparation.capacitySnapshot()
             : WorkflowLaunchWaitSnapshot.capture(preparation.originalRequest(), request, created);
-    int inserted = workflowRunMapper.insertIfActiveSlotFree(created);
-    if (inserted == 0) {
-      // 退出当前事务后再持久化等待；加密在 defer 内、取行锁之前完成，避免锁内做 KMS。
-      throw new CapacityWaitRequired(preparation.originalRequest(), snapshotForWait);
-    }
+    insertWithActiveSlot(created, preparation, snapshotForWait);
     attachReplayOperationTarget(request, created, startedAt);
     insertStartNodeRun(request, created, startedAt);
     return created;
+  }
+
+  /**
+   * ADR-050：按定义级上限逐个尝试活跃槽位。唯一索引负责并发裁决，不受准入事务 REPEATABLE READ
+   * 快照影响；槽位全被占用时抛出容量等待，由调用方在事务外持久化。
+   */
+  private void insertWithActiveSlot(
+      WorkflowRunEntity created,
+      RunPreparation preparation,
+      WorkflowLaunchWaitSnapshot snapshotForWait) {
+    Integer configuredLimit = workflowDefinitionMapper.selectMaxActiveRunsPerBizDate(
+        created.getTenantId(), created.getWorkflowDefinitionId());
+    int maxActiveRuns =
+        EmptyChecks.isNull(configuredLimit) || configuredLimit < 1 ? 1 : configuredLimit;
+    for (int slot = 1; slot <= maxActiveRuns; slot++) {
+      created.setActiveSlot(slot);
+      if (workflowRunMapper.insertIfActiveSlotFree(created) == 1) {
+        return;
+      }
+    }
+    // 退出当前事务后再持久化等待；加密在 defer 内、取行锁之前完成，避免锁内做 KMS。
+    throw new CapacityWaitRequired(preparation.originalRequest(), snapshotForWait);
   }
 
   /** 事务内准入结果：本次运行实际采用的定义与初始节点。 */

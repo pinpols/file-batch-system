@@ -13,7 +13,11 @@ public interface WorkflowRunMapper {
 
   int insert(WorkflowRunEntity entity);
 
-  /** 仅活跃名额冲突返回零；其他唯一键、外键及检查约束异常继续向调用方传播。 */
+  /**
+   * 按活跃槽位插入根运行；该槽位已被占用时返回零，其他唯一键、外键及检查约束异常继续向调用方传播。
+   *
+   * <p>ADR-050：槽位由准入方按定义级上限逐个尝试，唯一索引是并发下的最终裁决，不依赖事务快照。
+   */
   int insertIfActiveSlotFree(WorkflowRunEntity entity);
 
   WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);

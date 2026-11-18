@@ -281,6 +281,10 @@ Workflow 的 `crossDay` 是独立的冻结业务载荷契约；Java SDK handler 
 
 workflow_run 没有 WAITING / READY；等待依赖属于节点运行状态。`PAUSED` 是停止推进新节点的可恢复非终态。
 
+同一租户、Workflow、业务日与执行模式的活跃（`CREATED`/`RUNNING`）根运行数量受
+`workflow_definition.max_active_runs_per_biz_date`（1..64，默认 1）限制；超过上限的 launch 进入
+`workflow_launch_wait` 排队。上限与槽位实现见 [ADR-050](adr/ADR-050-multiple-active-runs-per-biz-date.md)。
+
 #### WorkflowNodeRunStatus
 
 <!-- enum-sync:WorkflowNodeRunStatus:start -->

@@ -55,7 +55,7 @@
 
 | 编号 | 项 | 现状与证据 |
 |---|---|---|
-| **BF-20261118-01** | 单 Workflow × 业务日仅一个活跃运行 | `WorkflowRunMapper.insertIfActiveSlotFree` 的唯一部分索引；容量 = 业务日数 × 1/运行时长。1w（100 业务日）峰值 25–28 完成/s |
+| **BF-20261118-01** | 单 Workflow × 业务日仅一个活跃运行 | ✅ 2026-11-18 按 [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 改为定义级 `max_active_runs_per_biz_date`（1..64，默认 1），用活跃槽位 + 唯一索引替代原唯一索引；默认值行为不变。剩余：Console/前端尚未暴露该字段，目前按 SQL 设置 |
 | **BF-20261118-02** | 批次日结算 advisory 栅栏 | 同日 launch 串行；历史采样最大等待 12.7 s。多业务日可分散，单日洪峰会排队 |
 | **BF-20261118-03** | 派发 outbox 发布延迟 | 任务事件创建→发布 avg 1–2 s、p95 ≈ 6 s，48% < 1 s；批处理与 CPU 争用，不是空闲退避 |
 | **BF-20261118-04** | 积压时单请求延迟 | `parallelism=8` 时 launch p95 585 ms、实例 p95 5.97 s；`parallelism=4` 延迟更低但排空更慢。可考虑按 `workflow_launch_wait` 深度自适应，当前不建议 |

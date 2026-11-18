@@ -31,6 +31,9 @@ public class WorkflowRunEntity implements Stateful {
   /** ADR-026 dry-run 演练标记；与 batch_day_instance.dry_run / job_instance.dry_run 必须一致。 */
   private Boolean dryRun;
 
+  /** ADR-050 活跃槽位（1..定义上限）；仅 CREATED/RUNNING 参与唯一约束。 */
+  private Integer activeSlot;
+
   @Override
   public String getStatus() {
     return runStatus;
