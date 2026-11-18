@@ -51,6 +51,8 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 修复 CodeQL `java/log-injection`（#1462）：注册 CAS 被并发 drain 挡下时的 WARN 改用 `LogSanitizer`，不再直接拼接注册请求里的租户/Worker/状态值。
+- 升级 Rust SDK 的 `libz-sys` 1.1.31 → 1.1.33，规避 [RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544)（zlib `gz_vacate()` 堆溢出）。
 - P2 容量预检不再漏掉宿主模式应用进程：除 Docker 容器检查外，预检会检查 18080–18087 上的非 Docker 监听者（`CAPACITY_APP_PORTS` 可覆盖端口），发现宿主 `start-all.sh` 起的 JVM 时以 `host application stack to be stopped` 失败。此前宿主 JVM 与容器共用 `worker_code` 和端口，容量轮次会被静默污染。
 - Worker 优雅停机后重启不再永久卡在 `DRAINING`：心跳响应把 `DECOMMISSIONED` 与 `DRAINING` 分开下发，worker 收到终止指令只停止认领、不改写自己上报的注册状态；注册入口对没有 `drain_started_at` 的 `DRAINING`/`DECOMMISSIONED`（上一代进程自报的停机标记）按新进程复活为 `ONLINE`，运维通过 drain 治理发起、带 `drain_started_at` 的终止态仍保持不变。修复前一次 `docker stop`/滚动重启就会让该 Worker 永远不再接任务，且没有接口能拉回。
 - launch-wait 恢复不再串行占用完成线程：一轮内按 `batch.workflow.launch-wait.parallelism`（默认 4）并发启动不同 requestId；终态提交后的立即补槽改为提交到独立有界线程池并按租户合并，单次只处理 `resume-batch-size`（默认 8）条，其余交给 5 秒扫描；执行器拒绝时释放合并标记并由扫描兜底。同一 requestId 仍由等待行租约互斥，同一 Workflow、业务日和 dry-run 仍只允许一个活跃 run。容量画像 profile 将该并发度设为 8。
