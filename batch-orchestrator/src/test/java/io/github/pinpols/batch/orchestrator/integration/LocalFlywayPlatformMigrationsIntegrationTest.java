@@ -785,7 +785,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
               """;
     final String selectIndexdefSql2 = """
               select indexdef from pg_indexes
-              where schemaname = 'batch' and indexname = 'uk_workflow_run_active'
+              where schemaname = 'batch' and indexname = 'uk_workflow_run_active_slot'
               """;
     final String selectCountSql7 = """
               select count(*) from information_schema.columns
@@ -1016,7 +1016,7 @@ class LocalFlywayPlatformMigrationsIntegrationTest {
       Long outboxArchiveTenantGuardIndexes = jdbc.queryForObject(selectCountSql6, Long.class);
       assertThat(outboxArchiveTenantGuardIndexes).isEqualTo(2L);
       String activeWorkflowIndex = jdbc.queryForObject(selectIndexdefSql2, String.class);
-      assertThat(activeWorkflowIndex).contains("dry_run");
+      assertThat(activeWorkflowIndex).contains("UNIQUE", "dry_run", "active_slot");
       assertThat(constraintDefinition(jdbc, "job_instance_archive", "ck_job_instance_status"))
           .contains("SUCCESS_DRY_RUN", "FAILED_DRY_RUN");
       assertThat(constraintDefinition(jdbc, "workflow_run_archive", "ck_workflow_run_status"))
