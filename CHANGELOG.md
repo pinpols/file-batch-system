@@ -26,6 +26,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- `.env.example` 移除未引用的 `BUSINESS_DB_SCHEMA`；实际生效的是 `BATCH_BUSINESS_DB_SCHEMA`，代码与 Compose 均未读取无前缀变量。
 
 - Outbox 查询（`/queries/outbox-retries`、`/queries/outbox-deliveries`）及其实时流（`/stream/outbox-*/events`）、补跑审批查询 `/queries/catch-up-approvals` 改为只对平台管理员和租户管理员开放，与菜单「Outbox」「审批中心」及移动端路由一致；审计员与普通租户用户调用返回 403。
 - `GET /api/console/queries/operation-audits` 改为只对平台管理员、租户管理员和审计员开放，与菜单「操作审计」一致；普通租户用户此前可直接调接口读到本租户管理员的操作记录，现在返回 403。文件审计 `/queries/audits` 不变，自助服务「我的审计」等页面仍在使用。
