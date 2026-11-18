@@ -6,11 +6,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -323,15 +326,15 @@ class TriggerApiAdmissionGuardTest {
     awaitQueued(guard, 1);
   }
 
-  private static void awaitQueued(TriggerApiAdmissionGuard guard, int queued)
-      throws InterruptedException {
-    for (int attempt = 0; attempt < 50; attempt++) {
-      if (guard.queuedForTest() == queued) {
-        return;
-      }
-      Thread.sleep(10);
+  private static void awaitQueued(TriggerApiAdmissionGuard guard, int queued) {
+    try {
+      Awaitility.await()
+          .atMost(Duration.ofMillis(500))
+          .pollInterval(Duration.ofMillis(10))
+          .untilAsserted(() -> assertThat(guard.queuedForTest()).isEqualTo(queued));
+    } catch (ConditionTimeoutException exception) {
+      throw new AssertionError("admission queue did not reach " + queued, exception);
     }
-    throw new AssertionError("admission queue did not reach " + queued);
   }
 
   private static CountDownLatch[] latches(int count) {

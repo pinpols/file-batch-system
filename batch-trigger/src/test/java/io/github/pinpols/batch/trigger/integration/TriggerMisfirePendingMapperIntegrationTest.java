@@ -2,6 +2,7 @@ package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.persistence.entity.TriggerMisfirePendingEntity;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
@@ -13,6 +14,7 @@ import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -373,22 +375,25 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
 
   // ── helpers ─────────────────────────────────────────────
 
-  private void awaitMisfireReconcilerLockAvailable() throws InterruptedException {
+  private void awaitMisfireReconcilerLockAvailable() {
     final String selectNotSql = """
         select not exists (select 1 from batch.shedlock where name = ?\s\
         and lock_until > timezone('utc', current_timestamp))\
         """;
 
-    long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
-    while (System.nanoTime() < deadline) {
-      Boolean available = jdbcTemplate.queryForObject(
-          selectNotSql, Boolean.class, "trigger_misfire_pending_reconciler");
-      if (Boolean.TRUE.equals(available)) {
-        return;
-      }
-      Thread.sleep(50);
+    try {
+      await()
+          .atMost(Duration.ofSeconds(20))
+          .pollInterval(Duration.ofMillis(50))
+          .until(
+              () ->
+                  Boolean.TRUE.equals(
+                      jdbcTemplate.queryForObject(
+                          selectNotSql, Boolean.class, "trigger_misfire_pending_reconciler")));
+    } catch (ConditionTimeoutException exception) {
+      throw new AssertionError(
+          "Timed out waiting for the startup misfire reconciliation lock", exception);
     }
-    throw new AssertionError("Timed out waiting for the startup misfire reconciliation lock");
   }
 
   private TriggerMisfirePendingEntity newPending(Instant scheduledFireTime) {

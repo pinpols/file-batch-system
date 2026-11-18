@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.Instant;
@@ -259,10 +260,11 @@ class FilesystemObjectStoreTest {
     store.put(BUCKET, "et.txt", new ByteArrayInputStream(before), before.length, "x");
     String etagBefore = store.list(BUCKET, "et.txt", null, 1).objects().get(0).etag();
 
-    // 等 mtime 步进至少 10ms 再改写
-    Thread.sleep(20L);
-    byte[] after = "abcd".getBytes(StandardCharsets.UTF_8);
+    // 用同长度内容改写并显式推进 mtime，验证 etag 的 mtime 维度，不依赖文件系统时间戳粒度。
+    byte[] after = "xyz".getBytes(StandardCharsets.UTF_8);
     store.put(BUCKET, "et.txt", new ByteArrayInputStream(after), after.length, "x");
+    Path stored = root.resolve(BUCKET).resolve("et.txt");
+    Files.setLastModifiedTime(stored, FileTime.from(Instant.now().plusSeconds(2)));
     String etagAfter = store.list(BUCKET, "et.txt", null, 1).objects().get(0).etag();
 
     assertThat(etagAfter).isNotEqualTo(etagBefore);

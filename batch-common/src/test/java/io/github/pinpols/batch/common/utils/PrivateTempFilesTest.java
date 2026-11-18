@@ -2,14 +2,18 @@ package io.github.pinpols.batch.common.utils;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -143,28 +147,34 @@ class PrivateTempFilesTest {
     }
   }
 
-  private static Path awaitOwnedFile(Path tempDirectory, Process owner) throws Exception {
+  private static Path awaitOwnedFile(Path tempDirectory, Process owner) {
     Path privateRoot = tempDirectory.resolve("file-batch-private");
     Path readyFile = tempDirectory.resolve(LOCK_OWNER_READY_FILE);
-    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
-    while (System.nanoTime() < deadline) {
-      if (Files.exists(readyFile) && Files.isDirectory(privateRoot)) {
+    AtomicReference<Path> found = new AtomicReference<>();
+    try {
+      await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(20)).until(() -> {
+        if (!owner.isAlive()) {
+          throw new IllegalStateException("lock owner process exited before creating its file");
+        }
+        if (!Files.exists(readyFile) || !Files.isDirectory(privateRoot)) {
+          return false;
+        }
         try (var files = Files.list(privateRoot)) {
-          var payload = files
+          return files
               .filter(path -> path.getFileName().toString().startsWith("lock-crash-review-"))
               .filter(path -> !path.getFileName().toString().endsWith(".lock"))
-              .findFirst();
-          if (payload.isPresent()) {
-            return payload.get();
-          }
+              .findFirst()
+              .map(path -> {
+                found.set(path);
+                return true;
+              })
+              .orElse(false);
         }
-      }
-      if (!owner.isAlive()) {
-        throw new IllegalStateException("lock owner process exited before creating its file");
-      }
-      Thread.sleep(20);
+      });
+    } catch (ConditionTimeoutException exception) {
+      throw new IllegalStateException("timed out waiting for lock owner file", exception);
     }
-    throw new IllegalStateException("timed out waiting for lock owner file");
+    return found.get();
   }
 
   /** 独立 JVM 持有文件锁,父测试用强杀模拟 Worker 退出,不执行 close。 */

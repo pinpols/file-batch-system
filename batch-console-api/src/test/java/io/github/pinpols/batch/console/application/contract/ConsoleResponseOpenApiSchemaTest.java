@@ -4,11 +4,21 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileChannelResponse;
 import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFilePipelineResponse;
+import io.github.pinpols.batch.console.domain.file.application.contract.response.ConsoleFileRecordResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleBatchDayResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobDefinitionResponse;
+import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobInstanceResponse;
 import io.github.pinpols.batch.console.domain.job.application.contract.response.ConsoleJobStepInstanceResponse;
+import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertEventResponse;
 import io.github.pinpols.batch.console.domain.notification.application.contract.response.ConsoleAlertRoutingResponse;
+import io.github.pinpols.batch.console.domain.observability.application.contract.response.ConsoleUsageSummaryResponse;
 import io.github.pinpols.batch.console.domain.rbac.application.contract.response.ConsoleTenantResponse;
+import io.github.pinpols.batch.console.domain.workflow.application.contract.response.ConsoleWorkflowRunResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleApprovalCommandResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleTraceSnapshotResponse;
+import io.github.pinpols.batch.console.shared.view.ConsoleWorkerRegistryResponse;
 import java.io.IOException;
 import java.lang.reflect.RecordComponent;
 import java.nio.file.Files;
@@ -53,7 +63,17 @@ class ConsoleResponseOpenApiSchemaTest {
         Arguments.of(ConsoleFilePipelineResponse.class, "ConsoleFilePipelineResponse"),
         Arguments.of(ConsoleJobDefinitionResponse.class, "ConsoleJobDefinitionResponse"),
         Arguments.of(ConsoleJobStepInstanceResponse.class, "ConsoleJobStepInstanceResponse"),
-        Arguments.of(ConsoleTenantResponse.class, "ConsoleTenantResponse"));
+        Arguments.of(ConsoleTenantResponse.class, "ConsoleTenantResponse"),
+        Arguments.of(ConsoleFileChannelResponse.class, "ConsoleFileChannelResponse"),
+        Arguments.of(ConsoleFileRecordResponse.class, "ConsoleFileRecordResponse"),
+        Arguments.of(ConsoleBatchDayResponse.class, "ConsoleBatchDayResponse"),
+        Arguments.of(ConsoleJobInstanceResponse.class, "ConsoleJobInstanceResponse"),
+        Arguments.of(ConsoleAlertEventResponse.class, "ConsoleAlertEventResponse"),
+        Arguments.of(ConsoleUsageSummaryResponse.class, "ConsoleUsageSummaryResponse"),
+        Arguments.of(ConsoleWorkflowRunResponse.class, "ConsoleWorkflowRunResponse"),
+        Arguments.of(ConsoleApprovalCommandResponse.class, "ConsoleApprovalCommandResponse"),
+        Arguments.of(ConsoleTraceSnapshotResponse.class, "ConsoleTraceSnapshotResponse"),
+        Arguments.of(ConsoleWorkerRegistryResponse.class, "ConsoleWorkerRegistryResponse"));
   }
 
   private static JsonNode schemas() throws IOException {

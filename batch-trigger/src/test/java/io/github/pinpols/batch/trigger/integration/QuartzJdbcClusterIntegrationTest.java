@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.trigger.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 import io.github.pinpols.batch.common.enums.TriggerType;
 import io.github.pinpols.batch.testing.AbstractIntegrationTest;
@@ -12,11 +13,13 @@ import io.github.pinpols.batch.trigger.infrastructure.QuartzLaunchJob;
 import io.github.pinpols.batch.trigger.service.TriggerService;
 import io.github.pinpols.batch.trigger.support.TriggerDescriptor;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.Locale;
 import java.util.Properties;
 import javax.sql.DataSource;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.quartz.CronTrigger;
@@ -334,18 +337,17 @@ class QuartzJdbcClusterIntegrationTest extends AbstractIntegrationTest {
     return properties;
   }
 
-  private int waitForSchedulerStateRows(String schedulerName, int expected)
-      throws InterruptedException {
-    // Quartz clusterCheckinInterval 默认 7.5s；之前 20×250ms=5s 等不到 secondary 注册导致 flaky
-    int observed = 0;
-    for (int i = 0; i < 60; i++) {
-      observed = querySchedulerStateRows(schedulerName);
-      if (observed >= expected) {
-        return observed;
-      }
-      Thread.sleep(500L);
+  private int waitForSchedulerStateRows(String schedulerName, int expected) {
+    // Quartz clusterCheckinInterval 默认 7.5s；最长等 30s，避免 secondary 注册慢导致 flaky。
+    try {
+      await()
+          .atMost(Duration.ofSeconds(30))
+          .pollInterval(Duration.ofMillis(500))
+          .until(() -> querySchedulerStateRows(schedulerName) >= expected);
+    } catch (ConditionTimeoutException ignored) {
+      // 超时仍返回最后一次观测值，让调用方断言具体数量。
     }
-    return observed;
+    return querySchedulerStateRows(schedulerName);
   }
 
   private int querySchedulerStateRows(String schedulerName) {
