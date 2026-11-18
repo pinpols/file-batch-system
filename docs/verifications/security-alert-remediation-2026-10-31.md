@@ -144,5 +144,5 @@
 
 - 只读查询 `gh api repos/pinpols/file-batch-system/code-scanning/alerts?state=open`：open 两条。
 - **#1462 `java/log-injection`**：`DefaultWorkerRegistryService` 在注册 CAS 被并发 drain 挡下时的 WARN 直接拼接 `tenantId` / `workerCode` / `expectedStatus`（均来自注册请求）。三个字段改用 `LogSanitizer.value(...)`（`\R` 替换为 `_`，见 `batch-common` 的日志净化入口），日志内容与告警条件不变。
-- **#296 Scorecard `Vulnerabilities`**：[RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544) 影响 `libz-sys 1.1.25..<1.1.33`（zlib `gz_vacate()` 堆缓冲区溢出），固定版本 1.1.33。`sdk/rust/Cargo.lock` 从 1.1.31 升到 1.1.33；`cargo check --all-targets` 与 `cargo test` 通过。
+- **#296 Scorecard `Vulnerabilities`**：[RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544) 影响 `libz-sys 1.1.25..<1.1.33`（zlib `gz_vacate()` 堆缓冲区溢出），固定版本 1.1.33。仓库有**两个** Rust 锁文件：`sdk/rust/Cargo.lock` 与 `examples/self-hosted-sdk/sample-tenant-worker-rust/Cargo.lock`；两者都从 1.1.31 升到 1.1.33，`cargo check --all-targets` 与 `cargo test` 通过。首次只改了 SDK 锁文件，#296 在下一次 Scorecard 扫描后仍为 open，补上示例锁文件后等待下一轮扫描关闭。
 - **关闭条件**：#1462 待下一次 `main` CodeQL 分析标记 `fixed`；#296 待下一次 Scorecard 扫描。两者都未提前宣称关闭。
