@@ -385,11 +385,8 @@ class TriggerMisfirePendingMapperIntegrationTest extends AbstractIntegrationTest
       await()
           .atMost(Duration.ofSeconds(20))
           .pollInterval(Duration.ofMillis(50))
-          .until(
-              () ->
-                  Boolean.TRUE.equals(
-                      jdbcTemplate.queryForObject(
-                          selectNotSql, Boolean.class, "trigger_misfire_pending_reconciler")));
+          .until(() -> Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+              selectNotSql, Boolean.class, "trigger_misfire_pending_reconciler")));
     } catch (ConditionTimeoutException exception) {
       throw new AssertionError(
           "Timed out waiting for the startup misfire reconciliation lock", exception);
