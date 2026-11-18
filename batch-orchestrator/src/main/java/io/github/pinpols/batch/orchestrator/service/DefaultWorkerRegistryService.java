@@ -370,9 +370,9 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
         log.warn(
             "worker registration skipped by concurrent status change: tenantId={}, workerCode={},"
                 + " expectedStatus={}",
-            registry.tenantId(),
-            registry.workerCode(),
-            expectedStatus);
+            LogSanitizer.value(registry.tenantId()),
+            LogSanitizer.value(registry.workerCode()),
+            LogSanitizer.value(expectedStatus));
       }
     }
     return workerRegistryMapper.selectByTenantAndWorkerCode(

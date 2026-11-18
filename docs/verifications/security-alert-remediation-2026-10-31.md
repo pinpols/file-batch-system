@@ -139,3 +139,10 @@
 - 只读查询时，open code scanning 仅剩 #296。`main` `fa7a083d9` 的 Scorecard 报告 `github.com/klauspost/compress` 受 [GO-2026-6865](https://osv.dev/vulnerability/GO-2026-6865)（CVE-2026-116591）影响，固定版本为 1.20.2。受影响符号在 `fse` 与 `huff0`。仓库两份 Go 模块图都通过 `segmentio/kafka-go v0.4.51` 间接选择了 1.20.0。
 - 处理：`sdk/go/kafka` 与 `examples/self-hosted-sdk/sample-tenant-worker-go` 的选定版本升到 1.20.2，未改 Kafka 客户端主版本。#296 仍须该变更进入 `main` 后的下一次 Scorecard 扫描才能标为 `fixed`，此处不提前宣称关闭。
 - CodeQL 状态页警告来自分析 `2118458074`：`288 relatedLocations were ignored`。已处理的 SARIF 里 15 条结果的相关位置已被 GitHub 截到每条 100 个。上传前按同一上限保留前 100 个，保留默认聚合和 `partialFingerprints`。警告是否消失须看合入后的下一次 `main` CodeQL 分析，不以本地单测代替。
+
+## 十二、2026-11-18 CodeQL 日志注入 #1462 与 RUSTSEC-2026-0544（#296）
+
+- 只读查询 `gh api repos/pinpols/file-batch-system/code-scanning/alerts?state=open`：open 两条。
+- **#1462 `java/log-injection`**：`DefaultWorkerRegistryService` 在注册 CAS 被并发 drain 挡下时的 WARN 直接拼接 `tenantId` / `workerCode` / `expectedStatus`（均来自注册请求）。三个字段改用 `LogSanitizer.value(...)`（`\R` 替换为 `_`，见 `batch-common` 的日志净化入口），日志内容与告警条件不变。
+- **#296 Scorecard `Vulnerabilities`**：[RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544) 影响 `libz-sys 1.1.25..<1.1.33`（zlib `gz_vacate()` 堆缓冲区溢出），固定版本 1.1.33。`sdk/rust/Cargo.lock` 从 1.1.31 升到 1.1.33；`cargo check --all-targets` 与 `cargo test` 通过。
+- **关闭条件**：#1462 待下一次 `main` CodeQL 分析标记 `fixed`；#296 待下一次 Scorecard 扫描。两者都未提前宣称关闭。
