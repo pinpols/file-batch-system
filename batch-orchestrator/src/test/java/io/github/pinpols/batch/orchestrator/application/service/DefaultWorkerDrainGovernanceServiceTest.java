@@ -365,6 +365,91 @@ class DefaultWorkerDrainGovernanceServiceTest {
     assertThatThrownBy(() -> service.warmup("", "w1")).isInstanceOf(BizException.class);
   }
 
+  // ── resume ───────────────────────────────────────────────────────────────
+
+  @Test
+  @DisplayName("排空中且无在途任务时可恢复为在线并清掉 drain 标记")
+  void resume_clearsDrainingWithoutActiveTasks() {
+    WorkerRegistryEntity draining = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity online = onlineWorker("t1", "w1");
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(draining, online);
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+    when(workerRegistryMapper.warmupTransition(
+            "t1", "w1", WorkerRegistryStatus.DRAINING.code(), WorkerRegistryStatus.ONLINE.code()))
+        .thenReturn(1);
+
+    WorkerRegistryEntity result = service.resume("t1", "w1");
+
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    verify(workerRegistryMapper)
+        .warmupTransition(
+            "t1", "w1", WorkerRegistryStatus.DRAINING.code(), WorkerRegistryStatus.ONLINE.code());
+  }
+
+  @Test
+  @DisplayName("排空中仍有在途任务时拒绝恢复，保持跑完再下线语义")
+  void resume_rejectsDrainingWithActiveTasks() {
+    WorkerRegistryEntity draining = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(draining);
+    JobTaskEntity task = new JobTaskEntity();
+    task.setId(200L);
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of(task));
+
+    assertThatThrownBy(() -> service.resume("t1", "w1")).isInstanceOf(BizException.class);
+    verify(workerRegistryMapper, never())
+        .warmupTransition(anyString(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("已退役节点允许显式恢复（任务已被接管回收）")
+  void resume_allowsDecommissioned() {
+    WorkerRegistryEntity decommissioned = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DECOMMISSIONED.code(), BatchDateTimeSupport.utcNow());
+    WorkerRegistryEntity online = onlineWorker("t1", "w1");
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1"))
+        .thenReturn(decommissioned, online);
+    when(workerRegistryMapper.warmupTransition(
+            "t1",
+            "w1",
+            WorkerRegistryStatus.DECOMMISSIONED.code(),
+            WorkerRegistryStatus.ONLINE.code()))
+        .thenReturn(1);
+
+    WorkerRegistryEntity result = service.resume("t1", "w1");
+
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    verify(jobTaskMapper, never()).selectActiveByAssignedWorker(anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("已在线时恢复幂等返回，不执行状态更新")
+  void resume_idempotentWhenOnline() {
+    WorkerRegistryEntity online = onlineWorker("t1", "w1");
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(online);
+
+    WorkerRegistryEntity result = service.resume("t1", "w1");
+
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    verify(workerRegistryMapper, never())
+        .warmupTransition(anyString(), anyString(), anyString(), anyString());
+  }
+
+  @Test
+  @DisplayName("恢复时状态被并发修改则抛出业务异常")
+  void resume_throwsOnConcurrentChange() {
+    WorkerRegistryEntity draining = onlineWorker("t1", "w1")
+        .withStatus(WorkerRegistryStatus.DRAINING.code(), BatchDateTimeSupport.utcNow());
+    when(workerRegistryMapper.selectByTenantAndWorkerCode("t1", "w1")).thenReturn(draining);
+    when(jobTaskMapper.selectActiveByAssignedWorker("t1", "w1")).thenReturn(List.of());
+    when(workerRegistryMapper.warmupTransition(
+            "t1", "w1", WorkerRegistryStatus.DRAINING.code(), WorkerRegistryStatus.ONLINE.code()))
+        .thenReturn(0);
+
+    assertThatThrownBy(() -> service.resume("t1", "w1")).isInstanceOf(BizException.class);
+  }
+
   // ── helpers ───────────────────────────────────────────────────────────────
 
   private static WorkerRegistryEntity onlineWorker(String tenantId, String workerCode) {

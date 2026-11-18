@@ -433,6 +433,7 @@ public final class SdkTaskContext {
 | `DEGRADED` | 按 `desiredMaxConcurrent` 降并发,记 warn |
 | `PAUSED` | 立刻 `KafkaConsumer.pause()`,保持 heartbeat 等恢复 |
 | `DRAINING` | 不接新消息(同 `stop()` 但不退进程),等 in-flight 完 |
+| `DECOMMISSIONED` | 同样停止认领,但不改写上报注册状态;进程重启后的新注册按复活处理(无运维 drain 时) |
 
 `pausedTaskTypes` 命中 → SDK CLAIM 前自检 → 直接 return 不消费(平台后续重派)。
 

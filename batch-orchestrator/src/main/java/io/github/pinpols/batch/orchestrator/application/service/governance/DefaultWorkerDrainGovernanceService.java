@@ -4,6 +4,7 @@ import io.github.pinpols.batch.common.enums.ResultCode;
 import io.github.pinpols.batch.common.enums.WorkerRegistryStatus;
 import io.github.pinpols.batch.common.exception.BizException;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
+import io.github.pinpols.batch.common.utils.EmptyChecks;
 import io.github.pinpols.batch.common.utils.Guard;
 import io.github.pinpols.batch.common.utils.Texts;
 import io.github.pinpols.batch.orchestrator.application.engine.OutboxEventKeyGenerator;
@@ -101,6 +102,37 @@ public class DefaultWorkerDrainGovernanceService implements WorkerDrainGovernanc
     int updated = workerRegistryMapper.warmupIfOffline(tenantId, workerCode);
     rejectConcurrentUpdate(updated);
     return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+  }
+
+  @Override
+  @Transactional
+  public WorkerRegistryEntity resume(String tenantId, String workerCode) {
+    validateTenant(tenantId);
+    Guard.requireText(workerCode, "workerCode is required");
+    WorkerRegistryEntity registry = requireRegistry(tenantId, workerCode);
+    String current = registry.status();
+    if (WorkerRegistryStatus.ONLINE.code().equals(current)) {
+      return registry;
+    }
+    if (!isResumable(current)) {
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.resume_unsupported", current);
+    }
+    if (WorkerRegistryStatus.DRAINING.code().equals(current)
+        && EmptyChecks.isNotEmpty(
+            jobTaskMapper.selectActiveByAssignedWorker(tenantId, workerCode))) {
+      // 还有在途任务：保持排空语义，等它跑完（或由 takeover 接管）后再恢复。
+      throw BizException.of(ResultCode.STATE_CONFLICT, "error.worker.drain_in_progress");
+    }
+    int updated = workerRegistryMapper.warmupTransition(
+        tenantId, workerCode, current, WorkerRegistryStatus.ONLINE.code());
+    rejectConcurrentUpdate(updated);
+    return workerRegistryMapper.selectByTenantAndWorkerCode(tenantId, workerCode);
+  }
+
+  private static boolean isResumable(String status) {
+    return WorkerRegistryStatus.DRAINING.code().equals(status)
+        || WorkerRegistryStatus.DECOMMISSIONED.code().equals(status)
+        || WorkerRegistryStatus.OFFLINE.code().equals(status);
   }
 
   @Override

@@ -7,6 +7,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOAD_DIR="$ROOT_DIR/load-tests"
 # shellcheck source=env.sh
 source "$LOAD_DIR/scripts/env.sh"
+# shellcheck source=../../scripts/lib/process.sh
+source "$ROOT_DIR/scripts/lib/process.sh"
 
 RUN_ID="${RUN_ID:-p2-capacity-$(date +%Y%m%d%H%M%S)}"
 # 该画像会核对固定 compose 服务、容器资源和 Kafka 分区，只支持仓库提供的本地 Docker
@@ -284,6 +286,40 @@ require_isolated_application_topology() {
     echo "Capacity benchmark requires unrelated application workers to be stopped: ${running}" >&2
     echo "  stop: docker stop batch-worker-import batch-worker-export batch-worker-process batch-worker-dispatch" >&2
     echo "  these workers consume Docker memory, CPU and PostgreSQL connections but are outside the Atomic profile" >&2
+    exit 2
+  fi
+}
+
+# 宿主模式（scripts/local/start-all.sh）的 JVM 用同一组 worker_code 注册，并可与容器各自绑定 IPv4/IPv6
+# 的同一端口：docker 检查看不到它们，但它们会共享 CPU、PostgreSQL 连接和注册状态，把容量画像和真实队列搅在一起。
+require_no_host_application_listeners() {
+  if [[ "$CAPACITY_REQUIRE_ISOLATED_APP_TOPOLOGY" != "1" ]]; then
+    return
+  fi
+  local ports="${CAPACITY_APP_PORTS:-}"
+  if [[ -z "$ports" ]]; then
+    ports="${BATCH_DEFAULT_CONSOLE_PORT},${BATCH_DEFAULT_TRIGGER_PORT},${BATCH_DEFAULT_ORCHESTRATOR_PORT},${BATCH_DEFAULT_WORKER_IMPORT_PORT},${BATCH_DEFAULT_WORKER_EXPORT_PORT},${BATCH_DEFAULT_WORKER_DISPATCH_PORT},${BATCH_DEFAULT_WORKER_PROCESS_PORT},${BATCH_DEFAULT_WORKER_ATOMIC_PORT}"
+  fi
+  local port pid command running=""
+  IFS=',' read -r -a port_list <<< "$ports"
+  for port in "${port_list[@]}"; do
+    if [[ ! "$port" =~ ^[0-9]+$ ]]; then
+      continue
+    fi
+    for pid in $(process_listen_pids "$port"); do
+      command="$(ps -p "$pid" -o command= 2>/dev/null || true)"
+      case "$command" in
+        # 容器端口发布由 docker 代理持有（macOS 为 com.docker.backend），是预期的监听者。
+        *docker*) continue ;;
+        "") continue ;;
+        *) running="${running}${running:+,}${port}(pid=${pid})" ;;
+      esac
+    done
+  done
+  if [[ -n "$running" ]]; then
+    echo "Capacity benchmark requires the host application stack to be stopped: ${running}" >&2
+    echo "  stop: bash scripts/local/stop-all.sh" >&2
+    echo "  host JVMs register the same worker_code and share CPU/PostgreSQL with the benchmark containers" >&2
     exit 2
   fi
 }
@@ -1354,6 +1390,7 @@ require_exact_storm_shape
 require_supported_capacity_runtime
 require_application_image_provenance
 require_isolated_application_topology
+require_no_host_application_listeners
 require_capacity_docker_environment
 require_trigger_capacity_budget
 require_pg_statement_profile

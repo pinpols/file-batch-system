@@ -138,6 +138,22 @@ class DefaultWorkerRegistryServiceTest {
         100L, "ta", "w1", "default", null, null, status, Instant.now(), 1, 10, null, null);
   }
 
+  private WorkerRegistryEntity entityWithStatusAndDrain(String status, Instant drainStartedAt) {
+    return new WorkerRegistryEntity(
+        100L,
+        "ta",
+        "w1",
+        "default",
+        null,
+        null,
+        status,
+        Instant.now(),
+        1,
+        10,
+        drainStartedAt,
+        null);
+  }
+
   // ===== heartbeat: drain 不可逆 =====
 
   @Test
@@ -317,6 +333,87 @@ class DefaultWorkerRegistryServiceTest {
     verify(mapper)
         .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.ONLINE.code()));
     assertThat(captor.getValue().maxConcurrent()).isEqualTo(10);
+  }
+
+  @Test
+  @DisplayName("register: 注册写入被并发状态推进挡下时保留平台状态且不抛错")
+  void shouldKeepPlatformState_whenRegistrationCasLosesRace() {
+    WorkerRegistryEntity existing = entityWithStatus(WorkerRegistryStatus.ONLINE.code());
+    WorkerRegistryEntity drained = entityWithStatus(WorkerRegistryStatus.DRAINING.code());
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, drained);
+    when(mapper.updateRegistrationIfCurrent(any(), anyString())).thenReturn(0);
+
+    WorkerRegistryEntity result = service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    // 并发 drain 胜出：返回最新行，不把 ONLINE 写回。
+    assertThat(result.status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+    verify(mapper, never()).insert(any());
+  }
+
+  @Test
+  @DisplayName("register: 上一代进程自报的 DRAINING(无 drain 起始时间)按新进程复活为 ONLINE")
+  void shouldReviveSelfReportedDrainingOnRegister() {
+    WorkerRegistryEntity existing =
+        entityWithStatusAndDrain(WorkerRegistryStatus.DRAINING.code(), null);
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    verify(mapper)
+        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
+    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+  }
+
+  @Test
+  @DisplayName("register: 上一代进程自报的 DECOMMISSIONED(无 drain 起始时间)按新进程复活为 ONLINE")
+  void shouldReviveSelfReportedDecommissionedOnRegister() {
+    WorkerRegistryEntity existing =
+        entityWithStatusAndDrain(WorkerRegistryStatus.DECOMMISSIONED.code(), null);
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    verify(mapper)
+        .updateRegistrationIfCurrent(
+            captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
+    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+  }
+
+  @Test
+  @DisplayName("register: 平台发起的 DRAINING(drain 有起始时间)不因进程重启被清除")
+  void shouldPreserveOperatorDrainingOnRegister() {
+    WorkerRegistryEntity existing = entityWithStatusAndDrain(
+        WorkerRegistryStatus.DRAINING.code(), Instant.parse("2026-01-01T00:00:00Z"));
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    verify(mapper)
+        .updateRegistrationIfCurrent(captor.capture(), eq(WorkerRegistryStatus.DRAINING.code()));
+    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+  }
+
+  @Test
+  @DisplayName("register: 平台发起的 DECOMMISSIONED(drain 有起始时间)保持终止态")
+  void shouldPreserveOperatorDecommissionedOnRegister() {
+    WorkerRegistryEntity existing = entityWithStatusAndDrain(
+        WorkerRegistryStatus.DECOMMISSIONED.code(), Instant.parse("2026-01-01T00:00:00Z"));
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1")).thenReturn(existing, existing);
+    ArgumentCaptor<WorkerRegistryEntity> captor =
+        ArgumentCaptor.forClass(WorkerRegistryEntity.class);
+
+    service.register(dto(WorkerRegistryStatus.ONLINE.code()));
+
+    verify(mapper)
+        .updateRegistrationIfCurrent(
+            captor.capture(), eq(WorkerRegistryStatus.DECOMMISSIONED.code()));
+    assertThat(captor.getValue().status()).isEqualTo(WorkerRegistryStatus.DECOMMISSIONED.code());
   }
 
   @Test

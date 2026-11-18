@@ -145,6 +145,20 @@ class HttpWorkerRegistryClientTest {
         registration, new WorkerHeartbeatResponse("DRAINING", 4, true, List.of(), null));
 
     assertThat(registration.getStatus()).isEqualTo(WorkerRegistryStatus.DRAINING.code());
+    assertThat(registration.isPlatformDraining()).isTrue();
+  }
+
+  @Test
+  @DisplayName("平台指令为 DECOMMISSIONED 时只停止认领，不改写上报状态")
+  void shouldKeepReportedStatus_whenPlatformDecommissionsRegistration() {
+    WorkerRegistration registration = registration();
+
+    client.applyHeartbeatResponse(
+        registration, new WorkerHeartbeatResponse("DECOMMISSIONED", 4, true, List.of(), null));
+
+    // 若把本地状态写成 DRAINING，心跳会持续上报 DRAINING，把终止态固化成无法恢复的 DRAINING。
+    assertThat(registration.getStatus()).isEqualTo(WorkerRegistryStatus.ONLINE.code());
+    assertThat(registration.isPlatformDraining()).isTrue();
   }
 
   @Test

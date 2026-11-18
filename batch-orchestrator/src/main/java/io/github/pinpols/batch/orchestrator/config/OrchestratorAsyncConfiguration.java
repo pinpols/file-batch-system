@@ -1,9 +1,11 @@
 package io.github.pinpols.batch.orchestrator.config;
 
 import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import java.util.concurrent.ThreadPoolExecutor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
@@ -30,6 +32,10 @@ public class OrchestratorAsyncConfiguration {
   // 同名冲突(Spring Boot 4 默认不允许 override → BeanDefinitionOverrideException)。
   public static final String OUTBOX_POLL_SCHEDULER = "outboxPollTaskScheduler";
   public static final String JOB_MONITORING_SCHEDULER = "jobMonitoringTaskScheduler";
+  public static final String LAUNCH_WAIT_RESUME_EXECUTOR = "launchWaitResumeExecutor";
+
+  /** launch-wait 恢复执行器关闭时等待的最长秒数，配置值更大时按此截断。 */
+  private static final int LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS = 30;
 
   /**
    * {@code defaultCandidate = false}:Spring Boot {@code TaskExecutionAutoConfiguration} 的
@@ -78,6 +84,31 @@ public class OrchestratorAsyncConfiguration {
         properties.isContinueExistingPeriodicTasksAfterShutdown());
     scheduler.setExecuteExistingDelayedTasksAfterShutdownPolicy(
         properties.isExecuteExistingDelayedTasksAfterShutdown());
+  }
+
+  /**
+   * launch-wait 恢复使用独立有界线程池：每条等待的恢复都是一次完整 launch 事务，串行执行会把单租户恢复吞吐
+   * 压在单线程水平；复用共享 {@code applicationTaskExecutor} 又会与请求线程争用。
+   *
+   * <p>核心线程数取 {@code parallelism}，队列长度取 {@code batch-size}，保证一轮扫描的全部认领都能排队而不被拒绝；
+   * 拒绝时回落到调用方线程，宁可慢也不丢恢复。
+   */
+  @Bean(name = LAUNCH_WAIT_RESUME_EXECUTOR, destroyMethod = "shutdown", defaultCandidate = false)
+  public ThreadPoolTaskExecutor launchWaitResumeExecutor(
+      WorkflowLaunchWaitProperties launchWait, BatchSchedulingProperties properties) {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(launchWait.getParallelism());
+    executor.setMaxPoolSize(launchWait.getParallelism());
+    executor.setQueueCapacity(launchWait.getBatchSize());
+    executor.setThreadNamePrefix("launch-wait-resume-");
+    executor.setDaemon(false);
+    executor.setPhase(properties.getPhase());
+    executor.setWaitForTasksToCompleteOnShutdown(properties.isWaitForTasksToCompleteOnShutdown());
+    int configuredAwaitSeconds = Math.max(0, properties.getAwaitTerminationSeconds());
+    executor.setAwaitTerminationSeconds(
+        Math.min(LAUNCH_WAIT_RESUME_MAX_AWAIT_SECONDS, configuredAwaitSeconds));
+    executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
+    return executor;
   }
 
   // applicationTaskExecutor 由 Spring Boot TaskExecutionAutoConfiguration 提供:

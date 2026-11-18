@@ -109,6 +109,34 @@ class WorkerControllerTest {
   }
 
   @Test
+  @DisplayName("恢复请求路由到治理服务并返回在线状态")
+  void shouldRouteResumeToGovernanceService() throws Exception {
+    when(workerDrainGovernanceService.resume("t1", "worker-1"))
+        .thenReturn(new WorkerRegistryEntity(
+            1L,
+            "t1",
+            "worker-1",
+            "import",
+            null,
+            null,
+            "ONLINE",
+            BatchDateTimeSupport.utcNow(),
+            0,
+            10,
+            null,
+            null));
+
+    mockMvc
+        .perform(post("/internal/workers/worker-1/resume")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("ONLINE"));
+
+    verify(workerDrainGovernanceService).resume("t1", "worker-1");
+  }
+
+  @Test
   @DisplayName("鉴权上下文租户与请求体租户不一致时拒绝治理请求并返回禁止访问")
   void shouldRejectApiKeyTenantMismatchOnWorkerGovernanceRequest() throws Exception {
     mockMvc
@@ -178,6 +206,21 @@ class WorkerControllerTest {
             .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.platformStatus").value("DRAINING"))
+        .andExpect(jsonPath("$.shouldDrain").value(true));
+  }
+
+  @Test
+  @DisplayName("已终止的注册下发 DECOMMISSIONED 指令,与 DRAINING 区分")
+  void shouldReturnDecommissionedDirective_whenWorkerIsDecommissioned() throws Exception {
+    when(workerRegistryService.heartbeat(eq("worker-1"), any(WorkerHeartbeatDto.class)))
+        .thenReturn(onlineWorker("DECOMMISSIONED", 8));
+
+    mockMvc
+        .perform(post("/internal/workers/worker-1/heartbeat")
+            .contentType(APPLICATION_JSON)
+            .content("{\"tenantId\":\"t1\",\"status\":\"RUNNING\",\"currentLoad\":2}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.platformStatus").value("DECOMMISSIONED"))
         .andExpect(jsonPath("$.shouldDrain").value(true));
   }
 

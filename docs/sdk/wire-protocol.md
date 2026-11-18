@@ -118,8 +118,8 @@ Orch 不主动 push 任何指令。所有"平台→worker"信号搭便车在两�
 
 ```java
 {
-  "platformStatus": "NORMAL" | "DEGRADED" | "PAUSED" | "DRAINING",
-  "shouldDrain": true,                     // 平台要求 worker 进 DRAINING
+  "platformStatus": "NORMAL" | "DEGRADED" | "PAUSED" | "DRAINING" | "DECOMMISSIONED",
+  "shouldDrain": true,                     // 平台要求 worker 停止认领新任务
   "desiredMaxConcurrent": 4,               // 平台动态压并发(可比 SDK 配的小)
   "pausedTaskTypes": ["http", "shell"],    // 临时屏蔽某些 type
   "nextHeartbeatHint": "PT15S"             // 平台建议的心跳间隔;Java SDK 会重排下一次心跳
@@ -128,8 +128,11 @@ Orch 不主动 push 任何指令。所有"平台→worker"信号搭便车在两�
 
 SDK 收到后 `TaskDispatcher.applyPlatformDirective()`:
 - `PAUSED` / `DRAINING` → `KafkaTaskConsumer` pause assignment,新 task 不再投
+- `DECOMMISSIONED` → 同样停止认领(`shouldDrain=true`)，但**不要**把上报的注册状态改写成 `DRAINING`：该值表示注册已终止，继续上报 `DRAINING` 会把终止态固化成无法自动恢复的排空态，进程重启后只能改库才能重新上线
 - `pausedTaskTypes` 命中 → `onMessage()` 直接 drop(返 Kafka offset 不 commit,后续平台撤销后还能 redeliver)
 - `desiredMaxConcurrent` 当场调整(原子)
+
+老 SDK 把未知的 `platformStatus` 当无指令处理即可，排空仍由 `shouldDrain=true` 驱动。
 
 ### 2.2 lease 续约响应
 

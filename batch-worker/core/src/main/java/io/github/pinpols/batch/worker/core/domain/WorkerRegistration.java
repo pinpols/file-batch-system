@@ -31,6 +31,14 @@ public class WorkerRegistration {
   private OffsetDateTime registeredAt;
   private OffsetDateTime lastHeartbeatAt;
 
+  /**
+   * 平台指令要求停止认领（DRAINING / DECOMMISSIONED）。
+   *
+   * <p>与 {@link #status} 分开：DECOMMISSIONED 只要求停止认领，不应改写上报的注册状态，否则重新注册会把终止态
+   * 固化成可持续的 DRAINING。
+   */
+  private boolean platformDraining;
+
   /** 进行中的任务数 / 已认领工作量；用于 Orchestrator worker 选择（值越低越优先）。 */
   private Integer currentLoad;
 

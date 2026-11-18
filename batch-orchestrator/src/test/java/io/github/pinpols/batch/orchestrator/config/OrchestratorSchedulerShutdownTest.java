@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.github.pinpols.batch.common.config.BatchSchedulingProperties;
 import io.github.pinpols.batch.common.time.BatchDateTimeSupport;
 import io.github.pinpols.batch.common.utils.EmptyChecks;
+import io.github.pinpols.batch.orchestrator.application.service.workflow.WorkflowLaunchWaitProperties;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
@@ -170,7 +171,10 @@ class OrchestratorSchedulerShutdownTest {
   }
 
   @Configuration(proxyBeanMethods = false)
-  @EnableConfigurationProperties(BatchSchedulingProperties.class)
+  @EnableConfigurationProperties({
+    BatchSchedulingProperties.class,
+    WorkflowLaunchWaitProperties.class
+  })
   @Import(OrchestratorAsyncConfiguration.class)
   static class SchedulerConfiguration {}
 }

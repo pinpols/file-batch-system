@@ -10,6 +10,7 @@
 
 ### Added
 
+- 新增内部接口 `POST /internal/workers/{workerCode}/resume`：把 `DRAINING` / `DECOMMISSIONED` / `OFFLINE` 的注册恢复为 `ONLINE` 并清空 drain 标记。运维 drain 会被重启保留，误排空或维护提前结束时需要显式恢复；`DRAINING` 仍有在途任务时返回 409。
 - 新增 `GET /api/console/tasks/{taskId}/execution-audit`：按任务查看派单时实际生效的参数（原子任务的 shell 命令与参数、SQL 文本等）和执行结果，供取证。只对平台管理员和审计员开放；`env`、`headers` 只返回键名，`auth` 与敏感键整体遮蔽，其余文本遮蔽端点与凭据表达式。数据来自已有的 `job_task.effective_parameters`，不新增表。
 - 控制台菜单新增审计页 `/observability/audit` 和平台设置 `/system/settings`。文件审计、操作审计及其他旧路径保留，等前端页面和重定向上线后再删。`/runs` 未改。
 - 审批查询新增 `excludeApprovalTypes`：逗号分隔，最多 8 个类型代码。普通审批列表用它排除 `CATCH_UP`。
@@ -47,6 +48,9 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- P2 容量预检不再漏掉宿主模式应用进程：除 Docker 容器检查外，预检会检查 18080–18087 上的非 Docker 监听者（`CAPACITY_APP_PORTS` 可覆盖端口），发现宿主 `start-all.sh` 起的 JVM 时以 `host application stack to be stopped` 失败。此前宿主 JVM 与容器共用 `worker_code` 和端口，容量轮次会被静默污染。
+- Worker 优雅停机后重启不再永久卡在 `DRAINING`：心跳响应把 `DECOMMISSIONED` 与 `DRAINING` 分开下发，worker 收到终止指令只停止认领、不改写自己上报的注册状态；注册入口对没有 `drain_started_at` 的 `DRAINING`/`DECOMMISSIONED`（上一代进程自报的停机标记）按新进程复活为 `ONLINE`，运维通过 drain 治理发起、带 `drain_started_at` 的终止态仍保持不变。修复前一次 `docker stop`/滚动重启就会让该 Worker 永远不再接任务，且没有接口能拉回。
+- launch-wait 恢复不再串行占用完成线程：一轮内按 `batch.workflow.launch-wait.parallelism`（默认 4）并发启动不同 requestId；终态提交后的立即补槽改为提交到独立有界线程池并按租户合并，单次只处理 `resume-batch-size`（默认 8）条，其余交给 5 秒扫描；执行器拒绝时释放合并标记并由扫描兜底。同一 requestId 仍由等待行租约互斥，同一 Workflow、业务日和 dry-run 仍只允许一个活跃 run。容量画像 profile 将该并发度设为 8。
 - 修复同一 trigger_request 的并发 launch 争用行锁：准入事务改用 `SELECT ... FOR UPDATE NOWAIT`，重复的 Kafka 投递或 launch-wait 恢复直接让出，不再阻塞等待；launch-wait 认领增加独立租约并在可重试失败时释放；容量等待快照的加密移到取锁之前，锁内复核不再做 KMS 解密。100 rps、100 业务日复测中 `pg_blocking_pids` 和 `idle in transaction` 均为 0。
 - 同业务日受理的幂等查询按直接 `dedup_key` 与幂等别名分两路走索引，直接键仍优先于别名。原先 `OR` 连接别名使 `idx_trigger_request_tenant_dedup` 失效，查询在结算栅栏内顺序扫描 `trigger_request`。租户隔离、空父运行过滤，以及未知键或空键不命中保持不变。
 - 同日 launch 的批次日结算栅栏改为在幂等查询之后取得，查询不再占着同日事务锁。Orchestrator 选 worker、下游准入和派发速率也改到租户准入锁之前；锁内仍重新计数并提交会改变活跃配额的状态。

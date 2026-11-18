@@ -75,8 +75,7 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     WorkerRegistryEntity registry =
         workerRegistryMapper.selectByTenantAndWorkerCode(request.tenantId(), request.workerCode());
     String expectedStatus = registry == null ? null : registry.status();
-    String newStatus = resolveIncomingStatus(
-        request, WorkerRegistryStatus.ONLINE.code(), registry == null ? null : registry.status());
+    String newStatus = resolveRegisterStatus(request, registry);
     // 首次注册用本机时钟，忽略 worker 上报的 heartbeatAt，避免 NTP 漂移写入 heartbeat_at。
     Instant heartbeatAt = BatchDateTimeSupport.utcNow();
     Integer newLoad = request.currentLoad() != null
@@ -364,10 +363,39 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
     if (registry.id() == null) {
       workerRegistryMapper.insert(registry);
     } else {
-      workerRegistryMapper.updateRegistrationIfCurrent(registry, expectedStatus);
+      int updated = workerRegistryMapper.updateRegistrationIfCurrent(registry, expectedStatus);
+      if (updated == 0) {
+        // 读取到写入之间状态被并发 drain/decommission 推进：保留平台状态，不用本次注册覆盖它。
+        // 这里只补可观测性，不重试成 ONLINE —— 那会把运维的排空决定悄悄撤销。
+        log.warn(
+            "worker registration skipped by concurrent status change: tenantId={}, workerCode={},"
+                + " expectedStatus={}",
+            registry.tenantId(),
+            registry.workerCode(),
+            expectedStatus);
+      }
     }
     return workerRegistryMapper.selectByTenantAndWorkerCode(
         registry.tenantId(), registry.workerCode());
+  }
+
+  /**
+   * 注册代表新进程存活，不能继承上一代进程自报的停机标记。
+   *
+   * <p>平台发起的下线一定带 {@code drain_started_at}（见 drain 治理），这类 terminal 状态不因进程重启被清除；
+   * 没有 drain 起始时间的 DRAINING / DECOMMISSIONED 只可能是上一代进程关机时自报的残留，按新注册复活为 ONLINE。
+   */
+  private String resolveRegisterStatus(WorkerHeartbeatDto request, WorkerRegistryEntity registry) {
+    if (EmptyChecks.isNotNull(registry)
+        && EmptyChecks.isNotNull(registry.drainStartedAt())
+        && (WorkerRegistryStatus.DRAINING.code().equals(registry.status())
+            || WorkerRegistryStatus.DECOMMISSIONED.code().equals(registry.status()))) {
+      return registry.status();
+    }
+    return resolveIncomingStatus(
+        request,
+        WorkerRegistryStatus.ONLINE.code(),
+        EmptyChecks.isNull(registry) ? null : registry.status());
   }
 
   private String resolveHeartbeatStatus(WorkerHeartbeatDto request, String currentStatus) {
