@@ -38,7 +38,8 @@ import org.springframework.transaction.annotation.Transactional;
  * <p>关键不变量：
  *
  * <ul>
- *   <li><b>DRAINING / DECOMMISSIONED 状态不可被心跳重置为 ONLINE</b>——见 {@link #resolveHeartbeatStatus}。 否则
+ *   <li><b>DRAINING / DECOMMISSIONED 状态不可被心跳重置为 ONLINE</b>——见 {@link #resolveHeartbeatStatus}。
+ *       反向同样成立：ONLINE 不被心跳自报的 DRAINING 回写，否则 resume 后会被下一次心跳覆盖。 否则
  *       {@link
  *       io.github.pinpols.batch.orchestrator.application.service.DefaultWorkerDrainGovernanceService}
  *       正在执行的 drain / decommission 会被 worker 端的周期心跳悄悄回滚。
@@ -403,6 +404,11 @@ public class DefaultWorkerRegistryService implements WorkerRegistryServerService
       return currentStatus;
     }
     if (WorkerRegistryStatus.DRAINING.code().equals(currentStatus)) {
+      return currentStatus;
+    }
+    if (WorkerRegistryStatus.ONLINE.code().equals(currentStatus)) {
+      // 排空只能由 drain / status 入口发起。worker 在收到过 DRAINING 指令后会把本地状态固定为
+      // DRAINING 并持续上报，若心跳采纳，resume 拉回 ONLINE 后会被下一次心跳立刻覆盖。
       return currentStatus;
     }
     return resolveIncomingStatus(request, WorkerRegistryStatus.ONLINE.code(), currentStatus);

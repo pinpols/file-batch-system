@@ -187,6 +187,21 @@ class DefaultWorkerRegistryServiceTest {
   }
 
   @Test
+  @DisplayName("heartbeat: ONLINE 状态收到自报 DRAINING → 保持 ONLINE，避免 resume 被心跳覆盖")
+  void shouldKeepOnlineStatus_whenHeartbeatSelfReportsDraining() {
+    when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
+        .thenReturn(
+            entityWithStatus(WorkerRegistryStatus.ONLINE.code()),
+            entityWithStatus(WorkerRegistryStatus.ONLINE.code()));
+
+    service.heartbeat("w1", dto(WorkerRegistryStatus.DRAINING.code()));
+
+    verify(mapper)
+        .touchHeartbeat(ArgumentMatchers.argThat((TouchHeartbeatParam p) ->
+            WorkerRegistryStatus.ONLINE.code().equals(p.getNextStatus())));
+  }
+
+  @Test
   @DisplayName("heartbeat: ONLINE 状态收到 ONLINE 心跳 → 保持 ONLINE(正常路径)")
   void shouldPreserveOnlineStatus_whenHeartbeatReportsOnline() {
     when(mapper.selectByTenantAndWorkerCode("ta", "w1"))
