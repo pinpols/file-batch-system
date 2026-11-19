@@ -56,6 +56,8 @@
 | **BF-20261118-01** | 单 Workflow × 业务日仅一个活跃运行 | ✅ 2026-11-18 按 [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 改为定义级 `max_active_runs_per_biz_date`（1..64，默认 1），用活跃槽位 + 唯一索引替代原唯一索引；默认值行为不变。剩余：Console/前端尚未暴露该字段，目前按 SQL 设置 |
 | **BF-20261118-02** | 批次日结算 advisory 栅栏 | 同日 launch 串行；历史采样最大等待 12.7 s。多业务日可分散，单日洪峰会排队 |
 | **BF-20261118-03** | 派发 outbox 发布延迟 | 任务事件创建→发布 avg 1–2 s、p95 ≈ 6 s，48% < 1 s；批处理与 CPU 争用，不是空闲退避 |
+| **BF-20261119-02** | 控制面按租户分片 | 评估完成、未实施：推荐“按租户组整库分片”，不建议拆运行时表或分布式 PG；主要成本在全局 ID、跨租户聚合、49 个单主调度器、迁移/备份扇出和租户迁移（约 8 人月）。前置门槛是先做 Tier 0.5 容量归因。见[分片评估](control-plane-sharding-assessment-2026-11-19.md) |
+| **BF-20261119-01** | 单 PostgreSQL 的 10w 拐点 | 2026-11-19 Tier 0 验证：调优入口（64/128/80）后 25 rps 持续注入 10w 无法收敛——`job_instance` avg 28.3 s（1w 时 2.3 s）、完成 1.3–4/s、`workflow_launch_wait` 积压 6k+，PG 3.5–6.3 核、32 个阻塞会话。入口已不是瓶颈；下一步需更低注入率或 Tier 1 控制面分片。见[压测记录](../verifications/load-test-local-2026-11-15.md) |
 | **BF-20261118-04** | 积压时单请求延迟 | `parallelism=8` 时 launch p95 585 ms、实例 p95 5.97 s；`parallelism=4` 延迟更低但排空更慢。可考虑按 `workflow_launch_wait` 深度自适应，当前不建议 |
 
 ### 本轮已修复（供追溯，待合入）

@@ -26,6 +26,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- 容量画像 profile 提高 Trigger 入口预算：`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 32→64、`BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE` 40→80，队列保持 128（受 `@Max(128)` 约束）；实测 50 rps 的 429 从约 7% 降到 3.45%，25 rps 保持 0 拒绝。仅影响隔离 benchmark 拓扑。
 - `.env.example` 移除未引用的 `BUSINESS_DB_SCHEMA`；实际生效的是 `BATCH_BUSINESS_DB_SCHEMA`，代码与 Compose 均未读取无前缀变量。
 
 - Outbox 查询（`/queries/outbox-retries`、`/queries/outbox-deliveries`）及其实时流（`/stream/outbox-*/events`）、补跑审批查询 `/queries/catch-up-approvals` 改为只对平台管理员和租户管理员开放，与菜单「Outbox」「审批中心」及移动端路由一致；审计员与普通租户用户调用返回 403。
@@ -52,6 +53,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 修复 `resume` 后 Worker 状态被下一次心跳改回 `DRAINING`：心跳不再接受 ONLINE 状态下的自报 DRAINING（排空只能由 drain / status 入口发起），否则运维把误排空的 Worker 拉回在线后会被自身心跳立刻覆盖。
 - 修复 CodeQL `java/log-injection`（#1462）：注册 CAS 被并发 drain 挡下时的 WARN 改用 `LogSanitizer`，不再直接拼接注册请求里的租户/Worker/状态值。
 - 升级 Rust SDK 的 `libz-sys` 1.1.31 → 1.1.33，规避 [RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544)（zlib `gz_vacate()` 堆溢出）。
 - P2 容量预检不再漏掉宿主模式应用进程：除 Docker 容器检查外，预检会检查 18080–18087 上的非 Docker 监听者（`CAPACITY_APP_PORTS` 可覆盖端口），发现宿主 `start-all.sh` 起的 JVM 时以 `host application stack to be stopped` 失败。此前宿主 JVM 与容器共用 `worker_code` 和端口，容量轮次会被静默污染。

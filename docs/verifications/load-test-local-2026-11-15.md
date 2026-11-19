@@ -364,3 +364,34 @@ RUN_ID=p2-atomic-1w-20261118a STORM_TOTAL_REQUESTS=10000 STORM_RPS=25 \
 - 本轮是本地开发环境证据，不是 staging/生产容量结论；宿主机负载和本地 JVM 参数使其不适合作为发布门禁。
 - 若要得到可比较的容量画像，应在空闲的专用 runner 上重跑，并用 `BIZ_DATE_CARDINALITY` 或分租户方式绕开同日结算栅栏的串行影响，同时采集 PostgreSQL 等待事件、连接池和 Kafka 积压。
 - 读路径 SLO 断言（p99 < 300 ms）本轮未通过；在干净环境下需要重新建立基线后再判断是否需要调优。
+
+## 2026-11-19 Tier 0 单集群调优与 10w 验证
+
+目标：在 benchmark 拓扑上验证“连接池/入口许可调优 + 10 万请求”能否收敛，量化单 PostgreSQL 的拐点。
+
+### 实施
+
+- Trigger 入口预算（`deploy/docker/compose/benchmark.yml`）：`maxConcurrency 32→64`、平台连接池 `40→80`、队列容量保持 128（受 `TriggerRuntimeProperties` 的 `@Max(128)` 约束）。
+- 修复 Worker 状态回写：心跳不再接受 ONLINE 状态下的自报 DRAINING，避免 `resume` 后下一次心跳把状态改回排空（`DefaultWorkerRegistryService.resolveHeartbeatStatus`）。
+- PostgreSQL 使用 `benchmark.env` 参数：`synchronous_commit=off`、`max_wal_size=4GB`、`checkpoint_timeout=15min`、`wal_compression=pglz`、`max_connections=300`。
+
+### 结果
+
+| 轮次 | 注入 | 请求 | 429 | p95 | 结论 |
+|---|---|---:|---:|---:|---|
+| 短探针（调优前 32/128/40） | 50 rps × 120 s | 10,000 | 689（6.9%） | — | 入口队列饱和 |
+| 短探针（调优后 64/128/80） | 50 rps × 120 s | 6,000 | 207（3.45%） | 6.0 s（p99 10.1 s） | 429 明显下降，但延迟超 5 s 预算 |
+| 10w | 25 rps × 约 17 min | 13,710 | **0** | — | **无法收敛**：`job_instance` avg 28.3 s、p95 61.1 s（1w 时为 2.3 s / 6.0 s）；完成速率 1.3–4/s，`workflow_launch_wait` 积压 6,000–7,600 |
+
+10w 期间的数据库侧证据（`pg_stat_activity` 采样）：
+
+- PostgreSQL CPU 3.5–6.3 / 8 核；`active=69`、`blocked=32`
+- 21 个会话等待 advisory 锁（批次日结算栅栏，分布在约 7 个 key，非单一热点）
+- `LWLock: LockManager` 21 个会话；`batch.trigger_request` 上 autovacuum 单次 8 s
+- `job_task`：READY 49（平均等待 29.9 s）、RUNNING 27——Worker 未饱和，瓶颈在控制面/PG
+
+### 结论与边界
+
+- 调优后**入口不再是瓶颈**（25 rps 0 拒绝；50 rps 仅 3.45% 拒绝）。
+- 单 PostgreSQL 在持续 25 rps、10 万请求规模下**无法在合理窗口内收敛**：运行时长被放大一个数量级，积压持续增长。1w 在 3.7 分钟收敛的结论仍然成立，但它只代表 1/10 体量。
+- 10w 在本机单库上不可作为容量结论；需要更低注入率、更大/更快的 PG（或读副本分担）以及 Tier 1 控制面分片，属于下一阶段。
