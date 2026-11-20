@@ -25,7 +25,16 @@ import org.apache.ibatis.annotations.Param;
  */
 public interface BatchDayInstanceMapper {
 
+  /** 独占写者版本：开日、人工状态迁移与结算使用；读者请使用 {@link #acquireSettlementFenceShared}。 */
   long acquireSettlementFence(
+      @Param("tenantId") String tenantId,
+      @Param("calendarCode") String calendarCode,
+      @Param("bizDate") LocalDate bizDate);
+
+  /**
+   * 栅栏的共享读者版本：准入、派发与回报只读业务日状态，可与同一业务日的其他读者并发； 结算的独占请求会等待所有读者提交。调用方不得在同一事务内从共享升级为独占。
+   */
+  long acquireSettlementFenceShared(
       @Param("tenantId") String tenantId,
       @Param("calendarCode") String calendarCode,
       @Param("bizDate") LocalDate bizDate);

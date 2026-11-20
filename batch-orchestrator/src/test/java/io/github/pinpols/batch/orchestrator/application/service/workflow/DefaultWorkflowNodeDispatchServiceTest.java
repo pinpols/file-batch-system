@@ -216,7 +216,8 @@ class DefaultWorkflowNodeDispatchServiceTest {
 
     assertThat(service.dispatchNode(jobInstance(), workflowRun(), resolution("JOB"), null, "trace"))
         .isZero();
-    verify(batchDayInstanceMapper).acquireSettlementFence("ta", "CAL", LocalDate.of(2026, 6, 29));
+    verify(batchDayInstanceMapper)
+        .acquireSettlementFenceShared("ta", "CAL", LocalDate.of(2026, 6, 29));
     verify(workflowNodeRunMapper, never()).selectLatestForUpdate(any(), anyString());
   }
 
@@ -235,7 +236,7 @@ class DefaultWorkflowNodeDispatchServiceTest {
         .isZero();
 
     verify(batchDayInstanceMapper)
-        .acquireSettlementFence("ta", "FROZEN_CALENDAR", LocalDate.of(2026, 6, 29));
+        .acquireSettlementFenceShared("ta", "FROZEN_CALENDAR", LocalDate.of(2026, 6, 29));
     verify(workflowDefinitionMapper, never()).selectById(50L);
   }
 

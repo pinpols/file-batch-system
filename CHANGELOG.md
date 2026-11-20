@@ -26,7 +26,8 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
-- 容量画像 profile 提高 Trigger 入口预算：`BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY` 32→64、`BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE` 40→80，队列保持 128（受 `@Max(128)` 约束）；实测 50 rps 的 429 从约 7% 降到 3.45%，25 rps 保持 0 拒绝。仅影响隔离 benchmark 拓扑。
+- 批次日结算栅栏拆分共享读者/独占写者（V387）：准入、节点派发与运行回报改用 `acquire_batch_day_settlement_fence_shared`，开日、人工操作与结算保持独占。同业务日的读者不再互相排队，结算仍会等待在读事务提交。1w 验证：launch p95 2,408→457 ms、`job_instance` p95 15.33→11.96 s、栅栏均值 417→2.5 ms。见[压测记录](docs/verifications/load-test-local-2026-11-15.md#2026-11-20-批次日结算栅栏共享锁改造验证)与[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md)。
+- 容量画像 profile 的 Trigger 入口预算回到 32 并发 / 40 连接：Tier 0.5 归因显示 64/80 会同时抬高并发 launch 事务数，放大批次日结算栅栏与连接配额争用（1w 的 `job_instance` avg 15.4→4.09 s、p95 38.1→15.33 s，入口 0 拒绝）。详见 [Tier 0.5 归因](docs/verifications/load-test-local-2026-11-15.md#2026-11-19-tier-05-单集群瓶颈归因abcd-对照)；仅影响隔离 benchmark 拓扑。
 - `.env.example` 移除未引用的 `BUSINESS_DB_SCHEMA`；实际生效的是 `BATCH_BUSINESS_DB_SCHEMA`，代码与 Compose 均未读取无前缀变量。
 
 - Outbox 查询（`/queries/outbox-retries`、`/queries/outbox-deliveries`）及其实时流（`/stream/outbox-*/events`）、补跑审批查询 `/queries/catch-up-approvals` 改为只对平台管理员和租户管理员开放，与菜单「Outbox」「审批中心」及移动端路由一致；审计员与普通租户用户调用返回 403。

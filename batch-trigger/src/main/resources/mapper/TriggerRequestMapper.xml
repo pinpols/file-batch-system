@@ -235,7 +235,7 @@
         select case
                    when cast(#{bizDate,jdbcType=DATE} as date) is null
                         or target.calendar_code is null then 0::bigint
-                   else batch.acquire_batch_day_settlement_fence(
+                   else batch.acquire_batch_day_settlement_fence_shared(
                        #{tenantId}, target.calendar_code, #{bizDate,jdbcType=DATE})
                end
           from (

@@ -130,8 +130,8 @@ public class DefaultWorkflowNodeDispatchService implements WorkflowNodeDispatchS
       return 0;
     }
     // 与子请求准入的加锁顺序保持一致：先获取批次日围栏，再锁定父记录。
-    // 使用锁定后的当前状态，不使用 Worker 报告中可能过期的快照。
-    batchDayInstanceMapper.acquireSettlementFence(
+    // 派发只读业务日状态，使用共享读者版本；结算的独占请求会等待本次派发提交。
+    batchDayInstanceMapper.acquireSettlementFenceShared(
         workflowRun.getTenantId(), calendarCode, workflowRun.getBizDate());
     WorkflowRunEntity currentRun = workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(
         workflowRun.getTenantId(), workflowRun.getId());
