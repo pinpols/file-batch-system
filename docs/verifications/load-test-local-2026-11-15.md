@@ -395,3 +395,164 @@ RUN_ID=p2-atomic-1w-20261118a STORM_TOTAL_REQUESTS=10000 STORM_RPS=25 \
 - 调优后**入口不再是瓶颈**（25 rps 0 拒绝；50 rps 仅 3.45% 拒绝）。
 - 单 PostgreSQL 在持续 25 rps、10 万请求规模下**无法在合理窗口内收敛**：运行时长被放大一个数量级，积压持续增长。1w 在 3.7 分钟收敛的结论仍然成立，但它只代表 1/10 体量。
 - 10w 在本机单库上不可作为容量结论；需要更低注入率、更大/更快的 PG（或读副本分担）以及 Tier 1 控制面分片，属于下一阶段。
+
+## 2026-11-19 Tier 0.5 单集群瓶颈归因（A/B/C/D 对照）
+
+Tier 0 显示入口拒绝已为 0、但 25 rps × 10w 不收敛，说明瓶颈在入口之后。本轮用四组对照隔离“连接池/entry 并发”“autovacuum”“outbox 串行发布”三类假设，为控制面分片提供 Go/No-Go 依据。
+
+### 方法
+
+同一镜像（`4bba27ba3+t0-heartbeat-fix`）、同一 benchmark 拓扑、每组一棵独立租户；10,000 请求 @ 25 rps、100 个业务日、`CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE=1`、`STORM_WAIT_SECONDS=300`、`SKIP_AUTO_CLEANUP=1`。数据库为 `benchmark.env` 口径（`synchronous_commit=off`、`max_wal_size=4GB`、`checkpoint_timeout=15min`、`wal_compression=pglz`）。
+
+### 结果
+
+| 轮次 | 变量 | 入口接纳 | launch p95 | `job_instance` avg / p95 | 备注 |
+|---|---|---|---:|---|---|
+| A 基线 | 64 并发 / 平台池 80 / 单 outbox 分片 / 默认 autovacuum | 10,000 OK / 0 KO | 5,256 ms（p99 9,130） | 29.8 s / 77.3 s | PG CPU 4.1/8，2 个 autovacuum 活跃 |
+| B | A + 放宽 autovacuum（0.1/0.05、naptime 60 s、workers 3） | 6,685 OK / 3,315 KO | 4,292 ms（OK 子集） | 20.9 s / 45.5 s | KO 为连接拒绝/提前关闭，有效负载更低 |
+| C | B + outbox 2 分片（每 Orchestrator 一片，batch 256）+ 关闭 SLA/监控扫描 | 7,095 OK / 2,905 KO | 5,036 ms（OK 子集） | 15.4 s / 38.1 s | 仍有连接中断；advisory 等待 11–21 会话，outbox 发布 avg 5.14 s |
+| D | C + 入口并发 64→32、平台连接池 80→40 | **10,000 OK / 0 KO** | **2,408 ms（p99 5,361）** | **4.09 s / 15.33 s** | 10,000 `workflow_run` 与 10,000 `job_instance` 全部 SUCCESS；PG CPU 3.2/8，advisory 等待 2、`LWLock: LockManager` 7 |
+
+### 归因
+
+- **决定性变量是入口并发与连接池预算，而不是“入口许可不够”。** C→D 只改并发 64→32、池 80→40，`job_instance` 均值 15.4→4.1 s、p95 38.1→15.3 s，同时把 30% 的入口失败降到 0。
+- 降低并发后 PG 侧争用同步下降：中段采样 advisory 等待 11–21 → 2、`LWLock: LockManager` 大幅回落、PG CPU 4.1 → 3.2 核。说明 64 个并发 launch 事务同时争抢批次日结算栅栏与连接配额，是放大器而不是吞吐来源。
+- B/C 的“改善”不能单独引用：两组分别有 33%/29% 的连接中断，实际注入低于名义值，时长下降里有一部分来自负载减少。只有 A 与 D 是 0 KO 的干净对照。
+- outbox 发布仍是串行点：D 期间每次发布平均约 717 ms、约 32 个事件；单分片约 22 事件/s，只是本轮不再是主导项。
+
+### 收敛与边界
+
+- 脚本 300 s 窗口仍然不足：D 在窗口内为 8,972/10,000 终态（`exit_code=1`），到 14:53:04 全部收敛——10,000/10,000 SUCCESS、`workflow_launch_wait` 清零，流量结束后约 13 分钟。
+- 与 2026-11-18 的 1w（avg 2.33 s / p95 5.97 s）仍有 1.75x / 2.57x 差距；两轮都是 10,000 请求，但业务日基数和夹具细节未逐项对齐，未隔离因素主要是 outbox 单分片发布节奏、数据库统计信息与本地宿主机负载，不能归因给单一配置。
+- 本轮为本地 8 核单机证据，不是 staging/生产容量结论；`p2capacity4` 运行态按 `SKIP_AUTO_CLEANUP=1` 保留后清理。
+
+### 容量含义
+
+- 单 PostgreSQL 在 25 rps、100 业务日、单日 1 个活跃运行的约束下可持续承接，PG CPU 约 40%，阻塞会话 < 10，未触发分片评估中的 Go 条件（CPU 持续 > 80% 或阻塞 > 20）。
+- 100k 体量（25 rps × 约 66 分钟）未在本轮直接执行。按 D 的稳定接纳与不增长积压外推可以收敛，但在拿到真实 100k 运行证据前不得作为容量结论。
+
+## 2026-11-19 Tier 0.6：100k 注入与两个硬上限
+
+Tier 0.5 证明 32/40 + outbox 2 分片能在 25 rps 下完成 1w。本轮把注入推到 100,000 请求，检验单租户 10w 能否收敛，并把数据库容量与业务/管线约束分开。
+
+### 运行 1：默认槽位（`max_active_runs_per_biz_date=1`，tenant `p2capacity5`）
+
+- 25 rps 注入 13 分钟后为 19,726 请求（19,714 OK / 12 × 429），人工停止：结论已确定，避免继续空跑。
+- 100 个业务日槽位、同时 `RUNNING` 75–77；run 时长 avg 18.1 s / p95 41.5 s（最近 200 个 avg 26.4 s）。
+- 吞吐 ≈ 100 槽 / 18–26 s ≈ **4–5.5 run/s**；`workflow_launch_wait` 积压 8,361 且线性增长。
+- PG CPU 3.4/8 核；`job_task` READY 32 / RUNNING 23（Worker 空闲）。
+- 结论：默认槽位规则下单租户 25 rps 不可能收敛；约束是业务并发规则，不是数据库或 Worker。
+
+### 运行 2：放宽槽位（`max_active_runs_per_biz_date=8`，tenant `p2capacity6`）
+
+- 25 rps × 4,000 s 注入完成：100,000 请求，**96,093 OK / 3,907 KO（3.91%）**，平均吞吐 24.66 rps。
+- KO 构成：429 × 3,376（15 s 准入排队超时）、500 × 501（Trigger 平台连接池获取失败）、客户端 60 s 超时 × 30。
+- launch p95 2,799 ms（OK 子集 1,877 ms）、p99 9,030 ms。
+- 槽位积压消失：`workflow_launch_wait` 全程为 0。
+- launch 管线成为新上限：Orchestrator launch 事务约 **0.95 s**（validation 115、prepare 217、dispatch 340、plan 18、resource 57、materialize 133、transition 67 ms），并发为 launch topic 12 分区 × 每 Orchestrator 6 consumer × 2 实例 = **12**，理论上限约 **12.6 run/s**。
+- 实测 launch 速率从 11.4 退化到 4.0 run/s（20:34→21:28 分段），入口 25 rps 的差额进入 Kafka/ACCEPTED 积压；注入结束时仍有 60,943 条 ACCEPTED 未 launch。
+- 已完成部分：35,120 个 run（34,922 SUCCESS）、35,130 个 job，avg 6.15 s / p95 14.34 s；PG CPU 3.4–5.5/8 核。
+- 结论：100k 在 90 分钟窗口内不可能收敛；限制是控制面 launch 并发 × 事务时长，不是 PG CPU 或 Worker。
+
+### 归因与容量含义
+
+- 单租户持续吞吐 ≈ `min(业务槽位 / run 时长, launch 并发 / launch 事务时长)`。
+- 本拓扑两项分别约为：默认槽位 4–5.5/s；launch 管线 11–12.6/s，且随积压增长退化到约 4/s。
+- 要让 25 rps 持续收敛，需要同时满足：`max_active_runs_per_biz_date ≥ 25 × run 时长`（约 6–8）且 launch 并发 ≥ 25（≥ 25 个分区与并发 launch 消费者），或把 launch 事务压到 0.4 s 以内。
+- 按租户组整库分片能提高多租户总吞吐，但**不改变单租户上限**；单租户 25 rps 必须扩控制器并发或缩短 launch 事务。
+
+### 本轮发现的问题
+
+- 过载时 Trigger 平台连接池耗尽返回 **500**（`CannotGetJdbcConnectionException`），而不是 503/429 的可重试语义；`TriggerApiExceptionHandler` 只映射了 `TriggerSchedulerBusyException`。
+- SLA 监控扫描按 10 分钟周期运行，在本机数据量下多次语句超时；容量压测当前只拉长了间隔，未彻底关闭，属于测量噪声。
+- 脚本 1,800 s 终态窗口不足以覆盖 100k 的尾部队列；若要判定 100k，需要按积压/速率单独计算收敛时间。
+
+### 边界
+
+- 本地 8 核单机，拓扑为单 Trigger + 2 Orchestrator + 1 Atomic Worker + Console；不是 staging/生产容量结论。
+- 运行 2 的人工终止发生在注入完成后，收敛过程被中断，因此没有“100k 全量终态”的证据；这不影响“窗口内无法收敛”的结论。
+
+### 对照：分区/消费者扩容（2026-11-19 夜间，已回滚）
+
+假设：launch 管线限 11–12.6/s 是并发不足，扩分区与消费者即可抬到 25/s。
+
+配置：launch topic 12→24 分区，两个 Orchestrator 各 6→12 consumer（共 24 并发）。其余与 Tier 0.6 相同（入口 32/40、槽位 8、outbox 2 分片）。
+
+结果（10,000 请求 @ 25 rps，tenant `p2capacity7`，RUN_ID `p2-t0-a24-20261119h`）：
+
+| 指标 | 12 分区 / 6 consumer（Tier 0.6） | 24 分区 / 12 consumer |
+|---|---|---|
+| launch 速率 | 11.4 run/s | **3.3 run/s** |
+| `job_instance` avg / p95 | 5.9 s / 14.8 s | **98.7 s / 158.8 s** |
+| 同时 RUNNING 的 run | 46–71 | 567（上限 800） |
+| PG CPU | 3.4–5.5 / 8 核 | 2.2 / 8 核 |
+| 等待 | advisory 0–5、LockManager 7 | advisory 31、LockManager 27 |
+
+数据库侧定位：`pg_stat_activity` 中 30 个会话同时在执行批次日结算栅栏 SQL（`select case when cast($1 as date) ... target.calendar_code`），另有 6 个会话等待 `acquire_batch_day_settlement_fence`。并发翻倍后，每个 launch 的栅栏查询互相拖慢，单次 launch 事务从约 0.95 s 退化到数秒，净吞吐反而下降 3.4 倍。
+
+结论：
+
+- **launch 并发是放大器而不是吞吐来源**，与 Tier 0.5 中“入口并发 64→32”的结论一致；当前限制在每次 launch 的栅栏查询与事务成本。
+- 提升单租户 launch 吞吐应转向压缩 launch 事务（减少栅栏查询次数、合并 prepare/dispatch、缩小结算围栏范围），而不是继续加分区/消费者。
+- 已回滚：`benchmark.yml` 回到 12 分区 / 每实例 6 consumer；本地 topic 重建为 12 分区。容量脚本保留新的 `CAPACITY_TRIGGER_CONSUMER_CONCURRENCY` 参数（默认 6），用于以后做对照时不必再改脚本。
+- 第一次 24/12 尝试在宿主 load 67（Docker VM）下进行、第二次在 load 19–33 下进行；两次都是同一形态的退化，且数据库侧的栅栏争用与宿主负载无关，因此结论保留，但绝对吞吐数值只作方向性参考。
+- 2026-11-20 决定：压缩 launch 事务（预估 3–5 天）暂不实施，单租户按约 11–12 run/s 作为当前接受能力；若未来业务确实需要更高单租户吞吐，再评估该方案或垂直扩库。
+
+### 对照：launch 消息按业务日分区（2026-11-20，已回滚）
+
+假设：把 launch 消息 key 从 `tenantId:requestId` 改成 `tenantId:bizDate`，同一业务日由一个 consumer 顺序处理，消除批次日结算栅栏的并发争抢；配合 24 分区 × 每实例 12 consumer。
+
+结果（10,000 请求 @ 25 rps，`max_active_runs_per_biz_date=8`，tenant `p2capacity9`，RUN_ID `p2-t0-datekey-20261120b`，`pg_stat_statements` 开启）：
+
+| 指标 | 12 分区 / 6 consumer（基线） | 按日分区 + 24/12 |
+|---|---|---|
+| launch 速率 | 11.4 run/s | **5.9 run/s** |
+| `job_instance` avg | 5.9–6.2 s | **87.7 s** |
+| 同时 RUNNING 的 run | 46–71 | 622 |
+| `job_task` READY 积压 | 32 | 538 |
+| PG CPU | 3.4–5.5 / 8 核 | 3.3 / 8 核 |
+| 等待 | advisory 0–5、LockManager 7 | advisory 12、LockManager 4（单看 launch 确实下降） |
+
+数据库侧：栅栏 SQL 在运行中累计 6,791 次、均值 **665 ms**、最大 20.5 s——按日分区只让准入不再抢锁，栅栏等待并没有消失。
+
+机制（代码证据）：
+
+- 准入路径取栅栏：`TriggerRequestPersistence` 的 `acquireBatchDaySettlementFence` 与 `trigger_request` 的 BEFORE INSERT 触发器。
+- 节点派发也取同一个栅栏：`DefaultWorkflowNodeDispatchService.java:134`。
+- 运行回报也取同一个栅栏：`WorkflowRunReportLock.java:43`。
+
+所以它是**整个运行生命周期**的栅栏，不只是准入锁。把准入串行化后，系统放进更多 run（RUNNING 46–71 → 622），节点派发与回报在同一个日期锁上排队，run 时长从 6 s 涨到 88 s，净吞吐反而下降。
+
+结论：
+
+- 单纯调整准入的消息顺序/分区不能解决瓶颈；**必须缩短栅栏持有时间或缩小栅栏范围**（压缩 launch 事务 / 合并事务 / 让派发与回报不持有同一把全局日期锁）。
+- 已回滚：消息 key 恢复 `tenantId:requestId`，`benchmark.yml` 恢复 12 分区 / 每实例 6 consumer，本地 topic 重建为 12 分区，代码与单测恢复到基线（`TriggerOutboxRelayTest` 22/22 通过）。
+- 这次对照说明 Tier 0.6 的“launch 并发是放大器”结论比原先更普适：并发放大的是整个生命周期的日期栅栏争用。
+
+## 2026-11-20 批次日结算栅栏共享锁改造验证
+
+改动：V387 新增 `acquire_batch_day_settlement_fence_shared`，准入、节点派发与运行回报改用共享读者锁；开日、人工操作与结算保持独占。方案与判据见[栅栏共享锁改造](../plans/batch-day-fence-shared-lock-2026-11-20.md)。
+
+### 12 分区 / 6 consumer（tenant `p2capacity10`，10,000 请求 @ 25 rps，槽位 8）
+
+- 入口：10,000 请求 / 10,000 OK / 0 KO，launch p95 **457 ms**（改造前 2,408–2,799 ms）。
+- 业务结果：10,000/10,000 `SUCCESS`、0 失败；`job_instance` avg **4.71 s** / p95 **11.96 s**；claim 延迟 avg 3.24 s / p95 8.66 s。
+- 收敛：等待窗口内 10,000/10,000 终态（`exit_code=0`）。
+- 栅栏 SQL：均值 **2.5 ms**、最大 457 ms（改造前均值 417 ms、最大 15.9 s）。
+- launch 阶段合计约 0.88 s：validation 96、prepare 206、dispatch 321、materialize 130、transition 65、resource 48、plan 16 ms。
+
+### 24 分区 / 12 consumer（tenant `p2capacity11`，同一注入）
+
+- launch 速率 **5.0 run/s**，同时 RUNNING 684，`job_instance` avg **91.5 s**。
+- `job_task` READY 640、RUNNING 59、Worker CPU 50%；PG 4.3/8 核，无持续锁等待；栅栏均值 7.2 ms。
+- 结论：栅栏不再是瓶颈，高并发下的新瓶颈是单 Worker 的 claim 领取能力。benchmark 保持 12/6，直到 Worker claim 容量提升。
+
+### 并发语义测试
+
+- 新增 `BatchDayFenceLockModeIntegrationTest`（真实 PostgreSQL）：两个共享读者互不阻塞、结算独占等待共享读者排队、结算窗口内共享读者排队并观察到提交后的状态；3/3 通过。
+- 回归：`JobNodeDispatchIntegrationTest` 100/100 通过（需带 `-am` 重新构建依赖，否则会命中本地旧制品）。
+
+### 边界
+
+- 本地 8 核单机，benchmark 拓扑；不是 staging/生产容量结论。
+- 两次 24/12 对照（随机 key、按日 key、共享锁）都低于 12/6 基线，差异来自下游领取与运行时长，不是栅栏本身。

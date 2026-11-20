@@ -4,6 +4,9 @@
     <select id="acquireSettlementFence" resultType="long">
         select batch.acquire_batch_day_settlement_fence(#{tenantId}, #{calendarCode}, #{bizDate})
     </select>
+    <select id="acquireSettlementFenceShared" resultType="long">
+        select batch.acquire_batch_day_settlement_fence_shared(#{tenantId}, #{calendarCode}, #{bizDate})
+    </select>
     <!--
       BatchDayInstanceEntity 是 java record（不可变），用 <constructor> 显式映射构造器参数。
       参数顺序必须与 record canonical constructor 完全一致：

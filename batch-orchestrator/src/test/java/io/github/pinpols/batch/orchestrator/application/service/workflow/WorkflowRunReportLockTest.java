@@ -70,7 +70,7 @@ class WorkflowRunReportLockTest {
     InOrder lockOrder = inOrder(batchDayInstanceMapper, workflowRunMapper);
     lockOrder
         .verify(batchDayInstanceMapper)
-        .acquireSettlementFence(TENANT_ID, CALENDAR_CODE, BIZ_DATE);
+        .acquireSettlementFenceShared(TENANT_ID, CALENDAR_CODE, BIZ_DATE);
     lockOrder.verify(workflowRunMapper).selectByTenantAndIdForUpdate(TENANT_ID, WORKFLOW_RUN_ID);
   }
 
@@ -83,7 +83,7 @@ class WorkflowRunReportLockTest {
     reportLock.acquireForJobInstance(TENANT_ID, JOB_INSTANCE_ID);
 
     verify(batchDayInstanceMapper, never())
-        .acquireSettlementFence(
+        .acquireSettlementFenceShared(
             ArgumentMatchers.anyString(),
             ArgumentMatchers.anyString(),
             ArgumentMatchers.any(LocalDate.class));

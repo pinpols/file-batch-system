@@ -40,7 +40,7 @@ public final class WorkflowRunReportLock {
       throw BizException.of(ResultCode.STATE_CONFLICT, "error.workflow.execution_snapshot_invalid");
     }
 
-    batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
+    batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
     Long workflowRunId = workflowRun.getId();
     WorkflowRunEntity lockedRun =
         workflowMappers.workflowRunMapper.selectByTenantAndIdForUpdate(tenantId, workflowRunId);

@@ -1,21 +1,21 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `79eeac383`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `24adb8c96`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,380 | 834,441 | 436,104 | 52.3% |
+| 6,381 | 834,601 | 436,200 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,942 | 416,701 | 224,307 | 53.8% |
-| prod | 3,519 | 329,582 | 157,090 | 47.7% |
-| script | 740 | 69,201 | 42,300 | 61.1% |
-| config | 68 | 10,290 | 7,689 | 74.7% |
+| test | 1,943 | 416,846 | 224,397 | 53.8% |
+| prod | 3,519 | 329,594 | 157,095 | 47.7% |
+| script | 740 | 69,203 | 42,301 | 61.1% |
+| config | 68 | 10,291 | 7,689 | 74.7% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
 | sql | 77 | 2,507 | 239 | 9.5% |
 
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,809 | 648,142 | 342,386 | 52.8% |
+| Java | 4,810 | 648,296 | 342,480 | 52.8% |
 | Python | 351 | 53,254 | 29,221 | 54.9% |
-| Shell | 218 | 36,138 | 28,601 | 79.1% |
-| YAML | 109 | 15,021 | 11,614 | 77.3% |
-| XML | 225 | 31,755 | 9,462 | 29.8% |
+| Shell | 218 | 36,140 | 28,602 | 79.1% |
+| YAML | 109 | 15,022 | 11,614 | 77.3% |
+| XML | 225 | 31,758 | 9,463 | 29.8% |
 | TypeScript | 42 | 8,679 | 4,596 | 53.0% |
 | Rust | 24 | 9,854 | 3,529 | 35.8% |
 | Properties | 5 | 3,193 | 2,653 | 83.1% |
@@ -48,7 +48,7 @@
 | `deploy/docker/observability/prometheus-batch-rules.yml` | config | YAML | 1,635 | 1,373 |
 | `helm/batch-platform/files/prometheus-batch-rules.yml` | infra-config | YAML | 1,635 | 1,373 |
 | `batch-console-api/src/test/java/io/github/pinpols/batch/console/integration/ConsoleTenantConfigPackageExcelUploadIntegrationTest.java` | test | Java | 3,064 | 1,347 |
-| `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,452 | 1,329 |
+| `load-tests/scripts/run-p2-capacity-profile.sh` | script | Shell | 1,454 | 1,330 |
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,586 | 1,326 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,584 | 1,326 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,157 | 1,128 |

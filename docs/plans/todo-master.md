@@ -56,9 +56,10 @@
 | **BF-20261118-01** | 单 Workflow × 业务日仅一个活跃运行 | ✅ 2026-11-18 按 [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 改为定义级 `max_active_runs_per_biz_date`（1..64，默认 1），用活跃槽位 + 唯一索引替代原唯一索引；默认值行为不变。剩余：Console/前端尚未暴露该字段，目前按 SQL 设置 |
 | **BF-20261118-02** | 批次日结算 advisory 栅栏 | 同日 launch 串行；历史采样最大等待 12.7 s。多业务日可分散，单日洪峰会排队 |
 | **BF-20261118-03** | 派发 outbox 发布延迟 | 任务事件创建→发布 avg 1–2 s、p95 ≈ 6 s，48% < 1 s；批处理与 CPU 争用，不是空闲退避 |
-| **BF-20261119-02** | 控制面按租户分片 | 评估完成、未实施：推荐“按租户组整库分片”，不建议拆运行时表或分布式 PG；主要成本在全局 ID、跨租户聚合、49 个单主调度器、迁移/备份扇出和租户迁移（约 8 人月）。前置门槛是先做 Tier 0.5 容量归因。见[分片评估](control-plane-sharding-assessment-2026-11-19.md) |
-| **BF-20261119-01** | 单 PostgreSQL 的 10w 拐点 | 2026-11-19 Tier 0 验证：调优入口（64/128/80）后 25 rps 持续注入 10w 无法收敛——`job_instance` avg 28.3 s（1w 时 2.3 s）、完成 1.3–4/s、`workflow_launch_wait` 积压 6k+，PG 3.5–6.3 核、32 个阻塞会话。入口已不是瓶颈；下一步需更低注入率或 Tier 1 控制面分片。见[压测记录](../verifications/load-test-local-2026-11-15.md) |
+| **BF-20261119-02** | 控制面按租户分片 | **No-Go（2026-11-20）**：Tier 0.5/0.6 显示 PG CPU < 70%、Worker 空闲，不收敛来自业务槽位与 launch 管线，不是单库容量；按租户组分片不改善单租户吞吐。方案（按租户组整库分片，约 8 人月）保留备查，重新评估条件：多租户总量使 PG CPU 持续 > 80%、存储/备份窗口成为约束，或压缩 launch 事务后单租户仍不足 12 run/s。见[分片评估](control-plane-sharding-assessment-2026-11-19.md) |
+| **BF-20261119-01** | 单 PostgreSQL 的 10w 拐点 | 2026-11-19 Tier 0.5/0.6：32/40 + outbox 2 分片下 1w 全量收敛（avg 4.09 s / p95 15.33 s、0 拒绝、PG 3.2 核）；100k 注入完成但窗口内不可能收敛——默认槽位 1 时限 4–5.5 run/s，槽位 8 时 launch 管线限 11–12.6 run/s 且随积压退化到 4/s，PG 始终 <6/8 核、Worker 空闲。单租户吞吐 = min(槽位/run 时长, launch 并发/事务时长)，分片不改变单租户上限。2026-11-19 夜间 24 分区 / 12 consumer 对照反而把 launch 降到 3.3/s（栅栏查询 30 会话争用），已回滚；下一步是压缩 launch 事务而不是加并发。2026-11-20 追加两次负结果：24/12 并发（3.3 run/s）与 launch 消息按业务日分区（5.9 run/s）都低于 12/6 基线，原因是批次日结算栅栏同时被准入、节点派发与运行回报使用，是生命周期锁而不是准入锁；单纯改准入顺序无效。**2026-11-20 已实施栅栏共享锁改造**（V387，读者共享/写者独占）：launch p95 2,408→457 ms、`job_instance` p95 15.33→11.96 s、栅栏均值 417→2.5 ms。24/12 仍低于基线，原因是单 Worker 的 claim 领取（READY 640），下一杠杆是 Worker 扩容或提高有效批量。单租户暂按约 11–12 run/s。方案与判据见[栅栏共享锁改造](batch-day-fence-shared-lock-2026-11-20.md)。见[压测记录](../verifications/load-test-local-2026-11-15.md) |
 | **BF-20261118-04** | 积压时单请求延迟 | `parallelism=8` 时 launch p95 585 ms、实例 p95 5.97 s；`parallelism=4` 延迟更低但排空更慢。可考虑按 `workflow_launch_wait` 深度自适应，当前不建议 |
+| **BF-20261119-03** | 过载时 Trigger 返回 500 | 100k 压测收尾阶段 Trigger 平台连接池耗尽（`CannotGetJdbcConnectionException`），被通用异常处理映射为 500（501 次）；客户端无法区分可重试背压。建议映射为 503 + `Retry-After`（或复用 429）并补异常处理单测。见[压测记录](../verifications/load-test-local-2026-11-15.md#2026-11-19-tier-06100k-注入与两个硬上限) |
 
 ### 本轮已修复（供追溯，待合入）
 

@@ -7,13 +7,14 @@ services:
       # 容量画像显式扩展 dispatch/direct topic，避免 broker 自动创建的 3 分区限制
       # Atomic worker 消费并发。Kafka 分区只能增加，普通 local profile 仍可用较低并发消费。
       KAFKA_PARTITIONS_DISPATCH: "24"
-      # launch topic 必须先扩到 12 再启动 Trigger producer。压测脚本会核对每个分区
-      # 的消息增量，避免 producer 缓存旧的 3 分区拓扑后产生虚假的控制面瓶颈。
+      # launch topic 扩到 12 分区（与 2 × 6 consumer 对齐）。压测脚本会核对每个分区
+      # 的消息增量，避免 producer 缓存旧拓扑后产生虚假的控制面瓶颈。
       KAFKA_PARTITIONS_TRIGGER_LAUNCH: "12"
   orchestrator:
     environment:
       # 容量画像使用 2 个 orchestrator × 6 consumer，对齐 launch topic 的 12 个分区。
-      # 单实例写 24 只会留下 12 个空闲线程，不能证明横向扩展能力。
+      # 2026-11-20 栅栏拆为共享读者/独占写者后，锁不再是并发上限；24/12 的瓶颈转移到
+      # 单 Worker 的 claim 领取（READY 积压 640），Worker 扩容前并发保持 6。
       BATCH_TRIGGER_CONSUMER_CONCURRENCY: "6"
       BATCH_ORCHESTRATOR_PLATFORM_DB_MAX_POOL_SIZE: "50"
       # 容量画像里大量 launch 会进入持久化等待；恢复串行时单租户吞吐被单线程限制，
@@ -56,11 +57,11 @@ services:
   trigger:
     environment:
       SPRING_PROFILES_ACTIVE: local,benchmark
-      # 10w 容量画像（Tier 0）：放宽入口许可与连接预算，配合 PG 调优把持续受理从约 25/s
-      # 推高。64 个许可配 80 条平台连接，仍保留 8 条给 relay、健康检查和管理路径；
-      # 队列容量受 TriggerRuntimeProperties 的 @Max(128) 约束，保持 128。
-      BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: "80"
-      BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: "64"
+      # 容量画像（Tier 0.5 归因）：32 个许可配 40 条平台连接。64/80 会同时抬高并发
+      # launch 事务数，放大批次日结算栅栏与连接配额的争用（1w 归因：avg 15.4→4.09 s）；
+      # 仍保留 8 条给 relay、健康检查和管理路径。队列容量受 @Max(128) 约束，保持 128。
+      BATCH_TRIGGER_PLATFORM_DB_MAX_POOL_SIZE: "40"
+      BATCH_TRIGGER_API_LAUNCH_MAX_CONCURRENCY: "32"
       BATCH_TRIGGER_API_LAUNCH_MIN_CONCURRENCY: "8"
       BATCH_TRIGGER_API_LAUNCH_QUEUE_CAPACITY: "128"
       BATCH_TRIGGER_API_LAUNCH_QUEUE_WAIT_MILLIS: "15000"

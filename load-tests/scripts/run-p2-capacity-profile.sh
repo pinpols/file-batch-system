@@ -92,6 +92,8 @@ CAPACITY_TENANT_ID="${CAPACITY_TENANT_ID:-p2capacity}"
 # 基准画像会有意提高隔离 Trigger 中继的预算；检查基准容器时不要继承 .env.local 中的本地生产基线。
 CAPACITY_ATOMIC_DISPATCH_PARTITIONS="${CAPACITY_ATOMIC_DISPATCH_PARTITIONS:-24}"
 CAPACITY_TRIGGER_LAUNCH_PARTITIONS="${CAPACITY_TRIGGER_LAUNCH_PARTITIONS:-12}"
+# 每个 Orchestrator 的 launch listener 数；topic 分区数应 >= replicas × 该值。
+CAPACITY_TRIGGER_CONSUMER_CONCURRENCY="${CAPACITY_TRIGGER_CONSUMER_CONCURRENCY:-6}"
 CAPACITY_ATOMIC_CONCURRENCY="${CAPACITY_ATOMIC_CONCURRENCY:-24}"
 CAPACITY_ATOMIC_MAX_POLL_RECORDS="${CAPACITY_ATOMIC_MAX_POLL_RECORDS:-5}"
 CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED="${CAPACITY_EXPECT_ATOMIC_BATCH_CLAIM_ENABLED:-1}"
@@ -750,8 +752,8 @@ require_trigger_capacity_budget() {
       || "$pool" != "$CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE" \
       || "$limit" != "$CAPACITY_TRIGGER_API_MAX_CONCURRENCY" \
       || "$relay" != "$CAPACITY_EXPECT_TRIGGER_RELAY_RATE" \
-      || "$consumer" != "6" || "$pool_max" != "50" \
-      || "$replica_consumer" != "6" || "$replica_pool_max" != "50" \
+      || "$consumer" != "$CAPACITY_TRIGGER_CONSUMER_CONCURRENCY" || "$pool_max" != "50" \
+      || "$replica_consumer" != "$CAPACITY_TRIGGER_CONSUMER_CONCURRENCY" || "$replica_pool_max" != "50" \
       || "$waiting_batch" != "$CAPACITY_WAITING_DISPATCH_BATCH_SIZE" \
       || "$waiting_interval" != "$CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS" \
       || "$replica_waiting_batch" != "$CAPACITY_WAITING_DISPATCH_BATCH_SIZE" \
@@ -773,7 +775,7 @@ require_trigger_capacity_budget() {
       || "$atomic_registered_max_concurrent" != "$CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS" \
       || "$atomic_health" != "healthy" ]]; then
     echo "trigger benchmark profile is not active or its capacity budget does not match; restart before P2:" >&2
-    echo "  required: profiles include benchmark, admission=${CAPACITY_TRIGGER_API_MAX_CONCURRENCY}, pool=${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE}, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, launch partitions=${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}, two orchestrators each consumers=6/db pool=50/waiting=${CAPACITY_WAITING_DISPATCH_BATCH_SIZE}@${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS}ms/rate-limit-v${CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION}/claim=${CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE}/report=${CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE}, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/max-poll=${CAPACITY_ATOMIC_MAX_POLL_RECORDS}/batch-claim=${atomic_batch_claim_expected}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}/task-client=${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}" >&2
+    echo "  required: profiles include benchmark, admission=${CAPACITY_TRIGGER_API_MAX_CONCURRENCY}, pool=${CAPACITY_TRIGGER_PLATFORM_DB_POOL_SIZE}, reserve=8, relay=${CAPACITY_EXPECT_TRIGGER_RELAY_RATE}, launch partitions=${CAPACITY_TRIGGER_LAUNCH_PARTITIONS}, two orchestrators each consumers=${CAPACITY_TRIGGER_CONSUMER_CONCURRENCY}/db pool=50/waiting=${CAPACITY_WAITING_DISPATCH_BATCH_SIZE}@${CAPACITY_WAITING_DISPATCH_INTERVAL_MILLIS}ms/rate-limit-v${CAPACITY_EXPECT_RATE_LIMIT_CONFIGURATION_VERSION}/claim=${CAPACITY_EXPECT_CLAIM_RATE_LIMIT_PER_MINUTE}/report=${CAPACITY_EXPECT_REPORT_RATE_LIMIT_PER_MINUTE}, atomic consumers=${CAPACITY_ATOMIC_CONCURRENCY}/max-poll=${CAPACITY_ATOMIC_MAX_POLL_RECORDS}/batch-claim=${atomic_batch_claim_expected}/permits=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/registered-capacity=${CAPACITY_ATOMIC_MAX_CONCURRENT_TASKS}/partitions=${CAPACITY_ATOMIC_DISPATCH_PARTITIONS}/task-client=${CAPACITY_ATOMIC_TASK_CLIENT_BASE_URLS}" >&2
     echo "  actual: profiles=${profiles:-missing} admission=${limit:-missing} pool=${pool:-missing} relay=${relay:-missing} launch partitions=${trigger_topic_partitions:-missing}, primary consumers=${consumer:-missing}/pool=${pool_max:-missing}/waiting=${waiting_batch:-missing}@${waiting_interval:-missing}ms/rate-limit-v${rate_limit_version:-missing}/claim=${claim_rate_limit:-missing}/report=${report_rate_limit:-missing} replica consumers=${replica_consumer:-missing}/pool=${replica_pool_max:-missing}/waiting=${replica_waiting_batch:-missing}@${replica_waiting_interval:-missing}ms/rate-limit-v${replica_rate_limit_version:-missing}/claim=${replica_claim_rate_limit:-missing}/report=${replica_report_rate_limit:-missing} atomic health=${atomic_health:-missing}/consumers=${atomic_concurrency:-missing}/max-poll=${atomic_max_poll_records:-missing}/batch-claim=${atomic_batch_claim:-false}/permits=${atomic_max_concurrent:-missing}/registered-capacity=${atomic_registered_max_concurrent:-missing}/pool=${atomic_execution_pool:-missing}/partitions=${atomic_topic_partitions:-missing}/task-client=${atomic_task_client_base_urls:-missing}" >&2
     echo "  start: COMPOSE_BENCHMARK=1 ./scripts/docker/up-apps.sh trigger orchestrator orchestrator-benchmark-replica worker-atomic" >&2
     exit 2
