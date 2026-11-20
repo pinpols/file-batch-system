@@ -6,6 +6,7 @@
 
 - `manage-logs.py`：本地日志留存与压缩归档；默认只读预览，原文按类别保存 7/30 天，压缩包保存 90 天后须显式清理；保护当前、打开中、latest、`.keep` 和文档字面引用的证据。策略与恢复说明见[本地日志手册](../../docs/runbook/local-log-layout.md#保存压缩归档与到期清理)。
 
+- [refresh-fresh-schema-manifest.sh](refresh-fresh-schema-manifest.sh)：新增或修改 `db/migration` 后重生成平台 fresh schema 摘要并打印差异；pre-commit 在迁移变更时自动调用，CI 仍按已提交清单只读校验。
 - `start-all.sh`：一键启动本地联调环境（基础依赖 + 8 个 Java 应用模块）
   - 建表后幂等应用业务库 RLS，避免 Worker 因租户策略缺失启动失败
   - 裸 JVM 自动使用宿主机 PostgreSQL / replica / Redis 地址，并映射 `.env.local` 的数据库凭据

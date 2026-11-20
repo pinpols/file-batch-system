@@ -52,6 +52,7 @@
 - `scripts/ci/run-staging-live-smoke.sh`：staging live rollout / rollback smoke 的便捷入口
 - `scripts/ci/security-scan.sh`：本地 / CI 安全扫描一键入口，编排 `gitleaks` / `dependency-check` / `semgrep` / `trivy` / `ZAP`
 - `scripts/ci/check-console-openapi-paths.py`：Console OpenAPI 与 `Console*Controller` 路由一致性检查（CI 与本地均可运行，详见 [scripts/ci/README.md](ci/README.md)）
+- `scripts/local/refresh-fresh-schema-manifest.sh`：迁移变更后重生成平台 fresh schema 摘要并打印差异；pre-commit 在 `db/migration` 变更时自动调用
 - `scripts/local/run-tests.sh --e2e`：本地运行 E2E 测试（`batch-e2e-tests`）
 - `scripts/local/pre-commit-checks.sh`：由项目 Git hook 调用，按暂存文件域执行轻量提交门禁。Java / Shell / Mapper XML 文件级守护采用增量扫描；跨文件关系类守护（文档引用、配置默认值、功能开关、`.env` 安全、Maven 依赖边界、Helm 环境变量、LOC 快照、仓库卫生等）按域触发全局校验，边界见 [docs/runbook/ci.md](../docs/runbook/ci.md#本地-git-hook-门禁)
 - `scripts/local/health-check-infra.sh`：基建健康检查(PG primary/replica / Kafka / Redis / MinIO),协议层探测 + env-var 驱动,本机 / staging / CI 通用。`make dev-health` 是别名

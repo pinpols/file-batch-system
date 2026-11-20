@@ -101,7 +101,7 @@ CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main �
 - **静态门禁失败统一汇总**：PR 将 policy、supply-chain、Java quality 三路并行执行，各路在末尾汇总自身失败，再由稳定的 `static-checks` required context 聚合；Full Gate 仍在单个 `static-checks` 中汇总。checkout、构建环境安装等缺失后无法继续的基础前置仍立即失败。本地 pre-commit/pre-push 执行完所有独立检查后汇总失败；依赖前置产物的步骤在其生成失败时停止该步骤，其他门禁继续执行。
 - **SBOM 快照必须同步**：POM 或 CI 门禁变更时，PR Gate 重生成 CycloneDX SBOM 并与 `docs/compliance/sbom.json` 比较；Full Gate 的许可证检查再次复核。动态 artifact 生成成功不等于入库快照已同步。
 - **核心术语枚举必须同步**：修改实例、工作流、节点、分片、步骤、任务状态，或调度类型、触发来源、节点类型、运行模式 enum 时，运行 `python3 scripts/ci/check-terminology-doc-sync.py --write`；PR / Full Gate 的只读检查会阻断旧值表。
-- **确定性派生产物由 hook 维护**：POM 已暂存且没有同文件未暂存改动时，pre-commit 自动重建并暂存 SBOM，同时执行许可证门禁；`@ConfigurationProperties` 增删时自动重建文档与运行时两份配置治理目录；代码量快照沿用 staged-tree 自动同步。CI 始终只读验证，不用机器人账号回写 PR。
+- **确定性派生产物由 hook 维护**：POM 已暂存且没有同文件未暂存改动时，pre-commit 自动重建并暂存 SBOM，同时执行许可证门禁；`@ConfigurationProperties` 增删时自动重建文档与运行时两份配置治理目录；代码量快照沿用 staged-tree 自动同步；新增或修改 `db/migration` 时自动重生成并暂存平台 fresh schema 摘要（Docker 不可用时该门禁失败并提示手工执行脚本）。CI 始终只读验证，不用机器人账号回写 PR。
 - **语义与安全例外保持人工审批**：Changelog、功能开关说明、环境变量 owner、Java 抑制项、Trivy 忽略项、SQL 例外基线和许可证风险说明不可由门禁自动放宽。CI 应给出修复命令或登记位置，但不替开发者作风险决定。
 
 ## 开源多人协作策略
@@ -308,6 +308,7 @@ Shell Linux 兼容守卫在 PR / Full 默认扫描工作树中现存的已跟踪
 | `helm/*` 变更 | Helm 环境变量同步、Helm 生产 overlay 安全 | 全局 Helm / 配置一致性检查 |
 | 数据库 / 脚本 / 文档 / 配置 / CI 变更 | 生产容量治理自动化 | 校验生产容量巡检脚本、只读 SQL、runbook、索引和 workflow 入口同步 |
 | tracked 源码/脚本/配置变更 | Lean LOC 快照重生成与校验 | 基于暂存树生成 `docs/stats/loc-current-lean.md` |
+| `db/migration` 变更 | fresh schema 清单重生成 | 调用 `scripts/local/refresh-fresh-schema-manifest.sh` 重新生成并暂存平台 schema 摘要；CI 只读校验 |
 | 所有提交 | 仓库卫生 | 全局仓库约束 |
 
 pre-commit 分组为 `hygiene`、`quality`、`docs`、`config`、`supply-chain`、`governance`；pre-push 使用 `local-pre-push`。模式控制示例：`BATCH_GATE_GROUP_MODES='quality=report,docs=ignore' git commit`，或 `BATCH_GATE_GROUP_MODES='local-pre-push=report' git push`。`report` 会执行并记录真实退出码但不阻断，`ignore` 不执行；默认仍为 `enforce`。
