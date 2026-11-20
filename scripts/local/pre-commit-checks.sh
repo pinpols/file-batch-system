@@ -70,6 +70,7 @@ helm_changed=0
 config_registry_changed=0
 sim_xlsx_fixture_changed=0
 worker_grants_changed=0
+migration_changed=0
 for file in "${staged_files[@]}"; do
   case "$file" in
     docs/governance/java-contract-governance*.json|scripts/ci/check-java-contract-governance.py|scripts/ci/tests/test_check_java_contract_governance.py)
@@ -85,6 +86,7 @@ for file in "${staged_files[@]}"; do
   [[ "$file" == *.md || "$file" == docs/* ]] && docs_changed=1
   [[ "$file" == scripts/* || "$file" == load-tests/scripts/* || "$file" == .githooks/* ]] && scripts_changed=1
   [[ "$file" == .github/workflows/* || "$file" == .github/actions/* ]] && workflow_changed=1
+  [[ "$file" == db/migration/V*__*.sql ]] && migration_changed=1
   [[ "$file" == .env* ]] && env_file_changed=1
   [[ "$file" == *.yml || "$file" == *.yaml || "$file" == docker-compose*.yml || "$file" == .env* ]] \
     && config_default_changed=1
@@ -315,6 +317,18 @@ if ((scripts_changed == 1)); then
     "$PYTHON_BIN" scripts/ci/check-testcontainers-reuse-label.py
   gate_run PRE_COMMIT_SCHEMA_GOVERNANCE_ASSETS "数据库结构治理资产" \
     "$PYTHON_BIN" scripts/ci/check-schema-governance-assets.py
+fi
+if ((migration_changed == 1)); then
+  # fresh schema 清单是确定性派生产物：迁移变更时由 hook 重生成并暂存，CI 仍只读校验。
+  refresh_fresh_schema_manifest() {
+    if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
+      echo "Docker 不可用，跳过 fresh schema 清单刷新；请在具备 Docker 的环境执行 scripts/local/refresh-fresh-schema-manifest.sh" >&2
+      return 1
+    fi
+    "$ROOT/scripts/local/refresh-fresh-schema-manifest.sh"
+    git add batch-orchestrator/src/test/resources/db/fresh-platform-schema-manifest.sha256
+  }
+  gate_run PRE_COMMIT_SCHEMA_MANIFEST_SYNC "fresh schema 清单刷新" refresh_fresh_schema_manifest
 fi
 if ((sim_xlsx_fixture_changed == 1)); then
   gate_run PRE_COMMIT_SIM_XLSX_FIXTURES "Sim 配置包 Excel schema" \

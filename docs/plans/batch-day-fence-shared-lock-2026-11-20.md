@@ -130,5 +130,6 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 
 ### 后续
 
-- 下一杠杆：Worker claim 容量（多 Worker 实例或提高 `batch-claim` 有效批量），预计能把 24/12 的 launch 吞吐拉回 20+/s。
+- 下一杠杆：Worker claim 容量（多 Worker 实例或提高 `batch-claim` 有效批量）。
+- 2026-11-20 追加对照：把 Worker 的 claim/report 轮询分摊到两个 Orchestrator（`endpointCount=2`）后，24/12 仍只有约 2.0 run/s；两个 Orchestrator 的 CPU 已均衡到 62%/64%，但 `pg_stat_activity` 出现 22 个 `LWLock: LockManager` 等待、Worker 8 分钟内重试 30 次。说明 24/12 的瓶颈不是单一 Orchestrator 的 claim 负载，而是高并发下的热点行/缓冲区争用；继续扩 Worker 前需要先定位热点行（`job_partition` / `trigger_request` 更新）。实验配置已回滚。
 - 结算独占语义未变；新增的共享函数不影响开日、人工操作与结算路径。
