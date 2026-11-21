@@ -108,7 +108,7 @@ class ExternalEventExpectationServiceTest {
             .triggerRequestId("request-a")
             .build());
     verify(batchDayInstanceMapper)
-        .acquireSettlementFence("tenant-a", "CALENDAR_A", LocalDate.of(2026, 10, 14));
+        .acquireSettlementFenceShared("tenant-a", "CALENDAR_A", LocalDate.of(2026, 10, 14));
   }
 
   @Test
