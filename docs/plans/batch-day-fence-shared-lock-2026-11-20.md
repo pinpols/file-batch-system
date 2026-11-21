@@ -143,6 +143,6 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 
 ### 后续
 
-- 下一杠杆：launch 事务。2026-11-21 业务键基数校准后，1,500 请求实测 15.74 任务/s，单 Worker 已能跟上；先做 launch 24/12 对照并压缩 launch 约 280 ms 未归因成本，Worker 扩容等到 launch 超过约 24/s 或迁到多宿主环境。`batch-claim` 有效批只有 1.05–1.12，调大批量无效。
+- 下一杠杆：launch 事务。2026-11-21 业务键基数校准后，1,500 请求实测 15.74 任务/s，单 Worker 已能跟上；24/12 对照已完成。根 Workflow 多槽位准入已减少热点业务日的插入往返，下一步在 12/6、基数 100 下做端到端 A/B 并分开记录根 Workflow 和子 Job 阶段耗时。`batch-claim` 有效批只有 1.05–1.12，调大批量无效。
 - 2026-11-20 追加对照：把 Worker 的 claim/report 轮询分摊到两个 Orchestrator（`endpointCount=2`）后，24/12 仍只有约 2.0 run/s；两个 Orchestrator 的 CPU 已均衡到 62%/64%，但 `pg_stat_activity` 出现 22 个 `LWLock: LockManager` 等待、Worker 8 分钟内重试 30 次。说明 24/12 的瓶颈不是单一 Orchestrator 的 claim 负载，而是高并发下的热点行/缓冲区争用；继续扩 Worker 前需要先定位热点行（`job_partition` / `trigger_request` 更新）。实验配置已回滚。
 - 结算独占语义未变；新增的共享函数不影响开日、人工操作与结算路径。

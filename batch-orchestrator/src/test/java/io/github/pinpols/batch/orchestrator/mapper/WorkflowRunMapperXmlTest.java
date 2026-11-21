@@ -3,14 +3,18 @@ package io.github.pinpols.batch.orchestrator.mapper;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import io.github.pinpols.batch.common.enums.WorkflowRunStatus;
+import io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.apache.ibatis.builder.xml.XMLMapperBuilder;
+import org.apache.ibatis.mapping.BoundSql;
+import org.apache.ibatis.mapping.ParameterMapping;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,8 +51,7 @@ class WorkflowRunMapperXmlTest {
           .contains("jsonb_each(coalesce(workflow_run.execution_snapshot -> 'jobDefinitions'")
           .contains("workflow_run.tenant_id = #{tenantId}")
           .contains("job_snapshot.identity -> 'executionDefinition' ->> 'id'")
-          .contains("job_snapshot.identity -> 'executionDefinition' ->> 'version'")
-          .contains("CAST(#{executionSnapshot} AS jsonb)");
+          .contains("job_snapshot.identity -> 'executionDefinition' ->> 'version'");
       assertArchivedColumnsAreExplicit(mapperXml);
       new XMLMapperBuilder(
               new ByteArrayInputStream(mapperBytes),
@@ -56,6 +59,20 @@ class WorkflowRunMapperXmlTest {
               resource,
               configuration.getSqlFragments())
           .parse();
+
+      WorkflowRunEntity run = new WorkflowRunEntity();
+      Map<String, Object> parameters = Map.of("run", run, "maxActiveRuns", 2);
+      String namespace = WorkflowRunMapper.class.getName();
+      for (String insert :
+          Set.of("insert", "insertIfActiveSlotFree", "insertAtFirstVisibleFreeSlot")) {
+        BoundSql sql =
+            configuration.getMappedStatement(namespace + "." + insert).getBoundSql(parameters);
+        assertThat(sql.getSql()).as(insert).contains("CAST(? AS jsonb)");
+        assertThat(sql.getParameterMappings())
+            .as(insert)
+            .extracting(ParameterMapping::getProperty)
+            .contains("run.executionSnapshot");
+      }
     } catch (Exception ex) {
       throw new AssertionError("failed to validate " + resource, ex);
     }

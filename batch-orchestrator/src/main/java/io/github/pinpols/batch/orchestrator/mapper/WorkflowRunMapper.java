@@ -11,14 +11,20 @@ import org.apache.ibatis.annotations.Param;
 
 public interface WorkflowRunMapper {
 
-  int insert(WorkflowRunEntity entity);
+  int insert(@Param("run") WorkflowRunEntity entity);
 
   /**
    * 按活跃槽位插入根运行；该槽位已被占用时返回零，其他唯一键、外键及检查约束异常继续向调用方传播。
    *
    * <p>ADR-050：槽位由准入方按定义级上限逐个尝试，唯一索引是并发下的最终裁决，不依赖事务快照。
    */
-  int insertIfActiveSlotFree(WorkflowRunEntity entity);
+  int insertIfActiveSlotFree(@Param("run") WorkflowRunEntity entity);
+
+  /**
+   * 在一次往返中尝试插入事务快照内第一个空槽。返回零时仍需逐槽复查，覆盖快照之后的槽位释放。
+   */
+  int insertAtFirstVisibleFreeSlot(
+      @Param("run") WorkflowRunEntity entity, @Param("maxActiveRuns") int maxActiveRuns);
 
   WorkflowRunEntity selectById(@Param("tenantId") String tenantId, @Param("id") Long id);
 

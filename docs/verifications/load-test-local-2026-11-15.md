@@ -629,8 +629,8 @@ claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` �
 | 任务完成速率 | 8.96 /s | **15.74 /s** |
 | 任务执行 avg | 0.957 s | 1.023 s |
 | launch 总耗时 | 约 1,659 ms（含日志开销） | **765 ms** |
-| launch 已埋点 phase | — | 485 ms |
-| 未归因 | — | 280 ms |
+| 子 Job launch 外层阶段合计 | — | 337 ms |
+| 与 launch 总耗时的差值（估算） | — | 428 ms |
 | 12 consumer 理论上限 | — | 12 ÷ 0.765 ≈ **15.7/s** |
 
 基数 100 时“12 consumer ÷ 765 ms”与实测 15.74/s 吻合；单 Worker 理论容量约 24.5/s，仍有约 1.5 倍余量。
@@ -639,7 +639,7 @@ claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` �
 
 - 基数=1 是热点键画像，不能作为吞吐基线；`CAPACITY_BIZ_DATE_CARDINALITY` 默认改为 100，脚本在 ≥1,000 请求且基数=1 时输出告警。
 - 24/12 对照早先得到的 5.0 run/s 主要受该夹具串行化影响，不能直接归因于 Worker claim 容量。
-- 真正的端到端上限仍是 launch：12 consumer × 单次 launch wall time；下一步是 launch 24/12 对照与压缩 280 ms 未归因成本，Worker 扩容等到 launch 超过约 24/s 或迁到多宿主环境。
+- 这轮 launch 的估算上限为 consumer 数除以平均 launch 耗时。后续使用 24/12 对照，并按不同阶段拆分总耗时。Worker 扩容等到 launch 超过约 24/s 或迁到多宿主环境。
 - 热点业务键在真实租户中仍会串行化结果版本写入，这是版本排序语义的一部分，容量规划需按业务键基数评估。
 
 ### 边界
@@ -656,12 +656,17 @@ claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` �
 |---|---:|---:|
 | 任务完成速率 | **11.43 /s** | **8.91 /s** |
 | launch 总耗时 | **950 ms** | **2,327 ms** |
-| launch 已埋点 phase | 605 ms | 1,743 ms |
-| 未归因 | 345 ms | 584 ms |
+| 子 Job launch 校验 | 70 ms | 257 ms |
+| 子 Job launch 准备事务 | 139 ms | 361 ms |
+| 子 Job launch 派发事务（含内部子阶段） | 217 ms | 623 ms |
+| 子 Job launch 外层阶段合计 | **426 ms** | **1,242 ms** |
+| 与 launch 总耗时的差值（估算） | 524 ms | 1,085 ms |
 | 任务执行 avg | 1.416 s | 4.246 s |
 | 宿主峰值 load/CPU | 2.18 | 2.34 |
 
-24/12 的 phase 全面膨胀约 2–3 倍（validation 48→277 ms、prepare 113→380 ms、dispatch 175→664 ms），不是单一段变慢，而是 Orchestrator 与 PG 的整体争用。按“consumer 数 ÷ launch wall time”计算，24 ÷ 2.327 ≈ 10.3/s，与实测 8.91/s 基本吻合。
+三项子 Job launch 外层阶段均变慢。按“consumer 数 ÷ launch wall time”计算，24 ÷ 2.327 ≈ 10.3/s，实测为 8.91/s。
+
+2026-11-21 复核原始 `p2-p1-launch-12-6`、`p2-p1-launch-24-12` 和 `p2-p1-cardinality` 报告。上表按各副本的计数增量对阶段均值加权，四个派发子阶段已包含在派发事务计时内。原 605 ms / 1,743 ms（以及基数对照的 485 ms）包含重复计时。总耗时与子 Job 阶段的差值还包含根 Workflow 准入、START 派发外层和触发状态回写等路径，尚无逐段测量。
 
 ### 结论
 
@@ -673,3 +678,31 @@ claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` �
 
 - 单机 8 核、应用与 PG 共享宿主；两轮宿主峰值负载接近（2.18 vs 2.34 load/CPU），相对对照有效，绝对速率不代表生产。
 - 24/12 的 24 分区为临时扩分区，完成后已恢复 12 分区与每实例 6 consumer。
+
+## 2026-11-21 Workflow 多槽位准入优化
+
+原 100 请求 SQL 画像（业务键基数 1）里，`workflow_run` 槽位 INSERT 调用 4,544 次、成功 100 次，数据库累计执行 3.37 s。调用来自根 Workflow 准入循环，业务键基数 100 的画像未采集对应语句次数。当前工作树以 `10658ff5c` 为基线，多槽将首个可见空槽选择与 INSERT 合成一条语句。数据库唯一索引继续裁决并发，快照落后时回到原逐槽复查。
+
+隔离 PostgreSQL 17.11（Docker 1 CPU / 512 MiB、JDK 21、pgJDBC 42.7.13）以合成表对照原逐槽 INSERT 与优化查询。保留同形状部分唯一索引，预置 100,000 条历史记录、32,768 条其余租户活跃记录，槽位上限 64。每组各预热 20 次并交替采样 200 次，`REPEATABLE READ`，每次回滚以保持占用条件，客户端计时不含回滚。两种方案每次选中相同槽位或均确认已满。
+
+| 已占用槽位 | SQL 往返（原 → 新） | p50（原 → 新） | p95（原 → 新） |
+|---:|---:|---:|---:|
+| 0 | 1 → 1 | 0.370 → 0.391 ms | 0.510 → 0.635 ms |
+| 1 | 2 → 1 | 0.670 → 0.369 ms | 0.910 → 0.482 ms |
+| 32 | 33 → 1 | 10.950 → 0.418 ms | 18.116 → 0.824 ms |
+| 63 | 64 → 1 | 20.123 → 0.399 ms | 26.157 → 0.563 ms |
+| 64 | 64 → 65 | 20.406 → 20.761 ms | 27.711 → 27.078 ms |
+
+32 槽用例的 `EXPLAIN (ANALYZE, BUFFERS)` 使用槽位部分唯一索引做 Index Only Scan 和冲突裁决，索引扫描 32 行，整个语句 18 次 shared buffer hit。优化没有实际 schema 或索引变更。
+
+旧实现的定向用例先红，两个成功 launch 执行了三次 INSERT。最终执行下列回归，14 个隔离集成用例与 11 个 Replay 单测全部通过，0 跳过。集成用例覆盖默认单槽、满槽等待、并发争抢、快照建立后释放槽位、请求幂等、约束错误和冻结快照恢复。
+
+```bash
+./mvnw -o -ntp -pl batch-orchestrator -am \
+  '-Dtest=JobNodeDispatchIntegrationTest#capacityWait*+systemCapacityWaitRecovery*,DefaultWorkflowRunLaunchServiceReplayTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false -Dbatch.testcontainers.reuse=false test
+```
+
+此轮用完的隔离集成容器及微基准数据库均由本轮释放。12/6、基数 100 的完整链路 A/B 待在同一隔离环境重跑。约 500 ms 是后续验收目标。
+
+PR #1441 首轮编排单测的 `WorkflowRunMapperXmlTest` 仍匹配改名前的 `executionSnapshot` XML 占位符。修正后的用例加载 MyBatis 映射，验证普通插入、逐槽复查和可见空槽插入三条路径都生成 JSONB 转换并绑定执行快照。重跑该用例、Replay 单测和多槽位准入集成用例，共 14 项通过，0 跳过。

@@ -1,5 +1,9 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-21 Workflow 多槽位准入和 launch 计时复核
+
+- 更新 [ADR-050](architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) 的多槽位准入实现和满槽复查条件。[容量记录](verifications/load-test-local-2026-11-15.md#2026-11-21-workflow-多槽位准入优化)补充隔离 PostgreSQL 对照，并修正子 Job 派发子阶段重复计时。
+
 ## 2026-11-21 容量画像业务键基数默认值
 
 - `load-tests/scripts/run-p2-capacity-profile.sh` 的 `CAPACITY_BIZ_DATE_CARDINALITY` 默认从 1 改为 100：基数=1 时所有运行共用同一 `result_version` 业务键，`ResultVersionWriter.lockBusinessKey` 的 `pg_advisory_xact_lock` 会串行化完成路径，吞吐被低估。基数=1 保留为热点键画像，脚本在 ≥1,000 请求时告警。

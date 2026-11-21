@@ -1,19 +1,19 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `9ecccbb54`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `4432f7cd9`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,383 | 834,756 | 436,286 | 52.3% |
+| 6,383 | 834,856 | 436,336 | 52.3% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,944 | 416,935 | 224,445 | 53.8% |
-| prod | 3,519 | 329,622 | 157,105 | 47.7% |
+| test | 1,944 | 416,988 | 224,475 | 53.8% |
+| prod | 3,519 | 329,669 | 157,125 | 47.7% |
 | script | 741 | 69,241 | 42,329 | 61.1% |
 | config | 68 | 10,291 | 7,689 | 74.7% |
 | infra-config | 34 | 6,160 | 4,479 | 72.7% |
@@ -23,11 +23,11 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,811 | 648,413 | 342,538 | 52.8% |
+| Java | 4,811 | 648,476 | 342,572 | 52.8% |
 | Python | 351 | 53,254 | 29,221 | 54.9% |
 | Shell | 219 | 36,178 | 28,630 | 79.1% |
 | YAML | 109 | 15,022 | 11,614 | 77.3% |
-| XML | 225 | 31,758 | 9,463 | 29.8% |
+| XML | 225 | 31,795 | 9,479 | 29.8% |
 | TypeScript | 42 | 8,679 | 4,596 | 53.0% |
 | Rust | 24 | 9,854 | 3,529 | 35.8% |
 | Properties | 5 | 3,193 | 2,653 | 83.1% |
@@ -40,7 +40,7 @@
 | File | Group | Language | Physical LOC | Lean logical LOC |
 |---|---|---|---:|---:|
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkflowOccurrenceCatchUpApprovalE2eIT.java` | test | Java | 7,854 | 3,290 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,331 | 2,733 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/JobNodeDispatchIntegrationTest.java` | test | Java | 6,367 | 2,752 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/WorkerReportLostAfterBusinessCommitE2eIT.java` | test | Java | 4,925 | 2,583 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/BatchDayMetricsMapperIntegrationTest.java` | test | Java | 3,750 | 1,791 |
 | `batch-trigger/src/test/java/io/github/pinpols/batch/trigger/integration/TriggerServiceIntegrationTest.java` | test | Java | 2,798 | 1,459 |

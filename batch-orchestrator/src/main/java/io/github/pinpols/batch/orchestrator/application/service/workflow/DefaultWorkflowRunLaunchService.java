@@ -497,8 +497,8 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
   }
 
   /**
-   * ADR-050：按定义级上限逐个尝试活跃槽位。唯一索引负责并发裁决，不受准入事务 REPEATABLE READ
-   * 快照影响；槽位全被占用时抛出容量等待，由调用方在事务外持久化。
+   * ADR-050：多槽位时一次尝试首个可见空槽。唯一索引负责并发裁决；快照落后时仍逐槽尝试，
+   * 避免漏掉准入事务开始后才释放的槽位。
    */
   private void insertWithActiveSlot(
       WorkflowRunEntity created,
@@ -508,6 +508,10 @@ public class DefaultWorkflowRunLaunchService implements WorkflowRunLaunchService
         created.getTenantId(), created.getWorkflowDefinitionId());
     int maxActiveRuns =
         EmptyChecks.isNull(configuredLimit) || configuredLimit < 1 ? 1 : configuredLimit;
+    if (maxActiveRuns > 1
+        && workflowRunMapper.insertAtFirstVisibleFreeSlot(created, maxActiveRuns) == 1) {
+      return;
+    }
     for (int slot = 1; slot <= maxActiveRuns; slot++) {
       created.setActiveSlot(slot);
       if (workflowRunMapper.insertIfActiveSlotFree(created) == 1) {
