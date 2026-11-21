@@ -556,3 +556,52 @@ Tier 0.5 证明 32/40 + outbox 2 分片能在 25 rps 下完成 1w。本轮把注
 
 - 本地 8 核单机，benchmark 拓扑；不是 staging/生产容量结论。
 - 两次 24/12 对照（随机 key、按日 key、共享锁）都低于 12/6 基线，差异来自下游领取与运行时长，不是栅栏本身。
+
+## 2026-11-21 Worker claim 容量与 outbox 延迟归因
+
+栅栏共享锁上线后，24/12 对照把瓶颈指向 Worker 领取。本轮用两组运行把 claim 与 outbox 分开测量：一组低速率干净运行拿基线，一组原 25 rps 洪峰复现积压。应用镜像为 `eb026c671+fence-shared-dirty`（含 V387），benchmark 拓扑 12 分区 / 每实例 6 consumer、Atomic 24 listener / `max-poll-records=5` / `batch-claim=5`。
+
+### 运行 A：600 请求 @10 rps（干净基线）
+
+`RUN_ID=p2-p1-outbox-20261121e`，tenant `p2capacity14`，槽位 64，自动清理关闭。600/600 实例 SUCCESS、0 失败，实例 avg 0.669 s / p95 1.653 s，launch p95 49 ms；12/12 launch 分区均分到消息。预检宿主 load 5.0–6.8，运行期峰值 1 分钟 load 8.45（1.06/CPU）。
+
+| 指标 | 数值 |
+|---|---|
+| claim-batch 调用 / 认领任务 | 536 / 600，**有效批 1.12**，最大 2 |
+| claim-batch HTTP 均值 | **23.5 ms**（12.60 s / 536） |
+| outbox advance 轮次 / 事件 | 302 / 1,800，平均批 5.96 |
+| outbox DB select 均值 | **7.0 ms** |
+| outbox 单轮 publish（poll+Kafka+回写） | **39.7 ms**（其中 Kafka+回写约 32.7 ms） |
+| `ATOMIC` 事件 created→published | avg 0.255 s / p50 0.221 s / p95 0.590 s / max 1.195 s |
+| `JOB_TERMINAL` / `WORKFLOW_TERMINAL` | avg 0.212 s / p50 0.190 s / p95 0.436 s / max 1.346 s |
+
+### 运行 B：10,000 请求 @25 rps（洪峰复现）
+
+`RUN_ID=p2-p1-claim-20261121c-10w`，tenant `p2capacity12`，槽位 8，单一业务日。宿主在注入期被压到 load 峰值 39，属于受污染运行，只用于分解延迟，不作为容量基线。
+
+- 入口：10,000 请求中 9,029 OK、**971 × 429（9.7%）**；launch p95 **25.3 s**、均值 3.58 s。
+- 业务侧：约 400 s 内创建 1,782 个实例（≈4.5 run/s）；1,801 个任务 SUCCESS，任务执行 avg 0.556 s / p95 2.011 s，READY→开始 avg 1.266 s。
+- claim：1,147 次 claim-batch / 1,205 个任务，**有效批 1.05**；claim-batch HTTP 均值 **262 ms**（301.0 s / 1,147）。
+- outbox：786 轮 / 3,616 个事件，平均批 4.60；DB select 均值 **46 ms**，单轮 publish 均值 **357 ms**（Kafka+回写约 311 ms）。
+- 事件延迟：`ATOMIC` avg 1.408 s / p50 0.813 s / p95 3.917 s / max 27.5 s；终态事件 avg 1.197 s / p50 0.718 s / p95 3.473 s / max 21.2 s。
+
+### 归因
+
+**claim 容量**
+
+- 两组的有效批都只有 **1.05–1.12**：Kafka 每次 poll 通常只交付 1–2 条，`batch-claim` 的 HTTP 摊销基本不存在；调大批量不会提高领取并发。
+- claim 本身很快：干净运行 **23.5 ms**，受污染运行 262 ms；即使按 262 ms 计算，24 listener 的 claim 理论上限也约 91 次/s，远高于观测值。
+- 真正的上限是 **listener 执行占用**：单 listener 串行执行已认领任务，单 Worker 吞吐 ≈ listener 数 ÷（claim RTT + 任务时长）。按干净运行 0.669 s 估，24 listener 约 34 任务/s；运行 B 的 4.5 run/s 是入口/宿主受限，不是 claim 饱和。
+- 11-20 的 24/12 对照（READY 640、5.0 run/s）同样是执行占用受限。可选杠杆按代价排序：增加 Worker 副本 / dispatch 分区与 listener 并发 → 缩短任务时长 → listener 内并行执行（须先验证 lease/report 与顺序语义）。单 Worker 的 claim 能力不是当前首要瓶颈。
+
+**outbox 延迟**
+
+- 干净运行单轮 39.7 ms，其中 DB select 7 ms、Kafka 与状态回写 32.7 ms；事件 p50 190–221 ms、p95 436–590 ms。
+- 洪峰运行单轮涨到 357 ms，事件 p50 718–813 ms、p95 3.47–3.92 s。p50 约等于“等待下一轮轮询的一半间隔 + 单轮处理”，p95 尾部来自自适应轮询间隔（最小 200 ms、空闲退避 ×1.5 至 5 s）叠加单轮成本。
+- 结论：延迟由**轮询排队 + 单轮处理成本**决定，不是 DB 查询，也不是 Kafka 吞吐本身；事件量越大、单轮越慢，尾部越长。若业务要求更低的派发 p95，可评估“outbox 写入后立即触发一轮”或限制空闲退避上限；当前没有 SLO 支撑，不改生产默认值，benchmark 也维持原配置。
+
+### 边界
+
+- 本地 8 核单机 benchmark 拓扑；运行 B 宿主 load 峰值 39，绝对速率与 429 比例不可作为容量结论，只用于延迟分解。
+- 运行 A 的宿主 load 仍略高于 0.75/CPU 的可比阈值，因此标记 `standard-baseline-comparable=no`；它的价值是低负载下的相对分解，不是生产容量承诺。
+- 本轮未覆盖多 Worker 副本、任务时长变化和 listener 内并行；这三点是后续验证 Worker 扩展方案的入口。
