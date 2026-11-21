@@ -8,8 +8,10 @@ import io.github.pinpols.batch.common.i18n.BizMessageResolver;
 import io.github.pinpols.batch.common.logging.SwallowedExceptionLogger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -27,6 +29,9 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
  * 日志，不作为 API 响应返回。
  */
 public abstract class AbstractApiExceptionHandler {
+
+  /** 数据库资源类故障的 Retry-After 秒数；与 Trigger 默认 connection-timeout 5s 对齐，给连接池恢复留出时间。 */
+  private static final String DB_RESOURCE_RETRY_AFTER_SECONDS = "5";
 
   private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -120,6 +125,29 @@ public abstract class AbstractApiExceptionHandler {
     String message = resolveCommonCode(ResultCode.CONFLICT, "并发插入冲突,请重试");
     CommonResponse<Void> failureBody = CommonResponse.failure(ResultCode.CONFLICT, message);
     return response.body(failureBody);
+  }
+
+  /**
+   * 数据库资源类故障（连接池耗尽、连接获取失败、主库瞬时不可达）→ 503 + Retry-After，而非落到 Exception.class 的 500。
+   *
+   * <p>典型现场是过载时 Trigger 平台连接池耗尽抛 {@code CannotGetJdbcConnectionException}；它继承自
+   * {@link DataAccessResourceFailureException}，属非 transient 族，不会被 Orchestrator 的
+   * {@code TransientDataAccessException} 映射覆盖。500 会让客户端无法区分“可重试背压”和“服务端 bug”，
+   * 压测中因此产生无差别重试。这里按 DB 资源不可用统一映射为可重试语义。
+   */
+  @ExceptionHandler(DataAccessResourceFailureException.class)
+  public ResponseEntity<CommonResponse<Void>> handleDataAccessResourceFailure(
+      DataAccessResourceFailureException exception) {
+    log.warn(
+        "{} database resource unavailable (retryable, mapped to 503): {}",
+        modulePrefix(),
+        SwallowedExceptionLogger.summary(exception));
+    ResultCode code = ResultCode.SERVICE_UNAVAILABLE;
+    String message = resolveCommonCode(code, code.label());
+    CommonResponse<Void> failureBody = CommonResponse.failure(code, message);
+    return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+        .header(HttpHeaders.RETRY_AFTER, DB_RESOURCE_RETRY_AFTER_SECONDS)
+        .body(failureBody);
   }
 
   /**
