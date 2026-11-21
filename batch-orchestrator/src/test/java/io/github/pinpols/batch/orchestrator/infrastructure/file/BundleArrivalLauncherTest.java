@@ -149,6 +149,8 @@ class BundleArrivalLauncherTest {
             && Objects.equals(parameters.sourceType(), "FILE_GROUP")
             && Objects.equals(parameters.sourceKey(), "GROUP-EXPECTED")
             && parameters.dueAt() == null));
+    verify(batchDayInstanceMapper)
+        .acquireSettlementFenceShared("t1", "CALENDAR_A", LocalDate.of(2026, 6, 21));
     verify(expectedWorkOccurrenceMapper)
         .transitionStatus(ExpectedWorkOccurrenceTransitionStatusByGenerationParam.builder()
             .tenantId("t1")

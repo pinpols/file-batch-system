@@ -58,9 +58,18 @@
 | `DefaultWorkflowNodeDispatchService` | 改用共享 |
 | `TriggerRequestMapper.acquireBatchDaySettlementFence`（XML 内联 SQL） | 改为调用共享函数 |
 
-### 4.3 第二批（可延后）
+### 4.3 第二批（2026-11-21 已实施）
 
-预期登记与 Bundle 到达路径改共享；它们频率低，先保持独占不影响主路径收益。
+预期登记与 Bundle 到达路径原本保持独占（频率低），2026-11-21 已统一改为共享读者，补齐分类：
+
+| 调用点 | 用途 |
+|---|---|
+| `ExpectedWorkRegistrationService` | 逐日文件预期登记（只读业务日状态 + `insertIfAbsent`） |
+| `FileGroupExpectationService` | 文件组预期物化（只读业务日状态 + `insertIfAbsent`） |
+| `ExternalEventExpectationService` | 外部事件预期物化与结清（只读业务日状态 + 状态迁移） |
+| `BundleArrivalLauncher` | 束文件到达登记预期（只读业务日状态 + `insertIfAbsent`） |
+
+这些路径都不修改 `day_status` 或结算统计，与准入/派发/回报同属读者；开日、人工状态迁移与结算仍保持独占。
 
 ### 4.4 测试
 
@@ -118,7 +127,7 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 | 栅栏 SQL 均值 | 7.2 ms（不再是瓶颈） |
 | PG CPU / 等待 | 4.3/8 核，无持续锁等待 |
 
-结论：**共享锁解决的是锁等待，不是吞吐上限。** 栅栏放开后，高并发下的瓶颈转移到单 Worker 的 claim 领取能力（READY 640、Worker CPU 仅 50%）。在 Worker 扩容或提高有效 claim 批量之前，benchmark 保持 12 分区 / 每实例 6 consumer（`benchmark.yml` 已回滚并注明原因）。
+结论：**共享锁解决的是锁等待，不是吞吐上限。** 栅栏放开后，高并发下的瓶颈转移到单 Worker 的 claim 领取能力（READY 640、Worker CPU 仅 50%）。2026-11-21 实测有效批约 1.05–1.12，调大批量无效；在 Worker 扩容或 listener 并发提升前，benchmark 保持 12 分区 / 每实例 6 consumer（`benchmark.yml` 已回滚并注明原因）。
 
 ### 测试结果
 
@@ -128,8 +137,12 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 2. 结算的独占请求等待共享读者提交后才继续；
 3. 结算窗口内共享读者排队，提交后才能继续。
 
+### 第二批读者切换（2026-11-21）
+
+`ExpectedWorkRegistrationService`、`FileGroupExpectationService`、`ExternalEventExpectationService`（物化与结清）和 `BundleArrivalLauncher` 已改用 `acquireSettlementFenceShared`；四个服务单测分别断言共享调用（`ExpectedWorkRegistrationServiceTest`、`FileGroupExpectationServiceTest`、`ExternalEventExpectationServiceTest`、`BundleArrivalLauncherTest`）。锁模式本身仍由 `BatchDayFenceLockModeIntegrationTest` 的真实 PostgreSQL 并发用例覆盖：共享读者互不阻塞、结算独占等待读者提交、结算窗口内读者排队。
+
 ### 后续
 
-- 下一杠杆：Worker claim 容量（多 Worker 实例或提高 `batch-claim` 有效批量）。
+- 下一杠杆：Worker claim 容量。2026-11-21 实测 `batch-claim` 有效批只有 1.05–1.12，调大批量无效；优先评估 Worker 副本 / dispatch 分区与 listener 并发，其次才是 listener 内并行。
 - 2026-11-20 追加对照：把 Worker 的 claim/report 轮询分摊到两个 Orchestrator（`endpointCount=2`）后，24/12 仍只有约 2.0 run/s；两个 Orchestrator 的 CPU 已均衡到 62%/64%，但 `pg_stat_activity` 出现 22 个 `LWLock: LockManager` 等待、Worker 8 分钟内重试 30 次。说明 24/12 的瓶颈不是单一 Orchestrator 的 claim 负载，而是高并发下的热点行/缓冲区争用；继续扩 Worker 前需要先定位热点行（`job_partition` / `trigger_request` 更新）。实验配置已回滚。
 - 结算独占语义未变；新增的共享函数不影响开日、人工操作与结算路径。

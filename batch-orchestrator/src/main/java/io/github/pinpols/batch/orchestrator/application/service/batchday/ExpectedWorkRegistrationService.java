@@ -59,7 +59,7 @@ public class ExpectedWorkRegistrationService {
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
     TransactionCallback<RegistrationResult> registration = status -> {
       occurrenceMapper.setTenantContext(request.tenantId());
-      batchDayInstanceMapper.acquireSettlementFence(
+      batchDayInstanceMapper.acquireSettlementFenceShared(
           request.tenantId(), request.calendarCode(), request.bizDate());
       WorkflowDefinitionView workflow = workflowDefinitionMapper.selectByTenantAndIdAndEnabled(
           request.tenantId(), request.workflowDefinitionId(), true);
