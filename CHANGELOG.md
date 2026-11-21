@@ -26,6 +26,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- Workflow 多槽位准入在一条 SQL 中选择并尝试占用可见空槽，减少同一业务日并行启动时的数据库往返。满载仍逐槽复查后进入容量等待，见 [ADR-050](docs/architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)。
 - 批次日结算栅栏第二批读者改用共享锁：`ExpectedWorkRegistrationService`、`FileGroupExpectationService`、`ExternalEventExpectationService`（物化与结清）和 `BundleArrivalLauncher` 原本用独占栅栏，现改为 `acquire_batch_day_settlement_fence_shared`。这些路径只读业务日状态并写预期/发生行，不修改 `day_status` 或结算统计；开日、人工状态迁移与结算仍保持独占。四个服务单测断言共享调用，锁模式并发语义由 `BatchDayFenceLockModeIntegrationTest` 覆盖。见[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md#43-第二批2026-11-21-已实施)。
 - 批次日结算栅栏拆分共享读者/独占写者（V387）：准入、节点派发与运行回报改用 `acquire_batch_day_settlement_fence_shared`，开日、人工操作与结算保持独占。同业务日的读者不再互相排队，结算仍会等待在读事务提交。1w 验证：launch p95 2,408→457 ms、`job_instance` p95 15.33→11.96 s、栅栏均值 417→2.5 ms。见[压测记录](docs/verifications/load-test-local-2026-11-15.md#2026-11-20-批次日结算栅栏共享锁改造验证)与[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md)。
 - 容量画像 profile 的 Trigger 入口预算回到 32 并发 / 40 连接：Tier 0.5 归因显示 64/80 会同时抬高并发 launch 事务数，放大批次日结算栅栏与连接配额争用（1w 的 `job_instance` avg 15.4→4.09 s、p95 38.1→15.33 s，入口 0 拒绝）。详见 [Tier 0.5 归因](docs/verifications/load-test-local-2026-11-15.md#2026-11-19-tier-05-单集群瓶颈归因abcd-对照)；仅影响隔离 benchmark 拓扑。

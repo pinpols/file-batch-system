@@ -24,7 +24,7 @@
         <result column="active_slot" property="activeSlot"/>
     </resultMap>
 
-    <sql id="insertWorkflowRun">
+    <sql id="insertWorkflowRunColumns">
         insert into batch.workflow_run (
             tenant_id,
             workflow_definition_id,
@@ -41,42 +41,79 @@
             data_interval_end,
             execution_snapshot,
             active_slot
-        ) values (
-            #{tenantId},
-            #{workflowDefinitionId},
-            #{triggerRequestId},
-            #{singleJobDefinitionId},
-            #{relatedJobInstanceId},
-            #{bizDate},
-            #{runStatus},
-            #{currentNodeCode},
-            #{traceId},
+        )
+    </sql>
+
+    <sql id="workflowRunDryRun">
+        <choose>
+            <when test="run.dryRun != null">#{run.dryRun}</when>
+            <otherwise>false</otherwise>
+        </choose>
+    </sql>
+
+    <sql id="workflowRunValuesBeforeSlot">
+        #{run.tenantId},
+        #{run.workflowDefinitionId},
+        #{run.triggerRequestId},
+        #{run.singleJobDefinitionId},
+        #{run.relatedJobInstanceId},
+        #{run.bizDate},
+        #{run.runStatus},
+        #{run.currentNodeCode},
+        #{run.traceId},
+        <include refid="workflowRunDryRun"/>,
+        #{run.workflowVersionSnapshot},
+        #{run.dataIntervalStart},
+        #{run.dataIntervalEnd},
+        CAST(#{run.executionSnapshot} AS jsonb)
+    </sql>
+
+    <sql id="insertWorkflowRun">
+        <include refid="insertWorkflowRunColumns"/>
+        values (
+            <include refid="workflowRunValuesBeforeSlot"/>,
             <choose>
-                <when test="dryRun != null">#{dryRun}</when>
-                <otherwise>false</otherwise>
-            </choose>,
-            #{workflowVersionSnapshot},
-            #{dataIntervalStart},
-            #{dataIntervalEnd},
-            CAST(#{executionSnapshot} AS jsonb),
-            <choose>
-                <when test="activeSlot != null">#{activeSlot}</when>
+                <when test="run.activeSlot != null">#{run.activeSlot}</when>
                 <otherwise>1</otherwise>
             </choose>
         )
     </sql>
 
-    <insert id="insert" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <sql id="occupiesActiveSlot">
+        run_status in ('CREATED', 'RUNNING')
+    </sql>
+
+    <sql id="ignoreActiveSlotConflict">
+        on conflict (tenant_id, workflow_definition_id, biz_date, dry_run, active_slot)
+            where <include refid="occupiesActiveSlot"/>
+        do nothing
+    </sql>
+
+    <insert id="insert" useGeneratedKeys="true" keyProperty="run.id" keyColumn="id">
         <include refid="insertWorkflowRun"/>
     </insert>
 
-    <insert id="insertIfActiveSlotFree" parameterType="io.github.pinpols.batch.common.persistence.entity.WorkflowRunEntity"
-            useGeneratedKeys="true" keyProperty="id" keyColumn="id">
+    <insert id="insertIfActiveSlotFree" useGeneratedKeys="true" keyProperty="run.id" keyColumn="id">
         <include refid="insertWorkflowRun"/>
-        on conflict (tenant_id, workflow_definition_id, biz_date, dry_run, active_slot)
-            where run_status in ('CREATED', 'RUNNING')
-        do nothing
+        <include refid="ignoreActiveSlotConflict"/>
+    </insert>
+
+    <insert id="insertAtFirstVisibleFreeSlot" useGeneratedKeys="true" keyProperty="run.id" keyColumn="id">
+        <include refid="insertWorkflowRunColumns"/>
+        select <include refid="workflowRunValuesBeforeSlot"/>, candidate.slot
+        from generate_series(1, #{maxActiveRuns}) as candidate(slot)
+        where not exists (
+            select 1 from batch.workflow_run
+            where tenant_id = #{run.tenantId}
+              and workflow_definition_id = #{run.workflowDefinitionId}
+              and biz_date = #{run.bizDate}
+              and dry_run = <include refid="workflowRunDryRun"/>
+              and active_slot = candidate.slot
+              and <include refid="occupiesActiveSlot"/>
+        )
+        order by candidate.slot
+        limit 1
+        <include refid="ignoreActiveSlotConflict"/>
     </insert>
 
     <select id="selectById" resultMap="WorkflowRunResultMap">

@@ -32,8 +32,10 @@ create unique index uk_workflow_run_active
    - 定时触发和手工触发共用该值；需要保护“一天一次”的业务 Workflow 保持默认即可。
 2. 删除 `uk_workflow_run_active`，改为**活跃槽位 + 唯一约束**：
    - `batch.workflow_run.active_slot`（1..64，默认 1）标记该运行占用的槽位；
-   - 准入时按上限从 1 开始逐个尝试 `insert ... on conflict (…, active_slot) do nothing`，
-     插入成功的槽位即占位；全部被占用时抛容量等待，由 `workflow_launch_wait` 在槽位释放后恢复；
+   - 上限为 1 时直接尝试槽 1。上限大于 1 时，在同一条 SQL 内选择事务快照中第一个可见空槽并尝试插入。
+     插入仍由 `on conflict (…, active_slot) do nothing` 和部分唯一索引裁决。
+     没有可见空槽或插入返回零时，从槽 1 开始逐槽复查，覆盖快照建立后才释放的槽位。
+     确认全部被占用后进入 `workflow_launch_wait`，由等待恢复流程重新准入；
    - 运行离开 `CREATED/RUNNING` 后不再命中部分唯一索引，槽位自动释放，无需清理。
 3. 同一 `trigger_request` 的幂等性不变：仍由 `trigger_request` 行锁（`FOR UPDATE NOWAIT`）、
    `selectByTenantAndTriggerRequestId` 和唯一约束保证，不依赖被删除的索引。
@@ -58,7 +60,8 @@ create unique index uk_workflow_run_active
 
 - 同一业务日可能出现多个并行运行，业务作业必须自己保证同日并发的数据隔离（例如按 requestId 分片）。
   默认 1 的 Workflow 不受影响。
-- 插入失败时最多重试“上限”次（通常是 1 次）；上限越高，满载时的重试次数越多，但都发生在同一事务内。
+- 多槽位有可见空槽时通常一次 INSERT 即可准入。满槽时先执行一次探测，再逐槽复查，仍在同一准入事务内。
+  槽号只用于数据库并发裁决。较低槽位在查询快照建立后才释放时，本次可使用快照中已空闲的较高槽位。
 - `active_slot` 成为运行快照的一部分；归档表不保留该列，恢复查询不依赖它。
 - 上限调高后 `workflow_launch_wait` 的排队深度会下降，运行时长重新成为主要瓶颈（见 BF-20261118-03）。
 

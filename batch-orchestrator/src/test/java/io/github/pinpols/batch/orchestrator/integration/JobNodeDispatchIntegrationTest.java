@@ -108,6 +108,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoSpyBean;
 import org.springframework.test.util.AopTestUtils;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.UnexpectedRollbackException;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -3189,10 +3190,18 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  @DisplayName("同槽并发启动只创建一个根运行，序列化失败由入口重试后保留唯一等待")
-  void capacityWait_shouldSerializeConcurrentAdmissions(boolean sameRequest) throws Exception {
+  @CsvSource({"false,1", "true,1", "false,2"})
+  @DisplayName("同槽并发启动由唯一索引裁决，序列化重试后只在容量已满时等待")
+  void capacityWait_shouldSerializeConcurrentAdmissions(boolean sameRequest, int activeLimit)
+      throws Exception {
     DirectWorkflowSeed seed = seedDirectWorkflow(seedChildJob("WG_B197_RACE_" + System.nanoTime()));
+    if (activeLimit > 1) {
+      String raiseLimitSql = """
+          update batch.workflow_definition set max_active_runs_per_biz_date = ?
+          where tenant_id = ? and id = ?
+          """;
+      jdbcTemplate.update(raiseLimitSql, activeLimit, testTenantId, seed.workflowDefinitionId());
+    }
     String secondRequestId = sameRequest ? seed.requestId() : seed.requestId() + "-second";
     String insertRequestSql = """
         insert into batch.trigger_request (
@@ -3260,14 +3269,16 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         waitCountSql, Long.class, testTenantId, seed.workflowDefinitionId());
     Long startCount = jdbcTemplate.queryForObject(
         startCountSql, Long.class, testTenantId, seed.workflowDefinitionId());
-    assertThat(activeCount).isEqualTo(1L);
-    assertThat(waitCount).isEqualTo(sameRequest ? 0L : 1L);
-    assertThat(startCount).isEqualTo(1L);
+    assertThat(activeCount).isEqualTo((long) activeLimit);
+    assertThat(waitCount).isEqualTo(!sameRequest && activeLimit == 1 ? 1L : 0L);
+    assertThat(startCount).isEqualTo((long) activeLimit);
   }
 
-  @Test
-  @DisplayName("定义级上限调高后允许同日多个活跃运行，超出上限的请求进入容量等待")
-  void capacityWait_shouldAllowMultipleActiveRuns_whenDefinitionLimitRaised() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  @DisplayName("多槽位准入跳过已占槽，满载时复查新释放的槽位后决定是否等待")
+  void capacityWait_shouldAllowMultipleActiveRuns_whenDefinitionLimitRaised(
+      boolean releaseAfterSnapshot) {
     DirectWorkflowSeed seed =
         seedDirectWorkflow(seedChildJob("WG_MULTI_ACTIVE_" + System.nanoTime()));
     jdbcTemplate.update("""
@@ -3311,8 +3322,31 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
         .triggerType(TriggerType.API)
         .build();
 
-    workflowRunLaunchService.launch(base);
+    LaunchResponse first = workflowRunLaunchService.launch(base);
     workflowRunLaunchService.launch(base.toBuilder().requestId(secondRequestId).build());
+    // 前两个请求都有空槽，各只需一次实际 INSERT；第二个请求应跳过已占用的槽 1。
+    Mockito.verify(workflowRunMapper, Mockito.never())
+        .insertIfActiveSlotFree(ArgumentMatchers.argThat(
+            run -> seed.workflowDefinitionId().equals(run.getWorkflowDefinitionId())));
+    if (releaseAfterSnapshot) {
+      long ownerRunId = Long.parseLong(first.instanceNo());
+      TransactionTemplate release = new TransactionTemplate(platformTransactionManager);
+      release.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+      WorkflowRunMapper directRuns = sqlSessionTemplate.getMapper(WorkflowRunMapper.class);
+      Mockito.doAnswer(invocation -> {
+            int inserted = directRuns.insertAtFirstVisibleFreeSlot(
+                invocation.getArgument(0), invocation.getArgument(1));
+            assertThat(inserted).isZero();
+            release.executeWithoutResult(ignored -> finishCapacityOwner(
+                new CapacityWaitSeed(testTenantId, thirdRequestId, ownerRunId)));
+            return inserted;
+          })
+          .when(workflowRunMapper)
+          .insertAtFirstVisibleFreeSlot(
+              ArgumentMatchers.argThat(
+                  run -> seed.workflowDefinitionId().equals(run.getWorkflowDefinitionId())),
+              ArgumentMatchers.eq(2));
+    }
     workflowRunLaunchService.launch(base.toBuilder().requestId(thirdRequestId).build());
 
     Long activeCount = jdbcTemplate.queryForObject(
@@ -3320,7 +3354,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     Long waitCount = jdbcTemplate.queryForObject(
         waitCountSql, Long.class, testTenantId, seed.workflowDefinitionId());
     assertThat(activeCount).isEqualTo(2L);
-    assertThat(waitCount).isEqualTo(1L);
+    assertThat(waitCount).isEqualTo(releaseAfterSnapshot ? 0L : 1L);
   }
 
   @Test
