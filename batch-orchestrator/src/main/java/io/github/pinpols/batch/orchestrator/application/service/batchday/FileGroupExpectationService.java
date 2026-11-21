@@ -202,7 +202,7 @@ public class FileGroupExpectationService {
   private int materializeForOpenedBusinessDayInTenant(
       String tenantId, String calendarCode, LocalDate bizDate, String timezoneSnapshot) {
     occurrenceMapper.setTenantContext(tenantId);
-    batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
+    batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
     BatchDayInstanceEntity batchDay =
         batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
     if (EmptyChecks.isNotNull(batchDay) && isTerminal(batchDay.dayStatus())) {

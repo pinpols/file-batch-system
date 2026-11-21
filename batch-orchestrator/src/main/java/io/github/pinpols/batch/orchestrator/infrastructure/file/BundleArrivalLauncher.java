@@ -367,7 +367,7 @@ public class BundleArrivalLauncher {
     TransactionTemplate transaction = new TransactionTemplate(transactionManager);
     Boolean registered = transaction.execute(status -> {
       expectedWorkOccurrenceMapper.setTenantContext(tenantId);
-      batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
+      batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
       BatchDayInstanceEntity batchDay =
           batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
       if (isTerminal(batchDay)) {

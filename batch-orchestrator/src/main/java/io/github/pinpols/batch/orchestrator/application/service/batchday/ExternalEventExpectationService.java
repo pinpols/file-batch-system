@@ -159,7 +159,7 @@ public class ExternalEventExpectationService {
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
     return transactionTemplate.execute(status -> {
       occurrenceMapper.setTenantContext(tenantId);
-      batchDayInstanceMapper.acquireSettlementFence(tenantId, calendarCode, bizDate);
+      batchDayInstanceMapper.acquireSettlementFenceShared(tenantId, calendarCode, bizDate);
       BatchDayInstanceEntity batchDay =
           batchDayInstanceMapper.selectByTenantCalendarBizDate(tenantId, calendarCode, bizDate);
       boolean existingBatchDayIsTerminal =
@@ -220,7 +220,7 @@ public class ExternalEventExpectationService {
     TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
     return transactionTemplate.execute(status -> {
       occurrenceMapper.setTenantContext(request.tenantId());
-      batchDayInstanceMapper.acquireSettlementFence(
+      batchDayInstanceMapper.acquireSettlementFenceShared(
           request.tenantId(), request.calendarCode(), request.bizDate());
       TriggerRequestEntity triggerRequest = triggerRequestMapper.selectByTenantAndRequestId(
           request.tenantId(), request.triggerRequestId());

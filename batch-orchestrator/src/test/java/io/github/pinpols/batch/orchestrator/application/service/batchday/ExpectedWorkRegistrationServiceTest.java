@@ -67,7 +67,7 @@ class ExpectedWorkRegistrationServiceTest {
             .dueAt(Instant.parse("2026-10-14T03:00:00Z"))
             .build());
     verify(batchDayInstanceMapper)
-        .acquireSettlementFence("tenant-a", "CAL_A", LocalDate.of(2026, 10, 14));
+        .acquireSettlementFenceShared("tenant-a", "CAL_A", LocalDate.of(2026, 10, 14));
   }
 
   @DisplayName("拒绝与作业日历不匹配的预期")

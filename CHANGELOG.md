@@ -26,6 +26,7 @@
 - 新增 `coverage-harness.sh`：初始化并执行 ta/tb/tc 全类型覆盖场景，统一运行配置、上下游容器、BUNDLE/WAIT 准备和触发矩阵；默认前后只清理 `*_COV_*` 运行产物并保留验收证据，支持本地重复验收。
 
 ### Changed
+- 批次日结算栅栏第二批读者改用共享锁：`ExpectedWorkRegistrationService`、`FileGroupExpectationService`、`ExternalEventExpectationService`（物化与结清）和 `BundleArrivalLauncher` 原本用独占栅栏，现改为 `acquire_batch_day_settlement_fence_shared`。这些路径只读业务日状态并写预期/发生行，不修改 `day_status` 或结算统计；开日、人工状态迁移与结算仍保持独占。四个服务单测断言共享调用，锁模式并发语义由 `BatchDayFenceLockModeIntegrationTest` 覆盖。见[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md#43-第二批2026-11-21-已实施)。
 - 批次日结算栅栏拆分共享读者/独占写者（V387）：准入、节点派发与运行回报改用 `acquire_batch_day_settlement_fence_shared`，开日、人工操作与结算保持独占。同业务日的读者不再互相排队，结算仍会等待在读事务提交。1w 验证：launch p95 2,408→457 ms、`job_instance` p95 15.33→11.96 s、栅栏均值 417→2.5 ms。见[压测记录](docs/verifications/load-test-local-2026-11-15.md#2026-11-20-批次日结算栅栏共享锁改造验证)与[改造方案](docs/plans/batch-day-fence-shared-lock-2026-11-20.md)。
 - 容量画像 profile 的 Trigger 入口预算回到 32 并发 / 40 连接：Tier 0.5 归因显示 64/80 会同时抬高并发 launch 事务数，放大批次日结算栅栏与连接配额争用（1w 的 `job_instance` avg 15.4→4.09 s、p95 38.1→15.33 s，入口 0 拒绝）。详见 [Tier 0.5 归因](docs/verifications/load-test-local-2026-11-15.md#2026-11-19-tier-05-单集群瓶颈归因abcd-对照)；仅影响隔离 benchmark 拓扑。
 - `.env.example` 移除未引用的 `BUSINESS_DB_SCHEMA`；实际生效的是 `BATCH_BUSINESS_DB_SCHEMA`，代码与 Compose 均未读取无前缀变量。
@@ -54,6 +55,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 过载时数据库资源故障返回可重试语义：`AbstractApiExceptionHandler` 把 `DataAccessResourceFailureException`（含连接池耗尽抛出的 `CannotGetJdbcConnectionException`）映射为 **503 + `Retry-After: 5`**，不再落到通用 500。此前 100k 压测收尾阶段 Trigger 平台连接池耗尽被记成 500（501 次），客户端无法区分可重试背压与服务端故障。
 - 修复 `resume` 后 Worker 状态被下一次心跳改回 `DRAINING`：心跳不再接受 ONLINE 状态下的自报 DRAINING（排空只能由 drain / status 入口发起），否则运维把误排空的 Worker 拉回在线后会被自身心跳立刻覆盖。
 - 修复 CodeQL `java/log-injection`（#1462）：注册 CAS 被并发 drain 挡下时的 WARN 改用 `LogSanitizer`，不再直接拼接注册请求里的租户/Worker/状态值。
 - 升级 Rust SDK 的 `libz-sys` 1.1.31 → 1.1.33，规避 [RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544)（zlib `gz_vacate()` 堆溢出）。

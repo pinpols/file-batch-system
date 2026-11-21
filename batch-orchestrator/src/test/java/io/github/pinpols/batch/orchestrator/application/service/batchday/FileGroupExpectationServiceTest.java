@@ -98,6 +98,8 @@ class FileGroupExpectationServiceTest {
     assertThat(service.materializeForOpenedBusinessDay(
             "tenant-a", "CAL_A", LocalDate.of(2026, 10, 14), "Asia/Shanghai"))
         .isOne();
+    verify(batchDayInstanceMapper)
+        .acquireSettlementFenceShared("tenant-a", "CAL_A", LocalDate.of(2026, 10, 14));
     verify(occurrenceMapper)
         .insertIfAbsent(ArgumentMatchers.argThat(parameters -> parameters != null
             && Objects.equals(parameters.tenantId(), "tenant-a")

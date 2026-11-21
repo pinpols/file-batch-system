@@ -12,6 +12,7 @@ import static org.springframework.http.MediaType.APPLICATION_JSON;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -35,6 +36,7 @@ import io.github.pinpols.batch.trigger.service.TriggerApiApplicationService;
 import io.github.pinpols.batch.trigger.service.TriggerLaunchAdmissionService;
 import io.github.pinpols.batch.trigger.service.TriggerRequestPolicy;
 import io.github.pinpols.batch.trigger.service.TriggerService;
+import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +48,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
+import org.springframework.jdbc.CannotGetJdbcConnectionException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -427,5 +430,29 @@ class TriggerControllerTest {
         .andExpect(content().string(containsString("must not be blank")));
 
     verifyNoInteractions(triggerService);
+  }
+
+  @Test
+  @DisplayName("平台库连接池耗尽时返回 503 + Retry-After,而不是通用 500")
+  void shouldReturnRetryableUnavailableWhenJdbcPoolIsExhausted() throws Exception {
+    when(triggerService.launch(any()))
+        .thenThrow(new CannotGetJdbcConnectionException(
+            "Failed to obtain JDBC Connection", new SQLException("connection is not available")));
+
+    mockMvc
+        .perform(post("/api/triggers/launch")
+            .header(CommonConstants.DEFAULT_IDEMPOTENCY_KEY_HEADER, "idem-pool-001")
+            .contentType(APPLICATION_JSON)
+            .content("""
+                    {
+                      "tenantId": "t1",
+                      "workflowDefinitionId": 41,
+                      "bizDate": "2026-03-27",
+                      "triggerType": "API"
+                    }
+                    """))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(header().string("Retry-After", "5"))
+        .andExpect(jsonPath("$.code").value("SERVICE_UNAVAILABLE"));
   }
 }
