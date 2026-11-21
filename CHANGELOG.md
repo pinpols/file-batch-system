@@ -54,6 +54,7 @@
 - 集中更新 Maven 依赖和 GitHub Actions，并同步依赖物料清单；OpenTelemetry appender 暂保留与 Spring Boot 管理版本兼容的版本。
 
 ### Fixed
+- 过载时数据库资源故障返回可重试语义：`AbstractApiExceptionHandler` 把 `DataAccessResourceFailureException`（含连接池耗尽抛出的 `CannotGetJdbcConnectionException`）映射为 **503 + `Retry-After: 5`**，不再落到通用 500。此前 100k 压测收尾阶段 Trigger 平台连接池耗尽被记成 500（501 次），客户端无法区分可重试背压与服务端故障。
 - 修复 `resume` 后 Worker 状态被下一次心跳改回 `DRAINING`：心跳不再接受 ONLINE 状态下的自报 DRAINING（排空只能由 drain / status 入口发起），否则运维把误排空的 Worker 拉回在线后会被自身心跳立刻覆盖。
 - 修复 CodeQL `java/log-injection`（#1462）：注册 CAS 被并发 drain 挡下时的 WARN 改用 `LogSanitizer`，不再直接拼接注册请求里的租户/Worker/状态值。
 - 升级 Rust SDK 的 `libz-sys` 1.1.31 → 1.1.33，规避 [RUSTSEC-2026-0544](https://osv.dev/vulnerability/RUSTSEC-2026-0544)（zlib `gz_vacate()` 堆溢出）。
