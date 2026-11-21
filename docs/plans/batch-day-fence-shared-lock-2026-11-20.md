@@ -127,7 +127,7 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 | 栅栏 SQL 均值 | 7.2 ms（不再是瓶颈） |
 | PG CPU / 等待 | 4.3/8 核，无持续锁等待 |
 
-结论：**共享锁解决的是锁等待，不是吞吐上限。** 栅栏放开后，高并发下的瓶颈转移到单 Worker 的 claim 领取能力（READY 640、Worker CPU 仅 50%）。2026-11-21 实测有效批约 1.05–1.12，调大批量无效；在 Worker 扩容或 listener 并发提升前，benchmark 保持 12 分区 / 每实例 6 consumer（`benchmark.yml` 已回滚并注明原因）。
+结论：**共享锁解决的是锁等待，不是吞吐上限。** 栅栏放开后，高并发下的瓶颈转移到单 Worker 的 claim 领取能力（READY 640、Worker CPU 仅 50%）。2026-11-21 实测有效批约 1.05–1.12，调大批量无效；在 Worker 扩容或 listener 并发提升前，benchmark 保持 12 分区 / 每实例 6 consumer（`benchmark.yml` 已回滚并注明原因）。**2026-11-21 复核修正**：24/12 的 5.0 run/s 主要受压测夹具业务键基数=1 影响（`ResultVersionWriter.lockBusinessKey` 的 advisory 锁串行化完成路径），不是 Worker 容量上限；同拓扑基数 100 时 1,500 请求实测 15.74 任务/s，见[压测记录](../verifications/load-test-local-2026-11-15.md#2026-11-21-业务键基数校准补充)。
 
 ### 测试结果
 
@@ -143,6 +143,6 @@ launch 事务各阶段合计约 0.88 s（validation 96、prepare 206、dispatch 
 
 ### 后续
 
-- 下一杠杆：Worker claim 容量。2026-11-21 实测 `batch-claim` 有效批只有 1.05–1.12，调大批量无效；优先评估 Worker 副本 / dispatch 分区与 listener 并发，其次才是 listener 内并行。
+- 下一杠杆：launch 事务。2026-11-21 业务键基数校准后，1,500 请求实测 15.74 任务/s，单 Worker 已能跟上；先做 launch 24/12 对照并压缩 launch 约 280 ms 未归因成本，Worker 扩容等到 launch 超过约 24/s 或迁到多宿主环境。`batch-claim` 有效批只有 1.05–1.12，调大批量无效。
 - 2026-11-20 追加对照：把 Worker 的 claim/report 轮询分摊到两个 Orchestrator（`endpointCount=2`）后，24/12 仍只有约 2.0 run/s；两个 Orchestrator 的 CPU 已均衡到 62%/64%，但 `pg_stat_activity` 出现 22 个 `LWLock: LockManager` 等待、Worker 8 分钟内重试 30 次。说明 24/12 的瓶颈不是单一 Orchestrator 的 claim 负载，而是高并发下的热点行/缓冲区争用；继续扩 Worker 前需要先定位热点行（`job_partition` / `trigger_request` 更新）。实验配置已回滚。
 - 结算独占语义未变；新增的共享函数不影响开日、人工操作与结算路径。

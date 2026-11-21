@@ -236,6 +236,8 @@ export SKIP_AUTO_CLEANUP=1
 
 `BIZ_DATE_CARDINALITY=1` 是同 Workflow/date 的去重画像。要验证独立执行吞吐，业务日基数应覆盖本轮启动数；日期跨模块分配，避免 Atomic 与 Trigger 共享 Workflow 时互相去重。分发文件序号仍按模块独立计算。parallel 入口按该日期范围准备 Process 输入（`PROCESS_BIZ_DATE_CARDINALITY`），混合 Process 载荷使用当次根业务日；sequential 夹具默认仍只有一天。
 
+容量吞吐基线使用 `run-p2-capacity-profile.sh` 的 `CAPACITY_BIZ_DATE_CARDINALITY`，默认 **100**。基数=1 会让所有运行共用同一 `result_version` 业务键，`pg_advisory_xact_lock` 串行化完成路径，吞吐会被显著低估（本地 1,500 请求实测 8.96/s vs 15.74/s）；基数=1 只用于热点键画像或小规模正确性验证，脚本在 ≥1,000 请求且基数=1 时会告警。
+
 历史本地 30 秒负载在新模型中的入口为：
 
 ```bash
