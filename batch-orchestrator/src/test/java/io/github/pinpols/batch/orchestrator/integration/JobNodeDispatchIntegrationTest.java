@@ -3,6 +3,8 @@ package io.github.pinpols.batch.orchestrator.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.awaitility.Awaitility.await;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import io.github.pinpols.batch.common.dto.LaunchEnvelope;
@@ -3325,7 +3327,7 @@ class JobNodeDispatchIntegrationTest extends AbstractIntegrationTest {
     LaunchResponse first = workflowRunLaunchService.launch(base);
     workflowRunLaunchService.launch(base.toBuilder().requestId(secondRequestId).build());
     // 前两个请求都有空槽，各只需一次实际 INSERT；第二个请求应跳过已占用的槽 1。
-    Mockito.verify(workflowRunMapper, Mockito.never())
+    verify(workflowRunMapper, never())
         .insertIfActiveSlotFree(ArgumentMatchers.argThat(
             run -> seed.workflowDefinitionId().equals(run.getWorkflowDefinitionId())));
     if (releaseAfterSnapshot) {

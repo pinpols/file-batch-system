@@ -704,3 +704,5 @@ claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` �
 ```
 
 此轮用完的隔离集成容器及微基准数据库均由本轮释放。12/6、基数 100 的完整链路 A/B 待在同一隔离环境重跑。约 500 ms 是后续验收目标。
+
+PR #1441 首轮编排单测的 `WorkflowRunMapperXmlTest` 仍匹配改名前的 `executionSnapshot` XML 占位符。修正后的用例加载 MyBatis 映射，验证普通插入、逐槽复查和可见空槽插入三条路径都生成 JSONB 转换并绑定执行快照。重跑该用例、Replay 单测和多槽位准入集成用例，共 14 项通过，0 跳过。
