@@ -1,5 +1,10 @@
 # 工程基线规范条款变化日志
 
+## 2026-11-21 容量画像业务键基数默认值
+
+- `load-tests/scripts/run-p2-capacity-profile.sh` 的 `CAPACITY_BIZ_DATE_CARDINALITY` 默认从 1 改为 100：基数=1 时所有运行共用同一 `result_version` 业务键，`ResultVersionWriter.lockBusinessKey` 的 `pg_advisory_xact_lock` 会串行化完成路径，吞吐被低估。基数=1 保留为热点键画像，脚本在 ≥1,000 请求时告警。
+- [压测记录](verifications/load-test-local-2026-11-15.md#2026-11-21-业务键基数校准补充)补充基数 1 vs 100 对照（8.96 vs 15.74 任务/s）与 `pg_stat_statements` 证据；[待办表](plans/todo-master.md) BF-20261120-01 按此修正，不再把 24/12 的 5.0 run/s 归因于 Worker claim 容量。
+
 ## 2026-11-18 同一业务日多个活跃 Workflow 运行（ADR-050）
 
 - 新增 [ADR-050](architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md)：`workflow_definition.max_active_runs_per_biz_date`（1..64，默认 1）控制同一租户、Workflow、业务日与执行模式的活跃根运行数；用 `workflow_run.active_slot` + 部分唯一索引替代原先“一天一个活跃 run”的唯一索引，超出上限仍进入 `workflow_launch_wait`。

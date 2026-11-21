@@ -605,3 +605,71 @@ Tier 0.5 证明 32/40 + outbox 2 分片能在 25 rps 下完成 1w。本轮把注
 - 本地 8 核单机 benchmark 拓扑；运行 B 宿主 load 峰值 39，绝对速率与 429 比例不可作为容量结论，只用于延迟分解。
 - 运行 A 的宿主 load 仍略高于 0.75/CPU 的可比阈值，因此标记 `standard-baseline-comparable=no`；它的价值是低负载下的相对分解，不是生产容量承诺。
 - 本轮未覆盖多 Worker 副本、任务时长变化和 listener 内并行；这三点是后续验证 Worker 扩展方案的入口。
+
+## 2026-11-21 业务键基数校准（补充）
+
+claim/outbox 归因后，继续追 launch 上限。先用 `pg_stat_statements` 做 100 请求画像，再用同一拓扑做 1,500 请求 @25 rps 的业务键基数 1 vs 100 对照。
+
+### 画像证据
+
+临时以 `shared_preload_libraries=pg_stat_statements`、`track_io_timing=on` 重建 postgres 主库（完成后已恢复默认），100 请求画像的 Top SQL：
+
+| 语句 | calls | total | mean |
+|---|---:|---:|---:|
+| `select 1 from (select pg_advisory_xact_lock(hashtext($1), hashtext($2))) guard` | 100 | 88,041 ms | **880 ms** |
+
+该语句来自 `ResultVersionWriter.lockBusinessKey`，锁键是 `(tenantId, businessKey)`。容量脚本原默认 `CAPACITY_BIZ_DATE_CARDINALITY=1`，所有运行共用同一业务键，结果版本写入被串行化，任务完成变慢并占住活跃槽位，进而压低 launch 吞吐。
+
+### 对照
+
+同一 12 分区 / 6 consumer、1 Worker、槽位 64、1,500 请求 @25 rps：
+
+| 指标 | 基数 1 | 基数 100 |
+|---|---:|---:|
+| 任务完成速率 | 8.96 /s | **15.74 /s** |
+| 任务执行 avg | 0.957 s | 1.023 s |
+| launch 总耗时 | 约 1,659 ms（含日志开销） | **765 ms** |
+| launch 已埋点 phase | — | 485 ms |
+| 未归因 | — | 280 ms |
+| 12 consumer 理论上限 | — | 12 ÷ 0.765 ≈ **15.7/s** |
+
+基数 100 时“12 consumer ÷ 765 ms”与实测 15.74/s 吻合；单 Worker 理论容量约 24.5/s，仍有约 1.5 倍余量。
+
+### 结论与调整
+
+- 基数=1 是热点键画像，不能作为吞吐基线；`CAPACITY_BIZ_DATE_CARDINALITY` 默认改为 100，脚本在 ≥1,000 请求且基数=1 时输出告警。
+- 24/12 对照早先得到的 5.0 run/s 主要受该夹具串行化影响，不能直接归因于 Worker claim 容量。
+- 真正的端到端上限仍是 launch：12 consumer × 单次 launch wall time；下一步是 launch 24/12 对照与压缩 280 ms 未归因成本，Worker 扩容等到 launch 超过约 24/s 或迁到多宿主环境。
+- 热点业务键在真实租户中仍会串行化结果版本写入，这是版本排序语义的一部分，容量规划需按业务键基数评估。
+
+### 边界
+
+- 单机 8 核、应用与 PG 共享宿主；基数 100 对照运行时宿主负载偏高，绝对速率只作方向性参考，相对对照使用同一拓扑。
+- 画像运行开启了全语句日志，日志开销使绝对延迟不可用；最终结论采用 `pg_stat_statements` 与基数对照，不采用该轮绝对时间。
+- 未覆盖多宿主、多 Worker 副本与真实业务键分布。
+
+## 2026-11-21 launch 12/6 vs 24/12 对照（业务键基数 100）
+
+基数校准后，再验证“增加 launch consumer 能否提升端到端吞吐”。同一会话、同一拓扑、业务键基数 100、1,500 请求 @25 rps、槽位 64：
+
+| 指标 | 12 分区 / 6 consumer | 24 分区 / 12 consumer |
+|---|---:|---:|
+| 任务完成速率 | **11.43 /s** | **8.91 /s** |
+| launch 总耗时 | **950 ms** | **2,327 ms** |
+| launch 已埋点 phase | 605 ms | 1,743 ms |
+| 未归因 | 345 ms | 584 ms |
+| 任务执行 avg | 1.416 s | 4.246 s |
+| 宿主峰值 load/CPU | 2.18 | 2.34 |
+
+24/12 的 phase 全面膨胀约 2–3 倍（validation 48→277 ms、prepare 113→380 ms、dispatch 175→664 ms），不是单一段变慢，而是 Orchestrator 与 PG 的整体争用。按“consumer 数 ÷ launch wall time”计算，24 ÷ 2.327 ≈ 10.3/s，与实测 8.91/s 基本吻合。
+
+### 结论
+
+- 在单 PG、8 核共享宿主上，**增加 launch consumer 不会提升吞吐，反而因每次 launch 变慢而下降**；这与 11-19/11-20 的两次负结果一致，但这次已排除业务键基数=1 的夹具干扰。
+- 端到端上限仍是 **launch wall time**：先把 950 ms 压到约 500 ms，12/6 即可到约 24/s；继续加 consumer 只会放大争用。
+- 若未来必须靠并发提升，需要更强的数据库或把 Orchestrator/PG 分到不同宿主，并重新建立可比基线。
+
+### 边界
+
+- 单机 8 核、应用与 PG 共享宿主；两轮宿主峰值负载接近（2.18 vs 2.34 load/CPU），相对对照有效，绝对速率不代表生产。
+- 24/12 的 24 分区为临时扩分区，完成后已恢复 12 分区与每实例 6 consumer。

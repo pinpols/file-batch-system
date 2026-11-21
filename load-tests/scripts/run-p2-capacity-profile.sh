@@ -82,9 +82,10 @@ CAPACITY_EXPECT_DOCKER_CPUS="${CAPACITY_EXPECT_DOCKER_CPUS:-8}"
 CAPACITY_MIN_DOCKER_MEMORY_BYTES="${CAPACITY_MIN_DOCKER_MEMORY_BYTES:-8053063680}"
 CAPACITY_MAX_DOCKER_MEMORY_BYTES="${CAPACITY_MAX_DOCKER_MEMORY_BYTES:-9663676416}"
 CAPACITY_MIN_PG_DATA_FREE_KIB="${CAPACITY_MIN_PG_DATA_FREE_KIB:-20971520}"
-# 1 保留既有同 job/bizDate 热点键画像；大于 1 时由 Gatling 轮换 bizDate，隔离
-# result_version 单业务键串行锁后测通用控制面容量。
-CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-1}"
+# 容量吞吐基线默认用代表性业务键基数：1 会把所有运行压到同一 result_version 业务键，
+# 由 pg_advisory_xact_lock 串行化完成路径，只能作为热点键画像，不能当吞吐结论。
+# 需要热点键画像时显式传 CAPACITY_BIZ_DATE_CARDINALITY=1。
+CAPACITY_BIZ_DATE_CARDINALITY="${CAPACITY_BIZ_DATE_CARDINALITY:-100}"
 # 大容量画像不需要以 2 秒频率反复扫描整轮实例。降低轮询频率可避免观测 SQL 与被测写链路争抢 I/O。
 CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS="${CAPACITY_TERMINAL_POLL_INTERVAL_SECONDS:-10}"
 CAPACITY_ISOLATED_TENANT_ENABLED="${CAPACITY_ISOLATED_TENANT_ENABLED:-1}"
@@ -1238,6 +1239,9 @@ run_10w_storm() {
     echo "CAPACITY_JOB_TIMEOUT_SECONDS (${CAPACITY_JOB_TIMEOUT_SECONDS}) must be >= traffic duration + terminal wait (${minimum_timeout_seconds})" >&2
     PROFILE_RC=1
     return
+  fi
+  if [[ "$CAPACITY_BIZ_DATE_CARDINALITY" == "1" && "$STORM_TOTAL_REQUESTS" -ge 1000 ]]; then
+    echo "==> WARNING: business-key cardinality=1 serializes result_version writes on one advisory lock; this run is a hot-key profile, not a throughput baseline" >&2
   fi
   if [[ "$CAPACITY_ISOLATED_TENANT_ENABLED" == "1" ]]; then
     if ! acquire_capacity_lock; then
