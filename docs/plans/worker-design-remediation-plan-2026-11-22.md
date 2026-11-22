@@ -85,7 +85,7 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 - `./mvnw -o -pl batch-orchestrator -Dtest=IncrementalWatermarkMapperIntegrationTest test` → 6/6 通过（39s）。覆盖首次无水位、`42 → 空批 → 43`（第三轮仍是 42）、空串、PARTIAL_FAILED/dry-run/重放/补跑不推进、归档后可追溯、热冷合并取最新、租户与作业定义隔离；V388 随 Flyway 全量迁移应用成功。
 - 查询计划（合成对照，非生产数据）：在一次性 PostgreSQL 17 容器按 V388 索引定义建表，热表 15,000 行（每 3 行 1 行空 OUT）、归档 5,000 行，`ANALYZE` 后执行同一 SQL。计划为两支各自 `Index Scan using idx_*_effective_watermark` + `Limit 1`，总耗时 0.148 ms（Planning 0.392 ms）。对照：若索引写成 `finished_at DESC`（默认 NULLS FIRST），查询的 `NULLS LAST` 无法复用索引顺序，规划器退回 Seq Scan + Sort（15.7 ms）。分区父表沿用同一索引定义，分区裁剪后的单分区行为与此一致。
 
-未覆盖：`ProcessPipelineE2eIT` 端到端（Process 插件发布与回报）、真实归档调度跨月后的连续运行、目标环境大表上的实测计划（最大 OUT 查询需要确认索引与扫描成本）。
+未覆盖：真实归档调度跨月后的连续运行、目标环境大表上的实测计划（最大 OUT 查询需要确认索引与扫描成本）。Process 完整 HTTP E2E 已由 PR6 补齐。
 
 ### PR4 补充（2026-11-22）
 
@@ -94,7 +94,7 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 - 派发 Outbox：`DefaultScheduleForwarderSetBasedTest` 新增 Kafka ACK 与 DB 回写交错用例，旧发布者领取 1 成功回写 0 行、新发布者领取 2 回写 1 行。
 - 汇总 SQL：新增 `EndToEndSummarySqlIntegrationTest`，在真实 PostgreSQL 上执行 `p2-run-end-to-end-summary.sql`，覆盖根 Workflow/子 Job/直接 Job 分行计数与 `INVALID` 样本状态。
 - 验证：`IncrementalWatermarkMapperIntegrationTest` 8/8、`EndToEndSummarySqlIntegrationTest` 2/2、准入上限 1 用例 1/1、`DefaultScheduleForwarderSetBasedTest` 7/7 通过。
-- 仍未覆盖：Process 端到端、Export 崩溃续跑的文件对账扩展、12/6 同构建压测、JDBC 往返实测、双 Pod 取证与混版旧发布器退出顺序。
+- 仍未覆盖：Export JOIN 展开重复行与页大小组合扩展、12/6 同构建压测、JDBC 往返实测、双 Pod 取证与混版旧发布器退出顺序。
 
 ### PR5 业务表类型补充（2026-11-22）
 
@@ -102,7 +102,14 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 - Export 分区表：`keyset_partitioned_demo` 三个 RANGE 分区，跨分区同排序值由复合游标完整覆盖且不重复。
 - Process 增量业务 SQL：`biz.incremental_event` + `WHERE event_id > :highWaterMarkIn`，验证 IN=42 只处理 43、空批不产生 OUT、下一轮 43 继续处理 44。
 - 验证：`ExportKeysetRangeIT` 14/14、`SqlTransformComputePluginIntegrationTest` 21/21。
-- 仍未覆盖：完整 Worker 管道 HTTP E2E、复合游标崩溃续跑切换、12/6 同构建压测。
+- 仍未覆盖：12/6 同构建压测。
+
+
+### PR6 完整 HTTP E2E 与复合游标崩溃续跑（2026-11-22）
+
+- Process 完整 HTTP E2E：`ProcessPipelineE2eIT#httpLaunch_fullPipeline_publishesAndReportsOverHttp` 经真实 `POST /internal/orchestrator/launch` 发起，Worker 通过真实 HTTP 认领与回报，验证五阶段、目标表行数与实例终态；`./mvnw -o -pl batch-e2e-tests -Dtest='ProcessPipelineE2eIT#httpLaunch_fullPipeline_publishesAndReportsOverHttp' test` → 1/1 通过（68s）。
+- Export 复合游标崩溃续跑对账：`ExportKeysetRangeIntegrationTest#jdbcMapped_compositeCursor_resumesAfterCrashAndReconciles` 在真实 PostgreSQL 上只保留首页复合游标后重启续页，校验无重复、无漏行且与库中行数一致；`./mvnw -o -pl batch-worker/export -Dtest=ExportKeysetRangeIT#jdbcMapped_compositeCursor_resumesAfterCrashAndReconciles test` → 1/1 通过（45s）。
+- 仍未覆盖：JOIN 展开重复行与页大小 1 以外的边界组合、上传完成到登记中断窗口，以及 12/6 同构建容量 A/B。
 
 ### 第 3 批（恢复合同）
 
@@ -115,7 +122,7 @@ Console 入口：配置包校验只检查 `jdbcMappedExport` 的 batchTable/deta
 | Report Outbox | Helm `orchestrator.workerReportOutbox.enabled` 默认 `false`，Compose `BATCH_WORKER_REPORT_OUTBOX_ENABLED` 默认 `false`；存储默认 `PLATFORM_PG` | 关闭态下回报走直连、失败重试边界；开启态的 Mapper/Outbox 单测与 PG 集成 | 目标环境实际开关、开启后的多副本接管、Kafka 残留与重送 |
 | Export | 内置 `jdbc_mapped_export`、`sql_template_export`；GENERATE 空位点续跑默认开启（Excel 与多分区除外） | 已由第 1 批真库用例覆盖分页与恢复位点 | 登记回调 `onRegistered` 的业务副作用、上传完成到登记中断窗口 |
 | Import | 内置 `jdbc_mapped` 加载；LOAD 先提交业务 chunk 再推进平台位点；多分区降级为分区内重跑 | 现有 `ADR-038` 夹具与 chunk 恢复用例 | 目标表幂等策略、插件自定义副作用、分区级续跑需求 |
-| Process | 内置 SQL 转换；DIRECT 与暂存按 generation 隔离 | 已由第 2 批 Mapper 用例覆盖水位；暂存回收另有既有用例 | Process 端到端发布/回报与冻结范围补跑 |
+| Process | 内置 SQL 转换；DIRECT 与暂存按 generation 隔离 | 第 2 批 Mapper 用例覆盖水位；PR6 覆盖完整 HTTP 发布/回报；暂存回收另有既有用例 | 冻结范围补跑与目标环境证据 |
 | Dispatch | `API`/`API_PUSH` 仅在 `receiver_idempotency_supported=true` 时自动重试；其余按 `EXTERNAL_OUTCOME_UNKNOWN`；渠道含 LOCAL/NAS/OSS/SFTP/EMAIL | 渠道适配器单测与未知结果保护 | 接收端是否真正兑现幂等键、SMTP 投递查询证据、真实远端文件/回执 |
 | Atomic | 执行器含 shell/sql/spark/storedproc/http；非幂等执行前已有持久化围栏 | 围栏拒绝回归用例 | 各外部系统可查询的执行身份（SQL 提交、Spark application、Shell 副作用）与人工核对入口 |
 

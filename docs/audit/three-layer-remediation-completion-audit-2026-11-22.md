@@ -7,7 +7,7 @@
 | 层 | 代码完成度 | 本地验收 | 未关闭项 |
 |---|---|---|---|
 | 性能与容量（PR1） | 三项前置修正已落地 | 根请求统计、子 Job 绑定、图定义复用的定向单测与最小 PostgreSQL 样本通过 | 12/6 同构建压测 A/B、JDBC 往返实测；PR4 已补汇总 SQL 自动化用例 |
-| Worker 设计（PR2） | 分页、空批水位已修；PR4 补“晚完成低 OUT” | 分页与水位真库用例通过；PR4 补乱序完成与跨归档最大值用例 | Process 端到端、崩溃续跑/文件对账扩展、第 3 批恢复合同的目标环境证据 |
+| Worker 设计（PR2） | 分页、空批水位已修；PR4 补“晚完成低 OUT”；PR6 补 Process HTTP E2E 与复合游标崩溃续跑对账 | 分页与水位真库用例通过；PR4 补乱序完成与跨归档最大值用例；PR6 两条 E2E 各 1/1 通过 | JOIN 展开重复行/页大小组合、登记中断窗口与第 3 批恢复合同的目标环境证据 |
 | 架构整改（PR3） | 10 项整改已落地 | 导出、补槽、等待准入、人工恢复、两类 Outbox、SDK、取证 Helm 均有定向证据 | 双 Pod 取证下载、混版旧发布器退出顺序、Kafka ACK 与真实 DB 交错链路；PR4 已补准入上限 1 与 forwarder 交错用例 |
 
 ## 1. 性能与容量
@@ -41,8 +41,8 @@ PR4 补充：`EndToEndSummarySqlIntegrationTest` 在真实 PostgreSQL 上执行 
 
 仍未关闭：
 
-- Process 插件级增量业务 SQL 已补（IN/OUT、空批）；完整 Worker 管道发布与回报的 HTTP E2E（`ProcessPipelineE2eIT`）仍待补。
-- Export 崩溃续跑切换复合游标、JOIN 展开重复行、页大小 1 以外边界组合的文件对账扩展。
+- Process 插件级增量业务 SQL 已补（IN/OUT、空批）；完整 Worker 管道发布与回报的 HTTP E2E 已由 PR6（`ProcessPipelineE2eIT#httpLaunch_fullPipeline_publishesAndReportsOverHttp`）补齐。
+- Export 复合游标崩溃续跑对账已由 PR6（`ExportKeysetRangeIntegrationTest#jdbcMapped_compositeCursor_resumesAfterCrashAndReconciles`）补齐；JOIN 展开重复行、页大小 1 以外边界组合与登记中断窗口仍开放。
 - 第 3 批恢复合同：Import 分块提交与位点推进窗口、Export 制品摘要确认、Process 暂存代回收、Dispatch 渠道确认、Atomic 外部执行身份，仍需目标环境或外部系统证据。
 
 ## 3. 后端架构整改

@@ -35,6 +35,10 @@ import io.github.pinpols.batch.worker.processes.domain.ProcessStage;
 import io.github.pinpols.batch.worker.processes.domain.ProcessStageResult;
 import io.github.pinpols.batch.worker.processes.stage.ProcessComputePlugin;
 import io.github.pinpols.batch.worker.processes.stage.ProcessRuntimeKeys;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -53,6 +57,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -114,6 +119,9 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
   private final ProcessStagingGenerationCleanupFence stagingGenerationCleanupFence;
 
   private final KafkaTemplate<String, String> kafkaTemplate;
+
+  @LocalServerPort
+  private int port;
 
   @MockitoSpyBean
   private TaskControllerApplicationService taskControllerApplicationService;
@@ -229,6 +237,55 @@ class ProcessPipelineE2eIT extends AbstractIntegrationTest {
     String publishedCount =
         jdbcTemplate.queryForObject(selectOutputSummarySql2, String.class, pipelineInstanceId);
     assertThat(publishedCount).isEqualTo("2");
+  }
+
+  @Test
+  @DisplayName("完整 HTTP E2E:经 /internal/orchestrator/launch 发起,Worker 真实 HTTP 认领与回报后收敛成功")
+  void httpLaunch_fullPipeline_publishesAndReportsOverHttp() throws Exception {
+    JdbcTemplate businessJdbc = new JdbcTemplate(businessDataSource);
+    LaunchSeed seed = E2eScenarioFixture.prepareLaunchWithoutPreSeededWorker(
+        jdbcTemplate, TENANT, "PROCESS", "process", TriggerType.API, BIZ_DATE);
+    ProcessE2eFixture.cleanProcessRows(businessJdbc);
+    ProcessE2eFixture.seedDemoOrderEvents(businessJdbc, TENANT, BIZ_DATE);
+    ProcessE2eFixture.configureSqlTransformJobParameters(
+        jdbcTemplate, objectMapper, TENANT, seed.jobCode(), List.of());
+
+    LaunchRequest request = new LaunchRequest(
+        TENANT,
+        seed.workflowDefinitionId(),
+        BIZ_DATE,
+        TriggerType.API,
+        seed.requestId(),
+        "e2e-tr-process-http",
+        Map.of("bizDate", BIZ_DATE.toString()));
+    HttpResponse<String> response = HttpClient.newHttpClient()
+        .send(
+            HttpRequest.newBuilder(
+                    URI.create("http://127.0.0.1:" + port + "/internal/orchestrator/launch"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(request)))
+                .build(),
+            HttpResponse.BodyHandlers.ofString());
+    assertThat(response.statusCode()).as(response.body()).isEqualTo(200);
+
+    e2eOutboxPublishSupport.publishAllPending(TENANT);
+
+    await()
+        .atMost(Duration.ofSeconds(120))
+        .pollInterval(Duration.ofMillis(200))
+        .untilAsserted(() -> {
+          E2eStatusLogger.logJobFlowSnapshot(
+              jdbcTemplate, TENANT, seed.dedupKey(), "ProcessE2e-http-launch");
+          Map<String, Object> outcome = loadProcessOutcome(seed.dedupKey());
+          assertThat(outcome.get("task_status")).isEqualTo("SUCCESS");
+          assertThat(outcome.get("instance_status")).isEqualTo("SUCCESS");
+        });
+
+    Integer published = businessJdbc.queryForObject(
+        "select count(*)::int from biz.process_account_summary where biz_date = ?",
+        Integer.class,
+        BIZ_DATE);
+    assertThat(published).isEqualTo(2);
   }
 
   @Test

@@ -10,6 +10,7 @@
 
 ### Added
 - `AlertmanagerDeliveryChainE2eIT` 新增租户分流用例：两个租户的告警经同一 AM receiver 回调后分别投递到各自渠道，并断言 `notification_delivery_log` 各记一条 `ALERTMANAGER` SUCCESS。
+- 新增 Process 完整 HTTP E2E 与 Export 复合游标崩溃续跑对账：`ProcessPipelineE2eIT` 经真实 `/internal/orchestrator/launch` 发起并由 Worker 通过 HTTP 认领/回报；`ExportKeysetRangeIntegrationTest` 在真实 PostgreSQL 上从首页复合游标重启续页，校验无重复、无漏行并与库中行数对账。
 - 新增 Workflow 定义级活跃运行上限 `max_active_runs_per_biz_date`（1..64，默认 1）：同一租户、Workflow、业务日与执行模式允许并存多个
   `CREATED`/`RUNNING` 根运行，超出上限的 launch 仍进入 `workflow_launch_wait`。实现用 `workflow_run.active_slot` + 部分唯一索引替代原先
   “一天一个活跃 run”的唯一索引；默认 1 时行为不变。容量画像可用 `CAPACITY_MAX_ACTIVE_RUNS_PER_BIZ_DATE` 显式调高。见 ADR-050。

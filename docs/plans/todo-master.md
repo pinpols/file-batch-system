@@ -7,7 +7,7 @@
 | 顺序 | 现有事项与状态 | 下一步与依赖 |
 |---|---|---|
 | 1 · 正式上线前 | 联合发布与晋级 · 等待 staging 接入。GitHub Environment 仅见 `release-publish`，Compose staging 工作流没有运行记录。 | 由运维确认目标主机、环境配置和部署权限，固定同一候选的前后端 SHA 与镜像 digest，建立已验收的稳定回滚基线，再接生产审批和晋级。[Compose CD 待办](../runbook/compose-cd-roadmap.md#8-待办) |
-| 2 · 正式上线前 | 目标环境联验 · 等待候选部署。2026-11-21 复核时，前后端的 GitHub Deployments 均无记录，尚未取得实际 staging 地址或同一候选的 release manifest。Workflow 联合矩阵仍为 24 项已验证、12 项部分验证。 | 先核对实际环境前后端镜像 digest 与同一 manifest，一次联验留存主链路、运行角色与租户隔离、目标负载 SLO、Kafka/Outbox 排空和告警送达证据。Console 场景使用同一候选中的配对前端和实际角色。[staging 执行手册](../runbook/go-live-staging-execution.md) · [Workflow 验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md) |
+| 2 · 正式上线前 | 目标环境联验 · 等待候选部署。2026-11-22 复核：前后端的 GitHub Deployments 仍无记录，尚未取得实际 staging 地址或同一候选的 release manifest。Workflow 联合矩阵为 24/36 已验证、12 项部分验证。 | 先核对实际环境前后端镜像 digest 与同一 manifest，一次联验留存主链路、运行角色与租户隔离、目标负载 SLO、Kafka/Outbox 排空和告警送达证据。Console 场景使用同一候选中的配对前端和实际角色。[staging 执行手册](../runbook/go-live-staging-execution.md) · [Workflow 验收矩阵](workflow-daily-integration-acceptance-matrix-2026-10-14.md) |
 | 3 · 正式上线前 | 割接与恢复 · 等待运维、DBA 和生产同构环境。 | 按发布候选和实际部署数据核对迁移耗时与锁影响，演练回滚、整组 Worker 故障恢复及 PITR，保留业务对账和 RTO/RPO 证据。[上线前演练要求](../runbook/go-live-readiness.md) |
 | 4 · 下一项后端验证 | **BF-20261122-01 → BF-20261120-01 / BF-20261119-01** · 统计修复已完成，下一步做多槽位收益 A/B。 | 端到端汇总已改按根 Workflow 关联，绑定与图读取优化已实施并有定向测试与隔离库证据。下一步在隔离环境按 12/6、基数 100 对 1,500 请求做同构建 A/B，记录根请求 p95、任务完成速率与排空时间。[统计口径](#workflow-统计与-launch-写路径2026-11-22) · [容量台账](#结构瓶颈需业务或容量决策) |
 | 5 · 随发布范围验收 | 文件入口、配置失效、分账号与身份联验 · 各自有本地或 CI 证据。 | 对候选实际启用的能力验收真实存储和多实例扫描、独立进程配置失效及混版、运行角色切换。OIDC 在试点有真实 IdP 时推进。[文件等待与入口扫描](#文件等待与入口扫描2026-11-09) · [当前差异审查清单](#当前差异审查清单) · [OIDC 试点方案](console-oidc-sso-integration-plan-2026-10-09.md) |
@@ -16,7 +16,7 @@
 
 ## 2026-11-03：全部开放事项统一索引
 
-2026-11-22 新增 Worker 数据正确性待办。**P1 Export**：修复 JDBC 映射和 SQL 模板单列游标在跨页同值时漏行，核对分片和续跑后的全部明细。**P2 Process**：修复增量空成功批次覆盖最近有效水位，核对后续增量、并发成功、部分失败与历史重放。两项已按整改方案实施：Export 增加可选唯一排序后缀、页边界同值与排序键 NULL 明确失败（真实 PG `ExportKeysetRangeIT` 12/12）；Process 启动水位跳过空 OUT、覆盖归档成功实例并排除重放/补跑（真实 PG `IncrementalWatermarkMapperIntegrationTest` 6/6，V388 索引）。Console 配置入口校验与 Process 端到端用例仍待补。第 3 批已盘点仓库默认启用场景（Report Outbox 默认关闭、五类插件与渠道清单），目标环境开关、接收端幂等证据和外部执行身份仍待取证；结果未知恢复沿用 ASSESS-20261102-01。[五类 Worker 复核](../audit/worker-design-review-2026-11-22.md) · [整改方案](worker-design-remediation-plan-2026-11-22.md)
+2026-11-22 新增 Worker 数据正确性待办。**P1 Export**：修复 JDBC 映射和 SQL 模板单列游标在跨页同值时漏行，核对分片和续跑后的全部明细。**P2 Process**：修复增量空成功批次覆盖最近有效水位，核对后续增量、并发成功、部分失败与历史重放。两项已按整改方案实施：Export 增加可选唯一排序后缀、页边界同值与排序键 NULL 明确失败（真实 PG `ExportKeysetRangeIT` 12/12）；Process 启动水位跳过空 OUT、覆盖归档成功实例并排除重放/补跑（真实 PG `IncrementalWatermarkMapperIntegrationTest` 6/6，V388 索引）。Console 配置入口校验仍待补；Process 完整 HTTP E2E 与 Export 复合游标崩溃续跑对账已于 2026-11-22 补齐。第 3 批已盘点仓库默认启用场景（Report Outbox 默认关闭、五类插件与渠道清单），目标环境开关、接收端幂等证据和外部执行身份仍待取证；结果未知恢复沿用 ASSESS-20261102-01。[五类 Worker 复核](../audit/worker-design-review-2026-11-22.md) · [整改方案](worker-design-remediation-plan-2026-11-22.md)
 
 同日复核 1,500 请求 A/B 样本，发现端到端汇总漏计根 Workflow 完成数，登记 BF-20261122-01；子 Job 与节点重复绑定、根启动事务图读取复用分别为 -02、-03。三项均已实施并通过定向测试与隔离 PostgreSQL 验证，见[容量复核](../audit/backend-capacity-analysis-2026-11-22.md)。
 
@@ -26,7 +26,7 @@
 |---|---|
 | 后端导出恢复、SDK 幂等、告警与取证 | 导出恢复、SDK 凭据、告警 Outbox `claim_token` 与取证包共享卷已实施；导出模块 266 项单测、三语言 SDK 时序用例与 Console 通知单测通过，Helm 渲染通过。告警 Mapper 真库用例 10 项通过。仍开放：混版发布器退出顺序，以及双 Pod 生成/下载/重建后下载与 SHA-256/跨租户实测。详见[全后端架构审核](../audit/backend-architecture-review-2026-11-22.md)和[整改状态](backend-architecture-remediation-2026-11-22.md#实施状态2026-11-22)。 |
 | 后端调度与投递恢复 | 补槽非阻塞协调、等待按实际空槽领取、人工恢复选槽、派发 Outbox 领取凭据均已实施；池并发 1/4 用例、上限 2 只释放 1 槽、原槽被占时恢复与两次领取回写用例通过。仍开放：真实新 launch 高并发竞争、Kafka ACK 与 DB 回写交错链路、目标环境多实例长稳观察。投递语义与归档槽位文档已校准。见[后端架构审核](../audit/backend-architecture-review-2026-11-21.md)和[整改状态](backend-architecture-remediation-2026-11-22.md#实施状态2026-11-22)。 |
-| 三层整改完成度 | 性能容量、Worker、架构整改的本地代码与自动化验收已由 [PR4 收口审计](../audit/three-layer-remediation-completion-audit-2026-11-22.md)核对；仍开放 12/6 同构建压测、JDBC 往返实测、Process 端到端、第 3 批恢复证据、双 Pod 取证与混版旧发布器。 |
+| 三层整改完成度 | 性能容量、Worker、架构整改的本地代码与自动化验收已由 [PR4 收口审计](../audit/three-layer-remediation-completion-audit-2026-11-22.md)核对；仍开放 12/6 同构建压测、JDBC 往返实测、第 3 批恢复证据、双 Pod 取证与混版旧发布器。 |
 | 当前差异与跨账号 | 配置失效的部署/混版与容量验证、跨账号旧客户端/OIDC/目标环境仍开放。六项清单的第 1 项已定向核查，第 2–6 项自 2026-10-27 起仍为待执行，不属于本次容量收口。见[当前差异审查清单](#当前差异审查清单)和[统一问题记录](../review/frontend-backend-bug-review-2026-10-27.md#2026-11-01本地关键边界与前后端联验续查)。复制与作业包未知结果已落地，见同清单。 |
 | 文件等待与入口扫描 | 新记录已按渠道编码精确匹配，有界扫描会保存分页位置。无法识别来源的渠道不再回退匹配历史文件；当前 Full CI 的渠道匹配与数据库语义集成测试 9/9 通过。真实云存储、多 JVM、默认扫描窗口、托管上传 API/浏览器与目标环境验收仍开放。见[当前状态](#文件等待与入口扫描2026-11-09)及[系统设计核查记录](system-design-capacity-validation-plan-2026-11-09.md#当前进度与下一步)。 |
 | 系统设计与容量验收 | 已按用户选择以本地结果收口；完整容量与稳态、真实断链恢复、目标环境和混版验证另行验收。范围、具体缺口与本地证据见[系统设计与容量验证计划](system-design-capacity-validation-plan-2026-11-09.md#当前进度与下一步)。候选负载场景见[负载测试草案](load-test-plan-2026-11-09.md)，执行前须单独核对环境与阈值，不作为当前编码任务。 |
