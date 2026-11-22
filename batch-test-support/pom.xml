@@ -106,6 +106,13 @@
                     <include>create_biz_tables.sql</include>
                 </includes>
             </resource>
+            <resource>
+                <directory>${project.basedir}/../db/legacy-migration</directory>
+                <targetPath>db/legacy-migration</targetPath>
+                <includes>
+                    <include>V*.sql</include>
+                </includes>
+            </resource>
         </resources>
     </build>
 </project>

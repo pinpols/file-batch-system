@@ -91,7 +91,7 @@ Orchestrator合并测试进程退出时出现Surefire 30秒退出超时提示，
 
 当前静态链路核对未找到上述冷表的生产搬运、冷读回退或恢复实现。能确认的是DDL建表与 `ArchiveSchemaDriftCheck` 动态拼接热表名加 `_archive` 的列/类型检查；**结构漂移检查不执行归档。**当前数据库函数也未检出这些冷表写入。
 
-证据：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java:65–79,88`；`db/migration/V118__data_quality_reconciliation.sql:84–87`、`V159__create_custom_task_type_registry.sql:57`、`V165__create_atomic_task_config.sql:56`、`V167__create_workflow_definition_version.sql:62`。现有[索引审查](../plans/database-index-review-remediation-2026-10-18.md)也登记过这5张表的生命周期缺口，本轮重新核实，未视为新发现的已实施能力。
+证据：`batch-orchestrator/src/main/java/io/github/pinpols/batch/orchestrator/infrastructure/archive/ArchiveSchemaDriftCheck.java:65–79,88`；`db/legacy-migration/V118__data_quality_reconciliation.sql:84–87`、`V159__create_custom_task_type_registry.sql:57`、`V165__create_atomic_task_config.sql:56`、`V167__create_workflow_definition_version.sql:62`。现有[索引审查](../plans/database-index-review-remediation-2026-10-18.md)也登记过这5张表的生命周期缺口，本轮重新核实，未视为新发现的已实施能力。
 
 影响：表存在容易被误认为已保障配置历史/质量证据留存；若后续热清理依赖这种假设，将缺少冷证据。当前未复现热数据丢失，不能将此写成正在发生的数据事故。
 
@@ -105,7 +105,7 @@ Orchestrator合并测试进程退出时出现Surefire 30秒退出超时提示，
 
 但实库 `batch.trigger_misfire_pending.trigger_runtime_state_id` 仍有指向它的外键，带 `ON DELETE CASCADE`，并保留旧唯一约束。当前 `TriggerMisfirePendingMapper.insertPendingWithStatus` 已按 `(tenant_id, workflow_definition_id, scheduled_fire_time)` 写入/去重。**旧运行态表可列退役候选，补跑待审批表仍然必需。**
 
-证据：`db/migration/V67__create_trigger_runtime_state.sql:14`；`batch-trigger/src/main/resources/application.yml:32–50`；`batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml:26–36`；本轮实库外键目录。旧表只在本地reset/seed检查等运维资产中有残留。
+证据：`db/legacy-migration/V67__create_trigger_runtime_state.sql:14`；`batch-trigger/src/main/resources/application.yml:32–50`；`batch-trigger/src/main/resources/mapper/TriggerMisfirePendingMapper.xml:26–36`；本轮实库外键目录。旧表只在本地reset/seed检查等运维资产中有残留。
 
 处理与验收：Trigger负责人清理旧FK、旧列/唯一约束及reset/清理/检查引用，再从空库结构退役旧表；禁止用 `DROP ... CASCADE` 顺手删除仍活跃的依赖。新库验证定时fire、readiness重检、misfire申请/审批/补跑及重复投递。
 
@@ -113,7 +113,7 @@ Orchestrator合并测试进程退出时出现Surefire 30秒退出超时提示，
 
 `batch.compensation_checkpoint` 有DDL、错误字段、索引和租户清理SQL，但当前生产源码和数据库函数未检出执行写入/读取。`docs/runbook/compensation-cleanup.md:3,64` 明确说明 `DefaultCompensationService` 不写此表，不得依赖它判断步骤已提交或回滚。当前估算0行与此一致，但不是判断依据。
 
-证据：`db/migration/V63__compensation_checkpoint.sql:23`；`scripts/db/wipe-tenants.sql:30`、`scripts/db/wipe-non-system-tenants.sql:41`、`scripts/sim-4day/sql/clean-platform-runtime.sql:24`。
+证据：`db/legacy-migration/V63__compensation_checkpoint.sql:23`；`scripts/db/wipe-tenants.sql:30`、`scripts/db/wipe-non-system-tenants.sql:41`、`scripts/sim-4day/sql/clean-platform-runtime.sql:24`。
 
 处理：当前需求若不包含持久化Saga/checkpoint，建议退役这张预留表及相关清理/说明；不要为保住一张表新增补偿体系。`compensation_command` 是仍在使用的补偿命令主记录，须保留。验收应证明空库建库和命令补偿正常，不把本表退役误报为已实现副作用逆向回滚。
 
@@ -121,7 +121,7 @@ Orchestrator合并测试进程退出时出现Surefire 30秒退出超时提示，
 
 两库的 `batch.process_staging` 不能靠名称合并判断。平台库为V75旧普通表；当前PROCESS的Mapper和COMPUTE/COMMIT/清理绑定 `processBusinessSqlSessionFactory` / `processBusinessDataSource`，实际使用业务库的分区表及 `process_staging_generation` 代际围栏。
 
-证据：`db/migration/V75__add_process_staging_table.sql:14`；`batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/BatchWorkerProcessApplication.java:26–35`；`batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/config/BusinessDataSourceConfiguration.java:90–105`；`batch-worker/process/src/main/resources/mapper/business/ProcessStagingMapper.xml:53,98`；`scripts/db/business/create_biz_tables.sql:30–33,48,91`。本轮统计中平台副本估算0行/0插入，业务表累计插入与删除均超过15000，只作为数据源定位旁证。
+证据：`db/legacy-migration/V75__add_process_staging_table.sql:14`；`batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/BatchWorkerProcessApplication.java:26–35`；`batch-worker/process/src/main/java/io/github/pinpols/batch/worker/processes/config/BusinessDataSourceConfiguration.java:90–105`；`batch-worker/process/src/main/resources/mapper/business/ProcessStagingMapper.xml:53,98`；`scripts/db/business/create_biz_tables.sql:30–33,48,91`。本轮统计中平台副本估算0行/0插入，业务表累计插入与删除均超过15000，只作为数据源定位旁证。
 
 处理：退役平台库旧副本及平台reset、迁移说明、RLS/表目录中相关假设；**保留业务库的2张PROCESS基础表与其分区/清理/围栏。**验证须使用平台/业务双库隔离，覆盖COMPUTE→VALIDATE→COMMIT→FEEDBACK及崩溃恢复，不能用单库fixture验证代替。
 

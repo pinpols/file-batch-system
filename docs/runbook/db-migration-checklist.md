@@ -6,15 +6,19 @@
 
 凡是新加 Flyway migration（`db/migration/V*.sql`），上线前必须自查本清单。审计 PR 评审者按本清单逐项核对。
 
-## 当前文件命名基线
+## 当前部署基线
 
-2026-10-24 的用途命名整理按空库部署：文件束地基使用 [V183__file_bundle_foundation.sql](../../db/migration/V183__file_bundle_foundation.sql)，导出/分发类型扩展使用 [V184__file_bundle_export_dispatch.sql](../../db/migration/V184__file_bundle_export_dispatch.sql)。版本号与 SQL 字节保持一致。部署前对受影响模块执行 `clean` 并重新构建迁移资源，在全新数据库执行完整迁移；不复用旧 schema history，也不提供历史修复或旧名兼容。
+平台库使用 [V1](../../db/migration/V1__create_schema.sql) 与 [V2](../../db/migration/V2__platform_schema.sql) 初始化，后续增量从 V3 开始。旧编号数据库先保留可恢复的备份，在空库执行新链并通过验证后切换连接。旧链和目标版本恢复材料见 [重编号方案](../plans/flyway-platform-renumber-2026-11-22.md)。全新库的 V2 可以写入官方种子数据，后续的大表回填遵守本手册的 DML 限制。
+
+## 旧迁移命名记录
+
+2026-10-24 的用途命名整理按空库部署：文件束地基使用 [V183__file_bundle_foundation.sql](../../db/legacy-migration/V183__file_bundle_foundation.sql)，导出/分发类型扩展使用 [V184__file_bundle_export_dispatch.sql](../../db/legacy-migration/V184__file_bundle_export_dispatch.sql)。版本号与 SQL 字节保持一致。部署前对受影响模块执行 `clean` 并重新构建迁移资源，在全新数据库执行完整迁移；不复用旧 schema history，也不提供历史修复或旧名兼容。
 
 ## 红线清单
 
 ### 1. 大表 DML 禁入 migration
 
-**反例**：[V124 §6](../../db/migration/V124__r3_constraint_hardening.sql)（`DELETE FROM batch.file_record … USING …` 全表 self-join 去重）/ [V108](../../db/migration/V108__result_version_main_model.sql)（`INSERT INTO result_version SELECT … FROM job_instance` 全表窗口函数 backfill）。
+**反例**：[V124 §6](../../db/legacy-migration/V124__r3_constraint_hardening.sql)（`DELETE FROM batch.file_record … USING …` 全表 self-join 去重）/ [V108](../../db/legacy-migration/V108__result_version_main_model.sql)（`INSERT INTO result_version SELECT … FROM job_instance` 全表窗口函数 backfill）。
 
 **风险**：
 - 全表锁 / 长事务阻塞 trigger / orchestrator 主链路（job_instance 是 hot 表）
@@ -27,7 +31,7 @@
 
 ### 2. `tenant_id` / 业务关键列 backfill 必须前置孤儿清理
 
-**反例**：[V84 / V85 / V92](../../db/migration/V84__workflow_node_tenant_id.sql) — `ADD COLUMN tenant_id` → `UPDATE … FROM parent` → `SET NOT NULL`。若 parent 已被删除留下孤儿子行，backfill 留 NULL → `SET NOT NULL` 直接 fail，迁移卡住集群启动。
+**反例**：[V84 / V85 / V92](../../db/legacy-migration/V84__workflow_node_tenant_id.sql) — `ADD COLUMN tenant_id` → `UPDATE … FROM parent` → `SET NOT NULL`。若 parent 已被删除留下孤儿子行，backfill 留 NULL → `SET NOT NULL` 直接 fail，迁移卡住集群启动。
 
 **规则**：`SET NOT NULL` 前必须有一个：
 ```sql
@@ -40,7 +44,7 @@ PR 评审者要求 backfill migration 必须包含孤儿处置 SQL。
 
 ### 3. `NOT VALID` 加约束必须同 sprint 配 `VALIDATE` migration
 
-**反例**：[V124](../../db/migration/V124__r3_constraint_hardening.sql) 加 5 处 CHECK / FK `NOT VALID`，原计划运维窗口手工 `VALIDATE CONSTRAINT`，实际滞留数周未跑；DB 长期处于"新写入受约束、历史数据尚未核验"状态。V125 / V126 同。R7 收尾 V127 一次性 VALIDATE。
+**反例**：[V124](../../db/legacy-migration/V124__r3_constraint_hardening.sql) 加 5 处 CHECK / FK `NOT VALID`，原计划运维窗口手工 `VALIDATE CONSTRAINT`，实际滞留数周未跑；DB 长期处于"新写入受约束、历史数据尚未核验"状态。V125 / V126 同。R7 收尾 V127 一次性 VALIDATE。
 
 **规则**：
 - 加 `NOT VALID` 必须在同次发布完成 `VALIDATE CONSTRAINT`（通常放在同一 migration，模板见 V127）
@@ -50,7 +54,7 @@ PR 评审者要求 backfill migration 必须包含孤儿处置 SQL。
 
 ### 4. `partial unique index` 必须前置 dedup 探针
 
-**反例**：[V124 P1-4](../../db/migration/V124__r3_constraint_hardening.sql) `CREATE UNIQUE INDEX uk_workflow_run_active … WHERE run_status IN ('CREATED','RUNNING')`。V124 前没这条约束，rerun / 手工创建场景完全可能有多行 active workflow_run → 索引构建期 duplicate key 整个迁移 abort。
+**反例**：[V124 P1-4](../../db/legacy-migration/V124__r3_constraint_hardening.sql) `CREATE UNIQUE INDEX uk_workflow_run_active … WHERE run_status IN ('CREATED','RUNNING')`。V124 前没这条约束，rerun / 手工创建场景完全可能有多行 active workflow_run → 索引构建期 duplicate key 整个迁移 abort。
 
 **规则**：每个 partial unique 在 migration 内必须前置：
 ```sql
@@ -70,7 +74,7 @@ END $$;
 
 ### 5. FK `ON DELETE CASCADE` 不用于审计 / 长寿数据
 
-**反例**：[V119](../../db/migration/V119__job_partition_fk_cascade.sql) 把 `job_execution_log.job_partition_id` 改 CASCADE，意图是 cleanup 序列遗漏时回退。结果是 partition 删除时**整条 audit log 跟着物理删**——审计追溯权威被静默 wipe。R7 收尾 V128 改 `SET NULL`。
+**反例**：[V119](../../db/legacy-migration/V119__job_partition_fk_cascade.sql) 把 `job_execution_log.job_partition_id` 改 CASCADE，意图是 cleanup 序列遗漏时回退。结果是 partition 删除时**整条 audit log 跟着物理删**——审计追溯权威被静默 wipe。R7 收尾 V128 改 `SET NULL`。
 
 **规则**：
 - 审计表 / 业务长寿表 → `ON DELETE SET NULL`（解除引用，保数据）
@@ -79,7 +83,7 @@ END $$;
 
 ### 6. archive 表与热表字段 1:1 镜像
 
-**反例**：[V118](../../db/migration/V118__data_quality_reconciliation.sql) 创建 `archive.data_quality_rule_archive` / `data_quality_check_archive` 时注释承诺 "archive drift check 覆盖"，实际 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 漏注册，加列时启动期不 fail-fast。R7 已修。
+**反例**：[V118](../../db/legacy-migration/V118__data_quality_reconciliation.sql) 创建 `archive.data_quality_rule_archive` / `data_quality_check_archive` 时注释承诺 "archive drift check 覆盖"，实际 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES` 漏注册，加列时启动期不 fail-fast。R7 已修。
 
 **规则**：
 - 新加归档表 → 同 PR 加入 `ArchiveSchemaDriftCheck.ARCHIVED_TABLES`
@@ -88,7 +92,7 @@ END $$;
 
 ### 7. `CHECK` 状态机枚举二次扩展 → release-engineering 锁序
 
-**反例**：[V101 → V107](../../db/migration/V107__batch_day_settling_status.sql) V101 把 `ck_batch_day_instance_status` 收紧到 7 值，V107 又扩到 8 值（加 SETTLING）。若 app 先部分推 prod（写 SETTLING）而 V107 还没跑 → CHECK 违反；反向回滚（先迁后部署）虽安全但需运维强约束。
+**反例**：[V101 → V107](../../db/legacy-migration/V107__batch_day_settling_status.sql) V101 把 `ck_batch_day_instance_status` 收紧到 7 值，V107 又扩到 8 值（加 SETTLING）。若 app 先部分推 prod（写 SETTLING）而 V107 还没跑 → CHECK 违反；反向回滚（先迁后部署）虽安全但需运维强约束。
 
 **规则**：
 - 状态机扩展（CHECK 列表放开 / 收紧）严格遵守 release 序：

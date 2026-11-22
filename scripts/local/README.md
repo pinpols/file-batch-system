@@ -118,7 +118,7 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 |---|---|
 | [analyze-replay.sh](analyze-replay.sh) | forensic replay 5 维度 diff harness。 |
 | [append-tenant-coverage.py](append-tenant-coverage.py) | 按 "租户分工" 策略向 ta / tb / tc-tenant-config-package-test.xlsx 追加。 |
-| [apply-pending-flyway-migrations.sh](apply-pending-flyway-migrations.sh) | Dev mode 工具:console-api 启动后,若 orchestrator/trigger 未起(本地常态),。 |
+| [apply-pending-flyway-migrations.sh](apply-pending-flyway-migrations.sh) | 通过 Flyway 校验并应用本地平台库迁移。 |
 | [audit-runtime-warnings.sh](audit-runtime-warnings.sh) | 审计当前应用日志中的 WARN：预期本地告警需登记 owner/到期日，。 |
 | [backend-reliability-tests.sh](backend-reliability-tests.sh) | 本地与每日 CI 共用的隔离可靠性回归套件。 |
 | [batch-consume-load.sh](batch-consume-load.sh) | ADR-046 Phase 2 切片 2.3d —— worker 消费端攒批的「全栈负载验收」。 |
@@ -142,7 +142,7 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [pre-push-sdk-checks.sh](pre-push-sdk-checks.sh) | SDK 路线图 PR 推送前自查 — 拦截高频被 CI 拦截的问题:。 |
 | [provision-biz-shard.sh](provision-biz-shard.sh) | 幂等「加一片 biz 分片」:起 PG → 建库建表 → rls-phase-a(角色+授权+RLS)→ 只读排故角色 → 写 secrets。 |
 | [redis-sentinel-ha-drill.sh](redis-sentinel-ha-drill.sh) | 在独立本地 Compose 项目中演练 Valkey Sentinel 故障切换。 |
-| [repair-local-flyway-history.sh](repair-local-flyway-history.sh) | 本地开发库 Flyway history 修复工具。 |
+| [repair-local-flyway-history.sh](repair-local-flyway-history.sh) | 仅修复已应用新编号平台基线的本地 Flyway 历史。 |
 | [replay-forensic-bundle.sh](replay-forensic-bundle.sh) | 拉 forensic 证据包 → 本地 sim 回放 → SQL 比对。 |
 | [restart.sh](restart.sh) | 按模块重启当前工作树的本地 Java 服务。 |
 | [restore-script-execute-bits.sh](restore-script-execute-bits.sh) | 恢复登记脚本在 Git 索引中的可执行权限。 |
@@ -187,7 +187,6 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [sql/import-copy-benchmark/drop-table.sql](sql/import-copy-benchmark/drop-table.sql) | DANGER: 删除 COPY benchmark 专用表及其数据。仅限隔离的 benchmark 数据库。 |
 | [sql/import-copy-benchmark/merge-stage.sql](sql/import-copy-benchmark/merge-stage.sql) | 供 [import-copy-worth-benchmark.sh](import-copy-worth-benchmark.sh) 使用的配套 SQL。 |
 | [sql/import-copy-benchmark/truncate-table.sql](sql/import-copy-benchmark/truncate-table.sql) | DANGER: 清空 COPY benchmark 专用表。仅限隔离的 benchmark 数据库，确认表名后执行。 |
-| [sql/insert-flyway-history.sql](sql/insert-flyway-history.sql) | 供 [apply-pending-flyway-migrations.sh](apply-pending-flyway-migrations.sh) 使用的配套 SQL。 |
 | [sql/insert-forensic-day-audit.sql](sql/insert-forensic-day-audit.sql) | 供 [replay-forensic-bundle.sh](replay-forensic-bundle.sh) 使用的配套 SQL。 |
 | [sql/insert-forensic-job-instance.sql](sql/insert-forensic-job-instance.sql) | 供 [replay-forensic-bundle.sh](replay-forensic-bundle.sh) 使用的配套 SQL。 |
 | [sql/insert-forensic-replay-request.sql](sql/insert-forensic-replay-request.sql) | 供 [replay-forensic-bundle.sh](replay-forensic-bundle.sh) 使用的配套 SQL。 |
@@ -202,7 +201,6 @@ Full CI / Staging 将恢复 E2E 类按方法分片，其中包含 Spark 场景�
 | [sql/reload-postgres-config.sql](sql/reload-postgres-config.sql) | 供 [pg-write-parameter-matrix.sh](pg-write-parameter-matrix.sh) 使用的配套 SQL。 |
 | [sql/reset-business-runtime.sql](sql/reset-business-runtime.sql) | 供 [sim-harness.sh](sim-harness.sh) 使用的配套 SQL。 |
 | [sql/reset-platform-runtime.sql](sql/reset-platform-runtime.sql) | 供 [sim-harness.sh](sim-harness.sh) 使用的配套 SQL。 |
-| [sql/select-applied-flyway-versions.sql](sql/select-applied-flyway-versions.sql) | 供 [apply-pending-flyway-migrations.sh](apply-pending-flyway-migrations.sh) 使用的配套 SQL。 |
 | [sql/select-current-database-size.sql](sql/select-current-database-size.sql) | 供 [pg-write-parameter-matrix.sh](pg-write-parameter-matrix.sh) 使用的配套 SQL。 |
 | [sql/select-current-wal-lsn.sql](sql/select-current-wal-lsn.sql) | 供 [pg-write-parameter-matrix.sh](pg-write-parameter-matrix.sh) 使用的配套 SQL。 |
 | [sql/select-forensic-export-sha.sql](sql/select-forensic-export-sha.sql) | 供 [replay-forensic-bundle.sh](replay-forensic-bundle.sh) 使用的配套 SQL。 |

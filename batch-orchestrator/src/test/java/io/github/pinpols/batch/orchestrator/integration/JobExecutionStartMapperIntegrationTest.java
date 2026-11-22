@@ -53,7 +53,7 @@ class JobExecutionStartMapperIntegrationTest {
         """;
     jdbcTemplate.execute(createTablesSql);
     ClassPathResource migration =
-        new ClassPathResource("db/migration/V354__job_execution_start_time.sql");
+        new ClassPathResource("db/legacy-migration/V354__job_execution_start_time.sql");
     ResourceDatabasePopulator populator = new ResourceDatabasePopulator(migration);
     populator.execute(dataSource);
     JdbcTransactionFactory transactionFactory = new JdbcTransactionFactory();

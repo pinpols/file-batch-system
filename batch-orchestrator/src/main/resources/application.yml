@@ -108,7 +108,7 @@ batch:
     context-name: orchestrator
     flyway-validate: true
     required-flyway-versions:
-      - "32"
+      - "2"
     schemas:
       - batch
       - quartz
@@ -123,15 +123,15 @@ batch:
       - schema: batch
         table: business_calendar
         name: cutoff_time
-        hint: V32__add_batch_day_support.sql
+        hint: V2__platform_schema.sql
       - schema: batch
         table: business_calendar
         name: late_arrival_tolerance_min
-        hint: V32__add_batch_day_support.sql
+        hint: V2__platform_schema.sql
       - schema: batch
         table: business_calendar
         name: sla_offset_min
-        hint: V32__add_batch_day_support.sql
+        hint: V2__platform_schema.sql
   scheduler:
     # 是否持久化调度器快照（用于恢复/审计；关闭可减少写库）
     snapshot-persist-enabled: ${BATCH_SCHEDULER_SNAPSHOT_PERSIST:true}

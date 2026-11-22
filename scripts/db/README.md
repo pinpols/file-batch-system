@@ -167,6 +167,6 @@ psql -X -v ON_ERROR_STOP=1 -v tenant_id=租户 -v cutoff=截止时间 -v batch_s
 | [preflight-job-instance-trigger-source.sql](preflight-job-instance-trigger-source.sql) | V136/V137 上线前预检:确认 job_instance 触发来源约束不会在 VALIDATE 阶段失败。 |
 | [quartz-replacement-preflight-scan.sql](quartz-replacement-preflight-scan.sql) | Quartz → 时间轮替换 Pre-flight 扫描脚本 |
 | [reset_platform_flyway_history.sh](reset_platform_flyway_history.sh) | 重置明确指定的本地平台数据库 Flyway 历史记录。 |
-| [reset_platform_flyway_history.sql](reset_platform_flyway_history.sql) | DANGER: 清空平台库 Flyway 历史记录会破坏迁移状态。执行前备份库并确认只有一个应用执行 migration。 |
+| [reset_platform_flyway_history.sql](reset_platform_flyway_history.sql) | 仅清理无平台业务对象的本地库迁移历史，已有平台对象时拒绝。 |
 | [wipe-non-system-tenants.sql](wipe-non-system-tenants.sql) | DANGER: 批量删除所有非系统租户及关联数据。执行前必须核对数据库、备份和保留租户名单。 |
 | [wipe-tenants.sql](wipe-tenants.sql) | DANGER: 批量删除租户及关联数据。执行前必须核对数据库、备份和目标租户清单。 |

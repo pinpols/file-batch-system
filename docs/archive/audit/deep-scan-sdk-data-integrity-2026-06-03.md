@@ -422,15 +422,15 @@ Java key namespace `sdk-<uuid>` 平台运维 grep 可定位;Python `claim-/repor
 
 ```bash
 # V160 job_task_effective_parameters
-$ grep -c "archive\." db/migration/V160__job_task_effective_parameters.sql
+$ grep -c "archive\." db/legacy-migration/V160__job_task_effective_parameters.sql
 2
 # V164 create_pipeline_progress
-$ grep -c "archive\." db/migration/V164__create_pipeline_progress.sql
+$ grep -c "archive\." db/legacy-migration/V164__create_pipeline_progress.sql
 4
 # V157/V163 worker_registry — 期望 0(运行态表不归档)
-$ grep -c "archive\." db/migration/V157__worker_registry_is_self_hosted.sql
+$ grep -c "archive\." db/legacy-migration/V157__worker_registry_is_self_hosted.sql
 0
-$ grep -c "archive\." db/migration/V163__worker_registry_fingerprint.sql
+$ grep -c "archive\." db/legacy-migration/V163__worker_registry_fingerprint.sql
 0
 ```
 

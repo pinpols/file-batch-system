@@ -48,7 +48,8 @@ class ReadinessWaitFairnessIntegrationTest {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
       String createSchemaSql = "CREATE SCHEMA batch";
       jdbc.execute(createSchemaSql);
-      new ResourceDatabasePopulator(new ClassPathResource("db/migration/V351__readiness_wait.sql"))
+      new ResourceDatabasePopulator(
+              new ClassPathResource("db/legacy-migration/V351__readiness_wait.sql"))
           .execute(dataSource);
       Environment environment =
           new Environment("cancel-race", new JdbcTransactionFactory(), dataSource);
@@ -109,7 +110,8 @@ class ReadinessWaitFairnessIntegrationTest {
       JdbcTemplate jdbc = new JdbcTemplate(dataSource);
       String createSchemaSql = "CREATE SCHEMA batch";
       jdbc.execute(createSchemaSql);
-      ClassPathResource migration = new ClassPathResource("db/migration/V351__readiness_wait.sql");
+      ClassPathResource migration =
+          new ClassPathResource("db/legacy-migration/V351__readiness_wait.sql");
       new ResourceDatabasePopulator(migration).execute(dataSource);
       Environment environment =
           new Environment("fairness", new JdbcTransactionFactory(), dataSource);

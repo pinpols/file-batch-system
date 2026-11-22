@@ -96,8 +96,8 @@ bash scripts/ops/verify-worker-rolling-upgrade.sh
 
 ## 5. 权威实现位置
 
-- 维护状态：`db/migration/V215__create_console_maintenance_state.sql`、`batch-console-api/.../support/maintenance/`
-- 日聚合：`db/migration/V216__create_console_usage_daily.sql`、`batch-console-api/.../domain/observability/`
-- AI 会话/用量/审计治理：`db/migration/V217__index_console_ai_audit_retention.sql`、`db/migration/V218__console_ai_conversations_and_cost_usage.sql`、`batch-console-api/.../domain/audit/infrastructure/ai/`
+- 维护状态：`db/legacy-migration/V215__create_console_maintenance_state.sql`、`batch-console-api/.../support/maintenance/`
+- 日聚合：`db/legacy-migration/V216__create_console_usage_daily.sql`、`batch-console-api/.../domain/observability/`
+- AI 会话/用量/审计治理：`db/legacy-migration/V217__index_console_ai_audit_retention.sql`、`db/legacy-migration/V218__console_ai_conversations_and_cost_usage.sql`、`batch-console-api/.../domain/audit/infrastructure/ai/`
 - 告警和容量：`deploy/docker/observability/prometheus-batch-rules.yml`、`grafana-dashboard-batch-capacity.json`
 - 运行证据：`scripts/ops/capture-runtime-evidence.sh`、`scripts/ops/verify-worker-rolling-upgrade.sh`

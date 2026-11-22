@@ -253,7 +253,7 @@
 
 | Stage | 状态 | 实地证据 |
 |---|---|---|
-| **Stage 1** ✅ | V80 trigger_outbox_event 表 + LaunchEnvelope DTO + TriggerOutboxEventMapper | `db/migration/V80__create_trigger_outbox_event.sql` / `LaunchEnvelope.java` 37 行 / `TriggerOutboxEventEntity` 41 行 — `9587b8bf` |
+| **Stage 1** ✅ | V80 trigger_outbox_event 表 + LaunchEnvelope DTO + TriggerOutboxEventMapper | `db/legacy-migration/V80__create_trigger_outbox_event.sql` / `LaunchEnvelope.java` 37 行 / `TriggerOutboxEventEntity` 41 行 — `9587b8bf` |
 | **Stage 2** ✅ | TriggerOutboxRelay 周期发布器(ShedLock 互斥 + FOR UPDATE SKIP LOCKED + 退避)+ 7 单测 | `TriggerOutboxRelay.java` 224 行 + `TriggerOutboxRelayTest` 7/7 全部通过 — `087f6b7a` |
 | **Stage 3** ✅ | DefaultTriggerService 加 outbox 写入分支(同事务) + 灰度开关 `batch.trigger.async-launch.enabled` | `DefaultTriggerService.java:202-225 persistAndForward` 异步路径分支 + `insertPendingAndOutboxOrReturnExisting` 同事务 INSERT — `1ca3a957` |
 | **Stage 4** ✅ | trigger 端 KafkaTriggerEventPublisher impl + ProducerConfig;orchestrator 端 ConsumerConfig + TriggerLaunchConsumer @KafkaListener | `KafkaTriggerEventPublisher.java` 101 行(headers: X-Trace-Id/X-Tenant-Id/X-Envelope-Version) / `TriggerLaunchConsumer.java`(409→ack / 429→ack / runtime→抛出 listener 重试) / `BatchTopics.TRIGGER_LAUNCH_V1` 常量 — `22b330ea` |
@@ -277,7 +277,7 @@
 
 | Stage | 状态 | 实地证据(post-`a9469407`) |
 |---|---|---|
-| **Stage 1** ✅ | DDL: V72 migration 加 `workflow_node_run.output` JSONB 列 | `db/migration/V72__add_workflow_node_run_output.sql` |
+| **Stage 1** ✅ | DDL: V72 migration 加 `workflow_node_run.output` JSONB 列 | `db/legacy-migration/V72__add_workflow_node_run_output.sql` |
 | **Stage 1.2** ✅ | 协议层 outputs 字段全栈 + 4 worker adapter populate + orchestrator 持久化 | `TaskExecutionReport.outputs` / `TaskExecutionReportDto.outputs` (+`@JsonIgnoreProperties` 保护滚动升级) / `TaskOutcomeCommand.outputs` 11 字段 record / `UpdateNodeRunStatusParam.output` / 4 `*StepExecutionAdapter.buildSuccessResponse` 填 `NODE_OUTPUTS` (Import: fileId/recordCount/parsedCount/...; Export: fileId/objectName/checksumValue/...; Process: processedCount/batchKey/...; Dispatch: receiptCode/channelCode/...) / `DefaultTaskExecutionWrapper` 提取透传 / `DefaultTaskOutcomeService.serializeOutputs` 写 JSONB / JOB 节点 `signalParentVirtualTask` 透传子作业 outputs |
 | **Stage 2** ✅ | `WorkflowParamResolver` 类(160 行)+ `WorkflowRunContext` 接口 + 10 单测 | `application/workflow/WorkflowParamResolver.java`(`$.nodes.<code>.output.<key>` / `$.workflowRun.<key>` 引用 + 3 类 fail-fast + 嵌套路径下钻 + Map/List 递归);`WorkflowParamResolverTest.java` 10/10 全部通过 |
 | **Stage 3** ✅ | resolver 集成 + 文档 | `DefaultWorkflowNodeDispatchService.mergeNodeParams` 注入 resolver + `loadWorkflowRunContext`(`selectByWorkflowRunId` 加载兄弟节点 output 反序列化构造 ctx,不持久化);TASK + JOB 双派发路径都接入;`error.workflow.param_ref_invalid` 中英双语 i18n;`workflow-dependency-guide.md §10` 节点间参数串联文档 |

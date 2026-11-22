@@ -21,7 +21,7 @@
 |---|---|---|
 | 了解系统架构、模型、原语和主链 | [架构索引](../architecture/README.md)、[核心模型](../architecture/core-model.md)、[系统边界](../architecture/system-scope-boundary.md) | 对应 ADR；方案目标与代码事实分别确认 |
 | 开发或修改业务功能 | [设计索引](../design/README.md) | 相关架构、API、SDK、运行手册与所属阶段方案 |
-| 查询数据库表、关系、索引与分区 | [数据库目录](../design/database-schema-guide.md) | db/migration/ 实际迁移、相关 Mapper、分区/迁移 Runbook；设计稿不替代实际 DDL |
+| 查询数据库表、关系、索引与分区 | [数据库目录](../design/database-schema-guide.md) | `db/migration/` 现行平台迁移、`db/legacy-migration/` 历史证据、Mapper 和迁移 Runbook。业务库从 `scripts/db/business/` 查找。 |
 | 前后端接口或 SDK 对接 | [API](../api/README.md)、[SDK](../sdk/README.md) | 配对前端生成类型、调用方与接口契约 |
 | 本地部署、构建、配置或故障处理 | [运行手册](../runbook/README.md) | 环境变量、配置生命周期、CI 和对应故障剧本 |
 | 写测试、准备共享数据 | [测试方法](../testing/README.md)、[测试数据指南](../testing/test-fixture-guide.md) | 根 test-data/；模块专用资源仍在 src/test/resources/；跨模块 classpath 资源用 batch-test-support |

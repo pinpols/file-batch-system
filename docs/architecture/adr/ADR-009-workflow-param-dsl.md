@@ -6,7 +6,7 @@
 - **Related**: V5-P1-1（hardening-backlog）/ V5-P2-9（依赖本 ADR 落地）
 
 > ✅ **当前状态（2026-05-03）**：决策段 + 实施分阶段段为提案时的设计意图，**所有 4 个 stage 均已落地**：
-> - Stage 1：[`V72__add_workflow_node_run_output.sql`](../../../db/migration/V72__add_workflow_node_run_output.sql) ✅；worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String, Object>`）✅
+> - Stage 1：[`V72__add_workflow_node_run_output.sql`](../../../db/legacy-migration/V72__add_workflow_node_run_output.sql) ✅；worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String, Object>`）✅
 > - Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest` ✅（`batch-orchestrator/.../application/workflow/`）
 > - Stage 3：集成在 `WorkflowNodePayloadBuilder`（设计稿假想集成点 `DefaultSchedulePlanBuilder`，实现选了 payload 装配点更准确）✅
 > - Stage 4：测试 seed `batch-test-support/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` 演示 ✅

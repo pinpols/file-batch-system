@@ -58,7 +58,7 @@ class WorkflowMonitoringPolicyMapperIntegrationTest {
         """;
     jdbcTemplate.execute(createParentSql);
     ClassPathResource migration =
-        new ClassPathResource("db/migration/V353__workflow_monitoring_policy.sql");
+        new ClassPathResource("db/legacy-migration/V353__workflow_monitoring_policy.sql");
     ResourceDatabasePopulator populator = new ResourceDatabasePopulator(migration);
     populator.execute(dataSource);
     String grantPolicySql = """

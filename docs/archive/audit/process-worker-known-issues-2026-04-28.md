@@ -33,7 +33,7 @@ PROCESS Worker 的 happy path 已跑通：配置 `pipeline_step_definition.impl_
 
 **现象**
 
-- V75 在 `db/migration/V75__add_process_staging_table.sql` 创建 `batch.process_staging`，这是平台 Flyway migration 路径。
+- V75 在 `db/legacy-migration/V75__add_process_staging_table.sql` 创建 `batch.process_staging`，这是平台 Flyway migration 路径。
 - `SqlTransformComputePlugin` 只注入 `processBusinessDataSource`，`COMPUTE / VALIDATE / COMMIT / FEEDBACK` 全部通过业务库连接执行 `batch.process_staging` SQL。
 - `batch-defaults.yml` 默认把业务库指向 `batch_business`，平台库指向 `batch_platform`。
 - 当前公共 IT 基类分别使用 `batch_platform` 和 `batch_business` 容器；完整 E2E 通过 `e2eBusinessDataSource` 接入独立业务库，应用集成测试对物理数据库隔离做显式断言。历史上曾存在同库测试配置，已不再作为当前验证基线。
@@ -58,7 +58,7 @@ relation "batch.process_staging" does not exist
 **验收**
 
 - 已完成：`scripts/db/business/create_biz_tables.sql` 现在会在业务库创建 `batch.process_staging` 及隔离索引，和 `processBusinessDataSource` 的实际访问路径一致。
-- 已完成：真双库 E2E 已落地；`db/migration/V75__add_process_staging_table.sql` 作为历史兼容仍会在平台库创建同名表，但不再作为 PROCESS 运行依赖。测试同时确认业务库存在 `batch.process_staging`，避免把历史兼容表误当成运行依赖。
+- 已完成：真双库 E2E 已落地；`db/legacy-migration/V75__add_process_staging_table.sql` 作为历史兼容仍会在平台库创建同名表，但不再作为 PROCESS 运行依赖。测试同时确认业务库存在 `batch.process_staging`，避免把历史兼容表误当成运行依赖。
 
 ### P0-2. staging 读写只按 `batch_key` 过滤，缺少 tenant/target 约束
 

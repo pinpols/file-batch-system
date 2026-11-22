@@ -6,8 +6,8 @@
 
 ## 事实源与边界
 
-- `db/migration/V172__outbox_event_monthly_partition.sql`：`batch.outbox_event` 按 `created_at` 月分区。
-- `db/migration/V173__job_instance_monthly_partition.sql`：`batch.job_instance` 按 `biz_date` 月分区。
+- `db/legacy-migration/V172__outbox_event_monthly_partition.sql`：`batch.outbox_event` 按 `created_at` 月分区。
+- `db/legacy-migration/V173__job_instance_monthly_partition.sql`：`batch.job_instance` 按 `biz_date` 月分区。
 - `scripts/db/partition-migration/` 下的 SQL 是迁移演练脚本，见该目录 README；不得把 `01`、`02` 或 `03` 脚本直接用于生产迁移或定时维护。
 - 当前仓库未发现负责生产未来分区自动创建的应用调度器或部署 cron。部署团队必须明确分区维护责任、告警和经过审核的执行流程；不得假定分区会自动创建。
 - 分区裁剪、分区主键/唯一约束和外键边界会影响查询与幂等语义。不要手工删除约束、旧表或分区，也不要安装 `pg_partman` 等额外扩展来绕过项目迁移流程。
@@ -65,8 +65,8 @@ V172/V173 建立的初始分区窗口并不证明未来分区会自动创建。�
 
 - [数据库迁移安全技能](../../.agents/skills/database-migration-safety/SKILL.md)
 - [分区迁移演练脚本说明](../../scripts/db/partition-migration/README.md)
-- [`V172` outbox 分区迁移](../../db/migration/V172__outbox_event_monthly_partition.sql)
-- [`V173` job instance 分区迁移](../../db/migration/V173__job_instance_monthly_partition.sql)
+- [`V172` outbox 分区迁移](../../db/legacy-migration/V172__outbox_event_monthly_partition.sql)
+- [`V173` job instance 分区迁移](../../db/legacy-migration/V173__job_instance_monthly_partition.sql)
 - [数据库备份与恢复手册](./backup-and-pitr.md)
 
 ## 手工切换旧表时的独立评审边界

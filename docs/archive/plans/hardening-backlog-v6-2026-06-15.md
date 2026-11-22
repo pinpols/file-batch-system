@@ -113,7 +113,7 @@
 **ADR 已立项**：[ADR-009 Workflow 节点间参数串联 DSL](../architecture/adr/ADR-009-workflow-param-dsl.md)（2026-04-26 Proposed）—— JSONPath-like DSL + worker 上报 outputs + WorkflowParamResolver 解析；分 4 stage 落地，~3 人天。
 
 **当前进度**（2026-06-05 复核：全 4 stage 已落地，本清单此前漏同步 → 校正）：
-- ✅ Stage 1：`db/migration/V72__add_workflow_node_run_output.sql` schema 落地（output JSONB 列）+ worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String,Object>`）
+- ✅ Stage 1：`db/legacy-migration/V72__add_workflow_node_run_output.sql` schema 落地（output JSONB 列）+ worker 上报 outputs（`TaskExecutionReportDto.outputs: Map<String,Object>`）
 - ✅ Stage 2：`WorkflowParamResolver` + `WorkflowParamResolverTest`（10 单测全部通过，复核日重跑确认）
 - ✅ Stage 3：集成在 `WorkflowNodePayloadBuilder.mergeNodeParams`（实现选 payload 装配点，比设计稿假想的 `DefaultSchedulePlanBuilder` 更准确）+ `loadWorkflowRunContext` 加载上游节点 output
 - ✅ Stage 4：测试 seed `batch-e2e-tests/.../multi-tenant-seed.sql` 已配 `$.nodes.PROCESS.output.processedCount` / `$.workflowRun.bizDate` DSL 演示

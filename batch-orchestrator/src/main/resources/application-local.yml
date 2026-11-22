@@ -28,9 +28,9 @@ spring:
     - batch
     - quartz
     baseline-on-migrate: true
-    # baseline-version 固定为 1：仅表示「V1（建 schema）已由 Docker init 等预置」，勿改成当前最新迁移号（V34/V35…）。
+    # baseline-version 固定为 1，用于 Docker init 已预置模式的全新数据库；V2 仍须正常执行。
     baseline-version: 1
-    # 本地也保持 Flyway 严格校验；若历史开发库 checksum 漂移，先执行本地 repair 或重建数据卷。
+    # 本地也验证脚本和历史。重编号前的开发库应保留原卷备查，并在空库重建。
     validate-on-migrate: true
   sql:
     init:

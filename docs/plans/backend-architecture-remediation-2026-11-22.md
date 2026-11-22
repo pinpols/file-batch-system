@@ -34,7 +34,7 @@
 | 权威原文 | 拟改内容与验收 |
 |---|---|
 | [系统职责 §2.3](../architecture/system-scope-boundary.md) | 将 Outbox + Kafka 的投递保证改为“至少一次”，分别写清发布端重试和 Worker 幂等认领的责任；按“ACK 后、DB 回写前中断”的例子和 [ADR-002](../architecture/adr/ADR-002-transactional-outbox.md)核对措辞。可与派发 Outbox 修复同期完成。 |
-| [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) | 说明归档表有 `active_slot` 列，但两条归档 INSERT 都省略该列，因此归档值取默认 1，不能用于还原历史实际槽号。按 [V386](../../db/migration/V386__workflow_active_runs_per_biz_date.sql) 和两条归档 SQL 核对。槽号按现行设计只用于活跃运行的并发裁决；如后续需要追溯实际槽号，再单列数据契约变更。 |
+| [ADR-050](../architecture/adr/ADR-050-multiple-active-runs-per-biz-date.md) | 说明归档表有 `active_slot` 列，但两条归档 INSERT 都省略该列，因此归档值取默认 1，不能用于还原历史实际槽号。按 [V386](../../db/legacy-migration/V386__workflow_active_runs_per_biz_date.sql) 和两条归档 SQL 核对。槽号按现行设计只用于活跃运行的并发裁决；如后续需要追溯实际槽号，再单列数据契约变更。 |
 
 实施时按原编号回填测试、环境和状态。局部单测、真实 PostgreSQL 并发、Kafka 回调和双 Pod 下载分别记录；目标环境尚未执行的验收继续保留在待办中。
 

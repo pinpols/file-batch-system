@@ -13,6 +13,7 @@ Workflow 新根与系统 Pipeline 的实施范围见[整合方案](../plans/work
 | 查看内容 | 图与位置 | 说明 |
 |---|---|---|
 | 模块与数据 | [模块结构图](project-structure.md#模块结构图) | 运行主链、数据访问及共享模块依赖 |
+| 建库资源 | [数据库与初始化资源](project-structure.md#数据库与初始化资源) | 当前平台迁移、历史测试资源、业务库和 Docker 初始化边界 |
 | 核心模型与状态 | [核心模型](core-model.md)的 3.1、4.2.1 节 | 实例层级及 WorkflowRun、NodeRun、Partition、Task 的典型状态路径，非穷举 |
 | 安全边界 | [租户与执行信任边界图](security-model.md#租户与执行信任边界图) | 身份、租户、执行与数据访问边界 |
 | 执行与恢复 | [执行后回报丢失与租约恢复](../runbook/troubleshooting-decision-tree.md#执行后回报丢失与租约恢复) | 外部副作用结果未知、租约和回报恢复 |
