@@ -1,18 +1,18 @@
 # 精简代码量统计 — 当前快照
 
-> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `dec3568d3`。
+> 口径：git 跟踪文件；排除 `docs/`、构建产物、生成物、依赖目录和 Flyway migration；主指标为 **Lean logical LOC**，用语句/块/配置项计数削弱格式化换行带来的膨胀。生成来源：HEAD `c3f91cb10`。
 
 ## 总览
 
 | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---:|---:|---:|---:|
-| 6,393 | 838,015 | 437,656 | 52.2% |
+| 6,393 | 838,015 | 437,654 | 52.2% |
 
 ## 按用途
 
 | Group | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| test | 1,946 | 418,731 | 225,310 | 53.8% |
+| test | 1,946 | 418,731 | 225,308 | 53.8% |
 | prod | 3,526 | 330,922 | 157,573 | 47.6% |
 | script | 741 | 69,246 | 42,332 | 61.1% |
 | config | 68 | 10,291 | 7,689 | 74.7% |
@@ -23,7 +23,7 @@
 
 | Language | Files | Physical LOC | Lean logical LOC | Lean/Physical |
 |---|---:|---:|---:|---:|
-| Java | 4,820 | 650,849 | 343,649 | 52.8% |
+| Java | 4,820 | 650,849 | 343,647 | 52.8% |
 | Python | 351 | 53,256 | 29,221 | 54.9% |
 | Shell | 219 | 36,181 | 28,633 | 79.1% |
 | YAML | 110 | 15,074 | 11,648 | 77.3% |
@@ -52,7 +52,7 @@
 | `batch-common/src/main/resources/messages.properties` | prod | Properties | 1,588 | 1,328 |
 | `batch-common/src/main/resources/messages_zh_CN.properties` | prod | Properties | 1,586 | 1,328 |
 | `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/integration/RetryExecutionClosureIntegrationTest.java` | test | Java | 2,157 | 1,128 |
-| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,524 | 1,081 |
+| `batch-orchestrator/src/test/java/io/github/pinpols/batch/orchestrator/infrastructure/sensor/WorkflowSensorApplicationContextRestartIntegrationTest.java` | test | Java | 2,524 | 1,079 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/StaleWorkerReportFenceE2eIT.java` | test | Java | 2,040 | 1,014 |
 | `batch-e2e-tests/src/test/java/io/github/pinpols/batch/e2e/DispatchPipelineE2eIT.java` | test | Java | 2,065 | 988 |
 | `batch-worker/import/src/test/java/io/github/pinpols/batch/worker/imports/runtime/ImportIngressScanPersistenceIntegrationTest.java` | test | Java | 1,531 | 954 |
