@@ -643,49 +643,42 @@
           <include refid="NotFromTerminal"/>
     </update>
 
-    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下最近一次"全成功且报告了有效 OUT"的实例的
-         high_water_mark_out,供新实例启动时作为本次 IN。
+    <!-- 增量水位:取同一 (tenantId, jobDefinitionId) 下数值最大的有效 high_water_mark_out。
          为什么不能只取最近一行:
            1) 空输入批次成功时 worker 不上报 OUT,该行为 NULL/空串;若按完成时间只取一行,上一轮
               有效水位会被空批遮住,下一轮按空水位从头扫,重读历史数据。
-           2) 成功实例默认 30 天后由归档服务移入 archive.job_instance_archive 并从热表删除;只查热表
-              会让运行间隔较长的增量任务丢失水位。热冷各取最近一行后合并,查询量仍为常数级。
+           2) 多个实例并发/乱序完成时,较晚完成的较低 OUT 不能把后续 IN 拉回;只有同一可比较、
+              单调数据流内的数值最大值才是可延续边界(由源查询契约证明单调性)。
+           3) 成功实例默认 30 天后由归档服务移入 archive.job_instance_archive 并从热表删除;只查热表
+              会让运行间隔较长的增量任务丢失水位。热冷各取最大值后合并。
          过滤口径:
            - 仅 SUCCESS(dry-run 成功是 SUCCESS_DRY_RUN,自然排除);
            - replay_session_id 非空的历史重放、rerun_flag=true 的补跑都不推进正式增量水位:
              它们按各自冻结范围/业务区间执行,水位不可与该数据流的连续边界直接比较;
-           - OUT 为 NULL/空串表示上一轮没有可延续的进度,跳过该行而不是把它当成新起点;
+           - OUT 为 NULL/空串或非十进制文本表示没有可延续的进度,跳过该行;
            - 不取 PARTIAL_FAILED:部分 partition 未覆盖,水位推给下次会跳过失败 partition 的
-             数据范围;由发布路径的 ON CONFLICT 兜住重复执行幂等。
-         排序用 finished_at desc, id desc:finished_at 是真实完成时间,空值/并发相同时 id 回退保证确定性。 -->
-    <select id="selectLatestEffectiveHighWaterMarkOut" resultType="java.lang.String">
-        select latest.high_water_mark_out
+             数据范围;由发布路径的 ON CONFLICT 兜住重复执行幂等。 -->
+    <sql id="HighestEligibleWatermark">
+        where tenant_id = #{tenantId}
+          and job_definition_id = #{jobDefinitionId}
+          and instance_status = 'SUCCESS'
+          and replay_session_id is null
+          and rerun_flag = false
+          and high_water_mark_out ~ '^-?[0-9]+(\.[0-9]+)?$'
+        order by high_water_mark_out::numeric desc, id desc
+        limit 1
+    </sql>
+
+    <select id="selectMaxEffectiveHighWaterMarkOut" resultType="java.lang.String">
+        select candidate.high_water_mark_out
         from (
-            (select high_water_mark_out, finished_at, id
-               from batch.job_instance
-              where tenant_id = #{tenantId}
-                and job_definition_id = #{jobDefinitionId}
-                and instance_status = 'SUCCESS'
-                and replay_session_id is null
-                and rerun_flag = false
-                and high_water_mark_out is not null
-                and high_water_mark_out &lt;&gt; ''
-              order by finished_at desc nulls last, id desc
-              limit 1)
+            (select high_water_mark_out, id from batch.job_instance
+             <include refid="HighestEligibleWatermark"/>)
             union all
-            (select high_water_mark_out, finished_at, id
-               from archive.job_instance_archive
-              where tenant_id = #{tenantId}
-                and job_definition_id = #{jobDefinitionId}
-                and instance_status = 'SUCCESS'
-                and replay_session_id is null
-                and rerun_flag = false
-                and high_water_mark_out is not null
-                and high_water_mark_out &lt;&gt; ''
-              order by finished_at desc nulls last, id desc
-              limit 1)
-        ) latest
-        order by latest.finished_at desc nulls last, latest.id desc
+            (select high_water_mark_out, id from archive.job_instance_archive
+             <include refid="HighestEligibleWatermark"/>)
+        ) candidate
+        order by candidate.high_water_mark_out::numeric desc, candidate.id desc
         limit 1
     </select>
 

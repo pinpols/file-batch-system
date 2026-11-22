@@ -331,7 +331,7 @@ class DefaultLaunchServiceTest {
     when(batchDayTransactionManager.getTransaction(any()))
         .thenReturn(mock(TransactionStatus.class));
     when(jobInstanceMapper.insert(any())).thenReturn(1);
-    when(jobInstanceMapper.selectLatestEffectiveHighWaterMarkOut("t1", 11L)).thenReturn("42");
+    when(jobInstanceMapper.selectMaxEffectiveHighWaterMarkOut("t1", 11L)).thenReturn("42");
 
     LaunchRequest request = new LaunchRequest(
         "t1",
@@ -400,7 +400,7 @@ class DefaultLaunchServiceTest {
     ArgumentCaptor<JobInstanceEntity> jobCaptor = ArgumentCaptor.forClass(JobInstanceEntity.class);
     verify(jobInstanceMapper).insert(jobCaptor.capture());
     assertThat(jobCaptor.getValue().getHighWaterMarkIn()).isEqualTo("42");
-    verify(jobInstanceMapper).selectLatestEffectiveHighWaterMarkOut("t1", 11L);
+    verify(jobInstanceMapper).selectMaxEffectiveHighWaterMarkOut("t1", 11L);
   }
 
   @Test

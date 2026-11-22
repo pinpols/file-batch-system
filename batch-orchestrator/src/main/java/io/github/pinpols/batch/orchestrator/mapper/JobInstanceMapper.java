@@ -177,16 +177,16 @@ public interface JobInstanceMapper {
       @Param("expectedVersion") Long expectedVersion);
 
   /**
-   * 取同一 (tenantId, jobDefinitionId) 下最近一次完整成功(仅 SUCCESS)且报告了有效 {@code high_water_mark_out}
-   * 的实例水位。
+   * 取同一 (tenantId, jobDefinitionId) 下数值最大的有效成功 {@code high_water_mark_out}。
    *
-   * <p>空输入批次不上报 OUT;若按完成时间只取一行,该 NULL 会遮住上一轮有效水位,下一轮按空水位从头扫。因此查询跳过
-   * NULL/空串 OUT 行,并覆盖已移入 archive 冷表的成功实例,避免长间隔任务因归档丢失水位。
+   * <p>空输入批次不上报 OUT;若按完成时间只取一行,该 NULL 会遮住上一轮有效水位,下一轮按空水位从头扫。乱序完成时,
+   * 较晚完成的较低 OUT 也不能把后续 IN 拉回。因此查询跳过 NULL/空串/非数值 OUT,热表与 archive 冷表各取数值最大值
+   * 后合并,避免长间隔任务因归档丢失水位。
    *
    * <p>不取 PARTIAL_FAILED:部分 partition 未覆盖时若把它的水位推给下次,会让下次跳过失败 partition 应处理的数据范围;由
    * publish 的 {@code ON CONFLICT} 兜住重复执行幂等。首次运行没有可用水位时返回 null,worker 在业务侧按"从头跑"处理。
    */
-  String selectLatestEffectiveHighWaterMarkOut(
+  String selectMaxEffectiveHighWaterMarkOut(
       @Param("tenantId") String tenantId, @Param("jobDefinitionId") Long jobDefinitionId);
 
   /**
