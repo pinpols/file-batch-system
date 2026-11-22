@@ -108,7 +108,7 @@ CodeQL 的 `CodeQL Java security analysis` 只有在 `codeql.yml` 已于 main �
 
 多人并行提交时，单个 PR 绿并不能证明“合并后主干仍绿”。本项目按以下规则处理：
 
-1. **main 受保护**：禁止常规直推；所有变更通过 PR 和 required checks，讨论必须解决。当前只有一个维护者，因此不伪造独立审批；新增第二位维护者后按开源治理规范启用 1 个独立审批和 Code Owner 审批。ruleset 不保留永久 bypass actor；紧急恢复需显式修改 ruleset 并保留平台审计记录。
+1. **main 受保护**：禁止常规直推；所有变更通过 PR 和 required checks，讨论必须解决。当前只有一个维护者，因此不伪造独立审批；新增第二位维护者后按开源治理规范启用 1 个独立审批和 Code Owner 审批。`main protection` 负责保护分支和 PR 评审。`Main CI required checks` 独立管理 8 项必需检查和最新基线要求。仓库拥有者 `pinpols` 可在紧急恢复时通过 PR 手动使用 CI 例外。合入前核对最终 head，保留定向验证和平台审计记录，合入后跟踪 Full CI。该规则使用 GitHub 的 `pull_request` bypass 模式，自动合并继续等待必需检查。
 2. **merge queue 按协作规模启用**：当前不声称已启用。并发活跃 PR 稳定达到 3 个以上、出现“单 PR 绿但连续合并后 main 红”时，再在 ruleset 启用 merge queue，并先确认 required workflows 支持 `merge_group`。单维护者阶段不为形式完整增加队列等待和维护成本。
 3. **PR gate 是合入门禁，full-ci-gate 是发布门禁**：开源贡献者不要求本地安装完整 hook；关键规则必须在 PR / full CI 中兜底。本地 hook 只减少返工，不承担最终可信边界。
 4. **main full-gate 红即冻结发布**：不以任何单个 PR gate 通过作为上线依据。直到 main 最新 `full-ci-gate` 重新通过，release / deploy 均应暂停。
