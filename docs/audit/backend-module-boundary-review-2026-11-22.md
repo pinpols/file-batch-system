@@ -63,7 +63,7 @@ Trigger 的当前写语句只更新 `schedule_enabled` 和 `updated_at`。运行
 - 编译：`./mvnw -ntp -pl batch-console-api,batch-worker/core -am -DskipTests test-compile` 通过。
 - 单元：`./mvnw -ntp -pl batch-console-api -am -Dtest=WorkflowDefinitionMapperXmlTest,WorkflowDefinitionVersionTest,WorkflowDefinitionMutationValidationTest,DefaultConsoleTenantConfigInitApplicationServiceTest,TenantConfigPackageExcelMonitoringPolicyApplyTest -Dsurefire.failIfNoSpecifiedTests=false test`，81 项通过、0 失败。
 - 集成：同一入口执行 `WorkflowDefinitionWriteContractIntegrationTest` 与 `ConsoleWorkflowDefinitionMutationIntegrationTest`，23 项通过（真实 PostgreSQL）；Excel 配置包上传 `ConsoleTenantConfigPackageExcelUploadIntegrationTest` 38 项通过（真实 PostgreSQL 与工作簿导入链路）。
-- Worker：`./mvnw -ntp -pl batch-worker/core -am -Dtest=PlatformFileRecordRepositoryIntegrationTest,PlatformFileRuntimeMapperStageSkipIntegrationTest,WorkerCoreMapperXmlTenantGuardArchTest,AbstractPipelineStepExecutionAdapterDefinitionTest -Dsurefire.failIfNoSpecifiedTests=false test`，42 项通过（文件登记与新增 CAS 用例 13、运行态 Mapper 20、Mapper 租户守卫 2、执行适配器失败补偿 7）。
+- Worker：`./mvnw -ntp -pl batch-worker/core -am -Dtest=PlatformFileRecordRepositoryIntegrationTest,PlatformFileRuntimeMapperStageSkipIntegrationTest,WorkerCoreMapperXmlTenantGuardArchTest,AbstractPipelineStepExecutionAdapterDefinitionTest -Dsurefire.failIfNoSpecifiedTests=false test`，44 项通过（文件登记与新增 CAS 用例 13、运行态 Mapper 20、Mapper 租户守卫 2、执行适配器失败补偿 9）。
 - 静态：`check-test-conventions.py`、`check-java-structured-string-concat.py`、`check-empty-checks.py`、`check-script-governance.py`、`check-docs-structure.py`、`check-code-doc-references.py`、`check-doc-timestamp-policy.py` 与平台库授权生成器自检均通过。
 - 未执行：完整 Worker 与治理侧交错的应用级用例、三租户 E2E、拆分账号实跑、目标环境 Quartz 重注册与首个 fire。不得将上述本机结果当作目标环境验收。
 

@@ -1,6 +1,7 @@
 package io.github.pinpols.batch.worker.core.support;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
@@ -81,6 +82,29 @@ class AbstractPipelineStepExecutionAdapterDefinitionTest {
             Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null);
 
     verify(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+  }
+
+  @Test
+  @DisplayName("文件状态写入成功时失败补偿正常完成")
+  void shouldCompleteFailureCompensation_whenStatusWriteSucceeds() {
+    adapter()
+        .handlePipelineFailure(
+            Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null);
+
+    verify(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+  }
+
+  @Test
+  @DisplayName("非状态冲突异常仍向外传播")
+  void shouldPropagateNonConflictException_whenFailureCompensationFails() {
+    BizException failure =
+        BizException.of(ResultCode.INVALID_ARGUMENT, "error.common.invalid_argument");
+    doThrow(failure).when(files).updateFileStatus(eq(42L), eq(FileStatus.FAILED.code()), any());
+
+    assertThatThrownBy(() -> adapter()
+            .handlePipelineFailure(
+                Map.of(PipelineRuntimeKeys.FILE_ID, 42L), "error", "message", null, null))
+        .isSameAs(failure);
   }
 
   @Test
