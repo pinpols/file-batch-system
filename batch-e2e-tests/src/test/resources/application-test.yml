@@ -10,7 +10,8 @@ spring:
 
 batch:
   shedlock:
-    auto-create: false
+    # V2 对 batch.shedlock 使用 IF NOT EXISTS，启动期回退建表与 Flyway 两种顺序都可完成迁移。
+    auto-create: true
   worker:
     execution:
       daemon-threads: true

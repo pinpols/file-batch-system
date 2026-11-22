@@ -31,3 +31,5 @@
 ## Full CI 跟进
 
 [#1447 合入后的 Full CI](https://github.com/pinpols/file-batch-system/actions/runs/44985721760)中，11 项迁移测试已通过。DB_ROW_EXISTS 的 WAIT 节点提交后，Workflow 根状态仍可能处于推进中。测试现等待根状态到达 SUCCESS，再核对节点状态和业务标记。原基线运行完整 Workflow Sensor 测试类 26 项通过，本分支以新迁移链定向复验通过。线上修复已通过必需检查并随 [PR #1448](https://github.com/pinpols/file-batch-system/pull/1448) 合入，后续回归见[当前主干 Full CI](https://github.com/pinpols/file-batch-system/actions/runs/44989207160)。
+
+[#1449 合入后的 Full CI](https://github.com/pinpols/file-batch-system/actions/runs/44993264439)在 E2E 启动期失败：ShedLock 自动建表先于 V2，`CREATE TABLE batch.shedlock` 报 `42P07`。V2 改为 `CREATE TABLE IF NOT EXISTS`，空库结果不变。同一次 Full tests 里，仍按旧版本号加载脚本的用例改为读取 `db/legacy-migration`，批次日迁移用例改为先停在 V1 再应用 V2。运行时 Flyway 仍只管理 `batch` 与 `quartz`，`archive` 由 V2 创建。

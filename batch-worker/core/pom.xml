@@ -122,7 +122,7 @@
                 <directory>src/test/resources</directory>
             </testResource>
             <testResource>
-                <directory>${project.basedir}/../../db/migration</directory>
+                <directory>${project.basedir}/../../db/legacy-migration</directory>
                 <targetPath>db/worker-report-outbox-fixture</targetPath>
                 <includes>
                     <include>V96__worker_report_outbox.sql</include>

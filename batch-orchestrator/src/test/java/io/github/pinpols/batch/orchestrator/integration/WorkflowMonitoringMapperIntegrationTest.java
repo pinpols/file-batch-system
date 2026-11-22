@@ -70,7 +70,7 @@ class WorkflowMonitoringMapperIntegrationTest {
         "V353__workflow_monitoring_policy.sql",
         "V261__scheduled_occurrence_ledger.sql",
         "V263__expected_work_occurrence.sql")) {
-      ClassPathResource migration = new ClassPathResource("db/migration/" + name);
+      ClassPathResource migration = new ClassPathResource("db/legacy-migration/" + name);
       ResourceDatabasePopulator populator = new ResourceDatabasePopulator(migration);
       populator.execute(dataSource);
     }

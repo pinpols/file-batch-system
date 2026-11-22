@@ -62,7 +62,7 @@ class PlatformFileRecordRepositoryIntegrationTest {
     String createSchemaSql = "create schema batch";
     jdbcTemplate.execute(createSchemaSql);
     // 使用不可变 V6 的原始 file_record DDL，保留真实字段、CHECK 和唯一约束；不是完整 Flyway 验收。
-    Path schemaPath = Path.of("..", "..", "db", "migration", "V6__create_file_tables.sql");
+    Path schemaPath = Path.of("..", "..", "db", "legacy-migration", "V6__create_file_tables.sql");
     String schemaSql = Files.readString(schemaPath);
     int firstTable = schemaSql.indexOf("CREATE TABLE");
     int nextTable = schemaSql.indexOf("CREATE TABLE", firstTable + 1);
@@ -70,7 +70,7 @@ class PlatformFileRecordRepositoryIntegrationTest {
     jdbcTemplate.execute(createFileRecordSql);
     // 生产 V124 为 NULL 校验和路径提供唯一围栏，竞争失败必须由外层事务回滚后重试。
     Path hardeningPath =
-        Path.of("..", "..", "db", "migration", "V124__r3_constraint_hardening.sql");
+        Path.of("..", "..", "db", "legacy-migration", "V124__r3_constraint_hardening.sql");
     String hardeningSql = Files.readString(hardeningPath);
     int indexStart =
         hardeningSql.indexOf("CREATE UNIQUE INDEX IF NOT EXISTS uk_file_record_no_checksum");
@@ -78,8 +78,8 @@ class PlatformFileRecordRepositoryIntegrationTest {
     String createNullChecksumIndexSql = hardeningSql.substring(indexStart, indexEnd + 1);
     jdbcTemplate.execute(createNullChecksumIndexSql);
     // 仅应用 V378 的热表部分，复用真实迁移并保持该测试的最小表结构范围。
-    Path channelMigrationPath =
-        Path.of("..", "..", "db", "migration", "V378__track_file_arrival_channel_identity.sql");
+    Path channelMigrationPath = Path.of(
+        "..", "..", "db", "legacy-migration", "V378__track_file_arrival_channel_identity.sql");
     String channelMigration = Files.readString(channelMigrationPath);
     int hotTableStart = channelMigration.indexOf("ALTER TABLE batch.file_record");
     int archiveTableStart = channelMigration.indexOf("ALTER TABLE archive.file_record_archive");

@@ -2,11 +2,13 @@ package io.github.pinpols.batch.orchestrator.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.github.pinpols.batch.common.config.ShedLockProviderFactory;
 import io.github.pinpols.batch.testing.TestPostgresContainers;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationInfo;
 import org.flywaydb.core.api.configuration.FluentConfiguration;
@@ -14,6 +16,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -21,7 +24,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 @Tag("integration")
 @Testcontainers(disabledWithoutDocker = true)
-@DisplayName("批次日相关数据库迁移 - 校验空库全量迁移,旧库升级路径与重复执行幂等性")
+@DisplayName("批次日相关数据库迁移 - 校验空库全量迁移、V1 后补齐 V2 与重复执行幂等性")
 class BatchDaySqlMigrationsIntegrationTest {
 
   @Container
@@ -77,15 +80,12 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   @Test
-  @DisplayName("旧库先停在早期版本时新结构缺失,补跑全量迁移后补齐且重复迁移不追加已应用记录")
-  void existingDb_upgradeFromBeforeV31_appliesV31AndIsIdempotent() {
+  @DisplayName("只应用 V1 时批次日结构缺失,补跑 V2 后齐备且重复迁移不追加已应用记录")
+  void schemaOnlyThenFullMigrate_createsBatchDayStructureAndIsIdempotent() {
     resetDb();
 
-    // 先模拟已有库：只跑到 V29（target 设成 30 时等价于“<=29”，不要求 V30 脚本存在）
-    Flyway configured = flywayConfiguration()
-        // 飞行目标必须存在真实迁移版本；用 V29 作为 V31 之前的“已升级到尽可能多”
-        .target("29")
-        .load();
+    // 现行链只有 V1（模式边界）和 V2（完整结构）。先停在 V1，确认批次日对象尚未出现。
+    Flyway configured = flywayConfiguration().target("1").load();
     configured.migrate();
 
     JdbcTemplate jdbc = jdbc();
@@ -98,7 +98,7 @@ class BatchDaySqlMigrationsIntegrationTest {
       assertThat(columnExists(jdbc, "batch", "business_calendar", "sla_offset_min"))
           .isFalse();
 
-      // 再全量升级到最新版（补齐 V31/V32...）
+      // 再应用到 V2，补齐现行批次日结构。
       flywayConfiguration().load().migrate();
 
       assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
@@ -131,6 +131,14 @@ class BatchDaySqlMigrationsIntegrationTest {
     Flyway flyway = flywayConfiguration().load();
 
     flyway.migrate();
+    JdbcTemplate jdbc = jdbc();
+    try {
+      assertThat(uniqueConstraintExists(jdbc, "batch", "shedlock", "pk_shedlock"))
+          .isTrue();
+      assertThat(columnExists(jdbc, "batch", "shedlock", "lock_until")).isTrue();
+    } finally {
+      closeJdbc(jdbc);
+    }
     List<String> applied1 = Arrays.stream(flyway.info().applied())
         .filter(Objects::nonNull)
         .map(MigrationInfo::getVersion)
@@ -147,6 +155,26 @@ class BatchDaySqlMigrationsIntegrationTest {
         .toList();
 
     assertThat(applied2).containsExactlyInAnyOrderElementsOf(applied1);
+  }
+
+  @Test
+  @DisplayName("ShedLock 先按自动建表结构创建 batch.shedlock 时,V2 仍能完成迁移")
+  void precreatedShedlock_doesNotBlockPlatformMigrate() {
+    resetDb();
+    DataSource dataSource = new DriverManagerDataSource(
+        POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword());
+    ShedLockProviderFactory.jdbcTemplateLockProvider(dataSource, true);
+
+    flywayConfiguration().load().migrate();
+
+    JdbcTemplate jdbc = jdbc();
+    try {
+      assertThat(tableExists(jdbc, "batch", "shedlock")).isTrue();
+      assertThat(columnExists(jdbc, "batch", "shedlock", "locked_at")).isTrue();
+      assertThat(tableExists(jdbc, "batch", "batch_day_instance")).isTrue();
+    } finally {
+      closeJdbc(jdbc);
+    }
   }
 
   private static JdbcTemplate jdbc() {
@@ -207,6 +235,13 @@ class BatchDaySqlMigrationsIntegrationTest {
   }
 
   private static void resetDb() {
+    JdbcTemplate jdbc = jdbc();
+    try {
+      // V2 创建 archive，但运行时 Flyway 只管理 batch 与 quartz；清理时单独丢掉 archive。
+      jdbc.execute("DROP SCHEMA IF EXISTS archive CASCADE");
+    } finally {
+      closeJdbc(jdbc);
+    }
     Flyway resetFlyway = flywayConfiguration().cleanDisabled(false).load();
     resetFlyway.clean();
   }
@@ -214,7 +249,7 @@ class BatchDaySqlMigrationsIntegrationTest {
   private static FluentConfiguration flywayConfiguration() {
     return Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
-        .schemas("batch", "quartz", "archive")
+        .schemas("batch", "quartz")
         .defaultSchema("batch")
         .locations("classpath:db/migration")
         .configuration(Map.of("flyway.postgresql.transactional.lock", "false"));

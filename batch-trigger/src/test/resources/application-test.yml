@@ -16,7 +16,7 @@ spring:
       org.quartz.dataSource.quartzJobstoreDs.password: ${spring.datasource.password}
       org.quartz.dataSource.quartzJobstoreDs.maxConnections: 5
 
-# IT 让 ShedLockProviderFactory 自动建 batch.shedlock 表(平台库由 Flyway V2 建表)
+# IT 可在 Flyway 前自动建 batch.shedlock；V2 使用 IF NOT EXISTS，空库仍由迁移建表。
 batch:
   shedlock:
-    auto-create: false
+    auto-create: true
